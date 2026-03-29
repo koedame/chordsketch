@@ -2,10 +2,12 @@
 
 pub mod ast;
 pub mod lexer;
+pub mod parser;
 pub mod token;
 
 // Re-export key types for convenience.
 pub use lexer::Lexer;
+pub use parser::{ParseError, Parser, parse};
 pub use token::{Position, Span, Token, TokenKind};
 
 /// Returns the library version.
