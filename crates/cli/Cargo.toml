@@ -1,0 +1,15 @@
+[package]
+name = "chordpro"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "ChordPro command-line tool"
+
+[[bin]]
+name = "chordpro"
+path = "src/main.rs"
+
+[dependencies]
+chordpro-core = { path = "../core" }
+chordpro-render-text = { path = "../render-text" }
