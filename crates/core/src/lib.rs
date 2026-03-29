@@ -1,5 +1,7 @@
 //! ChordPro parser, AST definitions, and transforms.
 
+pub mod ast;
+
 /// Returns the library version.
 #[must_use]
 pub fn version() -> &'static str {
