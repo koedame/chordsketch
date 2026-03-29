@@ -1,0 +1,593 @@
+//! Abstract Syntax Tree (AST) definitions for the ChordPro format.
+//!
+//! This module defines the data structures that represent a parsed ChordPro
+//! document. The root node is [`Song`], which contains metadata and a sequence
+//! of [`Line`] nodes.
+//!
+//! # Design
+//!
+//! The AST is intentionally simple and flat. A [`Song`] is a list of lines,
+//! where each line is one of several variants (lyrics, directive, comment, or
+//! empty). Section boundaries are represented as directives — the parser may
+//! later group them, but the AST itself does not enforce nesting.
+//!
+//! Chord annotations are stored inline within lyrics lines using a segment
+//! model: each [`LyricsSegment`] pairs an optional chord with the lyric text
+//! that follows it. This preserves the chord-text relationship without
+//! requiring offset arithmetic during rendering.
+
+// ---------------------------------------------------------------------------
+// Song (root node)
+// ---------------------------------------------------------------------------
+
+/// The root AST node representing a complete ChordPro song.
+///
+/// A song consists of optional metadata (populated from directives such as
+/// `{title}`, `{subtitle}`, `{artist}`, etc.) and a sequence of lines that
+/// make up the song body.
+///
+/// # Examples
+///
+/// ```
+/// use chordpro_core::ast::{Song, Metadata};
+///
+/// let song = Song::new();
+/// assert!(song.lines.is_empty());
+/// assert_eq!(song.metadata.title, None);
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct Song {
+    /// Metadata extracted from directives (title, subtitle, artist, etc.).
+    pub metadata: Metadata,
+    /// The ordered sequence of lines that make up the song body.
+    pub lines: Vec<Line>,
+}
+
+impl Song {
+    /// Creates a new empty song with no metadata and no lines.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            metadata: Metadata::new(),
+            lines: Vec::new(),
+        }
+    }
+}
+
+impl Default for Song {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Metadata
+// ---------------------------------------------------------------------------
+
+/// Metadata extracted from well-known ChordPro directives.
+///
+/// These fields correspond to standard ChordPro meta-directives such as
+/// `{title}`, `{subtitle}`, `{artist}`, `{composer}`, `{album}`, `{year}`,
+/// `{key}`, `{tempo}`, and `{capo}`.
+///
+/// Fields that can logically appear multiple times (e.g., `subtitle`, `artist`,
+/// `composer`) are stored as `Vec<String>`. Fields that are expected to appear
+/// at most once are stored as `Option<String>`.
+///
+/// Any meta-directive not covered by these fields can be stored in the
+/// `custom` vector as key-value pairs.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Metadata {
+    /// The song title, from `{title}` / `{t}`.
+    pub title: Option<String>,
+    /// Subtitles, from `{subtitle}` / `{st}`. May appear multiple times.
+    pub subtitles: Vec<String>,
+    /// Artist names, from `{artist}`.
+    pub artists: Vec<String>,
+    /// Composer names, from `{composer}`.
+    pub composers: Vec<String>,
+    /// Lyricist names, from `{lyricist}`.
+    pub lyricists: Vec<String>,
+    /// Album name, from `{album}`.
+    pub album: Option<String>,
+    /// Year or date, from `{year}`.
+    pub year: Option<String>,
+    /// Musical key, from `{key}`.
+    pub key: Option<String>,
+    /// Tempo indication, from `{tempo}`.
+    pub tempo: Option<String>,
+    /// Capo position, from `{capo}`.
+    pub capo: Option<String>,
+    /// Custom metadata directives not covered by the standard fields.
+    /// Each entry is a `(name, value)` pair.
+    pub custom: Vec<(String, String)>,
+}
+
+impl Metadata {
+    /// Creates a new empty metadata set with all fields at their defaults.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Line
+// ---------------------------------------------------------------------------
+
+/// A single line in the song body.
+///
+/// ChordPro documents are processed line-by-line. Each line is classified
+/// into one of these variants by the parser.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Line {
+    /// A lyrics line, possibly containing chord annotations interspersed
+    /// with text. An empty lyrics line (no text, no chords) is represented
+    /// by [`Line::Empty`] instead.
+    Lyrics(LyricsLine),
+
+    /// A directive such as `{title: My Song}` or `{start_of_chorus}`.
+    Directive(Directive),
+
+    /// A comment line starting with `#` (file-level comment, not rendered).
+    Comment(String),
+
+    /// An empty line, typically used to separate paragraphs or sections.
+    Empty,
+}
+
+// ---------------------------------------------------------------------------
+// LyricsLine
+// ---------------------------------------------------------------------------
+
+/// A lyrics line containing text with optional chord annotations.
+///
+/// In ChordPro format, chords are written inline with the lyrics:
+/// ```text
+/// [Am]Hello [G]world
+/// ```
+///
+/// The AST splits this into a sequence of [`LyricsSegment`] items, each
+/// optionally preceded by a chord. This preserves the exact relationship
+/// between chords and the lyric text they annotate.
+///
+/// # Examples
+///
+/// The input `[Am]Hello [G]world` produces:
+///
+/// ```
+/// use chordpro_core::ast::{LyricsLine, LyricsSegment, Chord};
+///
+/// let line = LyricsLine {
+///     segments: vec![
+///         LyricsSegment {
+///             chord: Some(Chord::new("Am")),
+///             text: "Hello ".to_string(),
+///         },
+///         LyricsSegment {
+///             chord: Some(Chord::new("G")),
+///             text: "world".to_string(),
+///         },
+///     ],
+/// };
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct LyricsLine {
+    /// The ordered sequence of segments that make up this lyrics line.
+    pub segments: Vec<LyricsSegment>,
+}
+
+impl LyricsLine {
+    /// Creates a new empty lyrics line with no segments.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            segments: Vec::new(),
+        }
+    }
+
+    /// Returns the full lyric text with all chord annotations removed.
+    #[must_use]
+    pub fn text(&self) -> String {
+        self.segments.iter().map(|s| s.text.as_str()).collect()
+    }
+
+    /// Returns `true` if this lyrics line contains at least one chord.
+    #[must_use]
+    pub fn has_chords(&self) -> bool {
+        self.segments.iter().any(|s| s.chord.is_some())
+    }
+}
+
+impl Default for LyricsLine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LyricsSegment
+// ---------------------------------------------------------------------------
+
+/// A segment within a lyrics line: an optional chord followed by text.
+///
+/// Every lyrics line is decomposed into a sequence of segments. Each segment
+/// may have a chord placed above the start of its text. A segment with no
+/// chord and non-empty text represents plain lyrics. A segment with a chord
+/// and empty text represents a chord placed at the end of the line (or
+/// between two consecutive chords with no intervening text).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LyricsSegment {
+    /// The chord annotation, if any, placed above the start of `text`.
+    pub chord: Option<Chord>,
+    /// The lyric text following the chord (may be empty).
+    pub text: String,
+}
+
+impl LyricsSegment {
+    /// Creates a new segment with the given chord and text.
+    #[must_use]
+    pub fn new(chord: Option<Chord>, text: impl Into<String>) -> Self {
+        Self {
+            chord,
+            text: text.into(),
+        }
+    }
+
+    /// Creates a text-only segment with no chord.
+    #[must_use]
+    pub fn text_only(text: impl Into<String>) -> Self {
+        Self {
+            chord: None,
+            text: text.into(),
+        }
+    }
+
+    /// Creates a chord-only segment with no text.
+    #[must_use]
+    pub fn chord_only(chord: Chord) -> Self {
+        Self {
+            chord: Some(chord),
+            text: String::new(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Chord
+// ---------------------------------------------------------------------------
+
+/// A chord annotation such as `Am`, `G7`, `Cmaj7`, or `F#m`.
+///
+/// The chord is stored as a raw string. Parsing chord components (root,
+/// quality, bass note, etc.) is handled separately; the AST only records
+/// the textual representation as it appeared in the source.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Chord {
+    /// The raw chord string as written in the source (e.g., `"Am"`, `"G7"`).
+    pub name: String,
+}
+
+impl Chord {
+    /// Creates a new chord from the given name string.
+    #[must_use]
+    pub fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
+}
+
+impl core::fmt::Display for Chord {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&self.name)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Directive
+// ---------------------------------------------------------------------------
+
+/// A ChordPro directive such as `{title: My Song}` or `{start_of_chorus}`.
+///
+/// Directives are enclosed in curly braces and consist of a name and an
+/// optional value separated by a colon. Some directives have standard short
+/// aliases (e.g., `t` for `title`, `st` for `subtitle`).
+///
+/// The AST stores the directive name as-is (not normalized). Normalization
+/// of aliases (e.g., `t` -> `title`) is the parser's responsibility.
+///
+/// # Examples
+///
+/// ```
+/// use chordpro_core::ast::Directive;
+///
+/// // {title: My Song}
+/// let d = Directive::with_value("title", "My Song");
+/// assert_eq!(d.name, "title");
+/// assert_eq!(d.value.as_deref(), Some("My Song"));
+///
+/// // {start_of_chorus}
+/// let d = Directive::name_only("start_of_chorus");
+/// assert_eq!(d.name, "start_of_chorus");
+/// assert!(d.value.is_none());
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct Directive {
+    /// The directive name (e.g., `"title"`, `"start_of_chorus"`, `"comment"`).
+    pub name: String,
+    /// The optional value after the colon (e.g., `"My Song"` in `{title: My Song}`).
+    pub value: Option<String>,
+}
+
+impl Directive {
+    /// Creates a directive with both a name and a value.
+    #[must_use]
+    pub fn with_value(name: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            value: Some(value.into()),
+        }
+    }
+
+    /// Creates a directive with only a name and no value.
+    #[must_use]
+    pub fn name_only(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            value: None,
+        }
+    }
+
+    /// Returns `true` if this directive marks the start of a section
+    /// (e.g., `start_of_chorus`, `start_of_verse`, etc.).
+    #[must_use]
+    pub fn is_section_start(&self) -> bool {
+        self.name.starts_with("start_of_")
+    }
+
+    /// Returns `true` if this directive marks the end of a section
+    /// (e.g., `end_of_chorus`, `end_of_verse`, etc.).
+    #[must_use]
+    pub fn is_section_end(&self) -> bool {
+        self.name.starts_with("end_of_")
+    }
+
+    /// If this is a section start or end directive, returns the section name
+    /// (e.g., `"chorus"` from `"start_of_chorus"`).
+    #[must_use]
+    pub fn section_name(&self) -> Option<&str> {
+        if let Some(suffix) = self.name.strip_prefix("start_of_") {
+            Some(suffix)
+        } else if let Some(suffix) = self.name.strip_prefix("end_of_") {
+            Some(suffix)
+        } else {
+            None
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- Song ---------------------------------------------------------------
+
+    #[test]
+    fn song_new_is_empty() {
+        let song = Song::new();
+        assert!(song.lines.is_empty());
+        assert_eq!(song.metadata.title, None);
+    }
+
+    #[test]
+    fn song_default_equals_new() {
+        assert_eq!(Song::default(), Song::new());
+    }
+
+    #[test]
+    fn song_with_lines() {
+        let mut song = Song::new();
+        song.metadata.title = Some("My Song".to_string());
+        song.lines.push(Line::Empty);
+        song.lines.push(Line::Comment("A comment".to_string()));
+        assert_eq!(song.lines.len(), 2);
+        assert_eq!(song.metadata.title.as_deref(), Some("My Song"));
+    }
+
+    // -- Metadata -----------------------------------------------------------
+
+    #[test]
+    fn metadata_default_is_empty() {
+        let meta = Metadata::new();
+        assert_eq!(meta.title, None);
+        assert!(meta.subtitles.is_empty());
+        assert!(meta.artists.is_empty());
+        assert!(meta.composers.is_empty());
+        assert!(meta.lyricists.is_empty());
+        assert_eq!(meta.album, None);
+        assert_eq!(meta.year, None);
+        assert_eq!(meta.key, None);
+        assert_eq!(meta.tempo, None);
+        assert_eq!(meta.capo, None);
+        assert!(meta.custom.is_empty());
+    }
+
+    // -- LyricsLine ---------------------------------------------------------
+
+    #[test]
+    fn lyrics_line_text_concatenation() {
+        let line = LyricsLine {
+            segments: vec![
+                LyricsSegment::new(Some(Chord::new("Am")), "Hello "),
+                LyricsSegment::new(Some(Chord::new("G")), "world"),
+            ],
+        };
+        assert_eq!(line.text(), "Hello world");
+    }
+
+    #[test]
+    fn lyrics_line_has_chords() {
+        let with_chords = LyricsLine {
+            segments: vec![LyricsSegment::new(Some(Chord::new("C")), "text")],
+        };
+        assert!(with_chords.has_chords());
+
+        let without_chords = LyricsLine {
+            segments: vec![LyricsSegment::text_only("just text")],
+        };
+        assert!(!without_chords.has_chords());
+    }
+
+    #[test]
+    fn lyrics_line_empty_default() {
+        let line = LyricsLine::new();
+        assert!(line.segments.is_empty());
+        assert_eq!(line.text(), "");
+        assert!(!line.has_chords());
+    }
+
+    // -- LyricsSegment ------------------------------------------------------
+
+    #[test]
+    fn segment_text_only() {
+        let seg = LyricsSegment::text_only("hello");
+        assert_eq!(seg.chord, None);
+        assert_eq!(seg.text, "hello");
+    }
+
+    #[test]
+    fn segment_chord_only() {
+        let seg = LyricsSegment::chord_only(Chord::new("Dm"));
+        assert_eq!(seg.chord, Some(Chord::new("Dm")));
+        assert!(seg.text.is_empty());
+    }
+
+    #[test]
+    fn segment_with_chord_and_text() {
+        let seg = LyricsSegment::new(Some(Chord::new("E7")), "lyrics");
+        assert_eq!(seg.chord.as_ref().map(|c| c.name.as_str()), Some("E7"));
+        assert_eq!(seg.text, "lyrics");
+    }
+
+    // -- Chord --------------------------------------------------------------
+
+    #[test]
+    fn chord_display() {
+        let chord = Chord::new("F#m7");
+        assert_eq!(format!("{chord}"), "F#m7");
+    }
+
+    #[test]
+    fn chord_equality() {
+        assert_eq!(Chord::new("Am"), Chord::new("Am"));
+        assert_ne!(Chord::new("Am"), Chord::new("Bm"));
+    }
+
+    // -- Directive ----------------------------------------------------------
+
+    #[test]
+    fn directive_with_value() {
+        let d = Directive::with_value("title", "My Song");
+        assert_eq!(d.name, "title");
+        assert_eq!(d.value.as_deref(), Some("My Song"));
+    }
+
+    #[test]
+    fn directive_name_only() {
+        let d = Directive::name_only("start_of_chorus");
+        assert_eq!(d.name, "start_of_chorus");
+        assert!(d.value.is_none());
+    }
+
+    #[test]
+    fn directive_section_detection() {
+        let soc = Directive::name_only("start_of_chorus");
+        assert!(soc.is_section_start());
+        assert!(!soc.is_section_end());
+        assert_eq!(soc.section_name(), Some("chorus"));
+
+        let eoc = Directive::name_only("end_of_chorus");
+        assert!(!eoc.is_section_start());
+        assert!(eoc.is_section_end());
+        assert_eq!(eoc.section_name(), Some("chorus"));
+
+        let title = Directive::with_value("title", "Test");
+        assert!(!title.is_section_start());
+        assert!(!title.is_section_end());
+        assert_eq!(title.section_name(), None);
+    }
+
+    #[test]
+    fn directive_section_name_variants() {
+        let sov = Directive::name_only("start_of_verse");
+        assert_eq!(sov.section_name(), Some("verse"));
+
+        let eob = Directive::name_only("end_of_bridge");
+        assert_eq!(eob.section_name(), Some("bridge"));
+    }
+
+    // -- Line enum ----------------------------------------------------------
+
+    #[test]
+    fn line_enum_variants() {
+        let lyrics = Line::Lyrics(LyricsLine::new());
+        let directive = Line::Directive(Directive::name_only("soc"));
+        let comment = Line::Comment("test".to_string());
+        let empty = Line::Empty;
+
+        // Ensure they are all distinct variants via pattern matching
+        assert!(matches!(lyrics, Line::Lyrics(_)));
+        assert!(matches!(directive, Line::Directive(_)));
+        assert!(matches!(comment, Line::Comment(_)));
+        assert!(matches!(empty, Line::Empty));
+    }
+
+    #[test]
+    fn line_clone_and_eq() {
+        let line = Line::Lyrics(LyricsLine {
+            segments: vec![LyricsSegment::new(Some(Chord::new("C")), "hello")],
+        });
+        let cloned = line.clone();
+        assert_eq!(line, cloned);
+    }
+
+    // -- Integration: full song construction --------------------------------
+
+    #[test]
+    fn full_song_construction() {
+        let mut song = Song::new();
+        song.metadata.title = Some("Amazing Grace".to_string());
+        song.metadata.key = Some("G".to_string());
+        song.metadata.artists.push("John Newton".to_string());
+
+        // {start_of_verse}
+        song.lines
+            .push(Line::Directive(Directive::name_only("start_of_verse")));
+
+        // [G]Amazing [G7]grace, how [C]sweet the [G]sound
+        song.lines.push(Line::Lyrics(LyricsLine {
+            segments: vec![
+                LyricsSegment::new(Some(Chord::new("G")), "Amazing "),
+                LyricsSegment::new(Some(Chord::new("G7")), "grace, how "),
+                LyricsSegment::new(Some(Chord::new("C")), "sweet the "),
+                LyricsSegment::new(Some(Chord::new("G")), "sound"),
+            ],
+        }));
+
+        // {end_of_verse}
+        song.lines
+            .push(Line::Directive(Directive::name_only("end_of_verse")));
+
+        assert_eq!(song.lines.len(), 3);
+        if let Line::Lyrics(ref lyrics) = song.lines[1] {
+            assert_eq!(lyrics.text(), "Amazing grace, how sweet the sound");
+            assert!(lyrics.has_chords());
+            assert_eq!(lyrics.segments.len(), 4);
+        } else {
+            panic!("Expected Line::Lyrics");
+        }
+    }
+}
