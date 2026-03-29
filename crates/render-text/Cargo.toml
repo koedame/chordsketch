@@ -1,0 +1,10 @@
+[package]
+name = "chordpro-render-text"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Plain text renderer for ChordPro documents"
+
+[dependencies]
+chordpro-core = { path = "../core" }
