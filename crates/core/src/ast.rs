@@ -11,9 +11,10 @@
 //! empty). Section boundaries are represented as directives — the parser may
 //! later group them, but the AST itself does not enforce nesting.
 //!
-//! Chord annotations are stored inline within lyrics lines, each carrying the
-//! chord name and its byte offset within the lyric text. This makes it easy
-//! for renderers to interleave chords above the corresponding lyric positions.
+//! Chord annotations are stored inline within lyrics lines using a segment
+//! model: each [`LyricsSegment`] pairs an optional chord with the lyric text
+//! that follows it. This preserves the chord-text relationship without
+//! requiring offset arithmetic during rendering.
 
 // ---------------------------------------------------------------------------
 // Song (root node)
