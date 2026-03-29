@@ -1,10 +1,20 @@
 # Pull Request Workflow
 
 1. All changes enter `main` via pull request — no direct pushes.
-2. Every PR must pass CI (cargo fmt --check, cargo clippy -- -D warnings, cargo test).
-3. Every PR must receive a `/review` approval.
-4. Every PR must receive a `/security-review` approval.
-5. When all three conditions above are met, the PR is auto-merged to `main`.
-6. PR titles should be concise and written in imperative mood (e.g., "Add chord
-   transposition support").
-7. PR descriptions must include What, Why, Test results, and Review summary sections.
+2. **Implement + test** — open a PR with code and tests.
+3. **CI must pass** (cargo fmt --check, cargo clippy -- -D warnings, cargo test).
+4. **`/review`** — request code review. Fix any issues raised, then return to step 3.
+5. **`/security-review`** — request security review. Fix any issues raised, then return
+   to step 3.
+6. **CI must pass on the final commit** — after all review-driven fixes, CI must be
+   green again on the HEAD commit.
+7. **Merge** — only when CI is green on the latest commit and both reviews approve.
+
+Branch protection enforces that status checks pass on the HEAD commit before merging.
+No merge is possible unless CI is green on the latest commit.
+
+### PR Formatting
+
+- PR titles should be concise and written in imperative mood (e.g., "Add chord
+  transposition support").
+- PR descriptions must include What, Why, Test results, and Review summary sections.

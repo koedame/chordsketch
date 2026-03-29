@@ -50,13 +50,20 @@ roadmap. High-level phases:
 5. **Phase 5** — Extended directives, metadata, transposition
 6. **Phase 6** — Additional renderers (HTML, PDF)
 
-## Auto-Merge Policy
+## Merge Policy
 
-Pull requests are merged to `main` when **all** of the following are true:
+Pull requests follow this workflow before merging to `main`:
 
-1. CI passes (fmt, clippy, test)
-2. `/review` approval is recorded
-3. `/security-review` approval is recorded
+1. **Implement + test** — author opens PR with code and tests
+2. **CI passes** — fmt, clippy, test must all be green
+3. **`/review`** — code review; fix any issues raised (go back to step 2)
+4. **`/security-review`** — security review; fix any issues raised (go back to step 2)
+5. **CI passes on the final commit** — after all fixes, CI must be green again
+6. **Merge** — only when CI is green on the latest commit and both reviews approve
+
+Branch protection requires status checks to pass on the HEAD commit before merging.
+No merge is possible unless CI is green on the latest commit, regardless of how many
+fix iterations occurred.
 
 ## Compatibility Strategy
 
