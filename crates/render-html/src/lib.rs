@@ -7,6 +7,87 @@ use chordpro_core::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
 use chordpro_core::inline_markup::{SpanAttributes, TextSpan};
 use chordpro_core::transpose::transpose_chord;
 
+// ---------------------------------------------------------------------------
+// Formatting state
+// ---------------------------------------------------------------------------
+
+/// Tracks the current font/size/color settings for an element type.
+///
+/// Formatting directives like `{textfont}`, `{chordsize}`, etc. set these
+/// values. The state persists until changed by another directive of the same
+/// type.
+#[derive(Default, Clone)]
+struct ElementStyle {
+    font: Option<String>,
+    size: Option<String>,
+    colour: Option<String>,
+}
+
+impl ElementStyle {
+    /// Generate a CSS `style` attribute string, or empty if no styles are set.
+    fn to_css(&self) -> String {
+        let mut css = String::new();
+        if let Some(ref font) = self.font {
+            css.push_str(&format!("font-family: {};", font));
+        }
+        if let Some(ref size) = self.size {
+            if size.chars().all(|c| c.is_ascii_digit()) {
+                css.push_str(&format!("font-size: {}pt;", size));
+            } else {
+                css.push_str(&format!("font-size: {};", size));
+            }
+        }
+        if let Some(ref colour) = self.colour {
+            css.push_str(&format!("color: {};", colour));
+        }
+        css
+    }
+}
+
+/// Formatting state for all element types.
+#[derive(Default, Clone)]
+struct FormattingState {
+    text: ElementStyle,
+    chord: ElementStyle,
+    tab: ElementStyle,
+    title: ElementStyle,
+    chorus: ElementStyle,
+    label: ElementStyle,
+    grid: ElementStyle,
+}
+
+impl FormattingState {
+    /// Apply a formatting directive, updating the appropriate style.
+    fn apply(&mut self, kind: &DirectiveKind, value: &Option<String>) {
+        let val = value.clone();
+        match kind {
+            DirectiveKind::TextFont => self.text.font = val,
+            DirectiveKind::TextSize => self.text.size = val,
+            DirectiveKind::TextColour => self.text.colour = val,
+            DirectiveKind::ChordFont => self.chord.font = val,
+            DirectiveKind::ChordSize => self.chord.size = val,
+            DirectiveKind::ChordColour => self.chord.colour = val,
+            DirectiveKind::TabFont => self.tab.font = val,
+            DirectiveKind::TabSize => self.tab.size = val,
+            DirectiveKind::TabColour => self.tab.colour = val,
+            DirectiveKind::TitleFont => self.title.font = val,
+            DirectiveKind::TitleSize => self.title.size = val,
+            DirectiveKind::TitleColour => self.title.colour = val,
+            DirectiveKind::ChorusFont => self.chorus.font = val,
+            DirectiveKind::ChorusSize => self.chorus.size = val,
+            DirectiveKind::ChorusColour => self.chorus.colour = val,
+            DirectiveKind::LabelFont => self.label.font = val,
+            DirectiveKind::LabelSize => self.label.size = val,
+            DirectiveKind::LabelColour => self.label.colour = val,
+            DirectiveKind::GridFont => self.grid.font = val,
+            DirectiveKind::GridSize => self.grid.size = val,
+            DirectiveKind::GridColour => self.grid.colour = val,
+            // Header/Footer/TOC directives are not rendered in the main body
+            _ => {}
+        }
+    }
+}
+
 /// Render a [`Song`] AST to an HTML5 document string.
 ///
 /// The output is a complete `<!DOCTYPE html>` document with embedded CSS
@@ -28,6 +109,7 @@ pub fn render_song(song: &Song) -> String {
 pub fn render_song_with_transpose(song: &Song, cli_transpose: i8) -> String {
     let mut html = String::new();
     let mut transpose_offset: i8 = cli_transpose;
+    let mut fmt_state = FormattingState::default();
 
     let title = song.metadata.title.as_deref().unwrap_or("Untitled");
     html.push_str(&format!(
@@ -51,7 +133,7 @@ pub fn render_song_with_transpose(song: &Song, cli_transpose: i8) -> String {
         match line {
             Line::Lyrics(lyrics_line) => {
                 let mut target = String::new();
-                render_lyrics(lyrics_line, transpose_offset, &mut target);
+                render_lyrics(lyrics_line, transpose_offset, &fmt_state, &mut target);
                 if let Some(buf) = chorus_buf.as_mut() {
                     buf.push_str(&target);
                 }
@@ -68,6 +150,10 @@ pub fn render_song_with_transpose(song: &Song, cli_transpose: i8) -> String {
                         .and_then(|v| v.parse().ok())
                         .unwrap_or(0);
                     transpose_offset = file_offset.saturating_add(cli_transpose);
+                    continue;
+                }
+                if directive.kind.is_font_size_color() {
+                    fmt_state.apply(&directive.kind, &directive.value);
                     continue;
                 }
                 match &directive.kind {
@@ -208,7 +294,13 @@ fn render_metadata(metadata: &chordpro_core::ast::Metadata, html: &mut String) {
 ///
 /// Each chord+text pair is wrapped in a `<span class="chord-block">` with
 /// the chord in `<span class="chord">` and the text in `<span class="lyrics">`.
-fn render_lyrics(lyrics_line: &LyricsLine, transpose_offset: i8, html: &mut String) {
+/// Formatting directives (font, size, color) are applied via inline CSS.
+fn render_lyrics(
+    lyrics_line: &LyricsLine,
+    transpose_offset: i8,
+    fmt_state: &FormattingState,
+    html: &mut String,
+) {
     html.push_str("<div class=\"line\">");
 
     for segment in &lyrics_line.segments {
@@ -221,16 +313,33 @@ fn render_lyrics(lyrics_line: &LyricsLine, transpose_offset: i8, html: &mut Stri
             } else {
                 chord.name.clone()
             };
-            html.push_str(&format!(
-                "<span class=\"chord\">{}</span>",
-                escape(&display_name)
-            ));
+            let chord_css = fmt_state.chord.to_css();
+            if chord_css.is_empty() {
+                html.push_str(&format!(
+                    "<span class=\"chord\">{}</span>",
+                    escape(&display_name)
+                ));
+            } else {
+                html.push_str(&format!(
+                    "<span class=\"chord\" style=\"{}\">{}</span>",
+                    escape(&chord_css),
+                    escape(&display_name)
+                ));
+            }
         } else if lyrics_line.has_chords() {
             // Empty chord placeholder to maintain vertical alignment.
             html.push_str("<span class=\"chord\"></span>");
         }
 
-        html.push_str("<span class=\"lyrics\">");
+        let text_css = fmt_state.text.to_css();
+        if text_css.is_empty() {
+            html.push_str("<span class=\"lyrics\">");
+        } else {
+            html.push_str(&format!(
+                "<span class=\"lyrics\" style=\"{}\">",
+                escape(&text_css)
+            ));
+        }
         if segment.has_markup() {
             render_spans(&segment.spans, html);
         } else {
@@ -753,6 +862,70 @@ mod transpose_tests {
         assert!(!html.contains("<b>"));
         assert!(!html.contains("<i>"));
         assert!(html.contains("Just plain text"));
+    }
+
+    // -- formatting directive tests -------------------------------------------
+
+    #[test]
+    fn test_textfont_directive_applies_css() {
+        let html = render("{textfont: Courier}\nHello world");
+        assert!(html.contains("font-family: Courier;"));
+    }
+
+    #[test]
+    fn test_textsize_directive_applies_css() {
+        let html = render("{textsize: 14}\nHello world");
+        assert!(html.contains("font-size: 14pt;"));
+    }
+
+    #[test]
+    fn test_textcolour_directive_applies_css() {
+        let html = render("{textcolour: blue}\nHello world");
+        assert!(html.contains("color: blue;"));
+    }
+
+    #[test]
+    fn test_chordfont_directive_applies_css() {
+        let html = render("{chordfont: Monospace}\n[Am]Hello");
+        assert!(html.contains("font-family: Monospace;"));
+    }
+
+    #[test]
+    fn test_chordsize_directive_applies_css() {
+        let html = render("{chordsize: 16}\n[Am]Hello");
+        // Chord span should have the size style
+        assert!(html.contains("font-size: 16pt;"));
+    }
+
+    #[test]
+    fn test_chordcolour_directive_applies_css() {
+        let html = render("{chordcolour: green}\n[Am]Hello");
+        assert!(html.contains("color: green;"));
+    }
+
+    #[test]
+    fn test_formatting_persists_across_lines() {
+        let html = render("{textcolour: red}\nLine one\nLine two");
+        // Both lines should have the color applied
+        let count = html.matches("color: red;").count();
+        assert!(
+            count >= 2,
+            "formatting should persist: found {count} matches"
+        );
+    }
+
+    #[test]
+    fn test_formatting_overridden_by_later_directive() {
+        let html = render("{textcolour: red}\nRed text\n{textcolour: blue}\nBlue text");
+        assert!(html.contains("color: red;"));
+        assert!(html.contains("color: blue;"));
+    }
+
+    #[test]
+    fn test_no_formatting_no_style_attr() {
+        let html = render("Plain text");
+        // lyrics span should not have a style attribute
+        assert!(!html.contains("<span class=\"lyrics\" style="));
     }
 }
 
