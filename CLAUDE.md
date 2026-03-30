@@ -49,12 +49,24 @@ This is a Cargo workspace with three crates:
 
 High-level phases:
 
-1. **Phase 1** — Workspace setup, CI, project scaffolding
-2. **Phase 2** — Core parser (ChordPro format lexer + AST)
-3. **Phase 3** — Plain text renderer
-4. **Phase 4** — CLI tool with file I/O
-5. **Phase 5** — Extended directives, metadata, transposition
-6. **Phase 6** — Additional renderers (HTML, PDF)
+1. **Phase 1** — Workspace setup, CI, project scaffolding ✅
+2. **Phase 2** — Core parser (ChordPro format lexer + AST) ✅
+3. **Phase 3** — Plain text renderer ✅
+4. **Phase 4** — CLI tool with file I/O ✅
+5. **Phase 5** — Extended directives, metadata, transposition ✅
+6. **Phase 6** — Additional renderers (HTML, PDF) ✅
+7. **Phase 7** — Missing metadata, `{meta}`, `{transpose}` directives
+8. **Phase 8** — Additional section environments (grid, custom, chorus recall)
+9. **Phase 9** — Inline markup parsing and rendering
+10. **Phase 10** — Font, size, and color directives (legacy formatting)
+11. **Phase 11** — Page control and multi-page PDF
+12. **Phase 12** — Image directive
+13. **Phase 13** — Configuration file system (chordpro.json, RRJSON)
+14. **Phase 14** — Chord diagram rendering and extended `{define}`
+15. **Phase 15** — Delegate environments (ABC, Lilypond, SVG, textblock)
+16. **Phase 16** — Conditional directive selectors
+17. **Phase 17** — Multi-song files and `{new_song}` directive
+18. **Phase 18** — Perl reference implementation compatibility testing
 
 ## Merge Policy
 
