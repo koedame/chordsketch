@@ -9,7 +9,8 @@
 //!
 //! Tags may be nested: `<b><i>text</i></b>`.
 //!
-//! Unclosed or malformed tags are treated as plain text (graceful degradation).
+//! Unclosed tags wrap all remaining text (per ChordPro spec). Unrecognized or
+//! malformed tags are treated as plain text (graceful degradation).
 //!
 //! # Examples
 //!
@@ -84,7 +85,8 @@ pub fn has_inline_markup(text: &str) -> bool {
 /// Parses inline markup tags from text and returns a list of [`TextSpan`]s.
 ///
 /// When the text contains no markup, a single `TextSpan::Plain` is returned.
-/// Unclosed or unrecognized tags are treated as plain text.
+/// Unclosed tags wrap all remaining text (per ChordPro spec). Unrecognized
+/// tags are treated as plain text.
 ///
 /// # Examples
 ///
