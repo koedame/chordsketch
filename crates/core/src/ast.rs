@@ -23,6 +23,8 @@
 //! resolves short aliases (e.g., `t` → `title`) and performs case-insensitive
 //! matching per the ChordPro specification.
 
+use crate::inline_markup::TextSpan;
+
 // ---------------------------------------------------------------------------
 // Song (root node)
 // ---------------------------------------------------------------------------
@@ -210,10 +212,12 @@ pub enum CommentStyle {
 ///         LyricsSegment {
 ///             chord: Some(Chord::new("Am")),
 ///             text: "Hello ".to_string(),
+///             spans: vec![],
 ///         },
 ///         LyricsSegment {
 ///             chord: Some(Chord::new("G")),
 ///             text: "world".to_string(),
+///             spans: vec![],
 ///         },
 ///     ],
 /// };
@@ -268,7 +272,18 @@ pub struct LyricsSegment {
     /// The chord annotation, if any, placed above the start of `text`.
     pub chord: Option<Chord>,
     /// The lyric text following the chord (may be empty).
+    ///
+    /// When inline markup is present, this field contains the plain text
+    /// content with all markup tags stripped. Renderers that do not support
+    /// markup can always use this field directly.
     pub text: String,
+    /// Inline markup spans parsed from the text.
+    ///
+    /// When the text contains inline markup tags (e.g., `<b>`, `<i>`,
+    /// `<highlight>`, `<comment>`), this field holds the parsed span tree.
+    /// When no markup is present, this vector is empty and renderers should
+    /// use the `text` field instead.
+    pub spans: Vec<TextSpan>,
 }
 
 impl LyricsSegment {
@@ -278,6 +293,7 @@ impl LyricsSegment {
         Self {
             chord,
             text: text.into(),
+            spans: Vec::new(),
         }
     }
 
@@ -287,6 +303,7 @@ impl LyricsSegment {
         Self {
             chord: None,
             text: text.into(),
+            spans: Vec::new(),
         }
     }
 
@@ -296,7 +313,24 @@ impl LyricsSegment {
         Self {
             chord: Some(chord),
             text: String::new(),
+            spans: Vec::new(),
         }
+    }
+
+    /// Creates a new segment with chord, text, and inline markup spans.
+    #[must_use]
+    pub fn with_spans(chord: Option<Chord>, text: impl Into<String>, spans: Vec<TextSpan>) -> Self {
+        Self {
+            chord,
+            text: text.into(),
+            spans,
+        }
+    }
+
+    /// Returns `true` if this segment has inline markup spans.
+    #[must_use]
+    pub fn has_markup(&self) -> bool {
+        !self.spans.is_empty()
     }
 }
 

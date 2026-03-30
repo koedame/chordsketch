@@ -35,6 +35,7 @@ use crate::ast::{
     Chord, CommentStyle, Directive, DirectiveKind, ImageAttributes, Line, LyricsLine,
     LyricsSegment, Song,
 };
+use crate::inline_markup;
 use crate::token::{Span, Token, TokenKind};
 
 // ---------------------------------------------------------------------------
@@ -747,8 +748,31 @@ impl Parser {
         if segments.is_empty() {
             Ok(Line::Empty)
         } else {
+            // Parse inline markup for each segment's text.
+            let segments = segments
+                .into_iter()
+                .map(Self::apply_inline_markup)
+                .collect();
             Ok(Line::Lyrics(LyricsLine { segments }))
         }
+    }
+
+    /// Applies inline markup parsing to a lyrics segment.
+    ///
+    /// If the segment's text contains inline markup tags, the `spans` field is
+    /// populated with the parsed span tree and the `text` field is updated to
+    /// contain only the plain text (markup tags stripped). If no markup is found,
+    /// the segment is returned unchanged.
+    fn apply_inline_markup(mut segment: LyricsSegment) -> LyricsSegment {
+        if inline_markup::has_inline_markup(&segment.text) {
+            let spans = inline_markup::parse_inline_markup(&segment.text);
+            if !spans.is_empty() {
+                // Update text to be the plain-text version (tags stripped)
+                segment.text = inline_markup::spans_to_plain_text(&spans);
+                segment.spans = spans;
+            }
+        }
+        segment
     }
 
     /// Parses a chord annotation: `[` text `]`.
@@ -2536,6 +2560,30 @@ mod tests {
         }
     }
 
+    // -- Inline markup in lyrics -------------------------------------------
+
+    #[test]
+    fn lyrics_with_bold_markup() {
+        use crate::inline_markup::TextSpan;
+
+        let result = lines("[Am]Hello <b>world</b>");
+        match &result[0] {
+            Line::Lyrics(lyrics) => {
+                assert_eq!(lyrics.segments.len(), 1);
+                let seg = &lyrics.segments[0];
+                assert_eq!(seg.text, "Hello world");
+                assert_eq!(
+                    seg.spans,
+                    vec![
+                        TextSpan::Plain("Hello ".to_string()),
+                        TextSpan::Bold(vec![TextSpan::Plain("world".to_string())]),
+                    ]
+                );
+            }
+            _ => panic!("expected lyrics line"),
+        }
+    }
+
     #[test]
     fn custom_section_case_insensitive() {
         let result = lines("{Start_Of_Intro}");
@@ -2569,6 +2617,20 @@ mod tests {
         }
     }
 
+    // --- Inline markup (#112) ---
+
+    #[test]
+    fn lyrics_without_markup_has_empty_spans() {
+        let result = lines("[Am]Hello world");
+        match &result[0] {
+            Line::Lyrics(lyrics) => {
+                assert_eq!(lyrics.segments[0].text, "Hello world");
+                assert!(lyrics.segments[0].spans.is_empty());
+            }
+            _ => panic!("expected lyrics line"),
+        }
+    }
+
     #[test]
     fn image_directive_all_attributes() {
         let song =
@@ -2591,6 +2653,25 @@ mod tests {
     }
 
     #[test]
+    fn lyrics_with_nested_markup() {
+        use crate::inline_markup::TextSpan;
+
+        let result = lines("<b><i>both</i></b>");
+        match &result[0] {
+            Line::Lyrics(lyrics) => {
+                assert_eq!(lyrics.segments[0].text, "both");
+                assert_eq!(
+                    lyrics.segments[0].spans,
+                    vec![TextSpan::Bold(vec![TextSpan::Italic(vec![
+                        TextSpan::Plain("both".to_string())
+                    ])])]
+                );
+            }
+            _ => panic!("expected lyrics line"),
+        }
+    }
+
+    #[test]
     fn image_directive_quoted_value_with_spaces() {
         let song = parse(r#"{image: src=cover.jpg title="My Great Album"}"#).unwrap();
         if let Line::Directive(ref d) = song.lines[0] {
@@ -2602,6 +2683,20 @@ mod tests {
             }
         } else {
             panic!("expected directive");
+        }
+    }
+
+    #[test]
+    fn lyrics_markup_text_field_has_stripped_content() {
+        let result = lines("<b>bold</b> and <i>italic</i> text");
+        match &result[0] {
+            Line::Lyrics(lyrics) => {
+                // text field should have markup stripped
+                assert_eq!(lyrics.segments[0].text, "bold and italic text");
+                // spans should be populated
+                assert!(!lyrics.segments[0].spans.is_empty());
+            }
+            _ => panic!("expected lyrics line"),
         }
     }
 
@@ -2905,5 +3000,17 @@ mod delegate_tests {
             DirectiveKind::from_name("start_of_textblock"),
             DirectiveKind::StartOfTextblock
         );
+    }
+
+    #[test]
+    fn lyrics_markup_preserves_backward_compat() {
+        // The LyricsLine::text() method should return plain text
+        let result = lines("[Am]Hello <b>bold</b> [G]world");
+        match &result[0] {
+            Line::Lyrics(lyrics) => {
+                assert_eq!(lyrics.text(), "Hello bold world");
+            }
+            _ => panic!("expected lyrics line"),
+        }
     }
 }
