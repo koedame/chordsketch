@@ -594,8 +594,8 @@ mod tests {
 
     #[test]
     fn test_float_value() {
-        let v = parse_rrjson(r#"{"n": 3.14}"#).unwrap();
-        assert_eq!(v["n"], Value::Number(3.14));
+        let v = parse_rrjson(r#"{"n": 2.75}"#).unwrap();
+        assert_eq!(v["n"], Value::Number(2.75));
     }
 
     #[test]
@@ -779,8 +779,8 @@ mod tests {
 
     #[test]
     fn test_value_as_f64() {
-        let v = Value::Number(3.14);
-        assert_eq!(v.as_f64(), Some(3.14));
+        let v = Value::Number(2.75);
+        assert_eq!(v.as_f64(), Some(2.75));
         assert_eq!(Value::Null.as_f64(), None);
     }
 
