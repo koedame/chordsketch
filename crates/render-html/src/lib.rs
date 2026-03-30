@@ -513,8 +513,55 @@ fn render_directive_inner(directive: &chordpro_core::ast::Directive, html: &mut 
         | DirectiveKind::EndOfSection(_) => {
             html.push_str("</section>\n");
         }
+        DirectiveKind::Image(attrs) => {
+            render_image(attrs, html);
+        }
         _ => {}
     }
+}
+
+/// Render an `{image}` directive as an HTML `<img>` element.
+fn render_image(attrs: &chordpro_core::ast::ImageAttributes, html: &mut String) {
+    let mut style = String::new();
+    let mut img_attrs = format!("src=\"{}\"", escape(&attrs.src));
+
+    if let Some(ref title) = attrs.title {
+        img_attrs.push_str(&format!(" alt=\"{}\"", escape(title)));
+    }
+
+    if let Some(ref width) = attrs.width {
+        img_attrs.push_str(&format!(" width=\"{}\"", escape(width)));
+    }
+    if let Some(ref height) = attrs.height {
+        img_attrs.push_str(&format!(" height=\"{}\"", escape(height)));
+    }
+    if let Some(ref scale) = attrs.scale {
+        // Scale as a CSS transform
+        style.push_str(&format!(
+            "transform: scale({});transform-origin: top left;",
+            escape(scale)
+        ));
+    }
+
+    // Determine wrapper alignment
+    let align_css = match attrs.anchor.as_deref() {
+        Some("line") | None => "",
+        Some("column") => "text-align: center;",
+        Some("paper") => "text-align: center;",
+        _ => "",
+    };
+
+    if !align_css.is_empty() {
+        html.push_str(&format!("<div style=\"{}\">", align_css));
+    } else {
+        html.push_str("<div>");
+    }
+
+    html.push_str(&format!("<img {}", img_attrs));
+    if !style.is_empty() {
+        html.push_str(&format!(" style=\"{}\"", escape(&style)));
+    }
+    html.push_str("></div>\n");
 }
 
 /// Capitalize the first character of a string.
@@ -987,6 +1034,33 @@ mod transpose_tests {
     fn test_new_page_generates_page_break() {
         let html = render("Page 1\n{new_page}\nPage 2");
         assert!(html.contains("break-before: page;"));
+    }
+
+    // -- image directive tests ------------------------------------------------
+
+    #[test]
+    fn test_image_basic() {
+        let html = render("{image: src=photo.jpg}");
+        assert!(html.contains("<img src=\"photo.jpg\""));
+    }
+
+    #[test]
+    fn test_image_with_dimensions() {
+        let html = render("{image: src=photo.jpg width=200 height=100}");
+        assert!(html.contains("width=\"200\""));
+        assert!(html.contains("height=\"100\""));
+    }
+
+    #[test]
+    fn test_image_with_title() {
+        let html = render("{image: src=photo.jpg title=\"My Photo\"}");
+        assert!(html.contains("alt=\"My Photo\""));
+    }
+
+    #[test]
+    fn test_image_with_scale() {
+        let html = render("{image: src=photo.jpg scale=0.5}");
+        assert!(html.contains("scale(0.5)"));
     }
 }
 
