@@ -51,14 +51,27 @@ pub fn render_song(song: &Song) -> String {
     result
 }
 
-/// Render a ChordPro source string to plain text.
+/// Parse a ChordPro source string and render it to plain text.
 ///
-/// This is a convenience function that parses the input and renders it.
-/// If parsing fails, the error message is returned as the output.
+/// Returns `Ok(text)` on success, or the [`chordpro_core::ParseError`] if
+/// the input cannot be parsed.
+///
+/// For pre-parsed input, use [`render_song`] directly.
+pub fn try_render(input: &str) -> Result<String, chordpro_core::ParseError> {
+    let song = chordpro_core::parse(input)?;
+    Ok(render_song(&song))
+}
+
+/// Parse a ChordPro source string and render it to plain text.
+///
+/// This is a convenience wrapper around [`try_render`] that converts parse
+/// errors into a human-readable error string. Because success and failure
+/// both return a `String`, callers **cannot** distinguish between them
+/// programmatically — use [`try_render`] if you need error handling.
 #[must_use]
 pub fn render(input: &str) -> String {
-    match chordpro_core::parse(input) {
-        Ok(song) => render_song(&song),
+    match try_render(input) {
+        Ok(text) => text,
         Err(e) => format!(
             "Parse error at line {} column {}: {}\n",
             e.line(),
@@ -96,6 +109,9 @@ fn render_metadata(metadata: &chordpro_core::ast::Metadata, output: &mut Vec<Str
 ///   2. The lyrics text.
 ///
 /// If the line has no chords, only the lyrics text is emitted.
+///
+/// Alignment is based on character count (`chars().count()`), which correctly
+/// handles multi-byte UTF-8 sequences in lyrics text.
 fn render_lyrics(lyrics_line: &LyricsLine, output: &mut Vec<String>) {
     if !lyrics_line.has_chords() {
         output.push(lyrics_line.text());
@@ -109,8 +125,8 @@ fn render_lyrics(lyrics_line: &LyricsLine, output: &mut Vec<String>) {
         let chord_name = segment.chord.as_ref().map_or("", |c| c.name.as_str());
         let text = &segment.text;
 
-        let chord_len = chord_name.len();
-        let text_len = text.len();
+        let chord_len = chord_name.chars().count();
+        let text_len = text.chars().count();
 
         // Write the chord (or equivalent spacing) on the chord line.
         chord_line.push_str(chord_name);
@@ -349,5 +365,59 @@ mod tests {
         let input = "{start_of_tab}\ne|---0---|\n{end_of_tab}";
         let output = render(input);
         assert_eq!(output, "[Tab]\ne|---0---|\n");
+    }
+
+    // --- Issue #65: Unicode alignment ---
+
+    #[test]
+    fn test_render_multibyte_lyrics_alignment() {
+        // Japanese text: each char is 3 bytes but 1 char
+        let input = "[Am]こんにちは [G]世界";
+        let output = render(input);
+        // "こんにちは " = 6 chars, "Am" = 2 chars → pad chord line by 4
+        // "世界" = 2 chars, "G" = 1 char → pad chord line by 1
+        assert_eq!(output, "Am    G\nこんにちは 世界\n");
+    }
+
+    #[test]
+    fn test_render_accented_lyrics_alignment() {
+        let input = "[Em]café [D]résumé";
+        let output = render(input);
+        assert_eq!(output, "Em   D\ncafé résumé\n");
+    }
+
+    // --- Issue #66: Text before first chord ---
+
+    #[test]
+    fn test_render_text_before_first_chord() {
+        let input = "Hello [Am]world";
+        let output = render(input);
+        assert_eq!(output, "      Am\nHello world\n");
+    }
+
+    #[test]
+    fn test_render_text_before_first_chord_multiple() {
+        let input = "I say [Am]hello [G]world";
+        let output = render(input);
+        assert_eq!(output, "      Am    G\nI say hello world\n");
+    }
+
+    // --- Issue #67: try_render API ---
+
+    #[test]
+    fn test_try_render_success() {
+        let result = try_render("{title: Test}\n[Am]Hello");
+        assert!(result.is_ok());
+        let text = result.unwrap();
+        assert!(text.contains("Test"));
+        assert!(text.contains("Am"));
+    }
+
+    #[test]
+    fn test_try_render_parse_error() {
+        let result = try_render("{title: unclosed");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.line(), 1);
     }
 }
