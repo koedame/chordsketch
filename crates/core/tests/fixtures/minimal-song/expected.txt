@@ -37,6 +37,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "Hello, world!",
+                        spans: [],
                     },
                 ],
             },

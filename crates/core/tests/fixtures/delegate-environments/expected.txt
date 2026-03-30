@@ -33,6 +33,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "X:1",
+                        spans: [],
                     },
                 ],
             },
@@ -43,6 +44,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "T:Test",
+                        spans: [],
                     },
                 ],
             },
@@ -53,6 +55,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "M:4/4",
+                        spans: [],
                     },
                 ],
             },
@@ -63,6 +66,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "K:G",
+                        spans: [],
                     },
                 ],
             },
@@ -73,6 +77,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "|:GABc|d2d2:|",
+                        spans: [],
                     },
                 ],
             },
@@ -97,6 +102,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "\\relative c' { c4 d e f | g1 }",
+                        spans: [],
                     },
                 ],
             },
@@ -121,6 +127,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "<svg><circle cx=\"50\" cy=\"50\" r=\"40\"/></svg>",
+                        spans: [],
                     },
                 ],
             },
@@ -145,6 +152,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "This is [verbatim] text with {braces} and [brackets].",
+                        spans: [],
                     },
                 ],
             },
@@ -155,6 +163,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "No chord parsing here.",
+                        spans: [],
                     },
                 ],
             },
@@ -185,6 +194,7 @@ Song {
                             },
                         ),
                         text: "After delegate sections",
+                        spans: [],
                     },
                 ],
             },

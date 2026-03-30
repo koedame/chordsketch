@@ -173,6 +173,7 @@ fn transpose_lyrics(lyrics_line: &LyricsLine, semitones: i8) -> LyricsLine {
             .segments
             .iter()
             .map(|seg| LyricsSegment {
+                spans: seg.spans.clone(),
                 chord: seg.chord.as_ref().map(|c| transpose_chord(c, semitones)),
                 text: seg.text.clone(),
             })
