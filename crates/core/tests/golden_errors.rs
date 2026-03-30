@@ -34,7 +34,13 @@ fn error_fixtures_dir() -> PathBuf {
 fn discover_error_fixtures() -> Vec<PathBuf> {
     let dir = error_fixtures_dir();
     let mut fixtures: Vec<PathBuf> = fs::read_dir(&dir)
-        .unwrap_or_else(|e| panic!("cannot read error_fixtures directory {}: {}", dir.display(), e))
+        .unwrap_or_else(|e| {
+            panic!(
+                "cannot read error_fixtures directory {}: {}",
+                dir.display(),
+                e
+            )
+        })
         .filter_map(|entry| {
             let entry = entry.ok()?;
             let path = entry.path();
@@ -64,8 +70,9 @@ fn run_error_golden_test(fixture_dir: &Path) {
     let input = fs::read_to_string(&input_path)
         .unwrap_or_else(|e| panic!("[{name}] cannot read {}: {e}", input_path.display()));
 
-    let err = chordpro_core::parse(&input)
-        .expect_err(&format!("[{name}] expected parse error but parsing succeeded"));
+    let err = chordpro_core::parse(&input).expect_err(&format!(
+        "[{name}] expected parse error but parsing succeeded"
+    ));
 
     let actual = format!("{err}\n");
 
@@ -77,15 +84,18 @@ fn run_error_golden_test(fixture_dir: &Path) {
         return;
     }
 
-    let expected = fs::read_to_string(&expected_path).unwrap_or_else(|e| {
-        panic!(
-            "[{name}] cannot read {} (run `UPDATE_GOLDEN=1 cargo test -p chordpro-core --test golden_errors` to create it): {e}",
-            expected_path.display()
-        )
-    });
+    let expected = fs::read_to_string(&expected_path)
+        .unwrap_or_else(|e| {
+            panic!(
+                "[{name}] cannot read {} (run `UPDATE_GOLDEN=1 cargo test -p chordpro-core --test golden_errors` to create it): {e}",
+                expected_path.display()
+            )
+        })
+        .replace("\r\n", "\n");
 
     assert_eq!(
-        actual, expected,
+        actual,
+        expected,
         "\n\nerror golden test '{name}' failed!\n\
          \n\
          Fixture: {}\n\
