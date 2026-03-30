@@ -32,7 +32,8 @@
 
 use crate::Lexer;
 use crate::ast::{
-    Chord, CommentStyle, Directive, DirectiveKind, Line, LyricsLine, LyricsSegment, Song,
+    Chord, CommentStyle, Directive, DirectiveKind, ImageAttributes, Line, LyricsLine,
+    LyricsSegment, Song,
 };
 use crate::token::{Span, Token, TokenKind};
 
@@ -565,6 +566,22 @@ impl Parser {
             return Ok(Line::Directive(directive));
         }
 
+        // Image directive: parse key=value attributes from the value string.
+        if kind.is_image() {
+            let attrs = match &value {
+                Some(v) => parse_image_attributes(v),
+                None => ImageAttributes::default(),
+            };
+            let kind = DirectiveKind::Image(attrs);
+            let canonical = kind.canonical_name().to_string();
+            let directive = Directive {
+                name: canonical,
+                value,
+                kind,
+            };
+            return Ok(Line::Directive(directive));
+        }
+
         // Build the directive with canonical name and kind.
         let canonical = kind.full_canonical_name();
         let directive = Directive {
@@ -882,6 +899,115 @@ pub fn parse_lenient_with_options(input: &str, options: &ParseOptions) -> ParseR
     }
     let tokens = Lexer::new(input).tokenize();
     Parser::new(tokens).parse_lenient()
+}
+
+// ---------------------------------------------------------------------------
+// Image attribute parsing
+// ---------------------------------------------------------------------------
+
+/// Parses the value string of an `{image}` directive into [`ImageAttributes`].
+///
+/// The value string is expected to contain `key=value` pairs separated by
+/// whitespace. Quoted values (e.g., `title="Album Cover"`) are supported.
+/// Unknown keys are silently ignored.
+///
+/// # Examples
+///
+/// ```
+/// # use chordpro_core::parser::parse_image_attributes;
+/// # use chordpro_core::ast::ImageAttributes;
+/// let attrs = parse_image_attributes("src=photo.jpg width=200");
+/// assert_eq!(attrs.src, "photo.jpg");
+/// assert_eq!(attrs.width.as_deref(), Some("200"));
+/// ```
+#[must_use]
+pub fn parse_image_attributes(input: &str) -> ImageAttributes {
+    let mut attrs = ImageAttributes::default();
+    let pairs = split_key_value_pairs(input);
+
+    for (key, value) in pairs {
+        match key.as_str() {
+            "src" => attrs.src = value,
+            "width" => attrs.width = Some(value),
+            "height" => attrs.height = Some(value),
+            "scale" => attrs.scale = Some(value),
+            "title" => attrs.title = Some(value),
+            "anchor" => attrs.anchor = Some(value),
+            _ => {
+                // Unknown attributes are silently ignored per spec.
+            }
+        }
+    }
+
+    attrs
+}
+
+/// Splits an input string into `(key, value)` pairs from `key=value` tokens.
+///
+/// Handles both unquoted values (`key=value`) and quoted values
+/// (`key="value with spaces"`). Tokens without an `=` sign are ignored.
+fn split_key_value_pairs(input: &str) -> Vec<(String, String)> {
+    let mut pairs = Vec::new();
+    let chars: Vec<char> = input.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+
+    while i < len {
+        // Skip whitespace.
+        while i < len && chars[i].is_whitespace() {
+            i += 1;
+        }
+        if i >= len {
+            break;
+        }
+
+        // Read key (up to '=' or whitespace).
+        let key_start = i;
+        while i < len && chars[i] != '=' && !chars[i].is_whitespace() {
+            i += 1;
+        }
+        let key: String = chars[key_start..i].iter().collect();
+
+        if i >= len || chars[i] != '=' {
+            // No '=' found — skip this token.
+            // Advance past any non-whitespace to avoid infinite loop.
+            while i < len && !chars[i].is_whitespace() {
+                i += 1;
+            }
+            continue;
+        }
+
+        // Skip '='.
+        i += 1;
+
+        // Read value (possibly quoted).
+        let value = if i < len && chars[i] == '"' {
+            // Quoted value: read until closing '"'.
+            i += 1; // skip opening quote
+            let val_start = i;
+            while i < len && chars[i] != '"' {
+                i += 1;
+            }
+            let val: String = chars[val_start..i].iter().collect();
+            if i < len {
+                i += 1; // skip closing quote
+            }
+            val
+        } else {
+            // Unquoted value: read until whitespace.
+            let val_start = i;
+            while i < len && !chars[i].is_whitespace() {
+                i += 1;
+            }
+            chars[val_start..i].iter().collect()
+        };
+
+        if !key.is_empty() {
+            pairs.push((key, value));
+        }
+    }
+
+    pairs
 }
 
 // ---------------------------------------------------------------------------
@@ -2343,5 +2469,201 @@ mod tests {
         } else {
             panic!("expected directive");
         }
+    }
+
+    // --- Image directive (#124) ---
+
+    #[test]
+    fn image_directive_basic() {
+        let song = parse("{image: src=photo.jpg}").unwrap();
+        if let Line::Directive(ref d) = song.lines[0] {
+            assert_eq!(d.name, "image");
+            if let DirectiveKind::Image(ref attrs) = d.kind {
+                assert_eq!(attrs.src, "photo.jpg");
+                assert!(attrs.width.is_none());
+                assert!(attrs.height.is_none());
+                assert!(attrs.scale.is_none());
+                assert!(attrs.title.is_none());
+                assert!(attrs.anchor.is_none());
+            } else {
+                panic!("expected Image directive kind");
+            }
+        } else {
+            panic!("expected directive");
+        }
+    }
+
+    #[test]
+    fn image_directive_all_attributes() {
+        let song =
+            parse(r#"{image: src=logo.png width=200 height=100 scale=0.5 title="Album Cover" anchor=top}"#)
+                .unwrap();
+        if let Line::Directive(ref d) = song.lines[0] {
+            if let DirectiveKind::Image(ref attrs) = d.kind {
+                assert_eq!(attrs.src, "logo.png");
+                assert_eq!(attrs.width.as_deref(), Some("200"));
+                assert_eq!(attrs.height.as_deref(), Some("100"));
+                assert_eq!(attrs.scale.as_deref(), Some("0.5"));
+                assert_eq!(attrs.title.as_deref(), Some("Album Cover"));
+                assert_eq!(attrs.anchor.as_deref(), Some("top"));
+            } else {
+                panic!("expected Image directive kind");
+            }
+        } else {
+            panic!("expected directive");
+        }
+    }
+
+    #[test]
+    fn image_directive_quoted_value_with_spaces() {
+        let song = parse(r#"{image: src=cover.jpg title="My Great Album"}"#).unwrap();
+        if let Line::Directive(ref d) = song.lines[0] {
+            if let DirectiveKind::Image(ref attrs) = d.kind {
+                assert_eq!(attrs.src, "cover.jpg");
+                assert_eq!(attrs.title.as_deref(), Some("My Great Album"));
+            } else {
+                panic!("expected Image directive kind");
+            }
+        } else {
+            panic!("expected directive");
+        }
+    }
+
+    #[test]
+    fn image_directive_no_value() {
+        let song = parse("{image}").unwrap();
+        if let Line::Directive(ref d) = song.lines[0] {
+            assert_eq!(d.name, "image");
+            if let DirectiveKind::Image(ref attrs) = d.kind {
+                assert_eq!(attrs.src, "");
+            } else {
+                panic!("expected Image directive kind");
+            }
+        } else {
+            panic!("expected directive");
+        }
+    }
+
+    #[test]
+    fn image_directive_unknown_attributes_ignored() {
+        let song = parse("{image: src=pic.jpg unknown=foo bar}").unwrap();
+        if let Line::Directive(ref d) = song.lines[0] {
+            if let DirectiveKind::Image(ref attrs) = d.kind {
+                assert_eq!(attrs.src, "pic.jpg");
+                // unknown attribute is silently ignored
+            } else {
+                panic!("expected Image directive kind");
+            }
+        } else {
+            panic!("expected directive");
+        }
+    }
+
+    #[test]
+    fn image_directive_case_insensitive() {
+        let song = parse("{IMAGE: src=photo.jpg}").unwrap();
+        if let Line::Directive(ref d) = song.lines[0] {
+            assert_eq!(d.name, "image");
+            assert!(d.kind.is_image());
+        } else {
+            panic!("expected directive");
+        }
+    }
+
+    #[test]
+    fn image_directive_width_only() {
+        let song = parse("{image: src=img.png width=50%}").unwrap();
+        if let Line::Directive(ref d) = song.lines[0] {
+            if let DirectiveKind::Image(ref attrs) = d.kind {
+                assert_eq!(attrs.src, "img.png");
+                assert_eq!(attrs.width.as_deref(), Some("50%"));
+                assert!(attrs.height.is_none());
+            } else {
+                panic!("expected Image directive kind");
+            }
+        } else {
+            panic!("expected directive");
+        }
+    }
+
+    #[test]
+    fn image_directive_preserves_raw_value() {
+        let song = parse("{image: src=photo.jpg width=200}").unwrap();
+        if let Line::Directive(ref d) = song.lines[0] {
+            // The raw value string is preserved.
+            assert_eq!(d.value.as_deref(), Some("src=photo.jpg width=200"));
+        } else {
+            panic!("expected directive");
+        }
+    }
+
+    // --- parse_image_attributes unit tests ---
+
+    #[test]
+    fn parse_image_attributes_empty_input() {
+        let attrs = super::parse_image_attributes("");
+        assert_eq!(attrs.src, "");
+        assert!(attrs.width.is_none());
+    }
+
+    #[test]
+    fn parse_image_attributes_src_only() {
+        let attrs = super::parse_image_attributes("src=test.png");
+        assert_eq!(attrs.src, "test.png");
+    }
+
+    #[test]
+    fn parse_image_attributes_multiple() {
+        let attrs = super::parse_image_attributes("src=a.jpg width=100 height=200");
+        assert_eq!(attrs.src, "a.jpg");
+        assert_eq!(attrs.width.as_deref(), Some("100"));
+        assert_eq!(attrs.height.as_deref(), Some("200"));
+    }
+
+    #[test]
+    fn parse_image_attributes_quoted_value() {
+        let attrs = super::parse_image_attributes(r#"src=a.jpg title="Hello World""#);
+        assert_eq!(attrs.src, "a.jpg");
+        assert_eq!(attrs.title.as_deref(), Some("Hello World"));
+    }
+
+    #[test]
+    fn parse_image_attributes_extra_whitespace() {
+        let attrs = super::parse_image_attributes("  src=a.jpg   width=100  ");
+        assert_eq!(attrs.src, "a.jpg");
+        assert_eq!(attrs.width.as_deref(), Some("100"));
+    }
+
+    #[test]
+    fn split_key_value_pairs_basic() {
+        let pairs = super::split_key_value_pairs("key=value");
+        assert_eq!(pairs, vec![("key".to_string(), "value".to_string())]);
+    }
+
+    #[test]
+    fn split_key_value_pairs_quoted() {
+        let pairs = super::split_key_value_pairs(r#"key="hello world""#);
+        assert_eq!(pairs, vec![("key".to_string(), "hello world".to_string())]);
+    }
+
+    #[test]
+    fn split_key_value_pairs_mixed() {
+        let pairs = super::split_key_value_pairs(r#"a=1 b="two three" c=4"#);
+        assert_eq!(pairs.len(), 3);
+        assert_eq!(pairs[0], ("a".to_string(), "1".to_string()));
+        assert_eq!(pairs[1], ("b".to_string(), "two three".to_string()));
+        assert_eq!(pairs[2], ("c".to_string(), "4".to_string()));
+    }
+
+    #[test]
+    fn split_key_value_pairs_no_equals() {
+        let pairs = super::split_key_value_pairs("bare_token");
+        assert!(pairs.is_empty());
+    }
+
+    #[test]
+    fn split_key_value_pairs_empty() {
+        let pairs = super::split_key_value_pairs("");
+        assert!(pairs.is_empty());
     }
 }

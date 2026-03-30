@@ -343,6 +343,52 @@ impl core::fmt::Display for Chord {
 }
 
 // ---------------------------------------------------------------------------
+// ImageAttributes
+// ---------------------------------------------------------------------------
+
+/// Attributes for the `{image}` directive.
+///
+/// The `{image}` directive embeds an image in the song. The `src` attribute
+/// is required; all other attributes are optional.
+///
+/// # Examples
+///
+/// ```
+/// use chordpro_core::ast::ImageAttributes;
+///
+/// let attrs = ImageAttributes::new("photo.jpg");
+/// assert_eq!(attrs.src, "photo.jpg");
+/// assert!(attrs.width.is_none());
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct ImageAttributes {
+    /// The image file path (required).
+    pub src: String,
+    /// Display width (e.g., "100", "50%").
+    pub width: Option<String>,
+    /// Display height (e.g., "200", "75%").
+    pub height: Option<String>,
+    /// Scale factor (e.g., "0.5").
+    pub scale: Option<String>,
+    /// Image title or alt text.
+    pub title: Option<String>,
+    /// Positioning anchor.
+    pub anchor: Option<String>,
+}
+
+impl ImageAttributes {
+    /// Creates a new `ImageAttributes` with the given source path and all
+    /// optional fields set to `None`.
+    #[must_use]
+    pub fn new(src: impl Into<String>) -> Self {
+        Self {
+            src: src.into(),
+            ..Self::default()
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // DirectiveKind
 // ---------------------------------------------------------------------------
 
@@ -456,6 +502,10 @@ pub enum DirectiveKind {
     /// field using the generic `{meta}` directive syntax.
     Meta(String),
 
+    // -- Image directive ----------------------------------------------------
+    /// `{image: src=filename}` — embeds an image with optional attributes.
+    Image(ImageAttributes),
+
     // -- Unknown ------------------------------------------------------------
     /// A directive not recognized as a standard ChordPro directive.
     /// The original directive name (lowercased) is preserved.
@@ -516,6 +566,10 @@ impl DirectiveKind {
             // Generic metadata
             "meta" => Self::Meta(String::new()),
 
+            // Image — recognized but requires attribute parsing by the parser.
+            // from_name returns a placeholder; the parser replaces it.
+            "image" => Self::Image(ImageAttributes::default()),
+
             // Custom sections (start_of_X / end_of_X)
             other => {
                 if let Some(section) = other.strip_prefix("start_of_") {
@@ -573,6 +627,8 @@ impl DirectiveKind {
             Self::Define => "define",
             Self::ChordDirective => "chord",
             Self::Meta(_) => "meta",
+
+            Self::Image(_) => "image",
             Self::StartOfSection(name) | Self::EndOfSection(name) | Self::Unknown(name) => {
                 name.as_str()
             }
@@ -657,6 +713,12 @@ impl DirectiveKind {
     #[must_use]
     pub fn is_environment(&self) -> bool {
         self.is_section_start() || self.is_section_end()
+    }
+
+    /// Returns `true` if this is the image directive.
+    #[must_use]
+    pub fn is_image(&self) -> bool {
+        matches!(self, Self::Image(_))
     }
 }
 
