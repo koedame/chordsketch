@@ -36,12 +36,14 @@ fn multi_song_golden_test() {
         return;
     }
 
-    let expected = fs::read_to_string(&expected_path).unwrap_or_else(|e| {
-        panic!(
-            "cannot read {} (run `UPDATE_GOLDEN=1 cargo test -p chordpro-core --test golden_multi_song` to create it): {e}",
-            expected_path.display()
-        )
-    });
+    let expected = fs::read_to_string(&expected_path)
+        .unwrap_or_else(|e| {
+            panic!(
+                "cannot read {} (run `UPDATE_GOLDEN=1 cargo test -p chordpro-core --test golden_multi_song` to create it): {e}",
+                expected_path.display()
+            )
+        })
+        .replace("\r\n", "\n");
 
     assert_eq!(
         expected, actual,
