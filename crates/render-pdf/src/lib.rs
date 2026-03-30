@@ -1035,7 +1035,7 @@ mod multipage_tests {
     #[test]
     fn test_multiple_new_page_directives() {
         let input = "Page 1\n{new_page}\nPage 2\n{new_page}\nPage 3";
-        let song = chordpro_core::parse(&input).unwrap();
+        let song = chordpro_core::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("/Count 3"));
