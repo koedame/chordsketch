@@ -223,9 +223,6 @@ impl Parser {
                 self.advance();
                 return;
             }
-            if self.peek_kind() == &TokenKind::Eof {
-                return;
-            }
             self.advance();
         }
     }
