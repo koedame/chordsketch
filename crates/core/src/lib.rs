@@ -11,7 +11,7 @@ pub mod transpose;
 pub use chord::{Accidental, ChordDetail, ChordQuality, Note, parse_chord};
 pub use lexer::Lexer;
 pub use parser::{
-    ParseError, ParseOptions, ParseResult, Parser, parse, parse_lenient,
+    ParseError, ParseOptions, ParseResult, Parser, parse, parse_image_attributes, parse_lenient,
     parse_lenient_with_options, parse_with_options,
 };
 pub use token::{Position, Span, Token, TokenKind};
