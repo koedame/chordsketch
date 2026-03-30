@@ -206,6 +206,7 @@ Song {
                             },
                         ),
                         text: "Hello ",
+                        spans: [],
                     },
                     LyricsSegment {
                         chord: Some(
@@ -223,6 +224,7 @@ Song {
                             },
                         ),
                         text: "world",
+                        spans: [],
                     },
                 ],
             },

@@ -33,6 +33,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "e|---[0]---|",
+                        spans: [],
                     },
                 ],
             },
@@ -43,6 +44,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "B|---1-----|",
+                        spans: [],
                     },
                 ],
             },
@@ -53,6 +55,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "{some directive}",
+                        spans: [],
                     },
                 ],
             },
@@ -83,6 +86,7 @@ Song {
                             },
                         ),
                         text: "After tab",
+                        spans: [],
                     },
                 ],
             },

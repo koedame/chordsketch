@@ -33,6 +33,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "| Am . | C . |",
+                        spans: [],
                     },
                 ],
             },
@@ -43,6 +44,7 @@ Song {
                     LyricsSegment {
                         chord: None,
                         text: "| G  . | D . |",
+                        spans: [],
                     },
                 ],
             },
@@ -73,6 +75,7 @@ Song {
                             },
                         ),
                         text: "After grid",
+                        spans: [],
                     },
                 ],
             },

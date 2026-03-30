@@ -1,0 +1,8 @@
+{title: Inline Markup Test}
+
+[Am]Hello <b>bold</b> world
+[G]This is <i>italic</i> text
+<highlight>highlighted</highlight> lyrics
+<b><i>bold and italic</i></b>
+[C]Mixed <bold>long bold</bold> and <italic>long italic</italic>
+Plain text no markup
