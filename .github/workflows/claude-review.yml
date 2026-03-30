@@ -29,6 +29,20 @@ jobs:
             const prNumber = prs[0].number;
             const headSha = context.payload.workflow_run.head_sha;
 
+            // Skip if head commit was authored by claude[bot] to prevent
+            // review loops (Claude pushes fix → CI → auto-review → Claude
+            // reviews again). Manual @claude requests still work.
+            const { data: commit } = await github.rest.repos.getCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: headSha,
+            });
+            const commitAuthor = commit.author?.login || '';
+            if (commitAuthor === 'claude[bot]') {
+              console.log(`Skipping auto-review: head commit ${headSha.substring(0, 7)} authored by claude[bot]`);
+              return;
+            }
+
             // Skip Dependabot PRs (handled by claude-dependabot.yml)
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
