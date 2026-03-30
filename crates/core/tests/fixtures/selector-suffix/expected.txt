@@ -115,6 +115,7 @@ Song {
                             },
                         ),
                         text: "La la la",
+                        spans: [],
                     },
                 ],
             },
