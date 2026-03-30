@@ -81,10 +81,10 @@ fn diff_strings(expected: &str, actual: &str) -> Option<String> {
 
         if exp != act {
             // Print context lines before the mismatch.
-            let start = if i >= context { i - context } else { 0 };
-            for j in start..i {
+            let start = i.saturating_sub(context);
+            for (j, line) in expected_lines.iter().enumerate().take(i).skip(start) {
                 if last_printed.is_none() || last_printed.unwrap() < j {
-                    output.push_str(&format!("  {:4} | {}\n", j + 1, expected_lines[j]));
+                    output.push_str(&format!("  {:4} | {}\n", j + 1, line));
                 }
             }
 
