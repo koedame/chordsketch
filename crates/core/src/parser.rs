@@ -87,6 +87,49 @@ impl core::fmt::Display for ParseError {
 impl std::error::Error for ParseError {}
 
 // ---------------------------------------------------------------------------
+// ParseResult
+// ---------------------------------------------------------------------------
+
+/// The result of a lenient parse, containing a partial AST and any errors.
+///
+/// When using [`Parser::parse_lenient`] or [`parse_lenient`], the parser
+/// recovers from errors by skipping problematic lines and continuing.
+/// The `song` field contains all successfully parsed lines, and `errors`
+/// contains all problems encountered.
+///
+/// # Examples
+///
+/// ```
+/// use chordpro_core::parser::parse_lenient;
+///
+/// let result = parse_lenient("{title: Test}\n[Am\nHello world");
+/// assert_eq!(result.song.metadata.title.as_deref(), Some("Test"));
+/// assert_eq!(result.errors.len(), 1); // unclosed chord on line 2
+/// assert_eq!(result.song.lines.len(), 2); // title directive + lyrics (error line skipped)
+/// ```
+#[derive(Debug, Clone)]
+pub struct ParseResult {
+    /// The partial AST with all successfully parsed lines.
+    pub song: Song,
+    /// All errors encountered during parsing.
+    pub errors: Vec<ParseError>,
+}
+
+impl ParseResult {
+    /// Returns `true` if no errors were encountered.
+    #[must_use]
+    pub fn is_ok(&self) -> bool {
+        self.errors.is_empty()
+    }
+
+    /// Returns `true` if any errors were encountered.
+    #[must_use]
+    pub fn has_errors(&self) -> bool {
+        !self.errors.is_empty()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Parser
 // ---------------------------------------------------------------------------
 
@@ -122,8 +165,9 @@ impl Parser {
     /// populate [`Song::metadata`]. Comment directives are converted to
     /// [`Line::Comment`] with the appropriate [`CommentStyle`].
     ///
-    /// Returns a [`ParseError`] if the token stream contains structural
-    /// problems (e.g., unclosed directives or chords).
+    /// Returns a [`ParseError`] on the first structural problem encountered
+    /// (e.g., unclosed directives or chords). Use [`parse_lenient`] to
+    /// collect all errors and obtain a partial AST.
     pub fn parse(mut self) -> Result<Song, ParseError> {
         let mut song = Song::new();
 
@@ -139,6 +183,51 @@ impl Parser {
         }
 
         Ok(song)
+    }
+
+    /// Parses the token stream leniently, collecting all errors.
+    ///
+    /// Unlike [`parse`], this method does not stop at the first error.
+    /// When a line cannot be parsed, the error is recorded and the parser
+    /// skips to the next line to continue. The returned [`ParseResult`]
+    /// contains the partial AST (all successfully parsed lines) and a
+    /// list of all errors encountered.
+    pub fn parse_lenient(mut self) -> ParseResult {
+        let mut song = Song::new();
+        let mut errors = Vec::new();
+
+        while !self.is_at_end() {
+            match self.parse_line() {
+                Ok(line) => {
+                    if let Line::Directive(ref directive) = line {
+                        Self::populate_metadata(&mut song.metadata, directive);
+                    }
+                    song.lines.push(line);
+                }
+                Err(e) => {
+                    errors.push(e);
+                    // Skip to the next line to recover.
+                    self.skip_to_next_line();
+                }
+            }
+        }
+
+        ParseResult { song, errors }
+    }
+
+    /// Advances past all tokens until the next Newline or Eof,
+    /// then consumes the Newline if present. Used for error recovery.
+    fn skip_to_next_line(&mut self) {
+        while !self.is_at_end() {
+            if self.peek_kind() == &TokenKind::Newline {
+                self.advance();
+                return;
+            }
+            if self.peek_kind() == &TokenKind::Eof {
+                return;
+            }
+            self.advance();
+        }
     }
 
     // -- Metadata population ------------------------------------------------
@@ -648,6 +737,52 @@ pub fn parse_with_options(input: &str, options: &ParseOptions) -> Result<Song, P
     }
     let tokens = Lexer::new(input).tokenize();
     Parser::new(tokens).parse()
+}
+
+/// Parses a ChordPro source string leniently, collecting all errors.
+///
+/// Unlike [`parse`], this function does not fail on the first error.
+/// It returns a [`ParseResult`] containing the partial AST and all
+/// errors encountered. The size limit from [`ParseOptions::default`]
+/// is enforced.
+///
+/// # Examples
+///
+/// ```
+/// use chordpro_core::parser::parse_lenient;
+///
+/// let result = parse_lenient("{title: Test}\n{bad\n[G]Hello");
+/// assert!(result.has_errors());
+/// assert_eq!(result.song.metadata.title.as_deref(), Some("Test"));
+/// // The valid lyrics line was still parsed.
+/// assert!(result.song.lines.len() >= 2);
+/// ```
+pub fn parse_lenient(input: &str) -> ParseResult {
+    parse_lenient_with_options(input, &ParseOptions::default())
+}
+
+/// Parses a ChordPro source string leniently with custom options.
+///
+/// See [`parse_lenient`] for details.
+pub fn parse_lenient_with_options(input: &str, options: &ParseOptions) -> ParseResult {
+    if options.max_input_size > 0 && input.len() > options.max_input_size {
+        return ParseResult {
+            song: Song::new(),
+            errors: vec![ParseError::new(
+                format!(
+                    "input size ({} bytes) exceeds maximum ({} bytes)",
+                    input.len(),
+                    options.max_input_size
+                ),
+                Span::new(
+                    crate::token::Position::new(0, 0),
+                    crate::token::Position::new(0, 0),
+                ),
+            )],
+        };
+    }
+    let tokens = Lexer::new(input).tokenize();
+    Parser::new(tokens).parse_lenient()
 }
 
 // ---------------------------------------------------------------------------
@@ -1828,5 +1963,73 @@ mod tests {
         } else {
             panic!("expected chord directive");
         }
+    }
+
+    // --- Lenient parsing / multi-error (#61) ---
+
+    #[test]
+    fn parse_lenient_no_errors() {
+        let result = parse_lenient("{title: Test}\n[Am]Hello");
+        assert!(result.is_ok());
+        assert!(!result.has_errors());
+        assert_eq!(result.song.metadata.title.as_deref(), Some("Test"));
+        assert_eq!(result.song.lines.len(), 2);
+    }
+
+    #[test]
+    fn parse_lenient_collects_multiple_errors() {
+        // Two errors: unclosed directive on line 1, unclosed chord on line 3
+        let result = parse_lenient("{title\nHello world\n[Am");
+        assert!(result.has_errors());
+        assert_eq!(result.errors.len(), 2);
+        // The valid lyrics line in the middle should still be present.
+        assert!(result.song.lines.iter().any(|l| {
+            if let Line::Lyrics(ll) = l {
+                ll.text() == "Hello world"
+            } else {
+                false
+            }
+        }));
+    }
+
+    #[test]
+    fn parse_lenient_partial_ast_with_metadata() {
+        // Title parses successfully, then an error, then more content.
+        let result = parse_lenient("{title: My Song}\n{bad\n[G]La la");
+        assert_eq!(result.errors.len(), 1);
+        assert_eq!(result.song.metadata.title.as_deref(), Some("My Song"));
+        // Title directive + skipped error line + lyrics = at least 2 lines
+        assert!(result.song.lines.len() >= 2);
+    }
+
+    #[test]
+    fn parse_lenient_all_lines_bad() {
+        let result = parse_lenient("{unclosed\n[bad");
+        assert_eq!(result.errors.len(), 2);
+        assert!(result.song.lines.is_empty());
+    }
+
+    #[test]
+    fn parse_lenient_error_locations() {
+        let result = parse_lenient("{ok: fine}\n{bad\n[Am]Good\n{also bad");
+        assert_eq!(result.errors.len(), 2);
+        assert_eq!(result.errors[0].line(), 2);
+        assert_eq!(result.errors[1].line(), 4);
+    }
+
+    #[test]
+    fn parse_lenient_empty_input() {
+        let result = parse_lenient("");
+        assert!(result.is_ok());
+        assert!(result.song.lines.is_empty());
+    }
+
+    #[test]
+    fn parse_lenient_size_limit() {
+        let opts = ParseOptions { max_input_size: 10 };
+        let result = parse_lenient_with_options("this input is too long", &opts);
+        assert!(result.has_errors());
+        assert_eq!(result.errors.len(), 1);
+        assert!(result.errors[0].message.contains("exceeds maximum"));
     }
 }
