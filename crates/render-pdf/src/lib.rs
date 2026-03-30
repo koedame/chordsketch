@@ -9,6 +9,48 @@ use chordpro_core::inline_markup::TextSpan;
 use chordpro_core::transpose::transpose_chord;
 
 // ---------------------------------------------------------------------------
+// Formatting state
+// ---------------------------------------------------------------------------
+
+/// Tracks the current font size for an element type.
+///
+/// PDF Type1 fonts are limited to the Helvetica family, so font name changes
+/// from directives are not applicable. Size changes are applied directly.
+#[derive(Default, Clone)]
+struct PdfElementStyle {
+    size: Option<f32>,
+}
+
+/// Formatting state for PDF rendering.
+#[derive(Default, Clone)]
+struct PdfFormattingState {
+    text: PdfElementStyle,
+    chord: PdfElementStyle,
+}
+
+impl PdfFormattingState {
+    /// Apply a formatting directive, updating the appropriate style.
+    fn apply(&mut self, kind: &DirectiveKind, value: &Option<String>) {
+        let size_val = value.as_deref().and_then(|v| v.parse::<f32>().ok());
+        match kind {
+            DirectiveKind::TextSize => self.text.size = size_val,
+            DirectiveKind::ChordSize => self.chord.size = size_val,
+            _ => {}
+        }
+    }
+
+    /// Get the effective lyrics font size.
+    fn lyrics_size(&self) -> f32 {
+        self.text.size.unwrap_or(LYRICS_SIZE)
+    }
+
+    /// Get the effective chord font size.
+    fn chord_size(&self) -> f32 {
+        self.chord.size.unwrap_or(CHORD_SIZE)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Layout constants (units: PDF points, 1 pt = 1/72 inch)
 // ---------------------------------------------------------------------------
 
@@ -61,6 +103,7 @@ pub fn render_song(song: &Song) -> Vec<u8> {
 pub fn render_song_with_transpose(song: &Song, cli_transpose: i8) -> Vec<u8> {
     let mut page = PageBuilder::new();
     let mut transpose_offset: i8 = cli_transpose;
+    let mut fmt_state = PdfFormattingState::default();
 
     // Title
     if let Some(title) = &song.metadata.title {
@@ -84,13 +127,17 @@ pub fn render_song_with_transpose(song: &Song, cli_transpose: i8) -> Vec<u8> {
                 if let Some(buf) = chorus_buf.as_mut() {
                     buf.push(line.clone());
                 }
-                render_lyrics(lyrics, transpose_offset, &mut page);
+                render_lyrics(lyrics, transpose_offset, &fmt_state, &mut page);
             }
             Line::Directive(d) if !d.kind.is_metadata() => {
                 if d.kind == DirectiveKind::Transpose {
                     let file_offset: i8 =
                         d.value.as_deref().and_then(|v| v.parse().ok()).unwrap_or(0);
                     transpose_offset = file_offset.saturating_add(cli_transpose);
+                    continue;
+                }
+                if d.kind.is_font_size_color() {
+                    fmt_state.apply(&d.kind, &d.value);
                     continue;
                 }
                 match &d.kind {
@@ -104,7 +151,13 @@ pub fn render_song_with_transpose(song: &Song, cli_transpose: i8) -> Vec<u8> {
                         }
                     }
                     DirectiveKind::Chorus => {
-                        render_chorus_recall(&d.value, &chorus_body, transpose_offset, &mut page);
+                        render_chorus_recall(
+                            &d.value,
+                            &chorus_body,
+                            transpose_offset,
+                            &fmt_state,
+                            &mut page,
+                        );
                     }
                     _ => {
                         if let Some(buf) = chorus_buf.as_mut() {
@@ -143,16 +196,23 @@ pub fn try_render(input: &str) -> Result<Vec<u8>, chordpro_core::ParseError> {
 // Content builders
 // ---------------------------------------------------------------------------
 
-fn render_lyrics(lyrics: &LyricsLine, transpose_offset: i8, page: &mut PageBuilder) {
+fn render_lyrics(
+    lyrics: &LyricsLine,
+    transpose_offset: i8,
+    fmt_state: &PdfFormattingState,
+    page: &mut PageBuilder,
+) {
     let has_markup = lyrics.segments.iter().any(|s| s.has_markup());
+    let lyrics_size = fmt_state.lyrics_size();
+    let chord_size = fmt_state.chord_size();
 
     if !lyrics.has_chords() {
         if has_markup {
-            render_lyrics_spans(lyrics, page);
+            render_lyrics_spans(lyrics, lyrics_size, page);
         } else {
-            page.text(&lyrics.text(), Font::Helvetica, LYRICS_SIZE);
+            page.text(&lyrics.text(), Font::Helvetica, lyrics_size);
         }
-        page.newline(LYRICS_SIZE + LINE_GAP);
+        page.newline(lyrics_size + LINE_GAP);
         return;
     }
 
@@ -166,43 +226,43 @@ fn render_lyrics(lyrics: &LyricsLine, transpose_offset: i8, page: &mut PageBuild
             } else {
                 chord.name.clone()
             };
-            page.text_at(&display_name, Font::HelveticaBold, CHORD_SIZE, x, start_y);
+            page.text_at(&display_name, Font::HelveticaBold, chord_size, x, start_y);
         }
-        let text_w = seg.text.chars().count() as f32 * LYRICS_SIZE * CHAR_WIDTH;
+        let text_w = seg.text.chars().count() as f32 * lyrics_size * CHAR_WIDTH;
         let chord_w = seg.chord.as_ref().map_or(0.0, |c| {
             let display_len = if transpose_offset != 0 {
                 transpose_chord(c, transpose_offset).name.chars().count()
             } else {
                 c.name.chars().count()
             };
-            display_len as f32 * CHORD_SIZE * CHAR_WIDTH + 2.0
+            display_len as f32 * chord_size * CHAR_WIDTH + 2.0
         });
         x += text_w.max(chord_w);
     }
 
     // Lyrics row
-    page.y -= CHORD_SIZE + 2.0;
+    page.y -= chord_size + 2.0;
     if has_markup {
-        render_lyrics_spans(lyrics, page);
+        render_lyrics_spans(lyrics, lyrics_size, page);
     } else {
-        page.text(&lyrics.text(), Font::Helvetica, LYRICS_SIZE);
+        page.text(&lyrics.text(), Font::Helvetica, lyrics_size);
     }
-    page.newline(LYRICS_SIZE + LINE_GAP);
+    page.newline(lyrics_size + LINE_GAP);
 }
 
 /// Render lyrics line with inline markup using font changes.
 ///
 /// Walks the span tree for each segment, switching between Helvetica,
 /// HelveticaBold, HelveticaOblique, and HelveticaBoldOblique as needed.
-fn render_lyrics_spans(lyrics: &LyricsLine, page: &mut PageBuilder) {
+fn render_lyrics_spans(lyrics: &LyricsLine, font_size: f32, page: &mut PageBuilder) {
     let mut x = MARGIN_LEFT;
     let y = page.y;
     for seg in &lyrics.segments {
         if seg.has_markup() {
-            x = render_span_list(&seg.spans, page, x, y, false, false);
+            x = render_span_list(&seg.spans, page, x, y, font_size, false, false);
         } else {
-            page.text_at(&seg.text, Font::Helvetica, LYRICS_SIZE, x, y);
-            x += seg.text.chars().count() as f32 * LYRICS_SIZE * CHAR_WIDTH;
+            page.text_at(&seg.text, Font::Helvetica, font_size, x, y);
+            x += seg.text.chars().count() as f32 * font_size * CHAR_WIDTH;
         }
     }
 }
@@ -215,6 +275,7 @@ fn render_span_list(
     page: &mut PageBuilder,
     mut x: f32,
     y: f32,
+    font_size: f32,
     bold: bool,
     italic: bool,
 ) -> f32 {
@@ -227,19 +288,19 @@ fn render_span_list(
                     (false, true) => Font::HelveticaOblique,
                     (false, false) => Font::Helvetica,
                 };
-                page.text_at(text, font, LYRICS_SIZE, x, y);
-                x += text.chars().count() as f32 * LYRICS_SIZE * CHAR_WIDTH;
+                page.text_at(text, font, font_size, x, y);
+                x += text.chars().count() as f32 * font_size * CHAR_WIDTH;
             }
             TextSpan::Bold(children) => {
-                x = render_span_list(children, page, x, y, true, italic);
+                x = render_span_list(children, page, x, y, font_size, true, italic);
             }
             TextSpan::Italic(children) => {
-                x = render_span_list(children, page, x, y, bold, true);
+                x = render_span_list(children, page, x, y, font_size, bold, true);
             }
             TextSpan::Highlight(children) | TextSpan::Comment(children) => {
                 // Highlight/comment: render children with current style
                 // (no distinct visual in basic PDF)
-                x = render_span_list(children, page, x, y, bold, italic);
+                x = render_span_list(children, page, x, y, font_size, bold, italic);
             }
             TextSpan::Span(attrs, children) => {
                 // Apply weight/style from span attributes
@@ -253,7 +314,7 @@ fn render_span_list(
                         .style
                         .as_deref()
                         .is_some_and(|s| s.eq_ignore_ascii_case("italic"));
-                x = render_span_list(children, page, x, y, span_bold, span_italic);
+                x = render_span_list(children, page, x, y, font_size, span_bold, span_italic);
             }
         }
     }
@@ -306,6 +367,7 @@ fn render_chorus_recall(
     value: &Option<String>,
     chorus_body: &[Line],
     transpose_offset: i8,
+    fmt_state: &PdfFormattingState,
     page: &mut PageBuilder,
 ) {
     let text = match value {
@@ -318,7 +380,7 @@ fn render_chorus_recall(
     // Replay the stored chorus body lines.
     for line in chorus_body {
         match line {
-            Line::Lyrics(lyrics) => render_lyrics(lyrics, transpose_offset, page),
+            Line::Lyrics(lyrics) => render_lyrics(lyrics, transpose_offset, fmt_state, page),
             Line::Comment(style, text) => render_comment(*style, text, page),
             Line::Empty => page.newline(LINE_GAP * 2.0),
             Line::Directive(d) if !d.kind.is_metadata() => render_directive(d, page),
@@ -796,5 +858,38 @@ mod inline_markup_tests {
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("/F2")); // HelveticaBold
         assert!(content.contains("weighted"));
+    }
+}
+
+#[cfg(test)]
+mod formatting_directive_tests {
+    use super::*;
+
+    #[test]
+    fn test_textsize_directive_changes_font_size() {
+        let input = "{textsize: 14}\nHello world";
+        let song = chordpro_core::parse(input).unwrap();
+        let bytes = render_song(&song);
+        let content = String::from_utf8_lossy(&bytes);
+        // The PDF should use 14pt for lyrics text
+        assert!(content.contains("14"));
+        assert!(content.contains("Hello world"));
+    }
+
+    #[test]
+    fn test_chordsize_directive_changes_chord_size() {
+        let input = "{chordsize: 16}\n[Am]Hello";
+        let song = chordpro_core::parse(input).unwrap();
+        let bytes = render_song(&song);
+        let content = String::from_utf8_lossy(&bytes);
+        assert!(content.contains("Am"));
+    }
+
+    #[test]
+    fn test_formatting_directive_produces_valid_pdf() {
+        let input = "{textsize: 14}\n{chordsize: 12}\n[Am]Hello <b>bold</b> world";
+        let song = chordpro_core::parse(input).unwrap();
+        let bytes = render_song(&song);
+        assert!(bytes.starts_with(b"%PDF"));
     }
 }
