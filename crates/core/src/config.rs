@@ -20,7 +20,7 @@
 //! assert!(!config.get("pdf").is_null());
 //! ```
 
-use crate::rrjson::{self, Value};
+use crate::rrjson::{self, NULL, Value};
 
 use std::fmt;
 
@@ -101,7 +101,7 @@ pub fn deep_merge(base: Value, overlay: Value) -> Value {
 /// A ChordPro configuration loaded from one or more sources.
 ///
 /// Wraps a [`Value::Object`] and provides convenience accessors.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Config {
     root: Value,
 }
@@ -154,7 +154,6 @@ impl Config {
     /// Returns `Value::Null` if any segment is missing.
     #[must_use]
     pub fn get_path(&self, path: &str) -> &Value {
-        static NULL: Value = Value::Null;
         let mut current = &self.root;
         for segment in path.split('.') {
             current = current.get(segment);
