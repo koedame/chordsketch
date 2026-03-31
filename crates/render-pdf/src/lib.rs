@@ -499,7 +499,97 @@ fn capitalize(s: &str) -> String {
 }
 
 fn render_directive(directive: &chordpro_core::ast::Directive, doc: &mut PdfDocument) {
+    if directive.kind == DirectiveKind::Define {
+        if let Some(ref value) = directive.value {
+            let def = chordpro_core::ast::ChordDefinition::parse_value(value);
+            if let Some(ref raw) = def.raw {
+                if let Some(diagram) =
+                    chordpro_core::chord_diagram::DiagramData::from_raw(&def.name, raw, 6)
+                {
+                    render_chord_diagram_pdf(&diagram, doc);
+                    return;
+                }
+            }
+        }
+    }
     render_section_label(directive, doc);
+}
+
+/// Render a chord diagram directly into the PDF content stream.
+///
+/// Uses PDF line/circle drawing operations to reproduce the chord grid,
+/// finger dots, open/muted string markers, and the chord name.
+fn render_chord_diagram_pdf(
+    data: &chordpro_core::chord_diagram::DiagramData,
+    doc: &mut PdfDocument,
+) {
+    let cell_w: f32 = 10.0;
+    let cell_h: f32 = 12.0;
+    let num_strings = data.strings;
+    let num_frets = data.frets_shown;
+    let grid_w = (num_strings - 1) as f32 * cell_w;
+    let grid_h = num_frets as f32 * cell_h;
+    let total_h = grid_h + 25.0; // title + top markers + grid
+
+    doc.ensure_space(total_h);
+
+    let base_x = doc.margin_left();
+    // PDF Y is bottom-up, so top of diagram is at doc.y
+    let top_y = doc.y();
+
+    // Chord name
+    doc.text_at(&data.name, Font::HelveticaBold, 9.0, base_x, top_y);
+
+    let grid_top = top_y - 15.0; // below the name
+
+    // Nut line (thick for open position)
+    if data.base_fret == 1 {
+        doc.line_at(base_x, grid_top, base_x + grid_w, grid_top, 2.0);
+    } else {
+        // Show fret number
+        let fret_label = format!("{}fr", data.base_fret);
+        doc.text_at(
+            &fret_label,
+            Font::Helvetica,
+            6.0,
+            base_x - 16.0,
+            grid_top - cell_h / 2.0,
+        );
+    }
+
+    // Vertical lines (strings)
+    for i in 0..num_strings {
+        let x = base_x + i as f32 * cell_w;
+        doc.line_at(x, grid_top, x, grid_top - grid_h, 0.5);
+    }
+
+    // Horizontal lines (frets)
+    for j in 0..=num_frets {
+        let y = grid_top - j as f32 * cell_h;
+        doc.line_at(base_x, y, base_x + grid_w, y, 0.5);
+    }
+
+    // Finger positions, open, and muted markers
+    for (i, &fret) in data.frets.iter().enumerate() {
+        if i >= num_strings {
+            break;
+        }
+        let x = base_x + i as f32 * cell_w;
+        if fret == -1 {
+            // Muted: X above nut
+            doc.text_at("X", Font::Helvetica, 7.0, x - 2.5, grid_top + 4.0);
+        } else if fret == 0 {
+            // Open: circle above nut
+            doc.stroked_circle_at(x, grid_top + 6.0, 2.5);
+        } else {
+            // Fretted: filled dot
+            let y = grid_top - (fret as f32 - 0.5) * cell_h;
+            doc.filled_circle_at(x, y, 3.0);
+        }
+    }
+
+    doc.advance_y(total_h);
+    doc.newline(LINE_GAP);
 }
 
 /// Render a `{chorus}` recall directive in the PDF.
@@ -678,6 +768,49 @@ impl PdfDocument {
     /// Used for intra-element positioning (e.g., chord row to lyrics row).
     fn advance_y(&mut self, amount: f32) {
         self.y -= amount;
+    }
+
+    /// Draw a line from (x1, y1) to (x2, y2) with the given width.
+    fn line_at(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, width: f32) {
+        let ops = self.current_page_mut();
+        ops.push(format!("{} w", fmt_f32(width)));
+        ops.push(format!(
+            "{} {} m {} {} l S",
+            fmt_f32(x1),
+            fmt_f32(y1),
+            fmt_f32(x2),
+            fmt_f32(y2)
+        ));
+    }
+
+    /// Draw a filled circle at (cx, cy) with the given radius.
+    fn filled_circle_at(&mut self, cx: f32, cy: f32, r: f32) {
+        // Approximate circle with 4 Bezier curves (kappa = 0.5523)
+        let k = r * 0.5523;
+        let ops = self.current_page_mut();
+        ops.push(format!(
+            "{} {} m {} {} {} {} {} {} c {} {} {} {} {} {} c {} {} {} {} {} {} c {} {} {} {} {} {} c f",
+            fmt_f32(cx + r), fmt_f32(cy),
+            fmt_f32(cx + r), fmt_f32(cy + k), fmt_f32(cx + k), fmt_f32(cy + r), fmt_f32(cx), fmt_f32(cy + r),
+            fmt_f32(cx - k), fmt_f32(cy + r), fmt_f32(cx - r), fmt_f32(cy + k), fmt_f32(cx - r), fmt_f32(cy),
+            fmt_f32(cx - r), fmt_f32(cy - k), fmt_f32(cx - k), fmt_f32(cy - r), fmt_f32(cx), fmt_f32(cy - r),
+            fmt_f32(cx + k), fmt_f32(cy - r), fmt_f32(cx + r), fmt_f32(cy - k), fmt_f32(cx + r), fmt_f32(cy),
+        ));
+    }
+
+    /// Draw a stroked (unfilled) circle at (cx, cy) with the given radius.
+    fn stroked_circle_at(&mut self, cx: f32, cy: f32, r: f32) {
+        let k = r * 0.5523;
+        let ops = self.current_page_mut();
+        ops.push("0.5 w".to_string());
+        ops.push(format!(
+            "{} {} m {} {} {} {} {} {} c {} {} {} {} {} {} c {} {} {} {} {} {} c {} {} {} {} {} {} c S",
+            fmt_f32(cx + r), fmt_f32(cy),
+            fmt_f32(cx + r), fmt_f32(cy + k), fmt_f32(cx + k), fmt_f32(cy + r), fmt_f32(cx), fmt_f32(cy + r),
+            fmt_f32(cx - k), fmt_f32(cy + r), fmt_f32(cx - r), fmt_f32(cy + k), fmt_f32(cx - r), fmt_f32(cy),
+            fmt_f32(cx - r), fmt_f32(cy - k), fmt_f32(cx - k), fmt_f32(cy - r), fmt_f32(cx), fmt_f32(cy - r),
+            fmt_f32(cx + k), fmt_f32(cy - r), fmt_f32(cx + r), fmt_f32(cy - k), fmt_f32(cx + r), fmt_f32(cy),
+        ));
     }
 
     /// Returns a mutable reference to the current page's operations.
@@ -1501,6 +1634,42 @@ mod toc_tests {
         let songs =
             chordpro_core::parse_multi("{title: A}\nText\n{new_song}\n{title: B}\nText").unwrap();
         let bytes = render_songs(&songs);
+        assert!(bytes.starts_with(b"%PDF-1.4"));
+        assert!(bytes.ends_with(b"%%EOF\n"));
+    }
+}
+
+#[cfg(test)]
+mod chord_diagram_pdf_tests {
+    use super::*;
+
+    #[test]
+    fn test_define_renders_diagram_in_pdf() {
+        let input = "{define: Am base-fret 1 frets x 0 2 2 1 0}\n[Am]Hello";
+        let song = chordpro_core::parse(input).unwrap();
+        let bytes = render_song(&song);
+        assert!(bytes.starts_with(b"%PDF"));
+        let content = String::from_utf8_lossy(&bytes);
+        // Should contain the chord name
+        assert!(content.contains("Am"));
+        // Should contain circle drawing operations (Bezier curves)
+        assert!(content.contains(" c "));
+    }
+
+    #[test]
+    fn test_define_keyboard_no_diagram_in_pdf() {
+        let input = "{define: Am keys 0 3 7}\n[Am]Hello";
+        let song = chordpro_core::parse(input).unwrap();
+        let bytes = render_song(&song);
+        assert!(bytes.starts_with(b"%PDF"));
+        // Should still be valid
+    }
+
+    #[test]
+    fn test_define_diagram_valid_pdf() {
+        let input = "{define: F base-fret 1 frets 1 1 2 3 3 1}\n[F]Lyrics";
+        let song = chordpro_core::parse(input).unwrap();
+        let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF-1.4"));
         assert!(bytes.ends_with(b"%%EOF\n"));
     }
