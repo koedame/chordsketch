@@ -28,6 +28,19 @@ pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+/// Capitalize the first character of a string.
+///
+/// Returns a new string with the first character uppercased and the
+/// rest unchanged. Returns an empty string for empty input.
+#[must_use]
+pub fn capitalize(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => c.to_uppercase().to_string() + chars.as_str(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

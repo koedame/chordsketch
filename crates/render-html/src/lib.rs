@@ -600,7 +600,7 @@ fn render_directive_inner(directive: &chordpro_core::ast::Directive, html: &mut 
         DirectiveKind::StartOfSection(section_name) => {
             let escaped = escape(section_name);
             let class = format!("section-{}", escaped);
-            let label = capitalize(&escaped);
+            let label = chordpro_core::capitalize(&escaped);
             render_section_open(&class, &label, &directive.value, html);
         }
         DirectiveKind::EndOfChorus
@@ -678,15 +678,6 @@ fn render_image(attrs: &chordpro_core::ast::ImageAttributes, html: &mut String) 
         html.push_str(&format!(" style=\"{}\"", escape(&style)));
     }
     html.push_str("></div>\n");
-}
-
-/// Capitalize the first character of a string.
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(c) => c.to_uppercase().to_string() + chars.as_str(),
-    }
 }
 
 /// Open a `<section>` with a class and optional label.
