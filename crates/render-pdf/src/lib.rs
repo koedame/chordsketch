@@ -935,7 +935,12 @@ impl PdfDocument {
         let usable_width = PAGE_W - self.margin_left - self.margin_right;
         let total_gaps = (self.num_columns - 1) as f32 * COLUMN_GAP;
         let col_width = (usable_width - total_gaps) / self.num_columns as f32;
-        self.margin_left + self.current_column as f32 * (col_width + COLUMN_GAP)
+        let result = self.margin_left + self.current_column as f32 * (col_width + COLUMN_GAP);
+        debug_assert!(
+            result.is_finite(),
+            "margin_left() produced non-finite value"
+        );
+        result
     }
 
     /// Set the number of columns (clamped to 1..=[`MAX_COLUMNS`]). Resets to column 0.
@@ -1317,7 +1322,13 @@ fn pdf_escape(s: &str) -> String {
 }
 
 /// Format f32 without trailing zeros for compact PDF output.
+///
+/// Non-finite values (NaN, ±Infinity) are replaced with `"0"` to prevent
+/// malformed PDF operators.
 fn fmt_f32(v: f32) -> String {
+    if !v.is_finite() {
+        return "0".to_string();
+    }
     let s = format!("{v:.2}");
     // Trim trailing zeros after decimal point.
     if s.contains('.') {
@@ -2412,5 +2423,24 @@ mod jpeg_tests {
         let custom_pdf = render_song_with_transpose(&song, 0, &config);
         // Different margins produce different PDF output.
         assert_ne!(default_pdf, custom_pdf);
+    }
+
+    #[test]
+    fn test_fmt_f32_nan_produces_zero() {
+        assert_eq!(fmt_f32(f32::NAN), "0");
+    }
+
+    #[test]
+    fn test_fmt_f32_infinity_produces_zero() {
+        assert_eq!(fmt_f32(f32::INFINITY), "0");
+        assert_eq!(fmt_f32(f32::NEG_INFINITY), "0");
+    }
+
+    #[test]
+    fn test_fmt_f32_normal_values() {
+        assert_eq!(fmt_f32(1.0), "1");
+        assert_eq!(fmt_f32(3.25), "3.25");
+        assert_eq!(fmt_f32(0.0), "0");
+        assert_eq!(fmt_f32(-5.5), "-5.5");
     }
 }
