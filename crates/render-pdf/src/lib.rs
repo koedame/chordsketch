@@ -475,7 +475,9 @@ fn render_section_label(directive: &chordpro_core::ast::Directive, doc: &mut Pdf
         DirectiveKind::StartOfLy => Some("Lilypond".to_string()),
         DirectiveKind::StartOfSvg => Some("SVG".to_string()),
         DirectiveKind::StartOfTextblock => Some("Textblock".to_string()),
-        DirectiveKind::StartOfSection(section_name) => Some(capitalize(section_name)),
+        DirectiveKind::StartOfSection(section_name) => {
+            Some(chordpro_core::capitalize(section_name))
+        }
         _ => None,
     };
     if let Some(label) = label {
@@ -486,15 +488,6 @@ fn render_section_label(directive: &chordpro_core::ast::Directive, doc: &mut Pdf
         doc.ensure_space(SECTION_SIZE + LINE_GAP);
         doc.text(&text, Font::HelveticaBoldOblique, SECTION_SIZE);
         doc.newline(SECTION_SIZE + LINE_GAP);
-    }
-}
-
-/// Capitalize the first character of a string.
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(c) => c.to_uppercase().to_string() + chars.as_str(),
     }
 }
 

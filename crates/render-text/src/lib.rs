@@ -298,20 +298,11 @@ fn render_directive(directive: &chordpro_core::ast::Directive, output: &mut Vec<
         }
         DirectiveKind::StartOfSection(section_name) => {
             // Capitalize the first letter of the section name for display.
-            let label = capitalize(section_name);
+            let label = chordpro_core::capitalize(section_name);
             render_section_header(&label, &directive.value, output);
         }
         // End-of-section, metadata, and unknown directives produce no output.
         _ => {}
-    }
-}
-
-/// Capitalize the first character of a string.
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(c) => c.to_uppercase().to_string() + chars.as_str(),
     }
 }
 
