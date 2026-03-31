@@ -6,6 +6,7 @@
 use chordpro_core::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
 use chordpro_core::config::Config;
 use chordpro_core::transpose::transpose_chord;
+use unicode_width::UnicodeWidthStr;
 
 /// Render a [`Song`] AST to plain text.
 ///
@@ -202,8 +203,8 @@ fn render_metadata(metadata: &chordpro_core::ast::Metadata, output: &mut Vec<Str
 ///
 /// If the line has no chords, only the lyrics text is emitted.
 ///
-/// Alignment is based on character count (`chars().count()`), which correctly
-/// handles multi-byte UTF-8 sequences in lyrics text.
+/// Alignment is based on Unicode display width (`UnicodeWidthStr::width()`),
+/// which correctly handles full-width CJK characters and other wide glyphs.
 fn render_lyrics(lyrics_line: &LyricsLine, transpose_offset: i8, output: &mut Vec<String>) {
     if !lyrics_line.has_chords() {
         output.push(lyrics_line.text());
@@ -227,8 +228,8 @@ fn render_lyrics(lyrics_line: &LyricsLine, transpose_offset: i8, output: &mut Ve
         };
         let text = &segment.text;
 
-        let chord_len = chord_name.chars().count();
-        let text_len = text.chars().count();
+        let chord_len = UnicodeWidthStr::width(chord_name);
+        let text_len = UnicodeWidthStr::width(text.as_str());
 
         // Write the chord (or equivalent spacing) on the chord line.
         chord_line.push_str(chord_name);
@@ -503,12 +504,12 @@ mod tests {
 
     #[test]
     fn test_render_multibyte_lyrics_alignment() {
-        // Japanese text: each char is 3 bytes but 1 char
+        // Japanese text: each char is 3 bytes, 1 code point, but 2 columns wide.
         let input = "[Am]こんにちは [G]世界";
         let output = render(input);
-        // "こんにちは " = 6 chars, "Am" = 2 chars → pad chord line by 4
-        // "世界" = 2 chars, "G" = 1 char → pad chord line by 1
-        assert_eq!(output, "Am    G\nこんにちは 世界\n");
+        // "こんにちは " = 5×2 + 1 = 11 display columns, "Am" = 2 → pad chord by 9
+        // "世界" = 2×2 = 4 display columns, "G" = 1 → pad chord by 3
+        assert_eq!(output, "Am         G\nこんにちは 世界\n");
     }
 
     #[test]
@@ -895,5 +896,26 @@ mod delegate_tests {
         assert!(output.contains("red text"));
         assert!(!output.contains("<span"));
         assert!(!output.contains("foreground"));
+    }
+
+    // --- Unicode display width alignment ---
+
+    #[test]
+    fn test_render_fullwidth_cjk_alignment() {
+        // Full-width CJK characters are 2 columns wide
+        let input = "[C]日本語";
+        let output = render(input);
+        // "日本語" = 3×2 = 6 display columns, "C" = 1 → pad chord by 5
+        assert_eq!(output, "C\n日本語\n");
+    }
+
+    #[test]
+    fn test_render_mixed_width_alignment() {
+        // Mix of ASCII (width 1) and CJK (width 2)
+        let input = "[Am]hello世界 [G]test";
+        let output = render(input);
+        // "hello世界 " = 5 + 4 + 1 = 10, "Am" = 2 → pad chord by 8
+        // "test" = 4, "G" = 1 → pad chord by 3
+        assert_eq!(output, "Am        G\nhello世界 test\n");
     }
 }
