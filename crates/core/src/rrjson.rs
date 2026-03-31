@@ -600,8 +600,16 @@ impl<'a> Parser<'a> {
                 break;
             }
 
-            // Skip "include" directives (not yet supported — warn and consume the line)
-            if self.input[self.pos..].starts_with("include") {
+            // Skip "include" directives (not yet supported — warn and consume the line).
+            // Check word boundary after "include" so keys like "includes" or
+            // "include_path" are parsed normally as object keys.
+            if self.input[self.pos..].starts_with("include")
+                && self
+                    .input
+                    .as_bytes()
+                    .get(self.pos + 7)
+                    .is_none_or(|&b| b == b' ' || b == b'\t' || b == b'"' || b == b'\'')
+            {
                 let (line, col) = self.line_col();
                 let directive_line = if let Some(end) = self.input[self.pos..].find('\n') {
                     let line_text = self.input[self.pos..self.pos + end].trim();
@@ -1060,6 +1068,45 @@ mod tests {
         let input = "include \"base.json\"\nkey = \"value\"";
         let v = parse_rrjson(input).unwrap();
         assert_eq!(v["key"], Value::String("value".to_string()));
+    }
+
+    #[test]
+    fn test_include_directive_single_quoted() {
+        let input = "include 'base.json'\nkey = \"value\"";
+        let v = parse_rrjson(input).unwrap();
+        assert_eq!(v["key"], Value::String("value".to_string()));
+    }
+
+    #[test]
+    fn test_include_at_eof() {
+        let input = "include \"base.json\"";
+        let v = parse_rrjson(input).unwrap();
+        // No keys — include is skipped and nothing else remains
+        assert_eq!(v, Value::Object(vec![]));
+    }
+
+    #[test]
+    fn test_includes_key_not_treated_as_include() {
+        let input = "includes = \"base.json\"";
+        let v = parse_rrjson(input).unwrap();
+        assert_eq!(v["includes"], Value::String("base.json".to_string()));
+    }
+
+    #[test]
+    fn test_include_path_key_not_treated_as_include() {
+        let input = "include_path = \"/etc/chordpro\"";
+        let v = parse_rrjson(input).unwrap();
+        assert_eq!(
+            v["include_path"],
+            Value::String("/etc/chordpro".to_string())
+        );
+    }
+
+    #[test]
+    fn test_included_key_not_treated_as_include() {
+        let input = "included = true";
+        let v = parse_rrjson(input).unwrap();
+        assert_eq!(v["included"], Value::Bool(true));
     }
 
     #[test]
