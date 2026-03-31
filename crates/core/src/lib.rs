@@ -7,6 +7,7 @@ pub mod inline_markup;
 pub mod lexer;
 pub mod parser;
 pub mod rrjson;
+pub mod selector;
 pub mod token;
 pub mod transpose;
 
