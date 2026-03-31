@@ -1318,6 +1318,14 @@ const FONTS: [Font; 4] = [
 // ---------------------------------------------------------------------------
 
 /// Escape a string for inclusion in a PDF literal string `(...)`.
+///
+/// Characters are handled as follows:
+/// - ASCII (U+0000–U+007F): passed through (with `\`, `(`, `)` escaped).
+/// - Latin-1 Supplement (U+00A0–U+00FF): encoded as PDF octal escapes
+///   (`\NNN`) for WinAnsiEncoding compatibility. This covers most accented
+///   European characters (é, ü, ñ, ß, etc.).
+/// - All other non-ASCII characters: replaced with `?` because the built-in
+///   Type1 fonts (Helvetica) only support WinAnsiEncoding.
 fn pdf_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
@@ -1326,7 +1334,11 @@ fn pdf_escape(s: &str) -> String {
             '(' => out.push_str("\\("),
             ')' => out.push_str("\\)"),
             _ if c.is_ascii() => out.push(c),
-            // Non-ASCII: replace with '?' for Type1 font compatibility.
+            // Latin-1 Supplement: WinAnsiEncoding byte equals the code point.
+            '\u{00A0}'..='\u{00FF}' => {
+                let byte = c as u32;
+                out.push_str(&format!("\\{byte:03o}"));
+            }
             _ => out.push('?'),
         }
     }
@@ -1437,6 +1449,32 @@ mod tests {
         assert_eq!(pdf_escape("hello"), "hello");
         assert_eq!(pdf_escape("a(b)c"), "a\\(b\\)c");
         assert_eq!(pdf_escape("back\\slash"), "back\\\\slash");
+    }
+
+    #[test]
+    fn test_pdf_escape_latin1_accented() {
+        // é (U+00E9) → octal 351
+        assert_eq!(pdf_escape("café"), "caf\\351");
+        // ü (U+00FC) → octal 374
+        assert_eq!(pdf_escape("über"), "\\374ber");
+        // ñ (U+00F1) → octal 361
+        assert_eq!(pdf_escape("España"), "Espa\\361a");
+        // ß (U+00DF) → octal 337
+        assert_eq!(pdf_escape("Straße"), "Stra\\337e");
+    }
+
+    #[test]
+    fn test_pdf_escape_non_latin1_replaced() {
+        // CJK and emoji are outside WinAnsiEncoding
+        assert_eq!(pdf_escape("日本語"), "???");
+        assert_eq!(pdf_escape("hello 世界"), "hello ??");
+    }
+
+    #[test]
+    fn test_pdf_escape_mixed_ascii_latin1() {
+        assert_eq!(pdf_escape("résumé"), "r\\351sum\\351");
+        // Non-breaking space (U+00A0) → octal 240
+        assert_eq!(pdf_escape("a\u{00A0}b"), "a\\240b");
     }
 
     #[test]
