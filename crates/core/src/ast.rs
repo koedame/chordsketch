@@ -441,6 +441,15 @@ impl ImageAttributes {
             ..Self::default()
         }
     }
+
+    /// Returns `true` if a non-empty `src` path is present.
+    ///
+    /// Renderers can use this to skip rendering when no image source was
+    /// provided, avoiding duplicated empty-string checks.
+    #[must_use]
+    pub fn has_src(&self) -> bool {
+        !self.src.is_empty()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2715,5 +2724,25 @@ mod chord_definition_tests {
     fn test_parse_keyboard_negative_keys() {
         let def = ChordDefinition::parse_value("Cm keys -1 0 3 7");
         assert_eq!(def.keys, Some(vec![-1, 0, 3, 7]));
+    }
+
+    // -- ImageAttributes ----------------------------------------------------
+
+    #[test]
+    fn has_src_returns_true_for_non_empty() {
+        let attrs = ImageAttributes::new("photo.jpg");
+        assert!(attrs.has_src());
+    }
+
+    #[test]
+    fn has_src_returns_false_for_empty() {
+        let attrs = ImageAttributes::default();
+        assert!(!attrs.has_src());
+    }
+
+    #[test]
+    fn has_src_returns_false_for_explicit_empty_string() {
+        let attrs = ImageAttributes::new("");
+        assert!(!attrs.has_src());
     }
 }

@@ -671,7 +671,7 @@ fn read_image_file(path: &str) -> Option<Vec<u8>> {
 /// places the image at the column margin, `"column"` centres it within the
 /// column, and `"paper"` centres it on the full page.
 fn render_image(attrs: &ImageAttributes, doc: &mut PdfDocument) {
-    if attrs.src.is_empty() {
+    if !attrs.has_src() {
         return;
     }
 
