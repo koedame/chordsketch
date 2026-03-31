@@ -440,6 +440,7 @@ section > .section-label { font-weight: bold; font-style: italic; margin-bottom:
 .comment-box { border: 1px solid #999; padding: 0.2em 0.5em; display: inline-block; margin: 0.3em 0; }
 .chorus-recall { margin: 1em 0; }
 .chorus-recall > .section-label { font-weight: bold; font-style: italic; margin-bottom: 0.3em; }
+img { max-width: 100%; height: auto; }
 ";
 
 // ---------------------------------------------------------------------------
@@ -1857,6 +1858,15 @@ Verse text\n\
         // No anchor should produce a bare <div> without style
         assert!(html.contains("<div><img"));
         assert!(!html.contains("text-align"));
+    }
+
+    #[test]
+    fn test_image_max_width_css_present() {
+        let html = render("{image: src=photo.jpg}");
+        assert!(
+            html.contains("img { max-width: 100%; height: auto; }"),
+            "CSS should include img max-width rule to prevent overflow"
+        );
     }
 
     // -- chord diagram tests --------------------------------------------------
