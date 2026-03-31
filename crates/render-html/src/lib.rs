@@ -190,11 +190,15 @@ pub fn render_song_with_transpose(song: &Song, cli_transpose: i8) -> String {
                         render_chorus_recall(&directive.value, &chorus_html, &mut html);
                     }
                     DirectiveKind::Columns => {
+                        // Clamp to 1..=32 to prevent degenerate CSS output.
+                        // Parsing as u32 already rejects non-numeric input;
+                        // clamping ensures the formatted value is always safe.
                         let n: u32 = directive
                             .value
                             .as_deref()
                             .and_then(|v| v.trim().parse().ok())
-                            .unwrap_or(1);
+                            .unwrap_or(1)
+                            .clamp(1, 32);
                         if columns_open {
                             html.push_str("</div>\n");
                             columns_open = false;
@@ -1177,6 +1181,20 @@ mod transpose_tests {
     fn test_column_break_generates_css() {
         let html = render("{columns: 2}\nCol 1\n{column_break}\nCol 2");
         assert!(html.contains("break-before: column;"));
+    }
+
+    #[test]
+    fn test_columns_clamped_to_max() {
+        let html = render("{columns: 999}\nContent");
+        // Should be clamped to 32
+        assert!(html.contains("column-count: 32"));
+    }
+
+    #[test]
+    fn test_columns_zero_treated_as_one() {
+        let html = render("{columns: 0}\nContent");
+        // 0 is clamped to 1, so no multi-column div should be opened
+        assert!(!html.contains("column-count"));
     }
 
     #[test]
