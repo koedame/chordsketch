@@ -274,7 +274,13 @@ fn render_song_into_doc(song: &Song, cli_transpose: i8, doc: &mut PdfDocument) {
                             doc,
                         );
                     }
+                    // Page control directives are intentionally NOT captured
+                    // in the chorus buffer. Replaying page/column breaks during
+                    // {chorus} recall would produce unexpected layout changes.
                     DirectiveKind::NewPage | DirectiveKind::NewPhysicalPage => {
+                        // TODO: NewPhysicalPage should eventually handle duplex
+                        // printing differently (e.g., insert a blank page to
+                        // ensure the next content starts on a recto page).
                         doc.new_page();
                     }
                     DirectiveKind::Columns => {
