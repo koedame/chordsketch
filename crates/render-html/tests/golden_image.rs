@@ -5,9 +5,11 @@
 #[test]
 fn image_directive_html_golden() {
     let input = std::fs::read_to_string("tests/fixtures/image-directive/input.cho")
-        .expect("read input.cho");
+        .expect("read input.cho")
+        .replace("\r\n", "\n");
     let expected = std::fs::read_to_string("tests/fixtures/image-directive/expected.html")
-        .expect("read expected.html");
+        .expect("read expected.html")
+        .replace("\r\n", "\n");
 
     let actual = chordpro_render_html::render(&input);
 
