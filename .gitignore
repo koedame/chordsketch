@@ -12,3 +12,6 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# Tools
+.serena/
