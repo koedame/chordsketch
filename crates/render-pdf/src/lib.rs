@@ -89,6 +89,9 @@ const TOC_ENTRY_SIZE: f32 = 11.0;
 /// Maximum number of pages a single document can contain.
 /// Prevents resource exhaustion from malicious input.
 const MAX_PAGES: usize = 10_000;
+/// Maximum number of columns allowed.
+/// Prevents degenerate layout and f32 overflow from extreme values.
+const MAX_COLUMNS: u32 = 32;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -588,9 +591,9 @@ impl PdfDocument {
         MARGIN_LEFT + self.current_column as f32 * (col_width + COLUMN_GAP)
     }
 
-    /// Set the number of columns. Resets to column 0.
+    /// Set the number of columns (clamped to 1..=[`MAX_COLUMNS`]). Resets to column 0.
     fn set_columns(&mut self, n: u32) {
-        self.num_columns = n.max(1);
+        self.num_columns = n.clamp(1, MAX_COLUMNS);
         self.current_column = 0;
     }
 
@@ -1349,6 +1352,36 @@ mod column_tests {
         assert_eq!(doc.current_column, 0);
         doc.column_break();
         assert_eq!(doc.current_column, 1);
+    }
+
+    #[test]
+    fn test_set_columns_clamps_to_max() {
+        let mut doc = PdfDocument::new();
+        doc.set_columns(999);
+        assert_eq!(doc.num_columns, MAX_COLUMNS);
+    }
+
+    #[test]
+    fn test_set_columns_clamps_zero_to_one() {
+        let mut doc = PdfDocument::new();
+        doc.set_columns(0);
+        assert_eq!(doc.num_columns, 1);
+    }
+
+    #[test]
+    fn test_margin_left_at_max_columns_no_overflow() {
+        let mut doc = PdfDocument::new();
+        doc.set_columns(MAX_COLUMNS);
+        // Verify margin_left produces a finite, non-negative value for every column.
+        for col in 0..MAX_COLUMNS {
+            doc.current_column = col;
+            let m = doc.margin_left();
+            assert!(m.is_finite(), "margin_left must be finite for column {col}");
+            assert!(
+                m >= 0.0,
+                "margin_left must be non-negative for column {col}"
+            );
+        }
     }
 
     #[test]
