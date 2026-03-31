@@ -497,8 +497,9 @@ fn render_directive_inner(directive: &chordpro_core::ast::Directive, html: &mut 
             render_section_open("textblock", "Textblock", &directive.value, html);
         }
         DirectiveKind::StartOfSection(section_name) => {
-            let class = format!("section-{}", section_name);
-            let label = capitalize(section_name);
+            let escaped = escape(section_name);
+            let class = format!("section-{}", escaped);
+            let label = capitalize(&escaped);
             render_section_open(&class, &label, &directive.value, html);
         }
         DirectiveKind::EndOfChorus
@@ -800,6 +801,24 @@ mod tests {
         assert!(html.contains("<section class=\"section-solo\">"));
         assert!(html.contains("Solo"));
         assert!(html.contains("</section>"));
+    }
+
+    #[test]
+    fn test_custom_section_name_escaped() {
+        let html = render(
+            "{start_of_x<script>alert(1)</script>}\ntext\n{end_of_x<script>alert(1)</script>}",
+        );
+        assert!(!html.contains("<script>"));
+        assert!(html.contains("&lt;script&gt;"));
+    }
+
+    #[test]
+    fn test_custom_section_name_quotes_escaped() {
+        let html =
+            render("{start_of_x\" onclick=\"alert(1)}\ntext\n{end_of_x\" onclick=\"alert(1)}");
+        // The `"` must be escaped to `&quot;` so the attribute boundary is not broken.
+        assert!(html.contains("&quot;"));
+        assert!(!html.contains("class=\"section-x\""));
     }
 }
 
