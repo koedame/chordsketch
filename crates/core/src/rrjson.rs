@@ -41,12 +41,15 @@ pub enum Value {
     Object(Vec<(String, Value)>),
 }
 
+/// Shared sentinel for returning references to `Value::Null` from indexing
+/// and lookup methods.
+pub(crate) static NULL: Value = Value::Null;
+
 impl Value {
     /// Look up a key in an Object value. Returns `Value::Null` if not found
     /// or if `self` is not an Object.
     #[must_use]
     pub fn get(&self, key: &str) -> &Value {
-        static NULL: Value = Value::Null;
         match self {
             Value::Object(entries) => entries
                 .iter()
@@ -95,6 +98,74 @@ impl core::ops::Index<&str> for Value {
 
     fn index(&self, key: &str) -> &Value {
         self.get(key)
+    }
+}
+
+impl core::ops::Index<usize> for Value {
+    type Output = Value;
+
+    /// Index into an Array by position. Returns `Value::Null` for
+    /// out-of-bounds indices or non-array values.
+    fn index(&self, index: usize) -> &Value {
+        match self {
+            Value::Array(items) => items.get(index).unwrap_or(&NULL),
+            _ => &NULL,
+        }
+    }
+}
+
+impl fmt::Display for Value {
+    /// Formats the value as valid JSON.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Null => write!(f, "null"),
+            Value::Bool(b) => write!(f, "{b}"),
+            Value::Number(n) => {
+                if n.fract() == 0.0 && n.is_finite() {
+                    write!(f, "{}", *n as i64)
+                } else {
+                    write!(f, "{n}")
+                }
+            }
+            Value::String(s) => {
+                write!(f, "\"")?;
+                for c in s.chars() {
+                    match c {
+                        '"' => write!(f, "\\\"")?,
+                        '\\' => write!(f, "\\\\")?,
+                        '\n' => write!(f, "\\n")?,
+                        '\r' => write!(f, "\\r")?,
+                        '\t' => write!(f, "\\t")?,
+                        '\u{08}' => write!(f, "\\b")?,
+                        '\u{0C}' => write!(f, "\\f")?,
+                        c if c < '\u{20}' => write!(f, "\\u{:04x}", c as u32)?,
+                        c => write!(f, "{c}")?,
+                    }
+                }
+                write!(f, "\"")
+            }
+            Value::Array(items) => {
+                write!(f, "[")?;
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ",")?;
+                    }
+                    write!(f, "{item}")?;
+                }
+                write!(f, "]")
+            }
+            Value::Object(entries) => {
+                write!(f, "{{")?;
+                for (i, (k, v)) in entries.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ",")?;
+                    }
+                    // Key is always a JSON string
+                    write!(f, "\"{k}\":{v}")?;
+                }
+                write!(f, "}}")
+            }
+        }
     }
 }
 
@@ -1171,9 +1242,111 @@ mod tests {
     }
 
     #[test]
+    fn test_value_index_usize() {
+        let v = Value::Array(vec![
+            Value::Number(10.0),
+            Value::String("hello".to_string()),
+            Value::Bool(true),
+        ]);
+        assert_eq!(v[0], Value::Number(10.0));
+        assert_eq!(v[1], Value::String("hello".to_string()));
+        assert_eq!(v[2], Value::Bool(true));
+    }
+
+    #[test]
+    fn test_value_index_usize_out_of_bounds() {
+        let v = Value::Array(vec![Value::Number(1.0)]);
+        assert!(v[5].is_null());
+    }
+
+    #[test]
+    fn test_value_index_usize_non_array() {
+        let v = Value::String("hello".to_string());
+        assert!(v[0].is_null());
+    }
+
+    #[test]
     fn test_value_is_null() {
         assert!(Value::Null.is_null());
         assert!(!Value::Bool(false).is_null());
+    }
+
+    // -- Display implementation -----------------------------------------------
+
+    #[test]
+    fn test_display_null() {
+        assert_eq!(Value::Null.to_string(), "null");
+    }
+
+    #[test]
+    fn test_display_bool() {
+        assert_eq!(Value::Bool(true).to_string(), "true");
+        assert_eq!(Value::Bool(false).to_string(), "false");
+    }
+
+    #[test]
+    fn test_display_number_integer() {
+        assert_eq!(Value::Number(42.0).to_string(), "42");
+    }
+
+    #[test]
+    fn test_display_number_float() {
+        assert_eq!(Value::Number(2.75).to_string(), "2.75");
+    }
+
+    #[test]
+    fn test_display_string() {
+        assert_eq!(Value::String("hello".to_string()).to_string(), r#""hello""#);
+    }
+
+    #[test]
+    fn test_display_string_escapes() {
+        let v = Value::String("a\"b\\c\n\r\t".to_string());
+        assert_eq!(v.to_string(), r#""a\"b\\c\n\r\t""#);
+    }
+
+    #[test]
+    fn test_display_string_control_chars() {
+        let v = Value::String("\u{08}\u{0C}\u{01}".to_string());
+        assert_eq!(v.to_string(), r#""\b\f\u0001""#);
+    }
+
+    #[test]
+    fn test_display_array() {
+        let v = Value::Array(vec![
+            Value::Number(1.0),
+            Value::String("two".to_string()),
+            Value::Null,
+        ]);
+        assert_eq!(v.to_string(), r#"[1,"two",null]"#);
+    }
+
+    #[test]
+    fn test_display_empty_array() {
+        assert_eq!(Value::Array(vec![]).to_string(), "[]");
+    }
+
+    #[test]
+    fn test_display_object() {
+        let v = Value::Object(vec![
+            ("a".to_string(), Value::Number(1.0)),
+            ("b".to_string(), Value::Bool(true)),
+        ]);
+        assert_eq!(v.to_string(), r#"{"a":1,"b":true}"#);
+    }
+
+    #[test]
+    fn test_display_empty_object() {
+        assert_eq!(Value::Object(vec![]).to_string(), "{}");
+    }
+
+    #[test]
+    fn test_display_roundtrip() {
+        let input = r#"{"name":"test","values":[1,2,3],"nested":{"flag":true}}"#;
+        let v = parse_rrjson(input).unwrap();
+        let output = v.to_string();
+        let reparsed = parse_rrjson(&output).unwrap();
+        assert_eq!(v, reparsed);
     }
 
     #[test]
