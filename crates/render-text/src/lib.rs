@@ -314,7 +314,9 @@ fn render_directive(directive: &chordpro_core::ast::Directive, output: &mut Vec<
             render_section_header(&label, &directive.value, output);
         }
         DirectiveKind::Image(attrs) => {
-            output.push(format!("[Image: {}]", attrs.src));
+            if attrs.has_src() {
+                output.push(format!("[Image: {}]", attrs.src));
+            }
         }
         // End-of-section, metadata, and unknown directives produce no output.
         _ => {}
@@ -942,6 +944,20 @@ mod delegate_tests {
         let input = "{image: src=images/cover.png width=200}";
         let output = render(input);
         assert!(output.contains("[Image: images/cover.png]"));
+    }
+
+    #[test]
+    fn test_render_image_empty_src_suppressed() {
+        let input = "{image}";
+        let output = render(input);
+        assert!(!output.contains("[Image"));
+    }
+
+    #[test]
+    fn test_render_image_empty_src_with_other_attrs_suppressed() {
+        let input = "{image: width=200 height=100}";
+        let output = render(input);
+        assert!(!output.contains("[Image"));
     }
 
     #[test]
