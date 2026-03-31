@@ -211,10 +211,15 @@ pub fn render_song_with_transpose(song: &Song, cli_transpose: i8) -> String {
                             columns_open = true;
                         }
                     }
+                    // Page control directives are intentionally NOT captured
+                    // in the chorus buffer. Replaying page/column breaks during
+                    // {chorus} recall would produce unexpected layout changes.
                     DirectiveKind::ColumnBreak => {
                         html.push_str("<div style=\"break-before: column;\"></div>\n");
                     }
                     DirectiveKind::NewPage | DirectiveKind::NewPhysicalPage => {
+                        // TODO: NewPhysicalPage should eventually emit a
+                        // different CSS hint for duplex printing scenarios.
                         html.push_str("<div style=\"break-before: page;\"></div>\n");
                     }
                     DirectiveKind::StartOfSvg => {
