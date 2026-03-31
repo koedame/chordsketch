@@ -102,6 +102,11 @@ const MIN_FONT_SIZE: f32 = 0.5;
 const MAX_FONT_SIZE: f32 = 200.0;
 /// Maximum image file size in bytes (50 MB).
 const MAX_IMAGE_FILE_SIZE: u64 = 50 * 1024 * 1024;
+/// Maximum native image dimension in pixels.  JPEG headers can report up to
+/// 65535 pixels; without explicit width/height/scale this maps 1:1 to PDF
+/// points, producing a ~23-metre image.  Clamping to 10 000 keeps the default
+/// within a few A0-sized pages while still being generous for real photographs.
+const MAX_IMAGE_PIXELS: u32 = 10_000;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -662,6 +667,10 @@ fn render_image(attrs: &ImageAttributes, doc: &mut PdfDocument) {
         return;
     }
 
+    // Clamp native pixel dimensions to prevent extreme default sizes.
+    let pixel_w = pixel_w.min(MAX_IMAGE_PIXELS);
+    let pixel_h = pixel_h.min(MAX_IMAGE_PIXELS);
+
     // Compute rendered dimensions in PDF points (1 pt = 1/72 inch).
     // Default: use pixel dimensions as points (1 pixel = 1 point).
     let native_w = pixel_w as f32;
@@ -672,10 +681,12 @@ fn render_image(attrs: &ImageAttributes, doc: &mut PdfDocument) {
 
     // Clamp to printable area.
     let max_w = PAGE_W - doc.margin_left - doc.margin_right;
+    let max_h = PAGE_H - MARGIN_TOP - MARGIN_BOTTOM;
     let (render_w, render_h) = if render_w > max_w {
-        (max_w, max_w / aspect)
+        let clamped_h = max_w / aspect;
+        (max_w, clamped_h.min(max_h))
     } else {
-        (render_w, render_h)
+        (render_w, render_h.min(max_h))
     };
 
     doc.ensure_space(render_h + LINE_GAP);
@@ -714,10 +725,18 @@ fn parse_dimension(value: &str, reference: f32) -> Option<f32> {
     if let Some(pct_str) = trimmed.strip_suffix('%') {
         let pct: f32 = pct_str.trim().parse().ok()?;
         let result = reference * pct / 100.0;
-        if result > 0.0 { Some(result) } else { None }
+        if result > 0.0 && result.is_finite() {
+            Some(result)
+        } else {
+            None
+        }
     } else {
         let v: f32 = trimmed.parse().ok()?;
-        if v > 0.0 { Some(v) } else { None }
+        if v > 0.0 && v.is_finite() {
+            Some(v)
+        } else {
+            None
+        }
     }
 }
 
@@ -745,7 +764,7 @@ fn compute_image_dimensions(
         .scale
         .as_deref()
         .and_then(|v| v.trim().parse::<f32>().ok())
-        .filter(|&v| v > 0.0);
+        .filter(|&v| v > 0.0 && v.is_finite());
 
     match (parsed_w, parsed_h) {
         (Some(w), Some(h)) => (w, h),
@@ -2772,6 +2791,49 @@ mod jpeg_tests {
         assert!(parse_dimension("-10", 400.0).is_none());
         assert!(parse_dimension("0%", 400.0).is_none());
         assert!(parse_dimension("-5%", 400.0).is_none());
+    }
+
+    #[test]
+    fn test_parse_dimension_rejects_non_finite() {
+        // Infinity via str::parse::<f32>
+        assert!(parse_dimension("inf", 400.0).is_none());
+        assert!(parse_dimension("infinity", 400.0).is_none());
+        assert!(parse_dimension("Infinity", 400.0).is_none());
+        // NaN
+        assert!(parse_dimension("NaN", 400.0).is_none());
+        // Infinity percentage
+        assert!(parse_dimension("inf%", 400.0).is_none());
+    }
+
+    #[test]
+    fn test_compute_image_dimensions_infinite_scale_rejected() {
+        let attrs = ImageAttributes {
+            src: String::new(),
+            width: None,
+            height: None,
+            scale: Some("inf".to_string()),
+            title: None,
+            anchor: None,
+        };
+        // With infinite scale rejected, should fall back to native dimensions.
+        let (w, h) = compute_image_dimensions(&attrs, 100.0, 200.0, 0.5);
+        assert!((w - 100.0).abs() < 0.01);
+        assert!((h - 200.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_compute_image_dimensions_nan_scale_rejected() {
+        let attrs = ImageAttributes {
+            src: String::new(),
+            width: None,
+            height: None,
+            scale: Some("NaN".to_string()),
+            title: None,
+            anchor: None,
+        };
+        let (w, h) = compute_image_dimensions(&attrs, 100.0, 200.0, 0.5);
+        assert!((w - 100.0).abs() < 0.01);
+        assert!((h - 200.0).abs() < 0.01);
     }
 
     #[test]
