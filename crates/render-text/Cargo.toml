@@ -8,3 +8,4 @@ description = "Plain text renderer for ChordPro documents"
 
 [dependencies]
 chordpro-core = { path = "../core" }
+unicode-width = "0.2.2"
