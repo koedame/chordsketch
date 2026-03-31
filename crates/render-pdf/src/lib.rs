@@ -554,6 +554,13 @@ fn is_safe_image_path(path: &str) -> bool {
         return false;
     }
 
+    // Reject Windows-style absolute paths on all platforms.  On Unix,
+    // `Path::is_absolute()` does not flag `C:\…` or `\\…` as absolute,
+    // so we perform string-level checks for drive letters and UNC paths.
+    if is_windows_absolute(path) {
+        return false;
+    }
+
     let p = std::path::Path::new(path);
 
     // Reject absolute paths (Unix `/…` and Windows `C:\…`).
@@ -571,6 +578,27 @@ fn is_safe_image_path(path: &str) -> bool {
     }
 
     true
+}
+
+/// Check whether a path string looks like a Windows absolute path.
+///
+/// Detects drive-letter paths (`C:\…`, `C:/…`) and UNC paths (`\\…`)
+/// using string-level checks so the result is consistent across platforms.
+fn is_windows_absolute(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    // Drive letter: e.g. `C:\` or `C:/`
+    if bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && (bytes[2] == b'\\' || bytes[2] == b'/')
+    {
+        return true;
+    }
+    // UNC path: `\\server\share`
+    if bytes.len() >= 2 && bytes[0] == b'\\' && bytes[1] == b'\\' {
+        return true;
+    }
+    false
 }
 
 /// Read an image file, rejecting symlinks and files exceeding
@@ -3212,13 +3240,13 @@ mod jpeg_tests {
         assert!(!is_safe_image_path("/images/photo.jpg"));
     }
 
-    #[cfg(windows)]
     #[test]
     fn test_safe_image_path_windows_absolute_rejected() {
-        // These are absolute on Windows and should be rejected there.
+        // String-level checks reject Windows-style absolute paths on all platforms.
         assert!(!is_safe_image_path(r"C:\photo.jpg"));
         assert!(!is_safe_image_path(r"D:\Users\photo.jpg"));
         assert!(!is_safe_image_path(r"\\server\share\photo.jpg"));
+        assert!(!is_safe_image_path("C:/photo.jpg"));
     }
 
     #[cfg(windows)]
