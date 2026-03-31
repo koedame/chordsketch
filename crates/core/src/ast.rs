@@ -440,6 +440,112 @@ impl ImageAttributes {
 }
 
 // ---------------------------------------------------------------------------
+// ChordDefinition
+// ---------------------------------------------------------------------------
+
+/// A parsed chord definition from `{define}` directives.
+///
+/// Supports three types:
+/// - **Fretted**: `{define: Am base-fret 1 frets x 0 2 2 1 0}` (stored as raw value)
+/// - **Keyboard**: `{define: Am keys 0 3 7}` (MIDI key offsets)
+/// - **Copy**: `{define: Am copy Amin}` or `{define: Am copyall Amin}`
+///
+/// # Examples
+///
+/// ```
+/// use chordpro_core::ast::ChordDefinition;
+///
+/// let def = ChordDefinition::parse_value("Am keys 0 3 7");
+/// assert_eq!(def.name, "Am");
+/// assert!(def.keys.is_some());
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChordDefinition {
+    /// The chord name being defined.
+    pub name: String,
+    /// Keyboard keys (MIDI offsets) for keyboard instrument definitions.
+    pub keys: Option<Vec<i32>>,
+    /// Source chord name for `copy` definitions.
+    pub copy: Option<String>,
+    /// Source chord name for `copyall` definitions.
+    pub copyall: Option<String>,
+    /// Display name override.
+    pub display: Option<String>,
+    /// The raw definition value (for fretted definitions not yet parsed).
+    pub raw: Option<String>,
+}
+
+impl ChordDefinition {
+    /// Parse a define directive value string.
+    ///
+    /// Recognizes `keys`, `copy`, `copyall`, and `display` tokens.
+    /// Everything else is stored in `raw` for fretted chord definitions.
+    #[must_use]
+    pub fn parse_value(value: &str) -> Self {
+        let value = value.trim();
+        let mut parts = value.splitn(2, char::is_whitespace);
+        let name = parts.next().unwrap_or("").to_string();
+        let rest = parts.next().unwrap_or("").trim();
+
+        let mut def = Self {
+            name,
+            keys: None,
+            copy: None,
+            copyall: None,
+            display: None,
+            raw: None,
+        };
+
+        if rest.is_empty() {
+            return def;
+        }
+
+        // Check for "keys <n1> <n2> ..."
+        if let Some(keys_str) = rest
+            .strip_prefix("keys ")
+            .or_else(|| rest.strip_prefix("keys\t"))
+        {
+            let keys: Vec<i32> = keys_str
+                .split_whitespace()
+                .filter_map(|s| s.parse().ok())
+                .collect();
+            def.keys = Some(keys);
+            return def;
+        }
+        if rest == "keys" {
+            def.keys = Some(Vec::new());
+            return def;
+        }
+
+        // Check for "copy <source>" or "copyall <source>"
+        if let Some(source) = rest.strip_prefix("copyall ") {
+            def.copyall = Some(source.trim().to_string());
+            return def;
+        }
+        if let Some(source) = rest.strip_prefix("copy ") {
+            def.copy = Some(source.trim().to_string());
+            return def;
+        }
+
+        // Check for "display" attribute in the raw value
+        if let Some(pos) = rest.find("display=") {
+            let after = &rest[pos + 8..];
+            // Extract quoted value
+            let display_val = if let Some(stripped) = after.strip_prefix('"') {
+                stripped.split('"').next().map(|s| s.to_string())
+            } else {
+                after.split_whitespace().next().map(|s| s.to_string())
+            };
+            def.display = display_val;
+        }
+
+        // Store raw for fretted definitions
+        def.raw = Some(rest.to_string());
+        def
+    }
+}
+
+// ---------------------------------------------------------------------------
 // DirectiveKind
 // ---------------------------------------------------------------------------
 
@@ -2539,5 +2645,71 @@ mod delegate_tests {
             DirectiveKind::from_name("start_of_textblock"),
             DirectiveKind::StartOfSection(_)
         ));
+    }
+}
+
+#[cfg(test)]
+mod chord_definition_tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_keyboard_definition() {
+        let def = ChordDefinition::parse_value("Am keys 0 3 7");
+        assert_eq!(def.name, "Am");
+        assert_eq!(def.keys, Some(vec![0, 3, 7]));
+        assert!(def.copy.is_none());
+    }
+
+    #[test]
+    fn test_parse_keyboard_empty_keys() {
+        let def = ChordDefinition::parse_value("Am keys");
+        assert_eq!(def.name, "Am");
+        assert_eq!(def.keys, Some(vec![]));
+    }
+
+    #[test]
+    fn test_parse_copy() {
+        let def = ChordDefinition::parse_value("Am copy Amin");
+        assert_eq!(def.name, "Am");
+        assert_eq!(def.copy, Some("Amin".to_string()));
+        assert!(def.keys.is_none());
+    }
+
+    #[test]
+    fn test_parse_copyall() {
+        let def = ChordDefinition::parse_value("Am copyall Amin");
+        assert_eq!(def.name, "Am");
+        assert_eq!(def.copyall, Some("Amin".to_string()));
+    }
+
+    #[test]
+    fn test_parse_fretted_definition() {
+        let def = ChordDefinition::parse_value("Am base-fret 1 frets x 0 2 2 1 0");
+        assert_eq!(def.name, "Am");
+        assert!(def.raw.is_some());
+        assert!(def.raw.unwrap().contains("base-fret"));
+    }
+
+    #[test]
+    fn test_parse_name_only() {
+        let def = ChordDefinition::parse_value("Am");
+        assert_eq!(def.name, "Am");
+        assert!(def.keys.is_none());
+        assert!(def.copy.is_none());
+        assert!(def.raw.is_none());
+    }
+
+    #[test]
+    fn test_parse_display_attribute() {
+        let def =
+            ChordDefinition::parse_value("Am base-fret 1 frets x 0 2 2 1 0 display=\"A minor\"");
+        assert_eq!(def.name, "Am");
+        assert_eq!(def.display, Some("A minor".to_string()));
+    }
+
+    #[test]
+    fn test_parse_keyboard_negative_keys() {
+        let def = ChordDefinition::parse_value("Cm keys -1 0 3 7");
+        assert_eq!(def.keys, Some(vec![-1, 0, 3, 7]));
     }
 }
