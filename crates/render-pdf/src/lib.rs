@@ -2967,11 +2967,11 @@ mod jpeg_tests {
         //
         // Use a unique subdirectory name (PID + thread name) so parallel
         // test threads never collide on the same directory.
-        let subdir = format!(
-            "_test_oversized_img_{}_{}",
-            std::process::id(),
-            std::thread::current().name().unwrap_or("main")
-        );
+        let thread_name = std::thread::current()
+            .name()
+            .unwrap_or("main")
+            .replace("::", "_");
+        let subdir = format!("_test_oversized_img_{}_{}", std::process::id(), thread_name);
         let _ = std::fs::remove_dir_all(&subdir);
         std::fs::create_dir_all(&subdir).expect("create test dir");
         let rel_path = format!("{subdir}/huge.jpg");
