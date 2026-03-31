@@ -86,6 +86,9 @@ const LINE_GAP: f32 = 4.0;
 const CHAR_WIDTH: f32 = 0.52;
 /// Table of Contents entry font size.
 const TOC_ENTRY_SIZE: f32 = 11.0;
+/// Maximum number of pages a single document can contain.
+/// Prevents resource exhaustion from malicious input.
+const MAX_PAGES: usize = 10_000;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -625,7 +628,13 @@ impl PdfDocument {
     }
 
     /// Start a new page, resetting the Y cursor and column index.
+    ///
+    /// Silently does nothing when [`MAX_PAGES`] has been reached so that
+    /// malicious input cannot cause unbounded memory allocation.
     fn new_page(&mut self) {
+        if self.pages.len() >= MAX_PAGES {
+            return;
+        }
         self.pages.push(Vec::new());
         self.y = PAGE_H - MARGIN_TOP;
         self.current_column = 0;
@@ -668,9 +677,14 @@ impl PdfDocument {
         self.pages.last_mut().expect("pages is never empty")
     }
 
-    /// Take all pages out of this document, leaving it empty.
+    /// Take all pages out of this document, replacing them with a single
+    /// empty page so that the "pages is never empty" invariant is preserved.
     fn take_pages(&mut self) -> Vec<Vec<String>> {
-        std::mem::take(&mut self.pages)
+        let pages = std::mem::take(&mut self.pages);
+        self.pages.push(Vec::new());
+        self.y = PAGE_H - MARGIN_TOP;
+        self.current_column = 0;
+        pages
     }
 
     /// Append a pre-built page to this document.
@@ -1241,6 +1255,38 @@ mod multipage_tests {
         assert_eq!(doc.page_count(), 2);
         doc.new_page();
         assert_eq!(doc.page_count(), 3);
+    }
+
+    #[test]
+    fn test_new_page_respects_max_limit() {
+        let mut doc = PdfDocument::new();
+        // Already has 1 page; add MAX_PAGES more attempts.
+        for _ in 0..MAX_PAGES {
+            doc.new_page();
+        }
+        assert_eq!(doc.page_count(), MAX_PAGES);
+    }
+
+    #[test]
+    fn test_take_pages_preserves_invariant() {
+        let mut doc = PdfDocument::new();
+        doc.new_page();
+        assert_eq!(doc.page_count(), 2);
+
+        let taken = doc.take_pages();
+        assert_eq!(taken.len(), 2);
+        // Document is usable after take — invariant preserved.
+        assert_eq!(doc.page_count(), 1);
+        // current_page_mut must not panic.
+        let _ = doc.current_page_mut();
+    }
+
+    #[test]
+    fn test_new_page_works_after_take_pages() {
+        let mut doc = PdfDocument::new();
+        let _ = doc.take_pages();
+        doc.new_page();
+        assert_eq!(doc.page_count(), 2);
     }
 }
 
