@@ -35,7 +35,10 @@ struct PdfFormattingState {
 impl PdfFormattingState {
     /// Apply a formatting directive, updating the appropriate style.
     fn apply(&mut self, kind: &DirectiveKind, value: &Option<String>) {
-        let size_val = value.as_deref().and_then(|v| v.parse::<f32>().ok());
+        let size_val = value
+            .as_deref()
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(|s| s.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE));
         match kind {
             DirectiveKind::TextSize => self.text.size = size_val,
             DirectiveKind::ChordSize => self.chord.size = size_val,
@@ -92,6 +95,10 @@ const MAX_PAGES: usize = 10_000;
 /// Maximum number of columns allowed.
 /// Prevents degenerate layout and f32 overflow from extreme values.
 const MAX_COLUMNS: u32 = 32;
+/// Minimum font size (in points) accepted from user directives.
+const MIN_FONT_SIZE: f32 = 0.5;
+/// Maximum font size (in points) accepted from user directives.
+const MAX_FONT_SIZE: f32 = 200.0;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -1538,6 +1545,37 @@ mod formatting_directive_tests {
         let song = chordpro_core::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
+    }
+
+    #[test]
+    fn test_textsize_clamped_to_max() {
+        let input = "{textsize: 99999}\nHello";
+        let song = chordpro_core::parse(input).unwrap();
+        let bytes = render_song(&song);
+        let content = String::from_utf8_lossy(&bytes);
+        // Font size must be clamped to MAX_FONT_SIZE (200), not 99999.
+        assert!(!content.contains("99999"));
+        assert!(content.contains("200"));
+    }
+
+    #[test]
+    fn test_textsize_clamped_to_min() {
+        let input = "{textsize: -5}\nHello";
+        let song = chordpro_core::parse(input).unwrap();
+        let bytes = render_song(&song);
+        let content = String::from_utf8_lossy(&bytes);
+        // Negative size must be clamped to MIN_FONT_SIZE (0.5).
+        assert!(content.contains("0.5"));
+    }
+
+    #[test]
+    fn test_chordsize_clamped_to_max() {
+        let input = "{chordsize: 500}\n[Am]Hello";
+        let song = chordpro_core::parse(input).unwrap();
+        let bytes = render_song(&song);
+        let content = String::from_utf8_lossy(&bytes);
+        assert!(!content.contains("500"));
+        assert!(content.contains("200"));
     }
 }
 
