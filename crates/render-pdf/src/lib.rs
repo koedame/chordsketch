@@ -602,15 +602,18 @@ fn compute_image_dimensions(
     let parsed_w = attrs
         .width
         .as_deref()
-        .and_then(|v| v.trim().parse::<f32>().ok());
+        .and_then(|v| v.trim().parse::<f32>().ok())
+        .filter(|&v| v > 0.0);
     let parsed_h = attrs
         .height
         .as_deref()
-        .and_then(|v| v.trim().parse::<f32>().ok());
+        .and_then(|v| v.trim().parse::<f32>().ok())
+        .filter(|&v| v > 0.0);
     let parsed_scale = attrs
         .scale
         .as_deref()
-        .and_then(|v| v.trim().parse::<f32>().ok());
+        .and_then(|v| v.trim().parse::<f32>().ok())
+        .filter(|&v| v > 0.0);
 
     match (parsed_w, parsed_h) {
         (Some(w), Some(h)) => (w, h),
@@ -2253,5 +2256,50 @@ mod jpeg_tests {
 
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn test_negative_scale_falls_back_to_native() {
+        let attrs = ImageAttributes {
+            scale: Some("-1".to_string()),
+            ..Default::default()
+        };
+        let (w, h) = compute_image_dimensions(&attrs, 400.0, 300.0, 400.0 / 300.0);
+        // Negative scale is rejected; native dimensions are used.
+        assert!((w - 400.0).abs() < 0.01);
+        assert!((h - 300.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_negative_width_falls_back_to_native() {
+        let attrs = ImageAttributes {
+            width: Some("-200".to_string()),
+            ..Default::default()
+        };
+        let (w, h) = compute_image_dimensions(&attrs, 400.0, 300.0, 400.0 / 300.0);
+        assert!((w - 400.0).abs() < 0.01);
+        assert!((h - 300.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_negative_height_falls_back_to_native() {
+        let attrs = ImageAttributes {
+            height: Some("-150".to_string()),
+            ..Default::default()
+        };
+        let (w, h) = compute_image_dimensions(&attrs, 400.0, 300.0, 400.0 / 300.0);
+        assert!((w - 400.0).abs() < 0.01);
+        assert!((h - 300.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_zero_scale_falls_back_to_native() {
+        let attrs = ImageAttributes {
+            scale: Some("0".to_string()),
+            ..Default::default()
+        };
+        let (w, h) = compute_image_dimensions(&attrs, 400.0, 300.0, 400.0 / 300.0);
+        assert!((w - 400.0).abs() < 0.01);
+        assert!((h - 300.0).abs() < 0.01);
     }
 }
