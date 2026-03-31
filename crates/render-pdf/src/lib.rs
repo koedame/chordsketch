@@ -534,7 +534,9 @@ fn is_safe_image_path(path: &str) -> bool {
     let p = std::path::Path::new(path);
 
     // Reject absolute paths (Unix `/…` and Windows `C:\…`).
-    if p.is_absolute() {
+    // Also explicitly check for leading `/` since `is_absolute()` on Windows
+    // does not consider Unix-style root paths as absolute.
+    if p.is_absolute() || path.starts_with('/') {
         return false;
     }
 
