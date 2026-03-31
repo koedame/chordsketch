@@ -107,6 +107,9 @@ const MAX_IMAGE_FILE_SIZE: u64 = 50 * 1024 * 1024;
 /// points, producing a ~23-metre image.  Clamping to 10 000 keeps the default
 /// within a few A0-sized pages while still being generous for real photographs.
 const MAX_IMAGE_PIXELS: u32 = 10_000;
+/// Maximum number of images that can be embedded in a single PDF document.
+/// Prevents memory exhaustion from documents with many large image directives.
+const MAX_IMAGES: usize = 1_000;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -641,6 +644,11 @@ fn read_image_file(path: &str) -> Option<Vec<u8>> {
 /// column, and `"paper"` centres it on the full page.
 fn render_image(attrs: &ImageAttributes, doc: &mut PdfDocument) {
     if attrs.src.is_empty() {
+        return;
+    }
+
+    // Limit the number of embedded images to prevent memory exhaustion.
+    if doc.images.len() >= MAX_IMAGES {
         return;
     }
 
