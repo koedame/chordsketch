@@ -992,6 +992,11 @@ fn is_safe_image_src(src: &str) -> bool {
         return false;
     }
 
+    // Reject null bytes (defense-in-depth).
+    if src.contains('\0') {
+        return false;
+    }
+
     // Normalise for case-insensitive scheme comparison.  Strip leading
     // whitespace so that " javascript:…" is still caught.
     let normalised = src.trim_start().to_ascii_lowercase();
@@ -999,6 +1004,16 @@ fn is_safe_image_src(src: &str) -> bool {
     // Reject absolute filesystem paths (defense-in-depth, similar to
     // is_safe_image_path in the PDF renderer).
     if normalised.starts_with('/') {
+        return false;
+    }
+
+    // Reject Windows-style absolute paths on all platforms.
+    if is_windows_absolute(src.trim_start()) {
+        return false;
+    }
+
+    // Reject directory traversal (`..` path components).
+    if has_traversal(src) {
         return false;
     }
 
@@ -1013,6 +1028,35 @@ fn is_safe_image_src(src: &str) -> bool {
     }
 
     true
+}
+
+/// Check whether a path string looks like a Windows absolute path.
+///
+/// Detects drive-letter paths (`C:\…`, `C:/…`) and UNC paths (`\\…`)
+/// using string-level checks so the result is consistent across platforms.
+fn is_windows_absolute(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    // Drive letter: e.g. `C:\` or `C:/`
+    if bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && (bytes[2] == b'\\' || bytes[2] == b'/')
+    {
+        return true;
+    }
+    // UNC path: `\\server\share`
+    if bytes.len() >= 2 && bytes[0] == b'\\' && bytes[1] == b'\\' {
+        return true;
+    }
+    false
+}
+
+/// Check whether a path contains `..` directory-traversal components.
+///
+/// Splits on both `/` and `\` so the check works for both Unix and
+/// Windows-style separators.
+fn has_traversal(path: &str) -> bool {
+    path.split(['/', '\\']).any(|seg| seg == "..")
 }
 
 /// Render Lilypond notation content using lilypond, falling back to preformatted text.
@@ -1788,6 +1832,22 @@ Verse text\n\
         // Rejected: absolute filesystem paths
         assert!(!is_safe_image_src("/etc/passwd"));
         assert!(!is_safe_image_src("/home/user/photo.jpg"));
+
+        // Rejected: null bytes
+        assert!(!is_safe_image_src("photo\0.jpg"));
+        assert!(!is_safe_image_src("\0"));
+
+        // Rejected: directory traversal
+        assert!(!is_safe_image_src("../photo.jpg"));
+        assert!(!is_safe_image_src("images/../../etc/passwd"));
+        assert!(!is_safe_image_src(r"..\photo.jpg"));
+        assert!(!is_safe_image_src(r"images\..\..\photo.jpg"));
+
+        // Rejected: Windows-style absolute paths (all platforms)
+        assert!(!is_safe_image_src(r"C:\photo.jpg"));
+        assert!(!is_safe_image_src(r"D:\Users\photo.jpg"));
+        assert!(!is_safe_image_src(r"\\server\share\photo.jpg"));
+        assert!(!is_safe_image_src("C:/photo.jpg"));
     }
 
     #[test]
