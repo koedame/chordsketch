@@ -3580,6 +3580,6 @@ mod delegate_tests {
     #[test]
     #[should_panic(expected = "token list must contain at least an Eof token")]
     fn parser_new_panics_on_empty_tokens() {
-        Parser::new(Vec::new());
+        let _parser = Parser::new(Vec::new());
     }
 }
