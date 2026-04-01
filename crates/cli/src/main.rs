@@ -116,10 +116,21 @@ fn main() -> ExitCode {
 
     // Combine CLI --transpose with settings.transpose from config.
     // CLI flag takes additive precedence: final = config + CLI.
-    let config_transpose = config
+    let config_transpose_f64 = config
         .get_path("settings.transpose")
         .as_f64()
-        .unwrap_or(0.0) as i8;
+        .unwrap_or(0.0);
+    let config_transpose =
+        if config_transpose_f64 < f64::from(i8::MIN) || config_transpose_f64 > f64::from(i8::MAX) {
+            let clamped = config_transpose_f64.clamp(f64::from(i8::MIN), f64::from(i8::MAX)) as i8;
+            eprintln!(
+                "warning: settings.transpose value {} is out of i8 range, clamped to {}",
+                config_transpose_f64, clamped
+            );
+            clamped
+        } else {
+            config_transpose_f64 as i8
+        };
     let (effective_transpose, saturated) =
         chordpro_core::transpose::combine_transpose(config_transpose, cli.transpose);
     if saturated {
