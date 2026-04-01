@@ -91,6 +91,44 @@ impl Value {
             _ => None,
         }
     }
+
+    /// Returns a slice of the array elements if this is an Array, or None.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chordpro_core::rrjson::Value;
+    ///
+    /// let arr = Value::Array(vec![Value::Number(1.0), Value::Number(2.0)]);
+    /// assert_eq!(arr.as_array().unwrap().len(), 2);
+    /// assert!(Value::Null.as_array().is_none());
+    /// ```
+    #[must_use]
+    pub fn as_array(&self) -> Option<&[Value]> {
+        match self {
+            Value::Array(items) => Some(items),
+            _ => None,
+        }
+    }
+
+    /// Returns a slice of the object entries if this is an Object, or None.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chordpro_core::rrjson::Value;
+    ///
+    /// let obj = Value::Object(vec![("key".to_string(), Value::Bool(true))]);
+    /// assert_eq!(obj.as_object().unwrap().len(), 1);
+    /// assert!(Value::Null.as_object().is_none());
+    /// ```
+    #[must_use]
+    pub fn as_object(&self) -> Option<&[(String, Value)]> {
+        match self {
+            Value::Object(entries) => Some(entries),
+            _ => None,
+        }
+    }
 }
 
 impl core::ops::Index<&str> for Value {
@@ -1346,6 +1384,30 @@ mod tests {
     fn test_value_as_bool() {
         assert_eq!(Value::Bool(true).as_bool(), Some(true));
         assert_eq!(Value::Null.as_bool(), None);
+    }
+
+    #[test]
+    fn test_value_as_array() {
+        let v = Value::Array(vec![Value::Number(1.0), Value::Number(2.0)]);
+        let arr = v.as_array();
+        assert!(arr.is_some());
+        assert_eq!(arr.unwrap().len(), 2);
+        assert_eq!(arr.unwrap()[0], Value::Number(1.0));
+        // Non-array returns None
+        assert!(Value::Null.as_array().is_none());
+        assert!(Value::String("x".to_string()).as_array().is_none());
+    }
+
+    #[test]
+    fn test_value_as_object() {
+        let v = Value::Object(vec![("key".to_string(), Value::Bool(true))]);
+        let obj = v.as_object();
+        assert!(obj.is_some());
+        assert_eq!(obj.unwrap().len(), 1);
+        assert_eq!(obj.unwrap()[0].0, "key");
+        // Non-object returns None
+        assert!(Value::Null.as_object().is_none());
+        assert!(Value::Array(vec![]).as_object().is_none());
     }
 
     #[test]
