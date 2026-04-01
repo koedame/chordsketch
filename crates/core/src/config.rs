@@ -278,7 +278,7 @@ impl Config {
         })
     }
 
-    /// Apply a single `key=value` define override.
+    /// Apply a single `key=value` define override, consuming `self`.
     ///
     /// The key may be dot-separated (e.g., `pdf.chorus.indent=20`).
     /// The value is parsed as RRJSON (so `20` becomes a number, `"hello"`
@@ -289,7 +289,23 @@ impl Config {
     ///
     /// Returns [`DefineError`] if the input has no `=`, the key is empty,
     /// or the dotted key exceeds the maximum nesting depth.
-    pub fn with_define(self, define: &str) -> Result<Self, DefineError> {
+    pub fn with_define(mut self, define: &str) -> Result<Self, DefineError> {
+        self.apply_define(define)?;
+        Ok(self)
+    }
+
+    /// Apply a single `key=value` define override in place.
+    ///
+    /// Same semantics as [`with_define`](Self::with_define) but mutates
+    /// `self` instead of consuming it, avoiding a clone when the caller
+    /// needs to retain ownership on error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DefineError`] if the input has no `=`, the key is empty,
+    /// or the dotted key exceeds the maximum nesting depth. On error,
+    /// `self` is not modified.
+    pub fn apply_define(&mut self, define: &str) -> Result<(), DefineError> {
         let Some(eq_pos) = define.find('=') else {
             return Err(DefineError::MissingEquals);
         };
@@ -315,9 +331,9 @@ impl Config {
         let Some(overlay) = build_nested_value(key, value) else {
             return Err(DefineError::ExcessiveDepth);
         };
-        Ok(Config {
-            root: deep_merge(self.root, overlay),
-        })
+        let root = std::mem::replace(&mut self.root, Value::Null);
+        self.root = deep_merge(root, overlay);
+        Ok(())
     }
 
     /// Apply song-level config overrides from `{+config.KEY: VALUE}` directives.
@@ -374,11 +390,8 @@ impl Config {
                 ));
                 continue;
             }
-            match config.clone().with_define(&format!("{key}={value}")) {
-                Ok(updated) => config = updated,
-                Err(e) => {
-                    warnings.push(format!("failed to apply song override {key}={value}: {e}"));
-                }
+            if let Err(e) = config.apply_define(&format!("{key}={value}")) {
+                warnings.push(format!("failed to apply song override {key}={value}: {e}"));
             }
         }
         config
