@@ -350,6 +350,46 @@ fn test_config_transpose_combined_with_cli() {
 }
 
 #[test]
+fn test_config_transpose_out_of_range_positive() {
+    let mut config_file = NamedTempFile::new().unwrap();
+    write!(config_file, r#"{{ "settings": {{ "transpose": 300 }} }}"#).unwrap();
+    config_file.flush().unwrap();
+
+    Command::cargo_bin("chordpro")
+        .unwrap()
+        .args([
+            "--config",
+            config_file.path().to_str().unwrap(),
+            &fixture("simple.cho"),
+        ])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "warning: settings.transpose value 300 is out of i8 range, clamped to 127",
+        ));
+}
+
+#[test]
+fn test_config_transpose_out_of_range_negative() {
+    let mut config_file = NamedTempFile::new().unwrap();
+    write!(config_file, r#"{{ "settings": {{ "transpose": -200 }} }}"#).unwrap();
+    config_file.flush().unwrap();
+
+    Command::cargo_bin("chordpro")
+        .unwrap()
+        .args([
+            "--config",
+            config_file.path().to_str().unwrap(),
+            &fixture("simple.cho"),
+        ])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "warning: settings.transpose value -200 is out of i8 range, clamped to -128",
+        ));
+}
+
+#[test]
 fn test_no_default_configs() {
     Command::cargo_bin("chordpro")
         .unwrap()
