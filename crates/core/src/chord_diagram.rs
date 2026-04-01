@@ -675,8 +675,7 @@ mod tests {
     fn test_format_stops_fret_parsing() {
         // "format" as a standalone token should act as a stop-word,
         // preventing it from being misinterpreted as a fret value.
-        let data =
-            DiagramData::from_raw("Am", "base-fret 1 frets x 0 2 2 1 0 format", 6).unwrap();
+        let data = DiagramData::from_raw("Am", "base-fret 1 frets x 0 2 2 1 0 format", 6).unwrap();
         assert_eq!(data.frets, vec![-1, 0, 2, 2, 1, 0]);
     }
 }
