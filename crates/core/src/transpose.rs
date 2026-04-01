@@ -339,6 +339,43 @@ mod tests {
         assert!(t.detail.is_none());
     }
 
+    #[test]
+    fn test_transpose_chord_preserves_display() {
+        let mut chord = Chord::new("Am");
+        chord.display = Some("A minor".to_string());
+        let t = transpose_chord(&chord, 2);
+        assert_eq!(t.name, "Bm");
+        assert_eq!(t.display, Some("A minor".to_string()));
+        assert_eq!(t.display_name(), "A minor");
+    }
+
+    #[test]
+    fn test_transpose_chord_preserves_none_display() {
+        let chord = Chord::new("Am");
+        let t = transpose_chord(&chord, 2);
+        assert_eq!(t.name, "Bm");
+        assert_eq!(t.display, None);
+        assert_eq!(t.display_name(), "Bm");
+    }
+
+    #[test]
+    fn test_transpose_song_preserves_display() {
+        let song = crate::parse("{define: Am display=\"A minor\"}\n[Am]Hello").unwrap();
+        let t = transpose(&song, 3);
+        // First line is the {define} directive; lyrics are second.
+        let lyrics_line = t.lines.iter().find_map(|line| {
+            if let Line::Lyrics(l) = line {
+                Some(l)
+            } else {
+                None
+            }
+        });
+        let l = lyrics_line.expect("expected a lyrics line");
+        let chord = l.segments[0].chord.as_ref().unwrap();
+        assert_eq!(chord.name, "Cm");
+        assert_eq!(chord.display_name(), "A minor");
+    }
+
     // --- transpose (song-level) ---
 
     #[test]
