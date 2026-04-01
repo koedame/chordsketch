@@ -248,7 +248,7 @@ impl Config {
     /// invoking this programmatically with partially untrusted input should
     /// validate the path first.
     ///
-    /// Symlinks and files exceeding [`MAX_CONFIG_FILE_SIZE`] are rejected,
+    /// Symlinks and files exceeding the 10 MB file size limit are rejected,
     /// matching the behavior of hierarchical config loading.
     ///
     /// # Errors
@@ -350,8 +350,20 @@ impl Config {
         /// song-level overrides. These require exact match, not prefix.
         const ALLOWED_EXACT_KEYS: &[&str] = &["tuning"];
 
+        /// Maximum number of song-level config overrides processed per song.
+        /// Prevents CPU exhaustion from malicious inputs with thousands of
+        /// `{+config.*}` directives.
+        const MAX_SONG_OVERRIDES: usize = 1000;
+
         let mut config = self;
-        for &(key, value) in overrides {
+        if overrides.len() > MAX_SONG_OVERRIDES {
+            warnings.push(format!(
+                "too many song-level config overrides ({}, max {}); excess ignored",
+                overrides.len(),
+                MAX_SONG_OVERRIDES
+            ));
+        }
+        for &(key, value) in overrides.iter().take(MAX_SONG_OVERRIDES) {
             let allowed = ALLOWED_PREFIXES
                 .iter()
                 .any(|prefix| key.starts_with(prefix))
@@ -1559,5 +1571,16 @@ mod tests {
         assert!(warnings[0].contains("failed to apply song override"));
         // Config should remain unchanged
         assert_eq!(config.get_path("pdf.margins.top"), &Value::Number(56.0));
+    }
+
+    #[test]
+    fn test_song_overrides_excess_count_warns() {
+        let config = Config::defaults();
+        let mut warnings = Vec::new();
+        // Create 1002 overrides — first 1000 should be applied, rest ignored.
+        let overrides: Vec<(&str, &str)> = (0..1002).map(|_| ("settings.transpose", "1")).collect();
+        let _config = config.with_song_overrides(&overrides, &mut warnings);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("too many song-level config overrides"));
     }
 }
