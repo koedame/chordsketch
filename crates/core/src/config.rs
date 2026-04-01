@@ -105,10 +105,9 @@ pub(crate) fn deep_merge(base: Value, overlay: Value) -> Value {
     match (base, overlay) {
         (Value::Object(mut base_entries), Value::Object(overlay_entries)) => {
             for (key, overlay_val) in overlay_entries {
-                let existing = base_entries.iter().position(|(k, _)| k == &key);
-                if let Some(idx) = existing {
-                    let (_, base_val) = base_entries.remove(idx);
-                    base_entries.insert(idx, (key, deep_merge(base_val, overlay_val)));
+                if let Some((_, base_val_ref)) = base_entries.iter_mut().find(|(k, _)| k == &key) {
+                    let old = std::mem::replace(base_val_ref, Value::Null);
+                    *base_val_ref = deep_merge(old, overlay_val);
                 } else {
                     base_entries.push((key, overlay_val));
                 }
