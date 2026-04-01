@@ -627,7 +627,10 @@ fn extract_attribute(s: &mut String, key: &str) -> Option<String> {
 pub struct ChordDefinition {
     /// The chord name being defined.
     pub name: String,
-    /// Keyboard keys (MIDI offsets) for keyboard instrument definitions.
+    /// Keyboard keys (MIDI note numbers, 0-127) for keyboard instrument definitions.
+    ///
+    /// Values outside 0-127 and non-numeric tokens are silently dropped during parsing.
+    /// `None` when no valid key values are provided.
     pub keys: Option<Vec<i32>>,
     /// Source chord name for `copy` definitions.
     pub copy: Option<String>,
@@ -672,19 +675,23 @@ impl ChordDefinition {
         }
 
         // Check for "keys <n1> <n2> ..."
+        // Key values are MIDI note numbers (0-127). Non-numeric and
+        // out-of-range values are silently dropped.
         if let Some(keys_str) = rest
             .strip_prefix("keys ")
             .or_else(|| rest.strip_prefix("keys\t"))
         {
             let keys: Vec<i32> = keys_str
                 .split_whitespace()
-                .filter_map(|s| s.parse().ok())
+                .filter_map(|s| s.parse::<i32>().ok())
+                .filter(|&v| (0..=127).contains(&v))
                 .collect();
-            def.keys = Some(keys);
+            // Treat empty keys (all values invalid) as no keys defined.
+            def.keys = if keys.is_empty() { None } else { Some(keys) };
             return def;
         }
         if rest == "keys" {
-            def.keys = Some(Vec::new());
+            // {define: Am keys} with no values — no keys defined.
             return def;
         }
 
@@ -2841,9 +2848,38 @@ mod chord_definition_tests {
 
     #[test]
     fn test_parse_keyboard_empty_keys() {
+        // {define: Am keys} with no values produces None (no valid keys).
         let def = ChordDefinition::parse_value("Am keys");
         assert_eq!(def.name, "Am");
-        assert_eq!(def.keys, Some(vec![]));
+        assert_eq!(def.keys, None);
+    }
+
+    #[test]
+    fn test_parse_keyboard_keys_midi_range() {
+        // Values within MIDI range (0-127) are accepted.
+        let def = ChordDefinition::parse_value("Am keys 0 60 127");
+        assert_eq!(def.keys, Some(vec![0, 60, 127]));
+    }
+
+    #[test]
+    fn test_parse_keyboard_keys_out_of_range_dropped() {
+        // Values outside 0-127 are silently dropped.
+        let def = ChordDefinition::parse_value("Am keys -1 0 128 60");
+        assert_eq!(def.keys, Some(vec![0, 60]));
+    }
+
+    #[test]
+    fn test_parse_keyboard_keys_all_invalid() {
+        // All values invalid -> None (not Some(vec![])).
+        let def = ChordDefinition::parse_value("Am keys abc def");
+        assert_eq!(def.keys, None);
+    }
+
+    #[test]
+    fn test_parse_keyboard_keys_non_numeric_dropped() {
+        // Non-numeric tokens are silently dropped.
+        let def = ChordDefinition::parse_value("Am keys 0 abc 7 xyz 12");
+        assert_eq!(def.keys, Some(vec![0, 7, 12]));
     }
 
     #[test]
@@ -2984,9 +3020,10 @@ mod chord_definition_tests {
     }
 
     #[test]
-    fn test_parse_keyboard_negative_keys() {
+    fn test_parse_keyboard_negative_keys_dropped() {
+        // Negative values are outside MIDI range (0-127) and are dropped.
         let def = ChordDefinition::parse_value("Cm keys -1 0 3 7");
-        assert_eq!(def.keys, Some(vec![-1, 0, 3, 7]));
+        assert_eq!(def.keys, Some(vec![0, 3, 7]));
     }
 
     // -- ImageAttributes ----------------------------------------------------
