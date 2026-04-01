@@ -2123,10 +2123,7 @@ Verse text\n\
             );
             assert_eq!(d.value, Some("off".to_string()));
         } else {
-            panic!(
-                "expected a directive line, got: {:?}",
-                &song.lines[0]
-            );
+            panic!("expected a directive line, got: {:?}", &song.lines[0]);
         }
     }
 
