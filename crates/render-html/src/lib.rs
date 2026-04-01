@@ -15,6 +15,8 @@
 //! XSS. When rendering untrusted ChordPro input, consumers should still
 //! apply Content Security Policy (CSP) headers as additional defense.
 
+use std::fmt::Write;
+
 use chordpro_core::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
 use chordpro_core::config::Config;
 use chordpro_core::escape::escape_xml as escape;
@@ -54,18 +56,18 @@ impl ElementStyle {
     fn to_css(&self) -> String {
         let mut css = String::new();
         if let Some(ref font) = self.font {
-            css.push_str(&format!("font-family: {};", sanitize_css_value(font)));
+            let _ = write!(css, "font-family: {};", sanitize_css_value(font));
         }
         if let Some(ref size) = self.size {
             let safe = sanitize_css_value(size);
             if safe.chars().all(|c| c.is_ascii_digit()) {
-                css.push_str(&format!("font-size: {}pt;", safe));
+                let _ = write!(css, "font-size: {safe}pt;");
             } else {
-                css.push_str(&format!("font-size: {};", safe));
+                let _ = write!(css, "font-size: {safe};");
             }
         }
         if let Some(ref colour) = self.colour {
-            css.push_str(&format!("color: {};", sanitize_css_value(colour)));
+            let _ = write!(css, "color: {};", sanitize_css_value(colour));
         }
         css
     }
@@ -157,10 +159,11 @@ pub fn render_song_with_warnings(
     let mut warnings = Vec::new();
     let title = song.metadata.title.as_deref().unwrap_or("Untitled");
     let mut html = String::new();
-    html.push_str(&format!(
+    let _ = write!(
+        html,
         "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>{}</title>\n",
         escape(title)
-    ));
+    );
     html.push_str("<style>\n");
     html.push_str(CSS);
     html.push_str("</style>\n</head>\n<body>\n");
@@ -320,10 +323,10 @@ fn render_song_body(
                             columns_open = false;
                         }
                         if n > 1 {
-                            html.push_str(&format!(
-                                "<div style=\"column-count: {};column-gap: 2em;\">\n",
-                                n
-                            ));
+                            let _ = writeln!(
+                                html,
+                                "<div style=\"column-count: {n};column-gap: 2em;\">"
+                            );
                             columns_open = true;
                         }
                     }
@@ -460,10 +463,11 @@ pub fn render_songs_with_warnings(
         .first()
         .and_then(|s| s.metadata.title.as_deref())
         .unwrap_or("Untitled");
-    html.push_str(&format!(
+    let _ = write!(
+        html,
         "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>{}</title>\n",
         escape(title)
-    ));
+    );
     html.push_str("<style>\n");
     html.push_str(CSS);
     html.push_str("</style>\n</head>\n<body>\n");
@@ -540,10 +544,10 @@ img { max-width: 100%; height: auto; }
 /// Render song metadata (title, subtitle) as HTML header elements.
 fn render_metadata(metadata: &chordpro_core::ast::Metadata, html: &mut String) {
     if let Some(title) = &metadata.title {
-        html.push_str(&format!("<h1>{}</h1>\n", escape(title)));
+        let _ = writeln!(html, "<h1>{}</h1>", escape(title));
     }
     for subtitle in &metadata.subtitles {
-        html.push_str(&format!("<h2>{}</h2>\n", escape(subtitle)));
+        let _ = writeln!(html, "<h2>{}</h2>", escape(subtitle));
     }
 }
 
@@ -576,16 +580,18 @@ fn render_lyrics(
             };
             let chord_css = fmt_state.chord.to_css();
             if chord_css.is_empty() {
-                html.push_str(&format!(
+                let _ = write!(
+                    html,
                     "<span class=\"chord\">{}</span>",
                     escape(&display_name)
-                ));
+                );
             } else {
-                html.push_str(&format!(
+                let _ = write!(
+                    html,
                     "<span class=\"chord\" style=\"{}\">{}</span>",
                     escape(&chord_css),
                     escape(&display_name)
-                ));
+                );
             }
         } else if lyrics_line.has_chords() {
             // Empty chord placeholder to maintain vertical alignment.
@@ -596,10 +602,11 @@ fn render_lyrics(
         if text_css.is_empty() {
             html.push_str("<span class=\"lyrics\">");
         } else {
-            html.push_str(&format!(
+            let _ = write!(
+                html,
                 "<span class=\"lyrics\" style=\"{}\">",
                 escape(&text_css)
-            ));
+            );
         }
         if segment.has_markup() {
             render_spans(&segment.spans, html);
@@ -650,7 +657,7 @@ fn render_spans(spans: &[TextSpan], html: &mut String) {
                 if css.is_empty() {
                     html.push_str("<span>");
                 } else {
-                    html.push_str(&format!("<span style=\"{}\">", escape(&css)));
+                    let _ = write!(html, "<span style=\"{}\">", escape(&css));
                 }
                 render_spans(children, html);
                 html.push_str("</span>");
@@ -663,31 +670,28 @@ fn render_spans(spans: &[TextSpan], html: &mut String) {
 fn span_attrs_to_css(attrs: &SpanAttributes) -> String {
     let mut css = String::new();
     if let Some(ref font_family) = attrs.font_family {
-        css.push_str(&format!(
-            "font-family: {};",
-            sanitize_css_value(font_family)
-        ));
+        let _ = write!(css, "font-family: {};", sanitize_css_value(font_family));
     }
     if let Some(ref size) = attrs.size {
         let safe = sanitize_css_value(size);
         // If the size is a plain number, treat it as pt; otherwise pass through.
         if safe.chars().all(|c| c.is_ascii_digit()) {
-            css.push_str(&format!("font-size: {}pt;", safe));
+            let _ = write!(css, "font-size: {safe}pt;");
         } else {
-            css.push_str(&format!("font-size: {};", safe));
+            let _ = write!(css, "font-size: {safe};");
         }
     }
     if let Some(ref fg) = attrs.foreground {
-        css.push_str(&format!("color: {};", sanitize_css_value(fg)));
+        let _ = write!(css, "color: {};", sanitize_css_value(fg));
     }
     if let Some(ref bg) = attrs.background {
-        css.push_str(&format!("background-color: {};", sanitize_css_value(bg)));
+        let _ = write!(css, "background-color: {};", sanitize_css_value(bg));
     }
     if let Some(ref weight) = attrs.weight {
-        css.push_str(&format!("font-weight: {};", sanitize_css_value(weight)));
+        let _ = write!(css, "font-weight: {};", sanitize_css_value(weight));
     }
     if let Some(ref style) = attrs.style {
-        css.push_str(&format!("font-style: {};", sanitize_css_value(style)));
+        let _ = write!(css, "font-style: {};", sanitize_css_value(style));
     }
     css
 }
@@ -1204,21 +1208,22 @@ fn render_image(attrs: &chordpro_core::ast::ImageAttributes, html: &mut String) 
     let mut img_attrs = format!("src=\"{}\"", escape(&attrs.src));
 
     if let Some(ref title) = attrs.title {
-        img_attrs.push_str(&format!(" alt=\"{}\"", escape(title)));
+        let _ = write!(img_attrs, " alt=\"{}\"", escape(title));
     }
 
     if let Some(ref width) = attrs.width {
-        img_attrs.push_str(&format!(" width=\"{}\"", escape(width)));
+        let _ = write!(img_attrs, " width=\"{}\"", escape(width));
     }
     if let Some(ref height) = attrs.height {
-        img_attrs.push_str(&format!(" height=\"{}\"", escape(height)));
+        let _ = write!(img_attrs, " height=\"{}\"", escape(height));
     }
     if let Some(ref scale) = attrs.scale {
         // Scale as a CSS transform
-        style.push_str(&format!(
+        let _ = write!(
+            style,
             "transform: scale({});transform-origin: top left;",
             sanitize_css_value(scale)
-        ));
+        );
     }
 
     // Determine wrapper alignment
@@ -1228,19 +1233,19 @@ fn render_image(attrs: &chordpro_core::ast::ImageAttributes, html: &mut String) 
     };
 
     if !align_css.is_empty() {
-        html.push_str(&format!("<div style=\"{}\">", align_css));
+        let _ = write!(html, "<div style=\"{align_css}\">");
     } else {
         html.push_str("<div>");
     }
 
-    html.push_str(&format!("<img {}", img_attrs));
+    let _ = write!(html, "<img {img_attrs}");
     if !style.is_empty() {
         // The style string is first sanitised (sanitize_css_value removes
         // dangerous characters) and then HTML-escaped here.  The double
         // processing is intentional: sanitisation makes the CSS value safe,
         // while escape() ensures the surrounding attribute context is safe
         // (e.g. a `"` in the style cannot break out of the attribute).
-        html.push_str(&format!(" style=\"{}\"", escape(&style)));
+        let _ = write!(html, " style=\"{}\"", escape(&style));
     }
     html.push_str("></div>\n");
 }
@@ -1248,14 +1253,12 @@ fn render_image(attrs: &chordpro_core::ast::ImageAttributes, html: &mut String) 
 /// Open a `<section>` with a class and optional label.
 fn render_section_open(class: &str, label: &str, value: &Option<String>, html: &mut String) {
     let safe_class = sanitize_css_class(class);
-    html.push_str(&format!("<section class=\"{safe_class}\">\n"));
+    let _ = writeln!(html, "<section class=\"{safe_class}\">");
     let display_label = match value {
         Some(v) if !v.is_empty() => format!("{label}: {}", escape(v)),
         _ => label.to_string(),
     };
-    html.push_str(&format!(
-        "<div class=\"section-label\">{display_label}</div>\n"
-    ));
+    let _ = writeln!(html, "<div class=\"section-label\">{display_label}</div>");
 }
 
 /// Render a `{chorus}` recall directive as HTML.
@@ -1268,9 +1271,7 @@ fn render_chorus_recall(value: &Option<String>, chorus_html: &str, html: &mut St
         Some(v) if !v.is_empty() => format!("Chorus: {}", escape(v)),
         _ => "Chorus".to_string(),
     };
-    html.push_str(&format!(
-        "<div class=\"section-label\">{display_label}</div>\n"
-    ));
+    let _ = writeln!(html, "<div class=\"section-label\">{display_label}</div>");
     html.push_str(chorus_html);
     html.push_str("</div>\n");
 }
@@ -1283,19 +1284,13 @@ fn render_chorus_recall(value: &Option<String>, chorus_html: &str, html: &mut St
 fn render_comment(style: CommentStyle, text: &str, html: &mut String) {
     match style {
         CommentStyle::Normal => {
-            html.push_str(&format!("<p class=\"comment\">{}</p>\n", escape(text)));
+            let _ = writeln!(html, "<p class=\"comment\">{}</p>", escape(text));
         }
         CommentStyle::Italic => {
-            html.push_str(&format!(
-                "<p class=\"comment\"><em>{}</em></p>\n",
-                escape(text)
-            ));
+            let _ = writeln!(html, "<p class=\"comment\"><em>{}</em></p>", escape(text));
         }
         CommentStyle::Boxed => {
-            html.push_str(&format!(
-                "<div class=\"comment-box\">{}</div>\n",
-                escape(text)
-            ));
+            let _ = writeln!(html, "<div class=\"comment-box\">{}</div>", escape(text));
         }
     }
 }
