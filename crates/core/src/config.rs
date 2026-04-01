@@ -595,7 +595,7 @@ fn read_config_file(path: &Path) -> Result<String, std::io::Error> {
     // Open the file. On Unix, O_NOFOLLOW atomically rejects symlinks at
     // the kernel level, closing the TOCTOU window between the metadata
     // check above and the actual open.
-    let mut file = open_no_follow(path)?;
+    let file = open_no_follow(path)?;
     let fd_meta = file.metadata()?;
 
     if fd_meta.len() > MAX_CONFIG_FILE_SIZE {
@@ -610,8 +610,21 @@ fn read_config_file(path: &Path) -> Result<String, std::io::Error> {
         ));
     }
 
+    // Use Read::take() to hard-cap the read as defense-in-depth, in case
+    // the metadata size is inaccurate (e.g., FUSE or synthetic filesystems).
     let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
+    file.take(MAX_CONFIG_FILE_SIZE + 1)
+        .read_to_string(&mut contents)?;
+    if contents.len() as u64 > MAX_CONFIG_FILE_SIZE {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "config file read size exceeds {} byte limit: {}",
+                MAX_CONFIG_FILE_SIZE,
+                path.display()
+            ),
+        ));
+    }
     Ok(contents)
 }
 
