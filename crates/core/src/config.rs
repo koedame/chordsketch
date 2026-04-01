@@ -248,7 +248,7 @@ impl Config {
     /// invoking this programmatically with partially untrusted input should
     /// validate the path first.
     ///
-    /// Symlinks and files exceeding [`MAX_CONFIG_FILE_SIZE`] are rejected,
+    /// Symlinks and files exceeding the 10 MB file size limit are rejected,
     /// matching the behavior of hierarchical config loading.
     ///
     /// # Errors
