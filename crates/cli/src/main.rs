@@ -102,16 +102,19 @@ fn main() -> ExitCode {
 
     // Apply --define overrides (highest precedence)
     for define in &cli.defines {
-        if !define.contains('=') {
-            eprintln!("error: invalid --define syntax: {define} (expected key=value)");
-            return ExitCode::FAILURE;
+        match define.split_once('=') {
+            None => {
+                eprintln!("error: invalid --define syntax: {define} (expected key=value)");
+                return ExitCode::FAILURE;
+            }
+            Some((key, _)) if key.trim().is_empty() => {
+                eprintln!("error: invalid --define syntax: {define} (key must not be empty)");
+                return ExitCode::FAILURE;
+            }
+            Some(_) => {
+                config = config.with_define(define);
+            }
         }
-        let key = define.split('=').next().unwrap_or("");
-        if key.trim().is_empty() {
-            eprintln!("error: invalid --define syntax: {define} (key must not be empty)");
-            return ExitCode::FAILURE;
-        }
-        config = config.with_define(define);
     }
 
     // Combine CLI --transpose with settings.transpose from config.
@@ -141,7 +144,6 @@ fn main() -> ExitCode {
     }
 
     let mut all_songs: Vec<chordpro_core::ast::Song> = Vec::new();
-    let is_binary = matches!(cli.format, Format::Pdf);
     let mut had_error = false;
 
     for path in &cli.files {
@@ -169,57 +171,59 @@ fn main() -> ExitCode {
         all_songs.extend(result.results.into_iter().map(|r| r.song));
     }
 
-    let combined_text;
-    let combined_bytes;
-
-    if is_binary {
-        let result = chordpro_render_pdf::render_songs_with_warnings(
-            &all_songs,
-            effective_transpose,
-            &config,
-        );
-        for w in &result.warnings {
-            eprintln!("warning: {w}");
-        }
-        combined_bytes = result.output;
-        combined_text = String::new();
-    } else {
-        combined_bytes = Vec::new();
-        combined_text = match cli.format {
-            Format::Text => {
-                let result = chordpro_render_text::render_songs_with_warnings(
-                    &all_songs,
-                    effective_transpose,
-                    &config,
-                );
-                for w in &result.warnings {
-                    eprintln!("warning: {w}");
-                }
-                result.output
-            }
-            Format::Html => {
-                let result = chordpro_render_html::render_songs_with_warnings(
-                    &all_songs,
-                    effective_transpose,
-                    &config,
-                );
-                for w in &result.warnings {
-                    eprintln!("warning: {w}");
-                }
-                result.output
-            }
-            Format::Pdf => unreachable!(),
-        };
+    /// Output produced by a renderer.
+    enum Output {
+        Text(String),
+        Binary(Vec<u8>),
     }
 
-    if had_error && combined_text.is_empty() && combined_bytes.is_empty() {
+    let output = match cli.format {
+        Format::Pdf => {
+            let result = chordpro_render_pdf::render_songs_with_warnings(
+                &all_songs,
+                effective_transpose,
+                &config,
+            );
+            for w in &result.warnings {
+                eprintln!("warning: {w}");
+            }
+            Output::Binary(result.output)
+        }
+        Format::Text => {
+            let result = chordpro_render_text::render_songs_with_warnings(
+                &all_songs,
+                effective_transpose,
+                &config,
+            );
+            for w in &result.warnings {
+                eprintln!("warning: {w}");
+            }
+            Output::Text(result.output)
+        }
+        Format::Html => {
+            let result = chordpro_render_html::render_songs_with_warnings(
+                &all_songs,
+                effective_transpose,
+                &config,
+            );
+            for w in &result.warnings {
+                eprintln!("warning: {w}");
+            }
+            Output::Text(result.output)
+        }
+    };
+
+    let is_empty = match &output {
+        Output::Text(s) => s.is_empty(),
+        Output::Binary(b) => b.is_empty(),
+    };
+    if had_error && is_empty {
         return ExitCode::FAILURE;
     }
 
-    let write_result = if is_binary {
-        write_bytes(&cli.output, &combined_bytes)
-    } else {
-        write_text(&cli.output, &combined_text)
+    let write_result = match &output {
+        Output::Binary(bytes) => write_bytes(&cli.output, bytes),
+        Output::Text(text) => write_text(&cli.output, text),
     };
 
     if let Err(e) = write_result {
