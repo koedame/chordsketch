@@ -264,9 +264,13 @@ impl Config {
             });
         }
         // Try as a file path — apply the same security checks as hierarchical config
-        let text = read_config_file(Path::new(name)).map_err(|e| ConfigError::Io {
-            path: name.to_string(),
-            source: e,
+        // CLI --config files are trusted (user-provided paths), so use the
+        // full MAX_CONFIG_FILE_SIZE limit.
+        let text = read_config_file(Path::new(name), MAX_CONFIG_FILE_SIZE).map_err(|e| {
+            ConfigError::Io {
+                path: name.to_string(),
+                source: e,
+            }
         })?;
         let result = rrjson::parse_rrjson_with_warnings(&text).map_err(|e| ConfigError::Parse {
             path: name.to_string(),
@@ -421,6 +425,9 @@ impl Config {
     /// Loads: defaults → system → user → project → song-specific.
     /// Missing files at any level are silently skipped.
     ///
+    /// System and user configs are trusted and may be up to 10 MB.
+    /// Project and song-specific configs are untrusted and limited to 1 MB.
+    ///
     /// `project_dir` is the directory containing the song file (for
     /// project-level config). `song_config` is an optional path to a
     /// song-specific config file.
@@ -429,9 +436,9 @@ impl Config {
         let mut config = Self::defaults();
         let mut warnings = Vec::new();
 
-        // System config
+        // System config (trusted — full size limit)
         let system_path = PathBuf::from("/etc/chordpro.json");
-        if let Some(text) = read_file_if_exists(&system_path, &mut warnings) {
+        if let Some(text) = read_file_if_exists(&system_path, MAX_CONFIG_FILE_SIZE, &mut warnings) {
             match Self::parse_collecting_warnings(&text, &mut warnings) {
                 Ok(sys) => config = config.merge(sys),
                 Err(e) => warnings.push(format!(
@@ -441,10 +448,12 @@ impl Config {
             }
         }
 
-        // User config: respect XDG_CONFIG_HOME, fall back to $HOME/.config
+        // User config (trusted — full size limit): respect XDG_CONFIG_HOME,
+        // fall back to $HOME/.config.
         if let Some(config_dir) = config_dir() {
             let user_path = config_dir.join("chordpro").join("chordpro.json");
-            if let Some(text) = read_file_if_exists(&user_path, &mut warnings) {
+            if let Some(text) = read_file_if_exists(&user_path, MAX_CONFIG_FILE_SIZE, &mut warnings)
+            {
                 match Self::parse_collecting_warnings(&text, &mut warnings) {
                     Ok(user) => config = config.merge(user),
                     Err(e) => warnings.push(format!(
@@ -468,10 +477,12 @@ impl Config {
             .as_bool()
             .unwrap_or(false);
 
-        // Project config
+        // Project config (untrusted — reduced size limit)
         if let Some(dir) = project_dir {
             let project_path = PathBuf::from(dir).join("chordpro.json");
-            if let Some(text) = read_file_if_exists(&project_path, &mut warnings) {
+            if let Some(text) =
+                read_file_if_exists(&project_path, MAX_UNTRUSTED_CONFIG_FILE_SIZE, &mut warnings)
+            {
                 match Self::parse_collecting_warnings(&text, &mut warnings) {
                     Ok(proj) => config = config.merge(proj),
                     Err(e) => warnings.push(format!(
@@ -482,9 +493,13 @@ impl Config {
             }
         }
 
-        // Song-specific config
+        // Song-specific config (untrusted — reduced size limit)
         if let Some(path) = song_config {
-            if let Some(text) = read_file_if_exists(Path::new(path), &mut warnings) {
+            if let Some(text) = read_file_if_exists(
+                Path::new(path),
+                MAX_UNTRUSTED_CONFIG_FILE_SIZE,
+                &mut warnings,
+            ) {
                 match Self::parse_collecting_warnings(&text, &mut warnings) {
                     Ok(song) => config = config.merge(song),
                     Err(e) => warnings.push(format!("failed to parse config file {path}: {e}")),
@@ -564,9 +579,19 @@ fn build_nested_value(key: &str, value: Value) -> Option<Value> {
     Some(result)
 }
 
-/// Maximum config file size (10 MB). Files larger than this are rejected
-/// to prevent accidental OOM from device files or very large inputs.
+/// Maximum config file size for trusted sources (10 MB).
+///
+/// Applies to system configs (`/etc/chordpro.json`), user configs
+/// (`~/.config/chordpro/chordpro.json`), and CLI `--config` files.
 const MAX_CONFIG_FILE_SIZE: u64 = 10 * 1024 * 1024;
+
+/// Maximum config file size for untrusted sources (1 MB).
+///
+/// Applies to project-level (`chordpro.json` in song directory) and
+/// song-specific config files. These are less trusted and typically
+/// much smaller than system/user configs, so a tighter limit reduces
+/// the attack surface.
+const MAX_UNTRUSTED_CONFIG_FILE_SIZE: u64 = 1024 * 1024;
 
 /// Open a file without following symlinks.
 ///
@@ -636,8 +661,8 @@ fn open_no_follow(path: &Path) -> Result<File, std::io::Error> {
 ///    the kernel level, eliminating the TOCTOU window between the metadata
 ///    check and file open.
 /// 3. On non-Unix: retains the pre-open metadata check only.
-/// 4. Checks metadata on the file descriptor to enforce the size limit.
-fn read_config_file(path: &Path) -> Result<String, std::io::Error> {
+/// 4. Checks metadata on the file descriptor to enforce `max_size`.
+fn read_config_file(path: &Path, max_size: u64) -> Result<String, std::io::Error> {
     // Pre-open symlink check — provides a clear error message on all platforms.
     let link_meta = std::fs::symlink_metadata(path)?;
     if link_meta.file_type().is_symlink() {
@@ -653,13 +678,13 @@ fn read_config_file(path: &Path) -> Result<String, std::io::Error> {
     let file = open_no_follow(path)?;
     let fd_meta = file.metadata()?;
 
-    if fd_meta.len() > MAX_CONFIG_FILE_SIZE {
+    if fd_meta.len() > max_size {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             format!(
                 "config file size {} exceeds {} byte limit: {}",
                 fd_meta.len(),
-                MAX_CONFIG_FILE_SIZE,
+                max_size,
                 path.display()
             ),
         ));
@@ -668,14 +693,13 @@ fn read_config_file(path: &Path) -> Result<String, std::io::Error> {
     // Use Read::take() to hard-cap the read as defense-in-depth, in case
     // the metadata size is inaccurate (e.g., FUSE or synthetic filesystems).
     let mut contents = String::new();
-    file.take(MAX_CONFIG_FILE_SIZE + 1)
-        .read_to_string(&mut contents)?;
-    if contents.len() as u64 > MAX_CONFIG_FILE_SIZE {
+    file.take(max_size + 1).read_to_string(&mut contents)?;
+    if contents.len() as u64 > max_size {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             format!(
                 "config file read size exceeds {} byte limit: {}",
-                MAX_CONFIG_FILE_SIZE,
+                max_size,
                 path.display()
             ),
         ));
@@ -685,10 +709,10 @@ fn read_config_file(path: &Path) -> Result<String, std::io::Error> {
 
 /// Read a file to a String, returning None if it doesn't exist or can't be read.
 ///
-/// Rejects files that are symlinks or exceed [`MAX_CONFIG_FILE_SIZE`], emitting
-/// a warning to stderr in either case.
-fn read_file_if_exists(path: &Path, warnings: &mut Vec<String>) -> Option<String> {
-    match read_config_file(path) {
+/// Rejects files that are symlinks or exceed `max_size`, emitting a warning
+/// in either case.
+fn read_file_if_exists(path: &Path, max_size: u64, warnings: &mut Vec<String>) -> Option<String> {
+    match read_config_file(path, max_size) {
         Ok(contents) => Some(contents),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => {
@@ -1302,7 +1326,7 @@ mod tests {
         std::fs::write(&file_path, r#"{"key": "value"}"#).unwrap();
 
         let mut warnings = Vec::new();
-        let result = read_file_if_exists(&file_path, &mut warnings);
+        let result = read_file_if_exists(&file_path, MAX_CONFIG_FILE_SIZE, &mut warnings);
         assert!(result.is_some());
         assert!(result.unwrap().contains("key"));
         assert!(warnings.is_empty());
@@ -1311,7 +1335,11 @@ mod tests {
     #[test]
     fn test_read_file_if_exists_nonexistent() {
         let mut warnings = Vec::new();
-        let result = read_file_if_exists(Path::new("/nonexistent/path/config.json"), &mut warnings);
+        let result = read_file_if_exists(
+            Path::new("/nonexistent/path/config.json"),
+            MAX_CONFIG_FILE_SIZE,
+            &mut warnings,
+        );
         assert!(result.is_none());
         assert!(warnings.is_empty());
     }
@@ -1326,7 +1354,7 @@ mod tests {
         std::os::unix::fs::symlink(&real_file, &link_path).unwrap();
 
         let mut warnings = Vec::new();
-        let result = read_file_if_exists(&link_path, &mut warnings);
+        let result = read_file_if_exists(&link_path, MAX_CONFIG_FILE_SIZE, &mut warnings);
         assert!(result.is_none(), "symlink should be rejected");
         assert!(!warnings.is_empty(), "should produce a warning for symlink");
     }
@@ -1352,13 +1380,16 @@ mod tests {
         let file_path = dir.path().join("config.json");
         std::fs::write(&file_path, r#"{"ok": true}"#).unwrap();
 
-        let text = read_config_file(&file_path).unwrap();
+        let text = read_config_file(&file_path, MAX_CONFIG_FILE_SIZE).unwrap();
         assert!(text.contains("ok"));
     }
 
     #[test]
     fn test_read_config_file_nonexistent() {
-        let result = read_config_file(Path::new("/nonexistent/path/config.json"));
+        let result = read_config_file(
+            Path::new("/nonexistent/path/config.json"),
+            MAX_CONFIG_FILE_SIZE,
+        );
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
     }
@@ -1372,9 +1403,47 @@ mod tests {
         std::fs::write(&real_file, r#"{"key": "value"}"#).unwrap();
         std::os::unix::fs::symlink(&real_file, &link_path).unwrap();
 
-        let result = read_config_file(&link_path);
+        let result = read_config_file(&link_path, MAX_CONFIG_FILE_SIZE);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::InvalidInput);
+    }
+
+    // -- Untrusted config size limit tests ----------------------------------------
+
+    #[test]
+    fn test_read_config_file_rejects_oversized_untrusted() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("config.json");
+        // Write a file that exceeds MAX_UNTRUSTED_CONFIG_FILE_SIZE (1 MB)
+        // but is under MAX_CONFIG_FILE_SIZE (10 MB).
+        let content = "x".repeat(MAX_UNTRUSTED_CONFIG_FILE_SIZE as usize + 1);
+        std::fs::write(&file_path, &content).unwrap();
+
+        // Should fail with the untrusted limit.
+        let result = read_config_file(&file_path, MAX_UNTRUSTED_CONFIG_FILE_SIZE);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::InvalidData);
+
+        // Should succeed with the trusted limit.
+        let result = read_config_file(&file_path, MAX_CONFIG_FILE_SIZE);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_read_file_if_exists_warns_on_oversized_untrusted() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("config.json");
+        let content = "x".repeat(MAX_UNTRUSTED_CONFIG_FILE_SIZE as usize + 1);
+        std::fs::write(&file_path, &content).unwrap();
+
+        let mut warnings = Vec::new();
+        let result = read_file_if_exists(&file_path, MAX_UNTRUSTED_CONFIG_FILE_SIZE, &mut warnings);
+        assert!(result.is_none(), "oversized file should be rejected");
+        assert!(!warnings.is_empty(), "should produce a warning");
+        assert!(
+            warnings[0].contains("byte limit"),
+            "warning should mention byte limit"
+        );
     }
 
     // -- XDG_CONFIG_HOME tests ---------------------------------------------------
