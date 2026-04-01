@@ -1014,7 +1014,7 @@ fn render_abc_with_fallback(abc_content: &str, label: &Option<String>, html: &mu
     match chordpro_core::external_tool::invoke_abc2svg(abc_content) {
         Ok(svg_fragment) => {
             render_section_open("abc", "ABC", label, html);
-            html.push_str(&svg_fragment);
+            html.push_str(&sanitize_svg_content(&svg_fragment));
             html.push('\n');
             html.push_str("</section>\n");
         }
@@ -1090,7 +1090,7 @@ fn render_ly_with_fallback(ly_content: &str, label: &Option<String>, html: &mut 
     match chordpro_core::external_tool::invoke_lilypond(ly_content) {
         Ok(svg) => {
             render_section_open("ly", "Lilypond", label, html);
-            html.push_str(&svg);
+            html.push_str(&sanitize_svg_content(&svg));
             html.push('\n');
             html.push_str("</section>\n");
         }
@@ -2137,6 +2137,41 @@ mod delegate_tests {
         assert!(html.contains("<section class=\"ly\">"));
         assert!(html.contains("Lilypond"));
         assert!(html.contains("</section>"));
+    }
+
+    #[test]
+    fn test_abc_fallback_sanitizes_would_be_script_in_svg() {
+        // Even though abc2svg is not installed, verify the sanitization path
+        // by directly calling the helper with a mocked SVG containing a
+        // script tag.  The sanitize_svg_content call must strip it.
+        let malicious_svg = "<svg><script>alert(1)</script><circle r=\"5\"/></svg>";
+        let sanitized = sanitize_svg_content(malicious_svg);
+        assert!(
+            !sanitized.contains("<script>"),
+            "script tags must be stripped from delegate SVG output"
+        );
+        assert!(sanitized.contains("<circle"));
+    }
+
+    #[test]
+    fn test_sanitize_svg_strips_event_handlers_from_delegate_output() {
+        let svg_with_handler = "<svg><rect onmouseover=\"alert(1)\" width=\"10\"/></svg>";
+        let sanitized = sanitize_svg_content(svg_with_handler);
+        assert!(
+            !sanitized.contains("onmouseover"),
+            "event handlers must be stripped from delegate SVG output"
+        );
+        assert!(sanitized.contains("<rect"));
+    }
+
+    #[test]
+    fn test_sanitize_svg_strips_foreignobject_from_delegate_output() {
+        let svg = "<svg><foreignObject><body xmlns=\"http://www.w3.org/1999/xhtml\"><script>alert(1)</script></body></foreignObject></svg>";
+        let sanitized = sanitize_svg_content(svg);
+        assert!(
+            !sanitized.contains("<foreignObject"),
+            "foreignObject must be stripped from delegate SVG output"
+        );
     }
 
     #[test]
