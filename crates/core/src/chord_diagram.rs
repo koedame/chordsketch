@@ -111,7 +111,11 @@ impl DiagramData {
                 }
                 "frets" => {
                     i += 1;
-                    while i < tokens.len() && tokens[i] != "fingers" && tokens[i] != "display" {
+                    while i < tokens.len()
+                        && tokens[i] != "fingers"
+                        && tokens[i] != "display"
+                        && tokens[i] != "format"
+                    {
                         let val = match tokens[i].to_ascii_lowercase().as_str() {
                             "x" | "n" => -1,
                             s => s.parse::<i32>().unwrap_or(-1),
@@ -665,5 +669,13 @@ mod tests {
         assert!(data.frets.iter().all(|&f| f == 0));
         let svg = render_svg(&data);
         assert!(svg.contains("<svg"));
+    }
+
+    #[test]
+    fn test_format_stops_fret_parsing() {
+        // "format" as a standalone token should act as a stop-word,
+        // preventing it from being misinterpreted as a fret value.
+        let data = DiagramData::from_raw("Am", "base-fret 1 frets x 0 2 2 1 0 format", 6).unwrap();
+        assert_eq!(data.frets, vec![-1, 0, 2, 2, 1, 0]);
     }
 }
