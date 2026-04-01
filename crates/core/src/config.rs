@@ -23,6 +23,8 @@
 use crate::rrjson::{self, NULL, Value};
 
 use std::fmt;
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
@@ -201,6 +203,9 @@ impl Config {
     /// invoking this programmatically with partially untrusted input should
     /// validate the path first.
     ///
+    /// Symlinks and files exceeding [`MAX_CONFIG_FILE_SIZE`] are rejected,
+    /// matching the behavior of hierarchical config loading.
+    ///
     /// # Errors
     ///
     /// Returns [`ConfigError::Io`] if the file cannot be read, or
@@ -210,8 +215,8 @@ impl Config {
         if let Some(preset) = Self::preset(name) {
             return Ok(preset);
         }
-        // Try as a file path
-        let text = std::fs::read_to_string(name).map_err(|e| ConfigError::Io {
+        // Try as a file path — apply the same security checks as hierarchical config
+        let text = read_config_file(Path::new(name)).map_err(|e| ConfigError::Io {
             path: name.to_string(),
             source: e,
         })?;
@@ -350,32 +355,56 @@ fn build_nested_value(key: &str, value: Value) -> Option<Value> {
 /// to prevent accidental OOM from device files or very large inputs.
 const MAX_CONFIG_FILE_SIZE: u64 = 10 * 1024 * 1024;
 
+/// Read a config file with symlink and size checks.
+///
+/// 1. Checks `symlink_metadata` to reject symlinks before opening.
+/// 2. Opens the file, then re-checks metadata on the file descriptor to
+///    enforce the size limit — eliminating the TOCTOU window between the
+///    initial check and the actual read.
+fn read_config_file(path: &Path) -> Result<String, std::io::Error> {
+    // Pre-open symlink check (the only reliable way to detect symlinks).
+    let link_meta = std::fs::symlink_metadata(path)?;
+    if link_meta.file_type().is_symlink() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("config file is a symlink: {}", path.display()),
+        ));
+    }
+
+    // Open the file, then check metadata on the fd to close the TOCTOU window.
+    let mut file = File::open(path)?;
+    let fd_meta = file.metadata()?;
+
+    if fd_meta.len() > MAX_CONFIG_FILE_SIZE {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "config file size {} exceeds {} byte limit: {}",
+                fd_meta.len(),
+                MAX_CONFIG_FILE_SIZE,
+                path.display()
+            ),
+        ));
+    }
+
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+    Ok(contents)
+}
+
 /// Read a file to a String, returning None if it doesn't exist or can't be read.
 ///
 /// Rejects files that are symlinks or exceed [`MAX_CONFIG_FILE_SIZE`], emitting
 /// a warning to stderr in either case.
 fn read_file_if_exists(path: &Path) -> Option<String> {
-    let metadata = match std::fs::symlink_metadata(path) {
-        Ok(m) => m,
-        Err(_) => return None,
-    };
-
-    if metadata.file_type().is_symlink() {
-        eprintln!("warning: skipping config file {} (symlink)", path.display());
-        return None;
+    match read_config_file(path) {
+        Ok(contents) => Some(contents),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => {
+            eprintln!("warning: skipping config file {}: {e}", path.display());
+            None
+        }
     }
-
-    if metadata.len() > MAX_CONFIG_FILE_SIZE {
-        eprintln!(
-            "warning: skipping config file {} (size {} exceeds {} byte limit)",
-            path.display(),
-            metadata.len(),
-            MAX_CONFIG_FILE_SIZE
-        );
-        return None;
-    }
-
-    std::fs::read_to_string(path).ok()
 }
 
 /// Get the user's home directory as a `PathBuf`.
@@ -937,6 +966,64 @@ mod tests {
 
         let result = read_file_if_exists(&link_path);
         assert!(result.is_none(), "symlink should be rejected");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // -- resolve() security tests ------------------------------------------------
+
+    #[cfg(unix)]
+    #[test]
+    fn test_resolve_rejects_symlink() {
+        let dir = std::env::temp_dir().join("chordpro_test_resolve_symlink");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let real_file = dir.join("real.json");
+        let link_path = dir.join("link.json");
+        std::fs::write(&real_file, r#"{"key": "value"}"#).unwrap();
+        std::os::unix::fs::symlink(&real_file, &link_path).unwrap();
+
+        let result = Config::resolve(link_path.to_str().unwrap());
+        assert!(result.is_err(), "resolve() should reject symlinks");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_read_config_file_normal() {
+        let dir = std::env::temp_dir().join("chordpro_test_read_config_normal");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file_path = dir.join("config.json");
+        std::fs::write(&file_path, r#"{"ok": true}"#).unwrap();
+
+        let text = read_config_file(&file_path).unwrap();
+        assert!(text.contains("ok"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_read_config_file_nonexistent() {
+        let result = read_config_file(Path::new("/nonexistent/path/config.json"));
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_read_config_file_rejects_symlink() {
+        let dir = std::env::temp_dir().join("chordpro_test_read_config_symlink");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let real_file = dir.join("real.json");
+        let link_path = dir.join("link.json");
+        std::fs::write(&real_file, r#"{"key": "value"}"#).unwrap();
+        std::os::unix::fs::symlink(&real_file, &link_path).unwrap();
+
+        let result = read_config_file(&link_path);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::InvalidInput);
 
         let _ = std::fs::remove_dir_all(&dir);
     }
