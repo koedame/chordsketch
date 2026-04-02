@@ -2143,7 +2143,7 @@ Verse text\n\
             "CSS should include .chord-diagram-container rule"
         );
         assert!(
-            html.contains(".chord-diagram"),
+            html.contains(".chord-diagram {"),
             "CSS should include .chord-diagram rule"
         );
     }
