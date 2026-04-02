@@ -46,7 +46,7 @@ Before closing a phase tracking issue:
 
 0. **Prerequisite** — all sub-issues of the tracking issue must be closed.
    If any are open, complete them first.
-1. **Initial review** — run `/phase-review <tracking-issue-number>`. This
+1. **Initial review** — run `/project:phase-review <tracking-issue-number>`. This
    verifies the prerequisite, performs both code review and security review
    on the full phase diff, classifies findings by severity (see
    [Severity Definitions](pr-workflow.md#severity-definitions)), and creates
@@ -55,7 +55,7 @@ Before closing a phase tracking issue:
    via normal PR workflow, and merge to `main`.
 3. **Non-blocking findings** (Low, Nit) — issues are created but do **not**
    block phase closure.
-4. **Delta review** — run `/delta-review <base-commit>` where `<base-commit>`
+4. **Delta review** — run `/project:delta-review <base-commit>` where `<base-commit>`
    is the last commit reviewed. This reviews only the fix commits, not the
    entire phase. Only new blocking findings require further fixes.
 5. **Repeat steps 2–4** until a delta review produces no new blocking findings.
