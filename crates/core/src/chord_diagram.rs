@@ -38,6 +38,9 @@ pub const MAX_BASE_FRET: u32 = 24;
 /// Minimum number of frets shown in a rendered chord diagram.
 pub const MIN_FRETS_SHOWN: usize = 1;
 
+/// Maximum number of frets shown in a rendered chord diagram (24-fret instrument).
+pub const MAX_FRETS_SHOWN: usize = 24;
+
 /// Data needed to render a chord diagram.
 #[derive(Debug, Clone)]
 pub struct DiagramData {
@@ -246,6 +249,7 @@ pub fn render_svg(data: &DiagramData) -> String {
     if data.strings < MIN_STRINGS
         || data.strings > MAX_STRINGS
         || data.frets_shown < MIN_FRETS_SHOWN
+        || data.frets_shown > MAX_FRETS_SHOWN
     {
         return String::new();
     }
@@ -912,6 +916,36 @@ mod tests {
             frets_shown: 5,
             base_fret: 1,
             frets: vec![0; MAX_STRINGS],
+            fingers: vec![],
+        };
+        assert!(!render_svg(&data).is_empty());
+    }
+
+    // --- render_svg MAX_FRETS_SHOWN guard (#675) ---
+
+    #[test]
+    fn test_render_svg_exceeding_max_frets_shown_returns_empty() {
+        let data = DiagramData {
+            name: "X".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: MAX_FRETS_SHOWN + 1,
+            base_fret: 1,
+            frets: vec![0; 6],
+            fingers: vec![],
+        };
+        assert!(render_svg(&data).is_empty());
+    }
+
+    #[test]
+    fn test_render_svg_at_max_frets_shown_ok() {
+        let data = DiagramData {
+            name: "X".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: MAX_FRETS_SHOWN,
+            base_fret: 1,
+            frets: vec![0; 6],
             fingers: vec![],
         };
         assert!(!render_svg(&data).is_empty());
