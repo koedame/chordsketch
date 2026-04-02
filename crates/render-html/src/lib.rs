@@ -1010,11 +1010,13 @@ fn has_dangerous_uri_scheme(value: &str) -> bool {
     // Strip leading whitespace, then remove embedded ASCII control characters
     // and whitespace within the scheme portion to defend against obfuscation
     // like `java\tscript:` which some older browsers tolerated.
+    // Filter runs before take(30) so the cap applies to meaningful characters,
+    // preventing bypass via 20+ embedded whitespace/control characters.
     let lower: String = value
         .trim_start()
         .chars()
-        .take(30)
         .filter(|c| !c.is_ascii_whitespace() && !c.is_ascii_control())
+        .take(30)
         .flat_map(|c| c.to_lowercase())
         .collect();
     lower.starts_with("javascript:") || lower.starts_with("vbscript:") || lower.starts_with("data:")
@@ -2957,5 +2959,15 @@ mod delegate_tests {
     #[test]
     fn test_safe_uri_not_flagged() {
         assert!(!has_dangerous_uri_scheme("https://example.com"));
+    }
+
+    #[test]
+    fn test_dangerous_uri_scheme_with_many_embedded_whitespace() {
+        // 20+ embedded whitespace chars should not bypass detection.
+        let payload = "j\ta\tv\ta\ts\tc\tr\ti\tp\tt\t:\ta\tl\te\tr\tt\t(\t1\t)\t";
+        assert!(
+            has_dangerous_uri_scheme(payload),
+            "20+ embedded tabs should not bypass javascript: detection"
+        );
     }
 }
