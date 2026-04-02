@@ -165,7 +165,18 @@ pub fn render_song_with_warnings(
     config: &Config,
 ) -> RenderResult<Vec<u8>> {
     let mut warnings = Vec::new();
-    let mut doc = PdfDocument::from_config_with_warnings(config, &mut warnings);
+    // Apply song-level config overrides before creating the document.
+    let song_overrides = song.config_overrides();
+    let song_config;
+    let effective_config = if song_overrides.is_empty() {
+        config
+    } else {
+        song_config = config
+            .clone()
+            .with_song_overrides(&song_overrides, &mut warnings);
+        &song_config
+    };
+    let mut doc = PdfDocument::from_config_with_warnings(effective_config, &mut warnings);
     render_song_into_doc(song, cli_transpose, &mut doc, &mut warnings);
     RenderResult::with_warnings(doc.build_pdf(), warnings)
 }
@@ -231,6 +242,14 @@ pub fn render_songs_with_warnings(
     for (i, song) in songs.iter().enumerate() {
         if i > 0 {
             body_doc.new_page();
+        }
+        // Apply per-song config overrides (e.g. pdf.margins.*).
+        let song_overrides = song.config_overrides();
+        if !song_overrides.is_empty() {
+            let effective_config = config
+                .clone()
+                .with_song_overrides(&song_overrides, &mut warnings);
+            body_doc.update_margins_from_config(&effective_config, &mut warnings);
         }
         let start_page = body_doc.page_count();
         let title = song
@@ -1601,6 +1620,25 @@ impl PdfDocument {
             .map(|v| Self::validate_margin(v as f32, MARGIN_RIGHT, "right", warnings))
             .unwrap_or(MARGIN_RIGHT);
         Self::with_margins(top, bottom, left, right)
+    }
+
+    /// Update the document margins from a config, e.g. after applying
+    /// per-song config overrides in multi-song rendering.
+    fn update_margins_from_config(&mut self, config: &Config, warnings: &mut Vec<String>) {
+        if let Some(v) = config.get_path("pdf.margins.top").as_f64() {
+            self.margin_top = Self::validate_margin(v as f32, self.margin_top, "top", warnings);
+        }
+        if let Some(v) = config.get_path("pdf.margins.bottom").as_f64() {
+            self.margin_bottom =
+                Self::validate_margin(v as f32, self.margin_bottom, "bottom", warnings);
+        }
+        if let Some(v) = config.get_path("pdf.margins.left").as_f64() {
+            self.margin_left = Self::validate_margin(v as f32, self.margin_left, "left", warnings);
+        }
+        if let Some(v) = config.get_path("pdf.margins.right").as_f64() {
+            self.margin_right =
+                Self::validate_margin(v as f32, self.margin_right, "right", warnings);
+        }
     }
 
     /// Returns the current Y position.
