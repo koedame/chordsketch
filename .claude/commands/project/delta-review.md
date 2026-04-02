@@ -32,7 +32,7 @@ review. The argument is a base commit hash or PR number: `$ARGUMENTS`
 7. **Verdict**:
    - If no blocking findings: the changes are approved.
    - If blocking findings exist: report them for fixing. After fixes, run
-     `/delta-review` again with the new base commit.
+     `/project:delta-review` again with the new base commit.
 
 ## Important
 
