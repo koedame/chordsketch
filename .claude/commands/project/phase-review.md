@@ -36,7 +36,7 @@ tracking issue number: `$ARGUMENTS`
 6. **Verdict**:
    - If there are **no blocking findings**: report that the phase is ready to close.
    - If there are **blocking findings**: report that fixes are required. After fixes
-     are merged, the user should run `/delta-review` on the fix commits.
+     are merged, the user should run `/project:delta-review` on the fix commits.
 
 ## Important
 
