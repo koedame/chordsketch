@@ -960,6 +960,13 @@ mod tests {
         assert_eq!(data.frets_shown, MAX_FRETS_SHOWN);
     }
 
+    #[test]
+    fn test_from_raw_frets_clamps_zero_frets_shown() {
+        // frets_shown = 0 should be clamped to MIN_FRETS_SHOWN, not rejected.
+        let data = DiagramData::from_raw_frets("Am", "frets x 0 2 2 1 0", 6, 0).unwrap();
+        assert_eq!(data.frets_shown, MIN_FRETS_SHOWN);
+    }
+
     // --- "fingers" self-referencing stop-word (#647) ---
 
     #[test]
