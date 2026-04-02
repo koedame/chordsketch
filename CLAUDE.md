@@ -71,20 +71,16 @@ High-level phases:
 
 ## Merge Policy
 
-Pull requests follow this workflow before merging to `main`:
+PRs are automatically reviewed and merged:
 
-1. **Implement + test** — author opens PR with code and tests
-2. **CI passes** — fmt, clippy, test must all be green
-3. **`/review` + `/security-review`** — run both reviews (may run in parallel)
-4. **Fix blocking findings** (High/Medium) — delta review on fixes only
-5. **Track non-blocking findings** (Low/Nit) — create issues, do not block merge
-6. **CI passes on the final commit** — after all fixes, CI must be green again
-7. **Merge** — only when CI is green and all blocking findings are resolved
+1. **PR created** — CI runs (fmt, clippy, test)
+2. **Auto-review** — Claude reviews with severity classification on CI success
+3. **Blocking findings** (High/Medium) — Claude pushes fix commits, delta review follows
+4. **Non-blocking findings** (Low/Nit) — issues created, merge not blocked
+5. **Auto-merge** — enabled when no blocking findings remain
 
-Branch protection requires status checks to pass on the HEAD commit before merging.
-No merge is possible unless CI is green on the latest commit, regardless of how many
-fix iterations occurred. All PRs are **squash-merged** (merge commits and rebase
-merging are disabled).
+All PRs are **squash-merged**. Branch protection requires CI to pass on HEAD.
+See `.claude/rules/pr-workflow.md` for full details.
 
 ## Parallel Development with tmux
 

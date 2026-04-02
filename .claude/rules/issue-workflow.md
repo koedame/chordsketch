@@ -25,7 +25,8 @@
 2. Create worktree + branch from latest `main`.
 3. Implement (commits reference issue: `Part of #N` or `Closes #N`).
 4. Open PR (title references issue, body has `Closes #N`).
-5. CI -> `/review` + `/security-review` -> fix blocking -> merge.
+5. CI -> auto-review (severity classification) -> auto-merge.
+   See [Pull Request Workflow](pr-workflow.md) for details.
 6. Cleanup worktree.
 
 ## Tracking Issues & Sub-Issues

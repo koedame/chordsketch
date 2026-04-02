@@ -1,23 +1,35 @@
 # Pull Request Workflow
 
-1. All changes enter `main` via pull request — no direct pushes.
-2. **Implement + test** — open a PR with code and tests.
-3. **CI must pass** (cargo fmt --check, cargo clippy -- -D warnings, cargo test).
-4. **`/review` + `/security-review`** — run both reviews (may run in parallel).
-5. **Classify findings** by severity (see [Severity Definitions](#severity-definitions)).
-6. **Blocking findings** (High, Medium) — fix in the same PR, then return to step 3.
-   The subsequent review is a **delta review**: it covers only the fix commits, not the
-   entire PR from scratch.
-7. **Non-blocking findings** (Low, Nit) — create a GitHub Issue for each finding. These
-   do **not** block the PR from merging.
-8. **CI must pass on the final commit** — after all review-driven fixes, CI must be
-   green again on the HEAD commit.
-9. **Merge** — when CI is green on the latest commit, all blocking findings are resolved,
-   and non-blocking findings are tracked as issues.
+## Automated Flow (default)
 
-Branch protection enforces that status checks pass on the HEAD commit before merging.
-No merge is possible unless CI is green on the latest commit. All PRs are
-**squash-merged** (merge commits and rebase merging are disabled).
+PRs are reviewed and merged automatically via CI:
+
+1. **PR created** — author opens PR with code and tests.
+2. **CI runs** (cargo fmt --check, cargo clippy -- -D warnings, cargo test).
+3. **Auto-review** — on CI success, `claude-review.yml` requests a Claude review
+   with severity classification. Claude performs both code review and security review.
+4. **Blocking findings** (High, Medium) — Claude pushes fix commits directly.
+   CI re-runs, then a **delta review** examines only the fix commits.
+5. **Non-blocking findings** (Low, Nit) — Claude creates GitHub Issues. These do
+   **not** block the PR from merging.
+6. **Auto-merge** — when there are no blocking findings, Claude enables auto-merge
+   (`gh pr merge --squash --auto`). The PR merges once CI passes on the final commit.
+7. **Safety cap** — after 3 auto-review iterations, the process stops and waits for
+   human intervention.
+
+## Manual Flow (optional)
+
+For local review before pushing, or when the automated flow is not desired:
+
+1. Run `/review` and/or `/security-review` locally.
+2. Fix any blocking findings, then push.
+3. The automated flow takes over from step 2 above.
+
+## Rules
+
+- All changes enter `main` via pull request — no direct pushes.
+- All PRs are **squash-merged** (merge commits and rebase merging are disabled).
+- Branch protection enforces that status checks pass on the HEAD commit before merging.
 
 ### Severity Definitions
 

@@ -29,20 +29,6 @@ jobs:
             const prNumber = prs[0].number;
             const headSha = context.payload.workflow_run.head_sha;
 
-            // Skip if head commit was authored by claude[bot] to prevent
-            // review loops (Claude pushes fix → CI → auto-review → Claude
-            // reviews again). Manual @claude requests still work.
-            const { data: commit } = await github.rest.repos.getCommit({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: headSha,
-            });
-            const commitAuthor = commit.author?.login || '';
-            if (commitAuthor === 'claude[bot]') {
-              console.log(`Skipping auto-review: head commit ${headSha.substring(0, 7)} authored by claude[bot]`);
-              return;
-            }
-
             // Skip Dependabot PRs (handled by claude-dependabot.yml)
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
@@ -68,7 +54,9 @@ jobs:
               return;
             }
 
-            // Limit auto-review iterations to prevent infinite loops
+            // Limit auto-review iterations to prevent infinite loops.
+            // claude[bot] fix commits are NOT skipped — they get delta-reviewed.
+            // MAX_ITERATIONS is the safety cap.
             const MAX_ITERATIONS = 3;
             const autoReviewCount = comments.filter(c =>
               c.body.startsWith('<!-- claude-auto-review:')
@@ -78,6 +66,24 @@ jobs:
               return;
             }
 
+            // Find the SHA from the previous auto-review (if any) for delta review
+            const previousMarkers = comments
+              .filter(c => c.body.startsWith('<!-- claude-auto-review:'))
+              .map(c => {
+                const match = c.body.match(/<!-- claude-auto-review:([a-f0-9]+) -->/);
+                return match ? match[1] : null;
+              })
+              .filter(Boolean);
+            const previousSha = previousMarkers.length > 0
+              ? previousMarkers[previousMarkers.length - 1]
+              : null;
+
+            const isFirstReview = previousSha === null;
+            const reviewType = isFirstReview ? 'Full review' : 'Delta review';
+            const deltaInstruction = isFirstReview
+              ? 'Review the entire PR diff (`gh pr diff`).'
+              : `This is a **delta review**. Only review changes since commit \`${previousSha.substring(0, 7)}\`. Use \`git diff ${previousSha.substring(0, 7)}..${headSha.substring(0, 7)}\` to see only the new changes. Do NOT re-review previously-accepted code.`;
+
             // Post review request comment (triggers claude.yml via @claude mention)
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -86,22 +92,27 @@ jobs:
               body: [
                 marker,
                 '',
-                `@claude CI passed for commit \`${headSha.substring(0, 7)}\`. Please review this PR:`,
+                `@claude ${reviewType} requested for commit \`${headSha.substring(0, 7)}\`.`,
                 '',
-                '**Code Review:**',
-                '- Code quality and adherence to project conventions (see CLAUDE.md)',
-                '- Logic correctness and edge case handling',
-                '- Test coverage and quality',
+                deltaInstruction,
                 '',
-                '**Security Review:**',
-                '- No unsafe code without justification',
-                '- Input validation at system boundaries',
-                '- Dependency safety (no unnecessary external deps, especially in chordpro-core)',
+                '## Review Instructions',
                 '',
-                'If you find fixable issues, push fix commits directly. For design issues requiring author input, leave review comments.',
+                'Perform both **code review** and **security review**. Classify every finding by severity:',
                 '',
-                'If both code review and security review pass with no issues, enable auto-merge with `gh pr merge --squash --auto`.',
+                '| Severity | Blocks merge | Definition |',
+                '|----------|-------------|------------|',
+                '| High | Yes | Security vulnerabilities, data corruption, crashes |',
+                '| Medium | Yes | Spec violations, logic bugs, incorrect output |',
+                '| Low | No | Defense-in-depth gaps, minor inconsistencies |',
+                '| Nit | No | Style, naming, test coverage suggestions |',
+                '',
+                '## Actions',
+                '',
+                '- **Blocking findings (High/Medium):** Push fix commits directly to the PR branch. Do NOT enable auto-merge.',
+                '- **Non-blocking findings (Low/Nit):** Create a GitHub issue for each finding. These do NOT block merge.',
+                '- **No blocking findings:** Enable auto-merge with `gh pr merge --squash --auto`.',
               ].join('\n'),
             });
 
-            console.log(`Review requested for PR #${prNumber} at ${headSha.substring(0, 7)}`);
+            console.log(`${reviewType} requested for PR #${prNumber} at ${headSha.substring(0, 7)}`);
