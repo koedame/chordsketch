@@ -1,0 +1,5 @@
+{title: Define Copy Display Test}
+{define: Am base-fret 1 frets x 0 2 2 1 0}
+{define: Am7 copy Am display="Alt"}
+{define: Bm copy Amin extra stuff}
+[Am7]Hello [Bm]world

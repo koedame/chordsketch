@@ -1,0 +1,4 @@
+{title: Define Display Keys Test}
+{define: Am keys 0 3 7 display="A minor"}
+{define: Dm keys 2 5 9 format="minor"}
+[Am]Hello [Dm]world
