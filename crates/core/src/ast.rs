@@ -613,9 +613,10 @@ fn extract_attribute(s: &mut String, key: &str) -> Option<String> {
     } else {
         match after.split_whitespace().next() {
             Some(t) => (Some(t.to_string()), pos + needle.len() + t.len()),
-            // Key found but no value follows — return Some("") to signal
-            // the key was present, without mutating the string for nothing.
-            None => return Some(String::new()),
+            // Key found but no value follows — consume the "key=" token so
+            // it is removed from the string, and return Some("") to signal
+            // the key was present.
+            None => (Some(String::new()), pos + needle.len()),
         }
     };
 
@@ -3153,12 +3154,15 @@ mod chord_definition_tests {
 
     #[test]
     fn test_parse_trailing_display_equals_no_value() {
-        // "display=" with no value should return Some("") and not lose
-        // the remaining string content.
+        // "display=" with no value should return Some("") and remove the
+        // token from the string so it does not leak into raw fret data.
         let def = ChordDefinition::parse_value("Am base-fret 1 frets x 0 2 2 1 0 display=");
         assert_eq!(def.display, Some(String::new()));
-        // The fret data should still be parsed.
-        assert!(def.raw.is_some());
+        // display= must not appear in raw — only the fret portion remains.
+        assert_eq!(
+            def.raw,
+            Some("base-fret 1 frets x 0 2 2 1 0".to_string())
+        );
     }
 
     // --- Forward-reference {define} (#657) ---
