@@ -2584,7 +2584,7 @@ Sing along
         let content = String::from_utf8_lossy(&bytes);
         // PDF text streams should contain finger numbers
         assert!(
-            content.contains("(3)") || content.contains("fret_marker"),
+            content.contains("(3)"),
             "finger numbers should appear in rendered PDF output"
         );
     }
