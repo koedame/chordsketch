@@ -40,13 +40,16 @@ jobs:
               return;
             }
 
-            // Fetch existing comments to prevent duplicates and limit iterations
-            const { data: comments } = await github.rest.issues.listComments({
+            // Fetch all existing comments to prevent duplicates and limit iterations
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: prNumber,
               per_page: 100,
             });
+            if (comments.length > 100) {
+              console.log(`Note: PR #${prNumber} has ${comments.length} comments (paginated fetch)`);
+            }
 
             // Skip if this commit was already reviewed
             const marker = `<!-- claude-auto-review:${headSha} -->`;
