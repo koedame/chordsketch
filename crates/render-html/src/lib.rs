@@ -751,7 +751,17 @@ fn sanitize_css_class(s: &str) -> String {
 /// injection is never legitimate in music notation.
 fn sanitize_svg_content(input: &str) -> String {
     // Dangerous elements that are stripped entirely (opening tag through closing tag).
-    const DANGEROUS_TAGS: &[&str] = &["script", "foreignobject", "iframe", "object", "embed"];
+    const DANGEROUS_TAGS: &[&str] = &[
+        "script",
+        "foreignobject",
+        "iframe",
+        "object",
+        "embed",
+        "set",
+        "animate",
+        "animatetransform",
+        "animatemotion",
+    ];
 
     let mut result = String::with_capacity(input.len());
     let mut chars = input.char_indices().peekable();
@@ -760,7 +770,14 @@ fn sanitize_svg_content(input: &str) -> String {
     while let Some((i, c)) = chars.next() {
         if c == '<' {
             let rest = &input[i..];
-            let rest_upper = if rest.len() > 20 { &rest[..20] } else { rest };
+            // Use a safe UTF-8 boundary for the prefix check. All tag names
+            // are ASCII, so 30 bytes is more than enough for matching.
+            let limit = rest
+                .char_indices()
+                .map(|(idx, _)| idx)
+                .find(|&idx| idx >= 30)
+                .unwrap_or(rest.len());
+            let rest_upper = &rest[..limit];
 
             // Check for opening dangerous tags: <tag or <tag> or <tag ...>
             let mut matched = false;
@@ -772,8 +789,23 @@ fn sanitize_svg_content(input: &str) -> String {
                         .get(i + prefix.len())
                         .is_none_or(|b| b.is_ascii_whitespace() || *b == b'>' || *b == b'/')
                 {
-                    // Skip until after </tag> or end of input.
-                    if let Some(end) = find_end_tag_ignore_case(input, i, tag) {
+                    // Check if this opening tag is self-closing (ends with />).
+                    let is_self_closing = rest
+                        .as_bytes()
+                        .iter()
+                        .position(|&b| b == b'>')
+                        .is_some_and(|gt| gt > 0 && rest.as_bytes()[gt - 1] == b'/');
+
+                    if is_self_closing {
+                        // Self-closing tag — skip past the >.
+                        while let Some(&(_, ch)) = chars.peek() {
+                            chars.next();
+                            if ch == '>' {
+                                break;
+                            }
+                        }
+                    } else if let Some(end) = find_end_tag_ignore_case(input, i, tag) {
+                        // Skip until after </tag>.
                         while let Some(&(j, _)) = chars.peek() {
                             if j >= end {
                                 break;
@@ -875,8 +907,8 @@ fn find_end_tag_ignore_case(input: &str, start: usize, tag: &str) -> Option<usiz
 /// delimiters to avoid false positives in text content.
 fn strip_dangerous_attrs(input: &str) -> String {
     let mut result = String::with_capacity(input.len());
-    let mut pos = 0;
     let bytes = input.as_bytes();
+    let mut pos = 0;
 
     while pos < bytes.len() {
         if bytes[pos] == b'<' && pos + 1 < bytes.len() && bytes[pos + 1] != b'/' {
@@ -891,8 +923,12 @@ fn strip_dangerous_attrs(input: &str) -> String {
                 break;
             }
         } else {
-            result.push(bytes[pos] as char);
-            pos += 1;
+            // Outside a tag — advance one UTF-8 character at a time to
+            // preserve multi-byte characters (CJK, emoji, accented, etc.).
+            let ch = &input[pos..];
+            let c = ch.chars().next().expect("pos is within bounds");
+            result.push(c);
+            pos += c.len_utf8();
         }
     }
     result
@@ -914,7 +950,13 @@ fn has_dangerous_uri_scheme(value: &str) -> bool {
 /// validation.
 fn is_uri_attr(name: &str) -> bool {
     let lower: String = name.chars().flat_map(|c| c.to_lowercase()).collect();
-    lower == "href" || lower == "src" || lower == "xlink:href"
+    lower == "href"
+        || lower == "src"
+        || lower == "xlink:href"
+        || lower == "to"
+        || lower == "values"
+        || lower == "from"
+        || lower == "by"
 }
 
 /// Sanitize attributes in a single HTML/SVG tag string.
@@ -2535,5 +2577,112 @@ mod delegate_tests {
         // C+2=D, G+2=A
         assert!(html.contains(">D<"));
         assert!(html.contains(">A<"));
+    }
+
+    // --- SVG animation XSS prevention (#572) ---
+
+    #[test]
+    fn test_sanitize_svg_strips_set_element() {
+        let svg = r##"<svg><a href="#"><set attributeName="href" to="javascript:alert(1)"/><text>Click</text></a></svg>"##;
+        let sanitized = sanitize_svg_content(svg);
+        assert!(
+            !sanitized.contains("<set"),
+            "set element must be stripped to prevent SVG animation XSS"
+        );
+        assert!(sanitized.contains("<text>Click</text>"));
+    }
+
+    #[test]
+    fn test_sanitize_svg_strips_animate_element() {
+        let svg =
+            r#"<svg><animate attributeName="href" values="javascript:alert(1)"/><rect/></svg>"#;
+        let sanitized = sanitize_svg_content(svg);
+        assert!(
+            !sanitized.contains("<animate"),
+            "animate element must be stripped"
+        );
+        assert!(sanitized.contains("<rect/>"));
+    }
+
+    #[test]
+    fn test_sanitize_svg_strips_animatetransform() {
+        let svg =
+            "<svg><animateTransform attributeName=\"transform\" type=\"rotate\"/><rect/></svg>";
+        let sanitized = sanitize_svg_content(svg);
+        assert!(
+            !sanitized.contains("animateTransform"),
+            "animateTransform must be stripped"
+        );
+        assert!(
+            !sanitized.contains("animatetransform"),
+            "animatetransform (lowercase) must be stripped"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_svg_strips_animatemotion() {
+        let svg = "<svg><animateMotion path=\"M0,0 L100,100\"/><rect/></svg>";
+        let sanitized = sanitize_svg_content(svg);
+        assert!(
+            !sanitized.contains("animateMotion"),
+            "animateMotion must be stripped"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_svg_strips_to_attr_with_dangerous_uri() {
+        let svg = r#"<svg><a to="javascript:alert(1)"><text>X</text></a></svg>"#;
+        let sanitized = sanitize_svg_content(svg);
+        assert!(
+            !sanitized.contains("javascript:"),
+            "dangerous URI in 'to' attr must be stripped"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_svg_strips_values_attr_with_dangerous_uri() {
+        let svg = r#"<svg><a values="javascript:alert(1)"><text>X</text></a></svg>"#;
+        let sanitized = sanitize_svg_content(svg);
+        assert!(
+            !sanitized.contains("javascript:"),
+            "dangerous URI in 'values' attr must be stripped"
+        );
+    }
+
+    // --- UTF-8 preservation in strip_dangerous_attrs (#578) ---
+
+    #[test]
+    fn test_strip_dangerous_attrs_preserves_cjk_text() {
+        let input = "<svg><text x=\"10\">日本語テスト</text></svg>";
+        let result = strip_dangerous_attrs(input);
+        assert!(
+            result.contains("日本語テスト"),
+            "CJK characters must not be corrupted"
+        );
+    }
+
+    #[test]
+    fn test_strip_dangerous_attrs_preserves_emoji() {
+        let input = "<svg><text>🎵🎸🎹</text></svg>";
+        let result = strip_dangerous_attrs(input);
+        assert!(result.contains("🎵🎸🎹"), "emoji must not be corrupted");
+    }
+
+    #[test]
+    fn test_strip_dangerous_attrs_preserves_accented_chars() {
+        let input = "<svg><text>café résumé naïve</text></svg>";
+        let result = strip_dangerous_attrs(input);
+        assert!(
+            result.contains("café résumé naïve"),
+            "accented characters must not be corrupted"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_svg_full_roundtrip_with_non_ascii() {
+        let input = "<svg><text x=\"10\">コード譜 🎵</text><rect width=\"100\"/></svg>";
+        let sanitized = sanitize_svg_content(input);
+        assert!(sanitized.contains("コード譜 🎵"));
+        assert!(sanitized.contains("<rect width=\"100\"/>"));
     }
 }

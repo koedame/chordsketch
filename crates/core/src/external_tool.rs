@@ -209,16 +209,18 @@ fn sanitize_lilypond_content(input: &str) -> String {
 
 /// Check if a line contains a dangerous Scheme function call.
 ///
-/// Matches patterns like `#(system ...)` or `#(ly:system ...)` anywhere in
-/// the line, case-insensitively.
+/// Matches patterns like `#(system ...)`, `#(ly:system ...)`, `$(system ...)`,
+/// or `$(ly:system ...)` anywhere in the line, case-insensitively. In Lilypond
+/// 2.18+, `$` is an alternative to `#` for Scheme evaluation.
 fn line_contains_dangerous_scheme(line: &str) -> bool {
     let lower = line.to_ascii_lowercase();
     for &func in DANGEROUS_SCHEME_FUNCTIONS {
-        // Match #(func or #( func (with optional whitespace after paren)
-        let pattern1 = format!("#({func}");
-        let pattern2 = format!("#( {func}");
-        if lower.contains(&pattern1) || lower.contains(&pattern2) {
-            return true;
+        // Match #(func, #( func, $(func, $( func
+        for prefix in &["#(", "#( ", "$(", "$( "] {
+            let pattern = format!("{prefix}{func}");
+            if lower.contains(&pattern) {
+                return true;
+            }
         }
     }
     false
@@ -556,6 +558,50 @@ mod tests {
         let input = "#(ly:gulp-file \"/etc/passwd\")\n\\relative c' { c4 }\n";
         let result = super::sanitize_lilypond_content(input);
         assert!(!result.contains("ly:gulp-file"));
+    }
+
+    #[test]
+    fn sanitize_lilypond_strips_dollar_sign_system() {
+        let input = "$(system \"echo pwned\")\n\\relative c' { c4 }\n";
+        let result = super::sanitize_lilypond_content(input);
+        assert!(!result.contains("system"));
+        assert!(result.contains("\\relative"));
+    }
+
+    #[test]
+    fn sanitize_lilypond_strips_dollar_sign_with_space() {
+        let input = "$( system \"echo pwned\")\n\\relative c' { c4 }\n";
+        let result = super::sanitize_lilypond_content(input);
+        assert!(!result.contains("system"));
+    }
+
+    #[test]
+    fn sanitize_lilypond_strips_dollar_sign_getenv() {
+        let input = "$(getenv \"HOME\")\n\\relative c' { c4 }\n";
+        let result = super::sanitize_lilypond_content(input);
+        assert!(!result.contains("getenv"));
+    }
+
+    #[test]
+    fn sanitize_lilypond_strips_dollar_sign_ly_system() {
+        let input = "$(ly:system \"rm -rf /\")\n\\relative c' { c4 }\n";
+        let result = super::sanitize_lilypond_content(input);
+        assert!(!result.contains("ly:system"));
+    }
+
+    #[test]
+    fn sanitize_lilypond_dollar_sign_case_insensitive() {
+        let input = "$(SYSTEM \"echo pwned\")\n\\relative c' { c4 }\n";
+        let result = super::sanitize_lilypond_content(input);
+        assert!(!result.contains("SYSTEM"));
+    }
+
+    #[test]
+    fn sanitize_lilypond_preserves_normal_dollar_sign() {
+        // Dollar sign not followed by ( should be preserved.
+        let input = "\\relative c' { c4$\\markup{test} }\n";
+        let result = super::sanitize_lilypond_content(input);
+        assert_eq!(result, "\\relative c' { c4$\\markup{test} }");
     }
 
     #[test]
