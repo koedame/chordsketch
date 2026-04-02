@@ -1735,9 +1735,7 @@ mod tests {
         let _result = config.with_song_overrides(&overrides, &mut warnings);
         // Delegate keys should be blocked — a warning should be emitted.
         assert!(
-            warnings
-                .iter()
-                .any(|w| w.contains("cannot be overridden")),
+            warnings.iter().any(|w| w.contains("cannot be overridden")),
             "delegate override should be blocked: {warnings:?}"
         );
     }
