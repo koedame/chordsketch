@@ -2563,8 +2563,11 @@ Sing along
         let song = chordpro_core::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
+        // When diagrams are suppressed the chord-name title ("Am") written by
+        // render_chord_diagram_pdf must not appear in the PDF content stream.
+        // This input has no lyrics, so "Am" would only appear as the diagram title.
         assert!(
-            !content.contains("fret_marker"),
+            !content.contains("Am"),
             "diagrams=Off should suppress diagrams in PDF (case-insensitive)"
         );
     }
@@ -2575,8 +2578,11 @@ Sing along
         let song = chordpro_core::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
+        // When diagrams are suppressed the chord-name title ("Am") written by
+        // render_chord_diagram_pdf must not appear in the PDF content stream.
+        // This input has no lyrics, so "Am" would only appear as the diagram title.
         assert!(
-            !content.contains("fret_marker"),
+            !content.contains("Am"),
             "diagrams=OFF should suppress diagrams in PDF (case-insensitive)"
         );
     }
