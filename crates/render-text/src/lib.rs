@@ -71,6 +71,9 @@ fn render_song_impl(
     warnings: &mut Vec<String>,
 ) -> String {
     // Apply song-level config overrides ({+config.KEY: VALUE} directives).
+    // The effective config is not yet consumed by the text renderer but is
+    // computed here for consistency with the HTML and PDF renderers, and will
+    // be used when text-specific config settings are added.
     let song_overrides = song.config_overrides();
     let song_config;
     let _config = if song_overrides.is_empty() {
