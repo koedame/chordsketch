@@ -12,6 +12,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
 
 /// Checks whether a command is available by attempting to run it.
 ///
@@ -47,15 +48,25 @@ pub fn is_available(command: &str) -> bool {
 }
 
 /// Returns `true` if `abc2svg` is available.
+///
+/// The result is cached at the process level via `OnceLock`, so the
+/// subprocess check runs at most once regardless of how many songs
+/// are rendered.
 #[must_use]
 pub fn has_abc2svg() -> bool {
-    is_available("abc2svg")
+    static CACHE: OnceLock<bool> = OnceLock::new();
+    *CACHE.get_or_init(|| is_available("abc2svg"))
 }
 
 /// Returns `true` if `lilypond` is available.
+///
+/// The result is cached at the process level via `OnceLock`, so the
+/// subprocess check runs at most once regardless of how many songs
+/// are rendered.
 #[must_use]
 pub fn has_lilypond() -> bool {
-    is_available("lilypond")
+    static CACHE: OnceLock<bool> = OnceLock::new();
+    *CACHE.get_or_init(|| is_available("lilypond"))
 }
 
 /// Global counter for generating unique temp file names within a process.
