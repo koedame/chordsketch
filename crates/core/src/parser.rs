@@ -1023,12 +1023,18 @@ impl MultiParseResult {
 
 /// Checks whether a trimmed line is a `{new_song}` or `{ns}` directive.
 fn is_new_song_line(trimmed: &str) -> bool {
-    // Match patterns like {new_song}, { new_song }, {ns}, { ns }, case-insensitive
+    // Match patterns like {new_song}, { new_song }, {ns}, { ns },
+    // {new_song: value}, { ns : tag }, case-insensitive.
     if !trimmed.starts_with('{') || !trimmed.ends_with('}') {
         return false;
     }
     let inner = trimmed[1..trimmed.len() - 1].trim().to_ascii_lowercase();
-    inner == "new_song" || inner == "ns"
+    // Strip optional colon and value (e.g., "new_song: tag" → "new_song").
+    let name = match inner.find(':') {
+        Some(pos) => inner[..pos].trim_end(),
+        None => inner.as_str(),
+    };
+    name == "new_song" || name == "ns"
 }
 
 /// Splits input text at `{new_song}` / `{ns}` directive boundaries.
@@ -1038,40 +1044,41 @@ fn is_new_song_line(trimmed: &str) -> bool {
 /// single-element vector containing the entire input.
 fn split_at_new_song(input: &str) -> Vec<&str> {
     let mut segments = Vec::new();
-    let mut start = 0;
-    let mut line_byte_start = 0;
+    let mut seg_start = 0;
     let bytes = input.as_bytes();
+    let len = bytes.len();
+    let mut pos = 0;
 
-    for line in input.lines() {
-        let line_byte_end = line_byte_start + line.len();
-        let trimmed = line.trim();
-
-        // Calculate the number of bytes used by the line terminator (\r\n or \n).
-        let newline_len = if line_byte_end < bytes.len() && bytes[line_byte_end] == b'\r' {
-            if line_byte_end + 1 < bytes.len() && bytes[line_byte_end + 1] == b'\n' {
-                2
-            } else {
-                0
-            }
-        } else if line_byte_end < bytes.len() && bytes[line_byte_end] == b'\n' {
-            1
-        } else {
-            0
-        };
-
-        if is_new_song_line(trimmed) {
-            // Add everything before this line as a segment.
-            segments.push(&input[start..line_byte_start]);
-            // Skip past this line and its line terminator.
-            start = line_byte_end + newline_len;
+    while pos < len {
+        let line_start = pos;
+        // Advance to end of line content (stop at \r or \n).
+        while pos < len && bytes[pos] != b'\r' && bytes[pos] != b'\n' {
+            pos += 1;
         }
+        let line_end = pos;
+        // Consume line terminator: \r\n, \n, or bare \r.
+        let after_newline = if pos < len && bytes[pos] == b'\r' {
+            if pos + 1 < len && bytes[pos + 1] == b'\n' {
+                pos + 2
+            } else {
+                pos + 1 // bare \r
+            }
+        } else if pos < len && bytes[pos] == b'\n' {
+            pos + 1
+        } else {
+            pos
+        };
+        pos = after_newline;
 
-        // Advance past this line and its line terminator.
-        line_byte_start = line_byte_end + newline_len;
+        let line = &input[line_start..line_end];
+        let trimmed = line.trim();
+        if is_new_song_line(trimmed) {
+            segments.push(&input[seg_start..line_start]);
+            seg_start = after_newline;
+        }
     }
 
-    // Add the remaining text as the last segment.
-    segments.push(&input[start..]);
+    segments.push(&input[seg_start..]);
     segments
 }
 
@@ -3651,12 +3658,25 @@ mod delegate_tests {
         assert!(is_new_song_line("{NS}"));
         assert!(is_new_song_line("{ new_song }"));
         assert!(is_new_song_line("{ ns }"));
+        // Directives with values should also be detected (#315).
+        assert!(is_new_song_line("{new_song: value}"));
+        assert!(is_new_song_line("{ns: tag}"));
+        assert!(is_new_song_line("{ new_song : tag }"));
 
-        assert!(!is_new_song_line("{new_song: value}"));
         assert!(!is_new_song_line("{title}"));
         assert!(!is_new_song_line("new_song"));
         assert!(!is_new_song_line(""));
         assert!(!is_new_song_line("{new_songs}"));
+    }
+
+    #[test]
+    fn split_at_new_song_bare_cr() {
+        // Bare \r (classic Mac line endings) should be handled correctly (#313).
+        let input = "{title: A}\r{new_song}\r{title: B}";
+        let segments = split_at_new_song(input);
+        assert_eq!(segments.len(), 2);
+        assert!(segments[0].contains("title: A"));
+        assert!(segments[1].contains("title: B"));
     }
 
     #[test]
