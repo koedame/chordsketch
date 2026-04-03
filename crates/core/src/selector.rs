@@ -71,9 +71,10 @@ impl SelectorContext {
             return true; // No selector = unconditional
         };
 
-        // Both context values and selectors are normalized to lowercase at
-        // construction time, so `eq_ignore_ascii_case` handles any residual
-        // mixed-case input without allocating.
+        // Context values are normalized to lowercase at construction, but
+        // selectors may bypass normalization via direct Directive struct
+        // construction. `eq_ignore_ascii_case` is used defensively to handle
+        // both paths without allocating.
         if let Some(ref instrument) = self.instrument {
             if instrument.eq_ignore_ascii_case(sel) {
                 return true;
