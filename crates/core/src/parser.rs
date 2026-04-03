@@ -258,8 +258,6 @@ impl Parser {
 
     // -- Metadata population ------------------------------------------------
 
-    /// Populates metadata fields from a directive, if it is a known metadata
-    /// directive with a value.
     /// Populate metadata fields from a directive's kind and value.
     ///
     /// This is called during parsing for unselectored directives, and again
