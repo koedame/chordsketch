@@ -107,7 +107,7 @@ fn char_width(c: char) -> f32 {
         0.556, // $
         0.889, // %
         0.667, // &
-        0.191, // '
+        0.222, // '
         0.333, // (
         0.333, // )
         0.389, // *
@@ -208,6 +208,7 @@ fn char_width(c: char) -> f32 {
 fn text_width(s: &str, font_size: f32) -> f32 {
     s.chars().map(|c| char_width(c) * font_size).sum()
 }
+
 /// Table of Contents entry font size.
 const TOC_ENTRY_SIZE: f32 = 11.0;
 /// Maximum number of pages a single document can contain.
