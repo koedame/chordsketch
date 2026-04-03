@@ -11,8 +11,8 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Checks whether a command is available by attempting to run it.
 ///
