@@ -1563,7 +1563,7 @@ impl Directive {
             name: canonical,
             value,
             kind,
-            selector: Some(selector.into()),
+            selector: Some(selector.into().to_ascii_lowercase()),
         }
     }
 
