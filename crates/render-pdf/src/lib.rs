@@ -224,8 +224,11 @@ pub fn render_songs_with_warnings(
 ) -> RenderResult<Vec<u8>> {
     let mut warnings = Vec::new();
 
-    if songs.len() == 1 {
-        return render_song_with_warnings(&songs[0], cli_transpose, config);
+    if songs.len() <= 1 {
+        return songs
+            .first()
+            .map(|s| render_song_with_warnings(s, cli_transpose, config))
+            .unwrap_or_else(|| RenderResult::with_warnings(Vec::new(), warnings));
     }
 
     // Phase 1: render all songs and record which page each starts on.
@@ -4617,5 +4620,13 @@ mod png_tests {
         assert_eq!(paeth_predictor(10, 20, 15), 15);
         // a=10, b=10, c=10: p=10, pa=0, pb=0, pc=0 → a (pa<=pb and pa<=pc)
         assert_eq!(paeth_predictor(10, 10, 10), 10);
+    }
+
+    #[test]
+    fn test_render_songs_with_warnings_empty_slice() {
+        let songs: Vec<chordpro_core::ast::Song> = Vec::new();
+        let result = render_songs_with_warnings(&songs, 0, &Config::defaults());
+        // Should not panic and should return empty output.
+        assert!(result.output.is_empty());
     }
 }
