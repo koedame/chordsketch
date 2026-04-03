@@ -1295,63 +1295,22 @@ mod tests {
 
     #[test]
     fn test_project_config_cannot_escalate_false_to_null() {
-        // When user config explicitly disables delegates (false), a project
-        // config setting null (auto-detect) must not override it.
-        let dir = tempdir().unwrap();
-        // User config disables delegates.
-        let user_dir = dir.path().join("user");
-        std::fs::create_dir(&user_dir).unwrap();
-        std::fs::write(
-            user_dir.join("chordpro.json"),
-            r#"{ "delegates": { "abc2svg": false } }"#,
-        )
-        .unwrap();
-        // Project config tries to set null (auto-detect).
-        let project_dir = dir.path().join("project");
-        std::fs::create_dir(&project_dir).unwrap();
-        std::fs::write(
-            project_dir.join("chordpro.json"),
-            r#"{ "delegates": { "abc2svg": null } }"#,
-        )
-        .unwrap();
-
-        // Load with user config applied first (simulate by building manually).
-        let mut base = Config::defaults();
-        // Hardcoded value — unwrap is safe.
-        base = base
-            .with_define("delegates.abc2svg=false")
-            .expect("hardcoded");
-        // Now run load with project dir to simulate the project config overlay.
-        // We use the low-level load with a project dir that has the null override.
-        let result = Config::load(Some(project_dir.to_str().unwrap()), None);
-        // Since user config isn't loaded via the load path in this test,
-        // simulate the check: defaults (null) + project config (null) = null.
-        // The real scenario: user sets false → project sets null → escalation blocked.
-        // We test this directly with the with_define chain:
+        // Verify that null (auto-detect) is more permissive than false (disabled).
+        // The merge itself changes the value; the security check in load() restores it.
         let mut config = Config::defaults()
             .with_define("delegates.abc2svg=false")
             .expect("hardcoded");
-        // Simulate project config overlay by merging a config with null delegates.
         let overlay = Config::parse(r#"{ "delegates": { "abc2svg": null } }"#).unwrap();
         config = config.merge(overlay);
-        // After merge, the value should be Null (project overrode false).
-        assert_eq!(config.get_path("delegates.abc2svg"), &Value::Null);
-        // But load() with the security check would restore it.
-        // Verify the security check logic directly:
-        // The real load flow snapshots trusted value BEFORE project config.
-        // After project config changes false→null, the perm check catches it.
-        // We can't easily test load() with custom user config path, so verify
-        // the warning is present in the full load result.
-        assert!(
-            result.warnings.is_empty() || result.warnings.iter().any(|w| w.contains("delegates")),
-            "project null override on default should produce no warning (null→null is no escalation)"
+        // After merge the value is Null — the security check must detect this
+        // as an escalation (false → null) and restore to false.
+        assert_eq!(
+            config.get_path("delegates.abc2svg"),
+            &Value::Null,
+            "merge changes false to null"
         );
-        drop(result);
 
-        // Direct test: simulate the exact security check logic.
-        // trusted=false, current=null → escalation detected.
-        let trusted = Value::Bool(false);
-        let current = Value::Null;
+        // Verify the permissiveness ordering used by the security check.
         fn delegate_perm(v: &Value) -> u8 {
             match v.as_bool() {
                 Some(false) => 0,
@@ -1360,17 +1319,18 @@ mod tests {
             }
         }
         assert!(
-            delegate_perm(&current) > delegate_perm(&trusted),
-            "null (auto-detect) must be considered more permissive than false (disabled)"
+            delegate_perm(&Value::Null) > delegate_perm(&Value::Bool(false)),
+            "null (auto-detect) must be more permissive than false (disabled)"
+        );
+        assert!(
+            delegate_perm(&Value::Bool(true)) > delegate_perm(&Value::Null),
+            "true must be more permissive than null (auto-detect)"
         );
     }
 
     #[test]
     fn test_project_config_can_downgrade_delegates() {
-        // Project config setting false when trusted is null (auto) should be allowed
-        // since it's less permissive.
-        let trusted = Value::Null;
-        let current = Value::Bool(false);
+        // Downgrading from null (auto) to false (disabled) is safe and allowed.
         fn delegate_perm(v: &Value) -> u8 {
             match v.as_bool() {
                 Some(false) => 0,
@@ -1379,7 +1339,7 @@ mod tests {
             }
         }
         assert!(
-            delegate_perm(&current) <= delegate_perm(&trusted),
+            delegate_perm(&Value::Bool(false)) <= delegate_perm(&Value::Null),
             "false should not be considered an escalation over null"
         );
     }
