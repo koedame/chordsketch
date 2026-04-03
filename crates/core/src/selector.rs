@@ -68,18 +68,18 @@ impl SelectorContext {
         let Some(sel) = selector else {
             return true; // No selector = unconditional
         };
-        let sel_lower = sel.to_ascii_lowercase();
 
-        // Check against instrument
+        // Both context values and selectors are normalized to lowercase at
+        // construction time, so `eq_ignore_ascii_case` handles any residual
+        // mixed-case input without allocating.
         if let Some(ref instrument) = self.instrument {
-            if *instrument == sel_lower {
+            if instrument.eq_ignore_ascii_case(sel) {
                 return true;
             }
         }
 
-        // Check against user
         if let Some(ref user) = self.user {
-            if *user == sel_lower {
+            if user.eq_ignore_ascii_case(sel) {
                 return true;
             }
         }
@@ -231,6 +231,31 @@ mod tests {
             selector: Some("piano".to_string()),
         };
         assert!(!ctx.matches_directive(&directive));
+    }
+
+    // -- edge case tests (#322) ------------------------------------------------
+
+    #[test]
+    fn test_empty_string_selector_does_not_match() {
+        let ctx = SelectorContext::new(Some("guitar"), Some("john"));
+        assert!(!ctx.matches(Some("")), "empty selector should not match");
+    }
+
+    #[test]
+    fn test_trailing_hyphen_directive_no_selector() {
+        // "title-" has an empty suffix after the hyphen — should resolve
+        // without a selector since the suffix is empty.
+        let (kind, sel) = crate::ast::DirectiveKind::resolve_with_selector("title-");
+        // Empty suffix is rejected by the `!suffix.is_empty()` check,
+        // so it falls back to Unknown("title-") with no selector.
+        assert_eq!(sel, None);
+        assert!(matches!(kind, crate::ast::DirectiveKind::Unknown(_)));
+    }
+
+    #[test]
+    fn test_with_selector_normalizes_to_lowercase() {
+        let d = crate::ast::Directive::with_selector("title", Some("Test".into()), "PIANO");
+        assert_eq!(d.selector.as_deref(), Some("piano"));
     }
 
     // -- filter_song tests ----------------------------------------------------
