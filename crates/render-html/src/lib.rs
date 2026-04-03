@@ -208,8 +208,9 @@ fn render_song_body(
 
     // Tracks whether a multi-column div is currently open.
     let mut columns_open = false;
-    // Tracks whether we are inside an SVG delegate section.
-    let mut in_svg_section = false;
+    // Buffer for collecting SVG section content. Content is sanitized as a
+    // single string on EndOfSvg to prevent multi-line tag splitting bypasses.
+    let mut svg_buf: Option<String> = None;
     // Delegate tool availability: Some(true) = force enable, Some(false) = force
     // disable, None = auto-detect on first encounter. The auto-detect value is
     // lazily resolved (via `get_or_insert_with`) so that subprocess checks only
@@ -243,13 +244,13 @@ fn render_song_body(
     for line in &song.lines {
         match line {
             Line::Lyrics(lyrics_line) => {
-                if in_svg_section {
-                    // Inside SVG section: emit lyrics text as raw, unescaped content
-                    // after sanitizing dangerous elements (script tags, event handlers).
+                if let Some(ref mut buf) = svg_buf {
+                    // Inside SVG section: collect content into buffer.
+                    // Sanitization is deferred to EndOfSvg so that multi-line
+                    // tags cannot bypass dangerous element detection.
                     let raw = lyrics_line.text();
-                    let sanitized = sanitize_svg_content(&raw);
-                    html.push_str(&sanitized);
-                    html.push('\n');
+                    buf.push_str(&raw);
+                    buf.push('\n');
                 } else if let Some(ref mut buf) = abc_buf {
                     // Inside ABC section with abc2svg enabled: collect content.
                     let raw = lyrics_line.text();
@@ -426,12 +427,15 @@ fn render_song_body(
                         }
                     }
                     DirectiveKind::StartOfSvg => {
-                        html.push_str("<div class=\"svg-section\">\n");
-                        in_svg_section = true;
+                        svg_buf = Some(String::new());
                     }
-                    DirectiveKind::EndOfSvg => {
-                        html.push_str("</div>\n");
-                        in_svg_section = false;
+                    DirectiveKind::EndOfSvg if svg_buf.is_some() => {
+                        if let Some(svg_content) = svg_buf.take() {
+                            html.push_str("<div class=\"svg-section\">\n");
+                            html.push_str(&sanitize_svg_content(&svg_content));
+                            html.push('\n');
+                            html.push_str("</div>\n");
+                        }
                     }
                     _ => {
                         let mut target = String::new();
@@ -3020,6 +3024,48 @@ mod delegate_tests {
         assert!(
             has_dangerous_uri_scheme(payload),
             "3 tabs between letters (colon at raw position 40) must still be detected"
+        );
+    }
+
+    // --- Multi-line tag splitting XSS prevention (#711) ---
+
+    #[test]
+    fn test_svg_section_blocks_multiline_script_tag_splitting() {
+        // Splitting <script> across two lines must NOT bypass the sanitizer.
+        let input = "{start_of_svg}\n<script\n>alert(1)</script>\n{end_of_svg}";
+        let html = render(input);
+        assert!(
+            !html.contains("alert(1)"),
+            "multi-line <script> tag splitting must not execute JS"
+        );
+        assert!(
+            !html.to_lowercase().contains("<script"),
+            "multi-line <script> tag must be stripped"
+        );
+    }
+
+    #[test]
+    fn test_svg_section_blocks_multiline_iframe_tag_splitting() {
+        let input =
+            "{start_of_svg}\n<iframe\nsrc=\"javascript:alert(1)\">\n</iframe>\n{end_of_svg}";
+        let html = render(input);
+        assert!(
+            !html.to_lowercase().contains("<iframe"),
+            "multi-line <iframe> tag splitting must be stripped"
+        );
+        assert!(
+            !html.contains("javascript:"),
+            "javascript: URI in split iframe must be stripped"
+        );
+    }
+
+    #[test]
+    fn test_svg_section_blocks_multiline_foreignobject_splitting() {
+        let input = "{start_of_svg}\n<foreignObject\n><script>alert(1)</script></foreignObject>\n{end_of_svg}";
+        let html = render(input);
+        assert!(
+            !html.to_lowercase().contains("<foreignobject"),
+            "multi-line <foreignObject> splitting must be stripped"
         );
     }
 }
