@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SVG Section Test</title>
+<style>
+body { font-family: serif; max-width: 800px; margin: 2em auto; padding: 0 1em; }
+h1 { margin-bottom: 0.2em; }
+h2 { margin-top: 0; font-weight: normal; color: #555; }
+.line { display: flex; flex-wrap: wrap; margin: 0.1em 0; }
+.chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
+.chord { font-weight: bold; color: #b00; font-size: 0.9em; min-height: 1.2em; }
+.lyrics { white-space: pre; }
+.empty-line { height: 1em; }
+section { margin: 1em 0; }
+section > .section-label { font-weight: bold; font-style: italic; margin-bottom: 0.3em; }
+.comment { font-style: italic; color: #666; margin: 0.3em 0; }
+.comment-box { border: 1px solid #999; padding: 0.2em 0.5em; display: inline-block; margin: 0.3em 0; }
+.chorus-recall { margin: 1em 0; }
+.chorus-recall > .section-label { font-weight: bold; font-style: italic; margin-bottom: 0.3em; }
+img { max-width: 100%; height: auto; }
+.chord-diagram-container { display: inline-block; margin: 0.5em 0.5em 0.5em 0; vertical-align: top; }
+.chord-diagram { display: block; }
+</style>
+</head>
+<body>
+<div class="song">
+<h1>SVG Section Test</h1>
+<div class="svg-section">
+<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="blue"/></svg>
+
+</div>
+<div class="svg-section">
+<svg><rect width="10" height="10"/></svg>
+
+</div>
+</div>
+</body>
+</html>
