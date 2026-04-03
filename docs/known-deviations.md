@@ -1,5 +1,7 @@
 # Known Deviations from Perl ChordPro
 
+**Compared against**: Perl ChordPro core v6.090.1 (`App::Music::ChordPro`)
+
 This document lists intentional differences between chordpro-rs and the Perl
 ChordPro reference implementation. These are not bugs — they represent design
 decisions where chordpro-rs chose a different (or simpler) text rendering format.
