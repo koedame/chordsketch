@@ -258,6 +258,19 @@ impl Parser {
 
     // -- Metadata population ------------------------------------------------
 
+    /// Maximum number of entries per multi-value metadata field (e.g.,
+    /// subtitles, artists). Entries beyond this limit are silently dropped
+    /// to prevent resource exhaustion from maliciously crafted input.
+    const MAX_METADATA_ENTRIES: usize = 1000;
+
+    /// Push a value onto a multi-value metadata field if the cap has not
+    /// been reached.
+    fn push_if_under_cap<T>(vec: &mut Vec<T>, value: T) {
+        if vec.len() < Self::MAX_METADATA_ENTRIES {
+            vec.push(value);
+        }
+    }
+
     /// Populate metadata fields from a directive's kind and value.
     ///
     /// This is called during parsing for unselectored directives, and again
@@ -274,16 +287,16 @@ impl Parser {
                 metadata.title = Some(value);
             }
             DirectiveKind::Subtitle => {
-                metadata.subtitles.push(value);
+                Self::push_if_under_cap(&mut metadata.subtitles, value);
             }
             DirectiveKind::Artist => {
-                metadata.artists.push(value);
+                Self::push_if_under_cap(&mut metadata.artists, value);
             }
             DirectiveKind::Composer => {
-                metadata.composers.push(value);
+                Self::push_if_under_cap(&mut metadata.composers, value);
             }
             DirectiveKind::Lyricist => {
-                metadata.lyricists.push(value);
+                Self::push_if_under_cap(&mut metadata.lyricists, value);
             }
             DirectiveKind::Album => {
                 metadata.album = Some(value);
@@ -310,7 +323,7 @@ impl Parser {
                 metadata.sort_artist = Some(value);
             }
             DirectiveKind::Arranger => {
-                metadata.arrangers.push(value);
+                Self::push_if_under_cap(&mut metadata.arrangers, value);
             }
             DirectiveKind::Copyright => {
                 metadata.copyright = Some(value);
@@ -319,14 +332,14 @@ impl Parser {
                 metadata.duration = Some(value);
             }
             DirectiveKind::Tag => {
-                metadata.tags.push(value);
+                Self::push_if_under_cap(&mut metadata.tags, value);
             }
             DirectiveKind::Meta(ref key) => match key.to_ascii_lowercase().as_str() {
                 "title" | "t" => metadata.title = Some(value),
-                "subtitle" | "st" => metadata.subtitles.push(value),
-                "artist" => metadata.artists.push(value),
-                "composer" => metadata.composers.push(value),
-                "lyricist" => metadata.lyricists.push(value),
+                "subtitle" | "st" => Self::push_if_under_cap(&mut metadata.subtitles, value),
+                "artist" => Self::push_if_under_cap(&mut metadata.artists, value),
+                "composer" => Self::push_if_under_cap(&mut metadata.composers, value),
+                "lyricist" => Self::push_if_under_cap(&mut metadata.lyricists, value),
                 "album" => metadata.album = Some(value),
                 "year" => metadata.year = Some(value),
                 "key" => metadata.key = Some(value),
@@ -335,14 +348,14 @@ impl Parser {
                 "capo" => metadata.capo = Some(value),
                 "sorttitle" => metadata.sort_title = Some(value),
                 "sortartist" => metadata.sort_artist = Some(value),
-                "arranger" => metadata.arrangers.push(value),
+                "arranger" => Self::push_if_under_cap(&mut metadata.arrangers, value),
                 "copyright" => metadata.copyright = Some(value),
                 "duration" => metadata.duration = Some(value),
-                "tag" => metadata.tags.push(value),
-                _ => metadata.custom.push((key.clone(), value)),
+                "tag" => Self::push_if_under_cap(&mut metadata.tags, value),
+                _ => Self::push_if_under_cap(&mut metadata.custom, (key.clone(), value)),
             },
             DirectiveKind::Unknown(ref name) => {
-                metadata.custom.push((name.clone(), value));
+                Self::push_if_under_cap(&mut metadata.custom, (name.clone(), value));
             }
             _ => {}
         }
@@ -3917,5 +3930,39 @@ mod delegate_tests {
         assert_eq!(songs.len(), 2);
         assert_eq!(songs[0].config_overrides().len(), 1);
         assert!(songs[1].config_overrides().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod metadata_cap_tests {
+    use super::*;
+
+    #[test]
+    fn test_metadata_entries_capped_at_limit() {
+        // Generate more subtitles than the cap allows.
+        let count = Parser::MAX_METADATA_ENTRIES + 100;
+        let mut input = String::new();
+        for i in 0..count {
+            input.push_str(&format!("{{subtitle: sub{i}}}\n"));
+        }
+        let song = parse(&input).unwrap();
+        assert_eq!(
+            song.metadata.subtitles.len(),
+            Parser::MAX_METADATA_ENTRIES,
+            "subtitles should be capped at MAX_METADATA_ENTRIES"
+        );
+    }
+
+    #[test]
+    fn test_metadata_cap_applies_per_field() {
+        // Each field has its own cap — filling subtitles does not affect artists.
+        let mut input = String::new();
+        for i in 0..Parser::MAX_METADATA_ENTRIES {
+            input.push_str(&format!("{{subtitle: s{i}}}\n"));
+        }
+        input.push_str("{artist: Alice}\n");
+        let song = parse(&input).unwrap();
+        assert_eq!(song.metadata.subtitles.len(), Parser::MAX_METADATA_ENTRIES);
+        assert_eq!(song.metadata.artists.len(), 1);
     }
 }
