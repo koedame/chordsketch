@@ -541,9 +541,9 @@ fn render_lyrics(
             doc.text_at(name, Font::HelveticaBold, chord_size, x, start_y);
         }
         let text_w = seg.text.chars().count() as f32 * lyrics_size * CHAR_WIDTH;
-        let chord_w = chord_display
-            .as_ref()
-            .map_or(0.0, |name| name.chars().count() as f32 * chord_size * CHAR_WIDTH + 2.0);
+        let chord_w = chord_display.as_ref().map_or(0.0, |name| {
+            name.chars().count() as f32 * chord_size * CHAR_WIDTH + 2.0
+        });
         x += text_w.max(chord_w);
     }
 
