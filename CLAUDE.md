@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**chordpro-rs** is a Rust rewrite of the Perl [ChordPro](https://www.chordpro.org/)
+**ChordSketch** is a Rust rewrite of the Perl [ChordPro](https://www.chordpro.org/)
 reference implementation. The goal is full compatibility with the ChordPro file format
 and rendering pipeline, implemented as a set of focused Rust library crates with a CLI
 front-end.
@@ -27,24 +27,29 @@ This is a Cargo workspace with five crates:
 
 | Crate | Path | Kind | Dependencies |
 |---|---|---|---|
-| `chordpro-core` | `crates/core` | lib | *none* (zero external deps) |
-| `chordpro-render-text` | `crates/render-text` | lib | `chordpro-core` |
-| `chordpro-render-html` | `crates/render-html` | lib | `chordpro-core` |
-| `chordpro-render-pdf` | `crates/render-pdf` | lib | `chordpro-core` |
-| `chordpro-rs` (CLI) | `crates/cli` | bin | `chordpro-core`, `chordpro-render-text`, `chordpro-render-html`, `chordpro-render-pdf` |
+| `chordsketch-core` | `crates/core` | lib | *none* (zero external deps) |
+| `chordsketch-render-text` | `crates/render-text` | lib | `chordsketch-core` |
+| `chordsketch-render-html` | `crates/render-html` | lib | `chordsketch-core` |
+| `chordsketch-render-pdf` | `crates/render-pdf` | lib | `chordsketch-core` |
+| `chordsketch` (CLI) | `crates/cli` | bin | `chordsketch-core`, `chordsketch-render-text`, `chordsketch-render-html`, `chordsketch-render-pdf` |
 
 ### Dependency Policy
 
-- `chordpro-core` must have **zero external dependencies**. All parsing and AST logic
+- `chordsketch-core` must have **zero external dependencies**. All parsing and AST logic
   is implemented from scratch.
-- Renderer crates may depend only on `chordpro-core` and, when justified, minimal
+- Renderer crates may depend only on `chordsketch-core` and, when justified, minimal
   external crates.
 - The CLI crate may use external crates for argument parsing, I/O, etc.
+
+### License Policy
+
+- **SDK layer** (all current crates): MIT
+- **Application layer** (future Forum, Playground, Desktop apps): AGPL-3.0-only
 
 ## Project Tracking
 
 - **GitHub Project**: https://github.com/orgs/koedame/projects/1/views/1
-- **Issues**: https://github.com/koedame/chordpro-rs/issues
+- **Issues**: https://github.com/koedame/chordsketch/issues
 
 ## Phase Roadmap
 
@@ -62,7 +67,7 @@ High-level phases:
 10. **Phase 10** — Font, size, and color directives (legacy formatting) ✅
 11. **Phase 11** — Page control and multi-page PDF ✅
 12. **Phase 12** — Image directive ✅
-13. **Phase 13** — Configuration file system (chordpro.json, RRJSON) ✅
+13. **Phase 13** — Configuration file system (chordsketch.json, RRJSON) ✅
 14. **Phase 14** — Chord diagram rendering and extended `{define}` ✅
 15. **Phase 15** — Delegate environments (ABC, Lilypond, SVG, textblock) ✅
 16. **Phase 16** — Conditional directive selectors ✅
@@ -96,7 +101,7 @@ state.
 | Git branch | One branch per worktree, named `issue-{N}-{slug}` |
 | Build artifacts | Each worktree has its own `target/` directory |
 | Network ports | `3000 + issue_number` |
-| Working directory | `../chordpro-rs-wt/issue-{N}-{slug}/` |
+| Working directory | `../chordsketch-wt/issue-{N}-{slug}/` |
 
 **Before starting work**: Always create a fresh worktree from latest `origin/main`.
 **After PR merge**: Remove the worktree and local branch.

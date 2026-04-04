@@ -1,14 +1,14 @@
-# chordpro-core
+# chordsketch-core
 
 Parser, AST, and transforms for the [ChordPro](https://www.chordpro.org/)
 file format. This crate has **zero external dependencies**.
 
-Part of the [chordpro-rs](https://github.com/koedame/chordpro-rs) project.
+Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 
 ## Usage
 
 ```rust
-use chordpro_core::parser::parse;
+use chordsketch_core::parser::parse;
 
 let input = "{title: Amazing Grace}\n[G]Amazing [G7]grace";
 let song = parse(input).unwrap();
@@ -27,7 +27,7 @@ assert_eq!(song.metadata.title.as_deref(), Some("Amazing Grace"));
 
 ## Documentation
 
-[API documentation on docs.rs](https://docs.rs/chordpro-core)
+[API documentation on docs.rs](https://docs.rs/chordsketch-core)
 
 ## License
 

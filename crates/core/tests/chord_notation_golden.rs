@@ -3,12 +3,12 @@
 //! Verifies that the parser correctly extracts structured chord details from
 //! chord annotations in a `.cho` input file.
 
-use chordpro_core::ast::Line;
-use chordpro_core::chord::{Accidental, ChordQuality, Note};
-use chordpro_core::parse;
+use chordsketch_core::ast::Line;
+use chordsketch_core::chord::{Accidental, ChordQuality, Note};
+use chordsketch_core::parse;
 
 /// Reads the fixture file and parses it.
-fn parse_fixture() -> chordpro_core::ast::Song {
+fn parse_fixture() -> chordsketch_core::ast::Song {
     let input = include_str!("fixtures/chord_notation.cho");
     parse(input).expect("fixture should parse without errors")
 }

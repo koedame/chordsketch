@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2026-04-04
 
-Initial release of chordpro-rs.
+Initial release of ChordSketch.
 
 ### Added
 
-#### Core Parser (`chordpro-core`)
+#### Core Parser (`chordsketch-core`)
 
 - Full ChordPro file format parser with zero external dependencies
 - 100+ directive types supported
@@ -31,21 +31,21 @@ Initial release of chordpro-rs.
 - `{transpose}` directive
 - Input size limits and parser safety controls
 
-#### Text Renderer (`chordpro-render-text`)
+#### Text Renderer (`chordsketch-render-text`)
 
 - Plain text output with chords above lyrics
 - Unicode-aware column alignment
 - Multi-column layout support
 - Section label rendering
 
-#### HTML Renderer (`chordpro-render-html`)
+#### HTML Renderer (`chordsketch-render-html`)
 
 - Self-contained HTML5 document output
 - Chord positioning above lyrics
 - Metadata display (title, subtitle, artist)
 - Section styling
 
-#### PDF Renderer (`chordpro-render-pdf`)
+#### PDF Renderer (`chordsketch-render-pdf`)
 
 - PDF document generation (A4, Helvetica)
 - Multi-page layout with page breaks
@@ -55,7 +55,7 @@ Initial release of chordpro-rs.
 - Image embedding
 - Font size and color support
 
-#### CLI (`chordpro-rs`)
+#### CLI (`chordsketch`)
 
 - Three output formats: text, HTML, PDF
 - Chord transposition via `--transpose`
@@ -76,4 +76,4 @@ Initial release of chordpro-rs.
 - Tested against the Perl ChordPro reference implementation
 - See [docs/known-deviations.md](docs/known-deviations.md) for known differences
 
-[0.1.0]: https://github.com/koedame/chordpro-rs/releases/tag/v0.1.0
+[0.1.0]: https://github.com/koedame/chordsketch/releases/tag/v0.1.0

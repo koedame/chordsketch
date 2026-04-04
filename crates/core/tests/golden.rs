@@ -1,7 +1,7 @@
 //! Golden tests for the ChordPro parser.
 //!
 //! This integration test discovers all subdirectories under `tests/fixtures/`,
-//! parses each `input.cho` file through [`chordpro_core::parse`], and compares
+//! parses each `input.cho` file through [`chordsketch_core::parse`], and compares
 //! the pretty-printed Debug output (`{:#?}`) of the resulting AST against the
 //! corresponding `expected.txt` file.
 //!
@@ -10,7 +10,7 @@
 //! 1. Create a new subdirectory under `crates/core/tests/fixtures/` with a
 //!    descriptive kebab-case name (e.g., `section-directives`).
 //! 2. Add an `input.cho` file containing the ChordPro source to parse.
-//! 3. Run `UPDATE_GOLDEN=1 cargo test -p chordpro-core --test golden` to
+//! 3. Run `UPDATE_GOLDEN=1 cargo test -p chordsketch-core --test golden` to
 //!    automatically generate the `expected.txt` file from the current parser
 //!    output.
 //! 4. Review the generated `expected.txt` to confirm it matches the intended
@@ -21,7 +21,7 @@
 //! When the parser output changes intentionally (e.g., new AST fields), run:
 //!
 //! ```sh
-//! UPDATE_GOLDEN=1 cargo test -p chordpro-core --test golden
+//! UPDATE_GOLDEN=1 cargo test -p chordsketch-core --test golden
 //! ```
 //!
 //! This overwrites every `expected.txt` with the current parser output. Review
@@ -134,7 +134,8 @@ fn run_golden_test(fixture_dir: &Path) {
     let input = fs::read_to_string(&input_path)
         .unwrap_or_else(|e| panic!("[{name}] cannot read {}: {e}", input_path.display()));
 
-    let song = chordpro_core::parse(&input).unwrap_or_else(|e| panic!("[{name}] parse error: {e}"));
+    let song =
+        chordsketch_core::parse(&input).unwrap_or_else(|e| panic!("[{name}] parse error: {e}"));
 
     let actual = format!("{:#?}\n", song);
 
@@ -148,7 +149,7 @@ fn run_golden_test(fixture_dir: &Path) {
 
     let expected = fs::read_to_string(&expected_path).unwrap_or_else(|e| {
         panic!(
-            "[{name}] cannot read {} (run `UPDATE_GOLDEN=1 cargo test -p chordpro-core --test golden` to create it): {e}",
+            "[{name}] cannot read {} (run `UPDATE_GOLDEN=1 cargo test -p chordsketch-core --test golden` to create it): {e}",
             expected_path.display()
         )
     });
@@ -164,7 +165,7 @@ fn run_golden_test(fixture_dir: &Path) {
              {diff}\n\
              \n\
              If this change is intentional, run:\n\
-             UPDATE_GOLDEN=1 cargo test -p chordpro-core --test golden\n",
+             UPDATE_GOLDEN=1 cargo test -p chordsketch-core --test golden\n",
             fixture_dir.display(),
             expected_path.display(),
         );

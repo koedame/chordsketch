@@ -62,7 +62,7 @@ jobs:
 ### TODO
 - [ ] Review release notes
 - [ ] Identify new directives or spec changes
-- [ ] Assess impact on chordpro-rs
+- [ ] Assess impact on chordsketch
 - [ ] Implement required changes
 - [ ] Update compatibility tests
 - [ ] Update \`.github/upstream-version\` to \`${UPSTREAM_TAG}\`

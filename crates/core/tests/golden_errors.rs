@@ -2,7 +2,7 @@
 //!
 //! This integration test discovers all subdirectories under
 //! `tests/error_fixtures/`, parses each `input.cho` file through
-//! [`chordpro_core::parse`], and verifies that parsing fails with an error
+//! [`chordsketch_core::parse`], and verifies that parsing fails with an error
 //! whose `Display` output matches the content of `expected_error.txt`.
 //!
 //! # Adding a new error golden test
@@ -10,14 +10,14 @@
 //! 1. Create a new subdirectory under `crates/core/tests/error_fixtures/` with
 //!    a descriptive kebab-case name (e.g., `unclosed-chord`).
 //! 2. Add an `input.cho` file containing the malformed ChordPro source.
-//! 3. Run `UPDATE_GOLDEN=1 cargo test -p chordpro-core --test golden_errors`
+//! 3. Run `UPDATE_GOLDEN=1 cargo test -p chordsketch-core --test golden_errors`
 //!    to generate `expected_error.txt` from the current error output.
 //! 4. Review the generated file, then commit both files.
 //!
 //! # Updating error golden snapshots
 //!
 //! ```sh
-//! UPDATE_GOLDEN=1 cargo test -p chordpro-core --test golden_errors
+//! UPDATE_GOLDEN=1 cargo test -p chordsketch-core --test golden_errors
 //! ```
 
 use std::fs;
@@ -70,7 +70,7 @@ fn run_error_golden_test(fixture_dir: &Path) {
     let input = fs::read_to_string(&input_path)
         .unwrap_or_else(|e| panic!("[{name}] cannot read {}: {e}", input_path.display()));
 
-    let err = chordpro_core::parse(&input).expect_err(&format!(
+    let err = chordsketch_core::parse(&input).expect_err(&format!(
         "[{name}] expected parse error but parsing succeeded"
     ));
 
@@ -87,7 +87,7 @@ fn run_error_golden_test(fixture_dir: &Path) {
     let expected = fs::read_to_string(&expected_path)
         .unwrap_or_else(|e| {
             panic!(
-                "[{name}] cannot read {} (run `UPDATE_GOLDEN=1 cargo test -p chordpro-core --test golden_errors` to create it): {e}",
+                "[{name}] cannot read {} (run `UPDATE_GOLDEN=1 cargo test -p chordsketch-core --test golden_errors` to create it): {e}",
                 expected_path.display()
             )
         })
@@ -105,7 +105,7 @@ fn run_error_golden_test(fixture_dir: &Path) {
          Actual error:\n  {}\n\
          \n\
          If this change is intentional, run:\n\
-         UPDATE_GOLDEN=1 cargo test -p chordpro-core --test golden_errors\n",
+         UPDATE_GOLDEN=1 cargo test -p chordsketch-core --test golden_errors\n",
         fixture_dir.display(),
         expected_path.display(),
         expected.trim(),

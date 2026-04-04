@@ -3,7 +3,7 @@
 ## Git Worktree Isolation
 
 - Each Claude Code instance MUST work in a separate git worktree.
-- Worktree location: `../chordpro-rs-wt/issue-{N}-{slug}/`
+- Worktree location: `../chordsketch-wt/issue-{N}-{slug}/`
 - Never modify files outside your own worktree.
 - Each worktree has its own `target/` directory — no build lock contention.
 
@@ -12,14 +12,14 @@
 ```bash
 # From the main repo checkout
 git fetch origin
-git worktree add ../chordpro-rs-wt/issue-{N}-{slug} -b issue-{N}-{slug} origin/main
-cd ../chordpro-rs-wt/issue-{N}-{slug}
+git worktree add ../chordsketch-wt/issue-{N}-{slug} -b issue-{N}-{slug} origin/main
+cd ../chordsketch-wt/issue-{N}-{slug}
 ```
 
 ## Cleanup after PR Merge
 
 ```bash
-git worktree remove ../chordpro-rs-wt/issue-{N}-{slug}
+git worktree remove ../chordsketch-wt/issue-{N}-{slug}
 git branch -d issue-{N}-{slug}
 ```
 

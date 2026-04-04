@@ -1,5 +1,5 @@
 [package]
-name = "chordpro-rs"
+name = "chordsketch"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -13,14 +13,14 @@ description = "ChordPro command-line tool"
 readme = "README.md"
 
 [[bin]]
-name = "chordpro"
+name = "chordsketch"
 path = "src/main.rs"
 
 [dependencies]
-chordpro-core = { version = "0.1.0", path = "../core" }
-chordpro-render-text = { version = "0.1.0", path = "../render-text" }
-chordpro-render-html = { version = "0.1.0", path = "../render-html" }
-chordpro-render-pdf = { version = "0.1.0", path = "../render-pdf" }
+chordsketch-core = { version = "0.1.0", path = "../core" }
+chordsketch-render-text = { version = "0.1.0", path = "../render-text" }
+chordsketch-render-html = { version = "0.1.0", path = "../render-html" }
+chordsketch-render-pdf = { version = "0.1.0", path = "../render-pdf" }
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
 

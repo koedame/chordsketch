@@ -12,7 +12,7 @@ use clap_complete::Shell;
 
 /// ChordPro file processor — parse and render ChordPro songs.
 #[derive(Parser)]
-#[command(name = "chordpro", version, about)]
+#[command(name = "chordsketch", version, about)]
 struct Cli {
     /// Input ChordPro file(s) to process.
     #[arg(required_unless_present = "completions")]
@@ -75,7 +75,7 @@ fn main() -> ExitCode {
 
     if let Some(shell) = cli.completions {
         let mut cmd = Cli::command();
-        clap_complete::generate(shell, &mut cmd, "chordpro", &mut io::stdout());
+        clap_complete::generate(shell, &mut cmd, "chordsketch", &mut io::stdout());
         return ExitCode::SUCCESS;
     }
 
@@ -89,9 +89,9 @@ fn main() -> ExitCode {
 
     // Build configuration: defaults → system → user → project → custom config files → defines
     let mut config = if cli.no_default_configs {
-        chordpro_core::config::Config::defaults()
+        chordsketch_core::config::Config::defaults()
     } else {
-        let result = chordpro_core::config::Config::load(project_dir.as_deref(), None);
+        let result = chordsketch_core::config::Config::load(project_dir.as_deref(), None);
         for warning in &result.warnings {
             eprintln!("warning: {warning}");
         }
@@ -100,7 +100,7 @@ fn main() -> ExitCode {
 
     // Apply --config files/presets in order (preset names resolved first)
     for config_name in &cli.configs {
-        match chordpro_core::config::Config::resolve(config_name) {
+        match chordsketch_core::config::Config::resolve(config_name) {
             Ok(result) => {
                 for warning in &result.warnings {
                     eprintln!("warning: {config_name}: {warning}");
@@ -154,7 +154,7 @@ fn main() -> ExitCode {
             config_transpose_f64 as i8
         };
     let (effective_transpose, saturated) =
-        chordpro_core::transpose::combine_transpose(config_transpose, cli.transpose);
+        chordsketch_core::transpose::combine_transpose(config_transpose, cli.transpose);
     if saturated {
         eprintln!(
             "warning: transpose offset {} + {} exceeds i8 range, clamped to {}",
@@ -162,7 +162,7 @@ fn main() -> ExitCode {
         );
     }
 
-    let mut all_songs: Vec<chordpro_core::ast::Song> = Vec::new();
+    let mut all_songs: Vec<chordsketch_core::ast::Song> = Vec::new();
     let mut had_error = false;
 
     for path in &cli.files {
@@ -175,7 +175,7 @@ fn main() -> ExitCode {
             }
         };
 
-        let result = chordpro_core::parse_multi_lenient(&input);
+        let result = chordsketch_core::parse_multi_lenient(&input);
         for parse_result in &result.results {
             for e in &parse_result.errors {
                 eprintln!(
@@ -191,7 +191,7 @@ fn main() -> ExitCode {
     }
 
     // Apply selector filtering if an instrument or user is configured.
-    let selector_ctx = chordpro_core::selector::SelectorContext::from_config(&config);
+    let selector_ctx = chordsketch_core::selector::SelectorContext::from_config(&config);
     if selector_ctx.instrument.is_some() || selector_ctx.user.is_some() {
         all_songs = all_songs
             .iter()
@@ -207,7 +207,7 @@ fn main() -> ExitCode {
 
     let output = match cli.format {
         Format::Pdf => {
-            let result = chordpro_render_pdf::render_songs_with_warnings(
+            let result = chordsketch_render_pdf::render_songs_with_warnings(
                 &all_songs,
                 effective_transpose,
                 &config,
@@ -218,7 +218,7 @@ fn main() -> ExitCode {
             Output::Binary(result.output)
         }
         Format::Text => {
-            let result = chordpro_render_text::render_songs_with_warnings(
+            let result = chordsketch_render_text::render_songs_with_warnings(
                 &all_songs,
                 effective_transpose,
                 &config,
@@ -229,7 +229,7 @@ fn main() -> ExitCode {
             Output::Text(result.output)
         }
         Format::Html => {
-            let result = chordpro_render_html::render_songs_with_warnings(
+            let result = chordsketch_render_html::render_songs_with_warnings(
                 &all_songs,
                 effective_transpose,
                 &config,

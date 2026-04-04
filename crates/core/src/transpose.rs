@@ -138,14 +138,14 @@ pub fn transpose_chord(chord: &Chord, semitones: i8) -> Chord {
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::parse;
-/// use chordpro_core::transpose::transpose;
+/// use chordsketch_core::parse;
+/// use chordsketch_core::transpose::transpose;
 ///
 /// let song = parse("[G]Hello [C]world").unwrap();
 /// let transposed = transpose(&song, 2); // up 2 semitones
 /// // G → A, C → D
 /// let first_line = &transposed.lines[0];
-/// if let chordpro_core::ast::Line::Lyrics(l) = first_line {
+/// if let chordsketch_core::ast::Line::Lyrics(l) = first_line {
 ///     assert_eq!(l.segments[0].chord.as_ref().unwrap().name, "A");
 ///     assert_eq!(l.segments[1].chord.as_ref().unwrap().name, "D");
 /// }

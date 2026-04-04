@@ -2,13 +2,13 @@
 
 ## compare-with-perl.sh
 
-Automated comparison tool that runs both chordpro-rs and the Perl ChordPro
+Automated comparison tool that runs both ChordSketch and the Perl ChordPro
 reference implementation on the same `.cho` input files and diffs the output.
 
 ### Prerequisites
 
 - **Perl ChordPro**: Install via `cpanm App::Music::ChordPro`
-- **chordpro-rs**: Built with `cargo build --release`
+- **ChordSketch**: Built with `cargo build --release`
 
 ### Usage
 

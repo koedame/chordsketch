@@ -4,9 +4,9 @@
 //! sources override earlier ones):
 //!
 //! 1. **Built-in defaults** — hardcoded baseline configuration
-//! 2. **System config** — `/etc/chordpro.json` (Linux), platform equivalent
-//! 3. **User config** — `~/.config/chordpro/chordpro.json`
-//! 4. **Project config** — `chordpro.json` in the song file directory
+//! 2. **System config** — `/etc/chordsketch.json` (Linux), platform equivalent
+//! 3. **User config** — `~/.config/chordsketch/chordsketch.json`
+//! 4. **Project config** — `chordsketch.json` in the song file directory
 //! 5. **Song-specific config** — referenced via CLI flag or directive
 //!
 //! Map values are deep-merged; array values are replaced (not concatenated).
@@ -14,7 +14,7 @@
 //! # Examples
 //!
 //! ```
-//! use chordpro_core::config::Config;
+//! use chordsketch_core::config::Config;
 //!
 //! let config = Config::defaults();
 //! assert!(!config.get("pdf").is_null());
@@ -437,7 +437,7 @@ impl Config {
         let mut warnings = Vec::new();
 
         // System config (trusted — full size limit)
-        let system_path = PathBuf::from("/etc/chordpro.json");
+        let system_path = PathBuf::from("/etc/chordsketch.json");
         if let Some(text) = read_file_if_exists(&system_path, MAX_CONFIG_FILE_SIZE, &mut warnings) {
             match Self::parse_collecting_warnings(&text, &mut warnings) {
                 Ok(sys) => config = config.merge(sys),
@@ -451,7 +451,7 @@ impl Config {
         // User config (trusted — full size limit): respect XDG_CONFIG_HOME,
         // fall back to $HOME/.config.
         if let Some(config_dir) = config_dir() {
-            let user_path = config_dir.join("chordpro").join("chordpro.json");
+            let user_path = config_dir.join("chordsketch").join("chordsketch.json");
             if let Some(text) = read_file_if_exists(&user_path, MAX_CONFIG_FILE_SIZE, &mut warnings)
             {
                 match Self::parse_collecting_warnings(&text, &mut warnings) {
@@ -467,13 +467,13 @@ impl Config {
         // Snapshot delegate settings from trusted sources (system + user config).
         // Project-level and song-specific configs must not silently enable
         // delegate execution — only CLI flags or explicit user config
-        // (~/.config/chordpro/) may enable delegates.
+        // (~/.config/chordsketch/) may enable delegates.
         let trusted_abc2svg = config.get_path("delegates.abc2svg").clone();
         let trusted_lilypond = config.get_path("delegates.lilypond").clone();
 
         // Project config (untrusted — reduced size limit)
         if let Some(dir) = project_dir {
-            let project_path = PathBuf::from(dir).join("chordpro.json");
+            let project_path = PathBuf::from(dir).join("chordsketch.json");
             if let Some(text) =
                 read_file_if_exists(&project_path, MAX_UNTRUSTED_CONFIG_FILE_SIZE, &mut warnings)
             {
@@ -600,13 +600,13 @@ fn build_nested_value(key: &str, value: Value) -> Option<Value> {
 
 /// Maximum config file size for trusted sources (10 MB).
 ///
-/// Applies to system configs (`/etc/chordpro.json`), user configs
-/// (`~/.config/chordpro/chordpro.json`), and CLI `--config` files.
+/// Applies to system configs (`/etc/chordsketch.json`), user configs
+/// (`~/.config/chordsketch/chordsketch.json`), and CLI `--config` files.
 const MAX_CONFIG_FILE_SIZE: u64 = 10 * 1024 * 1024;
 
 /// Maximum config file size for untrusted sources (1 MB).
 ///
-/// Applies to project-level (`chordpro.json` in song directory) and
+/// Applies to project-level (`chordsketch.json` in song directory) and
 /// song-specific config files. These are less trusted and typically
 /// much smaller than system/user configs, so a tighter limit reduces
 /// the attack surface.
@@ -623,7 +623,7 @@ fn open_no_follow(path: &Path) -> Result<File, std::io::Error> {
     {
         use std::os::unix::fs::OpenOptionsExt;
         // O_NOFOLLOW values from platform fcntl(2) headers.
-        // Note: chordpro-core has a zero-dependency policy, so we cannot
+        // Note: chordsketch-core has a zero-dependency policy, so we cannot
         // use the `libc` crate for portable O_NOFOLLOW constants.
         //
         // References:
@@ -1218,7 +1218,7 @@ mod tests {
     fn test_load_project_config() {
         let dir = tempdir().unwrap();
         std::fs::write(
-            dir.path().join("chordpro.json"),
+            dir.path().join("chordsketch.json"),
             r#"{ "settings": { "columns": 3 } }"#,
         )
         .unwrap();
@@ -1255,7 +1255,7 @@ mod tests {
 
         // Project sets columns=2 and transpose=5
         std::fs::write(
-            project_dir.path().join("chordpro.json"),
+            project_dir.path().join("chordsketch.json"),
             r#"{ "settings": { "columns": 2, "transpose": 5 } }"#,
         )
         .unwrap();
@@ -1284,7 +1284,7 @@ mod tests {
     fn test_project_config_cannot_enable_delegates() {
         let dir = tempdir().unwrap();
         std::fs::write(
-            dir.path().join("chordpro.json"),
+            dir.path().join("chordsketch.json"),
             r#"{ "delegates": { "abc2svg": true, "lilypond": true } }"#,
         )
         .unwrap();
@@ -1319,7 +1319,7 @@ mod tests {
         // and no warning should be emitted.
         let dir = tempdir().unwrap();
         std::fs::write(
-            dir.path().join("chordpro.json"),
+            dir.path().join("chordsketch.json"),
             r#"{ "delegates": { "abc2svg": null } }"#,
         )
         .unwrap();
@@ -1401,7 +1401,7 @@ mod tests {
     #[test]
     fn test_load_invalid_project_config_continues() {
         let dir = tempdir().unwrap();
-        std::fs::write(dir.path().join("chordpro.json"), "{ invalid json !!!").unwrap();
+        std::fs::write(dir.path().join("chordsketch.json"), "{ invalid json !!!").unwrap();
 
         // Should not panic; defaults are still loaded
         let result = Config::load(Some(dir.path().to_str().unwrap()), None);

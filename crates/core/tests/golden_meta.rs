@@ -4,8 +4,8 @@
 //! directive, routing known metadata keys to their respective fields and
 //! storing unknown keys in the custom metadata vector.
 
-use chordpro_core::ast::{DirectiveKind, Line};
-use chordpro_core::parser::parse;
+use chordsketch_core::ast::{DirectiveKind, Line};
+use chordsketch_core::parser::parse;
 
 /// Reads a fixture file relative to the fixtures directory.
 fn fixture(name: &str) -> String {

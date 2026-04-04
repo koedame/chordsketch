@@ -2,9 +2,9 @@
 
 **Compared against**: Perl ChordPro core v6.090.1 (`App::Music::ChordPro`)
 
-This document lists intentional differences between chordpro-rs and the Perl
+This document lists intentional differences between ChordSketch and the Perl
 ChordPro reference implementation. These are not bugs — they represent design
-decisions where chordpro-rs chose a different (or simpler) text rendering format.
+decisions where ChordSketch chose a different (or simpler) text rendering format.
 
 The ChordPro specification defines the `.cho` file format but does **not**
 prescribe a specific text output format. Both implementations produce valid

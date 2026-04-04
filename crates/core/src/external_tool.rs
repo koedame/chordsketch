@@ -31,7 +31,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// # Examples
 ///
 /// ```no_run
-/// use chordpro_core::external_tool::is_available;
+/// use chordsketch_core::external_tool::is_available;
 ///
 /// if is_available("lilypond") {
 ///     println!("Lilypond is installed");
@@ -113,7 +113,7 @@ fn write_temp_file_exclusive(path: &std::path::Path, content: &str) -> Result<()
 pub fn invoke_abc2svg(abc_content: &str) -> Result<String, String> {
     let sanitized = sanitize_abc_content(abc_content);
 
-    let tmp_path = unique_temp_path("chordpro_abc", "abc");
+    let tmp_path = unique_temp_path("chordsketch_abc", "abc");
 
     write_temp_file_exclusive(&tmp_path, &sanitized)?;
 
@@ -280,7 +280,7 @@ pub fn invoke_lilypond(ly_content: &str) -> Result<String, String> {
 
     let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let pid = std::process::id();
-    let tmp_dir = std::env::temp_dir().join(format!("chordpro_ly_{pid}_{counter}"));
+    let tmp_dir = std::env::temp_dir().join(format!("chordsketch_ly_{pid}_{counter}"));
 
     // Use create_dir (not create_dir_all) to fail if the directory already exists,
     // preventing symlink-based attacks on predictable paths.
@@ -366,7 +366,7 @@ mod tests {
     }
 
     // The following tests are #[ignore] because they depend on external tools.
-    // Run with: cargo test -p chordpro-core -- --ignored
+    // Run with: cargo test -p chordsketch-core -- --ignored
 
     #[test]
     fn extract_body_content_basic() {

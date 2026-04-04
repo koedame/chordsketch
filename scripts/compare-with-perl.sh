@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# compare-with-perl.sh — Compare chordpro-rs output against Perl ChordPro
+# compare-with-perl.sh — Compare ChordSketch output against Perl ChordPro
 #
 # Usage:
 #   ./scripts/compare-with-perl.sh [--format text|html] [corpus_dir]
 #
 # Requirements:
 #   - Perl ChordPro installed and available as 'chordpro' in PATH
-#   - chordpro-rs built (cargo build --release)
+#   - ChordSketch built (cargo build --release)
 #
 # The script runs both implementations on each .cho file in the test corpus
 # and produces a diff report.
@@ -17,7 +17,7 @@ FORMAT="${1:-text}"
 CORPUS_DIR="${2:-tests/corpus}"
 # Perl ChordPro uses capitalized format names (Text, HTML, PDF).
 PERL_FORMAT="$(echo "${FORMAT:0:1}" | tr '[:lower:]' '[:upper:]')${FORMAT:1}"
-RUST_BIN="./target/release/chordpro"
+RUST_BIN="./target/release/chordsketch"
 PERL_BIN="chordpro"
 OUTPUT_DIR="/tmp/chordpro-comparison"
 PASS=0
@@ -39,7 +39,7 @@ if ! command -v "$PERL_BIN" &>/dev/null; then
 fi
 
 if [[ ! -x "$RUST_BIN" ]]; then
-    echo "Building chordpro-rs..."
+    echo "Building ChordSketch..."
     cargo build --release
 fi
 

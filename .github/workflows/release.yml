@@ -51,9 +51,9 @@ jobs:
       - name: Build
         run: |
           if [ "${{ matrix.cross }}" = "true" ]; then
-            cross build --release --target ${{ matrix.target }} -p chordpro-rs
+            cross build --release --target ${{ matrix.target }} -p chordsketch
           else
-            cargo build --release --target ${{ matrix.target }} -p chordpro-rs
+            cargo build --release --target ${{ matrix.target }} -p chordsketch
           fi
         shell: bash
 
@@ -70,10 +70,10 @@ jobs:
       - name: Package (Unix)
         if: runner.os != 'Windows'
         run: |
-          ARCHIVE_NAME="chordpro-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz"
-          STAGING="chordpro-${{ steps.version.outputs.version }}-${{ matrix.target }}"
+          ARCHIVE_NAME="chordsketch-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz"
+          STAGING="chordsketch-${{ steps.version.outputs.version }}-${{ matrix.target }}"
           mkdir "$STAGING"
-          cp "target/${{ matrix.target }}/release/chordpro" "$STAGING/"
+          cp "target/${{ matrix.target }}/release/chordsketch" "$STAGING/"
           cp LICENSE README.md "$STAGING/"
           tar czf "$ARCHIVE_NAME" "$STAGING"
           echo "ARCHIVE=$ARCHIVE_NAME" >> "$GITHUB_ENV"
@@ -84,10 +84,10 @@ jobs:
         run: |
           $Version = "${{ steps.version.outputs.version }}"
           $Target = "${{ matrix.target }}"
-          $ArchiveName = "chordpro-$Version-$Target.zip"
-          $Staging = "chordpro-$Version-$Target"
+          $ArchiveName = "chordsketch-$Version-$Target.zip"
+          $Staging = "chordsketch-$Version-$Target"
           New-Item -ItemType Directory -Path $Staging
-          Copy-Item "target/$Target/release/chordpro.exe" "$Staging/"
+          Copy-Item "target/$Target/release/chordsketch.exe" "$Staging/"
           Copy-Item LICENSE, README.md "$Staging/"
           Compress-Archive -Path "$Staging/*" -DestinationPath $ArchiveName
           echo "ARCHIVE=$ArchiveName" >> $env:GITHUB_ENV
@@ -128,6 +128,6 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           gh release create "$VERSION" \
             --title "$VERSION" \
-            --notes "See [CHANGELOG.md](https://github.com/koedame/chordpro-rs/blob/main/CHANGELOG.md) for details." \
+            --notes "See [CHANGELOG.md](https://github.com/koedame/chordsketch/blob/main/CHANGELOG.md) for details." \
             artifacts/*/* \
             --draft=false

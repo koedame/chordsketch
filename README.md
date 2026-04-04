@@ -1,8 +1,8 @@
-# chordpro-rs
+# ChordSketch
 
 A Rust implementation of the [ChordPro](https://www.chordpro.org/) file format
-parser and renderer. Supports parsing ChordPro files into a structured AST and
-rendering to plain text, HTML, and PDF.
+parser and renderer. 100% ChordPro compatible. Supports parsing ChordPro files
+into a structured AST and rendering to plain text, HTML, and PDF.
 
 ## Features
 
@@ -10,7 +10,7 @@ rendering to plain text, HTML, and PDF.
   external dependencies in the core crate
 - Three output formats: plain text, HTML, and PDF
 - Chord transposition
-- Configuration file system (chordpro.json)
+- Configuration file system (chordsketch.json)
 - Inline markup (bold, italic, etc.)
 - Chord diagrams and extended `{define}` directives
 - Section environments (verse, chorus, tab, grid, custom)
@@ -26,7 +26,7 @@ rendering to plain text, HTML, and PDF.
 ### From crates.io
 
 ```bash
-cargo install chordpro-rs
+cargo install chordsketch
 ```
 
 ### From source
@@ -34,8 +34,8 @@ cargo install chordpro-rs
 Requires Rust 1.85 or later.
 
 ```bash
-git clone https://github.com/koedame/chordpro-rs.git
-cd chordpro-rs
+git clone https://github.com/koedame/chordsketch.git
+cd chordsketch
 cargo install --path crates/cli
 ```
 
@@ -43,22 +43,22 @@ cargo install --path crates/cli
 
 ```bash
 # Render to plain text (default)
-chordpro song.cho
+chordsketch song.cho
 
 # Render to HTML
-chordpro -f html song.cho -o song.html
+chordsketch -f html song.cho -o song.html
 
 # Render to PDF
-chordpro -f pdf song.cho -o song.pdf
+chordsketch -f pdf song.cho -o song.pdf
 
 # Transpose up 2 semitones
-chordpro --transpose 2 song.cho
+chordsketch --transpose 2 song.cho
 
 # Use a custom config file
-chordpro -c myconfig.json song.cho
+chordsketch -c myconfig.json song.cho
 
 # Process multiple files
-chordpro -f pdf song1.cho song2.cho -o songbook.pdf
+chordsketch -f pdf song1.cho song2.cho -o songbook.pdf
 ```
 
 ## Library Usage
@@ -66,8 +66,8 @@ chordpro -f pdf song1.cho song2.cho -o songbook.pdf
 The core parser and renderers are available as separate library crates:
 
 ```rust
-use chordpro_core::parser::parse;
-use chordpro_render_text::render_song;
+use chordsketch_core::parser::parse;
+use chordsketch_render_text::render_song;
 
 let input = "{title: Amazing Grace}\n{subtitle: Traditional}\n\n[G]Amazing [G7]grace, how [C]sweet the [G]sound";
 let song = parse(input).unwrap();
@@ -79,11 +79,11 @@ println!("{text}");
 
 | Crate | Description |
 |---|---|
-| [`chordpro-core`](crates/core) | Parser, AST, and transforms (zero external dependencies) |
-| [`chordpro-render-text`](crates/render-text) | Plain text renderer |
-| [`chordpro-render-html`](crates/render-html) | HTML renderer |
-| [`chordpro-render-pdf`](crates/render-pdf) | PDF renderer |
-| [`chordpro-rs`](crates/cli) | Command-line tool |
+| [`chordsketch-core`](crates/core) | Parser, AST, and transforms (zero external dependencies) |
+| [`chordsketch-render-text`](crates/render-text) | Plain text renderer |
+| [`chordsketch-render-html`](crates/render-html) | HTML renderer |
+| [`chordsketch-render-pdf`](crates/render-pdf) | PDF renderer |
+| [`chordsketch`](crates/cli) | Command-line tool |
 
 ## Links
 
@@ -95,4 +95,6 @@ println!("{text}");
 
 ## License
 
-[MIT](LICENSE)
+SDK crates (core, renderers, CLI): [MIT](LICENSE)
+
+Future application layer (Forum, Playground, Desktop): AGPL-3.0-only
