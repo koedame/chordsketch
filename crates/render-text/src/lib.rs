@@ -1,12 +1,12 @@
 //! Plain text renderer for ChordPro documents.
 //!
-//! This crate converts a parsed ChordPro AST (from `chordpro-core`) into
+//! This crate converts a parsed ChordPro AST (from `chordsketch-core`) into
 //! formatted plain text with chords aligned above their corresponding lyrics.
 
-use chordpro_core::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
-use chordpro_core::config::Config;
-use chordpro_core::render_result::RenderResult;
-use chordpro_core::transpose::transpose_chord;
+use chordsketch_core::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
+use chordsketch_core::config::Config;
+use chordsketch_core::render_result::RenderResult;
+use chordsketch_core::transpose::transpose_chord;
 use unicode_width::UnicodeWidthStr;
 
 /// Maximum number of chorus recall directives allowed per song.
@@ -89,7 +89,7 @@ fn render_song_impl(
     let song_transpose_delta = Config::song_transpose_delta(&song_overrides);
     let mut output = Vec::new();
     let (combined_transpose, _) =
-        chordpro_core::transpose::combine_transpose(cli_transpose, song_transpose_delta);
+        chordsketch_core::transpose::combine_transpose(cli_transpose, song_transpose_delta);
     let mut transpose_offset: i8 = combined_transpose;
     // Stores the AST lines of the most recently defined chorus body.
     // Re-rendered at recall time so the current transpose offset is applied.
@@ -122,7 +122,7 @@ fn render_song_impl(
                         .and_then(|v| v.parse().ok())
                         .unwrap_or(0);
                     let (combined, saturated) =
-                        chordpro_core::transpose::combine_transpose(file_offset, cli_transpose);
+                        chordsketch_core::transpose::combine_transpose(file_offset, cli_transpose);
                     if saturated {
                         warnings.push(format!(
                             "transpose offset {file_offset} + {cli_transpose} \
@@ -246,13 +246,13 @@ pub fn render_songs_with_warnings(
 
 /// Parse a ChordPro source string and render it to plain text.
 ///
-/// Returns `Ok(text)` on success, or the [`chordpro_core::ParseError`] if
+/// Returns `Ok(text)` on success, or the [`chordsketch_core::ParseError`] if
 /// the input cannot be parsed.
 ///
 /// For pre-parsed input, use [`render_song`] directly.
 #[must_use = "parse errors should be handled"]
-pub fn try_render(input: &str) -> Result<String, chordpro_core::ParseError> {
-    let song = chordpro_core::parse(input)?;
+pub fn try_render(input: &str) -> Result<String, chordsketch_core::ParseError> {
+    let song = chordsketch_core::parse(input)?;
     Ok(render_song(&song))
 }
 
@@ -283,7 +283,7 @@ pub fn render(input: &str) -> String {
 ///
 /// No trailing blank line is added — the document's own empty lines
 /// provide spacing between the metadata header and the song body.
-fn render_metadata(metadata: &chordpro_core::ast::Metadata, output: &mut Vec<String>) {
+fn render_metadata(metadata: &chordsketch_core::ast::Metadata, output: &mut Vec<String>) {
     if let Some(title) = &metadata.title {
         output.push(title.clone());
     }
@@ -372,7 +372,7 @@ fn render_lyrics(lyrics_line: &LyricsLine, transpose_offset: i8, output: &mut Ve
 /// - Section end directives are not rendered (they are structural markers).
 /// - Metadata directives are not rendered here (handled by `render_metadata`).
 /// - Unknown directives are silently ignored.
-fn render_directive(directive: &chordpro_core::ast::Directive, output: &mut Vec<String>) {
+fn render_directive(directive: &chordsketch_core::ast::Directive, output: &mut Vec<String>) {
     match &directive.kind {
         DirectiveKind::StartOfChorus => {
             render_section_header("Chorus", &directive.value, output);
@@ -403,7 +403,7 @@ fn render_directive(directive: &chordpro_core::ast::Directive, output: &mut Vec<
         }
         DirectiveKind::StartOfSection(section_name) => {
             // Capitalize the first letter of the section name for display.
-            let label = chordpro_core::capitalize(section_name);
+            let label = chordsketch_core::capitalize(section_name);
             render_section_header(&label, &directive.value, output);
         }
         DirectiveKind::Image(attrs) => {
@@ -588,7 +588,7 @@ mod tests {
 
     #[test]
     fn test_render_song_api() {
-        let song = chordpro_core::parse("{title: Test}\n[Am]Hello").unwrap();
+        let song = chordsketch_core::parse("{title: Test}\n[Am]Hello").unwrap();
         let output = render_song(&song);
         assert!(output.contains("Test"));
         assert!(output.contains("Am"));
@@ -733,7 +733,7 @@ mod multi_song_tests {
 
     #[test]
     fn test_render_songs_two_songs() {
-        let songs = chordpro_core::parse_multi(
+        let songs = chordsketch_core::parse_multi(
             "{title: Song One}\n[Am]Hello\n{new_song}\n{title: Song Two}\n[G]World",
         )
         .unwrap();
@@ -754,7 +754,7 @@ mod multi_song_tests {
 
     #[test]
     fn test_render_songs_single_song() {
-        let songs = chordpro_core::parse_multi("{title: Only One}\nLyrics").unwrap();
+        let songs = chordsketch_core::parse_multi("{title: Only One}\nLyrics").unwrap();
         let output = render_songs(&songs);
         assert_eq!(output, render_song(&songs[0]));
     }
@@ -762,7 +762,7 @@ mod multi_song_tests {
     #[test]
     fn test_render_songs_with_transpose() {
         let songs =
-            chordpro_core::parse_multi("{title: S1}\n[C]Do\n{new_song}\n{title: S2}\n[G]Re")
+            chordsketch_core::parse_multi("{title: S1}\n[C]Do\n{new_song}\n{title: S2}\n[G]Re")
                 .unwrap();
         let output = render_songs_with_transpose(&songs, 2, &Config::defaults());
         // C+2=D, G+2=A
@@ -778,7 +778,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_up_2() {
         let input = "{transpose: 2}\n[G]Hello [C]world";
-        let song = chordpro_core::parse(input).unwrap();
+        let song = chordsketch_core::parse(input).unwrap();
         let output = render_song(&song);
         // G+2=A, C+2=D
         assert_eq!(output, "A     D\nHello world\n");
@@ -787,7 +787,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_down_3() {
         let input = "{transpose: -3}\n[Am]Hello [Em]world";
-        let song = chordpro_core::parse(input).unwrap();
+        let song = chordsketch_core::parse(input).unwrap();
         let output = render_song(&song);
         // Am-3=F#m, Em-3=C#m
         assert_eq!(output, "F#m   C#m\nHello world\n");
@@ -796,7 +796,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_replaces_previous() {
         let input = "{transpose: 2}\n[G]First\n{transpose: -1}\n[G]Second";
-        let song = chordpro_core::parse(input).unwrap();
+        let song = chordsketch_core::parse(input).unwrap();
         let output = render_song(&song);
         // First line: G+2=A, Second line: G-1=F#
         assert!(output.contains("A\nFirst"));
@@ -806,7 +806,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_zero_resets() {
         let input = "{transpose: 5}\n[C]Up\n{transpose: 0}\n[C]Normal";
-        let song = chordpro_core::parse(input).unwrap();
+        let song = chordsketch_core::parse(input).unwrap();
         let output = render_song(&song);
         // First line: C+5=F, Second line: C+0=C
         assert!(output.contains("F\nUp"));
@@ -816,7 +816,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_with_cli_offset() {
         let input = "{transpose: 2}\n[C]Hello";
-        let song = chordpro_core::parse(input).unwrap();
+        let song = chordsketch_core::parse(input).unwrap();
         let output = render_song_with_transpose(&song, 3, &Config::defaults());
         // In-file 2 + CLI 3 = 5 total. C+5=F
         assert!(output.contains("F\nHello"));
@@ -825,7 +825,7 @@ mod transpose_tests {
     #[test]
     fn test_cli_transpose_without_directive() {
         let input = "[G]Hello [C]world";
-        let song = chordpro_core::parse(input).unwrap();
+        let song = chordsketch_core::parse(input).unwrap();
         let output = render_song_with_transpose(&song, 2, &Config::defaults());
         // CLI offset only: G+2=A, C+2=D
         assert_eq!(output, "A     D\nHello world\n");
@@ -834,7 +834,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_replaces_with_cli_additive() {
         let input = "{transpose: 2}\n[C]First\n{transpose: -1}\n[C]Second";
-        let song = chordpro_core::parse(input).unwrap();
+        let song = chordsketch_core::parse(input).unwrap();
         let output = render_song_with_transpose(&song, 1, &Config::defaults());
         // First: 2+1=3, C+3=D#. Second: -1+1=0, C+0=C
         assert!(output.contains("D#\nFirst"));
@@ -844,7 +844,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_no_chord_lyrics_unaffected() {
         let input = "{transpose: 5}\nPlain lyrics no chords";
-        let song = chordpro_core::parse(input).unwrap();
+        let song = chordsketch_core::parse(input).unwrap();
         let output = render_song(&song);
         assert_eq!(output, "Plain lyrics no chords\n");
     }
@@ -852,7 +852,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_invalid_value_treated_as_zero() {
         let input = "{transpose: abc}\n[G]Hello";
-        let song = chordpro_core::parse(input).unwrap();
+        let song = chordsketch_core::parse(input).unwrap();
         let output = render_song(&song);
         // Invalid value -> treated as 0
         assert!(output.contains("G\nHello"));
@@ -861,7 +861,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_no_value_treated_as_zero() {
         let input = "{transpose}\n[G]Hello";
-        let song = chordpro_core::parse(input).unwrap();
+        let song = chordsketch_core::parse(input).unwrap();
         let output = render_song(&song);
         // No value -> treated as 0
         assert!(output.contains("G\nHello"));
@@ -1115,12 +1115,12 @@ mod delegate_tests {
     #[test]
     fn test_selector_filtering_removes_non_matching_directive() {
         let input = "{title: Song}\n{textfont-piano: Courier}\n[Am]Hello";
-        let song = chordpro_core::parse(input).unwrap();
-        let ctx = chordpro_core::selector::SelectorContext::new(Some("guitar"), None);
+        let song = chordsketch_core::parse(input).unwrap();
+        let ctx = chordsketch_core::selector::SelectorContext::new(Some("guitar"), None);
         let filtered = ctx.filter_song(&song);
         // The piano textfont directive should be absent from the filtered song.
         let has_textfont = filtered.lines.iter().any(|l| {
-            matches!(l, chordpro_core::ast::Line::Directive(d) if d.kind == chordpro_core::ast::DirectiveKind::TextFont)
+            matches!(l, chordsketch_core::ast::Line::Directive(d) if d.kind == chordsketch_core::ast::DirectiveKind::TextFont)
         });
         assert!(
             !has_textfont,
@@ -1133,8 +1133,8 @@ mod delegate_tests {
     #[test]
     fn test_selector_filtering_removes_section_with_contents() {
         let input = "{title: Song}\n{start_of_chorus-piano}\n[C]Piano only\n{end_of_chorus-piano}\n[Am]Guitar verse";
-        let song = chordpro_core::parse(input).unwrap();
-        let ctx = chordpro_core::selector::SelectorContext::new(Some("guitar"), None);
+        let song = chordsketch_core::parse(input).unwrap();
+        let ctx = chordsketch_core::selector::SelectorContext::new(Some("guitar"), None);
         let filtered = ctx.filter_song(&song);
         let output = render_song(&filtered);
         assert!(

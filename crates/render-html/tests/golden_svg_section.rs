@@ -12,7 +12,7 @@ fn svg_section_html_golden() {
         .expect("read expected.html")
         .replace("\r\n", "\n");
 
-    let actual = chordpro_render_html::render(&input);
+    let actual = chordsketch_render_html::render(&input);
 
     assert_eq!(
         actual, expected,

@@ -1,6 +1,6 @@
 //! Parse a ChordPro string and render it to plain text.
 //!
-//! Run with: `cargo run --example render_text -p chordpro-render-text`
+//! Run with: `cargo run --example render_text -p chordsketch-render-text`
 
 fn main() {
     let input = "\
@@ -13,8 +13,8 @@ That [G]saved a [Em]wretch like [D]me.
 {end_of_verse}
 ";
 
-    let song = chordpro_core::parse(input).expect("parse failed");
-    let text = chordpro_render_text::render_song(&song);
+    let song = chordsketch_core::parse(input).expect("parse failed");
+    let text = chordsketch_render_text::render_song(&song);
 
     println!("{text}");
 }

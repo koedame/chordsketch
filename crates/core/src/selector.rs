@@ -8,7 +8,7 @@
 //! # Examples
 //!
 //! ```
-//! use chordpro_core::selector::SelectorContext;
+//! use chordsketch_core::selector::SelectorContext;
 //!
 //! let ctx = SelectorContext::new(Some("guitar"), None);
 //! assert!(ctx.matches(None));           // No selector = always matches

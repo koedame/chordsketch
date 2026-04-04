@@ -27,6 +27,19 @@ body:
         - "Phase 4: CLI"
         - "Phase 5: Extended Directives"
         - "Phase 6: Additional Renderers"
+        - "Phase 7: Missing Metadata"
+        - "Phase 8: Additional Section Environments"
+        - "Phase 9: Inline Markup"
+        - "Phase 10: Font, Size, Color Directives"
+        - "Phase 11: Page Control and Multi-page PDF"
+        - "Phase 12: Image Directive"
+        - "Phase 13: Configuration File System"
+        - "Phase 14: Chord Diagram Rendering"
+        - "Phase 15: Delegate Environments"
+        - "Phase 16: Conditional Directive Selectors"
+        - "Phase 17: Multi-song Files"
+        - "Phase 18: Perl Compatibility Testing"
+        - "Phase 19: Production Readiness & Publishing"
     validations:
       required: true
   - type: dropdown

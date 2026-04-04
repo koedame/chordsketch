@@ -1,16 +1,16 @@
-# chordpro-render-text
+# chordsketch-render-text
 
 Plain text renderer for [ChordPro](https://www.chordpro.org/) documents.
 Renders songs with chords positioned above lyrics using Unicode-aware
 column alignment.
 
-Part of the [chordpro-rs](https://github.com/koedame/chordpro-rs) project.
+Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 
 ## Usage
 
 ```rust
-use chordpro_core::parser::parse;
-use chordpro_render_text::render_song;
+use chordsketch_core::parser::parse;
+use chordsketch_render_text::render_song;
 
 let input = "{title: Amazing Grace}\n[G]Amazing [G7]grace";
 let song = parse(input).unwrap();
@@ -27,7 +27,7 @@ println!("{text}");
 
 ## Documentation
 
-[API documentation on docs.rs](https://docs.rs/chordpro-render-text)
+[API documentation on docs.rs](https://docs.rs/chordsketch-render-text)
 
 ## License
 

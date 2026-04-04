@@ -2,18 +2,18 @@
 
 ## Reporting Vulnerabilities
 
-If you discover a security vulnerability in chordpro-rs, please report it
+If you discover a security vulnerability in ChordSketch, please report it
 responsibly by [opening a GitHub security advisory][advisory]. Do **not** file
 a public issue for security-sensitive reports.
 
-[advisory]: https://github.com/koedame/chordpro-rs/security/advisories/new
+[advisory]: https://github.com/koedame/chordsketch/security/advisories/new
 
 We aim to acknowledge reports within 72 hours and provide a fix or mitigation
 plan within 30 days.
 
 ## Threat Model
 
-chordpro-rs processes **untrusted** `.cho` (ChordPro) files and renders them to
+ChordSketch processes **untrusted** `.cho` (ChordPro) files and renders them to
 text, HTML, and PDF. The primary threat is a malicious or crafted input file
 attempting to:
 
@@ -125,7 +125,7 @@ Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src 
 
 ## Dependency Policy
 
-- `chordpro-core` has **zero external dependencies**. All parsing, validation,
+- `chordsketch-core` has **zero external dependencies**. All parsing, validation,
   and sanitization logic is implemented from scratch.
 - Renderer crates use minimal, well-audited dependencies (`unicode-width`,
   `flate2`).

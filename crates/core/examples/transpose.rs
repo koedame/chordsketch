@@ -1,8 +1,8 @@
 //! Parse a ChordPro string and transpose all chords up by 2 semitones.
 //!
-//! Run with: `cargo run --example transpose -p chordpro-core`
+//! Run with: `cargo run --example transpose -p chordsketch-core`
 
-use chordpro_core::transpose::transpose;
+use chordsketch_core::transpose::transpose;
 
 fn main() {
     let input = "\
@@ -12,7 +12,7 @@ fn main() {
 [F]Gently [G]down the [C]stream.
 ";
 
-    let song = chordpro_core::parse(input).expect("parse failed");
+    let song = chordsketch_core::parse(input).expect("parse failed");
     let transposed = transpose(&song, 2);
 
     println!("Original key directives:");

@@ -38,7 +38,7 @@ use crate::inline_markup::TextSpan;
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::ast::{Song, Metadata};
+/// use chordsketch_core::ast::{Song, Metadata};
 ///
 /// let song = Song::new();
 /// assert!(song.lines.is_empty());
@@ -294,7 +294,7 @@ pub enum CommentStyle {
 /// The input `[Am]Hello [G]world` produces:
 ///
 /// ```
-/// use chordpro_core::ast::{LyricsLine, LyricsSegment, Chord};
+/// use chordsketch_core::ast::{LyricsLine, LyricsSegment, Chord};
 ///
 /// let line = LyricsLine {
 ///     segments: vec![
@@ -540,7 +540,7 @@ impl core::fmt::Display for Chord {
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::ast::ImageAttributes;
+/// use chordsketch_core::ast::ImageAttributes;
 ///
 /// let attrs = ImageAttributes::new("photo.jpg");
 /// assert_eq!(attrs.src, "photo.jpg");
@@ -653,7 +653,7 @@ fn extract_attribute(s: &mut String, key: &str) -> Option<String> {
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::ast::ChordDefinition;
+/// use chordsketch_core::ast::ChordDefinition;
 ///
 /// let def = ChordDefinition::parse_value("Am keys 0 3 7");
 /// assert_eq!(def.name, "Am");
@@ -1484,7 +1484,7 @@ impl DirectiveKind {
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::ast::{Directive, DirectiveKind};
+/// use chordsketch_core::ast::{Directive, DirectiveKind};
 ///
 /// // {title: My Song}
 /// let d = Directive::with_value("title", "My Song");

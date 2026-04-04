@@ -7,7 +7,7 @@
 //! # Examples
 //!
 //! ```
-//! use chordpro_core::chord_diagram::{DiagramData, render_svg};
+//! use chordsketch_core::chord_diagram::{DiagramData, render_svg};
 //!
 //! let data = DiagramData {
 //!     name: "Am".to_string(),

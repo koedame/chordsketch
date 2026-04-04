@@ -16,7 +16,7 @@
 //! # Examples
 //!
 //! ```
-//! use chordpro_core::inline_markup::{TextSpan, parse_inline_markup};
+//! use chordsketch_core::inline_markup::{TextSpan, parse_inline_markup};
 //!
 //! let spans = parse_inline_markup("<b>Hello</b> world");
 //! assert_eq!(spans, vec![
@@ -124,7 +124,7 @@ pub fn has_inline_markup(text: &str) -> bool {
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::inline_markup::{TextSpan, parse_inline_markup};
+/// use chordsketch_core::inline_markup::{TextSpan, parse_inline_markup};
 ///
 /// // No markup
 /// let spans = parse_inline_markup("plain text");

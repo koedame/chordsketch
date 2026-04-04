@@ -1,6 +1,6 @@
 # Configuration Guide
 
-chordpro-rs uses a layered configuration system that merges settings from
+ChordSketch uses a layered configuration system that merges settings from
 multiple sources. Later sources override earlier ones.
 
 ## Configuration Hierarchy
@@ -10,9 +10,9 @@ Settings are loaded and deep-merged in this order (highest precedence last):
 | Priority | Source | Location |
 |----------|--------|----------|
 | 1 (lowest) | Built-in defaults | Hardcoded in the binary |
-| 2 | System config | `/etc/chordpro.json` |
-| 3 | User config | `~/.config/chordpro/chordpro.json` (or `$XDG_CONFIG_HOME/chordpro/chordpro.json`) |
-| 4 | Project config | `chordpro.json` in the song file's directory |
+| 2 | System config | `/etc/chordsketch.json` |
+| 3 | User config | `~/.config/chordsketch/chordsketch.json` (or `$XDG_CONFIG_HOME/chordsketch/chordsketch.json`) |
+| 4 | Project config | `chordsketch.json` in the song file's directory |
 | 5 | CLI `--config` files | Specified via `-c` / `--config` (may be repeated) |
 | 6 | CLI `--define` values | Specified via `-D` / `--define` |
 | 7 (highest) | Song-level overrides | `{+config.KEY: VALUE}` directives inside the song file |
@@ -66,15 +66,15 @@ Load one or more configuration files. May be specified multiple times; files are
 merged in order.
 
 ```bash
-chordpro -c custom.json song.cho
-chordpro -c base.json -c overrides.json song.cho
+chordsketch -c custom.json song.cho
+chordsketch -c base.json -c overrides.json song.cho
 ```
 
 You can also pass a preset name instead of a file path:
 
 ```bash
-chordpro -c guitar song.cho
-chordpro -c ukulele song.cho
+chordsketch -c guitar song.cho
+chordsketch -c ukulele song.cho
 ```
 
 Available presets: `guitar`, `ukulele`.
@@ -85,8 +85,8 @@ Set a configuration value at runtime. Takes the highest precedence among CLI
 options. Format: `key=value`.
 
 ```bash
-chordpro -D settings.columns=2 song.cho
-chordpro -D pdf.chorus.indent=30 song.cho
+chordsketch -D settings.columns=2 song.cho
+chordsketch -D pdf.chorus.indent=30 song.cho
 ```
 
 ### `--no-default-configs`
@@ -95,7 +95,7 @@ Skip loading system, user, and project config files. Only built-in defaults are
 used as the base. `--config` and `--define` still apply on top.
 
 ```bash
-chordpro --no-default-configs -c myconfig.json song.cho
+chordsketch --no-default-configs -c myconfig.json song.cho
 ```
 
 ### `--instrument`
@@ -104,7 +104,7 @@ Set the active instrument for selector filtering. Equivalent to
 `--define instrument.type=<INSTRUMENT>`.
 
 ```bash
-chordpro --instrument piano song.cho
+chordsketch --instrument piano song.cho
 ```
 
 ## Configuration Sections

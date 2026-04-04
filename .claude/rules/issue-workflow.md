@@ -78,7 +78,7 @@ All review findings must be:
 
 ```bash
 # Get node ID of an issue
-gh issue view NUMBER --json id -q .id -R koedame/chordpro-rs
+gh issue view NUMBER --json id -q .id -R koedame/chordsketch
 
 # Link child to parent
 gh api graphql -f query='

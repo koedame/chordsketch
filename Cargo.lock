@@ -128,47 +128,48 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
-name = "chordpro"
+name = "chordsketch"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
- "chordpro-core",
- "chordpro-render-html",
- "chordpro-render-pdf",
- "chordpro-render-text",
+ "chordsketch-core",
+ "chordsketch-render-html",
+ "chordsketch-render-pdf",
+ "chordsketch-render-text",
  "clap",
+ "clap_complete",
  "predicates",
  "tempfile",
 ]
 
 [[package]]
-name = "chordpro-core"
+name = "chordsketch-core"
 version = "0.1.0"
 dependencies = [
  "tempfile",
 ]
 
 [[package]]
-name = "chordpro-render-html"
+name = "chordsketch-render-html"
 version = "0.1.0"
 dependencies = [
- "chordpro-core",
+ "chordsketch-core",
 ]
 
 [[package]]
-name = "chordpro-render-pdf"
+name = "chordsketch-render-pdf"
 version = "0.1.0"
 dependencies = [
- "chordpro-core",
+ "chordsketch-core",
  "flate2",
  "libc",
 ]
 
 [[package]]
-name = "chordpro-render-text"
+name = "chordsketch-render-text"
 version = "0.1.0"
 dependencies = [
- "chordpro-core",
+ "chordsketch-core",
  "unicode-width",
 ]
 
@@ -192,6 +193,15 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim",
+]
+
+[[package]]
+name = "clap_complete"
+version = "4.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19c9f1dde76b736e3681f28cec9d5a61299cbaae0fce80a68e43724ad56031eb"
+dependencies = [
+ "clap",
 ]
 
 [[package]]

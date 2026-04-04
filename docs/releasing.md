@@ -40,13 +40,13 @@ changes.
 
 6. **Publish to crates.io** in dependency order:
    ```bash
-   cargo publish -p chordpro-core
+   cargo publish -p chordsketch-core
    # Wait ~30 seconds for the crates.io index to update
-   cargo publish -p chordpro-render-text
-   cargo publish -p chordpro-render-html
-   cargo publish -p chordpro-render-pdf
+   cargo publish -p chordsketch-render-text
+   cargo publish -p chordsketch-render-html
+   cargo publish -p chordsketch-render-pdf
    # Wait ~30 seconds for renderer crates to propagate
-   cargo publish -p chordpro-rs
+   cargo publish -p chordsketch
    ```
 
 ## crates.io Publishing Order
@@ -60,11 +60,11 @@ After publishing each crate, wait for the crates.io index to update before
 publishing dependents. This typically takes 10-30 seconds.
 
 Publishing order:
-1. `chordpro-core` (no internal dependencies)
-2. `chordpro-render-text` (depends on `chordpro-core`)
-3. `chordpro-render-html` (depends on `chordpro-core`)
-4. `chordpro-render-pdf` (depends on `chordpro-core`)
-5. `chordpro-rs` (depends on all four above)
+1. `chordsketch-core` (no internal dependencies)
+2. `chordsketch-render-text` (depends on `chordsketch-core`)
+3. `chordsketch-render-html` (depends on `chordsketch-core`)
+4. `chordsketch-render-pdf` (depends on `chordsketch-core`)
+5. `chordsketch` (depends on all four above)
 
 Steps 2-4 can be published in any order among themselves, but all must complete
 before step 5.
@@ -73,4 +73,4 @@ before step 5.
 
 - Verify the GitHub Release page has all binary archives
 - Verify each crate appears on crates.io
-- Verify `cargo install chordpro-rs` works
+- Verify `cargo install chordsketch` works
