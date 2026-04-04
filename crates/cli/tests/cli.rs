@@ -523,3 +523,43 @@ fn test_song_config_override_combined_with_cli_transpose() {
         .stdout(predicate::str::contains("A#"))
         .stdout(predicate::str::contains("Hello world"));
 }
+
+#[test]
+fn test_completions_bash() {
+    Command::cargo_bin("chordpro")
+        .unwrap()
+        .args(["--completions", "bash"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("_chordpro"));
+}
+
+#[test]
+fn test_completions_zsh() {
+    Command::cargo_bin("chordpro")
+        .unwrap()
+        .args(["--completions", "zsh"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("#compdef chordpro"));
+}
+
+#[test]
+fn test_completions_fish() {
+    Command::cargo_bin("chordpro")
+        .unwrap()
+        .args(["--completions", "fish"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("complete -c chordpro"));
+}
+
+#[test]
+fn test_completions_powershell() {
+    Command::cargo_bin("chordpro")
+        .unwrap()
+        .args(["--completions", "powershell"])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty().not());
+}
