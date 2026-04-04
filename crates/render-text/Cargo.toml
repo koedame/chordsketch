@@ -13,5 +13,5 @@ description = "Plain text renderer for ChordPro documents"
 readme = "README.md"
 
 [dependencies]
-chordpro-core = { path = "../core" }
+chordpro-core = { version = "0.1.0", path = "../core" }
 unicode-width = "0.2.2"
