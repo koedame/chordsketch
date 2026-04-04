@@ -17,10 +17,10 @@ name = "chordpro"
 path = "src/main.rs"
 
 [dependencies]
-chordpro-core = { path = "../core" }
-chordpro-render-text = { path = "../render-text" }
-chordpro-render-html = { path = "../render-html" }
-chordpro-render-pdf = { path = "../render-pdf" }
+chordpro-core = { version = "0.1.0", path = "../core" }
+chordpro-render-text = { version = "0.1.0", path = "../render-text" }
+chordpro-render-html = { version = "0.1.0", path = "../render-html" }
+chordpro-render-pdf = { version = "0.1.0", path = "../render-pdf" }
 clap = { version = "4", features = ["derive"] }
 
 [dev-dependencies]
