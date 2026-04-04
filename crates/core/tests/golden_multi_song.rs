@@ -24,7 +24,7 @@ fn multi_song_golden_test() {
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", input_path.display()));
 
     let songs =
-        chordpro_core::parse_multi(&input).unwrap_or_else(|e| panic!("parse_multi error: {e}"));
+        chordsketch_core::parse_multi(&input).unwrap_or_else(|e| panic!("parse_multi error: {e}"));
 
     let actual = format!("{:#?}\n", songs);
 
@@ -39,7 +39,7 @@ fn multi_song_golden_test() {
     let expected = fs::read_to_string(&expected_path)
         .unwrap_or_else(|e| {
             panic!(
-                "cannot read {} (run `UPDATE_GOLDEN=1 cargo test -p chordpro-core --test golden_multi_song` to create it): {e}",
+                "cannot read {} (run `UPDATE_GOLDEN=1 cargo test -p chordsketch-core --test golden_multi_song` to create it): {e}",
                 expected_path.display()
             )
         })
@@ -47,6 +47,6 @@ fn multi_song_golden_test() {
 
     assert_eq!(
         expected, actual,
-        "multi-song golden test failed! Run `UPDATE_GOLDEN=1 cargo test -p chordpro-core --test golden_multi_song` to update."
+        "multi-song golden test failed! Run `UPDATE_GOLDEN=1 cargo test -p chordsketch-core --test golden_multi_song` to update."
     );
 }

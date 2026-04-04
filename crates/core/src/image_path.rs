@@ -2,7 +2,7 @@
 //!
 //! These helpers are used by multiple renderers to reject unsafe image
 //! paths (directory traversal, absolute paths, Windows-style paths).
-//! Centralising them in `chordpro-core` avoids duplication and ensures
+//! Centralising them in `chordsketch-core` avoids duplication and ensures
 //! consistent security behaviour across all renderers.
 
 /// Check whether a path string looks like a Windows absolute path.
@@ -13,7 +13,7 @@
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::image_path::is_windows_absolute;
+/// use chordsketch_core::image_path::is_windows_absolute;
 ///
 /// assert!(is_windows_absolute(r"C:\photo.jpg"));
 /// assert!(is_windows_absolute(r"\\server\share"));
@@ -45,7 +45,7 @@ pub fn is_windows_absolute(path: &str) -> bool {
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::image_path::has_traversal;
+/// use chordsketch_core::image_path::has_traversal;
 ///
 /// assert!(has_traversal("../photo.jpg"));
 /// assert!(has_traversal(r"images\..\..\etc\passwd"));

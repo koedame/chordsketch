@@ -18,7 +18,7 @@
 //! The [`parse`] function combines lexing and parsing into a single step:
 //!
 //! ```
-//! use chordpro_core::parser::parse;
+//! use chordsketch_core::parser::parse;
 //!
 //! let song = parse("{title: Hello}\n[Am]World").unwrap();
 //! assert_eq!(song.metadata.title.as_deref(), Some("Hello"));
@@ -102,7 +102,7 @@ impl std::error::Error for ParseError {}
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::parser::parse_lenient;
+/// use chordsketch_core::parser::parse_lenient;
 ///
 /// let result = parse_lenient("{title: Test}\n[Am\nHello world");
 /// assert_eq!(result.song.metadata.title.as_deref(), Some("Test"));
@@ -878,7 +878,7 @@ impl Parser {
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::parser::parse;
+/// use chordsketch_core::parser::parse;
 ///
 /// let song = parse("{title: Hello World}\n[Am]La la la").unwrap();
 /// assert_eq!(song.metadata.title.as_deref(), Some("Hello World"));
@@ -952,7 +952,7 @@ pub fn parse_with_options(input: &str, options: &ParseOptions) -> Result<Song, P
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::parser::parse_lenient;
+/// use chordsketch_core::parser::parse_lenient;
 ///
 /// let result = parse_lenient("{title: Test}\n{bad\n[G]Hello");
 /// assert!(result.has_errors());
@@ -1109,7 +1109,7 @@ fn split_at_new_song(input: &str) -> Vec<&str> {
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::parser::parse_multi;
+/// use chordsketch_core::parser::parse_multi;
 ///
 /// let input = "{title: Song One}\nLyrics one\n{new_song}\n{title: Song Two}\nLyrics two";
 /// let songs = parse_multi(input).unwrap();
@@ -1171,7 +1171,7 @@ pub fn parse_multi_with_options(
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::parser::parse_multi_lenient;
+/// use chordsketch_core::parser::parse_multi_lenient;
 ///
 /// let input = "{title: Song One}\n[Am\n{new_song}\n{title: Song Two}\n[G]Hello";
 /// let result = parse_multi_lenient(input);
@@ -1250,8 +1250,8 @@ fn truncate_string(s: String, max_bytes: usize) -> String {
 /// # Examples
 ///
 /// ```
-/// # use chordpro_core::parser::parse_image_attributes;
-/// # use chordpro_core::ast::ImageAttributes;
+/// # use chordsketch_core::parser::parse_image_attributes;
+/// # use chordsketch_core::ast::ImageAttributes;
 /// let attrs = parse_image_attributes("src=photo.jpg width=200");
 /// assert_eq!(attrs.src, "photo.jpg");
 /// assert_eq!(attrs.width.as_deref(), Some("200"));

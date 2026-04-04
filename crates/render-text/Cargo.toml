@@ -1,5 +1,5 @@
 [package]
-name = "chordpro-render-text"
+name = "chordsketch-render-text"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -13,5 +13,5 @@ description = "Plain text renderer for ChordPro documents"
 readme = "README.md"
 
 [dependencies]
-chordpro-core = { version = "0.1.0", path = "../core" }
+chordsketch-core = { version = "0.1.0", path = "../core" }
 unicode-width = "0.2.2"

@@ -1,6 +1,6 @@
 //! Parse a multi-song ChordPro file and list each song's title.
 //!
-//! Run with: `cargo run --example multi_song -p chordpro-core`
+//! Run with: `cargo run --example multi_song -p chordsketch-core`
 
 fn main() {
     let input = "\
@@ -18,7 +18,7 @@ fn main() {
 [G]Third song [D]lyrics.
 ";
 
-    let songs = chordpro_core::parse_multi(input).expect("parse failed");
+    let songs = chordsketch_core::parse_multi(input).expect("parse failed");
 
     println!("Found {} songs:", songs.len());
     for (i, song) in songs.iter().enumerate() {

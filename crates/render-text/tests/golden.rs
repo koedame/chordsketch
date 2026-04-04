@@ -1,8 +1,8 @@
 //! Golden tests for the plain text renderer.
 //!
 //! This integration test discovers all subdirectories under `tests/fixtures/`,
-//! parses each `input.cho` file through [`chordpro_core::parse`], renders it
-//! to plain text via [`chordpro_render_text::render_song`], and compares the
+//! parses each `input.cho` file through [`chordsketch_core::parse`], renders it
+//! to plain text via [`chordsketch_render_text::render_song`], and compares the
 //! output against the corresponding `expected.txt` file.
 //!
 //! # Adding a new golden test
@@ -10,7 +10,7 @@
 //! 1. Create a new subdirectory under `crates/render-text/tests/fixtures/` with
 //!    a descriptive kebab-case name.
 //! 2. Add an `input.cho` file containing the ChordPro source to render.
-//! 3. Run `UPDATE_GOLDEN=1 cargo test -p chordpro-render-text --test golden` to
+//! 3. Run `UPDATE_GOLDEN=1 cargo test -p chordsketch-render-text --test golden` to
 //!    automatically generate the `expected.txt` file from the current renderer
 //!    output.
 //! 4. Review the generated `expected.txt` to confirm it matches the intended
@@ -21,7 +21,7 @@
 //! When the renderer output changes intentionally, run:
 //!
 //! ```sh
-//! UPDATE_GOLDEN=1 cargo test -p chordpro-render-text --test golden
+//! UPDATE_GOLDEN=1 cargo test -p chordsketch-render-text --test golden
 //! ```
 
 use std::fs;
@@ -124,9 +124,10 @@ fn run_golden_test(fixture_dir: &Path) {
     let input = fs::read_to_string(&input_path)
         .unwrap_or_else(|e| panic!("[{name}] cannot read {}: {e}", input_path.display()));
 
-    let song = chordpro_core::parse(&input).unwrap_or_else(|e| panic!("[{name}] parse error: {e}"));
+    let song =
+        chordsketch_core::parse(&input).unwrap_or_else(|e| panic!("[{name}] parse error: {e}"));
 
-    let actual = chordpro_render_text::render_song(&song);
+    let actual = chordsketch_render_text::render_song(&song);
 
     if std::env::var("UPDATE_GOLDEN").is_ok() {
         fs::write(&expected_path, &actual)
@@ -137,7 +138,7 @@ fn run_golden_test(fixture_dir: &Path) {
 
     let expected = fs::read_to_string(&expected_path).unwrap_or_else(|e| {
         panic!(
-            "[{name}] cannot read {} (run `UPDATE_GOLDEN=1 cargo test -p chordpro-render-text --test golden` to create it): {e}",
+            "[{name}] cannot read {} (run `UPDATE_GOLDEN=1 cargo test -p chordsketch-render-text --test golden` to create it): {e}",
             expected_path.display()
         )
     });
@@ -153,7 +154,7 @@ fn run_golden_test(fixture_dir: &Path) {
              {diff}\n\
              \n\
              If this change is intentional, run:\n\
-             UPDATE_GOLDEN=1 cargo test -p chordpro-render-text --test golden\n",
+             UPDATE_GOLDEN=1 cargo test -p chordsketch-render-text --test golden\n",
             fixture_dir.display(),
             expected_path.display(),
         );

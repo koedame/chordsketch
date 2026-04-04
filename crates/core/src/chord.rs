@@ -130,7 +130,7 @@ impl core::fmt::Display for ChordQuality {
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::chord::{ChordDetail, Note, Accidental, ChordQuality, parse_chord};
+/// use chordsketch_core::chord::{ChordDetail, Note, Accidental, ChordQuality, parse_chord};
 ///
 /// let detail = parse_chord("C#m7").unwrap();
 /// assert_eq!(detail.root, Note::C);
@@ -199,7 +199,7 @@ impl core::fmt::Display for ChordDetail {
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::chord::{parse_chord, Note, ChordQuality};
+/// use chordsketch_core::chord::{parse_chord, Note, ChordQuality};
 ///
 /// let detail = parse_chord("Am").unwrap();
 /// assert_eq!(detail.root, Note::A);

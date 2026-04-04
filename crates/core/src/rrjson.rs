@@ -11,7 +11,7 @@
 //! # Examples
 //!
 //! ```
-//! use chordpro_core::rrjson::{parse_rrjson, Value};
+//! use chordsketch_core::rrjson::{parse_rrjson, Value};
 //!
 //! let input = r#"{ "key": "value", "num": 42 }"#;
 //! let value = parse_rrjson(input).unwrap();
@@ -97,7 +97,7 @@ impl Value {
     /// # Examples
     ///
     /// ```
-    /// use chordpro_core::rrjson::Value;
+    /// use chordsketch_core::rrjson::Value;
     ///
     /// let arr = Value::Array(vec![Value::Number(1.0), Value::Number(2.0)]);
     /// assert_eq!(arr.as_array().unwrap().len(), 2);
@@ -116,7 +116,7 @@ impl Value {
     /// # Examples
     ///
     /// ```
-    /// use chordpro_core::rrjson::Value;
+    /// use chordsketch_core::rrjson::Value;
     ///
     /// let obj = Value::Object(vec![("key".to_string(), Value::Bool(true))]);
     /// assert_eq!(obj.as_object().unwrap().len(), 1);

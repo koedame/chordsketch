@@ -1,7 +1,7 @@
 //! XML/HTML character escaping utilities.
 //!
 //! Provides a single shared escape function used by both the SVG chord diagram
-//! generator in `chordpro-core` and the HTML renderer.
+//! generator in `chordsketch-core` and the HTML renderer.
 
 /// Escape the five XML special characters.
 ///
@@ -12,7 +12,7 @@
 /// # Examples
 ///
 /// ```
-/// use chordpro_core::escape::escape_xml;
+/// use chordsketch_core::escape::escape_xml;
 ///
 /// assert_eq!(escape_xml("A&B"), "A&amp;B");
 /// assert_eq!(escape_xml("it's"), "it&apos;s");

@@ -3,8 +3,8 @@
 //! These tests parse `.cho` fixture files and verify that the parser correctly
 //! classifies directives, populates metadata, and handles short aliases.
 
-use chordpro_core::ast::{CommentStyle, DirectiveKind, Line};
-use chordpro_core::parser::parse;
+use chordsketch_core::ast::{CommentStyle, DirectiveKind, Line};
+use chordsketch_core::parser::parse;
 
 /// Reads a fixture file relative to the fixtures directory.
 fn fixture(name: &str) -> String {
