@@ -7,15 +7,20 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
+use clap_complete::Shell;
 
 /// ChordPro file processor — parse and render ChordPro songs.
 #[derive(Parser)]
 #[command(name = "chordpro", version, about)]
 struct Cli {
     /// Input ChordPro file(s) to process.
-    #[arg(required = true)]
+    #[arg(required_unless_present = "completions")]
     files: Vec<String>,
+
+    /// Generate shell completions and print to stdout.
+    #[arg(long, value_name = "SHELL")]
+    completions: Option<Shell>,
 
     /// Write output to a file instead of stdout.
     #[arg(short, long)]
@@ -67,6 +72,12 @@ enum Format {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+
+    if let Some(shell) = cli.completions {
+        let mut cmd = Cli::command();
+        clap_complete::generate(shell, &mut cmd, "chordpro", &mut io::stdout());
+        return ExitCode::SUCCESS;
+    }
 
     // Derive project directory from the first input file for project-level config.
     let project_dir = cli
