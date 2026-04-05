@@ -1,0 +1,129 @@
+name: Post-Release Package Updates
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g., v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  update-homebrew:
+    name: Update Homebrew formula
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${{ github.event.release.tag_name }}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ steps.version.outputs.tag }}" -p checksums.txt
+
+      - name: Generate formula
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+
+          # Extract SHA256 values from checksums.txt
+          SHA_AARCH64_APPLE=$(grep "aarch64-apple-darwin" checksums.txt | awk '{print $1}')
+          SHA_X86_64_APPLE=$(grep "x86_64-apple-darwin" checksums.txt | awk '{print $1}')
+          SHA_AARCH64_LINUX=$(grep "aarch64-unknown-linux-gnu" checksums.txt | awk '{print $1}')
+          SHA_X86_64_LINUX=$(grep "x86_64-unknown-linux-gnu" checksums.txt | awk '{print $1}')
+
+          # Generate formula from template
+          sed \
+            -e "s/{{VERSION}}/${VERSION}/g" \
+            -e "s/{{SHA256_AARCH64_APPLE_DARWIN}}/${SHA_AARCH64_APPLE}/g" \
+            -e "s/{{SHA256_X86_64_APPLE_DARWIN}}/${SHA_X86_64_APPLE}/g" \
+            -e "s/{{SHA256_AARCH64_UNKNOWN_LINUX_GNU}}/${SHA_AARCH64_LINUX}/g" \
+            -e "s/{{SHA256_X86_64_UNKNOWN_LINUX_GNU}}/${SHA_X86_64_LINUX}/g" \
+            packaging/homebrew/chordsketch.rb.template > chordsketch.rb
+
+          cat chordsketch.rb
+
+      - name: Push to homebrew-tap
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/koedame/homebrew-tap.git" tap
+          mkdir -p tap/Formula
+          cp chordsketch.rb tap/Formula/chordsketch.rb
+
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/chordsketch.rb
+          git commit -m "Update chordsketch to ${VERSION}"
+          git push
+
+  update-scoop:
+    name: Update Scoop manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${{ github.event.release.tag_name }}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ steps.version.outputs.tag }}" -p checksums.txt
+
+      - name: Generate manifest
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA_WINDOWS=$(grep "x86_64-pc-windows-msvc" checksums.txt | awk '{print $1}')
+
+          sed \
+            -e "s/{{VERSION}}/${VERSION}/g" \
+            -e "s/{{SHA256_X86_64_PC_WINDOWS_MSVC}}/${SHA_WINDOWS}/g" \
+            packaging/scoop/chordsketch.json.template > chordsketch.json
+
+          cat chordsketch.json
+
+      - name: Push to scoop-bucket
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/koedame/scoop-bucket.git" bucket
+          mkdir -p bucket/bucket
+          cp chordsketch.json bucket/bucket/chordsketch.json
+
+          cd bucket
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add bucket/chordsketch.json
+          git commit -m "Update chordsketch to ${VERSION}"
+          git push

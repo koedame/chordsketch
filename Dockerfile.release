@@ -1,0 +1,11 @@
+# Minimal release image for CI multi-arch builds.
+# Expects a pre-built musl binary at ./chordsketch-${TARGETARCH}.
+# Used by .github/workflows/docker.yml.
+
+FROM alpine:3
+
+ARG TARGETARCH
+COPY chordsketch-${TARGETARCH} /usr/local/bin/chordsketch
+RUN chmod +x /usr/local/bin/chordsketch
+
+ENTRYPOINT ["/usr/local/bin/chordsketch"]
