@@ -30,7 +30,7 @@ jobs:
     name: Build XCFramework
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust targets
         run: |
@@ -40,7 +40,7 @@ jobs:
           rustup target add aarch64-apple-ios-sim
           rustup target add x86_64-apple-ios
 
-      - uses: Swatinem/rust-cache@97031894c7e5700702c0bbabe624e1e4de0f0519 # v2
+      - uses: Swatinem/rust-cache@v2
         with:
           shared-key: swift
 
@@ -106,13 +106,13 @@ jobs:
           zip -r chordsketch-xcframework.zip chordsketchFFI.xcframework
 
       - name: Upload XCFramework
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@v4
         with:
           name: xcframework
           path: chordsketch-xcframework.zip
 
       - name: Upload Swift source
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@v4
         with:
           name: swift-source
           path: generated/chordsketch.swift
@@ -125,7 +125,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@v4
         with:
           name: xcframework
 
