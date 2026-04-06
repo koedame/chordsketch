@@ -1,0 +1,139 @@
+name: Swift Package
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "crates/ffi/**"
+      - "crates/core/**"
+      - "crates/render-*/**"
+      - "packages/swift/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/swift.yml"
+  pull_request:
+    paths:
+      - "crates/ffi/**"
+      - "crates/core/**"
+      - "crates/render-*/**"
+      - "packages/swift/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/swift.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-xcframework:
+    name: Build XCFramework
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust targets
+        run: |
+          rustup target add aarch64-apple-darwin
+          rustup target add x86_64-apple-darwin
+          rustup target add aarch64-apple-ios
+          rustup target add aarch64-apple-ios-sim
+          rustup target add x86_64-apple-ios
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: swift
+
+      - name: Build libraries
+        run: |
+          cargo build -p chordsketch-ffi --release --target aarch64-apple-darwin
+          cargo build -p chordsketch-ffi --release --target x86_64-apple-darwin
+          cargo build -p chordsketch-ffi --release --target aarch64-apple-ios
+          cargo build -p chordsketch-ffi --release --target aarch64-apple-ios-sim
+          cargo build -p chordsketch-ffi --release --target x86_64-apple-ios
+
+      - name: Generate Swift bindings
+        run: |
+          cargo run -p chordsketch-ffi --bin uniffi-bindgen generate \
+            --library target/aarch64-apple-darwin/release/libchordsketch_ffi.dylib \
+            --language swift \
+            --out-dir generated
+
+      - name: Create universal libraries
+        run: |
+          # macOS universal (arm64 + x86_64)
+          mkdir -p universal/macos
+          lipo -create \
+            target/aarch64-apple-darwin/release/libchordsketch_ffi.a \
+            target/x86_64-apple-darwin/release/libchordsketch_ffi.a \
+            -output universal/macos/libchordsketch_ffi.a
+
+          # iOS simulator universal (arm64 + x86_64)
+          mkdir -p universal/ios-sim
+          lipo -create \
+            target/aarch64-apple-ios-sim/release/libchordsketch_ffi.a \
+            target/x86_64-apple-ios/release/libchordsketch_ffi.a \
+            -output universal/ios-sim/libchordsketch_ffi.a
+
+      - name: Create module map
+        run: |
+          mkdir -p generated/include
+          cat > generated/include/module.modulemap << 'MODULEMAP'
+          framework module chordsketchFFI {
+            header "chordsketchFFI.h"
+            export *
+          }
+          MODULEMAP
+          cp generated/chordsketchFFI.h generated/include/
+
+      - name: Create XCFramework
+        run: |
+          xcodebuild -create-xcframework \
+            -library universal/macos/libchordsketch_ffi.a \
+            -headers generated/include \
+            -library target/aarch64-apple-ios/release/libchordsketch_ffi.a \
+            -headers generated/include \
+            -library universal/ios-sim/libchordsketch_ffi.a \
+            -headers generated/include \
+            -output chordsketchFFI.xcframework
+
+      - name: Copy generated Swift source
+        run: |
+          cp generated/chordsketch.swift packages/swift/Sources/ChordSketch/
+
+      - name: Package XCFramework
+        run: |
+          zip -r chordsketch-xcframework.zip chordsketchFFI.xcframework
+
+      - name: Upload XCFramework
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcframework
+          path: chordsketch-xcframework.zip
+
+      - name: Upload Swift source
+        uses: actions/upload-artifact@v4
+        with:
+          name: swift-source
+          path: generated/chordsketch.swift
+
+  publish:
+    name: Publish XCFramework
+    needs: [build-xcframework]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: xcframework
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          gh release upload "$TAG" chordsketch-xcframework.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
