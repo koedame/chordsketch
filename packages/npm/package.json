@@ -32,5 +32,8 @@
   },
   "sideEffects": [
     "./chordsketch_wasm.js"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
