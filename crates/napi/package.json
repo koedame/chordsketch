@@ -1,0 +1,44 @@
+{
+  "name": "@chordsketch/node",
+  "version": "0.1.0",
+  "description": "Native Node.js addon for ChordPro parsing and rendering",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/koedame/chordsketch.git",
+    "directory": "crates/napi"
+  },
+  "homepage": "https://github.com/koedame/chordsketch",
+  "keywords": [
+    "chordpro",
+    "music",
+    "chord",
+    "parser",
+    "lyrics",
+    "napi-rs"
+  ],
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "*.node",
+    "index.js",
+    "index.d.ts"
+  ],
+  "napi": {
+    "binaryName": "chordsketch-napi",
+    "targets": [
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-pc-windows-msvc"
+    ]
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.4.0"
+  },
+  "scripts": {
+    "build": "napi build --release --manifest-path Cargo.toml",
+    "build:debug": "napi build --manifest-path Cargo.toml"
+  }
+}

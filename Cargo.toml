@@ -6,6 +6,7 @@ members = [
     "crates/render-pdf",
     "crates/cli",
     "crates/wasm",
+    "crates/napi",
 ]
 resolver = "3"
 
