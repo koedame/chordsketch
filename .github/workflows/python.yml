@@ -83,8 +83,15 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact: wheels-ubuntu-latest-x86_64
+          # ubuntu-aarch64 wheel requires an arm64 runner to test natively.
+          # GitHub's ubuntu-24.04-arm runner is available but may need to be
+          # enabled for the repository. Uncomment when arm64 runners are confirmed.
+          # - os: ubuntu-24.04-arm
+          #   artifact: wheels-ubuntu-latest-aarch64
           - os: macos-latest
             artifact: wheels-macos-latest-aarch64
+          - os: macos-13
+            artifact: wheels-macos-latest-x86_64
           - os: windows-latest
             artifact: wheels-windows-latest-x64
     steps:
