@@ -115,8 +115,7 @@ jobs:
       - name: Test with Gradle
         working-directory: packages/kotlin
         run: |
-          chmod +x gradlew 2>/dev/null || true
-          ./gradlew test || gradle test
+          ./gradlew test
 
       - name: Upload generated Kotlin bindings
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -159,5 +158,4 @@ jobs:
           GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
           GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
         run: |
-          chmod +x gradlew 2>/dev/null || true
-          ./gradlew publish || gradle publish
+          ./gradlew publish
