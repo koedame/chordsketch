@@ -1,0 +1,11 @@
+PackageIdentifier: koedame.chordsketch
+PackageVersion: 0.1.0
+PackageLocale: en-US
+Publisher: koedame
+PackageName: ChordSketch
+License: MIT
+ShortDescription: ChordPro file format parser and renderer
+PackageUrl: https://github.com/koedame/chordsketch
+LicenseUrl: https://github.com/koedame/chordsketch/blob/main/LICENSE
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

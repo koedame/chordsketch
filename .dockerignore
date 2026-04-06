@@ -1,0 +1,9 @@
+target/
+.git/
+.github/
+.claude/
+.serena/
+docs/
+scripts/
+*.md
+LICENSE
