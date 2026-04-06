@@ -1,0 +1,102 @@
+name: napi-rs Native Addon
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/napi/**"
+      - "crates/core/**"
+      - "crates/render-*/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/napi.yml"
+  pull_request:
+    paths:
+      - "crates/napi/**"
+      - "crates/core/**"
+      - "crates/render-*/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/napi.yml"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            cross: true
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Rust toolchain
+        run: |
+          rustup target add ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@97031894c7e5700702c0bbabe624e1e4de0f0519 # v2
+        with:
+          shared-key: napi-${{ matrix.target }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4
+        with:
+          node-version: 22
+
+      - name: Install @napi-rs/cli
+        run: npm install -g @napi-rs/cli
+
+      - name: Install cross-compilation tools (aarch64-linux)
+        if: matrix.cross
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Build native addon
+        working-directory: crates/napi
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.cross && 'aarch64-linux-gnu-gcc' || '' }}
+        run: |
+          napi build --release --cargo-cwd . --target ${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: napi-${{ matrix.target }}
+          path: crates/napi/*.node
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@97031894c7e5700702c0bbabe624e1e4de0f0519 # v2
+        with:
+          shared-key: napi-lint
+
+      - name: Clippy
+        run: cargo clippy -p chordsketch-napi -- -D warnings
+
+      - name: Format check
+        run: cargo fmt --check -p chordsketch-napi
