@@ -23,8 +23,11 @@
 use crate::rrjson::{self, NULL, Value};
 
 use std::fmt;
+#[cfg(not(target_arch = "wasm32"))]
 use std::fs::File;
+#[cfg(not(target_arch = "wasm32"))]
 use std::io::Read;
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
@@ -255,6 +258,7 @@ impl Config {
     ///
     /// Returns [`ConfigError::Io`] if the file cannot be read, or
     /// [`ConfigError::Parse`] if the content is malformed.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn resolve(name: &str) -> Result<ConfigResolveResult, ConfigError> {
         // Try preset first
         if let Some(preset) = Self::preset(name) {
@@ -431,6 +435,7 @@ impl Config {
     /// `project_dir` is the directory containing the song file (for
     /// project-level config). `song_config` is an optional path to a
     /// song-specific config file.
+    #[cfg(not(target_arch = "wasm32"))]
     #[must_use]
     pub fn load(project_dir: Option<&str>, song_config: Option<&str>) -> ConfigLoadResult {
         let mut config = Self::defaults();
@@ -565,6 +570,7 @@ impl Config {
 
     /// Parse a configuration from a RRJSON string, collecting warnings into
     /// the provided vector.
+    #[cfg(not(target_arch = "wasm32"))]
     fn parse_collecting_warnings(
         input: &str,
         warnings: &mut Vec<String>,
@@ -598,12 +604,14 @@ fn build_nested_value(key: &str, value: Value) -> Option<Value> {
     Some(result)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Maximum config file size for trusted sources (10 MB).
 ///
 /// Applies to system configs (`/etc/chordsketch.json`), user configs
 /// (`~/.config/chordsketch/chordsketch.json`), and CLI `--config` files.
 const MAX_CONFIG_FILE_SIZE: u64 = 10 * 1024 * 1024;
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Maximum config file size for untrusted sources (1 MB).
 ///
 /// Applies to project-level (`chordsketch.json` in song directory) and
@@ -612,6 +620,7 @@ const MAX_CONFIG_FILE_SIZE: u64 = 10 * 1024 * 1024;
 /// the attack surface.
 const MAX_UNTRUSTED_CONFIG_FILE_SIZE: u64 = 1024 * 1024;
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Open a file without following symlinks.
 ///
 /// On Unix, uses `O_NOFOLLOW` via `OpenOptionsExt::custom_flags` to
@@ -673,6 +682,7 @@ fn open_no_follow(path: &Path) -> Result<File, std::io::Error> {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Read a config file with symlink and size checks.
 ///
 /// 1. Pre-open `symlink_metadata` check for a user-friendly error message.
@@ -726,6 +736,7 @@ fn read_config_file(path: &Path, max_size: u64) -> Result<String, std::io::Error
     Ok(contents)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Read a file to a String, returning None if it doesn't exist or can't be read.
 ///
 /// Rejects files that are symlinks or exceed `max_size`, emitting a warning
@@ -741,6 +752,7 @@ fn read_file_if_exists(path: &Path, max_size: u64, warnings: &mut Vec<String>) -
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Get the user's home directory as a `PathBuf`.
 fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
@@ -748,6 +760,7 @@ fn home_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Get the XDG config directory, respecting `XDG_CONFIG_HOME` and falling
 /// back to `$HOME/.config`.
 fn config_dir() -> Option<PathBuf> {
