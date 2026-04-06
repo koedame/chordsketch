@@ -33,13 +33,20 @@ This is a Cargo workspace with six crates:
 | `chordsketch-render-pdf` | `crates/render-pdf` | lib | `chordsketch-core` |
 | `chordsketch` (CLI) | `crates/cli` | bin | `chordsketch-core`, `chordsketch-render-text`, `chordsketch-render-html`, `chordsketch-render-pdf` |
 | `chordsketch-wasm` | `crates/wasm` | cdylib | `chordsketch-core`, all renderers, `wasm-bindgen`, `serde` |
+| `chordsketch-ffi` | `crates/ffi` | cdylib/staticlib/lib | `chordsketch-core`, all renderers, `uniffi`, `thiserror` |
+| `chordsketch-napi` | `crates/napi` | cdylib | `chordsketch-core`, all renderers, `napi`, `napi-derive` |
 
 Additionally, these non-Rust packages exist:
 
 | Package | Path | Description |
 |---|---|---|
 | `@chordsketch/wasm` | `packages/npm` | npm package with TypeScript types |
+| `@chordsketch/node` | `crates/napi` | Native Node.js addon via napi-rs |
 | Playground | `packages/playground` | Vite-based browser playground (Vanilla TS) |
+| Python (`chordsketch`) | `crates/ffi` | Python package via UniFFI + maturin |
+| Swift (`ChordSketch`) | `packages/swift` | Swift package with XCFramework |
+| Kotlin (`chordsketch`) | `packages/kotlin` | Kotlin/JVM package via JNI |
+| Ruby (`chordsketch`) | `packages/ruby` | Ruby gem via UniFFI |
 
 ### Dependency Policy
 
@@ -83,6 +90,7 @@ High-level phases:
 18. **Phase 18** — Perl reference implementation compatibility testing ✅
 19. **Phase 19** — Production readiness and publishing ✅
 20. **Phase 20** — WASM build & web playground
+21. **Phase 21** — Multi-language bindings & expanded distribution
 
 ## Merge Policy
 
