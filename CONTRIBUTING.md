@@ -22,8 +22,9 @@ issue bodies.
 
 - For bugs, include steps to reproduce. For features, describe the desired
   behavior.
-- Labels: `phase:N`, `type:feature`/`type:bug`/`type:docs`/`type:refactor`,
-  `size:small`/`size:medium`/`size:large`, `priority:high`/`priority:medium`/`priority:low`.
+- Labels: `phase:N`, `type:feature`/`type:bug`/`type:docs`/`type:refactor`/`type:ci`/`type:tracking`,
+  `size:small`/`size:medium`/`size:large`, `priority:high`/`priority:medium`/`priority:low`,
+  `blocked`.
 
 ## Development Setup
 
