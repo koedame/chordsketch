@@ -70,6 +70,30 @@ before step 5.
 
 ## Post-Release
 
-- Verify the GitHub Release page has all binary archives
-- Verify each crate appears on crates.io
-- Verify `cargo install chordsketch` works
+After the release workflow completes and the GitHub Release is published:
+
+1. **Automatic updates** — the `post-release.yml` workflow triggers on release
+   publication and automatically:
+   - Updates the Homebrew formula in `koedame/homebrew-tap`
+   - Updates the Scoop manifest in `koedame/scoop-bucket`
+
+2. **Docker image** — the `docker.yml` workflow triggers on release publication
+   and builds a multi-arch Docker image (linux/amd64, linux/arm64) pushed to
+   `ghcr.io/koedame/chordsketch`.
+
+3. **winget** — submit a PR to `microsoft/winget-pkgs` using the manifest
+   templates in `packaging/winget/`. Update the version and hash values before
+   submission.
+
+4. **Manual verification**:
+   - Verify the GitHub Release page has all binary archives
+   - Verify each crate appears on crates.io
+   - Verify `cargo install chordsketch` works
+   - Verify `brew install koedame/tap/chordsketch` works
+   - Verify `docker run ghcr.io/koedame/chordsketch --version` works
+
+## Required Secrets
+
+| Secret | Scope | Purpose |
+|--------|-------|---------|
+| `TAP_GITHUB_TOKEN` | `contents:write` on `koedame/homebrew-tap` and `koedame/scoop-bucket` | Push updated formulae/manifests after release |

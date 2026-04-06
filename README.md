@@ -23,6 +23,33 @@ into a structured AST and rendering to plain text, HTML, and PDF.
 
 ## Installation
 
+### Homebrew (macOS / Linux)
+
+```bash
+brew tap koedame/tap
+brew install chordsketch
+```
+
+### Scoop (Windows)
+
+```bash
+scoop bucket add koedame https://github.com/koedame/scoop-bucket
+scoop install chordsketch
+```
+
+### winget (Windows)
+
+```bash
+winget install koedame.chordsketch
+```
+
+### Docker
+
+```bash
+docker run --rm ghcr.io/koedame/chordsketch --version
+docker run --rm -v "$PWD:/data" ghcr.io/koedame/chordsketch /data/song.cho
+```
+
 ### From crates.io
 
 ```bash
