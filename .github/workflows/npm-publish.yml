@@ -10,6 +10,9 @@ on:
         required: true
         type: string
 
+env:
+  WASM_PACK_VERSION: "0.14.0"
+
 jobs:
   publish:
     name: Publish @chordsketch/wasm
@@ -27,7 +30,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        run: cargo install wasm-pack --version "=$WASM_PACK_VERSION" --locked
 
       - name: Build WASM
         run: wasm-pack build crates/wasm --release --target web
@@ -50,9 +53,11 @@ jobs:
         if: github.event_name == 'release'
 
       - name: Set version from workflow input
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           cd packages/npm
-          npm version "${{ inputs.version }}" --no-git-tag-version --allow-same-version
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
         if: github.event_name == 'workflow_dispatch'
 
       - name: Check if version already published
