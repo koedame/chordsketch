@@ -27,12 +27,12 @@ jobs:
     name: Build and test FFI crate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         run: rustup show
 
-      - uses: Swatinem/rust-cache@97031894c7e5700702c0bbabe624e1e4de0f0519 # v2
+      - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ffi
 
@@ -52,12 +52,12 @@ jobs:
       matrix:
         language: [python, swift, kotlin, ruby]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         run: rustup show
 
-      - uses: Swatinem/rust-cache@97031894c7e5700702c0bbabe624e1e4de0f0519 # v2
+      - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ffi
 
@@ -72,7 +72,7 @@ jobs:
             --out-dir bindings/${{ matrix.language }}
 
       - name: Upload bindings artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@v4
         with:
           name: bindings-${{ matrix.language }}
           path: bindings/${{ matrix.language }}/
