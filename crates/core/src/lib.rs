@@ -5,6 +5,7 @@ pub mod chord;
 pub mod chord_diagram;
 pub mod config;
 pub mod escape;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod external_tool;
 pub mod image_path;
 pub mod inline_markup;
