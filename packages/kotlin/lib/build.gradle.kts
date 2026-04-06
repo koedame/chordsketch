@@ -7,11 +7,11 @@ plugins {
 
 group = "com.koedame"
 // Read version from crates/ffi/Cargo.toml to keep in sync with Rust crate.
-version = file("${rootDir}/../../crates/ffi/Cargo.toml").readText()
-    .lineSequence()
-    .first { it.startsWith("version") }
-    .substringAfter('"')
-    .substringBefore('"')
+version = Regex("""^version\s*=\s*"([^"]+)"""", RegexOption.MULTILINE)
+    .find(file("${rootDir}/../../crates/ffi/Cargo.toml").readText())
+    ?.groupValues?.get(1)
+    ?: error("Failed to parse version from crates/ffi/Cargo.toml — expected a line matching: version = \"...\"")
+
 
 repositories {
     mavenCentral()
