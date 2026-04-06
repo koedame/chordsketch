@@ -19,19 +19,26 @@ struct RenderOptions {
 }
 
 /// Resolve a [`chordsketch_core::config::Config`] from the options.
-fn resolve_config(opts: &RenderOptions) -> chordsketch_core::config::Config {
+///
+/// # Errors
+///
+/// Returns an error string if the config value is not a known preset
+/// and cannot be parsed as RRJSON.
+fn resolve_config(opts: &RenderOptions) -> Result<chordsketch_core::config::Config, JsValue> {
     match &opts.config {
         Some(name) => {
             // Try as a preset first, then as inline RRJSON.
             if let Some(preset) = chordsketch_core::config::Config::preset(name) {
-                preset
-            } else if let Ok(parsed) = chordsketch_core::config::Config::parse(name) {
-                parsed
+                Ok(preset)
             } else {
-                chordsketch_core::config::Config::defaults()
+                chordsketch_core::config::Config::parse(name).map_err(|e| {
+                    JsValue::from_str(&format!(
+                        "invalid config (not a known preset and not valid RRJSON): {e}"
+                    ))
+                })
             }
         }
-        None => chordsketch_core::config::Config::defaults(),
+        None => Ok(chordsketch_core::config::Config::defaults()),
     }
 }
 
@@ -42,6 +49,21 @@ fn do_render_string(
     transpose: i8,
     render_fn: fn(&[chordsketch_core::ast::Song], i8, &chordsketch_core::config::Config) -> String,
 ) -> Result<String, JsValue> {
+    let result = chordsketch_core::parse_multi_lenient(input);
+    let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
+    if songs.is_empty() {
+        return Err(JsValue::from_str("no songs found in input"));
+    }
+    Ok(render_fn(&songs, transpose, config))
+}
+
+/// Parse input and render songs, returning a `Vec<u8>` result or an error.
+fn do_render_bytes(
+    input: &str,
+    config: &chordsketch_core::config::Config,
+    transpose: i8,
+    render_fn: fn(&[chordsketch_core::ast::Song], i8, &chordsketch_core::config::Config) -> Vec<u8>,
+) -> Result<Vec<u8>, JsValue> {
     let result = chordsketch_core::parse_multi_lenient(input);
     let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
     if songs.is_empty() {
@@ -93,15 +115,12 @@ pub fn render_text(input: &str) -> Result<String, JsValue> {
 /// Returns a `JsValue` error string if the input contains no songs.
 #[wasm_bindgen]
 pub fn render_pdf(input: &str) -> Result<Vec<u8>, JsValue> {
-    let config = chordsketch_core::config::Config::defaults();
-    let result = chordsketch_core::parse_multi_lenient(input);
-    let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
-    if songs.is_empty() {
-        return Err(JsValue::from_str("no songs found in input"));
-    }
-    Ok(chordsketch_render_pdf::render_songs_with_transpose(
-        &songs, 0, &config,
-    ))
+    do_render_bytes(
+        input,
+        &chordsketch_core::config::Config::defaults(),
+        0,
+        chordsketch_render_pdf::render_songs_with_transpose,
+    )
 }
 
 /// Render ChordPro input as HTML with options.
@@ -117,7 +136,7 @@ pub fn render_pdf(input: &str) -> Result<Vec<u8>, JsValue> {
 pub fn render_html_with_options(input: &str, options: JsValue) -> Result<String, JsValue> {
     let opts: RenderOptions =
         serde_wasm_bindgen::from_value(options).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let config = resolve_config(&opts);
+    let config = resolve_config(&opts)?;
     do_render_string(
         input,
         &config,
@@ -137,7 +156,7 @@ pub fn render_html_with_options(input: &str, options: JsValue) -> Result<String,
 pub fn render_text_with_options(input: &str, options: JsValue) -> Result<String, JsValue> {
     let opts: RenderOptions =
         serde_wasm_bindgen::from_value(options).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let config = resolve_config(&opts);
+    let config = resolve_config(&opts)?;
     do_render_string(
         input,
         &config,
@@ -159,21 +178,65 @@ pub fn render_text_with_options(input: &str, options: JsValue) -> Result<String,
 pub fn render_pdf_with_options(input: &str, options: JsValue) -> Result<Vec<u8>, JsValue> {
     let opts: RenderOptions =
         serde_wasm_bindgen::from_value(options).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let config = resolve_config(&opts);
-    let result = chordsketch_core::parse_multi_lenient(input);
-    let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
-    if songs.is_empty() {
-        return Err(JsValue::from_str("no songs found in input"));
-    }
-    Ok(chordsketch_render_pdf::render_songs_with_transpose(
-        &songs,
-        opts.transpose,
+    let config = resolve_config(&opts)?;
+    do_render_bytes(
+        input,
         &config,
-    ))
+        opts.transpose,
+        chordsketch_render_pdf::render_songs_with_transpose,
+    )
 }
 
 /// Returns the ChordSketch library version.
 #[wasm_bindgen]
 pub fn version() -> String {
     chordsketch_core::version().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MINIMAL_INPUT: &str = "{title: Test}\n[C]Hello";
+
+    #[test]
+    fn test_render_html_returns_content() {
+        let result = render_html(MINIMAL_INPUT);
+        assert!(result.is_ok());
+        let html = result.unwrap();
+        assert!(!html.is_empty());
+        assert!(html.contains("Test"));
+    }
+
+    #[test]
+    fn test_render_text_returns_content() {
+        let result = render_text(MINIMAL_INPUT);
+        assert!(result.is_ok());
+        let text = result.unwrap();
+        assert!(!text.is_empty());
+        assert!(text.contains("Test"));
+    }
+
+    #[test]
+    fn test_render_pdf_returns_bytes() {
+        let result = render_pdf(MINIMAL_INPUT);
+        assert!(result.is_ok());
+        let bytes = result.unwrap();
+        assert!(!bytes.is_empty());
+        // PDF files start with %PDF
+        assert!(bytes.starts_with(b"%PDF"));
+    }
+
+    #[test]
+    fn test_empty_input_returns_ok() {
+        // Lenient parser produces an empty song even for blank input.
+        let result = render_html("");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_version_returns_string() {
+        let v = version();
+        assert!(!v.is_empty());
+    }
 }
