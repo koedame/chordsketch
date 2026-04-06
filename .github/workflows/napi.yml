@@ -45,18 +45,18 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         run: |
           rustup target add ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@97031894c7e5700702c0bbabe624e1e4de0f0519 # v2
+      - uses: Swatinem/rust-cache@v2
         with:
           shared-key: napi-${{ matrix.target }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4
+        uses: actions/setup-node@v4
         with:
           node-version: 22
 
@@ -77,7 +77,7 @@ jobs:
           napi build --release --cargo-cwd . --target ${{ matrix.target }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@v4
         with:
           name: napi-${{ matrix.target }}
           path: crates/napi/*.node
@@ -86,12 +86,12 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         run: rustup show
 
-      - uses: Swatinem/rust-cache@97031894c7e5700702c0bbabe624e1e4de0f0519 # v2
+      - uses: Swatinem/rust-cache@v2
         with:
           shared-key: napi-lint
 
