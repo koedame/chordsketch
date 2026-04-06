@@ -15,6 +15,8 @@ repositories {
 dependencies {
     implementation("net.java.dev.jna:jna:5.17.0")
     testImplementation("org.jetbrains.kotlin:kotlin-test")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 java {
