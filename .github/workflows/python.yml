@@ -74,9 +74,19 @@ jobs:
           path: dist
 
   test:
-    name: Test Python bindings
+    name: Test Python bindings (${{ matrix.os }})
     needs: [build-wheels]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: wheels-ubuntu-latest-x86_64
+          - os: macos-latest
+            artifact: wheels-macos-latest-aarch64
+          - os: windows-latest
+            artifact: wheels-windows-latest-x64
     steps:
       - uses: actions/checkout@v6
 
@@ -86,7 +96,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: wheels-ubuntu-latest-x86_64
+          name: ${{ matrix.artifact }}
           path: dist
 
       - name: Install wheel
