@@ -1,0 +1,26 @@
+[package]
+name = "chordsketch-napi"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Native Node.js addon for ChordPro parsing and rendering via napi-rs"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+chordsketch-core = { version = "0.1.0", path = "../core" }
+chordsketch-render-text = { version = "0.1.0", path = "../render-text" }
+chordsketch-render-html = { version = "0.1.0", path = "../render-html" }
+chordsketch-render-pdf = { version = "0.1.0", path = "../render-pdf" }
+napi = { version = "3", features = ["napi9"] }
+napi-derive = "3"
+
+[build-dependencies]
+napi-build = "2"
