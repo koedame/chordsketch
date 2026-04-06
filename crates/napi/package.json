@@ -9,6 +9,9 @@
     "directory": "crates/napi"
   },
   "homepage": "https://github.com/koedame/chordsketch",
+  "engines": {
+    "node": ">=15.12.0"
+  },
   "keywords": [
     "chordpro",
     "music",
