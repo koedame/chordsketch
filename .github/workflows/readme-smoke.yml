@@ -16,23 +16,16 @@ on:
     - cron: "0 6 * * *"
   release:
     types: [published]
+  # Run on every PR, no path filter. End-user installability is a
+  # global property of the repo: it either works or it doesn't, and
+  # the validity of that guarantee should not depend on which file
+  # the current PR happens to edit. A path-filter list also has to be
+  # re-audited every time the workspace shape changes (new crate,
+  # build.rs, rust-toolchain.toml, .cargo/config.toml, etc.) and a
+  # missed entry produces a false sense of safety. The daily cron
+  # already runs the same matrix; running it on each PR adds bounded
+  # cost in exchange for catching every regression at PR time.
   pull_request:
-    # Run on PRs that touch anything affecting installability or
-    # rendering. The path filter keeps the heavy Windows/Docker jobs
-    # off pure-docs PRs that cannot break end-user state.
-    paths:
-      - "README.md"
-      - ".github/workflows/readme-smoke.yml"
-      - ".github/actions/cli-render-smoke/**"
-      - ".github/fixtures/**"
-      - "scripts/extract-readme-commands.py"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/cli/**"
-      - "crates/core/**"
-      - "crates/render-text/**"
-      - "crates/render-html/**"
-      - "crates/render-pdf/**"
 
 # Cancel previous runs on the same PR when new commits land. Daily cron
 # and release runs use a unique run_id and are never cancelled.
