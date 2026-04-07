@@ -13,12 +13,17 @@ on:
       - "scripts/extract-readme-commands.py"
       - "scripts/test_extract_readme_commands.py"
       - ".github/workflows/readme-sync.yml"
-      # Also fire when the smoke workflow itself changes. Without this,
-      # adding a new install path to readme-smoke.yml without a matching
-      # README update would slip past the sync gate, since the snapshot
-      # is unchanged. The signal-to-noise ratio is acceptable: this
-      # workflow is fast (single python script) and readme-smoke.yml
-      # changes are infrequent.
+      # Defense-in-depth: also re-run the sync check when the smoke
+      # workflow (the CI coverage layer this gate is meant to protect)
+      # changes. The README.md path filter above already catches the
+      # common case (smoke + README touched in the same PR), so this
+      # extra trigger is mostly belt-and-suspenders: it guarantees the
+      # extractor and snapshot are re-validated whenever the coverage
+      # layer is rewritten, even in the unlikely case that a future
+      # snapshot bug only surfaces under a smoke.yml change. The
+      # signal-to-noise ratio is acceptable: this workflow is fast
+      # (single python script) and readme-smoke.yml changes are
+      # infrequent.
       - ".github/workflows/readme-smoke.yml"
   push:
     branches: [main]
