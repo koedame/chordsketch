@@ -51,9 +51,10 @@ runs:
         chordsketch --transpose 2 "${{ inputs.fixtures-dir }}/sample.cho" > out-transposed.txt
         test -s out-transposed.txt
         # Original is in C/G/Am/F; +2 should yield D/A/Bm/G. Spot-check
-        # one chord to confirm transposition actually ran rather than
-        # passing through unchanged.
-        grep -q "D" out-transposed.txt
+        # "Bm" (transposed Am) to confirm transposition actually ran.
+        # "D" alone is unreliable because "README" in the subtitle
+        # contains the letter D, so that grep would always pass.
+        grep -q "Bm" out-transposed.txt
 
     - name: Custom config (-c) with RRJSON file
       shell: bash
