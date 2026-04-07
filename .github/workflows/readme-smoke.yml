@@ -69,6 +69,12 @@ jobs:
             cat "$DOCKER_CONFIG/config.json" >&2
             exit 1
           fi
+          # Idempotent: if a previous attempt left a stale named container
+          # behind (e.g., the runner re-runs after `docker create` succeeded
+          # but before `docker rm` ran), remove it so the next
+          # `docker create --name extract-ghcr` below doesn't fail with
+          # "Conflict. The container name already in use".
+          docker rm -f extract-ghcr 2>/dev/null || true
 
       - name: Verify GHCR manifest is anonymously pullable at HTTP layer
         run: |
@@ -129,6 +135,9 @@ jobs:
             cat "$DOCKER_CONFIG/config.json" >&2
             exit 1
           fi
+          # See docker-ghcr for the rationale: stale named container from a
+          # previous attempt would block the docker create below.
+          docker rm -f extract-hub 2>/dev/null || true
 
       - name: Verify Docker Hub manifest is anonymously pullable at HTTP layer
         run: |
@@ -177,12 +186,22 @@ jobs:
           mkdir -p /tmp/wasm-smoke
           cd /tmp/wasm-smoke
           npm init -y
-          # Pin to >=0.1.1 because 0.1.0 is published-but-broken on
-          # Node.js (the --target web init tries to fetch via file://
-          # which Node's undici does not implement). 0.1.1 ships the
-          # dual-package layout where Node resolves to a wasm-pack
-          # --target nodejs build that auto-loads synchronously.
-          npm install '@chordsketch/wasm@>=0.1.1'
+          # Pin to the exact released version so the smoke test verifies
+          # the *specific* artifact it was written against, rather than
+          # silently following whatever the latest published version
+          # happens to be. 0.1.0 is published-but-broken on Node.js (the
+          # --target web init tries to fetch via file:// which Node's
+          # undici does not implement); 0.1.1 ships the dual-package
+          # layout where Node resolves to a wasm-pack --target nodejs
+          # build that auto-loads synchronously.
+          #
+          # Bump policy: every time `@chordsketch/wasm` is published to
+          # npm, update this pin in the same PR that bumps the workspace
+          # version (or, for npm-only patch releases like the dual-package
+          # 0.1.0 → 0.1.1 fix, in the publish PR itself). The README sync
+          # check (.github/workflows/readme-sync.yml) does not catch this
+          # automatically because the version string lives only here.
+          npm install '@chordsketch/wasm@0.1.1'
 
       - name: Smoke test text + HTML + PDF render
         run: |
@@ -262,28 +281,42 @@ jobs:
       - name: Clone, install, and run
         env:
           CARGO_HOME: /tmp/cargo-source
+          # Route attacker-controllable GitHub context values through env
+          # vars instead of inline `${{ }}` interpolation in the shell
+          # script — see GitHub Actions security hardening guide. Even
+          # though `release: published` requires write access (limiting
+          # the practical attack surface for REF_NAME), the env-var
+          # pattern is the established defense-in-depth convention used
+          # elsewhere in this workflow.
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
+          ORIG_DIR="$PWD"
           mkdir -p "$CARGO_HOME"
           # The literal `git clone` ritual from README ## Installation
           # ## From source must work end-to-end. We resolve the ref the
           # clone should land on based on event:
           #   - release:      the exact tag being released
-          #   - pull_request: the PR's HEAD commit (so a PR that breaks
-          #                   the from-source build fails the PR check
-          #                   instead of slipping through to schedule)
+          #   - pull_request: the PR's HEAD commit, fetched via the
+          #                   `refs/pull/<N>/head` ref so the SHA is
+          #                   reachable for *both* same-repo and fork
+          #                   PRs (a raw `origin <sha>` fetch would only
+          #                   resolve same-repo branches because forks
+          #                   live in a different remote).
           #   - schedule/dispatch: default branch
-          if [ "${{ github.event_name }}" = "release" ]; then
-            git clone --branch "${{ github.ref_name }}" --depth 1 \
+          if [ "$EVENT_NAME" = "release" ]; then
+            git clone --branch "$REF_NAME" --depth 1 \
               https://github.com/koedame/chordsketch.git /tmp/chordsketch-src
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
             git clone --depth 1 \
               https://github.com/koedame/chordsketch.git /tmp/chordsketch-src
             cd /tmp/chordsketch-src
-            git fetch --depth 1 origin "$PR_HEAD_SHA"
+            git fetch --depth 1 origin "refs/pull/${PR_NUMBER}/head"
             git checkout "$PR_HEAD_SHA"
-            cd -
+            cd "$ORIG_DIR"
           else
             git clone --depth 1 \
               https://github.com/koedame/chordsketch.git /tmp/chordsketch-src
@@ -381,8 +414,13 @@ jobs:
             RENDER_DEP="chordsketch-render-text = { path = \"$GITHUB_WORKSPACE/crates/render-text\" }"
             MODE="workspace path deps (PR)"
           else
-            CORE_DEP='chordsketch-core = ">=0.1, <0.2"'
-            RENDER_DEP='chordsketch-render-text = ">=0.1, <0.2"'
+            # Cargo `^0.1` means `>=0.1.0, <0.2.0` (the caret rules treat
+            # the leftmost non-zero as the breaking-change boundary).
+            # Bump policy: when the workspace bumps to 0.2.x, update both
+            # constraints below to `^0.2` in the same release PR.
+            # Otherwise, daily smoke tests will silently stop resolving.
+            CORE_DEP='chordsketch-core = "^0.1"'
+            RENDER_DEP='chordsketch-render-text = "^0.1"'
             MODE="crates.io published"
           fi
           echo "library-smoke mode: $MODE"

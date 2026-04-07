@@ -24,3 +24,7 @@ packages/playground/dist/
 
 # Tools
 .serena/
+
+# Python (used by scripts/ and CI helpers, not a runtime dep)
+__pycache__/
+*.pyc
