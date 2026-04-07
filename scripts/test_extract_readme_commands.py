@@ -20,7 +20,12 @@ SCRIPT = REPO_ROOT / "scripts" / "extract-readme-commands.py"
 # The script's filename has hyphens, which prevents `import` directly.
 # Load it via importlib.util so we can call `extract()` from tests.
 _spec = importlib.util.spec_from_file_location("extract_readme_commands", SCRIPT)
-assert _spec is not None and _spec.loader is not None
+# Use an explicit RuntimeError instead of `assert` so the guard survives
+# `python3 -O` (which strips assert statements). Without this, running
+# the suite under `-O` would silently skip the check and crash later
+# inside `exec_module` with an unhelpful AttributeError.
+if _spec is None or _spec.loader is None:
+    raise RuntimeError(f"Could not load module spec from {SCRIPT}")
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 extract = _mod.extract
