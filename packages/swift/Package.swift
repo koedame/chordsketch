@@ -23,7 +23,12 @@ let package = Package(
         .target(
             name: "ChordSketch",
             dependencies: ["chordsketchFFI"],
-            path: "Sources/ChordSketch"
+            path: "Sources/ChordSketch",
+            linkerSettings: [
+                // chordsketch-render-pdf depends on flate2 which uses
+                // the system zlib for compression on Apple platforms.
+                .linkedLibrary("z"),
+            ]
         ),
         .testTarget(
             name: "ChordSketchTests",
