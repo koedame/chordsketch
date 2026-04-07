@@ -1,8 +1,12 @@
 name: README Install Smoke Tests
 
 # Verify every install method advertised in README.md works for an
-# unauthenticated end user. Catches breakage like a private GHCR package,
-# yanked crate, broken tap, etc., before users hit it.
+# unauthenticated end user, AND that the binary it produces actually
+# renders songs end-to-end (text/HTML/PDF/transpose/-c/multi-file PDF).
+# Also verifies that the Library Usage Rust snippet still compiles and
+# runs against the published crates on crates.io. Catches breakage like
+# a private GHCR package, yanked crate, broken tap, missing PDF font,
+# or removed library API before users hit it.
 
 on:
   workflow_dispatch:
@@ -21,21 +25,127 @@ jobs:
   docker-ghcr:
     name: Docker (GHCR)
     runs-on: ubuntu-latest
+    # DOCKER_CONFIG points at a fresh empty directory so the Docker
+    # client cannot pick up any pre-cached credentials from the runner
+    # image, $HOME/.docker, or a credential helper. This guarantees the
+    # `docker pull` below runs with the exact same authentication state
+    # as an end user on a clean machine — which is the only way to
+    # detect "package was silently flipped to private" regressions like
+    # the one this workflow exists for.
+    env:
+      DOCKER_CONFIG: /tmp/docker-anon-ghcr
     steps:
-      - name: Run unauthenticated docker pull + --version
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Initialize empty DOCKER_CONFIG and assert no credentials
         run: |
-          # Make sure we are not authenticated against ghcr.io.
+          set -euo pipefail
+          rm -rf "$DOCKER_CONFIG"
+          mkdir -p "$DOCKER_CONFIG"
+          # Defensive: also clear any creds the runner image happened
+          # to leave behind in the default location.
           docker logout ghcr.io || true
+          # Hard assertion: the config we're about to use must contain
+          # zero auth entries. If it doesn't, the test below would be
+          # silently authenticated and stop reflecting end-user reality.
+          if [ -f "$DOCKER_CONFIG/config.json" ] && grep -q '"auths"' "$DOCKER_CONFIG/config.json" 2>/dev/null; then
+            echo "DOCKER_CONFIG contains auth entries; refusing to run anonymous test." >&2
+            cat "$DOCKER_CONFIG/config.json" >&2
+            exit 1
+          fi
+
+      - name: Verify GHCR manifest is anonymously pullable at HTTP layer
+        run: |
+          set -euo pipefail
+          # Cross-check independent of the docker daemon: hit the
+          # registry v2 API directly with a fresh anonymous bearer
+          # token. For a *public* package this returns the manifest;
+          # for a *private* one the manifest fetch returns 401 even
+          # though the token endpoint hands out a token. This catches
+          # the failure mode at the HTTP layer in case some future
+          # docker daemon change masks it.
+          TOKEN=$(curl -fsS \
+            "https://ghcr.io/token?service=ghcr.io&scope=repository:koedame/chordsketch:pull" \
+            | python3 -c 'import sys, json; print(json.load(sys.stdin)["token"])')
+          curl -fsS \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.oci.image.index.v1+json" \
+            -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
+            "https://ghcr.io/v2/koedame/chordsketch/manifests/latest" \
+            -o /dev/null
+
+      - name: Pull image as unauthenticated user and verify --version
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/koedame/chordsketch:latest
           docker run --rm ghcr.io/koedame/chordsketch:latest --version
+
+      - name: Extract binary from image for render smoke
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/cli-bin
+          docker create --name extract-ghcr ghcr.io/koedame/chordsketch:latest
+          docker cp extract-ghcr:/usr/local/bin/chordsketch /tmp/cli-bin/chordsketch
+          docker rm extract-ghcr
+          chmod +x /tmp/cli-bin/chordsketch
+          echo "/tmp/cli-bin" >> "$GITHUB_PATH"
+
+      - name: Render smoke
+        uses: ./.github/actions/cli-render-smoke
 
   docker-hub:
     name: Docker Hub
     runs-on: ubuntu-latest
+    # See docker-ghcr for the rationale behind isolating DOCKER_CONFIG.
+    env:
+      DOCKER_CONFIG: /tmp/docker-anon-hub
     steps:
-      - name: Run unauthenticated docker pull + --version
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Initialize empty DOCKER_CONFIG and assert no credentials
         run: |
+          set -euo pipefail
+          rm -rf "$DOCKER_CONFIG"
+          mkdir -p "$DOCKER_CONFIG"
           docker logout docker.io || true
+          if [ -f "$DOCKER_CONFIG/config.json" ] && grep -q '"auths"' "$DOCKER_CONFIG/config.json" 2>/dev/null; then
+            echo "DOCKER_CONFIG contains auth entries; refusing to run anonymous test." >&2
+            cat "$DOCKER_CONFIG/config.json" >&2
+            exit 1
+          fi
+
+      - name: Verify Docker Hub manifest is anonymously pullable at HTTP layer
+        run: |
+          set -euo pipefail
+          # Docker Hub uses a different auth realm than GHCR.
+          TOKEN=$(curl -fsS \
+            "https://auth.docker.io/token?service=registry.docker.io&scope=repository:koedame/chordsketch:pull" \
+            | python3 -c 'import sys, json; print(json.load(sys.stdin)["token"])')
+          curl -fsS \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.oci.image.index.v1+json" \
+            -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
+            "https://registry-1.docker.io/v2/koedame/chordsketch/manifests/latest" \
+            -o /dev/null
+
+      - name: Pull image as unauthenticated user and verify --version
+        run: |
+          set -euo pipefail
+          docker pull docker.io/koedame/chordsketch:latest
           docker run --rm docker.io/koedame/chordsketch:latest --version
+
+      - name: Extract binary from image for render smoke
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/cli-bin
+          docker create --name extract-hub docker.io/koedame/chordsketch:latest
+          docker cp extract-hub:/usr/local/bin/chordsketch /tmp/cli-bin/chordsketch
+          docker rm extract-hub
+          chmod +x /tmp/cli-bin/chordsketch
+          echo "/tmp/cli-bin" >> "$GITHUB_PATH"
+
+      - name: Render smoke
+        uses: ./.github/actions/cli-render-smoke
 
   npm-wasm:
     name: npm (@chordsketch/wasm)
@@ -47,30 +157,54 @@ jobs:
 
       - name: Install @chordsketch/wasm in scratch directory
         run: |
+          set -euo pipefail
           mkdir -p /tmp/wasm-smoke
           cd /tmp/wasm-smoke
           npm init -y
           npm install @chordsketch/wasm
 
-      - name: Smoke test render
+      - name: Smoke test text + HTML + PDF render
         run: |
+          set -euo pipefail
           cd /tmp/wasm-smoke
           # Use ESM since the package ships ES modules. The script
-          # initializes the WASM module, renders a small ChordPro snippet,
-          # and asserts the output contains the expected content. This
-          # confirms the WASM binary is loaded and exports execute correctly,
-          # not just that the JS wrapper resolves.
+          # initializes the WASM module, exercises every renderer the
+          # package exposes, and asserts the output for each. This
+          # mirrors the CLI smoke step shape so all distribution channels
+          # are validated to the same depth — a binary that loads but
+          # whose PDF or HTML renderer is broken would slip past a
+          # text-only check.
           cat > smoke.mjs << 'EOF'
-          import init, { render_text, version } from '@chordsketch/wasm';
+          import init, { render_text, render_html, render_pdf, version } from '@chordsketch/wasm';
           await init();
           const v = version();
           if (!v) throw new Error('version() returned empty');
           console.log('version:', v);
-          const out = render_text('{title: Smoke}\n[C]Hello');
-          if (!out.includes('Smoke') || !out.includes('Hello')) {
-            throw new Error('render_text output missing expected content: ' + out);
+
+          const input = '{title: Smoke}\n{subtitle: WASM smoke}\n\n[C]Hello [G]world';
+
+          const txt = render_text(input);
+          if (!txt.includes('Smoke') || !txt.includes('Hello')) {
+            throw new Error('render_text output missing expected content: ' + txt);
           }
           console.log('render_text OK');
+
+          const html = render_html(input);
+          if (!html.includes('Smoke') || !html.includes('<html')) {
+            throw new Error('render_html output missing expected content');
+          }
+          console.log('render_html OK');
+
+          const pdf = render_pdf(input);
+          // render_pdf returns a Uint8Array; check the %PDF magic.
+          if (!(pdf instanceof Uint8Array) || pdf.length < 4) {
+            throw new Error('render_pdf did not return a Uint8Array');
+          }
+          const magic = String.fromCharCode(pdf[0], pdf[1], pdf[2], pdf[3]);
+          if (magic !== '%PDF') {
+            throw new Error('render_pdf output is not a PDF (magic: ' + magic + ')');
+          }
+          console.log('render_pdf OK (' + pdf.length + ' bytes)');
           EOF
           node smoke.mjs
 
@@ -78,26 +212,36 @@ jobs:
     name: cargo install chordsketch
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
       - name: Install from crates.io into scratch CARGO_HOME
         env:
           CARGO_HOME: /tmp/cargo-smoke
         run: |
+          set -euo pipefail
           mkdir -p "$CARGO_HOME"
           cargo install chordsketch
           "$CARGO_HOME/bin/chordsketch" --version
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Render smoke
+        uses: ./.github/actions/cli-render-smoke
 
   source-build:
     name: From source (git clone + cargo install)
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
       - name: Clone, install, and run
         env:
           CARGO_HOME: /tmp/cargo-source
         run: |
+          set -euo pipefail
           mkdir -p "$CARGO_HOME"
           # On a release trigger, clone the exact released tag.
           # Otherwise (schedule, dispatch) use the default branch.
@@ -111,24 +255,36 @@ jobs:
           cd /tmp/chordsketch-src
           cargo install --path crates/cli
           "$CARGO_HOME/bin/chordsketch" --version
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Render smoke
+        uses: ./.github/actions/cli-render-smoke
 
   homebrew:
     name: Homebrew
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@fc695c54c2032716dd4cedd007489c8e32fc8a5d # master
 
       - name: Tap and install
         run: |
+          set -euo pipefail
           brew tap koedame/tap
           brew install chordsketch
           chordsketch --version
+
+      - name: Render smoke
+        uses: ./.github/actions/cli-render-smoke
 
   scoop:
     name: Scoop (Windows)
     runs-on: windows-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
       - name: Install Scoop
         shell: powershell
         run: |
@@ -143,18 +299,76 @@ jobs:
           scoop install chordsketch
           chordsketch --version
 
+      - name: Render smoke
+        uses: ./.github/actions/cli-render-smoke
+
   winget:
     name: winget (Windows)
     runs-on: windows-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
       - name: Install via winget
         shell: powershell
         run: |
           winget install --id koedame.chordsketch --exact --accept-source-agreements --accept-package-agreements --silent
           chordsketch --version
 
+      - name: Render smoke
+        uses: ./.github/actions/cli-render-smoke
+
+  library-smoke:
+    name: Library Usage (crates.io)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - name: Build and run README Library Usage snippet against published crates
+        run: |
+          set -euo pipefail
+          # Build a scratch crate in a tmp directory that depends on the
+          # published chordsketch-core and chordsketch-render-text on
+          # crates.io. The main.rs body is the EXACT snippet from
+          # README.md ## Library Usage, plus an assertion. If the
+          # published API drifts away from what the README documents,
+          # this job fails before users do.
+          SCRATCH=/tmp/library-smoke
+          mkdir -p "$SCRATCH/src"
+          cat > "$SCRATCH/Cargo.toml" << 'EOF'
+          [package]
+          name = "library-smoke"
+          version = "0.0.0"
+          edition = "2021"
+          publish = false
+
+          [dependencies]
+          chordsketch-core = ">=0.1, <0.2"
+          chordsketch-render-text = ">=0.1, <0.2"
+          EOF
+          cat > "$SCRATCH/src/main.rs" << 'EOF'
+          use chordsketch_core::parser::parse;
+          use chordsketch_render_text::render_song;
+
+          fn main() {
+              let input = "{title: Amazing Grace}\n{subtitle: Traditional}\n\n[G]Amazing [G7]grace, how [C]sweet the [G]sound";
+              let song = parse(input).unwrap();
+              let text = render_song(&song);
+              println!("{text}");
+
+              // Assertions: the rendered output must contain the title,
+              // subtitle, and lyric text from the README snippet. If any
+              // of these are missing, the public API or rendering
+              // semantics drifted away from what the README promises.
+              assert!(text.contains("Amazing Grace"), "missing title in output: {text}");
+              assert!(text.contains("Traditional"), "missing subtitle in output: {text}");
+              assert!(text.contains("sweet the"), "missing lyric in output: {text}");
+          }
+          EOF
+          cd "$SCRATCH"
+          cargo run --quiet
+
   usage-smoke:
-    name: README Usage examples
+    name: README Usage examples (source build)
     needs: [source-build]
     runs-on: ubuntu-latest
     steps:
@@ -162,36 +376,17 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
-      - name: Install CLI
+      - name: Install CLI from workspace
         env:
           CARGO_HOME: /tmp/cargo-usage
         run: |
+          set -euo pipefail
           mkdir -p "$CARGO_HOME"
           cargo install --path crates/cli
           echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
 
-      - name: Render to plain text
-        run: |
-          chordsketch .github/fixtures/sample.cho > /tmp/out.txt
-          test -s /tmp/out.txt
-          grep -q "Smoke Test" /tmp/out.txt
-
-      - name: Render to HTML
-        run: |
-          chordsketch -f html .github/fixtures/sample.cho -o /tmp/out.html
-          test -s /tmp/out.html
-          grep -q "Smoke Test" /tmp/out.html
-
-      - name: Render to PDF
-        run: |
-          chordsketch -f pdf .github/fixtures/sample.cho -o /tmp/out.pdf
-          test -s /tmp/out.pdf
-          head -c 4 /tmp/out.pdf | grep -q "%PDF"
-
-      - name: Transpose
-        run: |
-          chordsketch --transpose 2 .github/fixtures/sample.cho > /tmp/out-transposed.txt
-          test -s /tmp/out-transposed.txt
+      - name: Render smoke
+        uses: ./.github/actions/cli-render-smoke
 
   report-failure:
     name: Open or update tracking issue on failure
@@ -204,6 +399,7 @@ jobs:
       - homebrew
       - scoop
       - winget
+      - library-smoke
       - usage-smoke
     if: failure() && github.event_name != 'pull_request'
     runs-on: ubuntu-latest

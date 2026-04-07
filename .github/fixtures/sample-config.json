@@ -1,0 +1,12 @@
+// Smoke test config for `chordsketch -c`.
+// Uses RRJSON syntax (comments, unquoted keys, trailing commas) so this
+// fixture also exercises the relaxed parser.
+{
+  settings: {
+    columns: 1,
+    transpose: 0,
+  },
+  pdf: {
+    papersize: "a4",
+  },
+}
