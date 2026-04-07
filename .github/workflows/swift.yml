@@ -124,17 +124,31 @@ jobs:
               raise SystemExit("Could not find .binaryTarget for chordsketchFFI")
 
           # Walk forward, counting parens, to find the matching close paren.
+          # Skip parens that appear inside Swift "..." string literals so
+          # URLs like "https://example.com/v1.0).zip" don't fool the counter.
+          # Also handles \" escape sequences inside strings.
           start = match.start()
           # The opening `(` is part of `.binaryTarget(`
           paren_pos = content.index('(', start)
           depth = 1
           i = paren_pos + 1
+          in_string = False
           while i < len(content) and depth > 0:
               ch = content[i]
-              if ch == '(':
-                  depth += 1
-              elif ch == ')':
-                  depth -= 1
+              if in_string:
+                  if ch == '\\' and i + 1 < len(content):
+                      # Skip the escaped character.
+                      i += 2
+                      continue
+                  if ch == '"':
+                      in_string = False
+              else:
+                  if ch == '"':
+                      in_string = True
+                  elif ch == '(':
+                      depth += 1
+                  elif ch == ')':
+                      depth -= 1
               i += 1
           if depth != 0:
               raise SystemExit("Unbalanced parentheses in .binaryTarget block")
