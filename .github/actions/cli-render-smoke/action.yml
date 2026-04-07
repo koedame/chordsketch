@@ -1,0 +1,86 @@
+name: "CLI Render Smoke"
+description: >
+  Run the README Usage examples against an installed `chordsketch` binary
+  on PATH and assert each command produces non-empty, structurally valid
+  output. Cross-platform via `shell: bash` so it works on ubuntu-latest
+  and windows-latest (git-bash) runners.
+inputs:
+  fixtures-dir:
+    description: "Directory containing sample.cho, song2.cho, sample-config.json."
+    required: false
+    default: ".github/fixtures"
+runs:
+  using: "composite"
+  steps:
+    - name: Verify CLI is on PATH
+      shell: bash
+      run: |
+        set -euo pipefail
+        chordsketch --version
+
+    - name: Render to plain text
+      shell: bash
+      run: |
+        set -euo pipefail
+        chordsketch "${{ inputs.fixtures-dir }}/sample.cho" > out.txt
+        test -s out.txt
+        grep -q "Smoke Test" out.txt
+        grep -q "Hello" out.txt
+
+    - name: Render to HTML
+      shell: bash
+      run: |
+        set -euo pipefail
+        chordsketch -f html "${{ inputs.fixtures-dir }}/sample.cho" -o out.html
+        test -s out.html
+        grep -q "Smoke Test" out.html
+        grep -q "<html" out.html
+
+    - name: Render to PDF
+      shell: bash
+      run: |
+        set -euo pipefail
+        chordsketch -f pdf "${{ inputs.fixtures-dir }}/sample.cho" -o out.pdf
+        test -s out.pdf
+        head -c 4 out.pdf | grep -q "%PDF"
+
+    - name: Transpose
+      shell: bash
+      run: |
+        set -euo pipefail
+        chordsketch --transpose 2 "${{ inputs.fixtures-dir }}/sample.cho" > out-transposed.txt
+        test -s out-transposed.txt
+        # Original is in C/G/Am/F; +2 should yield D/A/Bm/G. Spot-check
+        # one chord to confirm transposition actually ran rather than
+        # passing through unchanged.
+        grep -q "D" out-transposed.txt
+
+    - name: Custom config (-c) with RRJSON file
+      shell: bash
+      run: |
+        set -euo pipefail
+        chordsketch -c "${{ inputs.fixtures-dir }}/sample-config.json" \
+          "${{ inputs.fixtures-dir }}/sample.cho" > out-config.txt
+        test -s out-config.txt
+        grep -q "Smoke Test" out-config.txt
+
+    - name: Multi-file PDF
+      shell: bash
+      run: |
+        set -euo pipefail
+        chordsketch -f pdf \
+          "${{ inputs.fixtures-dir }}/sample.cho" \
+          "${{ inputs.fixtures-dir }}/song2.cho" \
+          -o songbook.pdf
+        test -s songbook.pdf
+        head -c 4 songbook.pdf | grep -q "%PDF"
+        # A multi-song PDF should be larger than a single-song PDF; this
+        # is a cheap structural check that both songs were actually
+        # rendered rather than only one being emitted.
+        chordsketch -f pdf "${{ inputs.fixtures-dir }}/sample.cho" -o single.pdf
+        single_size=$(wc -c < single.pdf)
+        book_size=$(wc -c < songbook.pdf)
+        if [ "$book_size" -le "$single_size" ]; then
+          echo "Multi-song PDF ($book_size bytes) is not larger than single-song PDF ($single_size bytes)" >&2
+          exit 1
+        fi
