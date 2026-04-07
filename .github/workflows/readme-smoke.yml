@@ -52,10 +52,27 @@ jobs:
           npm init -y
           npm install @chordsketch/wasm
 
-      - name: Smoke test require
+      - name: Smoke test render
         run: |
           cd /tmp/wasm-smoke
-          node -e "const cs = require('@chordsketch/wasm'); console.log(typeof cs);"
+          # Use ESM since the package ships ES modules. The script
+          # initializes the WASM module, renders a small ChordPro snippet,
+          # and asserts the output contains the expected content. This
+          # confirms the WASM binary is loaded and exports execute correctly,
+          # not just that the JS wrapper resolves.
+          cat > smoke.mjs << 'EOF'
+          import init, { render_text, version } from '@chordsketch/wasm';
+          await init();
+          const v = version();
+          if (!v) throw new Error('version() returned empty');
+          console.log('version:', v);
+          const out = render_text('{title: Smoke}\n[C]Hello');
+          if (!out.includes('Smoke') || !out.includes('Hello')) {
+            throw new Error('render_text output missing expected content: ' + out);
+          }
+          console.log('render_text OK');
+          EOF
+          node smoke.mjs
 
   cargo-install:
     name: cargo install chordsketch
@@ -82,7 +99,15 @@ jobs:
           CARGO_HOME: /tmp/cargo-source
         run: |
           mkdir -p "$CARGO_HOME"
-          git clone https://github.com/koedame/chordsketch.git /tmp/chordsketch-src
+          # On a release trigger, clone the exact released tag.
+          # Otherwise (schedule, dispatch) use the default branch.
+          if [ "${{ github.event_name }}" = "release" ]; then
+            git clone --branch "${{ github.ref_name }}" --depth 1 \
+              https://github.com/koedame/chordsketch.git /tmp/chordsketch-src
+          else
+            git clone --depth 1 \
+              https://github.com/koedame/chordsketch.git /tmp/chordsketch-src
+          fi
           cd /tmp/chordsketch-src
           cargo install --path crates/cli
           "$CARGO_HOME/bin/chordsketch" --version
@@ -92,7 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@master
+        uses: Homebrew/actions/setup-homebrew@fc695c54c2032716dd4cedd007489c8e32fc8a5d # master
 
       - name: Tap and install
         run: |
