@@ -11,14 +11,24 @@ on:
       - "README.md"
       - ".github/snapshots/readme-commands.txt"
       - "scripts/extract-readme-commands.py"
+      - "scripts/test_extract_readme_commands.py"
       - ".github/workflows/readme-sync.yml"
+      # Also fire when the smoke workflow itself changes. Without this,
+      # adding a new install path to readme-smoke.yml without a matching
+      # README update would slip past the sync gate, since the snapshot
+      # is unchanged. The signal-to-noise ratio is acceptable: this
+      # workflow is fast (single python script) and readme-smoke.yml
+      # changes are infrequent.
+      - ".github/workflows/readme-smoke.yml"
   push:
     branches: [main]
     paths:
       - "README.md"
       - ".github/snapshots/readme-commands.txt"
       - "scripts/extract-readme-commands.py"
+      - "scripts/test_extract_readme_commands.py"
       - ".github/workflows/readme-sync.yml"
+      - ".github/workflows/readme-smoke.yml"
 
 permissions:
   contents: read
@@ -29,6 +39,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Run extractor self-tests
+        run: python3 scripts/test_extract_readme_commands.py
 
       - name: Diff README install/usage snapshot
         run: python3 scripts/extract-readme-commands.py --check

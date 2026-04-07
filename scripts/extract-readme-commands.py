@@ -51,7 +51,16 @@ def extract(readme_text: str) -> list[str]:
             block_lang = None
             continue
 
-        fence = re.match(r"^```(\w*)\s*$", raw)
+        # Match opening/closing fences. The language identifier may
+        # contain hyphens (e.g., ```pwsh-script), and an opening fence
+        # may carry a trailing annotation (e.g., ```bash some-tag) which
+        # CommonMark allows after the info string. Both must be tracked
+        # without breaking parsing. The pattern below recognises:
+        #   ```
+        #   ```bash
+        #   ```pwsh-script
+        #   ```bash some annotation
+        fence = re.match(r"^```([\w-]*)(?:\s.*)?$", raw)
         if fence:
             if in_block:
                 in_block = False
