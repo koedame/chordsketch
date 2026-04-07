@@ -52,7 +52,15 @@ fn resolve_config(opts: &RenderOptions) -> Result<chordsketch_core::config::Conf
     }
 }
 
-/// Parse input and render songs, returning a `String` result or an error.
+/// Parse input and render songs.
+///
+/// `parse_multi_lenient` always returns at least one `ParseResult`
+/// (`split_at_new_song` unconditionally pushes the trailing segment, even
+/// for empty input — see `chordsketch_core::parser`), so the resulting
+/// `Vec<Song>` is never empty and the previous `is_empty()` guard was
+/// dead code. See #1083. The return type stays `Result` because
+/// `render_html_with_options` and friends use the same `JsValue` error
+/// channel for their config-parse failures.
 fn do_render_string(
     input: &str,
     config: &chordsketch_core::config::Config,
@@ -61,13 +69,13 @@ fn do_render_string(
 ) -> Result<String, JsValue> {
     let result = chordsketch_core::parse_multi_lenient(input);
     let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
-    if songs.is_empty() {
-        return Err(JsValue::from_str("no songs found in input"));
-    }
     Ok(render_fn(&songs, transpose, config))
 }
 
-/// Parse input and render songs, returning a `Vec<u8>` result or an error.
+/// Parse input and render songs, returning a `Vec<u8>` result.
+///
+/// See [`do_render_string`] for the note on the lenient parser always
+/// producing at least one song.
 fn do_render_bytes(
     input: &str,
     config: &chordsketch_core::config::Config,
@@ -76,9 +84,6 @@ fn do_render_bytes(
 ) -> Result<Vec<u8>, JsValue> {
     let result = chordsketch_core::parse_multi_lenient(input);
     let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
-    if songs.is_empty() {
-        return Err(JsValue::from_str("no songs found in input"));
-    }
     Ok(render_fn(&songs, transpose, config))
 }
 

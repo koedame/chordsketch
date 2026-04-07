@@ -42,13 +42,18 @@ fn resolve_config(config: Option<String>) -> Result<chordsketch_core::config::Co
     }
 }
 
-/// Parse input into songs, returning an error if none found.
+/// Parse input into songs.
+///
+/// `parse_multi_lenient` always returns at least one `ParseResult`
+/// (`split_at_new_song` unconditionally pushes the trailing segment, even
+/// for empty input — see `chordsketch_core::parser`), so the resulting
+/// `Vec<Song>` is never empty. The previous `is_empty()` guard was dead
+/// code. See #1083. The function still returns `Result` because the
+/// `*_with_options` callers use the same `napi::Result` channel for
+/// their `resolve_config` failures.
 fn parse_songs(input: &str) -> Result<Vec<chordsketch_core::ast::Song>> {
     let result = chordsketch_core::parse_multi_lenient(input);
     let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
-    if songs.is_empty() {
-        return Err(Error::new(Status::InvalidArg, "no songs found in input"));
-    }
     Ok(songs)
 }
 

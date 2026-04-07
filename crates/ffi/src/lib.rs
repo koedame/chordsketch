@@ -39,13 +39,23 @@ fn resolve_config(
     }
 }
 
-/// Parse input into songs, returning an error if no songs are found.
+/// Parse input into songs.
+///
+/// `parse_multi_lenient` always returns at least one `ParseResult`
+/// (`split_at_new_song` unconditionally pushes the trailing segment, even
+/// for empty input — see `chordsketch_core::parser`), so the resulting
+/// `Vec<Song>` is never empty. The previous `is_empty()` guard was dead
+/// code. See #1083.
+///
+/// The function still returns `Result` (and the [`ChordSketchError::NoSongsFound`]
+/// variant is still part of the FFI surface) for binding ABI stability —
+/// removing the variant would be a breaking change for Python / Swift /
+/// Kotlin / Ruby consumers. The variant is retained as defensive
+/// future-proofing in case the lenient parser ever changes its
+/// always-returns-one-segment behavior.
 fn parse_songs(input: &str) -> Result<Vec<chordsketch_core::ast::Song>, ChordSketchError> {
     let result = chordsketch_core::parse_multi_lenient(input);
     let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
-    if songs.is_empty() {
-        return Err(ChordSketchError::NoSongsFound);
-    }
     Ok(songs)
 }
 
