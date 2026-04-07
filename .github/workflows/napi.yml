@@ -87,8 +87,9 @@ jobs:
         #
         # Cross-compiled targets (aarch64-linux from x86_64 runner) cannot
         # `require()` their `.node` file on the build host, so this step is
-        # gated to host-native targets only. The published gem still gets
-        # exercised end-to-end on every supported platform via readme-smoke.
+        # gated to host-native targets only. The published Node.js addon
+        # still gets exercised end-to-end on every supported platform via
+        # readme-smoke.
         if: |
           (matrix.os == 'ubuntu-latest' && matrix.target == 'x86_64-unknown-linux-gnu') ||
           (matrix.os == 'macos-latest' && matrix.target == 'aarch64-apple-darwin') ||
@@ -122,6 +123,10 @@ jobs:
             const optsHtml = m.renderHtmlWithOptions("{title:Test}\n[C]Hello", { config: "guitar" });
             if (!optsHtml.includes("Test")) throw new Error("renderHtmlWithOptions output missing title");
             console.log("renderHtmlWithOptions: OK");
+            const optsPdf = m.renderPdfWithOptions("{title:Test}\n[C]Hello", { transpose: 2 });
+            if (!Buffer.isBuffer(optsPdf)) throw new Error("renderPdfWithOptions did not return a Buffer");
+            if (!optsPdf.toString("utf8", 0, 4).startsWith("%PDF")) throw new Error("renderPdfWithOptions output missing PDF header");
+            console.log("renderPdfWithOptions: OK");
             const errs = m.validate("{title:T}\n[C]X");
             if (!Array.isArray(errs) || errs.length !== 0) throw new Error("validate(valid) returned " + JSON.stringify(errs));
             console.log("validate (valid): OK");
