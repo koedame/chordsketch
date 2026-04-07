@@ -2,7 +2,7 @@
 
 ## Versioning Policy
 
-All five Rust crates in the workspace share the same version number and are
+All eight Rust crates in the workspace share the same version number and are
 bumped in lockstep. This project follows [Semantic Versioning](https://semver.org/):
 
 - **Major** (1.0.0) — breaking API changes
@@ -29,6 +29,9 @@ re-syncs at the next workspace-wide release.
    - `crates/render-html/Cargo.toml`
    - `crates/render-pdf/Cargo.toml`
    - `crates/cli/Cargo.toml`
+   - `crates/wasm/Cargo.toml`
+   - `crates/ffi/Cargo.toml`
+   - `crates/napi/Cargo.toml`
    - Update inter-crate dependency versions to match
 
 2. **Update CHANGELOG.md**: change `## [X.Y.Z] - Unreleased` to
@@ -254,10 +257,11 @@ https://github.com/orgs/koedame/packages/container/<package-name>/settings
 → Danger Zone → Change visibility → Public
 ```
 
-This is the bug behind PR #1022: the v0.1.0 image was pushed to GHCR
-successfully but anonymous pull returned `unauthorized` because the package
-was still private. The `readme-smoke.yml` `docker-ghcr` job now probes the
-HTTP layer with an anonymous bearer token to detect this state immediately.
+This is the bug originally reported in issue #1001: the v0.1.0 image was
+pushed to GHCR successfully but anonymous pull returned `unauthorized`
+because the package was still private. The `readme-smoke.yml` `docker-ghcr`
+job (added in #1012) now probes the HTTP layer with an anonymous bearer
+token to detect this state immediately.
 
 The visibility flip cannot be done via `gh api` with the standard `repo` /
 `workflow` token scopes — it requires `admin:packages`, which is not granted
