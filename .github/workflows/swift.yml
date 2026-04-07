@@ -106,27 +106,53 @@ jobs:
 
           # Replace only the binaryTarget in Package.swift with a local path,
           # preserving any other changes to the file (platforms, products, etc.).
+          # Uses parenthesis counting (not regex) so URLs/checksums containing
+          # literal `)` are handled correctly.
           python3 << 'PYTHON'
           import re
           path = "packages/swift/Package.swift"
           with open(path) as f:
               content = f.read()
-          # Match .binaryTarget(...) for chordsketchFFI, allowing multi-line content
-          pattern = re.compile(
-              r'\.binaryTarget\(\s*name:\s*"chordsketchFFI".*?\)',
+
+          # Find the start of .binaryTarget(... for chordsketchFFI
+          header_re = re.compile(
+              r'\.binaryTarget\(\s*name:\s*"chordsketchFFI"',
               re.DOTALL,
           )
+          match = header_re.search(content)
+          if not match:
+              raise SystemExit("Could not find .binaryTarget for chordsketchFFI")
+
+          # Walk forward, counting parens, to find the matching close paren.
+          start = match.start()
+          # The opening `(` is part of `.binaryTarget(`
+          paren_pos = content.index('(', start)
+          depth = 1
+          i = paren_pos + 1
+          while i < len(content) and depth > 0:
+              ch = content[i]
+              if ch == '(':
+                  depth += 1
+              elif ch == ')':
+                  depth -= 1
+              i += 1
+          if depth != 0:
+              raise SystemExit("Unbalanced parentheses in .binaryTarget block")
+          end = i  # one past the closing `)`
+
+          # Verify there is no second .binaryTarget for chordsketchFFI elsewhere.
+          if header_re.search(content, end):
+              raise SystemExit(
+                  "Found more than one .binaryTarget for chordsketchFFI"
+              )
+
           replacement = (
               '.binaryTarget(\n'
               '            name: "chordsketchFFI",\n'
               '            path: "chordsketchFFI.xcframework"\n'
               '        )'
           )
-          new_content, count = pattern.subn(replacement, content, count=1)
-          if count != 1:
-              raise SystemExit(
-                  f"Expected to replace exactly 1 binaryTarget, replaced {count}"
-              )
+          new_content = content[:start] + replacement + content[end:]
           with open(path, "w") as f:
               f.write(new_content)
           PYTHON
