@@ -1,0 +1,12 @@
+{
+    "name": "@chordsketch/syntaxes",
+    "version": "0.0.1",
+    "private": true,
+    "description": "TextMate grammar and language configuration for ChordPro files",
+    "scripts": {
+        "test": "vscode-tmgrammar-test -g chordpro.tmLanguage.json 'tests/**/*.cho'"
+    },
+    "devDependencies": {
+        "vscode-tmgrammar-test": "^0.1.3"
+    }
+}
