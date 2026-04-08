@@ -11,6 +11,10 @@ on:
       - "syntaxes/**"
       - ".github/workflows/grammar.yml"
 
+concurrency:
+  group: grammar-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
