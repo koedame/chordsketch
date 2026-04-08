@@ -66,20 +66,28 @@ jobs:
       - name: Install Rust target
         run: rustup target add ${{ matrix.target }}
 
-      - name: Install cross-compilation tools (aarch64-linux)
+      - name: Install cross (aarch64-linux)
+        # `cross` runs cargo inside a Docker container that already has
+        # the aarch64 gcc toolchain, eliminating the need to install
+        # gcc-aarch64-linux-gnu via apt-get on every run. The pre-built
+        # binary from taiki-e/install-action is downloaded in ~5 seconds
+        # vs. 1-2 minutes for apt-get. Docker is pre-installed on
+        # ubuntu-latest runners.
         if: matrix.cross
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+        uses: taiki-e/install-action@94cb46f8d6e437890146ffbd78a778b78e623fb2 # v2
+        with:
+          tool: cross
 
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           shared-key: kotlin-${{ matrix.target }}
 
       - name: Build
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.cross && 'aarch64-linux-gnu-gcc' || '' }}
-        run: cargo build -p chordsketch-ffi --release --target ${{ matrix.target }}
+        # `cross` is used for the aarch64-linux target (matrix.cross == true);
+        # all other targets build with plain `cargo`.
+        # The command is on one line so it works on all runner shells
+        # (bash, PowerShell, cmd) — backslash line continuation is bash-only.
+        run: ${{ matrix.cross && 'cross' || 'cargo' }} build -p chordsketch-ffi --release --target ${{ matrix.target }}
 
       - name: Upload JNI library
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
