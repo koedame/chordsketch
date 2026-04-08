@@ -21,6 +21,12 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/swift.yml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and publish (e.g., v0.1.0). Leave empty to build from the workflow's ref without publishing."
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -31,6 +37,13 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # When triggered via workflow_dispatch with a tag input, build
+          # from that tag rather than the workflow's default ref. This
+          # is what allows historical tags (e.g., v0.1.0) to be re-built
+          # for one-shot remediation. For other triggers, fall through
+          # to github.ref via the OR fallback.
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Install Rust targets
         run: |
@@ -194,7 +207,9 @@ jobs:
     name: Publish XCFramework
     needs: [build-xcframework]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: |
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && inputs.tag != '')
     permissions:
       contents: write
     steps:
@@ -205,8 +220,13 @@ jobs:
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
           gh release upload "$TAG" chordsketch-xcframework.zip \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
