@@ -428,9 +428,17 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn render_html_with_options_invalid_transpose_type() {
         let opts = js_sys::Object::new();
-        Reflect::set(&opts, &"transpose".into(), &JsValue::from_str("not a number")).unwrap();
+        Reflect::set(
+            &opts,
+            &"transpose".into(),
+            &JsValue::from_str("not a number"),
+        )
+        .unwrap();
         let result = render_html_with_options(MINIMAL_INPUT, opts.into());
-        assert!(result.is_err(), "string transpose should fail to deserialize");
+        assert!(
+            result.is_err(),
+            "string transpose should fail to deserialize"
+        );
     }
 
     /// Invalid `config` strings (neither a known preset nor valid RRJSON)
@@ -506,7 +514,12 @@ mod wasm_tests {
             captured_clone.push(&msg);
         })
             as Box<dyn FnMut(JsValue)>);
-        Reflect::set(&console, &"warn".into(), capture_fn.as_ref().unchecked_ref()).unwrap();
+        Reflect::set(
+            &console,
+            &"warn".into(),
+            capture_fn.as_ref().unchecked_ref(),
+        )
+        .unwrap();
 
         // Render with a transpose value that the renderer will note in
         // its warnings (any non-zero transpose with a chord that
