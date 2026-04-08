@@ -3,8 +3,10 @@
 # Note: the ChordPro comment character '#' is also the annotation prefix, so
 # column 0 of any source line cannot be tested directly.  Specifically:
 #   - punctuation.definition.directive.begin.chordpro  ('{' at col 0)
-#   - punctuation.definition.chord.begin.chordpro      ('[' at col 0)
-# are verified only indirectly via the surrounding token assertions.
+#   - punctuation.definition.comment.chordpro          ('#' at col 0)
+# are verified only indirectly via surrounding token assertions.
+# punctuation.definition.chord.begin.chordpro can be tested on the second
+# chord in a line (col > 0).
 
 # This is a comment
 #^ comment.line.number-sign.chordpro
@@ -23,6 +25,9 @@
 [G]Amazing [G7]grace, how [C]sweet the [G]sound
 #^ entity.name.chord.chordpro
 # ^ punctuation.definition.chord.end.chordpro
+#          ^ punctuation.definition.chord.begin.chordpro
+#           ^^ entity.name.chord.chordpro
+#             ^ punctuation.definition.chord.end.chordpro
 
 {end_of_verse}
 
