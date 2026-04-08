@@ -158,3 +158,208 @@ jobs:
           git add bucket/chordsketch.json
           git commit -m "Update chordsketch to ${VERSION}"
           git push
+
+  update-swift-package:
+    name: Update Swift Package.swift
+    runs-on: ubuntu-latest
+    # Note: this job pushes a branch and opens a PR. The default
+    # GITHUB_TOKEN cannot trigger downstream workflows on pushes / PR
+    # creation, which would leave the auto-generated PR with no CI runs
+    # and block the human merger from getting a green check. Use
+    # CLAUDE_PAT (the same token that auto-rebase.yml and claude.yml use
+    # for the "git pushes by Claude trigger CI" path) so that the
+    # generated PR fires CI normally. The job-level GITHUB_TOKEN is
+    # therefore left at its read default — it is not used for the push.
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: main
+          token: ${{ secrets.CLAUDE_PAT }}
+
+      - name: Determine version
+        id: version
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="$RELEASE_TAG"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for xcframework asset
+        id: wait
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # swift.yml's publish job runs in parallel with this workflow
+          # (both are triggered by the same tag push). The xcframework
+          # asset may not be on the release yet — poll up to 30 minutes.
+          ASSET="chordsketch-xcframework.zip"
+          for attempt in $(seq 1 60); do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+                --json assets --jq '.assets[].name' \
+                | grep -Fxq "$ASSET"; then
+              echo "Asset found on attempt ${attempt}"
+              echo "found=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Attempt ${attempt}: ${ASSET} not yet on release ${TAG}, waiting 30s..."
+            sleep 30
+          done
+          echo "Timed out waiting for ${ASSET} on release ${TAG}." >&2
+          echo "swift.yml's publish job may have failed; check that workflow." >&2
+          exit 1
+
+      - name: Download xcframework
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern chordsketch-xcframework.zip
+
+      - name: Compute checksum
+        id: checksum
+        run: |
+          # Swift Package Manager uses SHA256 of the zip file (same as
+          # `swift package compute-checksum chordsketch-xcframework.zip`,
+          # which is just sha256sum of the zip).
+          SHA=$(sha256sum chordsketch-xcframework.zip | awk '{print $1}')
+          if [[ ! "$SHA" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            echo "ERROR: invalid SHA256 computed: '${SHA}'" >&2
+            exit 1
+          fi
+          echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "Computed SHA256: ${SHA}"
+
+      - name: Update Package.swift
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          SHA256: ${{ steps.checksum.outputs.sha256 }}
+        run: |
+          # Rewrite the .binaryTarget block's url and checksum fields
+          # using paren-counting (matching the approach in swift.yml's
+          # test job) so URLs/checksums containing literal `)` are
+          # handled correctly.
+          python3 << 'PYTHON'
+          import os
+          import re
+
+          tag = os.environ["TAG"]
+          sha256 = os.environ["SHA256"]
+          path = "packages/swift/Package.swift"
+
+          with open(path) as f:
+              content = f.read()
+
+          header_re = re.compile(
+              r'\.binaryTarget\(\s*name:\s*"chordsketchFFI"',
+              re.DOTALL,
+          )
+          match = header_re.search(content)
+          if not match:
+              raise SystemExit("Could not find .binaryTarget for chordsketchFFI")
+
+          start = match.start()
+          paren_pos = content.index('(', start)
+          depth = 1
+          i = paren_pos + 1
+          in_string = False
+          while i < len(content) and depth > 0:
+              ch = content[i]
+              if in_string:
+                  if ch == '\\' and i + 1 < len(content):
+                      i += 2
+                      continue
+                  if ch == '"':
+                      in_string = False
+              else:
+                  if ch == '"':
+                      in_string = True
+                  elif ch == '(':
+                      depth += 1
+                  elif ch == ')':
+                      depth -= 1
+              i += 1
+          if depth != 0:
+              raise SystemExit("Unbalanced parentheses in .binaryTarget block")
+          end = i
+
+          if header_re.search(content, end):
+              raise SystemExit("Found more than one .binaryTarget for chordsketchFFI")
+
+          replacement = (
+              '.binaryTarget(\n'
+              '            name: "chordsketchFFI",\n'
+              f'            url: "https://github.com/koedame/chordsketch/releases/download/{tag}/chordsketch-xcframework.zip",\n'
+              f'            checksum: "{sha256}"\n'
+              '        )'
+          )
+          new_content = content[:start] + replacement + content[end:]
+          with open(path, "w") as f:
+              f.write(new_content)
+          PYTHON
+          cat packages/swift/Package.swift
+
+      - name: Open PR
+        env:
+          GH_TOKEN: ${{ secrets.CLAUDE_PAT }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA256: ${{ steps.checksum.outputs.sha256 }}
+        run: |
+          BRANCH="swift-package-update-${VERSION}"
+
+          # Configure committer identity for github-actions[bot].
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # If the file is unchanged (e.g., re-run on same release), do nothing.
+          if git diff --quiet packages/swift/Package.swift; then
+            echo "Package.swift already up-to-date for ${TAG}; nothing to do."
+            exit 0
+          fi
+
+          # If the branch already exists on the remote (e.g., re-run),
+          # delete it so we can recreate it cleanly.
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            git push origin --delete "$BRANCH"
+          fi
+
+          git checkout -b "$BRANCH"
+          git add packages/swift/Package.swift
+          git commit -m "Update Swift Package.swift to ${TAG}"
+          git push -u origin "$BRANCH"
+
+          BODY=$(cat <<BODY_EOF
+          ## What
+
+          Updates \`packages/swift/Package.swift\`'s \`.binaryTarget\` to point to
+          the \`${TAG}\` xcframework asset and pin its SHA256.
+
+          - **Tag**: \`${TAG}\`
+          - **Asset**: \`chordsketch-xcframework.zip\`
+          - **SHA256**: \`${SHA256}\`
+
+          ## Why
+
+          Auto-generated by \`post-release.yml\`'s \`update-swift-package\` job
+          after the Swift workflow uploaded the xcframework to the release.
+          Without this update, \`swift package add https://github.com/koedame/chordsketch.git\`
+          against the new tag would fail with an invalid checksum error.
+
+          See #1062.
+          BODY_EOF
+          )
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "Update Swift Package.swift to ${TAG}" \
+            --body "$BODY"
