@@ -57,9 +57,9 @@ jobs:
       - name: Build
         run: |
           if [ "${{ matrix.cross }}" = "true" ]; then
-            cross build --release --target ${{ matrix.target }} -p chordsketch
+            cross build --release --target ${{ matrix.target }} -p chordsketch -p chordsketch-lsp
           else
-            cargo build --release --target ${{ matrix.target }} -p chordsketch
+            cargo build --release --target ${{ matrix.target }} -p chordsketch -p chordsketch-lsp
           fi
         shell: bash
 
@@ -80,6 +80,7 @@ jobs:
           STAGING="chordsketch-${{ steps.version.outputs.version }}-${{ matrix.target }}"
           mkdir "$STAGING"
           cp "target/${{ matrix.target }}/release/chordsketch" "$STAGING/"
+          cp "target/${{ matrix.target }}/release/chordsketch-lsp" "$STAGING/"
           cp LICENSE README.md "$STAGING/"
           tar czf "$ARCHIVE_NAME" "$STAGING"
           echo "ARCHIVE=$ARCHIVE_NAME" >> "$GITHUB_ENV"
@@ -94,6 +95,7 @@ jobs:
           $Staging = "chordsketch-$Version-$Target"
           New-Item -ItemType Directory -Path $Staging
           Copy-Item "target/$Target/release/chordsketch.exe" "$Staging/"
+          Copy-Item "target/$Target/release/chordsketch-lsp.exe" "$Staging/"
           Copy-Item LICENSE, README.md "$Staging/"
           Compress-Archive -Path "$Staging/*" -DestinationPath $ArchiveName
           echo "ARCHIVE=$ArchiveName" >> $env:GITHUB_ENV
