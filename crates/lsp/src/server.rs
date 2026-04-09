@@ -1,9 +1,14 @@
 //! LSP [`Backend`] implementation.
 //!
-//! Implements the [`LanguageServer`] trait from `tower-lsp`. Only the
-//! capabilities required for parse-error diagnostics and text completion are
-//! declared; all other requests are left to their default (not-implemented)
-//! response so that editors degrade gracefully.
+//! Implements the [`LanguageServer`] trait from `tower-lsp`. Capabilities
+//! declared:
+//! - Diagnostics (parse errors)
+//! - Text completion (directive names, chord names, metadata keys)
+//! - Hover (chord diagrams, directive documentation)
+//! - Document formatting
+//!
+//! All other requests are left to their default (not-implemented) response so
+//! that editors degrade gracefully.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -14,7 +19,8 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::{
     CompletionOptions, CompletionParams, CompletionResponse, Diagnostic,
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DocumentFormattingParams, InitializeParams, InitializeResult, InitializedParams, OneOf,
+    DocumentFormattingParams, Hover, HoverContents, HoverParams, HoverProviderCapability,
+    InitializeParams, InitializeResult, InitializedParams, MarkupContent, MarkupKind, OneOf,
     Position, PositionEncodingKind, Range, ServerCapabilities, TextDocumentSyncKind, TextEdit, Url,
 };
 use tower_lsp::{Client, LanguageServer};
@@ -23,6 +29,9 @@ use crate::completion::{
     CompletionContext, chord_items, detect_context, directive_items, meta_key_items,
 };
 use crate::convert::parse_error_to_diagnostic;
+use crate::hover::{
+    HoverContext, chord_hover_markdown, detect_hover_context, directive_hover_markdown,
+};
 
 /// Maximum number of open documents tracked for completion.
 ///
@@ -104,6 +113,7 @@ impl LanguageServer for Backend {
                     ]),
                     ..Default::default()
                 }),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
                 document_formatting_provider: Some(OneOf::Left(true)),
                 ..Default::default()
             },
@@ -190,6 +200,40 @@ impl LanguageServer for Backend {
         } else {
             Ok(Some(CompletionResponse::Array(items)))
         }
+    }
+
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        let uri = &params.text_document_position_params.text_document.uri;
+        let pos = &params.text_document_position_params.position;
+
+        let line_owned: String = {
+            let docs = self.documents.lock().await;
+            let Some(text) = docs.get(uri) else {
+                return Ok(None);
+            };
+            text.lines().nth(pos.line as usize).unwrap_or("").to_owned()
+        };
+
+        // pos.character is a UTF-8 byte offset (server declared UTF8 encoding).
+        let byte_col = pos.character as usize;
+        let col = line_owned
+            .char_indices()
+            .take_while(|(byte_idx, _)| *byte_idx < byte_col)
+            .count();
+
+        let markdown = match detect_hover_context(&line_owned, col) {
+            HoverContext::ChordName { name } => chord_hover_markdown(&name),
+            HoverContext::DirectiveName { name } => directive_hover_markdown(&name),
+            HoverContext::None => None,
+        };
+
+        Ok(markdown.map(|md| Hover {
+            contents: HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: md,
+            }),
+            range: None,
+        }))
     }
 
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
