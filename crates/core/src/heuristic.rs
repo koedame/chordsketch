@@ -658,6 +658,17 @@ fn pair_chords_with_lyric(positions: &[(usize, String)], lyric: &str) -> LyricsL
 // ChordPro serializer for plain-text-imported songs
 // ---------------------------------------------------------------------------
 
+/// Strips `{` and `}` from a string so it is safe to embed as a ChordPro
+/// directive value.  ChordPro has no escape mechanism inside directive values,
+/// so brace characters would produce malformed output.
+fn sanitize_directive_value(s: &str) -> std::borrow::Cow<'_, str> {
+    if s.contains('{') || s.contains('}') {
+        std::borrow::Cow::Owned(s.replace(['{', '}'], ""))
+    } else {
+        std::borrow::Cow::Borrowed(s)
+    }
+}
+
 /// Serializes a [`Song`] to ChordPro format.
 ///
 /// This serializer is intended for songs produced by [`convert_plain_text`].
@@ -683,23 +694,33 @@ pub fn song_to_chordpro(song: &Song) -> String {
 
     // Emit metadata directives first if populated.
     if let Some(ref title) = song.metadata.title {
-        out.push_str(&format!("{{title: {title}}}\n"));
+        out.push_str(&format!("{{title: {}}}\n", sanitize_directive_value(title)));
     }
-    if let Some(ref artist) = song.metadata.artists.first() {
-        out.push_str(&format!("{{artist: {artist}}}\n"));
+    if let Some(artist) = song.metadata.artists.first() {
+        out.push_str(&format!(
+            "{{artist: {}}}\n",
+            sanitize_directive_value(artist)
+        ));
     }
 
     for line in &song.lines {
         match line {
             Line::Empty => out.push('\n'),
-            Line::Comment(style, text) => match style {
-                CommentStyle::Normal => out.push_str(&format!("{{comment: {text}}}\n")),
-                CommentStyle::Italic => out.push_str(&format!("{{comment_italic: {text}}}\n")),
-                CommentStyle::Boxed => out.push_str(&format!("{{comment_box: {text}}}\n")),
-            },
+            Line::Comment(style, text) => {
+                let t = sanitize_directive_value(text);
+                match style {
+                    CommentStyle::Normal => out.push_str(&format!("{{comment: {t}}}\n")),
+                    CommentStyle::Italic => out.push_str(&format!("{{comment_italic: {t}}}\n")),
+                    CommentStyle::Boxed => out.push_str(&format!("{{comment_box: {t}}}\n")),
+                }
+            }
             Line::Directive(dir) => {
                 if let Some(ref value) = dir.value {
-                    out.push_str(&format!("{{{}: {value}}}\n", dir.name));
+                    out.push_str(&format!(
+                        "{{{}: {}}}\n",
+                        dir.name,
+                        sanitize_directive_value(value)
+                    ));
                 } else {
                     out.push_str(&format!("{{{}}}\n", dir.name));
                 }
@@ -1007,5 +1028,20 @@ mod tests {
             .collect();
         assert!(kinds.iter().any(|k| **k == DirectiveKind::EndOfVerse));
         assert!(kinds.iter().any(|k| **k == DirectiveKind::EndOfChorus));
+    }
+
+    // --- song_to_chordpro ---
+
+    #[test]
+    fn song_to_chordpro_strips_braces_in_title() {
+        // song_to_chordpro must not emit malformed ChordPro when metadata
+        // contains brace characters (issue #1282).
+        let mut song = Song::default();
+        song.metadata.title = Some("Hello {World}".to_string());
+        let out = song_to_chordpro(&song);
+        // Braces inside the value must be stripped; the directive itself is
+        // still well-formed.
+        assert_eq!(out, "{title: Hello World}\n");
+        assert!(!out.contains("{World}"));
     }
 }
