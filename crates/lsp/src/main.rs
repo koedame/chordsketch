@@ -27,6 +27,7 @@
 
 mod completion;
 mod convert;
+mod hover;
 mod server;
 
 use server::Backend;
