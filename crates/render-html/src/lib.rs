@@ -2704,13 +2704,10 @@ Verse text\n\
         // When a chord has a {define} entry (rendered inline) and also appears in
         // lyrics with {diagrams} active, the auto-inject grid must NOT include it
         // again. Regression test for #1211.
-        let html = render(
-            "{define: Am base-fret 1 frets x 0 2 2 1 0}\n{diagrams}\n[Am]Hello [G]world\n",
-        );
+        let html =
+            render("{define: Am base-fret 1 frets x 0 2 2 1 0}\n{diagrams}\n[Am]Hello [G]world\n");
         // Am was rendered inline at the {define} position; count SVG occurrences.
-        let am_svg_count = html
-            .match_indices("font-weight=\"bold\">Am</text>")
-            .count();
+        let am_svg_count = html.match_indices("font-weight=\"bold\">Am</text>").count();
         assert_eq!(
             am_svg_count, 1,
             "Am diagram should appear exactly once (inline via {{define}}), not also in auto-inject grid"
