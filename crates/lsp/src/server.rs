@@ -235,17 +235,33 @@ impl LanguageServer for Backend {
 
 /// Compute the end position (UTF-8 byte offset) of `text`.
 ///
-/// Used to build a full-document `TextEdit` range. Each `\n` advances the
-/// line counter; the character offset within the final line is the byte
-/// distance from the last `\n` to the end of the string.
+/// Used to build a full-document `TextEdit` range. Supports LF (`\n`),
+/// CRLF (`\r\n`), and CR-only (`\r`) line endings. Each line break advances
+/// the line counter; the character offset is the byte distance from the last
+/// line-break byte to the end of the string.
 fn document_end_position(text: &str) -> Position {
     let mut line: u32 = 0;
     let mut last_newline_byte: usize = 0;
-    for (i, b) in text.bytes().enumerate() {
-        if b == b'\n' {
-            line += 1;
-            last_newline_byte = i + 1;
+    let bytes = text.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
+    while i < len {
+        match bytes[i] {
+            b'\n' => {
+                line += 1;
+                last_newline_byte = i + 1;
+            }
+            b'\r' => {
+                // A bare \r (CR-only) is a line break.  A \r\n pair is handled
+                // by the \n branch on the next iteration, so skip the \r here.
+                if i + 1 >= len || bytes[i + 1] != b'\n' {
+                    line += 1;
+                    last_newline_byte = i + 1;
+                }
+            }
+            _ => {}
         }
+        i += 1;
     }
     let character = (text.len() - last_newline_byte) as u32;
     Position { line, character }
@@ -313,5 +329,46 @@ mod tests {
             "expected errors from both song segments, got {}: {diags:?}",
             diags.len()
         );
+    }
+
+    // --- document_end_position ---
+
+    #[test]
+    fn end_pos_lf_only() {
+        // Standard LF line endings.
+        let pos = document_end_position("line1\nline2\nline3");
+        assert_eq!(pos.line, 2);
+        assert_eq!(pos.character, 5); // len("line3")
+    }
+
+    #[test]
+    fn end_pos_crlf() {
+        // CRLF line endings — \r is skipped, \n advances the counter.
+        let pos = document_end_position("line1\r\nline2\r\nline3");
+        assert_eq!(pos.line, 2);
+        assert_eq!(pos.character, 5);
+    }
+
+    #[test]
+    fn end_pos_cr_only() {
+        // CR-only line endings (old Mac OS 9 style).
+        let pos = document_end_position("line1\rline2\rline3");
+        assert_eq!(pos.line, 2);
+        assert_eq!(pos.character, 5);
+    }
+
+    #[test]
+    fn end_pos_empty() {
+        let pos = document_end_position("");
+        assert_eq!(pos.line, 0);
+        assert_eq!(pos.character, 0);
+    }
+
+    #[test]
+    fn end_pos_trailing_newline() {
+        // Trailing \n means the final line is empty (character = 0).
+        let pos = document_end_position("line1\nline2\n");
+        assert_eq!(pos.line, 2);
+        assert_eq!(pos.character, 0);
     }
 }

@@ -1570,30 +1570,25 @@ mod tests {
     }
 
     // -- XDG_CONFIG_HOME tests ---------------------------------------------------
-    // These tests manipulate the environment, so they must run serially
-    // (cargo test runs each test function in its own thread, but env vars are
-    // process-global). Use unique env manipulation patterns to minimize risk.
-
-    // SAFETY: These tests manipulate process-global environment variables.
-    // This is safe in test context because:
-    // 1. Each test saves and restores the previous value
-    // 2. The env var is only read by config_dir() within the same test
+    // Environment variables are process-global; tests that mutate them must not
+    // run concurrently.  All XDG_CONFIG_HOME tests acquire ENV_LOCK before
+    // touching the environment and release it (via drop) before asserting.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
     fn test_config_dir_uses_xdg_config_home() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let dir = tempdir().unwrap();
         let abs_path = dir.path().to_path_buf();
 
-        // Temporarily set XDG_CONFIG_HOME to our tempdir.
         let prev = std::env::var_os("XDG_CONFIG_HOME");
-        // SAFETY: test-only; we restore the value immediately after.
+        // SAFETY: test-only; we hold ENV_LOCK for the duration.
         unsafe {
             std::env::set_var("XDG_CONFIG_HOME", &abs_path);
         }
 
         let result = config_dir();
 
-        // Restore previous value.
         unsafe {
             match prev {
                 Some(val) => std::env::set_var("XDG_CONFIG_HOME", val),
@@ -1606,8 +1601,9 @@ mod tests {
 
     #[test]
     fn test_config_dir_rejects_relative_xdg_config_home() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let prev = std::env::var_os("XDG_CONFIG_HOME");
-        // SAFETY: test-only; we restore the value immediately after.
+        // SAFETY: test-only; we hold ENV_LOCK for the duration.
         unsafe {
             std::env::set_var("XDG_CONFIG_HOME", "relative/path");
         }
@@ -1621,7 +1617,7 @@ mod tests {
             }
         }
 
-        // A relative path should be ignored; result should be the fallback.
+        // A relative path must be ignored; fall back to HOME/.config or None.
         assert_ne!(result, Some(PathBuf::from("relative/path")));
     }
 

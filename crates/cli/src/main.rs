@@ -109,7 +109,7 @@ fn main() -> ExitCode {
         let mut cmd = Cli::command();
         cmd.error(
             clap::error::ErrorKind::MissingRequiredArgument,
-            "the following required arguments were not provided: <FILES>",
+            "<FILES> required for render mode",
         )
         .exit();
     }
