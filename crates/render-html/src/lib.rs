@@ -636,7 +636,7 @@ section > .section-label { font-weight: bold; font-style: italic; margin-bottom:
 .chorus-recall { margin: 1em 0; }
 .chorus-recall > .section-label { font-weight: bold; font-style: italic; margin-bottom: 0.3em; }
 img { max-width: 100%; height: auto; }
-.chord-diagrams-grid { display: flex; flex-wrap: wrap; gap: 0.5em; }
+.chord-diagrams-grid { display: flex; flex-wrap: wrap; gap: 0.5em; margin: 0.5em 0; }
 .chord-diagram-container { display: inline-block; vertical-align: top; }
 .chord-diagram { display: block; }
 ";

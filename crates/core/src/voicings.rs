@@ -869,9 +869,11 @@ mod tests {
         assert_eq!(flat_to_sharp("Bb11").as_deref(), Some("A#11"));
         assert_eq!(flat_to_sharp("Bb13").as_deref(), Some("A#13"));
 
-        // Other flat roots
+        // All five flat roots
         assert_eq!(flat_to_sharp("Dbsus2").as_deref(), Some("C#sus2"));
         assert_eq!(flat_to_sharp("Ebadd9").as_deref(), Some("D#add9"));
+        assert_eq!(flat_to_sharp("Gbdim7").as_deref(), Some("F#dim7"));
+        assert_eq!(flat_to_sharp("Absus2").as_deref(), Some("G#sus2"));
 
         // Sharp spellings must not be altered.
         assert_eq!(flat_to_sharp("A#9").as_deref(), None);
