@@ -130,6 +130,7 @@ fn render_song_impl(
                     } else {
                         let instr = match val.to_ascii_lowercase().as_str() {
                             "ukulele" | "uke" => "ukulele",
+                            "guitar" => "guitar",
                             _ => &default_instrument,
                         };
                         auto_diagrams_instrument = Some(instr.to_string());

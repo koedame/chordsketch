@@ -514,6 +514,7 @@ fn render_song_into_doc(
                         show_diagrams = true;
                         let instr = match val.to_ascii_lowercase().as_str() {
                             "ukulele" | "uke" => "ukulele",
+                            "guitar" => "guitar",
                             _ => &default_instrument,
                         };
                         auto_diagrams_instrument = Some(instr.to_string());
@@ -521,6 +522,7 @@ fn render_song_into_doc(
                     continue;
                 }
                 if d.kind == DirectiveKind::NoDiagrams {
+                    show_diagrams = false;
                     auto_diagrams_instrument = None;
                     continue;
                 }

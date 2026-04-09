@@ -293,6 +293,7 @@ fn render_song_body(
                         show_diagrams = true;
                         let instr = match val.to_ascii_lowercase().as_str() {
                             "ukulele" | "uke" => "ukulele",
+                            "guitar" => "guitar",
                             _ => &default_instrument,
                         };
                         auto_diagrams_instrument = Some(instr.to_string());
@@ -300,6 +301,7 @@ fn render_song_body(
                     continue;
                 }
                 if directive.kind == DirectiveKind::NoDiagrams {
+                    show_diagrams = false;
                     auto_diagrams_instrument = None;
                     continue;
                 }
@@ -2640,6 +2642,54 @@ Verse text\n\
         );
         // Ukulele Am has 4 strings so the SVG will differ from guitar
         assert!(html.contains(">Am<"), "Am diagram expected");
+    }
+
+    #[test]
+    fn test_diagrams_guitar_explicit_overrides_config_default() {
+        // Even when config could default to ukulele, {diagrams: guitar} should
+        // use guitar (6-string Am) not ukulele (4-string Am).
+        let song = chordsketch_core::parse("{diagrams: guitar}\n[Am]Hello").unwrap();
+        let config = chordsketch_core::config::Config::defaults()
+            .with_define("diagrams.instrument=ukulele")
+            .unwrap();
+        let html = render_song_with_transpose(&song, 0, &config);
+        assert!(
+            html.contains("class=\"chord-diagrams\""),
+            "guitar diagrams section expected"
+        );
+        assert!(html.contains(">Am<"), "Am diagram expected");
+        let guitar_am_html = render_song_with_transpose(
+            &chordsketch_core::parse("{diagrams: guitar}\n[Am]Hello").unwrap(),
+            0,
+            &chordsketch_core::config::Config::defaults(),
+        );
+        let uke_am_html = render_song_with_transpose(
+            &chordsketch_core::parse("{diagrams: ukulele}\n[Am]Hello").unwrap(),
+            0,
+            &chordsketch_core::config::Config::defaults(),
+        );
+        // Guitar and ukulele diagrams must differ in their SVG content.
+        assert_ne!(
+            guitar_am_html, uke_am_html,
+            "guitar and ukulele Am diagrams should differ"
+        );
+        // With config defaulting to ukulele, {diagrams: guitar} must produce
+        // the same output as the guitar default.
+        assert_eq!(
+            html, guitar_am_html,
+            "{{diagrams: guitar}} must select guitar regardless of config default"
+        );
+    }
+
+    #[test]
+    fn test_no_diagrams_suppresses_inline_define_diagrams() {
+        // {no_diagrams} should suppress inline {define} diagram rendering
+        // (show_diagrams = false), not just the auto-inject grid.
+        let html = render("{no_diagrams}\n{define: Am base-fret 1 frets x 0 2 2 1 0}\n[Am]Hello");
+        assert!(
+            !html.contains("<svg"),
+            "{{no_diagrams}} should suppress inline define diagram SVG"
+        );
     }
 
     // -- abc2svg delegate rendering tests -----------------------------------------
