@@ -8,15 +8,22 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
-use clap::{CommandFactory, Parser};
+use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 
 /// ChordPro file processor — parse and render ChordPro songs.
+///
+/// Run `chordsketch fmt --help` for the formatter subcommand.
 #[derive(Parser)]
 #[command(name = "chordsketch", version, about)]
+#[command(args_conflicts_with_subcommands = true)]
 struct Cli {
+    /// Subcommand (e.g. `fmt`).
+    #[command(subcommand)]
+    command: Option<Commands>,
+
     /// Input ChordPro file(s) to process.
-    #[arg(required_unless_present = "completions")]
+    #[arg(required = false)]
     files: Vec<String>,
 
     /// Generate shell completions and print to stdout.
@@ -60,6 +67,25 @@ struct Cli {
     instrument: Option<String>,
 }
 
+/// Available subcommands.
+#[derive(Subcommand)]
+enum Commands {
+    /// Format ChordPro source files.
+    ///
+    /// Normalize directive names, spacing, chord spelling, and blank lines.
+    /// Use '-' as a file name to read from stdin and write to stdout.
+    /// With --check the files are not modified; exits 1 if any needs formatting.
+    Fmt {
+        /// Files to format. Use '-' to read from stdin and write to stdout.
+        #[arg(required = true)]
+        files: Vec<String>,
+
+        /// Check only — do not modify files. Exit 1 if any file is not formatted.
+        #[arg(long)]
+        check: bool,
+    },
+}
+
 /// Supported output formats.
 #[derive(Clone, Debug, clap::ValueEnum)]
 enum Format {
@@ -72,14 +98,23 @@ enum Format {
 }
 
 fn main() -> ExitCode {
-    // Dispatch to the `fmt` subcommand before handing control to clap so that
-    // the existing flat `Cli` struct does not need to be restructured.
-    let args: Vec<String> = std::env::args().collect();
-    if args.get(1).map(|s| s.as_str()) == Some("fmt") {
-        return run_fmt(&args[2..]);
+    let cli = Cli::parse();
+
+    // Dispatch the `fmt` subcommand.
+    if let Some(Commands::Fmt { files, check }) = cli.command {
+        return run_fmt(&files, check);
     }
 
-    let cli = Cli::parse();
+    // Render mode: require at least one file (unless generating completions).
+    if cli.files.is_empty() && cli.completions.is_none() {
+        // Reuse clap's own error formatting for a consistent user experience.
+        let mut cmd = Cli::command();
+        cmd.error(
+            clap::error::ErrorKind::MissingRequiredArgument,
+            "the following required arguments were not provided: <FILES>",
+        )
+        .exit();
+    }
 
     if let Some(shell) = cli.completions {
         let mut cmd = Cli::command();
@@ -298,51 +333,19 @@ fn write_bytes(path: &Option<String>, content: &[u8]) -> io::Result<()> {
     }
 }
 
-/// Run the `chordsketch fmt` subcommand.
-///
-/// `extra_args` are the arguments after `"fmt"` (i.e., `argv[2..]`).
+/// Run the `fmt` subcommand with pre-parsed arguments.
 ///
 /// # Exit codes
 ///
 /// * `0` — all files are formatted (or `--check` found nothing to change).
 /// * `1` — at least one file needs formatting (`--check` mode) or an I/O
 ///   error occurred.
-fn run_fmt(extra_args: &[String]) -> ExitCode {
-    /// Arguments for `chordsketch fmt`.
-    #[derive(clap::Parser)]
-    #[command(
-        name = "chordsketch fmt",
-        about = "Format ChordPro source files",
-        long_about = "Normalize directive names, spacing, chord spelling, and blank lines.\n\
-                      \n\
-                      Use '-' as a file name to read from stdin and write to stdout.\n\
-                      With --check the files are not modified; the exit code is 1 if any\n\
-                      file needs formatting (useful in CI)."
-    )]
-    struct FmtCli {
-        /// Files to format. Use '-' to read from stdin and write to stdout.
-        files: Vec<String>,
-
-        /// Check only — do not modify files. Exit 1 if any file is not formatted.
-        #[arg(long)]
-        check: bool,
-    }
-
-    // parse_from expects the first element to be the program name.
-    let parsed = FmtCli::parse_from(
-        std::iter::once("chordsketch fmt".to_string()).chain(extra_args.iter().cloned()),
-    );
-
-    if parsed.files.is_empty() {
-        eprintln!("error: no input files specified (use '-' for stdin)");
-        return ExitCode::FAILURE;
-    }
-
+fn run_fmt(files: &[String], check: bool) -> ExitCode {
     let options = chordsketch_core::formatter::FormatOptions::default();
     let mut had_error = false;
     let mut needs_format = false;
 
-    for file in &parsed.files {
+    for file in files {
         if file == "-" {
             // stdin → stdout (always, regardless of --check).
             let mut input = String::new();
@@ -352,7 +355,7 @@ fn run_fmt(extra_args: &[String]) -> ExitCode {
                 continue;
             }
             let formatted = chordsketch_core::formatter::format(&input, &options);
-            if parsed.check {
+            if check {
                 if formatted != input {
                     eprintln!("error: <stdin> is not formatted");
                     needs_format = true;
@@ -371,7 +374,7 @@ fn run_fmt(extra_args: &[String]) -> ExitCode {
                 }
             };
             let formatted = chordsketch_core::formatter::format(&input, &options);
-            if parsed.check {
+            if check {
                 if formatted != input {
                     eprintln!("error: {file}: not formatted");
                     needs_format = true;
