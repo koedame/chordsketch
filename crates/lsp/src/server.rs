@@ -14,8 +14,8 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::{
     CompletionOptions, CompletionParams, CompletionResponse, Diagnostic,
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    InitializeParams, InitializeResult, InitializedParams, PositionEncodingKind, ServerCapabilities,
-    TextDocumentSyncKind, Url,
+    InitializeParams, InitializeResult, InitializedParams, PositionEncodingKind,
+    ServerCapabilities, TextDocumentSyncKind, Url,
 };
 use tower_lsp::{Client, LanguageServer};
 

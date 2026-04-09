@@ -10,7 +10,9 @@
 //! Context detection works by scanning the line text up to the cursor column
 //! and finding the innermost open delimiter.
 
-use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, Documentation, MarkupContent, MarkupKind};
+use tower_lsp::lsp_types::{
+    CompletionItem, CompletionItemKind, Documentation, MarkupContent, MarkupKind,
+};
 
 // ---------------------------------------------------------------------------
 // Completion context detection
@@ -25,13 +27,9 @@ pub enum CompletionContext {
         prefix: String,
     },
     /// After `{meta: `: complete known metadata keys.
-    MetadataKey {
-        prefix: String,
-    },
+    MetadataKey { prefix: String },
     /// Inside `[...]`: complete chord names.
-    ChordName {
-        prefix: String,
-    },
+    ChordName { prefix: String },
     /// Not inside a recognized completion context.
     None,
 }
@@ -259,32 +257,13 @@ const META_KEYS: &[&str] = &[
 
 /// Note roots.
 const ROOTS: &[&str] = &[
-    "A", "A#", "Ab", "B", "Bb", "C", "C#", "D", "D#", "Db", "E", "Eb", "F", "F#", "G", "G#",
-    "Gb",
+    "A", "A#", "Ab", "B", "Bb", "C", "C#", "D", "D#", "Db", "E", "Eb", "F", "F#", "G", "G#", "Gb",
 ];
 
 /// Chord quality suffixes.
 const SUFFIXES: &[&str] = &[
-    "",
-    "m",
-    "7",
-    "m7",
-    "maj7",
-    "M7",
-    "dim",
-    "dim7",
-    "aug",
-    "sus2",
-    "sus4",
-    "add9",
-    "9",
-    "m9",
-    "maj9",
-    "11",
-    "13",
-    "6",
-    "m6",
-    "5",
+    "", "m", "7", "m7", "maj7", "M7", "dim", "dim7", "aug", "sus2", "sus4", "add9", "9", "m9",
+    "maj9", "11", "13", "6", "m6", "5",
 ];
 
 // ---------------------------------------------------------------------------
@@ -378,7 +357,12 @@ mod tests {
     #[test]
     fn context_directive_name_empty_prefix() {
         let ctx = detect_context("{", 1);
-        assert_eq!(ctx, CompletionContext::DirectiveName { prefix: String::new() });
+        assert_eq!(
+            ctx,
+            CompletionContext::DirectiveName {
+                prefix: String::new()
+            }
+        );
     }
 
     #[test]
@@ -386,14 +370,21 @@ mod tests {
         let ctx = detect_context("{tit", 4);
         assert_eq!(
             ctx,
-            CompletionContext::DirectiveName { prefix: "tit".to_string() }
+            CompletionContext::DirectiveName {
+                prefix: "tit".to_string()
+            }
         );
     }
 
     #[test]
     fn context_chord_name_empty() {
         let ctx = detect_context("[", 1);
-        assert_eq!(ctx, CompletionContext::ChordName { prefix: String::new() });
+        assert_eq!(
+            ctx,
+            CompletionContext::ChordName {
+                prefix: String::new()
+            }
+        );
     }
 
     #[test]
@@ -401,7 +392,9 @@ mod tests {
         let ctx = detect_context("[Am", 3);
         assert_eq!(
             ctx,
-            CompletionContext::ChordName { prefix: "Am".to_string() }
+            CompletionContext::ChordName {
+                prefix: "Am".to_string()
+            }
         );
     }
 
@@ -410,7 +403,9 @@ mod tests {
         let ctx = detect_context("{meta: ", 7);
         assert_eq!(
             ctx,
-            CompletionContext::MetadataKey { prefix: String::new() }
+            CompletionContext::MetadataKey {
+                prefix: String::new()
+            }
         );
     }
 
@@ -419,7 +414,9 @@ mod tests {
         let ctx = detect_context("{meta: art", 10);
         assert_eq!(
             ctx,
-            CompletionContext::MetadataKey { prefix: "art".to_string() }
+            CompletionContext::MetadataKey {
+                prefix: "art".to_string()
+            }
         );
     }
 
@@ -449,7 +446,11 @@ mod tests {
     #[test]
     fn directive_items_empty_prefix_returns_all() {
         let items = directive_items("");
-        assert!(items.len() >= 40, "expected many directives, got {}", items.len());
+        assert!(
+            items.len() >= 40,
+            "expected many directives, got {}",
+            items.len()
+        );
     }
 
     #[test]
@@ -461,7 +462,11 @@ mod tests {
         assert!(labels.contains(&"C7"));
         // C# / Cb items are also included (they start with "C").
         // Unrelated roots (D, G, …) must not appear.
-        assert!(!labels.iter().any(|l| l.starts_with('D') || l.starts_with('G')));
+        assert!(
+            !labels
+                .iter()
+                .any(|l| l.starts_with('D') || l.starts_with('G'))
+        );
     }
 
     #[test]
