@@ -76,9 +76,15 @@ pub fn detect_context(line: &str, col: usize) -> CompletionContext {
             }
             ':' if in_brace => {
                 brace_colon_pos = Some(i);
-                directive_name = chars[..i]
+                // Extract the directive name as text between the most-recent
+                // `{` and the colon, ignoring any text before the brace.
+                let brace_start = chars[..i]
                     .iter()
-                    .skip_while(|&&c| c == '{')
+                    .rposition(|&c| c == '{')
+                    .map(|p| p + 1)
+                    .unwrap_or(0);
+                directive_name = chars[brace_start..i]
+                    .iter()
                     .collect::<String>()
                     .trim()
                     .to_ascii_lowercase();
@@ -89,7 +95,11 @@ pub fn detect_context(line: &str, col: usize) -> CompletionContext {
 
     if in_bracket {
         // Collect text after `[` up to cursor.
-        let open_bracket = prefix_chars.iter().rposition(|&c| c == '[').unwrap_or(0);
+        // in_bracket is true only after a `[` was scanned — rposition always finds it.
+        let open_bracket = prefix_chars
+            .iter()
+            .rposition(|&c| c == '[')
+            .expect("invariant: in_bracket requires a scanned `[`");
         let prefix: String = chars[open_bracket + 1..col].iter().collect();
         return CompletionContext::ChordName { prefix };
     }
@@ -109,10 +119,11 @@ pub fn detect_context(line: &str, col: usize) -> CompletionContext {
             return CompletionContext::None;
         }
         // Before the colon: completing the directive name.
+        // in_brace is true only after a `{` was scanned — rposition always finds it.
         let open_brace = prefix_chars
             .iter()
             .rposition(|&c| c == '{')
-            .unwrap_or(0);
+            .expect("invariant: in_brace requires a scanned `{`");
         let prefix: String = chars[open_brace + 1..col].iter().collect();
         let prefix = prefix.trim().to_ascii_lowercase();
         return CompletionContext::DirectiveName { prefix };
@@ -335,9 +346,10 @@ pub fn chord_items(prefix: &str) -> Vec<CompletionItem> {
                 });
             }
         }
-        // Bass note completions (root/bass): only for exact root match to
-        // avoid exploding the list.
-        if prefix.starts_with(root) {
+        // Bass-note slash chords (e.g. C/G): generated only when `prefix`
+        // starts with the root string, so they are suppressed for an empty
+        // prefix (preventing a combinatorial explosion of root×bass items).
+        if !prefix.is_empty() && prefix.starts_with(root) {
             for bass in ROOTS {
                 let label = format!("{root}/{bass}");
                 if label.starts_with(prefix) {
@@ -447,7 +459,8 @@ mod tests {
         assert!(labels.contains(&"C"));
         assert!(labels.contains(&"Cm"));
         assert!(labels.contains(&"C7"));
-        // Should not include unrelated roots
+        // C# / Cb items are also included (they start with "C").
+        // Unrelated roots (D, G, …) must not appear.
         assert!(!labels.iter().any(|l| l.starts_with('D') || l.starts_with('G')));
     }
 
