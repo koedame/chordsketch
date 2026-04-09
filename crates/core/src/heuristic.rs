@@ -336,8 +336,9 @@ where
 ///   numeric extension (e.g. `m7add11`, `maj7sus4`, `7b5`)
 /// - Optional bass note: `/A–G[#b]`
 fn is_chord_token(token: &str) -> bool {
-    // Chord names are short; reject anything suspiciously long.
-    if token.is_empty() || token.len() > 12 {
+    // Reject obviously non-chord tokens.  16 characters covers multi-component
+    // jazz chords like Dbmaj7#11sus4b9 (15 chars) while still catching long words.
+    if token.is_empty() || token.len() > 16 {
         return false;
     }
     let bytes = token.as_bytes();
@@ -811,7 +812,11 @@ mod tests {
         // Words that happen to start with A-G must still be rejected.
         assert!(!is_chord_token("Chorus"));
         assert!(!is_chord_token("Bridge"));
-        assert!(!is_chord_token("Cmaj7extended")); // 'e' after digits is not a keyword
+        // Cmaj7e: maj consumed → 7e, numeric 7 consumed → e; 'e' is not a
+        // keyword or numeric character so the algorithm returns false.
+        assert!(!is_chord_token("Cmaj7e"));
+        // Multi-component chords up to 16 characters must be accepted.
+        assert!(is_chord_token("Cmaj7sus4add9")); // 13 chars
     }
 
     // --- is_chord_line ---
