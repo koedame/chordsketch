@@ -67,8 +67,10 @@ pub struct PlainTextImporter {
     /// names for a line to be classified as a chord line. Default: `0.5`.
     ///
     /// **Valid range: `[0.0, 1.0]`.**
-    /// - `0.0` — every non-empty, non-punctuated line is classified as a chord
-    ///   line regardless of content.
+    /// - `0.0` — the ratio guard is disabled; any non-empty, non-punctuated
+    ///   line that contains at least
+    ///   [`min_chord_tokens`][Self::min_chord_tokens] recognized chord tokens
+    ///   is classified as a chord line.
     /// - `1.0` — all tokens must be valid chord names for the line to qualify.
     /// - Values above `1.0` disable chord-line detection entirely (the ratio of
     ///   chord tokens can never exceed `1.0`).
