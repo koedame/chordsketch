@@ -295,6 +295,20 @@ fn escape_directive_value(s: &str) -> String {
     }
 }
 
+/// Strip `{` and `}` from a lyric syllable before embedding it in ChordPro
+/// output.
+///
+/// Unlike [`escape_directive_value`], this function does **not** trim
+/// whitespace so that trailing hyphens (syllable connectors) are preserved.
+/// ChordPro has no escape mechanism for literal braces, so they are removed.
+fn sanitize_lyric_text(s: &str) -> String {
+    if s.contains('{') || s.contains('}') {
+        s.replace(['{', '}'], "")
+    } else {
+        s.to_string()
+    }
+}
+
 /// Strip `[`, `]`, `{`, and `}` from a chord name before embedding it in
 /// ChordPro `[chord]` output notation.
 ///
@@ -675,10 +689,11 @@ fn build_chordpro_line(chord_at: &HashMap<usize, String>, syllables: &[LyricToke
                     out.push_str(&sanitize_chord_name(chord));
                     out.push(']');
                 }
-                out.push_str(text);
+                let safe = sanitize_lyric_text(text);
+                out.push_str(&safe);
                 // A hyphen at the end means the next syllable continues the
                 // same word — no inter-word space needed.
-                need_space = !text.ends_with('-');
+                need_space = !safe.ends_with('-');
                 note_idx += 1;
             }
         }
@@ -1074,7 +1089,8 @@ mod tests {
 
     #[test]
     fn convert_multi_verse_emits_all_verses() {
-        // Two w: lines for the same music block — both verses must appear in output.
+        // Two w: lines for the same music block — both verses must appear in output
+        // and each must carry the shared chord annotation.
         let input = "X:1\nT:T\nK:C\n\"C\" C D E F|\nw:First verse here\nw:Second verse here\n";
         let out = convert_abc(input);
         assert!(
@@ -1084,6 +1100,33 @@ mod tests {
         assert!(
             out.contains("Second"),
             "second verse must be present, got: {out}"
+        );
+        // The [C] chord annotation must appear once per verse line (shared chord map).
+        let chord_count = out.matches("[C]").count();
+        assert_eq!(
+            chord_count, 2,
+            "[C] chord must appear once per verse line (2 total), got {chord_count} in: {out}"
+        );
+    }
+
+    // --- lyric sanitization (issue #1346) ---
+
+    #[test]
+    fn convert_lyric_braces_sanitized() {
+        // w: lines containing { or } must not inject directive syntax into output.
+        let input = "X:1\nT:T\nK:C\n\"C\" C D|\nw:Hello {world}\n";
+        let out = convert_abc(input);
+        assert!(
+            !out.contains("{world}"),
+            "brace injection must be stripped from lyrics, got: {out}"
+        );
+        assert!(
+            out.contains("Hello"),
+            "lyric text before braces must be preserved, got: {out}"
+        );
+        assert!(
+            out.contains("world"),
+            "lyric text inside braces must be preserved (braces stripped), got: {out}"
         );
     }
 }
