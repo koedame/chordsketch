@@ -14,11 +14,45 @@ import { createOrShow, notifyTranspose } from './preview';
  * Minimal type for the exports consumed from the `@chordsketch/wasm` Node.js
  * CJS build that is copied to `dist/node/` at build time.  Only the three
  * render functions used by `convertTo` are declared here.
+ *
+ * **Throws**: All three functions throw a JS exception on render failure
+ * (the Rust wasm-bindgen glue converts `Err(JsValue)` into a thrown JS
+ * value).  Callers must always wrap invocations in a try/catch.
+ *
+ * **HTML security note**: `render_html` produces a self-contained
+ * `<!DOCTYPE html>` document.  Delegate-section environments such as
+ * `{start_of_textblock}` emit their content verbatim (by spec).  The
+ * exported file must therefore NOT be served to untrusted users without
+ * additional sanitisation — it reflects the same content as the source
+ * `.cho` file, which the user is assumed to own.
  */
 interface WasmRenderModule {
   render_html(input: string): string;
   render_text(input: string): string;
   render_pdf(input: string): Uint8Array;
+}
+
+/**
+ * Type guard that verifies a `require()` result exposes the three render
+ * functions expected from `@chordsketch/wasm`.
+ *
+ * Prevents a silently broken or zero-byte copy of the WASM module from being
+ * permanently cached after it is first loaded.  Without this check a module
+ * object that is truthy but whose exports are absent (e.g., an incomplete
+ * deployment) would be cached indefinitely, causing every subsequent export
+ * attempt in the session to fail with `TypeError: wasm.render_X is not a
+ * function`.
+ */
+function isWasmRenderModule(m: unknown): m is WasmRenderModule {
+  if (typeof m !== 'object' || m === null) {
+    return false;
+  }
+  const mod = m as Record<string, unknown>;
+  return (
+    typeof mod['render_html'] === 'function' &&
+    typeof mod['render_text'] === 'function' &&
+    typeof mod['render_pdf'] === 'function'
+  );
 }
 
 /** Lazily loaded WASM render module singleton. */
@@ -33,13 +67,25 @@ let wasmRenderCache: WasmRenderModule | undefined;
  * therefore points to `dist/node/`, where `chordsketch_wasm_bg.wasm` is
  * located, so WASM initialisation succeeds.
  *
+ * The shape of the loaded module is validated by {@link isWasmRenderModule}
+ * before caching so that a broken or incomplete deployment is detected
+ * immediately rather than being permanently cached for the session.
+ *
  * The result is cached so the WASM binary is only parsed once per session.
+ *
+ * @throws {Error} If the module file is missing or its exports are absent.
  */
 function loadWasmRender(extensionPath: string): WasmRenderModule {
   if (!wasmRenderCache) {
     const modPath = path.join(extensionPath, 'dist', 'node', 'chordsketch_wasm.js');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    wasmRenderCache = require(modPath) as WasmRenderModule;
+    const mod: unknown = require(modPath);
+    if (!isWasmRenderModule(mod)) {
+      throw new Error(
+        `WASM module at ${modPath} does not export the expected render functions`,
+      );
+    }
+    wasmRenderCache = mod;
   }
   return wasmRenderCache;
 }
