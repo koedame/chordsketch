@@ -10,7 +10,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execFileSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 /** Maps VS Code platform identifiers to the binary directory names used in release archives. */
 const PLATFORM_MAP: Record<string, Record<string, string>> = {
@@ -32,15 +35,16 @@ export function lspBinaryName(): string {
 /**
  * Checks whether `chordsketch-lsp` is available on the system PATH.
  *
- * Uses `which` (Unix) or `where` (Windows) via a synchronous child process.
+ * Uses `which` (Unix) or `where` (Windows) asynchronously to avoid blocking
+ * the extension host event loop during activation.
  * Returns the resolved absolute path, or `undefined` if not found.
  */
-function findOnPath(): string | undefined {
+async function findOnPath(): Promise<string | undefined> {
   const cmd = process.platform === 'win32' ? 'where' : 'which';
   try {
-    const result = execFileSync(cmd, [lspBinaryName()], { encoding: 'utf8' }).trim();
+    const { stdout } = await execFileAsync(cmd, [lspBinaryName()], { encoding: 'utf8' });
     // `which` may return multiple lines; take the first.
-    const first = result.split('\n')[0].trim();
+    const first = stdout.trim().split('\n')[0].trim();
     if (first && fs.existsSync(first)) {
       return first;
     }
@@ -73,10 +77,10 @@ function findBundled(extensionPath: string): string | undefined {
  *
  * Returns the resolved path, or `undefined` if the binary cannot be found.
  */
-export function resolveLspBinary(
+export async function resolveLspBinary(
   extensionPath: string,
   configuredPath: string,
-): string | undefined {
+): Promise<string | undefined> {
   // Tier 1: user override.
   if (configuredPath.trim()) {
     const p = configuredPath.trim();
@@ -84,7 +88,7 @@ export function resolveLspBinary(
   }
 
   // Tier 2: system PATH.
-  const onPath = findOnPath();
+  const onPath = await findOnPath();
   if (onPath) {
     return onPath;
   }

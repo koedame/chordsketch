@@ -65,7 +65,7 @@ jobs:
         working-directory: packages/vscode-extension
 
       - name: Verify packaged files
-        run: npx @vscode/vsce ls
+        run: ./node_modules/.bin/vsce ls
         working-directory: packages/vscode-extension
 
       - name: Upload VSIX artifact

@@ -19,6 +19,13 @@ import { resolveLspBinary } from './platform';
 let client: LanguageClient | undefined;
 
 /**
+ * Single output channel reused across `startLspClient` calls to avoid
+ * accumulating duplicate "ChordSketch LSP" entries in the Output dropdown
+ * when the binary is not found and the user repeatedly toggles the setting.
+ */
+let notFoundChannel: vscode.OutputChannel | undefined;
+
+/**
  * Starts the LSP client if it is not already running.
  *
  * If the `chordsketch-lsp` binary cannot be found, logs a warning and shows
@@ -33,18 +40,20 @@ export async function startLspClient(context: vscode.ExtensionContext): Promise<
   }
 
   const configuredPath = config.get<string>('path', '');
-  const binaryPath = resolveLspBinary(context.extensionPath, configuredPath);
+  const binaryPath = await resolveLspBinary(context.extensionPath, configuredPath);
 
   if (!binaryPath) {
     const msg =
       'ChordSketch: chordsketch-lsp binary not found. ' +
       'Install it via cargo/Homebrew/Scoop or set chordsketch.lsp.path in settings.';
-    const outputChannel = vscode.window.createOutputChannel('ChordSketch LSP');
-    outputChannel.appendLine(msg);
-    outputChannel.appendLine(
+    if (!notFoundChannel) {
+      notFoundChannel = vscode.window.createOutputChannel('ChordSketch LSP');
+      context.subscriptions.push(notFoundChannel);
+    }
+    notFoundChannel.appendLine(msg);
+    notFoundChannel.appendLine(
       'Syntax highlighting and the preview panel will still work without the LSP.',
     );
-    context.subscriptions.push(outputChannel);
 
     void vscode.window.showInformationMessage(msg, 'Open Settings').then((choice) => {
       if (choice === 'Open Settings') {
