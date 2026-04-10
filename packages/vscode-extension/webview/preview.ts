@@ -48,6 +48,7 @@ function isExtToWebview(raw: unknown): raw is ExtToWebview {
   return r['type'] === 'update' && typeof r['text'] === 'string';
 }
 
+const toolbar = document.getElementById('toolbar') as HTMLDivElement;
 const loadingEl = document.getElementById('loading') as HTMLDivElement;
 const errorEl = document.getElementById('error') as HTMLDivElement;
 const previewFrame = document.getElementById('preview-frame') as HTMLIFrameElement;
@@ -124,6 +125,12 @@ function wrapHtml(body: string): string {
 </html>`;
 }
 
+/** Syncs toggle button active classes to the current `viewMode`. */
+function syncButtonStates(): void {
+  btnHtml.classList.toggle('active', viewMode === 'html');
+  btnText.classList.toggle('active', viewMode === 'text');
+}
+
 /**
  * Renders the given ChordPro source text according to the active view mode.
  *
@@ -175,13 +182,15 @@ function renderPreview(text: string): void {
  *
  * The chosen mode is persisted via `vscode.setState` so it survives the
  * WebView being hidden and re-shown (`retainContextWhenHidden` is set).
+ * Called only after WASM has successfully loaded.
  */
 function setViewMode(mode: ViewMode): void {
+  if (mode === viewMode) {
+    return; // No-op: avoid redundant WASM call and iframe flicker.
+  }
   viewMode = mode;
   vscode.setState({ mode } satisfies PanelState);
-
-  btnHtml.classList.toggle('active', mode === 'html');
-  btnText.classList.toggle('active', mode === 'text');
+  syncButtonStates();
 
   if (lastText) {
     renderPreview(lastText);
@@ -193,12 +202,8 @@ async function main(): Promise<void> {
   const saved = vscode.getState() as PanelState | null;
   if (saved?.mode === 'html' || saved?.mode === 'text') {
     viewMode = saved.mode;
-    btnHtml.classList.toggle('active', viewMode === 'html');
-    btnText.classList.toggle('active', viewMode === 'text');
+    syncButtonStates();
   }
-
-  btnHtml.addEventListener('click', () => setViewMode('html'));
-  btnText.addEventListener('click', () => setViewMode('text'));
 
   // Read the WASM binary URI injected by the extension host.
   // A <meta name="chordsketch-wasm-uri"> is used instead of a data- attribute
@@ -218,6 +223,15 @@ async function main(): Promise<void> {
   }
 
   loadingEl.style.display = 'none';
+
+  // Enable the toolbar only after WASM is ready so clicking buttons before
+  // init is not possible. The CSS sets pointer-events:none on the toolbar
+  // by default; removing the class re-enables it.
+  toolbar.classList.remove('disabled');
+
+  // Register toggle button handlers after WASM is ready.
+  btnHtml.addEventListener('click', () => setViewMode('html'));
+  btnText.addEventListener('click', () => setViewMode('text'));
 
   // Listen for messages from the extension host.
   window.addEventListener('message', (event: MessageEvent) => {

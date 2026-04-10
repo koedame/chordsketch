@@ -277,6 +277,13 @@ class PreviewPanel {
     .view-btn:not(.active):hover {
       background: var(--vscode-button-secondaryHoverBackground, #3a3a3a);
     }
+    /* Toolbar is disabled until WASM finishes loading so that clicking
+       buttons before init completes is not possible. The script removes
+       the 'disabled' class after a successful init(). */
+    #toolbar.disabled {
+      pointer-events: none;
+      opacity: 0.4;
+    }
     #loading {
       padding: 1rem;
       color: var(--vscode-descriptionForeground);
@@ -307,6 +314,7 @@ class PreviewPanel {
       font-family: var(--vscode-editor-font-family, monospace);
       font-size: var(--vscode-editor-font-size, 13px);
       line-height: 1.5;
+      background: var(--vscode-editor-background, #1e1e1e);
       color: var(--vscode-editor-foreground, #d4d4d4);
       white-space: pre;
       word-break: normal;
@@ -314,7 +322,7 @@ class PreviewPanel {
   </style>
 </head>
 <body>
-  <div id="toolbar">
+  <div id="toolbar" class="disabled">
     <button id="btn-html" class="view-btn active" title="HTML preview">HTML</button>
     <button id="btn-text" class="view-btn" title="Plain text preview">Plain text</button>
   </div>
