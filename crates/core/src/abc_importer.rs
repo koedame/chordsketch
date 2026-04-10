@@ -277,19 +277,33 @@ fn emit_header_directives(
 }
 
 /// Strip `{` and `}` from a directive value (sanitize for ChordPro output).
-fn escape_directive_value(s: &str) -> &str {
-    // ChordPro directives use {} as delimiters; strip them from user values.
-    // A simple trim is sufficient for typical chord/key names.
-    // In practice, ABC metadata rarely contains these characters.
+///
+/// ChordPro has no escape mechanism for literal braces inside directive
+/// values, so brace characters are removed.  Only the brace characters are
+/// stripped; the rest of the value is preserved.
+fn escape_directive_value(s: &str) -> String {
     let s = s.trim();
-    // If value contains braces, strip them rather than escaping, as ChordPro
-    // has no escape mechanism for literal braces inside directive values.
     if s.contains('{') || s.contains('}') {
-        // Fallback: return a static empty marker so callers get a safe string.
-        // This is an extremely rare edge case.
-        return "";
+        s.replace(['{', '}'], "")
+    } else {
+        s.to_string()
     }
-    s
+}
+
+/// Strip `[`, `]`, `{`, and `}` from a chord name before embedding it in
+/// ChordPro `[chord]` output notation.
+///
+/// The `]` character would terminate the bracket group prematurely;
+/// `{` and `}` could inject directive syntax into the output stream.
+fn sanitize_chord_name(chord: &str) -> String {
+    if chord.contains(['[', ']', '{', '}']) {
+        chord
+            .chars()
+            .filter(|&c| !matches!(c, '[' | ']' | '{' | '}'))
+            .collect()
+    } else {
+        chord.to_string()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -651,7 +665,7 @@ fn build_chordpro_line(chord_at: &HashMap<usize, String>, syllables: &[LyricToke
                 }
                 if let Some(chord) = chord_at.get(&note_idx) {
                     out.push('[');
-                    out.push_str(chord);
+                    out.push_str(&sanitize_chord_name(chord));
                     out.push(']');
                 }
                 out.push_str(text);
@@ -667,7 +681,8 @@ fn build_chordpro_line(chord_at: &HashMap<usize, String>, syllables: &[LyricToke
     if let Some(&last_chord_note) = chord_at.keys().max() {
         while note_idx <= last_chord_note {
             if let Some(chord) = chord_at.get(&note_idx) {
-                out.push_str(&format!("[{chord}]"));
+                let safe = sanitize_chord_name(chord);
+                out.push_str(&format!("[{safe}]"));
             }
             note_idx += 1;
         }
@@ -684,7 +699,7 @@ fn build_chord_only_line(chord_at: &HashMap<usize, String>, note_count: usize) -
     let mut parts: Vec<String> = Vec::new();
     for i in 0..note_count.max(chord_at.keys().max().copied().unwrap_or(0) + 1) {
         if let Some(chord) = chord_at.get(&i) {
-            parts.push(format!("[{chord}]"));
+            parts.push(format!("[{}]", sanitize_chord_name(chord)));
         }
     }
     parts.join(" ")
@@ -961,5 +976,51 @@ mod tests {
         let input = "X:1\nT:T\nK:C\n\"Am/E\" CDEF|\nw:Hello world\n";
         let out = convert_abc(input);
         assert!(out.contains("[Am/E]"), "slash chord should be preserved");
+    }
+
+    // --- sanitization ---
+
+    #[test]
+    fn escape_directive_value_strips_braces_not_whole_value() {
+        // A title containing braces should have the braces stripped, not the
+        // whole value discarded.
+        assert_eq!(escape_directive_value("Song {live}"), "Song live");
+        assert_eq!(escape_directive_value("{evil}"), "evil");
+        assert_eq!(escape_directive_value("Normal"), "Normal");
+    }
+
+    #[test]
+    fn convert_title_with_braces_strips_not_empties() {
+        // Regression: title containing `{` or `}` must not become empty.
+        let input = "X:1\nT:Song {live}\nK:C\n";
+        let out = convert_abc(input);
+        assert!(
+            out.contains("{title: Song live}"),
+            "braces in title should be stripped, got: {out}"
+        );
+    }
+
+    #[test]
+    fn sanitize_chord_name_strips_injection_chars() {
+        assert_eq!(sanitize_chord_name("Am"), "Am");
+        assert_eq!(sanitize_chord_name("Am][{title: evil}]["), "Amtitle: evil");
+        assert_eq!(sanitize_chord_name("G{7}"), "G7");
+    }
+
+    #[test]
+    fn convert_chord_with_injection_chars_sanitized() {
+        // A chord annotation containing `]` and `{` must not inject directives
+        // into the ChordPro output.
+        let input = "X:1\nT:T\nK:C\n\"Am][{title: evil}][\" C D|\nw:Hello world\n";
+        let out = convert_abc(input);
+        assert!(
+            !out.contains("{title: evil}"),
+            "injected directive must not appear in output, got: {out}"
+        );
+        // The sanitized chord (braces and brackets stripped) should appear.
+        assert!(
+            out.contains("[Amtitle: evil]"),
+            "sanitized chord name should be present, got: {out}"
+        );
     }
 }
