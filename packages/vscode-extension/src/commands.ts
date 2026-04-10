@@ -8,51 +8,34 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { createOrShow, notifyTranspose } from './preview';
+import { createOrShow, notifyTranspose } from './preview.js';
+import {
+  FORMAT_HTML,
+  FORMAT_TEXT,
+  FORMAT_PDF,
+  type ExportFormat,
+  type WasmRenderModule,
+  isWasmRenderModule,
+  extensionForFormat,
+  defaultExportPath,
+} from './command-utils.js';
 
 /**
- * Minimal type for the exports consumed from the `@chordsketch/wasm` Node.js
- * CJS build that is copied to `dist/node/` at build time.  Only the three
- * render functions used by `convertTo` are declared here.
+ * Lazily created output channel used by `registerConvertTo` to log full error
+ * details (WASM load failures, render errors) without exposing them in the
+ * user-facing notification popup.
  *
- * **Throws**: All three functions throw a JS exception on render failure
- * (the Rust wasm-bindgen glue converts `Err(JsValue)` into a thrown JS
- * value).  Callers must always wrap invocations in a try/catch.
- *
- * **HTML security note**: `render_html` produces a self-contained
- * `<!DOCTYPE html>` document.  Delegate-section environments such as
- * `{start_of_textblock}` emit their content verbatim (by spec).  The
- * exported file must therefore NOT be served to untrusted users without
- * additional sanitisation — it reflects the same content as the source
- * `.cho` file, which the user is assumed to own.
+ * Created on first use to avoid cluttering the Output panel for users who
+ * never invoke the export command.
  */
-interface WasmRenderModule {
-  render_html(input: string): string;
-  render_text(input: string): string;
-  render_pdf(input: string): Uint8Array;
-}
+let exportOutputChannel: vscode.OutputChannel | undefined;
 
-/**
- * Type guard that verifies a `require()` result exposes the three render
- * functions expected from `@chordsketch/wasm`.
- *
- * Prevents a silently broken or zero-byte copy of the WASM module from being
- * permanently cached after it is first loaded.  Without this check a module
- * object that is truthy but whose exports are absent (e.g., an incomplete
- * deployment) would be cached indefinitely, causing every subsequent export
- * attempt in the session to fail with `TypeError: wasm.render_X is not a
- * function`.
- */
-function isWasmRenderModule(m: unknown): m is WasmRenderModule {
-  if (typeof m !== 'object' || m === null) {
-    return false;
+/** Returns the shared ChordSketch output channel, creating it if necessary. */
+function getExportChannel(): vscode.OutputChannel {
+  if (!exportOutputChannel) {
+    exportOutputChannel = vscode.window.createOutputChannel('ChordSketch');
   }
-  const mod = m as Record<string, unknown>;
-  return (
-    typeof mod['render_html'] === 'function' &&
-    typeof mod['render_text'] === 'function' &&
-    typeof mod['render_pdf'] === 'function'
-  );
+  return exportOutputChannel;
 }
 
 /** Lazily loaded WASM render module singleton. */
@@ -82,7 +65,7 @@ function loadWasmRender(extensionPath: string): WasmRenderModule {
     const mod: unknown = require(modPath);
     if (!isWasmRenderModule(mod)) {
       throw new Error(
-        `WASM module at ${modPath} does not export the expected render functions`,
+        'WASM module does not export the expected render functions',
       );
     }
     wasmRenderCache = mod;
@@ -165,24 +148,6 @@ export function registerTransposeDown(): vscode.Disposable {
   });
 }
 
-/** Label constants for the export format QuickPick. */
-const FORMAT_HTML = 'HTML' as const;
-const FORMAT_TEXT = 'Plain text' as const;
-const FORMAT_PDF = 'PDF' as const;
-type ExportFormat = typeof FORMAT_HTML | typeof FORMAT_TEXT | typeof FORMAT_PDF;
-
-/**
- * Returns the default file extension for an export format.
- *
- * @param format - One of the three supported export formats.
- * @returns The file extension string including the leading dot.
- */
-function extensionForFormat(format: ExportFormat): string {
-  if (format === FORMAT_PDF) return '.pdf';
-  if (format === FORMAT_TEXT) return '.txt';
-  return '.html';
-}
-
 /**
  * Exports the active ChordPro document as HTML, plain text, or PDF.
  *
@@ -214,7 +179,7 @@ export function registerConvertTo(context: vscode.ExtensionContext): vscode.Disp
     }
 
     const ext = extensionForFormat(format as ExportFormat);
-    const defaultUri = vscode.Uri.file(doc.uri.fsPath.replace(/\.[^.]+$/, ext));
+    const defaultUri = vscode.Uri.file(defaultExportPath(doc.uri.fsPath, ext));
 
     let filters: { [name: string]: string[] };
     if (format === FORMAT_PDF) {
@@ -234,8 +199,11 @@ export function registerConvertTo(context: vscode.ExtensionContext): vscode.Disp
     try {
       wasm = loadWasmRender(context.extensionPath);
     } catch (err) {
+      const ch = getExportChannel();
+      ch.appendLine(`[convertTo] Failed to load WASM renderer: ${String(err)}`);
+      ch.show(true);
       void vscode.window.showErrorMessage(
-        `ChordSketch: Failed to load WASM renderer: ${String(err)}`,
+        'ChordSketch: Failed to load WASM renderer. See the "ChordSketch" output channel for details.',
       );
       return;
     }
@@ -252,18 +220,23 @@ export function registerConvertTo(context: vscode.ExtensionContext): vscode.Disp
         await vscode.workspace.fs.writeFile(saveUri, Buffer.from(rendered, 'utf-8'));
       }
     } catch (err) {
-      void vscode.window.showErrorMessage(`ChordSketch: Export failed: ${String(err)}`);
+      const ch = getExportChannel();
+      ch.appendLine(`[convertTo] Export failed: ${String(err)}`);
+      ch.show(true);
+      void vscode.window.showErrorMessage(
+        'ChordSketch: Export failed. See the "ChordSketch" output channel for details.',
+      );
       return;
     }
 
     if (format === FORMAT_PDF) {
-      const revealBtn = 'Reveal in Explorer';
+      const openBtn = 'Open PDF';
       const choice = await vscode.window.showInformationMessage(
         `ChordSketch: Exported PDF to ${saveUri.fsPath}`,
-        revealBtn,
+        openBtn,
       );
-      if (choice === revealBtn) {
-        await vscode.commands.executeCommand('revealFileInOS', saveUri);
+      if (choice === openBtn) {
+        await vscode.env.openExternal(saveUri);
       }
     } else {
       const openBtn = 'Open File';
