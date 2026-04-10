@@ -259,7 +259,7 @@ class PreviewPanel {
       border-bottom: 1px solid var(--vscode-editorGroup-border, #444);
       flex-shrink: 0;
     }
-    .view-btn {
+    #toolbar .view-btn {
       background: transparent;
       border: 1px solid var(--vscode-button-secondaryBackground, #555);
       color: var(--vscode-foreground, #ccc);
@@ -269,12 +269,12 @@ class PreviewPanel {
       border-radius: 3px;
       font-family: inherit;
     }
-    .view-btn.active {
+    #toolbar .view-btn.active {
       background: var(--vscode-button-background, #0078d4);
       color: var(--vscode-button-foreground, #fff);
       border-color: var(--vscode-button-background, #0078d4);
     }
-    .view-btn:not(.active):hover {
+    #toolbar .view-btn:not(.active):hover {
       background: var(--vscode-button-secondaryHoverBackground, #3a3a3a);
     }
     /* Toolbar is disabled until WASM finishes loading so that clicking
