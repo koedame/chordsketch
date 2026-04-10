@@ -88,6 +88,19 @@ let transpose = 0;
  */
 let lastText = '';
 
+/**
+ * Set to `true` once `init()` resolves successfully.
+ *
+ * Guards `renderPreview` from calling WASM exports before the module is
+ * initialised. The `scheduleUpdate` debounce timer in the extension host can
+ * fire an `update` message 300 ms after a keystroke — before WASM has
+ * finished loading on a slow connection. Without this guard the WASM call
+ * would throw and show a spurious error overlay. With it, the text is stored
+ * in `lastText` and the correct render happens when the extension host sends
+ * the next `update` after receiving `ready`.
+ */
+let wasmReady = false;
+
 function showError(msg: string): void {
   errorEl.textContent = msg;
   errorEl.style.display = 'block';
@@ -204,6 +217,14 @@ function renderPreview(text: string): void {
     return;
   }
 
+  // Guard: do not call WASM exports until init() has completed. An 'update'
+  // message can arrive before WASM is ready via the 300 ms scheduleUpdate
+  // debounce timer in the extension host. Storing the text in lastText (above)
+  // is still correct — the extension host re-sends it after receiving 'ready'.
+  if (!wasmReady) {
+    return;
+  }
+
   const options = { transpose };
 
   try {
@@ -294,6 +315,33 @@ async function main(): Promise<void> {
     btnTransposeUp.disabled = transpose === 11;
   }
 
+  // Register the message listener early — before WASM init — so that
+  // 'transpose' messages sent by the extension host in the narrow window
+  // between panel creation and WASM readiness are not silently dropped.
+  //
+  // A 'transpose' message that arrives during init calls adjustTranspose(),
+  // which updates the `transpose` variable and calls renderPreview(lastText).
+  // Because lastText is '' at this point, renderPreview returns immediately
+  // at the empty-text guard — no WASM call is made. The updated `transpose`
+  // value is then applied when the first 'update' message arrives after init.
+  //
+  // An 'update' message is only sent by the extension host after it receives
+  // 'ready', which is posted below. However, the 300 ms scheduleUpdate debounce
+  // timer in the extension host can fire if the document changes during the
+  // loading window — those early 'update' messages are handled safely by the
+  // wasmReady guard in renderPreview (text is stored in lastText; no WASM call).
+  window.addEventListener('message', (event: MessageEvent) => {
+    if (!isExtToWebview(event.data)) {
+      // Unknown or malformed message — silently ignore.
+      return;
+    }
+    if (event.data.type === 'update') {
+      renderPreview(event.data.text);
+    } else if (event.data.type === 'transpose') {
+      adjustTranspose(event.data.delta);
+    }
+  });
+
   // Read the WASM binary URI injected by the extension host.
   // A <meta name="chordsketch-wasm-uri"> is used instead of a data- attribute
   // on the <script> tag because document.currentScript is null for ES modules.
@@ -313,6 +361,9 @@ async function main(): Promise<void> {
 
   loadingEl.style.display = 'none';
 
+  // Unlock the wasmReady guard so renderPreview can now call WASM exports.
+  wasmReady = true;
+
   // Enable the toolbar only after WASM is ready so clicking buttons before
   // init is not possible. The CSS sets pointer-events:none on the toolbar
   // by default; removing the class re-enables it.
@@ -323,19 +374,6 @@ async function main(): Promise<void> {
   btnText.addEventListener('click', () => setViewMode('text'));
   btnTransposeDown.addEventListener('click', () => adjustTranspose(-1));
   btnTransposeUp.addEventListener('click', () => adjustTranspose(1));
-
-  // Listen for messages from the extension host.
-  window.addEventListener('message', (event: MessageEvent) => {
-    if (!isExtToWebview(event.data)) {
-      // Unknown or malformed message — silently ignore.
-      return;
-    }
-    if (event.data.type === 'update') {
-      renderPreview(event.data.text);
-    } else if (event.data.type === 'transpose') {
-      adjustTranspose(event.data.delta);
-    }
-  });
 
   // Tell the extension host that the WebView is ready to receive content.
   vscode.postMessage({ type: 'ready' });
