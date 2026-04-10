@@ -294,6 +294,31 @@ async function main(): Promise<void> {
     btnTransposeUp.disabled = transpose === 11;
   }
 
+  // Register the message listener early — before WASM init — so that
+  // 'transpose' messages sent by the extension host in the narrow window
+  // between panel creation and WASM readiness are not silently dropped.
+  //
+  // A 'transpose' message that arrives during init calls adjustTranspose(),
+  // which updates the `transpose` variable and calls renderPreview(lastText).
+  // Because lastText is '' at this point, renderPreview returns immediately
+  // at the empty-text guard — no WASM call is made. The updated `transpose`
+  // value is then applied when the first 'update' message arrives after init.
+  //
+  // An 'update' message cannot arrive before init completes because the
+  // extension host only sends it after receiving the 'ready' signal, which
+  // is posted below (after init succeeds).
+  window.addEventListener('message', (event: MessageEvent) => {
+    if (!isExtToWebview(event.data)) {
+      // Unknown or malformed message — silently ignore.
+      return;
+    }
+    if (event.data.type === 'update') {
+      renderPreview(event.data.text);
+    } else if (event.data.type === 'transpose') {
+      adjustTranspose(event.data.delta);
+    }
+  });
+
   // Read the WASM binary URI injected by the extension host.
   // A <meta name="chordsketch-wasm-uri"> is used instead of a data- attribute
   // on the <script> tag because document.currentScript is null for ES modules.
@@ -323,19 +348,6 @@ async function main(): Promise<void> {
   btnText.addEventListener('click', () => setViewMode('text'));
   btnTransposeDown.addEventListener('click', () => adjustTranspose(-1));
   btnTransposeUp.addEventListener('click', () => adjustTranspose(1));
-
-  // Listen for messages from the extension host.
-  window.addEventListener('message', (event: MessageEvent) => {
-    if (!isExtToWebview(event.data)) {
-      // Unknown or malformed message — silently ignore.
-      return;
-    }
-    if (event.data.type === 'update') {
-      renderPreview(event.data.text);
-    } else if (event.data.type === 'transpose') {
-      adjustTranspose(event.data.delta);
-    }
-  });
 
   // Tell the extension host that the WebView is ready to receive content.
   vscode.postMessage({ type: 'ready' });
