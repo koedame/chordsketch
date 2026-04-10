@@ -11,7 +11,7 @@ import * as crypto from 'crypto';
 import * as path from 'path';
 
 /** Message types sent from the extension host to the WebView. */
-type ExtToWebview = { type: 'update'; text: string };
+type ExtToWebview = { type: 'update'; text: string } | { type: 'transpose'; delta: 1 | -1 };
 
 /** Message types received from the WebView in the extension host. */
 type WebviewToExt = { type: 'ready' } | { type: 'error'; message: string };
@@ -73,6 +73,20 @@ export function notifyDocumentChanged(event: vscode.TextDocumentChangeEvent): vo
   const panel = panels.get(key);
   if (panel) {
     panel.scheduleUpdate(event.document.getText());
+  }
+}
+
+/**
+ * Sends a transpose delta to the preview panel for the given document URI.
+ *
+ * Looks up the panel by URI string (the key used in `panels`). No-op if no
+ * panel is currently open for that document — the command degrades gracefully
+ * when no preview is open.
+ */
+export function notifyTranspose(documentUri: string, delta: 1 | -1): void {
+  const panel = panels.get(documentUri);
+  if (panel) {
+    panel.transpose(delta);
   }
 }
 
@@ -187,6 +201,20 @@ class PreviewPanel {
   /** Sends an update message to the WebView immediately. */
   private sendUpdate(text: string): void {
     const msg: ExtToWebview = { type: 'update', text };
+    void this.panel.webview.postMessage(msg);
+  }
+
+  /**
+   * Sends a transpose delta to the WebView.
+   *
+   * The WebView applies the delta to its own in-memory transpose state (clamped
+   * to [−11, +11]) and re-renders. No-op if the panel is already disposed.
+   */
+  transpose(delta: 1 | -1): void {
+    if (this.disposed) {
+      return;
+    }
+    const msg: ExtToWebview = { type: 'transpose', delta };
     void this.panel.webview.postMessage(msg);
   }
 

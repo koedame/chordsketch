@@ -6,7 +6,7 @@
  */
 
 import * as vscode from 'vscode';
-import { createOrShow } from './preview';
+import { createOrShow, notifyTranspose } from './preview';
 
 /**
  * Resolves the active ChordPro document from the active text editor.
@@ -47,6 +47,32 @@ export function registerOpenPreviewToSide(
     const doc = resolveActiveChordProDocument();
     if (doc) {
       createOrShow(context, doc, vscode.ViewColumn.Beside);
+    }
+  });
+}
+
+/**
+ * Increments the transpose offset of the active document's preview panel by
+ * +1 semitone. No-op if no preview panel is open for the active document.
+ */
+export function registerTransposeUp(): vscode.Disposable {
+  return vscode.commands.registerCommand('chordsketch.transposeUp', () => {
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      notifyTranspose(editor.document.uri.toString(), 1);
+    }
+  });
+}
+
+/**
+ * Decrements the transpose offset of the active document's preview panel by
+ * −1 semitone. No-op if no preview panel is open for the active document.
+ */
+export function registerTransposeDown(): vscode.Disposable {
+  return vscode.commands.registerCommand('chordsketch.transposeDown', () => {
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      notifyTranspose(editor.document.uri.toString(), -1);
     }
   });
 }

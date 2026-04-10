@@ -14,7 +14,7 @@
 import * as vscode from 'vscode';
 import { startLspClient, stopLspClient } from './lsp';
 import { notifyDocumentChanged, disposeAll } from './preview';
-import { registerOpenPreview, registerOpenPreviewToSide } from './commands';
+import { registerOpenPreview, registerOpenPreviewToSide, registerTransposeUp, registerTransposeDown } from './commands';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   // Start the LSP client (gracefully degraded if binary not found).
@@ -24,6 +24,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     registerOpenPreview(context),
     registerOpenPreviewToSide(context),
+    registerTransposeUp(),
+    registerTransposeDown(),
   );
 
   // Propagate document changes to open preview panels (debounced inside PreviewPanel).
