@@ -355,7 +355,7 @@ class PreviewPanel {
     <button id="btn-text" class="view-btn" title="Plain text preview">Plain text</button>
     <span class="toolbar-separator" role="separator"></span>
     <button id="btn-transpose-down" class="transpose-btn" title="Transpose down one semitone">−</button>
-    <span id="transpose-label" aria-label="Transpose offset" title="Semitone transposition offset">±0</span>
+    <span id="transpose-label" aria-live="polite" aria-label="Transpose offset" title="Semitone transposition offset">±0</span>
     <button id="btn-transpose-up" class="transpose-btn" title="Transpose up one semitone">+</button>
   </div>
   <div id="loading">Initializing ChordSketch preview…</div>
