@@ -335,8 +335,9 @@ fn flush_block(music_lines: &[String], w_lines: &[String], out: &mut String) {
     if music_lines.is_empty() {
         // Orphaned lyric lines with no preceding music: output as plain text.
         for w in w_lines {
-            if !w.is_empty() {
-                out.push_str(w);
+            let safe = sanitize_lyric_text(w);
+            if !safe.is_empty() {
+                out.push_str(&safe);
                 out.push('\n');
             }
         }
@@ -1127,6 +1128,24 @@ mod tests {
         assert!(
             out.contains("world"),
             "lyric text inside braces must be preserved (braces stripped), got: {out}"
+        );
+    }
+
+    // --- orphaned lyric sanitization (issue #1348) ---
+
+    #[test]
+    fn orphaned_lyric_braces_sanitized() {
+        // w: lines with no preceding music line are output as plain text.
+        // They must still have { and } stripped to prevent directive injection.
+        let input = "X:1\nT:T\nK:C\nw:Orphaned {inject} line\n";
+        let out = convert_abc(input);
+        assert!(
+            !out.contains("{inject}"),
+            "brace injection must be stripped from orphaned lyrics, got: {out}"
+        );
+        assert!(
+            out.contains("inject"),
+            "text inside braces must be preserved (braces stripped), got: {out}"
         );
     }
 }
