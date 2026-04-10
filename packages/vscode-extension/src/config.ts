@@ -14,7 +14,7 @@
  * - Case-variants (`'HTML'`, `'Text'`) are treated as unknown rather than
  *   silently accepted.
  *
- * Exported for unit testing; also used in `preview.ts`.
+ * Used in `preview.ts` and independently testable without a VS Code host.
  */
 export function resolveDefaultMode(raw: string | undefined): 'html' | 'text' {
   return raw === 'text' ? 'text' : 'html';
