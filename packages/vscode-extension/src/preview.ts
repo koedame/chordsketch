@@ -16,6 +16,26 @@ type ExtToWebview = { type: 'update'; text: string };
 /** Message types received from the WebView in the extension host. */
 type WebviewToExt = { type: 'ready' } | { type: 'error'; message: string };
 
+/**
+ * Type guard for messages received from the WebView.
+ *
+ * Validates the shape of `raw` before casting to `WebviewToExt` so that
+ * field accesses are safe even if the WebView sends a malformed message.
+ */
+function isWebviewToExt(raw: unknown): raw is WebviewToExt {
+  if (typeof raw !== 'object' || raw === null) {
+    return false;
+  }
+  const r = raw as Record<string, unknown>;
+  if (r['type'] === 'ready') {
+    return true;
+  }
+  if (r['type'] === 'error') {
+    return typeof r['message'] === 'string';
+  }
+  return false;
+}
+
 /** Debounce delay in milliseconds. */
 const DEBOUNCE_MS = 300;
 
@@ -71,6 +91,8 @@ class PreviewPanel {
   private readonly document: vscode.TextDocument;
   private debounceTimer: NodeJS.Timeout | undefined;
   private pendingText: string | undefined;
+  /** Lazily created output channel for surfacing render errors from this panel. */
+  private outputChannel: vscode.OutputChannel | undefined;
 
   constructor(context: vscode.ExtensionContext, document: vscode.TextDocument) {
     this.context = context;
@@ -94,15 +116,21 @@ class PreviewPanel {
 
     // Handle messages from the WebView.
     this.panel.webview.onDidReceiveMessage((raw: unknown) => {
-      const msg = raw as WebviewToExt;
-      if (msg.type === 'ready') {
+      if (!isWebviewToExt(raw)) {
+        // Unknown or malformed message — silently ignore.
+        return;
+      }
+      if (raw.type === 'ready') {
         // WebView is ready — send the current document content.
         this.sendUpdate(this.document.getText());
-      } else if (msg.type === 'error') {
+      } else if (raw.type === 'error') {
         // The WebView surfaces render errors; they are also displayed inline
         // in the panel so we only log here and don't show a notification.
-        const outputChannel = vscode.window.createOutputChannel('ChordSketch Preview');
-        outputChannel.appendLine(`Preview render error: ${msg.message}`);
+        if (!this.outputChannel) {
+          this.outputChannel = vscode.window.createOutputChannel('ChordSketch Preview');
+          this.context.subscriptions.push(this.outputChannel);
+        }
+        this.outputChannel.appendLine(`Preview render error: ${raw.message}`);
       }
     });
 
@@ -159,8 +187,10 @@ class PreviewPanel {
    * Builds the WebView HTML.
    *
    * Uses a CSP nonce to allow only the bundled script. The WASM binary URI
-   * is embedded as a data attribute on a container element so the WebView
-   * script can pass it to `init()` at runtime without a network fetch.
+   * is injected via a `<meta name="chordsketch-wasm-uri">` element so the
+   * WebView script can read it at runtime. A `data-` attribute on
+   * `<script type="module">` cannot be used because `document.currentScript`
+   * is always `null` for ES module scripts (HTML spec).
    */
   private buildHtml(): string {
     const webview = this.panel.webview;
@@ -196,6 +226,7 @@ class PreviewPanel {
     connect-src ${csp};
   ">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="chordsketch-wasm-uri" content="${wasmUri}">
   <title>ChordSketch Preview</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -232,12 +263,7 @@ class PreviewPanel {
     sandbox="allow-popups allow-popups-to-escape-sandbox"
     title="ChordPro preview"
   ></iframe>
-  <script
-    nonce="${nonce}"
-    src="${scriptUri}"
-    type="module"
-    data-wasm-uri="${wasmUri}"
-  ></script>
+  <script nonce="${nonce}" src="${scriptUri}" type="module"></script>
 </body>
 </html>`;
   }
