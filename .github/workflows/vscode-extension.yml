@@ -31,16 +31,18 @@ jobs:
           cache: "npm"
           cache-dependency-path: packages/vscode-extension/package-lock.json
 
-      # The WASM package's web build must be present so esbuild can bundle
-      # the JS glue and copy the .wasm binary into dist/webview/.
-      # We restore it from the npm registry rather than building from source
+      # Both the web build (for the WebView preview) and the node build (for the
+      # convertTo export command) must be present so esbuild.mjs can:
+      #   - bundle the web JS glue and copy the .wasm binary into dist/webview/
+      #   - copy the node JS and .wasm binary into dist/node/
+      # We restore from the npm registry rather than building from source
       # so this CI job has no Rust toolchain dependency.
-      - name: Install @chordsketch/wasm (web build)
+      - name: Install @chordsketch/wasm (web + node builds)
         run: |
           mkdir -p packages/npm
           cd packages/npm
           npm pack @chordsketch/wasm@latest 2>/dev/null || true
-          # Unpack into packages/npm/ so esbuild.mjs can find packages/npm/web/
+          # Unpack into packages/npm/ so esbuild.mjs can find packages/npm/web/ and packages/npm/node/
           if ls chordsketch-wasm-*.tgz 1>/dev/null 2>&1; then
             tar xzf chordsketch-wasm-*.tgz --strip-components=1
             echo "Unpacked @chordsketch/wasm"

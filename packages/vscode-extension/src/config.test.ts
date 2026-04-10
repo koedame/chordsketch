@@ -37,3 +37,8 @@ test('resolveDefaultMode: empty string maps to "html"', () => {
 test('resolveDefaultMode: undefined maps to "html"', () => {
   assert.equal(resolveDefaultMode(undefined), 'html');
 });
+
+test('resolveDefaultMode: "Text" (mixed-case) maps to "html"', () => {
+  // Only the exact lowercase string 'text' maps to text mode; mixed-case does not.
+  assert.equal(resolveDefaultMode('Text'), 'html');
+});

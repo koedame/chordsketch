@@ -57,9 +57,13 @@ if (fs.existsSync(wasmSrc)) {
 }
 
 // Copy the WASM Node.js CJS build for the extension host (convertTo command).
-// The files are NOT bundled by esbuild — they are loaded at runtime via createRequire
+// The files are NOT bundled by esbuild — they are loaded at runtime via require()
 // so that the module's own __dirname resolves to dist/node/ where the .wasm binary lives.
+// Clean the directory first to prevent stale artifacts from accumulating across builds.
 const nodeDir = path.join(here, 'dist', 'node');
+if (fs.existsSync(nodeDir)) {
+  fs.rmSync(nodeDir, { recursive: true });
+}
 fs.mkdirSync(nodeDir, { recursive: true });
 // Write a package.json declaring CJS type so Node resolves the .js as CommonJS.
 fs.writeFileSync(path.join(nodeDir, 'package.json'), JSON.stringify({ type: 'commonjs' }, null, 2) + '\n');
