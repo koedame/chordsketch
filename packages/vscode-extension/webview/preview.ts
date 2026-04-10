@@ -6,11 +6,13 @@
  * extension host, then listens for document-update messages and renders them
  * as HTML via the iframe.
  *
- * The WASM URI is passed via the `data-wasm-uri` attribute on this script's
- * own `<script>` element, injected by the extension host in `preview.ts`.
+ * The WASM URI is injected by the extension host as
+ * `<meta name="chordsketch-wasm-uri" content="...">`. A `data-` attribute on
+ * the `<script>` element cannot be used because `document.currentScript` is
+ * always `null` for `type="module"` scripts (HTML spec).
  */
 
-import init, { render_html, render_html_with_options } from '@chordsketch/wasm';
+import init, { render_html } from '@chordsketch/wasm';
 
 /** VS Code WebView API acquired from the global injected by the host. */
 declare function acquireVsCodeApi(): {
@@ -104,15 +106,13 @@ function renderPreview(text: string): void {
   }
 }
 
-// Suppress unused-variable lint: render_html_with_options is exported for
-// future use by Phase B (transpose controls).
-void render_html_with_options;
-
 async function main(): Promise<void> {
   // Read the WASM binary URI injected by the extension host.
-  // The script tag that loads this module carries a `data-wasm-uri` attribute.
-  const scriptEl = document.currentScript as HTMLScriptElement | null;
-  const wasmUri = scriptEl?.dataset.wasmUri ?? '';
+  // A <meta name="chordsketch-wasm-uri"> is used instead of a data- attribute
+  // on the <script> tag because document.currentScript is null for ES modules.
+  const wasmUri =
+    document.querySelector<HTMLMetaElement>('meta[name="chordsketch-wasm-uri"]')?.content ?? '';
+  // TODO(Phase B): use render_html_with_options here for transpose controls.
 
   try {
     if (wasmUri) {
