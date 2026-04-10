@@ -189,7 +189,7 @@ class PreviewPanel {
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'none';
-    script-src 'nonce-${nonce}';
+    script-src 'nonce-${nonce}' 'wasm-unsafe-eval';
     style-src ${csp} 'unsafe-inline';
     img-src ${csp} data:;
     font-src ${csp};

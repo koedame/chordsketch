@@ -41,14 +41,14 @@
           ".chordpro",
           ".chopro"
         ],
-        "configuration": "./syntaxes/language-configuration.json"
+        "configuration": "./dist/syntaxes/language-configuration.json"
       }
     ],
     "grammars": [
       {
         "language": "chordpro",
         "scopeName": "source.chordpro",
-        "path": "./syntaxes/chordpro.tmLanguage.json"
+        "path": "./dist/syntaxes/chordpro.tmLanguage.json"
       }
     ],
     "commands": [
