@@ -61,6 +61,14 @@
         "command": "chordsketch.openPreviewToSide",
         "title": "ChordSketch: Open Preview to the Side",
         "icon": "$(open-preview)"
+      },
+      {
+        "command": "chordsketch.transposeUp",
+        "title": "ChordSketch: Transpose Up"
+      },
+      {
+        "command": "chordsketch.transposeDown",
+        "title": "ChordSketch: Transpose Down"
       }
     ],
     "menus": {
@@ -78,6 +86,14 @@
         },
         {
           "command": "chordsketch.openPreviewToSide",
+          "when": "editorLangId == chordpro"
+        },
+        {
+          "command": "chordsketch.transposeUp",
+          "when": "editorLangId == chordpro"
+        },
+        {
+          "command": "chordsketch.transposeDown",
           "when": "editorLangId == chordpro"
         }
       ]

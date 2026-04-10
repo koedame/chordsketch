@@ -34,7 +34,9 @@ interface PanelState {
 }
 
 /** Message types received from the extension host. */
-type ExtToWebview = { type: 'update'; text: string };
+type ExtToWebview =
+  | { type: 'update'; text: string }
+  | { type: 'transpose'; delta: 1 | -1 };
 
 /**
  * Type guard for messages received from the extension host.
@@ -47,7 +49,13 @@ function isExtToWebview(raw: unknown): raw is ExtToWebview {
     return false;
   }
   const r = raw as Record<string, unknown>;
-  return r['type'] === 'update' && typeof r['text'] === 'string';
+  if (r['type'] === 'update') {
+    return typeof r['text'] === 'string';
+  }
+  if (r['type'] === 'transpose') {
+    return r['delta'] === 1 || r['delta'] === -1;
+  }
+  return false;
 }
 
 const toolbar = document.getElementById('toolbar') as HTMLDivElement;
@@ -312,8 +320,11 @@ async function main(): Promise<void> {
       // Unknown or malformed message — silently ignore.
       return;
     }
-    // isExtToWebview guarantees type === 'update'; no inner dispatch needed.
-    renderPreview(event.data.text);
+    if (event.data.type === 'update') {
+      renderPreview(event.data.text);
+    } else if (event.data.type === 'transpose') {
+      adjustTranspose(event.data.delta);
+    }
   });
 
   // Tell the extension host that the WebView is ready to receive content.
