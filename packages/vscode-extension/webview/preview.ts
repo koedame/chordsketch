@@ -4,7 +4,7 @@
  * Runs in the sandboxed WebView context (browser environment). Initialises
  * the `@chordsketch/wasm` module using the WASM binary URI provided by the
  * extension host, then listens for document-update messages and renders them
- * using the active view mode (HTML or plain text).
+ * using the active view mode (HTML or plain text) and transpose setting.
  *
  * The WASM URI is injected by the extension host as
  * `<meta name="chordsketch-wasm-uri" content="...">`. A `data-` attribute on
@@ -12,7 +12,7 @@
  * always `null` for `type="module"` scripts (HTML spec).
  */
 
-import init, { render_html, render_text } from '@chordsketch/wasm';
+import init, { render_html_with_options, render_text_with_options } from '@chordsketch/wasm';
 
 /** VS Code WebView API acquired from the global injected by the host. */
 declare function acquireVsCodeApi(): {
@@ -29,6 +29,8 @@ type ViewMode = 'html' | 'text';
 /** Persisted panel state saved and restored via the VS Code WebView API. */
 interface PanelState {
   mode?: ViewMode;
+  /** Semitone transposition offset; any integer value (renderer reduces mod 12). */
+  transpose?: number;
 }
 
 /** Message types received from the extension host. */
@@ -55,15 +57,26 @@ const previewFrame = document.getElementById('preview-frame') as HTMLIFrameEleme
 const textFrame = document.getElementById('text-frame') as HTMLPreElement;
 const btnHtml = document.getElementById('btn-html') as HTMLButtonElement;
 const btnText = document.getElementById('btn-text') as HTMLButtonElement;
+const btnTransposeDown = document.getElementById('btn-transpose-down') as HTMLButtonElement;
+const btnTransposeUp = document.getElementById('btn-transpose-up') as HTMLButtonElement;
+const transposeLabel = document.getElementById('transpose-label') as HTMLSpanElement;
 
 /** Currently active view mode. Loaded from persisted state in `main()`. */
 let viewMode: ViewMode = 'html';
 
 /**
+ * Current semitone transposition offset.
+ *
+ * Any integer value is accepted — the WASM renderer reduces it modulo 12
+ * internally (same behaviour as the CLI `--transpose` flag).
+ */
+let transpose = 0;
+
+/**
  * Most recently rendered source text.
  *
- * Kept so that switching view modes re-renders the existing content without
- * waiting for the next document-change message from the extension host.
+ * Kept so that switching view modes or adjusting transpose re-renders the
+ * existing content without waiting for the next document-change message.
  */
 let lastText = '';
 
@@ -131,13 +144,20 @@ function syncButtonStates(): void {
   btnText.classList.toggle('active', viewMode === 'text');
 }
 
+/** Formats the transpose value for the toolbar label (e.g. `±0`, `+3`, `−2`). */
+function formatTranspose(t: number): string {
+  if (t === 0) return '±0';
+  return t > 0 ? `+${t}` : `${t}`;
+}
+
 /**
- * Renders the given ChordPro source text according to the active view mode.
+ * Renders the given ChordPro source text according to the active view mode
+ * and current transpose offset.
  *
- * In HTML mode, `render_html` is called and the output is loaded into the
- * sandboxed iframe via `srcdoc`. In plain text mode, `render_text` is called
- * and the output is set as `textContent` of the `<pre>` element (safe — no
- * HTML parsing occurs).
+ * In HTML mode, `render_html_with_options` is called and the output is loaded
+ * into the sandboxed iframe via `srcdoc`. In plain text mode,
+ * `render_text_with_options` is called and the output is set as `textContent`
+ * of the `<pre>` element (safe — no HTML parsing occurs).
  */
 function renderPreview(text: string): void {
   lastText = text;
@@ -156,16 +176,17 @@ function renderPreview(text: string): void {
     return;
   }
 
+  const options = { transpose };
+
   try {
     if (viewMode === 'html') {
-      // TODO(Phase B): call render_html_with_options with transpose options instead of render_html.
-      const html = render_html(text);
+      const html = render_html_with_options(text, options);
       hideError();
       previewFrame.srcdoc = wrapHtml(html);
       previewFrame.style.display = 'block';
       textFrame.style.display = 'none';
     } else {
-      const plain = render_text(text);
+      const plain = render_text_with_options(text, options);
       hideError();
       // textContent assignment is safe: no HTML parsing, no XSS risk.
       textFrame.textContent = plain;
@@ -197,12 +218,37 @@ function setViewMode(mode: ViewMode): void {
   renderPreview(lastText);
 }
 
+/**
+ * Adjusts the transpose offset by `delta` semitones and re-renders.
+ *
+ * The offset is clamped to [-11, +11]; values outside this range produce
+ * the same chord output since the renderer reduces modulo 12 internally.
+ * The clamp prevents the label from growing without bound on repeated clicks.
+ *
+ * Called only after WASM has successfully loaded.
+ */
+function adjustTranspose(delta: -1 | 1): void {
+  const next = transpose + delta;
+  // Clamp to [-11, +11]: one full chromatic octave in each direction.
+  transpose = Math.max(-11, Math.min(11, next));
+  transposeLabel.textContent = formatTranspose(transpose);
+  // Spread the existing state to preserve other PanelState fields.
+  vscode.setState({ ...(vscode.getState() as PanelState | null) ?? {}, transpose } satisfies PanelState);
+
+  renderPreview(lastText);
+}
+
 async function main(): Promise<void> {
-  // Restore the persisted view mode so the user's choice survives hide/show.
+  // Restore the persisted view mode and transpose so the user's choices
+  // survive hide/show cycles.
   const saved = vscode.getState() as PanelState | null;
   if (saved?.mode === 'html' || saved?.mode === 'text') {
     viewMode = saved.mode;
     syncButtonStates();
+  }
+  if (typeof saved?.transpose === 'number') {
+    transpose = saved.transpose;
+    transposeLabel.textContent = formatTranspose(transpose);
   }
 
   // Read the WASM binary URI injected by the extension host.
@@ -229,9 +275,11 @@ async function main(): Promise<void> {
   // by default; removing the class re-enables it.
   toolbar.classList.remove('disabled');
 
-  // Register toggle button handlers after WASM is ready.
+  // Register all toolbar button handlers after WASM is ready.
   btnHtml.addEventListener('click', () => setViewMode('html'));
   btnText.addEventListener('click', () => setViewMode('text'));
+  btnTransposeDown.addEventListener('click', () => adjustTranspose(-1));
+  btnTransposeUp.addEventListener('click', () => adjustTranspose(1));
 
   // Listen for messages from the extension host.
   window.addEventListener('message', (event: MessageEvent) => {
