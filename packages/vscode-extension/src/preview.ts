@@ -118,6 +118,9 @@ class PreviewPanel {
 
     // Handle messages from the WebView.
     this.panel.webview.onDidReceiveMessage((raw: unknown) => {
+      if (this.disposed) {
+        return;
+      }
       if (!isWebviewToExt(raw)) {
         // Unknown or malformed message — silently ignore.
         return;
