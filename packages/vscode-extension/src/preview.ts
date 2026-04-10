@@ -277,6 +277,34 @@ class PreviewPanel {
     #toolbar .view-btn:not(.active):hover {
       background: var(--vscode-button-secondaryHoverBackground, #3a3a3a);
     }
+    .toolbar-separator {
+      width: 1px;
+      height: 16px;
+      background: var(--vscode-editorGroup-border, #444);
+      margin: 0 6px;
+      flex-shrink: 0;
+    }
+    #toolbar .transpose-btn {
+      background: transparent;
+      border: 1px solid var(--vscode-button-secondaryBackground, #555);
+      color: var(--vscode-foreground, #ccc);
+      padding: 2px 7px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      border-radius: 3px;
+      font-family: inherit;
+      line-height: 1;
+    }
+    #toolbar .transpose-btn:hover {
+      background: var(--vscode-button-secondaryHoverBackground, #3a3a3a);
+    }
+    #transpose-label {
+      font-size: 0.75rem;
+      color: var(--vscode-foreground, #ccc);
+      min-width: 2.5rem;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
     /* Toolbar is disabled until WASM finishes loading so that clicking
        buttons before init completes is not possible. The script removes
        the 'disabled' class after a successful init(). */
@@ -325,6 +353,10 @@ class PreviewPanel {
   <div id="toolbar" class="disabled">
     <button id="btn-html" class="view-btn active" title="HTML preview">HTML</button>
     <button id="btn-text" class="view-btn" title="Plain text preview">Plain text</button>
+    <span class="toolbar-separator" role="separator"></span>
+    <button id="btn-transpose-down" class="transpose-btn" title="Transpose down one semitone">−</button>
+    <span id="transpose-label" aria-label="Transpose offset" title="Semitone transposition offset">±0</span>
+    <button id="btn-transpose-up" class="transpose-btn" title="Transpose up one semitone">+</button>
   </div>
   <div id="loading">Initializing ChordSketch preview…</div>
   <div id="error"></div>
