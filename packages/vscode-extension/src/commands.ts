@@ -20,6 +20,24 @@ import {
   defaultExportPath,
 } from './command-utils.js';
 
+/**
+ * Lazily created output channel used by `registerConvertTo` to log full error
+ * details (WASM load failures, render errors) without exposing them in the
+ * user-facing notification popup.
+ *
+ * Created on first use to avoid cluttering the Output panel for users who
+ * never invoke the export command.
+ */
+let exportOutputChannel: vscode.OutputChannel | undefined;
+
+/** Returns the shared ChordSketch output channel, creating it if necessary. */
+function getExportChannel(): vscode.OutputChannel {
+  if (!exportOutputChannel) {
+    exportOutputChannel = vscode.window.createOutputChannel('ChordSketch');
+  }
+  return exportOutputChannel;
+}
+
 /** Lazily loaded WASM render module singleton. */
 let wasmRenderCache: WasmRenderModule | undefined;
 
@@ -180,9 +198,12 @@ export function registerConvertTo(context: vscode.ExtensionContext): vscode.Disp
     let wasm: WasmRenderModule;
     try {
       wasm = loadWasmRender(context.extensionPath);
-    } catch {
+    } catch (err) {
+      const ch = getExportChannel();
+      ch.appendLine(`[convertTo] Failed to load WASM renderer: ${String(err)}`);
+      ch.show(true);
       void vscode.window.showErrorMessage(
-        'ChordSketch: Failed to load WASM renderer. Check the Output panel for details.',
+        'ChordSketch: Failed to load WASM renderer. See the "ChordSketch" output channel for details.',
       );
       return;
     }
@@ -198,9 +219,12 @@ export function registerConvertTo(context: vscode.ExtensionContext): vscode.Disp
         const rendered = wasm.render_html(doc.getText());
         await vscode.workspace.fs.writeFile(saveUri, Buffer.from(rendered, 'utf-8'));
       }
-    } catch {
+    } catch (err) {
+      const ch = getExportChannel();
+      ch.appendLine(`[convertTo] Export failed: ${String(err)}`);
+      ch.show(true);
       void vscode.window.showErrorMessage(
-        'ChordSketch: Export failed. Check the Output panel for details.',
+        'ChordSketch: Export failed. See the "ChordSketch" output channel for details.',
       );
       return;
     }
