@@ -1,36 +1,33 @@
-# Sanitizer and Security Rules
+# Sanitizer Security
 
-## Sanitizer Bypass Chains
+## Design Principles
 
-Any string that will be embedded in structured output (ChordPro directives,
-HTML, PDF annotations, JSON) MUST be sanitized before use. Apply sanitizers
-at the **output boundary**, not at the parse boundary.
+- Sanitizers use **allowlists**, not denylists. An allowlist enumerates every
+  safe construct explicitly; a denylist attempts to enumerate dangerous ones and
+  inevitably misses novel bypasses.
+- Operate on a **parsed representation** (DOM, token stream) wherever feasible —
+  not raw text with line-by-line or byte-by-byte pattern matching. Line-split
+  attacks and multi-byte sequences exploit parsers that do not track tag
+  boundaries.
+- All element and attribute comparisons must be **case-insensitive**: use
+  `eq_ignore_ascii_case`, `to_ascii_lowercase`, or equivalent. Mixed-case
+  variants (e.g., `ScRiPt`) must not bypass checks.
+- Never cast `u8` to `char` (e.g., `bytes[i] as char`) outside ASCII-only
+  contexts. This pattern silently corrupts multi-byte UTF-8 sequences and can
+  allow sanitizer bypasses via crafted byte patterns. Use `char::from(b)` only
+  when `b.is_ascii()` is proven; otherwise iterate with `str::chars()`.
+- URI scheme detection must strip control characters and whitespace before
+  comparing the scheme name. Fixed byte-length caps on scheme detection windows
+  are not sufficient.
 
-### Rules
+## Coverage Requirements
 
-- **ChordPro output**: Strip or escape `{` and `}` from all directive names
-  and values. Use `sanitize_directive_token` (see `heuristic.rs`) or an
-  equivalent at every call site that produces ChordPro text.
-- **HTML output**: Escape `<`, `>`, `&`, `"`, and `'` in any user-supplied
-  string. Never concatenate raw strings into HTML.
-- **No partial sanitization**: If a sanitizer is applied to a value, it must
-  also be applied to the corresponding name field and vice versa. Asymmetric
-  sanitization is a common source of bypass vulnerabilities.
-- **Test sanitization with adversarial inputs**: Every sanitizer must have
-  at least one test containing the exact character being stripped or escaped
-  in both the name and value positions.
-
-## Security Asymmetry
-
-When a security property (e.g. sanitization, access control, rate limiting)
-is applied to one code path, audit all parallel code paths for the same
-property. Asymmetric treatment is a structural vulnerability.
-
-Example: if directive *values* are sanitized, directive *names* must be
-sanitized too — they appear in the same output context.
-
-## Why
-
-53 sanitizer bypass issues and 18 security asymmetry issues were filed.
-The most common pattern was sanitizing only one field of a multi-field
-record, leaving the other fields exploitable.
+- Sanitization must be applied **consistently across every code path** that emits
+  the same data type. If HTML content is sanitized in the HTML renderer, the same
+  sanitizer must cover equivalent content in the PDF and text renderers.
+- When adding a new output path (renderer, API binding, FFI function, WASM export)
+  that handles user-supplied or external-tool content, audit all existing
+  sanitizers to confirm the new path is covered.
+- When fixing a sanitizer bypass: (1) add a regression test for the bypass,
+  (2) audit sibling sanitizers (e.g., if you fixed the SVG sanitizer, check the
+  CSS and URI sanitizers) for the same gap.

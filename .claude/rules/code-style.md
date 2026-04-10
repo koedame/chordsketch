@@ -11,34 +11,38 @@
   for integration tests.
 - Keep modules small and focused. Prefer many small files over few large ones.
 
-## Test Quality
+## Error Handling
 
-- Every test must make at least one meaningful assertion that would fail if the
-  tested behaviour regressed. Empty tests or tests that only assert `true` are
-  not acceptable.
-- Tests must cover both the happy path and the error / edge-case paths.
-- When adding a test for a bug fix, the test must fail without the fix applied.
-
-## Silent Fallback
-
-- Never use a default or fallback value where a missing value indicates a bug
-  or a contract violation. Return `None`, `Err`, or `Option` to force callers
-  to make an explicit decision.
-- Document any intentional fallback with a comment explaining why the default
-  is safe in context.
+- Do not silently swallow errors with `unwrap_or_default()`, `unwrap_or("")`,
+  or `.ok()` when the error indicates a bug or invalid input. Errors that callers
+  need to know about must propagate. If a silent fallback is intentional, add a
+  comment explaining why it is safe and what conditions trigger it.
 
 ## Resource Limits
 
-- Never accept unbounded input sizes without a documented limit. If a parser or
-  converter can receive arbitrarily large input, either enforce a limit or document
-  the memory/time complexity and the maximum safe input size.
-- Prefer streaming / incremental processing over loading entire inputs into memory
-  when processing files.
+- Every loop or recursion that processes untrusted input must have a bounded
+  iteration count. Define a named `MAX_*` constant for the bound — do not use
+  a bare integer literal.
+- Allocation sizes derived from untrusted input must be validated against a
+  `MAX_*` constant before allocating.
 
 ## Unicode Safety
 
-- Do not use byte indices to slice strings that may contain multi-byte characters.
-  Use `.chars()`, `char_indices()`, or crate helpers that respect char boundaries.
-- When byte offsets are unavoidable (e.g., interoperating with ASCII chord lines),
-  document why the bytes are known to be ASCII and add a golden test with a
-  multi-byte lyric to catch regressions.
+- Never index a `&str` by raw byte offset unless the offset is proven to be a
+  character boundary (e.g., obtained from `char_indices()`). Prefer `chars()`,
+  `char_indices()`, or the `unicode-width` crate for text measurement.
+- Never cast `u8` to `char` via `byte as char` outside ASCII-only contexts.
+  Use `char::from(b)` only when `b.is_ascii()` is guaranteed; otherwise
+  decode with `str::chars()`.
+
+## Test Quality
+
+- Every `#[test]` function must contain at least one meaningful assertion
+  (`assert!`, `assert_eq!`, `assert_ne!`, or a call that panics on failure).
+  Tests that call a function without asserting on its return value prove nothing.
+- `let _ = result;` in a test is prohibited — it discards the value and makes
+  the test a no-op with respect to correctness.
+- Assert on the **actual output** of the function under test. Asserting a
+  hardcoded string that is never computed by the function under test is meaningless.
+- When adding a test to cover a bug fix, verify the test fails when the fix is
+  reverted before committing.

@@ -1,32 +1,27 @@
 # Renderer Parity
 
-## Rule
+ChordSketch has three renderers — text (`crates/render-text`), HTML
+(`crates/render-html`), and PDF (`crates/render-pdf`) — plus bindings (WASM, FFI,
+napi). All three renderers consume the same AST and must produce semantically
+equivalent output for the same input unless a divergence is explicitly documented.
 
-Every ChordPro directive or AST node that is rendered by one renderer MUST
-be handled by **all** renderers (text, HTML, PDF). A missing case in one
-renderer is a correctness bug.
+## Rules
 
-## Required practices
-
-- When adding a new directive or AST node, add rendering support to all
-  three renderers in the same PR (or in explicitly tracked follow-up issues
-  that are linked and prioritised).
-- When fixing a rendering bug in one renderer, check all other renderers for
-  the same bug and fix them in the same PR.
-- Golden tests for each renderer must cover the same set of directives. If
-  a fixture exercises a directive in the text renderer, an equivalent fixture
-  must exist (or be explicitly tracked) for HTML and PDF.
-
-## Audit pattern
-
-Before closing a PR that touches any renderer:
-
-1. Search for all `match` arms on `Line`, `Directive`, or equivalent AST
-   enums in the changed renderer.
-2. Verify every arm exists in the other renderers.
-3. If an arm is missing, either add it or file a sub-issue.
-
-## Why
-
-45 renderer parity issues were filed — the most common was a new directive
-handled in the text renderer but silently ignored or panicking in HTML/PDF.
+- **Bug fixes**: when fixing a bug in one renderer, check the other two for the
+  same bug before marking the issue closed. File separate issues for confirmed
+  bugs in sibling renderers.
+- **New directives / AST nodes**: implement support in all three renderers in the
+  same PR. Do not merge partial support where one renderer silently ignores the
+  new node.
+- **Shared constants** (e.g., `MAX_CHORUS_RECALLS`, `MAX_COLUMNS`, limit values):
+  define them once in `chordsketch-core` and import them. Do not copy the value
+  across crates.
+- **Intentional divergence** (e.g., PDF has page limits, text renderer has no
+  image support): document the divergence with an inline comment citing the
+  rationale. Undocumented divergence is treated as a bug.
+- **Regression tests**: when adding a regression test for one renderer, add an
+  equivalent test for the other two — or include a comment explaining why the
+  other renderers are not affected.
+- **Bindings**: parameter validation ranges (e.g., transpose semitone limits)
+  must be identical across WASM, FFI, and napi. A mismatch is a Medium-severity
+  finding.
