@@ -121,11 +121,19 @@ impl PlainTextImporter {
     /// ```
     /// use chordsketch_core::heuristic::PlainTextImporter;
     ///
+    /// // Valid mid-range value.
     /// let importer = PlainTextImporter::with_thresholds(0.75, 3).unwrap();
     /// assert_eq!(importer.chord_threshold, 0.75);
     /// assert_eq!(importer.min_chord_tokens, 3);
     ///
+    /// // Boundary values are valid.
+    /// assert!(PlainTextImporter::with_thresholds(0.0, 1).is_ok());
+    /// assert!(PlainTextImporter::with_thresholds(1.0, 1).is_ok());
+    ///
+    /// // Out-of-range values are rejected.
     /// assert!(PlainTextImporter::with_thresholds(1.5, 2).is_err());
+    /// assert!(PlainTextImporter::with_thresholds(-0.1, 2).is_err());
+    /// assert!(PlainTextImporter::with_thresholds(f64::NAN, 2).is_err());
     /// assert!(PlainTextImporter::with_thresholds(0.5, 0).is_err());
     /// ```
     #[must_use = "this `Result` should be handled; use `.unwrap()` or `?` to apply the thresholds"]
@@ -870,6 +878,23 @@ mod tests {
         // `[C]` embedded mid-line (not the whole line) is inline chord notation.
         assert_eq!(detect_format("[C]Hello world"), InputFormat::ChordPro);
         assert_eq!(detect_format("Hello [Am]world"), InputFormat::ChordPro);
+    }
+
+    #[test]
+    fn detects_multi_bracket_line_as_chordpro() {
+        // `[Am][G]` on a single line has inner content `Am][G` which contains `[`,
+        // so the whole-line guard does NOT trigger. The scan finds `[Am]` → ChordPro.
+        assert_eq!(detect_format("[Am][G]"), InputFormat::ChordPro);
+        // Three brackets also triggers correctly.
+        assert_eq!(detect_format("[C][G][Am]"), InputFormat::ChordPro);
+    }
+
+    #[test]
+    fn detects_mixed_section_label_and_inline_chord_as_chordpro() {
+        // A whole-line section label `[Verse]` does NOT trigger ChordPro detection
+        // on its own, but a mid-line inline chord on another line does.
+        let input = "[Verse]\nHello [Am]world\n";
+        assert_eq!(detect_format(input), InputFormat::ChordPro);
     }
 
     #[test]
