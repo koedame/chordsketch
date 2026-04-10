@@ -192,9 +192,7 @@ function setViewMode(mode: ViewMode): void {
   vscode.setState({ mode } satisfies PanelState);
   syncButtonStates();
 
-  if (lastText) {
-    renderPreview(lastText);
-  }
+  renderPreview(lastText);
 }
 
 async function main(): Promise<void> {
