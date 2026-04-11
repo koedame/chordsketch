@@ -32,16 +32,40 @@ permissions:
   contents: read
 
 jobs:
-  build-jni:
+  # Build the linux-x86_64 JNI library first so that generate-and-test
+  # can start as soon as this single artifact is ready, without waiting for
+  # the slower Windows build (see #1462).
+  build-jni-linux-x64:
+    name: Build JNI library (x86_64-unknown-linux-gnu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: kotlin-x86_64-unknown-linux-gnu
+
+      - name: Build
+        run: cargo build -p chordsketch-ffi --release --target x86_64-unknown-linux-gnu
+
+      - name: Upload JNI library
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: jni-linux-x86-64
+          path: target/x86_64-unknown-linux-gnu/release/libchordsketch_ffi.so
+          retention-days: 7
+
+  # Build the remaining 4 JNI targets in parallel with generate-and-test.
+  # These are only needed by publish (release runs), not by generate-and-test.
+  build-jni-others:
     name: Build JNI library (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            jni-dir: linux-x86-64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             jni-dir: linux-aarch64
@@ -58,9 +82,6 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          # Allow workflow_dispatch to build a historical tag (e.g., v0.1.0)
-          # for one-shot remediation. For other triggers fall through to
-          # github.ref via the OR fallback.
           ref: ${{ inputs.tag || github.ref }}
 
       - name: Install Rust target
@@ -101,7 +122,10 @@ jobs:
 
   generate-and-test:
     name: Generate bindings and test
-    needs: [build-jni]
+    # Wait only on the linux-x64 artifact, which is the only one consumed by
+    # this job.  The remaining targets (build-jni-others) run in parallel
+    # and are joined by publish for release completeness.
+    needs: [build-jni-linux-x64]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -148,7 +172,9 @@ jobs:
 
   publish:
     name: Publish to Maven Central
-    needs: [generate-and-test]
+    # Wait for all JNI builds AND generate-and-test to ensure the package
+    # contains validated bindings and every platform's JNI library.
+    needs: [build-jni-linux-x64, build-jni-others, generate-and-test]
     runs-on: ubuntu-latest
     if: |
       startsWith(github.ref, 'refs/tags/v') ||

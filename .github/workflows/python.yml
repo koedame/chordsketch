@@ -41,23 +41,17 @@ jobs:
           path: dist
           retention-days: 7
 
-  build-wheels:
-    name: Build ${{ matrix.target }} wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  # Build Linux wheels (x86_64 and aarch64) in parallel.
+  # test-ubuntu waits only on this job, not on macOS or Windows builds (#1463).
+  build-wheels-ubuntu:
+    name: Build ${{ matrix.target }} wheels on ubuntu-latest
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64
-          - os: ubuntu-latest
-            target: aarch64
-          - os: macos-latest
-            target: x86_64
-          - os: macos-latest
-            target: aarch64
-          - os: windows-latest
-            target: x64
+          - target: x86_64
+          - target: aarch64
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -71,37 +65,66 @@ jobs:
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: wheels-${{ matrix.os }}-${{ matrix.target }}
+          name: wheels-ubuntu-latest-${{ matrix.target }}
           path: dist
           retention-days: 7
 
-  test:
-    name: Test Python bindings (${{ matrix.os }})
-    needs: [build-wheels]
-    runs-on: ${{ matrix.os }}
+  # Build macOS wheels (x86_64 and aarch64) in parallel.
+  # test-macos waits only on this job, not on Linux or Windows builds (#1463).
+  build-wheels-macos:
+    name: Build ${{ matrix.target }} wheels on macos-latest
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            artifact: wheels-ubuntu-latest-x86_64
-          # ubuntu-aarch64 wheel requires an arm64 runner to test natively.
-          # GitHub's ubuntu-24.04-arm runner is available but may need to be
-          # enabled for the repository. Uncomment when arm64 runners are confirmed.
-          # - os: ubuntu-24.04-arm
-          #   artifact: wheels-ubuntu-latest-aarch64
-          - os: macos-latest
-            artifact: wheels-macos-latest-aarch64
-          # macOS x86_64 wheels are still built and published to PyPI for
-          # Intel Mac users, but are intentionally not smoke-tested in CI.
-          # GitHub-hosted macos-13 (Intel) runners are being phased out and
-          # cannot be reliably allocated for this repository, and exercising
-          # the x86_64 wheel through Rosetta on the arm64 macos-latest
-          # runner adds non-trivial CI machinery for diminishing-return
-          # coverage as the macOS ecosystem moves to Apple Silicon. We
-          # accept this CI gap. See #1084.
-          - os: windows-latest
-            artifact: wheels-windows-latest-x64
+          - target: x86_64
+          - target: aarch64
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: PyO3/maturin-action@04ac600d27cdf7a9a280dadf7147097c42b757ad # v1
+        with:
+          command: build
+          args: --release --manifest-path crates/ffi/Cargo.toml --out dist
+          target: ${{ matrix.target }}
+          manylinux: manylinux2014
+          sccache: "true"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wheels-macos-latest-${{ matrix.target }}
+          path: dist
+          retention-days: 7
+
+  # Build the Windows wheel.
+  # test-windows waits only on this job (#1463).
+  build-wheels-windows:
+    name: Build x64 wheels on windows-latest
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: PyO3/maturin-action@04ac600d27cdf7a9a280dadf7147097c42b757ad # v1
+        with:
+          command: build
+          args: --release --manifest-path crates/ffi/Cargo.toml --out dist
+          target: x64
+          manylinux: manylinux2014
+          sccache: "true"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wheels-windows-latest-x64
+          path: dist
+          retention-days: 7
+
+  # Each test job waits only for the matching OS wheel build so that linux
+  # and macOS smoke tests don't block on the slower Windows build (#1463).
+  test-ubuntu:
+    name: Test Python bindings (ubuntu-latest)
+    needs: [build-wheels-ubuntu]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -111,7 +134,7 @@ jobs:
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ${{ matrix.artifact }}
+          name: wheels-ubuntu-latest-x86_64
           path: dist
 
       - name: Install wheel
@@ -122,39 +145,147 @@ jobs:
           python -c "
           import chordsketch
 
-          # Version check
           v = chordsketch.version()
           assert v, 'version should not be empty'
           print(f'Version: {v}')
 
-          # Text rendering
           text = chordsketch.parse_and_render_text('{title: Test}\n[C]Hello', None, None)
-          assert 'Test' in text
-          assert 'Hello' in text
+          assert 'Test' in text and 'Hello' in text
           print('Text render: OK')
 
-          # HTML rendering
           html = chordsketch.parse_and_render_html('{title: Test}\n[C]Hello', None, None)
           assert 'Test' in html
           print('HTML render: OK')
 
-          # PDF rendering
           pdf = chordsketch.parse_and_render_pdf('{title: Test}\n[C]Hello', None, None)
           assert pdf[:4] == b'%PDF'
           print('PDF render: OK')
 
-          # Validate
           errors = chordsketch.validate('{title: Valid}\n[C]Hello')
           assert isinstance(errors, list)
           print('Validate: OK')
 
-          # Config preset
           text = chordsketch.parse_and_render_text('{title: Test}\n[C]Hello', 'guitar', None)
           assert 'Test' in text
           print('Config preset: OK')
 
-          # Transpose
-          text = chordsketch.parse_and_render_text('{title: Test}\n[C]Hello', None, 2)
+          chordsketch.parse_and_render_text('{title: Test}\n[C]Hello', None, 2)
+          print('Transpose: OK')
+
+          print('All smoke tests passed!')
+          "
+
+  test-macos:
+    name: Test Python bindings (macos-latest)
+    needs: [build-wheels-macos]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          # macOS x86_64 wheels are still built and published to PyPI for
+          # Intel Mac users, but are intentionally not smoke-tested in CI.
+          # GitHub-hosted macos-13 (Intel) runners are being phased out and
+          # cannot be reliably allocated for this repository, and exercising
+          # the x86_64 wheel through Rosetta on the arm64 macos-latest
+          # runner adds non-trivial CI machinery for diminishing-return
+          # coverage as the macOS ecosystem moves to Apple Silicon. We
+          # accept this CI gap. See #1084.
+          name: wheels-macos-latest-aarch64
+          path: dist
+
+      - name: Install wheel
+        run: pip install chordsketch --find-links dist --no-index
+
+      - name: Run smoke test
+        run: |
+          python -c "
+          import chordsketch
+
+          v = chordsketch.version()
+          assert v, 'version should not be empty'
+          print(f'Version: {v}')
+
+          text = chordsketch.parse_and_render_text('{title: Test}\n[C]Hello', None, None)
+          assert 'Test' in text and 'Hello' in text
+          print('Text render: OK')
+
+          html = chordsketch.parse_and_render_html('{title: Test}\n[C]Hello', None, None)
+          assert 'Test' in html
+          print('HTML render: OK')
+
+          pdf = chordsketch.parse_and_render_pdf('{title: Test}\n[C]Hello', None, None)
+          assert pdf[:4] == b'%PDF'
+          print('PDF render: OK')
+
+          errors = chordsketch.validate('{title: Valid}\n[C]Hello')
+          assert isinstance(errors, list)
+          print('Validate: OK')
+
+          text = chordsketch.parse_and_render_text('{title: Test}\n[C]Hello', 'guitar', None)
+          assert 'Test' in text
+          print('Config preset: OK')
+
+          chordsketch.parse_and_render_text('{title: Test}\n[C]Hello', None, 2)
+          print('Transpose: OK')
+
+          print('All smoke tests passed!')
+          "
+
+  test-windows:
+    name: Test Python bindings (windows-latest)
+    needs: [build-wheels-windows]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: wheels-windows-latest-x64
+          path: dist
+
+      - name: Install wheel
+        run: pip install chordsketch --find-links dist --no-index
+
+      - name: Run smoke test
+        run: |
+          python -c "
+          import chordsketch
+
+          v = chordsketch.version()
+          assert v, 'version should not be empty'
+          print(f'Version: {v}')
+
+          text = chordsketch.parse_and_render_text('{title: Test}\n[C]Hello', None, None)
+          assert 'Test' in text and 'Hello' in text
+          print('Text render: OK')
+
+          html = chordsketch.parse_and_render_html('{title: Test}\n[C]Hello', None, None)
+          assert 'Test' in html
+          print('HTML render: OK')
+
+          pdf = chordsketch.parse_and_render_pdf('{title: Test}\n[C]Hello', None, None)
+          assert pdf[:4] == b'%PDF'
+          print('PDF render: OK')
+
+          errors = chordsketch.validate('{title: Valid}\n[C]Hello')
+          assert isinstance(errors, list)
+          print('Validate: OK')
+
+          text = chordsketch.parse_and_render_text('{title: Test}\n[C]Hello', 'guitar', None)
+          assert 'Test' in text
+          print('Config preset: OK')
+
+          chordsketch.parse_and_render_text('{title: Test}\n[C]Hello', None, 2)
           print('Transpose: OK')
 
           print('All smoke tests passed!')
@@ -162,7 +293,17 @@ jobs:
 
   publish:
     name: Publish to PyPI
-    needs: [build-sdist, build-wheels, test]
+    # Wait for all per-OS builds and tests; publish only on release tags.
+    needs:
+      [
+        build-sdist,
+        build-wheels-ubuntu,
+        build-wheels-macos,
+        build-wheels-windows,
+        test-ubuntu,
+        test-macos,
+        test-windows,
+      ]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     # Uses PyPI Trusted Publishing via OIDC — no API token needed.
