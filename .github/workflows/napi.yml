@@ -200,8 +200,10 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          ref: ${{ inputs.tag || github.ref }}
+        # No `ref:` override — always check out the default branch (main) so
+        # scripts/check-env-secrets.py is present. The publish step uses
+        # pre-built .node artifacts downloaded from the build jobs; version
+        # is determined by the tag input, not by checked-out source.
 
       - name: Check required secrets present
         # Fails fast when NPM_TOKEN is missing so "environment missing →
