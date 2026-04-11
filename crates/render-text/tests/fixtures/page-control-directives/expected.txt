@@ -1,0 +1,9 @@
+Page Control Test
+G
+First line
+C
+Second line
+D
+Third line
+Am
+Fourth line
