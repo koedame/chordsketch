@@ -109,7 +109,8 @@ fn convert_score(score: &Element) -> Result<Song, ImportError> {
     let mut key_emitted = false;
     let mut tempo_emitted = false;
     let mut capo_emitted = false;
-    let mut in_section = false;
+    // Tracks the end-directive name of the currently open section, if any.
+    let mut current_section_end: Option<&'static str> = None;
 
     for measure in part.children_named("measure") {
         // --- attributes (key, capo) -----------------------------------------
@@ -170,26 +171,28 @@ fn convert_score(score: &Element) -> Result<Song, ImportError> {
                 if let Some(rehearsal) = dt.child("rehearsal") {
                     let label = rehearsal.text.trim();
                     if !label.is_empty() {
-                        // Close any open section
-                        if in_section {
+                        // Close any open section with its end directive.
+                        if let Some(end_dir) = current_section_end {
+                            emit_directive(&mut song.lines, end_dir, None);
                             song.lines.push(Line::Empty);
                         }
                         let (section_dir, section_end) = map_section_label(label);
                         emit_directive(&mut song.lines, section_dir, Some(label));
-                        in_section = true;
-                        let _ = section_end; // will emit on next section or EOF
+                        current_section_end = Some(section_end);
                     }
                 }
                 if let Some(words) = dt.child("words") {
                     let text = words.text.trim();
                     // Treat "Intro:", "Verse", "Chorus", etc. as section markers
                     if looks_like_section_marker(text) {
-                        if in_section {
+                        // Close any open section with its end directive.
+                        if let Some(end_dir) = current_section_end {
+                            emit_directive(&mut song.lines, end_dir, None);
                             song.lines.push(Line::Empty);
                         }
-                        let (section_dir, _) = map_section_label(text);
+                        let (section_dir, section_end) = map_section_label(text);
                         emit_directive(&mut song.lines, section_dir, Some(text));
-                        in_section = true;
+                        current_section_end = Some(section_end);
                     }
                 }
             }
@@ -230,9 +233,9 @@ fn convert_score(score: &Element) -> Result<Song, ImportError> {
         }
     }
 
-    // Close open section
-    if in_section {
-        song.lines.push(Line::Empty);
+    // Close the last open section with its end directive.
+    if let Some(end_dir) = current_section_end {
+        emit_directive(&mut song.lines, end_dir, None);
     }
 
     Ok(song)

@@ -331,13 +331,13 @@ fn chord_to_musicxml(chord_name: &str) -> Option<ChordXml> {
     let detail = parse_chord(chord_name)?;
 
     let root_step = note_to_step(detail.root);
-    let root_alter = acciental_to_alter(detail.root_accidental);
+    let root_alter = accidental_to_alter(detail.root_accidental);
 
     let ext = detail.extension.as_deref().unwrap_or("");
     let (kind_content, kind_text) = quality_ext_to_kind(detail.quality, ext);
 
     let bass = if let Some((bass_note, bass_acc)) = detail.bass_note {
-        Some((note_to_step(bass_note), acciental_to_alter(bass_acc)))
+        Some((note_to_step(bass_note), accidental_to_alter(bass_acc)))
     } else {
         None
     };
@@ -364,7 +364,7 @@ fn note_to_step(note: chordsketch_core::chord::Note) -> &'static str {
     }
 }
 
-fn acciental_to_alter(acc: Option<chordsketch_core::chord::Accidental>) -> i32 {
+fn accidental_to_alter(acc: Option<chordsketch_core::chord::Accidental>) -> i32 {
     use chordsketch_core::chord::Accidental;
     match acc {
         Some(Accidental::Sharp) => 1,

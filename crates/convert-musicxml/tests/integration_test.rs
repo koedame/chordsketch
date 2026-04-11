@@ -309,6 +309,79 @@ fn round_trip_preserves_lyrics() {
 }
 
 // ---------------------------------------------------------------------------
+// Section end directives
+// ---------------------------------------------------------------------------
+
+/// Regression test: imported sections must have explicit `{end_of_*}` directives.
+///
+/// Previously `map_section_label` returned the end-directive name but it was
+/// always discarded with `let _ = section_end`, so the resulting ChordPro had
+/// `{start_of_verse}` / `{start_of_chorus}` without any closing directives.
+#[test]
+fn sections_have_end_directives() {
+    let xml = fixture("sections.xml");
+    let song = from_musicxml(&xml).expect("sections.xml should parse");
+
+    use chordsketch_core::ast::DirectiveKind;
+
+    let has_verse_end = song.lines.iter().any(|l| {
+        matches!(
+            l,
+            Line::Directive(d) if d.kind == DirectiveKind::EndOfVerse
+        )
+    });
+    let has_chorus_end = song.lines.iter().any(|l| {
+        matches!(
+            l,
+            Line::Directive(d) if d.kind == DirectiveKind::EndOfChorus
+        )
+    });
+
+    assert!(
+        has_verse_end,
+        "expected end_of_verse directive after verse section"
+    );
+    assert!(
+        has_chorus_end,
+        "expected end_of_chorus directive after chorus section"
+    );
+}
+
+/// Sections must be ordered correctly: start → content → end.
+#[test]
+fn section_end_follows_content() {
+    let xml = fixture("sections.xml");
+    let song = from_musicxml(&xml).expect("sections.xml should parse");
+
+    use chordsketch_core::ast::DirectiveKind;
+
+    // Collect line positions for start_of_verse, lyrics, and end_of_verse.
+    let verse_start = song
+        .lines
+        .iter()
+        .position(|l| matches!(l, Line::Directive(d) if d.kind == DirectiveKind::StartOfVerse));
+    let verse_end = song
+        .lines
+        .iter()
+        .position(|l| matches!(l, Line::Directive(d) if d.kind == DirectiveKind::EndOfVerse));
+    let first_lyrics = song.lines.iter().position(|l| matches!(l, Line::Lyrics(_)));
+
+    let (start, end, lyrics) = (
+        verse_start.expect("start_of_verse not found"),
+        verse_end.expect("end_of_verse not found"),
+        first_lyrics.expect("no lyrics found"),
+    );
+    assert!(
+        start < lyrics,
+        "start_of_verse must precede lyrics (start={start}, lyrics={lyrics})"
+    );
+    assert!(
+        lyrics < end,
+        "lyrics must precede end_of_verse (lyrics={lyrics}, end={end})"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Error cases
 // ---------------------------------------------------------------------------
 
