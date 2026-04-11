@@ -198,8 +198,11 @@ jobs:
       url: https://repo1.maven.org/maven2/io/github/koedame/chordsketch/
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          ref: ${{ inputs.tag || github.ref }}
+        # No `ref:` override — always check out the default branch (main) so
+        # scripts/check-env-secrets.py is present. The publish step uses
+        # pre-built artifacts downloaded from the build jobs; the Gradle source
+        # in packages/kotlin/ is identical in substance between main and any
+        # recent release tag, with version 0.2.0 specified in both.
 
       - name: Check required secrets present
         # Fails fast when any Maven Central credential is missing so
