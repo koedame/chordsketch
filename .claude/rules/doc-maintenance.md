@@ -20,6 +20,7 @@ promptly.
 | Existing rule no longer applies | Remove or update the relevant `.claude/rules/` file |
 | Dependency policy changed | `CLAUDE.md` Dependency Policy section |
 | Public API contract changes | Doc comment on the affected function/struct |
+| Decision warranting an ADR (see [`adr-discipline.md`](adr-discipline.md)) | `docs/adr/` — add ADR file and update index |
 
 ## CI Doc Check
 
