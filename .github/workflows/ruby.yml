@@ -166,15 +166,6 @@ jobs:
           mv .uniffi-tmp/chordsketch.rb packages/ruby/lib/chordsketch_uniffi.rb
           rm -rf .uniffi-tmp/
 
-      - name: Upload Ruby bindings
-        # The generated chordsketch_uniffi.rb is uploaded as an artifact so
-        # the publish job can download it directly instead of rebuilding the
-        # FFI crate and re-running uniffi-bindgen. See #1448.
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: ruby-bindings
-          path: packages/ruby/lib/chordsketch_uniffi.rb
-
       - name: Download native library (linux-x86-64)
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -192,6 +183,15 @@ jobs:
       - name: Run tests
         working-directory: packages/ruby
         run: ruby -Ilib -Itest test/test_chordsketch.rb
+
+      - name: Upload Ruby bindings
+        # Uploaded after tests pass so the artifact represents a validated
+        # binding file. The publish job downloads this instead of rebuilding
+        # the FFI crate and re-running uniffi-bindgen. See #1448.
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ruby-bindings
+          path: packages/ruby/lib/chordsketch_uniffi.rb
 
   publish:
     name: Publish to RubyGems
