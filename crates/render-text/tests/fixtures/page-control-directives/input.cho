@@ -1,5 +1,5 @@
 {title: Page Control Test}
-{columns: 2}
+{columns: 999}
 [G]First line
 {new_page}
 [C]Second line
