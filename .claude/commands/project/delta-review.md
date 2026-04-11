@@ -16,6 +16,12 @@ review. The argument is a base commit hash or PR number: `$ARGUMENTS`
 
 3. **Perform both code review and security review** on the diff.
 
+   **Additionally, check for symptomatic / band-aid fixes** (per `.claude/rules/root-cause-fixes.md`):
+   - Does the fix address the root cause, or does it only mask the symptom?
+   - Are there `#[allow(...)]`, deleted tests, silenced errors, bumped timeouts, or
+     adjusted expected outputs that hide the real defect?
+   - Any symptomatic fix is at minimum **Medium** severity (spec violation / incorrect behavior preserved).
+
 4. **Classify every finding by severity**:
 
    | Severity | Blocks | Definition |
