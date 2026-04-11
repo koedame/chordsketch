@@ -24,6 +24,11 @@ jobs:
     # One-time human setup: create the "npm" environment at
     #   https://github.com/koedame/chordsketch/settings/environments
     # and move NPM_TOKEN from repository secrets to environment secrets.
+    #
+    # If the "npm" environment does not exist (fork, fresh instance), GitHub
+    # cannot start this job. continue-on-error keeps the overall workflow green
+    # when CI succeeded but publishing infrastructure is absent. See #1443.
+    continue-on-error: true
     environment:
       name: npm
       url: https://www.npmjs.com/package/@chordsketch/wasm
