@@ -920,9 +920,13 @@ fn sanitize_css_class(s: &str) -> String {
 /// injection is never legitimate in music notation.
 fn sanitize_svg_content(input: &str) -> String {
     // Dangerous elements that are stripped entirely (opening tag through closing tag).
-    // Must cover all SVG/HTML elements that can load external resources:
-    // script, use (with external href), feImage, image, iframe, embed, object
-    // (sanitizer-security.md §SVG tag blocklists).
+    // Per sanitizer-security.md §SVG tag blocklists, this MUST cover all SVG/HTML
+    // elements that can load external resources: script, feImage, image, iframe,
+    // embed, object, and foreign-content containers.
+    // Note: <use> elements are NOT stripped here; their href/xlink:href attributes are
+    // sanitized at the attribute level by sanitize_tag_attrs / is_uri_attr, which now
+    // blocks file: and blob: schemes. This preserves legitimate <use href="#symbol"/>
+    // patterns while preventing local-file exfiltration.
     const DANGEROUS_TAGS: &[&str] = &[
         "script",
         "foreignobject",
@@ -931,8 +935,13 @@ fn sanitize_svg_content(input: &str) -> String {
         "embed",
         "math",
         // feImage is an SVG filter primitive that loads external content via href.
-        // A <feImage href="file:///etc/passwd"/> survives tag-stripping without this entry.
+        // A <feImage href="file:///etc/passwd"/> survives attribute sanitization
+        // with an http: or https: URL, so the element must be stripped entirely.
         "feimage",
+        // SVG <image> element loads external raster/vector images. Not needed in
+        // music notation SVG; strip entirely to prevent tracking-pixel and
+        // cross-origin leaks even over https:.
+        "image",
         "set",
         "animate",
         "animatetransform",
@@ -1102,8 +1111,8 @@ fn find_end_tag_ignore_case(input: &str, start: usize, tag: &str) -> Option<usiz
 }
 
 /// Strip dangerous attributes from HTML/SVG tags: event handlers (`on*`) and
-/// URI attributes (`href`, `src`, `xlink:href`) with dangerous schemes
-/// (`javascript:`, `vbscript:`, `data:`). Only operates inside `<...>`
+/// URI attributes (see [`is_uri_attr`]) with dangerous schemes
+/// (see [`has_dangerous_uri_scheme`]). Only operates inside `<...>`
 /// delimiters to avoid false positives in text content.
 fn strip_dangerous_attrs(input: &str) -> String {
     let mut result = String::with_capacity(input.len());
@@ -1172,15 +1181,18 @@ fn has_dangerous_uri_scheme(value: &str) -> bool {
         .take(30)
         .flat_map(|c| c.to_lowercase())
         .collect();
-    // Blocked schemes: javascript/vbscript (code execution), data (content injection),
-    // file/blob (local file access when HTML is opened as a local file — parity with
-    // is_safe_image_src which already blocks these).
-    // See WHATWG Fetch forbidden origins for rationale.
+    // Blocked schemes — parity with is_safe_image_src which uses an allowlist approach:
+    //   javascript/vbscript: code execution
+    //   data:               content injection
+    //   file:/blob:         local file access when HTML is opened as a local file
+    //   mhtml:              MIME HTML (IE-era; blocked by is_safe_image_src via allowlist)
+    // See WHATWG Fetch forbidden origins for further rationale.
     lower.starts_with("javascript:")
         || lower.starts_with("vbscript:")
         || lower.starts_with("data:")
         || lower.starts_with("file:")
         || lower.starts_with("blob:")
+        || lower.starts_with("mhtml:")
 }
 
 /// Check if an attribute name is a URI-bearing attribute that needs scheme
@@ -1212,7 +1224,7 @@ fn is_uri_attr(name: &str) -> bool {
 /// Sanitize attributes in a single HTML/SVG tag string.
 ///
 /// Removes event handler attributes (`on*`) entirely and strips URI attributes
-/// (`href`, `src`, `xlink:href`) that use dangerous schemes.
+/// (see [`is_uri_attr`]) that use dangerous schemes (see [`has_dangerous_uri_scheme`]).
 ///
 /// This function operates at the byte level for performance. This is safe
 /// because HTML/SVG tag names, attribute names, and structural characters
@@ -3865,6 +3877,72 @@ mod delegate_tests {
         assert!(
             !html.contains("javascript:"),
             "javascript: URI in formaction attribute must be stripped; got: {html}"
+        );
+    }
+
+    #[test]
+    fn test_svg_section_strips_ping_javascript_uri() {
+        // ping attribute sends POST requests on link click
+        let input =
+            "{start_of_svg}\n<svg><a ping=\"javascript:alert(1)\">click</a></svg>\n{end_of_svg}";
+        let html = render(input);
+        assert!(
+            !html.contains("javascript:"),
+            "javascript: URI in ping attribute must be stripped; got: {html}"
+        );
+    }
+
+    #[test]
+    fn test_svg_section_strips_poster_file_uri() {
+        // poster attribute on video — blocked via file: URI scheme
+        let input =
+            "{start_of_svg}\n<svg><video poster=\"file:///etc/passwd\"/></svg>\n{end_of_svg}";
+        let html = render(input);
+        assert!(
+            !html.contains("file:///"),
+            "file: URI in poster attribute must be stripped; got: {html}"
+        );
+    }
+
+    #[test]
+    fn test_svg_section_strips_background_file_uri() {
+        // background attribute (legacy HTML body attribute)
+        let input =
+            "{start_of_svg}\n<svg><body background=\"file:///etc/passwd\"/></svg>\n{end_of_svg}";
+        let html = render(input);
+        assert!(
+            !html.contains("file:///"),
+            "file: URI in background attribute must be stripped; got: {html}"
+        );
+    }
+
+    // --- mhtml: URI scheme blocking (parity with is_safe_image_src) ---
+
+    #[test]
+    fn test_dangerous_uri_mhtml_scheme_blocked() {
+        // mhtml: is an IE-era MIME HTML scheme; blocked by is_safe_image_src via allowlist.
+        assert!(
+            has_dangerous_uri_scheme("mhtml:file://C:/page.mhtml"),
+            "mhtml: URI scheme must be detected as dangerous"
+        );
+        assert!(
+            has_dangerous_uri_scheme("MHTML:file://C:/page.mhtml"),
+            "MHTML: (uppercase) must be detected as dangerous"
+        );
+    }
+
+    // --- SVG <image> element stripping ---
+
+    #[test]
+    fn test_svg_section_strips_image_element() {
+        // SVG <image> can load external raster/vector content and is not needed
+        // in music notation SVG.
+        let input =
+            "{start_of_svg}\n<svg><image href=\"https://evil.com/spy.png\"/></svg>\n{end_of_svg}";
+        let html = render(input);
+        assert!(
+            !html.to_lowercase().contains("<image"),
+            "SVG <image> element must be stripped entirely; got: {html}"
         );
     }
 }
