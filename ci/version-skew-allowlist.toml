@@ -29,23 +29,3 @@
 #                    human-actionable)
 #   tracking_issue — GitHub issue number, as a string or integer
 
-# ----------------------------------------------------------------
-# VS Code extension lagging until first Marketplace publish
-# ----------------------------------------------------------------
-
-[[allowed_skews]]
-file = "packages/vscode-extension/package.json"
-field = "version"
-current_value = "0.1.0"
-reason = """
-The VS Code extension is pinned at 0.1.0 until the first successful
-Marketplace publish. The `vscode-marketplace` environment was never created,
-so the publish job has been silently skipped on every run since #1352 (see
-issue #1506 Background §1). Bumping the package version before the first
-publish would create a confusing "0.2.0 was never published" gap in the
-Marketplace history. This entry retires the moment the first publish
-succeeds.
-"""
-expires_at = "first successful Marketplace publish"
-tracking_issue = "1508"
-
