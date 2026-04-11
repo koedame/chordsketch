@@ -64,9 +64,9 @@ console.log(`ChordSketch ${version()}`);
 ```js
 import { validate } from '@chordsketch/node';
 
-const errors = validate(source); // ValidationError[] — empty array if clean
-for (const e of errors) {
-  console.warn(`line ${e.line}, col ${e.column}: ${e.message}`);
+const errors = validate(source); // string[] — empty array if clean
+for (const msg of errors) {
+  console.warn(msg);
 }
 ```
 
