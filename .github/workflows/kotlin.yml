@@ -160,6 +160,11 @@ jobs:
     # and move CENTRAL_PORTAL_USERNAME, CENTRAL_PORTAL_PASSWORD,
     # GPG_SIGNING_KEY, GPG_SIGNING_PASSWORD from repository secrets to
     # environment secrets.
+    #
+    # If the "maven-central" environment does not exist (fork, fresh instance),
+    # GitHub cannot start this job. continue-on-error keeps the overall workflow
+    # green when CI succeeded but publishing infrastructure is absent. See #1443.
+    continue-on-error: true
     environment:
       name: maven-central
       url: https://repo1.maven.org/maven2/io/github/koedame/chordsketch/

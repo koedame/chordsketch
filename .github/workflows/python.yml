@@ -175,6 +175,10 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    # If the "pypi" environment does not exist (fork, fresh instance), GitHub
+    # cannot start this job. continue-on-error keeps the overall workflow green
+    # when GHCR/CI succeeded but publishing infrastructure is absent. See #1443.
+    continue-on-error: true
     environment:
       name: pypi
       url: https://pypi.org/p/chordsketch
