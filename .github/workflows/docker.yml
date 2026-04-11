@@ -43,9 +43,8 @@ jobs:
       - name: Download and extract release binaries
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          TAG="${{ steps.version.outputs.tag }}"
-
           # Download musl binaries from the release
           gh release download "$TAG" \
             -p "chordsketch-${TAG}-x86_64-unknown-linux-musl.tar.gz" \
@@ -171,8 +170,15 @@ jobs:
 
       - name: Copy tags from GHCR to Docker Hub
         # `docker buildx imagetools create` copies the multi-platform manifest
-        # list from GHCR to Docker Hub without a rebuild. Tag logic mirrors the
-        # metadata-action configuration in the `ghcr` job.
+        # list from GHCR to Docker Hub without a rebuild.
+        #
+        # Tag logic must stay in sync with the metadata-action config in the
+        # `ghcr` job:
+        #   type=semver,pattern={{version}}         → X.Y.Z
+        #   type=semver,pattern={{major}}.{{minor}} → X.Y
+        #   type=raw,value=latest (release only)    → latest
+        # When adding a new tag pattern in `ghcr`, add the corresponding copy
+        # command here. See #1440.
         if: steps.dockerhub.outputs.available == 'true'
         env:
           TAG: ${{ steps.version.outputs.tag }}
@@ -181,7 +187,11 @@ jobs:
           DST: docker.io/${{ env.IMAGE_NAME }}
         run: |
           VERSION="${TAG#v}"
-          MAJOR_MINOR="${VERSION%.*}"
+          # Use cut to extract major.minor so that 2-part tags (e.g. v1.2)
+          # produce "1.2" instead of "1" (which ${VERSION%.*} would give).
+          # This matches metadata-action's {{major}}.{{minor}} output exactly.
+          # See #1439.
+          MAJOR_MINOR="$(echo "${VERSION}" | cut -d. -f1,2)"
 
           docker buildx imagetools create \
             -t "${DST}:${VERSION}" \
