@@ -1,0 +1,9 @@
+{title: Page Control Test}
+{columns: 2}
+[G]First line
+{new_page}
+[C]Second line
+{new_physical_page}
+[D]Third line
+{column_break}
+[Am]Fourth line

@@ -492,6 +492,14 @@ fn render_directive(directive: &chordsketch_core::ast::Directive, output: &mut V
                 output.push(format!("[Image: {}]", attrs.src));
             }
         }
+        // Page-layout directives are intentionally no-ops in plain-text output:
+        // plain text has no concept of pages, columns, or column breaks.
+        // Explicit arms here make the omission visible to future contributors
+        // (renderer-parity.md requires every directive to have an explicit arm).
+        DirectiveKind::NewPage
+        | DirectiveKind::NewPhysicalPage
+        | DirectiveKind::ColumnBreak
+        | DirectiveKind::Columns => {}
         // End-of-section, metadata, and unknown directives produce no output.
         _ => {}
     }

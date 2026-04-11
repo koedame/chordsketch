@@ -593,11 +593,16 @@ fn render_song_into_doc(
                         }
                     }
                     DirectiveKind::Columns => {
+                        // Clamp to 1..=MAX_COLUMNS to prevent degenerate layout.
+                        // Parsing as u32 already rejects non-numeric and negative input;
+                        // explicit clamping here mirrors the HTML renderer for parity and
+                        // makes the constraint visible at the call site.
                         let n: u32 = d
                             .value
                             .as_deref()
                             .and_then(|v| v.trim().parse().ok())
-                            .unwrap_or(1);
+                            .unwrap_or(1)
+                            .clamp(1, MAX_COLUMNS);
                         doc.set_columns(n);
                     }
                     DirectiveKind::ColumnBreak => {
@@ -3691,6 +3696,18 @@ mod column_tests {
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         // Non-numeric value defaults to 1 column — should still render.
+        assert!(content.contains("Am"));
+        assert!(content.contains("Hello"));
+    }
+
+    #[test]
+    fn test_columns_out_of_range_clamped() {
+        // An absurdly large {columns} value must not cause a panic or degenerate
+        // layout — it is clamped to MAX_COLUMNS at the directive call site.
+        let input = "{columns: 4294967295}\n[Am]Hello";
+        let song = chordsketch_core::parse(input).unwrap();
+        let bytes = render_song(&song);
+        let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("Am"));
         assert!(content.contains("Hello"));
     }
