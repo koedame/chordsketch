@@ -257,6 +257,11 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
+      # rust-cache intentionally omitted: this job installs from crates.io into a
+      # custom CARGO_HOME (/tmp/cargo-smoke) outside the workspace. Both the registry
+      # and build artifacts land under /tmp, not under ~/.cargo or the workspace
+      # target/, so Swatinem/rust-cache would cache nothing useful.
+
       - name: Install from crates.io into scratch CARGO_HOME
         env:
           CARGO_HOME: /tmp/cargo-smoke
@@ -277,6 +282,10 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      # rust-cache intentionally omitted: compilation happens inside a fresh clone at
+      # /tmp/chordsketch-src with CARGO_HOME=/tmp/cargo-source — both are outside the
+      # workspace and ~/.cargo, so Swatinem/rust-cache has nothing to cache.
 
       - name: Clone, install, and run
         env:
@@ -406,6 +415,13 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
+      # Caches ~/.cargo/registry so crates.io dependency fetches are fast on
+      # re-runs. The scratch project builds in /tmp so target/ is not cached,
+      # but the registry cache alone is worthwhile given the daily + PR cadence.
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: readme-smoke-library
+
       - name: Build and run README Library Usage snippet
         run: |
           set -euo pipefail
@@ -474,6 +490,13 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      # Caches the workspace target/ directory. Although CARGO_HOME is redirected to
+      # /tmp/cargo-usage, cargo install --path still compiles into the workspace
+      # target/, so subsequent runs skip recompiling unchanged crates.
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: readme-smoke-usage
 
       - name: Install CLI from workspace
         env:
