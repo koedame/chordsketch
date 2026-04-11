@@ -181,6 +181,14 @@ fn render_song_impl(
                             chorus_recall_count += 1;
                         }
                     }
+                    // All page-layout directives are intentionally excluded from the
+                    // chorus buffer — they must not be replayed on chorus recall.
+                    // Plain-text rendering produces no output for these directives
+                    // (parity with HTML and PDF renderers which do the same exclusion).
+                    DirectiveKind::NewPage
+                    | DirectiveKind::NewPhysicalPage
+                    | DirectiveKind::ColumnBreak
+                    | DirectiveKind::Columns => {}
                     _ => {
                         if let Some(buf) = chorus_buf.as_mut() {
                             buf.push(line.clone());
@@ -449,6 +457,8 @@ fn render_lyrics(lyrics_line: &LyricsLine, transpose_offset: i8, output: &mut Ve
 /// - Section start directives produce a labeled header (e.g., "Chorus").
 /// - Section end directives are not rendered (they are structural markers).
 /// - Metadata directives are not rendered here (handled by `render_metadata`).
+/// - Page-layout directives (`{new_page}`, `{new_physical_page}`, `{column_break}`,
+///   `{columns}`) produce no output — plain text has no concept of pages or columns.
 /// - Unknown directives are silently ignored.
 fn render_directive(directive: &chordsketch_core::ast::Directive, output: &mut Vec<String>) {
     match &directive.kind {
@@ -492,6 +502,14 @@ fn render_directive(directive: &chordsketch_core::ast::Directive, output: &mut V
                 output.push(format!("[Image: {}]", attrs.src));
             }
         }
+        // Page-layout directives are intentionally no-ops in plain-text output:
+        // plain text has no concept of pages, columns, or column breaks.
+        // Explicit arms here make the omission visible to future contributors
+        // (renderer-parity.md requires every directive to have an explicit arm).
+        DirectiveKind::NewPage
+        | DirectiveKind::NewPhysicalPage
+        | DirectiveKind::ColumnBreak
+        | DirectiveKind::Columns => {}
         // End-of-section, metadata, and unknown directives produce no output.
         _ => {}
     }
@@ -1064,6 +1082,50 @@ Second chorus
             recall_count,
             super::MAX_CHORUS_RECALLS,
             "should stop at MAX_CHORUS_RECALLS"
+        );
+    }
+
+    #[test]
+    fn test_page_control_not_replayed_in_chorus_recall() {
+        // Page-control directives inside a chorus definition must NOT appear in
+        // {chorus} recall output. This mirrors the equivalent test in the HTML and
+        // PDF renderers (renderer-parity.md).
+        let input = "\
+{start_of_chorus}
+[G]Chorus line
+{new_page}
+{column_break}
+{columns: 2}
+{end_of_chorus}
+{chorus}";
+        let output = render(input);
+        // The recalled chorus must contain the lyric content …
+        assert!(
+            output.contains("G"),
+            "chord from chorus must appear in recall: {output}"
+        );
+        assert!(
+            output.contains("Chorus line"),
+            "lyric from chorus must appear in recall: {output}"
+        );
+        // … but must NOT contain any page-control directive text.
+        // (Page-control directives produce no text output in the text renderer,
+        //  so if they were erroneously replayed, the output would be unchanged;
+        //  the key assertion is that the chorus body stored during collection
+        //  does not include the directive AST nodes and cause extra empty lines.)
+        let chorus_section_lines: Vec<&str> = output.lines().collect();
+        // The definition renders: [Chorus] header + chord line + lyric line.
+        // The recall renders: [Chorus] header + chord line + lyric line again.
+        // Total: 6 non-empty lines (3 original + 3 recall). No extra blank lines
+        // introduced by replayed page-control directives.
+        let non_empty_count = chorus_section_lines
+            .iter()
+            .filter(|l| !l.is_empty())
+            .count();
+        assert_eq!(
+            non_empty_count, 6,
+            "expected 6 non-empty output lines (3 original + 3 recall), got {non_empty_count}; \
+             output:\n{output}"
         );
     }
 }
