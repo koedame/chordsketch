@@ -16,6 +16,11 @@ tracking issue number: `$ARGUMENTS`
    - Perform a thorough code review: correctness, quality, consistency, test coverage.
    - Perform a security review: input validation, injection, trust boundaries,
      data exposure.
+   - **Check for symptomatic / band-aid fixes** (per `.claude/rules/root-cause-fixes.md`):
+     look for `#[allow(...)]` suppressions, deleted or `#[ignore]`-d tests, silenced
+     errors (`unwrap_or_default`, swallowed `Err`), bumped timeouts, or adjusted golden
+     snapshots that hide rather than fix a defect. Any such pattern is at minimum
+     **Medium** severity.
 
 3. **Classify every finding by severity**:
 
