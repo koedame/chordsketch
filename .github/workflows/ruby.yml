@@ -296,6 +296,7 @@ jobs:
         # rubygems action and would still be absorbed by continue-on-error.
         # See #1445.
         id: oidc
+        shell: bash
         run: |
           if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
