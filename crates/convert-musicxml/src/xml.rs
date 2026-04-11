@@ -211,15 +211,12 @@ impl<'a> Parser<'a> {
     }
 
     fn skip_doctype(&mut self) -> Result<(), String> {
-        // Skip everything until the closing `>`, handling nested `[...]`.
-        while self.peek().is_some() && self.peek() != Some(b'<') {
-            self.advance();
-        }
-        // Advance past the initial `<!` if we haven't yet
-        if self.starts_with(b"<!") {
-            self.advance();
-            self.advance();
-        }
+        // Called when the current position is at `<!DOCTYPE` or `<!doctype`.
+        // Advance past the opening `<!` and scan to the matching `>`,
+        // tracking bracket depth for internal `[...]` subsets.
+        debug_assert!(self.starts_with(b"<!"));
+        self.advance();
+        self.advance();
         let mut depth = 1i32;
         loop {
             match self.consume_char() {
@@ -473,7 +470,11 @@ fn local_name(name: &str) -> &str {
     name.rfind(':').map_or(name, |i| &name[i + 1..])
 }
 
-/// Decode the five standard XML predefined entity references.
+/// Decode XML predefined entity references and numeric character references.
+///
+/// Handles the five predefined named entities (`&amp;`, `&lt;`, `&gt;`,
+/// `&quot;`, `&apos;`) as well as decimal (`&#N;`) and hexadecimal
+/// (`&#xN;` / `&#XN;`) numeric character references.
 fn decode_entities(s: &str) -> String {
     if !s.contains('&') {
         return s.to_string();
@@ -482,26 +483,49 @@ fn decode_entities(s: &str) -> String {
     let mut chars = s.chars();
     while let Some(c) = chars.next() {
         if c == '&' {
-            let rest: String = chars.as_str().to_string();
-            if let Some(semi) = rest.find(';') {
-                let entity = &rest[..semi];
-                let replacement = match entity {
-                    "amp" => "&",
-                    "lt" => "<",
-                    "gt" => ">",
-                    "quot" => "\"",
-                    "apos" => "'",
-                    _ => {
-                        out.push('&');
-                        continue;
-                    }
-                };
-                out.push_str(replacement);
-                // Advance past the entity + semicolon
-                for _ in 0..semi + 1 {
+            // Borrow `chars` as a `&str` only for the lookup; record the
+            // result as owned values before mutably advancing the iterator.
+            let (skip, replacement) = {
+                let rest = chars.as_str();
+                if let Some(semi) = rest.find(';') {
+                    let entity = &rest[..semi];
+                    let ch = if let Some(code_str) = entity.strip_prefix('#') {
+                        // Numeric character reference: &#N; or &#xN; / &#XN;
+                        let code_point = if let Some(hex) = code_str
+                            .strip_prefix('x')
+                            .or_else(|| code_str.strip_prefix('X'))
+                        {
+                            u32::from_str_radix(hex, 16).ok()
+                        } else {
+                            code_str.parse::<u32>().ok()
+                        };
+                        code_point.and_then(char::from_u32)
+                    } else {
+                        // Named entity reference
+                        match entity {
+                            "amp" => Some('&'),
+                            "lt" => Some('<'),
+                            "gt" => Some('>'),
+                            "quot" => Some('"'),
+                            "apos" => Some('\''),
+                            _ => None,
+                        }
+                    };
+                    // `semi` is a byte offset into ASCII-only entity names, so
+                    // `semi + 1` equals the char count (including the semicolon).
+                    (semi + 1, ch)
+                } else {
+                    (0, None)
+                }
+            };
+            if let Some(ch) = replacement {
+                out.push(ch);
+                for _ in 0..skip {
                     chars.next();
                 }
             } else {
+                // Unknown or malformed reference — emit `&` literally and let
+                // the iterator continue from the next character.
                 out.push('&');
             }
         } else {
@@ -589,5 +613,39 @@ mod tests {
         assert_eq!(decode_entities("a &amp; b"), "a & b");
         assert_eq!(decode_entities("&lt;tag&gt;"), "<tag>");
         assert_eq!(decode_entities("no entities"), "no entities");
+    }
+
+    #[test]
+    fn decode_entities_all_named() {
+        assert_eq!(decode_entities("&amp;"), "&");
+        assert_eq!(decode_entities("&lt;"), "<");
+        assert_eq!(decode_entities("&gt;"), ">");
+        assert_eq!(decode_entities("&quot;"), "\"");
+        assert_eq!(decode_entities("&apos;"), "'");
+    }
+
+    #[test]
+    fn decode_entities_numeric_decimal() {
+        // &#60; = '<', &#62; = '>', &#38; = '&'
+        assert_eq!(decode_entities("&#60;"), "<");
+        assert_eq!(decode_entities("&#62;"), ">");
+        assert_eq!(decode_entities("&#38;"), "&");
+        assert_eq!(decode_entities("&#65;"), "A");
+    }
+
+    #[test]
+    fn decode_entities_numeric_hex() {
+        // &#x3C; = '<', &#X3E; = '>' (uppercase X), &#x26; = '&'
+        assert_eq!(decode_entities("&#x3C;"), "<");
+        assert_eq!(decode_entities("&#X3E;"), ">");
+        assert_eq!(decode_entities("&#x26;"), "&");
+        assert_eq!(decode_entities("&#xA;"), "\n");
+    }
+
+    #[test]
+    fn decode_entities_unknown_passed_through() {
+        // Unknown named entities are left unchanged
+        assert_eq!(decode_entities("&foo;"), "&foo;");
+        assert_eq!(decode_entities("&unknown;bar"), "&unknown;bar");
     }
 }
