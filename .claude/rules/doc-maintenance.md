@@ -15,7 +15,6 @@ promptly.
 |---|---|
 | New crate added to workspace | `CLAUDE.md` Architecture table |
 | New rule or convention agreed upon | `.claude/rules/` — add new file |
-| Phase started or completed | `CLAUDE.md` Phase Roadmap |
 | Build commands or CI pipeline changed | `CLAUDE.md` Build Commands |
 | New workflow or process introduced | `.claude/rules/` — add new file |
 | Existing rule no longer applies | Remove or update the relevant `.claude/rules/` file |
@@ -27,12 +26,6 @@ promptly.
 `cargo doc --workspace --no-deps` is run in CI with `RUSTDOCFLAGS="-D warnings"`.
 Doc warnings (broken intra-doc links, missing `# Safety` sections, etc.) are treated
 as errors. Ensure all public items have valid doc comments before pushing.
-
-## Phase Completion Review
-
-When a phase's tracking issue is closed, perform a full review of all documentation
-files to ensure they accurately reflect the current state of the project. This is the
-one scheduled (non-event-driven) documentation checkpoint.
 
 ## Principles
 
