@@ -16,6 +16,8 @@
 //! - Text content
 //! - CDATA sections (`<![CDATA[...]]>`) — treated as text
 //! - Standard entity references (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`)
+//! - Decimal numeric character references (`&#N;`)
+//! - Hexadecimal numeric character references (`&#xN;`, `&#XN;`)
 
 use std::collections::HashMap;
 
@@ -470,6 +472,20 @@ fn local_name(name: &str) -> &str {
     name.rfind(':').map_or(name, |i| &name[i + 1..])
 }
 
+/// Returns `true` if `c` is a legal XML 1.0 character (XML 1.0 §2.2).
+///
+/// XML 1.0 permits: U+0009, U+000A, U+000D, U+0020–U+D7FF, U+E000–U+FFFD,
+/// U+10000–U+10FFFF. Everything else — including U+0000, U+0001–U+0008,
+/// U+000B–U+000C, U+000E–U+001F, U+FFFE, U+FFFF — is forbidden.
+fn xml_char_allowed(c: char) -> bool {
+    matches!(c,
+        '\t' | '\n' | '\r'
+        | '\u{0020}'..='\u{D7FF}'
+        | '\u{E000}'..='\u{FFFD}'
+        | '\u{10000}'..='\u{10FFFF}'
+    )
+}
+
 /// Decode XML predefined entity references and numeric character references.
 ///
 /// Handles the five predefined named entities (`&amp;`, `&lt;`, `&gt;`,
@@ -487,11 +503,15 @@ fn decode_entities(s: &str) -> String {
             // result as owned values before mutably advancing the iterator.
             let (skip, replacement) = {
                 let rest = chars.as_str();
-                if let Some(semi) = rest.find(';') {
+                // Limit the scan to the longest possible entity name/reference:
+                // max decimal `&#1114111;` = 9 chars, max hex `&#x10FFFF;` = 9 chars,
+                // longest named entity = 4 chars (`quot`, `apos`). Use 16 as a safe
+                // upper bound to keep the scan O(1) per `&` character.
+                let window = &rest[..rest.len().min(16)];
+                if let Some(semi) = window.find(';') {
                     let entity = &rest[..semi];
                     let ch = if let Some(code_str) = entity.strip_prefix('#') {
                         // Numeric character reference: &#N; or &#xN; / &#XN;.
-                        // XML 1.0 §2.2 forbids U+0000, so reject it explicitly.
                         let code_point = if let Some(hex) = code_str
                             .strip_prefix('x')
                             .or_else(|| code_str.strip_prefix('X'))
@@ -500,7 +520,9 @@ fn decode_entities(s: &str) -> String {
                         } else {
                             code_str.parse::<u32>().ok()
                         };
-                        code_point.and_then(char::from_u32).filter(|&c| c != '\0')
+                        code_point
+                            .and_then(char::from_u32)
+                            .filter(|&c| xml_char_allowed(c))
                     } else {
                         // Named entity reference
                         match entity {
@@ -684,5 +706,46 @@ mod tests {
         let root = parse(doc).unwrap();
         assert_eq!(root.name, "root");
         assert_eq!(root.child("child").unwrap().text, "text");
+    }
+
+    #[test]
+    fn decode_entities_xml_forbidden_chars_not_decoded() {
+        // XML 1.0 §2.2 forbidden characters must not be decoded.
+        // U+0001–U+0008 (control chars)
+        assert_eq!(decode_entities("&#1;"), "&#1;");
+        assert_eq!(decode_entities("&#8;"), "&#8;");
+        // U+000B (vertical tab), U+000C (form feed)
+        assert_eq!(decode_entities("&#11;"), "&#11;");
+        assert_eq!(decode_entities("&#12;"), "&#12;");
+        // U+000E–U+001F (more control chars)
+        assert_eq!(decode_entities("&#14;"), "&#14;");
+        assert_eq!(decode_entities("&#31;"), "&#31;");
+        // U+FFFE and U+FFFF
+        assert_eq!(decode_entities("&#xFFFE;"), "&#xFFFE;");
+        assert_eq!(decode_entities("&#xFFFF;"), "&#xFFFF;");
+    }
+
+    #[test]
+    fn decode_entities_adversarial_numeric_refs() {
+        // Surrogate codepoint (U+D800): char::from_u32 returns None
+        assert_eq!(decode_entities("&#xD800;"), "&#xD800;");
+        // Above Unicode range (U+110000): char::from_u32 returns None
+        assert_eq!(decode_entities("&#x110000;"), "&#x110000;");
+        // Empty numeric reference (&#;): should pass through literally
+        assert_eq!(decode_entities("&#;"), "&#;");
+        // Invalid hex digits (&#xGG;): parse fails, pass through literally
+        assert_eq!(decode_entities("&#xGG;"), "&#xGG;");
+        // Overflow beyond u32::MAX: parse fails, pass through literally
+        assert_eq!(decode_entities("&#4294967296;"), "&#4294967296;");
+    }
+
+    #[test]
+    fn decode_entities_no_quadratic_scan() {
+        // A string of bare `&` characters (no semicolons) should not cause
+        // O(n²) scanning. The 16-char window limit keeps each scan O(1).
+        // Just verify the output is correct (all `&` passed through).
+        let input = "&".repeat(1000);
+        let output = decode_entities(&input);
+        assert_eq!(output, input);
     }
 }
