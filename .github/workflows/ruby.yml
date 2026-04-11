@@ -32,17 +32,40 @@ permissions:
   contents: read
 
 jobs:
-  build-native:
+  # Build the linux-x86_64 native library first so that generate-and-test
+  # can start as soon as this single artifact is ready, without waiting for
+  # the slower Windows build (see #1461).
+  build-native-linux-x64:
+    name: Build native library (x86_64-unknown-linux-gnu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: ruby-x86_64-unknown-linux-gnu
+
+      - name: Build
+        run: cargo build -p chordsketch-ffi --release --target x86_64-unknown-linux-gnu
+
+      - name: Upload native library
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-x86_64-unknown-linux-gnu
+          path: target/x86_64-unknown-linux-gnu/release/libchordsketch_ffi.so
+          retention-days: 7
+
+  # Build the remaining 4 native targets in parallel with generate-and-test.
+  # These are only needed by publish (release runs), not by generate-and-test.
+  build-native-others:
     name: Build native library (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            lib: libchordsketch_ffi.so
-            platform_dir: x86_64-linux
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             lib: libchordsketch_ffi.so
@@ -63,9 +86,6 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          # Allow workflow_dispatch to build a historical tag (e.g., v0.1.0)
-          # for one-shot remediation. For other triggers fall through to
-          # github.ref via the OR fallback.
           ref: ${{ inputs.tag || github.ref }}
 
       - name: Install Rust target
@@ -95,7 +115,10 @@ jobs:
 
   generate-and-test:
     name: Generate bindings and test
-    needs: [build-native]
+    # Wait only on the linux-x64 artifact, which is the only one consumed by
+    # this job.  The remaining targets (build-native-others) run in parallel
+    # and are joined by publish for release completeness.
+    needs: [build-native-linux-x64]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -199,7 +222,9 @@ jobs:
 
   publish:
     name: Publish to RubyGems
-    needs: [generate-and-test]
+    # Wait for all native builds AND generate-and-test to ensure the gem
+    # contains validated bindings and every platform's native library.
+    needs: [build-native-linux-x64, build-native-others, generate-and-test]
     runs-on: ubuntu-latest
     if: |
       startsWith(github.ref, 'refs/tags/v') ||
