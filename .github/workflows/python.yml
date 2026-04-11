@@ -184,12 +184,6 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          pattern: wheels-*
-          merge-multiple: true
-          path: dist
-
       - name: Detect OIDC availability
         # Probes whether GitHub is providing OIDC tokens for this job run.
         # ACTIONS_ID_TOKEN_REQUEST_URL is set when `id-token: write` is in
@@ -197,6 +191,10 @@ jobs:
         # surfacing the skip here as a warning keeps the job exit-0
         # (consistent with the continue-on-error intent) while making it
         # visible in the run log.
+        #
+        # Placed first so that OIDC-unavailable runs (e.g. forks without
+        # the pypi environment) exit before downloading wheel artifacts.
+        # See #1454.
         #
         # Limitation: this probe cannot detect a misconfigured PyPI trusted
         # publisher — that failure occurs inside the OIDC exchange within
@@ -211,6 +209,14 @@ jobs:
             echo "available=false" >> "$GITHUB_OUTPUT"
             echo "::warning::GitHub OIDC token endpoint is unavailable; skipping PyPI publish. Check that the environment exists and id-token: write permission is effective. See #1445."
           fi
+
+      - name: Download wheel artifacts
+        if: steps.oidc.outputs.available == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist
 
       - uses: PyO3/maturin-action@04ac600d27cdf7a9a280dadf7147097c42b757ad # v1
         if: steps.oidc.outputs.available == 'true'
