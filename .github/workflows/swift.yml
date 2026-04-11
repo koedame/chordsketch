@@ -32,8 +32,63 @@ permissions:
   contents: read
 
 jobs:
-  build-xcframework:
-    name: Build XCFramework
+  # Build each Apple target on its own runner in parallel.
+  # The aarch64-apple-darwin cell also produces the dylib that uniffi-bindgen
+  # needs in the assemble job. All five cells upload a static library artifact;
+  # the aarch64-apple-darwin cell additionally uploads the dylib.
+  #
+  # Per-target shared-key avoids cache thrashing: different targets produce
+  # different compiled objects and polluting a shared key forces cache misses.
+  build-target:
+    name: Build ${{ matrix.target }}
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+          - target: x86_64-apple-darwin
+          - target: aarch64-apple-ios
+          - target: aarch64-apple-ios-sim
+          - target: x86_64-apple-ios
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: swift-${{ matrix.target }}
+
+      - name: Build library for ${{ matrix.target }}
+        run: cargo build -p chordsketch-ffi --release --target ${{ matrix.target }}
+
+      - name: Upload static library
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: swift-lib-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/libchordsketch_ffi.a
+          retention-days: 1
+
+      # The dylib is only produced for the macOS target and is only needed in
+      # the assemble job to let uniffi-bindgen extract the library metadata.
+      - name: Upload dylib (aarch64-apple-darwin only, for uniffi-bindgen)
+        if: matrix.target == 'aarch64-apple-darwin'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: swift-dylib-aarch64-apple-darwin
+          path: target/aarch64-apple-darwin/release/libchordsketch_ffi.dylib
+          retention-days: 1
+
+  # Download the 5 static libraries and dylib built in parallel above, then
+  # assemble the XCFramework, generate Swift bindings, and run swift test.
+  # Uses rust-cache (shared-key: swift-assemble) to avoid recompiling the
+  # uniffi-bindgen host binary on every run.
+  assemble-xcframework:
+    name: Assemble XCFramework
+    needs: [build-target]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -45,30 +100,34 @@ jobs:
           # to github.ref via the OR fallback.
           ref: ${{ inputs.tag || github.ref }}
 
-      - name: Install Rust targets
-        run: |
-          rustup target add aarch64-apple-darwin
-          rustup target add x86_64-apple-darwin
-          rustup target add aarch64-apple-ios
-          rustup target add aarch64-apple-ios-sim
-          rustup target add x86_64-apple-ios
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
+      # Cache the workspace target/ so that the uniffi-bindgen host binary
+      # is compiled once and reused. Without this, every assemble run
+      # re-compiles uniffi-bindgen (~60s cold; 0s warm).
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
-          shared-key: swift
+          shared-key: swift-assemble
 
-      - name: Build libraries
-        run: |
-          cargo build -p chordsketch-ffi --release --target aarch64-apple-darwin
-          cargo build -p chordsketch-ffi --release --target x86_64-apple-darwin
-          cargo build -p chordsketch-ffi --release --target aarch64-apple-ios
-          cargo build -p chordsketch-ffi --release --target aarch64-apple-ios-sim
-          cargo build -p chordsketch-ffi --release --target x86_64-apple-ios
+      - name: Download static libraries
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: swift-lib-*
+          # Each artifact downloads to its own subdirectory, e.g.:
+          # swift-lib-aarch64-apple-darwin/libchordsketch_ffi.a
+          # swift-lib-x86_64-apple-darwin/libchordsketch_ffi.a
+          # etc.
+
+      - name: Download dylib for uniffi-bindgen
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: swift-dylib-aarch64-apple-darwin
+          # Downloads libchordsketch_ffi.dylib to CWD
 
       - name: Generate Swift bindings
         run: |
           cargo run -p chordsketch-ffi --bin uniffi-bindgen generate \
-            --library target/aarch64-apple-darwin/release/libchordsketch_ffi.dylib \
+            --library libchordsketch_ffi.dylib \
             --language swift \
             --out-dir generated
 
@@ -77,15 +136,15 @@ jobs:
           # macOS universal (arm64 + x86_64)
           mkdir -p universal/macos
           lipo -create \
-            target/aarch64-apple-darwin/release/libchordsketch_ffi.a \
-            target/x86_64-apple-darwin/release/libchordsketch_ffi.a \
+            swift-lib-aarch64-apple-darwin/libchordsketch_ffi.a \
+            swift-lib-x86_64-apple-darwin/libchordsketch_ffi.a \
             -output universal/macos/libchordsketch_ffi.a
 
           # iOS simulator universal (arm64 + x86_64)
           mkdir -p universal/ios-sim
           lipo -create \
-            target/aarch64-apple-ios-sim/release/libchordsketch_ffi.a \
-            target/x86_64-apple-ios/release/libchordsketch_ffi.a \
+            swift-lib-aarch64-apple-ios-sim/libchordsketch_ffi.a \
+            swift-lib-x86_64-apple-ios/libchordsketch_ffi.a \
             -output universal/ios-sim/libchordsketch_ffi.a
 
       - name: Set up module map for XCFramework
@@ -102,7 +161,7 @@ jobs:
           xcodebuild -create-xcframework \
             -library universal/macos/libchordsketch_ffi.a \
             -headers generated/include \
-            -library target/aarch64-apple-ios/release/libchordsketch_ffi.a \
+            -library swift-lib-aarch64-apple-ios/libchordsketch_ffi.a \
             -headers generated/include \
             -library universal/ios-sim/libchordsketch_ffi.a \
             -headers generated/include \
@@ -207,7 +266,7 @@ jobs:
 
   publish:
     name: Publish XCFramework
-    needs: [build-xcframework]
+    needs: [assemble-xcframework]
     runs-on: ubuntu-latest
     if: |
       startsWith(github.ref, 'refs/tags/v') ||
