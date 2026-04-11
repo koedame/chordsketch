@@ -167,8 +167,12 @@ fn sanitize_abc_content(input: &str) -> String {
         }
 
         // %%javascript <code> is a single-line JS directive (case-insensitive).
-        if trimmed.len() >= 12 && trimmed[..12].eq_ignore_ascii_case("%%javascript") {
-            let after = &trimmed[12..];
+        // Use str::get to avoid panicking on multi-byte chars at byte 12 (#1574).
+        if trimmed
+            .get(..12)
+            .is_some_and(|s| s.eq_ignore_ascii_case("%%javascript"))
+        {
+            let after = &trimmed[12..]; // safe: get(..12) succeeded => 12 is a char boundary
             if after.is_empty() || after.starts_with(' ') || after.starts_with('\t') {
                 continue;
             }
@@ -176,8 +180,12 @@ fn sanitize_abc_content(input: &str) -> String {
 
         // %%js <code> is an undocumented shorthand for %%javascript observed in
         // some abc2svg examples. Strip it as defense-in-depth (#1551).
-        if trimmed.len() >= 4 && trimmed[..4].eq_ignore_ascii_case("%%js") {
-            let after = &trimmed[4..];
+        // Use str::get to avoid panicking on multi-byte chars at byte 4 (#1574).
+        if trimmed
+            .get(..4)
+            .is_some_and(|s| s.eq_ignore_ascii_case("%%js"))
+        {
+            let after = &trimmed[4..]; // safe: get(..4) succeeded => 4 is a char boundary
             if after.is_empty() || after.starts_with(' ') || after.starts_with('\t') {
                 continue;
             }
@@ -787,6 +795,30 @@ mod tests {
         let input = "X:1\n%%js\nK:C\n";
         let result = super::sanitize_abc_content(input);
         assert_eq!(result, "X:1\nK:C");
+
+        // Tab-separated %%js\t<code> must also be stripped (#1572).
+        let input = "X:1\n%%js\talert(1)\nK:C\n";
+        let result = super::sanitize_abc_content(input);
+        assert_eq!(result, "X:1\nK:C");
+        assert!(!result.contains("alert"));
+    }
+
+    #[test]
+    fn sanitize_abc_js_no_panic_on_multibyte_char_at_boundary() {
+        // "%%jé" is 5 bytes: %%(0x25) %(0x25) j(0x6A) é(0xC3 0xA9).
+        // Byte 4 is a UTF-8 continuation byte — not a char boundary.
+        // A naive trimmed[..4] would panic; the fix uses str::get (#1574).
+        let input = "X:1\n%%jé injected\nK:C\n";
+        let result = super::sanitize_abc_content(input);
+        // "%%jé" is not the %%js directive, so the line is preserved.
+        assert!(result.contains("%%jé"));
+
+        // "%%javascrip" + "é" — 12 bytes but byte 12 is not a char boundary.
+        // ("%%javascrip" is 11 bytes, "é" = 0xC3 0xA9 starts at byte 11.)
+        let input2 = "X:1\n%%javascripé evil\nK:C\n";
+        let result2 = super::sanitize_abc_content(input2);
+        // "%%javascripé" is not the %%javascript directive, so line is preserved.
+        assert!(result2.contains("%%javascripé"));
     }
 
     #[test]
