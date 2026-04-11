@@ -503,12 +503,16 @@ fn decode_entities(s: &str) -> String {
             // result as owned values before mutably advancing the iterator.
             let (skip, replacement) = {
                 let rest = chars.as_str();
-                // Limit the scan to the longest possible entity name/reference:
-                // max decimal `&#1114111;` = 9 chars, max hex `&#x10FFFF;` = 9 chars,
-                // longest named entity = 4 chars (`quot`, `apos`). Use 16 as a safe
-                // upper bound to keep the scan O(1) per `&` character.
-                let window = &rest[..rest.len().min(16)];
-                if let Some(semi) = window.find(';') {
+                // Scan at most 16 *characters* for ';': the longest valid
+                // entity body is 8 chars (`#x10FFFF` or `#1114111`) plus ';',
+                // so 16 is a safe upper bound.  Using char_indices avoids
+                // byte-slicing a &str at an offset that may not be a valid
+                // char boundary when the input contains non-ASCII text.
+                let semi_opt = rest
+                    .char_indices()
+                    .take(16)
+                    .find_map(|(byte_i, c)| (c == ';').then_some(byte_i));
+                if let Some(semi) = semi_opt {
                     let entity = &rest[..semi];
                     let ch = if let Some(code_str) = entity.strip_prefix('#') {
                         // Numeric character reference: &#N; or &#xN; / &#XN;.
@@ -747,5 +751,23 @@ mod tests {
         let input = "&".repeat(1000);
         let output = decode_entities(&input);
         assert_eq!(output, input);
+    }
+
+    #[test]
+    fn decode_entities_multibyte_chars_near_ampersand_no_panic() {
+        // Regression test: before the fix, `&rest[..rest.len().min(16)]` would
+        // panic when a multi-byte UTF-8 character straddled byte offset 16.
+        // E.g. 14 ASCII bytes followed by a 3-byte CJK character — byte 16
+        // lands inside the character.  Verify the entity is passed through
+        // literally (no replacement) without panicking.
+        //
+        // "aaaaaaaaaaaaaa" = 14 bytes, '日' = 3 bytes => byte 16 is mid-char.
+        let input = "&aaaaaaaaaaaaaa\u{65E5}xyz";
+        let output = decode_entities(input);
+        assert_eq!(output, input);
+
+        // Also verify a valid named entity after multi-byte text still works.
+        let input2 = "café &amp; more";
+        assert_eq!(decode_entities(input2), "café & more");
     }
 }
