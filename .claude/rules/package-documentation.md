@@ -1,5 +1,33 @@
 # Package Documentation Standard
 
+## Logo
+
+The canonical logo lives at `assets/logo.svg` (180×180 px, red `#BD1642` background,
+white mark). Use these assets:
+
+| File | Size | Use |
+|------|------|-----|
+| `assets/logo.svg` | 180×180 | All READMEs, web contexts |
+| `assets/logo-128.png` | 128×128 | VS Code Marketplace icon, app icons |
+| `assets/logo-256.png` | 256×256 | High-DPI contexts, social previews |
+
+**In every published package README**, embed the logo at the very top using the
+absolute raw GitHub URL so it renders on all registries (npm, PyPI, RubyGems, etc.):
+
+```markdown
+<p align="center">
+  <img src="https://raw.githubusercontent.com/koedame/chordsketch/main/assets/logo.svg" alt="ChordSketch" width="80" height="80">
+</p>
+```
+
+**VS Code extension**: set `"icon": "icon.png"` in `package.json`; the file at
+`packages/vscode-extension/icon.png` is generated from `assets/logo-128.png` and
+checked in. Regenerate it when the logo changes:
+
+```bash
+convert -background none assets/logo.svg -resize 128x128 packages/vscode-extension/icon.png
+```
+
 Defines the minimum quality bar and discoverability requirements for every
 publicly published ChordSketch package. Apply this rule when adding a new
 package or updating an existing one, and run `/doc-quality-check` to verify

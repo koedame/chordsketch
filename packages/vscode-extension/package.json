@@ -4,6 +4,7 @@
   "description": "ChordPro language support with syntax highlighting, diagnostics, completions, and a live HTML preview panel.",
   "version": "0.2.0",
   "publisher": "koedame",
+  "icon": "icon.png",
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
