@@ -45,13 +45,37 @@ compliance before opening a release PR.
 Primary consumer-facing packages (`@chordsketch/wasm`, `@chordsketch/node`, CLI
 crate) must reach **L3**.
 
+## Version Placeholder Rule
+
+Installation examples in READMEs MUST NOT hardcode a specific release version.
+Hardcoded versions silently become stale and direct users to outdated releases.
+
+**Required pattern:** pair a self-updating badge with a `VERSION` placeholder in
+every code snippet that includes a version number.
+
+| Registry | Badge | Placeholder |
+|----------|-------|-------------|
+| Maven Central | `[![Maven Central](https://img.shields.io/maven-central/v/me.koeda/chordsketch)](https://central.sonatype.com/artifact/me.koeda/chordsketch)` | `VERSION` in all three Gradle/Maven snippets |
+| Swift Package Index | `[![GitHub Release](https://img.shields.io/github/v/release/koedame/chordsketch)](https://github.com/koedame/chordsketch/releases/latest)` | Keep the numeric version in `.from:` but add inline comment `// replace with the latest release tag` and a version-agnostic note above the snippet (do not quote a specific version number in the prose) |
+| crates.io | `[![crates.io](https://img.shields.io/crates/v/CRATE-NAME)](https://crates.io/crates/CRATE-NAME)` | `VERSION` |
+| npm (if version is shown) | `[![npm](https://img.shields.io/npm/v/@chordsketch/wasm)](https://www.npmjs.com/package/@chordsketch/wasm)` | `VERSION` |
+| PyPI (if version is shown) | `[![PyPI](https://img.shields.io/pypi/v/chordsketch)](https://pypi.org/project/chordsketch/)` | `VERSION` |
+
+For registries where the install command does not include a version (e.g.
+`gem install chordsketch`, `pip install chordsketch`) no badge or placeholder
+is needed in the code block — the registry always serves the latest by default.
+
+When a badge is present, place it at the top of the `## Installation` section,
+immediately before the note about replacing `VERSION`.
+
 ## Required README Sections (L2 template, in order)
 
 1. **Package name heading** — exact name as installed from the registry
 2. **What it is** — one paragraph: what ChordPro is, what this binding does,
    and which registry it lives in
 3. **Installation** — exact registry install command as the **first** fenced
-   code block in the file (no prose before it except the above description)
+   code block in the file (no prose before it except the above description);
+   if the command includes a version number, apply the Version Placeholder Rule
 4. **Quick start** — complete runnable example; do not omit imports or
    `require` statements; use a non-trivial ChordPro snippet (title + chord line)
 5. **API** — table of all public functions/methods with signature and return type
