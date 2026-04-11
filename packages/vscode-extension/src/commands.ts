@@ -19,16 +19,9 @@ import {
   extensionForFormat,
   defaultExportPath,
 } from './command-utils.js';
+import { commandState } from './command-state.js';
 
-/**
- * Lazily created output channel used by `registerConvertTo` to log full error
- * details (WASM load failures, render errors) without exposing them in the
- * user-facing notification popup.
- *
- * Created on first use to avoid cluttering the Output panel for users who
- * never invoke the export command.
- */
-let exportOutputChannel: vscode.OutputChannel | undefined;
+export { resetCommandSingletons } from './command-state.js';
 
 /**
  * Returns the shared ChordSketch output channel, creating it if necessary.
@@ -37,26 +30,14 @@ let exportOutputChannel: vscode.OutputChannel | undefined;
  * disposes it automatically when the extension is deactivated.
  */
 function getExportChannel(context: vscode.ExtensionContext): vscode.OutputChannel {
-  if (!exportOutputChannel) {
-    exportOutputChannel = vscode.window.createOutputChannel('ChordSketch');
-    context.subscriptions.push(exportOutputChannel);
+  if (!commandState.exportOutputChannel) {
+    const ch = vscode.window.createOutputChannel('ChordSketch');
+    context.subscriptions.push(ch);
+    commandState.exportOutputChannel = ch;
   }
-  return exportOutputChannel;
-}
-
-/** Lazily loaded WASM render module singleton. */
-let wasmRenderCache: WasmRenderModule | undefined;
-
-/**
- * Resets all module-level singletons so that a subsequent re-activation within
- * the same VS Code host process (e.g., after `Developer: Restart Extension Host`)
- * creates fresh instances rather than reusing disposed/stale ones.
- *
- * Must be called from `deactivate()` in `extension.ts`.
- */
-export function resetCommandSingletons(): void {
-  exportOutputChannel = undefined;
-  wasmRenderCache = undefined;
+  // exportOutputChannel is guaranteed non-undefined: it was either non-undefined
+  // on entry or just assigned in the branch above.
+  return commandState.exportOutputChannel as vscode.OutputChannel;
 }
 
 /**
@@ -74,10 +55,18 @@ export function resetCommandSingletons(): void {
  *
  * The result is cached so the WASM binary is only parsed once per session.
  *
+ * **Note on `require.cache`**: Node.js's `require.cache` persists across
+ * Extension Host restarts within the same VS Code process.  After
+ * `resetCommandSingletons()` clears `wasmRenderCache`, the next call here
+ * will invoke `require(modPath)` again, but Node.js returns the in-process
+ * cached module rather than re-reading the file from disk.  A freshly
+ * deployed WASM binary at the same path is only guaranteed to be picked up
+ * after a full VS Code process restart.
+ *
  * @throws {Error} If the module file is missing or its exports are absent.
  */
 function loadWasmRender(extensionPath: string): WasmRenderModule {
-  if (!wasmRenderCache) {
+  if (!commandState.wasmRenderCache) {
     const modPath = path.join(extensionPath, 'dist', 'node', 'chordsketch_wasm.js');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod: unknown = require(modPath);
@@ -86,9 +75,10 @@ function loadWasmRender(extensionPath: string): WasmRenderModule {
         'WASM module does not export the expected render functions',
       );
     }
-    wasmRenderCache = mod;
+    commandState.wasmRenderCache = mod;
   }
-  return wasmRenderCache;
+  // wasmRenderCache is guaranteed non-undefined here.
+  return commandState.wasmRenderCache as WasmRenderModule;
 }
 
 /**
