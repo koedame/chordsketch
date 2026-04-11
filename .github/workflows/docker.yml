@@ -10,6 +10,9 @@ on:
         required: true
         type: string
 
+# Deny-by-default: each job declares only the permissions it needs.
+permissions: {}
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: koedame/chordsketch
@@ -29,11 +32,12 @@ jobs:
         env:
           INPUT_TAG: ${{ inputs.tag }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            echo "tag=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+            echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Download and extract release binaries
@@ -121,11 +125,12 @@ jobs:
         env:
           INPUT_TAG: ${{ inputs.tag }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            echo "tag=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+            echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Detect Docker Hub credentials
