@@ -29,8 +29,49 @@ property. Asymmetric treatment is a structural vulnerability.
 Example: if directive *values* are sanitized, directive *names* must be
 sanitized too — they appear in the same output context.
 
+## Blocklist and Allowlist Completeness
+
+When maintaining a URI scheme denylist, tag blocklist, or attribute allowlist,
+the list MUST be verified against the relevant specification for completeness.
+A partial list gives a false sense of security.
+
+### URI scheme denylists
+
+Every URI scheme denylist MUST block at minimum:
+`javascript:`, `vbscript:`, `data:`, `file:`, `blob:`
+
+Whenever an entry is added to any URI scheme list:
+1. Cross-check `has_dangerous_uri_scheme` and `is_safe_image_src` (and any future
+   sibling functions) to ensure they are consistent.
+2. Verify the list against the [WHATWG Fetch forbidden origins list](https://fetch.spec.whatwg.org/).
+
+### SVG tag blocklists
+
+Blocklisted SVG tags MUST include all tags that can load external resources:
+`script`, `use` (with external `href`), `feImage`, `image`, `iframe`, `embed`, `object`
+
+Whenever a tag is added to `DANGEROUS_TAGS`, check whether there is an equivalent
+filter primitive or presentation element that can load the same resource class.
+
+### Attribute allowlists / URI attribute lists
+
+URI-bearing SVG/HTML attributes MUST include at minimum:
+`href`, `xlink:href`, `src`, `action`, `formaction`, `poster`, `background`, `ping`, `to`, `values`, `from`, `by`
+
+### Testing completeness
+
+When a new entry is added to any blocklist or allowlist:
+- Add a test that exercises the new entry with a malicious value.
+- Add a comment citing the relevant spec section or CVE that motivated the entry.
+
 ## Why
 
 53 sanitizer bypass issues and 18 security asymmetry issues were filed.
 The most common pattern was sanitizing only one field of a multi-field
 record, leaving the other fields exploitable.
+
+A 2026-04-12 audit found two blocklist completeness gaps: `file:` URI not blocked
+in `has_dangerous_uri_scheme` despite being blocked in `is_safe_image_src` (#1538),
+and `feImage` absent from `DANGEROUS_TAGS` despite being a known resource-loading
+SVG primitive (#1545). Both were caused by partial lists copied from one context
+without auditing the full specification.
