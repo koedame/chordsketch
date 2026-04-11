@@ -21,6 +21,10 @@ tracking issue number: `$ARGUMENTS`
      errors (`unwrap_or_default`, swallowed `Err`), bumped timeouts, or adjusted golden
      snapshots that hide rather than fix a defect. Any such pattern is at minimum
      **Medium** severity.
+   - **Check for fix-propagation gaps** (per `.claude/rules/fix-propagation.md`):
+     for each bug fix in the phase, verify that the fix was applied to all sibling sites
+     (all three renderers, all three bindings, all external-tool invocation functions,
+     all sibling sanitizer lists). An unfixed sibling is at minimum **Medium** severity.
 
 3. **Classify every finding by severity**:
 
