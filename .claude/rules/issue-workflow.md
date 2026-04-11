@@ -53,8 +53,13 @@ When closing an issue because the work is being declined (upstream-blocked,
 no longer wanted, superseded, or rejected on its merits) rather than because
 a PR implemented it, **first check whether an ADR is warranted** per
 [`adr-discipline.md`](adr-discipline.md). If yes, write the ADR and link it
-from the closing comment so the rationale outlives the issue tracker. The
-ADR should be opened as its own dedicated PR before the close action runs.
+from the closing comment so the rationale outlives the issue tracker.
+
+The ADR PR must be **merged to `main`** before the issue is closed — opening
+the PR is not sufficient. If the close happens first, the closing comment
+will link to a path that does not yet exist on `main`, and the rationale
+will be invisible to anyone reading the issue between the close and the
+ADR merge.
 
 ## Tracking Issues & Sub-Issues
 

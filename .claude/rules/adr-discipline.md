@@ -55,10 +55,44 @@ the action that locks in the decision:
    action. Do not wait for the user to ask.
 2. **Find the next sequence number** by listing existing ADRs in
    `docs/adr/` and incrementing the highest. Sequence numbers are
-   never reused, even when an ADR is later superseded.
-3. **Write the ADR** following the template in `docs/adr/README.md`
-   (Status, Date, Context, Decision, Rationale, Consequences,
-   Alternatives considered, References).
+   never reused, even when an ADR is later superseded. If `docs/adr/`
+   does not yet exist, start at `0001` and create the directory in the
+   same PR (along with a `docs/adr/README.md` index page using the
+   convention documented in this rule).
+3. **Write the ADR** using the template below as the source of truth.
+   Once `docs/adr/README.md` exists in `main`, treat it as a richer
+   secondary reference, but the field list in this rule is always
+   authoritative:
+
+   ```markdown
+   # NNNN. Short title in sentence case
+
+   - **Status**: Accepted | Superseded by ADR-NNNN | Deprecated
+   - **Date**: YYYY-MM-DD
+
+   ## Context
+   Why is this decision being made now? What constraints define the
+   space of possible answers?
+
+   ## Decision
+   The chosen course of action, stated unambiguously.
+
+   ## Rationale
+   Why this option, given the context. Cite evidence so the reasoning
+   can be re-verified later.
+
+   ## Consequences
+   Trade-offs accepted by the decision — both positive and negative,
+   plus mitigations for the negatives.
+
+   ## Alternatives considered
+   Other options on the table and why they were rejected.
+
+   ## References
+   Issues, PRs, external documentation, and any "watch signals" that
+   should prompt revisiting the decision.
+   ```
+
 4. **Open a dedicated PR** for the ADR (per the shared-files policy in
    `parallel-work.md` and `doc-maintenance.md`). Update the ADR index
    table in `docs/adr/README.md` in the same PR.
