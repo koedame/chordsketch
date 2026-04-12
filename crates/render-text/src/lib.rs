@@ -138,16 +138,20 @@ fn render_song_impl(
                 }
                 if directive.kind == DirectiveKind::Transpose {
                     // {transpose: N} sets the in-file transposition amount.
-                    let raw_value = directive.value.as_deref().unwrap_or("");
-                    let file_offset: i8 = match raw_value.parse() {
-                        Ok(v) => v,
-                        Err(_) => {
-                            warnings.push(format!(
-                                "{{transpose}} value {raw_value:?} cannot be \
-                                 parsed as i8, ignored (using 0)"
-                            ));
-                            0
-                        }
+                    // A missing or empty value silently resets to 0; only a
+                    // non-empty value that cannot be parsed as i8 emits a warning.
+                    let file_offset: i8 = match directive.value.as_deref() {
+                        None | Some("") => 0,
+                        Some(raw) => match raw.parse() {
+                            Ok(v) => v,
+                            Err(_) => {
+                                warnings.push(format!(
+                                    "{{transpose}} value {raw:?} cannot be \
+                                     parsed as i8, ignored (using 0)"
+                                ));
+                                0
+                            }
+                        },
                     };
                     let (combined, saturated) =
                         chordsketch_core::transpose::combine_transpose(file_offset, cli_transpose);
@@ -995,8 +999,13 @@ mod transpose_tests {
         let song = chordsketch_core::parse(input).unwrap();
         let result =
             render_song_with_warnings(&song, 0, &chordsketch_core::config::Config::defaults());
-        // No value -> treated as 0, empty string emits a warning
+        // No value -> silently treated as 0, no warning emitted.
         assert!(result.output.contains("G\nHello"));
+        assert!(
+            result.warnings.is_empty(),
+            "missing {{transpose}} value should not emit a warning; got: {:?}",
+            result.warnings
+        );
     }
 
     // --- Issue #109: {chorus} recall ---
