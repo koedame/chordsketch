@@ -135,19 +135,17 @@ runs:
         # Clean up downloaded archive and checksums.
         rm "${INSTALL_DIR}/${FILENAME}" "${INSTALL_DIR}/checksums.txt"
 
-        # The release archive extracts to chordsketch-{version}-{triple}/;
-        # add that subdirectory to GITHUB_PATH so the binary is on PATH for
-        # subsequent steps in this job.
-        #
-        # On Windows, the GitHub Actions runner requires Windows-style paths in
-        # GITHUB_PATH (e.g. C:\...) not Unix-style paths (/c/...) that bash
-        # uses internally. cygpath -w converts the Git Bash Unix path to a
-        # Windows path so the runner can update the system PATH correctly.
+        # Export the full path to the binary via GITHUB_ENV so the render step
+        # can invoke it directly without relying on PATH propagation.
+        # PATH propagation via GITHUB_PATH within a composite action's bash
+        # steps is unreliable on Windows (the GitHub Actions runner requires
+        # Windows-style paths but bash produces Unix-style paths). Invoking
+        # by absolute path is more robust across all platforms.
         BIN_SUBDIR="${INSTALL_DIR}/chordsketch-${CHORDSKETCH_VERSION}-${TRIPLE}"
         if [[ "${RUNNER_OS}" = "Windows" ]]; then
-          echo "$(cygpath -w "${BIN_SUBDIR}")" >> "$GITHUB_PATH"
+          echo "CHORDSKETCH_BIN=${BIN_SUBDIR}/chordsketch.exe" >> "$GITHUB_ENV"
         else
-          echo "${BIN_SUBDIR}" >> "$GITHUB_PATH"
+          echo "CHORDSKETCH_BIN=${BIN_SUBDIR}/chordsketch" >> "$GITHUB_ENV"
         fi
 
     # ---- render the ChordPro file --------------------------------------------
@@ -180,6 +178,6 @@ runs:
           ARGS+=(--transpose "${TRANSPOSE}")
         fi
 
-        chordsketch "${ARGS[@]}" "${INPUT}"
+        "${CHORDSKETCH_BIN}" "${ARGS[@]}" "${INPUT}"
 
         echo "output-path=${OUTPUT}" >> "$GITHUB_OUTPUT"
