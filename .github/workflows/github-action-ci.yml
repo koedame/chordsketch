@@ -1,0 +1,87 @@
+name: GitHub Action CI
+
+# Exercises the composite action defined in packages/github-action/action.yml
+# against a sample fixture on all supported platforms. Runs on every push or
+# PR that touches the action definition, its fixture, or this workflow file.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/github-action/**"
+      - ".github/workflows/github-action-ci.yml"
+  pull_request:
+    paths:
+      - "packages/github-action/**"
+      - ".github/workflows/github-action-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test action (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
+
+      # ---- text output (default format) ------------------------------------
+      - name: Render to text
+        id: render-text
+        uses: ./packages/github-action
+        with:
+          input: packages/github-action/fixtures/simple.cho
+          output: out/simple.txt
+          # format defaults to "text", transpose defaults to "0"
+
+      - name: Verify text output exists and is non-empty
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT="${{ steps.render-text.outputs.output-path }}"
+          echo "output-path: $OUTPUT"
+          [ -s "$OUTPUT" ] || { echo "Output file is missing or empty"; exit 1; }
+          cat "$OUTPUT"
+
+      # ---- HTML output -----------------------------------------------------
+      - name: Render to HTML
+        id: render-html
+        uses: ./packages/github-action
+        with:
+          input: packages/github-action/fixtures/simple.cho
+          output: out/simple.html
+          format: html
+
+      - name: Verify HTML output
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT="${{ steps.render-html.outputs.output-path }}"
+          echo "output-path: $OUTPUT"
+          [ -s "$OUTPUT" ] || { echo "Output file is missing or empty"; exit 1; }
+          grep -q "Amazing Grace" "$OUTPUT" || { echo "Title not found in HTML output"; exit 1; }
+
+      # ---- transpose -------------------------------------------------------
+      - name: Render with transpose
+        id: render-transpose
+        uses: ./packages/github-action
+        with:
+          input: packages/github-action/fixtures/simple.cho
+          output: out/simple-transposed.txt
+          format: text
+          transpose: '2'
+
+      - name: Verify transposed output exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT="${{ steps.render-transpose.outputs.output-path }}"
+          echo "output-path: $OUTPUT"
+          [ -s "$OUTPUT" ] || { echo "Output file is missing or empty"; exit 1; }
+          cat "$OUTPUT"

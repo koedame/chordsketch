@@ -1,0 +1,125 @@
+name: 'ChordSketch'
+description: 'Render ChordPro (.cho) files to HTML, PDF, or plain text'
+author: 'koedame'
+branding:
+  icon: 'music'
+  color: 'red'
+
+inputs:
+  input:
+    description: 'Path to the ChordPro (.cho) input file (relative to workspace or absolute)'
+    required: true
+  output:
+    description: 'Path for the rendered output file (relative to workspace or absolute)'
+    required: true
+  format:
+    description: 'Output format: text, html, or pdf'
+    required: false
+    default: 'text'
+  transpose:
+    description: 'Semitones to transpose (positive or negative integer; 0 = no change)'
+    required: false
+    default: '0'
+  version:
+    description: 'ChordSketch release tag to install (e.g. "v0.2.0"). Defaults to "latest".'
+    required: false
+    default: 'latest'
+
+outputs:
+  output-path:
+    description: 'Absolute path to the rendered output file'
+    value: ${{ steps.render.outputs.output-path }}
+
+runs:
+  using: 'composite'
+  steps:
+    # ---- resolve "latest" to a concrete version tag ---------------------------
+    - name: Resolve ChordSketch version
+      id: resolve-version
+      shell: bash
+      run: |
+        set -euo pipefail
+        VERSION="${{ inputs.version }}"
+        if [ "$VERSION" = "latest" ]; then
+          VERSION=$(curl -fsSL \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/koedame/chordsketch/releases/latest" \
+            | python3 -c "import json,sys; print(json.load(sys.stdin)['tag_name'])")
+        fi
+        echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+    # ---- download and extract the pre-built binary (Linux / macOS) -----------
+    - name: Install ChordSketch (Linux / macOS)
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        CHORDSKETCH_VERSION: ${{ steps.resolve-version.outputs.version }}
+      run: |
+        set -euo pipefail
+        OS="${{ runner.os }}"
+        ARCH="${{ runner.arch }}"
+        case "$OS-$ARCH" in
+          Linux-X64)    TRIPLE="x86_64-unknown-linux-musl" ;;
+          Linux-ARM64)  TRIPLE="aarch64-unknown-linux-musl" ;;
+          macOS-X64)    TRIPLE="x86_64-apple-darwin" ;;
+          macOS-ARM64)  TRIPLE="aarch64-apple-darwin" ;;
+          *) echo "Unsupported platform: $OS/$ARCH" >&2; exit 1 ;;
+        esac
+        FILENAME="chordsketch-${CHORDSKETCH_VERSION}-${TRIPLE}.tar.gz"
+        URL="https://github.com/koedame/chordsketch/releases/download/${CHORDSKETCH_VERSION}/${FILENAME}"
+        INSTALL_DIR="${HOME}/.chordsketch-action"
+        mkdir -p "${INSTALL_DIR}"
+        curl -fsSL "${URL}" | tar xz -C "${INSTALL_DIR}"
+        echo "${INSTALL_DIR}" >> "$GITHUB_PATH"
+
+    # ---- download and extract the pre-built binary (Windows) -----------------
+    - name: Install ChordSketch (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        CHORDSKETCH_VERSION: ${{ steps.resolve-version.outputs.version }}
+      run: |
+        $version = $env:CHORDSKETCH_VERSION
+        $filename = "chordsketch-${version}-x86_64-pc-windows-msvc.zip"
+        $url = "https://github.com/koedame/chordsketch/releases/download/${version}/${filename}"
+        $installDir = Join-Path $env:USERPROFILE ".chordsketch-action"
+        New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+        $zipPath = Join-Path $installDir $filename
+        Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+        Expand-Archive -Path $zipPath -DestinationPath $installDir -Force
+        Remove-Item $zipPath
+        Add-Content -Path $env:GITHUB_PATH -Value $installDir
+
+    # ---- render the ChordPro file --------------------------------------------
+    - name: Render
+      id: render
+      shell: bash
+      env:
+        INPUT: ${{ inputs.input }}
+        OUTPUT: ${{ inputs.output }}
+        FORMAT: ${{ inputs.format }}
+        TRANSPOSE: ${{ inputs.transpose }}
+      run: |
+        set -euo pipefail
+
+        # Resolve relative paths against $GITHUB_WORKSPACE so the action
+        # behaves predictably regardless of the working directory of the
+        # calling step.
+        if [[ "${INPUT}" != /* ]]; then
+          INPUT="${GITHUB_WORKSPACE}/${INPUT}"
+        fi
+        if [[ "${OUTPUT}" != /* ]]; then
+          OUTPUT="${GITHUB_WORKSPACE}/${OUTPUT}"
+        fi
+
+        # Ensure the output directory exists.
+        mkdir -p "$(dirname "${OUTPUT}")"
+
+        ARGS=(-f "${FORMAT}" -o "${OUTPUT}")
+        if [ "${TRANSPOSE}" != "0" ]; then
+          ARGS+=(--transpose "${TRANSPOSE}")
+        fi
+
+        chordsketch "${ARGS[@]}" "${INPUT}"
+
+        echo "output-path=${OUTPUT}" >> "$GITHUB_OUTPUT"
