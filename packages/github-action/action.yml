@@ -17,7 +17,7 @@ inputs:
     required: false
     default: 'text'
   transpose:
-    description: 'Semitones to transpose, integer in range -128..127 (positive = up, negative = down; 0 = no change). No leading zeros.'
+    description: 'Semitones to transpose, integer in range -128..=127 (positive = up, negative = down; 0 = no change). No leading zeros (e.g., use 2 not 02).'
     required: false
     default: '0'
   version:
@@ -173,13 +173,15 @@ runs:
           *) echo "Invalid format '${FORMAT}': must be text, html, or pdf" >&2; exit 1 ;;
         esac
         if ! [[ "${TRANSPOSE}" =~ ^[+-]?(0|[1-9][0-9]*)$ ]]; then
-          echo "Invalid transpose value '${TRANSPOSE}': must be an integer in range -128..127 with no leading zeros" >&2; exit 1
+          echo "Invalid transpose value '${TRANSPOSE}': must be an integer with no leading zeros (e.g., 2 or -2, not 02)" >&2; exit 1
         fi
         if [[ "${INPUT}" != /* ]]; then INPUT="${GITHUB_WORKSPACE}/${INPUT}"; fi
         if [[ "${OUTPUT}" != /* ]]; then OUTPUT="${GITHUB_WORKSPACE}/${OUTPUT}"; fi
         mkdir -p "$(dirname "${OUTPUT}")"
         ARGS=(-f "${FORMAT}" -o "${OUTPUT}")
-        [ "${TRANSPOSE}" = "0" ] || ARGS+=(--transpose "${TRANSPOSE}")
+        # Use --transpose=VALUE (not --transpose VALUE) so clap treats negative
+        # numbers like -2 as the argument value rather than unknown short flags.
+        [ "${TRANSPOSE}" = "0" ] || ARGS+=(--transpose="${TRANSPOSE}")
         "${CHORDSKETCH_BIN}" "${ARGS[@]}" "${INPUT}"
         echo "output-path=${OUTPUT}" >> "$GITHUB_OUTPUT"
 
@@ -208,9 +210,9 @@ runs:
           exit 1
         }
 
-        # Validate transpose is an integer in range -128..127 with no leading zeros
+        # Validate transpose has no leading zeros (e.g., reject 007 but accept 7)
         if ($transpose -notmatch '^[+-]?(0|[1-9][0-9]*)$') {
-          Write-Error "Invalid transpose value '${transpose}': must be an integer in range -128..127 with no leading zeros"
+          Write-Error "Invalid transpose value '${transpose}': must be an integer with no leading zeros (e.g., 2 or -2, not 02)"
           exit 1
         }
 
@@ -227,7 +229,9 @@ runs:
         New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
         $args_list = @("-f", $format, "-o", $output_path)
-        if ($transpose -ne "0") { $args_list += @("--transpose", $transpose) }
+        # Use --transpose=VALUE (not --transpose VALUE) so clap treats negative
+        # numbers like -2 as the argument value rather than unknown short flags.
+        if ($transpose -ne "0") { $args_list += @("--transpose=$transpose") }
         $args_list += $input_path
 
         & $bin @args_list
