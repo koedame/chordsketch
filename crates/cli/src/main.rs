@@ -19,20 +19,31 @@ const MAX_INPUT_BYTES: u64 = 52_428_800;
 /// Reads `path` into a [`String`], returning an error string if the file is
 /// larger than [`MAX_INPUT_BYTES`] or if any I/O error occurs.
 ///
-/// [`fs::metadata`] is used for an early, cheap size check that avoids
-/// loading oversized files into memory at all.
+/// The file is opened once; [`File::metadata`] is called on the open handle
+/// (equivalent to `fstat`) to avoid a TOCTOU race between a separate
+/// `fs::metadata` call and the subsequent read. Even if the file grows after
+/// the `fstat` check, `Read::take` caps the read at `MAX_INPUT_BYTES + 1`
+/// bytes, and a second length check rejects any overflow.
 fn read_file_clamped(path: &str) -> Result<String, String> {
-    match fs::metadata(path) {
-        Ok(meta) if meta.len() > MAX_INPUT_BYTES => {
-            return Err(format!(
-                "file exceeds the {} MiB input limit",
-                MAX_INPUT_BYTES / (1024 * 1024)
-            ));
-        }
-        Err(e) => return Err(e.to_string()),
-        Ok(_) => {}
+    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    let meta = file.metadata().map_err(|e| e.to_string())?;
+    if meta.len() > MAX_INPUT_BYTES {
+        return Err(format!(
+            "file exceeds the {} MiB input limit",
+            MAX_INPUT_BYTES / (1024 * 1024)
+        ));
     }
-    fs::read_to_string(path).map_err(|e| e.to_string())
+    let mut buf = String::new();
+    file.take(MAX_INPUT_BYTES + 1)
+        .read_to_string(&mut buf)
+        .map_err(|e| e.to_string())?;
+    if buf.len() as u64 > MAX_INPUT_BYTES {
+        return Err(format!(
+            "file exceeds the {} MiB input limit",
+            MAX_INPUT_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(buf)
 }
 
 /// Reads stdin into a [`String`], rejecting streams that exceed
