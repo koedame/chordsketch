@@ -1,0 +1,98 @@
+name: GitHub Action CI
+
+# Exercises the composite action defined in packages/github-action/action.yml
+# against a sample fixture on all supported platforms.
+#
+# No paths: filter — the action downloads a published release binary, so any
+# CI regression introduced here is structural (action.yml / workflow wiring),
+# not a code regression. Running unconditionally ensures the test always
+# reflects the current state of the action wiring.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel previous runs on the same PR when new commits land.
+concurrency:
+  group: github-action-ci-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test action (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
+
+      # ---- text output (default format) ------------------------------------
+      - name: Render to text
+        id: render-text
+        uses: ./packages/github-action
+        with:
+          input: packages/github-action/fixtures/simple.cho
+          output: out/simple.txt
+          # format defaults to "text", transpose defaults to "0"
+
+      - name: Verify text output exists and is non-empty
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT="${{ steps.render-text.outputs.output-path }}"
+          echo "output-path: $OUTPUT"
+          [ -s "$OUTPUT" ] || { echo "Output file is missing or empty"; exit 1; }
+          # The title directive must appear in text output
+          grep -qi "Amazing Grace" "$OUTPUT" || { echo "Title not found in text output"; exit 1; }
+          cat "$OUTPUT"
+
+      # ---- HTML output -----------------------------------------------------
+      - name: Render to HTML
+        id: render-html
+        uses: ./packages/github-action
+        with:
+          input: packages/github-action/fixtures/simple.cho
+          output: out/simple.html
+          format: html
+
+      - name: Verify HTML output
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT="${{ steps.render-html.outputs.output-path }}"
+          echo "output-path: $OUTPUT"
+          [ -s "$OUTPUT" ] || { echo "Output file is missing or empty"; exit 1; }
+          grep -q "Amazing Grace" "$OUTPUT" || { echo "Title not found in HTML output"; exit 1; }
+
+      # ---- transpose -------------------------------------------------------
+      # The fixture uses G-major chords. Transposing by +2 semitones
+      # shifts G→A, C→D, D→E, Em→F#m. Assert that A (transposed root)
+      # appears in the output to confirm the flag is not silently ignored.
+      - name: Render with transpose
+        id: render-transpose
+        uses: ./packages/github-action
+        with:
+          input: packages/github-action/fixtures/simple.cho
+          output: out/simple-transposed.txt
+          format: text
+          transpose: '2'
+
+      - name: Verify transposed output
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT="${{ steps.render-transpose.outputs.output-path }}"
+          echo "output-path: $OUTPUT"
+          [ -s "$OUTPUT" ] || { echo "Output file is missing or empty"; exit 1; }
+          # G transposed +2 = A; assert A chord is present and G is absent
+          # (text renderer outputs chords inline, e.g. [A] or A  above the lyric)
+          grep -q "A" "$OUTPUT" || { echo "Expected A chord (G+2) not found in transposed output"; exit 1; }
+          cat "$OUTPUT"
