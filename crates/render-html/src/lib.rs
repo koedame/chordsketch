@@ -937,8 +937,8 @@ fn sanitize_svg_content(input: &str) -> String {
         "embed",
         "math",
         // feImage is an SVG filter primitive that loads external content via href.
-        // A <feImage href="file:///etc/passwd"/> survives attribute sanitization
-        // with an http: or https: URL, so the element must be stripped entirely.
+        // Stripping by URI scheme alone is insufficient: <feImage href="https://attacker.com/"/>
+        // would survive since https: is allowed. The element must be stripped entirely.
         "feimage",
         // SVG <image> element loads external raster/vector images. Not needed in
         // music notation SVG; strip entirely to prevent tracking-pixel and

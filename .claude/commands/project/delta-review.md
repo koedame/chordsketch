@@ -23,8 +23,8 @@ review. The argument is a base commit hash or PR number: `$ARGUMENTS`
    - Any symptomatic fix is at minimum **Medium** severity (spec violation / incorrect behavior preserved).
 
    **Additionally, run a fix-propagation audit** (per `.claude/rules/fix-propagation.md`):
-   - If the diff fixes a bug in one renderer, check the other two renderers for the same bug.
-   - If the diff fixes a bug in one binding (FFI/WASM/NAPI), check the other two bindings.
+   - If the diff fixes a bug in one renderer, check all other renderers for the same bug.
+   - If the diff fixes a bug in one binding (FFI/WASM/NAPI), check all other bindings.
    - If the diff changes validation or clamping logic in one renderer, verify parity in all three.
    - If the diff adds/changes an entry in a URI scheme denylist, tag blocklist, or attribute
      allowlist, verify all sibling lists are consistent (see `.claude/rules/sanitizer-security.md`).
