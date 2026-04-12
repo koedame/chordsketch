@@ -51,6 +51,47 @@ fn unicode_face() -> &'static ttf_parser::Face<'static> {
     })
 }
 
+/// Extract the raw CFF table bytes from an OpenType font binary.
+///
+/// Returns `None` if `otf_bytes` is not a valid OTF file or contains no `CFF ` table.
+/// The returned slice borrows from `otf_bytes`, so its lifetime matches the input.
+fn extract_cff_table(otf_bytes: &[u8]) -> Option<&[u8]> {
+    if otf_bytes.len() < 12 {
+        return None;
+    }
+    let num_tables = u16::from_be_bytes([otf_bytes[4], otf_bytes[5]]) as usize;
+    for i in 0..num_tables {
+        let rec = 12 + i * 16;
+        if rec + 16 > otf_bytes.len() {
+            return None;
+        }
+        if &otf_bytes[rec..rec + 4] == b"CFF " {
+            let offset = u32::from_be_bytes(otf_bytes[rec + 8..rec + 12].try_into().ok()?) as usize;
+            let length =
+                u32::from_be_bytes(otf_bytes[rec + 12..rec + 16].try_into().ok()?) as usize;
+            let end = offset.checked_add(length)?;
+            if end <= otf_bytes.len() {
+                return Some(&otf_bytes[offset..end]);
+            }
+        }
+    }
+    None
+}
+
+/// Returns a reference to the raw CFF table bytes extracted from the bundled Unicode font.
+///
+/// The PDF spec requires `FontFile3` with `/Subtype /CIDFontType0C` to contain the raw
+/// CFF table, not the full OTF wrapper. This accessor extracts that table once and caches
+/// the result for the lifetime of the process.
+fn unicode_cff_bytes() -> &'static [u8] {
+    use std::sync::OnceLock;
+    static CFF: OnceLock<&'static [u8]> = OnceLock::new();
+    CFF.get_or_init(|| {
+        extract_cff_table(UNICODE_FONT_BYTES)
+            .expect("bundled NotoSansCJK-subset.otf must contain a CFF table")
+    })
+}
+
 /// Returns `true` if `c` must be rendered using the CID Unicode font.
 ///
 /// Characters covered by WinAnsiEncoding (ASCII, Latin-1 Supplement
@@ -157,7 +198,9 @@ fn build_to_unicode_cmap(cid_glyphs: &BTreeMap<u16, char>) -> String {
     }
 
     cmap.push_str("endcmap\n");
-    cmap.push_str("CMapRegistry end\n");
+    cmap.push_str("CMapName currentdict /CMap defineresource pop\n");
+    cmap.push_str("end\n"); // closes "12 dict begin"
+    cmap.push_str("end\n"); // closes "/CIDInit /ProcSet findresource begin"
     cmap
 }
 
@@ -582,6 +625,11 @@ pub fn render_songs_with_warnings(
 
     // Phase 4: combine ToC pages + body pages.
     let mut combined = toc_doc;
+    // Merge CID glyph map from body into combined so build_pdf() can emit the full
+    // ToUnicode CMap and FontDescriptor for all glyphs referenced in the document.
+    for (gid, ch) in body_doc.cid_glyphs.iter() {
+        combined.cid_glyphs.entry(*gid).or_insert(*ch);
+    }
     for page_ops in body_doc.take_pages() {
         combined.push_page(page_ops);
     }
@@ -2832,16 +2880,19 @@ impl PdfDocument {
                 .as_bytes(),
             );
 
-            // Object FontFile3: raw CFF bytes from the bundled OTF asset.
+            // Object FontFile3: raw CFF table bytes (not the full OTF wrapper).
+            // PDF spec §9.9 requires /FontFile3 with /Subtype /CIDFontType0C to contain
+            // the bare CFF font program, not a complete OpenType container.
+            let cff_bytes = unicode_cff_bytes();
             offsets.push(pdf.len());
             pdf.extend_from_slice(
                 format!(
                     "{font_file_obj} 0 obj\n<< /Subtype /CIDFontType0C /Length {} >>\nstream\n",
-                    UNICODE_FONT_BYTES.len()
+                    cff_bytes.len()
                 )
                 .as_bytes(),
             );
-            pdf.extend_from_slice(UNICODE_FONT_BYTES);
+            pdf.extend_from_slice(cff_bytes);
             pdf.extend_from_slice(b"\nendstream\nendobj\n");
 
             // Object ToUnicode CMap: maps GIDs back to Unicode for text extraction.
