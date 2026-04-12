@@ -172,7 +172,7 @@ runs:
           text|html|pdf) ;;
           *) echo "Invalid format '${FORMAT}': must be text, html, or pdf" >&2; exit 1 ;;
         esac
-        if ! [[ "${TRANSPOSE}" =~ ^-?[0-9]+$ ]]; then
+        if ! [[ "${TRANSPOSE}" =~ ^[+-]?[0-9]+$ ]]; then
           echo "Invalid transpose value '${TRANSPOSE}': must be an integer" >&2; exit 1
         fi
         if [[ "${INPUT}" != /* ]]; then INPUT="${GITHUB_WORKSPACE}/${INPUT}"; fi
@@ -209,7 +209,7 @@ runs:
         }
 
         # Validate transpose is an integer before invoking CLI
-        if ($transpose -notmatch '^-?[0-9]+$') {
+        if ($transpose -notmatch '^[+-]?[0-9]+$') {
           Write-Error "Invalid transpose value '${transpose}': must be an integer"
           exit 1
         }

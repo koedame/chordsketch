@@ -96,7 +96,7 @@ jobs:
           # After G+2=A transpose: all standalone G chords become A.
           # -w matches whole words: "A" matches the chord token but NOT "Amazing" or "A7".
           # -w "G" matches the chord token but NOT "Grace" (G followed by r) or "G7".
-          # -w is POSIX-standard (unlike the GNU-only \b extension).
+          # -w is portable across GNU grep, BSD grep, and Git Bash; \bX\b ERE is GNU-only.
           grep -qw 'A' "$OUTPUT" || { echo "Expected standalone A chord (G+2) not found in transposed output"; exit 1; }
           if grep -qw 'G' "$OUTPUT"; then
             echo "Standalone G chord found in transposed output — transposition was not applied"
