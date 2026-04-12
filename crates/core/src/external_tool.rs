@@ -103,6 +103,12 @@ fn write_temp_file_exclusive(path: &std::path::Path, content: &str) -> Result<()
 /// scope exits (normal return, early `?` return, or panic). Because
 /// `chordsketch-core` has zero external dependencies, this is implemented
 /// as a stdlib-only `Drop` type rather than using `scopeguard` or `tempfile`.
+///
+/// # Usage
+///
+/// Bind with `let _guard = TempFileGuard { … }`, **not** `let _ = …`.
+/// `let _ = expr` drops the value immediately; `let _guard = …` keeps
+/// the guard alive until it goes out of scope.
 struct TempFileGuard {
     path: std::path::PathBuf,
 }
@@ -119,6 +125,12 @@ impl Drop for TempFileGuard {
 /// scope exits (normal return, early `?` return, or panic). Because
 /// `chordsketch-core` has zero external dependencies, this is implemented
 /// as a stdlib-only `Drop` type rather than using `scopeguard` or `tempfile`.
+///
+/// # Usage
+///
+/// Bind with `let _guard = TempDirGuard { … }`, **not** `let _ = …`.
+/// `let _ = expr` drops the value immediately; `let _guard = …` keeps
+/// the guard alive until it goes out of scope.
 struct TempDirGuard {
     path: std::path::PathBuf,
 }
@@ -628,6 +640,37 @@ mod tests {
         let result = super::write_temp_file_exclusive(&path, "world");
         assert!(result.is_err());
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn temp_file_guard_removes_file_on_drop() {
+        let path = super::unique_temp_path("test_guard_file", "tmp");
+        super::write_temp_file_exclusive(&path, "data").unwrap();
+        assert!(path.exists(), "file should exist before guard drops");
+        {
+            let _guard = super::TempFileGuard { path: path.clone() };
+        } // guard drops here
+        assert!(
+            !path.exists(),
+            "file should be removed after TempFileGuard drops"
+        );
+    }
+
+    #[test]
+    fn temp_dir_guard_removes_dir_on_drop() {
+        let dir =
+            std::env::temp_dir().join(format!("chordsketch_test_guard_{}", std::process::id()));
+        std::fs::create_dir(&dir).unwrap();
+        // Write a file inside so we exercise recursive removal.
+        std::fs::write(dir.join("inner.txt"), "hello").unwrap();
+        assert!(dir.exists(), "dir should exist before guard drops");
+        {
+            let _guard = super::TempDirGuard { path: dir.clone() };
+        } // guard drops here
+        assert!(
+            !dir.exists(),
+            "dir should be removed after TempDirGuard drops"
+        );
     }
 
     // The following tests are #[ignore] because they depend on external tools.
