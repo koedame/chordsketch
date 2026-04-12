@@ -25,7 +25,8 @@ Any fix to one renderer MUST be audited across all three:
 `crates/ffi/src/lib.rs`, `crates/wasm/src/lib.rs`, `crates/napi/src/lib.rs`
 
 Any fix to one binding's public API surface MUST be audited across all three:
-- Warning routing (e.g., `render_songs_with_warnings` vs. `render_songs_with_transpose`)
+- Warning routing (e.g., WASM had `render_songs_with_warnings` while NAPI only had
+  `render_songs_with_transpose`, leaving NAPI without structured warning capture; see #1541)
 - Input validation and error return paths
 - API shape consistency (options structs, return types)
 
