@@ -37,9 +37,11 @@ runs:
     - name: Resolve ChordSketch version
       id: resolve-version
       shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
-        VERSION="${{ inputs.version }}"
+        VERSION="${INPUT_VERSION}"
         if [ "$VERSION" = "latest" ]; then
           VERSION=$(curl -fsSL \
             -H "Accept: application/vnd.github+json" \
