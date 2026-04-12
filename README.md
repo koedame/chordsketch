@@ -138,11 +138,34 @@ println!("{text}");
 | [`@chordsketch/wasm`](packages/npm) | `packages/npm` | npm package with TypeScript types |
 | [Playground](packages/playground) | `packages/playground` | Browser-based ChordPro editor and renderer |
 
+## GitHub Actions
+
+Use the composite action to render ChordPro files in any GitHub Actions
+workflow — no Rust toolchain required:
+
+```yaml
+- uses: koedame/chordsketch/packages/github-action@action-v1
+  id: render
+  with:
+    input: songs/setlist.cho
+    output: dist/setlist.html
+    format: html
+
+- uses: actions/upload-artifact@v4
+  with:
+    name: setlist-html
+    path: ${{ steps.render.outputs.output-path }}
+```
+
+See [docs/github-action.md](docs/github-action.md) for full input/output
+reference and additional examples.
+
 ## Links
 
 - [ChordPro file format specification](https://www.chordpro.org/chordpro/)
 - [Configuration guide](docs/configuration.md)
 - [Versioning and release process](docs/releasing.md)
+- [GitHub Action reference](docs/github-action.md)
 - [Architecture decision records](docs/adr/README.md)
 - [SECURITY.md](SECURITY.md)
 - [CHANGELOG.md](CHANGELOG.md)
