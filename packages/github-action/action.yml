@@ -70,7 +70,9 @@ runs:
         INSTALL_DIR="${HOME}/.chordsketch-action"
         mkdir -p "${INSTALL_DIR}"
         curl -fsSL "${URL}" | tar xz -C "${INSTALL_DIR}"
-        echo "${INSTALL_DIR}" >> "$GITHUB_PATH"
+        # The tarball extracts to chordsketch-{version}-{triple}/; add that
+        # subdirectory to PATH so the `chordsketch` binary is findable.
+        echo "${INSTALL_DIR}/chordsketch-${CHORDSKETCH_VERSION}-${TRIPLE}" >> "$GITHUB_PATH"
 
     # ---- download and extract the pre-built binary (Windows) -----------------
     - name: Install ChordSketch (Windows)
@@ -88,7 +90,10 @@ runs:
         Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
         Expand-Archive -Path $zipPath -DestinationPath $installDir -Force
         Remove-Item $zipPath
-        Add-Content -Path $env:GITHUB_PATH -Value $installDir
+        # The zip extracts to chordsketch-{version}-{triple}/; add that
+        # subdirectory to PATH so chordsketch.exe is findable.
+        $subDir = Join-Path $installDir "chordsketch-${version}-x86_64-pc-windows-msvc"
+        Add-Content -Path $env:GITHUB_PATH -Value $subDir
 
     # ---- render the ChordPro file --------------------------------------------
     - name: Render
