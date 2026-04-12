@@ -525,16 +525,20 @@ fn render_song_into_doc(
                     continue;
                 }
                 if d.kind == DirectiveKind::Transpose {
-                    let raw_value = d.value.as_deref().unwrap_or("");
-                    let file_offset: i8 = match raw_value.parse() {
-                        Ok(v) => v,
-                        Err(_) => {
-                            warnings.push(format!(
-                                "{{transpose}} value {raw_value:?} cannot be \
-                                 parsed as i8, ignored (using 0)"
-                            ));
-                            0
-                        }
+                    // A missing or empty value silently resets to 0; only a
+                    // non-empty value that cannot be parsed as i8 emits a warning.
+                    let file_offset: i8 = match d.value.as_deref() {
+                        None | Some("") => 0,
+                        Some(raw) => match raw.parse() {
+                            Ok(v) => v,
+                            Err(_) => {
+                                warnings.push(format!(
+                                    "{{transpose}} value {raw:?} cannot be \
+                                     parsed as i8, ignored (using 0)"
+                                ));
+                                0
+                            }
+                        },
                     };
                     let (combined, saturated) =
                         chordsketch_core::transpose::combine_transpose(file_offset, cli_transpose);
@@ -3225,6 +3229,21 @@ mod transpose_tests {
         assert!(
             result.warnings.iter().any(|w| w.contains("\"999\"")),
             "expected warning about out-of-range value, got: {:?}",
+            result.warnings
+        );
+    }
+
+    #[test]
+    fn test_transpose_no_value_treated_as_zero() {
+        // {transpose} with no value should silently reset to 0, no warning.
+        let input = "{transpose}\n[G]Hello";
+        let song = chordsketch_core::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        let content = String::from_utf8_lossy(&result.output);
+        assert!(content.contains("(G)"), "chord should be untransposed");
+        assert!(
+            result.warnings.is_empty(),
+            "missing {{transpose}} value should not emit a warning; got: {:?}",
             result.warnings
         );
     }
