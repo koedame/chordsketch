@@ -2399,7 +2399,10 @@ impl PdfDocument {
         }
         self.current_page_mut().extend(ops_batch);
         for (gid, ch) in cid_mappings {
-            self.cid_glyphs.entry(gid).or_insert(ch);
+            // GID 0 is .notdef; never include it in the ToUnicode CMap (PDF spec §9.10.3).
+            if gid != 0 {
+                self.cid_glyphs.entry(gid).or_insert(ch);
+            }
         }
     }
 
@@ -2454,7 +2457,10 @@ impl PdfDocument {
         }
         self.current_page_mut().extend(ops_batch);
         for (gid, ch) in cid_mappings {
-            self.cid_glyphs.entry(gid).or_insert(ch);
+            // GID 0 is .notdef; never include it in the ToUnicode CMap (PDF spec §9.10.3).
+            if gid != 0 {
+                self.cid_glyphs.entry(gid).or_insert(ch);
+            }
         }
     }
 
@@ -2511,7 +2517,10 @@ impl PdfDocument {
         }
         self.current_page_mut().extend(ops_batch);
         for (gid, ch) in cid_mappings {
-            self.cid_glyphs.entry(gid).or_insert(ch);
+            // GID 0 is .notdef; never include it in the ToUnicode CMap (PDF spec §9.10.3).
+            if gid != 0 {
+                self.cid_glyphs.entry(gid).or_insert(ch);
+            }
         }
     }
 
@@ -2820,6 +2829,18 @@ impl PdfDocument {
 
             // Build /W width array for glyphs that differ from the default (1000).
             // Format: gid [width] gid [width] ...
+            //
+            // PDF spec §9.7.4.3: /DW and /W values are in units of 1/1000 em.
+            // Noto Sans CJK JP uses UPM=1000, so raw advance values from ttf-parser
+            // are already in these units. If the bundled font is ever replaced with
+            // a font that uses a different UPM (e.g. 2048), the advances would need
+            // scaling: `advance * 1000 / upe`. The debug_assert below guards against
+            // silently producing wrong metrics after such a font swap.
+            debug_assert_eq!(
+                face.units_per_em(),
+                1000,
+                "CID font /W values assume UPM=1000; scale advances if the font changes"
+            );
             const DW: u16 = 1000;
             let width_array: String = {
                 let entries: Vec<String> = self
@@ -3365,6 +3386,30 @@ mod tests {
         assert!(
             !text.contains("CIDFontType0"),
             "CID font must not appear in ASCII-only PDFs"
+        );
+    }
+
+    #[test]
+    fn test_missing_glyph_gid0_not_in_to_unicode_cmap() {
+        // Regression test for #1676: characters absent from the bundled font map to
+        // GID 0 (.notdef) in the content stream. GID 0 must NOT appear in the
+        // ToUnicode CMap (PDF spec §9.10.3).
+        //
+        // U+1F600 (😀) and U+1F601 (😁) are emoji not present in the Noto Sans CJK
+        // subset, so both produce GID 0 in the hex string. The ToUnicode CMap must
+        // contain no "<0000>" entry.
+        let song = chordsketch_core::parse("{title: T}\n\u{1F600}\u{1F601}").unwrap();
+        let bytes = render_song(&song);
+        let text = String::from_utf8_lossy(&bytes);
+        // The hex content stream should encode both characters as GID 0.
+        assert!(
+            text.contains("<00000000>"),
+            "both missing glyphs should emit GID 0"
+        );
+        // GID 0 must not appear in the ToUnicode CMap.
+        assert!(
+            !text.contains("<0000> <"),
+            "GID 0 (.notdef) must not appear as a CMap source entry"
         );
     }
 
