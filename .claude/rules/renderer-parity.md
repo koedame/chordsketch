@@ -32,7 +32,7 @@ Inconsistent validation is a correctness bug: the same `.cho` file can produce
 different output (or panic) depending on which output format is used.
 
 When adding or changing validation in one renderer:
-1. Apply the same change to the other two renderers in the same PR.
+1. Apply the same change to all other renderers in the same PR.
 2. Add a golden test with an out-of-range value that exercises the clamping/rejection.
 
 ## Audit pattern

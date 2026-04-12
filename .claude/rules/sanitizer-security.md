@@ -43,20 +43,28 @@ Every URI scheme denylist MUST block at minimum:
 Whenever an entry is added to any URI scheme list:
 1. Cross-check `has_dangerous_uri_scheme` and `is_safe_image_src` (and any future
    sibling functions) to ensure they are consistent.
-2. Verify the list against the [WHATWG Fetch forbidden origins list](https://fetch.spec.whatwg.org/).
+2. Verify the list against the [OWASP XSS Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)
+   for completeness. (The WHATWG Fetch spec does not define a URI scheme denylist
+   for HTML sanitization purposes.)
 
 ### SVG tag blocklists
 
 Blocklisted SVG tags MUST include all tags that can load external resources:
-`script`, `use` (with external `href`), `feImage`, `image`, `iframe`, `embed`, `object`
+`script`, `foreignObject`, `use` (with external `href`), `feImage`, `image`, `iframe`, `embed`, `object`
 
 Whenever a tag is added to `DANGEROUS_TAGS`, check whether there is an equivalent
 filter primitive or presentation element that can load the same resource class.
 
 ### Attribute allowlists / URI attribute lists
 
-URI-bearing SVG/HTML attributes MUST include at minimum:
-`href`, `xlink:href`, `src`, `action`, `formaction`, `poster`, `background`, `ping`, `to`, `values`, `from`, `by`
+Direct URI-bearing SVG/HTML attributes MUST include at minimum:
+`href`, `xlink:href`, `src`, `action`, `formaction`, `poster`, `background`, `ping`
+
+SVG animation value attributes (`to`, `values`, `from`, `by`) are NOT URI-bearing
+in the conventional sense — they carry animation values. However, they MUST still be
+sanitized when the animated `attributeName` is a URI attribute (e.g.
+`<animate attributeName="href" to="javascript:alert(1)"/>`). Filter for animation
+elements that target URI attributes rather than blanket URI-checking these attributes.
 
 ### Testing completeness
 
