@@ -785,7 +785,10 @@ impl ChordDefinition {
         // next() is infallible here. If value is empty or whitespace-only after
         // trim(), name will be "" — the callers check def.display/format/raw
         // before using def.name, so an empty name is a harmless no-op.
-        let name = parts.next().expect("splitn always yields at least one element").to_string();
+        let name = parts
+            .next()
+            .expect("splitn always yields at least one element")
+            .to_string();
         // rest is None for single-word values (no whitespace); "" is the correct
         // default (no rest tokens to process).
         let rest = parts.next().unwrap_or("").trim();
