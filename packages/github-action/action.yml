@@ -28,7 +28,7 @@ inputs:
 outputs:
   output-path:
     description: 'Absolute path to the rendered output file'
-    value: ${{ steps.render.outputs.output-path }}
+    value: ${{ steps.render-unix.outputs.output-path || steps.render-windows.outputs.output-path }}
 
 runs:
   using: 'composite'
@@ -36,17 +36,14 @@ runs:
     # ---- resolve "latest" to a concrete version tag ---------------------------
     # All user-supplied inputs are passed through env: (not interpolated
     # directly into run:) to prevent script injection via crafted values.
-    # jq is used for JSON parsing because it is pre-installed on all
-    # GitHub-hosted runners (Ubuntu, macOS, Windows) without requiring
-    # python3 in the bash PATH.
+    # github.token is used to authenticate the GitHub API call and avoid
+    # secondary rate-limits from shared runner IPs. jq is pre-installed on all
+    # GitHub-hosted runners (Ubuntu, macOS, Windows).
     - name: Resolve ChordSketch version
       id: resolve-version
       shell: bash
       env:
         INPUT_VERSION: ${{ inputs.version }}
-        # github.token is available in composite actions and avoids GitHub API
-        # secondary rate-limits that occur with unauthenticated requests from
-        # shared runner IPs.
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
@@ -60,53 +57,41 @@ runs:
         fi
         echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-    # ---- download, verify, and extract the pre-built binary ------------------
-    # Uses bash on all platforms (Git Bash on Windows) for consistent
-    # GITHUB_PATH propagation across steps. runner.os and runner.arch are
-    # passed via env: for defence-in-depth even though they are
-    # GitHub-controlled values not directly injectable by callers.
-    #
-    # The downloaded archive is verified against the publisher-signed
-    # checksums.txt before extraction. Python is used for SHA-256 computation
-    # and zip extraction because it is available on all GitHub-hosted runners
-    # (Ubuntu, macOS, Windows) without extra installation.
-    - name: Install ChordSketch
-      id: install
+    # ---- install: Linux and macOS -------------------------------------------
+    # Downloads the pre-built tarball, verifies SHA-256 checksum against
+    # publisher-signed checksums.txt, and extracts the binary.
+    # Python is used for checksum computation to avoid sha256sum (GNU-only)
+    # vs shasum (BSD-only) portability differences across Linux and macOS.
+    - name: Install ChordSketch (Linux / macOS)
+      id: install-unix
+      if: runner.os != 'Windows'
       shell: bash
       env:
         CHORDSKETCH_VERSION: ${{ steps.resolve-version.outputs.version }}
+        GH_TOKEN: ${{ github.token }}
         RUNNER_OS: ${{ runner.os }}
         RUNNER_ARCH: ${{ runner.arch }}
       run: |
         set -euo pipefail
-
-        # Map runner OS + arch to release target triple and archive extension.
         case "${RUNNER_OS}-${RUNNER_ARCH}" in
-          Linux-X64)    TRIPLE="x86_64-unknown-linux-musl";  EXT="tar.gz" ;;
-          Linux-ARM64)  TRIPLE="aarch64-unknown-linux-musl"; EXT="tar.gz" ;;
-          macOS-X64)    TRIPLE="x86_64-apple-darwin";        EXT="tar.gz" ;;
-          macOS-ARM64)  TRIPLE="aarch64-apple-darwin";       EXT="tar.gz" ;;
-          Windows-X64)  TRIPLE="x86_64-pc-windows-msvc";    EXT="zip"    ;;
+          Linux-X64)    TRIPLE="x86_64-unknown-linux-musl"  ;;
+          Linux-ARM64)  TRIPLE="aarch64-unknown-linux-musl" ;;
+          macOS-X64)    TRIPLE="x86_64-apple-darwin"        ;;
+          macOS-ARM64)  TRIPLE="aarch64-apple-darwin"       ;;
           *) echo "Unsupported platform: ${RUNNER_OS}/${RUNNER_ARCH}" >&2; exit 1 ;;
         esac
-
-        FILENAME="chordsketch-${CHORDSKETCH_VERSION}-${TRIPLE}.${EXT}"
+        FILENAME="chordsketch-${CHORDSKETCH_VERSION}-${TRIPLE}.tar.gz"
         BASE_URL="https://github.com/koedame/chordsketch/releases/download/${CHORDSKETCH_VERSION}"
-
         INSTALL_DIR="${HOME}/.chordsketch-action"
         mkdir -p "${INSTALL_DIR}"
 
-        # Download the archive and the checksums file separately so the
-        # archive can be verified before execution.
-        curl -fsSL "${BASE_URL}/${FILENAME}" -o "${INSTALL_DIR}/${FILENAME}"
-        curl -fsSL "${BASE_URL}/checksums.txt" -o "${INSTALL_DIR}/checksums.txt"
+        curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
+          "${BASE_URL}/${FILENAME}" -o "${INSTALL_DIR}/${FILENAME}"
+        curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
+          "${BASE_URL}/checksums.txt" -o "${INSTALL_DIR}/checksums.txt"
 
-        # Verify SHA-256 checksum against publisher-signed checksums.txt.
         EXPECTED=$(grep "${FILENAME}$" "${INSTALL_DIR}/checksums.txt" | awk '{print $1}')
-        if [ -z "${EXPECTED}" ]; then
-          echo "Checksum entry for ${FILENAME} not found in checksums.txt" >&2
-          exit 1
-        fi
+        [ -n "${EXPECTED}" ] || { echo "Checksum entry not found" >&2; exit 1; }
         ACTUAL=$(python3 -c "
         import hashlib, sys
         h = hashlib.sha256()
@@ -115,42 +100,64 @@ runs:
                 h.update(chunk)
         print(h.hexdigest())
         " "${INSTALL_DIR}/${FILENAME}")
-        if [ "${EXPECTED}" != "${ACTUAL}" ]; then
-          echo "Checksum mismatch for ${FILENAME}" >&2
-          echo "  expected: ${EXPECTED}" >&2
-          echo "  actual:   ${ACTUAL}" >&2
-          exit 1
-        fi
+        [ "${EXPECTED}" = "${ACTUAL}" ] || {
+          echo "Checksum mismatch: expected ${EXPECTED}, got ${ACTUAL}" >&2; exit 1;
+        }
 
-        # Extract the verified archive.
-        if [ "${EXT}" = "tar.gz" ]; then
-          tar xzf "${INSTALL_DIR}/${FILENAME}" -C "${INSTALL_DIR}"
-        else
-          # Use Python's zipfile module for portable zip extraction on Windows
-          # (avoids requiring the unzip utility in Git Bash).
-          python3 -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" \
-            "${INSTALL_DIR}/${FILENAME}" "${INSTALL_DIR}"
-        fi
-
-        # Clean up downloaded archive and checksums.
+        tar xzf "${INSTALL_DIR}/${FILENAME}" -C "${INSTALL_DIR}"
         rm "${INSTALL_DIR}/${FILENAME}" "${INSTALL_DIR}/checksums.txt"
+        echo "CHORDSKETCH_BIN=${INSTALL_DIR}/chordsketch-${CHORDSKETCH_VERSION}-${TRIPLE}/chordsketch" \
+          >> "$GITHUB_ENV"
 
-        # Export the full path to the binary via GITHUB_ENV so the render step
-        # can invoke it directly without relying on PATH propagation.
-        # PATH propagation via GITHUB_PATH within a composite action's bash
-        # steps is unreliable on Windows (the GitHub Actions runner requires
-        # Windows-style paths but bash produces Unix-style paths). Invoking
-        # by absolute path is more robust across all platforms.
-        BIN_SUBDIR="${INSTALL_DIR}/chordsketch-${CHORDSKETCH_VERSION}-${TRIPLE}"
-        if [[ "${RUNNER_OS}" = "Windows" ]]; then
-          echo "CHORDSKETCH_BIN=${BIN_SUBDIR}/chordsketch.exe" >> "$GITHUB_ENV"
-        else
-          echo "CHORDSKETCH_BIN=${BIN_SUBDIR}/chordsketch" >> "$GITHUB_ENV"
-        fi
+    # ---- install: Windows ---------------------------------------------------
+    # Uses PowerShell throughout to stay in the Windows-native path space.
+    # Invoke-WebRequest downloads the zip, Get-FileHash verifies the checksum,
+    # Expand-Archive extracts the binary. The binary path is written to
+    # GITHUB_ENV as a Windows path for use by the pwsh render step below.
+    - name: Install ChordSketch (Windows)
+      id: install-windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        CHORDSKETCH_VERSION: ${{ steps.resolve-version.outputs.version }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        $version = $env:CHORDSKETCH_VERSION
+        $triple  = "x86_64-pc-windows-msvc"
+        $filename = "chordsketch-${version}-${triple}.zip"
+        $baseUrl  = "https://github.com/koedame/chordsketch/releases/download/${version}"
+        $token    = $env:GH_TOKEN
+        $headers  = @{ "Authorization" = "Bearer $token"; "Accept" = "application/vnd.github+json" }
 
-    # ---- render the ChordPro file --------------------------------------------
-    - name: Render
-      id: render
+        $installDir = Join-Path $env:USERPROFILE ".chordsketch-action"
+        New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+
+        $zipPath      = Join-Path $installDir $filename
+        $checksumPath = Join-Path $installDir "checksums.txt"
+
+        Invoke-WebRequest -Uri "$baseUrl/$filename"     -OutFile $zipPath      -UseBasicParsing -Headers $headers
+        Invoke-WebRequest -Uri "$baseUrl/checksums.txt" -OutFile $checksumPath -UseBasicParsing -Headers $headers
+
+        # Verify SHA-256 against publisher-signed checksums.txt
+        $expected = (Get-Content $checksumPath | Where-Object { $_ -match [regex]::Escape($filename) }) `
+          -split '\s+' | Where-Object { $_ -match '^[0-9a-f]{64}$' } | Select-Object -First 1
+        if (-not $expected) { throw "Checksum entry for $filename not found in checksums.txt" }
+        $actual = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
+        if ($actual -ne $expected.ToLower()) {
+          throw "Checksum mismatch for ${filename}: expected $expected, got $actual"
+        }
+
+        Expand-Archive -Path $zipPath -DestinationPath $installDir -Force
+        Remove-Item $zipPath, $checksumPath
+
+        $binDir = Join-Path $installDir "chordsketch-${version}-${triple}"
+        $binPath = Join-Path $binDir "chordsketch.exe"
+        Add-Content -Path $env:GITHUB_ENV -Value "CHORDSKETCH_BIN=$binPath"
+
+    # ---- render: Linux and macOS --------------------------------------------
+    - name: Render (Linux / macOS)
+      id: render-unix
+      if: runner.os != 'Windows'
       shell: bash
       env:
         INPUT: ${{ inputs.input }}
@@ -159,25 +166,50 @@ runs:
         TRANSPOSE: ${{ inputs.transpose }}
       run: |
         set -euo pipefail
-
-        # Resolve relative paths against $GITHUB_WORKSPACE so the action
-        # behaves predictably regardless of the step's working directory.
-        # Windows absolute paths start with a drive letter (e.g. D:\...).
-        if [[ "${INPUT}" != /* && "${INPUT}" != [A-Za-z]:* ]]; then
-          INPUT="${GITHUB_WORKSPACE}/${INPUT}"
-        fi
-        if [[ "${OUTPUT}" != /* && "${OUTPUT}" != [A-Za-z]:* ]]; then
-          OUTPUT="${GITHUB_WORKSPACE}/${OUTPUT}"
-        fi
-
-        # Ensure the output directory exists.
+        if [[ "${INPUT}" != /* ]]; then INPUT="${GITHUB_WORKSPACE}/${INPUT}"; fi
+        if [[ "${OUTPUT}" != /* ]]; then OUTPUT="${GITHUB_WORKSPACE}/${OUTPUT}"; fi
         mkdir -p "$(dirname "${OUTPUT}")"
-
         ARGS=(-f "${FORMAT}" -o "${OUTPUT}")
-        if [ "${TRANSPOSE}" != "0" ]; then
-          ARGS+=(--transpose "${TRANSPOSE}")
-        fi
-
+        [ "${TRANSPOSE}" = "0" ] || ARGS+=(--transpose "${TRANSPOSE}")
         "${CHORDSKETCH_BIN}" "${ARGS[@]}" "${INPUT}"
-
         echo "output-path=${OUTPUT}" >> "$GITHUB_OUTPUT"
+
+    # ---- render: Windows ----------------------------------------------------
+    # Uses PowerShell to stay in the Windows-native path space. Relative input
+    # and output paths are resolved against $env:GITHUB_WORKSPACE.
+    - name: Render (Windows)
+      id: render-windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        INPUT: ${{ inputs.input }}
+        OUTPUT: ${{ inputs.output }}
+        FORMAT: ${{ inputs.format }}
+        TRANSPOSE: ${{ inputs.transpose }}
+      run: |
+        $input_path  = $env:INPUT
+        $output_path = $env:OUTPUT
+        $format    = $env:FORMAT
+        $transpose = $env:TRANSPOSE
+        $bin       = $env:CHORDSKETCH_BIN
+
+        # Resolve relative paths against GITHUB_WORKSPACE
+        if (-not [System.IO.Path]::IsPathRooted($input_path)) {
+          $input_path = Join-Path $env:GITHUB_WORKSPACE $input_path
+        }
+        if (-not [System.IO.Path]::IsPathRooted($output_path)) {
+          $output_path = Join-Path $env:GITHUB_WORKSPACE $output_path
+        }
+
+        # Ensure output directory exists
+        $outDir = Split-Path $output_path -Parent
+        New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+        $args_list = @("-f", $format, "-o", $output_path)
+        if ($transpose -ne "0") { $args_list += @("--transpose", $transpose) }
+        $args_list += $input_path
+
+        & $bin @args_list
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        Add-Content -Path $env:GITHUB_OUTPUT -Value "output-path=$output_path"
