@@ -168,12 +168,15 @@ fn sanitize_abc_content(input: &str) -> String {
 
         // %%javascript <code> is a single-line JS directive (case-insensitive).
         // Use str::get to avoid panicking on multi-byte chars at byte 12 (#1574).
+        // Use chars().next() with is_whitespace() to cover all whitespace separators
+        // including \x0b (VT) and \x0c (FF), not just space/tab (#1582).
+        // Note: is_ascii_whitespace() excludes VT (0x0B), so is_whitespace() is used.
         if trimmed
             .get(..12)
             .is_some_and(|s| s.eq_ignore_ascii_case("%%javascript"))
         {
             let after = &trimmed[12..]; // safe: get(..12) succeeded => 12 is a char boundary
-            if after.is_empty() || after.starts_with(' ') || after.starts_with('\t') {
+            if after.chars().next().is_none_or(|c| c.is_whitespace()) {
                 continue;
             }
         }
@@ -181,12 +184,14 @@ fn sanitize_abc_content(input: &str) -> String {
         // %%js <code> is an undocumented shorthand for %%javascript observed in
         // some abc2svg examples. Strip it as defense-in-depth (#1551).
         // Use str::get to avoid panicking on multi-byte chars at byte 4 (#1574).
+        // Use chars().next() with is_whitespace() to cover all whitespace separators
+        // including \x0b (VT) and \x0c (FF), not just space/tab (#1582).
         if trimmed
             .get(..4)
             .is_some_and(|s| s.eq_ignore_ascii_case("%%js"))
         {
             let after = &trimmed[4..]; // safe: get(..4) succeeded => 4 is a char boundary
-            if after.is_empty() || after.starts_with(' ') || after.starts_with('\t') {
+            if after.chars().next().is_none_or(|c| c.is_whitespace()) {
                 continue;
             }
         }
@@ -801,6 +806,33 @@ mod tests {
         let result = super::sanitize_abc_content(input);
         assert_eq!(result, "X:1\nK:C");
         assert!(!result.contains("alert"));
+    }
+
+    #[test]
+    fn sanitize_abc_js_other_ascii_whitespace_separators() {
+        // Vertical tab (\x0b) as separator: %%javascript\x0b<code> (#1582).
+        let input = "X:1\n%%javascript\x0bevil()\nK:C\n";
+        let result = super::sanitize_abc_content(input);
+        assert_eq!(result, "X:1\nK:C");
+        assert!(!result.contains("evil"));
+
+        // Form feed (\x0c) as separator: %%javascript\x0c<code> (#1582).
+        let input = "X:1\n%%javascript\x0cevil()\nK:C\n";
+        let result = super::sanitize_abc_content(input);
+        assert_eq!(result, "X:1\nK:C");
+        assert!(!result.contains("evil"));
+
+        // Vertical tab (\x0b) as separator: %%js\x0b<code> (#1582).
+        let input = "X:1\n%%js\x0bevil()\nK:C\n";
+        let result = super::sanitize_abc_content(input);
+        assert_eq!(result, "X:1\nK:C");
+        assert!(!result.contains("evil"));
+
+        // Form feed (\x0c) as separator: %%js\x0c<code> (#1582).
+        let input = "X:1\n%%js\x0cevil()\nK:C\n";
+        let result = super::sanitize_abc_content(input);
+        assert_eq!(result, "X:1\nK:C");
+        assert!(!result.contains("evil"));
     }
 
     #[test]
