@@ -3247,6 +3247,23 @@ mod transpose_tests {
             result.warnings
         );
     }
+
+    #[test]
+    fn test_transpose_whitespace_value_treated_as_zero() {
+        // {transpose:   } with whitespace-only value should silently reset to 0,
+        // no warning emitted. The parser trims whitespace → Some(""), which the
+        // Some("") arm converts to 0.
+        let input = "{transpose:   }\n[G]Hello";
+        let song = chordsketch_core::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        let content = String::from_utf8_lossy(&result.output);
+        assert!(content.contains("(G)"), "chord should be untransposed");
+        assert!(
+            result.warnings.is_empty(),
+            "whitespace-only {{transpose}} value should not emit a warning; got: {:?}",
+            result.warnings
+        );
+    }
 }
 
 #[cfg(test)]
