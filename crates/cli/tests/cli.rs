@@ -135,6 +135,21 @@ fn test_transpose_down() {
 }
 
 #[test]
+fn test_transpose_down_space_form() {
+    // Regression test for #1669: --transpose -2 (space-separated) was previously
+    // rejected by clap 4 as an unknown short flag. Fixed by adding
+    // allow_negative_numbers = true to the --transpose arg definition.
+    // This test would fail if that attribute were removed.
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args([&fixture("simple.cho"), "--transpose", "-2"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("F     A#"))
+        .stdout(predicate::str::contains("Hello world"));
+}
+
+#[test]
 fn test_transpose_zero_is_noop() {
     Command::cargo_bin("chordsketch")
         .unwrap()
