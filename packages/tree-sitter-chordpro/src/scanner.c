@@ -31,6 +31,9 @@ bool tree_sitter_chordpro_external_scanner_scan(void *payload, TSLexer *lexer,
   }
 
   // A comment is only valid at the very beginning of a line (column 0).
+  // NOTE: CRLF handling depends on `extras: [/\r/]` in grammar.js.
+  // The lexer strips `\r` before calling this scanner, so after a `\r\n`
+  // line ending the scanner sees `#` at column 0 as expected.
   if (lexer->get_column(lexer) != 0) {
     return false;
   }

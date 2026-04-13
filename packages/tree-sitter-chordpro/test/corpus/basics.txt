@@ -272,6 +272,18 @@ Sharp chord in brackets unaffected
     (lyrics)))
 
 ==================
+Indented hash is lyrics not comment
+==================
+
+  # indented
+
+---
+
+(source_file
+  (content_line
+    (lyrics)))
+
+==================
 Mixed content
 ==================
 
