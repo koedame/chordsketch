@@ -5,9 +5,9 @@
   # nixpkgs unstable supports Rust 1.85+ and the 2024 edition used by this
   # workspace, so no rust-overlay or similar overlay is required.
   #
-  # The input is pinned to a specific nixpkgs commit so the derivation is
-  # reproducible without requiring a committed flake.lock.  Update this SHA
-  # (and re-verify the build) when bumping nixpkgs.
+  # The input is pinned to a specific nixpkgs commit and the resolved
+  # metadata is recorded in flake.lock for fully reproducible builds.
+  # When bumping nixpkgs, update this SHA and run `nix flake update`.
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/4c1018dae018162ec878d42fec712642d214fdfa"; # nixos-unstable 2026-04-09
 
   outputs = { self, nixpkgs }:
