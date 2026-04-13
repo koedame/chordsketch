@@ -306,6 +306,23 @@ pub fn version() -> String {
     chordsketch_core::version().to_string()
 }
 
+/// Validate ChordPro input and return any parse errors as strings.
+///
+/// Returns an empty array if the input is valid. This allows callers to
+/// obtain parse diagnostics without performing a full render.
+///
+/// Matches the `validate()` function exposed by the FFI and NAPI bindings.
+#[must_use]
+#[wasm_bindgen]
+pub fn validate(input: &str) -> Vec<String> {
+    let result = chordsketch_core::parse_multi_lenient(input);
+    result
+        .results
+        .into_iter()
+        .flat_map(|r| r.errors.into_iter().map(|e| e.to_string()))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,6 +399,28 @@ mod tests {
         let result =
             chordsketch_core::config::Config::parse(r#"{ "settings": { "transpose": 2 } }"#);
         assert!(result.is_ok(), "valid RRJSON should parse successfully");
+    }
+
+    #[test]
+    fn test_validate_returns_empty_for_valid_input() {
+        let errors = validate(MINIMAL_INPUT);
+        assert!(errors.is_empty(), "valid input should produce no errors");
+    }
+
+    #[test]
+    fn test_validate_returns_errors_for_bad_input() {
+        // An unclosed chord bracket is always a parse error, even in lenient mode.
+        let errors = validate("{title: Test}\n[G");
+        assert!(
+            !errors.is_empty(),
+            "unclosed chord should produce a parse error"
+        );
+    }
+
+    #[test]
+    fn test_validate_returns_empty_for_empty_input() {
+        let errors = validate("");
+        assert!(errors.is_empty(), "empty input should produce no errors");
     }
 }
 
