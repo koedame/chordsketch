@@ -40,6 +40,133 @@ install it as a dev extension:
 2. In Zed, open the command palette and run **"zed: install dev extension"**
 3. Select the `packages/zed-extension` directory
 
+## Neovim
+
+ChordPro support in Neovim requires manual configuration until the
+tree-sitter grammar is published to nvim-treesitter and `chordsketch-lsp`
+is added to nvim-lspconfig.
+
+### Prerequisites
+
+```bash
+cargo install chordsketch-lsp
+```
+
+### File type recognition
+
+Add to your `init.lua`:
+
+```lua
+vim.filetype.add({
+  extension = {
+    cho = "chordpro",
+    chordpro = "chordpro",
+    chopro = "chordpro",
+  },
+})
+```
+
+### Tree-sitter highlighting
+
+If you use [nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter),
+register the ChordPro parser:
+
+```lua
+local parser_config = require("nvim-treesitter.parsers").get_parser_configs()
+parser_config.chordpro = {
+  install_info = {
+    url = "https://github.com/koedame/chordsketch",
+    files = { "src/parser.c", "src/scanner.c" },
+    location = "packages/tree-sitter-chordpro",
+    branch = "main",
+  },
+  filetype = "chordpro",
+}
+```
+
+Then install the parser:
+
+```vim
+:TSInstall chordpro
+```
+
+Copy the highlight queries to your Neovim runtime:
+
+```bash
+mkdir -p ~/.config/nvim/queries/chordpro
+cp packages/tree-sitter-chordpro/queries/highlights.scm \
+   ~/.config/nvim/queries/chordpro/highlights.scm
+```
+
+### LSP setup
+
+Since `chordsketch-lsp` is not yet in nvim-lspconfig, configure it
+manually:
+
+```lua
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "chordpro",
+  callback = function()
+    vim.lsp.start({
+      name = "chordsketch-lsp",
+      cmd = { "chordsketch-lsp", "--stdio" },
+      root_dir = vim.fs.dirname(
+        vim.fs.find({ ".git" }, { upward = true })[1]
+      ),
+    })
+  end,
+})
+```
+
+## Helix
+
+ChordPro support in Helix requires manual configuration until the
+grammar is submitted upstream to helix-editor/helix.
+
+### Prerequisites
+
+```bash
+cargo install chordsketch-lsp
+```
+
+### Configuration
+
+Add to `~/.config/helix/languages.toml`:
+
+```toml
+[[language]]
+name = "chordpro"
+scope = "source.chordpro"
+file-types = ["cho", "chordpro", "chopro"]
+comment-token = "#"
+language-servers = ["chordsketch-lsp"]
+
+[language-server.chordsketch-lsp]
+command = "chordsketch-lsp"
+args = ["--stdio"]
+
+[[grammar]]
+name = "chordpro"
+source = { git = "https://github.com/koedame/chordsketch", rev = "main", subpath = "packages/tree-sitter-chordpro" }
+```
+
+### Building the grammar
+
+Fetch and build the tree-sitter grammar:
+
+```bash
+hx --grammar fetch
+hx --grammar build
+```
+
+Copy the highlight queries to the Helix runtime:
+
+```bash
+mkdir -p ~/.config/helix/runtime/queries/chordpro
+cp packages/tree-sitter-chordpro/queries/highlights.scm \
+   ~/.config/helix/runtime/queries/chordpro/highlights.scm
+```
+
 ## Language Server (any editor)
 
 `chordsketch-lsp` implements the Language Server Protocol and can be used with
