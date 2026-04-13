@@ -6,7 +6,12 @@ sdk: org.freedesktop.Sdk
 command: chordsketch
 
 finish-args:
-  # Filesystem access for reading/writing .cho files
+  # The CLI reads input .cho files and writes output (text/HTML/PDF) to
+  # user-specified paths. --filesystem=home is the minimum scope that
+  # covers typical usage (files in ~/Documents, ~/Music, etc.) without
+  # granting access to system directories. Flatpak's portal/document
+  # mechanism does not apply to non-interactive CLI invocations where
+  # the user passes explicit file paths as arguments.
   - --filesystem=home
   # No display server, network, or other capabilities needed for a CLI tool
 

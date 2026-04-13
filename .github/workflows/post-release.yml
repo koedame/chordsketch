@@ -647,6 +647,11 @@ jobs:
   update-flatpak:
     name: Update Flathub manifest
     runs-on: ubuntu-latest
+    # Prerequisites: the Flathub app repo (flathub/me.koeda.chordsketch)
+    # must exist before this job can run. Unlike AUR or Homebrew, Flathub
+    # requires a separate application submission (PR to flathub/flathub)
+    # that must be accepted first. The FLATHUB_TOKEN guard below ensures
+    # the job is a no-op until both the repo and the token are set up.
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -655,8 +660,9 @@ jobs:
         env:
           INPUT_TAG: ${{ inputs.tag }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             TAG="$INPUT_TAG"
           else
             TAG="$RELEASE_TAG"
@@ -673,6 +679,14 @@ jobs:
       - name: Generate manifest
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+
+          # Validate VERSION format to prevent sed injection from crafted
+          # workflow_dispatch tags.
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "ERROR: invalid version format: '${VERSION}'" >&2
+            exit 1
+          fi
+
           SHA_LINUX=$(grep "x86_64-unknown-linux-gnu" checksums.txt | awk '{print $1}')
 
           if [[ ! "$SHA_LINUX" =~ ^[0-9a-fA-F]{64}$ ]]; then
@@ -693,8 +707,10 @@ jobs:
         run: |
           if [ -z "$FLATHUB_TOKEN" ]; then
             echo "FLATHUB_TOKEN secret is not set; skipping Flathub push."
-            echo "To enable automatic Flathub updates, fork flathub/me.koeda.chordsketch"
-            echo "and add a GitHub PAT as a repository secret named FLATHUB_TOKEN."
+            echo "To enable automatic Flathub updates:"
+            echo "  1. Submit the initial Flathub application (PR to flathub/flathub)"
+            echo "  2. After acceptance, add a GitHub PAT with push access to"
+            echo "     flathub/me.koeda.chordsketch as FLATHUB_TOKEN secret."
             exit 0
           fi
 
@@ -727,5 +743,13 @@ jobs:
             --repo flathub/me.koeda.chordsketch \
             --base master \
             --head "$BRANCH" \
-            --title "Update to ${VERSION}" \
-            --body "Automated update from chordsketch post-release workflow."
+            --title "Update chordsketch to ${VERSION}" \
+            --body "$(cat <<PR_BODY
+## Update chordsketch to ${VERSION}
+
+- **Version**: ${VERSION}
+- **Source**: Pre-built x86_64-linux-gnu binary from [GitHub Release](https://github.com/koedame/chordsketch/releases/tag/v${VERSION})
+
+Automated update from the [chordsketch post-release workflow](https://github.com/koedame/chordsketch/blob/main/.github/workflows/post-release.yml).
+PR_BODY
+          )"
