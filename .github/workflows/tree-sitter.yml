@@ -1,0 +1,56 @@
+name: Tree-sitter Grammar
+
+# Validates the tree-sitter-chordpro grammar:
+# - Generated parser (src/parser.c, src/grammar.json) matches grammar.js
+# - External scanner (src/scanner.c) compiles correctly
+# - All corpus tests pass
+#
+# This is a component-specific check (only the tree-sitter grammar can
+# break these tests), so a paths: filter is appropriate — unlike
+# guarantee-style checks that run unconditionally.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/tree-sitter-chordpro/**"
+      - ".github/workflows/tree-sitter.yml"
+  pull_request:
+    paths:
+      - "packages/tree-sitter-chordpro/**"
+      - ".github/workflows/tree-sitter.yml"
+
+concurrency:
+  group: tree-sitter-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tree-sitter grammar tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/tree-sitter-chordpro
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "20"
+
+      - name: Install tree-sitter-cli
+        run: npm install
+
+      - name: Verify generated files are up-to-date
+        run: |
+          npm run generate
+          if ! git diff --exit-code -- src/parser.c src/grammar.json src/node-types.json; then
+            echo "::error::Generated files are stale. Run 'tree-sitter generate' and commit the result."
+            exit 1
+          fi
+
+      - name: Run corpus tests
+        run: npm test
