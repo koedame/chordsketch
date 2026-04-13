@@ -16,6 +16,7 @@ Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 |---------|---------|-----------|
 | Comments | `# comment` | `comment` |
 | Directives | `{title: Song Name}` | `directive` (with `directive_name`, `directive_value`) |
+| Delegate blocks | `{start_of_abc}...{end_of_abc}` | `delegate_block` (with `block_start_directive`, `block_content`, `block_end_directive`) |
 | Chords | `[Am]`, `[G/B]` | `chord` (with `chord_name`) |
 | Lyrics | `Amazing grace` | `lyrics` |
 

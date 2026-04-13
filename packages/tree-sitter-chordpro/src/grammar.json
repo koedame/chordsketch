@@ -18,6 +18,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "delegate_block"
+        },
+        {
+          "type": "SYMBOL",
           "name": "directive"
         },
         {
@@ -50,6 +54,114 @@
         ]
       }
     },
+    "delegate_block": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "block_start_directive"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "block_content"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "SYMBOL",
+          "name": "block_end_directive"
+        }
+      ]
+    },
+    "block_start_directive": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "{"
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "ALIAS",
+            "content": {
+              "type": "PATTERN",
+              "value": "start_of_[a-zA-Z][a-zA-Z0-9_-]*"
+            },
+            "named": true,
+            "value": "directive_name"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "}"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "STRING",
+              "value": "\n"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        }
+      ]
+    },
+    "block_end_directive": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "{"
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "ALIAS",
+            "content": {
+              "type": "PATTERN",
+              "value": "end_of_[a-zA-Z][a-zA-Z0-9_-]*"
+            },
+            "named": true,
+            "value": "directive_name"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "}"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "STRING",
+              "value": "\n"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        }
+      ]
+    },
+    "block_content": {
+      "type": "REPEAT1",
+      "content": {
+        "type": "PATTERN",
+        "value": "[^\\n{]*\\n"
+      }
+    },
     "directive": {
       "type": "SEQ",
       "members": [
@@ -75,7 +187,7 @@
                   "type": "IMMEDIATE_TOKEN",
                   "content": {
                     "type": "PATTERN",
-                    "value": ":\\s*"
+                    "value": "[: ]\\s*"
                   }
                 },
                 {
@@ -113,36 +225,48 @@
     },
     "directive_name": {
       "type": "PATTERN",
-      "value": "[a-zA-Z_][a-zA-Z0-9_]*"
+      "value": "[a-zA-Z_][a-zA-Z0-9_-]*"
     },
     "directive_value": {
       "type": "PATTERN",
       "value": "[^{}]+"
     },
     "content_line": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "REPEAT1",
-          "content": {
+      "type": "PREC_RIGHT",
+      "value": 0,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "REPEAT1",
+            "content": {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "chord"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "lyrics"
+                }
+              ]
+            }
+          },
+          {
             "type": "CHOICE",
             "members": [
               {
-                "type": "SYMBOL",
-                "name": "chord"
+                "type": "STRING",
+                "value": "\n"
               },
               {
-                "type": "SYMBOL",
-                "name": "lyrics"
+                "type": "BLANK"
               }
             ]
           }
-        },
-        {
-          "type": "STRING",
-          "value": "\n"
-        }
-      ]
+        ]
+      }
     },
     "chord": {
       "type": "SEQ",
@@ -167,7 +291,7 @@
     },
     "lyrics": {
       "type": "PATTERN",
-      "value": "[^\\[\\n{#]+"
+      "value": "[^\\[\\n{}#]+"
     }
   },
   "extras": [

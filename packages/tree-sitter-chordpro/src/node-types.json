@@ -1,5 +1,42 @@
 [
   {
+    "type": "block_content",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "block_end_directive",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "directive_name",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "block_start_directive",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "directive_name",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "chord",
     "named": true,
     "fields": {},
@@ -28,6 +65,29 @@
         },
         {
           "type": "lyrics",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "delegate_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "block_content",
+          "named": true
+        },
+        {
+          "type": "block_end_directive",
+          "named": true
+        },
+        {
+          "type": "block_start_directive",
           "named": true
         }
       ]
@@ -74,6 +134,10 @@
         },
         {
           "type": "content_line",
+          "named": true
+        },
+        {
+          "type": "delegate_block",
           "named": true
         },
         {

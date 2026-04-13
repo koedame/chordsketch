@@ -10,7 +10,7 @@ Comment
   (comment))
 
 ==================
-Directive with value
+Directive with colon value
 ==================
 
 {title: Amazing Grace}
@@ -23,16 +23,48 @@ Directive with value
     value: (directive_value)))
 
 ==================
+Directive with space value
+==================
+
+{capo 3}
+
+---
+
+(source_file
+  (directive
+    name: (directive_name)
+    value: (directive_value)))
+
+==================
 Directive without value
 ==================
 
-{start_of_verse}
+{new_song}
 
 ---
 
 (source_file
   (directive
     name: (directive_name)))
+
+==================
+Delegate block
+==================
+
+{start_of_abc}
+X:1
+K:C
+{end_of_abc}
+
+---
+
+(source_file
+  (delegate_block
+    (block_start_directive
+      name: (directive_name))
+    (block_content)
+    (block_end_directive
+      name: (directive_name))))
 
 ==================
 Chord line
@@ -50,6 +82,120 @@ Chord line
     (chord
       (chord_name))
     (lyrics)))
+
+==================
+Chord with slash bass
+==================
+
+[G/B]Walking [Am7]down
+
+---
+
+(source_file
+  (content_line
+    (chord
+      (chord_name))
+    (lyrics)
+    (chord
+      (chord_name))
+    (lyrics)))
+
+==================
+Chord-only line
+==================
+
+[Am] [G] [C]
+
+---
+
+(source_file
+  (content_line
+    (chord
+      (chord_name))
+    (lyrics)
+    (chord
+      (chord_name))
+    (lyrics)
+    (chord
+      (chord_name))))
+
+==================
+Directive with selector suffix
+==================
+
+{textfont-piano: Courier}
+
+---
+
+(source_file
+  (directive
+    name: (directive_name)
+    value: (directive_value)))
+
+==================
+Complex chord names
+==================
+
+[Bbm7b5]Darkness [F#/C#]light [N.C.]rest
+
+---
+
+(source_file
+  (content_line
+    (chord
+      (chord_name))
+    (lyrics)
+    (chord
+      (chord_name))
+    (lyrics)
+    (chord
+      (chord_name))
+    (lyrics)))
+
+==================
+Short directive alias
+==================
+
+{t: My Title}
+
+---
+
+(source_file
+  (directive
+    name: (directive_name)
+    value: (directive_value)))
+
+==================
+Empty comment
+==================
+
+#
+
+---
+
+(source_file
+  (comment))
+
+==================
+Multiple directives
+==================
+
+{title: Song}
+{artist: Artist}
+{key: G}
+
+---
+
+(source_file
+  (directive
+    name: (directive_name)
+    value: (directive_value))
+  (directive
+    name: (directive_name)
+    value: (directive_value))
+  (directive
+    name: (directive_name)
+    value: (directive_value)))
 
 ==================
 Lyrics without chords

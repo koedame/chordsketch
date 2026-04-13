@@ -8,6 +8,7 @@ repository = "https://github.com/koedame/chordsketch"
 
 [grammars.chordpro]
 repository = "https://github.com/koedame/chordsketch"
+# Update this to the commit hash after merging to main
 rev = "REPLACE_WITH_MERGED_COMMIT"
 path = "packages/tree-sitter-chordpro"
 
