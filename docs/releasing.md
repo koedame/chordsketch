@@ -395,39 +395,36 @@ These are non-obvious gotchas discovered during real publishing. They are not
 derivable from the code; check this section before assuming the simple path
 will work.
 
-### npm publish via CI cannot create new packages in `@chordsketch` scope
+### npm publish via CI cannot create new packages (scoped or unscoped)
 
-The CI `npm-publish.yml` workflow with the current Granular `NPM_TOKEN`
-cannot create *new* packages under the `@chordsketch` scope, only update
-existing ones. Every attempt to publish a brand-new package name returns:
+The CI publish workflows with the current Granular `NPM_TOKEN` cannot
+create *new* packages — neither scoped (`@chordsketch/*`) nor unscoped
+(e.g., `tree-sitter-chordpro`). Every attempt to publish a brand-new
+package name returns:
 
 ```
-npm error 404 Not Found - PUT https://registry.npmjs.org/@chordsketch%2f<name>
-npm error 404  '@chordsketch/<name>@X.Y.Z' is not in this registry.
+npm error 404 Not Found - PUT https://registry.npmjs.org/<package-name>
+npm error 404  '<package-name>@X.Y.Z' is not in this registry.
 ```
 
-This persists even with a Granular Token configured for **scope-level
-read+write on `@chordsketch`** AND **read+write on the `chordsketch` org**.
-The exact mechanism is unclear (likely a Granular token permission gap not
-exposed in the npm UI).
+This was confirmed for both `@chordsketch/wasm` (2026-04-07) and
+`tree-sitter-chordpro` (2026-04-14, #1744). The exact mechanism is
+unclear (likely a Granular token permission gap not exposed in the npm
+UI).
 
-**Workaround** — manual local publish from a machine authenticated to npm
-as the account that owns the `@chordsketch` scope:
+**Workaround** — manual local publish for the first version only:
 
 ```bash
-cd packages/npm
-npm run build           # builds web/ + node/ subdirs (dual package)
-npm whoami              # must print the npm account that owns @chordsketch
+cd <package-directory>
+npm whoami              # must print the npm account that owns the package/scope
 # if not logged in: npm login (interactive 2FA OTP via browser)
-npm publish
-npm view @chordsketch/wasm version    # verify
+npm publish --access public
+npm view <package-name> version    # verify
 ```
 
-After the first version of a package exists, subsequent version bumps **may**
-work via CI but should be tried with low expectations and manual fallback
-available. As of the 2026-04-07 session, even an existing-package version
-bump (`@chordsketch/wasm@0.1.0` → `0.1.1`) failed via CI with the same 404
-and was published manually.
+Once the package exists on the registry, the CI workflow handles all
+subsequent version bumps automatically (confirmed with
+`tree-sitter-chordpro` in #1744).
 
 ### New GHCR packages are private by default
 
@@ -699,3 +696,69 @@ exceeds the value, the channel can be downgraded by flipping every napi
 entry in `ci/release-channels.toml` to `expected_version = "skip"` with a
 `skip_reason` — that is the supported way to pause a channel without
 deleting its infrastructure.
+
+## Adding a New npm Package
+
+When adding a new npm package to the project (scoped or unscoped), the
+following procedure sets up automated CI publishing. This was established
+during `tree-sitter-chordpro` (#1744) and applies to any future npm
+package.
+
+### Step-by-step
+
+1. **Create the publish workflow** at
+   `.github/workflows/npm-publish-<name>.yml`:
+   - Use `npm-publish.yml` (the `@chordsketch/wasm` workflow) as a
+     template
+   - Triggers: `release: [published]` and `workflow_dispatch` with a
+     `version` input
+   - Environment: `npm` (gates access to `NPM_TOKEN`)
+   - Include the duplicate-publish check (skip if version already exists)
+   - Use `--access public` on the `npm publish` command
+   - If no build step is needed (e.g., pre-committed generated files),
+     omit the build steps
+
+2. **Add a channel entry** to `ci/release-channels.toml`:
+   ```toml
+   [[channels]]
+   id = "npm-<short-name>"
+   display = "npm — <package-name>"
+   kind = "npm"
+   package = "<package-name>"
+   expected_version = "tag"
+   required_secrets = ["NPM_TOKEN"]
+   ```
+
+3. **Add the package to the version bump list** in `docs/releasing.md`
+   under "Non-Rust manifests" in the Release Checklist.
+
+4. **Add to version-consistency tracking** — two files must be updated:
+   - `scripts/check-version-consistency.py`: add a
+     `load_package_json_version()` call in `load_all_sources()`
+   - `scripts/test_check_version_consistency.py`: add the package to the
+     `_build_repo()` fixture builder so unit tests create the file in
+     their temp directories
+
+5. **Sync the package version** with the workspace version (currently
+   0.2.0), or add an entry to `ci/version-skew-allowlist.toml` if the
+   skew is intentional.
+
+6. **Regenerate any derived files** if the version is embedded in them
+   (e.g., tree-sitter `src/parser.c` includes the version from
+   `package.json`; run `tree-sitter generate` after bumping).
+
+7. **Merge the PR** with the workflow and infrastructure changes.
+
+8. **Manually publish the first version** — the CI Granular token cannot
+   create new packages (see "Known Operational Quirks" above):
+   ```bash
+   cd <package-directory>
+   npm publish --access public
+   ```
+
+9. **Verify CI works** by re-triggering the workflow with the same
+   version. It should succeed and skip the publish (already exists):
+   ```bash
+   gh workflow run npm-publish-<name>.yml \
+     -R koedame/chordsketch -f version=X.Y.Z
+   ```
