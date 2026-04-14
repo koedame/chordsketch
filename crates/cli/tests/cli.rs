@@ -290,16 +290,17 @@ fn test_config_file() {
 
 #[test]
 fn test_config_nonexistent_file() {
+    let nonexistent = {
+        let f = NamedTempFile::new().unwrap();
+        f.path().to_string_lossy().to_string()
+    };
     Command::cargo_bin("chordsketch")
         .unwrap()
-        .args([
-            "--config",
-            "/nonexistent/chordpro-test-config.json",
-            &fixture("simple.cho"),
-        ])
+        .args(["--config", &nonexistent, &fixture("simple.cho")])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("error:"));
+        .stderr(predicate::str::contains("error:"))
+        .stderr(predicate::str::contains(&nonexistent));
 }
 
 #[test]
