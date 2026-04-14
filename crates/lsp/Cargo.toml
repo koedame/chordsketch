@@ -8,6 +8,8 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 keywords.workspace = true
+categories = ["development-tools", "text-processing"]
+readme = "README.md"
 description = "Language Server Protocol server for ChordPro files"
 
 [[bin]]
