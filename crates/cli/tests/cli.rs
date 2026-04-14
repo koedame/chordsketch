@@ -624,7 +624,9 @@ fn test_convert_abc() {
         .args(["convert", &fixture("simple.abc"), "--from", "abc"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("{title: Simple ABC Tune}"));
+        .stdout(predicate::str::contains("{title: Simple ABC Tune}"))
+        .stdout(predicate::str::contains("[C]"))
+        .stdout(predicate::str::contains("[G]"));
 }
 
 #[test]
@@ -701,6 +703,20 @@ fn test_convert_nonexistent_file() {
     Command::cargo_bin("chordsketch")
         .unwrap()
         .args(["convert", "/tmp/nonexistent-chordpro-convert-test.txt"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error:"))
+        .stderr(predicate::str::contains(
+            "nonexistent-chordpro-convert-test",
+        ));
+}
+
+#[test]
+fn test_convert_musicxml_import_wrong_format() {
+    // Feeding a plaintext file with --from musicxml should fail.
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args(["convert", &fixture("plain.txt"), "--from", "musicxml"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("error:"));
