@@ -142,11 +142,11 @@ println!("{text}");
 | [`chordsketch-render-html`](crates/render-html) | HTML renderer |
 | [`chordsketch-render-pdf`](crates/render-pdf) | PDF renderer |
 | [`chordsketch-convert-musicxml`](crates/convert-musicxml) | MusicXML ↔ ChordPro bidirectional converter |
-| [`chordsketch`](crates/cli) | Command-line tool |
-| [`chordsketch-lsp`](crates/lsp) | Language Server Protocol server |
 | [`chordsketch-wasm`](crates/wasm) | WebAssembly bindings via wasm-bindgen |
 | [`chordsketch-ffi`](crates/ffi) | UniFFI bindings for Python, Ruby, Swift, and Kotlin |
 | [`chordsketch-napi`](crates/napi) | Native Node.js addon via napi-rs |
+| [`chordsketch`](crates/cli) | Command-line tool |
+| [`chordsketch-lsp`](crates/lsp) | Language Server Protocol server |
 
 ### Packages
 
