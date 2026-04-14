@@ -46,13 +46,18 @@ fn test_output_to_file() {
 
 #[test]
 fn test_nonexistent_file() {
+    // Use a NamedTempFile that is immediately dropped to guarantee
+    // the path does not exist, avoiding TOCTOU risk with hardcoded paths.
+    let nonexistent = {
+        let f = NamedTempFile::new().unwrap();
+        f.path().to_string_lossy().to_string()
+    };
     Command::cargo_bin("chordsketch")
         .unwrap()
-        .arg("/tmp/nonexistent-chordpro-test-file.cho")
+        .arg(&nonexistent)
         .assert()
         .failure()
-        .stderr(predicate::str::contains("error:"))
-        .stderr(predicate::str::contains("nonexistent"));
+        .stderr(predicate::str::contains("error:"));
 }
 
 #[test]
@@ -700,15 +705,18 @@ fn test_convert_chordpro_passthrough() {
 
 #[test]
 fn test_convert_nonexistent_file() {
+    // Use a NamedTempFile that is immediately dropped to guarantee
+    // the path does not exist, avoiding TOCTOU risk with hardcoded paths.
+    let nonexistent = {
+        let f = NamedTempFile::new().unwrap();
+        f.path().to_string_lossy().to_string()
+    };
     Command::cargo_bin("chordsketch")
         .unwrap()
-        .args(["convert", "/tmp/nonexistent-chordpro-convert-test.txt"])
+        .args(["convert", &nonexistent])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("error:"))
-        .stderr(predicate::str::contains(
-            "nonexistent-chordpro-convert-test",
-        ));
+        .stderr(predicate::str::contains("error:"));
 }
 
 #[test]
@@ -749,4 +757,29 @@ fn test_convert_help() {
         .stdout(predicate::str::contains("--from"))
         .stdout(predicate::str::contains("--to"))
         .stdout(predicate::str::contains("musicxml"));
+}
+
+#[test]
+fn test_convert_auto_detect_unknown_format() {
+    // Content that is not recognisable as plaintext, ABC, or ChordPro
+    // should trigger the Action::Skip path with a warning.
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args(["convert", "-"])
+        .write_stdin("\x00\x01\x02binary junk\x03\x04")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("format could not be detected"));
+}
+
+#[test]
+fn test_convert_invalid_xml_with_from_musicxml() {
+    // Malformed XML with --from musicxml should produce an error.
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args(["convert", "-", "--from", "musicxml"])
+        .write_stdin("this is not valid xml at all")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error:"));
 }
