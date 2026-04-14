@@ -9,6 +9,7 @@ repository.workspace = true
 homepage.workspace = true
 keywords = ["musicxml", "chordpro", "music", "converter"]
 categories = ["parser-implementations", "text-processing"]
+readme = "README.md"
 description = "MusicXML ↔ ChordPro bidirectional converter"
 
 [dependencies]
