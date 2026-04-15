@@ -49,6 +49,8 @@ Or add via Xcode: **File → Add Package Dependencies**, enter
 
 ### CocoaPods
 
+[![CocoaPods](https://img.shields.io/cocoapods/v/ChordSketch)](https://cocoapods.org/pods/ChordSketch)
+
 Add to your `Podfile`:
 
 ```ruby

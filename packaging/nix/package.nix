@@ -6,14 +6,9 @@
 #
 # Before submitting, update:
 #   - `version` to match the latest release tag
-#   - `hash` to match the source tarball (see instructions below)
-#   - `cargoHash` to match the vendored dependencies
-#
-# To compute the hashes:
-#   nix-prefetch-url --unpack \
-#     https://github.com/koedame/chordsketch/archive/refs/tags/v${version}.tar.gz
-#   # For cargoHash, set it to "" first, run `nix-build`, and copy the
-#   # hash from the error message.
+#   - `hash` and `cargoHash` — leave both as "" initially, run
+#     `nix-build`, and copy the SRI hashes from the error messages.
+#   - `maintainers` — add your nixpkgs maintainer handle
 
 {
   lib,
@@ -29,20 +24,26 @@ rustPlatform.buildRustPackage rec {
     owner = "koedame";
     repo = "chordsketch";
     tag = "v${version}";
-    hash = ""; # TODO: compute with nix-prefetch-url --unpack
+    hash = ""; # leave empty; build once and copy the SRI hash from the error
   };
 
-  cargoHash = ""; # TODO: set to "" and build to get the correct hash
+  cargoHash = ""; # leave empty; build once and copy the SRI hash from the error
 
   cargoBuildFlags = [ "--package" "chordsketch" ];
   cargoTestFlags = [ "--package" "chordsketch" ];
 
   meta = {
-    description = "ChordPro file format parser and renderer (text, HTML, PDF)";
+    description = "ChordPro file format renderer and CLI (text, HTML, PDF)";
     homepage = "https://github.com/koedame/chordsketch";
     changelog = "https://github.com/koedame/chordsketch/blob/main/CHANGELOG.md";
     license = lib.licenses.mit;
     maintainers = [ ]; # TODO: add your nixpkgs maintainer handle
     mainProgram = "chordsketch";
+    platforms = [
+      "x86_64-linux"
+      "aarch64-linux"
+      "x86_64-darwin"
+      "aarch64-darwin"
+    ];
   };
 }
