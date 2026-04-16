@@ -174,10 +174,11 @@ Publishing order:
 2. `chordsketch-render-text` (depends on `chordsketch-core`)
 3. `chordsketch-render-html` (depends on `chordsketch-core`)
 4. `chordsketch-render-pdf` (depends on `chordsketch-core`)
-5. `chordsketch` (depends on all four above)
+5. `chordsketch-convert-musicxml` (depends on `chordsketch-core`)
+6. `chordsketch` (depends on all five above)
 
-Steps 2-4 can be published in any order among themselves, but all must complete
-before step 5.
+Steps 2-5 can be published in any order among themselves, but all must complete
+before step 6.
 
 ## Distribution Channels
 
@@ -192,7 +193,7 @@ When adding a new channel, update both.
 
 | Channel | Identifier | Trigger | Required secret(s) | Verified by |
 |---|---|---|---|---|
-| crates.io | `chordsketch` (CLI) + 4 lib crates | manual `cargo publish` (Step 6) | maintainer's `~/.cargo/credentials` | `cargo-install` job |
+| crates.io | `chordsketch` (CLI) + 5 lib crates | manual `cargo publish` (Step 6) | maintainer's `~/.cargo/credentials` | `cargo-install` job |
 | GitHub Releases | binary archives | `release.yml` on tag push | `GITHUB_TOKEN` | `source-build` job |
 | GHCR | `ghcr.io/koedame/chordsketch` | `docker.yml` on `release: published` | `GITHUB_TOKEN` (push), org policy must allow public packages | `docker-ghcr` job |
 | Docker Hub | `docker.io/koedame/chordsketch` | `docker.yml` on `release: published` | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | `docker-hub` job |
