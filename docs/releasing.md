@@ -184,6 +184,7 @@ When adding a new channel, update both.
 | Homebrew tap | `koedame/tap/chordsketch` | `post-release.yml` on `release: published` | `TAP_GITHUB_TOKEN` | `homebrew` job |
 | Scoop bucket | `koedame/scoop-bucket/chordsketch` | `post-release.yml` on `release: published` | `TAP_GITHUB_TOKEN` | `scoop` job |
 | AUR | `chordsketch` | `post-release.yml` on `release: published` | `AUR_SSH_KEY` | `aur` rollup entry |
+| Chocolatey | `chordsketch` | `post-release.yml` on `release: published` (windows-latest) | `CHOCOLATEY_API_KEY` | `chocolatey` rollup entry |
 | Snap Store | `chordsketch` | `post-release.yml` on `release: published` | `SNAP_STORE_TOKEN` | `snap` rollup entry |
 | nixpkgs | `pkgs.chordsketch` | manual PR to `NixOS/nixpkgs` | none | `nixpkgs` rollup entry |
 | winget | `koedame.chordsketch` | manual PR to `microsoft/winget-pkgs` (Step 8) | none (uses your `gh` token to fork+push) | `winget` job |
@@ -358,6 +359,7 @@ After the release workflow completes and the GitHub Release is published:
 | `DOCKERHUB_USERNAME` | string | Docker Hub username under which images are pushed (currently `koedame`) |
 | `DOCKERHUB_TOKEN` | Docker Hub Personal Access Token, "Read & Write" | Authenticate `docker push` against `docker.io/koedame/chordsketch` from `docker.yml` |
 | `NPM_TOKEN` | npm Granular Access Token, scope `@chordsketch` Read & Write, org `chordsketch` Read & Write | ⚠️ Authenticate `npm publish` against the `@chordsketch/*` scope from `npm-publish.yml`. The org-level grant is the **empirically working** configuration, not necessarily the minimal one — see "npm publish via CI" quirk below for what we tried. Narrowing the scope is an open question; if you experiment with it, file a follow-up issue and link results back here. |
+| `CHOCOLATEY_API_KEY` | Chocolatey Community Repository API key | Authenticate `choco push` from `post-release.yml` (windows-latest runner) |
 | `AUR_SSH_KEY` | ed25519 SSH private key registered with AUR account `koedame` | Authenticate `git push` to `ssh://aur@aur.archlinux.org/chordsketch.git` from `post-release.yml` |
 | `SNAP_STORE_TOKEN` | Snapcraft exported credentials (`snapcraft export-login`) | Authenticate `snapcraft upload` + `snapcraft release` from `post-release.yml` |
 | `COCOAPODS_TRUNK_TOKEN` | CocoaPods trunk session token (from `~/.netrc` after `pod trunk register`) | Authenticate `pod trunk push` from `post-release.yml` |
@@ -379,6 +381,7 @@ following as the rotation policy:
 | `NPM_TOKEN` | Every 90 days, or immediately if the value has ever been pasted into chat / shared logs | <https://www.npmjs.com/settings/~/tokens> (sign in as the npm account that owns `@chordsketch`) |
 | `DOCKERHUB_TOKEN` | Every 90 days | <https://hub.docker.com/settings/security> |
 | `TAP_GITHUB_TOKEN` | Every 90 days, or whenever the issuing GitHub account changes 2FA / recovery setup | <https://github.com/settings/tokens> |
+| `CHOCOLATEY_API_KEY` | Only if regenerated on chocolatey.org | <https://community.chocolatey.org/account> → API Key → copy, then `gh secret set CHOCOLATEY_API_KEY` |
 | `AUR_SSH_KEY` | Only if the key is compromised or the AUR account changes | <https://aur.archlinux.org/account/koedame> (replace SSH public key, then `gh secret set AUR_SSH_KEY < new_key`) |
 | `SNAP_STORE_TOKEN` | Before expiry date (check current expiry with `snapcraft whoami`) | `snapcraft export-login ~/snap-token.txt && gh secret set SNAP_STORE_TOKEN < ~/snap-token.txt && rm -f ~/snap-token.txt` |
 | `COCOAPODS_TRUNK_TOKEN` | Sessions last ~4 months; re-register if expired | `pod trunk register <email> <name>`, confirm email, then pipe token directly: `grep -A2 trunk.cocoapods.org ~/.netrc \| awk '/password/{print $2}' \| gh secret set COCOAPODS_TRUNK_TOKEN` |
@@ -825,6 +828,26 @@ Set up on 2026-04-15. Automated via `post-release.yml` `update-aur`.
    ```bash
    gh secret set AUR_SSH_KEY -R koedame/chordsketch < ~/.ssh/aur_key
    ```
+
+### Chocolatey (Windows)
+
+Set up on 2026-04-16. Automated via `post-release.yml` `update-chocolatey`.
+
+The CI job runs on `windows-latest` where `choco` is pre-installed.
+No local Windows machine is needed.
+
+1. Create an account at <https://community.chocolatey.org/account/Register>.
+   Confirm the email verification link.
+2. Log in and copy the API key from
+   <https://community.chocolatey.org/account>.
+3. Store the API key as a GitHub secret:
+   ```bash
+   gh secret set CHOCOLATEY_API_KEY -R koedame/chordsketch
+   # Paste the API key when prompted
+   ```
+4. The `post-release.yml` `update-chocolatey` job handles building the
+   `.nupkg` from the template and pushing to the Chocolatey Community
+   Repository on each release. No manual `choco push` is needed.
 
 ### Snap Store
 

@@ -135,6 +135,38 @@ required_secrets = []
 notes = "Updated by .github/workflows/post-release.yml via PR to koedame/scoop-bucket."
 
 [[channels]]
+id = "chocolatey"
+display = "Chocolatey — chordsketch"
+kind = "manual"
+package = "chordsketch"
+expected_version = "tag"
+required_secrets = ["CHOCOLATEY_API_KEY"]
+notes = """
+Published by post-release.yml update-chocolatey job on windows-latest.
+First publish will happen on the next release (v0.2.0 was published
+before the CHOCOLATEY_API_KEY secret was configured). kind = "manual"
+because no automated _check_chocolatey verifier exists yet.
+"""
+
+[[channels]]
+id = "aur"
+display = "AUR — chordsketch"
+kind = "manual"
+package = "chordsketch"
+expected_version = "tag"
+required_secrets = ["AUR_SSH_KEY"]
+notes = "Published by post-release.yml update-aur job via SSH push."
+
+[[channels]]
+id = "snap"
+display = "Snap Store — chordsketch"
+kind = "manual"
+package = "chordsketch"
+expected_version = "tag"
+required_secrets = ["SNAP_STORE_TOKEN"]
+notes = "Published by post-release.yml update-snap job. Strict confinement."
+
+[[channels]]
 id = "nixpkgs"
 display = "nixpkgs — pkgs.chordsketch"
 kind = "manual"
