@@ -213,7 +213,7 @@ When adding a new channel, update both.
 | GitHub Releases | binary archives | `release.yml` on tag push | `GITHUB_TOKEN` | `source-build` job |
 | GHCR | `ghcr.io/koedame/chordsketch` | `docker.yml` on `release: published` | `GITHUB_TOKEN` (push), org policy must allow public packages | `docker-ghcr` job |
 | Docker Hub | `docker.io/koedame/chordsketch` | `docker.yml` on `release: published` | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | `docker-hub` job |
-| npm (wasm) | `@chordsketch/wasm` | `npm-publish.yml` `workflow_dispatch` (Step 7) | `NPM_TOKEN` (Granular Token, see quirks) | `npm-wasm` job |
+| npm (wasm) | `@chordsketch/wasm` | manual local `npm publish` (Step 7) — CI cannot publish new packages (see quirks) | `NPM_TOKEN` (Granular Token, see quirks) | `npm-wasm` job |
 | npm (napi) | `@chordsketch/node` + 5 prebuilt platform packages | `napi.yml` on `release: published` | `NPM_TOKEN` | `napi-node` job |
 | npm (tree-sitter) | `tree-sitter-chordpro` | `npm-publish-tree-sitter.yml` on `release: published` | `NPM_TOKEN` | `npm-tree-sitter` rollup entry |
 | Homebrew tap | `koedame/tap/chordsketch` | `post-release.yml` on `release: published` | `TAP_GITHUB_TOKEN` | `homebrew` job |
