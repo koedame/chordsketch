@@ -235,7 +235,12 @@ jobs:
           gh release download "$TAG" -R koedame/chordsketch \
             --pattern "$ARCHIVE" \
             --pattern "checksums.txt"
-          grep -E "[[:space:]]${ARCHIVE}\$" checksums.txt | sha256sum -c -
+          # Exact-filename match: extract the checksum line whose second
+          # whitespace-separated field equals $ARCHIVE, rather than a regex
+          # match where dots in ARCHIVE would match any char. Then pipe the
+          # single canonical line to `sha256sum -c -` for verification.
+          awk -v a="$ARCHIVE" '$2 == a { print; found = 1 } END { exit !found }' \
+            checksums.txt | sha256sum -c -
           SERVER_DIR="packages/vscode-extension/server/${SERVER_SUBDIR}"
           mkdir -p "$SERVER_DIR"
           BIN="chordsketch-lsp${EXT}"
@@ -340,18 +345,27 @@ jobs:
           path: packages/vscode-extension/
 
       - name: Verify expected VSIX count before publishing
-        # Fail closed when a platform is missing rather than silently shipping
+        # Fail closed when any platform is missing rather than silently shipping
         # an incomplete set. build-platform is fail-fast: false, so a single
-        # missing release asset would otherwise still let the other 6 publish
-        # and leave one platform's users falling back to the universal VSIX
-        # (no bundled LSP — the regression #1786 was meant to close).
+        # missing release asset would otherwise still let the remaining
+        # platforms publish and leave the affected platform's users falling back
+        # to the universal VSIX (no bundled LSP — the regression #1786 was
+        # meant to close).
+        # NOTE: EXPECTED must be updated whenever a target is added or removed
+        # from the build-platform matrix. 1 universal + N platform entries = N+1.
         working-directory: packages/vscode-extension
         run: |
           set -euo pipefail
-          count=$(ls -1 *.vsix 2>/dev/null | wc -l)
-          if [ "$count" -ne 8 ]; then
-            echo "Expected 1 universal + 7 platform VSIXes (=8), got $count:" >&2
-            ls -1 *.vsix >&2 || true
+          EXPECTED=8
+          # nullglob makes *.vsix expand to nothing rather than the literal
+          # pattern when no files match, so the count step doesn't abort
+          # under pipefail before printing its diagnostic.
+          shopt -s nullglob
+          files=(*.vsix)
+          count=${#files[@]}
+          if [ "$count" -ne "$EXPECTED" ]; then
+            echo "Expected $EXPECTED VSIXes (1 universal + 7 platform), got $count:" >&2
+            printf '  %s\n' "${files[@]}" >&2
             exit 1
           fi
 
