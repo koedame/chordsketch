@@ -42,6 +42,15 @@ jobs:
   build-target:
     name: Build ${{ matrix.target }}
     runs-on: macos-latest
+    # Intentionally fail-closed: if any Apple target fails, the
+    # downstream `assemble-xcframework` + `publish` jobs are skipped.
+    # XCFramework is a sealed container of per-platform static
+    # libraries; missing a triple produces an incomplete framework
+    # that breaks Swift consumers on that platform at link time.
+    # Blocking the release until every cell succeeds is the safer
+    # failure mode. Contrast with `vscode-extension.yml
+    # build-platform`, which has a universal VSIX fallback (#1795).
+    # See #1806.
     strategy:
       matrix:
         include:
