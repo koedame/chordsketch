@@ -156,6 +156,7 @@ at post-release verification rather than before the tag is cut.
    gh workflow run docker.yml                -f tag=v$V    -R koedame/chordsketch
    gh workflow run vscode-extension.yml      -f tag=v$V    -R koedame/chordsketch
    gh workflow run napi.yml                  -f tag=v$V    -R koedame/chordsketch
+   gh workflow run release-verify.yml        -f tag=v$V    -R koedame/chordsketch
    ```
    ⚠️ **napi** (`@chordsketch/node-*`): the CI workflow will likely fail
    with 404 due to the same granular token limitation. napi publish
@@ -169,8 +170,14 @@ at post-release verification rather than before the tag is cut.
    ```
    Check that post-release.yml updates Homebrew, Scoop, AUR, Snap,
    Chocolatey, CocoaPods, Swift, and Flathub. Docker pushes to both
-   GHCR and Docker Hub. VS Code publishes to Marketplace (and Open VSX
-   if `OPEN_VSX_TOKEN` is configured).
+   GHCR and Docker Hub. VS Code publishes **8 VSIXes per release**
+   (1 universal + 7 platform-specific: `linux-x64`, `linux-arm64`,
+   `darwin-x64`, `darwin-arm64`, `win32-x64`, `alpine-x64`,
+   `alpine-arm64`, see #1789) to both the Marketplace and Open VSX
+   (if `OPEN_VSX_TOKEN` is configured). The Marketplace "Version
+   History" page and a listing of release artifacts matching
+   `chordsketch-*.vsix` should both show 8 entries for the new
+   version.
 
 10. **Submit winget-pkgs PR**: see "Post-Release > winget" below. This is the
    only post-release step that involves an external repo (`microsoft/winget-pkgs`).
@@ -213,7 +220,7 @@ When adding a new channel, update both.
 | GitHub Releases | binary archives | `release.yml` on tag push | `GITHUB_TOKEN` | `source-build` job |
 | GHCR | `ghcr.io/koedame/chordsketch` | `docker.yml` on `release: published` | `GITHUB_TOKEN` (push), org policy must allow public packages | `docker-ghcr` job |
 | Docker Hub | `docker.io/koedame/chordsketch` | `docker.yml` on `release: published` | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | `docker-hub` job |
-| npm (wasm) | `@chordsketch/wasm` | `npm-publish.yml` `workflow_dispatch` (Step 7) | `NPM_TOKEN` (Granular Token, see quirks) | `npm-wasm` job |
+| npm (wasm) | `@chordsketch/wasm` | manual local `npm publish` (Step 7) — CI cannot publish new packages (see quirks) | `NPM_TOKEN` (Granular Token, see quirks) | `npm-wasm` job |
 | npm (napi) | `@chordsketch/node` + 5 prebuilt platform packages | `napi.yml` on `release: published` | `NPM_TOKEN` | `napi-node` job |
 | npm (tree-sitter) | `tree-sitter-chordpro` | `npm-publish-tree-sitter.yml` on `release: published` | `NPM_TOKEN` | `npm-tree-sitter` rollup entry |
 | Homebrew tap | `koedame/tap/chordsketch` | `post-release.yml` on `release: published` | `TAP_GITHUB_TOKEN` | `homebrew` job |
@@ -223,7 +230,7 @@ When adding a new channel, update both.
 | Snap Store | `chordsketch` | `post-release.yml` on `release: published` | `SNAP_STORE_TOKEN` | `snap` rollup entry |
 | nixpkgs | `pkgs.chordsketch` | manual PR to `NixOS/nixpkgs` | none | `nixpkgs` rollup entry |
 | winget | `koedame.chordsketch` | manual PR to `microsoft/winget-pkgs` (Step 8) | none (uses your `gh` token to fork+push) | `winget` job |
-| VS Code Marketplace | `koedame.chordsketch` | `vscode-extension.yml` on `release: published` | `VSCE_PAT` (PAT, Marketplace Publish scope) | `vscode-marketplace` rollup entry |
+| VS Code Marketplace | `koedame.chordsketch` (1 universal + 7 platform-specific VSIXes, #1789) | `vscode-extension.yml` on `release: published` | `VSCE_PAT` (PAT, Marketplace Publish scope) | `vscode-marketplace` rollup entry |
 | PyPI | `chordsketch` | `python.yml` on tag push | none (OIDC trusted publisher) | `pypi` rollup entry |
 | RubyGems | `chordsketch` | `ruby.yml` on tag push | none (OIDC trusted publisher) | `rubygems` rollup entry |
 | Maven Central | `io.github.koedame:chordsketch` | `kotlin.yml` on tag push | `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `SIGNING_KEY`, `SIGNING_PASSWORD` | `maven-central` rollup entry |
@@ -336,8 +343,12 @@ After the release workflow completes and the GitHub Release is published:
    4. Wait for MacPorts CI and maintainer review.
 
 6. **Automated channel rollup** — `.github/workflows/release-verify.yml`
-   runs automatically on `release: published`, queries every registry
-   listed in `ci/release-channels.toml`, and appends a
+   has `on: release: types: [published]`, but like the other publish
+   workflows it does **not** auto-trigger when `release.yml` creates the
+   release with `GITHUB_TOKEN` (anti-recursion rule, see Known
+   Operational Quirks). Manual dispatch is included in step 8 of the
+   Release Checklist. Once dispatched, it queries every registry listed
+   in `ci/release-channels.toml` and appends a
    `## Channel Verification` section to the release body. Wait for that
    workflow to complete, then read the appended table on the GitHub Release
    page:
@@ -452,10 +463,11 @@ will work.
 anti-recursion rule prevents events created by `GITHUB_TOKEN` from
 triggering further workflows. This means every workflow with
 `on: release: types: [published]` — Docker, VS Code extension, napi,
-post-release, and the npm publish workflows — will NOT fire automatically.
+post-release, the npm publish workflows, and **release-verify** — will
+NOT fire automatically.
 
 **All of these must be manually dispatched via `gh workflow run` after
-step 5 of the Release Checklist.** See step 7 for the exact commands.
+step 5 of the Release Checklist.** See step 8 for the exact commands.
 
 Discovered during the v0.2.1 release (2026-04-16) when post-release
 automation (Homebrew, Scoop, AUR, Snap, Chocolatey, CocoaPods, Swift,
@@ -463,7 +475,7 @@ Flathub, Docker) silently did not run.
 
 Long-term fix: use a PAT or GitHub App token in `release.yml` instead
 of `GITHUB_TOKEN` so the release event propagates normally. This would
-eliminate step 7 entirely.
+eliminate step 8 entirely.
 
 ### npm publish via CI cannot create new packages (scoped or unscoped)
 
@@ -782,7 +794,9 @@ package.
      template
    - Triggers: `release: [published]` and `workflow_dispatch` with a
      `version` input
-   - Environment: `npm` (gates access to `NPM_TOKEN`)
+   - Do **not** add an `environment:` block — `NPM_TOKEN` is a repo-level
+     secret. An environment block was removed from `npm-publish.yml` in
+     #1791 to avoid stale deployment entries (see #1790).
    - Include the duplicate-publish check (skip if version already exists)
    - Use `--access public` on the `npm publish` command
    - If no build step is needed (e.g., pre-committed generated files),
@@ -983,12 +997,13 @@ The VS Code extension is published to both the VS Code Marketplace and
 the Open VSX Registry. Open VSX requires a separate account and token.
 
 1. Sign in at <https://open-vsx.org> with your GitHub account.
-2. Create a namespace matching the VS Code publisher name:
-   ```bash
-   npx ovsx create-namespace koedame -p <your-token>
-   ```
-3. Generate a personal access token at
+2. Generate a personal access token at
    <https://open-vsx.org/user-settings/tokens>.
+3. Create a namespace matching the VS Code publisher name, using the token
+   from the previous step:
+   ```bash
+   npx ovsx create-namespace koedame -p <token-from-step-2>
+   ```
 4. Store the token as an **environment secret** (not repo-level):
    ```bash
    gh secret set OPEN_VSX_TOKEN --env open-vsx -R koedame/chordsketch
