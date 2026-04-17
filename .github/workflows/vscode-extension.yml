@@ -218,7 +218,11 @@ jobs:
           # Extraction below uses `unzip -j` and `tar --strip-components=1` to
           # normalise both into SERVER_DIR. `-j` is defense-in-depth against a
           # future release.yml refactor that reintroduces a wrapping directory.
-          if [ "$VS_TARGET" = "win32-x64" ]; then
+          # Use EXT (.exe on Windows targets) as the archive-format discriminator
+          # so adding a future target like win32-arm64 "just works" — the
+          # previous `VS_TARGET = win32-x64` check would silently download
+          # .tar.gz for a new Windows cell and fail extraction.
+          if [ "$EXT" = ".exe" ]; then
             ARCHIVE="chordsketch-${TAG}-${RT}.zip"
           else
             ARCHIVE="chordsketch-${TAG}-${RT}.tar.gz"
