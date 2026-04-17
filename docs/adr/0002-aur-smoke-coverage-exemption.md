@@ -1,9 +1,3 @@
----
-name: ADR 0002 — AUR install command is exempt from readme-smoke coverage
-description: Captures why `yay -S chordsketch` has no end-to-end smoke job and what instead verifies AUR package correctness.
-type: adr
----
-
 # 0002. AUR install command is exempt from readme-smoke coverage
 
 - **Status**: Accepted
