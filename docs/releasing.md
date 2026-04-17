@@ -983,12 +983,13 @@ The VS Code extension is published to both the VS Code Marketplace and
 the Open VSX Registry. Open VSX requires a separate account and token.
 
 1. Sign in at <https://open-vsx.org> with your GitHub account.
-2. Create a namespace matching the VS Code publisher name:
-   ```bash
-   npx ovsx create-namespace koedame -p <your-token>
-   ```
-3. Generate a personal access token at
+2. Generate a personal access token at
    <https://open-vsx.org/user-settings/tokens>.
+3. Create a namespace matching the VS Code publisher name, using the token
+   from the previous step:
+   ```bash
+   npx ovsx create-namespace koedame -p <token-from-step-2>
+   ```
 4. Store the token as an **environment secret** (not repo-level):
    ```bash
    gh secret set OPEN_VSX_TOKEN --env open-vsx -R koedame/chordsketch
