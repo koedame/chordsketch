@@ -11,7 +11,7 @@ inputs:
   tag:
     description: >
       The tag string to validate. Caller should usually pass
-      `${{ inputs.tag || github.event.release.tag_name || github.ref_name }}`
+      `$${{ inputs.tag || github.event.release.tag_name || github.ref_name }}`
       so all three entry points are covered.
     required: true
 runs:
