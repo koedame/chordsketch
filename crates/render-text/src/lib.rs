@@ -3,9 +3,9 @@
 //! This crate converts a parsed ChordPro AST (from `chordsketch-core`) into
 //! formatted plain text with chords aligned above their corresponding lyrics.
 
-use chordsketch_core::ast::{CapoValidation, CommentStyle, DirectiveKind, Line, LyricsLine, Song};
+use chordsketch_core::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
 use chordsketch_core::config::Config;
-use chordsketch_core::render_result::RenderResult;
+use chordsketch_core::render_result::{RenderResult, push_warning, validate_capo};
 use chordsketch_core::resolve_diagrams_instrument;
 use chordsketch_core::transpose::transpose_chord;
 use unicode_width::UnicodeWidthStr;
@@ -15,47 +15,11 @@ use unicode_width::UnicodeWidthStr;
 const MAX_CHORUS_RECALLS: usize = 1000;
 
 /// Maximum number of warnings the renderer will accumulate for a single
-/// render pass (issue #1833). Without a cap, a pathological input such as
-/// one million malformed `{transpose}` lines can push the warnings vector
-/// to tens of megabytes. `push_warning` refuses to exceed this limit and
-/// appends a single truncation marker the first time the cap is hit.
-pub const MAX_WARNINGS: usize = 1000;
-
-/// Push a warning into the renderer's accumulator, enforcing
-/// [`MAX_WARNINGS`]. Once the cap is reached the function pushes a
-/// single truncation marker in place of the overflowing warning and
-/// silently ignores every subsequent warning in the same pass.
-fn push_warning(warnings: &mut Vec<String>, message: impl Into<String>) {
-    if warnings.len() < MAX_WARNINGS {
-        warnings.push(message.into());
-    } else if warnings.len() == MAX_WARNINGS {
-        warnings.push(format!(
-            "additional warnings suppressed; MAX_WARNINGS ({MAX_WARNINGS}) reached"
-        ));
-    }
-}
-
-/// Validate `{capo}` at the render boundary and push a warning for any
-/// value that is not in `1..=24`. Matches the check applied in the HTML
-/// and PDF renderers per `.claude/rules/renderer-parity.md` §Validation
-/// Parity (issue #1834).
-fn validate_capo(metadata: &chordsketch_core::ast::Metadata, warnings: &mut Vec<String>) {
-    match metadata.capo_validated() {
-        CapoValidation::Unset | CapoValidation::Valid(_) => {}
-        CapoValidation::OutOfRange(n) => {
-            push_warning(
-                warnings,
-                format!("{{capo}} value {n} out of range (expected 1..=24); ignored"),
-            );
-        }
-        CapoValidation::NotInteger(raw) => {
-            push_warning(
-                warnings,
-                format!("{{capo}} value {raw:?} is not a valid integer; ignored"),
-            );
-        }
-    }
-}
+/// render pass. Re-exported from the canonical location in
+/// `chordsketch-core::render_result` so existing downstream callers can
+/// keep importing `chordsketch_render_text::MAX_WARNINGS` unchanged
+/// (issue #1874).
+pub use chordsketch_core::render_result::MAX_WARNINGS;
 
 /// Render a [`Song`] AST to plain text.
 ///
