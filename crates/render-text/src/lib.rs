@@ -1394,6 +1394,14 @@ mod delegate_tests {
             !result.output.contains("[Image"),
             "file: src must not reach text output"
         );
+        // Sister-site parity with `test_render_image_dangerous_scheme_rejected`:
+        // silent rejection is not enough — the renderer must surface a
+        // warning so users know the `{image}` directive was dropped.
+        assert!(
+            result.warnings.iter().any(|w| w.contains("file")),
+            "expected a warning mentioning the rejected src; got {:?}",
+            result.warnings
+        );
     }
 
     // -- {capo} validation parity (#1834) ---------------------------------
