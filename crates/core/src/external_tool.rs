@@ -272,10 +272,30 @@ const DANGEROUS_SCHEME_FUNCTIONS: &[&str] = &[
     // as a string. Block as defense-in-depth (#1844).
     "ly:gulp-string",
     "gulp-string",
-    // ly:format can emit attacker-controlled strings into the compiled
-    // output and, in combination with other primitives, enable format-string
-    // tricks against downstream processors. Defense-in-depth only (#1844).
-    "ly:format",
+    // Note: `ly:format` was removed from this list in #1859. It is a
+    // standard Guile `format`-equivalent used in real scores
+    // (e.g. `#(ly:format "~a" (ly:context-property …))`), and
+    // stripping it silently drops entire lines of legitimate Scheme,
+    // producing confusing downstream errors.
+    //
+    // Honest accounting of what this change weakens: the pattern
+    // `#(ly:format "~a" (ly:gulp-file "/etc/passwd"))` — where the
+    // dangerous primitive appears as a bare subexpression without its
+    // own `#(` / `$(` sigil — is no longer caught by the line-level
+    // scanner. With `ly:format` on the blocklist the outer
+    // `#(ly:format` match triggered the line drop; after removal it
+    // does not, and the inner `(ly:gulp-file …)` has no sigil.
+    // We accept this because:
+    //   1. The primary sandbox is Lilypond's `-dsafe`, not this list.
+    //   2. The same bypass works with any other wrapper function
+    //      (`display`, `apply`, user-defined let-bindings, …), so
+    //      keeping `ly:format` on the list did not systematically
+    //      close the class of attack — only this one specific spelling.
+    //   3. The false-positive rate on legitimate content was real and
+    //      visible; the defense value is marginal and already
+    //      partial.
+    // Directly-sigiled dangerous primitives (`#(ly:gulp-file …)`,
+    // `$(ly:system …)`, etc.) remain blocked as before.
     // ly:exit terminates the Lilypond process; useful to a sandbox
     // attacker for masking tampering signals in batch pipelines (#1844).
     "ly:exit",
@@ -1008,11 +1028,25 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_lilypond_strips_ly_format() {
-        // #1844: ly:format may emit attacker-controlled strings.
+    fn sanitize_lilypond_preserves_ly_format() {
+        // #1859: `ly:format` is a legitimate Guile `format`-equivalent
+        // used in real scores; the compound threat that originally had
+        // it on the blocklist (combining it with `ly:gulp-file`,
+        // `ly:system`, `ly:parser-include`, …) already requires one of
+        // those primitives, all of which remain independently blocked.
+        // Lines that only use `ly:format` must pass through the
+        // sanitizer untouched so legitimate content is not silently
+        // truncated.
         let input = "#(ly:format \"~a\" \"x\")\n\\relative c' { c4 }\n";
         let result = super::sanitize_lilypond_content(input);
-        assert!(!result.contains("ly:format"));
+        assert!(
+            result.contains("ly:format"),
+            "ly:format on its own must be preserved; got {result:?}"
+        );
+        assert!(
+            result.contains("\\relative"),
+            "surrounding music content must also survive"
+        );
     }
 
     #[test]
