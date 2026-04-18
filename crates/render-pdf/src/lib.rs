@@ -14,7 +14,7 @@ use chordsketch_core::ast::{CommentStyle, DirectiveKind, ImageAttributes, Line, 
 use chordsketch_core::canonical_chord_name;
 use chordsketch_core::config::Config;
 use chordsketch_core::inline_markup::TextSpan;
-use chordsketch_core::render_result::RenderResult;
+use chordsketch_core::render_result::{RenderResult, push_warning, validate_capo};
 use chordsketch_core::resolve_diagrams_instrument;
 use chordsketch_core::transpose::transpose_chord;
 
@@ -432,47 +432,11 @@ const MAX_IMAGES: usize = 1_000;
 /// Prevents output amplification from malicious inputs with many `{chorus}` lines.
 const MAX_CHORUS_RECALLS: usize = 1000;
 
-/// Maximum number of warnings the renderer accumulates per render pass
-/// (issue #1833). Mirrors `MAX_WARNINGS` in the text and HTML renderers
-/// so the three backends apply the same resource bound on a malicious
-/// `.cho` that would otherwise produce millions of warnings.
-pub const MAX_WARNINGS: usize = 1000;
-
-/// Push a warning into the renderer's accumulator, enforcing
-/// [`MAX_WARNINGS`]. Once the cap is reached the function pushes a single
-/// truncation marker in place of the overflowing warning and silently
-/// ignores every subsequent warning in the same pass.
-fn push_warning(warnings: &mut Vec<String>, message: impl Into<String>) {
-    if warnings.len() < MAX_WARNINGS {
-        warnings.push(message.into());
-    } else if warnings.len() == MAX_WARNINGS {
-        warnings.push(format!(
-            "additional warnings suppressed; MAX_WARNINGS ({MAX_WARNINGS}) reached"
-        ));
-    }
-}
-
-/// Validate `{capo}` at the render boundary and push a warning for any
-/// value that is not in `1..=24` (issue #1834, renderer-parity.md
-/// §Validation Parity).
-fn validate_capo(metadata: &chordsketch_core::ast::Metadata, warnings: &mut Vec<String>) {
-    use chordsketch_core::ast::CapoValidation;
-    match metadata.capo_validated() {
-        CapoValidation::Unset | CapoValidation::Valid(_) => {}
-        CapoValidation::OutOfRange(n) => {
-            push_warning(
-                warnings,
-                format!("{{capo}} value {n} out of range (expected 1..=24); ignored"),
-            );
-        }
-        CapoValidation::NotInteger(raw) => {
-            push_warning(
-                warnings,
-                format!("{{capo}} value {raw:?} is not a valid integer; ignored"),
-            );
-        }
-    }
-}
+/// Maximum number of warnings the renderer accumulates per render pass.
+/// Re-exported from `chordsketch-core::render_result` so callers can
+/// keep importing `chordsketch_render_pdf::MAX_WARNINGS` unchanged
+/// (issue #1874).
+pub use chordsketch_core::render_result::MAX_WARNINGS;
 
 // ---------------------------------------------------------------------------
 // Public API
