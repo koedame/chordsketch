@@ -28,10 +28,6 @@ export interface StartableClient {
  * module-level client reference to `undefined`, and re-throws the original
  * error. This prevents the caller's module from leaking a half-initialized
  * client that a subsequent `stop()` would operate on.
- *
- * The caller is responsible for having already registered `client` with the
- * extension context's subscriptions (so VS Code will still clean it up at
- * deactivation even in the re-throw path).
  */
 export async function tryStartLanguageClient<C extends StartableClient>(
   client: C,
@@ -53,8 +49,8 @@ export async function tryStartLanguageClient<C extends StartableClient>(
 }
 
 /**
- * Run `start` inside a guard that catches any failure, logs it, notifies the
- * user, and returns `false` instead of propagating the error.
+ * Run `start` inside a guard that catches any failure, logs it, and notifies
+ * the user instead of propagating the error.
  *
  * Used by `activate()` to ensure an LSP initialization failure cannot abort
  * activation and leave the preview / transpose / convert commands
@@ -62,32 +58,28 @@ export async function tryStartLanguageClient<C extends StartableClient>(
  * user who invokes them).
  */
 export async function startLspClientSafely(params: {
-    /** The start action — typically `() => startLspClient(context)`. */
-    start: () => Promise<void>;
-    /** Called with any diagnostic line that should land in the LSP output channel. */
-    log: (message: string) => void;
-    /** Called once with a short user-facing message when start fails. */
-    notify: (message: string) => void;
-}): Promise<boolean> {
-    try {
-        await params.start();
-        return true;
-    } catch (err) {
-        const detail = formatError(err);
-        params.log(`Failed to start chordsketch-lsp: ${detail}`);
-        params.log(
-            'Preview and transpose/convert commands remain available.',
-        );
-        params.notify(
-            'ChordSketch: LSP failed to start — preview and transpose/convert commands remain available.',
-        );
-        return false;
-    }
+  /** The start action — typically `() => startLspClient(context)`. */
+  start: () => Promise<void>;
+  /** Called with any diagnostic line that should land in the LSP output channel. */
+  log: (message: string) => void;
+  /** Called once with a short user-facing message when start fails. */
+  notify: (message: string) => void;
+}): Promise<void> {
+  try {
+    await params.start();
+  } catch (err) {
+    const detail = formatError(err);
+    params.log(`Failed to start chordsketch-lsp: ${detail}`);
+    params.log('Preview and transpose/convert commands remain available.');
+    params.notify(
+      'ChordSketch: LSP failed to start — preview and transpose/convert commands remain available.',
+    );
+  }
 }
 
 function formatError(err: unknown): string {
-    if (err instanceof Error) {
-        return err.stack ?? `${err.name}: ${err.message}`;
-    }
-    return String(err);
+  if (err instanceof Error) {
+    return err.stack ?? `${err.name}: ${err.message}`;
+  }
+  return String(err);
 }
