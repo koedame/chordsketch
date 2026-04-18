@@ -2235,11 +2235,20 @@ impl PdfDocument {
 
     /// Validate and clamp a margin value. Returns the default if the value is
     /// negative, non-finite, or exceeds `MAX_MARGIN`.
+    ///
+    /// The warning push is routed through the module-level
+    /// [`push_warning`] helper so it participates in the `MAX_WARNINGS`
+    /// cap (issue #1873). Before this fix a pathological config that
+    /// already filled the warnings vector could produce up to
+    /// `MAX_WARNINGS + 1 + 4 * N` entries, where `N` is the number of
+    /// `from_config_with_warnings` calls per render. The extra 4-per-N
+    /// term came from this function bypassing the cap.
     fn validate_margin(value: f32, default: f32, name: &str, warnings: &mut Vec<String>) -> f32 {
         if !value.is_finite() || !(0.0..=Self::MAX_MARGIN).contains(&value) {
-            warnings.push(format!(
-                "invalid pdf.margins.{name} value {value}, using default {default}"
-            ));
+            push_warning(
+                warnings,
+                format!("invalid pdf.margins.{name} value {value}, using default {default}"),
+            );
             default
         } else {
             value
