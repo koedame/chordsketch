@@ -22,9 +22,45 @@ const MAX_INPUT_BYTES: u64 = 52_428_800;
 /// [`fs::metadata`] is used for an early, cheap size check that avoids
 /// loading oversized files into memory at all.
 #[must_use = "I/O errors from reading the file must be handled"]
+fn read_file_clamped(path: &str) -> Result<String, String> {
+    match fs::metadata(path) {
+        Ok(meta) if meta.len() > MAX_INPUT_BYTES => {
+            return Err(format!(
+                "file exceeds the {} MiB input limit",
+                MAX_INPUT_BYTES / (1024 * 1024)
+            ));
+        }
+        Err(e) => return Err(e.to_string()),
+        Ok(_) => {}
+    }
+    fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+/// Reads stdin into a [`String`], rejecting streams that exceed
+/// [`MAX_INPUT_BYTES`].
+///
+/// Uses [`Read::take`] to avoid buffering more than `MAX_INPUT_BYTES + 1`
+/// bytes; if the read fills the cap the stream is rejected without consuming
+/// the remainder.
+#[must_use = "I/O errors from reading stdin must be handled"]
+fn read_stdin_clamped() -> Result<String, String> {
+    let mut buf = String::new();
+    io::stdin()
+        .take(MAX_INPUT_BYTES + 1)
+        .read_to_string(&mut buf)
+        .map_err(|e| e.to_string())?;
+    if buf.len() as u64 > MAX_INPUT_BYTES {
+        return Err(format!(
+            "input exceeds the {} MiB input limit",
+            MAX_INPUT_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(buf)
+}
+
 /// Minimal JSON string escape for the `--warnings-json` output stream.
 ///
-/// Escapes the six characters mandated by RFC 8259 §7: `"`, `\`, and the
+/// Escapes the characters mandated by RFC 8259 §7: `"`, `\`, and the
 /// control range U+0000–U+001F (tab/LF/CR via their shorthand, the rest
 /// via `\uXXXX`). Avoids a `serde_json` dependency — the CLI currently
 /// has no serde in its dependency tree and we only need to serialize
@@ -62,42 +98,6 @@ fn emit_warning(as_json: bool, source: &str, message: &str) {
     } else {
         eprintln!("warning: {message}");
     }
-}
-
-fn read_file_clamped(path: &str) -> Result<String, String> {
-    match fs::metadata(path) {
-        Ok(meta) if meta.len() > MAX_INPUT_BYTES => {
-            return Err(format!(
-                "file exceeds the {} MiB input limit",
-                MAX_INPUT_BYTES / (1024 * 1024)
-            ));
-        }
-        Err(e) => return Err(e.to_string()),
-        Ok(_) => {}
-    }
-    fs::read_to_string(path).map_err(|e| e.to_string())
-}
-
-/// Reads stdin into a [`String`], rejecting streams that exceed
-/// [`MAX_INPUT_BYTES`].
-///
-/// Uses [`Read::take`] to avoid buffering more than `MAX_INPUT_BYTES + 1`
-/// bytes; if the read fills the cap the stream is rejected without consuming
-/// the remainder.
-#[must_use = "I/O errors from reading stdin must be handled"]
-fn read_stdin_clamped() -> Result<String, String> {
-    let mut buf = String::new();
-    io::stdin()
-        .take(MAX_INPUT_BYTES + 1)
-        .read_to_string(&mut buf)
-        .map_err(|e| e.to_string())?;
-    if buf.len() as u64 > MAX_INPUT_BYTES {
-        return Err(format!(
-            "input exceeds the {} MiB input limit",
-            MAX_INPUT_BYTES / (1024 * 1024)
-        ));
-    }
-    Ok(buf)
 }
 
 use clap::{CommandFactory, Parser, Subcommand};
