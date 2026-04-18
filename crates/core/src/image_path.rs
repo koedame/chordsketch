@@ -207,6 +207,11 @@ mod tests {
         assert!(!is_safe_image_src("file:///etc/passwd"));
         assert!(!is_safe_image_src("blob:https://example.com/uuid"));
         assert!(!is_safe_image_src("vbscript:msgbox"));
+        // `mhtml:` is documented as blocked in the function's doc comment
+        // and is rejected because any scheme other than `http`/`https` is
+        // denied. Explicit assertion per the testing-completeness rule in
+        // `.claude/rules/sanitizer-security.md`.
+        assert!(!is_safe_image_src("mhtml:file:///etc/passwd"));
     }
 
     #[test]

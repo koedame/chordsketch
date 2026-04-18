@@ -1873,6 +1873,33 @@ mod sanitize_tag_attrs_tests {
         assert!(result.contains("style"));
         assert!(result.contains("fill: red"));
     }
+
+    #[test]
+    fn test_use_strips_relative_url_href() {
+        // #1857 / #1860: `<use>` only allows fragment-only (`#foo`) hrefs.
+        // A relative URL like `sprites.svg#icon` is NOT fragment-only —
+        // it resolves against the document's base URL and could fetch an
+        // external SVG sprite sheet. The fragment-only check strips it.
+        let tag = "<use href=\"sprites.svg#icon\">";
+        let result = sanitize_tag_attrs(tag);
+        assert!(
+            !result.contains("href="),
+            "relative URL must be stripped for <use>; got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_use_preserves_whitespace_prefixed_fragment_href() {
+        // Some serializers emit `href=" #symbol"` with leading whitespace
+        // around the value. The fragment-only check uses `trim_start` so
+        // whitespace-padded fragments are still accepted.
+        let tag = "<use href=\" #myShape\">";
+        let result = sanitize_tag_attrs(tag);
+        assert!(
+            result.contains("href"),
+            "whitespace-prefixed fragment href must be preserved; got {result:?}"
+        );
+    }
 }
 
 #[cfg(test)]
