@@ -876,6 +876,85 @@ mod wasm_tests {
         );
     }
 
+    // -- *_with_warnings (no-options) at the JsValue boundary (#1894) -----
+    //
+    // The `*_and_options` siblings above already exercise the options
+    // path; these tests pin the plain no-options entry points so a
+    // future refactor of the delegation shape can't silently drop the
+    // `{ output, warnings }` shape or the Uint8Array payload type.
+
+    /// `renderTextWithWarnings` returns `{ output: string, warnings: string[] }`
+    /// at the JS boundary. Clean input → empty warnings array.
+    #[wasm_bindgen_test]
+    fn render_text_with_warnings_returns_object_with_output_and_warnings() {
+        let v = render_text_with_warnings(MINIMAL_INPUT).unwrap();
+        let output = js_sys::Reflect::get(&v, &"output".into()).unwrap();
+        assert!(
+            output.is_string(),
+            "output must be a JS string (got {output:?})"
+        );
+        assert!(
+            output.as_string().unwrap_or_default().contains("Test"),
+            "output must contain the rendered title"
+        );
+        let warnings = js_sys::Reflect::get(&v, &"warnings".into()).unwrap();
+        assert!(
+            Array::is_array(&warnings),
+            "warnings must be a JS array (got {warnings:?})"
+        );
+    }
+
+    /// `renderHtmlWithWarnings` — same structural check.
+    #[wasm_bindgen_test]
+    fn render_html_with_warnings_returns_object_with_output_and_warnings() {
+        let v = render_html_with_warnings(MINIMAL_INPUT).unwrap();
+        let output = js_sys::Reflect::get(&v, &"output".into()).unwrap();
+        assert!(output.is_string(), "output must be a JS string");
+        let warnings = js_sys::Reflect::get(&v, &"warnings".into()).unwrap();
+        assert!(Array::is_array(&warnings), "warnings must be a JS array");
+    }
+
+    /// `renderPdfWithWarnings` returns `output` as a `Uint8Array` (not a
+    /// plain array — the `cfg(not(target_arch = "wasm32"))` serde
+    /// fallback would produce a plain array, which the wasm test host
+    /// MUST NOT hit).
+    #[wasm_bindgen_test]
+    fn render_pdf_with_warnings_returns_uint8array_output() {
+        let v = render_pdf_with_warnings(MINIMAL_INPUT).unwrap();
+        let output = js_sys::Reflect::get(&v, &"output".into()).unwrap();
+        // `Uint8Array::from(value)` panics on non-Uint8Array input, so
+        // check with `instanceof` first for a clean failure message.
+        assert!(
+            output.is_instance_of::<js_sys::Uint8Array>(),
+            "output must be a Uint8Array (got {output:?})"
+        );
+        let bytes = js_sys::Uint8Array::from(output);
+        assert!(bytes.length() > 4, "PDF output must have bytes");
+        let mut header = [0u8; 4];
+        bytes.slice(0, 4).copy_to(&mut header);
+        assert_eq!(&header, b"%PDF");
+        let warnings = js_sys::Reflect::get(&v, &"warnings".into()).unwrap();
+        assert!(Array::is_array(&warnings), "warnings must be a JS array");
+    }
+
+    /// Saturation-triggering input: a `{transpose: 100}` directive in
+    /// the source combined with the renderer's own i8-range check emits
+    /// a warning. `render_text_with_warnings` must capture it into the
+    /// `warnings` array rather than forwarding to `console.warn` (the
+    /// contract that distinguishes this variant from `render_text`).
+    #[wasm_bindgen_test]
+    fn render_text_with_warnings_captures_saturation_warning() {
+        let v = render_text_with_warnings("{title: T}\n{transpose: 100}\n[C]Hello").unwrap();
+        let warnings = js_sys::Reflect::get(&v, &"warnings".into()).unwrap();
+        assert!(Array::is_array(&warnings), "warnings must be a JS array");
+        let arr = Array::from(&warnings);
+        assert!(
+            arr.length() >= 1,
+            "expected at least one warning from a {{transpose: 100}} source (got {} entries)",
+            arr.length(),
+        );
+    }
+
     /// `version()` returns a non-empty string through the `JsValue`
     /// boundary.
     #[wasm_bindgen_test]
