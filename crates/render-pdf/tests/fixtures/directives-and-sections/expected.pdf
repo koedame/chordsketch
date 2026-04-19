@@ -1,0 +1,113 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> /ProcSet [/PDF /Text] >> /Kids [7 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 553 >>
+stream
+BT
+/F2 18 Tf
+56 786 Td
+(Test Song) Tj
+ET
+BT
+/F1 13 Tf
+56 764 Td
+(A Subtitle) Tj
+ET
+BT
+/F4 10 Tf
+56 739 Td
+(Verse: Verse 1) Tj
+ET
+BT
+/F2 9 Tf
+56 725 Td
+(G) Tj
+ET
+BT
+/F2 9 Tf
+112.85 725 Td
+(C) Tj
+ET
+BT
+/F1 11 Tf
+56 714 Td
+(First line of verse) Tj
+ET
+BT
+/F4 10 Tf
+56 691 Td
+(Chorus) Tj
+ET
+BT
+/F2 9 Tf
+56 677 Td
+(D) Tj
+ET
+BT
+/F2 9 Tf
+94.51 677 Td
+(G) Tj
+ET
+BT
+/F1 11 Tf
+56 666 Td
+(Chorus line) Tj
+ET
+BT
+/F4 10 Tf
+56 643 Td
+(Bridge) Tj
+ET
+BT
+/F1 11 Tf
+56 629 Td
+(Bridge text) Tj
+ET
+BT
+/F4 10 Tf
+56 606 Td
+(Tab) Tj
+ET
+BT
+/F1 11 Tf
+56 592 Td
+(e|---0---|) Tj
+ET
+endstream
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000230 00000 n 
+0000000327 00000 n 
+0000000429 00000 n 
+0000000534 00000 n 
+0000000643 00000 n 
+0000000706 00000 n 
+trailer
+<< /Size 9 /Root 1 0 R >>
+startxref
+1310
+%%EOF
