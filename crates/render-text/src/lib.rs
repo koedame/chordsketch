@@ -14,6 +14,57 @@ use unicode_width::UnicodeWidthStr;
 /// Prevents output amplification from malicious inputs with many `{chorus}` lines.
 const MAX_CHORUS_RECALLS: usize = 1000;
 
+/// Notation kinds that the text renderer acknowledges structurally
+/// but does not render. See #1971 (sister-site parity with #1825 in
+/// the PDF renderer).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TextNotationKind {
+    Abc,
+    Lilypond,
+    MusicXml,
+    Svg,
+}
+
+impl TextNotationKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Abc => "ABC",
+            Self::Lilypond => "Lilypond",
+            Self::MusicXml => "MusicXML",
+            Self::Svg => "SVG",
+        }
+    }
+
+    fn tag(self) -> &'static str {
+        match self {
+            Self::Abc => "abc",
+            Self::Lilypond => "ly",
+            Self::MusicXml => "musicxml",
+            Self::Svg => "svg",
+        }
+    }
+
+    fn from_start_directive(kind: &DirectiveKind) -> Option<Self> {
+        match kind {
+            DirectiveKind::StartOfAbc => Some(Self::Abc),
+            DirectiveKind::StartOfLy => Some(Self::Lilypond),
+            DirectiveKind::StartOfMusicxml => Some(Self::MusicXml),
+            DirectiveKind::StartOfSvg => Some(Self::Svg),
+            _ => None,
+        }
+    }
+
+    fn is_end_directive(self, kind: &DirectiveKind) -> bool {
+        matches!(
+            (self, kind),
+            (Self::Abc, DirectiveKind::EndOfAbc)
+                | (Self::Lilypond, DirectiveKind::EndOfLy)
+                | (Self::MusicXml, DirectiveKind::EndOfMusicxml)
+                | (Self::Svg, DirectiveKind::EndOfSvg),
+        )
+    }
+}
+
 /// Maximum number of warnings the renderer will accumulate for a single
 /// render pass. Re-exported from the canonical location in
 /// `chordsketch-core::render_result` so existing downstream callers can
@@ -107,6 +158,15 @@ fn render_song_impl(
     let mut chorus_buf: Option<Vec<Line>> = None;
     let mut chorus_recall_count: usize = 0;
 
+    // #1971: parity with the PDF renderer (#1825). When inside a
+    // `{start_of_<tag>} … {end_of_<tag>}` pair for a notation block
+    // (ABC, Lilypond, MusicXML, SVG), discard every body line and
+    // emit a single structured warning at StartOf. Rendering the raw
+    // notation source as plain text (as this renderer did before)
+    // was just as unhelpful as in the PDF renderer — readers get a
+    // wall of `X:1` / `K:C` / `\relative c' {` with no context.
+    let mut in_notation_block: Option<TextNotationKind> = None;
+
     // Instrument for the auto-inject ASCII diagram block.
     // Set by {diagrams: guitar/ukulele/on}; cleared by {diagrams: off} / {no_diagrams}.
     let default_instrument = _config
@@ -120,6 +180,17 @@ fn render_song_impl(
     render_metadata(&song.metadata, &mut output);
 
     for line in &song.lines {
+        // #1971: inside a notation block, discard every line until
+        // the matching EndOf directive. Mirrors the PDF renderer's
+        // skip-until-end window introduced in #1825/#1968.
+        if let Some(kind) = in_notation_block {
+            if let Line::Directive(d) = line {
+                if kind.is_end_directive(&d.kind) {
+                    in_notation_block = None;
+                }
+            }
+            continue;
+        }
         match line {
             Line::Lyrics(lyrics_line) => {
                 if let Some(buf) = chorus_buf.as_mut() {
@@ -131,6 +202,29 @@ fn render_song_impl(
                 // Metadata directives are already rendered via song.metadata;
                 // skip them in the body to avoid duplicate output.
                 if directive.kind.is_metadata() {
+                    continue;
+                }
+                // #1971: handle notation block openers. Route the
+                // warning through `push_warning` (participates in the
+                // MAX_WARNINGS cap), emit an inline placeholder, and
+                // flip the skip window on. The section header still
+                // renders so readers see where the block was.
+                if let Some(kind) = TextNotationKind::from_start_directive(&directive.kind) {
+                    render_section_header(kind.label(), &directive.value, &mut output);
+                    let label = kind.label();
+                    let tag = kind.tag();
+                    push_warning(
+                        warnings,
+                        format!(
+                            "Text renderer does not support {label} blocks; body of the \
+                             `{{start_of_{tag}}} … {{end_of_{tag}}}` section has been \
+                             omitted. Use the HTML renderer for full {label} support.",
+                        ),
+                    );
+                    output.push(format!(
+                        "[{label} block omitted — use the HTML renderer to view it]",
+                    ));
+                    in_notation_block = Some(kind);
                     continue;
                 }
                 if directive.kind == DirectiveKind::Diagrams {
@@ -511,20 +605,13 @@ fn render_directive(
         DirectiveKind::StartOfGrid => {
             render_section_header("Grid", &directive.value, output);
         }
-        DirectiveKind::StartOfAbc => {
-            render_section_header("ABC", &directive.value, output);
-        }
-        DirectiveKind::StartOfLy => {
-            render_section_header("Lilypond", &directive.value, output);
-        }
-        DirectiveKind::StartOfSvg => {
-            render_section_header("SVG", &directive.value, output);
-        }
+        // Notation block openers (ABC / Lilypond / MusicXML / SVG) are
+        // handled in the main render loop's notation-block skip window
+        // so they never reach this function. The `{start_of_textblock}`
+        // directive is NOT a notation block — it's documented text so
+        // it renders its section header here like any other section.
         DirectiveKind::StartOfTextblock => {
             render_section_header("Textblock", &directive.value, output);
-        }
-        DirectiveKind::StartOfMusicxml => {
-            render_section_header("MusicXML", &directive.value, output);
         }
         DirectiveKind::StartOfSection(section_name) => {
             // Capitalize the first letter of the section name for display.
@@ -1236,37 +1323,67 @@ Second chorus
 mod delegate_tests {
     use super::*;
 
+    // -- Notation blocks (#1971): body is skipped, warning is captured,
+    //    placeholder line renders. Parity with the PDF renderer's
+    //    behaviour from #1825/#1968.
+
     #[test]
     fn test_render_abc_section() {
         let input = "{start_of_abc}\nX:1\nK:G\n{end_of_abc}";
         let output = render(input);
         assert!(output.contains("[ABC]"));
-        assert!(output.contains("X:1"));
+        assert!(
+            !output.contains("X:1"),
+            "ABC body must not leak into text output; got:\n{output}"
+        );
+        assert!(output.contains("[ABC block omitted"));
     }
 
     #[test]
     fn test_render_abc_section_with_label() {
         let input = "{start_of_abc: Melody}\nX:1\n{end_of_abc}";
         let output = render(input);
-        assert_eq!(output, "[ABC: Melody]\nX:1\n");
+        // Section header + placeholder; body is gone.
+        assert!(output.contains("[ABC: Melody]"));
+        assert!(!output.contains("X:1"));
+        assert!(output.contains("[ABC block omitted"));
+    }
+
+    #[test]
+    fn test_render_abc_section_emits_warning() {
+        let input = "{start_of_abc}\nX:1\n{end_of_abc}";
+        let song = chordsketch_core::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            result.warnings.iter().any(|w| w.contains("ABC")),
+            "expected an ABC warning; got {:?}",
+            result.warnings,
+        );
     }
 
     #[test]
     fn test_render_ly_section() {
-        let input = "{start_of_ly}\nnotes\n{end_of_ly}";
+        let input = "{start_of_ly}\n\\relative c' { c4 d }\n{end_of_ly}";
         let output = render(input);
         assert!(output.contains("[Lilypond]"));
+        assert!(!output.contains("\\relative"));
+        assert!(output.contains("[Lilypond block omitted"));
     }
 
     #[test]
     fn test_render_svg_section() {
-        let input = "{start_of_svg}\n<svg/>\n{end_of_svg}";
+        let input = "{start_of_svg}\n<svg><circle/></svg>\n{end_of_svg}";
         let output = render(input);
         assert!(output.contains("[SVG]"));
+        assert!(!output.contains("<circle"));
+        assert!(output.contains("[SVG block omitted"));
     }
 
     #[test]
     fn test_render_textblock_section() {
+        // `{start_of_textblock}` is NOT a notation block — body must
+        // continue to render as plain text. Guard against accidental
+        // inclusion in the notation skip window.
         let input = "{start_of_textblock}\nPreformatted text\n{end_of_textblock}";
         let output = render(input);
         assert!(output.contains("[Textblock]"));
@@ -1275,9 +1392,12 @@ mod delegate_tests {
 
     #[test]
     fn test_render_musicxml_section() {
-        let input = "{start_of_musicxml}\n<score-partwise/>\n{end_of_musicxml}";
+        let input =
+            "{start_of_musicxml}\n<score-partwise>notes</score-partwise>\n{end_of_musicxml}";
         let output = render(input);
         assert!(output.contains("[MusicXML]"));
+        assert!(!output.contains("<score-partwise"));
+        assert!(output.contains("[MusicXML block omitted"));
     }
 
     #[test]
@@ -1285,6 +1405,7 @@ mod delegate_tests {
         let input = "{start_of_musicxml: Score}\n<score-partwise/>\n{end_of_musicxml}";
         let output = render(input);
         assert!(output.contains("[MusicXML: Score]"));
+        assert!(output.contains("[MusicXML block omitted"));
     }
 
     #[test]
