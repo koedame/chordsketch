@@ -4,6 +4,8 @@
 
 # ChordSketch
 
+[![codecov](https://codecov.io/gh/koedame/chordsketch/branch/main/graph/badge.svg)](https://codecov.io/gh/koedame/chordsketch)
+
 A Rust implementation of the [ChordPro](https://www.chordpro.org/) file format
 parser and renderer. 100% ChordPro compatible. Supports parsing ChordPro files
 into a structured AST and rendering to plain text, HTML, and PDF.
