@@ -14,6 +14,7 @@ use chordsketch_core::ast::{CommentStyle, DirectiveKind, ImageAttributes, Line, 
 use chordsketch_core::canonical_chord_name;
 use chordsketch_core::config::Config;
 use chordsketch_core::inline_markup::TextSpan;
+use chordsketch_core::notation::NotationKind;
 use chordsketch_core::render_result::{RenderResult, push_warning, validate_capo};
 use chordsketch_core::resolve_diagrams_instrument;
 use chordsketch_core::transpose::transpose_chord;
@@ -1123,74 +1124,6 @@ fn render_span_list(
         }
     }
     x
-}
-
-/// Notation block kinds the PDF renderer recognises but does not fully
-/// render. Used by the main render loop to track "inside a
-/// `{start_of_<kind>} … {end_of_<kind>}` pair" state so body lines can
-/// be skipped instead of spilled into the PDF as plain text.
-///
-/// Parity with the HTML renderer is documented in
-/// `.claude/rules/renderer-parity.md`; tracked in #1825 — #1825 option
-/// 2 (warning + placeholder) lands here, option 1 (embed a rasterised
-/// or usvg-rendered bitmap) is tracked for the future.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum NotationKind {
-    Abc,
-    Lilypond,
-    MusicXml,
-    Svg,
-}
-
-impl NotationKind {
-    /// Human-readable display name for user-facing output (section
-    /// label, placeholder text, warning message).
-    fn label(self) -> &'static str {
-        match self {
-            Self::Abc => "ABC",
-            Self::Lilypond => "Lilypond",
-            Self::MusicXml => "MusicXML",
-            Self::Svg => "SVG",
-        }
-    }
-
-    /// ChordPro directive token for this notation kind (e.g.
-    /// `{start_of_abc}` / `{end_of_abc}`). Kept as a method on the
-    /// enum rather than an inline `match` at the call site so adding
-    /// a new notation kind in the future only requires editing this
-    /// file in one place.
-    fn tag(self) -> &'static str {
-        match self {
-            Self::Abc => "abc",
-            Self::Lilypond => "ly",
-            Self::MusicXml => "musicxml",
-            Self::Svg => "svg",
-        }
-    }
-
-    /// Match the `StartOf…` directive variants. Returns `None` for any
-    /// other directive.
-    fn from_start_directive(kind: &DirectiveKind) -> Option<Self> {
-        match kind {
-            DirectiveKind::StartOfAbc => Some(Self::Abc),
-            DirectiveKind::StartOfLy => Some(Self::Lilypond),
-            DirectiveKind::StartOfMusicxml => Some(Self::MusicXml),
-            DirectiveKind::StartOfSvg => Some(Self::Svg),
-            _ => None,
-        }
-    }
-
-    /// Returns `true` when `kind` is the matching `EndOf…` directive for
-    /// this notation. Used to close the skip window.
-    fn is_end_directive(self, kind: &DirectiveKind) -> bool {
-        matches!(
-            (self, kind),
-            (Self::Abc, DirectiveKind::EndOfAbc)
-                | (Self::Lilypond, DirectiveKind::EndOfLy)
-                | (Self::MusicXml, DirectiveKind::EndOfMusicxml)
-                | (Self::Svg, DirectiveKind::EndOfSvg),
-        )
-    }
 }
 
 /// Render the section label for a start-of-section directive.
