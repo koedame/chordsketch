@@ -1,0 +1,132 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> /ProcSet [/PDF /Text] >> /Kids [7 0 R 9 0 R 11 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 166 >>
+stream
+BT
+/F2 18 Tf
+56 786 Td
+(Page Control Test) Tj
+ET
+q
+56 0 0 842 re W n
+BT
+/F2 9 Tf
+56 764 Td
+(G) Tj
+ET
+Q
+q
+56 0 0 842 re W n
+BT
+/F1 11 Tf
+56 753 Td
+(First line) Tj
+ET
+Q
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /Contents 10 0 R >>
+endobj
+10 0 obj
+<< /Length 118 >>
+stream
+q
+56 0 0 842 re W n
+BT
+/F2 9 Tf
+56 786 Td
+(C) Tj
+ET
+Q
+q
+56 0 0 842 re W n
+BT
+/F1 11 Tf
+56 775 Td
+(Second line) Tj
+ET
+Q
+endstream
+endobj
+11 0 obj
+<< /Type /Page /Parent 2 0 R /Contents 12 0 R >>
+endobj
+12 0 obj
+<< /Length 237 >>
+stream
+q
+56 0 0 842 re W n
+BT
+/F2 9 Tf
+56 786 Td
+(D) Tj
+ET
+Q
+q
+56 0 0 842 re W n
+BT
+/F1 11 Tf
+56 775 Td
+(Third line) Tj
+ET
+Q
+q
+76 0 0 842 re W n
+BT
+/F2 9 Tf
+76 786 Td
+(Am) Tj
+ET
+Q
+q
+76 0 0 842 re W n
+BT
+/F1 11 Tf
+76 775 Td
+(Fourth line) Tj
+ET
+Q
+endstream
+endobj
+xref
+0 13
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000243 00000 n 
+0000000340 00000 n 
+0000000442 00000 n 
+0000000547 00000 n 
+0000000656 00000 n 
+0000000719 00000 n 
+0000000936 00000 n 
+0000001000 00000 n 
+0000001170 00000 n 
+0000001235 00000 n 
+trailer
+<< /Size 13 /Root 1 0 R >>
+startxref
+1524
+%%EOF
