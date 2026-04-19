@@ -46,6 +46,20 @@ Before closing a PR that touches any renderer:
    and clamping logic is identical in all three renderers.
 4. If an arm or validation is missing, either add it or file a sub-issue.
 
+## Coverage Parity
+
+Sister-site parity extends to numeric test coverage. The renderer group
+(`render-text`, `render-html`, `render-pdf`) has a **group floor of 80%**
+line coverage, and the **intra-group skew must not exceed 5 percentage
+points**. A drop below either bound is a structural signal that one
+renderer is diverging from its siblings — the same class of defect as a
+missing match arm, just detected by metric instead of by grep.
+
+Thresholds are enforced via `codecov.yml` at the repo root. The skew
+clause is not natively supported by Codecov and is verified by auto-review
+using the per-crate percentages in the Codecov dashboard comment on each
+PR. See tracker #1846 §Strategy.3 for the full gating model.
+
 ## Why
 
 45 renderer parity issues were filed — the most common was a new directive
