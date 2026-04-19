@@ -806,19 +806,13 @@ fn render_song_into_doc(
                 if let Some(kind) = NotationKind::from_start_directive(&d.kind) {
                     render_section_label(d, doc);
                     let label = kind.label();
+                    let tag = kind.tag();
                     push_warning(
                         warnings,
                         format!(
                             "PDF renderer does not support {label} blocks; body of the \
                              `{{start_of_{tag}}} … {{end_of_{tag}}}` section has been \
                              omitted. Use the HTML renderer for full {label} support.",
-                            label = label,
-                            tag = match kind {
-                                NotationKind::Abc => "abc",
-                                NotationKind::Lilypond => "ly",
-                                NotationKind::MusicXml => "musicxml",
-                                NotationKind::Svg => "svg",
-                            },
                         ),
                     );
                     let placeholder = format!(
@@ -1149,12 +1143,28 @@ enum NotationKind {
 }
 
 impl NotationKind {
+    /// Human-readable display name for user-facing output (section
+    /// label, placeholder text, warning message).
     fn label(self) -> &'static str {
         match self {
             Self::Abc => "ABC",
             Self::Lilypond => "Lilypond",
             Self::MusicXml => "MusicXML",
             Self::Svg => "SVG",
+        }
+    }
+
+    /// ChordPro directive token for this notation kind (e.g.
+    /// `{start_of_abc}` / `{end_of_abc}`). Kept as a method on the
+    /// enum rather than an inline `match` at the call site so adding
+    /// a new notation kind in the future only requires editing this
+    /// file in one place.
+    fn tag(self) -> &'static str {
+        match self {
+            Self::Abc => "abc",
+            Self::Lilypond => "ly",
+            Self::MusicXml => "musicxml",
+            Self::Svg => "svg",
         }
     }
 
@@ -4096,6 +4106,90 @@ mod delegate_tests {
         let content = String::from_utf8_lossy(&result.output);
         assert!(content.contains("Hello world"));
         assert!(!content.contains("body"));
+    }
+
+    // #1969 — edge-case coverage for the notation-block skip window.
+
+    #[test]
+    fn test_notation_block_inside_chorus_is_excluded_from_recall() {
+        // A notation block INSIDE a chorus body must:
+        //   (a) still produce its structured warning at the initial
+        //       render, and
+        //   (b) NOT be replayed by a subsequent `{chorus}` recall —
+        //       lines are only appended to the chorus buffer from the
+        //       default match arm, which the notation-block
+        //       short-circuit bypasses. A recall after this source
+        //       therefore only replays the surrounding lyrics, not
+        //       the placeholder.
+        let input = "{start_of_chorus}\n\
+                     [G]Sing along\n\
+                     {start_of_abc}\n\
+                     X:1\n\
+                     {end_of_abc}\n\
+                     [C]another line\n\
+                     {end_of_chorus}\n\
+                     {chorus}\n";
+        let song = chordsketch_core::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        // One ABC block seen once → at most one ABC warning. The
+        // recall must NOT produce a second.
+        let abc_warnings = result.warnings.iter().filter(|w| w.contains("ABC")).count();
+        assert_eq!(
+            abc_warnings, 1,
+            "exactly one ABC warning expected (recall must not re-emit); got {:?}",
+            result.warnings,
+        );
+        let content = String::from_utf8_lossy(&result.output);
+        // The surrounding chorus lyrics are recalled normally.
+        assert!(content.contains("Sing along"));
+        assert!(content.contains("another line"));
+    }
+
+    #[test]
+    fn test_unterminated_notation_block_renders_without_panic() {
+        // A file that enters a notation block and ends before the
+        // matching `end_of_<tag>` must not panic. The section label,
+        // warning, and placeholder all land; any content after the
+        // unterminated StartOf is simply swallowed by the skip
+        // window.
+        let input = "{title: T}\n[C]Before\n{start_of_abc}\nX:1\nK:C\n";
+        let song = chordsketch_core::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            result.warnings.iter().any(|w| w.contains("ABC")),
+            "unterminated ABC block should still emit the warning; got {:?}",
+            result.warnings,
+        );
+        let content = String::from_utf8_lossy(&result.output);
+        assert!(content.contains("Before"));
+        assert!(content.contains("[ABC block omitted"));
+        // Body must not leak even though no EndOf was seen.
+        assert!(!content.contains("X:1"));
+        assert!(!content.contains("K:C"));
+    }
+
+    #[test]
+    fn test_stray_end_of_notation_is_silently_ignored() {
+        // A stray `{end_of_abc}` outside any notation block must not
+        // panic and must not produce a spurious warning. The skip
+        // state is `None` at that point, so the End directive flows
+        // through the default match arm (which treats it like any
+        // other unknown directive — rendered via `render_directive`
+        // but with no special behaviour for EndOf variants).
+        let input = "{title: T}\n[C]Hello\n{end_of_abc}\n[D]World\n";
+        let song = chordsketch_core::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            !result
+                .warnings
+                .iter()
+                .any(|w| w.contains("ABC") && w.contains("omitted")),
+            "stray `end_of_abc` must not trigger the notation-block warning; got {:?}",
+            result.warnings,
+        );
+        let content = String::from_utf8_lossy(&result.output);
+        assert!(content.contains("Hello"));
+        assert!(content.contains("World"));
     }
 }
 
