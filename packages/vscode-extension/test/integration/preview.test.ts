@@ -127,10 +127,13 @@ suite("preview panel", () => {
       vscode.ViewColumn.One,
       "openPreviewToSide must land in a column OTHER than the source column",
     );
-    // The preview must land in a real column — not `undefined`
-    // (detached panel) and not a negative sentinel value.
+    // The preview must land in a real, user-visible column — not the
+    // sentinel `ViewColumn.Beside` (-2, which VS Code only uses at
+    // reveal time to mean "pick something beside") or any other
+    // non-positive value. `viewColumn` is typed as a number enum at
+    // compile time so only the lower-bound check is load-bearing.
     assert.ok(
-      typeof tab.group.viewColumn === "number" && tab.group.viewColumn >= 1,
+      tab.group.viewColumn >= 1,
       `preview must have a positive ViewColumn; got ${tab.group.viewColumn}`,
     );
   });
@@ -141,6 +144,11 @@ suite("preview panel", () => {
     // preview tabs in the workspace.
     await vscode.commands.executeCommand(OPEN_PREVIEW_TO_SIDE);
     await waitForPreviewTab();
+    // Second invocation: no `waitForPreviewTab` needed. `createOrShow`
+    // detects the existing panel and calls `existing.reveal(column)`
+    // synchronously — no new async panel-creation work is queued, so
+    // the tab count is already stable by the time `executeCommand`
+    // resolves. A poll here would obscure that invariant.
     await vscode.commands.executeCommand(OPEN_PREVIEW_TO_SIDE);
 
     // Count preview tabs across every group.
