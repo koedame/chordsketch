@@ -5,6 +5,7 @@
 
 use chordsketch_core::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
 use chordsketch_core::config::Config;
+use chordsketch_core::notation::NotationKind;
 use chordsketch_core::render_result::{RenderResult, push_warning, validate_capo};
 use chordsketch_core::resolve_diagrams_instrument;
 use chordsketch_core::transpose::transpose_chord;
@@ -13,57 +14,6 @@ use unicode_width::UnicodeWidthStr;
 /// Maximum number of chorus recall directives allowed per song.
 /// Prevents output amplification from malicious inputs with many `{chorus}` lines.
 const MAX_CHORUS_RECALLS: usize = 1000;
-
-/// Notation kinds that the text renderer acknowledges structurally
-/// but does not render. See #1971 (sister-site parity with #1825 in
-/// the PDF renderer).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum TextNotationKind {
-    Abc,
-    Lilypond,
-    MusicXml,
-    Svg,
-}
-
-impl TextNotationKind {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Abc => "ABC",
-            Self::Lilypond => "Lilypond",
-            Self::MusicXml => "MusicXML",
-            Self::Svg => "SVG",
-        }
-    }
-
-    fn tag(self) -> &'static str {
-        match self {
-            Self::Abc => "abc",
-            Self::Lilypond => "ly",
-            Self::MusicXml => "musicxml",
-            Self::Svg => "svg",
-        }
-    }
-
-    fn from_start_directive(kind: &DirectiveKind) -> Option<Self> {
-        match kind {
-            DirectiveKind::StartOfAbc => Some(Self::Abc),
-            DirectiveKind::StartOfLy => Some(Self::Lilypond),
-            DirectiveKind::StartOfMusicxml => Some(Self::MusicXml),
-            DirectiveKind::StartOfSvg => Some(Self::Svg),
-            _ => None,
-        }
-    }
-
-    fn is_end_directive(self, kind: &DirectiveKind) -> bool {
-        matches!(
-            (self, kind),
-            (Self::Abc, DirectiveKind::EndOfAbc)
-                | (Self::Lilypond, DirectiveKind::EndOfLy)
-                | (Self::MusicXml, DirectiveKind::EndOfMusicxml)
-                | (Self::Svg, DirectiveKind::EndOfSvg),
-        )
-    }
-}
 
 /// Maximum number of warnings the renderer will accumulate for a single
 /// render pass. Re-exported from the canonical location in
@@ -165,7 +115,7 @@ fn render_song_impl(
     // notation source as plain text (as this renderer did before)
     // was just as unhelpful as in the PDF renderer — readers get a
     // wall of `X:1` / `K:C` / `\relative c' {` with no context.
-    let mut in_notation_block: Option<TextNotationKind> = None;
+    let mut in_notation_block: Option<NotationKind> = None;
 
     // Instrument for the auto-inject ASCII diagram block.
     // Set by {diagrams: guitar/ukulele/on}; cleared by {diagrams: off} / {no_diagrams}.
@@ -209,7 +159,7 @@ fn render_song_impl(
                 // MAX_WARNINGS cap), emit an inline placeholder, and
                 // flip the skip window on. The section header still
                 // renders so readers see where the block was.
-                if let Some(kind) = TextNotationKind::from_start_directive(&directive.kind) {
+                if let Some(kind) = NotationKind::from_start_directive(&directive.kind) {
                     render_section_header(kind.label(), &directive.value, &mut output);
                     let label = kind.label();
                     let tag = kind.tag();

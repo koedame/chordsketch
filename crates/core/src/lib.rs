@@ -13,6 +13,7 @@ pub mod heuristic;
 pub mod image_path;
 pub mod inline_markup;
 pub mod lexer;
+pub mod notation;
 pub mod parser;
 pub mod render_result;
 pub mod rrjson;
