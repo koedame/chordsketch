@@ -92,10 +92,18 @@ jobs:
       # the only production build — `npm run test:integration` deliberately
       # does NOT have a `pretest` hook that re-invokes `npm run build`, so
       # CI does not pay for two esbuild runs per PR.
+      #
+      # `.vscode-test.mjs` runs each test against two VS Code versions:
+      #   - `stable` (latest release)
+      #   - `engines.vscode` floor (currently 1.85.0, read from package.json)
+      # Both cells execute in a single `npm run test:integration` invocation
+      # — test-cli iterates the matrix internally. The first cold run
+      # downloads both VS Code builds (~200 MB combined); subsequent runs
+      # reuse the local cache.
+      #
       # xvfb-run provides a virtual X display for Electron on the Linux
-      # runner. See issue #1918 for the phased test plan — only the
-      # activation test lands in this first round; LSP, preview, and
-      # serializer tests follow.
+      # runner. See issue #1918 for the phased test plan — LSP and
+      # serializer integration tests are still follow-up phases.
       - name: Compile integration tests
         run: npm run compile:integration
         working-directory: packages/vscode-extension
