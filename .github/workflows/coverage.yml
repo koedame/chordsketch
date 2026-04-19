@@ -32,6 +32,12 @@ jobs:
     name: Measure and upload coverage
     runs-on: ubuntu-latest
     # needs: [] — intentional; this workflow must never gate other jobs.
+    permissions:
+      contents: read
+      # Required for codecov-action's `use_oidc: true`: GitHub refuses to
+      # mint the OIDC token without this, and `fail_ci_if_error: false`
+      # would otherwise swallow the failure silently.
+      id-token: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
