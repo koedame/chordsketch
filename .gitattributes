@@ -1,0 +1,17 @@
+# PDF fixtures and other binary artifacts must never be CRLF-converted by
+# git, or byte-exact golden comparisons break on Windows checkouts under
+# `core.autocrlf=true`. See #1979 for the original regression.
+*.pdf binary
+*.otf binary
+*.ttf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.wasm binary
+
+# Golden test input fixtures parse differently under CRLF on some
+# platforms; pin to LF so the committed byte content is what every
+# runner sees.
+crates/*/tests/fixtures/**/input.cho text eol=lf
+crates/*/tests/fixtures/**/expected.txt text eol=lf
