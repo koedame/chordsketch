@@ -95,7 +95,9 @@ jobs:
       #
       # `.vscode-test.mjs` runs each test against two VS Code versions:
       #   - `stable` (latest release)
-      #   - `engines.vscode` floor (currently 1.85.0, read from package.json)
+      #   - `engines.vscode` floor (read dynamically from package.json at
+      #     config-load time, so a future engines bump is picked up here
+      #     without editing this workflow).
       # Both cells execute in a single `npm run test:integration` invocation
       # — test-cli iterates the matrix internally. The first cold run
       # downloads both VS Code builds (~200 MB combined); subsequent runs

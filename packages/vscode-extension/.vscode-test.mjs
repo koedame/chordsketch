@@ -32,13 +32,27 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Read the `engines.vscode` floor from package.json so the matrix cannot
 // silently drift if the engines field is bumped.
 //
-// `engines.vscode` is semver-range style (e.g., "^1.85.0"); strip the
-// leading range operator and use the bare version for the test-cli
-// `version` field, which takes a concrete version string.
+// VS Code extensions use a *simple* prefix range for `engines.vscode`
+// (e.g., `"^1.85.0"`, `">=1.85.0"`), never a compound range. Strip the
+// leading range operator to get the bare version that `@vscode/test-cli`
+// accepts as its `version` field.
+//
+// We validate the result against the strict `major.minor.patch` shape
+// and throw a loud error if anything else leaks through — a compound
+// range like `">=1.85.0 <2.0.0"` would otherwise produce
+// `"1.85.0 <2.0.0"` and `@vscode/test-cli` would fail with an opaque
+// error deep inside the VS Code download path.
 const packageJson = JSON.parse(
   readFileSync(resolve(__dirname, "package.json"), "utf-8"),
 );
 const enginesVscodeFloor = packageJson.engines.vscode.replace(/^[\^~>=<]+/, "");
+if (!/^\d+\.\d+\.\d+$/.test(enginesVscodeFloor)) {
+  throw new Error(
+    `engines.vscode must be a simple prefix range (e.g. "^1.85.0"); ` +
+      `after stripping the range operator got ${JSON.stringify(enginesVscodeFloor)}. ` +
+      `If you need a compound range, update this config to pick the floor explicitly.`,
+  );
+}
 
 const sharedTestConfig = {
   files: "out-test/test/integration/**/*.test.js",
