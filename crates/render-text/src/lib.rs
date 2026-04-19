@@ -1406,6 +1406,77 @@ mod delegate_tests {
         let output = render(input);
         assert!(output.contains("[MusicXML: Score]"));
         assert!(output.contains("[MusicXML block omitted"));
+        // Negative assertion — body must not leak even when the
+        // section header carries a label. Mirrors the unlabelled
+        // variant so a future regression touching either code path
+        // fails here.
+        assert!(
+            !output.contains("<score-partwise"),
+            "MusicXML body must not leak into text output; got:\n{output}"
+        );
+    }
+
+    // #1974 — edge-case coverage for the notation-block skip window.
+    // Mirrors the tests added to the PDF renderer in #1969 so both
+    // skip-and-warn implementations are guarded by the same set of
+    // scenarios.
+
+    #[test]
+    fn test_text_notation_block_inside_chorus_is_excluded_from_recall() {
+        let input = "{start_of_chorus}\n\
+                     [G]Sing along\n\
+                     {start_of_abc}\n\
+                     X:1\n\
+                     {end_of_abc}\n\
+                     [C]another line\n\
+                     {end_of_chorus}\n\
+                     {chorus}\n";
+        let song = chordsketch_core::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        // One ABC block seen once → exactly one ABC warning. A recall
+        // that re-emitted the placeholder would double this.
+        let abc_warnings = result.warnings.iter().filter(|w| w.contains("ABC")).count();
+        assert_eq!(
+            abc_warnings, 1,
+            "exactly one ABC warning expected (recall must not re-emit); got {:?}",
+            result.warnings,
+        );
+        assert!(result.output.contains("Sing along"));
+        assert!(result.output.contains("another line"));
+    }
+
+    #[test]
+    fn test_text_unterminated_notation_block_renders_without_panic() {
+        let input = "[C]Before\n{start_of_abc}\nX:1\nK:C\n";
+        let song = chordsketch_core::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            result.warnings.iter().any(|w| w.contains("ABC")),
+            "unterminated ABC block should still emit the warning; got {:?}",
+            result.warnings,
+        );
+        assert!(result.output.contains("Before"));
+        assert!(result.output.contains("[ABC block omitted"));
+        // Body must not leak even though no EndOf was seen.
+        assert!(!result.output.contains("X:1"));
+        assert!(!result.output.contains("K:C"));
+    }
+
+    #[test]
+    fn test_text_stray_end_of_notation_is_silently_ignored() {
+        let input = "[C]Hello\n{end_of_abc}\n[D]World\n";
+        let song = chordsketch_core::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            !result
+                .warnings
+                .iter()
+                .any(|w| w.contains("ABC") && w.contains("omitted")),
+            "stray `end_of_abc` must not trigger the notation-block warning; got {:?}",
+            result.warnings,
+        );
+        assert!(result.output.contains("Hello"));
+        assert!(result.output.contains("World"));
     }
 
     #[test]
