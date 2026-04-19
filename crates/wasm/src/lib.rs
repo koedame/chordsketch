@@ -1003,6 +1003,41 @@ mod wasm_tests {
         assert!(!v.is_empty());
     }
 
+    // -- bare public entry points (#1982) --------------------------------
+    //
+    // The `_with_options` variants have explicit JS-boundary tests above,
+    // but the bare `render_text` / `render_html` / `render_pdf` and
+    // `render_text_with_options` entry points only had native `#[test]`
+    // coverage. Add wasm-side tests so a future regression in the bare
+    // delegation path is caught by `wasm-pack test --node` in CI.
+
+    #[wasm_bindgen_test]
+    fn render_html_bare_js_boundary() {
+        let result = render_html(MINIMAL_INPUT).unwrap();
+        assert!(result.contains("Test"));
+    }
+
+    #[wasm_bindgen_test]
+    fn render_text_bare_js_boundary() {
+        let result = render_text(MINIMAL_INPUT).unwrap();
+        assert!(result.contains("Test"));
+    }
+
+    #[wasm_bindgen_test]
+    fn render_pdf_bare_js_boundary() {
+        let bytes = render_pdf(MINIMAL_INPUT).unwrap();
+        assert!(bytes.len() > 4);
+        assert_eq!(&bytes[0..4], b"%PDF");
+    }
+
+    #[wasm_bindgen_test]
+    fn render_text_with_options_js_boundary() {
+        let opts = js_sys::Object::new();
+        Reflect::set(&opts, &"transpose".into(), &JsValue::from(2)).unwrap();
+        let result = render_text_with_options(MINIMAL_INPUT, opts.into()).unwrap();
+        assert!(result.contains("Test"));
+    }
+
     /// Smoke test that the `start` panic hook function exists and is
     /// callable through the wasm-bindgen boundary. We don't trigger an
     /// actual panic (it would abort the test runner), but calling
