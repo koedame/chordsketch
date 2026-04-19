@@ -20,7 +20,7 @@ use crate::ast::DirectiveKind;
 
 /// Notation kinds the text and PDF renderers skip rather than render.
 ///
-/// See [`.claude/rules/renderer-parity.md`] for the parity contract:
+/// See `.claude/rules/renderer-parity.md` for the parity contract:
 /// every renderer must handle every directive, but handling can be
 /// "skip with warning" when full rendering requires infrastructure a
 /// renderer does not have.
