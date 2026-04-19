@@ -110,7 +110,8 @@ fn run_golden_test(fixture_dir: &Path) {
         .unwrap_or_else(|e| panic!("[{name}] cannot read {}: {e}", input_path.display()))
         .replace("\r\n", "\n");
 
-    let actual = chordsketch_render_html::render(&input);
+    let actual = chordsketch_render_html::try_render(&input)
+        .unwrap_or_else(|e| panic!("[{name}] parse error: {e}"));
 
     if std::env::var("UPDATE_GOLDEN").is_ok() {
         fs::write(&expected_path, &actual)
