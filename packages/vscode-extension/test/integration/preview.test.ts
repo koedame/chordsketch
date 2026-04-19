@@ -15,18 +15,12 @@
  */
 
 import * as assert from "node:assert/strict";
-import * as path from "node:path";
 import * as vscode from "vscode";
+import { activateExtension, fixture } from "./helpers.js";
 
 const OPEN_PREVIEW = "chordsketch.openPreview";
 const OPEN_PREVIEW_TO_SIDE = "chordsketch.openPreviewToSide";
 const PREVIEW_VIEW_TYPE = "chordsketchPreview";
-
-/** Resolve the fixture by walking up from the compiled test location. */
-function fixture(name: string): vscode.Uri {
-  const fixtureDir = path.resolve(__dirname, "..", "..", "..", "test", "fixtures");
-  return vscode.Uri.file(path.join(fixtureDir, name));
-}
 
 /**
  * Poll until the tab group surface reports a webview tab of the expected
@@ -76,12 +70,7 @@ async function closeAllPreviewTabs(): Promise<void> {
 
 suite("preview panel", () => {
   suiteSetup(async () => {
-    // Make sure the extension is active so its commands are registered.
-    const ext = vscode.extensions.getExtension("koedame.chordsketch");
-    assert.ok(ext, "koedame.chordsketch extension must be installed");
-    if (!ext.isActive) {
-      await ext.activate();
-    }
+    await activateExtension();
   });
 
   setup(async () => {

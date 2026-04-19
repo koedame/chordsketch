@@ -18,40 +18,15 @@
  * path that was broken in #1917.
  */
 
-import * as assert from "node:assert/strict";
-import * as path from "node:path";
 import * as vscode from "vscode";
-
-const CONTRIBUTED_COMMANDS = [
-  "chordsketch.openPreview",
-  "chordsketch.openPreviewToSide",
-  "chordsketch.transposeUp",
-  "chordsketch.transposeDown",
-  "chordsketch.convertTo",
-];
-
-async function assertCommandsStillRegistered(): Promise<void> {
-  const registered = new Set(await vscode.commands.getCommands(true));
-  const missing = CONTRIBUTED_COMMANDS.filter((c) => !registered.has(c));
-  assert.deepEqual(
-    missing,
-    [],
-    `contributed commands must survive LSP restart; missing: ${JSON.stringify(missing)}`,
-  );
-}
+import {
+  activateExtension,
+  assertAllContributedCommandsRegistered,
+} from "./helpers.js";
 
 suite("LSP configuration restart", () => {
   suiteSetup(async () => {
-    // Activate the extension via a fixture open.
-    const fixtureDir = path.resolve(__dirname, "..", "..", "..", "test", "fixtures");
-    const uri = vscode.Uri.file(path.join(fixtureDir, "hello.cho"));
-    const doc = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(doc);
-    const ext = vscode.extensions.getExtension("koedame.chordsketch");
-    assert.ok(ext, "koedame.chordsketch extension must be installed");
-    if (!ext.isActive) {
-      await ext.activate();
-    }
+    await activateExtension();
   });
 
   test("toggling chordsketch.lsp.enabled does not crash the extension or drop commands", async () => {
@@ -68,7 +43,7 @@ suite("LSP configuration restart", () => {
       // Give the async handler a chance to run; the event is fired
       // synchronously but the handler's `await` chain yields.
       await new Promise((r) => setTimeout(r, 500));
-      await assertCommandsStillRegistered();
+      await assertAllContributedCommandsRegistered();
 
       await config.update(
         "enabled",
@@ -76,7 +51,7 @@ suite("LSP configuration restart", () => {
         vscode.ConfigurationTarget.Workspace,
       );
       await new Promise((r) => setTimeout(r, 500));
-      await assertCommandsStillRegistered();
+      await assertAllContributedCommandsRegistered();
     } finally {
       // Restore default so test state does not leak across tests.
       await config.update(
@@ -105,7 +80,7 @@ suite("LSP configuration restart", () => {
       await new Promise((r) => setTimeout(r, 500));
       // Core regression gate: commands must still exist after the
       // non-existent-binary restart path runs.
-      await assertCommandsStillRegistered();
+      await assertAllContributedCommandsRegistered();
     } finally {
       await config.update(
         "path",
