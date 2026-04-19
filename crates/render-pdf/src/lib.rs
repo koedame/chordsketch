@@ -710,7 +710,37 @@ fn render_song_into_doc(
     let mut saved_fmt_state: Option<PdfFormattingState> = None;
     let mut chorus_recall_count: usize = 0;
 
+    // #1825: the HTML renderer invokes external tools (abc2svg / lilypond /
+    // musescore) to render notation blocks into embedded SVG. The PDF
+    // renderer currently has no SVG-to-PDF pipeline, so it can't render
+    // the inner content. Rather than spilling the raw notation source
+    // into the PDF as plain text (which is visually noise and almost
+    // certainly what nobody wants), we skip the body of the block and
+    // emit exactly one structured warning per notation kind it sees.
+    // The section label (already produced by `render_section_label`) is
+    // retained so the reader can at least see where the notation would
+    // have been.
+    //
+    // When `in_notation_block` is `Some(kind)` the main loop is inside
+    // a `{start_of_<kind>} … {end_of_<kind>}` pair and must discard
+    // every non-End-directive line until the matching End.
+    let mut in_notation_block: Option<NotationKind> = None;
+
     for line in &song.lines {
+        // If we are inside a notation block, discard every line until
+        // the matching `EndOf…` directive is seen. The section label
+        // has already been emitted at StartOf…; the body cannot be
+        // rendered (no SVG→PDF pipeline yet — see #1825), so spilling
+        // the raw notation source into the PDF would just be noise.
+        if let Some(kind) = in_notation_block {
+            match line {
+                Line::Directive(d) if kind.is_end_directive(&d.kind) => {
+                    in_notation_block = None;
+                }
+                _ => {}
+            }
+            continue;
+        }
         match line {
             Line::Lyrics(lyrics) => {
                 if let Some(buf) = chorus_buf.as_mut() {
@@ -765,6 +795,40 @@ fn render_song_into_doc(
                 }
                 if d.kind.is_font_size_color() {
                     fmt_state.apply(&d.kind, &d.value);
+                    continue;
+                }
+                // #1825 — Notation blocks: emit the section label
+                // (so readers see where the block would have been),
+                // push a structured warning, render a short
+                // placeholder line, and enter skip-until-end mode so
+                // the body source does not land in the PDF as plain
+                // text.
+                if let Some(kind) = NotationKind::from_start_directive(&d.kind) {
+                    render_section_label(d, doc);
+                    let label = kind.label();
+                    push_warning(
+                        warnings,
+                        format!(
+                            "PDF renderer does not support {label} blocks; body of the \
+                             `{{start_of_{tag}}} … {{end_of_{tag}}}` section has been \
+                             omitted. Use the HTML renderer for full {label} support.",
+                            label = label,
+                            tag = match kind {
+                                NotationKind::Abc => "abc",
+                                NotationKind::Lilypond => "ly",
+                                NotationKind::MusicXml => "musicxml",
+                                NotationKind::Svg => "svg",
+                            },
+                        ),
+                    );
+                    let placeholder = format!(
+                        "[{} block omitted — use the HTML renderer to view it]",
+                        label
+                    );
+                    doc.ensure_space(LYRICS_SIZE + LINE_GAP);
+                    doc.text(&placeholder, Font::HelveticaOblique, LYRICS_SIZE);
+                    doc.newline(LYRICS_SIZE + LINE_GAP);
+                    in_notation_block = Some(kind);
                     continue;
                 }
                 match &d.kind {
@@ -1065,6 +1129,58 @@ fn render_span_list(
         }
     }
     x
+}
+
+/// Notation block kinds the PDF renderer recognises but does not fully
+/// render. Used by the main render loop to track "inside a
+/// `{start_of_<kind>} … {end_of_<kind>}` pair" state so body lines can
+/// be skipped instead of spilled into the PDF as plain text.
+///
+/// Parity with the HTML renderer is documented in
+/// `.claude/rules/renderer-parity.md`; tracked in #1825 — #1825 option
+/// 2 (warning + placeholder) lands here, option 1 (embed a rasterised
+/// or usvg-rendered bitmap) is tracked for the future.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NotationKind {
+    Abc,
+    Lilypond,
+    MusicXml,
+    Svg,
+}
+
+impl NotationKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Abc => "ABC",
+            Self::Lilypond => "Lilypond",
+            Self::MusicXml => "MusicXML",
+            Self::Svg => "SVG",
+        }
+    }
+
+    /// Match the `StartOf…` directive variants. Returns `None` for any
+    /// other directive.
+    fn from_start_directive(kind: &DirectiveKind) -> Option<Self> {
+        match kind {
+            DirectiveKind::StartOfAbc => Some(Self::Abc),
+            DirectiveKind::StartOfLy => Some(Self::Lilypond),
+            DirectiveKind::StartOfMusicxml => Some(Self::MusicXml),
+            DirectiveKind::StartOfSvg => Some(Self::Svg),
+            _ => None,
+        }
+    }
+
+    /// Returns `true` when `kind` is the matching `EndOf…` directive for
+    /// this notation. Used to close the skip window.
+    fn is_end_directive(self, kind: &DirectiveKind) -> bool {
+        matches!(
+            (self, kind),
+            (Self::Abc, DirectiveKind::EndOfAbc)
+                | (Self::Lilypond, DirectiveKind::EndOfLy)
+                | (Self::MusicXml, DirectiveKind::EndOfMusicxml)
+                | (Self::Svg, DirectiveKind::EndOfSvg),
+        )
+    }
 }
 
 /// Render the section label for a start-of-section directive.
@@ -3895,6 +4011,91 @@ mod delegate_tests {
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("MusicXML"));
+    }
+
+    // #1825 — Notation blocks emit a structured warning AND skip the
+    // body source so it does not land in the PDF as plain text.
+
+    #[test]
+    fn test_abc_block_emits_warning_and_skips_body() {
+        let input = "{start_of_abc: Melody}\nX:1\nK:C\nCDEF\n{end_of_abc}";
+        let song = chordsketch_core::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("ABC") && w.contains("omitted")),
+            "expected at least one warning mentioning `ABC` and `omitted`; got {:?}",
+            result.warnings,
+        );
+        let content = String::from_utf8_lossy(&result.output);
+        // The section label must still appear (so readers see where
+        // the block was), but the notation source must not.
+        assert!(content.contains("ABC: Melody"));
+        assert!(
+            !content.contains("CDEF"),
+            "ABC body content must not leak into the PDF as plain text",
+        );
+        // The explanatory placeholder line must reach the output.
+        assert!(content.contains("[ABC block omitted"));
+    }
+
+    #[test]
+    fn test_ly_block_emits_warning_and_skips_body() {
+        let input = "{start_of_ly}\n\\relative c' { c4 d }\n{end_of_ly}";
+        let song = chordsketch_core::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(result.warnings.iter().any(|w| w.contains("Lilypond")));
+        let content = String::from_utf8_lossy(&result.output);
+        assert!(content.contains("[Lilypond block omitted"));
+        assert!(
+            !content.contains("\\relative"),
+            "Lilypond body content must not leak into the PDF"
+        );
+    }
+
+    #[test]
+    fn test_svg_block_emits_warning_and_skips_body() {
+        let input = "{start_of_svg}\n<svg><circle r=\"10\"/></svg>\n{end_of_svg}";
+        let song = chordsketch_core::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(result.warnings.iter().any(|w| w.contains("SVG")));
+        let content = String::from_utf8_lossy(&result.output);
+        assert!(content.contains("[SVG block omitted"));
+        assert!(
+            !content.contains("<circle"),
+            "SVG body content must not leak into the PDF"
+        );
+    }
+
+    #[test]
+    fn test_musicxml_block_emits_warning_and_skips_body() {
+        let input =
+            "{start_of_musicxml: Score}\n<score-partwise>notes</score-partwise>\n{end_of_musicxml}";
+        let song = chordsketch_core::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(result.warnings.iter().any(|w| w.contains("MusicXML")));
+        let content = String::from_utf8_lossy(&result.output);
+        assert!(content.contains("[MusicXML block omitted"));
+        assert!(
+            !content.contains("<score-partwise"),
+            "MusicXML body content must not leak into the PDF",
+        );
+    }
+
+    #[test]
+    fn test_content_after_notation_block_still_renders() {
+        // The skip-until-end window must close at the matching
+        // `EndOf…` directive. Content after the block is rendered
+        // normally.
+        let input = "{title: T}\n{start_of_abc}\nbody\n{end_of_abc}\n[C]Hello world\n";
+        let song = chordsketch_core::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(result.warnings.iter().any(|w| w.contains("ABC")));
+        let content = String::from_utf8_lossy(&result.output);
+        assert!(content.contains("Hello world"));
+        assert!(!content.contains("body"));
     }
 }
 
