@@ -1,0 +1,115 @@
+# Codecov configuration for ChordSketch.
+#
+# Gating model follows the tracker in issue #1846 §Strategy.3:
+#
+#   core              standalone floor 85%
+#   Renderers (group) floor 80%, intra-group skew <= 5%
+#   Bindings (group)  floor 70%, intra-group skew <= 10%
+#   Patch target      70% on new lines
+#
+# Codecov does not natively enforce intra-group skew; the skew clause lives
+# as a reviewer rule in `.claude/rules/renderer-parity.md` and
+# `.claude/rules/fix-propagation.md` and is verified by auto-review, not by
+# this file.
+#
+# Branch protection: Codecov status checks are emitted but NOT yet wired
+# into branch protection required checks. Per tracker §Strategy: "add to
+# branch protection required checks only after two consecutive green main
+# builds at the gate value". That is a one-time human action on GitHub
+# Settings once baselines prove stable.
+
+codecov:
+  notify:
+    # Wait up to Codecov's default before finalising so the coverage.yml
+    # workflow has time to upload.
+    wait_for_ci: true
+
+coverage:
+  precision: 2
+  round: down
+  range: "70...95"
+
+  status:
+    project:
+      # Aggregate guard: the workspace as a whole may drift by at most 1
+      # percentage point between main builds.
+      default:
+        target: auto
+        threshold: 1%
+        informational: false
+
+      core:
+        paths:
+          - crates/core/
+        target: 85%
+        threshold: 1%
+        informational: false
+
+      render-text:
+        paths:
+          - crates/render-text/
+        target: 80%
+        threshold: 1%
+        informational: false
+
+      render-html:
+        paths:
+          - crates/render-html/
+        target: 80%
+        threshold: 1%
+        informational: false
+
+      render-pdf:
+        paths:
+          - crates/render-pdf/
+        target: 80%
+        threshold: 1%
+        informational: false
+
+      # Foreign-language bindings sit at a lower floor because the lines
+      # llvm-cov sees are mostly marshalling — the real public API surface
+      # is exercised via language-runtime integration tests that llvm-cov
+      # does not observe. Raising the floor requires addressing that
+      # observability gap first.
+      ffi:
+        paths:
+          - crates/ffi/
+        target: 70%
+        threshold: 1%
+        informational: false
+
+      napi:
+        paths:
+          - crates/napi/
+        target: 70%
+        threshold: 1%
+        informational: false
+
+      wasm:
+        paths:
+          - crates/wasm/
+        target: 70%
+        threshold: 1%
+        informational: false
+
+    patch:
+      default:
+        target: 70%
+        threshold: 0%
+
+# Excluded from both project and patch metrics so the published numbers
+# reflect hand-written, runtime-reachable code.
+ignore:
+  - "**/target/**"
+  - "**/node_modules/**"
+  - "**/tests/**"
+  - "**/*_test.rs"
+  - "**/build.rs"
+  # Build-time bindgen driver, instrumented at 0% because it is only
+  # invoked during `cargo build`, not at runtime.
+  - "crates/ffi/src/bin/uniffi-bindgen.rs"
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: true

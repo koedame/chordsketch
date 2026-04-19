@@ -8,6 +8,24 @@
 - New ChordPro directives or syntax support must include at least one golden test before
   merging.
 
+## Minimum Fixture Counts
+
+The renderers each maintain their own fixture corpus. These minimums are the
+floor for sister-site parity (see [`renderer-parity.md`](renderer-parity.md));
+Codecov thresholds alone do not guarantee structural coverage of directive
+classes, so a PR that drops below any of these numbers blocks on human review:
+
+| Renderer | Minimum fixtures | Location |
+|---|---|---|
+| `render-text` | 30 | `crates/render-text/tests/fixtures/` |
+| `render-html` | 15 | `crates/render-html/tests/fixtures/` |
+| `render-pdf`  | 10 | `crates/render-pdf/tests/fixtures/`  |
+
+The asymmetry reflects snapshot cost — render-text fixtures are tiny plain
+text, render-pdf fixtures are binary PDFs whose byte-exact snapshots cost
+~1–2 KB each, and byte-exact snapshots for unicode input are impractical in
+render-pdf (tracked in #1983). Raise the floor when those costs change.
+
 ## Stop-Word Collision Tests
 
 When adding or modifying the chord parser or heuristic importer, add at least one

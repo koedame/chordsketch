@@ -3,18 +3,25 @@ name: Coverage
 # Measures workspace test coverage with cargo-llvm-cov and uploads lcov.info
 # to Codecov. See #1846 for the multi-phase rollout plan.
 #
-# Phase 0+1 scope (issue #1977): upload only, no threshold gating, main-branch
-# pushes only. `needs: []` ensures this job never blocks other workflows.
-# PR trigger is intentionally omitted until baselines stabilise — see
-# tracker §Strategy.2.
+# Triggers:
+# - push to main: captures the authoritative baseline that every PR diff
+#   is compared against.
+# - pull_request: posts the Codecov diff comment and status check on each
+#   PR. The status check is NOT yet wired into branch protection — per
+#   tracker §Strategy, "add to branch protection required checks only
+#   after two consecutive green main builds at the gate value".
+#
+# `needs: []` ensures the coverage job never blocks other CI jobs; only
+# the Codecov status becomes a required check once branch protection is
+# updated.
 #
 # Token: public repos authenticate codecov-action via GitHub OIDC, so
-# CODECOV_TOKEN is not required. The tracker notes it can be added later if
-# upload reliability becomes an issue.
+# CODECOV_TOKEN is not required.
 
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 concurrency:

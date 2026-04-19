@@ -68,6 +68,33 @@ A PR that fixes a bug in one sister site but leaves an equivalent defect in anot
 - **Medium** if it causes incorrect output or violates a spec
 - **Low** if it is a defense-in-depth or quality gap
 
+## Coverage Floors
+
+Each sister-site group carries a numeric coverage floor enforced by
+`codecov.yml`. These floors are derived from the tracker in #1846
+§Strategy.3:
+
+| Group | Group floor | Max intra-group skew |
+|---|---|---|
+| Renderers (`render-text`, `render-html`, `render-pdf`) | 80% | 5 pp |
+| Bindings (`chordsketch-ffi`, `chordsketch-napi`, `chordsketch-wasm`) | 70% | 10 pp |
+| `chordsketch-core` (standalone) | 85% | — |
+| Patch (new lines in any PR) | 70% | — |
+
+Intra-group skew is not enforced natively by Codecov; it is verified by
+the auto-review step by reading the per-crate percentages from the
+Codecov PR comment. A PR that pushes a group's min-to-max spread over
+the skew threshold is a fix-propagation defect by the same definition
+as a missing match arm: one binding or renderer is diverging from its
+siblings. Severity defaults to Medium, raised to High if the drop is
+in a security-relevant function.
+
+Binding floors are intentionally lower because the lines `llvm-cov` sees
+are mostly marshalling glue; the public API surface is exercised via
+language-runtime integration tests (jest, wasm_bindgen_test, Python
+smoke) that llvm-cov does not observe. Raising the floors requires
+closing that observability gap first.
+
 ## Why
 
 6 of the 14 findings in the 2026-04-12 main-branch review were caused by fix locality bias:
