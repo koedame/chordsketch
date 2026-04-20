@@ -8,19 +8,104 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
 const LSP_BIN: &str = env!("CARGO_BIN_EXE_chordsketch-lsp");
 
+/// Upper bound on any single `read_message`-equivalent call. Applied per
+/// framed message, not only per round-trip, so a server that writes a
+/// Content-Length header and then hangs before sending the body fails the
+/// test deterministically instead of stalling CI until the runner timeout.
+/// See #1988 for the bug this guards against.
+const READ_TIMEOUT: Duration = Duration::from_secs(10);
+
 /// Minimal LSP client that speaks JSON-RPC with Content-Length framing over a
-/// subprocess's stdio.
+/// subprocess's stdio. A dedicated reader thread deserialises messages as
+/// soon as they arrive on the child's stdout; the test thread receives them
+/// through a bounded-wait channel, which gives `read_message` a real I/O
+/// timeout that blocking `BufReader::read_line` / `read_exact` calls cannot
+/// provide on their own.
 struct LspClient {
     child: Child,
     stdin: Option<ChildStdin>,
-    stdout: BufReader<ChildStdout>,
+    rx: Receiver<ReaderEvent>,
+    reader: Option<JoinHandle<()>>,
     next_id: i64,
+}
+
+/// What the reader thread emits. `Message` is a complete parsed JSON-RPC
+/// value; `Error` covers the stream ending or failing to parse. Exactly one
+/// `Error` is ever sent before the thread exits.
+enum ReaderEvent {
+    Message(Value),
+    Error(String),
+}
+
+fn spawn_reader_thread(stdout: ChildStdout) -> (Receiver<ReaderEvent>, JoinHandle<()>) {
+    let (tx, rx) = mpsc::channel();
+    let handle = thread::spawn(move || {
+        let mut stdout = BufReader::new(stdout);
+        loop {
+            let mut content_length: Option<usize> = None;
+            let mut header_error: Option<String> = None;
+            loop {
+                let mut line = String::new();
+                let n = match stdout.read_line(&mut line) {
+                    Ok(n) => n,
+                    Err(e) => {
+                        header_error = Some(format!("read header line: {e}"));
+                        break;
+                    }
+                };
+                if n == 0 {
+                    header_error = Some("server closed stdout".to_string());
+                    break;
+                }
+                let trimmed = line.trim_end_matches(['\r', '\n']);
+                if trimmed.is_empty() {
+                    break;
+                }
+                if let Some(rest) = trimmed.strip_prefix("Content-Length:") {
+                    match rest.trim().parse() {
+                        Ok(v) => content_length = Some(v),
+                        Err(e) => {
+                            header_error = Some(format!("parse Content-Length: {e}"));
+                            break;
+                        }
+                    }
+                }
+            }
+            if let Some(e) = header_error {
+                let _ = tx.send(ReaderEvent::Error(e));
+                return;
+            }
+            let Some(n) = content_length else {
+                let _ = tx.send(ReaderEvent::Error("missing Content-Length header".into()));
+                return;
+            };
+            let mut body = vec![0u8; n];
+            if let Err(e) = stdout.read_exact(&mut body) {
+                let _ = tx.send(ReaderEvent::Error(format!("read body: {e}")));
+                return;
+            }
+            let parsed: Value = match serde_json::from_slice(&body) {
+                Ok(v) => v,
+                Err(e) => {
+                    let _ = tx.send(ReaderEvent::Error(format!("parse JSON-RPC body: {e}")));
+                    return;
+                }
+            };
+            if tx.send(ReaderEvent::Message(parsed)).is_err() {
+                // Receiver dropped — test finished; exit quietly.
+                return;
+            }
+        }
+    });
+    (rx, handle)
 }
 
 impl LspClient {
@@ -35,11 +120,13 @@ impl LspClient {
             .spawn()
             .expect("spawn chordsketch-lsp");
         let stdin = Some(child.stdin.take().expect("stdin"));
-        let stdout = BufReader::new(child.stdout.take().expect("stdout"));
+        let stdout = child.stdout.take().expect("stdout");
+        let (rx, reader) = spawn_reader_thread(stdout);
         Self {
             child,
             stdin,
-            stdout,
+            rx,
+            reader: Some(reader),
             next_id: 1,
         }
     }
@@ -73,37 +160,33 @@ impl LspClient {
         }));
     }
 
-    fn read_message(&mut self) -> Value {
-        let mut content_length: Option<usize> = None;
-        loop {
-            let mut line = String::new();
-            let n = self.stdout.read_line(&mut line).expect("read header line");
-            if n == 0 {
-                panic!("LSP server closed stdout unexpectedly");
-            }
-            let trimmed = line.trim_end_matches(['\r', '\n']);
-            if trimmed.is_empty() {
-                break;
-            }
-            if let Some(rest) = trimmed.strip_prefix("Content-Length:") {
-                content_length = Some(rest.trim().parse().expect("parse Content-Length"));
+    /// Receives the next full message with a hard deadline. If the reader
+    /// thread is stuck mid-frame (headers received, body not sent), the
+    /// channel wait times out and this function panics instead of blocking
+    /// CI indefinitely. See #1988 for the scenario this guards against.
+    fn read_message_with_deadline(&mut self, deadline: Instant) -> Value {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match self.rx.recv_timeout(remaining) {
+            Ok(ReaderEvent::Message(v)) => v,
+            Ok(ReaderEvent::Error(e)) => panic!("LSP reader error: {e}"),
+            Err(RecvTimeoutError::Timeout) => panic!(
+                "timed out after {:?} waiting for next LSP message (server likely hung mid-frame)",
+                READ_TIMEOUT
+            ),
+            Err(RecvTimeoutError::Disconnected) => {
+                panic!("LSP reader thread exited before sending a message")
             }
         }
-        let n = content_length.expect("missing Content-Length header");
-        let mut body = vec![0u8; n];
-        self.stdout.read_exact(&mut body).expect("read body");
-        serde_json::from_slice(&body).expect("parse JSON-RPC body")
     }
 
     /// Reads messages, skipping notifications, until the response for the
-    /// given id arrives. Times out so a buggy server does not hang CI.
+    /// given id arrives. The overall deadline is the same as a single
+    /// `read_message` — if a server sends a stream of log notifications but
+    /// never the actual response, this still caps CI latency.
     fn wait_for_response(&mut self, id: i64) -> Value {
-        let deadline = Instant::now() + Duration::from_secs(10);
+        let deadline = Instant::now() + READ_TIMEOUT;
         loop {
-            if Instant::now() > deadline {
-                panic!("timed out waiting for response id={id}");
-            }
-            let msg = self.read_message();
+            let msg = self.read_message_with_deadline(deadline);
             if msg.get("id").and_then(Value::as_i64) == Some(id) {
                 return msg;
             }
@@ -141,6 +224,11 @@ impl Drop for LspClient {
         // does not wait on it forever.
         let _ = self.child.kill();
         let _ = self.child.wait();
+        // Reader thread observes stdout EOF once the child exits and
+        // terminates on its own; joining here keeps the test process tidy.
+        if let Some(handle) = self.reader.take() {
+            let _ = handle.join();
+        }
     }
 }
 
