@@ -69,6 +69,7 @@ describe("NAPI public API surface", () => {
 
   test("renderHtmlWithOptions({ transpose: 1 }) returns HTML", () => {
     const out = m.renderHtmlWithOptions(MINIMAL, { transpose: 1 });
+    expect(typeof out).toBe("string");
     expect(out).toContain("Test");
   });
 

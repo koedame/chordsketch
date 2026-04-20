@@ -45,8 +45,15 @@ enum ReaderEvent {
     Error(String),
 }
 
+/// Upper bound on the reader-to-test channel. Defends against an
+/// LSP-side chattiness storm (e.g. a burst of `window/logMessage` events)
+/// growing the queue without bound on a resource-constrained CI runner.
+/// 64 comfortably absorbs any realistic short burst while still capping
+/// memory use if something pathological happens.
+const READER_CHANNEL_CAPACITY: usize = 64;
+
 fn spawn_reader_thread(stdout: ChildStdout) -> (Receiver<ReaderEvent>, JoinHandle<()>) {
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = mpsc::sync_channel(READER_CHANNEL_CAPACITY);
     let handle = thread::spawn(move || {
         let mut stdout = BufReader::new(stdout);
         loop {
@@ -170,7 +177,7 @@ impl LspClient {
             Ok(ReaderEvent::Message(v)) => v,
             Ok(ReaderEvent::Error(e)) => panic!("LSP reader error: {e}"),
             Err(RecvTimeoutError::Timeout) => panic!(
-                "timed out after {:?} waiting for next LSP message (server likely hung mid-frame)",
+                "read deadline exceeded (budget: {:?}) waiting for next LSP message (server likely hung mid-frame)",
                 READ_TIMEOUT
             ),
             Err(RecvTimeoutError::Disconnected) => {
@@ -180,9 +187,12 @@ impl LspClient {
     }
 
     /// Reads messages, skipping notifications, until the response for the
-    /// given id arrives. The overall deadline is the same as a single
-    /// `read_message` — if a server sends a stream of log notifications but
-    /// never the actual response, this still caps CI latency.
+    /// given id arrives. The whole loop — every recv including ones that
+    /// get dropped as notifications — shares a single `READ_TIMEOUT`
+    /// budget, not one budget per message. That matters when a server
+    /// sends a stream of log notifications but never the actual response:
+    /// the cumulative time across the skipped messages still caps CI
+    /// latency at `READ_TIMEOUT`.
     fn wait_for_response(&mut self, id: i64) -> Value {
         let deadline = Instant::now() + READ_TIMEOUT;
         loop {
