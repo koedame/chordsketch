@@ -45,8 +45,15 @@ enum ReaderEvent {
     Error(String),
 }
 
+/// Upper bound on the reader-to-test channel. Defends against an
+/// LSP-side chattiness storm (e.g. a burst of `window/logMessage` events)
+/// growing the queue without bound on a resource-constrained CI runner.
+/// 64 comfortably absorbs any realistic short burst while still capping
+/// memory use if something pathological happens.
+const READER_CHANNEL_CAPACITY: usize = 64;
+
 fn spawn_reader_thread(stdout: ChildStdout) -> (Receiver<ReaderEvent>, JoinHandle<()>) {
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = mpsc::sync_channel(READER_CHANNEL_CAPACITY);
     let handle = thread::spawn(move || {
         let mut stdout = BufReader::new(stdout);
         loop {
