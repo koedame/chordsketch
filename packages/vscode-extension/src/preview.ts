@@ -108,16 +108,12 @@ export function disposeAll(): void {
 }
 
 /**
- * Registers a WebView panel serializer so that preview tabs survive VS Code
- * restarts. Must be called once from `activate()`.
+ * Builds the `WebviewPanelSerializer` invoked on VS Code restart.
  *
  * On deserialization the source `vscode.TextDocument` is looked up via the
- * persisted `documentUri`. If the document is no longer available (file moved
- * or deleted) the panel renders a friendly message and is left open so the
- * user can close it without error.
- */
-/**
- * Builds the `WebviewPanelSerializer` registered in `registerPreviewSerializer`.
+ * persisted `documentUri`; if the document is no longer available (file
+ * moved or deleted) the panel renders a friendly message and is left open
+ * so the user can close it without error.
  *
  * Exposed as a separate factory so integration tests can invoke
  * `deserializeWebviewPanel` directly with a fabricated panel and state —
@@ -174,6 +170,14 @@ export function createPreviewSerializer(
   };
 }
 
+/**
+ * Registers the preview-panel serializer with VS Code so preview tabs
+ * survive restarts. Call once from `activate()`; the returned
+ * `Disposable` must be pushed onto the extension context subscriptions
+ * so the serializer is unregistered at deactivation.
+ *
+ * The restoration logic itself lives in [`createPreviewSerializer`].
+ */
 export function registerPreviewSerializer(context: vscode.ExtensionContext): vscode.Disposable {
   return vscode.window.registerWebviewPanelSerializer(
     PREVIEW_VIEW_TYPE,
