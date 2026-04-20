@@ -177,7 +177,7 @@ impl LspClient {
             Ok(ReaderEvent::Message(v)) => v,
             Ok(ReaderEvent::Error(e)) => panic!("LSP reader error: {e}"),
             Err(RecvTimeoutError::Timeout) => panic!(
-                "timed out after {:?} waiting for next LSP message (server likely hung mid-frame)",
+                "read deadline exceeded (budget: {:?}) waiting for next LSP message (server likely hung mid-frame)",
                 READ_TIMEOUT
             ),
             Err(RecvTimeoutError::Disconnected) => {
@@ -187,9 +187,12 @@ impl LspClient {
     }
 
     /// Reads messages, skipping notifications, until the response for the
-    /// given id arrives. The overall deadline is the same as a single
-    /// `read_message` — if a server sends a stream of log notifications but
-    /// never the actual response, this still caps CI latency.
+    /// given id arrives. The whole loop — every recv including ones that
+    /// get dropped as notifications — shares a single `READ_TIMEOUT`
+    /// budget, not one budget per message. That matters when a server
+    /// sends a stream of log notifications but never the actual response:
+    /// the cumulative time across the skipped messages still caps CI
+    /// latency at `READ_TIMEOUT`.
     fn wait_for_response(&mut self, id: i64) -> Value {
         let deadline = Instant::now() + READ_TIMEOUT;
         loop {
