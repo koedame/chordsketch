@@ -1,0 +1,5 @@
+{title: Broken ChordPro Fixture}
+{subtitle: Integration test — deliberate parse errors}
+
+[C]Missing closing bracket in chord [G here
+Unterminated {directive

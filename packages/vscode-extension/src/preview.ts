@@ -116,8 +116,20 @@ export function disposeAll(): void {
  * or deleted) the panel renders a friendly message and is left open so the
  * user can close it without error.
  */
-export function registerPreviewSerializer(context: vscode.ExtensionContext): vscode.Disposable {
-  return vscode.window.registerWebviewPanelSerializer(PREVIEW_VIEW_TYPE, {
+/**
+ * Builds the `WebviewPanelSerializer` registered in `registerPreviewSerializer`.
+ *
+ * Exposed as a separate factory so integration tests can invoke
+ * `deserializeWebviewPanel` directly with a fabricated panel and state —
+ * VS Code's extension host has no way to trigger the real restart
+ * lifecycle inside a single test run, and the serializer instance
+ * returned by `registerWebviewPanelSerializer` is not accessible once
+ * it's been handed off.
+ */
+export function createPreviewSerializer(
+  context: vscode.ExtensionContext,
+): vscode.WebviewPanelSerializer {
+  return {
     async deserializeWebviewPanel(panel: vscode.WebviewPanel, state: unknown): Promise<void> {
       const parsed = parseSerializedState(state);
       if (!parsed) {
@@ -159,7 +171,14 @@ export function registerPreviewSerializer(context: vscode.ExtensionContext): vsc
 
       PreviewPanel.restore(context, document, panel);
     },
-  });
+  };
+}
+
+export function registerPreviewSerializer(context: vscode.ExtensionContext): vscode.Disposable {
+  return vscode.window.registerWebviewPanelSerializer(
+    PREVIEW_VIEW_TYPE,
+    createPreviewSerializer(context),
+  );
 }
 
 function renderUnavailableMessage(panel: vscode.WebviewPanel, message: string): void {
