@@ -24,3 +24,12 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 
 [target.'cfg(unix)'.dependencies]
 libc = { version = "0.2", default-features = false }
+
+[dev-dependencies]
+# Text extraction for unicode golden fixtures (#1983). Byte-exact snapshots
+# are impractical when the input contains non-Latin1 characters because the
+# bundled NotoSansCJK subset inflates the PDF to several megabytes. For
+# those fixtures the harness extracts the PDF's text layer and compares
+# against a small `expected.txt` snapshot instead. Dev-only, so the runtime
+# crate stays minimal.
+pdf-extract = "0.10"
