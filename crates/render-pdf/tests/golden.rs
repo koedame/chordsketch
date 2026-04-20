@@ -117,11 +117,30 @@ fn detect_mode(fixture_dir: &Path) -> Mode {
             "fixture {} has both expected.pdf and expected.txt; pick one mode",
             fixture_dir.display()
         ),
+        (true, false) => Mode::Pdf,
         (false, true) => Mode::Text,
-        // Byte-exact is the default. Pre-existing fixtures and the first
-        // UPDATE_GOLDEN run for a new fixture both land here unless the
-        // maintainer pre-creates an empty `expected.txt`.
-        _ => Mode::Pdf,
+        // Neither file exists. The maintainer intent is ambiguous — this
+        // could be a fresh fixture that hasn't been primed with its mode
+        // marker, or an accidentally deleted snapshot. Panic under
+        // UPDATE_GOLDEN with a clear hint rather than defaulting to PDF and
+        // surfacing a less helpful I/O error later from `compare_pdf_bytes`.
+        (false, false) => {
+            if std::env::var("UPDATE_GOLDEN").is_ok() {
+                // Default to PDF mode only when the maintainer has opted
+                // into regeneration. Still warn so fresh fixtures are named
+                // intentionally rather than falling into a default silently.
+                eprintln!(
+                    "[{}] no expected file present; creating expected.pdf (create an empty expected.txt before UPDATE_GOLDEN to opt into text-extraction mode)",
+                    fixture_dir.display()
+                );
+                Mode::Pdf
+            } else {
+                panic!(
+                    "fixture {} has neither expected.pdf nor expected.txt; create an empty expected.pdf or expected.txt to declare the mode and run `UPDATE_GOLDEN=1 cargo test -p chordsketch-render-pdf --test golden`",
+                    fixture_dir.display()
+                );
+            }
+        }
     }
 }
 
