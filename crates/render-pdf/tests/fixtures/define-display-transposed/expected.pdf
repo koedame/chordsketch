@@ -1,0 +1,137 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> /ProcSet [/PDF /Text] >> /Kids [7 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 1397 >>
+stream
+BT
+/F2 18 Tf
+56 786 Td
+(Display + Transpose Test) Tj
+ET
+BT
+/F2 9 Tf
+56 764 Td
+(A minor) Tj
+ET
+q
+2 w
+56 749 m 106 749 l S
+Q
+q
+0.5 w
+56 749 m 56 689 l S
+Q
+q
+0.5 w
+66 749 m 66 689 l S
+Q
+q
+0.5 w
+76 749 m 76 689 l S
+Q
+q
+0.5 w
+86 749 m 86 689 l S
+Q
+q
+0.5 w
+96 749 m 96 689 l S
+Q
+q
+0.5 w
+106 749 m 106 689 l S
+Q
+q
+0.5 w
+56 749 m 106 749 l S
+Q
+q
+0.5 w
+56 737 m 106 737 l S
+Q
+q
+0.5 w
+56 725 m 106 725 l S
+Q
+q
+0.5 w
+56 713 m 106 713 l S
+Q
+q
+0.5 w
+56 701 m 106 701 l S
+Q
+q
+0.5 w
+56 689 m 106 689 l S
+Q
+BT
+/F1 7 Tf
+53.5 753 Td
+(X) Tj
+ET
+0.5 w
+68.5 755 m 68.5 756.38 67.38 757.5 66 757.5 c 64.62 757.5 63.5 756.38 63.5 755 c 63.5 753.62 64.62 752.5 66 752.5 c 67.38 752.5 68.5 753.62 68.5 755 c S
+79 731 m 79 732.66 77.66 734 76 734 c 74.34 734 73 732.66 73 731 c 73 729.34 74.34 728 76 728 c 77.66 728 79 729.34 79 731 c f
+89 731 m 89 732.66 87.66 734 86 734 c 84.34 734 83 732.66 83 731 c 83 729.34 84.34 728 86 728 c 87.66 728 89 729.34 89 731 c f
+99 743 m 99 744.66 97.66 746 96 746 c 94.34 746 93 744.66 93 743 c 93 741.34 94.34 740 96 740 c 97.66 740 99 741.34 99 743 c f
+0.5 w
+108.5 755 m 108.5 756.38 107.38 757.5 106 757.5 c 104.62 757.5 103.5 756.38 103.5 755 c 103.5 753.62 104.62 752.5 106 752.5 c 107.38 752.5 108.5 753.62 108.5 755 c S
+BT
+/F2 9 Tf
+56 675 Td
+(A minor) Tj
+ET
+BT
+/F2 9 Tf
+89 675 Td
+(A) Tj
+ET
+BT
+/F2 9 Tf
+118.34 675 Td
+(A minor) Tj
+ET
+BT
+/F1 11 Tf
+56 664 Td
+(Hello world again) Tj
+ET
+endstream
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000230 00000 n 
+0000000327 00000 n 
+0000000429 00000 n 
+0000000534 00000 n 
+0000000643 00000 n 
+0000000706 00000 n 
+trailer
+<< /Size 9 /Root 1 0 R >>
+startxref
+2155
+%%EOF
