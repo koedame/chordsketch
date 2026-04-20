@@ -533,7 +533,11 @@ pub fn version() -> String {
 /// Returns an empty array if the input is valid. This allows callers to
 /// obtain parse diagnostics without performing a full render.
 ///
-/// Matches the `validate()` function exposed by the FFI and NAPI bindings.
+/// Return shape: `Vec<String>` — flat pre-formatted error messages.
+/// The FFI binding (`crates/ffi`) returns the same flat form; the NAPI
+/// binding (`crates/napi`) returns structured `ValidationError` records
+/// (`{line, column, message}`) since #1990. Harmonising the WASM and FFI
+/// sides to the structured shape is tracked in #2009.
 #[must_use]
 #[wasm_bindgen]
 pub fn validate(input: &str) -> Vec<String> {
