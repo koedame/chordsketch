@@ -2,16 +2,34 @@
 //!
 //! Discovers every subdirectory under `tests/fixtures/` that contains an
 //! `input.cho`, parses it through [`chordsketch_core::parse`], renders via
-//! [`chordsketch_render_pdf::render_song`], and compares the resulting bytes
-//! against an `expected.pdf` snapshot.
+//! [`chordsketch_render_pdf::render_song`], and compares the result against
+//! a snapshot.
 //!
-//! The PDF renderer is deterministic (no clock, no RNG, stable map
-//! orderings), so byte-exact comparison is the right primitive. When the
-//! renderer's output changes intentionally, regenerate the snapshots with:
+//! # Snapshot modes
+//!
+//! Each fixture declares its mode by which expected file it ships:
+//!
+//! - `expected.pdf` — **byte-exact**. The PDF renderer is deterministic (no
+//!   clock, no RNG, stable map orderings), so byte-for-byte comparison is
+//!   the tightest primitive and the default for ASCII-only input.
+//! - `expected.txt` — **text-extraction**. Runs `pdf-extract` on the
+//!   rendered bytes and compares against the snapshot. Used for inputs
+//!   that trigger the bundled NotoSansCJK subset (any non-Latin1
+//!   character), because byte-exact snapshots would commit ~6 MB of font
+//!   data per fixture. See #1983 for the rationale.
+//!
+//! A fixture may ship either, but not both. If neither exists at test
+//! time, the harness panics with a clear hint to run UPDATE_GOLDEN.
+//!
+//! # Regeneration
 //!
 //! ```sh
 //! UPDATE_GOLDEN=1 cargo test -p chordsketch-render-pdf --test golden
 //! ```
+//!
+//! The env var preserves whichever expected format already exists. For a
+//! brand-new fixture, create an empty `expected.pdf` or `expected.txt`
+//! first to declare the mode, then run UPDATE_GOLDEN.
 //!
 //! Each fixture deliberately mirrors an existing `render-text` fixture so
 //! sister-site parity (see `.claude/rules/renderer-parity.md`) can be
@@ -80,6 +98,58 @@ fn diff_context(expected: &[u8], actual: &[u8]) -> String {
     )
 }
 
+/// Which comparison mode a fixture uses, inferred from the expected file
+/// it ships.
+enum Mode {
+    /// Byte-exact PDF comparison (`expected.pdf`).
+    Pdf,
+    /// Extract the PDF's text layer via `pdf-extract` and compare against
+    /// `expected.txt`. Used when the input triggers the bundled NotoSansCJK
+    /// subset font (#1983).
+    Text,
+}
+
+fn detect_mode(fixture_dir: &Path) -> Mode {
+    let pdf = fixture_dir.join("expected.pdf");
+    let txt = fixture_dir.join("expected.txt");
+    match (pdf.exists(), txt.exists()) {
+        (true, true) => panic!(
+            "fixture {} has both expected.pdf and expected.txt; pick one mode",
+            fixture_dir.display()
+        ),
+        (false, true) => Mode::Text,
+        // Byte-exact is the default. Pre-existing fixtures and the first
+        // UPDATE_GOLDEN run for a new fixture both land here unless the
+        // maintainer pre-creates an empty `expected.txt`.
+        _ => Mode::Pdf,
+    }
+}
+
+/// Line-level diff for text-extraction mode, mirroring the helper in the
+/// render-text golden harness so failure output is familiar.
+fn diff_strings(expected: &str, actual: &str) -> Option<String> {
+    let expected_lines: Vec<&str> = expected.lines().collect();
+    let actual_lines: Vec<&str> = actual.lines().collect();
+    if expected_lines == actual_lines {
+        return None;
+    }
+    let mut out = String::new();
+    let max_len = expected_lines.len().max(actual_lines.len());
+    for i in 0..max_len {
+        match (expected_lines.get(i), actual_lines.get(i)) {
+            (Some(e), Some(a)) if e == a => out.push_str(&format!("  {:4} | {e}\n", i + 1)),
+            (Some(e), Some(a)) => {
+                out.push_str(&format!("- {:4} | {e}\n", i + 1));
+                out.push_str(&format!("+ {:4} | {a}\n", i + 1));
+            }
+            (Some(e), None) => out.push_str(&format!("- {:4} | {e}\n", i + 1)),
+            (None, Some(a)) => out.push_str(&format!("+ {:4} | {a}\n", i + 1)),
+            (None, None) => unreachable!(),
+        }
+    }
+    Some(out)
+}
+
 fn run_golden_test(fixture_dir: &Path) {
     let name = fixture_dir
         .file_name()
@@ -88,26 +158,33 @@ fn run_golden_test(fixture_dir: &Path) {
         .to_string();
 
     let input_path = fixture_dir.join("input.cho");
-    let expected_path = fixture_dir.join("expected.pdf");
-
     let input = fs::read_to_string(&input_path)
         .unwrap_or_else(|e| panic!("[{name}] cannot read {}: {e}", input_path.display()));
 
     let song =
         chordsketch_core::parse(&input).unwrap_or_else(|e| panic!("[{name}] parse error: {e}"));
-    let actual = chordsketch_render_pdf::render_song(&song);
+    let actual_pdf = chordsketch_render_pdf::render_song(&song);
 
     assert!(
-        !actual.is_empty(),
+        !actual_pdf.is_empty(),
         "[{name}] PDF renderer returned zero bytes"
     );
     assert!(
-        actual.starts_with(b"%PDF-"),
+        actual_pdf.starts_with(b"%PDF-"),
         "[{name}] output does not start with the PDF magic header"
     );
 
+    match detect_mode(fixture_dir) {
+        Mode::Pdf => compare_pdf_bytes(fixture_dir, &name, &actual_pdf),
+        Mode::Text => compare_extracted_text(fixture_dir, &name, &actual_pdf),
+    }
+}
+
+fn compare_pdf_bytes(fixture_dir: &Path, name: &str, actual: &[u8]) {
+    let expected_path = fixture_dir.join("expected.pdf");
+
     if std::env::var("UPDATE_GOLDEN").is_ok() {
-        fs::write(&expected_path, &actual)
+        fs::write(&expected_path, actual)
             .unwrap_or_else(|e| panic!("[{name}] cannot write {}: {e}", expected_path.display()));
         eprintln!("[{name}] updated {}", expected_path.display());
         return;
@@ -132,7 +209,45 @@ fn run_golden_test(fixture_dir: &Path) {
              UPDATE_GOLDEN=1 cargo test -p chordsketch-render-pdf --test golden\n",
             fixture_dir.display(),
             expected_path.display(),
-            diff_context(&expected, &actual),
+            diff_context(&expected, actual),
+        );
+    }
+}
+
+fn compare_extracted_text(fixture_dir: &Path, name: &str, pdf_bytes: &[u8]) {
+    let expected_path = fixture_dir.join("expected.txt");
+
+    let extracted = pdf_extract::extract_text_from_mem(pdf_bytes)
+        .unwrap_or_else(|e| panic!("[{name}] pdf-extract failed: {e}"));
+
+    if std::env::var("UPDATE_GOLDEN").is_ok() {
+        fs::write(&expected_path, &extracted)
+            .unwrap_or_else(|e| panic!("[{name}] cannot write {}: {e}", expected_path.display()));
+        eprintln!("[{name}] updated {}", expected_path.display());
+        return;
+    }
+
+    let expected = fs::read_to_string(&expected_path).unwrap_or_else(|e| {
+        panic!(
+            "[{name}] cannot read {} (run `UPDATE_GOLDEN=1 cargo test -p chordsketch-render-pdf --test golden` to create it): {e}",
+            expected_path.display()
+        )
+    });
+
+    if let Some(diff) = diff_strings(&expected, &extracted) {
+        panic!(
+            "\n\ngolden test '{name}' (text-extraction mode) failed!\n\
+             \n\
+             Fixture: {}\n\
+             Expected file: {}\n\
+             \n\
+             Diff (- expected, + actual):\n\
+             {diff}\n\
+             \n\
+             If this change is intentional, run:\n\
+             UPDATE_GOLDEN=1 cargo test -p chordsketch-render-pdf --test golden\n",
+            fixture_dir.display(),
+            expected_path.display(),
         );
     }
 }
