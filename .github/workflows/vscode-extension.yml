@@ -104,8 +104,10 @@ jobs:
       # reuse the local cache.
       #
       # xvfb-run provides a virtual X display for Electron on the Linux
-      # runner. See issue #1918 for the phased test plan — LSP and
-      # serializer integration tests are still follow-up phases.
+      # runner. Coverage completes the issue #1918 phased plan:
+      # activation + command registration (#1914), LSP handshake
+      # negotiation (#1913), preview panel, and the preview
+      # WebviewPanelSerializer restart round-trip.
       - name: Compile integration tests
         run: npm run compile:integration
         working-directory: packages/vscode-extension

@@ -19,6 +19,12 @@ import * as vscode from 'vscode';
 import { startLspClient, stopLspClient } from './lsp.js';
 import { startLspClientSafely } from './lsp-activation.js';
 import { notifyDocumentChanged, disposeAll, registerPreviewSerializer } from './preview.js';
+// Re-exported so the integration-test harness can reach
+// `createPreviewSerializer` through the bundled `dist/extension.js` —
+// the serializer object returned to VS Code by
+// `registerWebviewPanelSerializer` is otherwise unreachable from tests.
+// See `test/integration/serializer.test.ts` for the round-trip test.
+export { createPreviewSerializer } from './preview.js';
 import { registerOpenPreview, registerOpenPreviewToSide, registerTransposeUp, registerTransposeDown, registerConvertTo, resetCommandSingletons } from './commands.js';
 
 /**
