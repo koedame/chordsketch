@@ -13,9 +13,10 @@ export interface RenderOptions {
   /**
    * Semitone transposition offset. Defaults to 0.
    *
-   * Must be within the i8 range (-128..=127); out-of-range values are
-   * rejected with a thrown `Status::InvalidArg` error. The underlying
-   * renderer reduces the accepted value modulo 12.
+   * Must be within the i8 range (-128..=127); out-of-range values
+   * throw an `Error` (the underlying napi-rs status is `InvalidArg`,
+   * surfaced as `err.code === 'InvalidArg'`). The renderer reduces the
+   * accepted value modulo 12.
    */
   transpose?: number;
 
