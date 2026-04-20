@@ -573,11 +573,42 @@ fn validate_inner(input: &str) -> Vec<ValidationErrorPayload> {
 /// `serde_wasm_bindgen::to_value` only fails on programmer error, so
 /// this is a defensive return path — callers can treat it as infallible
 /// in normal use.
-#[wasm_bindgen(js_name = validate)]
+// Tell wasm-bindgen to skip its auto-generated TypeScript declaration for
+// `validate` (which would emit `validate(input: string): any` because the
+// Rust signature returns `JsValue`) and inject our own precise one via the
+// `typescript_custom_section` block below. See #2018 for the rationale —
+// downstream TypeScript consumers of `@chordsketch/wasm` should see the
+// same `ValidationError[]` shape the NAPI binding already provides.
+#[wasm_bindgen(js_name = validate, skip_typescript)]
 pub fn validate(input: &str) -> Result<JsValue, JsValue> {
     serde_wasm_bindgen::to_value(&validate_inner(input))
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
+
+#[wasm_bindgen(typescript_custom_section)]
+const VALIDATION_ERROR_TS: &'static str = r#"
+/**
+ * A single validation issue reported by {@link validate}.
+ *
+ * Matches the NAPI (`@chordsketch/node`) `ValidationError` interface and the
+ * UDL `ValidationError` dictionary exposed by the FFI bindings.
+ */
+export interface ValidationError {
+  /** One-based line number where the issue was detected. */
+  line: number;
+  /** One-based column number where the issue was detected. */
+  column: number;
+  /** Human-readable description of the issue. */
+  message: string;
+}
+
+/**
+ * Validate ChordPro input and return any parse errors as structured records.
+ *
+ * Returns an empty array if the input is valid.
+ */
+export function validate(input: string): ValidationError[];
+"#;
 
 #[cfg(test)]
 mod tests {
