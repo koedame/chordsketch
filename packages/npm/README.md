@@ -126,7 +126,10 @@ interface RenderOptions {
 
 | Function | Input | Output |
 |----------|-------|--------|
-| `validate(input)` | ChordPro string | `string[]` — parse errors (empty if valid) |
+| `validate(input)` | ChordPro string | `ValidationError[]` — parse errors (empty if valid) |
+
+Each `ValidationError` is `{line, column, message}` with one-based line
+and column numbers. Matches the NAPI (`@chordsketch/node`) binding.
 
 ### Utility
 

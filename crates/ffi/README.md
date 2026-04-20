@@ -68,9 +68,9 @@ See #1827.
 ### Validation
 
 ```python
-errors = chordsketch.validate(source)  # list[str] — empty if clean
-for msg in errors:
-    print(msg)
+errors = chordsketch.validate(source)  # list[ValidationError] — empty if clean
+for e in errors:
+    print(f"line {e.line}, column {e.column}: {e.message}")
 ```
 
 ### Utility

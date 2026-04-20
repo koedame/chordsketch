@@ -75,8 +75,8 @@ All render methods accept three arguments:
 ### Validation
 
 ```ruby
-errors = Chordsketch.validate(source)  # Array<String> — empty if clean
-errors.each { |msg| puts msg }
+errors = Chordsketch.validate(source)  # Array<ValidationError> — empty if clean
+errors.each { |e| puts "line #{e.line}, column #{e.column}: #{e.message}" }
 ```
 
 ### Utility

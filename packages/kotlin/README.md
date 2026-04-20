@@ -87,8 +87,8 @@ All render functions accept three parameters:
 ### Validation
 
 ```kotlin
-val errors: List<String> = validate(source)  // empty if clean
-errors.forEach { println(it) }
+val errors: List<ValidationError> = validate(source)  // empty if clean
+errors.forEach { println("line ${it.line}, column ${it.column}: ${it.message}") }
 ```
 
 ### Utility

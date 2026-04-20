@@ -49,12 +49,13 @@ namespace chordsketch {
     [Throws=ChordSketchError]
     PdfRenderWithWarnings parse_and_render_pdf_with_warnings(string input, string? config_json, i8? transpose);
 
-    /// Validate ChordPro input and return any parse errors as strings.
-    /// Returns an empty list if the input is valid.
+    /// Validate ChordPro input and return any parse errors as structured
+    /// records. Returns an empty list if the input is valid.
     ///
     /// Call this before or after rendering to surface parse diagnostics
-    /// that the render functions silently discard.
-    sequence<string> validate(string input);
+    /// that the render functions silently discard. Each entry carries a
+    /// one-based `line`, one-based `column`, and a human-readable message.
+    sequence<ValidationError> validate(string input);
 
     /// Return the ChordSketch library version.
     string version();
@@ -81,6 +82,20 @@ dictionary PdfRenderWithWarnings {
     bytes output;
     /// Warnings captured during the render pass.
     sequence<string> warnings;
+};
+
+/// A single validation issue reported by `validate()`.
+///
+/// Matches the NAPI `ValidationError` interface introduced in #1990 and
+/// tracked for cross-binding consistency in #2009. Line and column are
+/// one-based (editor diagnostic convention).
+dictionary ValidationError {
+    /// One-based line number where the issue was detected.
+    u32 line;
+    /// One-based column number where the issue was detected.
+    u32 column;
+    /// Human-readable description of the issue.
+    string message;
 };
 
 [Error]
