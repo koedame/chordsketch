@@ -408,11 +408,13 @@ jobs:
   chocolatey:
     name: Chocolatey (Windows)
     runs-on: windows-latest
-    # Chocolatey package is published automatically by post-release.yml
-    # on each release. On PR runs (before the first release with Chocolatey),
-    # this job will fail because the package does not yet exist on the
-    # Chocolatey Community Repository. That is expected and does not block
-    # the PR. Once the first release lands, this job will start passing.
+    # Temporarily skipped: the chordsketch Chocolatey package is stuck in
+    # community moderation (see #1852), so `choco install chordsketch` has
+    # been failing on every run for an extended period. Re-enable this job
+    # (remove `if: false` and drop `continue-on-error: true` per #1776) once
+    # the package is reliably installable from the Chocolatey Community
+    # Repository. Tracking: #2021.
+    if: false
     continue-on-error: true
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
