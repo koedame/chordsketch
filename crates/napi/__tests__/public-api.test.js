@@ -91,18 +91,20 @@ describe("NAPI public API surface", () => {
     expect(errs).toHaveLength(0);
   });
 
-  test("validate() returns at least one error message for a broken document", () => {
+  test("validate() returns at least one ValidationError for a broken document", () => {
     // Unterminated chord bracket — parser rejects this.
     const errs = m.validate("{title: T}\n[G");
     expect(Array.isArray(errs)).toBe(true);
     expect(errs.length).toBeGreaterThan(0);
-    // The Rust implementation returns `Vec<String>` — flat error messages,
-    // not structured `{line, column, message}` records. The
-    // `ValidationError[]` type in `crates/napi/index.d.ts` is inaccurate;
-    // tracked in #1990.
+    // Rust returns `Vec<ValidationError>` after #1990, matching the
+    // `ValidationError[]` declaration in `crates/napi/index.d.ts`.
     for (const e of errs) {
-      expect(typeof e).toBe("string");
-      expect(e.length).toBeGreaterThan(0);
+      expect(typeof e.line).toBe("number");
+      expect(typeof e.column).toBe("number");
+      expect(typeof e.message).toBe("string");
+      expect(e.line).toBeGreaterThanOrEqual(1);
+      expect(e.column).toBeGreaterThanOrEqual(1);
+      expect(e.message.length).toBeGreaterThan(0);
     }
   });
 

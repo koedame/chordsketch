@@ -398,16 +398,49 @@ pub fn render_pdf_with_warnings_and_options(
     do_render_pdf_with_warnings(&input, &config, transpose)
 }
 
-/// Validate ChordPro input and return any parse errors as strings.
-/// Returns an empty array if the input is valid.
+/// A single validation issue reported by [`validate`]. Mirrors the
+/// `ValidationError` interface in `crates/napi/index.d.ts`; the `#[napi(object)]`
+/// attribute marshals this into a plain JS `{line, column, message}` record.
+///
+/// Line and column are one-based, matching the rest of the public API and
+/// the numbers a typical editor diagnostic expects. They are `u32` so
+/// napi-rs can marshal them as plain JS `number`s; overflow is impossible
+/// in practice — a ChordPro source long enough to exceed `u32::MAX` lines
+/// is orders of magnitude above any realistic song file.
+#[napi(object)]
+pub struct ValidationError {
+    /// One-based line number where the issue was detected.
+    pub line: u32,
+    /// One-based column number where the issue was detected.
+    pub column: u32,
+    /// Human-readable description of the issue.
+    pub message: String,
+}
+
+/// Validate ChordPro input and return any parse errors as structured
+/// records. Returns an empty array if the input is valid.
+///
+/// The shape matches the TypeScript `ValidationError[]` declaration in
+/// `index.d.ts`. Prior to #1990 this function returned `Vec<String>`; the
+/// previous spelling is gone in this version rather than kept as a
+/// compatibility shim — the structured form is strictly richer and the
+/// package has no pinned consumers that depend on the string form.
 #[must_use]
 #[napi]
-pub fn validate(input: String) -> Vec<String> {
+pub fn validate(input: String) -> Vec<ValidationError> {
     let result = chordsketch_core::parse_multi_lenient(&input);
     result
         .results
         .into_iter()
-        .flat_map(|r| r.errors.into_iter().map(|e| e.to_string()))
+        .flat_map(|r| r.errors.into_iter())
+        .map(|e| ValidationError {
+            // `line()` / `column()` are `usize`; clamp the (astronomically
+            // unlikely) overflow at `u32::MAX` so we never panic on
+            // conversion.
+            line: u32::try_from(e.line()).unwrap_or(u32::MAX),
+            column: u32::try_from(e.column()).unwrap_or(u32::MAX),
+            message: e.message,
+        })
         .collect()
 }
 
