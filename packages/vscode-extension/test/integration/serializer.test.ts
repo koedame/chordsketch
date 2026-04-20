@@ -181,4 +181,34 @@ suite("preview panel serializer", () => {
       panel.dispose();
     }
   });
+
+  test("restores a preview for a document with parse errors without crashing", async () => {
+    // Regression gate for #2025. ChordPro parse errors are reported as
+    // diagnostics by the LSP but do not prevent the preview renderer
+    // from producing output — the parser is lenient. The serializer
+    // therefore must still take the happy path and embed the filename
+    // in the restored HTML even when the source file is deliberately
+    // malformed. If a future refactor makes the renderer throw on
+    // parse errors, this test fails and the regression is caught
+    // before users see a blank preview panel on restart.
+    const brokenUri = fixture("broken.cho");
+    const panel = makePanel();
+    try {
+      await serializer.deserializeWebviewPanel(panel, {
+        documentUri: brokenUri.toString(),
+      });
+      assert.match(
+        panel.webview.html,
+        /broken\.cho/i,
+        "restored panel HTML should mention the broken fixture's file name",
+      );
+      assert.doesNotMatch(
+        panel.webview.html,
+        /could no longer be opened|could not be determined/i,
+        "broken but present file must not render the unavailable fallback",
+      );
+    } finally {
+      panel.dispose();
+    }
+  });
 });
