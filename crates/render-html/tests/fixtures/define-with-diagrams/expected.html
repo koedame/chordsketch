@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Define with Diagrams</title>
+<style>
+body { font-family: serif; max-width: 800px; margin: 2em auto; padding: 0 1em; }
+h1 { margin-bottom: 0.2em; }
+h2 { margin-top: 0; font-weight: normal; color: #555; }
+.line { display: flex; flex-wrap: wrap; margin: 0.1em 0; }
+.chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
+.chord { font-weight: bold; color: #b00; font-size: 0.9em; min-height: 1.2em; }
+.lyrics { white-space: pre; }
+.empty-line { height: 1em; }
+section { margin: 1em 0; }
+section > .section-label { font-weight: bold; font-style: italic; margin-bottom: 0.3em; }
+.comment { font-style: italic; color: #666; margin: 0.3em 0; }
+.comment-box { border: 1px solid #999; padding: 0.2em 0.5em; display: inline-block; margin: 0.3em 0; }
+.chorus-recall { margin: 1em 0; }
+.chorus-recall > .section-label { font-weight: bold; font-style: italic; margin-bottom: 0.3em; }
+img { max-width: 100%; height: auto; }
+.chord-diagrams-grid { display: flex; flex-wrap: wrap; gap: 0.5em; margin: 0.5em 0; }
+.chord-diagram-container { display: inline-block; vertical-align: top; }
+.chord-diagram { display: block; }
+</style>
+</head>
+<body>
+<div class="song">
+<h1>Define with Diagrams</h1>
+<div class="chord-diagram-container"><svg xmlns="http://www.w3.org/2000/svg" width="120" height="160" viewBox="0 0 120 160" class="chord-diagram">
+<text x="60" y="15" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold">Am</text>
+<line x1="20" y1="30" x2="100" y2="30" stroke="black" stroke-width="3"/>
+<line x1="20" y1="30" x2="20" y2="130" stroke="black" stroke-width="1"/>
+<line x1="36" y1="30" x2="36" y2="130" stroke="black" stroke-width="1"/>
+<line x1="52" y1="30" x2="52" y2="130" stroke="black" stroke-width="1"/>
+<line x1="68" y1="30" x2="68" y2="130" stroke="black" stroke-width="1"/>
+<line x1="84" y1="30" x2="84" y2="130" stroke="black" stroke-width="1"/>
+<line x1="100" y1="30" x2="100" y2="130" stroke="black" stroke-width="1"/>
+<line x1="20" y1="30" x2="100" y2="30" stroke="black" stroke-width="1"/>
+<line x1="20" y1="50" x2="100" y2="50" stroke="black" stroke-width="1"/>
+<line x1="20" y1="70" x2="100" y2="70" stroke="black" stroke-width="1"/>
+<line x1="20" y1="90" x2="100" y2="90" stroke="black" stroke-width="1"/>
+<line x1="20" y1="110" x2="100" y2="110" stroke="black" stroke-width="1"/>
+<line x1="20" y1="130" x2="100" y2="130" stroke="black" stroke-width="1"/>
+<circle cx="20" cy="20" r="4" fill="none" stroke="black" stroke-width="1"/>
+<circle cx="36" cy="20" r="4" fill="none" stroke="black" stroke-width="1"/>
+<circle cx="52" cy="60" r="5" fill="black"/>
+<circle cx="68" cy="60" r="5" fill="black"/>
+<circle cx="84" cy="40" r="5" fill="black"/>
+<circle cx="100" cy="20" r="4" fill="none" stroke="black" stroke-width="1"/>
+</svg></div>
+<div class="line"><span class="chord-block"><span class="chord">Am</span><span class="lyrics">Hello </span></span><span class="chord-block"><span class="chord">G</span><span class="lyrics">world</span></span></div>
+<section class="chord-diagrams">
+<div class="section-label">Chord Diagrams</div>
+<div class="chord-diagrams-grid">
+<div class="chord-diagram-container"><svg xmlns="http://www.w3.org/2000/svg" width="120" height="160" viewBox="0 0 120 160" class="chord-diagram">
+<text x="60" y="15" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold">G</text>
+<line x1="20" y1="30" x2="100" y2="30" stroke="black" stroke-width="3"/>
+<line x1="20" y1="30" x2="20" y2="130" stroke="black" stroke-width="1"/>
+<line x1="36" y1="30" x2="36" y2="130" stroke="black" stroke-width="1"/>
+<line x1="52" y1="30" x2="52" y2="130" stroke="black" stroke-width="1"/>
+<line x1="68" y1="30" x2="68" y2="130" stroke="black" stroke-width="1"/>
+<line x1="84" y1="30" x2="84" y2="130" stroke="black" stroke-width="1"/>
+<line x1="100" y1="30" x2="100" y2="130" stroke="black" stroke-width="1"/>
+<line x1="20" y1="30" x2="100" y2="30" stroke="black" stroke-width="1"/>
+<line x1="20" y1="50" x2="100" y2="50" stroke="black" stroke-width="1"/>
+<line x1="20" y1="70" x2="100" y2="70" stroke="black" stroke-width="1"/>
+<line x1="20" y1="90" x2="100" y2="90" stroke="black" stroke-width="1"/>
+<line x1="20" y1="110" x2="100" y2="110" stroke="black" stroke-width="1"/>
+<line x1="20" y1="130" x2="100" y2="130" stroke="black" stroke-width="1"/>
+<circle cx="20" cy="80" r="5" fill="black"/>
+<circle cx="36" cy="60" r="5" fill="black"/>
+<circle cx="52" cy="20" r="4" fill="none" stroke="black" stroke-width="1"/>
+<circle cx="68" cy="20" r="4" fill="none" stroke="black" stroke-width="1"/>
+<circle cx="84" cy="20" r="4" fill="none" stroke="black" stroke-width="1"/>
+<circle cx="100" cy="80" r="5" fill="black"/>
+</svg></div>
+</div>
+</section>
+</div>
+</body>
+</html>
