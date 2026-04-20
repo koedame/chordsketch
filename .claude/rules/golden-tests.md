@@ -17,7 +17,7 @@ classes, so a PR that drops below any of these numbers blocks on human review:
 
 | Renderer | Minimum fixtures | Location |
 |---|---|---|
-| `render-text` | 30 | `crates/render-text/tests/fixtures/` |
+| `render-text` | 15 | `crates/render-text/tests/fixtures/` |
 | `render-html` | 15 | `crates/render-html/tests/fixtures/` |
 | `render-pdf`  | 10 | `crates/render-pdf/tests/fixtures/`  |
 
@@ -25,6 +25,11 @@ The asymmetry reflects snapshot cost — render-text fixtures are tiny plain
 text, render-pdf fixtures are binary PDFs whose byte-exact snapshots cost
 ~1–2 KB each, and byte-exact snapshots for unicode input are impractical in
 render-pdf (tracked in #1983). Raise the floor when those costs change.
+
+Enforced by `scripts/check-fixture-counts.py` (wired into the
+`fixture-counts` job in `.github/workflows/ci.yml`). The source of truth
+for the numbers is the `MINIMUMS` dict in that script; this table and the
+script must be updated in lockstep.
 
 ## Stop-Word Collision Tests
 

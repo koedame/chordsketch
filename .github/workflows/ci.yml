@@ -89,6 +89,23 @@ jobs:
         run: |
           python3 -m unittest scripts/test_check_version_consistency.py scripts/test_check_release_channels.py
 
+  fixture-counts:
+    name: Fixture counts
+    # Enforces the minimum per-renderer golden fixture counts documented in
+    # `.claude/rules/golden-tests.md`. Guarantee-style check per
+    # `.claude/rules/ci-parallelization.md` §3 — no paths: filter, runs on
+    # every PR. Python-only, ~1 second wall clock; no rust-cache needed
+    # (does not compile Rust).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Count fixtures
+        run: python3 scripts/check-fixture-counts.py
+
+      - name: Unit tests
+        run: python3 -m unittest scripts/test_check_fixture_counts.py
+
   test:
     name: Test (${{ matrix.os }}, ${{ matrix.rust }})
     runs-on: ${{ matrix.os }}
