@@ -103,13 +103,15 @@ ignore:
   - "**/target/**"
   - "**/node_modules/**"
   - "**/tests/**"
-  - "**/*_test.rs"
   - "**/build.rs"
   # Build-time bindgen driver, instrumented at 0% because it is only
   # invoked during `cargo build`, not at runtime.
   - "crates/ffi/src/bin/uniffi-bindgen.rs"
 
 comment:
-  layout: "reach, diff, flags, files"
+  # No flags are configured, so the `flags` layout item would render an
+  # empty column. Add it back here alongside a `flags:` section the day
+  # we want per-flag breakdown.
+  layout: "reach, diff, files"
   behavior: default
   require_changes: true
