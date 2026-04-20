@@ -251,14 +251,40 @@ pub fn parse_and_render_pdf_with_warnings(
     })
 }
 
-/// Validate ChordPro input and return any parse errors as strings.
+/// A single validation issue reported by [`validate`].
+///
+/// Mirrors the NAPI binding's `ValidationError` (#1990) and the UDL
+/// dictionary of the same name in `chordsketch.udl`. Line and column are
+/// one-based; `u32` matches the `u32` declaration in the UDL, which is
+/// what every target language (Python / Kotlin / Swift / Ruby) sees.
+#[derive(Debug)]
+pub struct ValidationError {
+    /// One-based line number where the issue was detected.
+    pub line: u32,
+    /// One-based column number where the issue was detected.
+    pub column: u32,
+    /// Human-readable description of the issue.
+    pub message: String,
+}
+
+/// Validate ChordPro input and return any parse errors as structured
+/// records. Returns an empty list if the input is valid.
 #[must_use]
-pub fn validate(input: String) -> Vec<String> {
+pub fn validate(input: String) -> Vec<ValidationError> {
     let result = chordsketch_core::parse_multi_lenient(&input);
     result
         .results
         .into_iter()
-        .flat_map(|r| r.errors.into_iter().map(|e| e.to_string()))
+        .flat_map(|r| r.errors.into_iter())
+        .map(|e| ValidationError {
+            // `line()` / `column()` are `usize`; clamp overflow at
+            // `u32::MAX` so we never panic on conversion. A source long
+            // enough to exceed `u32::MAX` lines is orders of magnitude
+            // beyond any realistic song file.
+            line: u32::try_from(e.line()).unwrap_or(u32::MAX),
+            column: u32::try_from(e.column()).unwrap_or(u32::MAX),
+            message: e.message,
+        })
         .collect()
 }
 
@@ -353,10 +379,12 @@ mod tests {
             "unclosed chord should produce a parse error"
         );
         assert!(
-            errors[0].contains("unclosed"),
+            errors[0].message.contains("unclosed"),
             "error message should mention 'unclosed', got: {}",
-            errors[0]
+            errors[0].message
         );
+        assert!(errors[0].line >= 1, "line should be one-based");
+        assert!(errors[0].column >= 1, "column should be one-based");
     }
 
     #[test]

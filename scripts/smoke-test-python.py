@@ -26,7 +26,21 @@ print("PDF render: OK")
 
 errors = chordsketch.validate("{title: Valid}\n[C]Hello")
 assert isinstance(errors, list)
-print("Validate: OK")
+assert len(errors) == 0
+print("Validate (valid): OK")
+
+# #2009: validate() now returns structured ValidationError records with
+# line/column/message fields. Exercise the bad-input path so the smoke
+# test catches a regression in the UniFFI wire shape, not just the
+# function existing.
+errors = chordsketch.validate("{title: Test}\n[G")
+assert isinstance(errors, list)
+assert len(errors) > 0
+first = errors[0]
+assert first.line >= 1
+assert first.column >= 1
+assert isinstance(first.message, str) and first.message
+print("Validate (broken, structured): OK")
 
 text = chordsketch.parse_and_render_text("{title: Test}\n[C]Hello", "guitar", None)
 assert "Test" in text
