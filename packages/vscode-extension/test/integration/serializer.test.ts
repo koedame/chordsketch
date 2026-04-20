@@ -42,7 +42,11 @@ import * as vscode from "vscode";
 import { activateExtension, fixture } from "./helpers.js";
 
 const EXTENSION_ID = "koedame.chordsketch";
-const PREVIEW_VIEW_TYPE = "chordsketchPreview";
+// Read from the compiled bundle in `suiteSetup` below rather than
+// hard-coding. That way a future rename of `PREVIEW_VIEW_TYPE` in
+// `preview.ts` cannot silently drift the test into creating panels
+// with the old identifier while the serializer binds to the new one.
+let PREVIEW_VIEW_TYPE: string;
 
 /**
  * Build a minimal `ExtensionContext` using the real extension's
@@ -96,6 +100,12 @@ suite("preview panel serializer", () => {
       "function",
       "dist/extension.js must export createPreviewSerializer — check extension.ts re-export and preview.ts factory",
     );
+    assert.equal(
+      typeof previewModule.PREVIEW_VIEW_TYPE,
+      "string",
+      "dist/extension.js must export PREVIEW_VIEW_TYPE — check extension.ts re-export",
+    );
+    PREVIEW_VIEW_TYPE = previewModule.PREVIEW_VIEW_TYPE;
     serializer = previewModule.createPreviewSerializer(fakeContext());
   });
 
