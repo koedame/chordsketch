@@ -113,9 +113,9 @@ All render functions accept three parameters:
 ### Validation
 
 ```swift
-let errors: [String] = validate(input: source)  // empty if clean
-for msg in errors {
-    print(msg)
+let errors: [ValidationError] = validate(input: source)  // empty if clean
+for e in errors {
+    print("line \(e.line), column \(e.column): \(e.message)")
 }
 ```
 

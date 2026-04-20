@@ -14,7 +14,12 @@ declare module '@chordsketch/wasm' {
     input: string,
     options: { transpose?: number; config?: string },
   ): Uint8Array;
-  export function validate(input: string): string[];
+  export interface ValidationError {
+    line: number;
+    column: number;
+    message: string;
+  }
+  export function validate(input: string): ValidationError[];
   export function version(): string;
   export default function init(): Promise<void>;
 }

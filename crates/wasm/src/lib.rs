@@ -528,25 +528,55 @@ pub fn version() -> String {
     chordsketch_core::version().to_string()
 }
 
-/// Validate ChordPro input and return any parse errors as strings.
+/// A single validation issue reported by [`validate`].
 ///
-/// Returns an empty array if the input is valid. This allows callers to
-/// obtain parse diagnostics without performing a full render.
-///
-/// Return shape: `Vec<String>` — flat pre-formatted error messages.
-/// The FFI binding (`crates/ffi`) returns the same flat form; the NAPI
-/// binding (`crates/napi`) returns structured `ValidationError` records
-/// (`{line, column, message}`) since #1990. Harmonising the WASM and FFI
-/// sides to the structured shape is tracked in #2009.
-#[must_use]
-#[wasm_bindgen]
-pub fn validate(input: &str) -> Vec<String> {
+/// Serialised to a plain JS `{line, column, message}` object via
+/// `serde_wasm_bindgen`. Matches the NAPI / FFI `ValidationError`
+/// declarations after #2009. Line and column are one-based (editor
+/// diagnostic convention).
+#[derive(Serialize)]
+struct ValidationErrorPayload {
+    line: u32,
+    column: u32,
+    message: String,
+}
+
+/// Shared inner helper used by both the wasm-bindgen wrapper and native
+/// unit tests. Keeping this free of any wasm-bindgen imports means
+/// `cargo test -p chordsketch-wasm` runs without hitting the "cannot
+/// call wasm-bindgen imported functions on non-wasm targets" panic that
+/// `serde_wasm_bindgen::to_value` triggers off-target.
+fn validate_inner(input: &str) -> Vec<ValidationErrorPayload> {
     let result = chordsketch_core::parse_multi_lenient(input);
     result
         .results
         .into_iter()
-        .flat_map(|r| r.errors.into_iter().map(|e| e.to_string()))
+        .flat_map(|r| r.errors.into_iter())
+        .map(|e| ValidationErrorPayload {
+            line: u32::try_from(e.line()).unwrap_or(u32::MAX),
+            column: u32::try_from(e.column()).unwrap_or(u32::MAX),
+            message: e.message,
+        })
         .collect()
+}
+
+/// Validate ChordPro input and return any parse errors as structured
+/// records.
+///
+/// Returns a JS array of `{line, column, message}` objects — empty if the
+/// input is valid. Matches the NAPI binding's `ValidationError[]` shape
+/// (#1990) and the FFI binding's `ValidationError` dictionary (#2009).
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string if serialisation fails. In practice,
+/// `serde_wasm_bindgen::to_value` only fails on programmer error, so
+/// this is a defensive return path — callers can treat it as infallible
+/// in normal use.
+#[wasm_bindgen(js_name = validate)]
+pub fn validate(input: &str) -> Result<JsValue, JsValue> {
+    serde_wasm_bindgen::to_value(&validate_inner(input))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 #[cfg(test)]
@@ -627,25 +657,37 @@ mod tests {
         assert!(result.is_ok(), "valid RRJSON should parse successfully");
     }
 
+    // Native tests exercise `validate_inner` directly rather than the
+    // wasm-bindgen wrapper, because `serde_wasm_bindgen::to_value` calls
+    // imported JS machinery that does not exist on non-wasm targets.
+    // The wasm-side serialisation and JS-observable shape are covered by
+    // the `wasm_tests` module below (run via `wasm-pack test --node`).
+
     #[test]
     fn test_validate_returns_empty_for_valid_input() {
-        let errors = validate(MINIMAL_INPUT);
+        let errors = validate_inner(MINIMAL_INPUT);
         assert!(errors.is_empty(), "valid input should produce no errors");
     }
 
     #[test]
     fn test_validate_returns_errors_for_bad_input() {
-        // An unclosed chord bracket is always a parse error, even in lenient mode.
-        let errors = validate("{title: Test}\n[G");
+        let errors = validate_inner("{title: Test}\n[G");
         assert!(
             !errors.is_empty(),
             "unclosed chord should produce a parse error"
         );
+        assert!(
+            errors[0].message.contains("unclosed"),
+            "error message should mention 'unclosed', got: {}",
+            errors[0].message
+        );
+        assert!(errors[0].line >= 1, "line should be one-based");
+        assert!(errors[0].column >= 1, "column should be one-based");
     }
 
     #[test]
     fn test_validate_returns_empty_for_empty_input() {
-        let errors = validate("");
+        let errors = validate_inner("");
         assert!(errors.is_empty(), "empty input should produce no errors");
     }
 
@@ -701,7 +743,7 @@ mod tests {
 mod wasm_tests {
     use super::*;
     use js_sys::{Array, Reflect};
-    use wasm_bindgen::JsValue;
+    use wasm_bindgen::{JsCast, JsValue};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     const MINIMAL_INPUT: &str = "{title: Test}\n[C]Hello";
@@ -1040,6 +1082,50 @@ mod wasm_tests {
         Reflect::set(&opts, &"transpose".into(), &JsValue::from(2)).unwrap();
         let result = render_text_with_options(MINIMAL_INPUT, opts.into()).unwrap();
         assert!(result.contains("Test"));
+    }
+
+    // -- validate JS-boundary tests (#2009) ------------------------------
+    //
+    // `validate` now serialises to an array of `{line, column, message}`
+    // objects via `serde_wasm_bindgen`. These tests run in a real JS host
+    // so the returned `JsValue` can be introspected as an array.
+
+    #[wasm_bindgen_test]
+    fn validate_returns_empty_array_for_valid_input() {
+        let result = validate(MINIMAL_INPUT).unwrap();
+        let arr: Array = result.dyn_into().expect("validate should return an array");
+        assert_eq!(arr.length(), 0, "valid input should produce no errors");
+    }
+
+    #[wasm_bindgen_test]
+    fn validate_returns_structured_errors_for_bad_input() {
+        // Unclosed chord bracket produces at least one parse error.
+        let result = validate("{title: Test}\n[G").unwrap();
+        let arr: Array = result.dyn_into().expect("validate should return an array");
+        assert!(
+            arr.length() > 0,
+            "bad input should produce at least one error"
+        );
+
+        let first = arr.get(0);
+        // Each entry is a plain object with line/column/message.
+        let line = Reflect::get(&first, &"line".into()).unwrap();
+        let column = Reflect::get(&first, &"column".into()).unwrap();
+        let message = Reflect::get(&first, &"message".into()).unwrap();
+
+        assert!(
+            line.as_f64().unwrap_or_default() >= 1.0,
+            "line should be one-based"
+        );
+        assert!(
+            column.as_f64().unwrap_or_default() >= 1.0,
+            "column should be one-based"
+        );
+        let msg = message.as_string().unwrap_or_default();
+        assert!(
+            msg.contains("unclosed"),
+            "error message should mention 'unclosed', got: {msg}"
+        );
     }
 
     /// Smoke test that the `start` panic hook function exists and is
