@@ -13,7 +13,7 @@ That [G]saved a [Em]wretch like [D]me.
 {end_of_verse}
 ";
 
-    let song = chordsketch_core::parse(input).expect("parse failed");
+    let song = chordsketch_chordpro::parse(input).expect("parse failed");
     let text = chordsketch_render_text::render_song(&song);
 
     println!("{text}");

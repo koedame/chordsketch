@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
-use chordsketch_core::parse_multi_lenient;
+use chordsketch_chordpro::parse_multi_lenient;
 use tokio::sync::Mutex;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::{
@@ -306,9 +306,9 @@ impl LanguageServer for Backend {
             }
         };
 
-        let formatted = chordsketch_core::formatter::format(
+        let formatted = chordsketch_chordpro::formatter::format(
             &text,
-            &chordsketch_core::formatter::FormatOptions::default(),
+            &chordsketch_chordpro::formatter::FormatOptions::default(),
         );
 
         // No-op if already formatted.

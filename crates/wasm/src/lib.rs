@@ -3,7 +3,7 @@
 //! Exposes ChordPro parsing and rendering (HTML, plain text, PDF) to
 //! JavaScript/TypeScript via `wasm-bindgen`.
 
-use chordsketch_core::render_result::RenderResult;
+use chordsketch_chordpro::render_result::RenderResult;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -52,27 +52,27 @@ struct RenderOptions {
     config: Option<String>,
 }
 
-/// Resolve a [`chordsketch_core::config::Config`] from the options.
+/// Resolve a [`chordsketch_chordpro::config::Config`] from the options.
 ///
 /// # Errors
 ///
 /// Returns an error string if the config value is not a known preset
 /// and cannot be parsed as RRJSON.
-fn resolve_config(opts: &RenderOptions) -> Result<chordsketch_core::config::Config, JsValue> {
+fn resolve_config(opts: &RenderOptions) -> Result<chordsketch_chordpro::config::Config, JsValue> {
     match &opts.config {
         Some(name) => {
             // Try as a preset first, then as inline RRJSON.
-            if let Some(preset) = chordsketch_core::config::Config::preset(name) {
+            if let Some(preset) = chordsketch_chordpro::config::Config::preset(name) {
                 Ok(preset)
             } else {
-                chordsketch_core::config::Config::parse(name).map_err(|e| {
+                chordsketch_chordpro::config::Config::parse(name).map_err(|e| {
                     JsValue::from_str(&format!(
                         "invalid config (not a known preset and not valid RRJSON): {e}"
                     ))
                 })
             }
         }
-        None => Ok(chordsketch_core::config::Config::defaults()),
+        None => Ok(chordsketch_chordpro::config::Config::defaults()),
     }
 }
 
@@ -95,22 +95,22 @@ fn flush_warnings<T>(result: RenderResult<T>) -> T {
 ///
 /// `parse_multi_lenient` always returns at least one `ParseResult`
 /// (`split_at_new_song` unconditionally pushes the trailing segment, even
-/// for empty input — see `chordsketch_core::parser`), so the resulting
+/// for empty input — see `chordsketch_chordpro::parser`), so the resulting
 /// `Vec<Song>` is never empty and the previous `is_empty()` guard was
 /// dead code (#1083). The return type stays `Result` because
 /// `render_html_with_options` and friends use the same `JsValue` error
 /// channel for their config-parse failures.
 fn do_render_string(
     input: &str,
-    config: &chordsketch_core::config::Config,
+    config: &chordsketch_chordpro::config::Config,
     transpose: i8,
     render_fn: fn(
-        &[chordsketch_core::ast::Song],
+        &[chordsketch_chordpro::ast::Song],
         i8,
-        &chordsketch_core::config::Config,
+        &chordsketch_chordpro::config::Config,
     ) -> RenderResult<String>,
 ) -> Result<String, JsValue> {
-    let parse_result = chordsketch_core::parse_multi_lenient(input);
+    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
     let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
     Ok(flush_warnings(render_fn(&songs, transpose, config)))
 }
@@ -121,15 +121,15 @@ fn do_render_string(
 /// the lenient parser always producing at least one song.
 fn do_render_bytes(
     input: &str,
-    config: &chordsketch_core::config::Config,
+    config: &chordsketch_chordpro::config::Config,
     transpose: i8,
     render_fn: fn(
-        &[chordsketch_core::ast::Song],
+        &[chordsketch_chordpro::ast::Song],
         i8,
-        &chordsketch_core::config::Config,
+        &chordsketch_chordpro::config::Config,
     ) -> RenderResult<Vec<u8>>,
 ) -> Result<Vec<u8>, JsValue> {
-    let parse_result = chordsketch_core::parse_multi_lenient(input);
+    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
     let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
     Ok(flush_warnings(render_fn(&songs, transpose, config)))
 }
@@ -158,9 +158,9 @@ fn render_string_inner(
     input: &str,
     opts: RenderOptions,
     render_fn: fn(
-        &[chordsketch_core::ast::Song],
+        &[chordsketch_chordpro::ast::Song],
         i8,
-        &chordsketch_core::config::Config,
+        &chordsketch_chordpro::config::Config,
     ) -> RenderResult<String>,
 ) -> Result<String, JsValue> {
     let config = resolve_config(&opts)?;
@@ -174,9 +174,9 @@ fn render_bytes_inner(
     input: &str,
     opts: RenderOptions,
     render_fn: fn(
-        &[chordsketch_core::ast::Song],
+        &[chordsketch_chordpro::ast::Song],
         i8,
-        &chordsketch_core::config::Config,
+        &chordsketch_chordpro::config::Config,
     ) -> RenderResult<Vec<u8>>,
 ) -> Result<Vec<u8>, JsValue> {
     let config = resolve_config(&opts)?;
@@ -325,13 +325,13 @@ fn render_string_with_warnings_inner(
     input: &str,
     opts: RenderOptions,
     render_fn: fn(
-        &[chordsketch_core::ast::Song],
+        &[chordsketch_chordpro::ast::Song],
         i8,
-        &chordsketch_core::config::Config,
+        &chordsketch_chordpro::config::Config,
     ) -> RenderResult<String>,
 ) -> Result<JsValue, JsValue> {
     let config = resolve_config(&opts)?;
-    let parse_result = chordsketch_core::parse_multi_lenient(input);
+    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
     let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
     let result = render_fn(&songs, opts.transpose, &config);
     let payload = StringWithWarnings {
@@ -354,13 +354,13 @@ fn render_bytes_with_warnings_inner(
     input: &str,
     opts: RenderOptions,
     render_fn: fn(
-        &[chordsketch_core::ast::Song],
+        &[chordsketch_chordpro::ast::Song],
         i8,
-        &chordsketch_core::config::Config,
+        &chordsketch_chordpro::config::Config,
     ) -> RenderResult<Vec<u8>>,
 ) -> Result<JsValue, JsValue> {
     let config = resolve_config(&opts)?;
-    let parse_result = chordsketch_core::parse_multi_lenient(input);
+    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
     let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
     let result = render_fn(&songs, opts.transpose, &config);
     let obj = js_sys::Object::new();
@@ -377,9 +377,9 @@ fn render_bytes_with_warnings_inner(
     input: &str,
     opts: RenderOptions,
     render_fn: fn(
-        &[chordsketch_core::ast::Song],
+        &[chordsketch_chordpro::ast::Song],
         i8,
-        &chordsketch_core::config::Config,
+        &chordsketch_chordpro::config::Config,
     ) -> RenderResult<Vec<u8>>,
 ) -> Result<JsValue, JsValue> {
     // On native test targets, js_sys types are unavailable. Fall back to
@@ -387,7 +387,7 @@ fn render_bytes_with_warnings_inner(
     // the *structure* of the return value (the byte payload lands as a
     // plain array, which is fine for shape-only tests).
     let config = resolve_config(&opts)?;
-    let parse_result = chordsketch_core::parse_multi_lenient(input);
+    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
     let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
     let result = render_fn(&songs, opts.transpose, &config);
     #[derive(Serialize)]
@@ -525,7 +525,7 @@ pub fn render_pdf_with_warnings_and_options(
 #[must_use]
 #[wasm_bindgen]
 pub fn version() -> String {
-    chordsketch_core::version().to_string()
+    chordsketch_chordpro::version().to_string()
 }
 
 /// A single validation issue reported by [`validate`].
@@ -547,7 +547,7 @@ struct ValidationErrorPayload {
 /// call wasm-bindgen imported functions on non-wasm targets" panic that
 /// `serde_wasm_bindgen::to_value` triggers off-target.
 fn validate_inner(input: &str) -> Vec<ValidationErrorPayload> {
-    let result = chordsketch_core::parse_multi_lenient(input);
+    let result = chordsketch_chordpro::parse_multi_lenient(input);
     result
         .results
         .into_iter()
@@ -657,7 +657,7 @@ mod tests {
         assert!(!v.is_empty());
     }
 
-    // The following tests cover the chordsketch-core APIs that
+    // The following tests cover the chordsketch-chordpro APIs that
     // `resolve_config` delegates to (Config::preset and Config::parse).
     // They do NOT exercise resolve_config itself or the JsValue boundary —
     // for that, see the `wasm_tests` module below (gated to wasm32 and
@@ -665,18 +665,18 @@ mod tests {
 
     #[test]
     fn config_parse_invalid_rrjson_returns_err() {
-        let result = chordsketch_core::config::Config::parse("{ invalid rrjson !!!");
+        let result = chordsketch_chordpro::config::Config::parse("{ invalid rrjson !!!");
         assert!(result.is_err(), "invalid RRJSON should fail to parse");
     }
 
     #[test]
     fn config_preset_known_and_unknown_names() {
         assert!(
-            chordsketch_core::config::Config::preset("guitar").is_some(),
+            chordsketch_chordpro::config::Config::preset("guitar").is_some(),
             "guitar preset should exist"
         );
         assert!(
-            chordsketch_core::config::Config::preset("nonexistent").is_none(),
+            chordsketch_chordpro::config::Config::preset("nonexistent").is_none(),
             "unknown preset should return None"
         );
     }
@@ -684,7 +684,7 @@ mod tests {
     #[test]
     fn config_parse_valid_rrjson_returns_ok() {
         let result =
-            chordsketch_core::config::Config::parse(r#"{ "settings": { "transpose": 2 } }"#);
+            chordsketch_chordpro::config::Config::parse(r#"{ "settings": { "transpose": 2 } }"#);
         assert!(result.is_ok(), "valid RRJSON should parse successfully");
     }
 
@@ -736,26 +736,26 @@ mod tests {
 
     #[test]
     fn test_with_warnings_core_renderers_return_output_and_empty_warnings_on_clean_input() {
-        let parse = chordsketch_core::parse_multi_lenient(MINIMAL_INPUT);
+        let parse = chordsketch_chordpro::parse_multi_lenient(MINIMAL_INPUT);
         let songs: Vec<_> = parse.results.into_iter().map(|r| r.song).collect();
         let text = chordsketch_render_text::render_songs_with_warnings(
             &songs,
             0,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         );
         assert!(!text.output.is_empty());
         assert!(text.warnings.is_empty());
         let html = chordsketch_render_html::render_songs_with_warnings(
             &songs,
             0,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         );
         assert!(html.output.contains("<html"));
         assert!(html.warnings.is_empty());
         let pdf = chordsketch_render_pdf::render_songs_with_warnings(
             &songs,
             0,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         );
         assert!(pdf.output.starts_with(b"%PDF"));
         assert!(pdf.warnings.is_empty());
@@ -1179,7 +1179,7 @@ mod wasm_tests {
     ///
     /// Sentinel: a `{transpose: 100}` directive in the source combined
     /// with a CLI `transpose: 100` exceeds the `i8` range (200 > 127),
-    /// so `chordsketch_core::transpose::combine_transpose` saturates
+    /// so `chordsketch_chordpro::transpose::combine_transpose` saturates
     /// and the renderer pushes a `transpose offset ... clamped to ...`
     /// warning. See `crates/render-text/src/lib.rs` line 124-131.
     /// (The HTML and PDF renderers have identical saturation paths;

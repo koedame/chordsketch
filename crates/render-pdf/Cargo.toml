@@ -13,7 +13,7 @@ description = "PDF renderer for ChordPro documents"
 readme = "README.md"
 
 [dependencies]
-chordsketch-core = { version = "0.2.2", path = "../core" }
+chordsketch-chordpro = { version = "0.2.2", path = "../chordpro" }
 ttf-parser = { version = "0.25", default-features = false, features = ["std"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

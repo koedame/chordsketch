@@ -3,7 +3,7 @@
 //! Provides the same API as `@chordsketch/wasm` but as a prebuilt native
 //! addon, offering better performance and no WASM overhead.
 
-use chordsketch_core::render_result::RenderResult;
+use chordsketch_chordpro::render_result::RenderResult;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
@@ -24,13 +24,13 @@ pub struct RenderOptions {
 }
 
 /// Resolve a config from an optional preset name or RRJSON string.
-fn resolve_config(config: Option<String>) -> Result<chordsketch_core::config::Config> {
+fn resolve_config(config: Option<String>) -> Result<chordsketch_chordpro::config::Config> {
     match config {
         Some(name) => {
-            if let Some(preset) = chordsketch_core::config::Config::preset(&name) {
+            if let Some(preset) = chordsketch_chordpro::config::Config::preset(&name) {
                 Ok(preset)
             } else {
-                chordsketch_core::config::Config::parse(&name).map_err(|e| {
+                chordsketch_chordpro::config::Config::parse(&name).map_err(|e| {
                     Error::new(
                         Status::InvalidArg,
                         format!("invalid config (not a known preset and not valid RRJSON): {e}"),
@@ -38,7 +38,7 @@ fn resolve_config(config: Option<String>) -> Result<chordsketch_core::config::Co
                 })
             }
         }
-        None => Ok(chordsketch_core::config::Config::defaults()),
+        None => Ok(chordsketch_chordpro::config::Config::defaults()),
     }
 }
 
@@ -46,13 +46,13 @@ fn resolve_config(config: Option<String>) -> Result<chordsketch_core::config::Co
 ///
 /// `parse_multi_lenient` always returns at least one `ParseResult`
 /// (`split_at_new_song` unconditionally pushes the trailing segment, even
-/// for empty input — see `chordsketch_core::parser`), so the resulting
+/// for empty input — see `chordsketch_chordpro::parser`), so the resulting
 /// `Vec<Song>` is never empty. The previous `is_empty()` guard was dead
 /// code. See #1083. The function still returns `Result` because the
 /// `*_with_options` callers use the same `napi::Result` channel for
 /// their `resolve_config` failures.
-fn parse_songs(input: &str) -> Result<Vec<chordsketch_core::ast::Song>> {
-    let result = chordsketch_core::parse_multi_lenient(input);
+fn parse_songs(input: &str) -> Result<Vec<chordsketch_chordpro::ast::Song>> {
+    let result = chordsketch_chordpro::parse_multi_lenient(input);
     let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
     Ok(songs)
 }
@@ -78,12 +78,12 @@ fn flush_warnings<T>(result: RenderResult<T>) -> T {
 /// `render_fn` so it can be shared by text and HTML renderers.
 fn do_render_string(
     input: &str,
-    config: &chordsketch_core::config::Config,
+    config: &chordsketch_chordpro::config::Config,
     transpose: i8,
     render_fn: fn(
-        &[chordsketch_core::ast::Song],
+        &[chordsketch_chordpro::ast::Song],
         i8,
-        &chordsketch_core::config::Config,
+        &chordsketch_chordpro::config::Config,
     ) -> RenderResult<String>,
 ) -> Result<String> {
     let songs = parse_songs(input)?;
@@ -95,12 +95,12 @@ fn do_render_string(
 /// See [`do_render_string`] — same pattern for PDF output.
 fn do_render_bytes(
     input: &str,
-    config: &chordsketch_core::config::Config,
+    config: &chordsketch_chordpro::config::Config,
     transpose: i8,
     render_fn: fn(
-        &[chordsketch_core::ast::Song],
+        &[chordsketch_chordpro::ast::Song],
         i8,
-        &chordsketch_core::config::Config,
+        &chordsketch_chordpro::config::Config,
     ) -> RenderResult<Vec<u8>>,
 ) -> Result<Vec<u8>> {
     let songs = parse_songs(input)?;
@@ -116,7 +116,7 @@ fn do_render_bytes(
 pub fn render_text(input: String) -> Result<String> {
     do_render_string(
         &input,
-        &chordsketch_core::config::Config::defaults(),
+        &chordsketch_chordpro::config::Config::defaults(),
         0,
         chordsketch_render_text::render_songs_with_warnings,
     )
@@ -131,7 +131,7 @@ pub fn render_text(input: String) -> Result<String> {
 pub fn render_html(input: String) -> Result<String> {
     do_render_string(
         &input,
-        &chordsketch_core::config::Config::defaults(),
+        &chordsketch_chordpro::config::Config::defaults(),
         0,
         chordsketch_render_html::render_songs_with_warnings,
     )
@@ -147,7 +147,7 @@ pub fn render_html(input: String) -> Result<String> {
 pub fn render_pdf(input: String) -> Result<Buffer> {
     let bytes = do_render_bytes(
         &input,
-        &chordsketch_core::config::Config::defaults(),
+        &chordsketch_chordpro::config::Config::defaults(),
         0,
         chordsketch_render_pdf::render_songs_with_warnings,
     )?;
@@ -188,12 +188,12 @@ pub struct PdfRenderWithWarnings {
 /// pipeline without the `flush_warnings` stderr side effect.
 fn do_render_string_with_warnings(
     input: &str,
-    config: &chordsketch_core::config::Config,
+    config: &chordsketch_chordpro::config::Config,
     transpose: i8,
     render_fn: fn(
-        &[chordsketch_core::ast::Song],
+        &[chordsketch_chordpro::ast::Song],
         i8,
-        &chordsketch_core::config::Config,
+        &chordsketch_chordpro::config::Config,
     ) -> RenderResult<String>,
 ) -> Result<TextRenderWithWarnings> {
     let songs = parse_songs(input)?;
@@ -216,7 +216,7 @@ fn do_render_string_with_warnings(
 pub fn render_text_with_warnings(input: String) -> Result<TextRenderWithWarnings> {
     do_render_string_with_warnings(
         &input,
-        &chordsketch_core::config::Config::defaults(),
+        &chordsketch_chordpro::config::Config::defaults(),
         0,
         chordsketch_render_text::render_songs_with_warnings,
     )
@@ -231,7 +231,7 @@ pub fn render_text_with_warnings(input: String) -> Result<TextRenderWithWarnings
 pub fn render_html_with_warnings(input: String) -> Result<TextRenderWithWarnings> {
     do_render_string_with_warnings(
         &input,
-        &chordsketch_core::config::Config::defaults(),
+        &chordsketch_chordpro::config::Config::defaults(),
         0,
         chordsketch_render_html::render_songs_with_warnings,
     )
@@ -244,7 +244,7 @@ pub fn render_html_with_warnings(input: String) -> Result<TextRenderWithWarnings
 #[must_use = "callers must handle render errors"]
 #[napi]
 pub fn render_pdf_with_warnings(input: String) -> Result<PdfRenderWithWarnings> {
-    do_render_pdf_with_warnings(&input, &chordsketch_core::config::Config::defaults(), 0)
+    do_render_pdf_with_warnings(&input, &chordsketch_chordpro::config::Config::defaults(), 0)
 }
 
 /// Shared implementation for the PDF `*_with_warnings` variants. Extracted
@@ -253,7 +253,7 @@ pub fn render_pdf_with_warnings(input: String) -> Result<PdfRenderWithWarnings> 
 /// parse + render + capture pipeline.
 fn do_render_pdf_with_warnings(
     input: &str,
-    config: &chordsketch_core::config::Config,
+    config: &chordsketch_chordpro::config::Config,
     transpose: i8,
 ) -> Result<PdfRenderWithWarnings> {
     let songs = parse_songs(input)?;
@@ -428,7 +428,7 @@ pub struct ValidationError {
 #[must_use]
 #[napi]
 pub fn validate(input: String) -> Vec<ValidationError> {
-    let result = chordsketch_core::parse_multi_lenient(&input);
+    let result = chordsketch_chordpro::parse_multi_lenient(&input);
     result
         .results
         .into_iter()
@@ -448,11 +448,11 @@ pub fn validate(input: String) -> Vec<ValidationError> {
 #[must_use]
 #[napi]
 pub fn version() -> String {
-    chordsketch_core::version().to_string()
+    chordsketch_chordpro::version().to_string()
 }
 
 // Unit tests exercise the underlying rendering and parsing logic directly
-// via chordsketch_core and renderer crates. The napi wrapper functions
+// via chordsketch_chordpro and renderer crates. The napi wrapper functions
 // cannot be tested natively because they depend on the Node.js runtime for
 // linking (Buffer, napi::Error, etc.).
 #[cfg(test)]
@@ -461,7 +461,7 @@ mod tests {
 
     #[test]
     fn test_render_text_returns_content() {
-        let result = chordsketch_core::parse_multi_lenient(MINIMAL_INPUT);
+        let result = chordsketch_chordpro::parse_multi_lenient(MINIMAL_INPUT);
         let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
         assert!(!songs.is_empty());
         // Use render_songs_with_warnings to match the code path used by the NAPI
@@ -469,7 +469,7 @@ mod tests {
         let text = chordsketch_render_text::render_songs_with_warnings(
             &songs,
             0,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         )
         .output;
         assert!(!text.is_empty());
@@ -478,14 +478,14 @@ mod tests {
 
     #[test]
     fn test_render_html_returns_content() {
-        let result = chordsketch_core::parse_multi_lenient(MINIMAL_INPUT);
+        let result = chordsketch_chordpro::parse_multi_lenient(MINIMAL_INPUT);
         let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
         // Use render_songs_with_warnings to match the code path used by the NAPI
         // binding's do_render_string (via flush_warnings).
         let html = chordsketch_render_html::render_songs_with_warnings(
             &songs,
             0,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         )
         .output;
         assert!(!html.is_empty());
@@ -494,14 +494,14 @@ mod tests {
 
     #[test]
     fn test_render_pdf_returns_bytes() {
-        let result = chordsketch_core::parse_multi_lenient(MINIMAL_INPUT);
+        let result = chordsketch_chordpro::parse_multi_lenient(MINIMAL_INPUT);
         let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
         // Use render_songs_with_warnings to match the code path used by the NAPI
         // binding's do_render_bytes (via flush_warnings).
         let bytes = chordsketch_render_pdf::render_songs_with_warnings(
             &songs,
             0,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         )
         .output;
         assert!(!bytes.is_empty());
@@ -510,7 +510,7 @@ mod tests {
 
     #[test]
     fn test_version_returns_nonempty_string() {
-        let v = chordsketch_core::version();
+        let v = chordsketch_chordpro::version();
         assert!(!v.is_empty());
     }
 
@@ -555,33 +555,33 @@ mod tests {
 
     #[test]
     fn test_validate_returns_empty_for_valid_input() {
-        let result = chordsketch_core::parse_multi_lenient(MINIMAL_INPUT);
+        let result = chordsketch_chordpro::parse_multi_lenient(MINIMAL_INPUT);
         let errors: Vec<_> = result.results.into_iter().flat_map(|r| r.errors).collect();
         assert!(errors.is_empty());
     }
 
     #[test]
     fn test_validate_returns_errors_for_bad_input() {
-        let result = chordsketch_core::parse_multi_lenient("{title: Test}\n[G");
+        let result = chordsketch_chordpro::parse_multi_lenient("{title: Test}\n[G");
         let errors: Vec<_> = result.results.into_iter().flat_map(|r| r.errors).collect();
         assert!(!errors.is_empty());
     }
 
     #[test]
     fn test_preset_config_resolves() {
-        assert!(chordsketch_core::config::Config::preset("guitar").is_some());
-        assert!(chordsketch_core::config::Config::preset("nonexistent").is_none());
+        assert!(chordsketch_chordpro::config::Config::preset("guitar").is_some());
+        assert!(chordsketch_chordpro::config::Config::preset("nonexistent").is_none());
     }
 
     #[test]
     fn test_invalid_config_fails() {
-        assert!(chordsketch_core::config::Config::parse("{ invalid rrjson !!!").is_err());
+        assert!(chordsketch_chordpro::config::Config::parse("{ invalid rrjson !!!").is_err());
     }
 
     #[test]
     fn test_valid_rrjson_config_parses() {
         assert!(
-            chordsketch_core::config::Config::parse(r#"{ "settings": { "transpose": 2 } }"#)
+            chordsketch_chordpro::config::Config::parse(r#"{ "settings": { "transpose": 2 } }"#)
                 .is_ok()
         );
     }
@@ -596,12 +596,12 @@ mod tests {
     #[test]
     fn test_render_songs_with_warnings_captures_saturation_warning() {
         let input = "{title: T}\n{transpose: 100}\n[C]Hello";
-        let result = chordsketch_core::parse_multi_lenient(input);
+        let result = chordsketch_chordpro::parse_multi_lenient(input);
         let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
         let render_result = chordsketch_render_text::render_songs_with_warnings(
             &songs,
             100,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         );
         assert!(
             !render_result.warnings.is_empty(),
@@ -619,17 +619,17 @@ mod tests {
     // `napi::Result<TextRenderWithWarnings>` / `napi::Result<PdfRenderWithWarnings>`,
     // whose error path references Node-API symbols via `Drop`. Tests
     // therefore bypass the wrapper and exercise the underlying
-    // chordsketch-core renderer directly, mirroring the pattern used by
+    // chordsketch-chordpro renderer directly, mirroring the pattern used by
     // `test_try_parse_transpose_*` for issue #1826.
 
     #[test]
     fn test_with_warnings_captures_core_output() {
-        let result = chordsketch_core::parse_multi_lenient(MINIMAL_INPUT);
+        let result = chordsketch_chordpro::parse_multi_lenient(MINIMAL_INPUT);
         let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
         let text = chordsketch_render_text::render_songs_with_warnings(
             &songs,
             0,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         );
         assert!(!text.output.is_empty());
         assert!(
@@ -640,14 +640,14 @@ mod tests {
         let html = chordsketch_render_html::render_songs_with_warnings(
             &songs,
             0,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         );
         assert!(html.output.contains("<html"));
         assert!(html.warnings.is_empty());
         let pdf = chordsketch_render_pdf::render_songs_with_warnings(
             &songs,
             0,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         );
         assert!(pdf.output.starts_with(b"%PDF"));
         assert!(pdf.warnings.is_empty());
@@ -674,7 +674,7 @@ mod tests {
     // (`Result<_, napi::Error>` and `Buffer`) reference Node-API symbols
     // via `Drop`. The same constraint applies to every other `#[napi]` in
     // this file, so the established pattern is to exercise the underlying
-    // chordsketch-core code paths that the wrapper delegates to.
+    // chordsketch-chordpro code paths that the wrapper delegates to.
     //
     // The wrapper body is a three-line delegation:
     //   1. `resolve_config(options.config)?`
@@ -694,18 +694,18 @@ mod tests {
         // default) but silently ignore the option. The pure renderer
         // call below proves the core renderer responds to `transpose`,
         // which pins down exactly the contract the wrapper promises.
-        let result = chordsketch_core::parse_multi_lenient(MINIMAL_INPUT);
+        let result = chordsketch_chordpro::parse_multi_lenient(MINIMAL_INPUT);
         let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
         let zero = chordsketch_render_text::render_songs_with_warnings(
             &songs,
             0,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         )
         .output;
         let shifted = chordsketch_render_text::render_songs_with_warnings(
             &songs,
             2,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         )
         .output;
         assert_ne!(
@@ -717,18 +717,18 @@ mod tests {
     #[test]
     fn test_transpose_option_changes_html_render_output() {
         // Same plumbing guard for the HTML variant.
-        let result = chordsketch_core::parse_multi_lenient(MINIMAL_INPUT);
+        let result = chordsketch_chordpro::parse_multi_lenient(MINIMAL_INPUT);
         let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
         let zero = chordsketch_render_html::render_songs_with_warnings(
             &songs,
             0,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         )
         .output;
         let shifted = chordsketch_render_html::render_songs_with_warnings(
             &songs,
             2,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         )
         .output;
         assert_ne!(
@@ -740,18 +740,18 @@ mod tests {
     #[test]
     fn test_transpose_option_changes_pdf_render_output() {
         // Same plumbing guard for the PDF variant.
-        let result = chordsketch_core::parse_multi_lenient(MINIMAL_INPUT);
+        let result = chordsketch_chordpro::parse_multi_lenient(MINIMAL_INPUT);
         let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
         let zero = chordsketch_render_pdf::render_songs_with_warnings(
             &songs,
             0,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         )
         .output;
         let shifted = chordsketch_render_pdf::render_songs_with_warnings(
             &songs,
             2,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         )
         .output;
         assert_ne!(zero, shifted, "transpose=2 must alter the PDF byte stream");
@@ -765,9 +765,9 @@ mod tests {
         // returns a `Some(...)`. The preset's effect on rendered output
         // depends on which config option it sets and what the input
         // exercises, which is covered by the Config tests in
-        // chordsketch-core; this test just pins the name-lookup contract
+        // chordsketch-chordpro; this test just pins the name-lookup contract
         // so a future rename of the "guitar" preset would surface here.
-        let preset = chordsketch_core::config::Config::preset("guitar");
+        let preset = chordsketch_chordpro::config::Config::preset("guitar");
         assert!(preset.is_some(), "the 'guitar' preset must be available");
     }
 }

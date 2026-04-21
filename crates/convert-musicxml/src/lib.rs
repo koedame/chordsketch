@@ -3,8 +3,8 @@
 //! This crate provides:
 //!
 //! - [`from_musicxml`]: parse a MusicXML 4.0 document into a ChordSketch
-//!   [`Song`](chordsketch_core::ast::Song) AST
-//! - [`to_musicxml`]: serialize a [`Song`](chordsketch_core::ast::Song) to a
+//!   [`Song`](chordsketch_chordpro::ast::Song) AST
+//! - [`to_musicxml`]: serialize a [`Song`](chordsketch_chordpro::ast::Song) to a
 //!   MusicXML 4.0 string
 //!
 //! # What is preserved across a round-trip
@@ -26,7 +26,7 @@
 //!
 //! ```rust
 //! use chordsketch_convert_musicxml::{from_musicxml, to_musicxml};
-//! use chordsketch_core::ast::{Song, Chord, Line, LyricsLine, LyricsSegment};
+//! use chordsketch_chordpro::ast::{Song, Chord, Line, LyricsLine, LyricsSegment};
 //!
 //! // Build a simple song
 //! let mut song = Song::new();

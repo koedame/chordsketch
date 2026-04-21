@@ -3,7 +3,7 @@
 - Follow standard Rust conventions (rustfmt defaults, Clippy lints).
 - All public items must have doc comments (`///` or `//!`).
 - No unnecessary external dependencies. Justify any new dependency in the PR description.
-- `chordsketch-core` must have zero external dependencies — no exceptions.
+- `chordsketch-chordpro` must have zero external dependencies — no exceptions.
 - Prefer returning `Result` over panicking. Reserve `unwrap()` / `expect()` for cases
   where failure is provably impossible, and add a comment explaining why.
 - Use `#[must_use]` on functions whose return values should not be silently discarded.

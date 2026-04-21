@@ -17,24 +17,24 @@
 
 use std::fmt::Write;
 
-use chordsketch_core::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
-use chordsketch_core::canonical_chord_name;
-use chordsketch_core::config::Config;
-use chordsketch_core::escape::escape_xml as escape;
-use chordsketch_core::inline_markup::{SpanAttributes, TextSpan};
-use chordsketch_core::render_result::{RenderResult, push_warning, validate_capo};
-use chordsketch_core::resolve_diagrams_instrument;
-use chordsketch_core::transpose::transpose_chord;
+use chordsketch_chordpro::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
+use chordsketch_chordpro::canonical_chord_name;
+use chordsketch_chordpro::config::Config;
+use chordsketch_chordpro::escape::escape_xml as escape;
+use chordsketch_chordpro::inline_markup::{SpanAttributes, TextSpan};
+use chordsketch_chordpro::render_result::{RenderResult, push_warning, validate_capo};
+use chordsketch_chordpro::resolve_diagrams_instrument;
+use chordsketch_chordpro::transpose::transpose_chord;
 
 /// Maximum number of chorus recall directives allowed per song.
 /// Prevents output amplification from malicious inputs with many `{chorus}` lines.
 const MAX_CHORUS_RECALLS: usize = 1000;
 
 /// Maximum number of warnings the renderer accumulates per render pass.
-/// Re-exported from `chordsketch-core::render_result` so callers can
+/// Re-exported from `chordsketch-chordpro::render_result` so callers can
 /// keep importing `chordsketch_render_html::MAX_WARNINGS` unchanged
 /// (issue #1874).
-pub use chordsketch_core::render_result::MAX_WARNINGS;
+pub use chordsketch_chordpro::render_result::MAX_WARNINGS;
 
 /// Maximum number of CSS columns allowed.
 /// Matches `MAX_COLUMNS` in the PDF renderer.
@@ -225,7 +225,7 @@ fn render_song_body(
     // The base config transpose is already folded into cli_transpose by the caller.
     let song_transpose_delta = Config::song_transpose_delta(&song_overrides);
     let (combined_transpose, _) =
-        chordsketch_core::transpose::combine_transpose(cli_transpose, song_transpose_delta);
+        chordsketch_chordpro::transpose::combine_transpose(cli_transpose, song_transpose_delta);
     let mut transpose_offset: i8 = combined_transpose;
     let mut fmt_state = FormattingState::default();
     html.push_str("<div class=\"song\">\n");
@@ -256,12 +256,10 @@ fn render_song_body(
     let mut show_diagrams = true;
 
     // Read configurable frets_shown for chord diagrams.
-    let diagram_frets = config
-        .get_path("diagrams.frets")
-        .as_f64()
-        .map_or(chordsketch_core::chord_diagram::DEFAULT_FRETS_SHOWN, |n| {
-            (n as usize).max(1)
-        });
+    let diagram_frets = config.get_path("diagrams.frets").as_f64().map_or(
+        chordsketch_chordpro::chord_diagram::DEFAULT_FRETS_SHOWN,
+        |n| (n as usize).max(1),
+    );
 
     // Instrument for the auto-inject diagram block at end of song.
     // Set by {diagrams: guitar/ukulele/on}; cleared by {diagrams: off} / {no_diagrams}.
@@ -355,8 +353,10 @@ fn render_song_body(
                             }
                         },
                     };
-                    let (combined, saturated) =
-                        chordsketch_core::transpose::combine_transpose(file_offset, cli_transpose);
+                    let (combined, saturated) = chordsketch_chordpro::transpose::combine_transpose(
+                        file_offset,
+                        cli_transpose,
+                    );
                     if saturated {
                         push_warning(
                             warnings,
@@ -459,7 +459,7 @@ fn render_song_body(
                     DirectiveKind::StartOfAbc => {
                         #[cfg(not(target_arch = "wasm32"))]
                         let enabled = *abc2svg_resolved
-                            .get_or_insert_with(chordsketch_core::external_tool::has_abc2svg);
+                            .get_or_insert_with(chordsketch_chordpro::external_tool::has_abc2svg);
                         #[cfg(target_arch = "wasm32")]
                         let enabled = *abc2svg_resolved.get_or_insert(false);
                         if enabled {
@@ -481,7 +481,7 @@ fn render_song_body(
                     DirectiveKind::StartOfLy => {
                         #[cfg(not(target_arch = "wasm32"))]
                         let enabled = *lilypond_resolved
-                            .get_or_insert_with(chordsketch_core::external_tool::has_lilypond);
+                            .get_or_insert_with(chordsketch_chordpro::external_tool::has_lilypond);
                         #[cfg(target_arch = "wasm32")]
                         let enabled = *lilypond_resolved.get_or_insert(false);
                         if enabled {
@@ -503,7 +503,7 @@ fn render_song_body(
                     DirectiveKind::StartOfMusicxml => {
                         #[cfg(not(target_arch = "wasm32"))]
                         let enabled = *musescore_resolved
-                            .get_or_insert_with(chordsketch_core::external_tool::has_musescore);
+                            .get_or_insert_with(chordsketch_chordpro::external_tool::has_musescore);
                         #[cfg(target_arch = "wasm32")]
                         let enabled = *musescore_resolved.get_or_insert(false);
                         if enabled {
@@ -547,7 +547,8 @@ fn render_song_body(
                         if directive.kind == DirectiveKind::Define && show_diagrams {
                             if let Some(ref val) = directive.value {
                                 let name =
-                                    chordsketch_core::ast::ChordDefinition::parse_value(val).name;
+                                    chordsketch_chordpro::ast::ChordDefinition::parse_value(val)
+                                        .name;
                                 if !name.is_empty() {
                                     inline_defined.insert(canonical_chord_name(&name));
                                 }
@@ -593,7 +594,9 @@ fn render_song_body(
             let kbd_defines = song.keyboard_defines();
             let voicings: Vec<_> = chord_names
                 .into_iter()
-                .filter_map(|name| chordsketch_core::lookup_keyboard_voicing(&name, &kbd_defines))
+                .filter_map(|name| {
+                    chordsketch_chordpro::lookup_keyboard_voicing(&name, &kbd_defines)
+                })
                 .collect();
             if !voicings.is_empty() {
                 html.push_str("<section class=\"chord-diagrams\">\n");
@@ -601,7 +604,7 @@ fn render_song_body(
                 html.push_str("<div class=\"chord-diagrams-grid\">\n");
                 for voicing in &voicings {
                     html.push_str("<div class=\"chord-diagram-container\">");
-                    html.push_str(&chordsketch_core::chord_diagram::render_keyboard_svg(
+                    html.push_str(&chordsketch_chordpro::chord_diagram::render_keyboard_svg(
                         voicing,
                     ));
                     html.push_str("</div>\n");
@@ -615,7 +618,7 @@ fn render_song_body(
             let diagrams: Vec<_> = chord_names
                 .into_iter()
                 .filter_map(|name| {
-                    chordsketch_core::lookup_diagram(&name, &defines, instrument, diagram_frets)
+                    chordsketch_chordpro::lookup_diagram(&name, &defines, instrument, diagram_frets)
                 })
                 .collect();
             if !diagrams.is_empty() {
@@ -624,7 +627,7 @@ fn render_song_body(
                 html.push_str("<div class=\"chord-diagrams-grid\">\n");
                 for diagram in &diagrams {
                     html.push_str("<div class=\"chord-diagram-container\">");
-                    html.push_str(&chordsketch_core::chord_diagram::render_svg(diagram));
+                    html.push_str(&chordsketch_chordpro::chord_diagram::render_svg(diagram));
                     html.push_str("</div>\n");
                 }
                 html.push_str("</div>\n");
@@ -711,11 +714,11 @@ pub fn render_songs_with_warnings(
 
 /// Parse a ChordPro source string and render it to HTML.
 ///
-/// Returns `Ok(html)` on success, or the [`chordsketch_core::ParseError`] if
+/// Returns `Ok(html)` on success, or the [`chordsketch_chordpro::ParseError`] if
 /// the input cannot be parsed.
 #[must_use = "parse errors should be handled"]
-pub fn try_render(input: &str) -> Result<String, chordsketch_core::ParseError> {
-    let song = chordsketch_core::parse(input)?;
+pub fn try_render(input: &str) -> Result<String, chordsketch_chordpro::ParseError> {
+    let song = chordsketch_chordpro::parse(input)?;
     Ok(render_song(&song))
 }
 
@@ -771,7 +774,7 @@ img { max-width: 100%; height: auto; }
 // ---------------------------------------------------------------------------
 
 /// Render song metadata (title, subtitle) as HTML header elements.
-fn render_metadata(metadata: &chordsketch_core::ast::Metadata, html: &mut String) {
+fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut String) {
     if let Some(title) = &metadata.title {
         let _ = writeln!(html, "<h1>{}</h1>", escape(title));
     }
@@ -1482,7 +1485,7 @@ fn sanitize_tag_attrs(tag: &str) -> String {
 /// StartOfChorus, EndOfChorus, and Chorus are handled directly in
 /// `render_song` for chorus-recall state tracking.
 fn render_directive_inner(
-    directive: &chordsketch_core::ast::Directive,
+    directive: &chordsketch_chordpro::ast::Directive,
     show_diagrams: bool,
     diagram_frets: usize,
     html: &mut String,
@@ -1519,7 +1522,7 @@ fn render_directive_inner(
         }
         DirectiveKind::StartOfSection(section_name) => {
             let class = format!("section-{}", sanitize_css_class(section_name));
-            let label = escape(&chordsketch_core::capitalize(section_name));
+            let label = escape(&chordsketch_chordpro::capitalize(section_name));
             render_section_open(&class, &label, &directive.value, html);
         }
         DirectiveKind::EndOfChorus
@@ -1540,7 +1543,7 @@ fn render_directive_inner(
         }
         DirectiveKind::Define if show_diagrams => {
             if let Some(ref value) = directive.value {
-                let def = chordsketch_core::ast::ChordDefinition::parse_value(value);
+                let def = chordsketch_chordpro::ast::ChordDefinition::parse_value(value);
                 // Keyboard defines: render a piano keyboard SVG.
                 if let Some(ref keys_raw) = def.keys {
                     let keys_u8: Vec<u8> = keys_raw
@@ -1555,14 +1558,14 @@ fn render_directive_inner(
                         .collect();
                     if !keys_u8.is_empty() {
                         let root = keys_u8[0];
-                        let voicing = chordsketch_core::chord_diagram::KeyboardVoicing {
+                        let voicing = chordsketch_chordpro::chord_diagram::KeyboardVoicing {
                             name: def.name.clone(),
                             display_name: def.display.clone(),
                             keys: keys_u8,
                             root_key: root,
                         };
                         html.push_str("<div class=\"chord-diagram-container\">");
-                        html.push_str(&chordsketch_core::chord_diagram::render_keyboard_svg(
+                        html.push_str(&chordsketch_chordpro::chord_diagram::render_keyboard_svg(
                             &voicing,
                         ));
                         html.push_str("</div>\n");
@@ -1570,7 +1573,7 @@ fn render_directive_inner(
                 } else if let Some(ref raw) = def.raw {
                     // Fretted defines: render the standard fret-grid SVG.
                     if let Some(mut diagram) =
-                        chordsketch_core::chord_diagram::DiagramData::from_raw_infer_frets(
+                        chordsketch_chordpro::chord_diagram::DiagramData::from_raw_infer_frets(
                             &def.name,
                             raw,
                             diagram_frets,
@@ -1578,7 +1581,7 @@ fn render_directive_inner(
                     {
                         diagram.display_name = def.display.clone();
                         html.push_str("<div class=\"chord-diagram-container\">");
-                        html.push_str(&chordsketch_core::chord_diagram::render_svg(&diagram));
+                        html.push_str(&chordsketch_chordpro::chord_diagram::render_svg(&diagram));
                         html.push_str("</div>\n");
                     }
                 }
@@ -1601,7 +1604,7 @@ fn render_abc_with_fallback(
     html: &mut String,
     warnings: &mut Vec<String>,
 ) {
-    match chordsketch_core::external_tool::invoke_abc2svg(abc_content) {
+    match chordsketch_chordpro::external_tool::invoke_abc2svg(abc_content) {
         Ok(svg_fragment) => {
             render_section_open("abc", "ABC", label, html);
             html.push_str(&sanitize_svg_content(&svg_fragment));
@@ -1638,12 +1641,12 @@ fn render_abc_with_fallback(
 
 /// Check whether an image `src` value is safe to emit in HTML.
 ///
-/// Re-export shared image-src validation from `chordsketch-core`.
+/// Re-export shared image-src validation from `chordsketch-chordpro`.
 ///
-/// The actual allowlist logic lives in `chordsketch_core::image_path::is_safe_image_src`
+/// The actual allowlist logic lives in `chordsketch_chordpro::image_path::is_safe_image_src`
 /// so every renderer (text, HTML, PDF) applies the same check — see
 /// `.claude/rules/renderer-parity.md` §Validation Parity.
-use chordsketch_core::image_path::is_safe_image_src;
+use chordsketch_chordpro::image_path::is_safe_image_src;
 
 /// Render Lilypond notation content using lilypond, falling back to preformatted text.
 ///
@@ -1657,7 +1660,7 @@ fn render_ly_with_fallback(
     html: &mut String,
     warnings: &mut Vec<String>,
 ) {
-    match chordsketch_core::external_tool::invoke_lilypond(ly_content) {
+    match chordsketch_chordpro::external_tool::invoke_lilypond(ly_content) {
         Ok(svg) => {
             render_section_open("ly", "Lilypond", label, html);
             html.push_str(&sanitize_svg_content(&svg));
@@ -1704,7 +1707,7 @@ fn render_musicxml_with_fallback(
     html: &mut String,
     warnings: &mut Vec<String>,
 ) {
-    match chordsketch_core::external_tool::invoke_musescore(musicxml_content) {
+    match chordsketch_chordpro::external_tool::invoke_musescore(musicxml_content) {
         Ok(svg) => {
             render_section_open("musicxml", "MusicXML", label, html);
             html.push_str(&sanitize_svg_content(&svg));
@@ -1747,7 +1750,7 @@ fn render_musicxml_with_fallback(
 /// via a CSS `transform: scale(…)` style.
 ///
 /// Paths that fail [`is_safe_image_src`] are silently skipped.
-fn render_image(attrs: &chordsketch_core::ast::ImageAttributes, html: &mut String) {
+fn render_image(attrs: &chordsketch_chordpro::ast::ImageAttributes, html: &mut String) {
     if !is_safe_image_src(&attrs.src) {
         return;
     }
@@ -1988,7 +1991,7 @@ mod tests {
 
     #[test]
     fn test_render_empty() {
-        let song = chordsketch_core::parse("").unwrap();
+        let song = chordsketch_chordpro::parse("").unwrap();
         let html = render_song(&song);
         assert!(html.contains("<!DOCTYPE html>"));
         assert!(html.contains("</html>"));
@@ -2227,7 +2230,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_up_2() {
         let input = "{transpose: 2}\n[G]Hello [C]world";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let html = render_song(&song);
         // G+2=A, C+2=D
         assert!(html.contains("<span class=\"chord\">A</span>"));
@@ -2239,7 +2242,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_replaces_previous() {
         let input = "{transpose: 2}\n[G]First\n{transpose: 0}\n[G]Second";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let html = render_song(&song);
         // First G transposed +2 = A, second G at 0 = G
         assert!(html.contains("<span class=\"chord\">A</span>"));
@@ -2249,7 +2252,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_with_cli_offset() {
         let input = "{transpose: 2}\n[C]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let html = render_song_with_transpose(&song, 3, &Config::defaults());
         // 2 + 3 = 5, C+5=F
         assert!(html.contains("<span class=\"chord\">F</span>"));
@@ -2259,7 +2262,7 @@ mod transpose_tests {
     fn test_transpose_out_of_i8_range_emits_warning() {
         // 999 cannot be represented as i8; should fall back to 0 with a warning
         let input = "{transpose: 999}\n[G]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             result.output.contains("<span class=\"chord\">G</span>"),
@@ -2276,7 +2279,7 @@ mod transpose_tests {
     fn test_transpose_no_value_treated_as_zero() {
         // {transpose} with no value should silently reset to 0, no warning.
         let input = "{transpose}\n[G]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             result.output.contains("<span class=\"chord\">G</span>"),
@@ -2295,7 +2298,7 @@ mod transpose_tests {
         // no warning emitted. The parser trims whitespace → Some(""), which the
         // Some("") arm converts to 0.
         let input = "{transpose:   }\n[G]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             result.output.contains("<span class=\"chord\">G</span>"),
@@ -2722,7 +2725,7 @@ Verse text\n\
 
     #[test]
     fn test_capo_out_of_range_emits_warning() {
-        let song = chordsketch_core::parse("{title: T}\n{capo: 999}").unwrap();
+        let song = chordsketch_chordpro::parse("{title: T}\n{capo: 999}").unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             result
@@ -2736,7 +2739,7 @@ Verse text\n\
 
     #[test]
     fn test_capo_non_numeric_emits_warning() {
-        let song = chordsketch_core::parse("{title: T}\n{capo: foo}").unwrap();
+        let song = chordsketch_chordpro::parse("{title: T}\n{capo: foo}").unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             result
@@ -2750,7 +2753,7 @@ Verse text\n\
 
     #[test]
     fn test_capo_in_range_is_silent() {
-        let song = chordsketch_core::parse("{title: T}\n{capo: 5}").unwrap();
+        let song = chordsketch_chordpro::parse("{title: T}\n{capo: 5}").unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             !result.warnings.iter().any(|w| w.contains("capo")),
@@ -2767,7 +2770,7 @@ Verse text\n\
         for _ in 0..(MAX_WARNINGS + 50) {
             input.push_str("{transpose: not-a-number}\n");
         }
-        let song = chordsketch_core::parse(&input).unwrap();
+        let song = chordsketch_chordpro::parse(&input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert_eq!(
             result.warnings.len(),
@@ -2961,8 +2964,8 @@ Verse text\n\
     #[test]
     fn test_diagrams_frets_config_controls_svg_height() {
         let input = "{define: Am base-fret 1 frets x 0 2 2 1 0}";
-        let song = chordsketch_core::parse(input).unwrap();
-        let config = chordsketch_core::config::Config::defaults()
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let config = chordsketch_chordpro::config::Config::defaults()
             .with_define("diagrams.frets=4")
             .unwrap();
         let html = render_song_with_transpose(&song, 0, &config);
@@ -3014,11 +3017,11 @@ Verse text\n\
 
     #[test]
     fn test_diagrams_parsed_as_known_directive() {
-        let song = chordsketch_core::parse("{diagrams: off}").unwrap();
-        if let chordsketch_core::ast::Line::Directive(d) = &song.lines[0] {
+        let song = chordsketch_chordpro::parse("{diagrams: off}").unwrap();
+        if let chordsketch_chordpro::ast::Line::Directive(d) = &song.lines[0] {
             assert_eq!(
                 d.kind,
-                chordsketch_core::ast::DirectiveKind::Diagrams,
+                chordsketch_chordpro::ast::DirectiveKind::Diagrams,
                 "diagrams should parse as DirectiveKind::Diagrams"
             );
             assert_eq!(d.value, Some("off".to_string()));
@@ -3124,8 +3127,8 @@ Verse text\n\
     fn test_diagrams_guitar_explicit_overrides_config_default() {
         // Even when config could default to ukulele, {diagrams: guitar} should
         // use guitar (6-string Am) not ukulele (4-string Am).
-        let song = chordsketch_core::parse("{diagrams: guitar}\n[Am]Hello").unwrap();
-        let config = chordsketch_core::config::Config::defaults()
+        let song = chordsketch_chordpro::parse("{diagrams: guitar}\n[Am]Hello").unwrap();
+        let config = chordsketch_chordpro::config::Config::defaults()
             .with_define("diagrams.instrument=ukulele")
             .unwrap();
         let html = render_song_with_transpose(&song, 0, &config);
@@ -3135,14 +3138,14 @@ Verse text\n\
         );
         assert!(html.contains(">Am<"), "Am diagram expected");
         let guitar_am_html = render_song_with_transpose(
-            &chordsketch_core::parse("{diagrams: guitar}\n[Am]Hello").unwrap(),
+            &chordsketch_chordpro::parse("{diagrams: guitar}\n[Am]Hello").unwrap(),
             0,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         );
         let uke_am_html = render_song_with_transpose(
-            &chordsketch_core::parse("{diagrams: ukulele}\n[Am]Hello").unwrap(),
+            &chordsketch_chordpro::parse("{diagrams: ukulele}\n[Am]Hello").unwrap(),
             0,
-            &chordsketch_core::config::Config::defaults(),
+            &chordsketch_chordpro::config::Config::defaults(),
         );
         // Guitar and ukulele diagrams must differ in their SVG content.
         assert_ne!(
@@ -3247,8 +3250,8 @@ Verse text\n\
     fn test_abc_section_disabled_by_config() {
         // With delegates.abc2svg explicitly disabled, ABC renders as text
         let input = "{start_of_abc}\nX:1\n{end_of_abc}";
-        let song = chordsketch_core::parse(input).unwrap();
-        let config = chordsketch_core::config::Config::defaults()
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let config = chordsketch_chordpro::config::Config::defaults()
             .with_define("delegates.abc2svg=false")
             .unwrap();
         let html = render_song_with_transpose(&song, 0, &config);
@@ -3261,13 +3264,13 @@ Verse text\n\
     fn test_abc_section_null_config_auto_detect_disabled() {
         // Default config has delegates.abc2svg=null (auto-detect).
         // When abc2svg is not installed, sections render as plain text.
-        if chordsketch_core::external_tool::has_abc2svg() {
+        if chordsketch_chordpro::external_tool::has_abc2svg() {
             return; // Skip on machines with abc2svg installed
         }
         let input = "{start_of_abc}\nX:1\n{end_of_abc}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         // Use defaults — delegates.abc2svg is null (auto-detect)
-        let config = chordsketch_core::config::Config::defaults();
+        let config = chordsketch_chordpro::config::Config::defaults();
         assert!(
             config.get_path("delegates.abc2svg").is_null(),
             "default config should have null delegates.abc2svg"
@@ -3282,12 +3285,12 @@ Verse text\n\
     #[test]
     fn test_abc_section_fallback_preformatted() {
         // With delegate enabled but abc2svg not available, falls back to <pre>
-        if chordsketch_core::external_tool::has_abc2svg() {
+        if chordsketch_chordpro::external_tool::has_abc2svg() {
             return; // Skip on machines with abc2svg installed
         }
         let input = "{start_of_abc}\nX:1\nT:Test\nK:C\n{end_of_abc}";
-        let song = chordsketch_core::parse(input).unwrap();
-        let config = chordsketch_core::config::Config::defaults()
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let config = chordsketch_chordpro::config::Config::defaults()
             .with_define("delegates.abc2svg=true")
             .unwrap();
         let html = render_song_with_transpose(&song, 0, &config);
@@ -3299,12 +3302,12 @@ Verse text\n\
 
     #[test]
     fn test_abc_section_with_label_delegate_fallback() {
-        if chordsketch_core::external_tool::has_abc2svg() {
+        if chordsketch_chordpro::external_tool::has_abc2svg() {
             return;
         }
         let input = "{start_of_abc: Melody}\nX:1\n{end_of_abc}";
-        let song = chordsketch_core::parse(input).unwrap();
-        let config = chordsketch_core::config::Config::defaults()
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let config = chordsketch_chordpro::config::Config::defaults()
             .with_define("delegates.abc2svg=true")
             .unwrap();
         let html = render_song_with_transpose(&song, 0, &config);
@@ -3317,8 +3320,8 @@ Verse text\n\
     fn test_abc_section_renders_svg_with_abc2svg() {
         // Requires abc2svg installed. Run with: cargo test -- --ignored
         let input = "{start_of_abc}\nX:1\nT:Test\nM:4/4\nK:C\nCDEF|GABc|\n{end_of_abc}";
-        let song = chordsketch_core::parse(input).unwrap();
-        let config = chordsketch_core::config::Config::defaults()
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let config = chordsketch_chordpro::config::Config::defaults()
             .with_define("delegates.abc2svg=true")
             .unwrap();
         let html = render_song_with_transpose(&song, 0, &config);
@@ -3336,14 +3339,14 @@ Verse text\n\
         // When the tool is not found, auto-detect resolves to false and the
         // section renders with raw content as regular text (no SVG, no <pre>).
         let input = "{start_of_abc}\nX:1\nT:Test\nK:C\n{end_of_abc}";
-        let song = chordsketch_core::parse(input).unwrap();
-        let config = chordsketch_core::config::Config::defaults();
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let config = chordsketch_chordpro::config::Config::defaults();
         let html = render_song_with_transpose(&song, 0, &config);
         assert!(
             html.contains("<section class=\"abc\">"),
             "auto-detect should produce abc section"
         );
-        if !chordsketch_core::external_tool::has_abc2svg() {
+        if !chordsketch_chordpro::external_tool::has_abc2svg() {
             assert!(
                 html.contains("X:1"),
                 "raw ABC content should be present without tool"
@@ -3361,14 +3364,14 @@ Verse text\n\
     fn test_ly_section_auto_detect_default_config() {
         // Same as ABC: auto-detect renders a section regardless of tool availability.
         let input = "{start_of_ly}\n\\relative c' { c4 }\n{end_of_ly}";
-        let song = chordsketch_core::parse(input).unwrap();
-        let config = chordsketch_core::config::Config::defaults();
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let config = chordsketch_chordpro::config::Config::defaults();
         let html = render_song_with_transpose(&song, 0, &config);
         assert!(
             html.contains("<section class=\"ly\">"),
             "auto-detect should produce ly section"
         );
-        if !chordsketch_core::external_tool::has_lilypond() {
+        if !chordsketch_chordpro::external_tool::has_lilypond() {
             assert!(
                 html.contains("\\relative"),
                 "raw Lilypond content should be present without tool"
@@ -3384,8 +3387,8 @@ Verse text\n\
     fn test_ly_section_disabled_by_config() {
         // With delegates.lilypond explicitly disabled, Ly renders as text
         let input = "{start_of_ly}\n\\relative c' { c4 }\n{end_of_ly}";
-        let song = chordsketch_core::parse(input).unwrap();
-        let config = chordsketch_core::config::Config::defaults()
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let config = chordsketch_chordpro::config::Config::defaults()
             .with_define("delegates.lilypond=false")
             .unwrap();
         let html = render_song_with_transpose(&song, 0, &config);
@@ -3396,12 +3399,12 @@ Verse text\n\
 
     #[test]
     fn test_ly_section_fallback_preformatted() {
-        if chordsketch_core::external_tool::has_lilypond() {
+        if chordsketch_chordpro::external_tool::has_lilypond() {
             return;
         }
         let input = "{start_of_ly}\n\\relative c' { c4 }\n{end_of_ly}";
-        let song = chordsketch_core::parse(input).unwrap();
-        let config = chordsketch_core::config::Config::defaults()
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let config = chordsketch_chordpro::config::Config::defaults()
             .with_define("delegates.lilypond=true")
             .unwrap();
         let html = render_song_with_transpose(&song, 0, &config);
@@ -3415,8 +3418,8 @@ Verse text\n\
     fn test_ly_section_renders_svg_with_lilypond() {
         // Requires lilypond installed. Run with: cargo test -- --ignored
         let input = "{start_of_ly}\n\\relative c' { c4 d e f | g2 g | }\n{end_of_ly}";
-        let song = chordsketch_core::parse(input).unwrap();
-        let config = chordsketch_core::config::Config::defaults()
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let config = chordsketch_chordpro::config::Config::defaults()
             .with_define("delegates.lilypond=true")
             .unwrap();
         let html = render_song_with_transpose(&song, 0, &config);
@@ -3462,8 +3465,8 @@ mod delegate_tests {
     fn test_render_musicxml_section_disabled() {
         // With delegates.musescore explicitly disabled, MusicXML renders as text.
         let input = "{start_of_musicxml}\n<score-partwise/>\n{end_of_musicxml}";
-        let song = chordsketch_core::parse(input).unwrap();
-        let config = chordsketch_core::config::Config::defaults()
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let config = chordsketch_chordpro::config::Config::defaults()
             .with_define("delegates.musescore=false")
             .unwrap();
         let html = render_song_with_transpose(&song, 0, &config);
@@ -3479,13 +3482,13 @@ mod delegate_tests {
     fn test_render_musicxml_section_no_musescore_installed() {
         // Default config has delegates.musescore=null (auto-detect).
         // When musescore is not installed, sections render as plain text.
-        if chordsketch_core::external_tool::has_musescore() {
+        if chordsketch_chordpro::external_tool::has_musescore() {
             return; // Skip on machines with musescore installed
         }
 
         let input = "{start_of_musicxml}\n<score-partwise/>\n{end_of_musicxml}";
-        let song = chordsketch_core::parse(input).unwrap();
-        let config = chordsketch_core::config::Config::defaults();
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let config = chordsketch_chordpro::config::Config::defaults();
         assert!(
             config.get_path("delegates.musescore").is_null(),
             "default config should have null delegates.musescore"
@@ -3500,8 +3503,8 @@ mod delegate_tests {
     #[test]
     fn test_render_musicxml_section_with_label() {
         let input = "{start_of_musicxml: Score}\n<score-partwise/>\n{end_of_musicxml}";
-        let song = chordsketch_core::parse(input).unwrap();
-        let config = chordsketch_core::config::Config::defaults()
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let config = chordsketch_chordpro::config::Config::defaults()
             .with_define("delegates.musescore=false")
             .unwrap();
         let html = render_song_with_transpose(&song, 0, &config);
@@ -3823,7 +3826,7 @@ mod delegate_tests {
 
     #[test]
     fn test_render_songs_single() {
-        let songs = chordsketch_core::parse_multi("{title: Only}").unwrap();
+        let songs = chordsketch_chordpro::parse_multi("{title: Only}").unwrap();
         let html = render_songs(&songs);
         // Single song: should be identical to render_song
         assert_eq!(html, render_song(&songs[0]));
@@ -3831,7 +3834,7 @@ mod delegate_tests {
 
     #[test]
     fn test_render_songs_two_songs_with_hr_separator() {
-        let songs = chordsketch_core::parse_multi(
+        let songs = chordsketch_chordpro::parse_multi(
             "{title: Song A}\n[Am]Hello\n{new_song}\n{title: Song B}\n[G]World",
         )
         .unwrap();
@@ -3864,7 +3867,7 @@ mod delegate_tests {
     #[test]
     fn test_render_songs_with_transpose() {
         let songs =
-            chordsketch_core::parse_multi("{title: S1}\n[C]Do\n{new_song}\n{title: S2}\n[G]Re")
+            chordsketch_chordpro::parse_multi("{title: S1}\n[C]Do\n{new_song}\n{title: S2}\n[G]Re")
                 .unwrap();
         let html = render_songs_with_transpose(&songs, 2, &Config::defaults());
         // C+2=D, G+2=A

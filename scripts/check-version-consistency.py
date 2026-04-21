@@ -23,7 +23,7 @@ Sources checked:
   6. `packages/tree-sitter-chordpro/package.json` `version`
   7. `.github/workflows/readme-smoke.yml` — the two hardcoded pins:
        a. L~204: `npm install '@chordsketch/wasm@<version>'`
-       b. L~450–451: `chordsketch-core = "<caret>"` and
+       b. L~450–451: `chordsketch-chordpro = "<caret>"` and
           `chordsketch-render-text = "<caret>"` (matched by both)
   8. `packaging/macports/Portfile` — `github.setup … <version> v`
   9. `packaging/nix/package.nix` — `version = "X.Y.Z";`
@@ -125,10 +125,10 @@ def load_package_json_version(repo_root: Path, relative: str) -> Source:
 _SMOKE_NPM_PIN_RE = re.compile(
     r"""npm\s+install\s+['"]@chordsketch/wasm@([0-9][^'"]*)['"]"""
 )
-# Line ~450 smoke-test caret constraint (matches the chordsketch-core entry,
+# Line ~450 smoke-test caret constraint (matches the chordsketch-chordpro entry,
 # which is representative of the library-smoke mode's paired pins).
 _SMOKE_CARET_RE = re.compile(
-    r"""chordsketch-core\s*=\s*['"]\^([0-9]+\.[0-9]+)['"]"""
+    r"""chordsketch-chordpro\s*=\s*['"]\^([0-9]+\.[0-9]+)['"]"""
 )
 
 
@@ -165,7 +165,7 @@ def load_readme_smoke_pins(repo_root: Path) -> list[Source]:
     caret_match = _SMOKE_CARET_RE.search(text)
     if caret_match is None:
         raise SystemExit(
-            f"{relative}: could not find `chordsketch-core = \"^X.Y\"`. "
+            f"{relative}: could not find `chordsketch-chordpro = \"^X.Y\"`. "
             f"If the library-smoke job was restructured, update _SMOKE_CARET_RE."
         )
     sources.append(

@@ -10,14 +10,16 @@
 //! the current page overflows, and `{new_page}` / `{new_physical_page}`
 //! directives trigger explicit page breaks.
 
-use chordsketch_core::ast::{CommentStyle, DirectiveKind, ImageAttributes, Line, LyricsLine, Song};
-use chordsketch_core::canonical_chord_name;
-use chordsketch_core::config::Config;
-use chordsketch_core::inline_markup::TextSpan;
-use chordsketch_core::notation::NotationKind;
-use chordsketch_core::render_result::{RenderResult, push_warning, validate_capo};
-use chordsketch_core::resolve_diagrams_instrument;
-use chordsketch_core::transpose::transpose_chord;
+use chordsketch_chordpro::ast::{
+    CommentStyle, DirectiveKind, ImageAttributes, Line, LyricsLine, Song,
+};
+use chordsketch_chordpro::canonical_chord_name;
+use chordsketch_chordpro::config::Config;
+use chordsketch_chordpro::inline_markup::TextSpan;
+use chordsketch_chordpro::notation::NotationKind;
+use chordsketch_chordpro::render_result::{RenderResult, push_warning, validate_capo};
+use chordsketch_chordpro::resolve_diagrams_instrument;
+use chordsketch_chordpro::transpose::transpose_chord;
 
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
@@ -434,10 +436,10 @@ const MAX_IMAGES: usize = 1_000;
 const MAX_CHORUS_RECALLS: usize = 1000;
 
 /// Maximum number of warnings the renderer accumulates per render pass.
-/// Re-exported from `chordsketch-core::render_result` so callers can
+/// Re-exported from `chordsketch-chordpro::render_result` so callers can
 /// keep importing `chordsketch_render_pdf::MAX_WARNINGS` unchanged
 /// (issue #1874).
-pub use chordsketch_core::render_result::MAX_WARNINGS;
+pub use chordsketch_chordpro::render_result::MAX_WARNINGS;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -664,17 +666,15 @@ fn render_song_into_doc(
     let song_overrides = song.config_overrides();
     let song_transpose_delta = Config::song_transpose_delta(&song_overrides);
     let (combined_transpose, _) =
-        chordsketch_core::transpose::combine_transpose(cli_transpose, song_transpose_delta);
+        chordsketch_chordpro::transpose::combine_transpose(cli_transpose, song_transpose_delta);
     let mut transpose_offset: i8 = combined_transpose;
     let mut fmt_state = PdfFormattingState::default();
 
     // Read configurable frets_shown for chord diagrams.
-    let diagram_frets = config
-        .get_path("diagrams.frets")
-        .as_f64()
-        .map_or(chordsketch_core::chord_diagram::DEFAULT_FRETS_SHOWN, |n| {
-            (n as usize).max(1)
-        });
+    let diagram_frets = config.get_path("diagrams.frets").as_f64().map_or(
+        chordsketch_chordpro::chord_diagram::DEFAULT_FRETS_SHOWN,
+        |n| (n as usize).max(1),
+    );
 
     validate_capo(&song.metadata, warnings);
 
@@ -780,8 +780,10 @@ fn render_song_into_doc(
                             }
                         },
                     };
-                    let (combined, saturated) =
-                        chordsketch_core::transpose::combine_transpose(file_offset, cli_transpose);
+                    let (combined, saturated) = chordsketch_chordpro::transpose::combine_transpose(
+                        file_offset,
+                        cli_transpose,
+                    );
                     if saturated {
                         push_warning(
                             warnings,
@@ -906,7 +908,8 @@ fn render_song_into_doc(
                         if d.kind == DirectiveKind::Define && show_diagrams {
                             if let Some(ref val) = d.value {
                                 let name =
-                                    chordsketch_core::ast::ChordDefinition::parse_value(val).name;
+                                    chordsketch_chordpro::ast::ChordDefinition::parse_value(val)
+                                        .name;
                                 if !name.is_empty() {
                                     inline_defined.insert(canonical_chord_name(&name));
                                 }
@@ -945,7 +948,7 @@ fn render_song_into_doc(
             let kbd_defines = song.keyboard_defines();
             for name in chord_names {
                 if let Some(voicing) =
-                    chordsketch_core::lookup_keyboard_voicing(&name, &kbd_defines)
+                    chordsketch_chordpro::lookup_keyboard_voicing(&name, &kbd_defines)
                 {
                     render_keyboard_diagram_pdf(&voicing, doc);
                 }
@@ -954,7 +957,7 @@ fn render_song_into_doc(
             let defines = song.fretted_defines();
             for name in chord_names {
                 if let Some(diagram) =
-                    chordsketch_core::lookup_diagram(&name, &defines, instrument, diagram_frets)
+                    chordsketch_chordpro::lookup_diagram(&name, &defines, instrument, diagram_frets)
                 {
                     render_chord_diagram_pdf(&diagram, doc);
                 }
@@ -965,8 +968,8 @@ fn render_song_into_doc(
 
 /// Parse and render a ChordPro source string to PDF bytes.
 #[must_use = "parse errors should be handled"]
-pub fn try_render(input: &str) -> Result<Vec<u8>, chordsketch_core::ParseError> {
-    let song = chordsketch_core::parse(input)?;
+pub fn try_render(input: &str) -> Result<Vec<u8>, chordsketch_chordpro::ParseError> {
+    let song = chordsketch_chordpro::parse(input)?;
     Ok(render_song(&song))
 }
 
@@ -1127,7 +1130,7 @@ fn render_span_list(
 }
 
 /// Render the section label for a start-of-section directive.
-fn render_section_label(directive: &chordsketch_core::ast::Directive, doc: &mut PdfDocument) {
+fn render_section_label(directive: &chordsketch_chordpro::ast::Directive, doc: &mut PdfDocument) {
     let label: Option<String> = match &directive.kind {
         DirectiveKind::StartOfChorus => Some("Chorus".to_string()),
         DirectiveKind::StartOfVerse => Some("Verse".to_string()),
@@ -1140,7 +1143,7 @@ fn render_section_label(directive: &chordsketch_core::ast::Directive, doc: &mut 
         DirectiveKind::StartOfTextblock => Some("Textblock".to_string()),
         DirectiveKind::StartOfMusicxml => Some("MusicXML".to_string()),
         DirectiveKind::StartOfSection(section_name) => {
-            Some(chordsketch_core::capitalize(section_name))
+            Some(chordsketch_chordpro::capitalize(section_name))
         }
         _ => None,
     };
@@ -1156,14 +1159,14 @@ fn render_section_label(directive: &chordsketch_core::ast::Directive, doc: &mut 
 }
 
 fn render_directive(
-    directive: &chordsketch_core::ast::Directive,
+    directive: &chordsketch_chordpro::ast::Directive,
     show_diagrams: bool,
     diagram_frets: usize,
     doc: &mut PdfDocument,
 ) {
     if directive.kind == DirectiveKind::Define && show_diagrams {
         if let Some(ref value) = directive.value {
-            let def = chordsketch_core::ast::ChordDefinition::parse_value(value);
+            let def = chordsketch_chordpro::ast::ChordDefinition::parse_value(value);
             // Keyboard defines: render a piano keyboard diagram.
             if let Some(ref keys_raw) = def.keys {
                 let keys_u8: Vec<u8> = keys_raw
@@ -1178,7 +1181,7 @@ fn render_directive(
                     .collect();
                 if !keys_u8.is_empty() {
                     let root = keys_u8[0];
-                    let voicing = chordsketch_core::chord_diagram::KeyboardVoicing {
+                    let voicing = chordsketch_chordpro::chord_diagram::KeyboardVoicing {
                         name: def.name.clone(),
                         display_name: def.display.clone(),
                         keys: keys_u8,
@@ -1191,7 +1194,7 @@ fn render_directive(
             // Fretted defines: render the standard fret-grid diagram.
             if let Some(ref raw) = def.raw {
                 if let Some(mut diagram) =
-                    chordsketch_core::chord_diagram::DiagramData::from_raw_infer_frets(
+                    chordsketch_chordpro::chord_diagram::DiagramData::from_raw_infer_frets(
                         &def.name,
                         raw,
                         diagram_frets,
@@ -1228,7 +1231,7 @@ fn is_safe_image_path(path: &str) -> bool {
     // Reject Windows-style absolute paths on all platforms.  On Unix,
     // `Path::is_absolute()` does not flag `C:\…` or `\\…` as absolute,
     // so we perform string-level checks for drive letters and UNC paths.
-    if chordsketch_core::image_path::is_windows_absolute(path) {
+    if chordsketch_chordpro::image_path::is_windows_absolute(path) {
         return false;
     }
 
@@ -1246,7 +1249,7 @@ fn is_safe_image_path(path: &str) -> bool {
     // backslash-separated traversal like `images\..\..\etc\passwd` is
     // also caught on Unix (where `Path::components()` treats `\` as a
     // literal character).
-    if chordsketch_core::image_path::has_traversal(path) {
+    if chordsketch_chordpro::image_path::has_traversal(path) {
         return false;
     }
 
@@ -1337,7 +1340,7 @@ fn render_image(attrs: &ImageAttributes, doc: &mut PdfDocument) {
     // behaviours (issue #1832, renderer-parity.md §Validation Parity).
     // `is_safe_image_src` blocks dangerous URI schemes (`javascript:`,
     // `file:`, `data:`, `blob:`, `vbscript:`, `mhtml:`) up front.
-    if !chordsketch_core::image_path::is_safe_image_src(&attrs.src) {
+    if !chordsketch_chordpro::image_path::is_safe_image_src(&attrs.src) {
         return;
     }
 
@@ -1518,14 +1521,14 @@ fn compute_image_dimensions(
 /// Uses PDF line/circle drawing operations to reproduce the chord grid,
 /// finger dots, open/muted string markers, and the chord name.
 fn render_chord_diagram_pdf(
-    data: &chordsketch_core::chord_diagram::DiagramData,
+    data: &chordsketch_chordpro::chord_diagram::DiagramData,
     doc: &mut PdfDocument,
 ) {
     // Guard: mirror render_svg bounds checks for strings and frets_shown.
-    if data.strings < chordsketch_core::chord_diagram::MIN_STRINGS
-        || data.strings > chordsketch_core::chord_diagram::MAX_STRINGS
-        || data.frets_shown < chordsketch_core::chord_diagram::MIN_FRETS_SHOWN
-        || data.frets_shown > chordsketch_core::chord_diagram::MAX_FRETS_SHOWN
+    if data.strings < chordsketch_chordpro::chord_diagram::MIN_STRINGS
+        || data.strings > chordsketch_chordpro::chord_diagram::MAX_STRINGS
+        || data.frets_shown < chordsketch_chordpro::chord_diagram::MIN_FRETS_SHOWN
+        || data.frets_shown > chordsketch_chordpro::chord_diagram::MAX_FRETS_SHOWN
     {
         return;
     }
@@ -1615,7 +1618,7 @@ fn render_chord_diagram_pdf(
 /// Draws a 2-octave piano keyboard strip with filled rectangles for each key,
 /// highlighting chord tones in blue and the root key in darker blue.
 fn render_keyboard_diagram_pdf(
-    voicing: &chordsketch_core::chord_diagram::KeyboardVoicing,
+    voicing: &chordsketch_chordpro::chord_diagram::KeyboardVoicing,
     doc: &mut PdfDocument,
 ) {
     if voicing.keys.is_empty() {
@@ -1623,8 +1626,10 @@ fn render_keyboard_diagram_pdf(
     }
 
     // Normalise pitch-class keys (0–11) to octave 4.
-    let (keys, root) =
-        chordsketch_core::chord_diagram::normalise_keyboard_keys(&voicing.keys, voicing.root_key);
+    let (keys, root) = chordsketch_chordpro::chord_diagram::normalise_keyboard_keys(
+        &voicing.keys,
+        voicing.root_key,
+    );
 
     let min_key = *keys.iter().min().unwrap_or(&60);
     let max_key = *keys.iter().max().unwrap_or(&71);
@@ -3333,7 +3338,7 @@ mod tests {
 
     #[test]
     fn test_produces_valid_pdf() {
-        let song = chordsketch_core::parse("{title: Test}\n[Am]Hello [G]world").unwrap();
+        let song = chordsketch_chordpro::parse("{title: Test}\n[Am]Hello [G]world").unwrap();
         let bytes = render_song(&song);
         assert!(!bytes.is_empty());
         assert!(bytes.starts_with(b"%PDF-1.4"));
@@ -3342,7 +3347,7 @@ mod tests {
 
     #[test]
     fn test_empty_song() {
-        let song = chordsketch_core::parse("").unwrap();
+        let song = chordsketch_chordpro::parse("").unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
     }
@@ -3371,7 +3376,7 @@ mod tests {
 {end_of_verse}
 
 {comment: Repeat}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
         // Should contain the title text in the content stream
@@ -3381,7 +3386,7 @@ mod tests {
 
     #[test]
     fn test_stream_length_matches_content() {
-        let song = chordsketch_core::parse("{title: Test}\n[Am]Hello").unwrap();
+        let song = chordsketch_chordpro::parse("{title: Test}\n[Am]Hello").unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
 
@@ -3438,7 +3443,7 @@ mod tests {
     /// CID composite font (/F5), not as '?' placeholders.
     #[test]
     fn test_cjk_renders_via_cid_font() {
-        let song = chordsketch_core::parse("{title: 桜}\n日本語の歌詞").unwrap();
+        let song = chordsketch_chordpro::parse("{title: 桜}\n日本語の歌詞").unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"), "must produce a PDF");
 
@@ -3472,7 +3477,8 @@ mod tests {
     #[test]
     fn test_mixed_ascii_and_cjk() {
         let song =
-            chordsketch_core::parse("{title: Sakura 桜}\n[Am]Hello [G]世界\nEnd of song").unwrap();
+            chordsketch_chordpro::parse("{title: Sakura 桜}\n[Am]Hello [G]世界\nEnd of song")
+                .unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
         let text = String::from_utf8_lossy(&bytes);
@@ -3491,7 +3497,7 @@ mod tests {
     /// the CID font chain is a conditional overhead.
     #[test]
     fn test_ascii_only_has_no_cid_font() {
-        let song = chordsketch_core::parse("{title: Test}\n[G]Hello world").unwrap();
+        let song = chordsketch_chordpro::parse("{title: Test}\n[G]Hello world").unwrap();
         let bytes = render_song(&song);
         let text = String::from_utf8_lossy(&bytes);
         assert!(
@@ -3510,7 +3516,7 @@ mod tests {
         // subset, so both produce GID 0 in the hex string. The CID font chain MUST
         // still be emitted (cid_needed=true) because /F5 was referenced in the
         // content stream — even though no non-GID-0 mappings exist.
-        let song = chordsketch_core::parse("{title: T}\n\u{1F600}\u{1F601}").unwrap();
+        let song = chordsketch_chordpro::parse("{title: T}\n\u{1F600}\u{1F601}").unwrap();
         let bytes = render_song(&song);
         let text = String::from_utf8_lossy(&bytes);
         // The hex content stream should encode both characters as GID 0.
@@ -3577,7 +3583,7 @@ mod tests {
     #[test]
     fn test_render_grid_section() {
         let input = "{start_of_grid}\n| Am . | C . |\n{end_of_grid}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
         let content = String::from_utf8_lossy(&bytes);
@@ -3594,7 +3600,7 @@ mod tests {
 {start_of_intro: Guitar}
 [Am]Intro line
 {end_of_intro}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("Intro: Guitar"));
@@ -3610,7 +3616,7 @@ mod tests {
 {end_of_chorus}
 
 {chorus}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF-1.4"));
         assert!(bytes.ends_with(b"%%EOF\n"));
@@ -3627,7 +3633,7 @@ Sing along
 {end_of_chorus}
 
 {chorus: Repeat}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("Chorus: Repeat"));
@@ -3636,7 +3642,7 @@ Sing along
     #[test]
     fn test_chorus_recall_no_chorus_defined() {
         let input = "{chorus}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
         let content = String::from_utf8_lossy(&bytes);
@@ -3649,7 +3655,7 @@ Sing along
         for _ in 0..1005 {
             input.push_str("{chorus}\n");
         }
-        let song = chordsketch_core::parse(&input).unwrap();
+        let song = chordsketch_chordpro::parse(&input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(result.output.starts_with(b"%PDF"));
         assert!(
@@ -3672,7 +3678,7 @@ Sing along
 [Am]Chorus line
 {end_of_chorus}
 {chorus}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         // Chord diagrams use Bezier curves for finger dots. When diagrams are
@@ -3684,7 +3690,7 @@ Sing along
 [Am]Chorus line
 {end_of_chorus}
 {chorus}";
-        let song_on = chordsketch_core::parse(input_on).unwrap();
+        let song_on = chordsketch_chordpro::parse(input_on).unwrap();
         let bytes_on = render_song(&song_on);
         let content_on = String::from_utf8_lossy(&bytes_on);
         // "l S" counts PDF lineto (l) + stroke (S) operations emitted by
@@ -3702,7 +3708,7 @@ Sing along
     #[test]
     fn test_diagrams_off_case_insensitive_pdf() {
         let input = "{diagrams: Off}\n{define: Am base-fret 1 frets x 0 2 2 1 0}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         // When diagrams are suppressed the chord-name title ("Am") written by
@@ -3717,7 +3723,7 @@ Sing along
     #[test]
     fn test_diagrams_off_uppercase_pdf() {
         let input = "{diagrams: OFF}\n{define: Am base-fret 1 frets x 0 2 2 1 0}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         // When diagrams are suppressed the chord-name title ("Am") written by
@@ -3732,7 +3738,7 @@ Sing along
     #[test]
     fn test_custom_section_solo_in_pdf() {
         let input = "{start_of_solo}\n[Em]Solo\n{end_of_solo}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("Solo"));
@@ -3741,7 +3747,7 @@ Sing along
     #[test]
     fn test_render_grid_section_with_label() {
         let input = "{start_of_grid: Intro}\n| Am |\n{end_of_grid}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("Grid: Intro"));
@@ -3750,7 +3756,7 @@ Sing along
     #[test]
     fn test_define_display_name_in_pdf_output() {
         let input = "{define: Am base-fret 1 frets x 0 2 2 1 0 display=\"A minor\"}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(
@@ -3762,7 +3768,7 @@ Sing along
     #[test]
     fn test_define_with_fingers_in_pdf_output() {
         let input = "{define: C base-fret 1 frets x 3 2 0 1 0 fingers 0 3 2 0 1 0}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         // PDF text streams should contain finger numbers
@@ -3780,7 +3786,7 @@ mod comment_style_tests {
     #[test]
     fn test_comment_normal_renders_text() {
         let input = "{comment: This is normal}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(
@@ -3792,7 +3798,7 @@ mod comment_style_tests {
     #[test]
     fn test_comment_italic_renders_text() {
         let input = "{comment_italic: Italic note}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(
@@ -3804,7 +3810,7 @@ mod comment_style_tests {
     #[test]
     fn test_comment_box_renders_with_rect() {
         let input = "{comment_box: Boxed note}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(
@@ -3821,7 +3827,7 @@ mod comment_style_tests {
     #[test]
     fn test_comment_normal_no_rect() {
         let input = "{comment: No box here}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(
@@ -3838,7 +3844,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_produces_pdf() {
         let input = "{transpose: 2}\n[G]Hello [C]world";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
         // Transposed chords should appear in the PDF content: G+2=A, C+2=D
@@ -3850,7 +3856,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_with_cli_offset() {
         let input = "{transpose: 2}\n[C]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song_with_transpose(&song, 3, &Config::defaults());
         // 2+3=5, C+5=F
         let content = String::from_utf8_lossy(&bytes);
@@ -3861,7 +3867,7 @@ mod transpose_tests {
     fn test_transpose_out_of_i8_range_emits_warning() {
         // 999 cannot be represented as i8; should fall back to 0 with a warning
         let input = "{transpose: 999}\n[G]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         // G + 0 transposition = G
         let content = String::from_utf8_lossy(&result.output);
@@ -3877,7 +3883,7 @@ mod transpose_tests {
     fn test_transpose_no_value_treated_as_zero() {
         // {transpose} with no value should silently reset to 0, no warning.
         let input = "{transpose}\n[G]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         let content = String::from_utf8_lossy(&result.output);
         assert!(content.contains("(G)"), "chord should be untransposed");
@@ -3894,7 +3900,7 @@ mod transpose_tests {
         // no warning emitted. The parser trims whitespace → Some(""), which the
         // Some("") arm converts to 0.
         let input = "{transpose:   }\n[G]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         let content = String::from_utf8_lossy(&result.output);
         assert!(content.contains("(G)"), "chord should be untransposed");
@@ -3913,7 +3919,7 @@ mod delegate_tests {
     #[test]
     fn test_abc_section_in_pdf() {
         let input = "{start_of_abc: Melody}\nX:1\n{end_of_abc}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
         let content = String::from_utf8_lossy(&bytes);
@@ -3923,7 +3929,7 @@ mod delegate_tests {
     #[test]
     fn test_ly_section_in_pdf() {
         let input = "{start_of_ly}\nnotes\n{end_of_ly}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("Lilypond"));
@@ -3932,7 +3938,7 @@ mod delegate_tests {
     #[test]
     fn test_svg_section_in_pdf() {
         let input = "{start_of_svg}\n<svg/>\n{end_of_svg}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("SVG"));
@@ -3941,7 +3947,7 @@ mod delegate_tests {
     #[test]
     fn test_textblock_section_in_pdf() {
         let input = "{start_of_textblock}\nText\n{end_of_textblock}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("Textblock"));
@@ -3950,7 +3956,7 @@ mod delegate_tests {
     #[test]
     fn test_musicxml_section_in_pdf() {
         let input = "{start_of_musicxml: Score}\n<score-partwise/>\n{end_of_musicxml}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("MusicXML"));
@@ -3962,7 +3968,7 @@ mod delegate_tests {
     #[test]
     fn test_abc_block_emits_warning_and_skips_body() {
         let input = "{start_of_abc: Melody}\nX:1\nK:C\nCDEF\n{end_of_abc}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             result
@@ -3987,7 +3993,7 @@ mod delegate_tests {
     #[test]
     fn test_ly_block_emits_warning_and_skips_body() {
         let input = "{start_of_ly}\n\\relative c' { c4 d }\n{end_of_ly}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(result.warnings.iter().any(|w| w.contains("Lilypond")));
         let content = String::from_utf8_lossy(&result.output);
@@ -4001,7 +4007,7 @@ mod delegate_tests {
     #[test]
     fn test_svg_block_emits_warning_and_skips_body() {
         let input = "{start_of_svg}\n<svg><circle r=\"10\"/></svg>\n{end_of_svg}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(result.warnings.iter().any(|w| w.contains("SVG")));
         let content = String::from_utf8_lossy(&result.output);
@@ -4016,7 +4022,7 @@ mod delegate_tests {
     fn test_musicxml_block_emits_warning_and_skips_body() {
         let input =
             "{start_of_musicxml: Score}\n<score-partwise>notes</score-partwise>\n{end_of_musicxml}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(result.warnings.iter().any(|w| w.contains("MusicXML")));
         let content = String::from_utf8_lossy(&result.output);
@@ -4033,7 +4039,7 @@ mod delegate_tests {
         // `EndOf…` directive. Content after the block is rendered
         // normally.
         let input = "{title: T}\n{start_of_abc}\nbody\n{end_of_abc}\n[C]Hello world\n";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(result.warnings.iter().any(|w| w.contains("ABC")));
         let content = String::from_utf8_lossy(&result.output);
@@ -4062,7 +4068,7 @@ mod delegate_tests {
                      [C]another line\n\
                      {end_of_chorus}\n\
                      {chorus}\n";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         // One ABC block seen once → at most one ABC warning. The
         // recall must NOT produce a second.
@@ -4086,7 +4092,7 @@ mod delegate_tests {
         // unterminated StartOf is simply swallowed by the skip
         // window.
         let input = "{title: T}\n[C]Before\n{start_of_abc}\nX:1\nK:C\n";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             result.warnings.iter().any(|w| w.contains("ABC")),
@@ -4110,7 +4116,7 @@ mod delegate_tests {
         // other unknown directive — rendered via `render_directive`
         // but with no special behaviour for EndOf variants).
         let input = "{title: T}\n[C]Hello\n{end_of_abc}\n[D]World\n";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             !result
@@ -4133,7 +4139,7 @@ mod inline_markup_tests {
     #[test]
     fn test_bold_markup_uses_bold_font() {
         let input = "Hello <b>bold</b> world";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         // PDF should contain both Helvetica (regular) and HelveticaBold
@@ -4145,7 +4151,7 @@ mod inline_markup_tests {
     #[test]
     fn test_italic_markup_uses_oblique_font() {
         let input = "Hello <i>italic</i> text";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("/F3")); // HelveticaOblique
@@ -4155,7 +4161,7 @@ mod inline_markup_tests {
     #[test]
     fn test_bold_italic_markup_uses_bold_oblique_font() {
         let input = "<b><i>bold italic</i></b>";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("/F4")); // HelveticaBoldOblique
@@ -4165,7 +4171,7 @@ mod inline_markup_tests {
     #[test]
     fn test_markup_with_chords_produces_valid_pdf() {
         let input = "[Am]Hello <b>bold</b> world";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
         let content = String::from_utf8_lossy(&bytes);
@@ -4176,7 +4182,7 @@ mod inline_markup_tests {
     #[test]
     fn test_span_weight_bold_uses_bold_font() {
         let input = r#"<span weight="bold">weighted</span>"#;
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("/F2")); // HelveticaBold
@@ -4191,7 +4197,7 @@ mod formatting_directive_tests {
     #[test]
     fn test_textsize_directive_changes_font_size() {
         let input = "{textsize: 14}\nHello world";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         // The PDF should use 14pt for lyrics text
@@ -4202,7 +4208,7 @@ mod formatting_directive_tests {
     #[test]
     fn test_chordsize_directive_changes_chord_size() {
         let input = "{chordsize: 16}\n[Am]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("Am"));
@@ -4211,7 +4217,7 @@ mod formatting_directive_tests {
     #[test]
     fn test_formatting_directive_produces_valid_pdf() {
         let input = "{textsize: 14}\n{chordsize: 12}\n[Am]Hello <b>bold</b> world";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
     }
@@ -4219,7 +4225,7 @@ mod formatting_directive_tests {
     #[test]
     fn test_textsize_clamped_to_max() {
         let input = "{textsize: 99999}\nHello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         // Font size must be clamped to MAX_FONT_SIZE (200), not 99999.
@@ -4230,7 +4236,7 @@ mod formatting_directive_tests {
     #[test]
     fn test_textsize_clamped_to_min() {
         let input = "{textsize: -5}\nHello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         // Negative size must be clamped to MIN_FONT_SIZE (0.5).
@@ -4240,7 +4246,7 @@ mod formatting_directive_tests {
     #[test]
     fn test_chordsize_clamped_to_max() {
         let input = "{chordsize: 500}\n[Am]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(!content.contains("500"));
@@ -4255,7 +4261,7 @@ mod multipage_tests {
     #[test]
     fn test_new_page_directive_creates_two_pages() {
         let input = "{title: Test}\nPage one\n{new_page}\nPage two";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
         let content = String::from_utf8_lossy(&bytes);
@@ -4269,7 +4275,7 @@ mod multipage_tests {
     fn test_new_physical_page_from_recto_inserts_blank() {
         // Page 1 (recto) -> {npp} -> blank page 2 (verso) -> page 3 (recto)
         let input = "Page one\n{new_physical_page}\nPage two";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(
@@ -4282,7 +4288,7 @@ mod multipage_tests {
     fn test_new_physical_page_from_verso_no_extra_blank() {
         // Page 1 (recto) -> {np} -> page 2 (verso) -> {npp} -> page 3 (recto)
         let input = "Page one\n{new_page}\nPage two\n{new_physical_page}\nPage three";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(
@@ -4294,7 +4300,7 @@ mod multipage_tests {
     #[test]
     fn test_single_page_has_count_one() {
         let input = "{title: Short Song}\n[Am]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("/Count 1"));
@@ -4308,7 +4314,7 @@ mod multipage_tests {
             lines.push(format!("[Am]Line number {i}"));
         }
         let input = lines.join("\n");
-        let song = chordsketch_core::parse(&input).unwrap();
+        let song = chordsketch_chordpro::parse(&input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         // Should have more than one page
@@ -4321,7 +4327,7 @@ mod multipage_tests {
     #[test]
     fn test_multiple_new_page_directives() {
         let input = "Page 1\n{new_page}\nPage 2\n{new_page}\nPage 3";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("/Count 3"));
@@ -4330,7 +4336,7 @@ mod multipage_tests {
     #[test]
     fn test_multipage_pdf_structure_valid() {
         let input = "First page\n{new_page}\nSecond page";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF-1.4"));
         assert!(bytes.ends_with(b"%%EOF\n"));
@@ -4430,7 +4436,7 @@ mod multipage_tests {
 {end_of_chorus}\n\
 Verse text\n\
 {chorus}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         // The initial chorus {new_page} creates page 2.
@@ -4450,7 +4456,7 @@ mod column_tests {
     #[test]
     fn test_columns_directive_produces_valid_pdf() {
         let input = "{columns: 2}\nColumn one\n{column_break}\nColumn two";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
         let content = String::from_utf8_lossy(&bytes);
@@ -4461,7 +4467,7 @@ mod column_tests {
     #[test]
     fn test_column_break_in_single_column_creates_new_page() {
         let input = "Page one\n{column_break}\nPage two";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("/Count 2"));
@@ -4470,7 +4476,7 @@ mod column_tests {
     #[test]
     fn test_columns_reset_to_one() {
         let input = "{columns: 2}\nTwo cols\n{columns: 1}\nOne col";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
         let content = String::from_utf8_lossy(&bytes);
@@ -4564,7 +4570,7 @@ mod column_tests {
     #[test]
     fn test_columns_non_numeric_defaults_to_one() {
         let input = "{columns: abc}\n[Am]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         // Non-numeric value defaults to 1 column — should still render.
@@ -4577,7 +4583,7 @@ mod column_tests {
         // An absurdly large {columns} value must not cause a panic or degenerate
         // layout — it is clamped to MAX_COLUMNS at the directive call site.
         let input = "{columns: 4294967295}\n[Am]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("Am"));
@@ -4589,7 +4595,7 @@ mod column_tests {
         // In a 2-column layout, text_at should emit clipping operators
         // (q/re W n/Q) to prevent overflow into adjacent columns.
         let input = "{columns: 2}\n[Am]Hello world this is a very long line of lyrics";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         // Multi-column layout should include clipping rectangle operator.
@@ -4618,7 +4624,7 @@ mod column_tests {
     fn test_single_column_no_clipping() {
         // Single-column layout should NOT emit clipping operators.
         let input = "[Am]Hello world";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(
@@ -4633,7 +4639,7 @@ mod column_tests {
         // should produce exactly 1 clip rect from render_lyrics_spans,
         // not one per markup segment.
         let input = "{columns: 2}\nHello <b>bold</b> and <i>italic</i> text";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         let clip_count = content.matches("re W n").count();
@@ -4647,7 +4653,7 @@ mod column_tests {
 
     #[test]
     fn test_render_songs_single() {
-        let songs = chordsketch_core::parse_multi("{title: Only}\n[Am]Hello").unwrap();
+        let songs = chordsketch_chordpro::parse_multi("{title: Only}\n[Am]Hello").unwrap();
         let bytes = render_songs(&songs);
         assert!(bytes.starts_with(b"%PDF-1.4"));
         assert!(bytes.ends_with(b"%%EOF\n"));
@@ -4657,7 +4663,7 @@ mod column_tests {
 
     #[test]
     fn test_render_songs_two_songs_multi_page() {
-        let songs = chordsketch_core::parse_multi(
+        let songs = chordsketch_chordpro::parse_multi(
             "{title: Song A}\n[Am]Hello\n{new_song}\n{title: Song B}\n[G]World",
         )
         .unwrap();
@@ -4677,7 +4683,7 @@ mod column_tests {
     #[test]
     fn test_render_songs_with_transpose() {
         let songs =
-            chordsketch_core::parse_multi("{title: S1}\n[C]Do\n{new_song}\n{title: S2}\n[G]Re")
+            chordsketch_chordpro::parse_multi("{title: S1}\n[C]Do\n{new_song}\n{title: S2}\n[G]Re")
                 .unwrap();
         let bytes = render_songs_with_transpose(&songs, 2, &Config::defaults());
         let content = String::from_utf8_lossy(&bytes);
@@ -4688,7 +4694,7 @@ mod column_tests {
 
     #[test]
     fn test_render_song_into_doc_helper() {
-        let song = chordsketch_core::parse("{title: Test}\n[Am]Hello").unwrap();
+        let song = chordsketch_chordpro::parse("{title: Test}\n[Am]Hello").unwrap();
         let mut doc = PdfDocument::new();
         let mut warnings = Vec::new();
         render_song_into_doc(&song, 0, &Config::defaults(), &mut doc, &mut warnings);
@@ -4707,7 +4713,7 @@ mod toc_tests {
 
     #[test]
     fn test_toc_generated_for_multi_song() {
-        let songs = chordsketch_core::parse_multi(
+        let songs = chordsketch_chordpro::parse_multi(
             "{title: First}\nLyrics 1\n{new_song}\n{title: Second}\nLyrics 2",
         )
         .unwrap();
@@ -4720,7 +4726,7 @@ mod toc_tests {
 
     #[test]
     fn test_toc_not_generated_for_single_song() {
-        let song = chordsketch_core::parse("{title: Only Song}\nLyrics").unwrap();
+        let song = chordsketch_chordpro::parse("{title: Only Song}\nLyrics").unwrap();
         let bytes = render_song(&song);
         let content = String::from_utf8_lossy(&bytes);
         assert!(!content.contains("Table of Contents"));
@@ -4728,7 +4734,7 @@ mod toc_tests {
 
     #[test]
     fn test_toc_page_numbers_present() {
-        let songs = chordsketch_core::parse_multi(
+        let songs = chordsketch_chordpro::parse_multi(
             "{title: Song A}\nA\n{new_song}\n{title: Song B}\nB\n{new_song}\n{title: Song C}\nC",
         )
         .unwrap();
@@ -4741,8 +4747,9 @@ mod toc_tests {
 
     #[test]
     fn test_toc_valid_pdf_structure() {
-        let songs = chordsketch_core::parse_multi("{title: A}\nText\n{new_song}\n{title: B}\nText")
-            .unwrap();
+        let songs =
+            chordsketch_chordpro::parse_multi("{title: A}\nText\n{new_song}\n{title: B}\nText")
+                .unwrap();
         let bytes = render_songs(&songs);
         assert!(bytes.starts_with(b"%PDF-1.4"));
         assert!(bytes.ends_with(b"%%EOF\n"));
@@ -4750,9 +4757,9 @@ mod toc_tests {
 
     #[test]
     fn test_toc_with_custom_margins_produces_valid_pdf() {
-        use chordsketch_core::config::Config;
+        use chordsketch_chordpro::config::Config;
         let songs =
-            chordsketch_core::parse_multi("{title: Song A}\nA\n{new_song}\n{title: Song B}\nB")
+            chordsketch_chordpro::parse_multi("{title: Song A}\nA\n{new_song}\n{title: Song B}\nB")
                 .unwrap();
         // Use large custom margins to exercise the from_config path in the ToC rebuild.
         let config = Config::parse(
@@ -4773,7 +4780,7 @@ mod toc_tests {
         // body_doc.cid_glyphs into combined.cid_glyphs so that build_pdf() emits
         // the CID font objects. Without the merge, body pages reference /F5 but no
         // CID font dictionary is written, producing a corrupt PDF.
-        let songs = chordsketch_core::parse_multi(
+        let songs = chordsketch_chordpro::parse_multi(
             "{title: Song A}\nこんにちは\n{new_song}\n{title: Song B}\n日本語",
         )
         .unwrap();
@@ -4804,7 +4811,7 @@ mod chord_diagram_pdf_tests {
     #[test]
     fn test_define_renders_diagram_in_pdf() {
         let input = "{define: Am base-fret 1 frets x 0 2 2 1 0}\n[Am]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
         let content = String::from_utf8_lossy(&bytes);
@@ -4818,7 +4825,7 @@ mod chord_diagram_pdf_tests {
     fn test_define_keyboard_renders_in_pdf() {
         // {define: Am keys 0 3 7} should produce a valid PDF (keyboard diagram rendered).
         let input = "{define: Am keys 0 3 7}\n[Am]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
         assert!(bytes.ends_with(b"%%EOF\n"));
@@ -4827,7 +4834,7 @@ mod chord_diagram_pdf_tests {
     #[test]
     fn test_define_keyboard_absolute_midi_pdf() {
         let input = "{define: Cmaj7 keys 60 64 67 71}\n[Cmaj7]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF-1.4"));
         assert!(bytes.ends_with(b"%%EOF\n"));
@@ -4836,7 +4843,7 @@ mod chord_diagram_pdf_tests {
     #[test]
     fn test_diagrams_piano_auto_inject_pdf() {
         let input = "{diagrams: piano}\n[Am]Hello [C]world";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF-1.4"));
         assert!(bytes.ends_with(b"%%EOF\n"));
@@ -4845,7 +4852,7 @@ mod chord_diagram_pdf_tests {
     #[test]
     fn test_define_diagram_valid_pdf() {
         let input = "{define: F base-fret 1 frets 1 1 2 3 3 1}\n[F]Lyrics";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF-1.4"));
         assert!(bytes.ends_with(b"%%EOF\n"));
@@ -4854,7 +4861,7 @@ mod chord_diagram_pdf_tests {
     #[test]
     fn test_define_ukulele_diagram_in_pdf() {
         let input = "{define: C frets 0 0 0 3}\n[C]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
         let content = String::from_utf8_lossy(&bytes);
@@ -4864,7 +4871,7 @@ mod chord_diagram_pdf_tests {
     #[test]
     fn test_define_banjo_diagram_in_pdf() {
         let input = "{define: G frets 0 0 0 0 0}\n[G]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF"));
     }
@@ -4872,11 +4879,11 @@ mod chord_diagram_pdf_tests {
     #[test]
     fn test_diagrams_frets_config_affects_pdf_output() {
         let input = "{define: Am base-fret 1 frets x 0 2 2 1 0}\n[Am]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
-        let config_4 = chordsketch_core::config::Config::defaults()
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let config_4 = chordsketch_chordpro::config::Config::defaults()
             .with_define("diagrams.frets=4")
             .unwrap();
-        let config_7 = chordsketch_core::config::Config::defaults()
+        let config_7 = chordsketch_chordpro::config::Config::defaults()
             .with_define("diagrams.frets=7")
             .unwrap();
         let bytes_4 = render_song_with_transpose(&song, 0, &config_4);
@@ -4905,7 +4912,7 @@ mod chord_diagram_pdf_tests {
     fn test_render_chord_diagram_pdf_single_string_no_panic() {
         // Direct construction with strings=1 (below MIN_STRINGS) should
         // return early without panicking.
-        let data = chordsketch_core::chord_diagram::DiagramData {
+        let data = chordsketch_chordpro::chord_diagram::DiagramData {
             name: "X".to_string(),
             display_name: None,
             strings: 1,
@@ -4921,7 +4928,7 @@ mod chord_diagram_pdf_tests {
 
     #[test]
     fn test_render_chord_diagram_pdf_zero_strings_no_panic() {
-        let data = chordsketch_core::chord_diagram::DiagramData {
+        let data = chordsketch_chordpro::chord_diagram::DiagramData {
             name: "X".to_string(),
             display_name: None,
             strings: 0,
@@ -4937,13 +4944,13 @@ mod chord_diagram_pdf_tests {
 
     #[test]
     fn test_render_chord_diagram_pdf_exceeding_max_strings_no_panic() {
-        let data = chordsketch_core::chord_diagram::DiagramData {
+        let data = chordsketch_chordpro::chord_diagram::DiagramData {
             name: "X".to_string(),
             display_name: None,
-            strings: chordsketch_core::chord_diagram::MAX_STRINGS + 1,
+            strings: chordsketch_chordpro::chord_diagram::MAX_STRINGS + 1,
             frets_shown: 5,
             base_fret: 1,
-            frets: vec![0; chordsketch_core::chord_diagram::MAX_STRINGS + 1],
+            frets: vec![0; chordsketch_chordpro::chord_diagram::MAX_STRINGS + 1],
             fingers: vec![],
         };
         let mut doc = PdfDocument::new();
@@ -4953,7 +4960,7 @@ mod chord_diagram_pdf_tests {
 
     #[test]
     fn test_render_chord_diagram_pdf_zero_frets_shown_no_panic() {
-        let data = chordsketch_core::chord_diagram::DiagramData {
+        let data = chordsketch_chordpro::chord_diagram::DiagramData {
             name: "X".to_string(),
             display_name: None,
             strings: 6,
@@ -4969,11 +4976,11 @@ mod chord_diagram_pdf_tests {
 
     #[test]
     fn test_render_chord_diagram_pdf_exceeding_max_frets_shown_no_panic() {
-        let data = chordsketch_core::chord_diagram::DiagramData {
+        let data = chordsketch_chordpro::chord_diagram::DiagramData {
             name: "X".to_string(),
             display_name: None,
             strings: 6,
-            frets_shown: chordsketch_core::chord_diagram::MAX_FRETS_SHOWN + 1,
+            frets_shown: chordsketch_chordpro::chord_diagram::MAX_FRETS_SHOWN + 1,
             base_fret: 1,
             frets: vec![0; 6],
             fingers: vec![],
@@ -4996,7 +5003,7 @@ mod chord_diagram_pdf_tests {
         //  - auto-inject grid (should be absent due to dedup): 0
         // Without the fix there would be 3 occurrences.
         let input = "{define: Am base-fret 1 frets x 0 2 2 1 0}\n{diagrams}\n[Am]Hello [G]world\n";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF-1.4"), "must produce a valid PDF");
         let content = String::from_utf8_lossy(&bytes);
@@ -5018,7 +5025,7 @@ mod chord_diagram_pdf_tests {
         // Regression test for #1245 / parity with HTML renderer (#1251).
         let input =
             "{no_diagrams}\n{define: Am base-fret 1 frets x 0 2 2 1 0}\n{diagrams}\n[Am]Hello\n";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF-1.4"), "must produce a valid PDF");
         let content = String::from_utf8_lossy(&bytes);
@@ -5215,7 +5222,7 @@ mod jpeg_tests {
     #[test]
     fn test_image_directive_nonexistent_file_no_crash() {
         let input = "{image: src=nonexistent_file_that_does_not_exist.jpg}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         // Should produce a valid PDF without crashing
         assert!(bytes.starts_with(b"%PDF-1.4"));
@@ -5225,7 +5232,7 @@ mod jpeg_tests {
     #[test]
     fn test_image_directive_non_jpeg_skipped() {
         let input = "{image: src=photo.png}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF-1.4"));
         assert!(bytes.ends_with(b"%%EOF\n"));
@@ -5236,7 +5243,7 @@ mod jpeg_tests {
         // #1832: PDF must reject the same URI schemes the HTML / text
         // renderers reject via `is_safe_image_src`.
         let input = "{image: src=\"javascript:alert(1)\"}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let bytes = render_song(&song);
         // No crash, no embedded image, no JS literal in the PDF stream.
         assert!(bytes.starts_with(b"%PDF-1.4"));
@@ -5251,7 +5258,7 @@ mod jpeg_tests {
 
     #[test]
     fn test_capo_out_of_range_emits_warning() {
-        let song = chordsketch_core::parse("{title: T}\n{capo: 999}").unwrap();
+        let song = chordsketch_chordpro::parse("{title: T}\n{capo: 999}").unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             result
@@ -5265,7 +5272,7 @@ mod jpeg_tests {
 
     #[test]
     fn test_capo_non_numeric_emits_warning() {
-        let song = chordsketch_core::parse("{title: T}\n{capo: foo}").unwrap();
+        let song = chordsketch_chordpro::parse("{title: T}\n{capo: foo}").unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             result
@@ -5279,7 +5286,7 @@ mod jpeg_tests {
 
     #[test]
     fn test_capo_in_range_is_silent() {
-        let song = chordsketch_core::parse("{title: T}\n{capo: 5}").unwrap();
+        let song = chordsketch_chordpro::parse("{title: T}\n{capo: 5}").unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             !result.warnings.iter().any(|w| w.contains("capo")),
@@ -5296,7 +5303,7 @@ mod jpeg_tests {
         for _ in 0..(MAX_WARNINGS + 50) {
             input.push_str("{transpose: not-a-number}\n");
         }
-        let song = chordsketch_core::parse(&input).unwrap();
+        let song = chordsketch_chordpro::parse(&input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert_eq!(
             result.warnings.len(),
@@ -5736,7 +5743,7 @@ mod jpeg_tests {
         drop(f);
 
         let input = format!("{{image: src={rel_path}}}");
-        let song = chordsketch_core::parse(&input).unwrap();
+        let song = chordsketch_chordpro::parse(&input).unwrap();
         // Should not panic or crash — the oversized image is silently skipped.
         let pdf = render_song(&song);
         let content = String::from_utf8_lossy(&pdf);
@@ -5936,7 +5943,7 @@ mod jpeg_tests {
         symlink(&target, &link).expect("create symlink");
 
         let input = format!("{{title: T}}\n{{image: src={link}}}");
-        let song = chordsketch_core::parse(&input).expect("parse");
+        let song = chordsketch_chordpro::parse(&input).expect("parse");
         let pdf = render_song(&song);
         let content = String::from_utf8_lossy(&pdf);
         // Image must NOT be embedded because src is a symlink.
@@ -5988,7 +5995,7 @@ mod jpeg_tests {
 
     #[test]
     fn test_custom_margins_affect_output() {
-        let song = chordsketch_core::parse("{title: Test}\nHello").unwrap();
+        let song = chordsketch_chordpro::parse("{title: Test}\nHello").unwrap();
         let default_pdf = render_song(&song);
         let config = Config::defaults()
             .with_define("pdf.margins.top=200")
@@ -6311,7 +6318,7 @@ mod png_tests {
 
     #[test]
     fn test_render_songs_with_warnings_empty_slice() {
-        let songs: Vec<chordsketch_core::ast::Song> = Vec::new();
+        let songs: Vec<chordsketch_chordpro::ast::Song> = Vec::new();
         let result = render_songs_with_warnings(&songs, 0, &Config::defaults());
         // Should not panic and should return empty output.
         assert!(result.output.is_empty());
