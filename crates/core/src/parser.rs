@@ -36,7 +36,7 @@ use crate::ast::{
     LyricsSegment, Song,
 };
 use crate::inline_markup;
-use crate::token::{Span, Token, TokenKind};
+use crate::token::{Position, Span, Token, TokenKind};
 
 // ---------------------------------------------------------------------------
 // ParseError
@@ -154,22 +154,48 @@ pub struct Parser {
 impl Parser {
     /// Creates a new parser for the given token stream.
     ///
+    /// Prefer [`Parser::try_new`] when the token vector may come from
+    /// untrusted or indirect sources — it returns `Err` instead of
+    /// panicking on an empty vector.
+    ///
     /// # Panics
     ///
     /// Panics if `tokens` is empty. The lexer always appends an
     /// [`Eof`](crate::token::TokenKind::Eof) token, so a well-formed
-    /// token stream is never empty.
+    /// token stream is never empty, and reaching this panic indicates
+    /// a caller bug rather than a user-facing input error.
     #[must_use]
     pub fn new(tokens: Vec<Token>) -> Self {
-        assert!(
-            !tokens.is_empty(),
-            "token list must contain at least an Eof token"
-        );
-        Self {
+        Self::try_new(tokens).expect("token list must contain at least an Eof token")
+    }
+
+    /// Creates a new parser for the given token stream, returning an
+    /// error if the stream is empty.
+    ///
+    /// This is the non-panicking counterpart of [`Parser::new`]. The
+    /// lexer always appends an [`Eof`](crate::token::TokenKind::Eof)
+    /// token, so a well-formed token stream is never empty; this entry
+    /// point surfaces the violation as a `ParseError` instead of a panic,
+    /// so callers that construct token vectors by hand (e.g. LSP or
+    /// fuzzing harnesses) can recover without aborting.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `ParseError` located at line 1, column 1 if `tokens`
+    /// is empty.
+    #[must_use = "callers must handle the empty-token error"]
+    pub fn try_new(tokens: Vec<Token>) -> Result<Self, ParseError> {
+        if tokens.is_empty() {
+            return Err(ParseError::new(
+                "empty token list — expected at least an Eof token",
+                Span::new(Position::new(1, 1), Position::new(1, 1)),
+            ));
+        }
+        Ok(Self {
             tokens,
             pos: 0,
             verbatim_end: None,
-        }
+        })
     }
 
     /// Parses the token stream and returns a [`Song`] AST.
@@ -3902,6 +3928,38 @@ mod delegate_tests {
     #[should_panic(expected = "token list must contain at least an Eof token")]
     fn parser_new_panics_on_empty_tokens() {
         let _parser = Parser::new(Vec::new());
+    }
+
+    #[test]
+    fn parser_try_new_returns_err_on_empty_tokens() {
+        // Non-panicking counterpart to Parser::new. Callers that build
+        // token vectors by hand (LSP, fuzz harnesses) can recover from an
+        // empty stream without aborting.
+        //
+        // Parser does not derive Debug, so unwrap the Result by hand rather
+        // than via `expect_err`.
+        match Parser::try_new(Vec::new()) {
+            Ok(_) => panic!("try_new should reject an empty token list"),
+            Err(err) => {
+                assert!(
+                    err.message.contains("empty token list"),
+                    "unexpected message: {}",
+                    err.message,
+                );
+                assert_eq!(err.line(), 1);
+                assert_eq!(err.column(), 1);
+            }
+        }
+    }
+
+    #[test]
+    fn parser_try_new_accepts_non_empty_tokens() {
+        let tokens = Lexer::new("[C]Hello").tokenize();
+        let song = Parser::try_new(tokens)
+            .expect("try_new should accept a non-empty token list")
+            .parse()
+            .expect("parse failed");
+        assert_eq!(song.lines.len(), 1);
     }
 
     // -- Multi-song input size limits -----------------------------------------
