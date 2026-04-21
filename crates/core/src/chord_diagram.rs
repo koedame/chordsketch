@@ -175,7 +175,18 @@ impl DiagramData {
                         ) {
                             break;
                         }
-                        fingers.push(tokens[i].parse().unwrap_or(0));
+                        // Stop finger parsing on any token that is not a
+                        // valid `u8`. Previously this used `unwrap_or(0)`,
+                        // which silently mapped overflow values like `256`
+                        // and garbage tokens like `abc` to `0` — the same
+                        // sentinel that means "no finger shown" — so a
+                        // typo in a ChordPro `fingers` list would silently
+                        // produce a visually plausible but wrong diagram.
+                        // See code-style.md §Silent Fallback.
+                        let Ok(n) = tokens[i].parse::<u8>() else {
+                            break;
+                        };
+                        fingers.push(n);
                         i += 1;
                     }
                 }
@@ -1324,12 +1335,46 @@ mod tests {
     }
 
     #[test]
-    fn test_finger_overflow_beyond_u8_max_becomes_zero() {
-        // Values > 255 overflow u8::parse and fall back to 0 via unwrap_or.
+    fn test_finger_overflow_beyond_u8_max_stops_parsing() {
+        // A finger token that does not parse as `u8` (e.g. `256`) stops the
+        // `fingers` section instead of silently being mapped to `0`
+        // (the "no finger" sentinel). Everything from the invalid token
+        // onwards is dropped, so the diagram is returned with an empty
+        // `fingers` list — which the renderer treats as "no finger
+        // annotations", not "no-finger-on-string" per slot.
+        //
+        // Regression guard for the silent-fallback behaviour previously
+        // captured by `test_finger_overflow_beyond_u8_max_becomes_zero`;
+        // see code-style.md §Silent Fallback.
         let data =
             DiagramData::from_raw("Am", "frets x 0 2 2 1 0 fingers 256 1 2 3 1 0", 6).unwrap();
-        assert_eq!(data.fingers[0], 0, "256 should overflow u8 and become 0");
-        assert_eq!(data.fingers[1], 1);
+        assert!(
+            data.fingers.is_empty(),
+            "invalid finger token must stop parsing, not silently become 0: {:?}",
+            data.fingers
+        );
+    }
+
+    #[test]
+    fn test_finger_garbage_token_stops_parsing() {
+        // A non-numeric finger token also stops the `fingers` section
+        // rather than silently becoming `0`.
+        let data =
+            DiagramData::from_raw("Am", "frets x 0 2 2 1 0 fingers abc 1 2 3 1 0", 6).unwrap();
+        assert!(
+            data.fingers.is_empty(),
+            "garbage finger token must stop parsing: {:?}",
+            data.fingers
+        );
+    }
+
+    #[test]
+    fn test_valid_fingers_before_invalid_are_kept() {
+        // Valid finger numbers before an invalid token are preserved; the
+        // parser simply stops at the first parse failure.
+        let data =
+            DiagramData::from_raw("Am", "frets x 0 2 2 1 0 fingers 0 3 2 abc 1 0", 6).unwrap();
+        assert_eq!(data.fingers, vec![0, 3, 2]);
     }
 
     // --- Negative fret clamping (#648) ---

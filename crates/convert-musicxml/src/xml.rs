@@ -160,7 +160,11 @@ impl<'a> Parser<'a> {
             self.pos += pat.len();
             Ok(())
         } else {
-            let got = &self.src[self.pos..self.pos.min(self.src.len()).min(self.pos + 8)];
+            // The previous `self.pos.min(self.src.len()).min(self.pos + 8)`
+            // ordering collapsed to `self.pos` whenever `self.pos + 8 >= pos`
+            // (i.e. always), yielding an empty slice in every error message.
+            let end = self.src.len().min(self.pos + 8);
+            let got = &self.src[self.pos..end];
             Err(format!(
                 "expected {:?} at offset {} but got {:?}",
                 std::str::from_utf8(pat).unwrap_or("?"),
@@ -885,6 +889,24 @@ mod tests {
         assert!(
             !msg.contains("too large"),
             "size guard should not fire at exactly MAX_INPUT_BYTES, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn expect_error_includes_surrounding_bytes() {
+        // Regression: the `got` slice in the error message was previously
+        // always empty because of a broken `min()` chain. The diagnostic
+        // must include the actual bytes that failed to match so humans can
+        // see where parsing went wrong. Exercise `expect` directly because
+        // in the real grammar the higher-level parsers recover before the
+        // only two `expect` call sites can be triggered by unexpected
+        // non-EOF bytes.
+        let src = b"XYZABCD_rest_of_doc";
+        let mut p = Parser { src, pos: 0 };
+        let err = p.expect(b"<?xml").unwrap_err();
+        assert!(
+            err.contains("XYZABCD"),
+            "error message should include the offending bytes, got: {err}"
         );
     }
 }
