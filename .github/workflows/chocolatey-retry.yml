@@ -1,0 +1,99 @@
+name: Chocolatey Retry Push
+
+# Re-runs only the Chocolatey pack-and-push step from post-release.yml.
+#
+# Use this when post-release.yml's `update-chocolatey` job fails (e.g.
+# 403 Forbidden because the previous version is still in Chocolatey
+# community moderation) while the other 7 jobs succeeded. Re-dispatching
+# the whole post-release.yml would duplicate non-idempotent side effects
+# in AUR, Flathub, Snap, CocoaPods, Homebrew, Scoop, and Swift.
+#
+# See #1852 (original v0.2.2 failure) and #2030 (this workflow).
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to push to Chocolatey (e.g., v0.2.2)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  push-chocolatey:
+    name: Retry Chocolatey push
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Determine version
+        id: version
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          TAG="$INPUT_TAG"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate release tag
+        uses: ./.github/actions/validate-release-tag
+        with:
+          tag: ${{ steps.version.outputs.tag }}
+
+      - name: Download checksums
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release download "$TAG" -p checksums.txt
+
+      - name: Generate package
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          SHA_WINDOWS=$(grep "x86_64-pc-windows-msvc" checksums.txt | awk '{print $1}')
+
+          if [[ ! "$SHA_WINDOWS" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            echo "ERROR: missing or invalid SHA256 for x86_64-pc-windows-msvc: '${SHA_WINDOWS}'" >&2
+            exit 1
+          fi
+
+          mkdir -p choco-pkg/tools
+
+          sed \
+            -e "s/{{VERSION}}/${VERSION}/g" \
+            packaging/chocolatey/chordsketch.nuspec.template > choco-pkg/chordsketch.nuspec
+
+          sed \
+            -e "s/{{VERSION}}/${VERSION}/g" \
+            -e "s/{{SHA256_X86_64_PC_WINDOWS_MSVC}}/${SHA_WINDOWS}/g" \
+            packaging/chocolatey/tools/chocolateyInstall.ps1.template > choco-pkg/tools/chocolateyInstall.ps1
+
+          echo "=== chordsketch.nuspec ==="
+          cat choco-pkg/chordsketch.nuspec
+          echo "=== chocolateyInstall.ps1 ==="
+          cat choco-pkg/tools/chocolateyInstall.ps1
+
+      - name: Pack and push
+        shell: pwsh
+        env:
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if (-not $env:CHOCOLATEY_API_KEY) {
+            Write-Host "CHOCOLATEY_API_KEY secret is not set; skipping Chocolatey push."
+            Write-Host "To enable automatic Chocolatey updates, add the API key"
+            Write-Host "as a repository secret named CHOCOLATEY_API_KEY."
+            exit 0
+          }
+
+          cd choco-pkg
+          choco pack chordsketch.nuspec
+          choco push "chordsketch.$env:VERSION.nupkg" `
+            --source https://push.chocolatey.org/ `
+            --api-key $env:CHOCOLATEY_API_KEY
