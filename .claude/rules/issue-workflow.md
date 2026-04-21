@@ -63,31 +63,17 @@ ADR merge.
 
 ## Tracking Issues & Sub-Issues
 
-For large features or milestones, create a **tracking issue** labeled
-`type:tracking`. Individual tasks are created as GitHub sub-issues.
-Sub-issues follow the same rules as regular issues.
+The `type:tracking` label marks **umbrella issues** that group related
+work — manually created multi-step features, version-skew trackers in
+`docs/releasing.md`, and the upstream-watch trackers auto-created by
+`.github/workflows/upstream-watch.yml`. Sub-issues follow the same
+lifecycle rules as regular issues. A tracking issue is closed once
+every sub-issue is closed and any in-flight PRs from those sub-issues
+have merged. There is no separate gate review.
 
-A tracking issue may only be closed after a **milestone review**:
-
-0. All sub-issues must be closed first.
-1. Run `/project:phase-review <tracking-issue-number>` to perform code and
-   security review, classify findings by severity, and create issues for all
-   findings.
-2. **Blocking findings** (High, Medium) — fix via normal PR workflow.
-3. **Non-blocking findings** (Low, Nit) — issues created, do not block closure.
-4. Run `/project:delta-review <base-commit>` to review only fix commits.
-5. Repeat steps 2–4 until no new blocking findings remain.
-6. Close the tracking issue.
-
-### Review Finding Accountability
-
-All review findings must be:
-
-1. **Individually documented** with description and severity classification.
-2. **Resolved or tracked** before the issue is closed:
-   - **Blocking** (High, Medium) — fixed in the current cycle.
-   - **Non-blocking** (Low, Nit) — GitHub Issue created for future work.
-3. **Never silently dropped.** Every finding must be enumerable and traceable.
+Code and security review still happens at PR level (per
+[`pr-workflow.md`](pr-workflow.md)); review findings are filed as
+their own issues and tracked independently of the umbrella.
 
 ### Creating Sub-Issue Relationships
 
