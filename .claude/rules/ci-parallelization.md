@@ -87,7 +87,40 @@ gh run view <run-id> --json jobs -R koedame/chordsketch
 A PR that says "this makes CI faster" without concrete numbers is not
 reviewable.
 
-## 5. Workflow frequency is a first-class design input
+## 5. Concurrency groups are required on every macOS-bearing workflow
+
+Every workflow that includes a `runs-on: macos-*` job MUST declare a
+top-level `concurrency:` block keyed by the PR number (falling back to
+`github.ref` for non-PR events) and cancel PR runs in-progress.
+Recommended shape:
+
+```yaml
+concurrency:
+  group: <workflow-name>-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+```
+
+The `cancel-in-progress` expression is gated on the `pull_request`
+event so that `main` pushes, tag pushes, `workflow_dispatch`, and
+`release` events always run to completion — only PR force-pushes /
+rebases cancel stale runs.
+
+**Why:** GitHub-hosted runners are capped at 5 concurrent macOS jobs
+on the Free / Pro / Team plans
+(https://docs.github.com/en/actions/reference/actions-limits). When a
+PR is rebased (or the `auto-update-branch` workflow merges `main`
+into it), the old run continues occupying macOS slots while the new
+run starts behind it in the 5-job queue. Without cancel-in-progress,
+N pushes to one PR produce N parallel macOS pipelines competing for
+the same ceiling.
+
+Covered workflows as of 2026-04-22: `ci.yml`, `swift.yml`,
+`python.yml`, `ruby.yml`, `kotlin.yml`, `napi.yml`, `ffi.yml`,
+`vscode-extension.yml`. When adding a new workflow that touches
+macOS, append its group name here in the same PR that introduces the
+workflow.
+
+## 6. Workflow frequency is a first-class design input
 
 Before adding a cache layer, a matrix split, or any optimization to a workflow,
 verify how often it actually runs:

@@ -20,6 +20,15 @@ on:
       - "Cargo.lock"
       - ".github/workflows/python.yml"
 
+# Cancel stale PR runs when a new commit is pushed to the same PR so
+# that rebase / force-push does not leave two parallel Python builds
+# competing for the macOS 5-job concurrency cap. `main` pushes, tag
+# pushes, and `workflow_dispatch` / `release` events are not grouped
+# with PRs and run to completion.
+concurrency:
+  group: python-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 

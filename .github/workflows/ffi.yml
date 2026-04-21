@@ -19,6 +19,15 @@ on:
       - "Cargo.lock"
       - ".github/workflows/ffi.yml"
 
+# Cancel stale PR runs when a new commit is pushed to the same PR so
+# that rebase / force-push does not leave two parallel FFI builds
+# competing for the macOS 5-job concurrency cap (via the Linux leg
+# chain). `main` pushes, tag pushes, and `workflow_dispatch` /
+# `release` events are not grouped with PRs and run to completion.
+concurrency:
+  group: ffi-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
