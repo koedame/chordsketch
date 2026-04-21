@@ -2,8 +2,8 @@
 //!
 //! Tests cover three fixture files plus a round-trip (ChordPro → MusicXML → ChordPro).
 
+use chordsketch_chordpro::ast::Line;
 use chordsketch_convert_musicxml::{from_musicxml, to_musicxml};
-use chordsketch_core::ast::Line;
 
 // ---------------------------------------------------------------------------
 // Helper
@@ -136,7 +136,7 @@ fn sections_import_structure() {
     // Should have section directives
     let has_section_start = song.lines.iter().any(|l| {
         if let Line::Directive(d) = l {
-            use chordsketch_core::ast::DirectiveKind;
+            use chordsketch_chordpro::ast::DirectiveKind;
             matches!(
                 d.kind,
                 DirectiveKind::StartOfVerse | DirectiveKind::StartOfChorus
@@ -159,7 +159,7 @@ fn sections_import_chorus_label() {
     // The Chorus rehearsal mark should produce a start_of_chorus directive
     let has_chorus = song.lines.iter().any(|l| {
         if let Line::Directive(d) = l {
-            use chordsketch_core::ast::DirectiveKind;
+            use chordsketch_chordpro::ast::DirectiveKind;
             d.kind == DirectiveKind::StartOfChorus
         } else {
             false
@@ -177,24 +177,24 @@ fn sections_import_chorus_label() {
 
 #[test]
 fn round_trip_preserves_title() {
-    let mut song = chordsketch_core::ast::Song::new();
+    let mut song = chordsketch_chordpro::ast::Song::new();
     song.metadata.title = Some("Round Trip Song".to_string());
     song.metadata.artists = vec!["Test Artist".to_string()];
     song.metadata.key = Some("Am".to_string());
     song.metadata.tempo = Some("100".to_string());
 
-    let mut ll = chordsketch_core::ast::LyricsLine::new();
+    let mut ll = chordsketch_chordpro::ast::LyricsLine::new();
     ll.segments = vec![
-        chordsketch_core::ast::LyricsSegment::new(
-            Some(chordsketch_core::ast::Chord::new("Am")),
+        chordsketch_chordpro::ast::LyricsSegment::new(
+            Some(chordsketch_chordpro::ast::Chord::new("Am")),
             "Hello ",
         ),
-        chordsketch_core::ast::LyricsSegment::new(
-            Some(chordsketch_core::ast::Chord::new("Dm")),
+        chordsketch_chordpro::ast::LyricsSegment::new(
+            Some(chordsketch_chordpro::ast::Chord::new("Dm")),
             "world ",
         ),
-        chordsketch_core::ast::LyricsSegment::new(
-            Some(chordsketch_core::ast::Chord::new("E")),
+        chordsketch_chordpro::ast::LyricsSegment::new(
+            Some(chordsketch_chordpro::ast::Chord::new("E")),
             "yeah",
         ),
     ];
@@ -262,19 +262,19 @@ fn round_trip_preserves_title() {
 
 #[test]
 fn round_trip_preserves_lyrics() {
-    let mut song = chordsketch_core::ast::Song::new();
-    let mut ll = chordsketch_core::ast::LyricsLine::new();
+    let mut song = chordsketch_chordpro::ast::Song::new();
+    let mut ll = chordsketch_chordpro::ast::LyricsLine::new();
     ll.segments = vec![
-        chordsketch_core::ast::LyricsSegment::new(
-            Some(chordsketch_core::ast::Chord::new("C")),
+        chordsketch_chordpro::ast::LyricsSegment::new(
+            Some(chordsketch_chordpro::ast::Chord::new("C")),
             "Twinkle ",
         ),
-        chordsketch_core::ast::LyricsSegment::new(None, "twinkle "),
-        chordsketch_core::ast::LyricsSegment::new(
-            Some(chordsketch_core::ast::Chord::new("G")),
+        chordsketch_chordpro::ast::LyricsSegment::new(None, "twinkle "),
+        chordsketch_chordpro::ast::LyricsSegment::new(
+            Some(chordsketch_chordpro::ast::Chord::new("G")),
             "little ",
         ),
-        chordsketch_core::ast::LyricsSegment::new(None, "star"),
+        chordsketch_chordpro::ast::LyricsSegment::new(None, "star"),
     ];
     song.lines.push(Line::Lyrics(ll));
 
@@ -322,7 +322,7 @@ fn sections_have_end_directives() {
     let xml = fixture("sections.xml");
     let song = from_musicxml(&xml).expect("sections.xml should parse");
 
-    use chordsketch_core::ast::DirectiveKind;
+    use chordsketch_chordpro::ast::DirectiveKind;
 
     let has_verse_end = song.lines.iter().any(|l| {
         matches!(
@@ -353,7 +353,7 @@ fn section_end_follows_content() {
     let xml = fixture("sections.xml");
     let song = from_musicxml(&xml).expect("sections.xml should parse");
 
-    use chordsketch_core::ast::DirectiveKind;
+    use chordsketch_chordpro::ast::DirectiveKind;
 
     // Collect line positions for start_of_verse, lyrics, and end_of_verse.
     let verse_start = song
@@ -411,9 +411,9 @@ fn invalid_xml_returns_error() {
 /// regress silently.
 #[test]
 fn round_trip_section_labels_preserved_and_ordered() {
-    use chordsketch_core::ast::{Directive, DirectiveKind, LyricsLine, LyricsSegment};
+    use chordsketch_chordpro::ast::{Directive, DirectiveKind, LyricsLine, LyricsSegment};
 
-    let mut song = chordsketch_core::ast::Song::new();
+    let mut song = chordsketch_chordpro::ast::Song::new();
 
     // Build: {start_of_verse} / verse line / {end_of_verse}
     //        {start_of_chorus} / chorus line / {end_of_chorus}
@@ -421,7 +421,7 @@ fn round_trip_section_labels_preserved_and_ordered() {
         .push(Line::Directive(Directive::name_only("start_of_verse")));
     let mut verse_line = LyricsLine::new();
     verse_line.segments = vec![LyricsSegment::new(
-        Some(chordsketch_core::ast::Chord::new("C")),
+        Some(chordsketch_chordpro::ast::Chord::new("C")),
         "Verse lyrics",
     )];
     song.lines.push(Line::Lyrics(verse_line));
@@ -432,7 +432,7 @@ fn round_trip_section_labels_preserved_and_ordered() {
         .push(Line::Directive(Directive::name_only("start_of_chorus")));
     let mut chorus_line = LyricsLine::new();
     chorus_line.segments = vec![LyricsSegment::new(
-        Some(chordsketch_core::ast::Chord::new("G")),
+        Some(chordsketch_chordpro::ast::Chord::new("G")),
         "Chorus lyrics",
     )];
     song.lines.push(Line::Lyrics(chorus_line));

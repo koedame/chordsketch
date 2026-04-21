@@ -1,7 +1,7 @@
 //! Golden tests for the plain text renderer.
 //!
 //! This integration test discovers all subdirectories under `tests/fixtures/`,
-//! parses each `input.cho` file through [`chordsketch_core::parse`], renders it
+//! parses each `input.cho` file through [`chordsketch_chordpro::parse`], renders it
 //! to plain text via [`chordsketch_render_text::render_song`], and compares the
 //! output against the corresponding `expected.txt` file.
 //!
@@ -125,7 +125,7 @@ fn run_golden_test(fixture_dir: &Path) {
         .unwrap_or_else(|e| panic!("[{name}] cannot read {}: {e}", input_path.display()));
 
     let song =
-        chordsketch_core::parse(&input).unwrap_or_else(|e| panic!("[{name}] parse error: {e}"));
+        chordsketch_chordpro::parse(&input).unwrap_or_else(|e| panic!("[{name}] parse error: {e}"));
 
     let actual = chordsketch_render_text::render_song(&song);
 

@@ -66,7 +66,7 @@ at post-release verification rather than before the tag is cut.
 1. **Update version** in every versioned manifest:
 
    Workspace Cargo.toml files (all ten crates):
-   - `crates/core/Cargo.toml`
+   - `crates/chordpro/Cargo.toml`
    - `crates/render-text/Cargo.toml`
    - `crates/render-html/Cargo.toml`
    - `crates/render-pdf/Cargo.toml`
@@ -91,7 +91,7 @@ at post-release verification rather than before the tag is cut.
    - `.github/workflows/readme-smoke.yml` ~line 204:
      `npm install '@chordsketch/wasm@<version>'`
    - `.github/workflows/readme-smoke.yml` ~lines 450–451:
-     `chordsketch-core = "^<major>.<minor>"` and the matching
+     `chordsketch-chordpro = "^<major>.<minor>"` and the matching
      `chordsketch-render-text` pin
 
    Allowlist (if applicable):
@@ -121,7 +121,7 @@ at post-release verification rather than before the tag is cut.
 
 6. **Publish to crates.io** in dependency order:
    ```bash
-   cargo publish -p chordsketch-core
+   cargo publish -p chordsketch-chordpro
    # Wait ~30 seconds for the crates.io index to update
    cargo publish -p chordsketch-render-text
    cargo publish -p chordsketch-render-html
@@ -193,11 +193,11 @@ After publishing each crate, wait for the crates.io index to update before
 publishing dependents. This typically takes 10-30 seconds.
 
 Publishing order:
-1. `chordsketch-core` (no internal dependencies)
-2. `chordsketch-render-text` (depends on `chordsketch-core`)
-3. `chordsketch-render-html` (depends on `chordsketch-core`)
-4. `chordsketch-render-pdf` (depends on `chordsketch-core`)
-5. `chordsketch-convert-musicxml` (depends on `chordsketch-core`)
+1. `chordsketch-chordpro` (no internal dependencies)
+2. `chordsketch-render-text` (depends on `chordsketch-chordpro`)
+3. `chordsketch-render-html` (depends on `chordsketch-chordpro`)
+4. `chordsketch-render-pdf` (depends on `chordsketch-chordpro`)
+5. `chordsketch-convert-musicxml` (depends on `chordsketch-chordpro`)
 6. `chordsketch` (depends on all five above)
 
 Steps 2-5 can be published in any order among themselves, but all must complete

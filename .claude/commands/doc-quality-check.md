@@ -15,7 +15,7 @@ specific package name to check; if omitted, check all packages: `$ARGUMENTS`
 | `ChordSketch` | Swift Package Index | `packages/swift/README.md` | `packages/swift/Package.swift` |
 | `me.koeda:chordsketch` | Maven Central | `packages/kotlin/README.md` | `packages/kotlin/lib/build.gradle.kts` |
 | `chordsketch` (CLI) | crates.io | `crates/cli/README.md` | `crates/cli/Cargo.toml` |
-| `chordsketch-core` | crates.io | `crates/core/README.md` | `crates/core/Cargo.toml` |
+| `chordsketch-chordpro` | crates.io | `crates/chordpro/README.md` | `crates/chordpro/Cargo.toml` |
 | `chordsketch-render-text` | crates.io | `crates/render-text/README.md` | `crates/render-text/Cargo.toml` |
 | `chordsketch-render-html` | crates.io | `crates/render-html/README.md` | `crates/render-html/Cargo.toml` |
 | `chordsketch-render-pdf` | crates.io | `crates/render-pdf/README.md` | `crates/render-pdf/Cargo.toml` |

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** Renamed the core parser/AST crate from `chordsketch-core`
+  to `chordsketch-chordpro` (and directory `crates/core/` →
+  `crates/chordpro/`). Rust consumers must update dependency names
+  and `use` paths (`chordsketch_core::` → `chordsketch_chordpro::`);
+  public APIs are otherwise unchanged. Part of the v0.3.0 multi-format
+  track (iReal Pro support). (#2056, #2050)
+
 ## [0.2.2] - 2026-04-18
 
 ### Added
@@ -161,7 +170,7 @@ Initial release of ChordSketch.
 
 ### Added
 
-#### Core Parser (`chordsketch-core`)
+#### Core Parser (`chordsketch-chordpro`)
 
 - Full ChordPro file format parser with zero external dependencies
 - 100+ directive types supported

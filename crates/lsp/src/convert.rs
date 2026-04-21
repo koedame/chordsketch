@@ -5,7 +5,7 @@
 //! LSP positions are 0-based and `character` is measured in the units
 //! of the negotiated [`PositionEncoding`]. This module bridges the two.
 
-use chordsketch_core::{ParseError, Span};
+use chordsketch_chordpro::{ParseError, Span};
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range};
 
 use crate::encoding::{PositionEncoding, char_idx_to_lsp_char, nth_line};
@@ -32,7 +32,7 @@ pub fn parse_error_to_diagnostic(
 /// Converts a parser [`Span`] (1-based, character-column, half-open) to an
 /// LSP [`Range`] (0-based) in the negotiated position encoding.
 ///
-/// The parser enforces an input-size cap (see [`chordsketch_core::ParseOptions`])
+/// The parser enforces an input-size cap (see [`chordsketch_chordpro::ParseOptions`])
 /// so line/column values fit comfortably within `u32`. `try_from` is used
 /// defensively; any value that somehow overflows is clamped to `u32::MAX`.
 fn span_to_range(span: &Span, text: &str, encoding: PositionEncoding) -> Range {
@@ -72,7 +72,7 @@ fn lsp_character_at(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chordsketch_core::token::{Position as CsPosition, Span as CsSpan};
+    use chordsketch_chordpro::token::{Position as CsPosition, Span as CsSpan};
 
     #[test]
     fn span_to_range_converts_1based_to_0based_utf8_ascii() {

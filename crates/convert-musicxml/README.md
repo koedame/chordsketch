@@ -12,7 +12,7 @@ Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 
 ```rust
 use chordsketch_convert_musicxml::{from_musicxml, to_musicxml};
-use chordsketch_core::ast::{Song, Chord, Line, LyricsLine, LyricsSegment};
+use chordsketch_chordpro::ast::{Song, Chord, Line, LyricsLine, LyricsSegment};
 
 // Build a simple song
 let mut song = Song::new();

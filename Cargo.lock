@@ -320,8 +320,8 @@ name = "chordsketch"
 version = "0.2.2"
 dependencies = [
  "assert_cmd",
+ "chordsketch-chordpro",
  "chordsketch-convert-musicxml",
- "chordsketch-core",
  "chordsketch-render-html",
  "chordsketch-render-pdf",
  "chordsketch-render-text",
@@ -332,24 +332,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "chordsketch-convert-musicxml"
-version = "0.2.2"
-dependencies = [
- "chordsketch-core",
-]
-
-[[package]]
-name = "chordsketch-core"
+name = "chordsketch-chordpro"
 version = "0.2.2"
 dependencies = [
  "tempfile",
 ]
 
 [[package]]
+name = "chordsketch-convert-musicxml"
+version = "0.2.2"
+dependencies = [
+ "chordsketch-chordpro",
+]
+
+[[package]]
 name = "chordsketch-ffi"
 version = "0.2.2"
 dependencies = [
- "chordsketch-core",
+ "chordsketch-chordpro",
  "chordsketch-render-html",
  "chordsketch-render-pdf",
  "chordsketch-render-text",
@@ -361,7 +361,7 @@ dependencies = [
 name = "chordsketch-lsp"
 version = "0.2.2"
 dependencies = [
- "chordsketch-core",
+ "chordsketch-chordpro",
  "serde_json",
  "tokio",
  "tower-lsp",
@@ -372,7 +372,7 @@ dependencies = [
 name = "chordsketch-napi"
 version = "0.2.2"
 dependencies = [
- "chordsketch-core",
+ "chordsketch-chordpro",
  "chordsketch-render-html",
  "chordsketch-render-pdf",
  "chordsketch-render-text",
@@ -385,14 +385,14 @@ dependencies = [
 name = "chordsketch-render-html"
 version = "0.2.2"
 dependencies = [
- "chordsketch-core",
+ "chordsketch-chordpro",
 ]
 
 [[package]]
 name = "chordsketch-render-pdf"
 version = "0.2.2"
 dependencies = [
- "chordsketch-core",
+ "chordsketch-chordpro",
  "flate2",
  "libc",
  "pdf-extract",
@@ -403,7 +403,7 @@ dependencies = [
 name = "chordsketch-render-text"
 version = "0.2.2"
 dependencies = [
- "chordsketch-core",
+ "chordsketch-chordpro",
  "unicode-width",
 ]
 
@@ -411,7 +411,7 @@ dependencies = [
 name = "chordsketch-wasm"
 version = "0.2.2"
 dependencies = [
- "chordsketch-core",
+ "chordsketch-chordpro",
  "chordsketch-render-html",
  "chordsketch-render-pdf",
  "chordsketch-render-text",

@@ -1,0 +1,18 @@
+[package]
+name = "chordsketch-chordpro"
+version = "0.2.2"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "ChordPro parser, AST, and transforms"
+readme = "README.md"
+
+[dependencies]
+
+[dev-dependencies]
+tempfile = "3"

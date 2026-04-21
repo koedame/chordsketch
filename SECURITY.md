@@ -125,7 +125,7 @@ Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src 
 
 ## Dependency Policy
 
-- `chordsketch-core` has **zero external dependencies**. All parsing, validation,
+- `chordsketch-chordpro` has **zero external dependencies**. All parsing, validation,
   and sanitization logic is implemented from scratch.
 - Renderer crates use minimal, well-audited dependencies (`unicode-width`,
   `flate2`).

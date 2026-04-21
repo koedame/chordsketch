@@ -17,7 +17,7 @@ name = "chordsketch-lsp"
 path = "src/main.rs"
 
 [dependencies]
-chordsketch-core = { version = "0.2.2", path = "../core" }
+chordsketch-chordpro = { version = "0.2.2", path = "../chordpro" }
 tower-lsp = "0.20"
 tokio = { version = "1", features = ["rt", "macros", "io-std"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

@@ -84,7 +84,7 @@ may push fix commits directly.
 
 ## Dependency Policy
 
-- **`chordsketch-core`** must have **zero external dependencies**. No
+- **`chordsketch-chordpro`** must have **zero external dependencies**. No
   exceptions.
 - Renderer crates may use minimal external crates when justified.
 - New dependencies must be explained in the PR description.
@@ -92,7 +92,7 @@ may push fix commits directly.
 ## Golden Tests
 
 Parser behavior is validated via golden tests: input `.cho` files paired with
-expected output snapshots in `crates/core/tests/fixtures/`. New directives or
+expected output snapshots in `crates/chordpro/tests/fixtures/`. New directives or
 syntax changes must include golden test coverage.
 
 ## Project Board

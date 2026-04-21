@@ -29,7 +29,7 @@ document preconditions with `# Panics`.
   discipline or process-exit cleanup.
   - **Non-core crates**: prefer the `scopeguard` crate or `tempfile::TempDir`
     (both are external dependencies).
-  - **`chordsketch-core`**: must use `Drop` impls or other stdlib-only RAII
+  - **`chordsketch-chordpro`**: must use `Drop` impls or other stdlib-only RAII
     patterns — external crates are prohibited in core.
 - Do not manually call `fs::remove_dir_all` in `Ok` paths and forget the `Err`
   path; use an RAII type that runs cleanup unconditionally.

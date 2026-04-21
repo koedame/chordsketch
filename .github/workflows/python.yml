@@ -6,7 +6,7 @@ on:
     tags: ["v*"]
     paths:
       - "crates/ffi/**"
-      - "crates/core/**"
+      - "crates/chordpro/**"
       - "crates/render-*/**"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -14,7 +14,7 @@ on:
   pull_request:
     paths:
       - "crates/ffi/**"
-      - "crates/core/**"
+      - "crates/chordpro/**"
       - "crates/render-*/**"
       - "Cargo.toml"
       - "Cargo.lock"

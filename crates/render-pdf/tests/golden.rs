@@ -1,7 +1,7 @@
 //! Golden tests for the PDF renderer.
 //!
 //! Discovers every subdirectory under `tests/fixtures/` that contains an
-//! `input.cho`, parses it through [`chordsketch_core::parse`], renders via
+//! `input.cho`, parses it through [`chordsketch_chordpro::parse`], renders via
 //! [`chordsketch_render_pdf::render_song`], and compares the result against
 //! a snapshot.
 //!
@@ -181,7 +181,7 @@ fn run_golden_test(fixture_dir: &Path) {
         .unwrap_or_else(|e| panic!("[{name}] cannot read {}: {e}", input_path.display()));
 
     let song =
-        chordsketch_core::parse(&input).unwrap_or_else(|e| panic!("[{name}] parse error: {e}"));
+        chordsketch_chordpro::parse(&input).unwrap_or_else(|e| panic!("[{name}] parse error: {e}"));
     let actual_pdf = chordsketch_render_pdf::render_song(&song);
 
     assert!(
@@ -314,7 +314,7 @@ fn golden_tests() {
 #[test]
 fn pdf_output_is_deterministic() {
     let input = "{title: Determinism Check}\n\n[C]Hello [G]world\n";
-    let song = chordsketch_core::parse(input).expect("parse");
+    let song = chordsketch_chordpro::parse(input).expect("parse");
     let a = chordsketch_render_pdf::render_song(&song);
     let b = chordsketch_render_pdf::render_song(&song);
     assert_eq!(a, b, "PDF renderer is not deterministic");

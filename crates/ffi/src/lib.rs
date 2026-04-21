@@ -3,7 +3,7 @@
 //! Exposes ChordPro parsing and rendering (text, HTML, PDF) to Python,
 //! Swift, Kotlin, and Ruby via [UniFFI](https://mozilla.github.io/uniffi-rs/).
 
-use chordsketch_core::render_result::RenderResult;
+use chordsketch_chordpro::render_result::RenderResult;
 
 uniffi::include_scaffolding!("chordsketch");
 
@@ -21,23 +21,23 @@ pub enum ChordSketchError {
     },
 }
 
-/// Resolve a [`chordsketch_core::config::Config`] from an optional JSON/preset string.
+/// Resolve a [`chordsketch_chordpro::config::Config`] from an optional JSON/preset string.
 fn resolve_config(
     config_json: Option<String>,
-) -> Result<chordsketch_core::config::Config, ChordSketchError> {
+) -> Result<chordsketch_chordpro::config::Config, ChordSketchError> {
     match config_json {
         Some(name) => {
-            if let Some(preset) = chordsketch_core::config::Config::preset(&name) {
+            if let Some(preset) = chordsketch_chordpro::config::Config::preset(&name) {
                 Ok(preset)
             } else {
-                chordsketch_core::config::Config::parse(&name).map_err(|e| {
+                chordsketch_chordpro::config::Config::parse(&name).map_err(|e| {
                     ChordSketchError::InvalidConfig {
                         reason: format!("not a known preset and not valid RRJSON: {e}"),
                     }
                 })
             }
         }
-        None => Ok(chordsketch_core::config::Config::defaults()),
+        None => Ok(chordsketch_chordpro::config::Config::defaults()),
     }
 }
 
@@ -45,7 +45,7 @@ fn resolve_config(
 ///
 /// `parse_multi_lenient` always returns at least one `ParseResult`
 /// (`split_at_new_song` unconditionally pushes the trailing segment, even
-/// for empty input — see `chordsketch_core::parser`), so the resulting
+/// for empty input — see `chordsketch_chordpro::parser`), so the resulting
 /// `Vec<Song>` is never empty. The previous `is_empty()` guard was dead
 /// code. See #1083.
 ///
@@ -55,8 +55,8 @@ fn resolve_config(
 /// Kotlin / Ruby consumers. The variant is retained as defensive
 /// future-proofing in case the lenient parser ever changes its
 /// always-returns-one-segment behavior.
-fn parse_songs(input: &str) -> Result<Vec<chordsketch_core::ast::Song>, ChordSketchError> {
-    let result = chordsketch_core::parse_multi_lenient(input);
+fn parse_songs(input: &str) -> Result<Vec<chordsketch_chordpro::ast::Song>, ChordSketchError> {
+    let result = chordsketch_chordpro::parse_multi_lenient(input);
     let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
     Ok(songs)
 }
@@ -271,7 +271,7 @@ pub struct ValidationError {
 /// records. Returns an empty list if the input is valid.
 #[must_use]
 pub fn validate(input: String) -> Vec<ValidationError> {
-    let result = chordsketch_core::parse_multi_lenient(&input);
+    let result = chordsketch_chordpro::parse_multi_lenient(&input);
     result
         .results
         .into_iter()
@@ -291,7 +291,7 @@ pub fn validate(input: String) -> Vec<ValidationError> {
 /// Return the ChordSketch library version.
 #[must_use]
 pub fn version() -> String {
-    chordsketch_core::version().to_string()
+    chordsketch_chordpro::version().to_string()
 }
 
 #[cfg(test)]

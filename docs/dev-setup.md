@@ -98,10 +98,10 @@ cargo test --workspace -- --ignored && ./scripts/compare-with-perl.sh
 
 ## Tool Detection
 
-The `chordsketch_core::external_tool` module provides runtime detection:
+The `chordsketch_chordpro::external_tool` module provides runtime detection:
 
 ```rust
-use chordsketch_core::external_tool;
+use chordsketch_chordpro::external_tool;
 
 if external_tool::has_abc2svg() {
     // abc2svg is available, proceed with conversion

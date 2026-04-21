@@ -291,9 +291,9 @@ fn main() -> ExitCode {
 
     // Build configuration: defaults → system → user → project → custom config files → defines
     let mut config = if cli.no_default_configs {
-        chordsketch_core::config::Config::defaults()
+        chordsketch_chordpro::config::Config::defaults()
     } else {
-        let result = chordsketch_core::config::Config::load(project_dir.as_deref(), None);
+        let result = chordsketch_chordpro::config::Config::load(project_dir.as_deref(), None);
         for warning in &result.warnings {
             emit_warning(cli.warnings_json, "config", warning);
         }
@@ -302,7 +302,7 @@ fn main() -> ExitCode {
 
     // Apply --config files/presets in order (preset names resolved first)
     for config_name in &cli.configs {
-        match chordsketch_core::config::Config::resolve(config_name) {
+        match chordsketch_chordpro::config::Config::resolve(config_name) {
             Ok(result) => {
                 for warning in &result.warnings {
                     emit_warning(
@@ -364,7 +364,7 @@ fn main() -> ExitCode {
             config_transpose_f64 as i8
         };
     let (effective_transpose, saturated) =
-        chordsketch_core::transpose::combine_transpose(config_transpose, cli.transpose);
+        chordsketch_chordpro::transpose::combine_transpose(config_transpose, cli.transpose);
     if saturated {
         emit_warning(
             cli.warnings_json,
@@ -376,7 +376,7 @@ fn main() -> ExitCode {
         );
     }
 
-    let mut all_songs: Vec<chordsketch_core::ast::Song> = Vec::new();
+    let mut all_songs: Vec<chordsketch_chordpro::ast::Song> = Vec::new();
     let mut had_error = false;
 
     for path in &cli.files {
@@ -389,7 +389,7 @@ fn main() -> ExitCode {
             }
         };
 
-        let result = chordsketch_core::parse_multi_lenient(&input);
+        let result = chordsketch_chordpro::parse_multi_lenient(&input);
         for parse_result in &result.results {
             for e in &parse_result.errors {
                 eprintln!(
@@ -405,7 +405,7 @@ fn main() -> ExitCode {
     }
 
     // Apply selector filtering if an instrument or user is configured.
-    let selector_ctx = chordsketch_core::selector::SelectorContext::from_config(&config);
+    let selector_ctx = chordsketch_chordpro::selector::SelectorContext::from_config(&config);
     if selector_ctx.instrument.is_some() || selector_ctx.user.is_some() {
         all_songs = all_songs
             .iter()
@@ -512,7 +512,7 @@ fn write_bytes(path: &Option<String>, content: &[u8]) -> io::Result<()> {
 /// * `1` — at least one file needs formatting (`--check` mode) or an I/O
 ///   error occurred.
 fn run_fmt(files: &[String], check: bool) -> ExitCode {
-    let options = chordsketch_core::formatter::FormatOptions::default();
+    let options = chordsketch_chordpro::formatter::FormatOptions::default();
     let mut had_error = false;
     let mut needs_format = false;
 
@@ -527,7 +527,7 @@ fn run_fmt(files: &[String], check: bool) -> ExitCode {
                     continue;
                 }
             };
-            let formatted = chordsketch_core::formatter::format(&input, &options);
+            let formatted = chordsketch_chordpro::formatter::format(&input, &options);
             if check {
                 if formatted != input {
                     eprintln!("error: <stdin> is not formatted");
@@ -546,7 +546,7 @@ fn run_fmt(files: &[String], check: bool) -> ExitCode {
                     continue;
                 }
             };
-            let formatted = chordsketch_core::formatter::format(&input, &options);
+            let formatted = chordsketch_chordpro::formatter::format(&input, &options);
             if check {
                 if formatted != input {
                     eprintln!("error: {file}: not formatted");
@@ -589,11 +589,11 @@ fn run_convert(
     to: Option<ConvertTo>,
     output_path: Option<&str>,
 ) -> ExitCode {
-    use chordsketch_convert_musicxml::{from_musicxml, to_musicxml};
-    use chordsketch_core::{
+    use chordsketch_chordpro::{
         InputFormat, convert_abc, convert_plain_text, detect_format, parse_lenient,
         song_to_chordpro,
     };
+    use chordsketch_convert_musicxml::{from_musicxml, to_musicxml};
 
     // --- Export path: ChordPro → MusicXML -----------------------------------
     if let Some(ConvertTo::Musicxml) = to {

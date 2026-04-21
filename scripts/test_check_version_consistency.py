@@ -140,7 +140,7 @@ def _build_repo(
               library-smoke:
                 steps:
                   - run: |
-                      CORE_DEP='chordsketch-core = "^{smoke_caret}"'
+                      CORE_DEP='chordsketch-chordpro = "^{smoke_caret}"'
                       RENDER_DEP='chordsketch-render-text = "^{smoke_caret}"'
             """
         ).strip()

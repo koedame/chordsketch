@@ -144,7 +144,7 @@ chordsketch -f pdf song1.cho song2.cho -o songbook.pdf
 The core parser and renderers are available as separate library crates:
 
 ```rust
-use chordsketch_core::parser::parse;
+use chordsketch_chordpro::parser::parse;
 use chordsketch_render_text::render_song;
 
 let input = "{title: Amazing Grace}\n{subtitle: Traditional}\n\n[G]Amazing [G7]grace, how [C]sweet the [G]sound";
@@ -157,7 +157,7 @@ println!("{text}");
 
 | Crate | Description |
 |---|---|
-| [`chordsketch-core`](crates/core) | Parser, AST, and transforms (zero external dependencies) |
+| [`chordsketch-chordpro`](crates/chordpro) | Parser, AST, and transforms (zero external dependencies) |
 | [`chordsketch-render-text`](crates/render-text) | Plain text renderer |
 | [`chordsketch-render-html`](crates/render-html) | HTML renderer |
 | [`chordsketch-render-pdf`](crates/render-pdf) | PDF renderer |

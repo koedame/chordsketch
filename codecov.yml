@@ -40,7 +40,7 @@ coverage:
 
       core:
         paths:
-          - crates/core/
+          - crates/chordpro/
         target: 85%
         threshold: 1%
         informational: false

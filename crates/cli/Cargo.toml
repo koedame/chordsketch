@@ -17,7 +17,7 @@ name = "chordsketch"
 path = "src/main.rs"
 
 [dependencies]
-chordsketch-core = { version = "0.2.2", path = "../core" }
+chordsketch-chordpro = { version = "0.2.2", path = "../chordpro" }
 chordsketch-render-text = { version = "0.2.2", path = "../render-text" }
 chordsketch-render-html = { version = "0.2.2", path = "../render-html" }
 chordsketch-render-pdf = { version = "0.2.2", path = "../render-pdf" }

@@ -13,7 +13,7 @@ Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 ## Usage
 
 ```rust
-use chordsketch_core::parser::parse;
+use chordsketch_chordpro::parser::parse;
 use chordsketch_render_text::render_song;
 
 let input = "{title: Amazing Grace}\n[G]Amazing [G7]grace";

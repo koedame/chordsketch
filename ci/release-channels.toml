@@ -33,9 +33,9 @@
 
 [[channels]]
 id = "crates-io-core"
-display = "crates.io — chordsketch-core"
+display = "crates.io — chordsketch-chordpro"
 kind = "crates-io"
-package = "chordsketch-core"
+package = "chordsketch-chordpro"
 expected_version = "tag"
 required_secrets = []
 notes = "Published manually per docs/releasing.md Step 6."

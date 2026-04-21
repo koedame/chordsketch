@@ -798,7 +798,7 @@ fn test_convert_invalid_xml_with_from_musicxml() {
 /// `--transpose`) value saturates the `i8` range and therefore forces
 /// the render layer to emit a `transpose offset ... clamped to ...`
 /// warning. The exact saturation path is in
-/// `chordsketch_core::transpose::combine_transpose`.
+/// `chordsketch_chordpro::transpose::combine_transpose`.
 fn saturating_transpose_fixture() -> NamedTempFile {
     let mut file = NamedTempFile::new_in(std::env::temp_dir()).unwrap();
     file.write_all(b"{title: T}\n{transpose: 100}\n[C]Hello\n")
