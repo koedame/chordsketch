@@ -5,6 +5,15 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # Fires when a PR enters the GitHub Merge Queue. The queue runs CI
+  # on a speculative merge commit before appending it to main. All
+  # checks listed in branch protection's required_status_checks must
+  # exist in this workflow (or another workflow that also handles
+  # merge_group) for the queue to consider a PR "green" and land it.
+  # The event has no effect until merge queue is enabled on `main` via
+  # repository / branch protection settings; until then this is a
+  # no-op trigger that never fires.
+  merge_group:
 
 concurrency:
   group: ci-${{ github.ref }}
