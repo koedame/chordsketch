@@ -8,10 +8,12 @@
     <authors>koedame</authors>
     <owners>koedame</owners>
     <projectUrl>https://github.com/koedame/chordsketch</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/koedame/chordsketch/main/assets/logo-128.png</iconUrl>
     <licenseUrl>https://github.com/koedame/chordsketch/blob/main/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
-    <projectSourceUrl>https://github.com/koedame/chordsketch</projectSourceUrl>
+    <packageSourceUrl>https://github.com/koedame/chordsketch/tree/main/packaging/chocolatey</packageSourceUrl>
     <bugTrackerUrl>https://github.com/koedame/chordsketch/issues</bugTrackerUrl>
+    <releaseNotes>https://github.com/koedame/chordsketch/releases</releaseNotes>
     <tags>chordpro music chord parser lyrics renderer cli</tags>
     <summary>ChordPro file format parser and renderer</summary>
     <description>ChordSketch is a Rust implementation of the ChordPro file format. It parses .cho files and renders them to text, HTML, or PDF output. This package installs the chordsketch CLI.</description>
