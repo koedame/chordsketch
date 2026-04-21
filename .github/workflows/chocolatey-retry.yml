@@ -39,6 +39,8 @@ jobs:
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Validate release tag
+        # Format-validate the resolved tag before downstream `gh` /
+        # shell / checksum-download steps interpolate it. See #1797.
         uses: ./.github/actions/validate-release-tag
         with:
           tag: ${{ steps.version.outputs.tag }}
