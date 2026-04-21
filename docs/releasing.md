@@ -919,6 +919,25 @@ No local Windows machine is needed.
    `.nupkg` from the template and pushing to the Chocolatey Community
    Repository on each release. No manual `choco push` is needed.
 
+#### Retrying a failed Chocolatey push
+
+If `update-chocolatey` fails while the other jobs in `post-release.yml`
+succeed — typical cause is a `403 Forbidden` because the previous
+version is still in community moderation (Chocolatey blocks newer-version
+pushes while the prior version is queued) — use the standalone
+`chocolatey-retry.yml` workflow:
+
+```bash
+gh workflow run chocolatey-retry.yml -R koedame/chordsketch -f tag=vX.Y.Z
+```
+
+This re-runs only the pack-and-push steps and does not re-trigger the
+other 7 post-release jobs (AUR, Flathub, Snap, CocoaPods, Homebrew,
+Scoop, Swift), avoiding duplicate side effects. Wait for the previous
+version's moderation badge on
+`community.chocolatey.org/packages/chordsketch` to read `Ready`
+(approved) before retrying.
+
 ### Snap Store
 
 Set up on 2026-04-15. Automated via `post-release.yml` `update-snap`.
