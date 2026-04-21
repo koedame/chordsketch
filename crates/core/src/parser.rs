@@ -516,11 +516,12 @@ impl Parser {
             self.advance();
         }
 
-        // The dispatch guard guarantees `raw` starts with `#` (no leading
-        // whitespace). Strip the `#` and one optional space.
-        let after_hash = raw
-            .strip_prefix('#')
-            .expect("dispatch guard guarantees raw starts with '#'");
+        // The dispatch guard in `parse_line` (`t.starts_with('#')`) guarantees
+        // `raw` starts with `#` today. Use `unwrap_or` rather than `expect` so
+        // that a future caller re-using this function without that guard
+        // degrades to treating the whole line as the comment body instead of
+        // panicking on otherwise valid input.
+        let after_hash = raw.strip_prefix('#').unwrap_or(raw.as_str());
         let text = after_hash.strip_prefix(' ').unwrap_or(after_hash);
 
         Ok(Line::Comment(CommentStyle::Normal, text.to_string()))
@@ -1796,6 +1797,25 @@ mod tests {
         assert!(
             matches!(result[..], [Line::Lyrics(_)]),
             "expected Lyrics, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn parse_hash_comment_line_is_resilient_to_missing_hash_prefix() {
+        // Directly invoke parse_hash_comment_line with tokens whose first
+        // text does NOT start with '#', bypassing the dispatch guard in
+        // parse_line. The function must not panic — it falls back to
+        // treating the whole line as the comment body. Regression guard
+        // for #2082 (a future caller could re-use this method without the
+        // `t.starts_with('#')` gate).
+        let tokens = Lexer::new("no hash prefix\n").tokenize();
+        let mut parser = Parser::new(tokens);
+        let line = parser
+            .parse_hash_comment_line()
+            .expect("parse_hash_comment_line returned Err unexpectedly");
+        assert_eq!(
+            line,
+            Line::Comment(CommentStyle::Normal, "no hash prefix".to_string()),
         );
     }
 
