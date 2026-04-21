@@ -39,13 +39,46 @@ bug should close all linked issues.
 ## Workflow Lifecycle
 
 1. Create Issue with labels.
-2. Create worktree + branch from latest `main`.
-3. Implement (commits reference issue: `Part of #N` or `Closes #N`).
-4. Open PR (title references issue, body has `Closes #N`).
-5. CI -> auto-review (severity classification) -> human merge.
+2. Move the issue to **In Progress** on the [chordsketch project board](https://github.com/orgs/koedame/projects/1)
+   at the moment work actually starts — i.e. the first commit or worktree
+   creation, not at planning time. Issues still sitting in Todo while a
+   PR exists against them are a signal that this step was skipped.
+3. Create worktree + branch from latest `main`.
+4. Implement (commits reference issue: `Part of #N` or `Closes #N`).
+5. Open PR (title references issue, body has `Closes #N`).
+6. CI -> auto-review (severity classification) -> human merge.
    See [Pull Request Workflow](pr-workflow.md) for details. Bots do not merge in
    this repo; a human inspects the check rollup and performs the squash merge.
-6. Cleanup worktree.
+7. After merge, the project-board automation moves the issue to Done via
+   the linked `Closes #N`; no manual status flip is needed.
+8. Cleanup worktree.
+
+### Updating Project Board Status
+
+The board's Status field has three options: **Todo**, **In Progress**, **Done**.
+Use `gh` to flip an issue to In Progress:
+
+```bash
+# 1. Resolve the issue's project-item ID.
+ITEM_ID=$(gh api graphql -f query='
+  { repository(owner: "koedame", name: "chordsketch") {
+      issue(number: '"$N"') { projectItems(first: 5) { nodes { id } } } } }
+  ' --jq '.data.repository.issue.projectItems.nodes[0].id')
+
+# 2. Set Status = In Progress.
+gh api graphql -f query='
+  mutation {
+    updateProjectV2ItemFieldValue(input: {
+      projectId: "PVT_kwDOBCeHxM4BTI0L"
+      itemId: "'"$ITEM_ID"'"
+      fieldId: "PVTSSF_lADOBCeHxM4BTI0LzhAd1Rw"
+      value: { singleSelectOptionId: "47fc9ee4" }
+    }) { projectV2Item { id } } }'
+```
+
+The single-select option IDs are stable: `f75ad846` = Todo,
+`47fc9ee4` = In Progress, `98236657` = Done. Batch multiple issues by
+iterating over a list of numbers.
 
 ## Closing an Issue Without Implementing It
 
