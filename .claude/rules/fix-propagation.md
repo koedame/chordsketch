@@ -31,7 +31,7 @@ Any fix to one binding's public API surface MUST be audited across all three:
 - API shape consistency (options structs, return types)
 
 ### External tool invocations
-`invoke_abc2svg`, `invoke_lilypond`, `invoke_musescore` in `crates/core/src/external_tool.rs`
+`invoke_abc2svg`, `invoke_lilypond`, `invoke_musescore` in `crates/chordpro/src/external_tool.rs`
 
 Any security or resource-management fix applied to one invocation function MUST be
 applied to all (e.g., `O_EXCL` temp file creation, RAII cleanup, JavaScript/script
@@ -39,7 +39,7 @@ stripping for user-supplied notation content).
 
 ### Sanitizer functions and blocklists
 `has_dangerous_uri_scheme`, `is_uri_attr`, `DANGEROUS_TAGS`, `is_safe_image_src`
-in `crates/render-html/src/lib.rs`; `sanitize_directive_token` in `crates/core/`
+in `crates/render-html/src/lib.rs`; `sanitize_directive_token` in `crates/chordpro/`
 
 Any addition to one URI-scheme denylist, tag blocklist, or attribute allowlist MUST be
 cross-checked against all sibling lists for the same class of risk.
@@ -78,7 +78,7 @@ Each sister-site group carries a numeric coverage floor enforced by
 |---|---|---|
 | Renderers (`render-text`, `render-html`, `render-pdf`) | 80% | 5 pp |
 | Bindings (`chordsketch-ffi`, `chordsketch-napi`, `chordsketch-wasm`) | 70% | 10 pp |
-| `chordsketch-core` (standalone) | 85% | — |
+| `chordsketch-chordpro` (standalone) | 85% | — |
 | Patch (new lines in any PR) | 70% | — |
 
 Intra-group skew is not enforced natively by Codecov; it is verified by

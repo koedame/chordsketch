@@ -15,7 +15,7 @@ description = "UniFFI bindings for ChordPro parsing and rendering"
 crate-type = ["cdylib", "staticlib", "lib"]
 
 [dependencies]
-chordsketch-core = { version = "0.2.2", path = "../core" }
+chordsketch-chordpro = { version = "0.2.2", path = "../chordpro" }
 chordsketch-render-text = { version = "0.2.2", path = "../render-text" }
 chordsketch-render-html = { version = "0.2.2", path = "../render-html" }
 chordsketch-render-pdf = { version = "0.2.2", path = "../render-pdf" }

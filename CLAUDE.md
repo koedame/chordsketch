@@ -27,16 +27,16 @@ This is a Cargo workspace with the following crates:
 
 | Crate | Path | Kind | Dependencies |
 |---|---|---|---|
-| `chordsketch-core` | `crates/core` | lib | *none* (zero external deps) |
-| `chordsketch-render-text` | `crates/render-text` | lib | `chordsketch-core` |
-| `chordsketch-render-html` | `crates/render-html` | lib | `chordsketch-core` |
-| `chordsketch-render-pdf` | `crates/render-pdf` | lib | `chordsketch-core` |
-| `chordsketch-convert-musicxml` | `crates/convert-musicxml` | lib | `chordsketch-core` |
-| `chordsketch` (CLI) | `crates/cli` | bin | `chordsketch-core`, `chordsketch-render-text`, `chordsketch-render-html`, `chordsketch-render-pdf`, `chordsketch-convert-musicxml` |
-| `chordsketch-lsp` | `crates/lsp` | bin | `chordsketch-core`, `tower-lsp`, `tokio` |
-| `chordsketch-wasm` | `crates/wasm` | cdylib | `chordsketch-core`, all renderers, `wasm-bindgen`, `serde` |
-| `chordsketch-ffi` | `crates/ffi` | cdylib/staticlib/lib | `chordsketch-core`, all renderers, `uniffi`, `thiserror` |
-| `chordsketch-napi` | `crates/napi` | cdylib | `chordsketch-core`, all renderers, `napi`, `napi-derive` |
+| `chordsketch-chordpro` | `crates/chordpro` | lib | *none* (zero external deps) |
+| `chordsketch-render-text` | `crates/render-text` | lib | `chordsketch-chordpro` |
+| `chordsketch-render-html` | `crates/render-html` | lib | `chordsketch-chordpro` |
+| `chordsketch-render-pdf` | `crates/render-pdf` | lib | `chordsketch-chordpro` |
+| `chordsketch-convert-musicxml` | `crates/convert-musicxml` | lib | `chordsketch-chordpro` |
+| `chordsketch` (CLI) | `crates/cli` | bin | `chordsketch-chordpro`, `chordsketch-render-text`, `chordsketch-render-html`, `chordsketch-render-pdf`, `chordsketch-convert-musicxml` |
+| `chordsketch-lsp` | `crates/lsp` | bin | `chordsketch-chordpro`, `tower-lsp`, `tokio` |
+| `chordsketch-wasm` | `crates/wasm` | cdylib | `chordsketch-chordpro`, all renderers, `wasm-bindgen`, `serde` |
+| `chordsketch-ffi` | `crates/ffi` | cdylib/staticlib/lib | `chordsketch-chordpro`, all renderers, `uniffi`, `thiserror` |
+| `chordsketch-napi` | `crates/napi` | cdylib | `chordsketch-chordpro`, all renderers, `napi`, `napi-derive` |
 
 Additionally, these non-Rust packages exist:
 
@@ -58,9 +58,9 @@ Additionally, these non-Rust packages exist:
 
 ### Dependency Policy
 
-- `chordsketch-core` must have **zero external dependencies**. All parsing and AST logic
+- `chordsketch-chordpro` must have **zero external dependencies**. All parsing and AST logic
   is implemented from scratch.
-- Renderer crates may depend only on `chordsketch-core` and, when justified, minimal
+- Renderer crates may depend only on `chordsketch-chordpro` and, when justified, minimal
   external crates.
 - The CLI crate may use external crates for argument parsing, I/O, etc.
 

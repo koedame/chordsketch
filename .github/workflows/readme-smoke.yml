@@ -485,7 +485,7 @@ jobs:
           SCRATCH=/tmp/library-smoke
           mkdir -p "$SCRATCH/src"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            CORE_DEP="chordsketch-core = { path = \"$GITHUB_WORKSPACE/crates/core\" }"
+            CORE_DEP="chordsketch-chordpro = { path = \"$GITHUB_WORKSPACE/crates/chordpro\" }"
             RENDER_DEP="chordsketch-render-text = { path = \"$GITHUB_WORKSPACE/crates/render-text\" }"
             MODE="workspace path deps (PR)"
           else
@@ -494,7 +494,7 @@ jobs:
             # Bump policy: when the workspace bumps to 0.2.x, update both
             # constraints below to `^0.2` in the same release PR.
             # Otherwise, daily smoke tests will silently stop resolving.
-            CORE_DEP='chordsketch-core = "^0.2"'
+            CORE_DEP='chordsketch-chordpro = "^0.2"'
             RENDER_DEP='chordsketch-render-text = "^0.2"'
             MODE="crates.io published"
           fi
@@ -511,7 +511,7 @@ jobs:
           $RENDER_DEP
           EOF
           cat > "$SCRATCH/src/main.rs" << 'EOF'
-          use chordsketch_core::parser::parse;
+          use chordsketch_chordpro::parser::parse;
           use chordsketch_render_text::render_song;
 
           fn main() {

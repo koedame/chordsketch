@@ -1,0 +1,1461 @@
+//! Heuristic plain-text chord+lyrics importer.
+//!
+//! This module detects and converts plain-text chord sheets — where chord names
+//! appear on their own lines above the corresponding lyric lines — into the
+//! ChordPro [`Song`] AST.
+//!
+//! # Format
+//!
+//! Plain-text chord sheets look like:
+//!
+//! ```text
+//! [Verse]
+//! Am        F         C         G
+//! There's a lady who's sure all that glitters is gold
+//! ```
+//!
+//! Each "chord line" contains only chord names (whitespace-separated), and the
+//! following "lyric line" contains the sung text. The column position of each
+//! chord in the chord line is preserved as an inline annotation over the
+//! corresponding text in the lyric line.
+//!
+//! # Detection
+//!
+//! Use [`detect_format`] to auto-classify an input string, or
+//! [`PlainTextImporter::detect_format`] to use custom thresholds.
+//!
+//! # Conversion
+//!
+//! Use [`convert_plain_text`] to convert a plain-text chord sheet into a
+//! [`Song`], or [`PlainTextImporter::convert`] to use custom thresholds.
+
+use crate::ast::{Chord, Directive, Line, LyricsLine, LyricsSegment, Song};
+
+// ---------------------------------------------------------------------------
+// InputFormat
+// ---------------------------------------------------------------------------
+
+/// Classification of an input text format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputFormat {
+    /// The input is ChordPro format (directives or inline chord notation).
+    ChordPro,
+    /// The input is a plain chord+lyrics sheet.
+    PlainChordLyrics,
+    /// The input is ABC notation.
+    Abc,
+    /// The format could not be determined.
+    Unknown,
+}
+
+// ---------------------------------------------------------------------------
+// PlainTextImporter
+// ---------------------------------------------------------------------------
+
+/// Configuration for the plain-text heuristic importer.
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::heuristic::{PlainTextImporter, InputFormat};
+///
+/// let importer = PlainTextImporter::new();
+/// let format = importer.detect_format("Am  G  C\nHello world here\n");
+/// assert_eq!(format, InputFormat::PlainChordLyrics);
+/// ```
+#[derive(Debug, Clone)]
+pub struct PlainTextImporter {
+    /// Minimum fraction of whitespace-separated tokens that must be valid chord
+    /// names for a line to be classified as a chord line. Default: `0.5`.
+    ///
+    /// **Valid range: `[0.0, 1.0]`.**
+    /// - `0.0` — every non-empty, non-punctuated line is classified as a chord
+    ///   line regardless of content.
+    /// - `1.0` — all tokens must be valid chord names for the line to qualify.
+    /// - Values above `1.0` disable chord-line detection entirely (the ratio of
+    ///   chord tokens can never exceed `1.0`).
+    /// - Negative values behave like `0.0`.
+    ///
+    /// Prefer [`PlainTextImporter::with_thresholds`] to construct an importer
+    /// with validated values.
+    pub chord_threshold: f64,
+    /// Minimum number of chord tokens required to classify a line as a chord
+    /// line. Default: `2`.
+    ///
+    /// **Valid range: `>= 1`.**
+    /// Setting this to `0` disables the minimum-count guard: any non-empty,
+    /// non-punctuated line that meets [`chord_threshold`][Self::chord_threshold]
+    /// will be classified as a chord line, even if it contains only a single
+    /// token.
+    ///
+    /// Prefer [`PlainTextImporter::with_thresholds`] to construct an importer
+    /// with validated values.
+    pub min_chord_tokens: usize,
+}
+
+impl Default for PlainTextImporter {
+    fn default() -> Self {
+        Self {
+            chord_threshold: 0.5,
+            min_chord_tokens: 2,
+        }
+    }
+}
+
+impl PlainTextImporter {
+    /// Creates a new importer with default threshold settings.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a new importer with explicit threshold values, returning an
+    /// error string if any value is out of its valid range.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if:
+    /// - `chord_threshold` is not in `[0.0, 1.0]`
+    /// - `min_chord_tokens` is `0`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chordsketch_chordpro::heuristic::PlainTextImporter;
+    ///
+    /// // Valid mid-range value.
+    /// let importer = PlainTextImporter::with_thresholds(0.75, 3).unwrap();
+    /// assert_eq!(importer.chord_threshold, 0.75);
+    /// assert_eq!(importer.min_chord_tokens, 3);
+    ///
+    /// // Boundary values are valid.
+    /// assert!(PlainTextImporter::with_thresholds(0.0, 1).is_ok());
+    /// assert!(PlainTextImporter::with_thresholds(1.0, 1).is_ok());
+    ///
+    /// // Out-of-range values are rejected.
+    /// assert!(PlainTextImporter::with_thresholds(1.5, 2).is_err());
+    /// assert!(PlainTextImporter::with_thresholds(-0.1, 2).is_err());
+    /// assert!(PlainTextImporter::with_thresholds(f64::NAN, 2).is_err());
+    /// assert!(PlainTextImporter::with_thresholds(0.5, 0).is_err());
+    /// ```
+    #[must_use = "this `Result` should be handled; use `.unwrap()` or `?` to obtain the configured importer"]
+    pub fn with_thresholds(chord_threshold: f64, min_chord_tokens: usize) -> Result<Self, String> {
+        if !(0.0..=1.0).contains(&chord_threshold) {
+            return Err(format!(
+                "chord_threshold must be in [0.0, 1.0], got {chord_threshold}"
+            ));
+        }
+        if min_chord_tokens == 0 {
+            return Err("min_chord_tokens must be >= 1".to_string());
+        }
+        Ok(Self {
+            chord_threshold,
+            min_chord_tokens,
+        })
+    }
+
+    /// Returns `true` if `line` appears to be a chord line.
+    ///
+    /// A chord line satisfies all of the following conditions:
+    /// - Contains at least [`min_chord_tokens`][Self::min_chord_tokens] tokens
+    ///   that parse as valid chord names.
+    /// - The fraction of valid chord tokens is ≥
+    ///   [`chord_threshold`][Self::chord_threshold].
+    /// - Does not contain sentence-ending punctuation (`.`, `?`, `!`), which
+    ///   is a strong indicator that the line is lyrics.
+    fn is_chord_line(&self, line: &str) -> bool {
+        // Sentence-ending punctuation strongly indicates lyrics.
+        if line.contains('.') || line.contains('?') || line.contains('!') {
+            return false;
+        }
+        let tokens: Vec<&str> = line.split_whitespace().collect();
+        if tokens.is_empty() {
+            return false;
+        }
+        let chord_count = tokens.iter().filter(|t| is_chord_token(t)).count();
+        chord_count >= self.min_chord_tokens
+            && chord_count as f64 / tokens.len() as f64 >= self.chord_threshold
+    }
+
+    /// Detects the input format using heuristics.
+    ///
+    /// Returns [`InputFormat::ChordPro`] if the input appears to be ChordPro
+    /// (directive braces or inline `[chord]` notation).
+    /// Returns [`InputFormat::PlainChordLyrics`] if the input contains at least
+    /// two chord lines.
+    /// Returns [`InputFormat::Unknown`] otherwise.
+    #[must_use]
+    pub fn detect_format(&self, input: &str) -> InputFormat {
+        let lines: Vec<&str> = input.lines().collect();
+
+        // ChordPro directive syntax: a line whose first non-space character is
+        // `{` and last non-space character is `}`.
+        let has_directives = lines.iter().any(|l| {
+            let t = l.trim();
+            t.starts_with('{') && t.ends_with('}')
+        });
+        if has_directives {
+            return InputFormat::ChordPro;
+        }
+
+        // ChordPro inline chord notation: `[Am]`, `[G7]`, etc.
+        // Distinguish from plain-text section labels like `[Verse]` or `[Chorus 2]`
+        // by checking whether the content inside `[...]` is a valid chord name.
+        //
+        // A whole-line bracket (the trimmed line is exactly `[content]`) is
+        // treated as a section header — not inline chord notation — because
+        // `parse_section_header` already classifies it that way during
+        // conversion. This prevents single-letter key indicators like `[C]`
+        // or `[Am]` from triggering a false ChordPro classification.
+        //
+        // Known limitation (issue #1304): a directive-free ChordPro file that
+        // uses *only* whole-line bracket chords (e.g. `[Am]` alone on its own
+        // line immediately before a lyric) will be classified as `Unknown`
+        // rather than `ChordPro`, because such lines are indistinguishable
+        // from plain-text key/section labels without lookahead context that
+        // would risk introducing new false positives. Files with at least one
+        // `{directive}` or one mid-line inline chord (e.g., `Hello [Am]world`)
+        // are not affected.
+        let has_inline_chords = lines.iter().any(|l| {
+            let trimmed = l.trim();
+            // Skip whole-line brackets: `[content]` where content has no nested `[`.
+            if trimmed.starts_with('[')
+                && trimmed.ends_with(']')
+                && trimmed.len() >= 3
+                && !trimmed[1..trimmed.len() - 1].contains('[')
+            {
+                return false;
+            }
+            let mut rest: &str = l;
+            while let Some(open) = rest.find('[') {
+                let after = &rest[open + 1..];
+                let Some(close) = after.find(']') else { break };
+                let content = &after[..close];
+                if is_chord_token(content) {
+                    return true;
+                }
+                rest = &after[close + 1..];
+            }
+            false
+        });
+        if has_inline_chords {
+            return InputFormat::ChordPro;
+        }
+
+        // ABC notation: at least one `X:` reference-number field followed by
+        // digits (the mandatory field that begins every ABC tune).
+        let has_abc_header = lines.iter().any(|l| {
+            let t = l.trim_start();
+            if let Some(rest) = t.strip_prefix("X:") {
+                rest.trim_start()
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_digit())
+            } else {
+                false
+            }
+        });
+        if has_abc_header {
+            return InputFormat::Abc;
+        }
+
+        // Plain chord+lyrics: at least two chord lines.
+        let chord_line_count = lines.iter().filter(|l| self.is_chord_line(l)).count();
+        if chord_line_count >= 2 {
+            InputFormat::PlainChordLyrics
+        } else if chord_line_count == 1 && lines.len() <= 5 {
+            // Very short input with one chord line is still treated as plain
+            // chord+lyrics (e.g., a two-line snippet passed for testing).
+            InputFormat::PlainChordLyrics
+        } else {
+            InputFormat::Unknown
+        }
+    }
+
+    /// Converts a plain chord+lyrics text into a [`Song`] AST.
+    ///
+    /// # Algorithm
+    ///
+    /// 1. Classify each line as a chord line, section header, lyric, or blank.
+    /// 2. Pair each chord line with the immediately following lyric line.
+    ///    For each such pair, compute chord column offsets and produce inline
+    ///    chord annotations.
+    /// 3. Section headers are converted to `{start_of_*}` / `{end_of_*}`
+    ///    directive pairs.
+    /// 4. Lines that are neither chord lines nor section headers are emitted as
+    ///    plain lyric lines.
+    #[must_use]
+    pub fn convert(&self, input: &str) -> Song {
+        let raw_lines: Vec<&str> = input.lines().collect();
+        let classes: Vec<LineKind<'_>> = raw_lines
+            .iter()
+            .map(|l| classify_line(l, |line| self.is_chord_line(line)))
+            .collect();
+
+        let mut song = Song::new();
+        let mut i = 0;
+        let mut current_section: Option<String> = None;
+
+        while i < classes.len() {
+            match &classes[i] {
+                LineKind::Blank => {
+                    song.lines.push(Line::Empty);
+                    i += 1;
+                }
+                LineKind::SectionHeader(label) => {
+                    let label = label.clone();
+                    // Close any open section.
+                    if let Some(ref sec) = current_section {
+                        song.lines
+                            .push(Line::Directive(end_directive_for_section(sec)));
+                    }
+                    // Open the new section.
+                    let (start_dir, canonical) = start_directive_for_section(&label);
+                    song.lines.push(Line::Directive(start_dir));
+                    current_section = Some(canonical);
+                    i += 1;
+                }
+                LineKind::ChordLine(positions) => {
+                    // Peek at the next non-blank line: if it is a lyric, pair them.
+                    let j = i + 1;
+                    if j < classes.len() {
+                        if let LineKind::Lyric(lyric) = &classes[j] {
+                            let paired = pair_chords_with_lyric(positions, lyric);
+                            song.lines.push(Line::Lyrics(paired));
+                            i += 2;
+                            continue;
+                        }
+                    }
+                    // No following lyric — emit the chords as a chord-only line.
+                    let paired = pair_chords_with_lyric(positions, "");
+                    song.lines.push(Line::Lyrics(paired));
+                    i += 1;
+                }
+                LineKind::Lyric(text) => {
+                    song.lines.push(Line::Lyrics(LyricsLine {
+                        segments: vec![LyricsSegment {
+                            chord: None,
+                            text: (*text).to_string(),
+                            spans: vec![],
+                        }],
+                    }));
+                    i += 1;
+                }
+            }
+        }
+
+        // Close the last open section.
+        if let Some(ref sec) = current_section {
+            song.lines
+                .push(Line::Directive(end_directive_for_section(sec)));
+        }
+
+        song
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Module-level convenience functions
+// ---------------------------------------------------------------------------
+
+/// Detects the format of `input` using default [`PlainTextImporter`] settings.
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::heuristic::{detect_format, InputFormat};
+///
+/// assert_eq!(
+///     detect_format("{title: My Song}\n[Am]Hello"),
+///     InputFormat::ChordPro
+/// );
+/// assert_eq!(
+///     detect_format("Am  G  C\nHello world\n"),
+///     InputFormat::PlainChordLyrics
+/// );
+/// ```
+#[must_use]
+pub fn detect_format(input: &str) -> InputFormat {
+    PlainTextImporter::default().detect_format(input)
+}
+
+/// Converts a plain chord+lyrics text into a [`Song`] AST using default
+/// [`PlainTextImporter`] settings.
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::heuristic::convert_plain_text;
+///
+/// let song = convert_plain_text("Am  G\nHello world\n");
+/// assert!(!song.lines.is_empty());
+/// ```
+#[must_use]
+pub fn convert_plain_text(input: &str) -> Song {
+    PlainTextImporter::default().convert(input)
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/// Classification of a single input line.
+#[derive(Debug)]
+enum LineKind<'a> {
+    /// A blank (empty or all-whitespace) line.
+    Blank,
+    /// A section header like `[Verse]` or `CHORUS:`.
+    /// Contains the inner label text.
+    SectionHeader(String),
+    /// A chord line. Contains `(byte_offset, chord_name)` pairs, sorted by
+    /// byte offset.
+    ChordLine(Vec<(usize, String)>),
+    /// A lyric (or unrecognised) line.
+    Lyric(&'a str),
+}
+
+/// Classifies a single line using the supplied chord-line predicate.
+fn classify_line<'a, F>(line: &'a str, is_chord_line: F) -> LineKind<'a>
+where
+    F: Fn(&str) -> bool,
+{
+    if line.trim().is_empty() {
+        return LineKind::Blank;
+    }
+    if let Some(label) = parse_section_header(line) {
+        return LineKind::SectionHeader(label);
+    }
+    if is_chord_line(line) {
+        return LineKind::ChordLine(chord_positions(line));
+    }
+    LineKind::Lyric(line)
+}
+
+/// Returns `true` if `token` is a well-formed chord name.
+///
+/// This is a stricter check than [`parse_chord`]: it rejects tokens whose
+/// extension part contains unexpected alphabetic characters (e.g., `"Chorus"`
+/// would be parsed as `C + "horus"` by `parse_chord`, but is rejected here).
+///
+/// Accepted patterns:
+/// - Root `A–G` with optional `#` / `b`
+/// - Zero or more quality+extension atoms: a quality keyword (`m`, `maj`,
+///   `min`, `dim`, `aug`, `sus`, `add`, `+`, `°`) optionally followed by a
+///   numeric extension (e.g. `m7add11`, `maj7sus4`, `7b5`)
+/// - Optional bass note: `/A–G[#b]`
+fn is_chord_token(token: &str) -> bool {
+    // Reject obviously non-chord tokens.  16 characters covers multi-component
+    // jazz chords like Dbmaj7#11sus4b9 (15 chars) while still catching long words.
+    if token.is_empty() || token.len() > 16 {
+        return false;
+    }
+    let bytes = token.as_bytes();
+
+    // Root note: must be A–G (uppercase).
+    if !matches!(bytes[0], b'A'..=b'G') {
+        return false;
+    }
+
+    // Split off optional bass note (/X[#b]).
+    let (body, bass) = match token.find('/') {
+        Some(i) => (&token[..i], Some(&token[i + 1..])),
+        None => (token, None),
+    };
+
+    // Validate bass note.
+    if let Some(bass) = bass {
+        if bass.is_empty() {
+            return false;
+        }
+        let b = bass.as_bytes();
+        if !matches!(b[0], b'A'..=b'G') {
+            return false;
+        }
+        if b.len() > 1 && b[1] != b'#' && b[1] != b'b' {
+            return false;
+        }
+        if b.len() > 2 {
+            return false;
+        }
+    }
+
+    // Validate body: root [accidental] [quality] [extension]
+    let body_bytes = body.as_bytes();
+    let mut pos = 1usize; // skip root letter
+
+    // Optional accidental.
+    if pos < body_bytes.len() && (body_bytes[pos] == b'#' || body_bytes[pos] == b'b') {
+        pos += 1;
+    }
+
+    let quality_ext = &body[pos..];
+    is_valid_quality_ext(quality_ext)
+}
+
+/// Consumes an optional accidental (`#` or `b`, only when immediately
+/// followed by a digit) and then any run of ASCII digits.  Returns the
+/// unconsumed suffix.
+fn consume_numeric(s: &str) -> &str {
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    // Accidental only counts when a digit follows it.
+    if bytes.len() >= 2 && (bytes[0] == b'#' || bytes[0] == b'b') && bytes[1].is_ascii_digit() {
+        i = 1;
+    }
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    &s[i..]
+}
+
+/// Returns `true` if `s` is a valid chord quality+extension suffix.
+///
+/// The suffix is consumed iteratively: each step strips one quality keyword
+/// (`maj`, `min`, `dim`, `aug`, `sus`, `add`, `m`, `+`, `°`) optionally
+/// followed by a numeric extension (optional `#`/`b` accidental then digits).
+/// This allows compound forms such as `m7add11`, `maj7sus4`, or `7b5`.
+///
+/// Acceptable atoms (zero or more, in any order):
+/// - Quality keyword: `maj`, `min`, `dim`, `aug`, `sus`, `add`, `m`, `+`, `°`
+/// - Numeric extension: optional accidental (`#`/`b`, only if a digit follows)
+///   then one or more digits
+fn is_valid_quality_ext(s: &str) -> bool {
+    let mut rest = s;
+    loop {
+        if rest.is_empty() {
+            return true;
+        }
+
+        // Try to strip a quality keyword.
+        let after_kw: Option<&str> = None
+            .or_else(|| rest.strip_prefix("maj"))
+            .or_else(|| rest.strip_prefix("min"))
+            .or_else(|| rest.strip_prefix("dim"))
+            .or_else(|| rest.strip_prefix("aug"))
+            .or_else(|| rest.strip_prefix("sus"))
+            .or_else(|| rest.strip_prefix("add"))
+            .or_else(|| rest.strip_prefix('m'))
+            .or_else(|| rest.strip_prefix('+'))
+            .or_else(|| rest.strip_prefix('°'));
+
+        if let Some(after) = after_kw {
+            // Keyword consumed; optionally consume a following numeric part.
+            rest = consume_numeric(after);
+        } else {
+            // No keyword — try a bare numeric extension.
+            let next = consume_numeric(rest);
+            if next.len() == rest.len() {
+                // Nothing consumed: unrecognized character.
+                return false;
+            }
+            rest = next;
+        }
+    }
+}
+
+/// Extracts `(byte_offset, chord_name)` pairs from a chord line, preserving
+/// the column position of each chord token.
+fn chord_positions(line: &str) -> Vec<(usize, String)> {
+    // Walk the string once with byte offsets. Previously this delegated to
+    // `split_whitespace` + `str::find` with a cumulative search offset,
+    // which required the caller to hold the invariant that every token
+    // occurs exactly once in the remaining slice at its natural position.
+    // Tracking the position directly sidesteps the issue entirely and
+    // never re-scans the line.
+    let mut result = Vec::new();
+    let bytes = line.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
+
+    while i < len {
+        // Skip whitespace. ASCII is fine here because `char::is_whitespace`
+        // for any non-ASCII whitespace codepoint is not something a chord
+        // line is expected to contain, and ASCII whitespace is all 1 byte.
+        if bytes[i].is_ascii_whitespace() {
+            i += 1;
+            continue;
+        }
+
+        // Token runs from `i` to the next ASCII-whitespace byte. Non-ASCII
+        // bytes inside the token are forwarded byte-by-byte; `is_chord_token`
+        // rejects any token that is not pure ASCII chord syntax.
+        let start = i;
+        while i < len && !bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        let token = &line[start..i];
+        if is_chord_token(token) {
+            result.push((start, token.to_string()));
+        }
+    }
+    result
+}
+
+/// Attempts to parse `line` as a section header.
+///
+/// Recognised patterns:
+/// - `[Verse]`, `[Chorus 2]` — square brackets
+/// - `(Bridge)` — parentheses
+/// - `VERSE:`, `CHORUS:` — uppercase label followed by a colon
+/// - `-- Chorus --`, `== Verse ==` — dash or equals decoration
+///
+/// Returns the inner label on success, or `None` if the line is not a section
+/// header.
+fn parse_section_header(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+
+    /// Returns `true` if `label` is safe to embed in a ChordPro directive
+    /// value.  Rejects labels containing `{` or `}` because ChordPro has no
+    /// escape mechanism inside directive values and those characters would
+    /// produce malformed output.
+    fn is_safe_label(label: &str) -> bool {
+        !label.is_empty() && !label.contains('{') && !label.contains('}')
+    }
+
+    // [Label] form
+    if trimmed.starts_with('[') && trimmed.ends_with(']') && trimmed.len() >= 3 {
+        let inner = trimmed[1..trimmed.len() - 1].trim();
+        if !inner.contains('[') && is_safe_label(inner) {
+            return Some(inner.to_string());
+        }
+    }
+
+    // (Label) form
+    if trimmed.starts_with('(') && trimmed.ends_with(')') && trimmed.len() >= 3 {
+        let inner = trimmed[1..trimmed.len() - 1].trim();
+        if !inner.contains('(') && is_safe_label(inner) {
+            return Some(inner.to_string());
+        }
+    }
+
+    // LABEL: form — alphabetic label followed by exactly one colon
+    if let Some(label) = trimmed.strip_suffix(':') {
+        if label
+            .chars()
+            .all(|c| c.is_alphabetic() || c == ' ' || c == '-')
+            && is_safe_label(label.trim())
+        {
+            return Some(label.trim().to_string());
+        }
+    }
+
+    // -- Label -- and == Label == forms
+    for delim in &["--", "==", "**", "##"] {
+        if trimmed.starts_with(delim) && trimmed.ends_with(delim) && trimmed.len() > 2 * delim.len()
+        {
+            let inner = trimmed[delim.len()..trimmed.len() - delim.len()].trim();
+            if is_safe_label(inner) {
+                return Some(inner.to_string());
+            }
+        }
+    }
+
+    None
+}
+
+/// Maps a section label to its canonical ChordPro directive base name.
+///
+/// For example, `"verse"` → `"verse"`, `"chorus 2"` → `"chorus"`.
+/// Unknown labels fall back to `"verse"` with a label attribute.
+fn canonical_section(label: &str) -> &'static str {
+    let lower = label.to_lowercase();
+    let lower = lower.trim();
+    if lower.starts_with("chorus") || lower.starts_with("refrain") {
+        "chorus"
+    } else if lower.starts_with("bridge") {
+        "bridge"
+    } else {
+        // verse, intro, outro, pre-chorus, and unknown labels all map to "verse".
+        "verse"
+    }
+}
+
+/// Returns the `{start_of_*}` directive for the given label, plus the
+/// canonical section name used to match the closing directive.
+fn start_directive_for_section(label: &str) -> (Directive, String) {
+    let canonical = canonical_section(label);
+    let dir_name = format!("start_of_{canonical}");
+    // Include the label as a `label` attribute when the label text differs from
+    // the canonical section name (e.g., "Verse 2", "Intro").
+    let lower_label = label.trim().to_lowercase();
+    let dir = if lower_label == canonical {
+        Directive::name_only(dir_name)
+    } else {
+        Directive::with_value(dir_name, label.trim().to_string())
+    };
+    (dir, canonical.to_string())
+}
+
+/// Returns the `{end_of_*}` directive for the given canonical section name.
+fn end_directive_for_section(canonical: &str) -> Directive {
+    let dir_name = format!("end_of_{canonical}");
+    Directive::name_only(dir_name)
+}
+
+/// Builds a [`LyricsLine`] by pairing chord column positions with the
+/// corresponding lyric text.
+///
+/// Each chord annotates the lyric text starting at its column position in the
+/// chord line. Text that precedes the first chord is emitted in a leading
+/// chord-free segment.
+///
+/// If `positions` is empty the function returns a single chord-free segment
+/// containing the full `lyric` string (rather than an empty `LyricsLine`).
+fn pair_chords_with_lyric(positions: &[(usize, String)], lyric: &str) -> LyricsLine {
+    // Fast path: no chord positions — return the lyric as a single plain segment.
+    if positions.is_empty() {
+        return LyricsLine {
+            segments: vec![LyricsSegment {
+                chord: None,
+                text: lyric.to_string(),
+                spans: vec![],
+            }],
+        };
+    }
+
+    // Work in terms of char indices for correctness with multi-byte text, but
+    // chord positions from `chord_positions` are byte offsets into the ASCII
+    // chord line. Because chord lines are expected to be ASCII (chord names),
+    // byte == char for the chord line. We must, however, map those byte offsets
+    // to char offsets in the lyric line for correct slicing.
+    let lyric_char_offsets: Vec<usize> = lyric.char_indices().map(|(b, _)| b).collect();
+    let lyric_len = lyric.len();
+
+    // Maps a byte offset from the (ASCII) chord line to a valid byte offset in
+    // the lyric string, clamped to lyric_len.  When col is beyond the end of
+    // the lyric we return lyric_len (no text to annotate).  For shorter cols
+    // we snap to the nearest char boundary so we never slice in the middle of
+    // a multi-byte codepoint.
+    let clamp_to_lyric = |col: usize| -> usize {
+        if col >= lyric_len {
+            return lyric_len;
+        }
+        // Snap down to the nearest char-boundary offset that does not exceed col.
+        lyric_char_offsets
+            .iter()
+            .copied()
+            .rfind(|&b| b <= col)
+            .unwrap_or(0)
+    };
+
+    let mut segments: Vec<LyricsSegment> = Vec::new();
+    let mut cursor = 0usize; // byte position in lyric
+
+    for (i, (col, chord_name)) in positions.iter().enumerate() {
+        let text_start = clamp_to_lyric(*col);
+        let text_end = if let Some((next_col, _)) = positions.get(i + 1) {
+            clamp_to_lyric(*next_col)
+        } else {
+            lyric_len // last chord gets all remaining lyric text
+        };
+
+        // Any lyric text before this chord position (after the cursor) without
+        // a chord annotation.
+        if text_start > cursor {
+            segments.push(LyricsSegment {
+                chord: None,
+                text: lyric[cursor..text_start].to_string(),
+                spans: vec![],
+            });
+        }
+
+        // text_start is always <= lyric_len by construction of clamp_to_lyric.
+        let text = lyric[text_start..text_end.min(lyric_len)].to_string();
+
+        segments.push(LyricsSegment {
+            chord: Some(Chord::new(chord_name.as_str())),
+            text,
+            spans: vec![],
+        });
+        cursor = text_end.min(lyric_len);
+    }
+
+    // positions was non-empty, so segments is non-empty and cursor == lyric_len.
+    LyricsLine { segments }
+}
+
+// ---------------------------------------------------------------------------
+// ChordPro serializer for plain-text-imported songs
+// ---------------------------------------------------------------------------
+
+/// Strips characters from a string so it is safe to embed as a ChordPro
+/// directive name or value.
+///
+/// Four characters are removed: `{`, `}`, `\n`, `\r`. Braces would produce
+/// malformed output (ChordPro has no escape syntax for braces inside directive
+/// names or values); newlines would split the directive across multiple output
+/// lines, leaving no closing `}` on the first line and producing invalid
+/// ChordPro. See issues #1824 and #1883.
+fn sanitize_directive_token(s: &str) -> std::borrow::Cow<'_, str> {
+    if s.as_bytes()
+        .iter()
+        .any(|&b| matches!(b, b'{' | b'}' | b'\n' | b'\r'))
+    {
+        std::borrow::Cow::Owned(s.replace(['{', '}', '\n', '\r'], ""))
+    } else {
+        std::borrow::Cow::Borrowed(s)
+    }
+}
+
+/// Strips characters that would be interpreted as ChordPro structure when a
+/// string is emitted into the **lyric** position of a line.
+///
+/// Six characters are removed: `{`, `}`, `[`, `]`, `\n`, `\r`. Braces
+/// start a directive (`{title: HACKED}`) and square brackets start an
+/// inline chord annotation (`[Cmaj7]`); newlines would split the lyric
+/// across multiple output lines, producing malformed ChordPro whose
+/// second line is a bare text token no standard parser would emit from
+/// structured input. ChordPro has no escape syntax for any of these
+/// inside plain lyric text, so stripping is the only safe option —
+/// matching the `sanitize_directive_token` approach used for directive
+/// names/values. See issues #1824 (directive-injection guard) and
+/// #1883 (well-formedness under embedded newlines).
+fn sanitize_lyric_text(s: &str) -> std::borrow::Cow<'_, str> {
+    if s.as_bytes()
+        .iter()
+        .any(|&b| matches!(b, b'{' | b'}' | b'[' | b']' | b'\n' | b'\r'))
+    {
+        std::borrow::Cow::Owned(s.replace(['{', '}', '[', ']', '\n', '\r'], ""))
+    } else {
+        std::borrow::Cow::Borrowed(s)
+    }
+}
+
+/// Strips characters that would be interpreted as ChordPro structure when a
+/// string is emitted inside a **chord annotation** (`[…]`). Six characters
+/// are removed — the same set as `sanitize_lyric_text`. `]` would close
+/// the annotation early; braces are unusual in chord names but stripped
+/// for parity; newlines would split the `[…]` annotation across lines
+/// (unrecoverable for any standard parser) (issues #1824 and #1883).
+fn sanitize_chord_name(s: &str) -> std::borrow::Cow<'_, str> {
+    if s.as_bytes()
+        .iter()
+        .any(|&b| matches!(b, b'{' | b'}' | b'[' | b']' | b'\n' | b'\r'))
+    {
+        std::borrow::Cow::Owned(s.replace(['{', '}', '[', ']', '\n', '\r'], ""))
+    } else {
+        std::borrow::Cow::Borrowed(s)
+    }
+}
+
+/// Serializes a [`Song`] to ChordPro format.
+///
+/// This serializer is intended for songs produced by [`convert_plain_text`].
+/// It handles the subset of [`Line`] and [`Directive`] variants that the
+/// heuristic importer emits. Complex AST features (image directives, delegate
+/// environments, etc.) are rendered as a best-effort comment.
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::heuristic::{convert_plain_text, song_to_chordpro};
+///
+/// let song = convert_plain_text("[Verse]\nAm  G\nHello world\n");
+/// let chordpro = song_to_chordpro(&song);
+/// assert!(chordpro.contains("{start_of_verse}"));
+/// assert!(chordpro.contains("[Am]"));
+/// ```
+#[must_use]
+pub fn song_to_chordpro(song: &Song) -> String {
+    use crate::ast::{CommentStyle, Line};
+
+    let mut out = String::new();
+
+    // Emit metadata directives first if populated.
+    if let Some(ref title) = song.metadata.title {
+        out.push_str(&format!("{{title: {}}}\n", sanitize_directive_token(title)));
+    }
+    if let Some(artist) = song.metadata.artists.first() {
+        out.push_str(&format!(
+            "{{artist: {}}}\n",
+            sanitize_directive_token(artist)
+        ));
+    }
+
+    for line in &song.lines {
+        match line {
+            Line::Empty => out.push('\n'),
+            Line::Comment(style, text) => {
+                let t = sanitize_directive_token(text);
+                match style {
+                    CommentStyle::Normal => out.push_str(&format!("{{comment: {t}}}\n")),
+                    CommentStyle::Italic => out.push_str(&format!("{{comment_italic: {t}}}\n")),
+                    CommentStyle::Boxed => out.push_str(&format!("{{comment_box: {t}}}\n")),
+                }
+            }
+            Line::Directive(dir) => {
+                let name = sanitize_directive_token(&dir.name);
+                if let Some(ref value) = dir.value {
+                    out.push_str(&format!(
+                        "{{{}: {}}}\n",
+                        name,
+                        sanitize_directive_token(value)
+                    ));
+                } else {
+                    out.push_str(&format!("{{{}}}\n", name));
+                }
+            }
+            Line::Lyrics(lyrics) => {
+                for seg in &lyrics.segments {
+                    if let Some(ref chord) = seg.chord {
+                        out.push('[');
+                        out.push_str(&sanitize_chord_name(&chord.name));
+                        out.push(']');
+                    }
+                    out.push_str(&sanitize_lyric_text(&seg.text));
+                }
+                out.push('\n');
+            }
+        }
+    }
+
+    out
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn chord_names(line: &LyricsLine) -> Vec<Option<String>> {
+        line.segments
+            .iter()
+            .map(|s| s.chord.as_ref().map(|c| c.name.clone()))
+            .collect()
+    }
+
+    // --- detect_format ---
+
+    #[test]
+    fn detects_chordpro_from_directives() {
+        assert_eq!(
+            detect_format("{title: Hello}\n{soc}\n[Am]Hello\n{eoc}"),
+            InputFormat::ChordPro
+        );
+    }
+
+    #[test]
+    fn detects_chordpro_from_inline_chords() {
+        assert_eq!(detect_format("[Am]Hello [G]world"), InputFormat::ChordPro);
+    }
+
+    #[test]
+    fn detects_plain_chord_lyrics() {
+        let input = "Am  G  C  Em\nHello beautiful world tonight\nG  C\nOnce more";
+        assert_eq!(detect_format(input), InputFormat::PlainChordLyrics);
+    }
+
+    #[test]
+    fn detects_plain_chord_lyrics_with_section_labels() {
+        // Section labels like [Verse] and [Chorus] should NOT be misidentified
+        // as ChordPro inline chord notation.
+        let input = "[Verse]\nG  D\nHere I am\nEm  C\nWondering\n\n[Chorus]\nC  G\nLala\n";
+        assert_eq!(detect_format(input), InputFormat::PlainChordLyrics);
+    }
+
+    #[test]
+    fn detects_single_letter_section_label_not_chordpro() {
+        // A whole-line `[C]` is a key/section label in plain-text chord
+        // sheets, not ChordPro inline chord notation. Issue #1278.
+        let input = "[C]\nG  D\nHere I am\nEm  C\nWondering\n";
+        assert_eq!(detect_format(input), InputFormat::PlainChordLyrics);
+
+        // Same for other single-letter keys that are valid chord names.
+        let input_am = "[Am]\nG  D  Em\nHello world again now\n";
+        assert_eq!(detect_format(input_am), InputFormat::PlainChordLyrics);
+    }
+
+    #[test]
+    fn detects_inline_chord_in_line_still_chordpro() {
+        // `[C]` embedded mid-line (not the whole line) is inline chord notation.
+        assert_eq!(detect_format("[C]Hello world"), InputFormat::ChordPro);
+        assert_eq!(detect_format("Hello [Am]world"), InputFormat::ChordPro);
+    }
+
+    #[test]
+    fn detects_multi_bracket_line_as_chordpro() {
+        // `[Am][G]` on a single line has inner content `Am][G` which contains `[`,
+        // so the whole-line guard does NOT trigger. The scan finds `[Am]` → ChordPro.
+        assert_eq!(detect_format("[Am][G]"), InputFormat::ChordPro);
+        // Three brackets also triggers correctly.
+        assert_eq!(detect_format("[C][G][Am]"), InputFormat::ChordPro);
+    }
+
+    #[test]
+    fn detects_mixed_section_label_and_inline_chord_as_chordpro() {
+        // A whole-line section label `[Verse]` does NOT trigger ChordPro detection
+        // on its own, but a mid-line inline chord on another line does.
+        let input = "[Verse]\nHello [Am]world\n";
+        assert_eq!(detect_format(input), InputFormat::ChordPro);
+    }
+
+    #[test]
+    fn known_limitation_whole_line_chord_only_chordpro_returns_unknown() {
+        // A directive-free ChordPro file that uses ONLY whole-line bracket chords
+        // (each chord on its own line before a lyric) is indistinguishable from
+        // a plain-text file with key/section labels, so detect_format returns
+        // Unknown rather than ChordPro. This is a documented trade-off — see
+        // issue #1304 and the comment in detect_format above `has_inline_chords`.
+        //
+        // Files with at least one directive or one mid-line inline chord are
+        // correctly identified as ChordPro (see `detects_chordpro_from_directives`
+        // and `detects_inline_chord_in_line_still_chordpro`).
+        let input = "[Am]\nThis is a lyric line\n[G]\nAnother lyric line\n";
+        assert_eq!(detect_format(input), InputFormat::Unknown);
+    }
+
+    #[test]
+    fn detects_unknown_for_pure_lyrics() {
+        let input = "Hello beautiful world\nOnce upon a time\nSomething happened here";
+        assert_eq!(detect_format(input), InputFormat::Unknown);
+    }
+
+    #[test]
+    fn detects_unknown_for_empty() {
+        assert_eq!(detect_format(""), InputFormat::Unknown);
+    }
+
+    // --- is_chord_token ---
+
+    #[test]
+    fn chord_token_rejects_section_labels() {
+        // Section labels that start with A-G should NOT be recognized as chords.
+        assert!(!is_chord_token("Chorus"));
+        assert!(!is_chord_token("Bridge"));
+        assert!(!is_chord_token("Em7add9sus2extended"));
+    }
+
+    /// Regression guard for stop-word collisions called out explicitly in
+    /// `.claude/rules/golden-tests.md` §Stop-Word Collision Tests (#1831).
+    ///
+    /// These are lyric words that begin with a valid chord-root letter
+    /// (A–G, with or without a chord-quality suffix prefix like `Am`,
+    /// `Em`, `Dm`). The heuristic importer must keep rejecting them so
+    /// that a future parser change cannot silently start detecting
+    /// `Amazing` → `Am` + trailing `azing`, or `Bad` → `B` + `ad`, etc.
+    #[test]
+    fn chord_token_rejects_chord_like_prefix_in_lyric_words() {
+        // Rule-text examples.
+        assert!(!is_chord_token("Amazing"));
+        assert!(!is_chord_token("Empty"));
+        assert!(!is_chord_token("Get"));
+
+        // Additional adversarial prefixes covering every A–G root letter.
+        assert!(!is_chord_token("Bad"));
+        assert!(!is_chord_token("Broken"));
+        assert!(!is_chord_token("Cold"));
+        assert!(!is_chord_token("Dance"));
+        assert!(!is_chord_token("Edge"));
+        assert!(!is_chord_token("Father"));
+        assert!(!is_chord_token("Furniture")); // F...
+        assert!(!is_chord_token("Gone"));
+
+        // Two-letter chord-quality prefixes inside lyric words.
+        assert!(!is_chord_token("Amber")); // Am...
+        assert!(!is_chord_token("Emerald")); // Em...
+        assert!(!is_chord_token("Dmitri")); // Dm...
+    }
+
+    #[test]
+    fn chord_token_accepts_bare_dm_but_collisions_are_line_level() {
+        // `is_chord_token` is context-free: `Dm` on its own *is* a valid
+        // chord, because the stop-word collision for "section label
+        // whose first letter is a chord root" is resolved at the
+        // line-classification layer (`classify_line` counts
+        // is_chord_token hits and only treats the line as a chord line
+        // when the density is high enough). This assertion documents
+        // the contract: the function-level test pins `Dm` → true and
+        // the line-level heuristic guards the collision.
+        assert!(is_chord_token("Dm"));
+    }
+
+    #[test]
+    fn chord_token_accepts_valid_chords() {
+        assert!(is_chord_token("Am"));
+        assert!(is_chord_token("C"));
+        assert!(is_chord_token("G7"));
+        assert!(is_chord_token("Cmaj7"));
+        assert!(is_chord_token("D/F#"));
+        assert!(is_chord_token("Bb"));
+        assert!(is_chord_token("F#m7"));
+        assert!(is_chord_token("Gsus4"));
+        assert!(is_chord_token("Em"));
+    }
+
+    #[test]
+    fn chord_token_accepts_multicomponent_extensions() {
+        // Compound quality+extension sequences (issue #1279).
+        assert!(is_chord_token("Am7add11"));
+        assert!(is_chord_token("Cmaj7sus4"));
+        assert!(is_chord_token("G7b5"));
+        assert!(is_chord_token("Fmaj7add9"));
+        assert!(is_chord_token("Dm7add11"));
+        assert!(is_chord_token("G7#9"));
+        assert!(is_chord_token("Cmaj9"));
+        // Words that happen to start with A-G must still be rejected.
+        assert!(!is_chord_token("Chorus"));
+        assert!(!is_chord_token("Bridge"));
+        // Cmaj7e: maj consumed → 7e, numeric 7 consumed → e; 'e' is not a
+        // keyword or numeric character so the algorithm returns false.
+        assert!(!is_chord_token("Cmaj7e"));
+        // Multi-component chords up to 16 characters must be accepted.
+        assert!(is_chord_token("Cmaj7sus4add9")); // 13 chars
+    }
+
+    // --- is_chord_line ---
+
+    #[test]
+    fn chord_line_typical() {
+        let imp = PlainTextImporter::new();
+        assert!(imp.is_chord_line("Am  F  C  G"));
+    }
+
+    #[test]
+    fn chord_line_with_slash_chords() {
+        let imp = PlainTextImporter::new();
+        assert!(imp.is_chord_line("G  D/F#  Em  C"));
+    }
+
+    #[test]
+    fn not_chord_line_all_lyrics() {
+        let imp = PlainTextImporter::new();
+        assert!(!imp.is_chord_line("There's a lady who's sure."));
+    }
+
+    #[test]
+    fn not_chord_line_sentence_punctuation() {
+        let imp = PlainTextImporter::new();
+        // Even though "A" and "G" are valid chords, the period disqualifies it.
+        assert!(!imp.is_chord_line("A song for G."));
+    }
+
+    #[test]
+    fn not_chord_line_too_few_chords() {
+        let imp = PlainTextImporter::new();
+        // Only one chord token — below min_chord_tokens=2.
+        assert!(!imp.is_chord_line("Am something else here now"));
+    }
+
+    // --- parse_section_header ---
+
+    #[test]
+    fn section_square_brackets() {
+        assert_eq!(parse_section_header("[Verse]"), Some("Verse".to_string()));
+        assert_eq!(
+            parse_section_header("[Chorus 2]"),
+            Some("Chorus 2".to_string())
+        );
+    }
+
+    #[test]
+    fn section_parens() {
+        assert_eq!(parse_section_header("(Bridge)"), Some("Bridge".to_string()));
+    }
+
+    #[test]
+    fn section_colon() {
+        assert_eq!(parse_section_header("VERSE:"), Some("VERSE".to_string()));
+        assert_eq!(parse_section_header("Chorus:"), Some("Chorus".to_string()));
+    }
+
+    #[test]
+    fn section_dash_decorated() {
+        assert_eq!(
+            parse_section_header("-- Chorus --"),
+            Some("Chorus".to_string())
+        );
+    }
+
+    #[test]
+    fn section_not_matched() {
+        assert_eq!(parse_section_header("Hello world"), None);
+        assert_eq!(parse_section_header("Am G C Em"), None);
+    }
+
+    #[test]
+    fn section_rejects_brace_in_label() {
+        // Labels containing { or } must be rejected to prevent emitting
+        // malformed ChordPro directive values (M-1 from delta review).
+        assert_eq!(parse_section_header("[Verse}]"), None);
+        assert_eq!(parse_section_header("[{Chorus}]"), None);
+        assert_eq!(parse_section_header("Verse}:"), None);
+    }
+
+    // --- pair_chords_with_lyric ---
+
+    #[test]
+    fn pair_basic() {
+        // "Am  F" at cols 0 and 4 over "Hello world"
+        let positions = vec![(0, "Am".to_string()), (4, "F".to_string())];
+        let line = pair_chords_with_lyric(&positions, "Hello world");
+        let chords = chord_names(&line);
+        assert_eq!(chords, vec![Some("Am".to_string()), Some("F".to_string())]);
+        assert_eq!(line.segments[0].text, "Hell");
+        assert_eq!(line.segments[1].text, "o world");
+    }
+
+    #[test]
+    fn pair_lyric_shorter_than_chord_line() {
+        // Chord at column 10 but lyric is only 5 chars.
+        let positions = vec![(0, "Am".to_string()), (10, "G".to_string())];
+        let line = pair_chords_with_lyric(&positions, "Hi");
+        // Am gets "Hi", G gets ""
+        assert_eq!(
+            line.segments[0].chord.as_ref().map(|c| c.name.as_str()),
+            Some("Am")
+        );
+        assert_eq!(line.segments[0].text, "Hi");
+        assert_eq!(
+            line.segments[1].chord.as_ref().map(|c| c.name.as_str()),
+            Some("G")
+        );
+        assert_eq!(line.segments[1].text, "");
+    }
+
+    #[test]
+    fn pair_no_chords_returns_plain_lyric() {
+        let positions: Vec<(usize, String)> = vec![];
+        let line = pair_chords_with_lyric(&positions, "Hello world");
+        assert_eq!(line.segments.len(), 1);
+        assert!(line.segments[0].chord.is_none());
+        assert_eq!(line.segments[0].text, "Hello world");
+    }
+
+    // --- convert ---
+
+    #[test]
+    fn convert_simple_verse() {
+        let input = "[Verse]\nAm  G  C\nHello world today\n";
+        let song = convert_plain_text(input);
+        // Should have: start_of_verse, lyrics, end_of_verse
+        assert!(song.lines.iter().any(|l| matches!(l, Line::Directive(_))));
+        assert!(song.lines.iter().any(|l| matches!(l, Line::Lyrics(_))));
+    }
+
+    #[test]
+    fn convert_chordless_lyric_passthrough() {
+        let input = "Am  G  C  Em\nThere is a song\nThis line has no preceding chord line\n";
+        let song = convert_plain_text(input);
+        // The first line pair produces a lyrics line with chords.
+        // "This line has no preceding chord line" is a lyric after the pair.
+        let has_plain_lyric = song.lines.iter().any(|l| {
+            if let Line::Lyrics(ll) = l {
+                ll.segments.len() == 1
+                    && ll.segments[0].chord.is_none()
+                    && ll.segments[0].text.contains("no preceding")
+            } else {
+                false
+            }
+        });
+        assert!(has_plain_lyric);
+    }
+
+    #[test]
+    fn convert_section_labels_to_directives() {
+        let input = "[Chorus]\nG  C  G  D\nLala lala lala\n[Verse]\nAm  F  C  G\nHello world\n";
+        let song = convert_plain_text(input);
+        // At least one StartOfChorus and one StartOfVerse directive.
+        use crate::ast::DirectiveKind;
+        let kinds: Vec<&DirectiveKind> = song
+            .lines
+            .iter()
+            .filter_map(|l| {
+                if let Line::Directive(d) = l {
+                    Some(&d.kind)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert!(kinds.iter().any(|k| **k == DirectiveKind::StartOfChorus));
+        assert!(kinds.iter().any(|k| **k == DirectiveKind::StartOfVerse));
+    }
+
+    #[test]
+    fn convert_multiple_sections_close_properly() {
+        let input = "[Verse]\nAm  G\nHello world\n[Chorus]\nC  G\nYeah yeah\n";
+        let song = convert_plain_text(input);
+        use crate::ast::DirectiveKind;
+        // Should have both end_of_verse and end_of_chorus.
+        let kinds: Vec<&DirectiveKind> = song
+            .lines
+            .iter()
+            .filter_map(|l| {
+                if let Line::Directive(d) = l {
+                    Some(&d.kind)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert!(kinds.iter().any(|k| **k == DirectiveKind::EndOfVerse));
+        assert!(kinds.iter().any(|k| **k == DirectiveKind::EndOfChorus));
+    }
+
+    // --- song_to_chordpro ---
+
+    #[test]
+    fn song_to_chordpro_strips_braces_in_title() {
+        // song_to_chordpro must not emit malformed ChordPro when metadata
+        // contains brace characters (issue #1282).
+        let mut song = Song::default();
+        song.metadata.title = Some("Hello {World}".to_string());
+        let out = song_to_chordpro(&song);
+        // Braces inside the value must be stripped; the directive itself is still well-formed.
+        assert_eq!(out, "{title: Hello World}\n");
+    }
+
+    #[test]
+    fn song_to_chordpro_strips_braces_in_artist() {
+        let mut song = Song::default();
+        song.metadata.artists.push("{Dodgy} Artist".to_string());
+        let out = song_to_chordpro(&song);
+        assert_eq!(out, "{artist: Dodgy Artist}\n");
+    }
+
+    #[test]
+    fn song_to_chordpro_strips_braces_in_comment() {
+        use crate::ast::{CommentStyle, Line};
+        let mut song = Song::default();
+        song.lines.push(Line::Comment(
+            CommentStyle::Normal,
+            "See {note}".to_string(),
+        ));
+        let out = song_to_chordpro(&song);
+        assert_eq!(out, "{comment: See note}\n");
+    }
+
+    #[test]
+    fn song_to_chordpro_strips_braces_in_directive_name_and_value() {
+        // A manually-constructed Song with braces in directive name/value
+        // must still produce well-formed ChordPro (issue #1291).
+        use crate::ast::{Directive, Line};
+        let mut dir = Directive::name_only("start_of_{section}".to_string());
+        dir.value = Some("{custom}".to_string());
+        let mut song = Song::default();
+        song.lines.push(Line::Directive(dir));
+        let out = song_to_chordpro(&song);
+        assert_eq!(out, "{start_of_section: custom}\n");
+    }
+
+    #[test]
+    fn song_to_chordpro_strips_embedded_newline_in_title() {
+        // #1883 sister-site: an embedded `\n` in a directive token (here the
+        // title) would leave the closing `}` on a separate line, producing
+        // invalid ChordPro. `sanitize_directive_token` must strip it.
+        let mut song = Song::default();
+        song.metadata.title = Some("Foo\nBar".to_string());
+        let out = song_to_chordpro(&song);
+        assert_eq!(out, "{title: FooBar}\n");
+    }
+
+    // -- Lyric / chord sanitization (#1824 directive-injection guard) ----
+
+    #[test]
+    fn song_to_chordpro_strips_braces_in_lyric_text() {
+        // Attacker path from #1824: a lyric string containing `{title:
+        // HACKED}` must not round-trip as a forged directive.
+        use crate::ast::{Line, LyricsLine, LyricsSegment};
+        let mut song = Song::default();
+        song.lines.push(Line::Lyrics(LyricsLine {
+            segments: vec![LyricsSegment::text_only("see {title: HACKED} here")],
+        }));
+        let out = song_to_chordpro(&song);
+        assert!(
+            !out.contains('{') && !out.contains('}'),
+            "braces must not appear in serialized lyric output: {out:?}"
+        );
+        assert!(out.contains("see title: HACKED here"));
+    }
+
+    #[test]
+    fn song_to_chordpro_strips_brackets_in_lyric_text() {
+        // The mirror attack uses `[Cmaj7]` to forge a chord annotation.
+        use crate::ast::{Line, LyricsLine, LyricsSegment};
+        let mut song = Song::default();
+        song.lines.push(Line::Lyrics(LyricsLine {
+            segments: vec![LyricsSegment::text_only("pre [Cmaj7] mid")],
+        }));
+        let out = song_to_chordpro(&song);
+        assert!(
+            !out.contains('[') && !out.contains(']'),
+            "square brackets must not appear in serialized lyric output: {out:?}"
+        );
+        assert!(out.contains("pre Cmaj7 mid"));
+    }
+
+    #[test]
+    fn song_to_chordpro_strips_closing_bracket_in_chord_name() {
+        // A crafted chord name containing `]` would close the annotation
+        // early. The sanitizer strips it so the annotation stays intact.
+        use crate::ast::{Chord, Line, LyricsLine, LyricsSegment};
+        let mut song = Song::default();
+        let chord = Chord {
+            name: "C]{title: HACKED}".to_string(),
+            detail: None,
+            display: None,
+        };
+        song.lines.push(Line::Lyrics(LyricsLine {
+            segments: vec![LyricsSegment::new(Some(chord), "hello")],
+        }));
+        let out = song_to_chordpro(&song);
+        assert!(
+            !out.contains('{') && !out.contains('}'),
+            "injected directive braces must be stripped: {out:?}"
+        );
+        // The opening `[` is emitted by the serializer, the closing `]`
+        // comes from the serializer too; the chord name itself contains
+        // no stray `[`/`]` after sanitization.
+        assert_eq!(out, "[Ctitle: HACKED]hello\n");
+    }
+
+    #[test]
+    fn song_to_chordpro_strips_embedded_newline_in_lyric_text() {
+        // #1883: an embedded `\n` would split the lyric into two output
+        // lines, producing malformed ChordPro. The brace strip from
+        // #1824 already prevents directive injection, but the
+        // well-formedness fix requires stripping newlines too.
+        use crate::ast::{Line, LyricsLine, LyricsSegment};
+        let mut song = Song::default();
+        song.lines.push(Line::Lyrics(LyricsLine {
+            segments: vec![LyricsSegment::text_only("Hello\n{title: HACKED}")],
+        }));
+        let out = song_to_chordpro(&song);
+        // The lyric becomes a single line (leading "Hello" + stripped
+        // braces + no embedded newline).
+        assert_eq!(out, "Hellotitle: HACKED\n");
+    }
+
+    #[test]
+    fn song_to_chordpro_strips_embedded_carriage_return_in_lyric_text() {
+        use crate::ast::{Line, LyricsLine, LyricsSegment};
+        let mut song = Song::default();
+        song.lines.push(Line::Lyrics(LyricsLine {
+            segments: vec![LyricsSegment::text_only("a\rb")],
+        }));
+        let out = song_to_chordpro(&song);
+        assert_eq!(out, "ab\n");
+    }
+
+    #[test]
+    fn song_to_chordpro_strips_embedded_newline_in_chord_name() {
+        // A chord name containing a newline would break the `[…]`
+        // annotation into two lines. Parity with the lyric-text fix
+        // above.
+        use crate::ast::{Chord, Line, LyricsLine, LyricsSegment};
+        let mut song = Song::default();
+        let chord = Chord {
+            name: "C\nD".to_string(),
+            detail: None,
+            display: None,
+        };
+        song.lines.push(Line::Lyrics(LyricsLine {
+            segments: vec![LyricsSegment::new(Some(chord), "x")],
+        }));
+        let out = song_to_chordpro(&song);
+        assert_eq!(out, "[CD]x\n");
+    }
+}

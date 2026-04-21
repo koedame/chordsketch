@@ -22,7 +22,7 @@
 //! - Chord diagrams
 
 use crate::xml::{Element, parse};
-use chordsketch_core::ast::{Chord, Directive, Line, LyricsLine, LyricsSegment, Song};
+use chordsketch_chordpro::ast::{Chord, Directive, Line, LyricsLine, LyricsSegment, Song};
 
 // ---------------------------------------------------------------------------
 // Public API

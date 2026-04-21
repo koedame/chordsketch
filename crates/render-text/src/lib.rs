@@ -1,14 +1,14 @@
 //! Plain text renderer for ChordPro documents.
 //!
-//! This crate converts a parsed ChordPro AST (from `chordsketch-core`) into
+//! This crate converts a parsed ChordPro AST (from `chordsketch-chordpro`) into
 //! formatted plain text with chords aligned above their corresponding lyrics.
 
-use chordsketch_core::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
-use chordsketch_core::config::Config;
-use chordsketch_core::notation::NotationKind;
-use chordsketch_core::render_result::{RenderResult, push_warning, validate_capo};
-use chordsketch_core::resolve_diagrams_instrument;
-use chordsketch_core::transpose::transpose_chord;
+use chordsketch_chordpro::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
+use chordsketch_chordpro::config::Config;
+use chordsketch_chordpro::notation::NotationKind;
+use chordsketch_chordpro::render_result::{RenderResult, push_warning, validate_capo};
+use chordsketch_chordpro::resolve_diagrams_instrument;
+use chordsketch_chordpro::transpose::transpose_chord;
 use unicode_width::UnicodeWidthStr;
 
 /// Maximum number of chorus recall directives allowed per song.
@@ -17,10 +17,10 @@ const MAX_CHORUS_RECALLS: usize = 1000;
 
 /// Maximum number of warnings the renderer will accumulate for a single
 /// render pass. Re-exported from the canonical location in
-/// `chordsketch-core::render_result` so existing downstream callers can
+/// `chordsketch-chordpro::render_result` so existing downstream callers can
 /// keep importing `chordsketch_render_text::MAX_WARNINGS` unchanged
 /// (issue #1874).
-pub use chordsketch_core::render_result::MAX_WARNINGS;
+pub use chordsketch_chordpro::render_result::MAX_WARNINGS;
 
 /// Render a [`Song`] AST to plain text.
 ///
@@ -99,7 +99,7 @@ fn render_song_impl(
     let song_transpose_delta = Config::song_transpose_delta(&song_overrides);
     let mut output = Vec::new();
     let (combined_transpose, _) =
-        chordsketch_core::transpose::combine_transpose(cli_transpose, song_transpose_delta);
+        chordsketch_chordpro::transpose::combine_transpose(cli_transpose, song_transpose_delta);
     let mut transpose_offset: i8 = combined_transpose;
     // Stores the AST lines of the most recently defined chorus body.
     // Re-rendered at recall time so the current transpose offset is applied.
@@ -208,8 +208,10 @@ fn render_song_impl(
                             }
                         },
                     };
-                    let (combined, saturated) =
-                        chordsketch_core::transpose::combine_transpose(file_offset, cli_transpose);
+                    let (combined, saturated) = chordsketch_chordpro::transpose::combine_transpose(
+                        file_offset,
+                        cli_transpose,
+                    );
                     if saturated {
                         push_warning(
                             warnings,
@@ -296,7 +298,9 @@ fn render_song_impl(
             let voicings: Vec<_> = song
                 .used_chord_names()
                 .into_iter()
-                .filter_map(|name| chordsketch_core::lookup_keyboard_voicing(&name, &kbd_defines))
+                .filter_map(|name| {
+                    chordsketch_chordpro::lookup_keyboard_voicing(&name, &kbd_defines)
+                })
                 .collect();
             if !voicings.is_empty() {
                 output.push(String::new());
@@ -315,18 +319,16 @@ fn render_song_impl(
                 }
             }
         } else {
-            let frets_shown = _config
-                .get_path("diagrams.frets")
-                .as_f64()
-                .map_or(chordsketch_core::chord_diagram::DEFAULT_FRETS_SHOWN, |n| {
-                    (n as usize).max(1)
-                });
+            let frets_shown = _config.get_path("diagrams.frets").as_f64().map_or(
+                chordsketch_chordpro::chord_diagram::DEFAULT_FRETS_SHOWN,
+                |n| (n as usize).max(1),
+            );
             let defines = song.fretted_defines();
             let diagrams: Vec<_> = song
                 .used_chord_names()
                 .into_iter()
                 .filter_map(|name| {
-                    chordsketch_core::lookup_diagram(&name, &defines, instrument, frets_shown)
+                    chordsketch_chordpro::lookup_diagram(&name, &defines, instrument, frets_shown)
                 })
                 .collect();
             if !diagrams.is_empty() {
@@ -335,7 +337,7 @@ fn render_song_impl(
                 for diagram in &diagrams {
                     output.push(String::new());
                     for diagram_line in
-                        chordsketch_core::chord_diagram::render_ascii(diagram).lines()
+                        chordsketch_chordpro::chord_diagram::render_ascii(diagram).lines()
                     {
                         output.push(diagram_line.to_string());
                     }
@@ -406,13 +408,13 @@ pub fn render_songs_with_warnings(
 
 /// Parse a ChordPro source string and render it to plain text.
 ///
-/// Returns `Ok(text)` on success, or the [`chordsketch_core::ParseError`] if
+/// Returns `Ok(text)` on success, or the [`chordsketch_chordpro::ParseError`] if
 /// the input cannot be parsed.
 ///
 /// For pre-parsed input, use [`render_song`] directly.
 #[must_use = "parse errors should be handled"]
-pub fn try_render(input: &str) -> Result<String, chordsketch_core::ParseError> {
-    let song = chordsketch_core::parse(input)?;
+pub fn try_render(input: &str) -> Result<String, chordsketch_chordpro::ParseError> {
+    let song = chordsketch_chordpro::parse(input)?;
     Ok(render_song(&song))
 }
 
@@ -443,7 +445,7 @@ pub fn render(input: &str) -> String {
 ///
 /// No trailing blank line is added — the document's own empty lines
 /// provide spacing between the metadata header and the song body.
-fn render_metadata(metadata: &chordsketch_core::ast::Metadata, output: &mut Vec<String>) {
+fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, output: &mut Vec<String>) {
     if let Some(title) = &metadata.title {
         output.push(title.clone());
     }
@@ -535,7 +537,7 @@ fn render_lyrics(lyrics_line: &LyricsLine, transpose_offset: i8, output: &mut Ve
 ///   `{columns}`) produce no output — plain text has no concept of pages or columns.
 /// - Unknown directives are silently ignored.
 fn render_directive(
-    directive: &chordsketch_core::ast::Directive,
+    directive: &chordsketch_chordpro::ast::Directive,
     output: &mut Vec<String>,
     warnings: &mut Vec<String>,
 ) {
@@ -565,7 +567,7 @@ fn render_directive(
         }
         DirectiveKind::StartOfSection(section_name) => {
             // Capitalize the first letter of the section name for display.
-            let label = chordsketch_core::capitalize(section_name);
+            let label = chordsketch_chordpro::capitalize(section_name);
             render_section_header(&label, &directive.value, output);
         }
         DirectiveKind::Image(attrs) if attrs.has_src() => {
@@ -575,7 +577,7 @@ fn render_directive(
             // never belong in rendered output — text output is not
             // executed, but embedding such strings would mislead any
             // tool or human that copies them downstream.
-            if !chordsketch_core::image_path::is_safe_image_src(&attrs.src) {
+            if !chordsketch_chordpro::image_path::is_safe_image_src(&attrs.src) {
                 push_warning(
                     warnings,
                     format!(
@@ -776,7 +778,7 @@ mod tests {
 
     #[test]
     fn test_render_song_api() {
-        let song = chordsketch_core::parse("{title: Test}\n[Am]Hello").unwrap();
+        let song = chordsketch_chordpro::parse("{title: Test}\n[Am]Hello").unwrap();
         let output = render_song(&song);
         assert!(output.contains("Test"));
         assert!(output.contains("Am"));
@@ -921,7 +923,7 @@ mod multi_song_tests {
 
     #[test]
     fn test_render_songs_two_songs() {
-        let songs = chordsketch_core::parse_multi(
+        let songs = chordsketch_chordpro::parse_multi(
             "{title: Song One}\n[Am]Hello\n{new_song}\n{title: Song Two}\n[G]World",
         )
         .unwrap();
@@ -942,7 +944,7 @@ mod multi_song_tests {
 
     #[test]
     fn test_render_songs_single_song() {
-        let songs = chordsketch_core::parse_multi("{title: Only One}\nLyrics").unwrap();
+        let songs = chordsketch_chordpro::parse_multi("{title: Only One}\nLyrics").unwrap();
         let output = render_songs(&songs);
         assert_eq!(output, render_song(&songs[0]));
     }
@@ -950,7 +952,7 @@ mod multi_song_tests {
     #[test]
     fn test_render_songs_with_transpose() {
         let songs =
-            chordsketch_core::parse_multi("{title: S1}\n[C]Do\n{new_song}\n{title: S2}\n[G]Re")
+            chordsketch_chordpro::parse_multi("{title: S1}\n[C]Do\n{new_song}\n{title: S2}\n[G]Re")
                 .unwrap();
         let output = render_songs_with_transpose(&songs, 2, &Config::defaults());
         // C+2=D, G+2=A
@@ -966,7 +968,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_up_2() {
         let input = "{transpose: 2}\n[G]Hello [C]world";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let output = render_song(&song);
         // G+2=A, C+2=D
         assert_eq!(output, "A     D\nHello world\n");
@@ -975,7 +977,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_down_3() {
         let input = "{transpose: -3}\n[Am]Hello [Em]world";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let output = render_song(&song);
         // Am-3=F#m, Em-3=C#m
         assert_eq!(output, "F#m   C#m\nHello world\n");
@@ -984,7 +986,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_replaces_previous() {
         let input = "{transpose: 2}\n[G]First\n{transpose: -1}\n[G]Second";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let output = render_song(&song);
         // First line: G+2=A, Second line: G-1=F#
         assert!(output.contains("A\nFirst"));
@@ -994,7 +996,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_zero_resets() {
         let input = "{transpose: 5}\n[C]Up\n{transpose: 0}\n[C]Normal";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let output = render_song(&song);
         // First line: C+5=F, Second line: C+0=C
         assert!(output.contains("F\nUp"));
@@ -1004,7 +1006,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_with_cli_offset() {
         let input = "{transpose: 2}\n[C]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let output = render_song_with_transpose(&song, 3, &Config::defaults());
         // In-file 2 + CLI 3 = 5 total. C+5=F
         assert!(output.contains("F\nHello"));
@@ -1013,7 +1015,7 @@ mod transpose_tests {
     #[test]
     fn test_cli_transpose_without_directive() {
         let input = "[G]Hello [C]world";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let output = render_song_with_transpose(&song, 2, &Config::defaults());
         // CLI offset only: G+2=A, C+2=D
         assert_eq!(output, "A     D\nHello world\n");
@@ -1022,7 +1024,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_directive_replaces_with_cli_additive() {
         let input = "{transpose: 2}\n[C]First\n{transpose: -1}\n[C]Second";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let output = render_song_with_transpose(&song, 1, &Config::defaults());
         // First: 2+1=3, C+3=D#. Second: -1+1=0, C+0=C
         assert!(output.contains("D#\nFirst"));
@@ -1032,7 +1034,7 @@ mod transpose_tests {
     #[test]
     fn test_transpose_no_chord_lyrics_unaffected() {
         let input = "{transpose: 5}\nPlain lyrics no chords";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let output = render_song(&song);
         assert_eq!(output, "Plain lyrics no chords\n");
     }
@@ -1040,9 +1042,9 @@ mod transpose_tests {
     #[test]
     fn test_transpose_invalid_value_treated_as_zero() {
         let input = "{transpose: abc}\n[G]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result =
-            render_song_with_warnings(&song, 0, &chordsketch_core::config::Config::defaults());
+            render_song_with_warnings(&song, 0, &chordsketch_chordpro::config::Config::defaults());
         // Invalid value -> treated as 0
         assert!(result.output.contains("G\nHello"));
         assert!(
@@ -1056,9 +1058,9 @@ mod transpose_tests {
     fn test_transpose_out_of_i8_range_emits_warning() {
         // 999 cannot be represented as i8; should fall back to 0 with a warning
         let input = "{transpose: 999}\n[G]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result =
-            render_song_with_warnings(&song, 0, &chordsketch_core::config::Config::defaults());
+            render_song_with_warnings(&song, 0, &chordsketch_chordpro::config::Config::defaults());
         assert!(
             result.output.contains("G\nHello"),
             "chord should be untransposed"
@@ -1073,9 +1075,9 @@ mod transpose_tests {
     #[test]
     fn test_transpose_no_value_treated_as_zero() {
         let input = "{transpose}\n[G]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result =
-            render_song_with_warnings(&song, 0, &chordsketch_core::config::Config::defaults());
+            render_song_with_warnings(&song, 0, &chordsketch_chordpro::config::Config::defaults());
         // No value -> silently treated as 0, no warning emitted.
         assert!(result.output.contains("G\nHello"));
         assert!(
@@ -1091,9 +1093,9 @@ mod transpose_tests {
         // no warning emitted. The parser trims whitespace → Some(""), which the
         // Some("") arm converts to 0.
         let input = "{transpose:   }\n[G]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result =
-            render_song_with_warnings(&song, 0, &chordsketch_core::config::Config::defaults());
+            render_song_with_warnings(&song, 0, &chordsketch_chordpro::config::Config::defaults());
         assert!(
             result.output.contains("G\nHello"),
             "chord should be untransposed"
@@ -1302,7 +1304,7 @@ mod delegate_tests {
     #[test]
     fn test_render_abc_section_emits_warning() {
         let input = "{start_of_abc}\nX:1\n{end_of_abc}";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             result.warnings.iter().any(|w| w.contains("ABC")),
@@ -1381,7 +1383,7 @@ mod delegate_tests {
                      [C]another line\n\
                      {end_of_chorus}\n\
                      {chorus}\n";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         // One ABC block seen once → exactly one ABC warning. A recall
         // that re-emitted the placeholder would double this.
@@ -1398,7 +1400,7 @@ mod delegate_tests {
     #[test]
     fn test_text_unterminated_notation_block_renders_without_panic() {
         let input = "[C]Before\n{start_of_abc}\nX:1\nK:C\n";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             result.warnings.iter().any(|w| w.contains("ABC")),
@@ -1415,7 +1417,7 @@ mod delegate_tests {
     #[test]
     fn test_text_stray_end_of_notation_is_silently_ignored() {
         let input = "[C]Hello\n{end_of_abc}\n[D]World\n";
-        let song = chordsketch_core::parse(input).unwrap();
+        let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             !result
@@ -1514,7 +1516,7 @@ mod delegate_tests {
     #[test]
     fn test_render_image_dangerous_scheme_rejected() {
         // #1832: text renderer must reject the same URI schemes HTML does.
-        let song = chordsketch_core::parse("{image: src=\"javascript:alert(1)\"}").unwrap();
+        let song = chordsketch_chordpro::parse("{image: src=\"javascript:alert(1)\"}").unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             !result.output.contains("[Image"),
@@ -1530,7 +1532,7 @@ mod delegate_tests {
 
     #[test]
     fn test_render_image_file_uri_rejected() {
-        let song = chordsketch_core::parse("{image: src=\"file:///etc/passwd\"}").unwrap();
+        let song = chordsketch_chordpro::parse("{image: src=\"file:///etc/passwd\"}").unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             !result.output.contains("[Image"),
@@ -1550,7 +1552,7 @@ mod delegate_tests {
 
     #[test]
     fn test_capo_out_of_range_emits_warning() {
-        let song = chordsketch_core::parse("{title: T}\n{capo: 999}").unwrap();
+        let song = chordsketch_chordpro::parse("{title: T}\n{capo: 999}").unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             result
@@ -1564,7 +1566,7 @@ mod delegate_tests {
 
     #[test]
     fn test_capo_non_numeric_emits_warning() {
-        let song = chordsketch_core::parse("{title: T}\n{capo: foo}").unwrap();
+        let song = chordsketch_chordpro::parse("{title: T}\n{capo: foo}").unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             result
@@ -1578,7 +1580,7 @@ mod delegate_tests {
 
     #[test]
     fn test_capo_in_range_is_silent() {
-        let song = chordsketch_core::parse("{title: T}\n{capo: 5}").unwrap();
+        let song = chordsketch_chordpro::parse("{title: T}\n{capo: 5}").unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
             !result.warnings.iter().any(|w| w.contains("capo")),
@@ -1596,7 +1598,7 @@ mod delegate_tests {
         for _ in 0..(MAX_WARNINGS + 50) {
             input.push_str("{transpose: not-a-number}\n");
         }
-        let song = chordsketch_core::parse(&input).unwrap();
+        let song = chordsketch_chordpro::parse(&input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert_eq!(
             result.warnings.len(),
@@ -1615,12 +1617,12 @@ mod delegate_tests {
     #[test]
     fn test_selector_filtering_removes_non_matching_directive() {
         let input = "{title: Song}\n{textfont-piano: Courier}\n[Am]Hello";
-        let song = chordsketch_core::parse(input).unwrap();
-        let ctx = chordsketch_core::selector::SelectorContext::new(Some("guitar"), None);
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let ctx = chordsketch_chordpro::selector::SelectorContext::new(Some("guitar"), None);
         let filtered = ctx.filter_song(&song);
         // The piano textfont directive should be absent from the filtered song.
         let has_textfont = filtered.lines.iter().any(|l| {
-            matches!(l, chordsketch_core::ast::Line::Directive(d) if d.kind == chordsketch_core::ast::DirectiveKind::TextFont)
+            matches!(l, chordsketch_chordpro::ast::Line::Directive(d) if d.kind == chordsketch_chordpro::ast::DirectiveKind::TextFont)
         });
         assert!(
             !has_textfont,
@@ -1633,8 +1635,8 @@ mod delegate_tests {
     #[test]
     fn test_selector_filtering_removes_section_with_contents() {
         let input = "{title: Song}\n{start_of_chorus-piano}\n[C]Piano only\n{end_of_chorus-piano}\n[Am]Guitar verse";
-        let song = chordsketch_core::parse(input).unwrap();
-        let ctx = chordsketch_core::selector::SelectorContext::new(Some("guitar"), None);
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let ctx = chordsketch_chordpro::selector::SelectorContext::new(Some("guitar"), None);
         let filtered = ctx.filter_song(&song);
         let output = render_song(&filtered);
         assert!(

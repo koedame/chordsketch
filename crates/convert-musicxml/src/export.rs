@@ -18,7 +18,7 @@
 //! as whole notes. Applications that require real note durations must add them
 //! after import.
 
-use chordsketch_core::{
+use chordsketch_chordpro::{
     ast::{DirectiveKind, Line, Song},
     chord::parse_chord,
 };
@@ -348,8 +348,8 @@ fn chord_to_musicxml(chord_name: &str) -> Option<ChordXml> {
     })
 }
 
-fn note_to_step(note: chordsketch_core::chord::Note) -> &'static str {
-    use chordsketch_core::chord::Note;
+fn note_to_step(note: chordsketch_chordpro::chord::Note) -> &'static str {
+    use chordsketch_chordpro::chord::Note;
     match note {
         Note::C => "C",
         Note::D => "D",
@@ -361,8 +361,8 @@ fn note_to_step(note: chordsketch_core::chord::Note) -> &'static str {
     }
 }
 
-fn accidental_to_alter(acc: Option<chordsketch_core::chord::Accidental>) -> i32 {
-    use chordsketch_core::chord::Accidental;
+fn accidental_to_alter(acc: Option<chordsketch_chordpro::chord::Accidental>) -> i32 {
+    use chordsketch_chordpro::chord::Accidental;
     match acc {
         Some(Accidental::Sharp) => 1,
         Some(Accidental::Flat) => -1,
@@ -376,10 +376,10 @@ fn accidental_to_alter(acc: Option<chordsketch_core::chord::Accidental>) -> i32 
 /// The `text` attribute is returned as an owned `String` to avoid memory leaks
 /// for uncommon extensions that are not in the static lookup table.
 fn quality_ext_to_kind(
-    quality: chordsketch_core::chord::ChordQuality,
+    quality: chordsketch_chordpro::chord::ChordQuality,
     ext: &str,
 ) -> (&'static str, String) {
-    use chordsketch_core::chord::ChordQuality;
+    use chordsketch_chordpro::chord::ChordQuality;
 
     match (quality, ext) {
         (ChordQuality::Major, "") => ("major", String::new()),
@@ -462,7 +462,7 @@ fn key_to_fifths(key: &str) -> (i32, &'static str) {
 /// other code point must be stripped before emission, otherwise a
 /// conformant parser — including this crate's own importer — will reject
 /// the document and the ChordPro → MusicXML → ChordPro round-trip breaks
-/// on input that `chordsketch-core` accepted.
+/// on input that `chordsketch-chordpro` accepted.
 ///
 /// Covers:
 /// - **C0 controls** except tab/LF/CR (issue #1830).
@@ -538,7 +538,7 @@ fn xml_escape(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chordsketch_core::ast::{Chord, LyricsLine, LyricsSegment};
+    use chordsketch_chordpro::ast::{Chord, LyricsLine, LyricsSegment};
 
     fn simple_song() -> Song {
         let mut song = Song::new();
@@ -552,7 +552,7 @@ mod tests {
             LyricsSegment::new(Some(Chord::new("C")), "Hello "),
             LyricsSegment::new(Some(Chord::new("G")), "world "),
         ];
-        song.lines.push(chordsketch_core::ast::Line::Lyrics(ll));
+        song.lines.push(chordsketch_chordpro::ast::Line::Lyrics(ll));
         song
     }
 
@@ -722,7 +722,7 @@ mod tests {
     /// the wrong measure.
     #[test]
     fn section_label_on_correct_measure() {
-        use chordsketch_core::ast::{Chord, Directive, Line, LyricsLine, LyricsSegment};
+        use chordsketch_chordpro::ast::{Chord, Directive, Line, LyricsLine, LyricsSegment};
 
         let mut song = Song::new();
 

@@ -10,8 +10,8 @@
 //! innermost open delimiter and determines whether the cursor sits on a chord
 //! name or a directive name.
 
-use chordsketch_core::chord_diagram::render_ascii;
-use chordsketch_core::voicings::guitar_voicing;
+use chordsketch_chordpro::chord_diagram::render_ascii;
+use chordsketch_chordpro::voicings::guitar_voicing;
 
 // ---------------------------------------------------------------------------
 // Hover context detection
