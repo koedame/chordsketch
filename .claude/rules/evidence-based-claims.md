@@ -80,18 +80,14 @@ It does not apply to:
 
 ## Why
 
-Unverified claims compound. A single casual "probably ~15 min" offered
-as fact seeds follow-on decisions — waiting strategies, priority
-ordering, time estimates presented to the user — that all silently
-inherit the original error. Grounding even small claims in data keeps
-the project's collective reasoning defensible across reviewers and
-sessions.
+Unverified claims compound. A single casual "probably ~15 min"
+offered as fact seeds follow-on decisions — waiting strategies,
+priority ordering, time estimates presented to the user — that all
+silently inherit the original error. The cost of a wrong number is
+not local to the sentence it appears in.
 
-This rule was added after a 2026-04-22 session in which the assistant
-stated "CI takes 15-20 minutes" as justification for a long-wait merge
-strategy, when a `gh run list --branch main --limit 200` sample showed
-the slowest main-branch workflow in the last 91 successful runs was
-10.5 min and the typical wall-clock per PR hovers around 8-10 min. The
-fabricated number was off by roughly 2x. The user flagged it
-("そんなに掛かる? 何を根拠にいってる?") and asked for a durable
-project-level rule. This file is that rule.
+Measurement is almost always cheap compared to the cost of a
+downstream decision that turns out to be based on a fabrication.
+Grounding even small claims in data keeps the project's reasoning
+defensible across reviewers, sessions, and future maintainers who
+cannot interview the original author.
