@@ -147,9 +147,8 @@ impl Lexer {
         let is_crlf = self.chars.get(self.pos + 1).map(|&(_, c)| c) == Some('\n');
 
         if is_crlf {
-            // Advance past \r (does NOT bump line — we only bump on \n)
-            self.pos += 1;
-            self.column += 1;
+            // Advance past \r (advance() only bumps line on \n, so \r just bumps column)
+            self.advance(); // consumes '\r'
             // Advance past \n (bumps line)
             self.advance(); // consumes '\n'
             let end = Position::new(self.line, self.column);
