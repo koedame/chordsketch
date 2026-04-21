@@ -1149,6 +1149,8 @@ fn is_invisible_format_char(c: char) -> bool {
         | '\u{200B}' // zero-width space
         | '\u{200C}' // zero-width non-joiner
         | '\u{200D}' // zero-width joiner
+        | '\u{200E}' // left-to-right mark (see #2087)
+        | '\u{200F}' // right-to-left mark (see #2087)
         | '\u{2060}' // word joiner
         | '\u{FEFF}' // zero-width no-break space / BOM
         | '\u{202A}'..='\u{202E}' // bidi embedding/override
@@ -1166,8 +1168,11 @@ fn namespace_prefix_len(bytes: &[u8]) -> usize {
         Some(b) if b.is_ascii_alphabetic() => idx += 1,
         _ => return 0,
     }
+    // XML Namespaces §2 NCName body allows alphanumerics, `-`, `_`, and `.`
+    // after the first character. `.` is intentionally excluded from the
+    // first-character match above — see issue #2088 for context.
     while let Some(&b) = bytes.get(idx) {
-        if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' {
+        if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.' {
             idx += 1;
         } else {
             break;
@@ -4103,6 +4108,43 @@ mod delegate_tests {
         // The filter must not flag safe schemes just because they pass
         // through the wider Unicode stripper.
         assert!(!has_dangerous_uri_scheme("https://example.com/a\u{200B}b"));
+    }
+
+    #[test]
+    fn test_dangerous_uri_scheme_with_lrm() {
+        // LEFT-TO-RIGHT MARK (U+200E) is a Unicode Cf (Format) character
+        // that is invisible in rendered text. Per #2087, it must be
+        // stripped from the scheme candidate before comparison.
+        assert!(
+            has_dangerous_uri_scheme("java\u{200E}script:alert(1)"),
+            "LRM embedded in javascript: scheme must still be blocked"
+        );
+    }
+
+    #[test]
+    fn test_dangerous_uri_scheme_with_rlm() {
+        // RIGHT-TO-LEFT MARK (U+200F) mirror of LRM. Per #2087.
+        assert!(
+            has_dangerous_uri_scheme("vb\u{200F}script:alert(1)"),
+            "RLM embedded in vbscript: scheme must still be blocked"
+        );
+    }
+
+    // -- Namespace prefix with `.` (XML NCName, #2088) --------------------
+
+    #[test]
+    fn test_sanitize_svg_strips_namespaced_script_with_dot_in_prefix() {
+        // NCName body allows `.` after the first character, so `foo.bar:`
+        // is a valid namespace prefix that previous versions of
+        // `namespace_prefix_len` did not recognise. The blocklist must
+        // still strip it.
+        let svg = "<foo.bar:script>alert(1)</foo.bar:script>text";
+        let sanitized = sanitize_svg_content(svg);
+        assert!(
+            !sanitized.to_ascii_lowercase().contains("script"),
+            "`foo.bar:script` must be stripped, got: {sanitized}"
+        );
+        assert!(sanitized.contains("text"));
     }
 
     // --- Multi-line tag splitting XSS prevention (#711) ---
