@@ -281,10 +281,11 @@ mod tests {
     }
 
     #[test]
-    fn test_transpose_flat_to_flat() {
+    fn test_transpose_eb_up_2_to_f() {
         let detail = parse_chord("Eb").unwrap();
         let t = transpose_detail(&detail, 2);
-        // Eb (3) + 2 = 5 = F
+        // Eb (3) + 2 = 5 = F natural. F has no flat form in standard chord
+        // notation, so the flat accidental is dropped.
         assert_eq!(t.root, Note::F);
         assert_eq!(t.root_accidental, None);
     }
