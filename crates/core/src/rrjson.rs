@@ -173,20 +173,24 @@ fn write_json_string(f: &mut fmt::Formatter<'_>, s: &str) -> fmt::Result {
 
 impl fmt::Display for Value {
     /// Formats the value as valid JSON.
+    ///
+    /// Non-finite `f64` values (`NaN`, `±Infinity`) are emitted as `null`
+    /// to match the `serde_json` convention. The JSON spec has no
+    /// representation for non-finite numbers, and Rust's default `f64`
+    /// `Display` produces bare `NaN`/`inf` tokens that are not valid JSON.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Value::Null => write!(f, "null"),
             Value::Bool(b) => write!(f, "{b}"),
             Value::Number(n) => {
+                if !n.is_finite() {
+                    return write!(f, "null");
+                }
                 // Display whole numbers without a decimal point. The upper
                 // bound uses strict less-than because `i64::MAX as f64`
                 // rounds up to a value larger than `i64::MAX`, and casting
                 // such a value `as i64` would overflow to `i64::MIN`.
-                if n.fract() == 0.0
-                    && n.is_finite()
-                    && *n >= i64::MIN as f64
-                    && *n < i64::MAX as f64
-                {
+                if n.fract() == 0.0 && *n >= i64::MIN as f64 && *n < i64::MAX as f64 {
                     write!(f, "{}", *n as i64)
                 } else {
                     write!(f, "{n}")
@@ -1536,10 +1540,6 @@ mod tests {
         // Values outside i64 range should not be cast to i64
         assert_eq!(Value::Number(1e20).to_string(), "100000000000000000000");
         assert_eq!(Value::Number(-1e20).to_string(), "-100000000000000000000");
-        // Non-finite values cannot be produced by the parser (rejected at parse time),
-        // but Display still handles them if constructed directly.
-        assert_eq!(Value::Number(f64::INFINITY).to_string(), "inf");
-        assert_eq!(Value::Number(f64::NEG_INFINITY).to_string(), "-inf");
     }
 
     #[test]
@@ -1859,10 +1859,42 @@ mod tests {
     // --- Additional edge case coverage (#580) ---
 
     #[test]
-    fn test_display_nan() {
+    fn test_display_nan_emits_null() {
+        // Per the JSON spec, NaN has no representation. Following the
+        // `serde_json` convention, emit `null` rather than the bare `NaN`
+        // token that Rust's default `Display` produces.
         let val = Value::Number(f64::NAN);
-        let s = val.to_string();
-        assert_eq!(s, "NaN");
+        assert_eq!(val.to_string(), "null");
+    }
+
+    #[test]
+    fn test_display_positive_infinity_emits_null() {
+        let val = Value::Number(f64::INFINITY);
+        assert_eq!(val.to_string(), "null");
+    }
+
+    #[test]
+    fn test_display_negative_infinity_emits_null() {
+        let val = Value::Number(f64::NEG_INFINITY);
+        assert_eq!(val.to_string(), "null");
+    }
+
+    #[test]
+    fn test_display_non_finite_inside_array_and_object_is_valid_json() {
+        // The surrounding structure must remain valid JSON: a non-finite
+        // number inside an array or object becomes `null` in place.
+        let arr = Value::Array(vec![
+            Value::Number(1.0),
+            Value::Number(f64::NAN),
+            Value::Number(2.0),
+        ]);
+        assert_eq!(arr.to_string(), "[1,null,2]");
+
+        let obj = Value::Object(vec![
+            ("a".to_string(), Value::Number(f64::INFINITY)),
+            ("b".to_string(), Value::Number(0.0)),
+        ]);
+        assert_eq!(obj.to_string(), "{\"a\":null,\"b\":0}");
     }
 
     #[test]

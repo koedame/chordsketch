@@ -69,6 +69,12 @@ jobs:
         if: matrix.cross
         run: cargo install cross --locked
 
+      # NOTE: no Swatinem/rust-cache here. Per .claude/rules/ci-parallelization.md §2,
+      # this workflow fires on version-tag pushes (~every 10 days) and GitHub
+      # Actions evicts cache entries after 7 days of inactivity, so the cache
+      # expires between runs. Adding rust-cache delivers no wall-clock benefit
+      # and only adds YAML noise. Do not add one back without updating the rule.
+
       - name: Build
         run: |
           if [ "${{ matrix.cross }}" = "true" ]; then

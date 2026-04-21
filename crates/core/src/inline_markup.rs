@@ -105,8 +105,12 @@ pub fn has_inline_markup(text: &str) -> bool {
             if tag_name_at_start(rest).is_some() {
                 return true;
             }
-            // Check for </span>
-            if rest.len() >= 5 && rest[..5].eq_ignore_ascii_case("span>") {
+            // Check for </span>. Use `str::get` so a non-ASCII byte that
+            // happens to fall within the first 5 bytes does not panic.
+            if rest
+                .get(..5)
+                .is_some_and(|p| p.eq_ignore_ascii_case("span>"))
+            {
                 return true;
             }
         }
@@ -204,12 +208,12 @@ fn tag_name_at_start(s: &str) -> Option<(TagType, usize)> {
     ];
 
     for (name, tag_type) in tags {
-        if s.len() >= name.len() {
-            // Case-insensitive comparison
-            let candidate = &s[..name.len()];
-            if candidate.eq_ignore_ascii_case(name) {
-                return Some((tag_type.clone(), name.len()));
-            }
+        // `str::get` returns `None` if `name.len()` is not a char boundary,
+        // which protects against multi-byte UTF-8 input from panicking.
+        if s.get(..name.len())
+            .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
+        {
+            return Some((tag_type.clone(), name.len()));
         }
     }
 
@@ -221,11 +225,14 @@ fn tag_name_at_start(s: &str) -> Option<(TagType, usize)> {
 /// The input should start after the `<`. Returns `SpanAttributes` and the
 /// length consumed (including the closing `>`).
 fn span_tag_at_start(s: &str) -> Option<(SpanAttributes, usize)> {
-    // Must start with "span" (case-insensitive)
-    if s.len() < 4 {
-        return None;
-    }
-    if !s[..4].eq_ignore_ascii_case("span") {
+    // Must start with "span" (case-insensitive). `str::get` guards against
+    // non-ASCII bytes within the first 4 bytes; if the prefix matched, those
+    // 4 bytes are all ASCII, so `s[4..]` is guaranteed to be at a char
+    // boundary.
+    if !s
+        .get(..4)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("span"))
+    {
         return None;
     }
 
@@ -312,8 +319,9 @@ fn parse_span_attributes(s: &str) -> SpanAttributes {
 ///
 /// The input should start after the `</`. Matches both simple tags and `</span>`.
 fn closing_tag_at_start(s: &str) -> Option<(TagType, usize)> {
-    // Check for </span> first
-    if s.len() >= 5 && s[..5].eq_ignore_ascii_case("span>") {
+    // Check for </span> first. `str::get` avoids panicking if the first 5
+    // bytes straddle a multi-byte UTF-8 boundary.
+    if s.get(..5).is_some_and(|p| p.eq_ignore_ascii_case("span>")) {
         return Some((TagType::Span(SpanAttributes::default()), 5));
     }
     tag_name_at_start(s)
@@ -994,5 +1002,58 @@ mod tests {
             vec![TextSpan::Plain("colored".to_string())],
         )];
         assert_eq!(spans_to_plain_text(&spans), "colored");
+    }
+
+    // -- Regression: multi-byte UTF-8 must not panic the tag scanner --------
+    //
+    // Before the fix, `span_tag_at_start` sliced `s[..4]` after only a byte
+    // length guard. Input like "<abc\u{0300}xyz" (combining grave accent
+    // spanning bytes 3..=4) would panic with "byte index 4 is not a char
+    // boundary". Because `has_inline_markup` is called for every lyric
+    // segment in the parser, any ChordPro file containing such a sequence
+    // could crash the parser, every renderer, the CLI, and every binding.
+
+    #[test]
+    fn has_inline_markup_does_not_panic_on_multibyte_after_lt() {
+        // 2-byte combining mark starting at byte 3 — slicing at byte 4 inside
+        // the char used to panic.
+        assert!(!has_inline_markup("<abc\u{0300}xyz"));
+    }
+
+    #[test]
+    fn has_inline_markup_does_not_panic_on_multibyte_after_slash() {
+        // `</abc\u{0300}xyz` — previously panicked in the `</span>` check
+        // when `rest[..5]` landed inside the combining mark.
+        assert!(!has_inline_markup("</abc\u{0300}xyz"));
+    }
+
+    #[test]
+    fn has_inline_markup_does_not_panic_on_emoji_after_lt() {
+        // 4-byte emoji starting at byte 3; `tag_name_at_start` used to slice
+        // `s[..5]` which falls inside the emoji.
+        assert!(!has_inline_markup("<abc🎸xyz"));
+    }
+
+    #[test]
+    fn has_inline_markup_does_not_panic_on_cjk_after_slash() {
+        // 3-byte CJK character right after `</`.
+        assert!(!has_inline_markup("</こんにちは"));
+    }
+
+    #[test]
+    fn parse_inline_markup_does_not_panic_on_multibyte_adjacent_to_lt() {
+        // Full parser path (not just the quick scan) must also be safe.
+        let spans = parse_inline_markup("<abc\u{0300}xyz");
+        assert_eq!(spans, vec![TextSpan::Plain("<abc\u{0300}xyz".to_string())]);
+    }
+
+    #[test]
+    fn parse_inline_markup_does_not_panic_with_real_tag_and_multibyte() {
+        // A real <b>...</b> tag wrapping text that contains multi-byte chars
+        // placed right after a stray `<`.
+        let spans = parse_inline_markup("<b>漢字<abc\u{0300}xyz</b>");
+        // Outcome: bold wraps everything between the opening and closing tag.
+        // The important assertion is simply that parsing did not panic.
+        assert!(matches!(spans.as_slice(), [TextSpan::Bold(_)]));
     }
 }

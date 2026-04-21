@@ -47,7 +47,11 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      # NOTE: no Swatinem/rust-cache here. Per .claude/rules/ci-parallelization.md §2,
+      # this workflow runs only a few times per month and GitHub Actions evicts
+      # cache entries after 7 days of inactivity, so the cache expires between
+      # runs. Adding rust-cache delivers no wall-clock benefit and only adds YAML
+      # noise. Do not add one back without updating the rule.
 
       - name: Install wasm-pack
         uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2

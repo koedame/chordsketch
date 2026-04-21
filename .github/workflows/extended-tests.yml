@@ -21,7 +21,11 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      # NOTE: no Swatinem/rust-cache here. Per .claude/rules/ci-parallelization.md §2,
+      # this workflow is `workflow_dispatch`-only and runs rarely, so its cache
+      # entries will be evicted by GitHub's 7-day LRU before the next invocation.
+      # Caching infrequent workflows delivers no wall-clock benefit and only adds
+      # YAML noise. Do not add one back without updating the rule.
 
       - name: Install Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0

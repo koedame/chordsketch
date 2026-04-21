@@ -556,18 +556,36 @@ fn is_valid_quality_ext(s: &str) -> bool {
 /// Extracts `(byte_offset, chord_name)` pairs from a chord line, preserving
 /// the column position of each chord token.
 fn chord_positions(line: &str) -> Vec<(usize, String)> {
+    // Walk the string once with byte offsets. Previously this delegated to
+    // `split_whitespace` + `str::find` with a cumulative search offset,
+    // which required the caller to hold the invariant that every token
+    // occurs exactly once in the remaining slice at its natural position.
+    // Tracking the position directly sidesteps the issue entirely and
+    // never re-scans the line.
     let mut result = Vec::new();
-    let mut search_start = 0usize;
+    let bytes = line.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
 
-    for token in line.split_whitespace() {
-        // Locate this token inside the remaining slice.
-        if let Some(rel) = line[search_start..].find(token) {
-            let abs = search_start + rel;
-            if is_chord_token(token) {
-                result.push((abs, token.to_string()));
-            }
-            // Advance past this token.
-            search_start = abs + token.len();
+    while i < len {
+        // Skip whitespace. ASCII is fine here because `char::is_whitespace`
+        // for any non-ASCII whitespace codepoint is not something a chord
+        // line is expected to contain, and ASCII whitespace is all 1 byte.
+        if bytes[i].is_ascii_whitespace() {
+            i += 1;
+            continue;
+        }
+
+        // Token runs from `i` to the next ASCII-whitespace byte. Non-ASCII
+        // bytes inside the token are forwarded byte-by-byte; `is_chord_token`
+        // rejects any token that is not pure ASCII chord syntax.
+        let start = i;
+        while i < len && !bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        let token = &line[start..i];
+        if is_chord_token(token) {
+            result.push((start, token.to_string()));
         }
     }
     result

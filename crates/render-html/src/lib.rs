@@ -1009,14 +1009,25 @@ fn sanitize_svg_content(input: &str) -> String {
                 .unwrap_or(rest.len());
             let rest_upper = &rest[..limit];
 
+            // Optional XML namespace prefix (e.g. `<svg:script>`,
+            // `<xhtml:iframe>`). HTML5 parsers outside an SVG root treat
+            // these as colon-in-name plain elements, so the practical
+            // attack surface is narrow — but the sister-site rule for
+            // blocklists demands we not rely on callers always stripping
+            // namespaces beforehand. See sanitizer-security.md §SVG tag
+            // blocklists.
+            let ns_open = namespace_prefix_len(&rest.as_bytes()[1..]);
+            let tag_start_in_rest = 1 + ns_open;
+
             // Check for opening dangerous tags: <tag or <tag> or <tag ...>
             let mut matched = false;
             for tag in DANGEROUS_TAGS {
-                let prefix = format!("<{tag}");
-                if starts_with_ignore_case(rest_upper, &prefix)
-                    && rest.len() > prefix.len()
+                let tag_end_in_rest = tag_start_in_rest + tag.len();
+                if rest.len() > tag_end_in_rest
+                    && rest_upper.len() >= tag_end_in_rest
+                    && starts_with_ignore_case(&rest_upper[tag_start_in_rest..], tag)
                     && bytes
-                        .get(i + prefix.len())
+                        .get(i + tag_end_in_rest)
                         .is_none_or(|b| b.is_ascii_whitespace() || *b == b'>' || *b == b'/')
                 {
                     // Check if this opening tag is self-closing (ends with />).
@@ -1078,13 +1089,17 @@ fn sanitize_svg_content(input: &str) -> String {
                 continue;
             }
 
-            // Check for stray closing dangerous tags: </tag>
+            // Check for stray closing dangerous tags: </tag> or </ns:tag>
+            let ns_close = namespace_prefix_len(rest.as_bytes().get(2..).unwrap_or(&[]));
+            let tag_start_in_close = 2 + ns_close;
             for tag in DANGEROUS_TAGS {
-                let prefix = format!("</{tag}");
-                if starts_with_ignore_case(rest_upper, &prefix)
-                    && rest.len() > prefix.len()
+                let tag_end_in_close = tag_start_in_close + tag.len();
+                if rest_upper.len() >= tag_end_in_close
+                    && rest.len() > tag_end_in_close
+                    && rest.starts_with("</")
+                    && starts_with_ignore_case(&rest_upper[tag_start_in_close..], tag)
                     && bytes
-                        .get(i + prefix.len())
+                        .get(i + tag_end_in_close)
                         .is_none_or(|b| b.is_ascii_whitespace() || *b == b'>')
                 {
                     // Skip past the closing >.
@@ -1123,31 +1138,79 @@ fn starts_with_ignore_case(s: &str, prefix: &str) -> bool {
         .all(|(a, b)| a.eq_ignore_ascii_case(b))
 }
 
+/// Zero-width, BOM, and bidirectional-override code points that browsers
+/// may render as invisible inside a URI scheme but which an attacker can
+/// use to split a blocked scheme name (e.g. `java\u{200B}script:` or
+/// `java\u{FEFF}script:`). Stripped before scheme comparison.
+fn is_invisible_format_char(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00AD}' // soft hyphen
+        | '\u{200B}' // zero-width space
+        | '\u{200C}' // zero-width non-joiner
+        | '\u{200D}' // zero-width joiner
+        | '\u{200E}' // left-to-right mark (see #2087)
+        | '\u{200F}' // right-to-left mark (see #2087)
+        | '\u{2060}' // word joiner
+        | '\u{FEFF}' // zero-width no-break space / BOM
+        | '\u{202A}'..='\u{202E}' // bidi embedding/override
+        | '\u{2066}'..='\u{2069}' // isolate / pop directional
+    )
+}
+
+/// Length of an optional XML namespace prefix at the start of `bytes`
+/// (e.g. `svg:`, `xhtml:`), including the trailing colon. Returns `0` when
+/// no prefix is present, so callers can always add the result to a fixed
+/// offset without branching.
+fn namespace_prefix_len(bytes: &[u8]) -> usize {
+    let mut idx = 0;
+    match bytes.first() {
+        Some(b) if b.is_ascii_alphabetic() => idx += 1,
+        _ => return 0,
+    }
+    // XML Namespaces §2 NCName body allows alphanumerics, `-`, `_`, and `.`
+    // after the first character. `.` is intentionally excluded from the
+    // first-character match above — see issue #2088 for context.
+    while let Some(&b) = bytes.get(idx) {
+        if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.' {
+            idx += 1;
+        } else {
+            break;
+        }
+    }
+    if bytes.get(idx) == Some(&b':') {
+        idx + 1
+    } else {
+        0
+    }
+}
+
 /// Find the byte offset just past the closing `</tag>` for the given tag name,
 /// starting the search from position `start`. Returns `None` if not found.
+///
+/// Accepts an optional XML namespace prefix on the closing tag so that
+/// `<svg:script>…</svg:script>` is fully consumed even though we matched
+/// the opening form by stripping `svg:` at lookup time.
 fn find_end_tag_ignore_case(input: &str, start: usize, tag: &str) -> Option<usize> {
     let search = &input.as_bytes()[start..];
     let tag_bytes = tag.as_bytes();
-    let close_prefix_len = 2 + tag_bytes.len(); // "</" + tag
 
     for i in 0..search.len() {
-        if search[i] == b'<'
-            && i + 1 < search.len()
-            && search[i + 1] == b'/'
-            && i + close_prefix_len <= search.len()
-        {
-            let candidate = &search[i + 2..i + close_prefix_len];
-            if candidate
-                .iter()
-                .zip(tag_bytes)
-                .all(|(a, b)| a.eq_ignore_ascii_case(b))
-            {
-                // Find the closing '>'.
-                if let Some(gt) = search[i + close_prefix_len..]
+        if search[i] == b'<' && search.get(i + 1) == Some(&b'/') {
+            let after_slash = &search[i + 2..];
+            let ns = namespace_prefix_len(after_slash);
+            let tag_end = ns + tag_bytes.len();
+            if after_slash.len() >= tag_end {
+                let candidate = &after_slash[ns..tag_end];
+                if candidate
                     .iter()
-                    .position(|&b| b == b'>')
+                    .zip(tag_bytes)
+                    .all(|(a, b)| a.eq_ignore_ascii_case(b))
                 {
-                    return Some(start + i + close_prefix_len + gt + 1);
+                    // Find the closing '>'.
+                    if let Some(gt) = after_slash[tag_end..].iter().position(|&b| b == b'>') {
+                        return Some(start + i + 2 + tag_end + gt + 1);
+                    }
                 }
             }
         }
@@ -1214,15 +1277,20 @@ fn find_tag_end(bytes: &[u8]) -> Option<usize> {
 /// Check if a URI value starts with a dangerous scheme (`javascript:`,
 /// `vbscript:`, `data:`), ignoring leading whitespace and case.
 fn has_dangerous_uri_scheme(value: &str) -> bool {
-    // Strip leading whitespace, then remove embedded ASCII control characters
-    // and whitespace within the scheme portion to defend against obfuscation
-    // like `java\tscript:` which some older browsers tolerated.
-    // Filter runs before take(30) so the cap applies to meaningful characters,
-    // preventing bypass via 20+ embedded whitespace/control characters.
+    // Strip leading whitespace, then remove embedded whitespace, ASCII
+    // control characters, and the Unicode format characters that have
+    // historically been used to obfuscate URI schemes (zero-width spaces,
+    // zero-width joiners, bidi overrides, BOM, word joiner). Filter runs
+    // before `take(30)` so the cap applies to meaningful characters,
+    // preventing bypass via large numbers of embedded invisible
+    // characters. See sanitizer-security.md §Blocklist completeness and
+    // the OWASP XSS Prevention Cheat Sheet for motivation.
     let lower: String = value
         .trim_start()
         .chars()
-        .filter(|c| !c.is_ascii_whitespace() && !c.is_ascii_control())
+        .filter(|&c| {
+            !c.is_ascii_whitespace() && !c.is_ascii_control() && !is_invisible_format_char(c)
+        })
         .take(30)
         .flat_map(|c| c.to_lowercase())
         .collect();
@@ -3481,6 +3549,58 @@ mod delegate_tests {
         );
     }
 
+    // -- Namespaced dangerous tags (sister-site gap, sanitizer-security.md) --
+
+    #[test]
+    fn test_sanitize_svg_strips_namespaced_script() {
+        // `<svg:script>` used to survive because the DANGEROUS_TAGS scan
+        // only matched `<script`. HTML5 parsers outside an `<svg>` root
+        // treat this as a plain element, so the exploitability is narrow,
+        // but the blocklist must still cover the namespaced form.
+        let svg = "<svg:script>alert(1)</svg:script><circle r=\"5\"/>";
+        let sanitized = sanitize_svg_content(svg);
+        assert!(
+            !sanitized.to_ascii_lowercase().contains("script"),
+            "namespaced <svg:script> must be stripped, got: {sanitized}"
+        );
+        assert!(sanitized.contains("<circle"));
+    }
+
+    #[test]
+    fn test_sanitize_svg_strips_namespaced_iframe_case_insensitive() {
+        let svg = "<XHTML:Iframe src=\"javascript:alert(1)\"></XHTML:Iframe>text";
+        let sanitized = sanitize_svg_content(svg);
+        assert!(
+            !sanitized.to_ascii_lowercase().contains("iframe"),
+            "namespaced iframe must be stripped, got: {sanitized}"
+        );
+        assert!(sanitized.contains("text"));
+    }
+
+    #[test]
+    fn test_sanitize_svg_strips_namespaced_foreignobject() {
+        let svg = "<svg:foreignObject><body><script>x()</script></body></svg:foreignObject>safe";
+        let sanitized = sanitize_svg_content(svg);
+        assert!(
+            !sanitized.to_ascii_lowercase().contains("foreignobject"),
+            "namespaced foreignObject must be stripped, got: {sanitized}"
+        );
+        assert!(!sanitized.to_ascii_lowercase().contains("script"));
+        assert!(sanitized.contains("safe"));
+    }
+
+    #[test]
+    fn test_sanitize_svg_strips_stray_namespaced_closing_tag() {
+        // A stray closing `</svg:script>` without a matching opener must
+        // still be stripped — previously only `</script>` was recognised.
+        let svg = "lyrics</svg:script>more";
+        let sanitized = sanitize_svg_content(svg);
+        assert!(
+            !sanitized.to_ascii_lowercase().contains("script"),
+            "stray namespaced closing tag must be stripped, got: {sanitized}"
+        );
+    }
+
     #[test]
     fn test_render_svg_section() {
         let html = render("{start_of_svg}\n<svg/>\n{end_of_svg}");
@@ -3935,6 +4055,96 @@ mod delegate_tests {
             has_dangerous_uri_scheme(payload),
             "3 tabs between letters (colon at raw position 40) must still be detected"
         );
+    }
+
+    // -- Unicode invisible-format-character obfuscation --------------------
+
+    #[test]
+    fn test_dangerous_uri_scheme_with_zero_width_space() {
+        assert!(
+            has_dangerous_uri_scheme("java\u{200B}script:alert(1)"),
+            "ZWSP embedded in javascript: scheme must still be blocked"
+        );
+    }
+
+    #[test]
+    fn test_dangerous_uri_scheme_with_zero_width_joiner() {
+        assert!(
+            has_dangerous_uri_scheme("vb\u{200D}script:alert(1)"),
+            "ZWJ embedded in vbscript: scheme must still be blocked"
+        );
+    }
+
+    #[test]
+    fn test_dangerous_uri_scheme_with_byte_order_mark() {
+        assert!(
+            has_dangerous_uri_scheme("java\u{FEFF}script:alert(1)"),
+            "BOM/ZWNBSP embedded in javascript: scheme must still be blocked"
+        );
+    }
+
+    #[test]
+    fn test_dangerous_uri_scheme_with_soft_hyphen() {
+        assert!(
+            has_dangerous_uri_scheme("data\u{00AD}:text/html,xss"),
+            "soft hyphen embedded in data: scheme must still be blocked"
+        );
+    }
+
+    #[test]
+    fn test_dangerous_uri_scheme_with_bidi_override() {
+        assert!(
+            has_dangerous_uri_scheme("\u{202E}javascript:alert(1)"),
+            "leading bidi override must not hide the scheme"
+        );
+        assert!(
+            has_dangerous_uri_scheme("java\u{202A}script:alert(1)"),
+            "embedded bidi override must not hide the scheme"
+        );
+    }
+
+    #[test]
+    fn test_dangerous_uri_scheme_safe_after_unicode_filter() {
+        // The filter must not flag safe schemes just because they pass
+        // through the wider Unicode stripper.
+        assert!(!has_dangerous_uri_scheme("https://example.com/a\u{200B}b"));
+    }
+
+    #[test]
+    fn test_dangerous_uri_scheme_with_lrm() {
+        // LEFT-TO-RIGHT MARK (U+200E) is a Unicode Cf (Format) character
+        // that is invisible in rendered text. Per #2087, it must be
+        // stripped from the scheme candidate before comparison.
+        assert!(
+            has_dangerous_uri_scheme("java\u{200E}script:alert(1)"),
+            "LRM embedded in javascript: scheme must still be blocked"
+        );
+    }
+
+    #[test]
+    fn test_dangerous_uri_scheme_with_rlm() {
+        // RIGHT-TO-LEFT MARK (U+200F) mirror of LRM. Per #2087.
+        assert!(
+            has_dangerous_uri_scheme("vb\u{200F}script:alert(1)"),
+            "RLM embedded in vbscript: scheme must still be blocked"
+        );
+    }
+
+    // -- Namespace prefix with `.` (XML NCName, #2088) --------------------
+
+    #[test]
+    fn test_sanitize_svg_strips_namespaced_script_with_dot_in_prefix() {
+        // NCName body allows `.` after the first character, so `foo.bar:`
+        // is a valid namespace prefix that previous versions of
+        // `namespace_prefix_len` did not recognise. The blocklist must
+        // still strip it.
+        let svg = "<foo.bar:script>alert(1)</foo.bar:script>text";
+        let sanitized = sanitize_svg_content(svg);
+        assert!(
+            !sanitized.to_ascii_lowercase().contains("script"),
+            "`foo.bar:script` must be stripped, got: {sanitized}"
+        );
+        assert!(sanitized.contains("text"));
     }
 
     // --- Multi-line tag splitting XSS prevention (#711) ---
