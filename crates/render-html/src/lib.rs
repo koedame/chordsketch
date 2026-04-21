@@ -1244,8 +1244,15 @@ fn strip_dangerous_attrs(input: &str) -> String {
         } else {
             // Outside a tag — advance one UTF-8 character at a time to
             // preserve multi-byte characters (CJK, emoji, accented, etc.).
+            debug_assert!(
+                input.is_char_boundary(pos),
+                "pos must land on a char boundary; advancing by c.len_utf8() is the invariant"
+            );
             let ch = &input[pos..];
-            let c = ch.chars().next().expect("pos is within bounds");
+            let c = ch
+                .chars()
+                .next()
+                .expect("pos is on a char boundary and within bounds");
             result.push(c);
             pos += c.len_utf8();
         }
