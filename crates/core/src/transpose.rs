@@ -271,10 +271,11 @@ mod tests {
     }
 
     #[test]
-    fn test_transpose_flat_preserves_flat_spelling() {
+    fn test_transpose_bb_up_2_to_c() {
         let detail = parse_chord("Bb").unwrap();
         let t = transpose_detail(&detail, 2);
-        // Bb (10) + 2 = 0 = C
+        // Bb (10) + 2 = 0 = C (natural — no accidental; flat spelling is
+        // not preserved here because C has no flat form).
         assert_eq!(t.root, Note::C);
         assert_eq!(t.root_accidental, None);
     }
