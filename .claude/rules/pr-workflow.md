@@ -70,3 +70,22 @@ separate issue — not raised in the delta review.
 - PR titles should be concise and written in imperative mood (e.g., "Add chord
   transposition support").
 - PR descriptions must include What, Why, Test results, and Review summary sections.
+- PR descriptions and commit messages must stay neutral and technical. The
+  following are prohibited:
+  - Verbatim quotes of user or reviewer messages.
+  - Session dates, timestamps, or narrative framing such as
+    "in the 2026-04-XX session the assistant said X and the user replied Y".
+  - GitHub handles (`@user`) naming who said what. Linking an issue or PR
+    number (`#1234`) is fine; naming a person's reaction is not.
+  - Blow-by-blow reconstructions of how the PR came to exist.
+
+  Write every PR body and commit message as if onboarding a future maintainer
+  who has no access to the originating conversation. The change and its
+  rationale stand on their own; the conversation that produced them does not.
+
+  **Why:** PR history and commit messages are a permanent onboarding artefact
+  that future maintainers and code-archaeology tools rely on. Conversational
+  context rots — participants leave, quotes lose meaning, dates become
+  noise — and embedding it in durable artefacts pollutes the signal. Keep
+  conversations in chat, issues, or review threads; keep PR bodies and
+  commit messages in the technical-record voice.
