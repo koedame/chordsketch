@@ -4,50 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ChordSketch Playground</title>
-  <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
-  <header>
-    <h1>ChordSketch Playground</h1>
-    <div class="controls">
-      <label>
-        Format:
-        <select id="format">
-          <option value="html" selected>HTML</option>
-          <option value="text">Text</option>
-          <option value="pdf">PDF</option>
-        </select>
-      </label>
-      <label>
-        Transpose:
-        <input type="number" id="transpose" value="0" min="-12" max="12" />
-      </label>
-    </div>
-  </header>
-  <main>
-    <div class="pane editor-pane">
-      <textarea id="editor" spellcheck="false" placeholder="Enter ChordPro here..."></textarea>
-    </div>
-    <div class="pane output-pane">
-      <div id="error" class="error hidden"></div>
-      <!--
-        Sandbox is intentionally restrictive — empty `sandbox` blocks
-        scripts/forms/storage so the rendered HTML can't run JS or steal
-        cookies. We do allow popups so anchor clicks (e.g. from {link}
-        or chord-diagram image maps) can open in a new tab. See #1058.
-      -->
-      <iframe
-        id="preview"
-        sandbox="allow-popups allow-popups-to-escape-sandbox"
-        title="Rendered output"
-      ></iframe>
-      <pre id="text-output" class="hidden"></pre>
-      <div id="pdf-pane" class="hidden">
-        <p>Click the button to generate and download a PDF.</p>
-        <button id="download-pdf">Download PDF</button>
-      </div>
-    </div>
-  </main>
+  <!--
+    The editor / preview / controls DOM is built by
+    `mountChordSketchUi` from `@chordsketch/ui-web`. Keep this body
+    minimal: a single `#app` mount point lets the desktop scaffold
+    (#2069) reuse the same library against an empty Tauri WebView.
+    See `packages/ui-web/README.md` for the API contract.
+  -->
+  <div id="app"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

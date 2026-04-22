@@ -1,0 +1,23 @@
+{
+  "name": "@chordsketch/ui-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Framework-agnostic playground UI shared by the browser playground and the desktop app.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./style.css": "./src/style.css",
+    "./sample": {
+      "types": "./src/sample.ts",
+      "default": "./src/sample.ts"
+    }
+  },
+  "files": [
+    "src"
+  ]
+}

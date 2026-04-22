@@ -9,12 +9,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
-    "paths": {
-      "@chordsketch/wasm": ["../npm/web/chordsketch_wasm.js"],
-      "@chordsketch/ui-web": ["../ui-web/src/index.ts"],
-      "@chordsketch/ui-web/style.css": ["../ui-web/src/style.css"]
-    }
+    "lib": ["ES2020", "DOM", "DOM.Iterable"]
   },
-  "include": ["src", "../ui-web/src"]
+  "include": ["src"]
 }
