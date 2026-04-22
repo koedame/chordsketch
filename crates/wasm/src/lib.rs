@@ -555,6 +555,7 @@ pub fn version() -> String {
 ///
 /// Returns a `JsValue` error string on unknown instrument. Unknown
 /// chords are signalled by returning `Option::None`, not an error.
+#[must_use = "callers must handle the unknown-instrument error"]
 #[wasm_bindgen]
 pub fn chord_diagram_svg(chord: &str, instrument: &str) -> Result<Option<String>, JsValue> {
     use chordsketch_chordpro::chord_diagram::{render_keyboard_svg, render_svg};
