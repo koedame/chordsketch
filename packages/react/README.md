@@ -145,13 +145,15 @@ The returned string matches `package.json`'s `version` field.
   build config — they are resolved by the consumer's bundler rather
   than bundled in. This keeps the published package small and lets
   consumers upgrade those dependencies on their own cadence.
-- **CSS under `./styles.css`** (currently empty) is the canonical
-  stylesheet import path for future components:
+- **CSS under `./styles.css`** is the canonical stylesheet import
+  path — opt in from the host application:
   ```ts
   import '@chordsketch/react/styles.css';
   ```
-  The export is reserved in `package.json` so the first component
-  PR can land the stylesheet without a breaking path change.
+  Rules are minimal and use `currentColor` / transparent
+  backgrounds so the components inherit the host theme. Every
+  selector carries a `chordsketch-*` prefix to avoid colliding
+  with host styles.
 
 ## Links
 

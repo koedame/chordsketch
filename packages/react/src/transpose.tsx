@@ -113,6 +113,11 @@ export function Transpose({
     <div
       {...divProps}
       role="group"
+      // `aria-label` has to be a string; fall back to the literal
+      // `"Transpose"` if the caller passed a ReactNode label (e.g.
+      // `<span>🎵</span>`) so the group still has an accessible
+      // name. Consumers who want a different accessible name can
+      // pass an explicit `aria-label` through divProps, which wins.
       aria-label={
         typeof divProps['aria-label'] === 'string'
           ? divProps['aria-label']
