@@ -1,0 +1,9 @@
+/*
+ * @chordsketch/react — component stylesheet.
+ *
+ * This is the scaffolding commit (#2040). The file is intentionally
+ * empty — real rules for `<ChordSheet>` / `<ChordEditor>` / etc.
+ * land with each component PR (#2041–#2045). Keeping the file
+ * present lets consumers pin the `./styles.css` import path now
+ * and have it resolve without error on every component release.
+ */
