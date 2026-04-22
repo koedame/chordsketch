@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `@chordsketch/react` — npm package scaffold (no components yet; the
+  surface lands in #2041–#2045). Dual ESM + CJS build via tsup,
+  React 18+ peer dependency, `@chordsketch/wasm` runtime dependency,
+  stylesheet at `@chordsketch/react/styles.css`, `version()` as the
+  only exported symbol. CI workflow `.github/workflows/react.yml`
+  covers typecheck, vitest smoke, and a build-artefact integrity
+  check. (#2040)
+
 ### Changed
 
 - **Breaking:** Renamed the core parser/AST crate from `chordsketch-core`

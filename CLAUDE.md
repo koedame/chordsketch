@@ -45,6 +45,7 @@ Additionally, these non-Rust packages exist:
 | `@chordsketch/wasm` | `packages/npm` | npm package, **dual build** (browser ESM + Node.js CJS) with TypeScript types |
 | `@chordsketch/node` | `crates/napi` | Native Node.js addon via napi-rs, multi-package prebuilt layout (main resolver + 5 platform packages). See `docs/releasing.md` §napi distribution. |
 | `@chordsketch/ui-web` | `packages/ui-web` | Framework-agnostic editor + preview UI shared by playground and the upcoming Tauri desktop app (private workspace package, not published) |
+| `@chordsketch/react` | `packages/react` | React component library (scaffold — component surface #2041–#2045 pending). Dual ESM + CJS build via tsup; React 18+ peer dep; CSS at `@chordsketch/react/styles.css`. |
 | Playground | `packages/playground` | Vite-based browser host that mounts `@chordsketch/ui-web` against `@chordsketch/wasm` |
 | Python (`chordsketch`) | `crates/ffi` | Python package via UniFFI + maturin |
 | Swift (`ChordSketch`) | `packages/swift` | Swift package with XCFramework |
