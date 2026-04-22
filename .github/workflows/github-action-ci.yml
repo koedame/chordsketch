@@ -16,7 +16,7 @@ on:
 
 # Cancel previous runs on the same PR when new commits land.
 concurrency:
-  group: github-action-ci-${{ github.head_ref || github.run_id }}
+  group: github-action-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:

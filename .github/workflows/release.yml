@@ -11,6 +11,17 @@ on:
         required: true
         type: string
 
+# Tag-triggered releases never receive force-pushes and MUST NOT be
+# cancelled mid-flight (the partial-release failure mode described on
+# the `build` job below would silently degrade downstream channels).
+# Declare a concurrency group so the workflow is still covered by
+# `.claude/rules/ci-parallelization.md` §5, but with
+# `cancel-in-progress: false` so tag pushes and workflow_dispatch runs
+# always run to completion.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
