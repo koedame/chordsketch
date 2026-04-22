@@ -115,11 +115,11 @@ block.
 **Why:** GitHub-hosted runners are capped at 5 concurrent macOS jobs
 on the Free / Pro / Team plans
 (https://docs.github.com/en/actions/reference/actions-limits). When a
-PR is rebased (or the `auto-update-branch` workflow merges `main`
-into it), the old run continues occupying macOS slots while the new
-run starts behind it in the 5-job queue. Without cancel-in-progress,
-N pushes to one PR produce N parallel macOS pipelines competing for
-the same ceiling.
+PR is rebased (or a GitHub Merge Queue speculative-merge failure
+pushes the author to re-queue), the old run continues occupying
+macOS slots while the new run starts behind it in the 5-job queue.
+Without cancel-in-progress, N pushes to one PR produce N parallel
+macOS pipelines competing for the same ceiling.
 
 ### Release/tag-triggered workflows
 
