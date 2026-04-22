@@ -80,3 +80,4 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 |---|---|---|
 | [0001](0001-kotlin-maven-central-publishing-credentials.md) | Kotlin Maven Central publishing credentials | Accepted (2026-04-11) |
 | [0002](0002-aur-smoke-coverage-exemption.md) | AUR install command is exempt from readme-smoke coverage | Accepted (2026-04-18) |
+| [0003](0003-github-merge-queue.md) | GitHub Merge Queue replaces the auto-update-branch cascade | Accepted (2026-04-22) |
