@@ -356,7 +356,18 @@ export async function mountChordSketchUi(
         const a = document.createElement('a');
         a.href = url;
         a.download = pdfFilename;
-        a.click();
+        // Appending to the document is required in some browsers
+        // (notably Firefox) for `click()` to actually dispatch
+        // the download event. Removing the element after the
+        // click keeps the DOM clean. Mirrors the
+        // `triggerDownload` helper in
+        // `packages/react/src/use-pdf-export.ts`. (#2179)
+        document.body.appendChild(a);
+        try {
+          a.click();
+        } finally {
+          a.remove();
+        }
       } finally {
         // Revoke inside `finally` so a throwing `a.click()`
         // (adversarial / unusual browser state) does not leak
