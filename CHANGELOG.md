@@ -14,7 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `crates/chordpro/`). Rust consumers must update dependency names
   and `use` paths (`chordsketch_core::` → `chordsketch_chordpro::`);
   public APIs are otherwise unchanged. Part of the v0.3.0 multi-format
-  track (iReal Pro support). (#2056, #2050)
+  track (iReal Pro support). See the
+  [v0.3.0 migration guide](docs/migration/v0.3.md) for the bulk-rename
+  commands and per-binding impact matrix. (#2056, #2050, #2065)
 
 ## [0.2.2] - 2026-04-18
 
