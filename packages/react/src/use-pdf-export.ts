@@ -207,8 +207,15 @@ export function triggerDownload(bytes: Uint8Array, filename: string): void {
     // Firefox) for `click()` to actually dispatch the download event.
     // Removing the element after the click keeps the DOM clean.
     document.body.appendChild(a);
-    a.click();
-    a.remove();
+    try {
+      a.click();
+    } finally {
+      // Inner `finally` — remove the anchor even if `click()`
+      // throws, so an adversarial / unusual browser state does
+      // not leak the DOM node. The outer `finally` still revokes
+      // the object URL after removal.
+      a.remove();
+    }
   } finally {
     URL.revokeObjectURL(url);
   }
