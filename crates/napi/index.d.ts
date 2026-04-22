@@ -154,3 +154,20 @@ export function renderPdfWithWarningsAndOptions(
  * empty array indicates the document parses cleanly.
  */
 export function validate(source: string): ValidationError[];
+
+/**
+ * Look up an SVG chord diagram for the given chord name and
+ * instrument. Mirrors the WASM `chord_diagram_svg` export
+ * (#2164).
+ *
+ * `instrument` accepts (case-insensitive): `"guitar"`,
+ * `"ukulele"` (alias `"uke"`), or `"piano"` (aliases
+ * `"keyboard"`, `"keys"`). `chord` is a standard ChordPro
+ * chord name.
+ *
+ * Returns the inline SVG string, or `null` when the built-in
+ * voicing database has no entry for this `(chord, instrument)`
+ * pair. Throws an `Error` (`InvalidArg`) when `instrument` is
+ * not one of the supported values.
+ */
+export function chordDiagramSvg(chord: string, instrument: string): string | null;
