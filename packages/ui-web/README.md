@@ -58,6 +58,22 @@ same shape.
 | `title` | `ChordSketch Playground` | Shown in the header bar. |
 | `documentTitle` | (unchanged) | When set, also overrides `document.title` on mount. |
 
+### Cleanup
+
+`mountChordSketchUi` returns a `Promise<ChordSketchUiHandle>`. The
+handle's `destroy()` method cancels the pending render-debounce
+timer and detaches the event listeners attached during mount:
+
+```ts
+const handle = await mountChordSketchUi(root, { renderers });
+// ...later, when the host is unmounting (Tauri WebView reset, tab
+// switch, Vite HMR, etc.):
+handle.destroy();
+```
+
+`destroy()` is idempotent. Hosts that mount once and never unmount
+(today's browser playground) may safely ignore the return value.
+
 ## Visual contract
 
 The DOM structure built by `mountChordSketchUi` is **structurally

@@ -47,6 +47,19 @@ export interface MountOptions {
   documentTitle?: string;
 }
 
+/**
+ * Handle returned by {@link mountChordSketchUi}. Hosts that need to tear
+ * the UI down (e.g. a Tauri WebView reset, a tab switch in a desktop
+ * shell, a Vite HMR replacement) call `destroy()` to cancel the pending
+ * debounce timer and remove the event listeners attached during mount.
+ *
+ * Hosts that mount once and never unmount (the browser playground today)
+ * may safely ignore the return value.
+ */
+export interface ChordSketchUiHandle {
+  destroy(): void;
+}
+
 const RENDER_DEBOUNCE_MS = 300;
 
 const HTML_FRAME_TEMPLATE = (body: string): string => `<!DOCTYPE html>
@@ -201,17 +214,19 @@ function formatError(e: unknown): string {
 }
 
 /**
- * Mount the ChordSketch playground UI into `root`. Returns a Promise that
- * resolves once the renderer backend is initialised and the first render
- * has been run. Rejects if `renderers.init()` rejects (the host is
- * responsible for surfacing that to the user, e.g. via console).
+ * Mount the ChordSketch playground UI into `root`. Returns a handle whose
+ * `destroy()` method cancels any pending render debounce and detaches the
+ * event listeners added during mount; resolves once the renderer backend
+ * is initialised and the first render has been run. Rejects if
+ * `renderers.init()` rejects (the host is responsible for surfacing that
+ * to the user, e.g. via console).
  *
  * Calling `mountChordSketchUi` replaces the contents of `root`.
  */
 export async function mountChordSketchUi(
   root: HTMLElement,
   options: MountOptions,
-): Promise<void> {
+): Promise<ChordSketchUiHandle> {
   const {
     renderers,
     initialChordPro = SAMPLE_CHORDPRO,
@@ -291,6 +306,13 @@ export async function mountChordSketchUi(
       } else if (format === 'pdf') {
         showPane('pdf');
         hideError();
+      } else {
+        // Forward-safety guard: `formatSelect.value` is typed as `string`
+        // by the DOM, so adding a new <option> in `buildDom` without a
+        // matching arm here would silently no-op (blank pane, no error).
+        // Surfacing the unknown value as an error makes that mismatch
+        // visible at development time. Filed via #2130.
+        showError(`Unknown format selected: ${format}`);
       }
     } catch (e) {
       showError(formatError(e));
@@ -344,4 +366,20 @@ export async function mountChordSketchUi(
   downloadPdfBtn.addEventListener('click', downloadPdf);
 
   render();
+
+  let destroyed = false;
+  return {
+    destroy(): void {
+      if (destroyed) return;
+      destroyed = true;
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      editor.removeEventListener('input', scheduleRender);
+      formatSelect.removeEventListener('change', render);
+      transposeInput.removeEventListener('input', scheduleRender);
+      downloadPdfBtn.removeEventListener('click', downloadPdf);
+    },
+  };
 }
