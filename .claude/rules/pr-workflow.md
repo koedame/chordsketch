@@ -44,6 +44,29 @@ For local review before pushing, or when the automated flow is not desired:
 - All changes enter `main` via pull request — no direct pushes.
 - All PRs are **squash-merged** (merge commits and rebase merging are disabled).
 - Branch protection enforces that status checks pass on the HEAD commit before merging.
+- `main` is protected by **GitHub Merge Queue**. When a human clicks
+  "Merge when ready" (or runs `gh pr merge --merge-queue`), the PR
+  enters the queue; GitHub creates a speculative merge commit
+  against the current tip of `main`, CI runs against that merge
+  commit (the `merge_group:` trigger in `ci.yml`), and the PR lands
+  only if CI passes on the merge commit. The queue replaces the old
+  `auto-update-branch.yml` rebase-fan-out loop — there is no longer
+  a per-merge cascade that re-runs CI on every open PR.
+
+### Merge Queue expectations
+
+- Workflows that produce `required_status_checks` MUST include
+  `merge_group:` alongside `pull_request:` in their `on:` block. The
+  queue's speculative merge commit runs against the `merge_group`
+  event, and any required check that does not fire on that event
+  blocks the queue indefinitely.
+- Non-required workflows that compute on PR events (smoke jobs,
+  language-binding builds, etc.) do NOT need `merge_group:` triggers
+  — the queue does not wait on them. Adding them produces wasted CI
+  runs on every queued merge.
+- If CI fails against the speculative merge commit, GitHub removes
+  the PR from the queue automatically. The author investigates,
+  pushes a fix, and re-queues manually.
 
 ### Severity Definitions
 

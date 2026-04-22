@@ -35,15 +35,19 @@ isolation:
    `github-action-ci.yml`, `release.yml`, `post-release.yml`), so the
    macOS 5-job ceiling is the practical bottleneck long before the
    20-job total.
-2. **Rebase cascade.** After any merge to `main`, the
-   `auto-update-branch.yml` workflow rebases every other open PR on
-   the new `main`, which re-triggers CI on every one of them from
-   scratch. The wall-clock cost per PR therefore grows with the
-   *number of open PRs*, not the *size of each change*.
+2. **Speculative-merge CI runs.** GitHub Merge Queue
+   (enabled on `main` in #2107) runs CI once per queued merge
+   against a speculative merge commit. A large fan-in of queued PRs
+   still consumes runner minutes linearly in the queue depth;
+   macOS-bearing required checks (Test matrix) are the bottleneck.
+   The queue replaces the earlier `auto-update-branch.yml` cascade,
+   so rebase churn on every open PR is gone, but the macOS ceiling
+   still applies to the queue's own CI runs.
 
-Serialization eliminates both: one PR in flight means one CI cycle,
-zero rebase churn, and a linear landing order that the auto-review
-pipeline can converge on.
+Keeping the open-PR-against-main count at one eliminates the first
+bottleneck and keeps the queue itself short, so a given PR's
+wait-in-queue time does not grow with the number of drivers active
+simultaneously.
 
 ## Exception criteria
 
@@ -51,14 +55,16 @@ Parallel PRs to `main` are permitted only when **all** of the
 following hold, and the parallel window is called out in each PR's
 body:
 
-- The PRs modify strictly disjoint files, AND none of them touches
-  `Cargo.toml`, `Cargo.lock`, workspace metadata, or `.github/` (any
-  of those force a rebase on any other open PR).
-- There is a hard deadline that makes the rebase cost acceptable —
-  e.g. an active release freeze, a CVE patch, or an external registry
-  timeout window.
+- The PRs modify strictly disjoint files. Overlapping files would
+  force one of the two to be rejected from the merge queue as a
+  speculative-merge conflict, producing churn that the queue was
+  meant to eliminate.
+- There is a hard deadline that makes the parallel runner load
+  acceptable — e.g. an active release freeze, a CVE patch, or an
+  external registry timeout window.
 - The author has verified the Actions queue is not already saturated
-  (e.g. `gh run list --status queued --limit 100` is short).
+  (e.g. `gh run list --status queued --limit 100` is short) and the
+  merge queue itself is short (no more than ~1–2 PRs ahead).
 
 Purely documentation changes that do not touch any Rust file or
 `.github/workflows/` (such as adding a rule file under
