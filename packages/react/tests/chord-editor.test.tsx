@@ -102,6 +102,40 @@ describe('<ChordEditor>', () => {
     expect(textarea.tagName).toBe('TEXTAREA');
   });
 
+  test('dev-warning fires when the editor flips between controlled and uncontrolled', () => {
+    const stub = makeStub();
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      // Start controlled (value defined).
+      const { rerender } = render(
+        <ChordEditor
+          value="start"
+          onChange={vi.fn()}
+          wasmLoader={makeLoader(stub)}
+          debounceMs={0}
+        />,
+      );
+      // Flip to uncontrolled by passing undefined — same shape as
+      // the React core warning on `<input>`. Regression guard for
+      // #2160.
+      rerender(
+        <ChordEditor
+          defaultValue="next"
+          onChange={vi.fn()}
+          wasmLoader={makeLoader(stub)}
+          debounceMs={0}
+        />,
+      );
+
+      const messages = err.mock.calls.map((call) => String(call[0]));
+      expect(
+        messages.some((m) => m.includes('controlled') && m.includes('uncontrolled')),
+      ).toBe(true);
+    } finally {
+      err.mockRestore();
+    }
+  });
+
   test('readOnly forwards to the textarea', () => {
     render(
       <ChordEditor

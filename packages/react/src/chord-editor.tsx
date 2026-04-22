@@ -1,5 +1,14 @@
 import type { ChangeEvent, HTMLAttributes, KeyboardEvent, ReactNode } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+// Minimal `process.env.NODE_ENV` typing so we do not pull in
+// `@types/node` for a single dev-only reference. The exact
+// `process.env.NODE_ENV` token is required — bundlers (esbuild,
+// Rollup, Vite, webpack DefinePlugin) replace it at build time and
+// a helper that accesses it via `globalThis.process` would not
+// match the substitution pattern, so the production build would
+// still carry the warning code path.
+declare const process: { env: { NODE_ENV?: string } };
 
 import { ChordSheet } from './chord-sheet';
 import type { ChordRenderFormat, ChordWasmLoader } from './use-chord-render';
@@ -32,9 +41,18 @@ export interface ChordEditorProps extends Omit<HTMLAttributes<HTMLDivElement>, '
   transpose?: number;
   /**
    * Fires when the user hits the transpose keyboard shortcut
-   * (Ctrl / Cmd + Up / Down). The component never mutates
-   * `transpose` directly; wire this callback to your own
+   * (`Ctrl` / `Cmd` + `ArrowUp` / `ArrowDown`). The component never
+   * mutates `transpose` directly; wire this callback to your own
    * transpose state (e.g. from `useTranspose`) to respond.
+   *
+   * ### Keyboard note
+   *
+   * Registering this callback suppresses the browser's default
+   * text-navigation for those key combinations inside the editor
+   * textarea — in Firefox `Ctrl+ArrowUp/Down` normally move the
+   * caret to the start/end of the paragraph. If you need the
+   * browser default, omit `onTransposeChange` or wrap it with a
+   * conditional that selectively skips `preventDefault()`.
    */
   onTransposeChange?: (next: number) => void;
   /** Configuration preset name or inline RRJSON forwarded to the preview. */
@@ -125,6 +143,27 @@ export function ChordEditor({
   const [internal, setInternal] = useState<string>(isControlled ? value : defaultValue);
   const current = isControlled ? value : internal;
   const debounced = useDebounced(current, debounceMs);
+
+  // Dev-only warning if a caller flips the component between
+  // controlled and uncontrolled mid-lifetime. React's built-in
+  // `<input>` / `<textarea>` emit the same warning; we mirror the
+  // pattern so the `<ChordEditor>` surface behaves consistently.
+  // Production builds strip the warning via bundler dead-code
+  // elimination on the literal `process.env.NODE_ENV` token; the
+  // inline check below matches what React itself uses.
+  const wasControlledRef = useRef(isControlled);
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (wasControlledRef.current !== isControlled) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `Warning: A component is changing an ${wasControlledRef.current ? 'controlled' : 'uncontrolled'} <ChordEditor> to be ${isControlled ? 'controlled' : 'uncontrolled'}. ` +
+          `<ChordEditor> should not switch between controlled and uncontrolled (or vice versa) during its lifetime. ` +
+          `Decide between using a controlled or uncontrolled <ChordEditor> for the lifetime of the component.`,
+      );
+      wasControlledRef.current = isControlled;
+    }
+  }, [isControlled]);
 
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>): void => {
