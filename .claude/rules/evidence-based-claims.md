@@ -5,7 +5,7 @@ and unilateral judgments that are not grounded in verifiable data.
 "I think", "probably", "should be around X" are signals to stop and
 measure, not to ship the number as a fact.
 
-## Prohibited behaviours
+## Prohibited behaviors
 
 - **Fabricated durations** — "CI takes 15-20 minutes", "this should
   build in a minute", "the deploy usually takes a while". If the

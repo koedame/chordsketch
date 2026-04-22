@@ -65,7 +65,7 @@ Previously-reviewed code that was not flagged is considered accepted. If a revie
 later discovers a blocking issue in previously-accepted code, it should be filed as a
 separate issue — not raised in the delta review.
 
-### PR Formatting
+### PR Formatting and Commit Messages
 
 - PR titles should be concise and written in imperative mood (e.g., "Add chord
   transposition support").
