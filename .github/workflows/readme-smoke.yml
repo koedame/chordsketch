@@ -456,6 +456,13 @@ jobs:
   library-smoke:
     name: Library Usage
     runs-on: ubuntu-latest
+    # Tolerate failure on non-PR runs while the `chordsketch-chordpro`
+    # rename (#2097) is still pre-release — crates.io only hosts the
+    # old `chordsketch-core` name until v0.3.0 publishes. The PR
+    # branch still exercises the snippet via workspace path-deps and
+    # fails hard on API drift. Remove this flag once v0.3.0 is on
+    # crates.io; tracked in #2169.
+    continue-on-error: ${{ github.event_name != 'pull_request' }}
     steps:
       # Checkout is needed even on non-PR runs because the PR branch
       # variant uses workspace path-deps. Cheap on shallow clone.
