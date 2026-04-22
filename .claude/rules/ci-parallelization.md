@@ -155,8 +155,10 @@ Covered macOS-bearing workflows as of 2026-04-22:
 `ffi.yml` and `vscode-extension.yml` carry concurrency blocks too,
 but they are Linux-only — their groups guard against redundant
 `ubuntu-latest` builds on PR rebase / force-push, not the macOS
-5-job ceiling. Their concurrency is a §1 fan-in-discipline measure,
-not a §5 requirement.
+5-job ceiling. They are not required by §5; their presence is a
+defense-in-depth measure against stale-run pileups on Linux
+capacity and is orthogonal to the macOS-cap motivation documented
+here.
 
 When adding a new workflow that touches macOS, append its group name
 to the appropriate bucket above in the same PR that introduces the
