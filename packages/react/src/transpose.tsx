@@ -80,14 +80,19 @@ export function Transpose({
     onChange(clamp(value + step));
   }, [onChange, clamp, value, step]);
 
-  const handleReset = useCallback(() => {
-    onChange(resetValue);
-  }, [onChange, resetValue]);
-
   const clampedResetValue = useMemo(
     () => clampValue(resetValue, min, max),
     [resetValue, min, max],
   );
+
+  const handleReset = useCallback(() => {
+    // Emit the clamped reset value so out-of-range `resetValue`
+    // props do not leak past the component boundary. The render
+    // guard (`value !== clampedResetValue`) and the reset
+    // button's `aria-label` already use the clamped value; this
+    // keeps `onChange`'s payload consistent across all three.
+    onChange(clampedResetValue);
+  }, [onChange, clampedResetValue]);
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>): void => {

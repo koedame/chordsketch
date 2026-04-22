@@ -118,6 +118,25 @@ describe('<Transpose>', () => {
     expect(onChange).toHaveBeenCalledWith(2);
   });
 
+  test('out-of-range resetValue is clamped to [min, max] before onChange fires', () => {
+    const onChange = vi.fn();
+    render(
+      <Transpose
+        value={3}
+        onChange={onChange}
+        resetValue={15}
+        min={-11}
+        max={11}
+      />,
+    );
+    // The button advertises the clamped value (11) so the
+    // on-click payload must match — otherwise the label lies
+    // about what clicking does. Regression guard for #2172.
+    const resetButton = screen.getByRole('button', { name: 'Reset transposition to 11' });
+    fireEvent.click(resetButton);
+    expect(onChange).toHaveBeenCalledWith(11);
+  });
+
   test('reset button is hidden when value equals resetValue (not just zero)', () => {
     const { rerender } = render(<Transpose value={2} onChange={vi.fn()} resetValue={2} />);
     expect(screen.queryByRole('button', { name: /Reset transposition/ })).toBeNull();

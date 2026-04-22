@@ -77,6 +77,10 @@ describe('<ChordSheet>', () => {
         config: 'ukulele',
       }),
     );
+    // Symmetric with the transpose test above — a regression
+    // where the options branch silently falls back to
+    // `render_html` would otherwise pass this test. #2173.
+    expect(stub.render_html).not.toHaveBeenCalled();
   });
 
   test('HTML branch keeps stale output when a subsequent render errors', async () => {

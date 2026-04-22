@@ -119,7 +119,11 @@ copy of the source (default 250 ms). Supports both controlled
 plus keyboard shortcuts **Ctrl+ArrowUp / Ctrl+ArrowDown** (Cmd
 on macOS) to fire `onTransposeChange` — wire that callback to
 the `setValue` from `useTranspose()` to get live transposition
-without leaving the editor.
+without leaving the editor. Registering `onTransposeChange`
+suppresses the browser's default text-navigation for those key
+combinations (Firefox normally moves the caret to
+start/end-of-paragraph); omit the prop if the browser default
+is preferred.
 
 `readOnly`, `previewFormat="text"` (preview inside `<pre>`
 instead of HTML), `config`, custom `errorFallback`, and
