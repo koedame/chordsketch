@@ -188,6 +188,29 @@ describe('<PdfExport>', () => {
     expect(button.getAttribute('aria-busy')).toBeNull();
   });
 
+  test('options prop is forwarded to the renderer', async () => {
+    const stub = makeStubRenderer();
+
+    render(
+      <PdfExport
+        source="{title: Hi}"
+        filename="hi.pdf"
+        options={{ transpose: 5, config: 'ukulele' }}
+        wasmLoader={makeLoader(stub)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export PDF' }));
+
+    await waitFor(() =>
+      expect(stub.render_pdf_with_options).toHaveBeenCalledWith('{title: Hi}', {
+        transpose: 5,
+        config: 'ukulele',
+      }),
+    );
+    expect(stub.render_pdf).not.toHaveBeenCalled();
+  });
+
   test('calls onError when the render rejects', async () => {
     const boom = new Error('render kaboom');
     const stub = makeStubRenderer();

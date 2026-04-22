@@ -93,9 +93,22 @@ const defaultLoader: WasmLoader = () =>
  * await exportPdf(chordproSource, 'song.pdf');
  * ```
  *
+ * ### Cache scope
+ *
+ * Each mounted hook owns its own renderer cache — two
+ * `usePdfExport()` consumers in the same app will each call
+ * `import('@chordsketch/wasm')` on first use. Dynamic ESM imports
+ * and `@chordsketch/wasm`'s own `init()` both dedupe internally,
+ * so this is a measurement-level concern (one extra
+ * microtask-scoped dynamic import resolution), not a correctness
+ * concern. Apps that want a single shared renderer can hoist the
+ * hook into a context provider.
+ *
  * @param loader Optional WASM loader — pass a stub in tests. Do not
  *   supply one in production; the default loads `@chordsketch/wasm`
- *   lazily.
+ *   lazily. The loader does not have to be stable across renders —
+ *   the hook reads the latest reference via a ref so inline
+ *   loaders do not invalidate `exportPdf`'s identity.
  */
 export function usePdfExport(loader: WasmLoader = defaultLoader): UsePdfExportResult {
   const [loading, setLoading] = useState(false);
@@ -107,6 +120,15 @@ export function usePdfExport(loader: WasmLoader = defaultLoader): UsePdfExportRe
   // not a state transition.
   const rendererRef = useRef<PdfRenderer | null>(null);
 
+  // The loader is captured in a ref rather than a useCallback
+  // dependency so that a caller who passes an inline loader
+  // expression does not invalidate `exportPdf`'s identity on every
+  // render. The value is read only on the cache miss (first call),
+  // and `rendererRef` encodes the single-init contract, so using
+  // the latest value committed to the ref is sufficient.
+  const loaderRef = useRef(loader);
+  loaderRef.current = loader;
+
   const exportPdf = useCallback(
     async (
       source: string,
@@ -117,11 +139,16 @@ export function usePdfExport(loader: WasmLoader = defaultLoader): UsePdfExportRe
       setError(null);
       try {
         if (rendererRef.current === null) {
-          const mod = await loader();
+          const mod = await loaderRef.current();
           // `init()` is a no-op on the Node.js build of
           // `@chordsketch/wasm` (the module auto-loads in Node) and
           // required on the browser build. Calling it
-          // unconditionally keeps the hook runtime-agnostic.
+          // unconditionally keeps the hook runtime-agnostic. The
+          // Node build still exports `default` as a no-op init
+          // stub — see `packages/npm/node/chordsketch_wasm.js`.
+          // If a future `@chordsketch/wasm` refactor drops that
+          // export, this call will throw on Node and the hook will
+          // surface the error via `error` state on first use.
           await mod.default();
           rendererRef.current = mod;
         }
@@ -139,7 +166,7 @@ export function usePdfExport(loader: WasmLoader = defaultLoader): UsePdfExportRe
         setLoading(false);
       }
     },
-    [loader],
+    [],
   );
 
   return { exportPdf, loading, error };
