@@ -59,29 +59,55 @@ bug should close all linked issues.
 ### Updating Project Board Status
 
 The board's Status field has three options: **Todo**, **In Progress**, **Done**.
-Use `gh` to flip an issue to In Progress:
+
+Flip an issue (`$N` is the issue number) to In Progress:
 
 ```bash
-# 1. Resolve the issue's project-item ID.
-ITEM_ID=$(gh api graphql -f query='
-  { repository(owner: "koedame", name: "chordsketch") {
-      issue(number: '"$N"') { projectItems(first: 5) { nodes { id } } } } }
-  ' --jq '.data.repository.issue.projectItems.nodes[0].id')
+# 1. Resolve the issue's project-item ID via a GraphQL variable
+#    (no shell interpolation into the query string, so $N can be
+#    validated once and then passed safely).
+ITEM_ID=$(gh api graphql -F number="$N" -f query='
+  query($number: Int!) {
+    repository(owner: "koedame", name: "chordsketch") {
+      issue(number: $number) { projectItems(first: 5) { nodes { id } } }
+    }
+  }' --jq '.data.repository.issue.projectItems.nodes[0].id // empty')
 
-# 2. Set Status = In Progress.
-gh api graphql -f query='
-  mutation {
-    updateProjectV2ItemFieldValue(input: {
-      projectId: "PVT_kwDOBCeHxM4BTI0L"
-      itemId: "'"$ITEM_ID"'"
-      fieldId: "PVTSSF_lADOBCeHxM4BTI0LzhAd1Rw"
-      value: { singleSelectOptionId: "47fc9ee4" }
-    }) { projectV2Item { id } } }'
+# 2. Guard against issues not yet added to the board — otherwise the
+#    mutation below fails with an opaque "Variable $itemId got invalid
+#    value null" message.
+if [ -z "$ITEM_ID" ]; then
+  echo "Issue #$N is not on the chordsketch project board; add it first." >&2
+  exit 1
+fi
+
+# 3. Set Status = In Progress (option ID 47fc9ee4).
+#    Use `-f` (not `-F`) for the option ID so numeric-looking values
+#    like "98236657" are forced to GraphQL String rather than being
+#    inferred as Int by gh's typed-field parser and rejected
+#    server-side against `singleSelectOptionId`'s String type.
+gh api graphql \
+  -f itemId="$ITEM_ID" \
+  -f optionId="47fc9ee4" \
+  -f query='
+    mutation($itemId: ID!, $optionId: String!) {
+      updateProjectV2ItemFieldValue(input: {
+        projectId: "PVT_kwDOBCeHxM4BTI0L"
+        itemId: $itemId
+        fieldId: "PVTSSF_lADOBCeHxM4BTI0LzhAd1Rw"
+        value: { singleSelectOptionId: $optionId }
+      }) { projectV2Item { id } }
+    }'
 ```
+
+To flip the issue to **Done** after merge (when the board's
+auto-close workflow is not enabled), run the step-3 mutation again
+with `optionId="98236657"`; the lookup in step 1 and the guard in
+step 2 are unchanged.
 
 The single-select option IDs are stable: `f75ad846` = Todo,
 `47fc9ee4` = In Progress, `98236657` = Done. Batch multiple issues by
-iterating over a list of numbers.
+iterating over a list of numbers and re-running steps 1–3 per entry.
 
 ## Closing an Issue Without Implementing It
 
