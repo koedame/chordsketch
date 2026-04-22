@@ -125,7 +125,7 @@ function hideError(): void {
 /**
  * Formats a thrown value into a readable error message.
  *
- * Mirrors the `formatError` helper in `packages/playground/src/main.ts`
+ * Mirrors the `formatError` helper in `packages/ui-web/src/index.ts`
  * (see #1060, #1087): prefers `.message` from Error instances to avoid
  * `[object Object]` for structured JsError objects with line/col info.
  */
@@ -139,7 +139,7 @@ function formatError(e: unknown): string {
 /**
  * Wraps rendered HTML body content with baseline CSS.
  *
- * Mirrors `wrapHtml()` in `packages/playground/src/main.ts:96-117`.
+ * Mirrors the `HTML_FRAME_TEMPLATE` helper in `packages/ui-web/src/index.ts`.
  * The rendered HTML from `chordsketch-render-html` contains only the body
  * content (sections, chords-above-lyrics, chord diagrams) without a full
  * document wrapper.

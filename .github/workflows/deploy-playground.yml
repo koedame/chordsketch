@@ -6,6 +6,7 @@ on:
     paths:
       - 'crates/wasm/**'
       - 'packages/playground/**'
+      - 'packages/ui-web/**'
       - 'packages/npm/**'
       - '.github/workflows/deploy-playground.yml'
   workflow_dispatch:

@@ -18,11 +18,20 @@ export default defineConfig({
       // before #1061 was filed). Importing under the published name lets
       // future layout changes only touch the alias here. See #1057.
       '@chordsketch/wasm': resolve(here, '../npm/web/chordsketch_wasm.js'),
+      // Shared editor + preview UI extracted in #2073. Same alias
+      // pattern as the wasm package: ui-web is a sibling workspace
+      // package that ships only TypeScript sources, so Vite consumes
+      // it directly via the `./src/index.ts` main + `./src/style.css`
+      // export. Match-longer-first ordering: the more specific
+      // `/style.css` alias must be listed before the bare package
+      // alias so Vite resolves it correctly.
+      '@chordsketch/ui-web/style.css': resolve(here, '../ui-web/src/style.css'),
+      '@chordsketch/ui-web': resolve(here, '../ui-web/src/index.ts'),
     },
   },
   server: {
     fs: {
-      allow: ['../npm'],
+      allow: ['../npm', '../ui-web'],
     },
   },
 });
