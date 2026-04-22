@@ -7,14 +7,14 @@
 React component library for rendering [ChordPro](https://www.chordpro.org/)
 files, powered by [`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsketch/wasm).
 
-> **Status:** pre-release. The component surface is landing
-> incrementally under issues
-> [#2041](https://github.com/koedame/chordsketch/issues/2041)–[#2045](https://github.com/koedame/chordsketch/issues/2045).
-> Currently shipped: `<PdfExport>` + `usePdfExport` (#2041),
-> `<Transpose>` + `useTranspose` (#2044),
-> `<ChordSheet>` + `useChordRender` (#2042),
-> `<ChordEditor>` + `useDebounced` (#2043).
-> Still pending: `<ChordDiagram>`.
+> **Status:** pre-release. The full component surface promised
+> by #2041–#2045 is now shipped: `<PdfExport>` + `usePdfExport`
+> (#2041), `<ChordSheet>` + `useChordRender` (#2042),
+> `<ChordEditor>` + `useDebounced` (#2043),
+> `<Transpose>` + `useTranspose` (#2044), and
+> `<ChordDiagram>` + `useChordDiagram` (#2045). The package
+> awaits its first `npm publish` (manual maintainer step per the
+> scaffold release contract).
 
 ## Installation
 
@@ -144,6 +144,49 @@ const debouncedQuery = useDebounced(rawQuery, 300);
 Returns a value that lags the input by at most `delay` ms.
 `delay <= 0` bypasses the debounce and passes the input through
 synchronously (used internally by `<ChordEditor>` in tests).
+
+### `<ChordDiagram>` — guitar / ukulele / piano voicings
+
+```tsx
+import { ChordDiagram } from '@chordsketch/react';
+
+export function Voicing() {
+  return (
+    <>
+      <ChordDiagram chord="Am" instrument="guitar" />
+      <ChordDiagram chord="C" instrument="ukulele" />
+      <ChordDiagram chord="Dm7" instrument="piano" />
+    </>
+  );
+}
+```
+
+Looks up the chord in the same voicing database the Rust HTML
+renderer uses (156 built-in voicings: 60 guitar, 36 ukulele,
+60 piano) and returns inline SVG. The SVG inherits
+`currentColor`, so the diagram picks up the host text colour and
+works in dark/light themes without extra styling.
+
+`instrument` accepts `"guitar"`, `"ukulele"` (alias `"uke"`), or
+`"piano"` (aliases `"keyboard"`, `"keys"`). Unknown chords — or
+known chords the database has no voicing for — render
+`notFoundFallback` (default: an inline `role="note"` that
+surfaces the chord name so page readers still see "Am — no
+guitar voicing in the built-in database"). Unsupported
+instruments surface via `errorFallback` (default: inline
+`role="alert"`; pass `errorFallback={null}` to hide).
+
+### `useChordDiagram` — hook for bespoke renderers
+
+```tsx
+import { useChordDiagram } from '@chordsketch/react';
+
+const { svg, loading, error } = useChordDiagram('Am', 'guitar');
+```
+
+Returns the raw SVG string (or `null` when not in the database),
+plus loading / error state. Useful for hosts that want to embed
+the diagram inside custom markup (tooltip, popover, etc.).
 
 ### `<PdfExport>` — one-click PDF download
 
