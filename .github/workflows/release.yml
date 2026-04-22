@@ -19,7 +19,7 @@ on:
 # `cancel-in-progress: false` so tag pushes and workflow_dispatch runs
 # always run to completion.
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
 
 permissions:

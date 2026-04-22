@@ -106,11 +106,11 @@ event so that `main` pushes, tag pushes, `workflow_dispatch`, and
 rebases cancel stale runs.
 
 Use this exact group-key pattern — `github.event.pull_request.number
-|| github.ref` — for all newly added workflows. Pattern-A keys such
-as `github.head_ref || github.run_id` cancel correctly too, but the
-`head_ref || run_id` form lives alongside the canonical shape in two
-older files for historical reasons and SHOULD be migrated when those
-files are touched for any other reason.
+|| github.ref` — for all newly added workflows. Every existing
+workflow in this repo uses this canonical shape; the older
+`github.head_ref || github.run_id` form is no longer present and
+MUST NOT be reintroduced when adding or modifying a `concurrency:`
+block.
 
 **Why:** GitHub-hosted runners are capped at 5 concurrent macOS jobs
 on the Free / Pro / Team plans
@@ -136,7 +136,7 @@ These workflows therefore use a minimal variant:
 
 ```yaml
 concurrency:
-  group: release-${{ github.ref }}              # or post-release-${{ ... }}
+  group: release-${{ inputs.tag || github.ref }}  # or post-release-${{ ... }}
   cancel-in-progress: false
 ```
 
