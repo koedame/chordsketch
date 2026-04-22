@@ -69,9 +69,16 @@ npm run dev
    ```
 
 5. **Open a PR** with `Closes #N` in the description. PRs are squash-merged.
+6. **Click "Merge when ready"** (or run `gh pr merge --merge-queue`).
+   `main` is protected by GitHub Merge Queue: the queue rebases your
+   PR onto the current tip of `main`, runs CI once against that
+   speculative merge commit, and lands the PR if CI passes. You do
+   not need to manually update or rebase your branch before
+   merging — the queue does it for you.
 
 CI runs `cargo fmt --check`, `cargo clippy -- -D warnings`, and `cargo test`
-on every PR. A Claude-powered auto-review classifies findings by severity and
+on every PR and on every speculative merge commit created by the merge
+queue. A Claude-powered auto-review classifies findings by severity and
 may push fix commits directly.
 
 ## Code Style
