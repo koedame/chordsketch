@@ -68,6 +68,21 @@ For local review before pushing, or when the automated flow is not desired:
   the PR from the queue automatically. The author investigates,
   pushes a fix, and re-queues manually.
 
+### Secret-access caveat for `merge_group:` events
+
+Unlike `pull_request:` from forks (which run with restricted
+permissions and no secret access), `merge_group:` events run on a
+GitHub-built merge commit with **full repo-secret access** — the
+same posture as `push:` to a protected branch. That means a queued
+PR that touches `.github/workflows/`, `Cargo.toml`, or any other
+file the speculative merge commit will execute in CI gains
+secret-bearing CI on the queue's merge commit.
+
+The "Merge when ready" click is the gate for this. Reviewers MUST
+scrutinise diffs touching `.github/`, build scripts, or anything
+that runs as a CI step before clicking. Treat workflow-file diffs
+the same way you would treat a `push:` directly to `main`.
+
 ### Severity Definitions
 
 | Severity | Blocks PR/Phase | Definition |
