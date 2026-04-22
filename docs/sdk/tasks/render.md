@@ -68,14 +68,16 @@ the runtime-detection details and the dual-package layout.
 ## `@chordsketch/node` (Node.js native addon)
 
 ```ts
-import { render_html, render_text, render_pdf } from '@chordsketch/node';
+import { renderHtml, renderText, renderPdf } from '@chordsketch/node';
 
-const html: string  = render_html(input);
-const text: string  = render_text(input);
-const pdf:  Buffer  = render_pdf(input);
+const html: string  = renderHtml(input);
+const text: string  = renderText(input);
+const pdf:  Buffer  = renderPdf(input);
 ```
 
-`render_pdf` returns a Node.js `Buffer` (vs. `Uint8Array` for the
+NAPI exposes the functions as **camelCase** (napi-rs converts the
+Rust snake_case automatically); the WASM package keeps snake_case.
+`renderPdf` returns a Node.js `Buffer` (vs. `Uint8Array` for the
 WASM build). No `init()` step — the native addon is loaded
 synchronously by `require`. Prebuilt binaries are shipped for the
 five supported platforms (linux-x64-gnu, linux-arm64-gnu,
@@ -88,11 +90,11 @@ The default subcommand reads ChordPro and renders to stdout (or
 `--output FILE`):
 
 ```bash
-# HTML to stdout (default)
+# Plain text — chords above lyrics — is the default format
 chordsketch song.cho
 
-# Plain text
-chordsketch song.cho --format text
+# HTML
+chordsketch song.cho --format html
 
 # PDF
 chordsketch song.cho --format pdf --output song.pdf
@@ -119,25 +121,29 @@ the AST is not exposed as a host-language object graph.
 ```swift
 import ChordSketch
 
-let html = try ChordSketch.parseAndRenderHtml(input: input, configJson: nil, transpose: nil)
-let text = try ChordSketch.parseAndRenderText(input: input, configJson: nil, transpose: nil)
-let pdf  = try ChordSketch.parseAndRenderPdf(input: input, configJson: nil, transpose: nil)
+let html = try parseAndRenderHtml(input: input, configJson: nil, transpose: nil)
+let text = try parseAndRenderText(input: input, configJson: nil, transpose: nil)
+let pdf  = try parseAndRenderPdf(input: input, configJson: nil, transpose: nil)  // [UInt8]
 ```
 
 UniFFI converts the snake_case Rust function names to camelCase
-Swift names automatically. PDF output is `Data`.
+Swift names automatically. PDF output is `[UInt8]` (the
+`bytes` UDL type → Swift's byte sequence, per the Swift package
+README).
 
 ## Kotlin
 
 ```kotlin
-import me.koeda.chordsketch.parseAndRenderHtml
-import me.koeda.chordsketch.parseAndRenderText
-import me.koeda.chordsketch.parseAndRenderPdf
+import uniffi.chordsketch.*
 
 val html: String     = parseAndRenderHtml(input, null, null)
 val text: String     = parseAndRenderText(input, null, null)
 val pdf:  ByteArray  = parseAndRenderPdf(input, null, null)
 ```
+
+The Maven coordinate is `me.koeda:chordsketch` but the package
+namespace UniFFI generates is `uniffi.chordsketch` — that's the
+import path in source.
 
 ## Ruby
 
@@ -151,16 +157,16 @@ pdf  = Chordsketch.parse_and_render_pdf(input, nil, nil)  # binary string
 
 ## Errors
 
-| Binding | Error type | Carries position info? |
+| Binding | Error type | Notes |
 |---|---|---|
-| Rust | `ParseError` (parse) / renderer infallible after parse | yes (`Span` line+column) |
-| WASM / npm | `JsError` thrown | yes (`.line`, `.column` on parse errors) |
-| NAPI / Node native | `Error` thrown | yes |
-| CLI | non-zero exit + stderr | exit 65 (`EX_DATAERR`) on parse error |
-| Python | `ChordSketchError` exception | yes |
-| Swift | `ChordSketchError` enum (`.invalidConfig`, `.noSongsFound`, …) | yes |
-| Kotlin | `ChordSketchException` | yes |
-| Ruby | `Chordsketch::Error` | yes |
+| Rust | `ParseError` (parse) / renderer infallible after parse | Carries `Span` (line + column) |
+| WASM / npm | thrown `JsError` | Render-path errors carry only `.message`. Use `validate(input)` for structured `{line, column, message}` records. |
+| NAPI / Node native | thrown `Error` | Same as WASM: render-path is `.message` only; `validate(input)` returns `ValidationError[]` with `line`, `column`, `message`. |
+| CLI | non-zero exit + stderr | Currently `1` (`ExitCode::FAILURE`) on any error path; the binary does not yet differentiate parse vs. config vs. I/O failures via distinct exit codes. |
+| Python | `chordsketch.ChordSketchError` exception | `.message` |
+| Swift | `ChordSketchError` enum (`.invalidConfig(reason:)`, `.noSongsFound`, …) | `.message`-equivalent on the variant payload |
+| Kotlin | `ChordSketchException` | `.message` |
+| Ruby | `Chordsketch::ChordSketchError` | `.message` |
 
 To validate input without rendering, use the `validate(input)`
 function exposed by the WASM, NAPI, and UniFFI bindings (returns

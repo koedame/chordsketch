@@ -56,13 +56,15 @@ each format (`render_html_with_options` / `render_text_with_options`
 ## `@chordsketch/node`
 
 ```ts
-import { render_html_with_options } from '@chordsketch/node';
+import { renderHtmlWithOptions } from '@chordsketch/node';
 
-const html = render_html_with_options(input, { transpose: 2 });
+const html = renderHtmlWithOptions(input, { transpose: 2 });
 ```
 
-Same options shape as the WASM build. Out-of-range values reject
-with `Status::InvalidArg` (#1826 — previously this binding silently
+NAPI uses **camelCase** function names (napi-rs converts the Rust
+snake_case automatically); the options-object shape is the same as
+the WASM build. Out-of-range values reject with
+`Status::InvalidArg` (#1826 — previously this binding silently
 clamped, which has since been fixed for cross-binding parity).
 
 ## CLI
@@ -87,16 +89,19 @@ html = chordsketch.parse_and_render_html(input, None, 2)
 ```swift
 import ChordSketch
 
-let html = try ChordSketch.parseAndRenderHtml(input: input, configJson: nil, transpose: 2)
+let html = try parseAndRenderHtml(input: input, configJson: nil, transpose: 2)
 ```
 
 ## Kotlin
 
 ```kotlin
-import me.koeda.chordsketch.parseAndRenderHtml
+import uniffi.chordsketch.parseAndRenderHtml
 
 val html = parseAndRenderHtml(input, null, 2)
 ```
+
+The Maven coordinate is `me.koeda:chordsketch` but the import
+path UniFFI generates is `uniffi.chordsketch.*`.
 
 ## Ruby
 
@@ -121,9 +126,16 @@ namespace is required (lowercase rest).
 - **Saturated transpositions**: A few rendering paths emit a
   warning when transposition produces a chord that the renderer
   cannot place faithfully (e.g. extreme accidental spelling).
-  Warnings are surfaced via the `_with_warnings` variants
-  (Rust direct, WASM, NAPI). UniFFI-backed bindings (Python /
-  Swift / Kotlin / Ruby) currently print warnings to stderr.
+  Structured warning capture is available through the
+  `_with_warnings` variants in every binding that exposes them:
+  Rust (`render_*_with_warnings`), WASM
+  (`render_*_with_warnings_and_options`), NAPI
+  (`render*WithWarningsAndOptions`), and UniFFI bindings —
+  Python / Swift / Kotlin / Ruby — via the
+  `parse_and_render_*_with_warnings` variants which return a
+  struct carrying both the rendered output and a `Vec<String>` of
+  warnings. The default (non-`_with_warnings`) entry points
+  forward warnings to stderr.
 
 ## Next step
 
