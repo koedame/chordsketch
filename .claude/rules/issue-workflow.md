@@ -49,8 +49,11 @@ bug should close all linked issues.
 6. CI -> auto-review (severity classification) -> human merge.
    See [Pull Request Workflow](pr-workflow.md) for details. Bots do not merge in
    this repo; a human inspects the check rollup and performs the squash merge.
-7. After merge, the project-board automation moves the issue to Done via
-   the linked `Closes #N`; no manual status flip is needed.
+7. After merge, either the project-board's built-in
+   "Auto-add PR / Auto-close" workflow moves the issue to Done via the
+   linked `Closes #N`, or — if that workflow is not enabled — flip the
+   Status to Done manually with the same `gh` snippet below, using
+   option ID `98236657`.
 8. Cleanup worktree.
 
 ### Updating Project Board Status
