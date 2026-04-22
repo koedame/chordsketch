@@ -82,6 +82,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the built-in database; `errorFallback` (default: inline
   `role="alert"`; pass `null` to hide) covers unsupported
   instruments or WASM init failures. (#2045)
+- `chordsketch-napi` (`@chordsketch/node` npm package):
+  `chordDiagramSvg(chord, instrument)` export. Sister of
+  the WASM export added in #2164. Accepted `instrument`
+  values + error semantics match the WASM binding;
+  unknown instruments reject with a napi `Error`
+  (`InvalidArg`). `crates/napi/index.d.ts` carries the new
+  declaration. (#2167)
+- `chordsketch-ffi` (UniFFI): `chord_diagram_svg(chord,
+  instrument)` UDL function. Picked up automatically by the
+  Python (`chordsketch.chord_diagram_svg`), Swift
+  (`ChordSketch.chordDiagramSvg`), Kotlin
+  (`uniffi.chordsketch.chordDiagramSvg`), and Ruby
+  (`Chordsketch.chord_diagram_svg`) bindings. Unknown
+  instrument errors via
+  `ChordSketchError::InvalidConfig`. Five new unit tests
+  exercise the happy path, unknown chord (returns `None`),
+  unsupported instrument (errors), and the
+  `uke` / `keyboard` aliases. (#2167)
 
 ### Changed
 

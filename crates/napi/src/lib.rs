@@ -451,6 +451,52 @@ pub fn version() -> String {
     chordsketch_chordpro::version().to_string()
 }
 
+/// Look up an SVG chord diagram for the given chord name and
+/// instrument, mirroring the WASM `chord_diagram_svg` export
+/// added in #2164.
+///
+/// `instrument` accepts (case-insensitive): `"guitar"`,
+/// `"ukulele"` (alias `"uke"`), or `"piano"` (aliases
+/// `"keyboard"`, `"keys"`). `chord` is a standard ChordPro
+/// chord name. Flat spellings are normalised to sharps via the
+/// same path the core voicing-database lookup uses.
+///
+/// Returns the inline SVG string, or `null` (JavaScript `null`)
+/// when the built-in voicing database has no entry for this
+/// `(chord, instrument)` pair. Hosts typically render a
+/// "chord not found" fallback for that case.
+///
+/// # Errors
+///
+/// Returns a napi `Error` with status `InvalidArg` when
+/// `instrument` is not one of the supported values.
+#[must_use = "callers must handle the unknown-instrument error"]
+#[napi]
+pub fn chord_diagram_svg(chord: String, instrument: String) -> Result<Option<String>> {
+    use chordsketch_chordpro::chord_diagram::{render_keyboard_svg, render_svg};
+    use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
+
+    match instrument.to_ascii_lowercase().as_str() {
+        "piano" | "keyboard" | "keys" => {
+            Ok(lookup_keyboard_voicing(&chord, &[]).map(|v| render_keyboard_svg(&v)))
+        }
+        "guitar" | "ukulele" | "uke" => {
+            // `frets_shown = 5` matches the default ChordPro HTML
+            // renderer (`crates/render-html` emits 5-fret diagrams
+            // when no `{chordfrets}` directive is set), keeping
+            // diagrams produced via NAPI visually consistent with
+            // sheets rendered through the same binding.
+            Ok(lookup_diagram(&chord, &[], &instrument, 5).map(|d| render_svg(&d)))
+        }
+        other => Err(Error::new(
+            Status::InvalidArg,
+            format!(
+                "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
+            ),
+        )),
+    }
+}
+
 // Unit tests exercise the underlying rendering and parsing logic directly
 // via chordsketch_chordpro and renderer crates. The napi wrapper functions
 // cannot be tested natively because they depend on the Node.js runtime for
