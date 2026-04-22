@@ -1,0 +1,238 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
+import { describe, expect, test, vi } from 'vitest';
+
+import { ChordEditor } from '../src/index';
+import type { ChordWasmLoader } from '../src/use-chord-render';
+
+// Reuse the stub shape from the chord-sheet suite — the editor's
+// preview pane is just a `<ChordSheet>` under the hood.
+function makeStub() {
+  return {
+    default: vi.fn(async () => undefined),
+    render_html: vi.fn((src: string) => `<article>${src}</article>`),
+    render_text: vi.fn((src: string) => `TEXT:${src}`),
+    render_html_with_options: vi.fn(
+      (src: string, opts: { transpose?: number }) =>
+        `<article data-t="${opts.transpose ?? 0}">${src}</article>`,
+    ),
+    render_text_with_options: vi.fn(
+      (src: string, opts: { transpose?: number }) => `TEXT+${opts.transpose ?? 0}:${src}`,
+    ),
+  };
+}
+
+function makeLoader(stub: ReturnType<typeof makeStub>): ChordWasmLoader {
+  return vi.fn(async () => stub as unknown as Awaited<ReturnType<ChordWasmLoader>>);
+}
+
+describe('<ChordEditor>', () => {
+  test('uncontrolled mode: renders defaultValue and fires onChange on input', async () => {
+    const stub = makeStub();
+    const onChange = vi.fn();
+
+    render(
+      <ChordEditor
+        defaultValue="start"
+        onChange={onChange}
+        wasmLoader={makeLoader(stub)}
+        debounceMs={0}
+      />,
+    );
+
+    const textarea = screen.getByPlaceholderText(
+      'Enter ChordPro source here…',
+    ) as HTMLTextAreaElement;
+    expect(textarea.value).toBe('start');
+
+    fireEvent.change(textarea, { target: { value: 'next' } });
+    expect(onChange).toHaveBeenCalledWith('next');
+    expect(textarea.value).toBe('next');
+  });
+
+  test('controlled mode: value prop wins, host owns state via onChange', () => {
+    function Controlled() {
+      const [v, setV] = useState('foo');
+      return (
+        <>
+          <ChordEditor
+            value={v}
+            onChange={setV}
+            wasmLoader={makeLoader(makeStub())}
+            debounceMs={0}
+          />
+          <div data-testid="observed">{v}</div>
+        </>
+      );
+    }
+    render(<Controlled />);
+    const textarea = screen.getByPlaceholderText(
+      'Enter ChordPro source here…',
+    ) as HTMLTextAreaElement;
+    expect(textarea.value).toBe('foo');
+    fireEvent.change(textarea, { target: { value: 'bar' } });
+    expect(screen.getByTestId('observed').textContent).toBe('bar');
+    expect(textarea.value).toBe('bar');
+  });
+
+  test('readOnly forwards to the textarea', () => {
+    render(
+      <ChordEditor
+        defaultValue="frozen"
+        readOnly
+        wasmLoader={makeLoader(makeStub())}
+        debounceMs={0}
+      />,
+    );
+    const textarea = screen.getByPlaceholderText(
+      'Enter ChordPro source here…',
+    ) as HTMLTextAreaElement;
+    expect(textarea.readOnly).toBe(true);
+  });
+
+  test('debounced preview only re-renders after the quiet window', async () => {
+    const stub = makeStub();
+    render(
+      <ChordEditor
+        defaultValue=""
+        wasmLoader={makeLoader(stub)}
+        debounceMs={120}
+      />,
+    );
+    const textarea = screen.getByPlaceholderText(
+      'Enter ChordPro source here…',
+    ) as HTMLTextAreaElement;
+
+    // Wait for the initial WASM load and empty-input render
+    // so the call counter starts from a predictable baseline.
+    // The initial render uses \`render_html_with_options\`
+    // because \`transpose\` defaults to 0 (a non-undefined value).
+    await waitFor(() =>
+      expect(stub.render_html_with_options).toHaveBeenCalledTimes(1),
+    );
+
+    fireEvent.change(textarea, { target: { value: 'a' } });
+    fireEvent.change(textarea, { target: { value: 'ab' } });
+    fireEvent.change(textarea, { target: { value: 'abc' } });
+
+    // Within ~50 ms no preview re-render has fired — all three
+    // keystrokes are still inside the debounce window.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(stub.render_html_with_options).toHaveBeenCalledTimes(1);
+
+    // After the window elapses, exactly one additional render
+    // fires with the final value.
+    await waitFor(
+      () => {
+        const calls = stub.render_html_with_options.mock.calls;
+        const lastSrc = calls.length > 0 ? calls[calls.length - 1]?.[0] : undefined;
+        expect(lastSrc).toBe('abc');
+      },
+      { timeout: 1000 },
+    );
+    // Still exactly 2 total calls (initial + debounced final),
+    // not 4 (one per keystroke) — proves the debounce coalesced.
+    expect(stub.render_html_with_options).toHaveBeenCalledTimes(2);
+  });
+
+  test('Ctrl+ArrowUp / Ctrl+ArrowDown fire onTransposeChange with clamped values', async () => {
+    const onTransposeChange = vi.fn();
+    const stub = makeStub();
+
+    render(
+      <ChordEditor
+        defaultValue="x"
+        transpose={2}
+        onTransposeChange={onTransposeChange}
+        minTranspose={-5}
+        maxTranspose={5}
+        wasmLoader={makeLoader(stub)}
+        debounceMs={0}
+      />,
+    );
+    const textarea = screen.getByPlaceholderText('Enter ChordPro source here…');
+
+    fireEvent.keyDown(textarea, { key: 'ArrowUp', ctrlKey: true });
+    expect(onTransposeChange).toHaveBeenLastCalledWith(3);
+
+    fireEvent.keyDown(textarea, { key: 'ArrowDown', ctrlKey: true });
+    expect(onTransposeChange).toHaveBeenLastCalledWith(1);
+
+    // Cmd key also works for macOS parity.
+    fireEvent.keyDown(textarea, { key: 'ArrowUp', metaKey: true });
+    expect(onTransposeChange).toHaveBeenLastCalledWith(3);
+
+    // Arrow keys without modifier do NOT fire the callback (leave
+    // cursor navigation alone).
+    onTransposeChange.mockClear();
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(onTransposeChange).not.toHaveBeenCalled();
+  });
+
+  test('transpose shortcut clamps at max / min boundary (no callback fired)', () => {
+    const onTransposeChange = vi.fn();
+    const stub = makeStub();
+
+    render(
+      <ChordEditor
+        defaultValue="x"
+        transpose={5}
+        minTranspose={-5}
+        maxTranspose={5}
+        onTransposeChange={onTransposeChange}
+        wasmLoader={makeLoader(stub)}
+        debounceMs={0}
+      />,
+    );
+    const textarea = screen.getByPlaceholderText('Enter ChordPro source here…');
+
+    // At max — up shortcut should be a no-op.
+    fireEvent.keyDown(textarea, { key: 'ArrowUp', ctrlKey: true });
+    expect(onTransposeChange).not.toHaveBeenCalled();
+  });
+
+  test('transpose value is forwarded to the preview via render_html_with_options', async () => {
+    const stub = makeStub();
+    render(
+      <ChordEditor
+        defaultValue="src"
+        transpose={3}
+        wasmLoader={makeLoader(stub)}
+        debounceMs={0}
+      />,
+    );
+    await waitFor(
+      () =>
+        expect(stub.render_html_with_options).toHaveBeenCalledWith('src', {
+          transpose: 3,
+          config: undefined,
+        }),
+      { timeout: 2000 },
+    );
+  });
+
+  test('previewFormat="text" with default transpose still goes through the with-options variant', async () => {
+    const stub = makeStub();
+    render(
+      <ChordEditor
+        defaultValue="src"
+        previewFormat="text"
+        wasmLoader={makeLoader(stub)}
+        debounceMs={0}
+      />,
+    );
+    // `<ChordEditor>` defaults `transpose` to 0 and forwards it
+    // to the preview. `useChordRender` routes any non-undefined
+    // transpose through `render_text_with_options`, so the plain
+    // `render_text` does not fire here — the check below is on
+    // the options variant.
+    await waitFor(
+      () =>
+        expect(stub.render_text_with_options).toHaveBeenCalledWith('src', {
+          transpose: 0,
+          config: undefined,
+        }),
+      { timeout: 2000 },
+    );
+  });
+});

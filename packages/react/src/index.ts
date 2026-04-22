@@ -2,11 +2,11 @@
 // backed by @chordsketch/wasm.
 //
 // Components land incrementally. Remaining surface:
-//   - #2043: <ChordEditor>
 //   - #2045: <ChordDiagram>
 
 import packageJson from '../package.json' with { type: 'json' };
 
+export { ChordEditor, type ChordEditorProps } from './chord-editor';
 export { ChordSheet, type ChordSheetProps } from './chord-sheet';
 export {
   useChordRender,
@@ -26,6 +26,7 @@ export {
   type UseTransposeOptions,
   type UseTransposeResult,
 } from './use-transpose';
+export { useDebounced } from './use-debounced';
 
 /**
  * The running version of `@chordsketch/react`. Returns the string

@@ -12,8 +12,9 @@ files, powered by [`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsket
 > [#2041](https://github.com/koedame/chordsketch/issues/2041)–[#2045](https://github.com/koedame/chordsketch/issues/2045).
 > Currently shipped: `<PdfExport>` + `usePdfExport` (#2041),
 > `<Transpose>` + `useTranspose` (#2044),
-> `<ChordSheet>` + `useChordRender` (#2042).
-> Still pending: `<ChordEditor>`, `<ChordDiagram>`.
+> `<ChordSheet>` + `useChordRender` (#2042),
+> `<ChordEditor>` + `useDebounced` (#2043).
+> Still pending: `<ChordDiagram>`.
 
 ## Installation
 
@@ -92,6 +93,51 @@ wire the output into a custom container (e.g. a diff view, a
 multi-pane preview). The renderer is memoised against
 `(source, format, transpose, config)`, so re-renders with
 unchanged inputs do not re-parse.
+
+### `<ChordEditor>` — split-pane edit + live preview
+
+```tsx
+import { ChordEditor, useTranspose } from '@chordsketch/react';
+
+export function Editor() {
+  const { value: transpose, setValue: setTranspose } = useTranspose();
+  return (
+    <ChordEditor
+      defaultValue="{title: My Song}\n[G]Hello"
+      transpose={transpose}
+      onTransposeChange={setTranspose}
+    />
+  );
+}
+```
+
+The left pane is a plain `<textarea>` (spell-check / auto-correct
+disabled so ChordPro tokens don't trigger browser corrections),
+the right pane is a `<ChordSheet>` that re-renders a debounced
+copy of the source (default 250 ms). Supports both controlled
+(`value` + `onChange`) and uncontrolled (`defaultValue`) modes,
+plus keyboard shortcuts **Ctrl+ArrowUp / Ctrl+ArrowDown** (Cmd
+on macOS) to fire `onTransposeChange` — wire that callback to
+the `setValue` from `useTranspose()` to get live transposition
+without leaving the editor.
+
+`readOnly`, `previewFormat="text"` (preview inside `<pre>`
+instead of HTML), `config`, custom `errorFallback`, and
+`minTranspose` / `maxTranspose` bounds for the shortcuts are all
+passed through. Pass `debounceMs={0}` in tests to make the
+preview re-render synchronously.
+
+### `useDebounced` — general-purpose debouncer
+
+```tsx
+import { useDebounced } from '@chordsketch/react';
+
+const debouncedQuery = useDebounced(rawQuery, 300);
+```
+
+Returns a value that lags the input by at most `delay` ms.
+`delay <= 0` bypasses the debounce and passes the input through
+synchronously (used internally by `<ChordEditor>` in tests).
 
 ### `<PdfExport>` — one-click PDF download
 

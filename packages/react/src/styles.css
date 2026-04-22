@@ -70,3 +70,46 @@
   margin-bottom: 0.5rem;
   font-size: 0.9em;
 }
+
+.chordsketch-editor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  min-height: 20rem;
+  background: currentColor;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.chordsketch-editor__textarea {
+  min-height: 20rem;
+  padding: 0.75rem;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  border: none;
+  outline: none;
+  resize: none;
+  background: inherit;
+  color: inherit;
+  tab-size: 4;
+}
+
+.chordsketch-editor__textarea:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+.chordsketch-editor__preview {
+  padding: 0.75rem;
+  overflow: auto;
+  background: inherit;
+}
+
+@media (max-width: 40rem) {
+  .chordsketch-editor {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+}
