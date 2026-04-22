@@ -546,7 +546,13 @@ impl Parser {
         // `raw` starts with `#` today. Use `unwrap_or` rather than `expect` so
         // that a future caller re-using this function without that guard
         // degrades to treating the whole line as the comment body instead of
-        // panicking on otherwise valid input.
+        // panicking on otherwise valid input. The `debug_assert!` surfaces a
+        // contract violation loudly in debug builds while still allowing the
+        // release-build fallback above.
+        debug_assert!(
+            raw.starts_with('#'),
+            "parse_hash_comment_line called without '#' prefix"
+        );
         let after_hash = raw.strip_prefix('#').unwrap_or(raw.as_str());
         let text = after_hash.strip_prefix(' ').unwrap_or(after_hash);
 
@@ -1826,14 +1832,14 @@ mod tests {
         );
     }
 
+    // Release-only: in debug builds the `debug_assert!` added for #2096 fires
+    // on this contract violation. The release fallback (treating the whole
+    // line as the comment body) is still live, so this test locks it in on
+    // release profiles. Regression guard for #2082 (a future caller could
+    // re-use this method without the `t.starts_with('#')` gate).
+    #[cfg(not(debug_assertions))]
     #[test]
     fn parse_hash_comment_line_is_resilient_to_missing_hash_prefix() {
-        // Directly invoke parse_hash_comment_line with tokens whose first
-        // text does NOT start with '#', bypassing the dispatch guard in
-        // parse_line. The function must not panic — it falls back to
-        // treating the whole line as the comment body. Regression guard
-        // for #2082 (a future caller could re-use this method without the
-        // `t.starts_with('#')` gate).
         let tokens = Lexer::new("no hash prefix\n").tokenize();
         let mut parser = Parser::new(tokens);
         let line = parser
@@ -1843,6 +1849,17 @@ mod tests {
             line,
             Line::Comment(CommentStyle::Normal, "no hash prefix".to_string()),
         );
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "parse_hash_comment_line called without '#' prefix")]
+    fn parse_hash_comment_line_debug_asserts_missing_hash_prefix() {
+        // Counterpart to the release-only resilience test above: debug builds
+        // must surface the contract violation loudly via `debug_assert!`.
+        let tokens = Lexer::new("no hash prefix\n").tokenize();
+        let mut parser = Parser::new(tokens);
+        let _ = parser.parse_hash_comment_line();
     }
 
     // -- Directive classification -------------------------------------------

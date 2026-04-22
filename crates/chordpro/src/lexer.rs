@@ -499,6 +499,24 @@ mod tests {
         assert_eq!(tokens[2].span.end, Position::new(2, 3));
     }
 
+    #[test]
+    fn spans_across_crlf_lines() {
+        let tokens = Lexer::new("AB\r\nCD").tokenize();
+
+        // "AB"
+        assert_eq!(tokens[0].span.start, Position::new(1, 1));
+        assert_eq!(tokens[0].span.end, Position::new(1, 3));
+
+        // \r\n — span mirrors the bare-LF case: the newline token starts at
+        // the CR column on line 1 and ends at column 1 of the next line.
+        assert_eq!(tokens[1].span.start, Position::new(1, 3));
+        assert_eq!(tokens[1].span.end, Position::new(2, 1));
+
+        // "CD"
+        assert_eq!(tokens[2].span.start, Position::new(2, 1));
+        assert_eq!(tokens[2].span.end, Position::new(2, 3));
+    }
+
     // ------------------------------------------------------------------
     // Edge cases
     // ------------------------------------------------------------------
