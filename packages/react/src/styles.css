@@ -126,3 +126,36 @@
     border-bottom: 1px solid currentColor;
   }
 }
+
+.chordsketch-diagram {
+  display: inline-block;
+  color: inherit;
+  font-family: inherit;
+}
+
+.chordsketch-diagram svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  /* Let the host decide the diagram's colour by inheriting
+     currentColor on every stroke / fill the renderer emits. */
+  color: inherit;
+}
+
+.chordsketch-diagram__notfound,
+.chordsketch-diagram__error,
+.chordsketch-diagram__loading {
+  padding: 0.4rem 0.6rem;
+  border: 1px dashed currentColor;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.chordsketch-diagram__loading {
+  border-style: dotted;
+  opacity: 0.7;
+}
+
+.chordsketch-diagram__error {
+  border-style: solid;
+}

@@ -45,7 +45,7 @@ Additionally, these non-Rust packages exist:
 | `@chordsketch/wasm` | `packages/npm` | npm package, **dual build** (browser ESM + Node.js CJS) with TypeScript types |
 | `@chordsketch/node` | `crates/napi` | Native Node.js addon via napi-rs, multi-package prebuilt layout (main resolver + 5 platform packages). See `docs/releasing.md` §napi distribution. |
 | `@chordsketch/ui-web` | `packages/ui-web` | Framework-agnostic editor + preview UI shared by playground and the upcoming Tauri desktop app (private workspace package, not published) |
-| `@chordsketch/react` | `packages/react` | React component library (pre-release — `<PdfExport>` + `usePdfExport` shipped in #2041, `<Transpose>` + `useTranspose` in #2044, `<ChordSheet>` + `useChordRender` in #2042, `<ChordEditor>` + `useDebounced` in #2043; `<ChordDiagram>` pending). Dual ESM + CJS build via tsup; React 18+ peer dep; CSS at `@chordsketch/react/styles.css`. |
+| `@chordsketch/react` | `packages/react` | React component library (pre-release — full surface shipped across #2041–#2045: `<PdfExport>`+`usePdfExport`, `<ChordSheet>`+`useChordRender`, `<ChordEditor>`+`useDebounced`, `<Transpose>`+`useTranspose`, `<ChordDiagram>`+`useChordDiagram`). Dual ESM + CJS build via tsup; React 18+ peer dep; CSS at `@chordsketch/react/styles.css`. Awaits first `npm publish` (manual maintainer step). |
 | Playground | `packages/playground` | Vite-based browser host that mounts `@chordsketch/ui-web` against `@chordsketch/wasm` |
 | Python (`chordsketch`) | `crates/ffi` | Python package via UniFFI + maturin |
 | Swift (`ChordSketch`) | `packages/swift` | Swift package with XCFramework |

@@ -1,11 +1,14 @@
 // @chordsketch/react — React component library for ChordPro rendering
 // backed by @chordsketch/wasm.
-//
-// Components land incrementally. Remaining surface:
-//   - #2045: <ChordDiagram>
 
 import packageJson from '../package.json' with { type: 'json' };
 
+export { ChordDiagram, type ChordDiagramProps } from './chord-diagram';
+export {
+  useChordDiagram,
+  type ChordDiagramInstrument,
+  type ChordDiagramResult,
+} from './use-chord-diagram';
 export { ChordEditor, type ChordEditorProps } from './chord-editor';
 export { ChordSheet, type ChordSheetProps } from './chord-sheet';
 export {

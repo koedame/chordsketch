@@ -528,6 +528,57 @@ pub fn version() -> String {
     chordsketch_chordpro::version().to_string()
 }
 
+/// Render a chord diagram to SVG for the given chord name and
+/// instrument.
+///
+/// `instrument` accepts (case-insensitive): `"guitar"`, `"ukulele"`
+/// (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`).
+/// `chord` is a standard ChordPro chord name (e.g. `"Am"`, `"C#m7"`,
+/// `"Bb"`). Flat spellings are normalised to sharps via the same
+/// path the core crate uses for its built-in voicing database
+/// lookup.
+///
+/// Returns `None` (JavaScript `null`) when the chord or instrument
+/// is not known to the built-in voicing database. Hosts typically
+/// render a plain-text fallback (`"Chord not found"`) for that
+/// case; see the `<ChordDiagram>` component in `@chordsketch/react`
+/// for the reference UI.
+///
+/// Output is inline SVG (`<svg>…</svg>`), suitable for injection
+/// into the DOM via `innerHTML` or React's
+/// `dangerouslySetInnerHTML`. Viewers that can rasterise SVG
+/// (every modern browser) display the diagram directly; consumers
+/// that need raster output can pipe the SVG through a library like
+/// `resvg` or `canvg`.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string on unknown instrument. Unknown
+/// chords are signalled by returning `Option::None`, not an error.
+#[must_use = "callers must handle the unknown-instrument error"]
+#[wasm_bindgen]
+pub fn chord_diagram_svg(chord: &str, instrument: &str) -> Result<Option<String>, JsValue> {
+    use chordsketch_chordpro::chord_diagram::{render_keyboard_svg, render_svg};
+    use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
+
+    match instrument.to_ascii_lowercase().as_str() {
+        "piano" | "keyboard" | "keys" => {
+            Ok(lookup_keyboard_voicing(chord, &[]).map(|v| render_keyboard_svg(&v)))
+        }
+        "guitar" | "ukulele" | "uke" => {
+            // `frets_shown = 5` matches the default ChordPro HTML
+            // renderer (`crates/render-html` emits 5-fret diagrams
+            // when no `{chordfrets}` directive is set) so diagrams
+            // produced by `<ChordDiagram>` visually match the
+            // sheet output from `<ChordSheet>` for the same chord.
+            Ok(lookup_diagram(chord, &[], instrument, 5).map(|d| render_svg(&d)))
+        }
+        other => Err(JsValue::from_str(&format!(
+            "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
+        ))),
+    }
+}
+
 /// A single validation issue reported by [`validate`].
 ///
 /// Serialised to a plain JS `{line, column, message}` object via
