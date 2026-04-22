@@ -7,14 +7,12 @@
 React component library for rendering [ChordPro](https://www.chordpro.org/)
 files, powered by [`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsketch/wasm).
 
-> **Status:** scaffold only. The component surface
-> (`<ChordSheet>`, `<ChordEditor>`, `<Transpose>`, `<ChordDiagram>`,
-> `<PdfExport>`) lands in issues
+> **Status:** pre-release. The component surface is landing
+> incrementally under issues
 > [#2041](https://github.com/koedame/chordsketch/issues/2041)–[#2045](https://github.com/koedame/chordsketch/issues/2045).
-> Until those issues close, the only export is `version()` — the
-> package exists so its npm name is reserved, its publish pipeline
-> is proven, and downstream consumers can pin against it ahead of
-> the component release.
+> Currently shipped: `<PdfExport>` + `usePdfExport` (#2041).
+> Still pending: `<ChordSheet>`, `<ChordEditor>`,
+> `<Transpose>` + `useTranspose`, `<ChordDiagram>`.
 
 ## Installation
 
@@ -30,17 +28,74 @@ npm install '@chordsketch/react@VERSION' react
 itself — the host does not need to install it separately. `react`
 is a **peer dependency** (React 18 or newer).
 
-## Usage (scaffold)
+## Usage
+
+### `<PdfExport>` — one-click PDF download
+
+```tsx
+import { PdfExport } from '@chordsketch/react';
+
+const source = `{title: Amazing Grace}
+{key: G}
+
+[G]Amazing [G7]grace, how [C]sweet the [G]sound`;
+
+export function SaveButton() {
+  return (
+    <PdfExport source={source} filename="amazing-grace.pdf">
+      Download PDF
+    </PdfExport>
+  );
+}
+```
+
+While the render is in flight the button is `disabled` and
+`aria-busy="true"` so assistive tech surfaces the loading state.
+`onExported(filename)` and `onError(err)` callbacks are available
+for imperative handlers (analytics, toasts). All the standard
+`<button>` attributes (`className`, `style`, `type` override,
+`id`, …) are forwarded.
+
+### `usePdfExport` — hook for bespoke UIs
+
+```tsx
+import { usePdfExport } from '@chordsketch/react';
+
+export function SaveDropdownItem({ source }: { source: string }) {
+  const { exportPdf, loading, error } = usePdfExport();
+  return (
+    <>
+      <button onClick={() => exportPdf(source, 'song.pdf')} disabled={loading}>
+        {loading ? 'Preparing…' : 'Save as PDF'}
+      </button>
+      {error ? <p role="alert">{error.message}</p> : null}
+    </>
+  );
+}
+```
+
+The hook lazy-loads `@chordsketch/wasm` on first call and caches
+the initialised module for subsequent calls, so repeated exports
+do not re-run WASM init.
+
+### Transposition
+
+Both the component and the hook accept a third `options` argument
+forwarded to the underlying WASM renderer:
+
+```tsx
+<PdfExport source={source} filename="song-up-2.pdf" options={{ transpose: 2 }} />
+await exportPdf(source, 'ukulele-preset.pdf', { config: 'ukulele' });
+```
+
+### Version
 
 ```ts
 import { version } from '@chordsketch/react';
-
-console.log(version()); // "0.0.0" (pre-release)
+console.log(version());
 ```
 
-Once the components land the API will grow; the package's `main`
-entry point will remain the stable surface so this import path
-continues to work.
+The returned string matches `package.json`'s `version` field.
 
 ## Design
 
