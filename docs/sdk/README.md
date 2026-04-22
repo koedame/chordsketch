@@ -54,14 +54,27 @@ output. Every other binding is a thin wrapper that exposes the
                 │  chordsketch-render-{text,html,pdf}      │
                 └──────────────────────────────────────────┘
                                     ▲
-        ┌──────────────┬────────────┼────────────┬──────────────┐
-        │              │            │            │              │
-   chordsketch     chordsketch-  chordsketch-  chordsketch-   chordsketch
-   (CLI binary)    wasm          napi          ffi (UniFFI)   (Ruby gem
-                   (browser /    (Node.js      → Python /      via UniFFI)
-                   ESM)          native)       Swift /
-                                               Kotlin)
+            ┌──────────────┬────────┼────────┬──────────────┐
+            │              │        │        │              │
+       chordsketch     chordsketch- │   chordsketch-     chordsketch-
+       (CLI binary)    wasm         │   napi             ffi (UniFFI)
+                       (browser /   │   (Node.js         │
+                       ESM)         │   native)          ▼
+                                                  ┌──────────────────┐
+                                                  │ Python (PyPI)    │
+                                                  │ Swift (XCFwk)    │
+                                                  │ Kotlin (Maven)   │
+                                                  │ Ruby (RubyGems)  │
+                                                  └──────────────────┘
 ```
+
+`chordsketch-ffi` is the single UniFFI shared library that backs
+**all four** of the Python, Swift, Kotlin, and Ruby distributions.
+The per-language packages (`pip install chordsketch`,
+`me.koeda:chordsketch`, `gem install chordsketch`, the Swift
+package) each ship a thin language-binding layer on top of the
+same `crates/ffi` artefact — there is no separate `chordsketch-ruby`
+crate.
 
 Because every binding wraps the same parser and renderers, the
 output of `parseAndRenderHtml(input)` (or its language-specific
