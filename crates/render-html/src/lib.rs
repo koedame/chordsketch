@@ -826,8 +826,17 @@ fn render_lyrics(
                 );
             }
         } else if lyrics_line.has_chords() {
-            // Empty chord placeholder to maintain vertical alignment.
-            html.push_str("<span class=\"chord\"></span>");
+            // Emit a U+00A0 (NBSP) inside the chord placeholder so
+            // the inline-flex `.chord-block` column reserves a full
+            // chord-row-height line box. A genuinely empty
+            // `<span class="chord"></span>` produces no line box in
+            // most browsers, so `min-height: 1.2em` on `.chord` does
+            // not reliably reserve the row — chord-less segments
+            // float up by one row and misalign with chord-bearing
+            // segments on the same `.line`. The NBSP forces a line
+            // box on structural merits; `min-height` stays as
+            // defense-in-depth. See #2142.
+            html.push_str("<span class=\"chord\">\u{00A0}</span>");
         }
 
         let text_css = fmt_state.text.to_css();
@@ -2092,8 +2101,36 @@ mod tests {
     #[test]
     fn test_text_before_first_chord() {
         let html = render("Hello [Am]world");
-        // Should have empty chord placeholder for the "Hello " segment
-        assert!(html.contains("<span class=\"chord\"></span><span class=\"lyrics\">Hello </span>"));
+        // Chord-less segments in a chord-bearing line render with a
+        // U+00A0 NBSP inside the `.chord` placeholder so the
+        // inline-flex column reserves a full line box for the chord
+        // row; see #2142 for the baseline-alignment bug that a
+        // genuinely empty span caused.
+        assert!(
+            html.contains(
+                "<span class=\"chord\">\u{00A0}</span><span class=\"lyrics\">Hello </span>"
+            )
+        );
+    }
+
+    #[test]
+    fn test_chord_less_and_chord_bearing_segments_share_baseline_placeholder() {
+        // Regression guard for #2142: when a lyrics line mixes
+        // chord-less segments with chord-bearing segments, the
+        // chord-less side must emit the NBSP-bearing placeholder
+        // so the flex columns align vertically.
+        let html = render("Was [G]blind but [D]now I [G]see.");
+        // The leading "Was " segment must carry the NBSP
+        // placeholder, not a bare empty span.
+        assert!(
+            html.contains(
+                "<span class=\"chord\">\u{00A0}</span><span class=\"lyrics\">Was </span>"
+            ),
+            "expected NBSP-bearing chord placeholder for \"Was \" segment, got: {html}"
+        );
+        // The chord-bearing segments still carry their chord text.
+        assert!(html.contains("<span class=\"chord\">G</span>"));
+        assert!(html.contains("<span class=\"chord\">D</span>"));
     }
 
     #[test]
