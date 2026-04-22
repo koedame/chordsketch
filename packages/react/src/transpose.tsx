@@ -137,7 +137,9 @@ export function Transpose({
         type="button"
         onClick={handleDecrement}
         disabled={decrementDisabled}
-        aria-label="Transpose down one semitone"
+        aria-label={
+          step === 1 ? 'Transpose down one semitone' : `Transpose down ${step} semitones`
+        }
         className="chordsketch-transpose__button chordsketch-transpose__button--decrement"
       >
         −
@@ -153,7 +155,9 @@ export function Transpose({
         type="button"
         onClick={handleIncrement}
         disabled={incrementDisabled}
-        aria-label="Transpose up one semitone"
+        aria-label={
+          step === 1 ? 'Transpose up one semitone' : `Transpose up ${step} semitones`
+        }
         className="chordsketch-transpose__button chordsketch-transpose__button--increment"
       >
         +

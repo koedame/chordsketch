@@ -150,4 +150,10 @@ describe('<Transpose>', () => {
     );
     expect(screen.getByText('2 st')).toBeTruthy();
   });
+
+  test('aria-labels reflect the actual step size when step != 1', () => {
+    render(<Transpose value={0} onChange={vi.fn()} step={2} />);
+    expect(screen.getByRole('button', { name: 'Transpose up 2 semitones' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Transpose down 2 semitones' })).toBeTruthy();
+  });
 });
