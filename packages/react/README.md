@@ -11,8 +11,9 @@ files, powered by [`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsket
 > incrementally under issues
 > [#2041](https://github.com/koedame/chordsketch/issues/2041)–[#2045](https://github.com/koedame/chordsketch/issues/2045).
 > Currently shipped: `<PdfExport>` + `usePdfExport` (#2041),
-> `<Transpose>` + `useTranspose` (#2044).
-> Still pending: `<ChordSheet>`, `<ChordEditor>`, `<ChordDiagram>`.
+> `<Transpose>` + `useTranspose` (#2044),
+> `<ChordSheet>` + `useChordRender` (#2042).
+> Still pending: `<ChordEditor>`, `<ChordDiagram>`.
 
 ## Installation
 
@@ -29,6 +30,50 @@ itself — the host does not need to install it separately. `react`
 is a **peer dependency** (React 18 or newer).
 
 ## Usage
+
+### `<ChordSheet>` — flagship render component
+
+```tsx
+import { ChordSheet } from '@chordsketch/react';
+import '@chordsketch/react/styles.css';
+
+const source = `{title: Amazing Grace}
+{key: G}
+
+[G]Amazing [G7]grace, how [C]sweet the [G]sound`;
+
+export function Sheet() {
+  return <ChordSheet source={source} transpose={0} />;
+}
+```
+
+`format="html"` (default) injects ChordPro's rendered HTML via
+`dangerouslySetInnerHTML` — the output comes from the trusted
+`chordsketch-render-html` crate that backs every ChordSketch
+binding, so it is safe. `format="text"` renders the plain-text
+chords-above-lyrics output inside a `<pre>`; pick that variant if
+you need a zero-HTML preview.
+
+Errors are surfaced via an inline `role="alert"` by default; pass
+`errorFallback={(err) => ...}` to customise the rendering, or
+`errorFallback={null}` to hide errors entirely and let the stale
+previous render stay visible.
+
+### `useChordRender` — hook for bespoke renderers
+
+```tsx
+import { useChordRender } from '@chordsketch/react';
+
+const { output, loading, error } = useChordRender(source, 'html', {
+  transpose: 2,
+});
+```
+
+Same render pipeline as `<ChordSheet>` but exposed as raw state —
+wire the output into a custom container (e.g. a diff view, a
+multi-pane preview). The renderer is memoised against
+`(source, format, transpose, config)`, so re-renders with
+unchanged inputs do not re-parse.
 
 ### `<PdfExport>` — one-click PDF download
 
