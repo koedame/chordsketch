@@ -835,8 +835,11 @@ fn render_lyrics(
             // float up by one row and misalign with chord-bearing
             // segments on the same `.line`. The NBSP forces a line
             // box on structural merits; `min-height` stays as
-            // defense-in-depth. See #2142.
-            html.push_str("<span class=\"chord\">\u{00A0}</span>");
+            // defense-in-depth. `aria-hidden` prevents assistive
+            // tech from announcing the placeholder as "space" — the
+            // chord row is semantic (chord names), so a purely
+            // presentational NBSP should stay silent. See #2142.
+            html.push_str("<span class=\"chord\" aria-hidden=\"true\">\u{00A0}</span>");
         }
 
         let text_css = fmt_state.text.to_css();
@@ -2108,7 +2111,7 @@ mod tests {
         // genuinely empty span caused.
         assert!(
             html.contains(
-                "<span class=\"chord\">\u{00A0}</span><span class=\"lyrics\">Hello </span>"
+                "<span class=\"chord\" aria-hidden=\"true\">\u{00A0}</span><span class=\"lyrics\">Hello </span>"
             )
         );
     }
@@ -2124,7 +2127,7 @@ mod tests {
         // placeholder, not a bare empty span.
         assert!(
             html.contains(
-                "<span class=\"chord\">\u{00A0}</span><span class=\"lyrics\">Was </span>"
+                "<span class=\"chord\" aria-hidden=\"true\">\u{00A0}</span><span class=\"lyrics\">Was </span>"
             ),
             "expected NBSP-bearing chord placeholder for \"Was \" segment, got: {html}"
         );
