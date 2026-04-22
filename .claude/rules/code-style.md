@@ -14,7 +14,7 @@
 ## Test Quality
 
 - Every test must make at least one meaningful assertion that would fail if the
-  tested behaviour regressed. Empty tests or tests that only assert `true` are
+  tested behavior regressed. Empty tests or tests that only assert `true` are
   not acceptable.
 - Tests must cover both the happy path and the error / edge-case paths.
 - When adding a test for a bug fix, the test must fail without the fix applied.
