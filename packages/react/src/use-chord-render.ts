@@ -106,8 +106,12 @@ export function useChordRender(
           // `init()` is a no-op on the Node build of
           // `@chordsketch/wasm` and required on the browser build.
           await mod.default();
-          if (cancelled) return;
+          // Cache the renderer BEFORE the cancellation guard so a
+          // subsequent effect (source change mid-init) can reuse
+          // the already-loaded module — otherwise rendererRef stays
+          // null and we re-run init on the next render. See #2154.
           rendererRef.current = mod;
+          if (cancelled) return;
         }
         const renderer = rendererRef.current;
         const hasOptions = transpose !== undefined || config !== undefined;

@@ -63,6 +63,14 @@
   overflow-x: auto;
 }
 
+.chordsketch-sheet__content {
+  /* Wrapper for the renderer's HTML output. Empty by design —
+     the baseline rule reserves the selector so hosts can override
+     it (e.g. set `max-height` / `overflow-y` for a scrollable
+     preview pane, or scope `font-size` to the rendered sheet)
+     without first discovering the class by inspecting the DOM. */
+}
+
 .chordsketch-sheet__error {
   padding: 0.5rem 0.75rem;
   border: 1px solid currentColor;

@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 
+import { clamp } from './clamp';
+
 /** Value returned by {@link useTranspose}. */
 export interface UseTransposeResult {
   /** Current semitone offset (clamped into `[min, max]`). */
@@ -42,18 +44,6 @@ export interface UseTransposeOptions {
    * to `+11`.
    */
   max?: number;
-}
-
-/**
- * Clamps `n` to `[min, max]`. Also normalises `NaN` → `min` so a
- * caller that passes a parsed input box does not leak an invalid
- * numeric value into the render path.
- */
-function clamp(n: number, min: number, max: number): number {
-  if (Number.isNaN(n)) return min;
-  if (n < min) return min;
-  if (n > max) return max;
-  return n;
 }
 
 /**

@@ -1,5 +1,7 @@
 import type { HTMLAttributes, KeyboardEvent } from 'react';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
+
+import { clamp as clampValue } from './clamp';
 
 /** Props accepted by {@link Transpose}. */
 export interface TransposeProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> {
@@ -13,6 +15,16 @@ export interface TransposeProps extends Omit<HTMLAttributes<HTMLDivElement>, 'on
   max?: number;
   /** Step size for `+` / `−` buttons. Defaults to `1`. */
   step?: number;
+  /**
+   * Value the reset button (and the `0` keyboard shortcut) emit.
+   * Defaults to `0` so the button returns to the identity
+   * transposition. Pair with `useTranspose({ initial: N })` by
+   * setting `resetValue={N}` — the hook's `reset()` returns to
+   * `initial`, so matching them keeps the "reset" semantics
+   * consistent across both surfaces. The reset button only
+   * renders when `value !== resetValue`.
+   */
+  resetValue?: number;
   /**
    * Optional label shown inline with the buttons. Defaults to
    * `"Transpose"`. Pass `null` to omit the visible label; the
@@ -49,17 +61,14 @@ export function Transpose({
   min = -11,
   max = 11,
   step = 1,
+  resetValue = 0,
   label = 'Transpose',
   formatValue = defaultFormat,
   className,
   ...divProps
 }: TransposeProps): JSX.Element {
   const clamp = useCallback(
-    (next: number): number => {
-      if (next < min) return min;
-      if (next > max) return max;
-      return next;
-    },
+    (next: number): number => clampValue(next, min, max),
     [min, max],
   );
 
@@ -72,8 +81,13 @@ export function Transpose({
   }, [onChange, clamp, value, step]);
 
   const handleReset = useCallback(() => {
-    onChange(0);
-  }, [onChange]);
+    onChange(resetValue);
+  }, [onChange, resetValue]);
+
+  const clampedResetValue = useMemo(
+    () => clampValue(resetValue, min, max),
+    [resetValue, min, max],
+  );
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>): void => {
@@ -92,7 +106,7 @@ export function Transpose({
           handleDecrement();
           break;
         case '0':
-          if (value !== 0) {
+          if (value !== clampedResetValue) {
             event.preventDefault();
             handleReset();
           }
@@ -103,7 +117,7 @@ export function Transpose({
           break;
       }
     },
-    [handleIncrement, handleDecrement, handleReset, value],
+    [handleIncrement, handleDecrement, handleReset, value, clampedResetValue],
   );
 
   const decrementDisabled = value <= min;
@@ -162,11 +176,15 @@ export function Transpose({
       >
         +
       </button>
-      {value !== 0 ? (
+      {value !== clampedResetValue ? (
         <button
           type="button"
           onClick={handleReset}
-          aria-label="Reset transposition to zero"
+          aria-label={
+            clampedResetValue === 0
+              ? 'Reset transposition to zero'
+              : `Reset transposition to ${clampedResetValue}`
+          }
           className="chordsketch-transpose__button chordsketch-transpose__button--reset"
         >
           Reset
