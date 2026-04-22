@@ -216,6 +216,7 @@ reference and additional examples.
 ## Links
 
 - [ChordPro file format specification](https://www.chordpro.org/chordpro/)
+- [Unified SDK guide (all bindings, task-oriented)](docs/sdk/README.md)
 - [Editor integration guide](docs/editors.md)
 - [Configuration guide](docs/configuration.md)
 - [Versioning and release process](docs/releasing.md)
