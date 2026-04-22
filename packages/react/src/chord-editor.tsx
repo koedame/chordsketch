@@ -1,6 +1,10 @@
 import type { ChangeEvent, HTMLAttributes, KeyboardEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { ChordSheet } from './chord-sheet';
+import type { ChordRenderFormat, ChordWasmLoader } from './use-chord-render';
+import { useDebounced } from './use-debounced';
+
 // Minimal `process.env.NODE_ENV` typing so we do not pull in
 // `@types/node` for a single dev-only reference. The exact
 // `process.env.NODE_ENV` token is required — bundlers (esbuild,
@@ -9,10 +13,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // match the substitution pattern, so the production build would
 // still carry the warning code path.
 declare const process: { env: { NODE_ENV?: string } };
-
-import { ChordSheet } from './chord-sheet';
-import type { ChordRenderFormat, ChordWasmLoader } from './use-chord-render';
-import { useDebounced } from './use-debounced';
 
 /** Props accepted by {@link ChordEditor}. */
 export interface ChordEditorProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'> {
