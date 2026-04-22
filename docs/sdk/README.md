@@ -49,23 +49,23 @@ output. Every other binding is a thin wrapper that exposes the
 **same** Rust API surface in idiomatic form for its host language:
 
 ```
-                ┌──────────────────────────────────────────┐
-                │  chordsketch-chordpro (parser + AST)     │
-                │  chordsketch-render-{text,html,pdf}      │
-                └──────────────────────────────────────────┘
-                                    ▲
-            ┌──────────────┬────────┼────────┬──────────────┐
-            │              │        │        │              │
-       chordsketch     chordsketch- │   chordsketch-     chordsketch-
-       (CLI binary)    wasm         │   napi             ffi (UniFFI)
-                       (browser /   │   (Node.js         │
-                       ESM)         │   native)          ▼
-                                                  ┌──────────────────┐
-                                                  │ Python (PyPI)    │
-                                                  │ Swift (XCFwk)    │
-                                                  │ Kotlin (Maven)   │
-                                                  │ Ruby (RubyGems)  │
-                                                  └──────────────────┘
+           ┌──────────────────────────────────────────┐
+           │  chordsketch-chordpro (parser + AST)     │
+           │  chordsketch-render-{text,html,pdf}      │
+           └──────────────────────────────────────────┘
+                                ▲
+       ┌──────────────┬─────────┴─────┬──────────────┐
+       │              │               │              │
+  chordsketch    chordsketch-    chordsketch-    chordsketch-
+  (CLI binary)   wasm            napi            ffi (UniFFI)
+                 (browser /      (Node.js              │
+                 ESM)            native)               ▼
+                                              ┌──────────────────┐
+                                              │ Python  (PyPI)   │
+                                              │ Swift   (XCFwk)  │
+                                              │ Kotlin  (Maven)  │
+                                              │ Ruby    (Gems)   │
+                                              └──────────────────┘
 ```
 
 `chordsketch-ffi` is the single UniFFI shared library that backs
