@@ -461,7 +461,7 @@ jobs:
     # old `chordsketch-core` name until v0.3.0 publishes. The PR
     # branch still exercises the snippet via workspace path-deps and
     # fails hard on API drift. Remove this flag once v0.3.0 is on
-    # crates.io; tracked in #1776-equivalent follow-up.
+    # crates.io; tracked in #2169.
     continue-on-error: ${{ github.event_name != 'pull_request' }}
     steps:
       # Checkout is needed even on non-PR runs because the PR branch
