@@ -1,18 +1,14 @@
 import type { ChangeEvent, HTMLAttributes, KeyboardEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-/**
- * `true` when the bundle is running under a development build.
- * Checks `globalThis.process.env.NODE_ENV !== 'production'` in a
- * way that does not require @types/node. Bundlers that inline
- * `process.env.NODE_ENV === 'production'` (esbuild / tsup /
- * Rollup / Vite) strip the whole helper and its call sites in
- * production builds.
- */
-function isDevelopment(): boolean {
-  const proc = (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process;
-  return proc?.env?.NODE_ENV !== 'production';
-}
+// Minimal `process.env.NODE_ENV` typing so we do not pull in
+// `@types/node` for a single dev-only reference. The exact
+// `process.env.NODE_ENV` token is required — bundlers (esbuild,
+// Rollup, Vite, webpack DefinePlugin) replace it at build time and
+// a helper that accesses it via `globalThis.process` would not
+// match the substitution pattern, so the production build would
+// still carry the warning code path.
+declare const process: { env: { NODE_ENV?: string } };
 
 import { ChordSheet } from './chord-sheet';
 import type { ChordRenderFormat, ChordWasmLoader } from './use-chord-render';
@@ -153,10 +149,11 @@ export function ChordEditor({
   // `<input>` / `<textarea>` emit the same warning; we mirror the
   // pattern so the `<ChordEditor>` surface behaves consistently.
   // Production builds strip the warning via bundler dead-code
-  // elimination on `process.env.NODE_ENV !== 'production'`.
+  // elimination on the literal `process.env.NODE_ENV` token; the
+  // inline check below matches what React itself uses.
   const wasControlledRef = useRef(isControlled);
   useEffect(() => {
-    if (!isDevelopment()) return;
+    if (process.env.NODE_ENV === 'production') return;
     if (wasControlledRef.current !== isControlled) {
       // eslint-disable-next-line no-console
       console.error(
