@@ -110,6 +110,34 @@ describe('<Transpose>', () => {
     expect(onChange).toHaveBeenCalledWith(0);
   });
 
+  test('resetValue prop emits that value on reset click and updates aria-label', () => {
+    const onChange = vi.fn();
+    render(<Transpose value={3} onChange={onChange} resetValue={2} />);
+    const resetButton = screen.getByRole('button', { name: 'Reset transposition to 2' });
+    fireEvent.click(resetButton);
+    expect(onChange).toHaveBeenCalledWith(2);
+  });
+
+  test('reset button is hidden when value equals resetValue (not just zero)', () => {
+    const { rerender } = render(<Transpose value={2} onChange={vi.fn()} resetValue={2} />);
+    expect(screen.queryByRole('button', { name: /Reset transposition/ })).toBeNull();
+    rerender(<Transpose value={3} onChange={vi.fn()} resetValue={2} />);
+    expect(screen.getByRole('button', { name: 'Reset transposition to 2' })).toBeTruthy();
+  });
+
+  test('keyboard 0 emits resetValue when set, and is a no-op at resetValue', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <Transpose value={3} onChange={onChange} resetValue={2} />,
+    );
+    fireEvent.keyDown(screen.getByRole('group'), { key: '0' });
+    expect(onChange).toHaveBeenLastCalledWith(2);
+    onChange.mockClear();
+    rerender(<Transpose value={2} onChange={onChange} resetValue={2} />);
+    fireEvent.keyDown(screen.getByRole('group'), { key: '0' });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   test('keyboard shortcuts: + / - / 0 fire onChange', () => {
     const onChange = vi.fn();
     render(<Transpose value={2} onChange={onChange} />);
