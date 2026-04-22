@@ -11,8 +11,9 @@ files, powered by [`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsket
 > incrementally under issues
 > [#2041](https://github.com/koedame/chordsketch/issues/2041)–[#2045](https://github.com/koedame/chordsketch/issues/2045).
 > Currently shipped: `<PdfExport>` + `usePdfExport` (#2041),
-> `<Transpose>` + `useTranspose` (#2044).
-> Still pending: `<ChordSheet>`, `<ChordEditor>`, `<ChordDiagram>`.
+> `<Transpose>` + `useTranspose` (#2044),
+> `<ChordSheet>` + `useChordRender` (#2042).
+> Still pending: `<ChordEditor>`, `<ChordDiagram>`.
 
 ## Installation
 
@@ -29,6 +30,68 @@ itself — the host does not need to install it separately. `react`
 is a **peer dependency** (React 18 or newer).
 
 ## Usage
+
+### `<ChordSheet>` — flagship render component
+
+```tsx
+import { ChordSheet } from '@chordsketch/react';
+import '@chordsketch/react/styles.css';
+
+const source = `{title: Amazing Grace}
+{key: G}
+
+[G]Amazing [G7]grace, how [C]sweet the [G]sound`;
+
+export function Sheet() {
+  return <ChordSheet source={source} transpose={0} />;
+}
+```
+
+`format="html"` (default) injects ChordPro's rendered HTML via
+`dangerouslySetInnerHTML`. The output comes from
+`chordsketch-render-html`, which escapes all user-supplied
+ChordPro tokens (titles, lyrics, chord names, attributes, inline
+markup, custom section labels) before emitting markup — for
+first-party ChordPro this is safe to inject directly.
+`format="text"` renders the plain-text chords-above-lyrics output
+inside a `<pre>`; pick that variant if you need a zero-HTML
+preview.
+
+**Trust boundary note.** Delegate sections (`{start_of_abc}`,
+`{start_of_ly}`, `{start_of_musicxml}`, `{start_of_textblock}`)
+pass their bodies through **raw** per the render-html crate's
+security doc. If you accept **untrusted** ChordPro (e.g. a
+multi-tenant SaaS where end users share songs), combine this
+component with a Content Security Policy that restricts inline
+scripts and external resource loads, or switch to `format="text"`
+for a zero-HTML preview. The playground
+(`packages/ui-web`) uses a sandboxed iframe for the same render
+pipeline because it does not control the ChordPro source it
+renders; `<ChordSheet>` does not sandbox because typical React
+hosts already control their own input.
+
+Errors are surfaced via an inline `role="alert"` above the
+render by default. Pass `errorFallback={(err) => <YourJsx/>}` to
+customise — any ReactNode works under both `format` values
+because the error lives in a sibling element of the rendered
+output. `errorFallback={null}` hides errors entirely and lets
+the stale previous render stay visible.
+
+### `useChordRender` — hook for bespoke renderers
+
+```tsx
+import { useChordRender } from '@chordsketch/react';
+
+const { output, loading, error } = useChordRender(source, 'html', {
+  transpose: 2,
+});
+```
+
+Same render pipeline as `<ChordSheet>` but exposed as raw state —
+wire the output into a custom container (e.g. a diff view, a
+multi-pane preview). The renderer is memoised against
+`(source, format, transpose, config)`, so re-renders with
+unchanged inputs do not re-parse.
 
 ### `<PdfExport>` — one-click PDF download
 
