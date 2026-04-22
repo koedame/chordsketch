@@ -209,6 +209,10 @@ workflow — no Rust toolchain required:
 See [docs/github-action.md](docs/github-action.md) for full input/output
 reference and additional examples.
 
+## Migration Guides
+
+- [v0.3.0 — `chordsketch-core` → `chordsketch-chordpro` rename](docs/migration/v0.3.md)
+
 ## Links
 
 - [ChordPro file format specification](https://www.chordpro.org/chordpro/)
