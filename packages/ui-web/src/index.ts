@@ -132,14 +132,28 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
   }
   formatLabel.appendChild(formatSelect);
 
+  // Wrap the transpose input in a group with an accessible name so
+  // assistive tech surfaces the role of the field distinct from
+  // the surrounding format control. The visible `<label>` provides
+  // the accessible name via DOM association; the redundant
+  // `aria-label` on the input itself is a safety net for screen
+  // readers that prioritise it over the associated label text.
+  // Partial parity with the `<Transpose>` React component in
+  // `@chordsketch/react` (#2150) — a full `role=\"group\"` button
+  // trio would change the playground UX visually, so this scope
+  // is limited to named input + documented range.
   const transposeLabel = document.createElement('label');
   transposeLabel.append('Transpose: ');
   const transposeInput = document.createElement('input');
   transposeInput.type = 'number';
   transposeInput.id = 'transpose';
   transposeInput.value = '0';
-  transposeInput.min = '-12';
-  transposeInput.max = '12';
+  // Range is `-11..=11` — matches the `@chordsketch/react`
+  // `<Transpose>` default. A full octave (`±12`) is the identity
+  // transposition, so the interesting values stop at ±11.
+  transposeInput.min = '-11';
+  transposeInput.max = '11';
+  transposeInput.setAttribute('aria-label', 'Transpose in semitones');
   transposeLabel.appendChild(transposeInput);
 
   controls.append(formatLabel, transposeLabel);
@@ -255,7 +269,12 @@ export async function mountChordSketchUi(
 
   const getTranspose = (): number => {
     const val = parseInt(transposeInput.value, 10);
-    return isNaN(val) ? 0 : Math.max(-12, Math.min(12, val));
+    // Clamp to the same `[-11, 11]` window as the input's own
+    // HTML `min`/`max`, matching the `@chordsketch/react`
+    // `<Transpose>` default — a full octave (`±12`) is the
+    // identity transposition, so the interesting values stop
+    // at ±11.
+    return isNaN(val) ? 0 : Math.max(-11, Math.min(11, val));
   };
 
   const showError = (msg: string): void => {
@@ -333,11 +352,18 @@ export async function mountChordSketchUi(
         : renderers.renderPdf(input);
       const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = pdfFilename;
-      a.click();
-      URL.revokeObjectURL(url);
+      try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = pdfFilename;
+        a.click();
+      } finally {
+        // Revoke inside `finally` so a throwing `a.click()`
+        // (adversarial / unusual browser state) does not leak
+        // the object URL. Mirrors the defensive pattern in
+        // `packages/react/src/use-pdf-export.ts`. (#2144)
+        URL.revokeObjectURL(url);
+      }
       hideError();
     } catch (e) {
       showError(formatError(e));
