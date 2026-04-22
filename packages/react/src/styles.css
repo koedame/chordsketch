@@ -46,3 +46,27 @@
   outline: 2px solid currentColor;
   outline-offset: 2px;
 }
+
+.chordsketch-sheet {
+  font-family: inherit;
+}
+
+.chordsketch-sheet[aria-busy='true'] {
+  opacity: 0.75;
+  transition: opacity 0.15s ease-in-out;
+}
+
+.chordsketch-sheet__text {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.chordsketch-sheet__error {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  font-size: 0.9em;
+}

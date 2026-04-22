@@ -2,12 +2,18 @@
 // backed by @chordsketch/wasm.
 //
 // Components land incrementally. Remaining surface:
-//   - #2042: <ChordSheet>
 //   - #2043: <ChordEditor>
 //   - #2045: <ChordDiagram>
 
 import packageJson from '../package.json' with { type: 'json' };
 
+export { ChordSheet, type ChordSheetProps } from './chord-sheet';
+export {
+  useChordRender,
+  type ChordRenderFormat,
+  type ChordRenderOptions,
+  type ChordRenderResult,
+} from './use-chord-render';
 export { PdfExport, type PdfExportProps } from './pdf-export';
 export {
   usePdfExport,

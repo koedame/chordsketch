@@ -34,6 +34,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   numeric input is safe. Baseline styles under
   `@chordsketch/react/styles.css` use transparent backgrounds and
   `currentColor` so the control inherits the host theme. (#2044)
+- `@chordsketch/react`: `<ChordSheet>` component + `useChordRender`
+  hook. Renders ChordPro source to HTML (default) or plain text
+  via `@chordsketch/wasm`. Memoises the render against
+  `(source, format, transpose, config)` so re-renders without
+  input changes do not re-parse. Errors (parse / WASM init /
+  render) surface via an inline `role="alert"` fallback by
+  default — pass `errorFallback={(err) => ...}` to customise or
+  `errorFallback={null}` to hide entirely and keep the stale
+  previous render visible. `aria-busy` is set on the wrapper
+  during init and in-flight renders so assistive tech observes
+  the loading state. (#2042)
 
 ### Changed
 
