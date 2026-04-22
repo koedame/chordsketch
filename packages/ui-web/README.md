@@ -26,14 +26,22 @@ import { mountChordSketchUi, type Renderers } from '@chordsketch/ui-web';
 import '@chordsketch/ui-web/style.css';
 
 const renderers: Renderers = {
-  init:        () => initWasm(),
-  renderHtml:  (input, opts) => render_html_with_options(input, opts ?? {}),
-  renderText:  (input, opts) => render_text_with_options(input, opts ?? {}),
-  renderPdf:   (input, opts) => render_pdf_with_options(input, opts ?? {}),
+  init: () => initWasm(),
+  renderHtml: (input, opts) =>
+    opts ? render_html_with_options(input, opts) : render_html(input),
+  renderText: (input, opts) =>
+    opts ? render_text_with_options(input, opts) : render_text(input),
+  renderPdf: (input, opts) =>
+    opts ? render_pdf_with_options(input, opts) : render_pdf(input),
 };
 
 await mountChordSketchUi(document.getElementById('app')!, { renderers });
 ```
+
+The branching `opts ? ... : ...` form (rather than `opts ?? {}`) is
+deliberate — it lets the no-options renderer call match what the
+playground used pre-extraction, which keeps `renderPdf`'s binary
+output deterministic against the pre-extraction baseline.
 
 The host injects the renderer backend so `ui-web` does not bake in a
 dependency on `@chordsketch/wasm`. A desktop host could instead wrap a
@@ -52,9 +60,13 @@ same shape.
 
 ## Visual contract
 
-The DOM structure built by `mountChordSketchUi` matches the original
-`packages/playground/index.html` markup byte-for-byte (same element
-IDs, same class names, same nesting), so the bundled stylesheet
-(`./style.css`) renders identically against either site. A visual
+The DOM structure built by `mountChordSketchUi` is **structurally
+identical** to the original `packages/playground/index.html` markup
+— same element IDs, same class names, same nesting order. (The
+text-node whitespace inside `<label>` elements is collapsed by
+`document.createElement` rather than preserved as in the original
+hand-written HTML, but CSS whitespace collapsing makes the rendered
+result indistinguishable.) The bundled stylesheet (`./style.css`)
+therefore renders identically against either host. A visual
 regression check (screenshots before/after this extraction) is the
 gate on changes that affect rendered output.
