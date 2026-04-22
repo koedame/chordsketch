@@ -63,9 +63,10 @@ jobs:
       - name: Verify dist/ contents
         run: |
           set -euo pipefail
-          test -f dist/index.js    # ESM
-          test -f dist/index.cjs   # CJS
-          test -f dist/index.d.ts  # Types
-          test -f dist/styles.css  # Reserved CSS import path
+          test -f dist/index.js     # ESM
+          test -f dist/index.cjs    # CJS
+          test -f dist/index.d.ts   # Types for the ESM branch
+          test -f dist/index.d.cts  # Types for the CJS branch (exports."."["require"].types)
+          test -f dist/styles.css   # Reserved CSS import path
           echo "dist/ contents:"
           ls -la dist/
