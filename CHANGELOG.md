@@ -61,6 +61,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `0` flushes synchronously for tests) are all forwarded.
   `useDebounced(value, delay)` is exported standalone for
   hosts that want the debouncer without the editor shell. (#2043)
+- `chordsketch-wasm` (`@chordsketch/wasm` npm package): new
+  `chord_diagram_svg(chord, instrument)` export. Looks up the
+  chord in the built-in voicing database (156 voicings: 60
+  guitar / 36 ukulele / 60 piano) and returns inline SVG, or
+  `null` when the database has no entry. Accepted
+  `instrument` values: `"guitar"`, `"ukulele"` (alias
+  `"uke"`), and `"piano"` (aliases `"keyboard"`, `"keys"`).
+  Unknown instruments reject with a `JsError`. The underlying
+  Rust `chord_diagram::render_svg` / `render_keyboard_svg`
+  generators are unchanged; this change only widens the WASM
+  public API. (#2045)
+- `@chordsketch/react`: `<ChordDiagram>` component +
+  `useChordDiagram` hook. Renders inline SVG chord diagrams
+  for guitar / ukulele / piano via the new
+  `chord_diagram_svg` WASM export. The SVG inherits
+  `currentColor` so diagrams match the host theme without
+  extra styling. `notFoundFallback` (default: inline
+  `role="note"` with the chord name) covers chords outside
+  the built-in database; `errorFallback` (default: inline
+  `role="alert"`; pass `null` to hide) covers unsupported
+  instruments or WASM init failures. (#2045)
 
 ### Changed
 
