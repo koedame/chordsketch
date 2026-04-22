@@ -45,6 +45,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   previous render visible. `aria-busy` is set on the wrapper
   during init and in-flight renders so assistive tech observes
   the loading state. (#2042)
+- `@chordsketch/react`: `<ChordEditor>` component +
+  `useDebounced` hook. Split-pane editor with a plain `<textarea>`
+  (auto-correct / spell-check / auto-capitalise disabled so
+  ChordPro tokens don't trigger browser corrections) and a
+  debounced `<ChordSheet>` live preview on the right. Supports
+  controlled (`value` + `onChange`) and uncontrolled
+  (`defaultValue`) modes. Keyboard shortcuts
+  `Ctrl+ArrowUp` / `Ctrl+ArrowDown` (`Cmd` on macOS) fire
+  `onTransposeChange` with the next value clamped into
+  `[minTranspose, maxTranspose]`, so consumers can bind the
+  editor directly to `useTranspose()` for live transposition
+  without leaving the textarea. `readOnly`, `previewFormat`,
+  `config`, `errorFallback`, and `debounceMs` (default 250 ms;
+  `0` flushes synchronously for tests) are all forwarded.
+  `useDebounced(value, delay)` is exported standalone for
+  hosts that want the debouncer without the editor shell. (#2043)
 
 ### Changed
 
