@@ -52,6 +52,14 @@ export interface ChordEditorProps extends Omit<HTMLAttributes<HTMLDivElement>, '
   /** Placeholder shown when the editor is empty. */
   placeholder?: string;
   /**
+   * Accessible name forwarded to the editor textarea as
+   * `aria-label`. Defaults to `"ChordPro editor"`. Placeholders
+   * are not accessible names per WAI-ARIA 1.2 §5.2.8, so the
+   * default is applied even when {@link placeholder} is supplied.
+   * Override when the editor sits next to a visible `<label>`.
+   */
+  textareaAriaLabel?: string;
+  /**
    * Optional content rendered while the preview's WASM module
    * initialises or re-renders. Forwarded to the internal
    * `<ChordSheet loadingFallback>`.
@@ -104,6 +112,7 @@ export function ChordEditor({
   readOnly = false,
   debounceMs = 250,
   placeholder = 'Enter ChordPro source here…',
+  textareaAriaLabel = 'ChordPro editor',
   loadingFallback,
   errorFallback,
   minTranspose = -11,
@@ -166,6 +175,7 @@ export function ChordEditor({
         onKeyDown={handleKeyDown}
         readOnly={readOnly}
         placeholder={placeholder}
+        aria-label={textareaAriaLabel}
         spellCheck={false}
         // `autoComplete=off` and disabling form-assist attributes
         // stop browser UI (spell-check underlines, auto-capitalise,

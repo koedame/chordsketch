@@ -74,9 +74,7 @@
 .chordsketch-editor {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1px;
   min-height: 20rem;
-  background: currentColor;
   border: 1px solid currentColor;
   border-radius: 6px;
   overflow: hidden;
@@ -89,9 +87,19 @@
   font-size: 0.9rem;
   line-height: 1.5;
   border: none;
+  /* Separate the textarea from the preview pane with a
+     currentColor divider. Dark-mode consumers get a light
+     divider, light-mode a dark one — the divider inherits the
+     surrounding text colour instead of using a hard-coded hex. */
+  border-right: 1px solid currentColor;
   outline: none;
   resize: none;
-  background: inherit;
+  /* Leave the background transparent so the host decides the
+     editor surface. Setting `background: inherit` here was a
+     subtle bug when the wrapper used a `currentColor` grid-gap
+     trick — it made the textarea background the text colour,
+     which turned dark-mode hosts into text-on-text. */
+  background: transparent;
   color: inherit;
   tab-size: 4;
 }
@@ -104,12 +112,17 @@
 .chordsketch-editor__preview {
   padding: 0.75rem;
   overflow: auto;
-  background: inherit;
+  background: transparent;
 }
 
 @media (max-width: 40rem) {
   .chordsketch-editor {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr 1fr;
+  }
+
+  .chordsketch-editor__textarea {
+    border-right: none;
+    border-bottom: 1px solid currentColor;
   }
 }

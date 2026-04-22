@@ -127,6 +127,12 @@ instead of HTML), `config`, custom `errorFallback`, and
 passed through. Pass `debounceMs={0}` in tests to make the
 preview re-render synchronously.
 
+The textarea receives a default `aria-label="ChordPro editor"`
+so screen-reader users hear an actual name rather than falling
+back to the placeholder (which WAI-ARIA does not treat as an
+accessible name). Override via the `textareaAriaLabel` prop when
+a visible `<label>` provides a better name.
+
 ### `useDebounced` — general-purpose debouncer
 
 ```tsx

@@ -75,6 +75,33 @@ describe('<ChordEditor>', () => {
     expect(textarea.value).toBe('bar');
   });
 
+  test('textarea has a default aria-label that overrides the placeholder-as-name fallback', () => {
+    const stub = makeStub();
+    render(
+      <ChordEditor
+        defaultValue=""
+        wasmLoader={makeLoader(stub)}
+        debounceMs={0}
+      />,
+    );
+    const textarea = screen.getByRole('textbox', { name: 'ChordPro editor' });
+    expect(textarea.tagName).toBe('TEXTAREA');
+  });
+
+  test('textareaAriaLabel prop overrides the default accessible name', () => {
+    const stub = makeStub();
+    render(
+      <ChordEditor
+        defaultValue=""
+        textareaAriaLabel="Lyrics source"
+        wasmLoader={makeLoader(stub)}
+        debounceMs={0}
+      />,
+    );
+    const textarea = screen.getByRole('textbox', { name: 'Lyrics source' });
+    expect(textarea.tagName).toBe('TEXTAREA');
+  });
+
   test('readOnly forwards to the textarea', () => {
     render(
       <ChordEditor
