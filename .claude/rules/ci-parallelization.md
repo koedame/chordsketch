@@ -105,6 +105,13 @@ event so that `main` pushes, tag pushes, `workflow_dispatch`, and
 `release` events always run to completion — only PR force-pushes /
 rebases cancel stale runs.
 
+Use this exact group-key pattern — `github.event.pull_request.number
+|| github.ref` — for all newly added workflows. Every existing
+workflow in this repo uses this canonical shape; the older
+`github.head_ref || github.run_id` form is no longer present and
+MUST NOT be reintroduced when adding or modifying a `concurrency:`
+block.
+
 **Why:** GitHub-hosted runners are capped at 5 concurrent macOS jobs
 on the Free / Pro / Team plans
 (https://docs.github.com/en/actions/reference/actions-limits). When a
@@ -114,10 +121,47 @@ run starts behind it in the 5-job queue. Without cancel-in-progress,
 N pushes to one PR produce N parallel macOS pipelines competing for
 the same ceiling.
 
-Covered workflows as of 2026-04-22: `ci.yml`, `swift.yml`,
-`python.yml`, `ruby.yml`, `kotlin.yml`, `napi.yml`, `ffi.yml`,
-`vscode-extension.yml`. When adding a new workflow that touches
-macOS, append its group name here in the same PR that introduces the
+### Release/tag-triggered workflows
+
+`release.yml` and `post-release.yml` are macOS-bearing but NEVER
+participate in PR force-push cancellation (they are triggered by tag
+pushes or by `release.types=[published]`). The PR-scoped
+cancel-in-progress expression is therefore irrelevant; what matters
+is that a second tag push or a re-dispatched `workflow_dispatch`
+MUST NOT cancel a release that is already in flight — a partial
+release with only some platform archives would silently degrade
+every downstream install path.
+
+These workflows therefore use a minimal variant:
+
+```yaml
+concurrency:
+  group: release-${{ inputs.tag || github.ref }}  # or post-release-${{ ... }}
+  cancel-in-progress: false
+```
+
+This keeps §5 applied to every macOS-bearing workflow while
+preserving the "always run to completion" guarantee for the release
+pipeline.
+
+Covered macOS-bearing workflows as of 2026-04-22:
+
+- **PR-scoped cancel-in-progress** (main §5 shape): `ci.yml`,
+  `swift.yml`, `python.yml`, `ruby.yml`, `kotlin.yml`, `napi.yml`,
+  `github-action-ci.yml`.
+- **`cancel-in-progress: false`** (release/tag-triggered variant):
+  `release.yml`, `post-release.yml`.
+
+`ffi.yml` and `vscode-extension.yml` carry concurrency blocks too,
+but they are Linux-only — their groups guard against redundant
+`ubuntu-latest` builds on PR rebase / force-push, not the macOS
+5-job ceiling. They are not required by §5; their presence is a
+defense-in-depth measure against stale-run pileups on Linux
+capacity and is orthogonal to the macOS-cap motivation documented
+here.
+
+When adding a new workflow that touches macOS, append its group name
+to the appropriate bucket above in the same PR that introduces the
 workflow.
 
 ## 6. Workflow frequency is a first-class design input

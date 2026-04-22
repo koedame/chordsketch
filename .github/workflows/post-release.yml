@@ -10,6 +10,16 @@ on:
         required: true
         type: string
 
+# Post-release runs key off an already-published GitHub Release (or a
+# manual dispatch of a specific tag) and fan out to external package
+# registries. Cancelling one mid-flight would leave some ecosystems
+# updated and others not. Declare a concurrency group so the workflow
+# conforms to `.claude/rules/ci-parallelization.md` §5, but keep
+# `cancel-in-progress: false` so no partial rollouts are possible.
+concurrency:
+  group: post-release-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
