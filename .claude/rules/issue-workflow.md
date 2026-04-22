@@ -83,8 +83,9 @@ fi
 
 # 3. Set Status = In Progress (option ID 47fc9ee4).
 #    Use `-f` (not `-F`) for the option ID so numeric-looking values
-#    like "98236657" are forced to GraphQL String and not inferred as
-#    Int by gh's typed-field parser.
+#    like "98236657" are forced to GraphQL String rather than being
+#    inferred as Int by gh's typed-field parser and rejected
+#    server-side against `singleSelectOptionId`'s String type.
 gh api graphql \
   -f itemId="$ITEM_ID" \
   -f optionId="47fc9ee4" \
