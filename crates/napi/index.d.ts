@@ -39,6 +39,42 @@ export interface ValidationError {
   message: string;
 }
 
+/**
+ * Structured render result returned by the `*WithWarnings` and
+ * `*WithWarningsAndOptions` families (string outputs).
+ *
+ * Mirrors the `TextRenderWithWarnings` struct in
+ * `crates/napi/src/lib.rs`. Used by both the text and HTML render
+ * variants — the field name is historical (the struct backed text
+ * output first).
+ *
+ * Use these variants when you need warning-driven UI (inline
+ * banners, telemetry aggregation, selective suppression). The plain
+ * `renderText` / `renderHtml` entry points forward warnings to
+ * `process.stderr` instead, which is fine for CLI scripts but
+ * invisible to embedded use.
+ */
+export interface TextRenderWithWarnings {
+  /** Rendered text or HTML output. */
+  output: string;
+  /** Renderer warnings captured during the render pass. */
+  warnings: string[];
+}
+
+/**
+ * Structured render result for the PDF `*WithWarnings` family.
+ *
+ * Mirrors the `PdfRenderWithWarnings` struct in
+ * `crates/napi/src/lib.rs`. See {@link TextRenderWithWarnings} for
+ * the warnings contract.
+ */
+export interface PdfRenderWithWarnings {
+  /** PDF byte stream. */
+  output: Buffer;
+  /** Renderer warnings captured during the render pass. */
+  warnings: string[];
+}
+
 /** Returns the version string baked into the compiled Rust crate. */
 export function version(): string;
 
@@ -66,6 +102,52 @@ export function renderPdf(source: string): Buffer;
  * applied.
  */
 export function renderPdfWithOptions(source: string, options: RenderOptions): Buffer;
+
+/**
+ * Renders to plain text, returning structured warnings alongside the
+ * output. Use this when you need warning-driven UI; the plain
+ * `renderText` forwards warnings to `process.stderr` instead.
+ */
+export function renderTextWithWarnings(source: string): TextRenderWithWarnings;
+
+/**
+ * Renders to HTML, returning structured warnings alongside the
+ * output. See {@link renderTextWithWarnings} for the contract.
+ */
+export function renderHtmlWithWarnings(source: string): TextRenderWithWarnings;
+
+/**
+ * Renders to PDF, returning structured warnings alongside the
+ * Buffer output. See {@link renderTextWithWarnings} for the contract.
+ */
+export function renderPdfWithWarnings(source: string): PdfRenderWithWarnings;
+
+/**
+ * Renders to plain text with rendering options applied, returning
+ * structured warnings alongside the output.
+ */
+export function renderTextWithWarningsAndOptions(
+  source: string,
+  options: RenderOptions,
+): TextRenderWithWarnings;
+
+/**
+ * Renders to HTML with rendering options applied, returning
+ * structured warnings alongside the output.
+ */
+export function renderHtmlWithWarningsAndOptions(
+  source: string,
+  options: RenderOptions,
+): TextRenderWithWarnings;
+
+/**
+ * Renders to PDF with rendering options applied, returning
+ * structured warnings alongside the Buffer output.
+ */
+export function renderPdfWithWarningsAndOptions(
+  source: string,
+  options: RenderOptions,
+): PdfRenderWithWarnings;
 
 /**
  * Validates a ChordPro source document and returns a list of issues. An
