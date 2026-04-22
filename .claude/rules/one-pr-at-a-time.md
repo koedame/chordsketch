@@ -36,13 +36,15 @@ isolation:
    macOS 5-job ceiling is the practical bottleneck long before the
    20-job total.
 2. **Speculative-merge CI runs.** GitHub Merge Queue
-   (enabled on `main` in #2107) runs CI once per queued merge
-   against a speculative merge commit. A large fan-in of queued PRs
-   still consumes runner minutes linearly in the queue depth;
-   macOS-bearing required checks (Test matrix) are the bottleneck.
-   The queue replaces the earlier `auto-update-branch.yml` cascade,
-   so rebase churn on every open PR is gone, but the macOS ceiling
-   still applies to the queue's own CI runs.
+   (enabled on `main` in #2107; rationale in
+   [ADR-0003](../../docs/adr/0003-github-merge-queue.md)) runs CI
+   once per queued merge against a speculative merge commit. A
+   large fan-in of queued PRs still consumes runner minutes
+   linearly in the queue depth; macOS-bearing required checks
+   (Test matrix) are the bottleneck. The queue replaces the
+   earlier `auto-update-branch.yml` cascade, so rebase churn on
+   every open PR is gone, but the macOS ceiling still applies to
+   the queue's own CI runs.
 
 Keeping the open-PR-against-main count at one eliminates the first
 bottleneck and keeps the queue itself short, so a given PR's
