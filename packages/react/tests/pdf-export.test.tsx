@@ -85,6 +85,18 @@ describe('usePdfExport', () => {
     expect(stub.render_pdf_with_options).toHaveBeenCalledWith('{title: T}', { transpose: 2 });
   });
 
+  test('options are forwarded when only config is set (no transpose)', async () => {
+    const stub = makeStubRenderer();
+    const { result } = renderHook(() => usePdfExport(makeLoader(stub)));
+
+    await act(async () => {
+      await result.current.exportPdf('{title: T}', 'song.pdf', { config: 'ukulele' });
+    });
+
+    expect(stub.render_pdf).not.toHaveBeenCalled();
+    expect(stub.render_pdf_with_options).toHaveBeenCalledWith('{title: T}', { config: 'ukulele' });
+  });
+
   test('WASM module is loaded exactly once across repeated calls', async () => {
     const stub = makeStubRenderer();
     const loader = makeLoader(stub);
@@ -157,15 +169,11 @@ describe('<PdfExport>', () => {
 
   test('disables itself and sets aria-busy while rendering', async () => {
     const stub = makeStubRenderer();
-    // Hold the render open so the button is observed mid-flight.
-    let resolveRender!: () => void;
-    stub.render_pdf.mockImplementation(() => {
-      // render_pdf is synchronous in the real API; the hold is
-      // simulated by having `default()` (init) await a pending
-      // promise instead, so the button observes `loading=true`
-      // before render_pdf fires.
-      return PDF_BYTES;
-    });
+    // `render_pdf` is synchronous in the real API; we simulate the
+    // in-flight state by holding `default()` (init) open on a
+    // pending promise so the button observes `loading=true` before
+    // the render call ever fires.
+    stub.render_pdf.mockImplementation(() => PDF_BYTES);
     let releaseInit!: () => void;
     stub.default.mockImplementation(
       () =>
@@ -173,7 +181,6 @@ describe('<PdfExport>', () => {
           releaseInit = resolve;
         }),
     );
-    resolveRender = () => releaseInit();
 
     render(<PdfExport source="x" filename="x.pdf" wasmLoader={makeLoader(stub)} />);
     const button = screen.getByRole('button', { name: 'Export PDF' });
@@ -183,7 +190,7 @@ describe('<PdfExport>', () => {
     await waitFor(() => expect(button.hasAttribute('disabled')).toBe(true));
     expect(button.getAttribute('aria-busy')).toBe('true');
 
-    resolveRender();
+    releaseInit();
     await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false));
     expect(button.getAttribute('aria-busy')).toBeNull();
   });

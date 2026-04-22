@@ -113,19 +113,22 @@ const defaultLoader: WasmLoader = () =>
 export function usePdfExport(loader: WasmLoader = defaultLoader): UsePdfExportResult {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  // Cache the initialised renderer across invocations so repeated
-  // exports do not re-run WASM init. `useRef` is appropriate (not
-  // `useState`) because the value is plain cache that does not need
-  // to drive re-renders — writing to `.current` is a side effect,
-  // not a state transition.
-  const rendererRef = useRef<PdfRenderer | null>(null);
+  // Cache the initialised-renderer Promise (not the resolved value)
+  // so concurrent `exportPdf` calls that race before the first init
+  // completes all await the SAME underlying load — otherwise the
+  // second caller's `rendererRef.current === null` check wins its
+  // race with the first caller's `await loaderRef.current()` and
+  // triggers a second `loader()` + `mod.default()` invocation.
+  // `useRef` is appropriate (not `useState`) because the value is
+  // plain cache that does not need to drive re-renders.
+  const rendererPromiseRef = useRef<Promise<PdfRenderer> | null>(null);
 
   // The loader is captured in a ref rather than a useCallback
   // dependency so that a caller who passes an inline loader
   // expression does not invalidate `exportPdf`'s identity on every
   // render. The value is read only on the cache miss (first call),
-  // and `rendererRef` encodes the single-init contract, so using
-  // the latest value committed to the ref is sufficient.
+  // and `rendererPromiseRef` encodes the single-init contract, so
+  // using the latest value committed to the ref is sufficient.
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
 
@@ -138,8 +141,7 @@ export function usePdfExport(loader: WasmLoader = defaultLoader): UsePdfExportRe
       setLoading(true);
       setError(null);
       try {
-        if (rendererRef.current === null) {
-          const mod = await loaderRef.current();
+        if (rendererPromiseRef.current === null) {
           // `init()` is a no-op on the Node.js build of
           // `@chordsketch/wasm` (the module auto-loads in Node) and
           // required on the browser build. Calling it
@@ -149,10 +151,19 @@ export function usePdfExport(loader: WasmLoader = defaultLoader): UsePdfExportRe
           // If a future `@chordsketch/wasm` refactor drops that
           // export, this call will throw on Node and the hook will
           // surface the error via `error` state on first use.
-          await mod.default();
-          rendererRef.current = mod;
+          rendererPromiseRef.current = (async () => {
+            const mod = await loaderRef.current();
+            await mod.default();
+            return mod;
+          })();
+          // If the load rejects, clear the cached promise so a
+          // subsequent call retries fresh. Without this, every
+          // future `exportPdf` would re-throw the same boot error.
+          rendererPromiseRef.current.catch(() => {
+            rendererPromiseRef.current = null;
+          });
         }
-        const renderer = rendererRef.current;
+        const renderer = await rendererPromiseRef.current;
         const bytes =
           options !== undefined && (options.transpose !== undefined || options.config !== undefined)
             ? renderer.render_pdf_with_options(source, options)
@@ -180,6 +191,12 @@ export function usePdfExport(loader: WasmLoader = defaultLoader): UsePdfExportRe
  * @internal
  */
 export function triggerDownload(bytes: Uint8Array, filename: string): void {
+  // The `as BlobPart` cast works around TypeScript's narrower
+  // `BlobPart` definition: `Uint8Array<ArrayBufferLike>`
+  // technically includes `SharedArrayBuffer`, which is not a
+  // `BlobPart` in the lib.dom.d.ts shipped with TS ≥ 5.7. The
+  // narrowing is a type-system artefact — the runtime accepts
+  // any `ArrayBufferView`, which `Uint8Array` always is.
   const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
   try {

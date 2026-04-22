@@ -64,6 +64,44 @@ describe('<ChordSheet>', () => {
     expect(stub.render_html).not.toHaveBeenCalled();
   });
 
+  test('forwards config via render_html_with_options', async () => {
+    const stub = makeStub();
+
+    render(
+      <ChordSheet source="{title: T}" config="ukulele" wasmLoader={makeLoader(stub)} />,
+    );
+
+    await waitFor(() =>
+      expect(stub.render_html_with_options).toHaveBeenCalledWith('{title: T}', {
+        transpose: undefined,
+        config: 'ukulele',
+      }),
+    );
+  });
+
+  test('HTML branch keeps stale output when a subsequent render errors', async () => {
+    const stub = makeStub();
+    const { rerender, container } = render(
+      <ChordSheet source="one" wasmLoader={makeLoader(stub)} />,
+    );
+    await waitFor(() => {
+      const wrapper = container.querySelector('.chordsketch-sheet__content');
+      expect(wrapper?.innerHTML).toContain('<article>one</article>');
+    });
+
+    stub.render_html.mockImplementation(() => {
+      throw new Error('bad');
+    });
+    rerender(<ChordSheet source="two" wasmLoader={makeLoader(stub)} />);
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('bad'));
+    // Stale HTML from "one" is still rendered alongside the error,
+    // mirroring the text-branch behaviour covered in the sister
+    // test above.
+    const wrapper = container.querySelector('.chordsketch-sheet__content');
+    expect(wrapper?.innerHTML).toContain('<article>one</article>');
+  });
+
   test('format="text" renders into a <pre>', async () => {
     const stub = makeStub();
 
@@ -165,8 +203,11 @@ describe('<ChordSheet>', () => {
       <ChordSheet source="second" format="text" wasmLoader={makeLoader(stub)} errorFallback={null} />,
     );
 
-    // No alert element should appear.
-    await new Promise((r) => setTimeout(r, 20));
+    // Wait for the failing render to settle (the stub was called
+    // with "second") before asserting that no alert appeared —
+    // asserting before the effect fires would trivially pass for
+    // the wrong reason.
+    await waitFor(() => expect(stub.render_text).toHaveBeenCalledWith('second'));
     expect(screen.queryByRole('alert')).toBeNull();
     // Stale text output stays visible.
     expect(screen.getByText('TEXT:first')).toBeTruthy();
@@ -218,8 +259,10 @@ describe('<ChordSheet>', () => {
       expect(node.tagName).toBe('SECTION');
       expect(node.textContent).toBe('Problem: html-boom');
     });
-    // The content wrapper is still present (holds the render output,
-    // which is null here because every render threw).
+    // The content wrapper is absent because `output` is null —
+    // every render call threw, so the component takes the
+    // no-output branch and does not mount
+    // `.chordsketch-sheet__content`.
     expect(container.querySelector('.chordsketch-sheet__content')).toBeNull();
   });
 

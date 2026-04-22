@@ -218,6 +218,29 @@ describe('<ChordEditor>', () => {
     expect(onTransposeChange).not.toHaveBeenCalled();
   });
 
+  test('transpose shortcut at min boundary is a no-op on ArrowDown', () => {
+    const onTransposeChange = vi.fn();
+    const stub = makeStub();
+
+    render(
+      <ChordEditor
+        defaultValue="x"
+        transpose={-5}
+        minTranspose={-5}
+        maxTranspose={5}
+        onTransposeChange={onTransposeChange}
+        wasmLoader={makeLoader(stub)}
+        debounceMs={0}
+      />,
+    );
+    const textarea = screen.getByPlaceholderText('Enter ChordPro source here…');
+
+    // At min — down shortcut should be a no-op (symmetric guard
+    // to the max-boundary test above).
+    fireEvent.keyDown(textarea, { key: 'ArrowDown', ctrlKey: true });
+    expect(onTransposeChange).not.toHaveBeenCalled();
+  });
+
   test('transpose value is forwarded to the preview via render_html_with_options', async () => {
     const stub = makeStub();
     render(
