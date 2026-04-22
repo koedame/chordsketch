@@ -1,9 +1,48 @@
 /*
  * @chordsketch/react — component stylesheet.
  *
- * This is the scaffolding commit (#2040). The file is intentionally
- * empty — real rules for `<ChordSheet>` / `<ChordEditor>` / etc.
- * land with each component PR (#2041–#2045). Keeping the file
- * present lets consumers pin the `./styles.css` import path now
- * and have it resolve without error on every component release.
+ * Rules here are minimal defaults designed to be easily overridden
+ * by consumer CSS. Every selector uses the `chordsketch-*` prefix
+ * to avoid colliding with host styles; nothing here uses `!important`
+ * or hard-coded colour values that would clash with dark/light
+ * themes.
  */
+
+.chordsketch-transpose {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: inherit;
+}
+
+.chordsketch-transpose__label {
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
+.chordsketch-transpose__value {
+  min-width: 2.5ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.chordsketch-transpose__button {
+  min-width: 2rem;
+  padding: 0.25rem 0.5rem;
+  font: inherit;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: inherit;
+}
+
+.chordsketch-transpose__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.chordsketch-transpose__button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
