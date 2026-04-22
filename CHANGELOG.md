@@ -99,7 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ChordSketchError::InvalidConfig`. Five new unit tests
   exercise the happy path, unknown chord (returns `None`),
   unsupported instrument (errors), and the
-  `uke` / `keyboard` aliases. (#2167)
+  `uke` / `keyboard` aliases. (#2165)
 
 ### Changed
 
