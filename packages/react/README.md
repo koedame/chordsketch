@@ -10,9 +10,9 @@ files, powered by [`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsket
 > **Status:** pre-release. The component surface is landing
 > incrementally under issues
 > [#2041](https://github.com/koedame/chordsketch/issues/2041)–[#2045](https://github.com/koedame/chordsketch/issues/2045).
-> Currently shipped: `<PdfExport>` + `usePdfExport` (#2041).
-> Still pending: `<ChordSheet>`, `<ChordEditor>`,
-> `<Transpose>` + `useTranspose`, `<ChordDiagram>`.
+> Currently shipped: `<PdfExport>` + `usePdfExport` (#2041),
+> `<Transpose>` + `useTranspose` (#2044).
+> Still pending: `<ChordSheet>`, `<ChordEditor>`, `<ChordDiagram>`.
 
 ## Installation
 
@@ -87,6 +87,45 @@ forwarded to the underlying WASM renderer:
 <PdfExport source={source} filename="song-up-2.pdf" options={{ transpose: 2 }} />
 await exportPdf(source, 'ukulele-preset.pdf', { config: 'ukulele' });
 ```
+
+### `<Transpose>` — accessible transposition control
+
+```tsx
+import { Transpose, useTranspose } from '@chordsketch/react';
+
+export function Controls() {
+  const { value, setValue } = useTranspose();
+  return <Transpose value={value} onChange={setValue} />;
+}
+```
+
+The component renders a `−` / current-value readout / `+` trio
+plus a Reset button that appears only when the offset is non-zero.
+Buttons carry per-direction `aria-label`s (`"Transpose up one
+semitone"`, etc.), the readout is an `<output>` with `aria-live="polite"`
+so screen readers announce changes, and the wrapper listens for
+`+` / `-` / `0` keys while focus is inside so keyboard users can
+step without mouse hits. Values are clamped into `[min, max]`
+(defaults `-11`…`+11`) in both the controlled mode and via the
+hook's own `setValue`.
+
+### `useTranspose` — state helper for custom UIs
+
+```tsx
+import { useTranspose } from '@chordsketch/react';
+
+const { value, increment, decrement, reset, setValue } = useTranspose({
+  initial: 0,
+  min: -11,
+  max: 11,
+});
+```
+
+All update functions clamp into `[min, max]`. `reset()` returns
+to the initial value, not necessarily zero. `increment` /
+`decrement` accept an optional step; `setValue` accepts any
+number (including `NaN`, which collapses to `min`) so direct
+binding to a numeric input is safe.
 
 ### Version
 

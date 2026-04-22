@@ -23,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   download. `<PdfExport>` sets `disabled` + `aria-busy` while the
   render is in flight and forwards `onExported` / `onError`
   callbacks alongside all standard `<button>` attributes. (#2041)
+- `@chordsketch/react`: `<Transpose>` control + `useTranspose`
+  hook. Accessible `−` / readout / `+` / reset UI with per-button
+  `aria-label`s, an `<output aria-live="polite">` indicator, and
+  `+` / `-` / `0` keyboard shortcuts while focus is inside.
+  `useTranspose` returns `{ value, increment, decrement, reset,
+  setValue }` with configurable `initial` / `min` / `max` bounds
+  (default `-11`…`+11`); every setter clamps into range and
+  `setValue` normalises `NaN` to `min` so direct binding to a
+  numeric input is safe. Baseline styles under
+  `@chordsketch/react/styles.css` use transparent backgrounds and
+  `currentColor` so the control inherits the host theme. (#2044)
 
 ### Changed
 
