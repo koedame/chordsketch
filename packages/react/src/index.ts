@@ -4,7 +4,6 @@
 // Components land incrementally. Remaining surface:
 //   - #2042: <ChordSheet>
 //   - #2043: <ChordEditor>
-//   - #2044: <Transpose> + useTranspose
 //   - #2045: <ChordDiagram>
 
 import packageJson from '../package.json' with { type: 'json' };
@@ -15,6 +14,12 @@ export {
   type PdfExportOptions,
   type UsePdfExportResult,
 } from './use-pdf-export';
+export { Transpose, type TransposeProps } from './transpose';
+export {
+  useTranspose,
+  type UseTransposeOptions,
+  type UseTransposeResult,
+} from './use-transpose';
 
 /**
  * The running version of `@chordsketch/react`. Returns the string
