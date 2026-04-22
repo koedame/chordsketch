@@ -48,16 +48,34 @@ export function Sheet() {
 ```
 
 `format="html"` (default) injects ChordPro's rendered HTML via
-`dangerouslySetInnerHTML` — the output comes from the trusted
-`chordsketch-render-html` crate that backs every ChordSketch
-binding, so it is safe. `format="text"` renders the plain-text
-chords-above-lyrics output inside a `<pre>`; pick that variant if
-you need a zero-HTML preview.
+`dangerouslySetInnerHTML`. The output comes from
+`chordsketch-render-html`, which escapes all user-supplied
+ChordPro tokens (titles, lyrics, chord names, attributes, inline
+markup, custom section labels) before emitting markup — for
+first-party ChordPro this is safe to inject directly.
+`format="text"` renders the plain-text chords-above-lyrics output
+inside a `<pre>`; pick that variant if you need a zero-HTML
+preview.
 
-Errors are surfaced via an inline `role="alert"` by default; pass
-`errorFallback={(err) => ...}` to customise the rendering, or
-`errorFallback={null}` to hide errors entirely and let the stale
-previous render stay visible.
+**Trust boundary note.** Delegate sections (`{start_of_abc}`,
+`{start_of_ly}`, `{start_of_musicxml}`, `{start_of_textblock}`)
+pass their bodies through **raw** per the render-html crate's
+security doc. If you accept **untrusted** ChordPro (e.g. a
+multi-tenant SaaS where end users share songs), combine this
+component with a Content Security Policy that restricts inline
+scripts and external resource loads, or switch to `format="text"`
+for a zero-HTML preview. The playground
+(`packages/ui-web`) uses a sandboxed iframe for the same render
+pipeline because it does not control the ChordPro source it
+renders; `<ChordSheet>` does not sandbox because typical React
+hosts already control their own input.
+
+Errors are surfaced via an inline `role="alert"` above the
+render by default. Pass `errorFallback={(err) => <YourJsx/>}` to
+customise — any ReactNode works under both `format` values
+because the error lives in a sibling element of the rendered
+output. `errorFallback={null}` hides errors entirely and lets
+the stale previous render stay visible.
 
 ### `useChordRender` — hook for bespoke renderers
 

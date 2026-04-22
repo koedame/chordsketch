@@ -117,66 +117,32 @@ export function ChordSheet({
     );
   }
 
-  // HTML output is produced by `chordsketch-render-html`, which is
-  // part of this project's SDK layer — the output is trusted the
-  // same way the CLI's HTML output is. ChordPro source is never
-  // interpreted as HTML at the input boundary; any HTML tokens in
-  // the input are escaped by the renderer before they reach this
-  // point. Injecting via `dangerouslySetInnerHTML` is therefore
-  // safe here. If you are worried about rendering untrusted
-  // renderer output, use `format="text"` (plain-text, no HTML).
+  // HTML output is produced by `chordsketch-render-html`, which
+  // escapes all user-supplied ChordPro tokens (titles, lyrics,
+  // chord names, attributes, inline markup, custom section labels)
+  // via `escape_xml` before emitting markup. For typical
+  // first-party ChordPro content the output is therefore safe to
+  // inject via `dangerouslySetInnerHTML`. Delegate sections
+  // (`{start_of_abc}`, `{start_of_ly}`, `{start_of_musicxml}`,
+  // `{start_of_textblock}`) are the documented exception — their
+  // bodies are passed through raw per `chordsketch-render-html`'s
+  // module-level security note. Hosts that accept untrusted
+  // ChordPro SHOULD combine this component with a Content Security
+  // Policy that restricts inline scripts and external resource
+  // loads, or switch to `format="text"` (zero-HTML preview).
+  //
+  // The error node (if any) lives in a sibling element rather than
+  // being stringified into the HTML branch, so a consumer-supplied
+  // JSX `errorFallback` renders identically under both `format`
+  // values.
   return (
-    <div
-      {...divProps}
-      className={wrapperClass}
-      aria-busy={loading || undefined}
-      // eslint-disable-next-line react/no-danger
-      dangerouslySetInnerHTML={{ __html: maybePrependError(errorNode, output) }}
-    />
+    <div {...divProps} className={wrapperClass} aria-busy={loading || undefined}>
+      {errorNode}
+      <div
+        className="chordsketch-sheet__content"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: output }}
+      />
+    </div>
   );
-}
-
-// Inline error prepending for the HTML branch: React does not let
-// us mix children and `dangerouslySetInnerHTML`, so we render the
-// error to a raw string when it is present. The errorFallback
-// return value is a ReactNode — if the consumer passes a complex
-// fallback they should move to the `format="text"` branch (or
-// stop passing a custom errorFallback and surface the error via
-// the `error` state from useChordRender directly).
-//
-// Default path: no customisation ⇒ errorNode is the built-in
-// `role=alert` div; serialise it to the minimal markup
-// equivalent. Consumers that supply a custom `errorFallback` for
-// the HTML branch get the raw HTML of its output if it's a string
-// or an empty prefix otherwise.
-function maybePrependError(errorNode: ReactNode, html: string): string {
-  if (errorNode === null || errorNode === undefined || errorNode === false) {
-    return html;
-  }
-  if (typeof errorNode === 'string') {
-    return escapeHtml(errorNode) + html;
-  }
-  // For the default `defaultErrorFallback` output we render a
-  // minimal `role="alert"` div with the message plain-text.
-  // Consumers that supply richer ReactNode fallbacks should use
-  // `format="text"` instead — this branch keeps them working but
-  // falls back to no prefix.
-  if (typeof errorNode === 'object' && errorNode !== null && 'props' in errorNode) {
-    const props = (errorNode as { props?: { children?: unknown } }).props ?? {};
-    if (typeof props.children === 'string') {
-      return `<div role="alert" class="chordsketch-sheet__error">${escapeHtml(
-        props.children,
-      )}</div>${html}`;
-    }
-  }
-  return html;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

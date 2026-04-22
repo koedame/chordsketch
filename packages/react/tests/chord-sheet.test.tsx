@@ -189,6 +189,40 @@ describe('<ChordSheet>', () => {
     expect(screen.getByText('TEXT:one')).toBeTruthy();
   });
 
+  test('HTML branch renders custom JSX errorFallback alongside the output', async () => {
+    // Regression guard: under `format="html"` the component used
+    // to stringify the default fallback into the HTML branch and
+    // silently drop arbitrary JSX. The post-2042-delta design
+    // renders the errorFallback in a sibling element so any
+    // ReactNode works under both `format` values.
+    const stub = makeStub();
+    stub.render_html.mockImplementation(() => {
+      throw new Error('html-boom');
+    });
+
+    const { container } = render(
+      <ChordSheet
+        source="bad"
+        format="html"
+        errorFallback={(err) => (
+          <section data-testid="rich-err">
+            <strong>Problem:</strong> {err.message}
+          </section>
+        )}
+        wasmLoader={makeLoader(stub)}
+      />,
+    );
+
+    await waitFor(() => {
+      const node = screen.getByTestId('rich-err');
+      expect(node.tagName).toBe('SECTION');
+      expect(node.textContent).toBe('Problem: html-boom');
+    });
+    // The content wrapper is still present (holds the render output,
+    // which is null here because every render threw).
+    expect(container.querySelector('.chordsketch-sheet__content')).toBeNull();
+  });
+
   test('WASM module is loaded once across rerenders with different sources', async () => {
     const stub = makeStub();
     const loader = makeLoader(stub);
