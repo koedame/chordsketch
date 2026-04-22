@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only exported symbol. CI workflow `.github/workflows/react.yml`
   covers typecheck, vitest smoke, and a build-artefact integrity
   check. (#2040)
+- `@chordsketch/react`: `<PdfExport>` button + `usePdfExport` hook.
+  Lazy-loads `@chordsketch/wasm` on first call, caches the
+  initialised module for subsequent calls, renders to PDF via
+  `render_pdf` / `render_pdf_with_options`, and triggers a browser
+  download. `<PdfExport>` sets `disabled` + `aria-busy` while the
+  render is in flight and forwards `onExported` / `onError`
+  callbacks alongside all standard `<button>` attributes. (#2041)
 
 ### Changed
 
