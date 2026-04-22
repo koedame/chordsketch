@@ -1,0 +1,71 @@
+name: "@chordsketch/react"
+
+# Lint, typecheck, build, and smoke-test the @chordsketch/react
+# package on every PR that touches it, plus pushes to main for
+# post-merge verification. Publish-on-tag is intentionally NOT
+# handled here — the first @chordsketch/react release has to be a
+# manual `npm publish` on the maintainer's machine (npm granular
+# tokens cannot create new @chordsketch/* packages; see the
+# memory note and #1748 for the tree-sitter-chordpro precedent).
+# Automated publish will be added in a follow-up once the package
+# namespace exists on npm.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/react/**'
+      - '.github/workflows/react.yml'
+  pull_request:
+    paths:
+      - 'packages/react/**'
+      - '.github/workflows/react.yml'
+
+# Cancel stale PR runs on force-push / rebase. Main / workflow_dispatch
+# runs always go to completion (gated on pull_request event).
+concurrency:
+  group: react-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+    working-directory: packages/react
+
+jobs:
+  build-and-test:
+    name: Build and test @chordsketch/react
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: packages/react/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Run vitest smoke tests
+        run: npm test
+
+      - name: Build (tsup ESM + CJS + .d.ts)
+        run: npm run build
+
+      - name: Verify dist/ contents
+        run: |
+          set -euo pipefail
+          test -f dist/index.js    # ESM
+          test -f dist/index.cjs   # CJS
+          test -f dist/index.d.ts  # Types
+          test -f dist/styles.css  # Reserved CSS import path
+          echo "dist/ contents:"
+          ls -la dist/
