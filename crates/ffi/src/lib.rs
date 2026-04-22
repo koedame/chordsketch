@@ -294,6 +294,55 @@ pub fn version() -> String {
     chordsketch_chordpro::version().to_string()
 }
 
+/// Look up an SVG chord diagram for the given chord name and
+/// instrument. Mirrors the WASM `chord_diagram_svg` export
+/// added in #2164 and the NAPI `chordDiagramSvg` export added
+/// in #2167.
+///
+/// `instrument` accepts (case-insensitive): `"guitar"`,
+/// `"ukulele"` (alias `"uke"`), or `"piano"` (aliases
+/// `"keyboard"`, `"keys"`). `chord` is a standard ChordPro
+/// chord name. Flat spellings are normalised to sharps via the
+/// same path the core voicing-database lookup uses.
+///
+/// Returns `Ok(Some(svg))` for known `(chord, instrument)`
+/// pairs, `Ok(None)` when the database has no entry, and
+/// `Err(ChordSketchError::InvalidConfig)` when the instrument
+/// is not supported.
+///
+/// # Errors
+///
+/// Returns [`ChordSketchError::InvalidConfig`] when
+/// `instrument` is not one of the supported values.
+#[must_use = "callers must handle the unknown-instrument error"]
+pub fn chord_diagram_svg(
+    chord: String,
+    instrument: String,
+) -> Result<Option<String>, ChordSketchError> {
+    use chordsketch_chordpro::chord_diagram::{render_keyboard_svg, render_svg};
+    use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
+
+    match instrument.to_ascii_lowercase().as_str() {
+        "piano" | "keyboard" | "keys" => {
+            Ok(lookup_keyboard_voicing(&chord, &[]).map(|v| render_keyboard_svg(&v)))
+        }
+        "guitar" | "ukulele" | "uke" => {
+            // `frets_shown = 5` matches the default ChordPro HTML
+            // renderer (`crates/render-html` emits 5-fret diagrams
+            // when no `{chordfrets}` directive is set), keeping
+            // diagrams produced via UniFFI bindings (Python /
+            // Swift / Kotlin / Ruby) visually consistent with
+            // sheets rendered through the same binding.
+            Ok(lookup_diagram(&chord, &[], &instrument, 5).map(|d| render_svg(&d)))
+        }
+        other => Err(ChordSketchError::InvalidConfig {
+            reason: format!(
+                "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
+            ),
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -391,6 +440,52 @@ mod tests {
     fn test_version() {
         let v = version();
         assert!(!v.is_empty());
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_known_guitar() {
+        let svg = chord_diagram_svg("Am".to_string(), "guitar".to_string()).unwrap();
+        let svg = svg.expect("Am should be in the built-in guitar voicing database");
+        assert!(svg.contains("<svg"), "expected inline SVG, got: {svg}");
+        assert!(svg.contains("Am"));
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_known_piano() {
+        let svg = chord_diagram_svg("C".to_string(), "piano".to_string()).unwrap();
+        let svg = svg.expect("C should be in the built-in piano voicing database");
+        assert!(svg.contains("<svg"));
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_unknown_chord_returns_none() {
+        // A chord name the database has no voicing for must return
+        // `Ok(None)` rather than an error — hosts pattern-match on
+        // the optional to render a "chord not found" fallback.
+        let svg = chord_diagram_svg("ZZZ7sus4".to_string(), "guitar".to_string()).unwrap();
+        assert!(svg.is_none());
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_unknown_instrument_errors() {
+        let err = chord_diagram_svg("C".to_string(), "theremin".to_string())
+            .expect_err("unsupported instrument should reject");
+        match err {
+            ChordSketchError::InvalidConfig { reason } => {
+                assert!(reason.contains("theremin"), "unexpected reason: {reason}");
+            }
+            _ => panic!("expected InvalidConfig, got: {err:?}"),
+        }
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_instrument_aliases() {
+        // `"uke"` should route through the same path as `"ukulele"`.
+        let svg = chord_diagram_svg("Am".to_string(), "uke".to_string()).unwrap();
+        assert!(svg.is_some());
+        // `"keyboard"` should route through the piano branch.
+        let svg = chord_diagram_svg("C".to_string(), "keyboard".to_string()).unwrap();
+        assert!(svg.is_some());
     }
 
     #[test]

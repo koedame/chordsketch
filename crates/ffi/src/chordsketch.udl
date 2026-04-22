@@ -59,6 +59,24 @@ namespace chordsketch {
 
     /// Return the ChordSketch library version.
     string version();
+
+    /// Look up an SVG chord diagram for the given chord name and
+    /// instrument. Mirrors the WASM `chord_diagram_svg` export
+    /// added in #2164 and the NAPI `chordDiagramSvg` export
+    /// added in #2167.
+    ///
+    /// `instrument` accepts (case-insensitive): `"guitar"`,
+    /// `"ukulele"` (alias `"uke"`), or `"piano"` (aliases
+    /// `"keyboard"`, `"keys"`). `chord` is a standard ChordPro
+    /// chord name. Flat spellings are normalised to sharps via
+    /// the same path the core voicing-database lookup uses.
+    ///
+    /// Returns the inline SVG string, or `null` when the
+    /// built-in voicing database has no entry for this
+    /// `(chord, instrument)` pair. Throws `InvalidConfig` when
+    /// the instrument is unsupported.
+    [Throws=ChordSketchError]
+    string? chord_diagram_svg(string chord, string instrument);
 };
 
 /// Structured render result for text / HTML output.
