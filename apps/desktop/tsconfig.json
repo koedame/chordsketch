@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@chordsketch/wasm": ["../../packages/npm/web/chordsketch_wasm"],
+      "@chordsketch/ui-web": ["../../packages/ui-web/src/index.ts"],
+      "@chordsketch/ui-web/style.css": [
+        "../../packages/ui-web/src/style.css"
+      ]
+    }
+  },
+  "include": ["src", "../../packages/ui-web/src"]
+}
