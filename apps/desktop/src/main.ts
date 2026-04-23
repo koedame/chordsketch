@@ -12,6 +12,8 @@ import {
   type Renderers,
 } from '@chordsketch/ui-web';
 import '@chordsketch/ui-web/style.css';
+import './codemirror-editor.css';
+import { codemirrorEditorFactory } from './codemirror-editor';
 import { invoke } from '@tauri-apps/api/core';
 import {
   Menu,
@@ -457,6 +459,7 @@ async function bootstrap(): Promise<void> {
     renderers,
     title: DEFAULT_WINDOW_TITLE,
     documentTitle: DEFAULT_WINDOW_TITLE,
+    createEditor: codemirrorEditorFactory,
     onChordProChange: () => {
       // `updateWindowTitle` is async but fire-and-forget here —
       // the title only needs to update eventually, and racing

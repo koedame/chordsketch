@@ -5,13 +5,23 @@
   "type": "module",
   "description": "Vite frontend for the ChordSketch desktop app; mounts @chordsketch/ui-web inside the Tauri WebView.",
   "scripts": {
+    "prebuild": "node scripts/build-grammar-wasm.mjs",
+    "predev": "node scripts/build-grammar-wasm.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/lint": "^6.9.5",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.41.1",
+    "@lezer/highlight": "^1.2.3",
+    "codemirror": "^6.0.2",
     "typescript": "^5.7.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "web-tree-sitter": "^0.26.8"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",
