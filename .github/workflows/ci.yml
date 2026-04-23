@@ -143,12 +143,22 @@ jobs:
 
   desktop-smoke:
     name: Desktop smoke (Linux)
-    # Linux-only `cargo check` of the `chordsketch-desktop` Tauri scaffold.
-    # Guarantees the scaffold still compiles on every PR while keeping
-    # the cross-platform bundle build in a dedicated workflow (#2077).
-    # Per `.claude/rules/ci-parallelization.md` §3, this runs without a
-    # `paths:` filter so any workspace or dependency change is exercised.
+    # End-to-end smoke for the `chordsketch-desktop` app:
+    #   1. Build `@chordsketch/wasm` (web + node dual-package) so the
+    #      Vite alias in `apps/desktop/vite.config.ts` has a target.
+    #   2. `npm ci` + `npm run build` inside `apps/desktop/` (runs `tsc`
+    #      + `vite build`) to prove the WebView frontend type-checks
+    #      and bundles against the shared `@chordsketch/ui-web` source.
+    #   3. `cargo check -p chordsketch-desktop --all-targets` on the
+    #      Tauri Rust side, with webkit2gtk installed.
+    # Guarantees both halves of the desktop stack compile on every PR,
+    # while the cross-platform bundle build matrix stays tracked in
+    # #2077. Per `.claude/rules/ci-parallelization.md` §3, this runs
+    # without a `paths:` filter so any workspace or dep change is
+    # exercised.
     runs-on: ubuntu-latest
+    env:
+      WASM_PACK_VERSION: "0.14.0"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -166,10 +176,39 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: wasm32-unknown-unknown
 
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           shared-key: desktop-smoke-x86_64-unknown-linux-gnu
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2
+        with:
+          tool: wasm-pack@${{ env.WASM_PACK_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Build @chordsketch/wasm (dual-package layout)
+        # Same canonical build used by `deploy-playground.yml`. Produces
+        # `packages/npm/web/chordsketch_wasm.js` that the desktop Vite
+        # alias resolves to.
+        run: npm run build
+        working-directory: packages/npm
+
+      - name: Install desktop frontend deps
+        run: npm ci
+        working-directory: apps/desktop
+
+      - name: Build desktop frontend (tsc + vite)
+        run: npm run build
+        working-directory: apps/desktop
 
       - name: cargo check
         run: cargo check -p chordsketch-desktop --all-targets

@@ -28,6 +28,7 @@ packages/npm/node/
 # Node.js
 node_modules/
 packages/playground/dist/
+apps/desktop/dist/
 
 # napi-rs prebuilt binaries and lock files (local build/publish artifacts)
 crates/napi/**/*.node

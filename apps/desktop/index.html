@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChordSketch</title>
+  </head>
+  <body>
+    <!--
+      The editor / preview / controls DOM is built by
+      `mountChordSketchUi` from `@chordsketch/ui-web`. Keep this body
+      minimal — the desktop and the browser playground share the same
+      mount contract (`#app`), so any divergence in the shell HTML
+      makes the shared UI module harder to keep framework-agnostic.
+    -->
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
