@@ -45,6 +45,15 @@ export interface MountOptions {
   title?: string;
   /** Document `<title>` to set on mount. If omitted, the document title is left alone. */
   documentTitle?: string;
+  /**
+   * Fires synchronously on every editor input event, before the
+   * render debounce. Hosts use this for dirty-tracking in the
+   * desktop app (#2080) — comparing the current value to the last
+   * saved content to decide whether the title bar should show a
+   * "modified" indicator. The browser playground has no concept
+   * of unsaved state and simply omits the callback.
+   */
+  onChordProChange?: (value: string) => void;
 }
 
 /**
@@ -75,6 +84,16 @@ export interface ChordSketchUiHandle {
    * shows.
    */
   getTranspose(): number;
+  /**
+   * Replace the editor contents with `value`, triggering an
+   * immediate render. Used by the desktop app's `File → Open`
+   * flow after reading a file off disk (#2080). Does NOT fire
+   * the {@link MountOptions.onChordProChange} callback — a
+   * programmatic load is not a user edit, and the host is
+   * responsible for resetting its own dirty-tracking state at
+   * the same time it calls this.
+   */
+  setChordPro(value: string): void;
 }
 
 const RENDER_DEBOUNCE_MS = 300;
@@ -387,6 +406,7 @@ export async function mountChordSketchUi(
     pdfFilename = 'chordsketch-output.pdf',
     title = 'ChordSketch Playground',
     documentTitle,
+    onChordProChange,
   } = options;
 
   if (documentTitle !== undefined) {
@@ -682,6 +702,11 @@ export async function mountChordSketchUi(
 
   editor.value = initialChordPro;
 
+  const onEditorInput = (): void => {
+    onChordProChange?.(editor.value);
+    scheduleRender();
+  };
+
   const onTransposeInput = (): void => {
     updateTransposeControls();
     scheduleRender();
@@ -696,7 +721,7 @@ export async function mountChordSketchUi(
     setTranspose(TRANSPOSE_RESET);
   };
 
-  editor.addEventListener('input', scheduleRender);
+  editor.addEventListener('input', onEditorInput);
   formatSelect.addEventListener('change', render);
   transposeInput.addEventListener('input', onTransposeInput);
   transposeDecrementBtn.addEventListener('click', onTransposeDecrement);
@@ -720,7 +745,7 @@ export async function mountChordSketchUi(
         clearTimeout(debounceTimer);
         debounceTimer = null;
       }
-      editor.removeEventListener('input', scheduleRender);
+      editor.removeEventListener('input', onEditorInput);
       formatSelect.removeEventListener('change', render);
       transposeInput.removeEventListener('input', onTransposeInput);
       transposeDecrementBtn.removeEventListener('click', onTransposeDecrement);
@@ -738,6 +763,21 @@ export async function mountChordSketchUi(
     },
     getTranspose(): number {
       return getTranspose();
+    },
+    setChordPro(value: string): void {
+      editor.value = value;
+      // Cancel any debounce pending from pre-load keystrokes (e.g.
+      // paste-then-Open): without this, the stale timer fires ~300 ms
+      // later and re-renders the freshly loaded content again —
+      // idempotent but wasteful.
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      // Immediate render (not `scheduleRender`) because programmatic
+      // loads are discrete events — users expect the preview to
+      // reflect the loaded file without a 300 ms debounce delay.
+      render();
     },
   };
 }

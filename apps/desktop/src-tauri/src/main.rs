@@ -1,9 +1,19 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs;
+use std::fs::File;
+use std::io::{BufReader, Read};
+use std::path::Path;
 
 use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::parse_multi_lenient;
+
+/// Max ChordPro source size the editor will open from disk. 10 MiB
+/// comfortably fits the largest hymnal transcriptions in the test
+/// corpus (hundreds of songs concatenated) while rejecting anything
+/// big enough to wedge the `<textarea>` on modest hardware. Lets the
+/// command fail fast with a readable error instead of a WebView hang.
+const MAX_OPEN_SIZE_BYTES: u64 = 10 * 1024 * 1024;
 
 /// Parse the supplied ChordPro source, render every song it contains
 /// with the requested transposition, and write the result to `path`.
@@ -54,10 +64,54 @@ fn export_html(path: String, chordpro: String, transpose: Option<i8>) -> Result<
     )
 }
 
+/// Reads the ChordPro source at `path` and returns it as a UTF-8
+/// string to the frontend. Enforces `MAX_OPEN_SIZE_BYTES` during a
+/// single opened-handle read so a stray 2 GB binary selected in the
+/// file picker fails fast with a readable error, rather than a
+/// multi-minute WebView hang.
+///
+/// Uses `File::open` + `BufReader::take(MAX + 1)` so the size
+/// check is TOCTOU-safe per `.claude/rules/defensive-inputs.md`
+/// ("Never check a resource then act on it in separate steps. Use
+/// atomic operations… Prefer passing already-opened handles"). A
+/// separate `metadata()`-then-`read_to_string()` pair leaves a race
+/// window where a co-process can grow the file past the limit
+/// after the stat but before the read.
+#[tauri::command]
+fn open_file(path: String) -> Result<String, String> {
+    let p = Path::new(&path);
+    let file = File::open(p).map_err(|e| format!("Failed to open {path}: {e}"))?;
+    // `take(MAX + 1)` lets us distinguish "exactly at the limit" (OK)
+    // from "over the limit" (reject) in a single read.
+    let mut reader = BufReader::new(file).take(MAX_OPEN_SIZE_BYTES + 1);
+    let mut buf = String::new();
+    reader
+        .read_to_string(&mut buf)
+        .map_err(|e| format!("Failed to read {path}: {e}"))?;
+    if buf.len() as u64 > MAX_OPEN_SIZE_BYTES {
+        return Err(format!("File is too large (> {MAX_OPEN_SIZE_BYTES} bytes)"));
+    }
+    Ok(buf)
+}
+
+/// Writes `content` to `path`, overwriting any existing file. Used
+/// by the File → Save / Save As menu items; the frontend is
+/// responsible for dialog-driven destination selection so this
+/// command does no extra validation beyond the IO error surface.
+#[tauri::command]
+fn save_file(path: String, content: String) -> Result<(), String> {
+    fs::write(&path, content).map_err(|e| format!("Failed to write {path}: {e}"))
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![export_pdf, export_html])
+        .invoke_handler(tauri::generate_handler![
+            export_pdf,
+            export_html,
+            open_file,
+            save_file,
+        ])
         .run(tauri::generate_context!())
         // `expect` is justified: this is process entry — if the Tauri
         // runtime cannot start, there is no application to recover

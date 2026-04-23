@@ -88,6 +88,28 @@ the Rust binary against `apps/desktop/dist/`. Bundles land under
 release matrix (signing, notarization, upload to GitHub Releases) is
 tracked under `#2075`, `#2077`, and `#2078`.
 
+## File I/O
+
+`File → Open…`, `File → Save`, `File → Save As…`, and `File →
+Open Recent` (last 10 files, persisted in `localStorage`) route
+through two Tauri commands in `src-tauri/src/main.rs`:
+
+- `open_file(path)` → reads the UTF-8 source at `path`, enforces
+  `MAX_OPEN_SIZE_BYTES` (10 MiB) before the full read so a stray
+  2 GB binary selected in the picker fails fast instead of
+  wedging the WebView, and returns the string to the frontend.
+- `save_file(path, content)` → `std::fs::write` the given content
+  to the chosen path.
+
+The title bar shows a `•` prefix while the in-memory buffer has
+drifted from the last-saved content; closing the window with a
+dirty buffer prompts "Unsaved changes — Quit without saving?"
+before destroying the window.
+
+Keyboard shortcuts (`⌘/Ctrl + O`, `⌘/Ctrl + S`, `⌘/Ctrl + Shift +
+S`) are tracked under #2206; the menu items drive the same flow
+via click for now.
+
 ## Export flow
 
 `File → Export PDF…` / `Export HTML…` in the native menu route
@@ -105,10 +127,13 @@ byte-for-byte identical to what the CLI (`chordsketch`) and the
 UniFFI bindings produce, and avoids piping the full rendered
 buffer back across the IPC boundary as JavaScript memory.
 
-The native save dialog is provided by `tauri-plugin-dialog`;
-the capability in `src-tauri/capabilities/default.json` grants
-only `dialog:allow-save` + `dialog:allow-message` — file-open
-lands with `#2080`.
+Native dialogs are provided by `tauri-plugin-dialog`. The
+capability in `src-tauri/capabilities/default.json` grants
+`dialog:allow-open` + `dialog:allow-save` + `dialog:allow-ask`
++ `dialog:allow-message`; the wider `dialog:default` (which also
+includes `confirm`) is still withheld, and the `fs:*` permissions
+are intentionally absent — the Rust commands above handle all
+filesystem access.
 
 ## Workspace integration
 

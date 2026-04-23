@@ -1,12 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Narrow capability set. `core:app:default` + `core:window:default` are the baseline from #2069. `dialog:allow-save` + `dialog:allow-message` are added in #2074 so the File → Export handlers can open a native save dialog and show a success/error alert; the broader `dialog:default` (which also grants file-open + confirm + ask) is intentionally NOT granted — open-file lands with #2080 and will extend this capability then.",
+  "description": "Narrow capability set. `core:app:default` + `core:window:default` are the baseline from #2069. `dialog:allow-save` + `dialog:allow-message` land in #2074 (Export flow). `dialog:allow-open` + `dialog:allow-ask` land in #2080 (File → Open and the Quit-unsaved prompt). The custom Rust commands (`open_file`, `save_file`) handle the actual filesystem access, so `fs:*` is intentionally not granted — this keeps untrusted WebView code unable to read or write arbitrary paths without a user-initiated dialog.",
   "windows": ["main"],
   "permissions": [
     "core:app:default",
     "core:window:default",
     "dialog:allow-save",
-    "dialog:allow-message"
+    "dialog:allow-open",
+    "dialog:allow-message",
+    "dialog:allow-ask"
   ]
 }
