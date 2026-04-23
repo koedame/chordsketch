@@ -139,9 +139,14 @@ jobs:
       - name: Install Tauri CLI
         # `taiki-e/install-action` prebuilds the Tauri CLI so this
         # finishes in seconds, vs. ~2 min for `cargo install`.
+        # Pin to a concrete version because `install-action` does
+        # NOT accept semver operators (caret/tilde) — see the
+        # upstream error "install-action does not support semver
+        # operators: '^2'". Bump this line when Tauri CLI cuts a
+        # new release we want to pick up.
         uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2
         with:
-          tool: tauri-cli@^2
+          tool: tauri-cli@2.10.1
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
