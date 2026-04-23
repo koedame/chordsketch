@@ -193,7 +193,6 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: apps/desktop/package-lock.json
 
       - name: Build @chordsketch/wasm (dual-package layout)
         # Same canonical build used by `deploy-playground.yml`. Produces
@@ -202,11 +201,24 @@ jobs:
         run: npm run build
         working-directory: packages/npm
 
+      - name: Install tree-sitter-chordpro grammar deps
+        # `apps/desktop`'s `prebuild` script runs `tree-sitter build
+        # --wasm` against this grammar package to produce
+        # `tree-sitter-chordpro.wasm` (served at the Vite public
+        # root for the CodeMirror editor). The tree-sitter CLI is a
+        # devDependency of `packages/tree-sitter-chordpro/`, so the
+        # prebuild needs this install first.
+        run: npm ci
+        working-directory: packages/tree-sitter-chordpro
+
       - name: Install desktop frontend deps
         run: npm ci
         working-directory: apps/desktop
 
-      - name: Build desktop frontend (tsc + vite)
+      - name: Build desktop frontend (prebuild + tsc + vite)
+        # `npm run build` runs the `prebuild` hook which builds the
+        # grammar wasm; then `tsc && vite build` produces the Vite
+        # bundle under `apps/desktop/dist/`.
         run: npm run build
         working-directory: apps/desktop
 

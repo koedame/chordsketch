@@ -186,8 +186,19 @@ main {
   outline-offset: -2px;
 }
 
-#editor {
+/*
+ * Any editor adapter mounted inside `.editor-pane` gets the same
+ * flex-fill slot. `defaultTextareaEditor` produces a
+ * `<textarea id="editor">` whose more-specific `#editor` rules
+ * below layer on the font / background styling; richer editors
+ * (CodeMirror, etc.) own their own look and only need the flex.
+ */
+.editor-pane > * {
   flex: 1;
+  min-height: 0;
+}
+
+#editor {
   resize: none;
   border: none;
   outline: none;

@@ -1,0 +1,127 @@
+/*
+ * Styling for the CodeMirror-backed ChordPro editor used by the
+ * desktop app. Light/dark palettes are driven by
+ * `prefers-color-scheme` so the editor matches the OS theme
+ * without touching JS — ui-web's own surface is dark-only for now,
+ * but the CodeMirror pane lives inside the same scroller and
+ * should follow the system preference once ui-web picks up a
+ * light palette in a future iteration.
+ *
+ * Class-name mapping must stay in sync with `HighlightStyle`
+ * entries in `codemirror-editor.ts` (`cm-chordpro-*`).
+ */
+
+.chordsketch-cm-host {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  background: var(--editor-bg);
+  color: var(--editor-text);
+  overflow: hidden;
+}
+
+.chordsketch-cm-host .cm-editor {
+  flex: 1;
+  min-height: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.chordsketch-cm-host .cm-content {
+  caret-color: var(--accent);
+}
+
+.chordsketch-cm-host .cm-gutters {
+  background: var(--editor-bg);
+  color: #555;
+  border-right: 1px solid var(--border);
+}
+
+.chordsketch-cm-host .cm-activeLine {
+  background: rgba(233, 69, 96, 0.08);
+}
+
+.chordsketch-cm-host .cm-activeLineGutter {
+  background: rgba(233, 69, 96, 0.12);
+}
+
+/*
+ * Dark palette (default; ui-web's design tokens are dark today).
+ * Tokens draw from the Tauri WebView page so picking up the ui-web
+ * `--accent` / `--editor-text` custom properties keeps the editor
+ * and the preview pane in the same visual language.
+ */
+.cm-chordpro-comment {
+  color: #7c8fa5;
+  font-style: italic;
+}
+.cm-chordpro-keyword {
+  color: #c792ea;
+  font-weight: 600;
+}
+.cm-chordpro-string {
+  color: #c3e88d;
+}
+.cm-chordpro-chord {
+  color: var(--accent, #e94560);
+  font-weight: 600;
+}
+.cm-chordpro-punct {
+  color: #888;
+}
+.cm-chordpro-embedded {
+  color: #ffcb6b;
+}
+
+/*
+ * Light palette. Kicks in on macOS / Windows when the user sets
+ * "light" system appearance. Overrides the dark colour choices
+ * above.
+ */
+@media (prefers-color-scheme: light) {
+  .chordsketch-cm-host {
+    background: #fafafa;
+    color: #24292f;
+  }
+  .chordsketch-cm-host .cm-gutters {
+    background: #fafafa;
+    color: #999;
+    border-right-color: #ddd;
+  }
+  .chordsketch-cm-host .cm-activeLine {
+    background: rgba(233, 69, 96, 0.05);
+  }
+  .chordsketch-cm-host .cm-activeLineGutter {
+    background: rgba(233, 69, 96, 0.08);
+  }
+  .cm-chordpro-comment {
+    color: #6a737d;
+  }
+  .cm-chordpro-keyword {
+    color: #6f42c1;
+  }
+  .cm-chordpro-string {
+    color: #22863a;
+  }
+  .cm-chordpro-chord {
+    color: #b31d28;
+  }
+  .cm-chordpro-punct {
+    color: #555;
+  }
+  .cm-chordpro-embedded {
+    color: #e36209;
+  }
+}
+
+/*
+ * Lint diagnostic affordance. `@codemirror/lint` adds its own
+ * underline; the red-wavy pattern below matches the conventional
+ * spelling-mistake indicator so ChordPro syntax errors read as
+ * "something is wrong here" without needing a separate tooltip
+ * to disambiguate.
+ */
+.chordsketch-cm-host .cm-lintRange-error {
+  background-image: none;
+  border-bottom: 2px dotted #e94560;
+}
