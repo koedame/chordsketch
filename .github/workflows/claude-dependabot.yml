@@ -40,7 +40,7 @@ jobs:
             4. **Functional review**:
                - Verify the update is compatible with our codebase
                - For GitHub Actions updates: verify the action's new version doesn't change behavior we depend on
-               - For Cargo dependency updates: run `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace`
+               - For Cargo dependency updates: run `cargo clippy --workspace --exclude chordsketch-desktop --all-targets -- -D warnings` and `cargo test --workspace --exclude chordsketch-desktop` (the desktop scaffold is covered separately by the `desktop-smoke` job in ci.yml, which installs the Tauri system libs this runner does not have)
             5. **If CI fails**:
                - Diagnose the failure
                - If fixable (e.g., API change in new version), create a fix commit and push
