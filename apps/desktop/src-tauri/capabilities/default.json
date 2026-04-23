@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Scaffold-tight capability set. The placeholder frontend runs no IPC; granting only the core app + window primitives keeps the default posture narrow so the UI issues (#2071 split-pane, #2074 export dialog, #2080 file I/O) must opt in consciously rather than inherit `core:default`'s event/menu/tray/path surface.",
+  "windows": ["main"],
+  "permissions": ["core:app:default", "core:window:default"]
+}
