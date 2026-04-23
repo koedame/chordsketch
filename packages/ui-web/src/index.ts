@@ -58,6 +58,23 @@ export interface MountOptions {
  */
 export interface ChordSketchUiHandle {
   destroy(): void;
+  /**
+   * Current contents of the editor. Hosts use this to drive
+   * format-specific export paths that bypass the in-WebView
+   * rendering — e.g. the desktop app's `File → Export PDF / HTML`
+   * menu routes the source through Rust renderers (#2074) instead
+   * of the WASM module, so it needs a way to read what the user
+   * has typed.
+   */
+  getChordPro(): string;
+  /**
+   * Current semitone offset in the transpose control, clamped to
+   * the same `[-11, 11]` window the trio and the `<input>` itself
+   * enforce. Pair with {@link getChordPro} when invoking an
+   * external renderer so the export matches what the preview
+   * shows.
+   */
+  getTranspose(): number;
 }
 
 const RENDER_DEBOUNCE_MS = 300;
@@ -715,6 +732,12 @@ export async function mountChordSketchUi(
       splitter.removeEventListener('pointercancel', onSplitterPointerUp);
       splitter.removeEventListener('keydown', onSplitterKeyDown);
       downloadPdfBtn.removeEventListener('click', downloadPdf);
+    },
+    getChordPro(): string {
+      return editor.value;
+    },
+    getTranspose(): number {
+      return getTranspose();
     },
   };
 }

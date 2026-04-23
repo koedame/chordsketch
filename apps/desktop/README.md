@@ -88,6 +88,28 @@ the Rust binary against `apps/desktop/dist/`. Bundles land under
 release matrix (signing, notarization, upload to GitHub Releases) is
 tracked under `#2075`, `#2077`, and `#2078`.
 
+## Export flow
+
+`File → Export PDF…` / `Export HTML…` in the native menu route
+through two Tauri commands in `src-tauri/src/main.rs`:
+
+- `export_pdf(path, chordpro, transpose)` → calls
+  `chordsketch-render-pdf::render_songs_with_transpose` directly
+  from Rust (not the WASM module that drives the live preview)
+  and writes the bytes to `path`.
+- `export_html(path, chordpro, transpose)` → mirror of the above
+  against `chordsketch-render-html`.
+
+Going through Rust instead of WASM keeps exported files
+byte-for-byte identical to what the CLI (`chordsketch`) and the
+UniFFI bindings produce, and avoids piping the full rendered
+buffer back across the IPC boundary as JavaScript memory.
+
+The native save dialog is provided by `tauri-plugin-dialog`;
+the capability in `src-tauri/capabilities/default.json` grants
+only `dialog:allow-save` + `dialog:allow-message` — file-open
+lands with `#2080`.
+
 ## Workspace integration
 
 - `apps/desktop/src-tauri` is a workspace member but **excluded from
