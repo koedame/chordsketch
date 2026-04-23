@@ -1,0 +1,292 @@
+name: Desktop Release
+
+# Tag-triggered release pipeline for the ChordSketch desktop app.
+# Builds the 4-cell matrix (same as `desktop-build.yml`) and
+# publishes the resulting native installers plus a `SHA256SUMS`
+# file to a GitHub Release.
+#
+# Tag namespace: `desktop-v<major>.<minor>.<patch>[-prerelease]`.
+# Kept separate from the CLI's `v<major>.<minor>.<patch>` namespace
+# so the two can ship on independent cadences without one tag
+# firing the other's workflow. `release.yml`'s trigger
+# (`tags: ['v*']`) does NOT match `desktop-v*` — fnmatch requires
+# the tag name to start with `v`.
+#
+# Signing: this workflow ships **unsigned** bundles today. When
+# #2075 lands (Apple Developer ID + Windows Authenticode
+# certificates in repository secrets), Tauri's build step picks
+# up the signing env vars automatically and the same cargo tauri
+# build invocation below starts producing signed artefacts
+# without a workflow change. The `TAURI_SIGNING_PRIVATE_KEY` /
+# `APPLE_SIGNING_IDENTITY` / `WINDOWS_CERTIFICATE_*` env vars are
+# reserved here so the plumbing is already in place.
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g., desktop-v0.1.0)"
+        required: true
+        type: string
+
+# Release-shape concurrency per `.claude/rules/ci-parallelization.md`
+# §5 "Release/tag-triggered workflows" — a partial release (some
+# platform bundles missing) would silently degrade every
+# downstream install path, so NEVER cancel in-flight runs on a
+# second tag push or a re-dispatch.
+concurrency:
+  group: desktop-release-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  WASM_PACK_VERSION: "0.14.0"
+
+jobs:
+  validate:
+    name: Validate tag format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TAG" ]; then
+            echo "Rejecting empty release tag." >&2
+            exit 1
+          fi
+          # Accept `desktop-v<major>.<minor>.<patch>[-prerelease]`.
+          # A dedicated regex (not the generic
+          # `.github/actions/validate-release-tag` helper) because
+          # the desktop namespace adds the `desktop-` prefix.
+          if ! printf '%s' "$TAG" | grep -Eq '^desktop-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
+            echo "Rejecting malformed desktop release tag: $TAG" >&2
+            echo "Expected format: desktop-v<major>.<minor>.<patch>[-<prerelease>]" >&2
+            exit 1
+          fi
+
+  build:
+    name: Build (${{ matrix.platform.label }})
+    needs: [validate]
+    runs-on: ${{ matrix.platform.runner }}
+    # Fail-closed: if any matrix cell fails, the downstream
+    # `release` job (needs: build) is skipped and no GitHub
+    # Release is created. A partial desktop release would orphan
+    # users on the failing platform, so holding back the whole
+    # cut is safer. Mirrors the rationale in `release.yml`'s
+    # `build` job (see #1806).
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - label: linux-x86_64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - label: macos-aarch64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+          - label: macos-x86_64
+            # Cross-compile from Apple Silicon per #1084 — same
+            # decision documented in `desktop-build.yml`.
+            runner: macos-latest
+            target: x86_64-apple-darwin
+          - label: windows-x86_64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: wasm32-unknown-unknown, ${{ matrix.platform.target }}
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          # Target-triple per-matrix-cell. Separate shared-key
+          # from `desktop-build.yml`'s cache so release builds do
+          # not invalidate PR-smoke caches (and vice versa).
+          shared-key: desktop-release-${{ matrix.platform.target }}
+
+      - name: Install Tauri system dependencies (Linux)
+        if: matrix.platform.runner == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            build-essential \
+            pkg-config \
+            file
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2
+        with:
+          tool: wasm-pack@${{ env.WASM_PACK_VERSION }}
+
+      - name: Install Tauri CLI
+        uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2
+        with:
+          tool: tauri-cli@2.10.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            apps/desktop/package-lock.json
+            packages/tree-sitter-chordpro/package-lock.json
+
+      - name: Build @chordsketch/wasm (dual-package layout)
+        run: npm run build
+        working-directory: packages/npm
+
+      - name: Install tree-sitter-chordpro grammar deps
+        run: npm ci
+        working-directory: packages/tree-sitter-chordpro
+
+      - name: Install desktop frontend deps
+        run: npm ci
+        working-directory: apps/desktop
+
+      - name: Build Tauri bundle
+        # Same `beforeBuildCommand` chain documented in
+        # `desktop-build.yml`. When #2075 lands, the signing env
+        # vars below are populated from repository secrets and
+        # Tauri produces signed artefacts without any workflow
+        # change. Until then, the env vars stay empty and the
+        # build ships unsigned installers.
+        run: cargo tauri build --target ${{ matrix.platform.target }}
+        working-directory: apps/desktop/src-tauri
+        env:
+          # Apple notarization / signing (populated by #2075).
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Windows Authenticode (populated by #2075).
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          # Tauri updater signing (populated by #2076).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Collect bundles into a flat directory
+        # Downstream SHA256SUMS and Release upload want one
+        # directory per cell with just the installer files. Flat
+        # out the nested `bundle/<type>/` layout so the collected
+        # tree is easy to glob.
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC="target/${{ matrix.platform.target }}/release/bundle"
+          DST="release-artefacts/${{ matrix.platform.label }}"
+          mkdir -p "$DST"
+          # macOS: .dmg + .app.tar.gz. Windows: .msi + .exe.
+          # Linux: .deb + .rpm + .AppImage. The `|| true` tolerates
+          # platforms that don't emit a particular format.
+          for pat in '*.dmg' '*.app.tar.gz' '*.msi' '*.exe' '*.deb' '*.rpm' '*.AppImage'; do
+            find "$SRC" -type f -name "$pat" -exec cp -v {} "$DST/" \; || true
+          done
+          ls -la "$DST"
+
+      - name: Upload cell artefacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: chordsketch-desktop-${{ matrix.platform.label }}
+          path: release-artefacts/${{ matrix.platform.label }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Download all cell artefacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: dist
+
+      - name: Determine tag
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="$REF_NAME"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Re-validate tag format
+        # Guard against the `release` job running without the
+        # `validate` job's format check (e.g. a future refactor
+        # that drops the `needs:`).
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$TAG" | grep -Eq '^desktop-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
+            echo "Rejecting malformed desktop release tag: $TAG" >&2
+            exit 1
+          fi
+
+      - name: Flatten artefacts + generate SHA256SUMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          # Copy every file in every downloaded cell directory
+          # into a flat `release/` for the Release upload.
+          find dist -type f \
+            \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.msi' \
+               -o -name '*.exe' -o -name '*.deb' -o -name '*.rpm' \
+               -o -name '*.AppImage' \) \
+            -exec cp -v {} release/ \;
+          cd release
+          # Deterministic sort so the SHA256SUMS file is stable
+          # across runs (same tag → same file content).
+          find . -type f -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        # `--generate-notes` asks GitHub to auto-build the body
+        # from commits + merged PRs between the previous
+        # `desktop-v*` tag and this one. `--verify-tag` ensures
+        # the tag actually exists on the remote. `--latest` is
+        # intentionally omitted — desktop releases share the repo
+        # with the CLI, and marking every desktop release "latest"
+        # would hide the CLI's own `v*` releases from the landing
+        # page.
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --generate-notes \
+            --verify-tag \
+            release/*

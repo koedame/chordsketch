@@ -152,7 +152,7 @@ Covered macOS-bearing workflows as of 2026-04-24:
   `swift.yml`, `python.yml`, `ruby.yml`, `kotlin.yml`, `napi.yml`,
   `github-action-ci.yml`, `desktop-build.yml`.
 - **`cancel-in-progress: false`** (release/tag-triggered variant):
-  `release.yml`, `post-release.yml`.
+  `release.yml`, `post-release.yml`, `desktop-release.yml`.
 
 `ffi.yml` and `vscode-extension.yml` carry concurrency blocks too,
 but they are Linux-only — their groups guard against redundant
