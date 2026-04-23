@@ -31,6 +31,60 @@ export interface Renderers {
   renderPdf(input: string, options?: RenderOptions): Uint8Array;
 }
 
+/**
+ * Minimal editor contract ui-web depends on. The default factory
+ * (`defaultTextareaEditor` below) wraps a `<textarea>` and gives
+ * the playground its current behaviour byte-for-byte. Desktop hosts
+ * inject a CodeMirror-based implementation (see #2072) without
+ * pulling CodeMirror into the framework-agnostic ui-web bundle.
+ */
+export interface EditorAdapter {
+  /**
+   * Root DOM element for the editor. ui-web appends it inside the
+   * editor pane and relies on `flex: 1` to fill the pane height.
+   */
+  element: HTMLElement;
+  /** Current text content. Called on every render + export. */
+  getValue(): string;
+  /**
+   * Replace the full editor content. Called on mount
+   * (`initialChordPro`) and programmatic loads
+   * ({@link ChordSketchUiHandle.setChordPro}). Implementations must
+   * NOT fire the change handler registered via {@link onChange} for
+   * these calls — a load is not a user edit, and the host resets
+   * its own dirty-tracking state at the same call site.
+   */
+  setValue(value: string): void;
+  /**
+   * Subscribe to user-initiated value changes. Fires synchronously
+   * on every keystroke (or CodeMirror transaction). Returns an
+   * unsubscribe function which ui-web calls from `destroy()`.
+   */
+  onChange(handler: (value: string) => void): () => void;
+  /** Move keyboard focus to the editor. Optional. */
+  focus?(): void;
+  /**
+   * Release any editor-owned resources (CodeMirror views, tree
+   * parsers, etc.). Called from `ChordSketchUiHandle.destroy()`.
+   */
+  destroy(): void;
+}
+
+export interface EditorFactoryOptions {
+  /** Value to seed the editor with on creation. */
+  initialValue: string;
+  /** Placeholder rendered while the editor is empty. */
+  placeholder?: string;
+}
+
+/**
+ * Produces an {@link EditorAdapter} mounted inside the editor pane.
+ * Called exactly once per `mountChordSketchUi` call, before the
+ * first render. Passing `undefined` selects the built-in
+ * `<textarea>` implementation.
+ */
+export type EditorFactory = (options: EditorFactoryOptions) => EditorAdapter;
+
 export interface MountOptions {
   /** Renderer backend (browser injects `@chordsketch/wasm`). */
   renderers: Renderers;
@@ -54,6 +108,14 @@ export interface MountOptions {
    * of unsaved state and simply omits the callback.
    */
   onChordProChange?: (value: string) => void;
+  /**
+   * Custom editor factory. Defaults to a plain `<textarea>` that
+   * matches the pre-#2072 playground exactly. The desktop app
+   * injects a CodeMirror-based factory so ui-web stays
+   * framework-agnostic and the playground bundle does not need to
+   * pull in CodeMirror.
+   */
+  createEditor?: EditorFactory;
 }
 
 /**
@@ -120,7 +182,7 @@ const HTML_FRAME_TEMPLATE = (body: string): string => `<!DOCTYPE html>
 </html>`;
 
 interface UiNodes {
-  editor: HTMLTextAreaElement;
+  editorPaneEl: HTMLDivElement;
   formatSelect: HTMLSelectElement;
   transposeInput: HTMLInputElement;
   transposeDecrementBtn: HTMLButtonElement;
@@ -128,13 +190,58 @@ interface UiNodes {
   transposeResetBtn: HTMLButtonElement;
   transposeLiveRegion: HTMLSpanElement;
   mainEl: HTMLElement;
-  editorPane: HTMLDivElement;
   splitter: HTMLDivElement;
   preview: HTMLIFrameElement;
   textOutput: HTMLPreElement;
   pdfPane: HTMLDivElement;
   downloadPdfBtn: HTMLButtonElement;
   errorDiv: HTMLDivElement;
+}
+
+/**
+ * Default `<textarea>`-backed editor. Preserves the byte-exact
+ * playground behaviour from before the `EditorAdapter` split: one
+ * `<textarea id="editor">` inside the editor pane, `input` events
+ * proxied to the change subscriber, no placeholder announcements.
+ */
+function defaultTextareaEditor(options: EditorFactoryOptions): EditorAdapter {
+  const textarea = document.createElement('textarea');
+  textarea.id = 'editor';
+  textarea.spellcheck = false;
+  if (options.placeholder !== undefined) {
+    textarea.placeholder = options.placeholder;
+  }
+  textarea.value = options.initialValue;
+
+  const listeners = new Set<(value: string) => void>();
+  const onInput = (): void => {
+    for (const handler of listeners) handler(textarea.value);
+  };
+  textarea.addEventListener('input', onInput);
+
+  return {
+    element: textarea,
+    getValue: () => textarea.value,
+    setValue: (value: string) => {
+      // Direct assignment does NOT fire `input` events, which is
+      // exactly what the `EditorAdapter` contract requires for
+      // programmatic loads.
+      textarea.value = value;
+    },
+    onChange(handler) {
+      listeners.add(handler);
+      return () => {
+        listeners.delete(handler);
+      };
+    },
+    focus: () => {
+      textarea.focus();
+    },
+    destroy: () => {
+      listeners.clear();
+      textarea.removeEventListener('input', onInput);
+    },
+  };
 }
 
 // Range is `-11..=11` — matches the `@chordsketch/react`
@@ -293,14 +400,11 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
 
   const main = document.createElement('main');
 
-  const editorPane = document.createElement('div');
-  editorPane.id = 'editor-pane';
-  editorPane.className = 'pane editor-pane';
-  const editor = document.createElement('textarea');
-  editor.id = 'editor';
-  editor.spellcheck = false;
-  editor.placeholder = 'Enter ChordPro here...';
-  editorPane.appendChild(editor);
+  const editorPaneEl = document.createElement('div');
+  editorPaneEl.id = 'editor-pane';
+  editorPaneEl.className = 'pane editor-pane';
+  // Editor DOM is mounted by `mountChordSketchUi` via the
+  // `EditorAdapter` factory — `buildDom` only reserves the slot.
 
   // Draggable splitter between the editor and the preview. Follows
   // the W3C APG Window Splitter pattern:
@@ -349,11 +453,11 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
 
   outputPane.append(errorDiv, preview, textOutput, pdfPane);
 
-  main.append(editorPane, splitter, outputPane);
+  main.append(editorPaneEl, splitter, outputPane);
   root.append(header, main);
 
   return {
-    editor,
+    editorPaneEl,
     formatSelect,
     transposeInput,
     transposeDecrementBtn,
@@ -361,7 +465,6 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
     transposeResetBtn,
     transposeLiveRegion,
     mainEl: main,
-    editorPane,
     splitter,
     preview,
     textOutput,
@@ -407,6 +510,7 @@ export async function mountChordSketchUi(
     title = 'ChordSketch Playground',
     documentTitle,
     onChordProChange,
+    createEditor = defaultTextareaEditor,
   } = options;
 
   if (documentTitle !== undefined) {
@@ -415,7 +519,7 @@ export async function mountChordSketchUi(
 
   const nodes = buildDom(root, title);
   const {
-    editor,
+    editorPaneEl,
     formatSelect,
     transposeInput,
     transposeDecrementBtn,
@@ -423,7 +527,6 @@ export async function mountChordSketchUi(
     transposeResetBtn,
     transposeLiveRegion,
     mainEl,
-    editorPane,
     splitter,
     preview,
     textOutput,
@@ -431,6 +534,12 @@ export async function mountChordSketchUi(
     downloadPdfBtn,
     errorDiv,
   } = nodes;
+
+  const editor = createEditor({
+    initialValue: initialChordPro,
+    placeholder: 'Enter ChordPro here...',
+  });
+  editorPaneEl.appendChild(editor.element);
 
   // Apply the persisted split ratio (if any) before the initial
   // paint so the panes open at the stored proportion rather than
@@ -598,7 +707,7 @@ export async function mountChordSketchUi(
   };
 
   const render = (): void => {
-    const input = editor.value;
+    const input = editor.getValue();
     if (!input.trim()) {
       hideError();
       showPane('html');
@@ -644,7 +753,7 @@ export async function mountChordSketchUi(
   };
 
   const downloadPdf = (): void => {
-    const input = editor.value;
+    const input = editor.getValue();
     if (!input.trim()) return;
 
     const transpose = getTranspose();
@@ -700,10 +809,11 @@ export async function mountChordSketchUi(
     throw e;
   }
 
-  editor.value = initialChordPro;
+  // `initialValue` was already seeded by the factory; no second
+  // assignment needed here.
 
-  const onEditorInput = (): void => {
-    onChordProChange?.(editor.value);
+  const onEditorInput = (value: string): void => {
+    onChordProChange?.(value);
     scheduleRender();
   };
 
@@ -721,7 +831,7 @@ export async function mountChordSketchUi(
     setTranspose(TRANSPOSE_RESET);
   };
 
-  editor.addEventListener('input', onEditorInput);
+  const unsubscribeEditor = editor.onChange(onEditorInput);
   formatSelect.addEventListener('change', render);
   transposeInput.addEventListener('input', onTransposeInput);
   transposeDecrementBtn.addEventListener('click', onTransposeDecrement);
@@ -745,7 +855,8 @@ export async function mountChordSketchUi(
         clearTimeout(debounceTimer);
         debounceTimer = null;
       }
-      editor.removeEventListener('input', onEditorInput);
+      unsubscribeEditor();
+      editor.destroy();
       formatSelect.removeEventListener('change', render);
       transposeInput.removeEventListener('input', onTransposeInput);
       transposeDecrementBtn.removeEventListener('click', onTransposeDecrement);
@@ -759,13 +870,13 @@ export async function mountChordSketchUi(
       downloadPdfBtn.removeEventListener('click', downloadPdf);
     },
     getChordPro(): string {
-      return editor.value;
+      return editor.getValue();
     },
     getTranspose(): number {
       return getTranspose();
     },
     setChordPro(value: string): void {
-      editor.value = value;
+      editor.setValue(value);
       // Cancel any debounce pending from pre-load keystrokes (e.g.
       // paste-then-Open): without this, the stale timer fires ~300 ms
       // later and re-renders the freshly loaded content again —
