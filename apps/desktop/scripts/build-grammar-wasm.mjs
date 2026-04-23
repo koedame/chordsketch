@@ -42,9 +42,17 @@ if (!existsSync(publicDir)) {
 }
 
 console.log('Building tree-sitter-chordpro.wasm…');
+// `shell: true` routes through the platform shell so the npx
+// lookup obeys PATHEXT on Windows (where the executable is
+// actually `npx.cmd`, not `npx`). Without this, Node's
+// CreateProcess-backed `execFileSync('npx', ...)` fails with
+// `ENOENT` on the Windows cell of `desktop-build.yml`. The args
+// array stays a literal whitelist so the shell pass-through
+// does not introduce injection surface.
 execFileSync('npx', ['tree-sitter', 'build', '--wasm'], {
   cwd: grammarDir,
   stdio: 'inherit',
+  shell: true,
 });
 
 const grammarSrc = resolve(grammarDir, 'tree-sitter-chordpro.wasm');
