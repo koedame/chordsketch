@@ -766,9 +766,17 @@ export async function mountChordSketchUi(
     },
     setChordPro(value: string): void {
       editor.value = value;
+      // Cancel any debounce pending from pre-load keystrokes (e.g.
+      // paste-then-Open): without this, the stale timer fires ~300 ms
+      // later and re-renders the freshly loaded content again —
+      // idempotent but wasteful.
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
       // Immediate render (not `scheduleRender`) because programmatic
       // loads are discrete events — users expect the preview to
-      // reflect the loaded file without a 300ms debounce delay.
+      // reflect the loaded file without a 300 ms debounce delay.
       render();
     },
   };

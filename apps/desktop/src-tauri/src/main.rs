@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs;
+use std::fs::File;
+use std::io::{BufReader, Read};
 use std::path::Path;
 
 use chordsketch_chordpro::config::Config;
@@ -63,22 +65,33 @@ fn export_html(path: String, chordpro: String, transpose: Option<i8>) -> Result<
 }
 
 /// Reads the ChordPro source at `path` and returns it as a UTF-8
-/// string to the frontend. Enforces `MAX_OPEN_SIZE_BYTES` before the
-/// full read so a stray 2 GB binary selected in the file picker
-/// fails fast with a readable error, rather than a multi-minute
-/// WebView hang while `editor.value = "…"` digests the payload.
+/// string to the frontend. Enforces `MAX_OPEN_SIZE_BYTES` during a
+/// single opened-handle read so a stray 2 GB binary selected in the
+/// file picker fails fast with a readable error, rather than a
+/// multi-minute WebView hang.
+///
+/// Uses `File::open` + `BufReader::take(MAX + 1)` so the size
+/// check is TOCTOU-safe per `.claude/rules/defensive-inputs.md`
+/// ("Never check a resource then act on it in separate steps. Use
+/// atomic operations… Prefer passing already-opened handles"). A
+/// separate `metadata()`-then-`read_to_string()` pair leaves a race
+/// window where a co-process can grow the file past the limit
+/// after the stat but before the read.
 #[tauri::command]
 fn open_file(path: String) -> Result<String, String> {
     let p = Path::new(&path);
-    let meta = fs::metadata(p).map_err(|e| format!("Failed to stat {path}: {e}"))?;
-    if meta.len() > MAX_OPEN_SIZE_BYTES {
-        return Err(format!(
-            "File is too large ({} bytes; limit {} bytes)",
-            meta.len(),
-            MAX_OPEN_SIZE_BYTES,
-        ));
+    let file = File::open(p).map_err(|e| format!("Failed to open {path}: {e}"))?;
+    // `take(MAX + 1)` lets us distinguish "exactly at the limit" (OK)
+    // from "over the limit" (reject) in a single read.
+    let mut reader = BufReader::new(file).take(MAX_OPEN_SIZE_BYTES + 1);
+    let mut buf = String::new();
+    reader
+        .read_to_string(&mut buf)
+        .map_err(|e| format!("Failed to read {path}: {e}"))?;
+    if buf.len() as u64 > MAX_OPEN_SIZE_BYTES {
+        return Err(format!("File is too large (> {MAX_OPEN_SIZE_BYTES} bytes)"));
     }
-    fs::read_to_string(p).map_err(|e| format!("Failed to read {path}: {e}"))
+    Ok(buf)
 }
 
 /// Writes `content` to `path`, overwriting any existing file. Used

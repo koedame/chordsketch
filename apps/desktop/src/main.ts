@@ -166,42 +166,54 @@ async function runOpen(
   }
 }
 
-async function runSave(handle: ChordSketchUiHandle): Promise<void> {
+async function runSave(
+  handle: ChordSketchUiHandle,
+  rebuildMenu: MenuRebuilder,
+): Promise<void> {
   if (!currentPath) {
-    await runSaveAs(handle);
+    await runSaveAs(handle, rebuildMenu);
     return;
   }
   await writeCurrent(handle, currentPath);
 }
 
-async function runSaveAs(handle: ChordSketchUiHandle): Promise<void> {
+async function runSaveAs(
+  handle: ChordSketchUiHandle,
+  rebuildMenu: MenuRebuilder,
+): Promise<void> {
   const picked = await save({
     defaultPath: currentPath ?? `${UNTITLED_LABEL.toLowerCase()}.cho`,
     filters: CHORDPRO_FILTERS,
   });
   if (!picked) return;
-  await writeCurrent(handle, picked);
+  // Gate the `currentPath` / `pushRecent` updates on the actual
+  // write succeeding — a partial failure previously left the UI
+  // pointing at an unwritten path, so the next `runSave` would
+  // silently retry the failing write instead of reopening Save As.
+  const ok = await writeCurrent(handle, picked);
+  if (!ok) return;
   currentPath = picked;
   pushRecent(picked);
-  // Title reflects the new filename; rebuild the Open Recent menu
-  // so the just-saved path shows up at the top.
+  await rebuildMenu();
   await updateWindowTitle(handle);
 }
 
 async function writeCurrent(
   handle: ChordSketchUiHandle,
   path: string,
-): Promise<void> {
+): Promise<boolean> {
   const content = handle.getChordPro();
   try {
     await invoke('save_file', { path, content });
     lastSavedContent = content;
     await updateWindowTitle(handle);
+    return true;
   } catch (err) {
     await message(err instanceof Error ? err.message : String(err), {
       title: 'Save failed',
       kind: 'error',
     });
+    return false;
   }
 }
 
@@ -332,14 +344,14 @@ async function buildAppMenu(
       id: 'file-save',
       text: 'Save',
       action: () => {
-        void runSave(handle);
+        void runSave(handle, rebuildMenu);
       },
     }),
     MenuItem.new({
       id: 'file-save-as',
       text: 'Save As…',
       action: () => {
-        void runSaveAs(handle);
+        void runSaveAs(handle, rebuildMenu);
       },
     }),
     MenuItem.new({
