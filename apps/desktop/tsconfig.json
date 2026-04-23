@@ -1,6 +1,13 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    // ES2021+ for `String.prototype.replaceAll`, which
+    // `codemirror-editor.ts` uses for capture-name normalisation
+    // (multi-dotted captures like `variable.parameter.builtin`
+    // need every dot substituted, not just the first). Tauri's
+    // WebView on every supported OS is recent enough; Vite's
+    // `build.target = "esnext"` already mirrors this.
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,

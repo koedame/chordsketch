@@ -36,6 +36,8 @@ import {
 import { tags as t, type Tag } from '@lezer/highlight';
 import { Language, Parser, Query } from 'web-tree-sitter';
 
+import { HIGHLIGHTS_QUERY } from './highlights-query.generated';
+
 // `tags` recognises a fixed vocabulary. Map every tree-sitter
 // capture name in `queries/highlights.scm` to one of them so
 // `HighlightStyle` can colour them. Kept narrow — the grammar
@@ -56,7 +58,12 @@ const CAPTURE_TO_TAG: Record<string, Tag> = {
 const CAPTURE_MARK: Record<string, Decoration> = Object.fromEntries(
   Object.keys(CAPTURE_TO_TAG).map((capture) => [
     capture,
-    Decoration.mark({ class: `cm-capture-${capture.replace('.', '-')}` }),
+    // `replaceAll` covers multi-dotted capture names like
+    // `variable.parameter.builtin` should the grammar ever emit
+    // them. `.replace('.', '-')` only substitutes the first dot
+    // and would collide with sibling captures on the second
+    // segment.
+    Decoration.mark({ class: `cm-capture-${capture.replaceAll('.', '-')}` }),
   ]),
 );
 
@@ -86,11 +93,14 @@ let grammarPromise: Promise<LoadedGrammar> | null = null;
  * Lazily load + cache the tree-sitter runtime, grammar, and
  * highlights query. Called by the editor plugin on first
  * construction; subsequent editor instances share the cached
- * `LoadedGrammar`.
+ * `LoadedGrammar`. Caches successes only — a rejected load nulls
+ * the cache so a later editor instance (e.g. after the wasm is
+ * refreshed on disk) can retry rather than inheriting the old
+ * rejection.
  */
 async function loadGrammar(): Promise<LoadedGrammar> {
   if (grammarPromise) return grammarPromise;
-  grammarPromise = (async () => {
+  const attempt = (async () => {
     await Parser.init({
       // The runtime defaults to `locateFile: (p) => new URL(p, document.baseURI).href`.
       // We override anyway to pin the resolution explicitly — the
@@ -111,43 +121,22 @@ async function loadGrammar(): Promise<LoadedGrammar> {
     const query = new Query(language, HIGHLIGHTS_QUERY);
     return { parser, query };
   })();
-  return grammarPromise;
+  attempt.catch(() => {
+    // Drop the cached rejection so the next editor instance
+    // retries from scratch.
+    if (grammarPromise === attempt) grammarPromise = null;
+  });
+  grammarPromise = attempt;
+  return attempt;
 }
 
-// Inlined copy of `packages/tree-sitter-chordpro/queries/highlights.scm`.
-// Keep in sync with that file — the grammar tests validate the
-// query against the grammar, so a drift here would be caught by
-// `apps/desktop/src/__tests__/highlights-sync.test.ts` if/when it
-// is added. For now `scripts/build-grammar-wasm.mjs` could also
-// copy the .scm; inlining is cheaper and the query is stable.
-const HIGHLIGHTS_QUERY = `
-(comment) @comment
-
-(directive
-  "{" @punctuation.bracket
-  name: (directive_name) @keyword
-  "}" @punctuation.bracket)
-
-(directive
-  value: (directive_value) @string)
-
-(block_start_directive
-  "{" @punctuation.bracket
-  name: (directive_name) @keyword
-  "}" @punctuation.bracket)
-
-(block_end_directive
-  "{" @punctuation.bracket
-  name: (directive_name) @keyword
-  "}" @punctuation.bracket)
-
-(block_content) @embedded
-
-(chord
-  "[" @punctuation.bracket
-  (chord_name) @constant
-  "]" @punctuation.bracket)
-`;
+// `HIGHLIGHTS_QUERY` is generated from
+// `packages/tree-sitter-chordpro/queries/highlights.scm` by
+// `scripts/build-grammar-wasm.mjs` at `prebuild` / `predev` time.
+// That file is gitignored — the grammar is the single source of
+// truth, so a grammar change forces the desktop editor to pick up
+// the new query on the next build rather than relying on a
+// hand-maintained inline copy.
 
 /**
  * ViewPlugin that re-parses the document on every change, runs
@@ -230,6 +219,17 @@ class RangeDecorationBuilder {
 }
 
 /**
+ * Hard cap on the number of diagnostics emitted per parse.
+ * `@codemirror/lint` re-runs through state fields on every
+ * transaction, so an unbounded list (pasted binary, malformed
+ * 10 MB log) makes keystroke cost quadratic in the error count.
+ * Once the cap is hit the walker stops collecting and the user
+ * sees a single trailing "…and N more errors" entry so the
+ * truncation is discoverable, not silent.
+ */
+const MAX_DIAGNOSTICS = 100;
+
+/**
  * Walks the tree looking for `ERROR` / `MISSING` nodes and
  * surfaces them as `@codemirror/lint` diagnostics (red underline +
  * tooltip). Lets the editor flag unbalanced braces / brackets the
@@ -242,17 +242,25 @@ function publishDiagnostics(
   if (!tree) return;
   const diagnostics: Diagnostic[] = [];
   const walker = tree.walk();
+  let truncated = 0;
+  const pushDiagnostic = (d: Diagnostic): void => {
+    if (diagnostics.length >= MAX_DIAGNOSTICS) {
+      truncated += 1;
+      return;
+    }
+    diagnostics.push(d);
+  };
   const visit = (): void => {
     const node = walker.currentNode;
     if (node.isError) {
-      diagnostics.push({
+      pushDiagnostic({
         from: node.startIndex,
         to: Math.max(node.startIndex + 1, node.endIndex),
         severity: 'error',
         message: `Invalid ChordPro syntax near "${node.type}"`,
       });
     } else if (node.isMissing) {
-      diagnostics.push({
+      pushDiagnostic({
         from: node.startIndex,
         to: Math.max(node.startIndex + 1, node.endIndex),
         severity: 'error',
@@ -268,6 +276,18 @@ function publishDiagnostics(
   };
   visit();
   walker.delete();
+  if (truncated > 0) {
+    // Trailing marker so the truncation is visible in the lint
+    // gutter, not just silent. `from === to` would be rejected,
+    // so anchor it at doc end with a 1-char span.
+    const docLen = view.state.doc.length;
+    diagnostics.push({
+      from: Math.max(0, docLen - 1),
+      to: docLen,
+      severity: 'warning',
+      message: `…and ${truncated} more syntax error${truncated === 1 ? '' : 's'} (truncated; fix earlier errors first)`,
+    });
+  }
   view.dispatch(setDiagnostics(view.state, diagnostics));
   // `setDiagnostics` returns a `TransactionSpec` (not a
   // transaction), which `view.dispatch` accepts directly — no

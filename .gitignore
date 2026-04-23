@@ -33,6 +33,7 @@ apps/desktop/dist/
 # `npm run prebuild|predev`. The grammar itself is the source of
 # truth; committing the wasm would rot on every grammar change.
 apps/desktop/public/*.wasm
+apps/desktop/src/highlights-query.generated.ts
 packages/tree-sitter-chordpro/tree-sitter-chordpro.wasm
 
 # napi-rs prebuilt binaries and lock files (local build/publish artifacts)

@@ -193,6 +193,14 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+          # Multiline glob — `setup-node`'s `cache-dependency-path`
+          # accepts a newline-separated list, and both lockfiles
+          # participate in the cache key. This is a step up from the
+          # pre-#2072 single-lockfile pin, which would have missed a
+          # `tree-sitter-chordpro` dep bump.
+          cache-dependency-path: |
+            apps/desktop/package-lock.json
+            packages/tree-sitter-chordpro/package-lock.json
 
       - name: Build @chordsketch/wasm (dual-package layout)
         # Same canonical build used by `deploy-playground.yml`. Produces
