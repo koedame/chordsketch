@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Scaffold-tight capability set. The placeholder frontend runs no IPC; granting only the core app + window primitives keeps the default posture narrow so the UI issues (#2071 split-pane, #2074 export dialog, #2080 file I/O) must opt in consciously rather than inherit `core:default`'s event/menu/tray/path surface.",
+  "description": "Narrow capability set. `core:app:default` + `core:window:default` are the baseline from #2069. `dialog:allow-save` + `dialog:allow-message` are added in #2074 so the File → Export handlers can open a native save dialog and show a success/error alert; the broader `dialog:default` (which also grants file-open + confirm + ask) is intentionally NOT granted — open-file lands with #2080 and will extend this capability then.",
   "windows": ["main"],
-  "permissions": ["core:app:default", "core:window:default"]
+  "permissions": [
+    "core:app:default",
+    "core:window:default",
+    "dialog:allow-save",
+    "dialog:allow-message"
+  ]
 }

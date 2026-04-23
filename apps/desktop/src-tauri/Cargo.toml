@@ -10,7 +10,7 @@ license = "AGPL-3.0-only"
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "ChordSketch desktop application (Tauri v2 scaffold)"
+description = "ChordSketch desktop application"
 publish = false
 
 [build-dependencies]
@@ -18,12 +18,15 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 chordsketch-chordpro = { path = "../../../crates/chordpro" }
+chordsketch-render-html = { path = "../../../crates/render-html" }
+chordsketch-render-pdf = { path = "../../../crates/render-pdf" }
 tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
 
-# Promotes `unused_crate_dependencies` to a warning so that the
-# `use chordsketch_chordpro as _;` link in `src/main.rs` is load-bearing.
-# If a future contributor deletes the `use` line without wiring the
-# parser into the editor surface, the build will warn instead of
-# silently dropping the workspace-linkage AC from #2069.
 [lints.rust]
+# Guards against a workspace-linkage regression: if any of the SDK
+# crates above are silently removed from the binary's dependency
+# graph (e.g. all uses of `chordsketch_render_pdf::*` are deleted in
+# a follow-up refactor), the build now warns instead of accepting a
+# dead entry in Cargo.toml. Kept from #2069.
 unused_crate_dependencies = "warn"
