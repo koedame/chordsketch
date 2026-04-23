@@ -138,20 +138,52 @@ header h1 {
 }
 
 main {
+  /*
+   * Editor:preview split ratio driven by `applySplitRatio()` in
+   * `index.ts`. Default (pre-drag) matches the pre-#2071 50/50
+   * layout. The `@media (max-width: 768px)` rule below overrides
+   * the flex on narrow viewports so the draggable proportion
+   * only takes effect in the two-column desktop layout.
+   */
+  --editor-ratio: 0.5;
+
   flex: 1;
   display: flex;
   min-height: 0;
 }
 
 .pane {
-  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
 
 .editor-pane {
-  border-right: 1px solid var(--border);
+  flex: var(--editor-ratio) 0 0;
+}
+
+.output-pane {
+  flex: calc(1 - var(--editor-ratio)) 0 0;
+}
+
+.splitter {
+  flex: 0 0 6px;
+  background: var(--border);
+  cursor: col-resize;
+  touch-action: none; /* Pointer-based drag; disable browser gestures. */
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.splitter:hover,
+.splitter.dragging,
+.splitter:focus-visible {
+  background: var(--accent);
+}
+
+.splitter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 #editor {
@@ -238,17 +270,33 @@ main {
   z-index: 10;
 }
 
-/* Responsive: single column on narrow viewports */
+/*
+ * Responsive: single column on narrow viewports. The `main`
+ * descendant selectors (specificity 0,0,2) intentionally beat the
+ * desktop `--editor-ratio`-driven rules above (specificity 0,0,1)
+ * regardless of source order — the earlier form relied on source
+ * order, which is fragile under future refactors (raised during
+ * review of PR #2195 as Medium).
+ */
 @media (max-width: 768px) {
   main {
     flex-direction: column;
   }
-  .editor-pane {
+  main .editor-pane {
     border-right: none;
     border-bottom: 1px solid var(--border);
     flex: 0 0 40%;
   }
-  .output-pane {
+  main .output-pane {
     flex: 1;
+  }
+  /*
+   * Hide the draggable splitter on narrow viewports — the stacked
+   * layout is a fixed 40/60 and a horizontal grabber on a vertical
+   * split is confusing. Matches the pre-#2071 mobile behaviour
+   * (fixed proportion, no resize).
+   */
+  main .splitter {
+    display: none;
   }
 }
