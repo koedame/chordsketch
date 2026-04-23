@@ -90,6 +90,7 @@ interface UiNodes {
   transposeDecrementBtn: HTMLButtonElement;
   transposeIncrementBtn: HTMLButtonElement;
   transposeResetBtn: HTMLButtonElement;
+  transposeLiveRegion: HTMLSpanElement;
   preview: HTMLIFrameElement;
   textOutput: HTMLPreElement;
   pdfPane: HTMLDivElement;
@@ -103,6 +104,18 @@ interface UiNodes {
 const TRANSPOSE_MIN = -11;
 const TRANSPOSE_MAX = 11;
 const TRANSPOSE_RESET = 0;
+
+/**
+ * Signed, human-readable semitone offset for the accessibility
+ * live region. Matches the format emitted by the `<Transpose>`
+ * React component's default `formatValue`, plus an explicit
+ * "semitones" suffix so a screen-reader announcement of `"+3"`
+ * alone is not ambiguous out of context.
+ */
+function formatTransposeForAnnouncement(n: number): string {
+  if (n === 0) return '0 semitones';
+  return `${n > 0 ? '+' : ''}${n} semitones`;
+}
 
 /**
  * Build the playground DOM inside `root`. The previous contents of `root`
@@ -186,10 +199,22 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
   const transposeResetBtn = document.createElement('button');
   transposeResetBtn.type = 'button';
   // Starts hidden because the initial value is `TRANSPOSE_RESET`;
-  // visibility is kept in sync by `updateResetVisibility` below.
+  // visibility is kept in sync by `updateTransposeControls` below.
   transposeResetBtn.className = 'transpose-reset hidden';
   transposeResetBtn.textContent = 'Reset';
   transposeResetBtn.setAttribute('aria-label', 'Reset transpose to 0');
+
+  // Visually-hidden live region that announces the current offset
+  // on every value change. Matches the role of the `<output
+  // aria-live="polite">` in the React `<Transpose>` component;
+  // kept as a separate `<span>` here because ui-web retains an
+  // editable `<input>` for direct numeric entry, which `<output>`
+  // cannot be.
+  const transposeLiveRegion = document.createElement('span');
+  transposeLiveRegion.className = 'sr-only';
+  transposeLiveRegion.setAttribute('aria-live', 'polite');
+  transposeLiveRegion.setAttribute('aria-atomic', 'true');
+  transposeLiveRegion.textContent = formatTransposeForAnnouncement(TRANSPOSE_RESET);
 
   transposeGroup.append(
     transposeLabelText,
@@ -197,6 +222,7 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
     transposeInput,
     transposeIncrementBtn,
     transposeResetBtn,
+    transposeLiveRegion,
   );
 
   controls.append(formatLabel, transposeGroup);
@@ -250,6 +276,7 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
     transposeDecrementBtn,
     transposeIncrementBtn,
     transposeResetBtn,
+    transposeLiveRegion,
     preview,
     textOutput,
     pdfPane,
@@ -307,6 +334,7 @@ export async function mountChordSketchUi(
     transposeDecrementBtn,
     transposeIncrementBtn,
     transposeResetBtn,
+    transposeLiveRegion,
     preview,
     textOutput,
     pdfPane,
@@ -326,24 +354,29 @@ export async function mountChordSketchUi(
       : Math.max(TRANSPOSE_MIN, Math.min(TRANSPOSE_MAX, val));
   };
 
-  // Reset button is only meaningful when the current offset is
-  // non-zero — mirrors the `<Transpose>` React component's
-  // `value !== resetValue` rule.
-  const updateResetVisibility = (): void => {
-    const atReset = getTranspose() === TRANSPOSE_RESET;
-    transposeResetBtn.classList.toggle('hidden', atReset);
+  // Sync the three button states + the live-region announcement
+  // to the current clamped offset. Mirrors the `<Transpose>` React
+  // component's `disabled`-at-boundary + `<output aria-live>` rule
+  // so a screen-reader user driving the trio via buttons hears the
+  // new offset and can feel the hard stop at ±11.
+  const updateTransposeControls = (): void => {
+    const v = getTranspose();
+    transposeDecrementBtn.disabled = v <= TRANSPOSE_MIN;
+    transposeIncrementBtn.disabled = v >= TRANSPOSE_MAX;
+    transposeResetBtn.classList.toggle('hidden', v === TRANSPOSE_RESET);
+    transposeLiveRegion.textContent = formatTransposeForAnnouncement(v);
   };
 
   // Set the transpose field to `next`, clamped to the documented
   // range, and schedule a rerender. Setting `value` via JS does
-  // NOT fire `input` events, so the visibility helper and
+  // NOT fire `input` events, so the control-sync helper and
   // debounced render must be invoked explicitly. Mirrors the
   // behaviour of the `<Transpose>` React component's `onChange`
   // callback.
   const setTranspose = (next: number): void => {
     const clamped = Math.max(TRANSPOSE_MIN, Math.min(TRANSPOSE_MAX, next));
     transposeInput.value = String(clamped);
-    updateResetVisibility();
+    updateTransposeControls();
     scheduleRender();
   };
 
@@ -468,7 +501,7 @@ export async function mountChordSketchUi(
   editor.value = initialChordPro;
 
   const onTransposeInput = (): void => {
-    updateResetVisibility();
+    updateTransposeControls();
     scheduleRender();
   };
   const onTransposeDecrement = (): void => {
