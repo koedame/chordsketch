@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ChordSketch",
+  "version": "0.0.0",
+  "identifier": "me.koeda.chordsketch.desktop",
+  "build": {
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "ChordSketch",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 640,
+        "minHeight": 480,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Music",
+    "shortDescription": "ChordPro editor",
+    "longDescription": "ChordSketch is a ChordPro editor with live preview, transpose, and PDF export.",
+    "icon": ["icons/icon.png"]
+  }
+}

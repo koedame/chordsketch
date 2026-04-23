@@ -56,7 +56,11 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Clippy lints
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        # `chordsketch-desktop` is excluded because its Tauri/WRY deps
+        # need webkit2gtk/appindicator system libs that are installed
+        # only in the dedicated `desktop-smoke` job. Cross-platform
+        # coverage is tracked in #2077.
+        run: cargo clippy --workspace --exclude chordsketch-desktop --all-targets -- -D warnings
 
   doc:
     name: Docs
@@ -70,7 +74,8 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Build docs (warnings as errors)
-        run: cargo doc --workspace --no-deps
+        # See the clippy job for the `chordsketch-desktop` exclusion rationale.
+        run: cargo doc --workspace --exclude chordsketch-desktop --no-deps
         env:
           RUSTDOCFLAGS: "-D warnings"
 
@@ -133,4 +138,38 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Run tests
-        run: cargo test --workspace
+        # See the clippy job for the `chordsketch-desktop` exclusion rationale.
+        run: cargo test --workspace --exclude chordsketch-desktop
+
+  desktop-smoke:
+    name: Desktop smoke (Linux)
+    # Linux-only `cargo check` of the `chordsketch-desktop` Tauri scaffold.
+    # Guarantees the scaffold still compiles on every PR while keeping
+    # the cross-platform bundle build in a dedicated workflow (#2077).
+    # Per `.claude/rules/ci-parallelization.md` §3, this runs without a
+    # `paths:` filter so any workspace or dependency change is exercised.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            build-essential \
+            pkg-config \
+            file
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: desktop-smoke-x86_64-unknown-linux-gnu
+
+      - name: cargo check
+        run: cargo check -p chordsketch-desktop --all-targets

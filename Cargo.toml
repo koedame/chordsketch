@@ -10,6 +10,24 @@ members = [
     "crates/napi",
     "crates/ffi",
     "crates/convert-musicxml",
+    "apps/desktop/src-tauri",
+]
+# Excludes `apps/desktop/src-tauri` from default workspace operations.
+# Tauri's transitive deps pull in webkit2gtk on Linux and WebView2 on
+# Windows, which are not available on a bare contributor machine. CI
+# installs those libs in the dedicated `desktop-smoke` job, and the
+# cross-platform matrix tracked by #2077 owns the full release build.
+default-members = [
+    "crates/chordpro",
+    "crates/render-text",
+    "crates/render-html",
+    "crates/render-pdf",
+    "crates/cli",
+    "crates/lsp",
+    "crates/wasm",
+    "crates/napi",
+    "crates/ffi",
+    "crates/convert-musicxml",
 ]
 resolver = "3"
 

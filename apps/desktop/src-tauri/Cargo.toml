@@ -1,0 +1,21 @@
+[package]
+name = "chordsketch-desktop"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+# Application-layer license per CLAUDE.md §License Policy ("future Forum,
+# Playground, Desktop apps: AGPL-3.0-only"). SDK crates (everything under
+# `crates/`) stay MIT via the workspace inheritance.
+license = "AGPL-3.0-only"
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "ChordSketch desktop application (Tauri v2 scaffold)"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+chordsketch-chordpro = { path = "../../../crates/chordpro" }
+tauri = { version = "2", features = [] }
