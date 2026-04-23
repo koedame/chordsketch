@@ -17,6 +17,11 @@ members = [
 # Windows, which are not available on a bare contributor machine. CI
 # installs those libs in the dedicated `desktop-smoke` job, and the
 # cross-platform matrix tracked by #2077 owns the full release build.
+#
+# Maintenance note: when you add a new member under `crates/*`, add it
+# to BOTH `members` above AND to `default-members` below, otherwise
+# bare `cargo build` / `cargo test` from the repo root will silently
+# stop covering the new crate.
 default-members = [
     "crates/chordpro",
     "crates/render-text",

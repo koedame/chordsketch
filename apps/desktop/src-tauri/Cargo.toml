@@ -19,3 +19,11 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 chordsketch-chordpro = { path = "../../../crates/chordpro" }
 tauri = { version = "2", features = [] }
+
+# Promotes `unused_crate_dependencies` to a warning so that the
+# `use chordsketch_chordpro as _;` link in `src/main.rs` is load-bearing.
+# If a future contributor deletes the `use` line without wiring the
+# parser into the editor surface, the build will warn instead of
+# silently dropping the workspace-linkage AC from #2069.
+[lints.rust]
+unused_crate_dependencies = "warn"
