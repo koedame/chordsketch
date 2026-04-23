@@ -384,13 +384,40 @@ jobs:
   winget:
     name: winget (Windows)
     runs-on: windows-latest
+    # `winget install` starts with a source refresh against
+    # Microsoft's CDN; the CDN occasionally returns "Failed in
+    # attempting to update the source: winget" on the hosted
+    # Windows runners. This bubbles up as `CommandNotFoundException`
+    # on the subsequent `chordsketch --version`, which is an infra
+    # flake, not a breakage we can fix in-repo. Soft-fail on
+    # scheduled runs so a single flake does not page the maintainer;
+    # keep fail-fast on PRs so a PR that actually breaks the winget
+    # manifest still surfaces. Filed as #2208.
+    continue-on-error: ${{ github.event_name != 'pull_request' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install via winget
         shell: powershell
         run: |
-          winget install --id koedame.chordsketch --exact --accept-source-agreements --accept-package-agreements --silent
+          # Explicit retry loop for the transient source-refresh
+          # failure documented in #2208. Three attempts with a
+          # 10-second backoff covers the typical CDN blip; the
+          # `continue-on-error` gate above is the final safety net
+          # if all three still fail on a scheduled run.
+          $attempt = 0
+          while ($true) {
+            $attempt++
+            winget install --id koedame.chordsketch --exact `
+              --accept-source-agreements --accept-package-agreements --silent
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -ge 3) {
+              Write-Error "winget install failed after $attempt attempts"
+              exit 1
+            }
+            Write-Host "winget install attempt $attempt failed; retrying in 10s"
+            Start-Sleep -Seconds 10
+          }
           # winget portable installs place command-line aliases in
           # %LOCALAPPDATA%\Microsoft\WinGet\Links\ and adds that directory to
           # the user PATH in the registry — but the current process does not
