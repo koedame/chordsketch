@@ -91,6 +91,9 @@ interface UiNodes {
   transposeIncrementBtn: HTMLButtonElement;
   transposeResetBtn: HTMLButtonElement;
   transposeLiveRegion: HTMLSpanElement;
+  mainEl: HTMLElement;
+  editorPane: HTMLDivElement;
+  splitter: HTMLDivElement;
   preview: HTMLIFrameElement;
   textOutput: HTMLPreElement;
   pdfPane: HTMLDivElement;
@@ -115,6 +118,30 @@ const TRANSPOSE_RESET = 0;
 function formatTransposeForAnnouncement(n: number): string {
   if (n === 0) return '0 semitones';
   return `${n > 0 ? '+' : ''}${n} semitones`;
+}
+
+// Split-pane ratio bounds. 15/85 keeps a usable slice of the
+// editor and preview visible at each extreme — a 0/100 drag
+// would hide one pane entirely, which users can't recover from
+// without the keyboard fallback or clearing localStorage.
+const SPLIT_RATIO_MIN = 0.15;
+const SPLIT_RATIO_MAX = 0.85;
+const SPLIT_RATIO_DEFAULT = 0.5;
+const SPLIT_RATIO_STEP = 0.02; // 2 % per arrow keypress
+const SPLIT_RATIO_STORAGE_KEY = 'chordsketch-ui-split-ratio';
+
+/**
+ * Clamp + validate a numeric string from `localStorage`. Returns
+ * `null` for invalid or out-of-range values so the caller falls
+ * back to {@link SPLIT_RATIO_DEFAULT} and re-persists a clean
+ * value on the next drag.
+ */
+function parseStoredSplitRatio(raw: string | null): number | null {
+  if (raw === null) return null;
+  const n = Number.parseFloat(raw);
+  if (!Number.isFinite(n)) return null;
+  if (n < SPLIT_RATIO_MIN || n > SPLIT_RATIO_MAX) return null;
+  return n;
 }
 
 /**
@@ -231,12 +258,32 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
   const main = document.createElement('main');
 
   const editorPane = document.createElement('div');
+  editorPane.id = 'editor-pane';
   editorPane.className = 'pane editor-pane';
   const editor = document.createElement('textarea');
   editor.id = 'editor';
   editor.spellcheck = false;
   editor.placeholder = 'Enter ChordPro here...';
   editorPane.appendChild(editor);
+
+  // Draggable splitter between the editor and the preview. Follows
+  // the W3C APG Window Splitter pattern:
+  //   https://www.w3.org/WAI/ARIA/apg/patterns/windowsplitter/
+  // `role="separator"` + `aria-orientation="vertical"` identifies
+  // it as a resize handle; `aria-controls` points at the pane it
+  // grows/shrinks; `aria-valuenow/min/max` carry the percentage
+  // state so assistive tech announces the offset. Keyboard
+  // resizing (`ArrowLeft`/`ArrowRight` on focus) is wired in
+  // `mountChordSketchUi` below — this is element-local widget
+  // interaction (not a global accelerator), so it is in scope
+  // even while global desktop shortcuts remain deferred.
+  const splitter = document.createElement('div');
+  splitter.className = 'splitter';
+  splitter.setAttribute('role', 'separator');
+  splitter.setAttribute('aria-orientation', 'vertical');
+  splitter.setAttribute('aria-controls', 'editor-pane');
+  splitter.setAttribute('aria-label', 'Resize editor and preview panes');
+  splitter.tabIndex = 0;
 
   const outputPane = document.createElement('div');
   outputPane.className = 'pane output-pane';
@@ -266,7 +313,7 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
 
   outputPane.append(errorDiv, preview, textOutput, pdfPane);
 
-  main.append(editorPane, outputPane);
+  main.append(editorPane, splitter, outputPane);
   root.append(header, main);
 
   return {
@@ -277,6 +324,9 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
     transposeIncrementBtn,
     transposeResetBtn,
     transposeLiveRegion,
+    mainEl: main,
+    editorPane,
+    splitter,
     preview,
     textOutput,
     pdfPane,
@@ -335,12 +385,127 @@ export async function mountChordSketchUi(
     transposeIncrementBtn,
     transposeResetBtn,
     transposeLiveRegion,
+    mainEl,
+    editorPane,
+    splitter,
     preview,
     textOutput,
     pdfPane,
     downloadPdfBtn,
     errorDiv,
   } = nodes;
+
+  // Apply the persisted split ratio (if any) before the initial
+  // paint so the panes open at the stored proportion rather than
+  // flashing through the 50/50 default on every launch.
+  let splitRatio = SPLIT_RATIO_DEFAULT;
+  try {
+    const stored = parseStoredSplitRatio(
+      window.localStorage.getItem(SPLIT_RATIO_STORAGE_KEY),
+    );
+    if (stored !== null) splitRatio = stored;
+  } catch {
+    // localStorage can throw (Safari private mode, disabled cookies,
+    // sandboxed iframe). The default ratio is still usable, so
+    // silently fall through — persistence is a convenience, not a
+    // correctness requirement.
+  }
+
+  const applySplitRatio = (next: number): void => {
+    const clamped = Math.max(
+      SPLIT_RATIO_MIN,
+      Math.min(SPLIT_RATIO_MAX, next),
+    );
+    splitRatio = clamped;
+    // CSS custom property on `<main>` — the `@media (max-width: 768px)`
+    // rule in `style.css` overrides the flex on narrow viewports so
+    // the drag-to-resize ratio only takes effect in the desktop-style
+    // two-column layout.
+    mainEl.style.setProperty('--editor-ratio', String(clamped));
+    splitter.setAttribute(
+      'aria-valuenow',
+      String(Math.round(clamped * 100)),
+    );
+  };
+
+  const persistSplitRatio = (): void => {
+    try {
+      window.localStorage.setItem(
+        SPLIT_RATIO_STORAGE_KEY,
+        splitRatio.toFixed(3),
+      );
+    } catch {
+      // See note in the initial load — persistence failure is a
+      // convenience loss, not a correctness failure.
+    }
+  };
+
+  splitter.setAttribute('aria-valuemin', String(Math.round(SPLIT_RATIO_MIN * 100)));
+  splitter.setAttribute('aria-valuemax', String(Math.round(SPLIT_RATIO_MAX * 100)));
+  applySplitRatio(splitRatio);
+
+  let splitterDragActive = false;
+
+  const onSplitterPointerDown = (ev: PointerEvent): void => {
+    // Only primary-button drags (mouse button 0 / touch / pen).
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    splitterDragActive = true;
+    splitter.setPointerCapture(ev.pointerId);
+    splitter.classList.add('dragging');
+    // Disable text selection on the document while dragging so
+    // mid-drag mouse moves over the editor don't hijack text
+    // selection.
+    document.body.style.userSelect = 'none';
+  };
+
+  const onSplitterPointerMove = (ev: PointerEvent): void => {
+    if (!splitterDragActive) return;
+    const rect = mainEl.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const ratio = (ev.clientX - rect.left) / rect.width;
+    applySplitRatio(ratio);
+  };
+
+  const onSplitterPointerUp = (ev: PointerEvent): void => {
+    if (!splitterDragActive) return;
+    splitterDragActive = false;
+    if (splitter.hasPointerCapture(ev.pointerId)) {
+      splitter.releasePointerCapture(ev.pointerId);
+    }
+    splitter.classList.remove('dragging');
+    document.body.style.userSelect = '';
+    persistSplitRatio();
+  };
+
+  // Widget-local keyboard resizing when the splitter has focus,
+  // per the W3C APG Window Splitter pattern: ArrowLeft/Right step
+  // by `SPLIT_RATIO_STEP`, Home/End jump to the min/max. These
+  // are NOT global shortcuts — they only fire when the separator
+  // itself has keyboard focus — so they do not conflict with the
+  // deferred global-shortcut scope (#2190).
+  const onSplitterKeyDown = (ev: KeyboardEvent): void => {
+    let next: number | null = null;
+    switch (ev.key) {
+      case 'ArrowLeft':
+        next = splitRatio - SPLIT_RATIO_STEP;
+        break;
+      case 'ArrowRight':
+        next = splitRatio + SPLIT_RATIO_STEP;
+        break;
+      case 'Home':
+        next = SPLIT_RATIO_MIN;
+        break;
+      case 'End':
+        next = SPLIT_RATIO_MAX;
+        break;
+      default:
+        return;
+    }
+    ev.preventDefault();
+    applySplitRatio(next);
+    persistSplitRatio();
+  };
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -520,6 +685,11 @@ export async function mountChordSketchUi(
   transposeDecrementBtn.addEventListener('click', onTransposeDecrement);
   transposeIncrementBtn.addEventListener('click', onTransposeIncrement);
   transposeResetBtn.addEventListener('click', onTransposeReset);
+  splitter.addEventListener('pointerdown', onSplitterPointerDown);
+  splitter.addEventListener('pointermove', onSplitterPointerMove);
+  splitter.addEventListener('pointerup', onSplitterPointerUp);
+  splitter.addEventListener('pointercancel', onSplitterPointerUp);
+  splitter.addEventListener('keydown', onSplitterKeyDown);
   downloadPdfBtn.addEventListener('click', downloadPdf);
 
   render();
@@ -539,6 +709,11 @@ export async function mountChordSketchUi(
       transposeDecrementBtn.removeEventListener('click', onTransposeDecrement);
       transposeIncrementBtn.removeEventListener('click', onTransposeIncrement);
       transposeResetBtn.removeEventListener('click', onTransposeReset);
+      splitter.removeEventListener('pointerdown', onSplitterPointerDown);
+      splitter.removeEventListener('pointermove', onSplitterPointerMove);
+      splitter.removeEventListener('pointerup', onSplitterPointerUp);
+      splitter.removeEventListener('pointercancel', onSplitterPointerUp);
+      splitter.removeEventListener('keydown', onSplitterKeyDown);
       downloadPdfBtn.removeEventListener('click', downloadPdf);
     },
   };
