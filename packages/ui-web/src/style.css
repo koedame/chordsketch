@@ -270,17 +270,24 @@ main {
   z-index: 10;
 }
 
-/* Responsive: single column on narrow viewports */
+/*
+ * Responsive: single column on narrow viewports. The `main`
+ * descendant selectors (specificity 0,0,2) intentionally beat the
+ * desktop `--editor-ratio`-driven rules above (specificity 0,0,1)
+ * regardless of source order — the earlier form relied on source
+ * order, which is fragile under future refactors (raised during
+ * review of PR #2195 as Medium).
+ */
 @media (max-width: 768px) {
   main {
     flex-direction: column;
   }
-  .editor-pane {
+  main .editor-pane {
     border-right: none;
     border-bottom: 1px solid var(--border);
     flex: 0 0 40%;
   }
-  .output-pane {
+  main .output-pane {
     flex: 1;
   }
   /*
@@ -289,7 +296,7 @@ main {
    * split is confusing. Matches the pre-#2071 mobile behaviour
    * (fixed proportion, no resize).
    */
-  .splitter {
+  main .splitter {
     display: none;
   }
 }
