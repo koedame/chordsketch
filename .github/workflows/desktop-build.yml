@@ -90,12 +90,18 @@ jobs:
             runner: macos-latest
             target: aarch64-apple-darwin
           - label: macos-x86_64
-            # `macos-13` is the last GitHub-hosted Intel runner.
-            # When Microsoft retires it, the x86_64-apple-darwin
-            # slice drops out of the matrix until an alternative
-            # (`macos-latest-large`, self-hosted Intel mini, …)
-            # is wired in.
-            runner: macos-13
+            # Cross-compile x86_64 from the Apple Silicon
+            # `macos-latest` runner rather than pinning to the
+            # `macos-13` Intel runner, which "cannot be reliably
+            # allocated for this repository" per #1084 — the
+            # python workflow accepts that CI gap the same way.
+            # `rustup target add x86_64-apple-darwin` lands
+            # implicitly via `dtolnay/rust-toolchain`'s `targets:`
+            # input below, and Xcode on the GitHub runner ships
+            # the Intel toolchain, so `cargo tauri build --target
+            # x86_64-apple-darwin` is a drop-in replacement for
+            # the dedicated Intel runner.
+            runner: macos-latest
             target: x86_64-apple-darwin
           - label: windows-x86_64
             runner: windows-latest
