@@ -74,6 +74,46 @@ header h1 {
   text-align: center;
 }
 
+.transpose-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #999;
+}
+
+.transpose-group-label {
+  /* `aria-hidden` on this node keeps it out of the accessibility
+     tree; styling is purely visual. */
+  margin-right: 0.1rem;
+}
+
+.transpose-group button {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  min-width: 1.75rem;
+}
+
+.transpose-group button:hover {
+  background: var(--border);
+}
+
+.transpose-group button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.transpose-reset {
+  /* Slightly wider than the ± steppers because the label is a word. */
+  min-width: auto !important;
+}
+
 main {
   flex: 1;
   display: flex;

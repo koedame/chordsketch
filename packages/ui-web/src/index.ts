@@ -87,12 +87,22 @@ interface UiNodes {
   editor: HTMLTextAreaElement;
   formatSelect: HTMLSelectElement;
   transposeInput: HTMLInputElement;
+  transposeDecrementBtn: HTMLButtonElement;
+  transposeIncrementBtn: HTMLButtonElement;
+  transposeResetBtn: HTMLButtonElement;
   preview: HTMLIFrameElement;
   textOutput: HTMLPreElement;
   pdfPane: HTMLDivElement;
   downloadPdfBtn: HTMLButtonElement;
   errorDiv: HTMLDivElement;
 }
+
+// Range is `-11..=11` — matches the `@chordsketch/react`
+// `<Transpose>` default. A full octave (`±12`) is the identity
+// transposition, so the interesting values stop at ±11.
+const TRANSPOSE_MIN = -11;
+const TRANSPOSE_MAX = 11;
+const TRANSPOSE_RESET = 0;
 
 /**
  * Build the playground DOM inside `root`. The previous contents of `root`
@@ -132,31 +142,64 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
   }
   formatLabel.appendChild(formatSelect);
 
-  // Wrap the transpose input in a group with an accessible name so
-  // assistive tech surfaces the role of the field distinct from
-  // the surrounding format control. The visible `<label>` provides
-  // the accessible name via DOM association; the redundant
-  // `aria-label` on the input itself is a safety net for screen
-  // readers that prioritise it over the associated label text.
-  // Partial parity with the `<Transpose>` React component in
-  // `@chordsketch/react` (#2150) — a full `role=\"group\"` button
-  // trio would change the playground UX visually, so this scope
-  // is limited to named input + documented range.
-  const transposeLabel = document.createElement('label');
-  transposeLabel.append('Transpose: ');
+  // Full `role="group"` button trio matching the `<Transpose>` React
+  // component in `@chordsketch/react`. Landed in #2070; supersedes
+  // the pre-#2070 scope limit that kept this to a bare `<input>` to
+  // avoid visual regression. The `role="group"` + `aria-label` pair
+  // gives assistive tech one labelled cluster for the three
+  // controls; each button still carries its own `aria-label` so a
+  // screen reader reading one button in isolation announces what
+  // it does, not just "button".
+  const transposeGroup = document.createElement('div');
+  transposeGroup.className = 'transpose-group';
+  transposeGroup.setAttribute('role', 'group');
+  transposeGroup.setAttribute('aria-label', 'Transpose');
+
+  const transposeLabelText = document.createElement('span');
+  transposeLabelText.className = 'transpose-group-label';
+  transposeLabelText.textContent = 'Transpose:';
+  // The surrounding group already carries aria-label="Transpose";
+  // hide this text from assistive tech so screen readers do not
+  // read the word twice when focus enters the group.
+  transposeLabelText.setAttribute('aria-hidden', 'true');
+
+  const transposeDecrementBtn = document.createElement('button');
+  transposeDecrementBtn.type = 'button';
+  transposeDecrementBtn.className = 'transpose-step';
+  transposeDecrementBtn.textContent = '−'; // MINUS SIGN (matches `<Transpose>`)
+  transposeDecrementBtn.setAttribute('aria-label', 'Decrease transpose by 1 semitone');
+
   const transposeInput = document.createElement('input');
   transposeInput.type = 'number';
   transposeInput.id = 'transpose';
-  transposeInput.value = '0';
-  // Range is `-11..=11` — matches the `@chordsketch/react`
-  // `<Transpose>` default. A full octave (`±12`) is the identity
-  // transposition, so the interesting values stop at ±11.
-  transposeInput.min = '-11';
-  transposeInput.max = '11';
+  transposeInput.value = String(TRANSPOSE_RESET);
+  transposeInput.min = String(TRANSPOSE_MIN);
+  transposeInput.max = String(TRANSPOSE_MAX);
   transposeInput.setAttribute('aria-label', 'Transpose in semitones');
-  transposeLabel.appendChild(transposeInput);
 
-  controls.append(formatLabel, transposeLabel);
+  const transposeIncrementBtn = document.createElement('button');
+  transposeIncrementBtn.type = 'button';
+  transposeIncrementBtn.className = 'transpose-step';
+  transposeIncrementBtn.textContent = '+';
+  transposeIncrementBtn.setAttribute('aria-label', 'Increase transpose by 1 semitone');
+
+  const transposeResetBtn = document.createElement('button');
+  transposeResetBtn.type = 'button';
+  // Starts hidden because the initial value is `TRANSPOSE_RESET`;
+  // visibility is kept in sync by `updateResetVisibility` below.
+  transposeResetBtn.className = 'transpose-reset hidden';
+  transposeResetBtn.textContent = 'Reset';
+  transposeResetBtn.setAttribute('aria-label', 'Reset transpose to 0');
+
+  transposeGroup.append(
+    transposeLabelText,
+    transposeDecrementBtn,
+    transposeInput,
+    transposeIncrementBtn,
+    transposeResetBtn,
+  );
+
+  controls.append(formatLabel, transposeGroup);
   header.appendChild(controls);
 
   const main = document.createElement('main');
@@ -204,6 +247,9 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
     editor,
     formatSelect,
     transposeInput,
+    transposeDecrementBtn,
+    transposeIncrementBtn,
+    transposeResetBtn,
     preview,
     textOutput,
     pdfPane,
@@ -258,6 +304,9 @@ export async function mountChordSketchUi(
     editor,
     formatSelect,
     transposeInput,
+    transposeDecrementBtn,
+    transposeIncrementBtn,
+    transposeResetBtn,
     preview,
     textOutput,
     pdfPane,
@@ -269,12 +318,33 @@ export async function mountChordSketchUi(
 
   const getTranspose = (): number => {
     const val = parseInt(transposeInput.value, 10);
-    // Clamp to the same `[-11, 11]` window as the input's own
-    // HTML `min`/`max`, matching the `@chordsketch/react`
-    // `<Transpose>` default — a full octave (`±12`) is the
-    // identity transposition, so the interesting values stop
-    // at ±11.
-    return isNaN(val) ? 0 : Math.max(-11, Math.min(11, val));
+    // Clamp to `TRANSPOSE_MIN..=TRANSPOSE_MAX`. Empty/non-numeric
+    // input (`NaN`) falls back to the reset value so a mid-edit
+    // cleared field doesn't crash renderers downstream.
+    return isNaN(val)
+      ? TRANSPOSE_RESET
+      : Math.max(TRANSPOSE_MIN, Math.min(TRANSPOSE_MAX, val));
+  };
+
+  // Reset button is only meaningful when the current offset is
+  // non-zero — mirrors the `<Transpose>` React component's
+  // `value !== resetValue` rule.
+  const updateResetVisibility = (): void => {
+    const atReset = getTranspose() === TRANSPOSE_RESET;
+    transposeResetBtn.classList.toggle('hidden', atReset);
+  };
+
+  // Set the transpose field to `next`, clamped to the documented
+  // range, and schedule a rerender. Setting `value` via JS does
+  // NOT fire `input` events, so the visibility helper and
+  // debounced render must be invoked explicitly. Mirrors the
+  // behaviour of the `<Transpose>` React component's `onChange`
+  // callback.
+  const setTranspose = (next: number): void => {
+    const clamped = Math.max(TRANSPOSE_MIN, Math.min(TRANSPOSE_MAX, next));
+    transposeInput.value = String(clamped);
+    updateResetVisibility();
+    scheduleRender();
   };
 
   const showError = (msg: string): void => {
@@ -397,9 +467,26 @@ export async function mountChordSketchUi(
 
   editor.value = initialChordPro;
 
+  const onTransposeInput = (): void => {
+    updateResetVisibility();
+    scheduleRender();
+  };
+  const onTransposeDecrement = (): void => {
+    setTranspose(getTranspose() - 1);
+  };
+  const onTransposeIncrement = (): void => {
+    setTranspose(getTranspose() + 1);
+  };
+  const onTransposeReset = (): void => {
+    setTranspose(TRANSPOSE_RESET);
+  };
+
   editor.addEventListener('input', scheduleRender);
   formatSelect.addEventListener('change', render);
-  transposeInput.addEventListener('input', scheduleRender);
+  transposeInput.addEventListener('input', onTransposeInput);
+  transposeDecrementBtn.addEventListener('click', onTransposeDecrement);
+  transposeIncrementBtn.addEventListener('click', onTransposeIncrement);
+  transposeResetBtn.addEventListener('click', onTransposeReset);
   downloadPdfBtn.addEventListener('click', downloadPdf);
 
   render();
@@ -415,7 +502,10 @@ export async function mountChordSketchUi(
       }
       editor.removeEventListener('input', scheduleRender);
       formatSelect.removeEventListener('change', render);
-      transposeInput.removeEventListener('input', scheduleRender);
+      transposeInput.removeEventListener('input', onTransposeInput);
+      transposeDecrementBtn.removeEventListener('click', onTransposeDecrement);
+      transposeIncrementBtn.removeEventListener('click', onTransposeIncrement);
+      transposeResetBtn.removeEventListener('click', onTransposeReset);
       downloadPdfBtn.removeEventListener('click', downloadPdf);
     },
   };
