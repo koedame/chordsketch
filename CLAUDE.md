@@ -37,7 +37,7 @@ This is a Cargo workspace with the following crates:
 | `chordsketch-wasm` | `crates/wasm` | cdylib | `chordsketch-chordpro`, all renderers, `wasm-bindgen`, `serde` |
 | `chordsketch-ffi` | `crates/ffi` | cdylib/staticlib/lib | `chordsketch-chordpro`, all renderers, `uniffi`, `thiserror` |
 | `chordsketch-napi` | `crates/napi` | cdylib | `chordsketch-chordpro`, all renderers, `napi`, `napi-derive` |
-| `chordsketch-desktop` | `apps/desktop/src-tauri` | bin | `chordsketch-chordpro`, `tauri` (v2). Scaffold only; excluded from default workspace operations via `default-members` because its transitive deps need webkit2gtk / WebView2. CI's `desktop-smoke` job covers Linux; cross-platform bundles are tracked in #2077. |
+| `chordsketch-desktop` | `apps/desktop/src-tauri` | bin | `chordsketch-chordpro`, `tauri` (v2). Rust shell for the desktop app; loads `apps/desktop/dist/` (Vite build of `@chordsketch/ui-web` + `@chordsketch/wasm`) inside the WebView. Excluded from default workspace operations via `default-members` because its transitive deps need webkit2gtk / WebView2. CI's `desktop-smoke` job covers Linux (wasm-pack + Vite + cargo check); cross-platform bundles are tracked in #2077. |
 
 Additionally, these non-Rust packages exist:
 
