@@ -28,6 +28,9 @@ fn render_and_write<R>(path: &str, chordpro: &str, transpose: i8, render: R) -> 
 where
     R: Fn(&[chordsketch_chordpro::ast::Song], i8, &Config) -> Vec<u8>,
 {
+    if path.is_empty() {
+        return Err("Refusing to write: destination path is empty".to_string());
+    }
     let config = Config::defaults();
     let parse_result = parse_multi_lenient(chordpro);
     let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
@@ -79,6 +82,9 @@ fn export_html(path: String, chordpro: String, transpose: Option<i8>) -> Result<
 /// after the stat but before the read.
 #[tauri::command]
 fn open_file(path: String) -> Result<String, String> {
+    if path.is_empty() {
+        return Err("Refusing to open: source path is empty".to_string());
+    }
     let p = Path::new(&path);
     let file = File::open(p).map_err(|e| format!("Failed to open {path}: {e}"))?;
     // `take(MAX + 1)` lets us distinguish "exactly at the limit" (OK)
@@ -100,6 +106,9 @@ fn open_file(path: String) -> Result<String, String> {
 /// command does no extra validation beyond the IO error surface.
 #[tauri::command]
 fn save_file(path: String, content: String) -> Result<(), String> {
+    if path.is_empty() {
+        return Err("Refusing to write: destination path is empty".to_string());
+    }
     fs::write(&path, content).map_err(|e| format!("Failed to write {path}: {e}"))
 }
 
