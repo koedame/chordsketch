@@ -194,10 +194,17 @@ jobs:
           SRC="target/${{ matrix.platform.target }}/release/bundle"
           DST="release-artefacts/${{ matrix.platform.label }}"
           mkdir -p "$DST"
-          # macOS: .dmg + .app.tar.gz. Windows: .msi + .exe.
-          # Linux: .deb + .rpm + .AppImage. The `|| true` tolerates
-          # platforms that don't emit a particular format.
-          for pat in '*.dmg' '*.app.tar.gz' '*.msi' '*.exe' '*.deb' '*.rpm' '*.AppImage'; do
+          # macOS: .dmg + .app.tar.gz (+ their .sig). Windows: .msi
+          # + .exe (+ .sig). Linux: .deb + .rpm + .AppImage (+ .sig).
+          # The `|| true` tolerates platforms that don't emit a given
+          # format. `.sig` files are Tauri updater signatures written
+          # alongside their respective bundles whenever
+          # `TAURI_SIGNING_PRIVATE_KEY` is populated (#2076); without
+          # the secret the `.sig` glob matches nothing and auto-update
+          # stays disabled — the rest of the release still ships.
+          for pat in '*.dmg' '*.app.tar.gz' '*.app.tar.gz.sig' \
+                     '*.msi' '*.msi.sig' '*.exe' '*.exe.sig' \
+                     '*.deb' '*.rpm' '*.AppImage' '*.AppImage.sig'; do
             find "$SRC" -type f -name "$pat" -exec cp -v {} "$DST/" \; || true
           done
           ls -la "$DST"
@@ -260,9 +267,12 @@ jobs:
           # Copy every file in every downloaded cell directory
           # into a flat `release/` for the Release upload.
           find dist -type f \
-            \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.msi' \
-               -o -name '*.exe' -o -name '*.deb' -o -name '*.rpm' \
-               -o -name '*.AppImage' \) \
+            \( -name '*.dmg' -o -name '*.app.tar.gz' \
+               -o -name '*.app.tar.gz.sig' -o -name '*.msi' \
+               -o -name '*.msi.sig' -o -name '*.exe' \
+               -o -name '*.exe.sig' -o -name '*.deb' \
+               -o -name '*.rpm' -o -name '*.AppImage' \
+               -o -name '*.AppImage.sig' \) \
             -exec cp -v {} release/ \;
           cd release
           # Deterministic sort so the SHA256SUMS file is stable
@@ -397,3 +407,161 @@ jobs:
           # workflow_dispatch idempotent.
           git commit --allow-empty -m "Update chordsketch desktop cask to ${VERSION}"
           git push
+
+  publish-updater-manifest:
+    name: Publish Tauri updater manifest
+    # Generates `latest.json` — the manifest the Tauri updater
+    # plugin reads from `tauri.conf.json`'s `endpoints` entry — and
+    # uploads it to the release alongside the bundles. Each entry
+    # points at the format Tauri's updater actually consumes per
+    # platform (macOS: `.app.tar.gz`; Linux: `.AppImage`; Windows:
+    # `.exe`) and embeds the matching `.sig` signature.
+    #
+    # If `TAURI_SIGNING_PRIVATE_KEY` is not set in repo secrets
+    # (the pre-#2076 state), the `.sig` files never exist and this
+    # job fails early with a clear error rather than publishing a
+    # manifest with empty signatures that would fail client-side
+    # verification.
+    needs: [release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Determine tag + version
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="$REF_NAME"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#desktop-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Re-validate tag format
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$TAG" | grep -Eq '^desktop-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
+            echo "Rejecting malformed desktop release tag: $TAG" >&2
+            exit 1
+          fi
+
+      - name: Download release signatures
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p sigs
+          cd sigs
+          # `gh release download` with `-p '*.sig'` would match too
+          # aggressively; listing patterns explicitly both documents
+          # the platform set and fails closed if a platform's
+          # signature is missing (e.g. the signing env var was
+          # unset on that runner).
+          gh release download "$TAG" \
+            -p "*.app.tar.gz.sig" \
+            -p "*.AppImage.sig" \
+            -p "*-setup.exe.sig" || {
+              echo "ERROR: release $TAG does not contain the updater signature files." >&2
+              echo "       Verify TAURI_SIGNING_PRIVATE_KEY is populated in repo secrets." >&2
+              exit 1
+            }
+          ls -la
+
+      - name: Build latest.json
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_RE=$(printf '%s' "$VERSION" | sed 's/\./\\./g')
+          BASE="https://github.com/${REPO}/releases/download/${TAG}"
+          cd sigs
+
+          # Each Tauri platform key uses a fixed arch suffix
+          # (`aarch64` / `x86_64`) — NOT the rust triple — and the
+          # URL points at the binary, not the `.sig` file.
+          declare -A SIG_OF URL_OF
+          for platform in darwin-aarch64 darwin-x86_64 linux-x86_64 windows-x86_64; do
+            case "$platform" in
+              darwin-aarch64)
+                suffix="aarch64.app.tar.gz"
+                ;;
+              darwin-x86_64)
+                suffix="x64.app.tar.gz"
+                ;;
+              linux-x86_64)
+                suffix="amd64.AppImage"
+                ;;
+              windows-x86_64)
+                suffix="x64-setup.exe"
+                ;;
+            esac
+            sig_file=$(ls | grep -E "_${VERSION_RE}_${suffix}\.sig\$" | head -n1 || true)
+            if [ -z "$sig_file" ]; then
+              echo "ERROR: missing signature for platform ${platform} (suffix ${suffix})" >&2
+              exit 1
+            fi
+            SIG_OF[$platform]=$(cat "$sig_file" | tr -d '\n')
+            URL_OF[$platform]="${BASE}/${sig_file%.sig}"
+          done
+
+          RELEASE_NOTES=$(gh release view "$TAG" --json body --jq .body | jq -Rs .)
+          PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          cat > latest.json <<EOF
+          {
+            "version": "${VERSION}",
+            "notes": ${RELEASE_NOTES},
+            "pub_date": "${PUB_DATE}",
+            "platforms": {
+              "darwin-aarch64": {
+                "signature": "${SIG_OF[darwin-aarch64]}",
+                "url": "${URL_OF[darwin-aarch64]}"
+              },
+              "darwin-x86_64": {
+                "signature": "${SIG_OF[darwin-x86_64]}",
+                "url": "${URL_OF[darwin-x86_64]}"
+              },
+              "linux-x86_64": {
+                "signature": "${SIG_OF[linux-x86_64]}",
+                "url": "${URL_OF[linux-x86_64]}"
+              },
+              "windows-x86_64": {
+                "signature": "${SIG_OF[windows-x86_64]}",
+                "url": "${URL_OF[windows-x86_64]}"
+              }
+            }
+          }
+          EOF
+
+          # Validate JSON well-formedness before upload so a
+          # malformed manifest never lands on the release page
+          # (where clients would log parse errors with no way to
+          # fix forward short of re-tagging).
+          jq . latest.json > /dev/null
+          cat latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload latest.json to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # `--clobber` so re-runs overwrite a stale manifest
+          # cleanly (the `--allow-empty` parallel in update-cask).
+          gh release upload "$TAG" sigs/latest.json --clobber
