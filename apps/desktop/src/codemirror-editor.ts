@@ -182,10 +182,11 @@ function highlightPlugin(grammar: LoadedGrammar) {
         // walks every node. Viewport-scoped decorations would be
         // cheaper for very long buffers, but the current chord
         // fixtures comfortably fit the "reparse on every keystroke"
-        // budget, and viewport scoping requires keeping a separate
-        // decoration set per visible range (tracked in #2215 sibling
-        // notes). Keep the call symmetric with `tree.rootNode.text`
-        // so a future caller can't mistakenly assume range scoping.
+        // budget, and viewport scoping requires maintaining a
+        // per-visible-range decoration set — a future optimisation
+        // if large files become a concern. Keep the call symmetric
+        // with `tree.rootNode.text` so a future reader can't
+        // mistakenly assume range scoping is already in place.
         const matches = grammar.query.matches(this.tree.rootNode, {
           startIndex: 0,
           endIndex: view.state.doc.length,
@@ -320,9 +321,10 @@ function publishDiagnostics(
 
 /**
  * Return true iff the EditorState currently has at least one
- * diagnostic set. Short-circuits via throw so the lint iterator
- * stops at the first hit — `forEachDiagnostic` has no built-in
- * break.
+ * diagnostic set. Iterates all existing diagnostics (O(n)) because
+ * `forEachDiagnostic` has no built-in break; this is acceptable since
+ * the function is only called on the error-clearing path where the
+ * new diagnostics list is already empty.
  */
 function hasExistingDiagnostics(view: EditorView): boolean {
   let found = false;
