@@ -237,5 +237,8 @@ Before opening any release PR, run:
 
 The command will output a compliance matrix and list all gaps that must be
 fixed before the release tag is created. Gaps at L1 or missing README files
-are **blocking** (must fix before release). L3 gaps on non-primary packages
-are non-blocking but should be tracked as issues.
+are **blocking** (must fix in the release PR). L3 gaps on non-primary
+packages are not release-blockers but must be resolved before the next
+release PR — this is a release-process exception distinct from the
+review-finding rule in `.claude/rules/pr-workflow.md`, which forbids
+filing review findings as separate issues.

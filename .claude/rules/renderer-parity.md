@@ -9,13 +9,14 @@ renderer is a correctness bug.
 ## Required practices
 
 - When adding a new directive or AST node, add rendering support to all
-  three renderers in the same PR (or in explicitly tracked follow-up issues
-  that are linked and prioritised).
+  three renderers in the same PR. Omissions record a `## Deferred` entry
+  in the PR body with a one-line justification, per `pr-workflow.md`; do
+  not file a follow-up issue.
 - When fixing a rendering bug in one renderer, check all other renderers for
   the same bug and fix them in the same PR.
 - Golden tests for each renderer must cover the same set of directives. If
-  a fixture exercises a directive in the text renderer, an equivalent fixture
-  must exist (or be explicitly tracked) for HTML and PDF.
+  a fixture exercises a directive in the text renderer, equivalent fixtures
+  must exist for HTML and PDF — not merely be tracked for later.
 
 ## Validation Parity
 
@@ -44,7 +45,9 @@ Before closing a PR that touches any renderer:
 2. Verify every arm exists in the other renderers.
 3. For every directive that parses a numeric parameter, verify the valid range
    and clamping logic is identical in all three renderers.
-4. If an arm or validation is missing, either add it or file a sub-issue.
+4. If an arm or validation is missing, add it in this PR or record a
+   `## Deferred` entry in the PR body per `pr-workflow.md`; do not file
+   a sub-issue.
 
 ## Coverage Parity
 
