@@ -53,24 +53,12 @@ jobs:
     name: Validate tag format
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Validate
-        env:
-          TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          set -euo pipefail
-          if [ -z "$TAG" ]; then
-            echo "Rejecting empty release tag." >&2
-            exit 1
-          fi
-          # Accept `desktop-v<major>.<minor>.<patch>[-prerelease]`.
-          # A dedicated regex (not the generic
-          # `.github/actions/validate-release-tag` helper) because
-          # the desktop namespace adds the `desktop-` prefix.
-          if ! printf '%s' "$TAG" | grep -Eq '^desktop-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
-            echo "Rejecting malformed desktop release tag: $TAG" >&2
-            echo "Expected format: desktop-v<major>.<minor>.<patch>[-<prerelease>]" >&2
-            exit 1
-          fi
+        uses: ./.github/actions/validate-release-tag
+        with:
+          tag: ${{ inputs.tag || github.ref_name }}
+          prefix: desktop-
 
   build:
     name: Build (${{ matrix.platform.label }})
@@ -276,14 +264,10 @@ jobs:
         # Guard against the `release` job running without the
         # `validate` job's format check (e.g. a future refactor
         # that drops the `needs:`).
-        env:
-          TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          set -euo pipefail
-          if ! printf '%s' "$TAG" | grep -Eq '^desktop-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
-            echo "Rejecting malformed desktop release tag: $TAG" >&2
-            exit 1
-          fi
+        uses: ./.github/actions/validate-release-tag
+        with:
+          tag: ${{ steps.tag.outputs.tag }}
+          prefix: desktop-
 
       - name: Flatten artefacts + generate SHA256SUMS
         shell: bash
@@ -395,14 +379,10 @@ jobs:
         # Same defense-in-depth as the `release` job — `needs:
         # [release]` already serialises on a validated tag, but
         # a future refactor could break that ordering.
-        env:
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          set -euo pipefail
-          if ! printf '%s' "$TAG" | grep -Eq '^desktop-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
-            echo "Rejecting malformed desktop release tag: $TAG" >&2
-            exit 1
-          fi
+        uses: ./.github/actions/validate-release-tag
+        with:
+          tag: ${{ steps.version.outputs.tag }}
+          prefix: desktop-
 
       - name: Download SHA256SUMS
         env:
@@ -517,14 +497,10 @@ jobs:
           echo "version=${TAG#desktop-v}" >> "$GITHUB_OUTPUT"
 
       - name: Re-validate tag format
-        env:
-          TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          set -euo pipefail
-          if ! printf '%s' "$TAG" | grep -Eq '^desktop-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
-            echo "Rejecting malformed desktop release tag: $TAG" >&2
-            exit 1
-          fi
+        uses: ./.github/actions/validate-release-tag
+        with:
+          tag: ${{ steps.tag.outputs.tag }}
+          prefix: desktop-
 
       - name: Download release signatures
         env:
