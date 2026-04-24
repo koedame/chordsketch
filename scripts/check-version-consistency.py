@@ -346,7 +346,11 @@ def load_desktop_versions(repo_root: Path) -> list[Source]:
             )
         )
 
-    sources.append(load_package_json_version(repo_root, "apps/desktop/package.json"))
+    package_json = repo_root / "apps/desktop/package.json"
+    if package_json.is_file():
+        sources.append(
+            load_package_json_version(repo_root, "apps/desktop/package.json")
+        )
 
     return sources
 
