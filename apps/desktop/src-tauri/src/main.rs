@@ -102,8 +102,9 @@ fn open_file(path: String) -> Result<String, String> {
 
 /// Writes `content` to `path`, overwriting any existing file. Used
 /// by the File → Save / Save As menu items; the frontend is
-/// responsible for dialog-driven destination selection so this
-/// command does no extra validation beyond the IO error surface.
+/// responsible for dialog-driven destination selection; an empty
+/// `path` is rejected immediately to produce a clear error rather
+/// than a confusing OS-level "No such file" message.
 #[tauri::command]
 fn save_file(path: String, content: String) -> Result<(), String> {
     if path.is_empty() {
