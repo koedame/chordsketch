@@ -22,7 +22,11 @@ import {
   HighlightStyle,
   syntaxHighlighting,
 } from '@codemirror/language';
-import { setDiagnostics, type Diagnostic } from '@codemirror/lint';
+import {
+  forEachDiagnostic,
+  setDiagnostics,
+  type Diagnostic,
+} from '@codemirror/lint';
 import { Compartment, EditorState } from '@codemirror/state';
 import {
   Decoration,
@@ -174,11 +178,14 @@ function highlightPlugin(grammar: LoadedGrammar) {
       buildDecorations(view: EditorView): DecorationSet {
         if (!this.tree) return Decoration.none;
         const builder = new RangeDecorationBuilder();
-        // Range-scoped `QueryOptions` are honoured here so the
-        // highlight query only walks the visible / changed slice
-        // of the tree rather than the entire document on every
-        // keystroke. `tree-sitter`'s query cursor internally
-        // clips matches to `[startIndex, endIndex)`.
+        // Pass the full document extent to the query so tree-sitter
+        // walks every node. Viewport-scoped decorations would be
+        // cheaper for very long buffers, but the current chord
+        // fixtures comfortably fit the "reparse on every keystroke"
+        // budget, and viewport scoping requires keeping a separate
+        // decoration set per visible range (tracked in #2215 sibling
+        // notes). Keep the call symmetric with `tree.rootNode.text`
+        // so a future caller can't mistakenly assume range scoping.
         const matches = grammar.query.matches(this.tree.rootNode, {
           startIndex: 0,
           endIndex: view.state.doc.length,
@@ -274,8 +281,16 @@ function publishDiagnostics(
       walker.gotoParent();
     }
   };
-  visit();
-  walker.delete();
+  try {
+    visit();
+  } finally {
+    // `walker` wraps a WASM `TreeCursor` — skipping `.delete()`
+    // would leak its WASM-side memory for the parser's lifetime.
+    // The finally is unconditional so a thrown `visit()` (e.g. a
+    // future `web-tree-sitter` regression) does not bleed handles
+    // keystroke-by-keystroke (#2214).
+    walker.delete();
+  }
   if (truncated > 0) {
     // Trailing marker so the truncation is visible in the lint
     // gutter, not just silent. `from === to` would be rejected,
@@ -288,10 +303,33 @@ function publishDiagnostics(
       message: `…and ${truncated} more syntax error${truncated === 1 ? '' : 's'} (truncated; fix earlier errors first)`,
     });
   }
+  // Skip the dispatch on the common "valid ChordPro" path where
+  // both the previous and the new diagnostics list are empty.
+  // `@codemirror/lint`'s state field re-runs through every
+  // transaction even when the value is unchanged, so eliminating
+  // the empty-to-empty write halves the per-keystroke transaction
+  // count on the happy path (#2215).
+  if (diagnostics.length === 0 && !hasExistingDiagnostics(view)) {
+    return;
+  }
   view.dispatch(setDiagnostics(view.state, diagnostics));
   // `setDiagnostics` returns a `TransactionSpec` (not a
   // transaction), which `view.dispatch` accepts directly — no
   // extra wrapping needed.
+}
+
+/**
+ * Return true iff the EditorState currently has at least one
+ * diagnostic set. Short-circuits via throw so the lint iterator
+ * stops at the first hit — `forEachDiagnostic` has no built-in
+ * break.
+ */
+function hasExistingDiagnostics(view: EditorView): boolean {
+  let found = false;
+  forEachDiagnostic(view.state, () => {
+    found = true;
+  });
+  return found;
 }
 
 // Base theme that fills the pane and matches the dark surface of
