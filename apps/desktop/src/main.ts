@@ -139,6 +139,19 @@ async function runOpen(
   rebuildMenu: () => Promise<void>,
   path?: string,
 ): Promise<void> {
+  // Dirty-state check happens BEFORE any file picker so the user
+  // isn't made to pick a file only to be told their work would be
+  // discarded. The recent-file path (`path` already supplied) funnels
+  // through the same guard so a stray click on "Open Recent" does
+  // not silently clobber unsaved edits either (#2210).
+  if (isDirty(handle)) {
+    const confirmed = await ask(
+      'You have unsaved changes. Open another file and discard them?',
+      { title: 'Discard unsaved changes?', kind: 'warning' },
+    );
+    if (!confirmed) return;
+  }
+
   let target = path ?? null;
   if (!target) {
     const picked = await open({
@@ -148,14 +161,6 @@ async function runOpen(
     });
     if (typeof picked === 'string') target = picked;
     if (!target) return; // User cancelled.
-  }
-
-  if (isDirty(handle)) {
-    const confirmed = await ask(
-      'You have unsaved changes. Open another file and discard them?',
-      { title: 'Discard unsaved changes?', kind: 'warning' },
-    );
-    if (!confirmed) return;
   }
 
   try {
@@ -194,13 +199,22 @@ async function runSaveAs(
     filters: CHORDPRO_FILTERS,
   });
   if (!picked) return;
-  // Gate the `currentPath` / `pushRecent` updates on the actual
-  // write succeeding — a partial failure previously left the UI
-  // pointing at an unwritten path, so the next `runSave` would
-  // silently retry the failing write instead of reopening Save As.
-  const ok = await writeCurrent(handle, picked);
-  if (!ok) return;
+
+  // Point `currentPath` at the new destination BEFORE the write so
+  // the in-flight `updateWindowTitle` call inside `writeCurrent`
+  // reads the new filename instead of briefly showing the old path
+  // or "Untitled" while the write completes. Roll back on failure
+  // so the next `runSave` reopens the picker rather than silently
+  // retrying against an unwritten destination (#2211).
+  const previousPath = currentPath;
   currentPath = picked;
+  const ok = await writeCurrent(handle, picked);
+  if (!ok) {
+    currentPath = previousPath;
+    // Repaint the title back to the old state after a failed save.
+    await updateWindowTitle(handle);
+    return;
+  }
   pushRecent(picked);
   await rebuildMenu();
   await updateWindowTitle(handle);
@@ -238,13 +252,18 @@ async function runExport(
   handle: ChordSketchUiHandle,
   format: ExportFormat,
 ): Promise<void> {
-  const path = await save({
-    defaultPath: `chordsketch.${format}`,
-    filters: [EXPORT_FILTERS[format]],
-  });
-  if (!path) return; // User cancelled the save dialog.
-
+  // `save()` is inside the try block so a plugin-initialisation
+  // failure or an unexpected rejection from `tauri-plugin-dialog`
+  // surfaces the same "Export failed" dialog as a downstream
+  // `invoke()` error — instead of bubbling out of the `void
+  // runExport(...)` menu handler and being silently swallowed.
   try {
+    const path = await save({
+      defaultPath: `chordsketch.${format}`,
+      filters: [EXPORT_FILTERS[format]],
+    });
+    if (!path) return; // User cancelled the save dialog.
+
     const transpose = handle.getTranspose();
     await invoke(format === 'pdf' ? 'export_pdf' : 'export_html', {
       path,
@@ -526,4 +545,22 @@ export async function checkForUpdatesNow(): Promise<void> {
   await checkForUpdates({ silent: false });
 }
 
-void bootstrap();
+// `bootstrap()` drives the entire app startup — wasm init, UI mount,
+// native menu install, close-guard registration, updater arming. If
+// any of those reject, the user would otherwise be looking at a blank
+// window with no explanation. Surface the failure through the native
+// `message()` dialog when possible, then fall back to rendering a
+// plain-text error into `#app` so the user at least sees the message
+// on the (also rare) path where the dialog plugin itself is the one
+// that failed (#2205).
+bootstrap().catch((err: unknown) => {
+  const text = err instanceof Error ? (err.stack ?? err.message) : String(err);
+  console.error('ChordSketch failed to start:', err);
+  message(text, { title: 'ChordSketch failed to start', kind: 'error' }).catch(
+    () => {
+      if (root) {
+        root.textContent = `ChordSketch failed to start:\n\n${text}`;
+      }
+    },
+  );
+});
