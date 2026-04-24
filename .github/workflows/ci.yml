@@ -157,8 +157,6 @@ jobs:
     # without a `paths:` filter so any workspace or dep change is
     # exercised.
     runs-on: ubuntu-latest
-    env:
-      WASM_PACK_VERSION: "0.14.0"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -184,9 +182,7 @@ jobs:
           shared-key: desktop-smoke-x86_64-unknown-linux-gnu
 
       - name: Install wasm-pack
-        uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2
-        with:
-          tool: wasm-pack@${{ env.WASM_PACK_VERSION }}
+        uses: ./.github/actions/install-wasm-pack
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0

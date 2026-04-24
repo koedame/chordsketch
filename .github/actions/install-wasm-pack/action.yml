@@ -1,0 +1,29 @@
+name: "Install wasm-pack"
+description: >
+  Install a pinned version of `wasm-pack` via `taiki-e/install-action`.
+  The version lives here rather than repeated across every consumer
+  workflow so a bump in one place does not leave five others behind.
+  Bump the version value in the `tool:` expression below when a new
+  `wasm-pack` release is wanted; every consumer picks it up on the
+  next CI run (#2225).
+inputs:
+  version:
+    description: >
+      Override the pinned `wasm-pack` version. Empty by default,
+      which uses the composite's hardcoded fallback value.
+      Callers SHOULD leave this empty so the repo ships one
+      canonical version; set it only when a workflow genuinely
+      needs a different cut (e.g. testing a release candidate).
+    required: false
+    default: ""
+runs:
+  using: "composite"
+  steps:
+    - name: Install wasm-pack
+      uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2
+      with:
+        # The fallback is the canonical repo-wide version. Keep it
+        # in sync with the release cadence of the upstream
+        # `rustwasm/wasm-pack` crate; bump by editing this single
+        # line.
+        tool: wasm-pack@${{ inputs.version || '0.14.0' }}
