@@ -166,7 +166,20 @@ jobs:
         # Tauri produces signed artefacts without any workflow
         # change. Until then, the env vars stay empty and the
         # build ships unsigned installers.
-        run: cargo tauri build --target ${{ matrix.platform.target }}
+        #
+        # `-c '{"bundle":{"createUpdaterArtifacts":true}}'`
+        # enables updater `.sig` file generation only for the
+        # release pipeline. Baking it into `tauri.conf.json`
+        # would break `desktop-build.yml` and `desktop-smoke`
+        # (both run on PRs, where `TAURI_SIGNING_PRIVATE_KEY` is
+        # not available; Tauri fails hard with "A public key
+        # has been found, but no private key" when
+        # createUpdaterArtifacts is true and no private key is
+        # set). See #2076 review for the observed failure.
+        run: |
+          cargo tauri build \
+            --target ${{ matrix.platform.target }} \
+            -c '{"bundle":{"createUpdaterArtifacts":true}}'
         working-directory: apps/desktop/src-tauri
         env:
           # Apple notarization / signing (populated by #2075).
@@ -194,10 +207,17 @@ jobs:
           SRC="target/${{ matrix.platform.target }}/release/bundle"
           DST="release-artefacts/${{ matrix.platform.label }}"
           mkdir -p "$DST"
-          # macOS: .dmg + .app.tar.gz. Windows: .msi + .exe.
-          # Linux: .deb + .rpm + .AppImage. The `|| true` tolerates
-          # platforms that don't emit a particular format.
-          for pat in '*.dmg' '*.app.tar.gz' '*.msi' '*.exe' '*.deb' '*.rpm' '*.AppImage'; do
+          # macOS: .dmg + .app.tar.gz (+ their .sig). Windows: .msi
+          # + .exe (+ .sig). Linux: .deb + .rpm + .AppImage (+ .sig).
+          # The `|| true` tolerates platforms that don't emit a given
+          # format. `.sig` files are Tauri updater signatures written
+          # alongside their respective bundles whenever
+          # `TAURI_SIGNING_PRIVATE_KEY` is populated (#2076); without
+          # the secret the `.sig` glob matches nothing and auto-update
+          # stays disabled — the rest of the release still ships.
+          for pat in '*.dmg' '*.app.tar.gz' '*.app.tar.gz.sig' \
+                     '*.msi' '*.msi.sig' '*.exe' '*.exe.sig' \
+                     '*.deb' '*.rpm' '*.AppImage' '*.AppImage.sig'; do
             find "$SRC" -type f -name "$pat" -exec cp -v {} "$DST/" \; || true
           done
           ls -la "$DST"
@@ -260,9 +280,12 @@ jobs:
           # Copy every file in every downloaded cell directory
           # into a flat `release/` for the Release upload.
           find dist -type f \
-            \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.msi' \
-               -o -name '*.exe' -o -name '*.deb' -o -name '*.rpm' \
-               -o -name '*.AppImage' \) \
+            \( -name '*.dmg' -o -name '*.app.tar.gz' \
+               -o -name '*.app.tar.gz.sig' -o -name '*.msi' \
+               -o -name '*.msi.sig' -o -name '*.exe' \
+               -o -name '*.exe.sig' -o -name '*.deb' \
+               -o -name '*.rpm' -o -name '*.AppImage' \
+               -o -name '*.AppImage.sig' \) \
             -exec cp -v {} release/ \;
           cd release
           # Deterministic sort so the SHA256SUMS file is stable
@@ -397,3 +420,221 @@ jobs:
           # workflow_dispatch idempotent.
           git commit --allow-empty -m "Update chordsketch desktop cask to ${VERSION}"
           git push
+
+  publish-updater-manifest:
+    name: Publish Tauri updater manifest
+    # Generates `latest.json` — the manifest the Tauri updater
+    # plugin reads from `tauri.conf.json`'s `endpoints` entry — and
+    # publishes it to the **`desktop-updater-manifest` branch** of
+    # this repo. Each entry points at the format Tauri's updater
+    # actually consumes per platform (macOS: `.app.tar.gz`; Linux:
+    # `.AppImage`; Windows: `.exe`) and embeds the matching `.sig`
+    # signature with its multi-line minisign frame preserved.
+    #
+    # Why a branch, not a release asset: `/releases/latest/download/`
+    # resolves to the repo-wide "Latest" release — which is the CLI
+    # (`v*`) release, not the desktop (`desktop-v*`) one, because
+    # the desktop pipeline intentionally omits `--latest` to avoid
+    # demoting CLI releases on the repo landing page. A branch-
+    # hosted manifest is stable (tag-independent), cheap to update
+    # (single git push), and well-supported by Tauri's updater
+    # (which just GETs the URL).
+    #
+    # If `TAURI_SIGNING_PRIVATE_KEY` is not set in repo secrets
+    # (the pre-#2076 state), the `.sig` files never exist and this
+    # job fails early with a clear error rather than publishing a
+    # manifest with empty signatures that would fail client-side
+    # verification.
+    needs: [release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Determine tag + version
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="$REF_NAME"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#desktop-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Re-validate tag format
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$TAG" | grep -Eq '^desktop-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
+            echo "Rejecting malformed desktop release tag: $TAG" >&2
+            exit 1
+          fi
+
+      - name: Download release signatures
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p sigs
+          cd sigs
+          # `gh release download` with `-p '*.sig'` would match too
+          # aggressively; listing patterns explicitly both documents
+          # the platform set and fails closed if a platform's
+          # signature is missing (e.g. the signing env var was
+          # unset on that runner).
+          gh release download "$TAG" \
+            -p "*.app.tar.gz.sig" \
+            -p "*.AppImage.sig" \
+            -p "*-setup.exe.sig" || {
+              echo "ERROR: release $TAG does not contain the updater signature files." >&2
+              echo "       Verify TAURI_SIGNING_PRIVATE_KEY is populated in repo secrets." >&2
+              exit 1
+            }
+          ls -la
+
+      - name: Build latest.json
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_RE=$(printf '%s' "$VERSION" | sed 's/\./\\./g')
+          BASE="https://github.com/${REPO}/releases/download/${TAG}"
+          cd sigs
+
+          # Each Tauri platform key uses a fixed arch suffix
+          # (`aarch64` / `x86_64`) — NOT the rust triple — and the
+          # URL points at the binary, not the `.sig` file.
+          #
+          # Per-platform signature bodies are read via `jq -Rs`,
+          # which preserves the full multi-line minisign frame
+          # (`untrusted comment`, signature, `trusted comment`,
+          # global signature). A flattened single-line form breaks
+          # the minisign parser on the client and every auto-update
+          # check fails signature verification. See PR #2235 review.
+          manifest_platforms=$(jq -n '{}')
+          for platform in darwin-aarch64 darwin-x86_64 linux-x86_64 windows-x86_64; do
+            case "$platform" in
+              darwin-aarch64) suffix="aarch64.app.tar.gz" ;;
+              darwin-x86_64)  suffix="x64.app.tar.gz" ;;
+              linux-x86_64)   suffix="amd64.AppImage" ;;
+              windows-x86_64) suffix="x64-setup.exe" ;;
+            esac
+            sig_file=$(find . -maxdepth 1 -type f -name "*_${VERSION_RE}_${suffix}.sig" -printf '%f\n' | head -n1)
+            if [ -z "$sig_file" ]; then
+              echo "ERROR: missing signature for platform ${platform} (suffix ${suffix})" >&2
+              exit 1
+            fi
+            url="${BASE}/${sig_file%.sig}"
+            manifest_platforms=$(
+              jq --arg key "$platform" \
+                 --rawfile sig "$sig_file" \
+                 --arg url "$url" \
+                 '. + { ($key): { signature: $sig, url: $url } }' \
+                 <<<"$manifest_platforms"
+            )
+          done
+
+          release_notes=$(gh release view "$TAG" --json body --jq .body)
+          pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          jq -n \
+            --arg version "$VERSION" \
+            --arg notes "$release_notes" \
+            --arg pub_date "$pub_date" \
+            --argjson platforms "$manifest_platforms" \
+            '{ version: $version, notes: $notes, pub_date: $pub_date, platforms: $platforms }' \
+            > latest.json
+
+          # Sanity: the Tauri updater client parses this document
+          # with `serde_json`; `jq .` rejects malformed JSON so a
+          # broken template expansion cannot ship.
+          jq . latest.json > /dev/null
+          cat latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish latest.json to desktop-updater-manifest branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # The manifest lives on its own branch (`desktop-updater-manifest`)
+          # so the Tauri updater can GET a stable URL regardless of
+          # which release is marked "latest" on the repo. Reusing
+          # the `GITHUB_TOKEN` (which already has `contents: write`
+          # per the job-level `permissions:` above) avoids provisioning
+          # a dedicated PAT.
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Probe whether the publishing branch exists before choosing
+          # between the clone path and the orphan-bootstrap path.
+          # `git ls-remote --exit-code --heads` returns 2 iff the ref
+          # does not exist, 0 when it does, and a non-2 non-zero on
+          # auth/network failures. Bootstrapping only on the explicit
+          # "branch not found" signal prevents a transient network
+          # error from clobbering an already-published branch's
+          # history by running `--orphan` + `git rm -rf .` against it.
+          REMOTE_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          set +e
+          git ls-remote --exit-code --heads "$REMOTE_URL" desktop-updater-manifest >/dev/null
+          ls_remote_rc=$?
+          set -e
+          case "$ls_remote_rc" in
+            0)
+              git clone --depth=1 "$REMOTE_URL" \
+                --branch desktop-updater-manifest \
+                manifest-repo
+              ;;
+            2)
+              # Branch doesn't exist yet — bootstrap it as an orphan
+              # branch containing only `latest.json`. The
+              # --orphan + rm -rf + commit dance is the canonical
+              # git idiom for a no-history publishing branch.
+              git clone --depth=1 "$REMOTE_URL" manifest-repo
+              cd manifest-repo
+              git checkout --orphan desktop-updater-manifest
+              git rm -rf .
+              cd ..
+              ;;
+            *)
+              echo "ERROR: git ls-remote failed with exit code ${ls_remote_rc}" >&2
+              echo "       This is not a 'branch not found' failure" \
+                   "(exit 2); refusing to fall through to the orphan" \
+                   "bootstrap path. Check network / auth / permissions." >&2
+              exit "$ls_remote_rc"
+              ;;
+          esac
+          cp sigs/latest.json manifest-repo/latest.json
+          cd manifest-repo
+          git add latest.json
+          # `--allow-empty` so re-running workflow_dispatch on a
+          # tag that produced an identical manifest still succeeds.
+          git commit --allow-empty \
+            -m "Publish updater manifest for ${TAG}"
+          git push origin desktop-updater-manifest
+
+      - name: Also upload latest.json to the release (convenience)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Duplicate the manifest as a release asset so maintainers
+          # inspecting a specific release can see the exact
+          # signature payloads without branch-checkout. The branch
+          # is the source of truth for the live updater endpoint.
+          gh release upload "$TAG" sigs/latest.json --clobber

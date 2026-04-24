@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Narrow capability set. `core:app:default` + `core:window:default` are the baseline from #2069. `dialog:allow-save` + `dialog:allow-message` land in #2074 (Export flow). `dialog:allow-open` + `dialog:allow-ask` land in #2080 (File → Open and the Quit-unsaved prompt). The custom Rust commands (`open_file`, `save_file`) handle the actual filesystem access, so `fs:*` is intentionally not granted — this keeps untrusted WebView code unable to read or write arbitrary paths without a user-initiated dialog.",
+  "description": "Narrow capability set. `core:app:default` + `core:window:default` are the baseline from #2069. `dialog:allow-save` + `dialog:allow-message` land in #2074 (Export flow). `dialog:allow-open` + `dialog:allow-ask` land in #2080 (File → Open and the Quit-unsaved prompt). `updater:allow-check` + `updater:allow-download-and-install` + `process:allow-restart` land in #2076 (auto-update via Tauri updater + relaunch after install). The updater grants are minimised — we withhold `updater:allow-install`, which would accept a pre-downloaded file path from the WebView (widening XSS-to-RCE surface). The custom Rust commands (`open_file`, `save_file`) handle the actual filesystem access, so `fs:*` is intentionally not granted — this keeps untrusted WebView code unable to read or write arbitrary paths without a user-initiated dialog.",
   "windows": ["main"],
   "permissions": [
     "core:app:default",
@@ -9,6 +9,9 @@
     "dialog:allow-save",
     "dialog:allow-open",
     "dialog:allow-message",
-    "dialog:allow-ask"
+    "dialog:allow-ask",
+    "updater:allow-check",
+    "updater:allow-download-and-install",
+    "process:allow-restart"
   ]
 }
