@@ -106,13 +106,16 @@ export async function checkForUpdates(
   }
 
   // Re-check the opt-out preference between `check()` resolving
-  // and the user-facing dialog: a check that started while the
-  // user was still opted-in can race against a subsequent toggle
-  // (`check()` takes ~1 s on a cold network). Without this
+  // and the user-facing dialog: a background check that started
+  // while the user was still opted-in can race against a subsequent
+  // toggle (`check()` takes ~1 s on a cold network). Without this
   // guard, a user who opts out mid-check would still see the
-  // "Update available" prompt a beat later, which is the
-  // "confused user" failure mode L1 from PR #2235 review.
-  if (isAutoUpdateOptedOut()) {
+  // "Update available" prompt a beat later.
+  //
+  // The `&& silent` mirrors the first guard: a manual
+  // "Check for updates now" (silent: false) bypasses opt-out even
+  // here, so an explicit user action always produces feedback.
+  if (isAutoUpdateOptedOut() && silent) {
     return;
   }
 
