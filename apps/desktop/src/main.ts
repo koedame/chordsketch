@@ -240,6 +240,33 @@ async function writeCurrent(
 }
 
 /**
+ * Format the renderer warnings (returned by the Rust export command)
+ * into a human-readable dialog body. The first few warnings are
+ * quoted verbatim; longer lists are truncated with a count so the
+ * dialog stays compact on small laptops. Mirrors the trimming logic
+ * used by the auto-update dialog in `./updater.ts`.
+ */
+const EXPORT_WARNING_LINE_LIMIT = 5;
+function buildExportSummary(path: string, warnings: string[]): string {
+  if (warnings.length === 0) {
+    return `Exported to ${path}`;
+  }
+  const header = `Exported to ${path} with ${warnings.length} warning${
+    warnings.length === 1 ? '' : 's'
+  }:`;
+  if (warnings.length <= EXPORT_WARNING_LINE_LIMIT) {
+    return [header, ...warnings.map((w) => `• ${w}`)].join('\n');
+  }
+  const shown = warnings.slice(0, EXPORT_WARNING_LINE_LIMIT);
+  const hidden = warnings.length - shown.length;
+  return [
+    header,
+    ...shown.map((w) => `• ${w}`),
+    `… and ${hidden} more`,
+  ].join('\n');
+}
+
+/**
  * Drive a File → Export flow: read the editor content + transpose
  * offset from the UI handle, show the native save dialog, and
  * invoke the matching Rust command.
@@ -265,17 +292,27 @@ async function runExport(
     if (!path) return; // User cancelled the save dialog.
 
     const transpose = handle.getTranspose();
-    await invoke(format === 'pdf' ? 'export_pdf' : 'export_html', {
-      path,
-      chordpro: handle.getChordPro(),
-      // Only forward a non-zero transpose so the Rust side can
-      // follow the same identity-skip that the WASM adapter uses
-      // in `renderers` above.
-      transpose: transpose === 0 ? null : transpose,
-    });
-    await message(`Exported to ${path}`, {
+    // The Rust export commands return the renderer's captured
+    // warnings (`render_songs_with_warnings` variant) so we can
+    // surface them next to the success dialog — same set the
+    // playground's live preview logs via `console.warn`. Windowed
+    // `.app` builds have no visible stderr, so without this the
+    // renderer warnings would disappear silently (#2201).
+    const warnings = (await invoke<string[]>(
+      format === 'pdf' ? 'export_pdf' : 'export_html',
+      {
+        path,
+        chordpro: handle.getChordPro(),
+        // Only forward a non-zero transpose so the Rust side can
+        // follow the same identity-skip that the WASM adapter uses
+        // in `renderers` above.
+        transpose: transpose === 0 ? null : transpose,
+      },
+    )) ?? [];
+    const body = buildExportSummary(path, warnings);
+    await message(body, {
       title: DEFAULT_WINDOW_TITLE,
-      kind: 'info',
+      kind: warnings.length > 0 ? 'warning' : 'info',
     });
   } catch (err) {
     await message(err instanceof Error ? err.message : String(err), {
