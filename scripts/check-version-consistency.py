@@ -28,6 +28,11 @@ Sources checked:
   8. `packaging/macports/Portfile` — `github.setup … <version> v`
   9. `packaging/nix/package.nix` — `version = "X.Y.Z";`
  10. `packaging/winget/*.yaml` — `PackageVersion: X.Y.Z`
+ 11. `apps/desktop/src-tauri/Cargo.toml` — `package.version`
+ 12. `apps/desktop/src-tauri/tauri.conf.json` — top-level `"version"`
+ 13. `apps/desktop/package.json` — `version`
+     (CLI and GUI are always in lockstep; the three desktop manifests
+     must all agree with the workspace canonical.)
 
 Each source is a (file, field, current_value) triple. The allowlist file has
 the same (file, field, current_value) shape plus a mandatory `tracking_issue`
@@ -291,6 +296,61 @@ def load_napi_platform_package_versions(repo_root: Path) -> list[Source]:
     return sources
 
 
+def load_desktop_versions(repo_root: Path) -> list[Source]:
+    """Collect the three version fields the desktop Tauri app carries.
+
+    The desktop crate lives under `apps/desktop/src-tauri/` (outside the
+    `crates/` tree that `load_crate_versions` scans) and is kept in
+    lockstep with the workspace per the user's release-versioning
+    requirement — CLI and GUI always share the same version number. The
+    Tauri bundle's user-facing version is pulled from
+    `tauri.conf.json`'s `"version"`, which MUST agree with the Rust
+    crate's `Cargo.toml` and with the Vite frontend's `package.json`
+    (otherwise the shipped installer metadata diverges from the binary
+    it packages).
+    """
+    sources: list[Source] = []
+
+    cargo_toml = repo_root / "apps/desktop/src-tauri/Cargo.toml"
+    if cargo_toml.is_file():
+        try:
+            data = tomllib.loads(cargo_toml.read_text(encoding="utf-8"))
+        except tomllib.TOMLDecodeError as exc:
+            raise SystemExit(f"{cargo_toml}: invalid TOML: {exc}")
+        version = data.get("package", {}).get("version")
+        if not isinstance(version, str):
+            raise SystemExit(
+                f"{cargo_toml}: package.version is missing or not a string"
+            )
+        sources.append(
+            Source(
+                file="apps/desktop/src-tauri/Cargo.toml",
+                field="package.version",
+                value=version,
+            )
+        )
+
+    tauri_conf = repo_root / "apps/desktop/src-tauri/tauri.conf.json"
+    if tauri_conf.is_file():
+        text = tauri_conf.read_text(encoding="utf-8")
+        match = re.search(r'"version"\s*:\s*"([^"]+)"', text)
+        if match is None:
+            raise SystemExit(
+                "apps/desktop/src-tauri/tauri.conf.json: no version field found"
+            )
+        sources.append(
+            Source(
+                file="apps/desktop/src-tauri/tauri.conf.json",
+                field="version",
+                value=match.group(1),
+            )
+        )
+
+    sources.append(load_package_json_version(repo_root, "apps/desktop/package.json"))
+
+    return sources
+
+
 def load_all_sources(repo_root: Path) -> list[Source]:
     sources: list[Source] = []
     sources.extend(load_crate_versions(repo_root))
@@ -312,6 +372,9 @@ def load_all_sources(repo_root: Path) -> list[Source]:
     sources.extend(load_macports_version(repo_root))
     sources.extend(load_nix_version(repo_root))
     sources.extend(load_winget_versions(repo_root))
+    # Desktop Tauri app — CLI and GUI are always in lockstep per the
+    # user's release-versioning requirement.
+    sources.extend(load_desktop_versions(repo_root))
     return sources
 
 

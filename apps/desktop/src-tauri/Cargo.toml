@@ -1,6 +1,12 @@
 [package]
 name = "chordsketch-desktop"
-version = "0.0.0"
+# Kept in lockstep with the SDK workspace version — see
+# `.github/workflows/ci.yml`'s `check-version-consistency` job and
+# `scripts/check-version-consistency.py`. A release PR bumps this
+# line together with every `crates/*/Cargo.toml` and the desktop
+# frontend manifests (`apps/desktop/package.json`,
+# `apps/desktop/src-tauri/tauri.conf.json`).
+version = "0.2.2"
 edition.workspace = true
 rust-version.workspace = true
 # Application-layer license per CLAUDE.md §License Policy ("future Forum,
