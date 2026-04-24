@@ -3,7 +3,7 @@
 # Reference Portfile for MacPorts submission. Before submitting to
 # macports/macports-ports, you must:
 #   1. Update the checksums to match the new release tarball
-#      (currently set for v0.2.2 — refresh on each release)
+#      (currently set for v0.3.0 — refresh on each release)
 #   2. Populate the cargo.crates block via cargo2port.py
 # See docs/releasing.md for the full procedure.
 
@@ -11,7 +11,7 @@ PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           cargo 1.0
 
-github.setup        koedame chordsketch 0.2.2 v
+github.setup        koedame chordsketch 0.3.0 v
 revision            0
 categories          textproc music
 license             MIT
@@ -22,8 +22,8 @@ long_description    ChordSketch is a Rust implementation of the ChordPro file \
                     HTML, or PDF output. Full compatibility with the ChordPro \
                     specification.
 
-# Checksums for the v0.2.2 source tarball. Regenerate on each release:
-#   curl -L -o src.tar.gz https://github.com/koedame/chordsketch/archive/refs/tags/v0.2.2.tar.gz
+# Checksums for the v0.3.0 source tarball. Regenerate on each release:
+#   curl -L -o src.tar.gz https://github.com/koedame/chordsketch/archive/refs/tags/v0.3.0.tar.gz
 #   openssl dgst -rmd160 src.tar.gz
 #   openssl dgst -sha256 src.tar.gz
 #   wc -c src.tar.gz
