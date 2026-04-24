@@ -46,6 +46,12 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/desktop-build.yml"
+      # The composite action this workflow consumes; without this
+      # entry a PR that only bumps the composite (e.g. Tauri CLI
+      # version, wasm-pack pin, apt-get list) would NOT trigger
+      # the 4-cell matrix, defeating #2223's purpose of giving
+      # both desktop workflows a single point of truth.
+      - ".github/actions/desktop-build-steps/**"
   pull_request:
     paths:
       - "apps/desktop/**"
@@ -65,6 +71,12 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/desktop-build.yml"
+      # The composite action this workflow consumes; without this
+      # entry a PR that only bumps the composite (e.g. Tauri CLI
+      # version, wasm-pack pin, apt-get list) would NOT trigger
+      # the 4-cell matrix, defeating #2223's purpose of giving
+      # both desktop workflows a single point of truth.
+      - ".github/actions/desktop-build-steps/**"
   workflow_dispatch:
 
 # PR-scoped cancel-in-progress per the §5 shape in
