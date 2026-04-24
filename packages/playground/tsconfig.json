@@ -11,7 +11,7 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@chordsketch/wasm": ["../npm/web/chordsketch_wasm.js"],
+      "@chordsketch/wasm": ["../npm/web/chordsketch_wasm"],
       "@chordsketch/ui-web": ["../ui-web/src/index.ts"],
       "@chordsketch/ui-web/style.css": ["../ui-web/src/style.css"]
     }
