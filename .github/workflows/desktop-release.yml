@@ -360,6 +360,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # Pin to the tag under release so `workflow_dispatch` re-runs
+          # read `packaging/homebrew/chordsketch-desktop.rb.template`
+          # from the tagged commit rather than the current branch HEAD.
+          # Same source-commit-drift class fixed in the `build` job
+          # (#2226); a future placeholder rename in the template would
+          # otherwise produce a silently-broken cask on re-dispatch.
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Determine version
         id: version
