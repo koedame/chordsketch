@@ -198,6 +198,31 @@ runs:
         TAURI_SIGNING_PRIVATE_KEY: ${{ inputs.tauri-signing-private-key }}
         TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ inputs.tauri-signing-private-key-password }}
       run: |
+        # Unset any signing-related env vars that the caller passed
+        # as empty strings. GitHub Actions YAML has no way to
+        # conditionally drop a key from a step's `env:` block, so
+        # passing `APPLE_CERTIFICATE: ""` (the default when the
+        # PR-smoke caller does not wire up the secret) still puts
+        # the variable into `cargo tauri build`'s environment — at
+        # which point Tauri's bundler treats the empty value as
+        # "certificate supplied, import it" and calls
+        # `security import`, which fails with "One or more
+        # parameters passed to a function were not valid; failed to
+        # import keychain certificate". Unsetting empty values here
+        # restores the pre-composite behaviour where those env vars
+        # were simply absent on the PR-smoke path, letting Tauri
+        # fall back to unsigned bundles.
+        for v in APPLE_SIGNING_IDENTITY APPLE_CERTIFICATE \
+                 APPLE_CERTIFICATE_PASSWORD APPLE_ID \
+                 APPLE_PASSWORD APPLE_TEAM_ID \
+                 WINDOWS_CERTIFICATE WINDOWS_CERTIFICATE_PASSWORD \
+                 TAURI_SIGNING_PRIVATE_KEY \
+                 TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
+          if [ -z "${!v:-}" ]; then
+            unset "$v"
+          fi
+        done
+
         if [ -n "$BUILD_CONFIG" ]; then
           cargo tauri build --target "$TARGET" -c "$BUILD_CONFIG"
         else
