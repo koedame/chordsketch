@@ -336,7 +336,7 @@ def load_desktop_versions(repo_root: Path) -> list[Source]:
         match = re.search(r'"version"\s*:\s*"([^"]+)"', text)
         if match is None:
             raise SystemExit(
-                "apps/desktop/src-tauri/tauri.conf.json: no version field found"
+                f"{tauri_conf}: no version field found"
             )
         sources.append(
             Source(
