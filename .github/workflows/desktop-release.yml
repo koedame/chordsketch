@@ -579,22 +579,45 @@ jobs:
           # a dedicated PAT.
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git clone --depth=1 \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-            --branch desktop-updater-manifest \
-            manifest-repo 2>/dev/null || {
+
+          # Probe whether the publishing branch exists before choosing
+          # between the clone path and the orphan-bootstrap path.
+          # `git ls-remote --exit-code --heads` returns 2 iff the ref
+          # does not exist, 0 when it does, and a non-2 non-zero on
+          # auth/network failures. Bootstrapping only on the explicit
+          # "branch not found" signal prevents a transient network
+          # error from clobbering an already-published branch's
+          # history by running `--orphan` + `git rm -rf .` against it.
+          REMOTE_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          set +e
+          git ls-remote --exit-code --heads "$REMOTE_URL" desktop-updater-manifest >/dev/null
+          ls_remote_rc=$?
+          set -e
+          case "$ls_remote_rc" in
+            0)
+              git clone --depth=1 "$REMOTE_URL" \
+                --branch desktop-updater-manifest \
+                manifest-repo
+              ;;
+            2)
               # Branch doesn't exist yet — bootstrap it as an orphan
               # branch containing only `latest.json`. The
               # --orphan + rm -rf + commit dance is the canonical
               # git idiom for a no-history publishing branch.
-              git clone --depth=1 \
-                "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-                manifest-repo
+              git clone --depth=1 "$REMOTE_URL" manifest-repo
               cd manifest-repo
               git checkout --orphan desktop-updater-manifest
               git rm -rf .
               cd ..
-            }
+              ;;
+            *)
+              echo "ERROR: git ls-remote failed with exit code ${ls_remote_rc}" >&2
+              echo "       This is not a 'branch not found' failure" \
+                   "(exit 2); refusing to fall through to the orphan" \
+                   "bootstrap path. Check network / auth / permissions." >&2
+              exit "$ls_remote_rc"
+              ;;
+          esac
           cp sigs/latest.json manifest-repo/latest.json
           cd manifest-repo
           git add latest.json

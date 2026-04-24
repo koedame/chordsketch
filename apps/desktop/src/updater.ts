@@ -119,7 +119,16 @@ export async function checkForUpdates(
     return;
   }
 
-  const summary = formatReleaseNotes(update.body ?? '');
+  // `update.body` is empty when the GitHub release has no description
+  // (e.g. a hotfix tag that skipped --generate-notes, or a release where
+  // the body was manually cleared). `formatReleaseNotes('')` returns ''
+  // and the dialog then renders two consecutive blank lines between
+  // the version line and the "Install now?" question, which reads as
+  // a broken prompt. Substitute a neutral fallback before formatting.
+  const rawBody = update.body?.trim()
+    ? update.body
+    : 'See the GitHub release page for details.';
+  const summary = formatReleaseNotes(rawBody);
   const confirmed = await ask(
     `ChordSketch ${update.version} is available.\n\n${summary}\n\nInstall now?`,
     {
