@@ -212,16 +212,41 @@ runs:
         # restores the pre-composite behaviour where those env vars
         # were simply absent on the PR-smoke path, letting Tauri
         # fall back to unsigned bundles.
+        #
+        # EXCEPTION: `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` is NOT in
+        # this unset list. The Tauri updater-key generated with
+        # `cargo tauri signer generate --ci --password ""` is
+        # encrypted with an empty-string password (the comment line
+        # reads "rsign encrypted secret key" regardless). At sign
+        # time, Tauri reads the password env var and treats
+        # "unset" as "no password supplied, refuse to decrypt" —
+        # which throws "Wrong password for that key" even though
+        # empty-string is the right password. Leaving the env var
+        # set to the empty string (its `inputs.*` default) lets
+        # Tauri match "empty string password supplied" ↔
+        # "empty string password used at generate". The other eight
+        # vars stay in the unset list because their consumers (Apple
+        # `security import`, Windows Authenticode, Tauri's Apple
+        # notary flow) all interpret empty-string as "configured but
+        # invalid", not as "intentionally blank".
         for v in APPLE_SIGNING_IDENTITY APPLE_CERTIFICATE \
                  APPLE_CERTIFICATE_PASSWORD APPLE_ID \
                  APPLE_PASSWORD APPLE_TEAM_ID \
                  WINDOWS_CERTIFICATE WINDOWS_CERTIFICATE_PASSWORD \
-                 TAURI_SIGNING_PRIVATE_KEY \
-                 TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
+                 TAURI_SIGNING_PRIVATE_KEY; do
           if [ -z "${!v:-}" ]; then
             unset "$v"
           fi
         done
+
+        # If the updater private key is absent (PR-smoke path,
+        # where `TAURI_SIGNING_PRIVATE_KEY` was just unset above),
+        # the password env var is dead weight — also unset it so
+        # Tauri doesn't ingest a phantom password against a
+        # non-existent key.
+        if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+          unset TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+        fi
 
         if [ -n "$BUILD_CONFIG" ]; then
           cargo tauri build --target "$TARGET" -c "$BUILD_CONFIG"
