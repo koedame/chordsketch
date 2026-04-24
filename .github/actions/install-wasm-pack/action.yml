@@ -3,13 +3,14 @@ description: >
   Install a pinned version of `wasm-pack` via `taiki-e/install-action`.
   The version lives here rather than repeated across every consumer
   workflow so a bump in one place does not leave five others behind.
-  Bump `DEFAULT_VERSION` below when a new `wasm-pack` release is
-  wanted; every consumer picks it up on the next CI run (#2225).
+  Bump the version value in the `tool:` expression below when a new
+  `wasm-pack` release is wanted; every consumer picks it up on the
+  next CI run (#2225).
 inputs:
   version:
     description: >
       Override the pinned `wasm-pack` version. Empty by default,
-      which selects the composite's `DEFAULT_VERSION` constant.
+      which uses the composite's hardcoded fallback value.
       Callers SHOULD leave this empty so the repo ships one
       canonical version; set it only when a workflow genuinely
       needs a different cut (e.g. testing a release candidate).
