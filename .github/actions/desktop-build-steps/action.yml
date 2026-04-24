@@ -1,0 +1,230 @@
+name: "Desktop bundle build steps"
+description: >
+  Shared install + `cargo tauri build` pipeline for the desktop app,
+  consumed by both `desktop-build.yml` (PR-time smoke across four
+  matrix cells) and `desktop-release.yml` (tag-triggered signed
+  bundles). Covers everything from "Rust toolchain installed" through
+  "native installer written to `target/<triple>/release/bundle/`";
+  callers run their own artefact-collection + upload steps
+  afterwards because the upload shape differs between the two
+  workflows (PR smoke pairs names with matrix-label directories;
+  release flattens into one `release/` directory for `gh release`).
+  Tracked in #2223; rationale for consolidating in
+  `.claude/rules/fix-propagation.md` §Sister-Site Groups.
+inputs:
+  target:
+    description: >
+      Rust target triple (e.g. `x86_64-unknown-linux-gnu`). The
+      toolchain installs this target and `wasm32-unknown-unknown`;
+      `cargo tauri build --target ${target}` uses the value directly.
+    required: true
+  enable-cache:
+    description: >
+      Install `Swatinem/rust-cache` when `"true"`. The CLI
+      `release.yml` and the desktop `desktop-release.yml` both set
+      this to `"false"` per `.claude/rules/ci-parallelization.md` §2
+      (infrequent workflows — cache expires before the next run).
+      PR-smoke callers (`desktop-build.yml`) leave the default
+      `"true"`.
+    required: false
+    default: "true"
+  cache-key-prefix:
+    description: >
+      Prefix for the `rust-cache` `shared-key`; the target triple is
+      appended so the four matrix cells do not thrash. Ignored when
+      `enable-cache` is `"false"`.
+    required: false
+    default: "desktop-build"
+  build-config:
+    description: >
+      Optional JSON blob forwarded to `cargo tauri build -c <...>`.
+      Leave empty for the default build. `desktop-release.yml` passes
+      `{"bundle":{"createUpdaterArtifacts":true}}` to produce the
+      updater `.sig` files (#2076); baking that into
+      `tauri.conf.json` would break PR builds because
+      `TAURI_SIGNING_PRIVATE_KEY` is not available on PR runs.
+    required: false
+    default: ""
+  # --- Signing pass-throughs (populated from repo secrets at the
+  # caller level). All default to empty so the PR-smoke caller
+  # doesn't need to enumerate them. Tauri's build step reads these
+  # env vars directly when present; absent values produce unsigned
+  # bundles, matching the pre-#2075 state.
+  apple-signing-identity:
+    required: false
+    default: ""
+  apple-certificate:
+    required: false
+    default: ""
+  apple-certificate-password:
+    required: false
+    default: ""
+  apple-id:
+    required: false
+    default: ""
+  apple-password:
+    required: false
+    default: ""
+  apple-team-id:
+    required: false
+    default: ""
+  windows-certificate:
+    required: false
+    default: ""
+  windows-certificate-password:
+    required: false
+    default: ""
+  tauri-signing-private-key:
+    required: false
+    default: ""
+  tauri-signing-private-key-password:
+    required: false
+    default: ""
+runs:
+  using: "composite"
+  steps:
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      with:
+        targets: wasm32-unknown-unknown, ${{ inputs.target }}
+
+    - name: Configure rust-cache
+      if: inputs.enable-cache == 'true'
+      uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      with:
+        # Target-triple in the shared-key so the four matrix
+        # cells do not thrash the cache against each other (per
+        # the worked example in
+        # `.claude/rules/ci-parallelization.md` §2).
+        # `apps/desktop/src-tauri` inherits the workspace target
+        # dir from the root `Cargo.toml`, so the default
+        # `workspaces: . -> target` is correct — no override.
+        shared-key: ${{ inputs.cache-key-prefix }}-${{ inputs.target }}
+
+    - name: Install Tauri system dependencies (Linux)
+      # `runner.os` is a stable context value ('Linux' / 'macOS' /
+      # 'Windows') independent of the mutable GitHub runner label
+      # alias — survives an Ubuntu LTS bump (#2220).
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          libwebkit2gtk-4.1-dev \
+          libgtk-3-dev \
+          libayatana-appindicator3-dev \
+          librsvg2-dev \
+          build-essential \
+          pkg-config \
+          file
+
+    - name: Install wasm-pack
+      uses: ./.github/actions/install-wasm-pack
+
+    - name: Install Tauri CLI
+      # `taiki-e/install-action` prebuilds the Tauri CLI so this
+      # finishes in seconds, vs. ~2 min for `cargo install`. Pin
+      # to a concrete version because `install-action` does NOT
+      # accept semver operators (caret/tilde) — see the upstream
+      # error "install-action does not support semver operators:
+      # '^2'". Bump this line when Tauri CLI cuts a new release
+      # we want to pick up.
+      uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2
+      with:
+        tool: tauri-cli@2.10.1
+
+    - name: Setup Node.js
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+      with:
+        node-version: "22"
+        cache: npm
+        cache-dependency-path: |
+          apps/desktop/package-lock.json
+          packages/tree-sitter-chordpro/package-lock.json
+
+    - name: Build @chordsketch/wasm (dual-package layout)
+      # Produces `packages/npm/web/chordsketch_wasm.js` — the file
+      # Vite's alias in `apps/desktop/vite.config.ts` resolves to.
+      # `packages/npm` carries no node_modules, so no `npm ci` is
+      # needed here; `scripts/build.mjs` shells out to wasm-pack
+      # directly.
+      shell: bash
+      run: npm run build
+      working-directory: packages/npm
+
+    - name: Install tree-sitter-chordpro grammar deps
+      # `apps/desktop`'s `prebuild` hook (run transitively by
+      # `cargo tauri build`'s `beforeBuildCommand`) invokes
+      # `npx tree-sitter build --wasm` against this package; the
+      # CLI is a devDependency of `packages/tree-sitter-chordpro`.
+      shell: bash
+      run: npm ci
+      working-directory: packages/tree-sitter-chordpro
+
+    - name: Install desktop frontend deps
+      shell: bash
+      run: npm ci
+      working-directory: apps/desktop
+
+    - name: Build Tauri bundle
+      # `cargo tauri build` fires `beforeBuildCommand: "npm run
+      # build"` from `tauri.conf.json`, which in turn runs the
+      # `prebuild` hook (tree-sitter wasm build + web-tree-sitter
+      # runtime copy) and then `tsc && vite build`. Afterwards
+      # the Rust release build packages the app into platform-
+      # native installers under
+      # `apps/desktop/src-tauri/target/release/bundle/`.
+      #
+      # The `-c` flag is forwarded from `inputs.build-config`
+      # when non-empty; an empty input falls through to the
+      # default build. See `desktop-release.yml` for the updater
+      # artefact case.
+      shell: bash
+      working-directory: apps/desktop/src-tauri
+      env:
+        BUILD_CONFIG: ${{ inputs.build-config }}
+        TARGET: ${{ inputs.target }}
+        # Tauri's build step reads these env vars when present;
+        # empty defaults produce unsigned bundles (the pre-#2075
+        # state).
+        APPLE_SIGNING_IDENTITY: ${{ inputs.apple-signing-identity }}
+        APPLE_CERTIFICATE: ${{ inputs.apple-certificate }}
+        APPLE_CERTIFICATE_PASSWORD: ${{ inputs.apple-certificate-password }}
+        APPLE_ID: ${{ inputs.apple-id }}
+        APPLE_PASSWORD: ${{ inputs.apple-password }}
+        APPLE_TEAM_ID: ${{ inputs.apple-team-id }}
+        WINDOWS_CERTIFICATE: ${{ inputs.windows-certificate }}
+        WINDOWS_CERTIFICATE_PASSWORD: ${{ inputs.windows-certificate-password }}
+        TAURI_SIGNING_PRIVATE_KEY: ${{ inputs.tauri-signing-private-key }}
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ inputs.tauri-signing-private-key-password }}
+      run: |
+        # Unset any signing-related env vars that the caller passed
+        # as empty strings. GitHub Actions YAML has no way to
+        # conditionally drop a key from a step's `env:` block, so
+        # passing `APPLE_CERTIFICATE: ""` (the default when the
+        # PR-smoke caller does not wire up the secret) still puts
+        # the variable into `cargo tauri build`'s environment — at
+        # which point Tauri's bundler treats the empty value as
+        # "certificate supplied, import it" and calls
+        # `security import`, which fails with "One or more
+        # parameters passed to a function were not valid; failed to
+        # import keychain certificate". Unsetting empty values here
+        # restores the pre-composite behaviour where those env vars
+        # were simply absent on the PR-smoke path, letting Tauri
+        # fall back to unsigned bundles.
+        for v in APPLE_SIGNING_IDENTITY APPLE_CERTIFICATE \
+                 APPLE_CERTIFICATE_PASSWORD APPLE_ID \
+                 APPLE_PASSWORD APPLE_TEAM_ID \
+                 WINDOWS_CERTIFICATE WINDOWS_CERTIFICATE_PASSWORD \
+                 TAURI_SIGNING_PRIVATE_KEY \
+                 TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
+          if [ -z "${!v:-}" ]; then
+            unset "$v"
+          fi
+        done
+
+        if [ -n "$BUILD_CONFIG" ]; then
+          cargo tauri build --target "$TARGET" -c "$BUILD_CONFIG"
+        else
+          cargo tauri build --target "$TARGET"
+        fi
