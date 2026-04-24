@@ -457,6 +457,15 @@ jobs:
           VERSION: ${{ steps.tag.outputs.version }}
           TAG: ${{ steps.tag.outputs.tag }}
           REPO: ${{ github.repository }}
+          # `gh release view` inside this step reads the release
+          # body the `release` job just created. Previously this
+          # was set in a second `env:` block at the bottom of the
+          # step, which GitHub Actions rejects as duplicate-key —
+          # Python's PyYAML tolerates it (second key overwrites),
+          # so `python3 -c 'yaml.safe_load(...)'` passes locally
+          # while `actions/workflows/.../dispatches` returns
+          # `HTTP 422: 'env' is already defined`. Merged here.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -513,8 +522,6 @@ jobs:
           # broken template expansion cannot ship.
           jq . latest.json > /dev/null
           cat latest.json
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish latest.json to desktop-updater-manifest branch
         env:
