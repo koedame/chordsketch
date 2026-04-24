@@ -350,7 +350,7 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
   transposeDecrementBtn.type = 'button';
   transposeDecrementBtn.className = 'transpose-step';
   transposeDecrementBtn.textContent = '−'; // MINUS SIGN (matches `<Transpose>`)
-  transposeDecrementBtn.setAttribute('aria-label', 'Decrease transpose by 1 semitone');
+  transposeDecrementBtn.setAttribute('aria-label', 'Transpose down one semitone');
 
   const transposeInput = document.createElement('input');
   transposeInput.type = 'number';
@@ -364,7 +364,7 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
   transposeIncrementBtn.type = 'button';
   transposeIncrementBtn.className = 'transpose-step';
   transposeIncrementBtn.textContent = '+';
-  transposeIncrementBtn.setAttribute('aria-label', 'Increase transpose by 1 semitone');
+  transposeIncrementBtn.setAttribute('aria-label', 'Transpose up one semitone');
 
   const transposeResetBtn = document.createElement('button');
   transposeResetBtn.type = 'button';
@@ -372,7 +372,7 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
   // visibility is kept in sync by `updateTransposeControls` below.
   transposeResetBtn.className = 'transpose-reset hidden';
   transposeResetBtn.textContent = 'Reset';
-  transposeResetBtn.setAttribute('aria-label', 'Reset transpose to 0');
+  transposeResetBtn.setAttribute('aria-label', 'Reset transposition to zero');
 
   // Visually-hidden live region that announces the current offset
   // on every value change. Matches the role of the `<output
@@ -591,12 +591,33 @@ export async function mountChordSketchUi(
   applySplitRatio(splitRatio);
 
   let splitterDragActive = false;
+  // Snapshot of the split ratio at drag start so `pointercancel`
+  // can revert mid-drag movement rather than persist a partial
+  // position. See #2198 for the cancel-vs-up split.
+  let splitRatioBeforeDrag: number | null = null;
+
+  // Shared cleanup for the states `onSplitterPointerDown` mutates —
+  // pointer capture, the `dragging` CSS class, and the global
+  // `user-select: none`. Hoisted out so `destroy()` can run it if
+  // the host tears down the widget while a drag is in progress;
+  // skipping this path left `user-select: none` stuck on `<body>`
+  // (#2196).
+  const clearSplitterDragState = (pointerId?: number): void => {
+    splitterDragActive = false;
+    splitRatioBeforeDrag = null;
+    if (pointerId !== undefined && splitter.hasPointerCapture(pointerId)) {
+      splitter.releasePointerCapture(pointerId);
+    }
+    splitter.classList.remove('dragging');
+    document.body.style.userSelect = '';
+  };
 
   const onSplitterPointerDown = (ev: PointerEvent): void => {
     // Only primary-button drags (mouse button 0 / touch / pen).
     if (ev.button !== 0) return;
     ev.preventDefault();
     splitterDragActive = true;
+    splitRatioBeforeDrag = splitRatio;
     splitter.setPointerCapture(ev.pointerId);
     splitter.classList.add('dragging');
     // Disable text selection on the document while dragging so
@@ -615,12 +636,24 @@ export async function mountChordSketchUi(
 
   const onSplitterPointerUp = (ev: PointerEvent): void => {
     if (!splitterDragActive) return;
-    splitterDragActive = false;
-    if (splitter.hasPointerCapture(ev.pointerId)) {
-      splitter.releasePointerCapture(ev.pointerId);
+    clearSplitterDragState(ev.pointerId);
+    persistSplitRatio();
+  };
+
+  // `pointercancel` fires when the browser interrupts a drag — a
+  // phone-call overlay, an iOS home gesture, an OS-level focus
+  // steal. The user did not release the pointer deliberately, so
+  // reverting to the pre-drag ratio matches the "cancel undoes the
+  // gesture" convention used elsewhere (#2198). Persist the
+  // restored (== previous) ratio so the layout survives the next
+  // reload even if this host session ends abruptly afterwards.
+  const onSplitterPointerCancel = (ev: PointerEvent): void => {
+    if (!splitterDragActive) return;
+    const restore = splitRatioBeforeDrag;
+    clearSplitterDragState(ev.pointerId);
+    if (restore !== null) {
+      applySplitRatio(restore);
     }
-    splitter.classList.remove('dragging');
-    document.body.style.userSelect = '';
     persistSplitRatio();
   };
 
@@ -840,7 +873,7 @@ export async function mountChordSketchUi(
   splitter.addEventListener('pointerdown', onSplitterPointerDown);
   splitter.addEventListener('pointermove', onSplitterPointerMove);
   splitter.addEventListener('pointerup', onSplitterPointerUp);
-  splitter.addEventListener('pointercancel', onSplitterPointerUp);
+  splitter.addEventListener('pointercancel', onSplitterPointerCancel);
   splitter.addEventListener('keydown', onSplitterKeyDown);
   downloadPdfBtn.addEventListener('click', downloadPdf);
 
@@ -865,9 +898,17 @@ export async function mountChordSketchUi(
       splitter.removeEventListener('pointerdown', onSplitterPointerDown);
       splitter.removeEventListener('pointermove', onSplitterPointerMove);
       splitter.removeEventListener('pointerup', onSplitterPointerUp);
-      splitter.removeEventListener('pointercancel', onSplitterPointerUp);
+      splitter.removeEventListener('pointercancel', onSplitterPointerCancel);
       splitter.removeEventListener('keydown', onSplitterKeyDown);
       downloadPdfBtn.removeEventListener('click', downloadPdf);
+      // If `destroy()` fires mid-drag (Tauri host switching tabs,
+      // Vite HMR replacement), the `pointerup`/`pointercancel`
+      // listeners we just removed will never fire — so the
+      // document-wide `user-select: none` and the `dragging` CSS
+      // class would otherwise stay stuck until the next mount.
+      // `clearSplitterDragState` is idempotent when no drag is in
+      // progress, so it is safe to call unconditionally (#2196).
+      clearSplitterDragState();
     },
     getChordPro(): string {
       return editor.getValue();
