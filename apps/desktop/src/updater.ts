@@ -64,16 +64,21 @@ export function setAutoUpdateOptOut(optOut: boolean): void {
  *
  * The `silent` mode is used for the 24-hour background re-check —
  * no dialog shown if the check itself fails, no "you're up to
- * date" confirmation. The `silent: false` mode is reserved for a
- * future menu-driven "Check for updates" action which has not yet
- * been wired into the native menu (#2199 tracks that surface).
+ * date" confirmation. The `silent: false` mode is used for a
+ * menu-driven "Check for updates now" action: it bypasses the
+ * opt-out preference so the user always gets feedback on an
+ * explicit click even if auto-checking is disabled. #2199 tracks
+ * the menu surface that calls this path.
  */
 export async function checkForUpdates(
   options: { silent?: boolean } = {},
 ): Promise<void> {
   const silent = options.silent ?? true;
 
-  if (isAutoUpdateOptedOut()) {
+  // Respect opt-out for background auto-checks (silent: true).
+  // An explicit user-triggered check (silent: false) bypasses this
+  // so "Check for updates now" works even when auto-update is off.
+  if (isAutoUpdateOptedOut() && silent) {
     return;
   }
 
