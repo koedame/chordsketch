@@ -83,11 +83,15 @@ PRs are automatically reviewed; **merging is always a human action**.
 
 1. **PR created** — CI runs (fmt, clippy, test, plus workflow-specific smoke jobs)
 2. **Auto-review** — Claude reviews with severity classification on CI success
-3. **Blocking findings** (High/Medium) — Claude pushes fix commits, delta review follows
-4. **Non-blocking findings** (Low/Nit) — issues created, merge not blocked
-5. **Ready for human merge** — when there are no blocking findings, Claude posts a
+3. **All findings, every severity, resolved in-PR** — Claude pushes fix commits
+   (High first, Nit last), CI re-runs, delta review iterates. Review bots do NOT
+   create follow-up issues for findings; the in-PR fix is the only path.
+4. **Convergence** — loop iterates until the delta review surfaces zero findings
+   (or the 3-iteration safety cap in `.claude/rules/pr-workflow.md` fires).
+5. **Ready for human merge** — when the review converges, Claude posts a
    "Ready for human merge" comment. A human inspects the **full check rollup** (not
-   just the required checks listed in branch protection) and performs the squash merge.
+   just the required checks listed in branch protection), verifies there are no
+   review-bot-authored issues still open against the PR, and performs the squash merge.
 
 All PRs are **squash-merged**. Branch protection requires CI to pass on HEAD. Bots do
 NOT run `gh pr merge` — see `.claude/rules/pr-workflow.md` for the rationale.

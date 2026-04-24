@@ -27,10 +27,13 @@ PRs are reviewed automatically; **merging is always a human action**.
    human intervention.
 
 Before merging, the author (or the human doing the merge) verifies there are no
-open GitHub Issues authored by a review bot during this PR's lifetime. If any
-exist, close them as part of the PR — either via a referencing fix commit or,
-for items judged genuinely out of scope after discussion, by closing as
-`not planned` with a justification that matches the PR body's "Deferred" entry.
+open GitHub Issues authored by a review bot during this PR's lifetime. Per
+step 5 this list should be empty; the check exists to catch rule violations —
+a review bot that still calls `gh issue create` despite the prompt update is a
+bug, not an expected flow. If any exist, close them as part of the PR —
+either via a referencing fix commit or, for items judged genuinely out of
+scope after discussion, by closing as `not planned` with a justification
+that matches the PR body's "Deferred" entry.
 
 ### Why in-PR resolution of every severity
 
@@ -45,11 +48,18 @@ The cost is a longer review cycle on each PR. The benefit is that merged PRs
 are actually finished, and the review-findings pool stays at zero instead of
 growing by ~3 items per PR.
 
-**Pre-rule backlog.** Review-bot-filed issues that predate this rule (e.g.
-most issues in the #2180–#2234 range that were filed by review agents or the
-auto-review Claude bot as "non-blocking follow-ups") are orphaned and do not
-need to be resolved before any specific PR merges. Fold them into the next
-relevant PR when natural, or close as `not planned` when stale.
+**Pre-rule backlog.** 38 open issues in the #2180–#2234 range predate this
+rule — most filed by review agents or the auto-review Claude bot as
+"non-blocking follow-ups" against PRs that have since merged. They are
+orphaned and do not need to be resolved before any specific PR merges.
+Fold them into the next relevant PR when natural, or close as `not
+planned` when stale.
+
+Recent issues against code paths that are *still* in active flight (for
+example, findings filed against a PR whose follow-up implementation is
+already underway) should be folded into that in-flight PR rather than
+orphaned — the rule's goal is that reviewer signal lands before context
+rots, and context is freshest while the code is still being edited.
 
 ### Why bots do not merge
 

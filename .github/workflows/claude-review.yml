@@ -108,7 +108,7 @@ jobs:
                 '|----------|------------|',
                 '| High | Security vulnerabilities, data corruption, crashes |',
                 '| Medium | Spec violations, logic bugs, incorrect output |',
-                '| Low | Defense-in-depth gaps, minor inconsistencies |',
+                '| Low | Defense-in-depth gaps, minor inconsistencies, portability |',
                 '| Nit | Style, naming, test coverage suggestions |',
                 '',
                 '## Actions',
