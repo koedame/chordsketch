@@ -10,9 +10,6 @@ on:
         required: true
         type: string
 
-env:
-  WASM_PACK_VERSION: "0.14.0"
-
 defaults:
   run:
     shell: bash
@@ -54,9 +51,7 @@ jobs:
       # noise. Do not add one back without updating the rule.
 
       - name: Install wasm-pack
-        uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2
-        with:
-          tool: wasm-pack@${{ env.WASM_PACK_VERSION }}
+        uses: ./.github/actions/install-wasm-pack
 
       - name: Build WASM (web target)
         run: wasm-pack build crates/wasm --release --target web --out-dir ../../packages/npm/web

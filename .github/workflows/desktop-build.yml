@@ -84,11 +84,6 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  # Canonical wasm-pack version used by `deploy-playground.yml`,
-  # `npm-publish.yml`, `wasm.yml`, and the `desktop-smoke` job in
-  # `ci.yml`. Kept in sync with those workflows so a bump in one
-  # place flags the rest.
-  WASM_PACK_VERSION: "0.14.0"
 
 jobs:
   build:
@@ -161,9 +156,7 @@ jobs:
             file
 
       - name: Install wasm-pack
-        uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2
-        with:
-          tool: wasm-pack@${{ env.WASM_PACK_VERSION }}
+        uses: ./.github/actions/install-wasm-pack
 
       - name: Install Tauri CLI
         # `taiki-e/install-action` prebuilds the Tauri CLI so this

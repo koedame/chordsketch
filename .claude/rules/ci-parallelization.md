@@ -63,6 +63,23 @@ specific target, to avoid cache thrashing across targets:
     shared-key: kotlin-x86_64-unknown-linux-gnu
 ```
 
+### Tool-version single source of truth
+
+Tool versions that multiple workflows pin SHOULD live in exactly one
+location so a bump in one place does not leave others behind. Current
+registered tools:
+
+| Tool | Canonical location |
+|---|---|
+| `wasm-pack` | `.github/actions/install-wasm-pack/action.yml`, `inputs.version` fallback (#2225) |
+
+New workflows that need `wasm-pack` MUST consume the composite action
+(`uses: ./.github/actions/install-wasm-pack`) rather than re-pinning the
+version in a workflow-level `env:` block. Adding a new tool to this list
+means: create a `.github/actions/install-<tool>/action.yml` composite,
+move every workflow's version pin into it, and append the entry here in
+the same PR.
+
 ## 3. Public-repo parallelism
 
 Because this repository is public, runner minutes are free. When a job performs
