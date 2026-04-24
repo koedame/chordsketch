@@ -9,16 +9,47 @@ PRs are reviewed automatically; **merging is always a human action**.
    workflow-specific smoke jobs).
 3. **Auto-review** — on CI success, `claude-review.yml` requests a Claude review
    with severity classification. Claude performs both code review and security review.
-4. **Blocking findings** (High, Medium) — Claude pushes fix commits directly.
-   CI re-runs, then a **delta review** examines only the fix commits.
-5. **Non-blocking findings** (Low, Nit) — Claude creates GitHub Issues. These do
-   **not** block the PR from merging.
-6. **Ready for human merge** — when there are no blocking findings, Claude posts a
-   single summary comment stating "Ready for human merge." Bots **never** run
-   `gh pr merge` in this repo. A human inspects the full check rollup (not just
-   the required checks listed in branch protection) and performs the squash merge.
+4. **All findings — every severity — resolved in-PR.** Every High / Medium / Low /
+   Nit finding produces a fix commit on the PR branch. CI re-runs, then a **delta
+   review** examines only the fix commits. The review loop iterates until the
+   delta review surfaces nothing further (or the safety cap in step 6 fires).
+5. **No follow-up issues for review findings.** Review bots MUST NOT call
+   `gh issue create` during review. If a finding is genuinely out of the PR's
+   scope (e.g. a pre-existing defect in an unrelated crate surfaced in passing),
+   the PR body's "Deferred" section records it with a one-line justification
+   and a link to an existing tracker. The default is "fix it in this PR."
+6. **Ready for human merge** — when the review converges to zero findings,
+   Claude posts a single summary comment stating "Ready for human merge." Bots
+   **never** run `gh pr merge` in this repo. A human inspects the full check
+   rollup (not just the required checks listed in branch protection) and
+   performs the squash merge.
 7. **Safety cap** — after 3 auto-review iterations, the process stops and waits for
    human intervention.
+
+Before merging, the author (or the human doing the merge) verifies there are no
+open GitHub Issues authored by a review bot during this PR's lifetime. If any
+exist, close them as part of the PR — either via a referencing fix commit or,
+for items judged genuinely out of scope after discussion, by closing as
+`not planned` with a justification that matches the PR body's "Deferred" entry.
+
+### Why in-PR resolution of every severity
+
+The previous rubric — Low/Nit → filed as issues and merge-not-blocked — created a
+backlog that reviewer signal never caught up to. Each filed issue reset the
+context for a future attempt: the reviewer's rationale, the surrounding diff,
+and the reviewer's mental model all had to be reconstructed from a short issue
+body weeks or months later. Fixing in-PR keeps the reviewer, author, and code
+co-located.
+
+The cost is a longer review cycle on each PR. The benefit is that merged PRs
+are actually finished, and the review-findings pool stays at zero instead of
+growing by ~3 items per PR.
+
+**Pre-rule backlog.** Review-bot-filed issues that predate this rule (e.g.
+most issues in the #2180–#2234 range that were filed by review agents or the
+auto-review Claude bot as "non-blocking follow-ups") are orphaned and do not
+need to be resolved before any specific PR merges. Fold them into the next
+relevant PR when natural, or close as `not planned` when stale.
 
 ### Why bots do not merge
 
@@ -87,12 +118,15 @@ the same way you would treat a `push:` directly to `main`.
 
 ### Severity Definitions
 
-| Severity | Blocks PR/Phase | Definition |
-|----------|-----------------|------------|
-| High | Yes | Security vulnerabilities, data corruption, crashes |
-| Medium | Yes | Spec violations, logic bugs, incorrect output |
-| Low | No | Defense-in-depth gaps, minor inconsistencies, portability |
-| Nit | No | Style, naming, test coverage suggestions |
+Severity orders the fix commits (High first, Nit last) but NOT whether a
+finding merges. Every severity is resolved in-PR per step 4 above.
+
+| Severity | Definition |
+|----------|------------|
+| High | Security vulnerabilities, data corruption, crashes |
+| Medium | Spec violations, logic bugs, incorrect output |
+| Low | Defense-in-depth gaps, minor inconsistencies, portability |
+| Nit | Style, naming, test coverage suggestions |
 
 ### Delta Review
 
@@ -101,9 +135,16 @@ must only examine the new commits (the fix diff), not re-review the entire PR. T
 ensures convergence: fix diffs are small and produce fewer findings, trending toward
 zero.
 
-Previously-reviewed code that was not flagged is considered accepted. If a reviewer
-later discovers a blocking issue in previously-accepted code, it should be filed as a
-separate issue — not raised in the delta review.
+Previously-reviewed code that was not flagged is considered accepted. A review
+that delivered its verdict of "nothing outstanding" at iteration N cannot revive
+findings in the same region at iteration N+1; if a defect was truly missed, it
+goes into the next PR that touches the area, not the current delta review.
+
+The in-PR-resolution rule (step 4) applies equally to delta review: if the
+delta review surfaces a Nit that the prior iteration missed, the Nit gets a
+fix commit too. The review loop keeps iterating until the delta review is
+empty. This is the convergence criterion — not "no blocking findings" but
+"no findings at all".
 
 ### PR Formatting and Commit Messages
 
