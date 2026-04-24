@@ -28,8 +28,36 @@ defaults:
     shell: bash
 
 jobs:
+  detect-tag-type:
+    name: Detect tag type (CLI vs desktop)
+    # `release.types=[published]` does not offer a tag-pattern
+    # filter, so desktop-v* tags (owned by
+    # `desktop-release.yml`, #2078) would fan out through every
+    # CLI-targeted job below and fail `validate-release-tag`
+    # against the CLI tag format. Compute one boolean output
+    # here and gate every downstream job on it. Added in #2079
+    # when the desktop release namespace was introduced.
+    runs-on: ubuntu-latest
+    outputs:
+      is-desktop: ${{ steps.check.outputs.is-desktop }}
+    steps:
+      - name: Inspect tag
+        id: check
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_TAG" == desktop-v* ]] || [[ "$INPUT_TAG" == desktop-v* ]]; then
+            echo "is-desktop=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-desktop=false" >> "$GITHUB_OUTPUT"
+          fi
+
   update-homebrew:
     name: Update Homebrew formula
+    if: needs.detect-tag-type.outputs.is-desktop != 'true'
+    needs: [detect-tag-type]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -121,6 +149,8 @@ jobs:
 
   update-scoop:
     name: Update Scoop manifest
+    if: needs.detect-tag-type.outputs.is-desktop != 'true'
+    needs: [detect-tag-type]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -192,6 +222,10 @@ jobs:
 
   update-chocolatey:
     name: Update Chocolatey package
+    # See `update-homebrew` for the desktop-tag skip rationale.
+    if: >-
+      !startsWith(github.event.release.tag_name, 'desktop-v') &&
+      !startsWith(inputs.tag, 'desktop-v')
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -276,6 +310,8 @@ jobs:
 
   update-snap:
     name: Update Snap package
+    if: needs.detect-tag-type.outputs.is-desktop != 'true'
+    needs: [detect-tag-type]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -348,6 +384,8 @@ jobs:
 
   update-cocoapods:
     name: Update CocoaPods podspec
+    if: needs.detect-tag-type.outputs.is-desktop != 'true'
+    needs: [detect-tag-type]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -397,6 +435,8 @@ jobs:
 
   update-aur:
     name: Update AUR package
+    if: needs.detect-tag-type.outputs.is-desktop != 'true'
+    needs: [detect-tag-type]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -511,6 +551,8 @@ jobs:
 
   update-swift-package:
     name: Update Swift Package.swift
+    if: needs.detect-tag-type.outputs.is-desktop != 'true'
+    needs: [detect-tag-type]
     runs-on: ubuntu-latest
     # Note: this job pushes a branch and opens a PR. The default
     # GITHUB_TOKEN cannot trigger downstream workflows on pushes / PR
@@ -723,6 +765,8 @@ jobs:
 
   update-flatpak:
     name: Update Flathub manifest
+    if: needs.detect-tag-type.outputs.is-desktop != 'true'
+    needs: [detect-tag-type]
     runs-on: ubuntu-latest
     # Prerequisites: the Flathub app repo (flathub/me.koeda.chordsketch)
     # must exist before this job can run. Unlike AUR or Homebrew, Flathub

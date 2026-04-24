@@ -63,6 +63,14 @@ brew tap koedame/tap
 brew install chordsketch
 ```
 
+The Homebrew tap also ships a **Cask** for the ChordSketch
+desktop app (`.app`). See [Desktop application](#desktop-application)
+below for the install snippet and post-install quarantine-flag
+step. The cask is kept in its own section (not under
+`## Installation`) until the first `desktop-v*` release ships
+the DMG to the tap, at which point [#2230](https://github.com/koedame/chordsketch/issues/2230)
+will move it here and add `readme-smoke` coverage.
+
 ### Scoop (Windows)
 
 ```bash
@@ -116,6 +124,43 @@ git clone https://github.com/koedame/chordsketch.git
 cd chordsketch
 cargo install --path crates/cli
 ```
+
+## Desktop application
+
+ChordSketch also ships a native desktop editor (Tauri v2) with
+live ChordPro preview, syntax highlighting, transpose, file
+open/save, and PDF / HTML export.
+
+Once the first `desktop-v*` release ships, install via the
+Homebrew Cask in `koedame/tap`:
+
+```sh
+brew tap koedame/tap
+brew install --cask chordsketch
+```
+
+The cask installs `ChordSketch.app` into `/Applications/`.
+Until [#2075](https://github.com/koedame/chordsketch/issues/2075)
+lands Apple Developer ID signing + notarization, the bundle is
+unsigned; after installation clear the Gatekeeper quarantine
+attribute:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/ChordSketch.app
+```
+
+The cask's `caveats` block repeats this step on install so
+users do not need to remember the URL.
+
+> These two snippets live in `## Desktop application` (not
+> `## Installation`) on purpose. The
+> [`readme-sync.md`](.claude/rules/readme-sync.md) rule couples
+> every `## Installation` command to a smoke job in
+> `.github/workflows/readme-smoke.yml`, and the desktop cask
+> cannot be smoke-installed until the first `desktop-v*` tag
+> publishes the DMG. [#2230](https://github.com/koedame/chordsketch/issues/2230)
+> tracks moving the snippets up and adding cask-install smoke
+> coverage once the cask goes live.
 
 ## Usage
 

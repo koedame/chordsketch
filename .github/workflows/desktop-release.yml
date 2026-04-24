@@ -290,3 +290,103 @@ jobs:
             --generate-notes \
             --verify-tag \
             release/*
+
+  update-cask:
+    name: Update Homebrew Cask
+    # Fans out the `brew install --cask chordsketch` path (#2079).
+    # Clones the existing `koedame/homebrew-tap` (shared with the
+    # CLI formula under `Formula/chordsketch.rb`), writes the
+    # generated cask to `Casks/chordsketch.rb`, and pushes. The
+    # token secret is shared with the CLI post-release flow.
+    needs: [release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Determine version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="$REF_NAME"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          # `desktop-v0.1.0` → `0.1.0`
+          echo "version=${TAG#desktop-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Re-validate tag format
+        # Same defense-in-depth as the `release` job — `needs:
+        # [release]` already serialises on a validated tag, but
+        # a future refactor could break that ordering.
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$TAG" | grep -Eq '^desktop-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
+            echo "Rejecting malformed desktop release tag: $TAG" >&2
+            exit 1
+          fi
+
+      - name: Download SHA256SUMS
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: gh release download "$TAG" -p SHA256SUMS
+
+      - name: Generate cask
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # The DMG filename pattern is determined by Tauri's
+          # bundle output: `<ProductName>_<version>_<arch>.dmg`
+          # where `<arch>` is `aarch64` or `x64` (NOT the rust
+          # triple). `SHA256SUMS` lists the base filename (no
+          # directory prefix), so a suffix grep is safe.
+          SHA_ARM=$(grep -E "_${VERSION}_aarch64\.dmg\$" SHA256SUMS | awk '{print $1}')
+          SHA_X64=$(grep -E "_${VERSION}_x64\.dmg\$" SHA256SUMS | awk '{print $1}')
+          for name in SHA_ARM SHA_X64; do
+            val="${!name}"
+            if [[ ! "$val" =~ ^[0-9a-fA-F]{64}$ ]]; then
+              echo "ERROR: missing or invalid SHA256 for ${name}: '${val}'" >&2
+              echo "SHA256SUMS contents:" >&2
+              cat SHA256SUMS >&2
+              exit 1
+            fi
+          done
+
+          sed \
+            -e "s/{{VERSION}}/${VERSION}/g" \
+            -e "s/{{SHA256_DMG_AARCH64_APPLE_DARWIN}}/${SHA_ARM}/g" \
+            -e "s/{{SHA256_DMG_X86_64_APPLE_DARWIN}}/${SHA_X64}/g" \
+            packaging/homebrew/chordsketch-desktop.rb.template > chordsketch.rb
+          cat chordsketch.rb
+
+      - name: Push to homebrew-tap
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Same credential-persistence trade-off as
+          # `post-release.yml` (#1086 comment there): the token
+          # embeds into `tap/.git/config`. Do NOT
+          # `actions/upload-artifact` the `tap/` directory.
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/koedame/homebrew-tap.git" tap
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p Casks
+          cp ../chordsketch.rb Casks/chordsketch.rb
+          git add Casks/chordsketch.rb
+          # `--allow-empty` tolerates the already-identical case
+          # (a re-run on the same tag), which keeps the
+          # workflow_dispatch idempotent.
+          git commit --allow-empty -m "Update chordsketch desktop cask to ${VERSION}"
+          git push
