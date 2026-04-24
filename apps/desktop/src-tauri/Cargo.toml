@@ -20,11 +20,15 @@ tauri-build = { version = "2", features = [] }
 chordsketch-chordpro = { path = "../../../crates/chordpro" }
 chordsketch-render-html = { path = "../../../crates/render-html" }
 chordsketch-render-pdf = { path = "../../../crates/render-pdf" }
-# `serde_json` is a transitive dep of tauri-plugin-updater whose
-# types `generate_context!` expands against. Declaring it here is
-# cosmetic (it would be in the graph anyway via the updater plugin),
-# but the macro expansion needs the crate name to resolve in the
-# current-crate root. Added alongside the updater plugin in #2076.
+# `tauri::generate_context!` emits
+# `::serde_json::from_str(...)` at the call site when
+# `bundle.createUpdaterArtifacts` / `plugins.updater` are present
+# in `tauri.conf.json`. `::serde_json` is the absolute-path form,
+# so the crate name must resolve in the binary-crate's own
+# dependency graph — empirically verified by removing the dep
+# and observing `E0433: cannot find 'serde_json' in the list of
+# imported crates` pointing at the `generate_context!()` call in
+# `main.rs`. Required since the plugins were added in #2076.
 serde_json = "1"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"

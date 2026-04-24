@@ -412,10 +412,20 @@ jobs:
     name: Publish Tauri updater manifest
     # Generates `latest.json` — the manifest the Tauri updater
     # plugin reads from `tauri.conf.json`'s `endpoints` entry — and
-    # uploads it to the release alongside the bundles. Each entry
-    # points at the format Tauri's updater actually consumes per
-    # platform (macOS: `.app.tar.gz`; Linux: `.AppImage`; Windows:
-    # `.exe`) and embeds the matching `.sig` signature.
+    # publishes it to the **`desktop-updater-manifest` branch** of
+    # this repo. Each entry points at the format Tauri's updater
+    # actually consumes per platform (macOS: `.app.tar.gz`; Linux:
+    # `.AppImage`; Windows: `.exe`) and embeds the matching `.sig`
+    # signature with its multi-line minisign frame preserved.
+    #
+    # Why a branch, not a release asset: `/releases/latest/download/`
+    # resolves to the repo-wide "Latest" release — which is the CLI
+    # (`v*`) release, not the desktop (`desktop-v*`) one, because
+    # the desktop pipeline intentionally omits `--latest` to avoid
+    # demoting CLI releases on the repo landing page. A branch-
+    # hosted manifest is stable (tag-independent), cheap to update
+    # (single git push), and well-supported by Tauri's updater
+    # (which just GETs the URL).
     #
     # If `TAURI_SIGNING_PRIVATE_KEY` is not set in repo secrets
     # (the pre-#2076 state), the `.sig` files never exist and this
@@ -493,75 +503,102 @@ jobs:
           # Each Tauri platform key uses a fixed arch suffix
           # (`aarch64` / `x86_64`) — NOT the rust triple — and the
           # URL points at the binary, not the `.sig` file.
-          declare -A SIG_OF URL_OF
+          #
+          # Per-platform signature bodies are read via `jq -Rs`,
+          # which preserves the full multi-line minisign frame
+          # (`untrusted comment`, signature, `trusted comment`,
+          # global signature). A flattened single-line form breaks
+          # the minisign parser on the client and every auto-update
+          # check fails signature verification. See PR #2235 review.
+          manifest_platforms=$(jq -n '{}')
           for platform in darwin-aarch64 darwin-x86_64 linux-x86_64 windows-x86_64; do
             case "$platform" in
-              darwin-aarch64)
-                suffix="aarch64.app.tar.gz"
-                ;;
-              darwin-x86_64)
-                suffix="x64.app.tar.gz"
-                ;;
-              linux-x86_64)
-                suffix="amd64.AppImage"
-                ;;
-              windows-x86_64)
-                suffix="x64-setup.exe"
-                ;;
+              darwin-aarch64) suffix="aarch64.app.tar.gz" ;;
+              darwin-x86_64)  suffix="x64.app.tar.gz" ;;
+              linux-x86_64)   suffix="amd64.AppImage" ;;
+              windows-x86_64) suffix="x64-setup.exe" ;;
             esac
-            sig_file=$(ls | grep -E "_${VERSION_RE}_${suffix}\.sig\$" | head -n1 || true)
+            sig_file=$(find . -maxdepth 1 -type f -name "*_${VERSION_RE}_${suffix}.sig" -printf '%f\n' | head -n1)
             if [ -z "$sig_file" ]; then
               echo "ERROR: missing signature for platform ${platform} (suffix ${suffix})" >&2
               exit 1
             fi
-            SIG_OF[$platform]=$(cat "$sig_file" | tr -d '\n')
-            URL_OF[$platform]="${BASE}/${sig_file%.sig}"
+            url="${BASE}/${sig_file%.sig}"
+            manifest_platforms=$(
+              jq --arg key "$platform" \
+                 --rawfile sig "$sig_file" \
+                 --arg url "$url" \
+                 '. + { ($key): { signature: $sig, url: $url } }' \
+                 <<<"$manifest_platforms"
+            )
           done
 
-          RELEASE_NOTES=$(gh release view "$TAG" --json body --jq .body | jq -Rs .)
-          PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          release_notes=$(gh release view "$TAG" --json body --jq .body)
+          pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-          cat > latest.json <<EOF
-          {
-            "version": "${VERSION}",
-            "notes": ${RELEASE_NOTES},
-            "pub_date": "${PUB_DATE}",
-            "platforms": {
-              "darwin-aarch64": {
-                "signature": "${SIG_OF[darwin-aarch64]}",
-                "url": "${URL_OF[darwin-aarch64]}"
-              },
-              "darwin-x86_64": {
-                "signature": "${SIG_OF[darwin-x86_64]}",
-                "url": "${URL_OF[darwin-x86_64]}"
-              },
-              "linux-x86_64": {
-                "signature": "${SIG_OF[linux-x86_64]}",
-                "url": "${URL_OF[linux-x86_64]}"
-              },
-              "windows-x86_64": {
-                "signature": "${SIG_OF[windows-x86_64]}",
-                "url": "${URL_OF[windows-x86_64]}"
-              }
-            }
-          }
-          EOF
+          jq -n \
+            --arg version "$VERSION" \
+            --arg notes "$release_notes" \
+            --arg pub_date "$pub_date" \
+            --argjson platforms "$manifest_platforms" \
+            '{ version: $version, notes: $notes, pub_date: $pub_date, platforms: $platforms }' \
+            > latest.json
 
-          # Validate JSON well-formedness before upload so a
-          # malformed manifest never lands on the release page
-          # (where clients would log parse errors with no way to
-          # fix forward short of re-tagging).
+          # Sanity: the Tauri updater client parses this document
+          # with `serde_json`; `jq .` rejects malformed JSON so a
+          # broken template expansion cannot ship.
           jq . latest.json > /dev/null
           cat latest.json
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload latest.json to release
+      - name: Publish latest.json to desktop-updater-manifest branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -euo pipefail
-          # `--clobber` so re-runs overwrite a stale manifest
-          # cleanly (the `--allow-empty` parallel in update-cask).
+          # The manifest lives on its own branch (`desktop-updater-manifest`)
+          # so the Tauri updater can GET a stable URL regardless of
+          # which release is marked "latest" on the repo. Reusing
+          # the `GITHUB_TOKEN` (which already has `contents: write`
+          # per the job-level `permissions:` above) avoids provisioning
+          # a dedicated PAT.
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git clone --depth=1 \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            --branch desktop-updater-manifest \
+            manifest-repo 2>/dev/null || {
+              # Branch doesn't exist yet — bootstrap it as an orphan
+              # branch containing only `latest.json`. The
+              # --orphan + rm -rf + commit dance is the canonical
+              # git idiom for a no-history publishing branch.
+              git clone --depth=1 \
+                "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+                manifest-repo
+              cd manifest-repo
+              git checkout --orphan desktop-updater-manifest
+              git rm -rf .
+              cd ..
+            }
+          cp sigs/latest.json manifest-repo/latest.json
+          cd manifest-repo
+          git add latest.json
+          # `--allow-empty` so re-running workflow_dispatch on a
+          # tag that produced an identical manifest still succeeds.
+          git commit --allow-empty \
+            -m "Publish updater manifest for ${TAG}"
+          git push origin desktop-updater-manifest
+
+      - name: Also upload latest.json to the release (convenience)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Duplicate the manifest as a release asset so maintainers
+          # inspecting a specific release can see the exact
+          # signature payloads without branch-checkout. The branch
+          # is the source of truth for the live updater endpoint.
           gh release upload "$TAG" sigs/latest.json --clobber

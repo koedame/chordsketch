@@ -100,6 +100,17 @@ export async function checkForUpdates(
     return;
   }
 
+  // Re-check the opt-out preference between `check()` resolving
+  // and the user-facing dialog: a check that started while the
+  // user was still opted-in can race against a subsequent toggle
+  // (`check()` takes ~1 s on a cold network). Without this
+  // guard, a user who opts out mid-check would still see the
+  // "Update available" prompt a beat later, which is the
+  // "confused user" failure mode L1 from PR #2235 review.
+  if (isAutoUpdateOptedOut()) {
+    return;
+  }
+
   const summary = formatReleaseNotes(update.body ?? '');
   const confirmed = await ask(
     `ChordSketch ${update.version} is available.\n\n${summary}\n\nInstall now?`,

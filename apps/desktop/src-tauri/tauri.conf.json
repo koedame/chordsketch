@@ -22,13 +22,13 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://github.com https://*.githubusercontent.com; frame-src 'self'"
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://raw.githubusercontent.com https://objects.githubusercontent.com https://release-assets.githubusercontent.com; frame-src 'self'"
     }
   },
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/koedame/chordsketch/releases/latest/download/latest.json"
+        "https://raw.githubusercontent.com/koedame/chordsketch/desktop-updater-manifest/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcxNTQwOTE1RDg2RjQzRTIKUldUaVEyL1lGUWxVY1htOWh2ZFNQejJoSkdYZEc1YVp2SUd4V1diOTVVK2pnS2FudFJkL3AvYkwK"
     }
@@ -39,6 +39,7 @@
     "category": "Music",
     "shortDescription": "ChordPro editor",
     "longDescription": "ChordSketch is a ChordPro editor with live preview, transpose, and PDF export.",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

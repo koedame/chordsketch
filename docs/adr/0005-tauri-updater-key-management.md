@@ -55,8 +55,10 @@ Threat paths and their outcomes:
 | Threat | No password | With password |
 |---|---|---|
 | GitHub Actions `secrets:` read by a compromised workflow step | Attacker gets private key, can forge updates | Attacker gets password-protected key + env-passed password → same outcome |
-| Repo secret accidentally logged to a public CI output | Key leaks as plaintext minisign base64 | Key leaks as password-protected minisign base64; attacker needs the separate password secret too |
+| Key material exfiltrated via workflow artefact upload or copy to `$GITHUB_WORKSPACE` and then leaked | Key is immediately usable | Attacker still needs the separate password secret; password adds real defense here |
 | Maintainer laptop compromise | N/A (key lives only in GitHub) | N/A (same) |
+
+(Note: GitHub Actions automatically scrubs secret values from public log output, so the "secret printed to log" threat is mitigated by the platform. The realistic residual path is an artefact or file-system write that copies the raw secret into a reviewable location, which is what the password would guard against.)
 
 In practice, GitHub Secrets are the actual trust boundary. Both
 `TAURI_SIGNING_PRIVATE_KEY` and the password secret ride the same
