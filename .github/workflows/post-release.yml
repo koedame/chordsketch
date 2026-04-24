@@ -222,10 +222,8 @@ jobs:
 
   update-chocolatey:
     name: Update Chocolatey package
-    # See `update-homebrew` for the desktop-tag skip rationale.
-    if: >-
-      !startsWith(github.event.release.tag_name, 'desktop-v') &&
-      !startsWith(inputs.tag, 'desktop-v')
+    if: needs.detect-tag-type.outputs.is-desktop != 'true'
+    needs: [detect-tag-type]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

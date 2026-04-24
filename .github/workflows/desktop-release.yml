@@ -349,8 +349,15 @@ jobs:
           # where `<arch>` is `aarch64` or `x64` (NOT the rust
           # triple). `SHA256SUMS` lists the base filename (no
           # directory prefix), so a suffix grep is safe.
-          SHA_ARM=$(grep -E "_${VERSION}_aarch64\.dmg\$" SHA256SUMS | awk '{print $1}')
-          SHA_X64=$(grep -E "_${VERSION}_x64\.dmg\$" SHA256SUMS | awk '{print $1}')
+          #
+          # Pre-escape VERSION's dots so the grep regex matches
+          # literal version numbers, not regex wildcards — a
+          # hypothetical `0.1.0` that also matched `0X1Y0` would
+          # silently over-match if two DMGs ever coexisted in the
+          # same `SHA256SUMS` file.
+          VERSION_RE=$(printf '%s' "$VERSION" | sed 's/\./\\./g')
+          SHA_ARM=$(grep -E "_${VERSION_RE}_aarch64\.dmg\$" SHA256SUMS | awk '{print $1}')
+          SHA_X64=$(grep -E "_${VERSION_RE}_x64\.dmg\$" SHA256SUMS | awk '{print $1}')
           for name in SHA_ARM SHA_X64; do
             val="${!name}"
             if [[ ! "$val" =~ ^[0-9a-fA-F]{64}$ ]]; then

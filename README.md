@@ -134,23 +134,26 @@ open/save, and PDF / HTML export.
 Once the first `desktop-v*` release ships, install via the
 Homebrew Cask in `koedame/tap`:
 
-```sh
+```bash
 brew tap koedame/tap
 brew install --cask chordsketch
 ```
 
 The cask installs `ChordSketch.app` into `/Applications/`.
-Until [#2075](https://github.com/koedame/chordsketch/issues/2075)
-lands Apple Developer ID signing + notarization, the bundle is
-unsigned; after installation clear the Gatekeeper quarantine
-attribute:
+Homebrew automatically clears the Gatekeeper quarantine flag
+during install, so the app launches directly.
 
-```sh
+If you instead download the `.dmg` directly from a GitHub
+Release (bypassing Homebrew), macOS Gatekeeper will block the
+unsigned bundle on first open. Clear the flag manually:
+
+```bash
 xattr -dr com.apple.quarantine /Applications/ChordSketch.app
 ```
 
-The cask's `caveats` block repeats this step on install so
-users do not need to remember the URL.
+Apple Developer ID signing + notarization (so the flag is not
+needed regardless of install path) is tracked in
+[#2075](https://github.com/koedame/chordsketch/issues/2075).
 
 > These two snippets live in `## Desktop application` (not
 > `## Installation`) on purpose. The

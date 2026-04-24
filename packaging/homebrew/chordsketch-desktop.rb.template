@@ -11,8 +11,6 @@
 cask "chordsketch" do
   version "{{VERSION}}"
 
-  arch arm: "aarch64-apple-darwin", intel: "x86_64-apple-darwin"
-
   on_arm do
     sha256 "{{SHA256_DMG_AARCH64_APPLE_DARWIN}}"
     url "https://github.com/koedame/chordsketch/releases/download/desktop-v#{version}/ChordSketch_#{version}_aarch64.dmg"
@@ -29,22 +27,38 @@ cask "chordsketch" do
   # Minimum macOS matches `tauri.conf.json`'s implied baseline
   # (Tauri v2 officially supports macOS 10.15+; we floor to 12
   # because the WKWebView fixes below that version are outside
-  # the project's testable surface).
-  depends_on macos: ">=:monterey"
+  # the project's testable surface). Note the space between `>=`
+  # and `:monterey` — Homebrew Cask DSL requires it (see the
+  # Cookbook at https://docs.brew.sh/Cask-Cookbook#stanza-depends_on;
+  # the no-space form silently fails `brew audit`).
+  depends_on macos: ">= :monterey"
 
   app "ChordSketch.app"
 
-  # Unsigned bundle: Gatekeeper blocks the first launch until
-  # the quarantine attribute is cleared. Dropped automatically
-  # once #2075 lands Apple Developer ID signing + notarization —
-  # the caveat block can then be deleted.
+  # Unsigned bundle. Homebrew Cask clears `com.apple.quarantine`
+  # automatically during install, so users who `brew install
+  # --cask` can launch the app directly — no manual step needed.
+  # The caveat block below is a safety net for two other paths:
+  # manual DMG download from the GitHub Release (where no
+  # quarantine clear happens), and setups that opt out via
+  # `HOMEBREW_CASK_OPTS=--no-quarantine`. Dropped entirely once
+  # #2075 lands Apple Developer ID signing + notarization.
   caveats <<~EOS
     The ChordSketch desktop bundle is not yet code-signed or notarized.
-    After installation, remove the quarantine attribute so macOS will launch it:
+
+    Installed via `brew install --cask`? Homebrew clears the Gatekeeper
+    quarantine flag for you and the app launches directly.
+
+    Downloaded the .dmg manually from GitHub Releases, or ran Homebrew
+    with `HOMEBREW_CASK_OPTS=--no-quarantine`? Clear the flag yourself:
 
       xattr -dr com.apple.quarantine "#{appdir}/ChordSketch.app"
 
-    Tracking issue: https://github.com/koedame/chordsketch/issues/2075
+    On macOS Sequoia you may additionally need to approve the app the
+    first time it launches: System Settings → Privacy & Security →
+    "Open Anyway".
+
+    Tracking: https://github.com/koedame/chordsketch/issues/2075
   EOS
 
   zap trash: [
