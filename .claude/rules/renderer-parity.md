@@ -45,7 +45,9 @@ Before closing a PR that touches any renderer:
 2. Verify every arm exists in the other renderers.
 3. For every directive that parses a numeric parameter, verify the valid range
    and clamping logic is identical in all three renderers.
-4. If an arm or validation is missing, either add it or file a sub-issue.
+4. If an arm or validation is missing, add it in this PR or record a
+   `## Deferred` entry in the PR body per `pr-workflow.md`; do not file
+   a sub-issue.
 
 ## Coverage Parity
 
