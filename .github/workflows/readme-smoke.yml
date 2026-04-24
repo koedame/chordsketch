@@ -527,7 +527,7 @@ jobs:
             # Cargo `^0.1` means `>=0.1.0, <0.2.0` (the caret rules treat
             # the leftmost non-zero as the breaking-change boundary).
             # Bump policy: when the workspace bumps to 0.3.x, update both
-            # constraints below to `^0.2` in the same release PR.
+            # constraints below to `^0.3` in the same release PR.
             # Otherwise, daily smoke tests will silently stop resolving.
             CORE_DEP='chordsketch-chordpro = "^0.3"'
             RENDER_DEP='chordsketch-render-text = "^0.3"'
