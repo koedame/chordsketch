@@ -15,6 +15,16 @@ use chordsketch_chordpro::parse_multi_lenient;
 /// command fail fast with a readable error instead of a WebView hang.
 const MAX_OPEN_SIZE_BYTES: u64 = 10 * 1024 * 1024;
 
+/// Upper bound on the ChordPro source length that `export_pdf` and
+/// `export_html` accept from the WebView. Matches `MAX_OPEN_SIZE_BYTES`
+/// — a user who cannot open a file larger than 10 MiB cannot reach the
+/// export path with one either, so keeping the two limits identical is
+/// the least-surprising contract. Per `.claude/rules/code-style.md`
+/// ("Resource Limits"): the `parse_multi_lenient` + renderer pipeline
+/// has no internal cap, so the boundary check lives here at the Tauri
+/// command entry point.
+const MAX_EXPORT_CHORDPRO_BYTES: usize = 10 * 1024 * 1024;
+
 /// Parse the supplied ChordPro source, render every song it contains
 /// with the requested transposition, and write the result to `path`.
 ///
@@ -30,6 +40,13 @@ where
 {
     if path.is_empty() {
         return Err("Refusing to write: destination path is empty".to_string());
+    }
+    if chordpro.len() > MAX_EXPORT_CHORDPRO_BYTES {
+        return Err(format!(
+            "ChordPro source is too large to export ({} bytes > {} bytes)",
+            chordpro.len(),
+            MAX_EXPORT_CHORDPRO_BYTES
+        ));
     }
     let config = Config::defaults();
     let parse_result = parse_multi_lenient(chordpro);
