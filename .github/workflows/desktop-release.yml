@@ -102,6 +102,14 @@ jobs:
             target: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # Pin to the tag under release so `workflow_dispatch` runs
+          # build from the tagged commit rather than whichever branch
+          # HEAD the user selected as the dispatch ref. `push: tags:`
+          # events already resolve GITHUB_SHA to the tagged commit,
+          # so this `ref:` is a no-op on that path and a correctness
+          # fix for manual re-runs (#2226).
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
@@ -289,8 +297,13 @@ jobs:
             -exec cp -v {} release/ \;
           cd release
           # Deterministic sort so the SHA256SUMS file is stable
-          # across runs (same tag → same file content).
-          find . -type f -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
+          # across runs (same tag → same file content). NUL-delimited
+          # form (`-printf '%f\0'` + `sort -z` + `xargs -0`) so a
+          # future installer filename with whitespace still produces
+          # one-line-per-file output; Tauri's current naming scheme
+          # (`ChordSketch_<version>_<arch>.<ext>`) never contains
+          # spaces, so this is defense-in-depth (#2229).
+          find . -type f -printf '%f\0' | sort -z | xargs -0 sha256sum > SHA256SUMS
           cat SHA256SUMS
 
       - name: Create Release
@@ -305,14 +318,36 @@ jobs:
         # with the CLI, and marking every desktop release "latest"
         # would hide the CLI's own `v*` releases from the landing
         # page.
+        #
+        # Known cosmetic for the very first `desktop-v*` tag:
+        # `--generate-notes` has no prior tag in the desktop
+        # namespace to diff against, so GitHub falls back to
+        # "every merged PR since the repo was created". The note
+        # body will be long; edit manually after the release cuts
+        # if desired. Subsequent desktop tags diff against the
+        # immediately-prior `desktop-v*` and are concise (#2229).
+        #
+        # `--prerelease` is set iff the tag carries a prerelease
+        # suffix (`desktop-v0.1.0-beta.1`, `desktop-v0.2.0-rc.1`).
+        # Without it, a prerelease tag would publish as a
+        # "latest"-eligible release and leak into users' stable
+        # update channels (#2227).
         run: |
           set -euo pipefail
-          gh release create "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "$TAG" \
-            --generate-notes \
-            --verify-tag \
-            release/*
+          args=(
+            "$TAG"
+            --repo "$GITHUB_REPOSITORY"
+            --title "$TAG"
+            --generate-notes
+            --verify-tag
+          )
+          # Prerelease suffix is anything after the `MAJOR.MINOR.PATCH`
+          # triplet; the tag format regex (validate job above) already
+          # guarantees the suffix starts with `-` when present.
+          if printf '%s' "$TAG" | grep -Eq '^desktop-v[0-9]+\.[0-9]+\.[0-9]+-'; then
+            args+=(--prerelease)
+          fi
+          gh release create "${args[@]}" release/*
 
   update-cask:
     name: Update Homebrew Cask

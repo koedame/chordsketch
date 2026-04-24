@@ -70,6 +70,14 @@ jobs:
             os: windows-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          # Pin to the tag under release so `workflow_dispatch` runs
+          # build from the tagged commit rather than whichever branch
+          # HEAD the user selected as the dispatch ref. `push: tags:`
+          # events already resolve GITHUB_SHA to the tagged commit,
+          # so this `ref:` is a no-op on that path and a correctness
+          # fix for manual re-runs (#2226).
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Install Rust toolchain
         run: |
