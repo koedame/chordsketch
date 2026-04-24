@@ -18,13 +18,15 @@ capability system; the capability allowlist only restricts plugin
 commands. The distinction surfaced in #2209 during review of #2207.
 
 The practical threat model nonetheless remains narrow. The WebView
-loads only from the local Vite build, the CSP (`default-src 'self'`,
-no `unsafe-inline` for scripts) blocks arbitrary JS injection, and
-there is no remote-content fetch path. Any attacker capable of
+loads only from the local Vite build, the CSP (no `unsafe-inline` in
+`script-src`; `'unsafe-eval'` is present for WASM tooling per ADR-0004
+but user content does not flow into eval-paths) blocks inline JS
+injection, and there is no remote-content fetch path. Any attacker capable of
 invoking `save_file('/arbitrary/path', ...)` has already executed
-code inside the WebView, at which point they can also call
-`process::exit` / mount the user's filesystem via the `fs:*` plugin
-once anyone grants it / etc. — i.e. the capability-gate argument
+code inside the WebView, at which point they can also trigger a
+forced restart via the granted `process:allow-restart` capability,
+or mount the user's filesystem via the `fs:*` plugin if that
+capability were ever added — i.e. the capability-gate argument
 would only raise the bar marginally while imposing non-trivial
 implementation cost.
 
