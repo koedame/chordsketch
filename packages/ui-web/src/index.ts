@@ -906,11 +906,9 @@ export async function mountChordSketchUi(
       // listeners we just removed will never fire — so the
       // document-wide `user-select: none` and the `dragging` CSS
       // class would otherwise stay stuck until the next mount.
-      // Run the same cleanup unconditionally here; it is idempotent
-      // when no drag is in progress (#2196).
-      if (splitterDragActive) {
-        clearSplitterDragState();
-      }
+      // `clearSplitterDragState` is idempotent when no drag is in
+      // progress, so it is safe to call unconditionally (#2196).
+      clearSplitterDragState();
     },
     getChordPro(): string {
       return editor.getValue();
