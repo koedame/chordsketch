@@ -166,7 +166,20 @@ jobs:
         # Tauri produces signed artefacts without any workflow
         # change. Until then, the env vars stay empty and the
         # build ships unsigned installers.
-        run: cargo tauri build --target ${{ matrix.platform.target }}
+        #
+        # `-c '{"bundle":{"createUpdaterArtifacts":true}}'`
+        # enables updater `.sig` file generation only for the
+        # release pipeline. Baking it into `tauri.conf.json`
+        # would break `desktop-build.yml` and `desktop-smoke`
+        # (both run on PRs, where `TAURI_SIGNING_PRIVATE_KEY` is
+        # not available; Tauri fails hard with "A public key
+        # has been found, but no private key" when
+        # createUpdaterArtifacts is true and no private key is
+        # set). See #2076 review for the observed failure.
+        run: |
+          cargo tauri build \
+            --target ${{ matrix.platform.target }} \
+            -c '{"bundle":{"createUpdaterArtifacts":true}}'
         working-directory: apps/desktop/src-tauri
         env:
           # Apple notarization / signing (populated by #2075).

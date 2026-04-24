@@ -39,7 +39,6 @@
     "category": "Music",
     "shortDescription": "ChordPro editor",
     "longDescription": "ChordSketch is a ChordPro editor with live preview, transpose, and PDF export.",
-    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
