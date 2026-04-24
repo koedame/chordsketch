@@ -116,15 +116,20 @@ jobs:
         with:
           targets: wasm32-unknown-unknown, ${{ matrix.platform.target }}
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          # Target-triple per-matrix-cell. Separate shared-key
-          # from `desktop-build.yml`'s cache so release builds do
-          # not invalidate PR-smoke caches (and vice versa).
-          shared-key: desktop-release-${{ matrix.platform.target }}
+      # NOTE: no Swatinem/rust-cache here. Per
+      # `.claude/rules/ci-parallelization.md` §2, this workflow
+      # fires on `desktop-v*` tag pushes — expected cadence
+      # comparable to the CLI `release.yml` (well under once per
+      # 7 days). GitHub Actions evicts cache entries after 7 days
+      # of inactivity, so the cache expires between runs. Adding
+      # rust-cache delivers no wall-clock benefit and only adds
+      # YAML noise. Do not add one back without updating the rule.
 
       - name: Install Tauri system dependencies (Linux)
-        if: matrix.platform.runner == 'ubuntu-latest'
+        # See the parallel gate in `desktop-build.yml`: `runner.os`
+        # is the stable context value, surviving a future Ubuntu
+        # LTS alias rename (#2220).
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
