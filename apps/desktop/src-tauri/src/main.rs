@@ -34,6 +34,9 @@ const MAX_EXPORT_CHORDPRO_BYTES: usize = 10 * 1024 * 1024;
 /// to one (e.g. transpose-clamp behaviour, parse-warnings surface,
 /// error message format) does not drift against the other — see
 /// `.claude/rules/fix-propagation.md` for the sister-site rationale.
+///
+/// Trust model: the callers (`export_pdf` / `export_html`) are not
+/// capability-gated; see `save_file`'s doc comment and ADR-0006.
 fn render_and_write<R>(path: &str, chordpro: &str, transpose: i8, render: R) -> Result<(), String>
 where
     R: Fn(&[chordsketch_chordpro::ast::Song], i8, &Config) -> Vec<u8>,
@@ -97,6 +100,10 @@ fn export_html(path: String, chordpro: String, transpose: Option<i8>) -> Result<
 /// separate `metadata()`-then-`read_to_string()` pair leaves a race
 /// window where a co-process can grow the file past the limit
 /// after the stat but before the read.
+///
+/// Trust model: not capability-gated; see `save_file`'s doc comment
+/// and ADR-0006. WebView code can read any path the running user
+/// has read access to.
 #[tauri::command]
 fn open_file(path: String) -> Result<String, String> {
     if path.is_empty() {
@@ -122,6 +129,13 @@ fn open_file(path: String) -> Result<String, String> {
 /// responsible for dialog-driven destination selection; an empty
 /// `path` is rejected immediately to produce a clear error rather
 /// than a confusing OS-level "No such file" message.
+///
+/// Trust model: this command is not capability-gated (Tauri v2's
+/// capability system does not apply to `invoke_handler!`-registered
+/// commands). The WebView is trusted to call this with a
+/// user-approved path because the WebView loads only from the local
+/// Vite build under the CSP documented in `tauri.conf.json`. See
+/// ADR-0006 for the full rationale and the revisit triggers.
 #[tauri::command]
 fn save_file(path: String, content: String) -> Result<(), String> {
     if path.is_empty() {
