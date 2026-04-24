@@ -1,12 +1,17 @@
 name: "Validate release tag format"
 description: >
   Validate that a string matches the project's release tag format
-  `v<major>.<minor>.<patch>[-prerelease]`. Rejects tags whose format
-  is malformed before they are interpolated into downstream shell or
-  `gh` CLI invocations. Paired with routing `inputs.tag` and
+  `[prefix]v<major>.<minor>.<patch>[-prerelease]`. Rejects tags whose
+  format is malformed before they are interpolated into downstream
+  shell or `gh` CLI invocations. Paired with routing `inputs.tag` and
   `github.event.release.tag_name` through `env:` so user-controlled
   values never reach YAML expression interpolation in a `run:` body
   without first being format-validated. See #1797.
+
+  The optional `prefix` input lets tag-triggered workflows on
+  per-product namespaces (e.g. `desktop-v<...>` for the desktop app,
+  #2078) share this composite rather than carrying an inline regex
+  that would silently diverge from the CLI form (#2224).
 inputs:
   tag:
     description: >
@@ -15,6 +20,15 @@ inputs:
       github.ref_name so all three entry points are covered. See the
       workflow callers of this action for the exact expression.
     required: true
+  prefix:
+    description: >
+      Optional product-namespace prefix required before the leading
+      `v` (e.g. `desktop-` so `desktop-v0.1.0` is accepted). Empty by
+      default, which preserves the historical CLI tag form. The
+      prefix MUST NOT contain regex metacharacters; it is spliced
+      into an ERE pattern literally.
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -22,14 +36,21 @@ runs:
       shell: bash
       env:
         TAG: ${{ inputs.tag }}
+        PREFIX: ${{ inputs.prefix }}
       run: |
         set -euo pipefail
         if [ -z "$TAG" ]; then
           echo "Rejecting empty release tag (workflow must supply inputs.tag, github.event.release.tag_name, or run on a tag push)." >&2
           exit 1
         fi
-        if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
+        # Splice the prefix literally — the composite contract
+        # documents that callers MUST NOT pass a prefix containing
+        # regex metacharacters. Within this repo every caller uses a
+        # hardcoded string literal (`desktop-` today), so we do not
+        # rescan the prefix for metachars at run-time.
+        REGEX="^${PREFIX}v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$"
+        if ! printf '%s' "$TAG" | grep -Eq "$REGEX"; then
           echo "Rejecting malformed release tag: $TAG" >&2
-          echo "Expected format: v<major>.<minor>.<patch>[-<prerelease>]" >&2
+          echo "Expected format: ${PREFIX}v<major>.<minor>.<patch>[-<prerelease>]" >&2
           exit 1
         fi
