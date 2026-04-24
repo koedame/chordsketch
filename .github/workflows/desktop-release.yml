@@ -98,101 +98,31 @@ jobs:
           # fix for manual re-runs (#2226).
           ref: ${{ inputs.tag || github.ref }}
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - name: Desktop bundle build steps
+        # Shared composite with `desktop-build.yml` (#2223). Per
+        # `.claude/rules/ci-parallelization.md` §2, tag-triggered
+        # workflows run too infrequently for rust-cache to help;
+        # `enable-cache: "false"` suppresses the cache step.
+        # `build-config` enables updater `.sig` file generation
+        # only for the release pipeline (#2076 rationale in the
+        # composite's doc). Signing secrets are threaded through
+        # the composite's pass-through inputs; absent values ship
+        # unsigned installers (pre-#2075 state).
+        uses: ./.github/actions/desktop-build-steps
         with:
-          targets: wasm32-unknown-unknown, ${{ matrix.platform.target }}
-
-      # NOTE: no Swatinem/rust-cache here. Per
-      # `.claude/rules/ci-parallelization.md` §2, this workflow
-      # fires on `desktop-v*` tag pushes — expected cadence
-      # comparable to the CLI `release.yml` (well under once per
-      # 7 days). GitHub Actions evicts cache entries after 7 days
-      # of inactivity, so the cache expires between runs. Adding
-      # rust-cache delivers no wall-clock benefit and only adds
-      # YAML noise. Do not add one back without updating the rule.
-
-      - name: Install Tauri system dependencies (Linux)
-        # See the parallel gate in `desktop-build.yml`: `runner.os`
-        # is the stable context value, surviving a future Ubuntu
-        # LTS alias rename (#2220).
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            build-essential \
-            pkg-config \
-            file
-
-      - name: Install wasm-pack
-        uses: ./.github/actions/install-wasm-pack
-
-      - name: Install Tauri CLI
-        uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2
-        with:
-          tool: tauri-cli@2.10.1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: |
-            apps/desktop/package-lock.json
-            packages/tree-sitter-chordpro/package-lock.json
-
-      - name: Build @chordsketch/wasm (dual-package layout)
-        run: npm run build
-        working-directory: packages/npm
-
-      - name: Install tree-sitter-chordpro grammar deps
-        run: npm ci
-        working-directory: packages/tree-sitter-chordpro
-
-      - name: Install desktop frontend deps
-        run: npm ci
-        working-directory: apps/desktop
-
-      - name: Build Tauri bundle
-        # Same `beforeBuildCommand` chain documented in
-        # `desktop-build.yml`. When #2075 lands, the signing env
-        # vars below are populated from repository secrets and
-        # Tauri produces signed artefacts without any workflow
-        # change. Until then, the env vars stay empty and the
-        # build ships unsigned installers.
-        #
-        # `-c '{"bundle":{"createUpdaterArtifacts":true}}'`
-        # enables updater `.sig` file generation only for the
-        # release pipeline. Baking it into `tauri.conf.json`
-        # would break `desktop-build.yml` and `desktop-smoke`
-        # (both run on PRs, where `TAURI_SIGNING_PRIVATE_KEY` is
-        # not available; Tauri fails hard with "A public key
-        # has been found, but no private key" when
-        # createUpdaterArtifacts is true and no private key is
-        # set). See #2076 review for the observed failure.
-        run: |
-          cargo tauri build \
-            --target ${{ matrix.platform.target }} \
-            -c '{"bundle":{"createUpdaterArtifacts":true}}'
-        working-directory: apps/desktop/src-tauri
-        env:
-          # Apple notarization / signing (populated by #2075).
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Windows Authenticode (populated by #2075).
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-          # Tauri updater signing (populated by #2076).
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          target: ${{ matrix.platform.target }}
+          enable-cache: "false"
+          build-config: '{"bundle":{"createUpdaterArtifacts":true}}'
+          apple-signing-identity: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          apple-certificate: ${{ secrets.APPLE_CERTIFICATE }}
+          apple-certificate-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          apple-id: ${{ secrets.APPLE_ID }}
+          apple-password: ${{ secrets.APPLE_PASSWORD }}
+          apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+          windows-certificate: ${{ secrets.WINDOWS_CERTIFICATE }}
+          windows-certificate-password: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          tauri-signing-private-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          tauri-signing-private-key-password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Collect bundles into a flat directory
         # Downstream SHA256SUMS and Release upload want one
