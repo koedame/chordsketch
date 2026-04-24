@@ -46,6 +46,8 @@ YAML noise.
 
 **Intentionally omitted (infrequent — cache expires before next run):**
 - `release.yml` — ~every 10 days on version tags
+- `desktop-release.yml` — fires on `desktop-v*` tag pushes; expected
+  cadence comparable to `release.yml` and below the 7-day cache TTL
 - `npm-publish.yml` — a few times per month
 - `extended-tests.yml` — dispatch-only, rarely invoked
 

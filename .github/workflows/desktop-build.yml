@@ -33,7 +33,16 @@ on:
       - "packages/npm/**"
       - "packages/tree-sitter-chordpro/**"
       - "packages/ui-web/**"
-      - "crates/**"
+      # Only the three crates `chordsketch-desktop` depends on —
+      # `chordpro`, `render-html`, `render-pdf`. Changes to sibling
+      # crates (`lsp`, `ffi`, `napi`, `wasm`, `cli`,
+      # `convert-musicxml`) never affect the desktop bundle, so they
+      # MUST not trigger the 4-cell macOS/Windows/Linux matrix.
+      # Extending this list requires a matching edit to
+      # `apps/desktop/src-tauri/Cargo.toml`'s `[dependencies]`.
+      - "crates/chordpro/**"
+      - "crates/render-html/**"
+      - "crates/render-pdf/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/desktop-build.yml"
@@ -43,7 +52,16 @@ on:
       - "packages/npm/**"
       - "packages/tree-sitter-chordpro/**"
       - "packages/ui-web/**"
-      - "crates/**"
+      # Only the three crates `chordsketch-desktop` depends on —
+      # `chordpro`, `render-html`, `render-pdf`. Changes to sibling
+      # crates (`lsp`, `ffi`, `napi`, `wasm`, `cli`,
+      # `convert-musicxml`) never affect the desktop bundle, so they
+      # MUST not trigger the 4-cell macOS/Windows/Linux matrix.
+      # Extending this list requires a matching edit to
+      # `apps/desktop/src-tauri/Cargo.toml`'s `[dependencies]`.
+      - "crates/chordpro/**"
+      - "crates/render-html/**"
+      - "crates/render-pdf/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/desktop-build.yml"
@@ -125,7 +143,12 @@ jobs:
           shared-key: desktop-build-${{ matrix.platform.target }}
 
       - name: Install Tauri system dependencies (Linux)
-        if: matrix.platform.runner == 'ubuntu-latest'
+        # `runner.os` is a stable context value ('Linux' / 'macOS'
+        # / 'Windows') independent of the mutable GitHub runner
+        # label alias (`ubuntu-latest`). Using it here shields the
+        # gate from a future Ubuntu LTS bump that renames the alias
+        # (#2220).
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
