@@ -7,6 +7,7 @@ use std::path::Path;
 
 use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::parse_multi_lenient;
+use chordsketch_chordpro::render_result::RenderResult;
 
 /// Max ChordPro source size the editor will open from disk. 10 MiB
 /// comfortably fits the largest hymnal transcriptions in the test
@@ -27,6 +28,8 @@ const MAX_EXPORT_CHORDPRO_BYTES: usize = 10 * 1024 * 1024;
 
 /// Parse the supplied ChordPro source, render every song it contains
 /// with the requested transposition, and write the result to `path`.
+/// Returns the collected render-side warnings so the frontend can
+/// surface them to the user (#2201).
 ///
 /// Called by the renderer-specific command wrappers below. Extracting
 /// the parse + render pipeline here keeps the two commands
@@ -35,11 +38,25 @@ const MAX_EXPORT_CHORDPRO_BYTES: usize = 10 * 1024 * 1024;
 /// error message format) does not drift against the other — see
 /// `.claude/rules/fix-propagation.md` for the sister-site rationale.
 ///
+/// Warning parity with the WASM path (playground / desktop live
+/// preview): both use each renderer's `render_songs_with_warnings`
+/// variant, so the warning messages and ordering are identical across
+/// browser, in-process desktop export, and the CLI (see
+/// `crates/wasm/src/lib.rs` `flush_warnings`). Parser warnings are not
+/// included — `parse_multi_lenient` never returns structured warnings,
+/// only per-line errors that are flushed into the partial AST, and the
+/// CLI/WASM paths do not surface those either.
+///
 /// Trust model: the callers (`export_pdf` / `export_html`) are not
 /// capability-gated; see `save_file`'s doc comment and ADR-0006.
-fn render_and_write<R>(path: &str, chordpro: &str, transpose: i8, render: R) -> Result<(), String>
+fn render_and_write<R>(
+    path: &str,
+    chordpro: &str,
+    transpose: i8,
+    render: R,
+) -> Result<Vec<String>, String>
 where
-    R: Fn(&[chordsketch_chordpro::ast::Song], i8, &Config) -> Vec<u8>,
+    R: Fn(&[chordsketch_chordpro::ast::Song], i8, &Config) -> RenderResult<Vec<u8>>,
 {
     if path.is_empty() {
         return Err("Refusing to write: destination path is empty".to_string());
@@ -54,35 +71,48 @@ where
     let config = Config::defaults();
     let parse_result = parse_multi_lenient(chordpro);
     let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
-    let bytes = render(&songs, transpose, &config);
-    fs::write(path, bytes).map_err(|e| format!("Failed to write {path}: {e}"))
+    let result = render(&songs, transpose, &config);
+    fs::write(path, result.output).map_err(|e| format!("Failed to write {path}: {e}"))?;
+    Ok(result.warnings)
 }
 
 /// Renders `chordpro` to PDF with the optional `transpose` offset and
 /// writes the bytes to `path`. The renderer is the in-process
 /// `chordsketch-render-pdf` crate, not the WASM module — satisfies
-/// AC3 of #2074.
+/// AC3 of #2074. Returns the renderer's captured warnings so the
+/// frontend can surface them in the Export dialog (#2201).
 #[tauri::command]
-fn export_pdf(path: String, chordpro: String, transpose: Option<i8>) -> Result<(), String> {
+fn export_pdf(
+    path: String,
+    chordpro: String,
+    transpose: Option<i8>,
+) -> Result<Vec<String>, String> {
     render_and_write(
         &path,
         &chordpro,
         transpose.unwrap_or(0),
-        chordsketch_render_pdf::render_songs_with_transpose,
+        chordsketch_render_pdf::render_songs_with_warnings,
     )
 }
 
 /// Renders `chordpro` to HTML with the optional `transpose` offset
 /// and writes the string to `path`. As with `export_pdf`, the
 /// renderer is the in-process `chordsketch-render-html` crate.
+/// Returns the renderer's captured warnings so the frontend can
+/// surface them in the Export dialog (#2201).
 #[tauri::command]
-fn export_html(path: String, chordpro: String, transpose: Option<i8>) -> Result<(), String> {
+fn export_html(
+    path: String,
+    chordpro: String,
+    transpose: Option<i8>,
+) -> Result<Vec<String>, String> {
     render_and_write(
         &path,
         &chordpro,
         transpose.unwrap_or(0),
         |songs, t, config| {
-            chordsketch_render_html::render_songs_with_transpose(songs, t, config).into_bytes()
+            let r = chordsketch_render_html::render_songs_with_warnings(songs, t, config);
+            RenderResult::with_warnings(r.output.into_bytes(), r.warnings)
         },
     )
 }
