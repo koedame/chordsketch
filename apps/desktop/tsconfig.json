@@ -17,16 +17,12 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
-    // `@chordsketch/wasm` is mapped WITHOUT the `.js` extension on
-    // purpose. Playground's tsconfig points to
-    // `chordsketch_wasm.js` directly and resolves fine there, but
-    // the same form raises TS7016 ("Could not find a declaration
-    // file") under `moduleResolution: "bundler"` from this deeper
-    // `apps/desktop/` location — reproduced locally on TS 5.9.3.
-    // Root cause is still unexplained; dropping the extension lets
-    // TS pair the alias with the neighbouring
-    // `chordsketch_wasm.d.ts` explicitly. Unification with
-    // playground's form is tracked in #2188.
+    // The `@chordsketch/wasm` alias points at the extension-less
+    // path so `moduleResolution: "bundler"` pairs it with the
+    // neighbouring `chordsketch_wasm.d.ts`. The `.js`-suffix form
+    // raises TS7016 from this nested location under TS 5.9.3; both
+    // `apps/desktop` and `packages/playground` use the same
+    // extension-less form to keep the two tsconfigs symmetric.
     "paths": {
       "@chordsketch/wasm": ["../../packages/npm/web/chordsketch_wasm"],
       "@chordsketch/ui-web": ["../../packages/ui-web/src/index.ts"],
