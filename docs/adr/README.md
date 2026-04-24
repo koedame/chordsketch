@@ -83,3 +83,4 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0003](0003-github-merge-queue.md) | GitHub Merge Queue replaces the auto-update-branch cascade | Accepted (2026-04-22) |
 | [0004](0004-unsafe-eval-for-web-tree-sitter-emscripten.md) | `'unsafe-eval'` in the desktop CSP for `web-tree-sitter` | Accepted (2026-04-24) |
 | [0005](0005-tauri-updater-key-management.md) | Tauri updater key management (Ed25519, no password) | Accepted (2026-04-24) |
+| [0006](0006-desktop-webview-trust-boundary.md) | Desktop WebView is trusted; custom commands are not capability-gated | Accepted (2026-04-24) |
