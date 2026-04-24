@@ -25,6 +25,14 @@
       "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; frame-src 'self'"
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://raw.githubusercontent.com/koedame/chordsketch/desktop-updater-manifest/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcxNTQwOTE1RDg2RjQzRTIKUldUaVEyL1lGUWxVY1htOWh2ZFNQejJoSkdYZEc1YVp2SUd4V1diOTVVK2pnS2FudFJkL3AvYkwK"
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

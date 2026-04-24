@@ -135,6 +135,53 @@ includes `confirm`) is still withheld, and the `fs:*` permissions
 are intentionally absent — the Rust commands above handle all
 filesystem access.
 
+## Auto-update
+
+The app calls `@tauri-apps/plugin-updater`'s `check()` on launch
+and every 24 hours while running. If an update is available and
+the user hasn't opted out, a prompt offers the new version's
+release-notes summary plus Install / Later buttons. Accepting
+downloads and verifies the signature (Ed25519 via minisign,
+pubkey baked into `tauri.conf.json`), swaps the binary, and
+calls `@tauri-apps/plugin-process`'s `relaunch()`.
+
+`check()` hits the manifest URL configured in
+`tauri.conf.json`'s `plugins.updater.endpoints`, currently
+`https://github.com/koedame/chordsketch/releases/latest/download/
+latest.json`. The `latest.json` manifest is produced by the
+`publish-updater-manifest` job in `desktop-release.yml` on every
+`desktop-v*` tag — see
+[ADR-0005](../../docs/adr/0005-tauri-updater-key-management.md)
+for the signing-key management decision.
+
+Opt-out is stored in `localStorage` under
+`chordsketch-desktop-auto-update-opt-out/v1`. Users can toggle
+it by opening the (forthcoming; tracked in #2199) Preferences
+dialog; the `toggleAutoUpdate()` helper in
+`apps/desktop/src/main.ts` is exported so a menu / settings
+surface can wire it in.
+
+### First-time updater setup (maintainer)
+
+Before the first `desktop-v*` release can ship signed updates,
+the maintainer must run once locally:
+
+```sh
+cargo tauri signer generate --ci --password ""
+```
+
+and save the emitted private key as the
+`TAURI_SIGNING_PRIVATE_KEY` repo secret:
+
+```sh
+gh secret set TAURI_SIGNING_PRIVATE_KEY -R koedame/chordsketch < /tmp/key.txt
+```
+
+The matching public key is already committed to
+`tauri.conf.json`; regenerating the pair requires replacing that
+value and re-cutting a release so clients re-pin to the new
+pubkey.
+
 ## Workspace integration
 
 - `apps/desktop/src-tauri` is a workspace member but **excluded from

@@ -23,6 +23,12 @@ import {
 } from '@tauri-apps/api/menu';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { ask, message, open, save } from '@tauri-apps/plugin-dialog';
+import {
+  checkForUpdates,
+  isAutoUpdateOptedOut,
+  setAutoUpdateOptOut,
+  startAutoUpdateLoop,
+} from './updater';
 
 type ExportFormat = 'pdf' | 'html';
 
@@ -477,6 +483,47 @@ async function bootstrap(): Promise<void> {
   await installAppMenu(handle);
   await registerCloseGuard(handle);
   await updateWindowTitle(handle);
+
+  // Fire the first update check + arm the 24-hour re-check loop.
+  // Intentionally fire-and-forget: a failed check on a slow / no
+  // network must not block the rest of the boot sequence. The
+  // opt-out short-circuit lives inside `checkForUpdates`, so
+  // calling `startAutoUpdateLoop()` unconditionally keeps the
+  // wiring simple — the user's choice is re-read on every tick.
+  autoUpdateCancel = startAutoUpdateLoop();
+}
+
+/**
+ * Cancel handle returned by `startAutoUpdateLoop`. Module-scoped
+ * because the menu handlers need to stop the loop when the user
+ * toggles the opt-out preference.
+ */
+let autoUpdateCancel: (() => void) | null = null;
+
+/**
+ * Toggle the "Check for updates automatically" preference. Stops
+ * the running loop when the user opts out, and restarts it on the
+ * way back in so the next tick isn't a day away.
+ */
+export function toggleAutoUpdate(): void {
+  const nextOptedOut = !isAutoUpdateOptedOut();
+  setAutoUpdateOptOut(nextOptedOut);
+  if (nextOptedOut) {
+    autoUpdateCancel?.();
+    autoUpdateCancel = null;
+  } else if (!autoUpdateCancel) {
+    autoUpdateCancel = startAutoUpdateLoop();
+  }
+}
+
+/**
+ * One-shot "Check for updates now" action — always runs, even if
+ * auto-update is opted out, and shows the "up to date" dialog so
+ * the user gets feedback on the explicit click. Returns once the
+ * check (and any subsequent install) finishes.
+ */
+export async function checkForUpdatesNow(): Promise<void> {
+  await checkForUpdates({ silent: false });
 }
 
 void bootstrap();

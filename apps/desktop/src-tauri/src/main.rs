@@ -106,6 +106,17 @@ fn save_file(path: String, content: String) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // `tauri-plugin-updater` lets the frontend call `check()` /
+        // `downloadAndInstall()` against the release manifest at the
+        // endpoint configured in `tauri.conf.json`. Signatures are
+        // verified against the bundled `pubkey` before install, so
+        // a compromised GitHub Release CDN cannot push rogue updates.
+        // See ADR-0005 (#2076).
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        // `tauri-plugin-process` exposes `relaunch()` to the
+        // frontend so the user can restart the app after the
+        // updater installs a new version.
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             export_pdf,
             export_html,
