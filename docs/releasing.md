@@ -87,6 +87,12 @@ at post-release verification rather than before the tag is cut.
      manifests under `crates/napi/npm/<triple>/package.json`
    - `packages/tree-sitter-chordpro/package.json`
 
+   Desktop (CLI and GUI are always in lockstep — same version number):
+   - `apps/desktop/src-tauri/Cargo.toml` — `package.version`
+   - `apps/desktop/src-tauri/tauri.conf.json` — top-level `"version"`
+     (drives the installer metadata users see in Finder / Explorer)
+   - `apps/desktop/package.json` — `version`
+
    Hardcoded pins in CI:
    - `.github/workflows/readme-smoke.yml` ~line 204:
      `npm install '@chordsketch/wasm@<version>'`
