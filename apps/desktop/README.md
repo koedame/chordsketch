@@ -170,15 +170,16 @@ empty-string path in rsign2 cannot decrypt the key it generates):
 
 ```sh
 # Generate a random 32-char password and capture it.
-SIGNER_PASS=$(openssl rand -base64 32)
+SIGNER_PASS=$(openssl rand -base64 24)
 cargo tauri signer generate --ci --password "$SIGNER_PASS" > /tmp/key.txt
 ```
 
-Save the private key and password as repo secrets:
+Save the private key and password as repo secrets, then delete the temp file:
 
 ```sh
 gh secret set TAURI_SIGNING_PRIVATE_KEY -R koedame/chordsketch < /tmp/key.txt
 gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD -R koedame/chordsketch <<< "$SIGNER_PASS"
+rm -f /tmp/key.txt
 ```
 
 The matching public key must be committed to
