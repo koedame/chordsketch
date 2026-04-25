@@ -164,20 +164,24 @@ surface can wire it in.
 ### First-time updater setup (maintainer)
 
 Before the first `desktop-v*` release can ship signed updates,
-the maintainer must run once locally:
+the maintainer must run once locally. **A non-empty password is
+required** — `--password ""` does not work with Tauri 2.10+ (the
+empty-string path in rsign2 cannot decrypt the key it generates):
 
 ```sh
-cargo tauri signer generate --ci --password ""
+# Generate a random 32-char password and capture it.
+SIGNER_PASS=$(openssl rand -base64 32)
+cargo tauri signer generate --ci --password "$SIGNER_PASS" > /tmp/key.txt
 ```
 
-and save the emitted private key as the
-`TAURI_SIGNING_PRIVATE_KEY` repo secret:
+Save the private key and password as repo secrets:
 
 ```sh
 gh secret set TAURI_SIGNING_PRIVATE_KEY -R koedame/chordsketch < /tmp/key.txt
+gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD -R koedame/chordsketch <<< "$SIGNER_PASS"
 ```
 
-The matching public key is already committed to
+The matching public key must be committed to
 `tauri.conf.json`; regenerating the pair requires replacing that
 value and re-cutting a release so clients re-pin to the new
 pubkey.
