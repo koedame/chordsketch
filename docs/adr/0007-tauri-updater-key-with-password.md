@@ -48,8 +48,8 @@ shipped with auto-update disabled (see release notes).
 ## Decision
 
 1. **Generate the Ed25519 updater keypair with a non-empty random
-   password** (32 ASCII characters, generated via a CSPRNG at the same
-   time as the keypair).
+   password** (32 alphanumeric characters from a CSPRNG, generated at
+   the same time as the keypair).
 2. **Commit the public key** to
    `apps/desktop/src-tauri/tauri.conf.json` under
    `plugins.updater.pubkey` (unchanged from ADR-0005).
@@ -118,12 +118,12 @@ cannot ship silently.
 
 `rsign2`'s scrypt-derived KDF uses default parameters; the password's
 entropy is the lower bound on key-recovery cost given the encrypted file.
-32 ASCII characters of CSPRNG output gives ~190 bits of entropy, well
-above the Ed25519 key's own 128-bit security floor, so the password is
-not the weakest link. The exact length is not load-bearing — anything
-≥20 random characters from a CSPRNG is equivalent in practice — but
-fixing a specific length in this ADR removes a future ambiguity at
-rotation time.
+32 alphanumeric characters of CSPRNG output gives ~190 bits of entropy
+(log₂(62³²) ≈ 190 bits), well above the Ed25519 key's own 128-bit
+security floor, so the password is not the weakest link. The exact
+length is not load-bearing — anything ≥20 random characters from a
+CSPRNG is equivalent in practice — but fixing a specific length in this
+ADR removes a future ambiguity at rotation time.
 
 ## Consequences
 
