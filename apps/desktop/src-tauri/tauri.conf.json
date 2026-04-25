@@ -30,7 +30,7 @@
       "endpoints": [
         "https://raw.githubusercontent.com/koedame/chordsketch/desktop-updater-manifest/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU3QTU1RTdBQjcwOUE4MTYKUldRV3FBbTNlbDZsNTdCTzBNVE1xdUVvQmM2T0xoL1BSSVhYZlZrNXdtM21oSFZSL0diR2pUbVIK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgwMUIzN0JCRDIwQTI0RjIKUldUeUpBclN1emNiZ0FtN0cxTmxldWdCUGZlOTdLMENOeHZWRWgwME1tTndqVWVGS2NuYVFyLzMK"
     }
   },
   "bundle": {
