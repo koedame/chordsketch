@@ -914,6 +914,10 @@ export async function mountChordSketchUi(
       // `clearSplitterDragState` is idempotent when no drag is in
       // progress, so it is safe to call unconditionally (#2196).
       clearSplitterDragState();
+      // Remove the class added by `buildDom` so the host can reuse
+      // `root` for non-ChordSketch content without inheriting the
+      // viewport-filling flex layout.
+      root.classList.remove('chordsketch-ui-root');
     },
     getChordPro(): string {
       return editor.getValue();
