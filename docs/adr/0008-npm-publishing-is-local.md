@@ -271,8 +271,6 @@ the cascade-credential ADR's PAT swap lands.
 ## References
 
 - Issue #2274 — this ADR's tracking issue.
-- ChordSketch memory `feedback_npm_local_only.md` — the
-  rule-form summary for future sessions.
 - `.github/workflows/npm-publish.yml`,
   `.github/workflows/npm-publish-tree-sitter.yml`,
   `.github/workflows/napi.yml`,
