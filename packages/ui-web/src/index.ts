@@ -299,6 +299,11 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
   // or steal cookies. We do allow popups so anchor clicks (e.g. from
   // {link} or chord-diagram image maps) can open in a new tab. See #1058.
   root.innerHTML = '';
+  // Apply the viewport-filling flex chain to `root` rather than `body`
+  // so the layout works when the host wraps the mount root in a
+  // non-body container (the playground's `<div id="app">`). See #2280
+  // and `.chordsketch-ui-root` in `style.css`.
+  root.classList.add('chordsketch-ui-root');
 
   const header = document.createElement('header');
   const h1 = document.createElement('h1');
@@ -909,6 +914,10 @@ export async function mountChordSketchUi(
       // `clearSplitterDragState` is idempotent when no drag is in
       // progress, so it is safe to call unconditionally (#2196).
       clearSplitterDragState();
+      // Remove the class added by `buildDom` so the host can reuse
+      // `root` for non-ChordSketch content without inheriting the
+      // viewport-filling flex layout.
+      root.classList.remove('chordsketch-ui-root');
     },
     getChordPro(): string {
       return editor.getValue();
