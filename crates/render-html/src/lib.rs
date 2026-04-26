@@ -193,7 +193,7 @@ pub fn render_song_with_warnings(
     html.push_str("<style>\n");
     html.push_str(CSS);
     html.push_str("</style>\n</head>\n<body>\n");
-    render_song_body(song, cli_transpose, config, &mut html, &mut warnings);
+    render_song_body_into(song, cli_transpose, config, &mut html, &mut warnings);
     html.push_str("</body>\n</html>\n");
     RenderResult::with_warnings(html, warnings)
 }
@@ -203,7 +203,7 @@ pub fn render_song_with_warnings(
 /// This is the shared implementation used by both single-song and multi-song
 /// rendering. It appends directly to the provided buffer without any document
 /// wrapper (`<html>`, `<head>`, etc.).
-fn render_song_body(
+fn render_song_body_into(
     song: &Song,
     cli_transpose: i8,
     config: &Config,
@@ -705,11 +705,137 @@ pub fn render_songs_with_warnings(
         if i > 0 {
             html.push_str("<hr class=\"song-separator\">\n");
         }
-        render_song_body(song, cli_transpose, config, &mut html, &mut warnings);
+        render_song_body_into(song, cli_transpose, config, &mut html, &mut warnings);
     }
 
     html.push_str("</body>\n</html>\n");
     RenderResult::with_warnings(html, warnings)
+}
+
+/// Render a [`Song`] AST to its body-only HTML fragment.
+///
+/// Unlike [`render_song`], this returns just the `<div class="song">...</div>`
+/// markup — no `<!DOCTYPE>`, `<html>`, `<head>`, `<title>`, or embedded
+/// `<style>` block. Use this when the consumer is going to wrap the output
+/// in its own document (e.g. a VS Code WebView, a Tauri shell, or a static
+/// site generator) and supply CSS separately via [`render_html_css`].
+///
+/// Background: prior to #2279 the only public API was the full-document
+/// variants, which forced consumers to either accept a complete HTML
+/// document where they wanted a fragment, or to reimplement body
+/// rendering. The latter produced sister-site drift across the playground,
+/// the desktop shell, and the VS Code preview (each with its own bespoke
+/// `wrapHtml`-style helper). The body-only family closes that gap.
+#[must_use]
+pub fn render_song_body(song: &Song) -> String {
+    render_song_body_with_transpose(song, 0, &Config::defaults())
+}
+
+/// Render a [`Song`] AST to its body-only HTML fragment with a CLI
+/// transposition offset.
+///
+/// See [`render_song_body`] for the contract. Warnings are printed to
+/// stderr via `eprintln!`; use [`render_song_body_with_warnings`] to
+/// capture them programmatically.
+#[must_use]
+pub fn render_song_body_with_transpose(song: &Song, cli_transpose: i8, config: &Config) -> String {
+    let result = render_song_body_with_warnings(song, cli_transpose, config);
+    for w in &result.warnings {
+        eprintln!("warning: {w}");
+    }
+    result.output
+}
+
+/// Render a [`Song`] AST to its body-only HTML fragment, returning warnings
+/// programmatically.
+///
+/// This is the structured variant of [`render_song_body_with_transpose`].
+/// See [`render_song_body`] for the contract.
+#[must_use = "caller must check warnings in the returned RenderResult"]
+pub fn render_song_body_with_warnings(
+    song: &Song,
+    cli_transpose: i8,
+    config: &Config,
+) -> RenderResult<String> {
+    let mut warnings = Vec::new();
+    let mut html = String::new();
+    render_song_body_into(song, cli_transpose, config, &mut html, &mut warnings);
+    RenderResult::with_warnings(html, warnings)
+}
+
+/// Render multiple [`Song`]s into a single body-only HTML fragment.
+///
+/// Songs are separated with `<hr class="song-separator">`, matching the
+/// inline separator used by [`render_songs`]. See [`render_song_body`]
+/// for the contract.
+#[must_use]
+pub fn render_songs_body(songs: &[Song]) -> String {
+    render_songs_body_with_transpose(songs, 0, &Config::defaults())
+}
+
+/// Render multiple [`Song`]s into a single body-only HTML fragment with
+/// transposition.
+///
+/// See [`render_songs_body`] for the contract. Warnings are printed to
+/// stderr via `eprintln!`; use [`render_songs_body_with_warnings`] to
+/// capture them programmatically.
+#[must_use]
+pub fn render_songs_body_with_transpose(
+    songs: &[Song],
+    cli_transpose: i8,
+    config: &Config,
+) -> String {
+    let result = render_songs_body_with_warnings(songs, cli_transpose, config);
+    for w in &result.warnings {
+        eprintln!("warning: {w}");
+    }
+    result.output
+}
+
+/// Render multiple [`Song`]s into a single body-only HTML fragment, returning
+/// warnings programmatically.
+///
+/// See [`render_songs_body`] for the contract.
+#[must_use = "caller must check warnings in the returned RenderResult"]
+pub fn render_songs_body_with_warnings(
+    songs: &[Song],
+    cli_transpose: i8,
+    config: &Config,
+) -> RenderResult<String> {
+    let mut warnings = Vec::new();
+    if songs.len() <= 1 {
+        let output = songs
+            .first()
+            .map(|s| {
+                let r = render_song_body_with_warnings(s, cli_transpose, config);
+                warnings = r.warnings;
+                r.output
+            })
+            .unwrap_or_default();
+        return RenderResult::with_warnings(output, warnings);
+    }
+    let mut html = String::new();
+    for (i, song) in songs.iter().enumerate() {
+        if i > 0 {
+            html.push_str("<hr class=\"song-separator\">\n");
+        }
+        render_song_body_into(song, cli_transpose, config, &mut html, &mut warnings);
+    }
+    RenderResult::with_warnings(html, warnings)
+}
+
+/// The canonical chord-over-lyrics CSS that the full-document renderers
+/// embed inside `<style>`.
+///
+/// Pair this with [`render_song_body`] / [`render_songs_body`] when the
+/// consumer is supplying its own document envelope: inline the returned
+/// string inside a `<style>` block, ship it as a separate file referenced
+/// via `<link rel="stylesheet">`, or merge it into the host's existing
+/// stylesheet. The contract is byte-stable; consumers can hash the result
+/// for cache-busting filenames.
+#[must_use]
+pub fn render_html_css() -> &'static str {
+    CSS
 }
 
 /// Parse a ChordPro source string and render it to HTML.
@@ -2007,6 +2133,100 @@ mod tests {
         let html = render_song(&song);
         assert!(html.contains("<!DOCTYPE html>"));
         assert!(html.contains("</html>"));
+    }
+
+    #[test]
+    fn test_render_song_body_omits_document_envelope() {
+        // The whole point of the body-only family is that consumers
+        // wrapping the output in their own document do not get a
+        // nested `<!DOCTYPE>` / `<html>` / `<head>` / `<style>` to
+        // unwrap. Pin that contract here so future refactors cannot
+        // silently re-introduce the envelope.
+        let song =
+            chordsketch_chordpro::parse("{title: Sample}\nWas [G]blind but [D]now I [G]see.")
+                .unwrap();
+        let body = render_song_body(&song);
+        assert!(!body.contains("<!DOCTYPE"));
+        assert!(!body.contains("<html"));
+        assert!(!body.contains("</html>"));
+        assert!(!body.contains("<head"));
+        assert!(!body.contains("<style"));
+        assert!(!body.contains("<title>"));
+        // The body must still contain the song wrapper and metadata
+        // blocks that the full-document renderer produces inside
+        // `<body>` — that's the contract consumers depend on.
+        assert!(body.contains("<div class=\"song\">"));
+        assert!(body.contains("<h1>Sample</h1>"));
+        // The `chord-block` flex layout is what positions chords above
+        // lyrics; body-only consumers will provide the CSS via
+        // `render_html_css()` but the markup itself must still emit
+        // the class names.
+        assert!(body.contains("class=\"chord-block\""));
+    }
+
+    #[test]
+    fn test_render_song_body_byte_stable_with_full_render_body_section() {
+        // The body-only output should be byte-equal to the body slice
+        // of the full-document output (between `<body>\n` and
+        // `</body>`). That is the only way to guarantee that callers
+        // who switch over from the full-document API to the body-only
+        // API see no rendering drift.
+        let song = chordsketch_chordpro::parse(
+            "{title: Amazing Grace}\nA[G]mazing [D]grace, how [G]sweet the sound.",
+        )
+        .unwrap();
+        let full = render_song(&song);
+        let body = render_song_body(&song);
+        let body_start = full
+            .find("<body>\n")
+            .expect("full-document render must have <body>")
+            + "<body>\n".len();
+        let body_end = full
+            .rfind("</body>")
+            .expect("full-document render must have </body>");
+        let extracted = &full[body_start..body_end];
+        assert_eq!(
+            extracted, body,
+            "body-only output must match the body slice of the full document"
+        );
+    }
+
+    #[test]
+    fn test_render_html_css_returns_canonical_block() {
+        // Consumers can hash this result to build cache-busting
+        // filenames or inline it directly. Pin a few key selectors
+        // so a future refactor that drops one (e.g. `.chord-block`,
+        // which is what makes the chord-over-lyrics layout work)
+        // surfaces here as a hard test failure rather than a silent
+        // visual regression in every host that uses the body-only
+        // family.
+        let css = render_html_css();
+        assert!(css.contains(".chord-block"));
+        assert!(css.contains(".chord "));
+        assert!(css.contains(".lyrics"));
+        // The full-document renderer embeds *exactly* this string
+        // inside its `<style>` block — assert the lockstep so a
+        // future divergence is caught immediately.
+        let song = chordsketch_chordpro::parse("{title: t}").unwrap();
+        let full = render_song(&song);
+        assert!(full.contains(css));
+    }
+
+    #[test]
+    fn test_render_songs_body_separator_between_songs() {
+        let parsed =
+            chordsketch_chordpro::parse_multi_lenient("{title: A}\n{new_song}\n{title: B}");
+        let songs: Vec<_> = parsed.results.into_iter().map(|r| r.song).collect();
+        assert_eq!(songs.len(), 2, "expected two songs in the parsed output");
+        let body = render_songs_body(&songs);
+        assert!(body.contains("<hr class=\"song-separator\">"));
+        assert!(!body.contains("<!DOCTYPE"));
+    }
+
+    #[test]
+    fn test_render_songs_body_empty_input() {
+        let body = render_songs_body(&[]);
+        assert!(body.is_empty());
     }
 
     #[test]
