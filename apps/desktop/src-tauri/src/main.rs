@@ -177,6 +177,11 @@ fn save_file(path: String, content: String) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // `tauri-plugin-opener` exposes `openUrl()` to the frontend
+        // so the Help → "Visit project homepage" menu item can hand
+        // the URL off to the OS default browser. Scoped via the
+        // capability allowlist to the project homepage only (#2199).
+        .plugin(tauri_plugin_opener::init())
         // `tauri-plugin-updater` lets the frontend call `check()` /
         // `downloadAndInstall()` against the release manifest at the
         // endpoint configured in `tauri.conf.json`. Signatures are
