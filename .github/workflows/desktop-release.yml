@@ -222,9 +222,25 @@ jobs:
           find . -type f -printf '%f\0' | sort -z | xargs -0 sha256sum > SHA256SUMS
           cat SHA256SUMS
 
+      - name: Assert RELEASE_DISPATCH_TOKEN is present
+        # Per ADR-0009: the release MUST be created by a PAT, not
+        # GITHUB_TOKEN, so that `release: [published]` cascades.
+        # Fail loud if the secret is missing.
+        env:
+          DISPATCH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "${DISPATCH_TOKEN:-}" ]; then
+            echo "::error::RELEASE_DISPATCH_TOKEN is unset. Per ADR-0009 this token is required for desktop releases to cascade. Provision it via 'gh secret set RELEASE_DISPATCH_TOKEN' before re-running."
+            exit 1
+          fi
+
       - name: Create Release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # See ADR-0009. `RELEASE_DISPATCH_TOKEN` is a fine-grained
+          # PAT (Contents: Read and write on this repo only). Using
+          # a non-GITHUB_TOKEN here is what causes the resulting
+          # `release: [published]` event to fire downstream workflows.
+          GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
           TAG: ${{ steps.tag.outputs.tag }}
         # `--generate-notes` asks GitHub to auto-build the body
         # from commits + merged PRs between the previous

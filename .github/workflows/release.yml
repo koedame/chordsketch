@@ -212,9 +212,29 @@ jobs:
           find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec sha256sum {} \; | sed 's|  \./[^/]*/|  |' > ../checksums.txt
           cat ../checksums.txt
 
+      - name: Assert RELEASE_DISPATCH_TOKEN is present
+        # Per ADR-0009: the release MUST be created by a PAT, not
+        # GITHUB_TOKEN, so that `release: [published]` cascades to
+        # the eight downstream workflows that listen for it. Fail
+        # loud if the secret is missing rather than silently
+        # falling back to GITHUB_TOKEN (the silent path is exactly
+        # what this ADR exists to eliminate).
+        env:
+          DISPATCH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "${DISPATCH_TOKEN:-}" ]; then
+            echo "::error::RELEASE_DISPATCH_TOKEN is unset. Per ADR-0009 this token is required for releases to cascade to downstream workflows. Provision it via 'gh secret set RELEASE_DISPATCH_TOKEN' before re-running."
+            exit 1
+          fi
+
       - name: Create Release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # `RELEASE_DISPATCH_TOKEN` is a fine-grained PAT scoped to
+          # `Contents: Read and write` on this repo only. Using a
+          # non-GITHUB_TOKEN here is what causes the resulting
+          # `release: [published]` event to fire downstream
+          # workflows. See ADR-0009.
+          GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           gh release create "$VERSION" \
