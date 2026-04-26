@@ -86,3 +86,4 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0006](0006-desktop-webview-trust-boundary.md) | Desktop WebView is trusted; custom commands are not capability-gated | Accepted (2026-04-24) |
 | [0007](0007-tauri-updater-key-with-password.md) | Tauri updater key requires a non-empty password | Accepted (2026-04-25) |
 | [0008](0008-npm-publishing-is-local.md) | npm publishing is a maintainer-local manual operation | Accepted (2026-04-26) |
+| [0009](0009-release-event-cascade-credential.md) | Release event cascading requires a non-GITHUB_TOKEN credential | Accepted (2026-04-26) |

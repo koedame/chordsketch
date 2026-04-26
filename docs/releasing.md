@@ -450,6 +450,7 @@ following as the rotation policy:
 | Secret | Target cadence | Rotation UI |
 |--------|----------------|-------------|
 | `NPM_TOKEN` | Every 90 days, or immediately if the value has ever been pasted into chat / shared logs | <https://www.npmjs.com/settings/~/tokens> (sign in as the npm account that owns `@chordsketch`) |
+| `RELEASE_DISPATCH_TOKEN` | Every 90 days. Per [ADR-0009](adr/0009-release-event-cascade-credential.md), this is a fine-grained PAT scoped to `koedame/chordsketch` only with `Contents: Read and write`. Required for `release.yml` and `desktop-release.yml` to fire `release: [published]` events on tag push. | <https://github.com/settings/tokens?type=beta> → "Generate new token" → repository access "Only select repositories" → `koedame/chordsketch` → permissions: `Contents: Read and write` → expiration 90 days. Then `gh secret set RELEASE_DISPATCH_TOKEN -R koedame/chordsketch` with the new token value. |
 | `DOCKERHUB_TOKEN` | Every 90 days | <https://hub.docker.com/settings/security> |
 | `TAP_GITHUB_TOKEN` | Every 90 days, or whenever the issuing GitHub account changes 2FA / recovery setup | <https://github.com/settings/tokens> |
 | `CHOCOLATEY_API_KEY` | Only if regenerated on chocolatey.org | <https://community.chocolatey.org/account> → API Key → copy, then `gh secret set CHOCOLATEY_API_KEY` |
