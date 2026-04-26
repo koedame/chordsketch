@@ -74,6 +74,22 @@ handle.destroy();
 `destroy()` is idempotent. Hosts that mount once and never unmount
 (today's browser playground) may safely ignore the return value.
 
+## Host-page contract
+
+`mountChordSketchUi` adds the `.chordsketch-ui-root` class to the
+supplied `root` element and styles it as a `100vh` flex column. The
+host therefore needs to provide:
+
+- A `<body>` (and any wrapping containers) without their own
+  conflicting `height` or `display` rules — the `100vh` on the mount
+  root is self-sufficient and does not depend on parent sizing.
+- A reset that zeroes `body` margin (the bundled `style.css` already
+  applies `* { margin: 0; padding: 0; box-sizing: border-box; }`).
+
+Both the browser playground (`packages/playground/index.html`) and
+the desktop Tauri shell (`apps/desktop/index.html`) satisfy this with
+a single `<div id="app"></div>`; no host-specific CSS is required.
+
 ## Visual contract
 
 The DOM structure built by `mountChordSketchUi` is **structurally

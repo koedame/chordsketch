@@ -41,6 +41,19 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
+}
+
+/*
+ * The flex/height chain lives on the mount root rather than `body` so
+ * hosts can put `mountChordSketchUi` into any element without first
+ * styling `<body>`. Pre-#2280, these rules were on `body`, which broke
+ * the layout whenever the host wrapped the mount root in a non-body
+ * container (the playground's `<div id="app">`): the body's flex
+ * context applied to the wrapper, not to the `<header>` / `<main>`
+ * children one level deeper, so `main { flex: 1 }` had no parent
+ * height to fill. `buildDom` adds this class to the supplied `root`.
+ */
+.chordsketch-ui-root {
   height: 100vh;
   display: flex;
   flex-direction: column;
