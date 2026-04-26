@@ -23,6 +23,8 @@ import {
 } from '@tauri-apps/api/menu';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { ask, message, open, save } from '@tauri-apps/plugin-dialog';
+import { openUrl } from '@tauri-apps/plugin-opener';
+import { getVersion } from '@tauri-apps/api/app';
 import {
   checkForUpdates,
   isAutoUpdateOptedOut,
@@ -177,6 +179,64 @@ async function runOpen(
       kind: 'error',
     });
   }
+}
+
+/**
+ * File → New: discard the current document (after a dirty-check
+ * prompt) and reset the editor to an empty buffer with no backing
+ * path. Mirrors `runOpen`'s dirty-check guard so a stray click here
+ * cannot silently clobber unsaved edits (#2199).
+ */
+async function runNew(
+  handle: ChordSketchUiHandle,
+  rebuildMenu: MenuRebuilder,
+): Promise<void> {
+  if (isDirty(handle)) {
+    const confirmed = await ask(
+      'You have unsaved changes. Start a new document and discard them?',
+      { title: 'Discard unsaved changes?', kind: 'warning' },
+    );
+    if (!confirmed) return;
+  }
+  handle.setChordPro('');
+  currentPath = null;
+  lastSavedContent = '';
+  await rebuildMenu();
+  await updateWindowTitle(handle);
+}
+
+/**
+ * Help → Visit project homepage. The `openUrl` call is gated by
+ * the `opener:allow-open-url` capability whose `allow` list is
+ * scoped to the project homepage URL only — passing any other URL
+ * here will be rejected by the Tauri runtime, so this is a safe
+ * fixed string.
+ */
+const PROJECT_HOMEPAGE = 'https://github.com/koedame/chordsketch';
+
+async function runOpenHomepage(): Promise<void> {
+  try {
+    await openUrl(PROJECT_HOMEPAGE);
+  } catch (err) {
+    await message(err instanceof Error ? err.message : String(err), {
+      title: 'Could not open homepage',
+      kind: 'error',
+    });
+  }
+}
+
+/**
+ * App → Preferences…: stub. Real Preferences UI is not yet
+ * scaffolded; the menu item exists so the macOS app menu gets the
+ * platform-conventional "Preferences…" entry alongside Hide /
+ * Services / Quit (#2199 AC). Replace this with a real settings
+ * surface when the Preferences feature lands.
+ */
+async function runPreferencesStub(): Promise<void> {
+  await message('Preferences are not yet available in this build.', {
+    title: 'Preferences',
+    kind: 'info',
+  });
 }
 
 async function runSave(
@@ -377,8 +437,22 @@ async function buildAppMenu(
   handle: ChordSketchUiHandle,
   rebuildMenu: MenuRebuilder,
 ): Promise<Menu> {
+  // The app version is read from the Tauri runtime so the About box
+  // always reflects the running build — avoids drift versus a
+  // hardcoded string when `apps/desktop/package.json` /
+  // `Cargo.toml` / `tauri.conf.json` versions bump.
+  const version = await getVersion();
   const [
+    aboutItem,
+    preferencesItem,
+    hideItem,
+    hideOthersItem,
+    showAllItem,
+    servicesItem,
+    appMenuSepA,
+    appMenuSepB,
     quitItem,
+    newItem,
     openItem,
     saveItem,
     saveAsItem,
@@ -395,8 +469,46 @@ async function buildAppMenu(
     pasteItem,
     selectAllItem,
     editMenuSep,
+    minimizeItem,
+    maximizeItem,
+    homepageItem,
   ] = await Promise.all([
+    PredefinedMenuItem.new({
+      item: {
+        About: {
+          name: DEFAULT_WINDOW_TITLE,
+          version,
+          // Application-layer license per CLAUDE.md §License Policy;
+          // matches `apps/desktop/src-tauri/Cargo.toml`.
+          license: 'AGPL-3.0-only',
+          website: PROJECT_HOMEPAGE,
+          websiteLabel: 'github.com/koedame/chordsketch',
+          comments:
+            'A ChordPro editor with live preview, transpose, and PDF export.',
+        },
+      },
+    }),
+    MenuItem.new({
+      id: 'app-preferences',
+      text: 'Preferences…',
+      action: () => {
+        void runPreferencesStub();
+      },
+    }),
+    PredefinedMenuItem.new({ item: 'Hide' }),
+    PredefinedMenuItem.new({ item: 'HideOthers' }),
+    PredefinedMenuItem.new({ item: 'ShowAll' }),
+    PredefinedMenuItem.new({ item: 'Services' }),
+    PredefinedMenuItem.new({ item: 'Separator' }),
+    PredefinedMenuItem.new({ item: 'Separator' }),
     PredefinedMenuItem.new({ item: 'Quit' }),
+    MenuItem.new({
+      id: 'file-new',
+      text: 'New',
+      action: () => {
+        void runNew(handle, rebuildMenu);
+      },
+    }),
     MenuItem.new({
       id: 'file-open',
       text: 'Open…',
@@ -443,17 +555,46 @@ async function buildAppMenu(
     PredefinedMenuItem.new({ item: 'Paste' }),
     PredefinedMenuItem.new({ item: 'SelectAll' }),
     PredefinedMenuItem.new({ item: 'Separator' }),
+    PredefinedMenuItem.new({ item: 'Minimize' }),
+    // macOS convention calls this "Zoom"; Tauri's predefined item
+    // is `Maximize` and the platform layer renames the surface
+    // string to "Zoom" on macOS itself.
+    PredefinedMenuItem.new({ item: 'Maximize' }),
+    MenuItem.new({
+      id: 'help-homepage',
+      text: 'Visit project homepage',
+      action: () => {
+        void runOpenHomepage();
+      },
+    }),
   ]);
 
   const recentsSubmenu = await buildRecentsSubmenu(handle, rebuildMenu);
 
+  // macOS surfaces the first submenu's items under the application
+  // name regardless of the `text` field; on Windows / Linux the
+  // submenu is rendered with `DEFAULT_WINDOW_TITLE` as the label.
+  // Items not applicable on a platform (Hide / HideOthers / ShowAll /
+  // Services on Windows + Linux) are no-ops there — Tauri does the
+  // platform filtering, so the same item list is safe everywhere.
   const appMenu = await Submenu.new({
     text: DEFAULT_WINDOW_TITLE,
-    items: [quitItem],
+    items: [
+      aboutItem,
+      appMenuSepA,
+      preferencesItem,
+      appMenuSepB,
+      servicesItem,
+      hideItem,
+      hideOthersItem,
+      showAllItem,
+      quitItem,
+    ],
   });
   const fileMenu = await Submenu.new({
     text: 'File',
     items: [
+      newItem,
       openItem,
       recentsSubmenu,
       fileSepA,
@@ -478,8 +619,18 @@ async function buildAppMenu(
       selectAllItem,
     ],
   });
+  const windowMenu = await Submenu.new({
+    text: 'Window',
+    items: [minimizeItem, maximizeItem],
+  });
+  const helpMenu = await Submenu.new({
+    text: 'Help',
+    items: [homepageItem],
+  });
 
-  return Menu.new({ items: [appMenu, fileMenu, editMenu] });
+  return Menu.new({
+    items: [appMenu, fileMenu, editMenu, windowMenu, helpMenu],
+  });
 }
 
 /**

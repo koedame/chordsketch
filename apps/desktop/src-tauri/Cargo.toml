@@ -38,6 +38,11 @@ chordsketch-render-pdf = { path = "../../../crates/render-pdf" }
 serde_json = "1"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+# `tauri-plugin-opener` lets the Help → "Visit project homepage"
+# menu item open the repository URL in the user's default browser
+# without having to plumb a custom Rust command. The capability
+# system below scopes it to `https://github.com/koedame/chordsketch`.
+tauri-plugin-opener = "2"
 tauri-plugin-process = "2"
 tauri-plugin-updater = "2"
 
