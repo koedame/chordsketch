@@ -130,10 +130,13 @@ jobs:
         # out the nested `bundle/<type>/` layout so the collected
         # tree is easy to glob.
         shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+          ARCH_LABEL: ${{ matrix.platform.label }}
         run: |
           set -euo pipefail
           SRC="target/${{ matrix.platform.target }}/release/bundle"
-          DST="release-artefacts/${{ matrix.platform.label }}"
+          DST="release-artefacts/${ARCH_LABEL}"
           mkdir -p "$DST"
           # macOS: .dmg + .app.tar.gz (+ their .sig). Windows: .msi
           # + .exe (+ .sig). Linux: .deb + .rpm + .AppImage (+ .sig).
@@ -148,6 +151,42 @@ jobs:
                      '*.deb' '*.rpm' '*.AppImage' '*.AppImage.sig'; do
             find "$SRC" -type f -name "$pat" -exec cp -v {} "$DST/" \; || true
           done
+
+          # Tauri 2.10 emits `<ProductName>.app.tar.gz` and
+          # `<ProductName>.app.tar.gz.sig` for the macOS updater
+          # bundle WITHOUT the `_<version>_<arch>` suffix that the
+          # `.dmg` carries. Two macOS cells produce identically-named
+          # files, and the release-flatten step (job `release` below)
+          # then `cp`s both into a single flat `release/` directory,
+          # silently overwriting one cell's bundle with the other's.
+          # The `publish-updater-manifest` job further down expects
+          # `*_<version>_(aarch64|x64).app.tar.gz.sig` per platform
+          # — which never exists on the release. Fix: rename per
+          # cell to match the existing `_<version>_<arch>` convention
+          # before upload-artifact captures the cell. See #2260.
+          if [ "${ARCH_LABEL}" = "macos-aarch64" ] || [ "${ARCH_LABEL}" = "macos-x86_64" ]; then
+            VERSION="${TAG#desktop-v}"
+            case "${ARCH_LABEL}" in
+              macos-aarch64) ARCH=aarch64 ;;
+              macos-x86_64)  ARCH=x64 ;;
+            esac
+            for f in "$DST"/*.app.tar.gz "$DST"/*.app.tar.gz.sig; do
+              [ -e "$f" ] || continue
+              dir=$(dirname "$f")
+              base=$(basename "$f")
+              # Strip everything before `.app.tar.gz` so the rename is
+              # idempotent if Tauri ever starts emitting a versioned
+              # name in a future release — `ChordSketch.app.tar.gz`
+              # and `ChordSketch_<v>_<a>.app.tar.gz` both reduce to
+              # the same target name here.
+              ext="${base#*.app.tar.gz}"  # "" or ".sig"
+              new="ChordSketch_${VERSION}_${ARCH}.app.tar.gz${ext}"
+              if [ "$base" != "$new" ]; then
+                mv -v "$f" "$dir/$new"
+              fi
+            done
+          fi
+
           ls -la "$DST"
 
       - name: Upload cell artefacts
@@ -245,11 +284,21 @@ jobs:
         # `--generate-notes` asks GitHub to auto-build the body
         # from commits + merged PRs between the previous
         # `desktop-v*` tag and this one. `--verify-tag` ensures
-        # the tag actually exists on the remote. `--latest` is
-        # intentionally omitted — desktop releases share the repo
-        # with the CLI, and marking every desktop release "latest"
-        # would hide the CLI's own `v*` releases from the landing
-        # page.
+        # the tag actually exists on the remote.
+        #
+        # `--latest=false` is REQUIRED, not optional. When it is
+        # omitted, `gh release create` defaults to GitHub's
+        # `make_latest=legacy` semver-based picker, which compares
+        # `desktop-v0.3.0`'s semver against the CLI's `v*` tags
+        # and silently promotes the desktop tag to "latest". That
+        # broke `chordsketch-action@v1` for downstream users on
+        # 2026-04-25 because the action's "resolve latest"
+        # endpoint returned `desktop-v0.3.0` and tried to download
+        # CLI binaries from a release that only had desktop
+        # bundles (#2260). Mapping the desktop release out of the
+        # "latest" picker keeps the CLI's `v*` chain authoritative
+        # for the GitHub Releases landing page and for the
+        # `/releases/latest` API.
         #
         # Known cosmetic for the very first `desktop-v*` tag:
         # `--generate-notes` has no prior tag in the desktop
@@ -272,6 +321,7 @@ jobs:
             --title "$TAG"
             --generate-notes
             --verify-tag
+            --latest=false
           )
           # Prerelease suffix is anything after the `MAJOR.MINOR.PATCH`
           # triplet; the tag format regex (validate job above) already
