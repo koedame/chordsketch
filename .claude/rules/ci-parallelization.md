@@ -165,7 +165,7 @@ This keeps §5 applied to every macOS-bearing workflow while
 preserving the "always run to completion" guarantee for the release
 pipeline.
 
-Covered macOS-bearing workflows as of 2026-04-27:
+Covered macOS-bearing workflows as of 2026-04-26:
 
 - **PR-scoped cancel-in-progress** (main §5 shape): `ci.yml`,
   `swift.yml`, `python.yml`, `ruby.yml`, `kotlin.yml`, `napi.yml`,
