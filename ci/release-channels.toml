@@ -99,8 +99,10 @@ display = "npm — @chordsketch/wasm"
 kind = "npm"
 package = "@chordsketch/wasm"
 expected_version = "tag"
-required_secrets = ["NPM_TOKEN"]
-notes = "Patch skew from workspace is allowed; see ci/version-skew-allowlist.toml."
+required_secrets = []  # Per ADR-0008: maintainer-local manual publish;
+                       # no CI secret involved. Verification is still
+                       # `npm view @chordsketch/wasm version` (anonymous).
+notes = "Manual local publish per ADR-0008. Patch skew from workspace allowed; see ci/version-skew-allowlist.toml."
 
 # ---------------------------------------------------------------- npm (tree-sitter)
 
@@ -110,8 +112,8 @@ display = "npm — tree-sitter-chordpro"
 kind = "npm"
 package = "tree-sitter-chordpro"
 expected_version = "tag"
-required_secrets = ["NPM_TOKEN"]
-notes = "Unscoped package; version tracks workspace releases."
+required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
+notes = "Unscoped per ADR-0008 §Decision 6 (tree-sitter ecosystem convention). Manual local publish; version tracks workspace releases."
 
 # ---------------------------------------------------------------- installers
 
@@ -285,7 +287,7 @@ display = "npm — @chordsketch/node (resolver)"
 kind = "npm"
 package = "@chordsketch/node"
 expected_version = "tag"
-required_secrets = ["NPM_TOKEN"]
+required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
 
 [[channels]]
 id = "napi-linux-x64-gnu"
@@ -293,7 +295,7 @@ display = "npm — @chordsketch/node-linux-x64-gnu"
 kind = "npm"
 package = "@chordsketch/node-linux-x64-gnu"
 expected_version = "tag"
-required_secrets = ["NPM_TOKEN"]
+required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
 
 [[channels]]
 id = "napi-linux-arm64-gnu"
@@ -301,7 +303,7 @@ display = "npm — @chordsketch/node-linux-arm64-gnu"
 kind = "npm"
 package = "@chordsketch/node-linux-arm64-gnu"
 expected_version = "tag"
-required_secrets = ["NPM_TOKEN"]
+required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
 
 [[channels]]
 id = "napi-darwin-x64"
@@ -309,7 +311,7 @@ display = "npm — @chordsketch/node-darwin-x64"
 kind = "npm"
 package = "@chordsketch/node-darwin-x64"
 expected_version = "tag"
-required_secrets = ["NPM_TOKEN"]
+required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
 
 [[channels]]
 id = "napi-darwin-arm64"
@@ -317,7 +319,7 @@ display = "npm — @chordsketch/node-darwin-arm64"
 kind = "npm"
 package = "@chordsketch/node-darwin-arm64"
 expected_version = "tag"
-required_secrets = ["NPM_TOKEN"]
+required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
 
 [[channels]]
 id = "napi-win32-x64-msvc"
@@ -325,4 +327,4 @@ display = "npm — @chordsketch/node-win32-x64-msvc"
 kind = "npm"
 package = "@chordsketch/node-win32-x64-msvc"
 expected_version = "tag"
-required_secrets = ["NPM_TOKEN"]
+required_secrets = []  # Per ADR-0008: maintainer-local manual publish.

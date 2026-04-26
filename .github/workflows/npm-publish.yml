@@ -1,4 +1,10 @@
-name: Publish npm package
+name: Verify @chordsketch/wasm build
+
+# Per ADR-0008, npm publishing is a maintainer-local manual operation.
+# This workflow no longer publishes — it only verifies that the
+# @chordsketch/wasm package builds cleanly and packs into a valid
+# tarball. The maintainer runs `cd packages/npm && npm run build &&
+# npm publish` locally on the release machine.
 
 on:
   release:
@@ -6,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g., 0.2.0). Required for manual triggers.'
+        description: 'Version to set in package.json before verifying (e.g., 0.2.0).'
         required: true
         type: string
 
@@ -15,29 +21,13 @@ defaults:
     shell: bash
 
 jobs:
-  publish:
-    name: Publish @chordsketch/wasm
+  verify:
+    name: Verify @chordsketch/wasm
     runs-on: ubuntu-latest
-    # NPM_TOKEN is a repo-level secret, not an environment secret.
-    # The `environment:` block was removed to avoid creating GitHub
-    # deployment entries that stay in "failure" state when the granular
-    # npm token cannot publish (see #1790).
-    #
-    # npm publish is done MANUALLY as part of the release checklist.
-    # This workflow is kept as a convenience for cases where the token
-    # does work, but failure is expected and non-blocking.
-    continue-on-error: true
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Check required secrets present
-        # Fails fast when NPM_TOKEN is missing so "environment missing →
-        # silent skip" turns into a loud, diagnosable error. See #1506.
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: python3 scripts/check-env-secrets.py --channel npm-wasm
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
@@ -81,7 +71,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Derive version from git tag
         run: |
@@ -92,12 +81,6 @@ jobs:
         if: github.event_name == 'release'
 
       - name: Validate workflow_dispatch version
-        # Format-validate the user-supplied `inputs.version` before
-        # passing it to `npm version`. `npm version` also rejects
-        # non-semver, but the earlier, narrower check here matches
-        # the validation point the rest of the release workflows
-        # use (#1797) and fails with a consistent error message
-        # instead of npm's opaque "not a valid version" output.
         if: github.event_name == 'workflow_dispatch'
         uses: ./.github/actions/validate-release-version
         with:
@@ -111,23 +94,9 @@ jobs:
           npm version "$VERSION" --no-git-tag-version --allow-same-version
         if: github.event_name == 'workflow_dispatch'
 
-      - name: Check if version already published
-        id: check
-        run: |
-          cd packages/npm
-          PKG_NAME=$(node -p "require('./package.json').name")
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          if npm view "$PKG_NAME@$PKG_VERSION" version 2>/dev/null; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish to npm
-        if: steps.check.outputs.skip != 'true'
-        run: npm publish
+      - name: Pack tarball (dry run)
+        # Surfaces filename / size regressions without producing a
+        # publish artefact. The maintainer's local `npm publish` is
+        # the only operation that uploads to the registry.
         working-directory: packages/npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm pack --dry-run

@@ -137,37 +137,55 @@ at post-release verification rather than before the tag is cut.
    cargo publish -p chordsketch
    ```
 
-7. **Publish npm packages manually.** The granular `NPM_TOKEN` cannot
-   reliably publish via CI (see "Known operational quirks" below). Publish
-   from your local machine:
+7. **Publish every npm package manually from your local machine.**
+   Per [ADR-0008](adr/0008-npm-publishing-is-local.md), every npm
+   publish for every ChordSketch-distributed package is a maintainer-
+   local operation. CI never publishes to npm. The flow:
+
    ```bash
-   # @chordsketch/wasm
-   cd packages/npm && npm run build && npm publish && cd ../..
-   # tree-sitter-chordpro
+   # 7a. @chordsketch/wasm (dual web/node package)
+   cd packages/npm && npm run build && npm whoami && npm publish && cd ../..
+
+   # 7b. tree-sitter-chordpro
    cd packages/tree-sitter-chordpro && npm publish --access public && cd ../..
-   ```
-   Verify:
-   ```bash
-   npm view @chordsketch/wasm version        # should show X.Y.Z
-   npm view tree-sitter-chordpro version      # should show X.Y.Z
+
+   # 7c. @chordsketch/node (napi-rs, 5 platforms + meta)
+   #     CI's napi.yml uploads the platform tarballs to the GitHub
+   #     Release; the local script fetches and publishes them.
+   ./crates/napi/scripts/local-publish.sh v$V
    ```
 
-8. **Manually trigger all remaining publish workflows.** The release
-   created in step 5 uses `GITHUB_TOKEN`, which does NOT trigger
-   `release: published` workflows (GitHub anti-recursion rule). Every
-   workflow that depends on that event must be dispatched manually:
+   `npm whoami` should print `unchidev` before any publish; if not,
+   run `npm login` (interactive 2FA via browser) first. Each
+   `npm publish` will prompt for a 2FA OTP.
+
+   Verify:
+   ```bash
+   npm view @chordsketch/wasm version          # should show X.Y.Z
+   npm view tree-sitter-chordpro version        # should show X.Y.Z
+   npm view @chordsketch/node version          # should show X.Y.Z
+   for triple in linux-x64-gnu linux-arm64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
+     npm view "@chordsketch/node-$triple" version
+   done
+   ```
+
+8. **Manually trigger remaining release-event workflows.** The
+   release created in step 5 uses `GITHUB_TOKEN`, which does NOT
+   trigger `release: published` workflows (GitHub anti-recursion
+   rule; tracked in a follow-up ADR). Until the cascade-credential
+   fix lands, every non-npm workflow that depends on the release
+   event must be dispatched manually:
    ```bash
    V=X.Y.Z  # replace with the actual version
    gh workflow run post-release.yml          -f tag=v$V    -R koedame/chordsketch
    gh workflow run docker.yml                -f tag=v$V    -R koedame/chordsketch
    gh workflow run vscode-extension.yml      -f tag=v$V    -R koedame/chordsketch
-   gh workflow run napi.yml                  -f tag=v$V    -R koedame/chordsketch
    gh workflow run release-verify.yml        -f tag=v$V    -R koedame/chordsketch
+   gh workflow run napi.yml                  -f tag=v$V    -R koedame/chordsketch
    ```
-   ⚠️ **napi** (`@chordsketch/node-*`): the CI workflow will likely fail
-   with 404 due to the same granular token limitation. napi publish
-   requires manually downloading CI build artifacts — see
-   "napi distribution" section below for the full procedure.
+   The `napi.yml` dispatch above only re-runs the build matrix and
+   re-uploads platform tarballs to the Release for safety; it does
+   not publish to npm (Step 7c does that).
 
 9. **Wait for all workflows to complete** and verify each channel:
    ```bash
@@ -226,9 +244,9 @@ When adding a new channel, update both.
 | GitHub Releases | binary archives | `release.yml` on tag push | `GITHUB_TOKEN` | `source-build` job |
 | GHCR | `ghcr.io/koedame/chordsketch` | `docker.yml` on `release: published` | `GITHUB_TOKEN` (push), org policy must allow public packages | `docker-ghcr` job |
 | Docker Hub | `docker.io/koedame/chordsketch` | `docker.yml` on `release: published` | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | `docker-hub` job |
-| npm (wasm) | `@chordsketch/wasm` | manual local `npm publish` (Step 7) — CI cannot publish new packages (see quirks) | `NPM_TOKEN` (Granular Token, see quirks) | `npm-wasm` job |
-| npm (napi) | `@chordsketch/node` + 5 prebuilt platform packages | `napi.yml` on `release: published` | `NPM_TOKEN` | `napi-node` job |
-| npm (tree-sitter) | `tree-sitter-chordpro` | `npm-publish-tree-sitter.yml` on `release: published` | `NPM_TOKEN` | `npm-tree-sitter` rollup entry |
+| npm (wasm) | `@chordsketch/wasm` | manual local `npm publish` (Step 7a) — see ADR-0008 | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-wasm` job |
+| npm (napi) | `@chordsketch/node` + 5 prebuilt platform packages | manual local `crates/napi/scripts/local-publish.sh` (Step 7c) — see ADR-0008. CI uploads platform tarballs to the GitHub Release. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `napi-node` job |
+| npm (tree-sitter) | `tree-sitter-chordpro` | manual local `npm publish --access public` (Step 7b) — see ADR-0008 | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-tree-sitter` rollup entry |
 | Homebrew tap | `koedame/tap/chordsketch` | `post-release.yml` on `release: published` | `TAP_GITHUB_TOKEN` | `homebrew` job |
 | Scoop bucket | `koedame/scoop-bucket/chordsketch` | `post-release.yml` on `release: published` | `TAP_GITHUB_TOKEN` | `scoop` job |
 | AUR | `chordsketch` | `post-release.yml` on `release: published` | `AUR_SSH_KEY` | `aur` rollup entry |

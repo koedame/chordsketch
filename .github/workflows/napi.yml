@@ -218,48 +218,36 @@ jobs:
       - name: Format check
         run: cargo fmt --check -p chordsketch-napi
 
-  publish:
-    name: Publish to npm (@chordsketch/node + 5 platforms)
-    # Runs only on release: published or explicit workflow_dispatch.
-    # `build` must succeed so every target triple has an artifact to
-    # publish; we download them all and assemble each platform package
-    # before running `npm publish`.
+  upload-release-tarballs:
+    name: Upload napi tarballs to GitHub Release
+    # Per ADR-0008, npm publishing is a maintainer-local manual operation.
+    # This job no longer publishes — it stages the platform packages with
+    # their prebuilt .node files and uploads them as compressed tarballs to
+    # the GitHub Release for the maintainer to fetch via `gh release
+    # download <tag>` and publish locally with the script in
+    # `crates/napi/scripts/local-publish.sh`.
+    #
+    # `build` must succeed so every target triple has an artifact to stage;
+    # we download them all, assemble each platform package, and tar the
+    # six packages (5 platforms + meta) into the release.
     needs: [build]
     if: |
       github.event_name == 'release' ||
       (github.event_name == 'workflow_dispatch' && inputs.tag != '')
     runs-on: ubuntu-latest
-    # `continue-on-error: true` keeps the overall workflow green when the
-    # See npm-publish.yml comment — environment block removed to avoid
-    # stale deployment entries (#1790). NPM_TOKEN is a repo-level secret.
-    continue-on-error: true
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        # No `ref:` override — always check out the default branch (main) so
-        # scripts/check-env-secrets.py is present. The publish step uses
-        # pre-built .node artifacts downloaded from the build jobs; version
-        # is determined by the tag input, not by checked-out source.
-
-      - name: Check required secrets present
-        # Fails fast when NPM_TOKEN is missing so "environment missing →
-        # silent skip" turns into a loud, diagnosable error. Mirrors the
-        # pattern used in every other publish job. See #1506.
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: python3 scripts/check-env-secrets.py --channel napi-main
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: 22
-          registry-url: "https://registry.npmjs.org"
 
       - name: Validate release tag
         # Format-validate the user-supplied tag before downstream steps
-        # derive a `version` from it and use the value in npm publish.
-        # See #1797.
+        # derive a `version` from it. See #1797.
         uses: ./.github/actions/validate-release-tag
         with:
           tag: ${{ inputs.tag || github.event.release.tag_name || github.ref_name }}
@@ -279,7 +267,8 @@ jobs:
           fi
           version="${tag#v}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Publishing @chordsketch/node@$version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Staging @chordsketch/node@$version for local publish"
 
       - name: Download all platform artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -292,10 +281,9 @@ jobs:
         # Each `crates/napi/npm/<triple>/package.json` declares a `main` and
         # `files` entry referencing a specific `.node` filename. Copy the
         # downloaded artifact into the staging directory under that name so
-        # `npm publish` picks it up via the `files` allowlist. The `{ok, }`
-        # suffix in the loop makes the script fail loud if a target's
-        # artifact is missing, rather than silently publishing an empty
-        # package.
+        # the local `npm publish` picks it up via the `files` allowlist.
+        # Fail loud if a target's artifact is missing, rather than uploading
+        # an empty package.
         working-directory: crates/napi
         run: |
           set -euo pipefail
@@ -320,7 +308,7 @@ jobs:
               exit 1
             fi
             cp "$node_file" "$dst_dir/chordsketch-napi.${triple}.node"
-            # Verify the file is non-empty — a zero-byte .node publishes
+            # Verify the file is non-empty — a zero-byte .node uploads
             # without error but fails at require() time on the user.
             if [ ! -s "$dst_dir/chordsketch-napi.${triple}.node" ]; then
               echo "::error::$dst_dir/chordsketch-napi.${triple}.node is empty"
@@ -333,8 +321,8 @@ jobs:
         # crates/napi/package.json and each crates/napi/npm/<triple>/package.json
         # all have a committed `version` field that must match the release tag
         # exactly. The version-consistency check enforces this on every PR, but
-        # re-verify at publish time to catch any out-of-band edit that slipped
-        # through (e.g., a hotfix tag cut from an older commit).
+        # re-verify here to catch any out-of-band edit that slipped through
+        # (e.g., a hotfix tag cut from an older commit).
         env:
           EXPECTED: ${{ steps.version.outputs.version }}
         run: |
@@ -353,43 +341,28 @@ jobs:
             check "crates/napi/npm/$triple"
           done
 
-      - name: Publish each platform package
-        # Publish the five platform packages FIRST. Order within this group
-        # does not matter, but all five must succeed before the main resolver
-        # package is published — the resolver's `optionalDependencies` point
-        # at them, and installing the resolver before the platform packages
-        # are live causes npm to silently skip them and then `require()`
-        # fails at runtime.
-        #
-        # `--access public` is required for scoped packages under a free npm
-        # account — without it, the first publish would default to private
-        # and be silently invisible to anonymous pulls.
+      - name: Pack each platform tarball with npm pack
+        # `npm pack` produces a tarball with the exact filename and
+        # contents `npm publish` would upload, so the maintainer's local
+        # publish step is byte-equivalent to a CI publish would be.
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
+          mkdir -p release-staging
           for triple in linux-x64-gnu linux-arm64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
-            pkg="@chordsketch/node-${triple}"
-            if npm view "$pkg@$VERSION" version >/dev/null 2>&1; then
-              echo "$pkg@$VERSION already published — skipping"
-              continue
-            fi
-            (cd "crates/napi/npm/${triple}" && npm publish --access public)
+            pkg_dir="crates/napi/npm/${triple}"
+            (cd "$pkg_dir" && npm pack --pack-destination=../../../../release-staging)
           done
+          (cd crates/napi && npm pack --pack-destination=../../release-staging)
+          ls -la release-staging
 
-      - name: Publish resolver package (@chordsketch/node)
-        # Publish the main resolver LAST, after all platform packages are
-        # live on the registry. Same skip-if-already-published guard as the
-        # platform loop above.
+      - name: Upload tarballs to GitHub Release
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        # `--clobber` lets a re-run overwrite the previous tarball if a
+        # build was rebuilt against the same tag.
         run: |
           set -euo pipefail
-          if npm view "@chordsketch/node@$VERSION" version >/dev/null 2>&1; then
-            echo "@chordsketch/node@$VERSION already published — skipping"
-            exit 0
-          fi
-          cd crates/napi
-          npm publish --access public
+          gh release upload "$TAG" release-staging/*.tgz --clobber -R "$GITHUB_REPOSITORY"

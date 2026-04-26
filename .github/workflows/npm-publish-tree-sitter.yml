@@ -1,8 +1,14 @@
-name: Publish tree-sitter-chordpro
+name: Verify tree-sitter-chordpro build
 
-# Publishes the tree-sitter-chordpro grammar package to npm.
-# The generated parser files (src/parser.c, src/grammar.json) are already
-# committed, so no build step is needed — this is a pure publish job.
+# Per ADR-0008, npm publishing is a maintainer-local manual operation.
+# This workflow no longer publishes — it only verifies that the
+# tree-sitter-chordpro package's pre-generated parser files are
+# present and that the package packs into a valid tarball. The
+# maintainer runs `cd packages/tree-sitter-chordpro && npm publish
+# --access public` locally on the release machine.
+#
+# The generated parser files (src/parser.c, src/grammar.json) are
+# already committed, so no build step is needed.
 
 on:
   release:
@@ -10,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g., 0.1.0). Required for manual triggers.'
+        description: 'Version to set in package.json before verifying (e.g., 0.1.0).'
         required: true
         type: string
 
@@ -19,12 +25,9 @@ defaults:
     shell: bash
 
 jobs:
-  publish:
-    name: Publish tree-sitter-chordpro
+  verify:
+    name: Verify tree-sitter-chordpro
     runs-on: ubuntu-latest
-    # See npm-publish.yml comment — environment block removed to avoid
-    # stale deployment entries (#1790).
-    continue-on-error: true
     permissions:
       contents: read
     defaults:
@@ -33,16 +36,10 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Check required secrets present
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: python3 ../../scripts/check-env-secrets.py --channel npm-tree-sitter
-
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Derive version from git tag
         if: github.event_name == 'release'
@@ -52,9 +49,6 @@ jobs:
           npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Validate workflow_dispatch version
-        # See rationale in npm-publish.yml. Consistent validation
-        # point across every workflow that accepts a version / tag
-        # input. Per #1797 / #1815.
         if: github.event_name == 'workflow_dispatch'
         uses: ./.github/actions/validate-release-version
         with:
@@ -66,21 +60,19 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      - name: Check if version already published
-        id: check
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Verify generated parser files are present
+        # The grammar's src/parser.c and src/grammar.json are
+        # committed (not generated at publish time). Make sure
+        # they exist and reference the current version, so a
+        # forgotten `tree-sitter generate` after a grammar change
+        # is caught here rather than after the maintainer publishes.
         run: |
-          PKG_NAME=$(node -p "require('./package.json').name")
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          if npm view "$PKG_NAME@$PKG_VERSION" version 2>/dev/null; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
+          test -f src/parser.c
+          test -f src/grammar.json
 
-      - name: Publish to npm
-        if: steps.check.outputs.skip != 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+      - name: Pack tarball (dry run)
+        # Surfaces filename / size regressions without producing a
+        # publish artefact. The maintainer's local `npm publish
+        # --access public` is the only operation that uploads to
+        # the registry.
+        run: npm pack --dry-run
