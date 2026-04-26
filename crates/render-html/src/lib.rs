@@ -1,7 +1,11 @@
 //! HTML renderer for ChordPro documents.
 //!
-//! Converts a parsed ChordPro AST into a self-contained HTML5 document with
-//! embedded CSS for chord-over-lyrics layout.
+//! Converts a parsed ChordPro AST into either a self-contained HTML5 document
+//! (with embedded CSS) or a body-only `<div class="song">` fragment suitable
+//! for embedding in a host document. Use [`render_song`] / [`render_songs`]
+//! for the full-document API and [`render_song_body`] / [`render_songs_body`]
+//! for the fragment API. Pair the latter with [`render_html_css`] to obtain
+//! the matching stylesheet.
 //!
 //! # Security
 //!
