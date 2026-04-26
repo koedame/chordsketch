@@ -1,6 +1,6 @@
 # 0005. Tauri updater key management (Ed25519, no password)
 
-- **Status**: Accepted
+- **Status**: Superseded by [ADR-0007](0007-tauri-updater-key-with-password.md)
 - **Date**: 2026-04-24
 
 ## Context
