@@ -58,15 +58,21 @@ JavaScript/TypeScript.
 
 ### Homebrew (macOS / Linux)
 
+CLI (formula):
+
 ```bash
 brew tap koedame/tap
 brew install chordsketch
 ```
 
-The Homebrew tap also ships a **Cask** for the ChordSketch
-desktop app (`.app`). See [Desktop application](#desktop-application)
-below for the install snippet and post-install quarantine-flag
-step.
+[Desktop app](#desktop-application) (cask, macOS only):
+
+```bash
+brew install --cask chordsketch
+```
+
+The cask installs `ChordSketch.app` into `/Applications/`; Homebrew
+clears the Gatekeeper quarantine flag automatically on install.
 
 ### Scoop (Windows)
 
@@ -126,19 +132,8 @@ cargo install --path crates/cli
 
 ChordSketch also ships a native desktop editor (Tauri v2) with
 live ChordPro preview, syntax highlighting, transpose, file
-open/save, and PDF / HTML export.
-
-Once the first `desktop-v*` release ships, install via the
-Homebrew Cask in `koedame/tap`:
-
-```bash
-brew tap koedame/tap
-brew install --cask chordsketch
-```
-
-The cask installs `ChordSketch.app` into `/Applications/`.
-Homebrew automatically clears the Gatekeeper quarantine flag
-during install, so the app launches directly.
+open/save, and PDF / HTML export. Install via the Homebrew cask
+under `### Homebrew (macOS / Linux)` above.
 
 If you instead download the `.dmg` directly from a GitHub
 Release (bypassing Homebrew), macOS Gatekeeper will block the
