@@ -58,10 +58,15 @@ JavaScript/TypeScript.
 
 ### Homebrew (macOS / Linux)
 
-CLI (formula):
+Add the tap (required for both the CLI formula and the desktop cask):
 
 ```bash
 brew tap koedame/tap
+```
+
+CLI (formula):
+
+```bash
 brew install chordsketch
 ```
 
