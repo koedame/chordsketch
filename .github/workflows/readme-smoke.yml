@@ -358,6 +358,41 @@ jobs:
       - name: Render smoke
         uses: ./.github/actions/cli-render-smoke
 
+  homebrew-cask:
+    name: Homebrew Cask (macOS)
+    # The cask installs `ChordSketch.app` into `/Applications/`, so the
+    # smoke test has to run on a real macOS host. Linux + ubuntu-latest
+    # have no `/Applications` and `brew install --cask` is macOS-only.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Tap and install cask
+        run: |
+          set -euo pipefail
+          brew tap koedame/tap
+          brew install --cask chordsketch
+          # Verify the app bundle landed where the README promises.
+          if [ ! -d /Applications/ChordSketch.app ]; then
+            echo "::error::ChordSketch.app missing from /Applications after cask install" >&2
+            exit 1
+          fi
+          # Sanity-check the bundle metadata so a broken DMG (wrong SHA,
+          # truncated bundle, missing Info.plist) fails the job rather
+          # than silently passing on the directory check alone.
+          VERSION=$(/usr/bin/defaults read \
+            /Applications/ChordSketch.app/Contents/Info.plist \
+            CFBundleShortVersionString)
+          if [ -z "$VERSION" ]; then
+            echo "::error::CFBundleShortVersionString missing from Info.plist" >&2
+            exit 1
+          fi
+          echo "Installed ChordSketch.app version: $VERSION"
+          # `brew info --cask` exits non-zero if the cask manifest is
+          # malformed, giving a second independent signal beyond the
+          # install-and-bundle-check above.
+          brew info --cask chordsketch
+
   scoop:
     name: Scoop (Windows)
     runs-on: windows-latest
@@ -603,6 +638,7 @@ jobs:
       - cargo-install
       - source-build
       - homebrew
+      - homebrew-cask
       - scoop
       - winget
       - chocolatey
