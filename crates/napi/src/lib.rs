@@ -398,6 +398,94 @@ pub fn render_pdf_with_warnings_and_options(
     do_render_pdf_with_warnings(&input, &config, transpose)
 }
 
+/// Render ChordPro input as a body-only HTML fragment using default
+/// configuration.
+///
+/// Unlike [`render_html`], the returned string is just the
+/// `<div class="song">...</div>` markup — no `<!DOCTYPE>`, `<html>`,
+/// `<head>`, `<title>`, or embedded `<style>` block. Use this from
+/// hosts that supply their own document envelope so the rendered
+/// chord-over-lyrics layout does not depend on HTML5's nested-document
+/// recovery rules — see #2279.
+///
+/// Pair with [`render_html_css`] to obtain the matching stylesheet.
+#[must_use = "callers must handle render errors"]
+#[napi]
+pub fn render_html_body(input: String) -> Result<String> {
+    do_render_string(
+        &input,
+        &chordsketch_chordpro::config::Config::defaults(),
+        0,
+        chordsketch_render_html::render_songs_body_with_warnings,
+    )
+}
+
+/// Render ChordPro input as a body-only HTML fragment with options.
+///
+/// See [`render_html_body`] for the body-only contract.
+#[must_use = "callers must handle render errors"]
+#[napi]
+pub fn render_html_body_with_options(input: String, options: RenderOptions) -> Result<String> {
+    let config = resolve_config(options.config)?;
+    let transpose = parse_transpose(options.transpose.unwrap_or(0))?;
+    do_render_string(
+        &input,
+        &config,
+        transpose,
+        chordsketch_render_html::render_songs_body_with_warnings,
+    )
+}
+
+/// Render ChordPro input as a body-only HTML fragment, returning both
+/// output and captured warnings.
+///
+/// See [`render_html_body`] for the body-only contract and
+/// [`render_text_with_warnings`] for the warnings contract.
+#[must_use = "callers must handle render errors"]
+#[napi]
+pub fn render_html_body_with_warnings(input: String) -> Result<TextRenderWithWarnings> {
+    do_render_string_with_warnings(
+        &input,
+        &chordsketch_chordpro::config::Config::defaults(),
+        0,
+        chordsketch_render_html::render_songs_body_with_warnings,
+    )
+}
+
+/// Render ChordPro input as a body-only HTML fragment with options,
+/// returning both output and captured warnings.
+///
+/// Combines the options payload of [`render_html_body_with_options`]
+/// with the structured-warning capture of
+/// [`render_html_body_with_warnings`].
+#[must_use = "callers must handle render errors"]
+#[napi]
+pub fn render_html_body_with_warnings_and_options(
+    input: String,
+    options: RenderOptions,
+) -> Result<TextRenderWithWarnings> {
+    let config = resolve_config(options.config)?;
+    let transpose = parse_transpose(options.transpose.unwrap_or(0))?;
+    do_render_string_with_warnings(
+        &input,
+        &config,
+        transpose,
+        chordsketch_render_html::render_songs_body_with_warnings,
+    )
+}
+
+/// Returns the canonical chord-over-lyrics CSS that
+/// [`render_html`] / [`render_html_with_options`] embed inside
+/// `<style>`.
+///
+/// Pair with [`render_html_body`] / [`render_html_body_with_options`]
+/// when the consumer is supplying its own document envelope.
+#[must_use]
+#[napi]
+pub fn render_html_css() -> String {
+    chordsketch_render_html::render_html_css().to_string()
+}
+
 /// A single validation issue reported by [`validate`]. Mirrors the
 /// `ValidationError` interface in `crates/napi/index.d.ts`; the `#[napi(object)]`
 /// attribute marshals this into a plain JS `{line, column, message}` record.

@@ -299,6 +299,65 @@ pub fn render_pdf_with_options(input: &str, options: JsValue) -> Result<Vec<u8>,
     )
 }
 
+/// Render ChordPro input as a body-only HTML fragment using default
+/// configuration.
+///
+/// Unlike [`render_html`], the returned string is just the
+/// `<div class="song">...</div>` markup — no `<!DOCTYPE>`, `<html>`,
+/// `<head>`, `<title>`, or embedded `<style>` block. Use this from
+/// hosts that supply their own document envelope (the playground's
+/// `<iframe srcdoc>`, the desktop Tauri shell, the VS Code WebView
+/// preview) so the rendered chord-over-lyrics layout does not depend
+/// on HTML5's nested-document recovery rules — see #2279.
+///
+/// Pair with [`render_html_css`] to obtain the matching stylesheet.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string on parse failure.
+#[must_use = "callers must handle render errors"]
+#[wasm_bindgen]
+pub fn render_html_body(input: &str) -> Result<String, JsValue> {
+    render_string_inner(
+        input,
+        RenderOptions::default(),
+        chordsketch_render_html::render_songs_body_with_warnings,
+    )
+}
+
+/// Render ChordPro input as a body-only HTML fragment with options.
+///
+/// See [`render_html_body`] for the body-only contract and
+/// [`render_html_with_options`] for the `options` format.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string on parse failure or invalid options.
+#[must_use = "callers must handle render errors"]
+#[wasm_bindgen]
+pub fn render_html_body_with_options(input: &str, options: JsValue) -> Result<String, JsValue> {
+    render_string_inner(
+        input,
+        deserialize_options(options)?,
+        chordsketch_render_html::render_songs_body_with_warnings,
+    )
+}
+
+/// Return the canonical chord-over-lyrics CSS that
+/// [`render_html`] / [`render_html_with_options`] embed inside
+/// `<style>`.
+///
+/// Pair with [`render_html_body`] / [`render_html_body_with_options`]
+/// when the consumer is supplying its own document envelope. The
+/// contract is byte-stable; consumers can hash the result for
+/// cache-busting filenames or compare it against an expected hash to
+/// detect renderer-CSS drift across versions.
+#[must_use]
+#[wasm_bindgen]
+pub fn render_html_css() -> String {
+    chordsketch_render_html::render_html_css().to_string()
+}
+
 /// Structured render result returned by the `*_with_warnings` family.
 ///
 /// Serialized to a plain JS object `{ output, warnings }` where
@@ -521,6 +580,51 @@ pub fn render_pdf_with_warnings_and_options(
     )
 }
 
+/// Render ChordPro input as a body-only HTML fragment and return
+/// `{ output, warnings }`.
+///
+/// Body-only counterpart to [`render_html_with_warnings`]; returns the
+/// `<div class="song">...</div>` markup without `<!DOCTYPE>` /
+/// `<html>` / `<head>` / `<style>`. See [`render_html_body`] for the
+/// fragment contract and [`render_html_with_warnings`] for the
+/// warnings contract.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string on parse failure.
+#[must_use = "callers must handle render errors"]
+#[wasm_bindgen(js_name = renderHtmlBodyWithWarnings)]
+pub fn render_html_body_with_warnings(input: &str) -> Result<JsValue, JsValue> {
+    render_string_with_warnings_inner(
+        input,
+        RenderOptions::default(),
+        chordsketch_render_html::render_songs_body_with_warnings,
+    )
+}
+
+/// Render ChordPro input as a body-only HTML fragment with options
+/// and return `{ output, warnings }`.
+///
+/// Combines the `options` payload of [`render_html_body_with_options`]
+/// with the structured-warning capture of
+/// [`render_html_body_with_warnings`].
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string on parse failure or invalid options.
+#[must_use = "callers must handle render errors"]
+#[wasm_bindgen(js_name = renderHtmlBodyWithWarningsAndOptions)]
+pub fn render_html_body_with_warnings_and_options(
+    input: &str,
+    options: JsValue,
+) -> Result<JsValue, JsValue> {
+    render_string_with_warnings_inner(
+        input,
+        deserialize_options(options)?,
+        chordsketch_render_html::render_songs_body_with_warnings,
+    )
+}
+
 /// Returns the ChordSketch library version.
 #[must_use]
 #[wasm_bindgen]
@@ -700,6 +804,35 @@ mod tests {
         // Lenient parser produces an empty song even for blank input.
         let result = render_html("");
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_render_html_body_omits_document_envelope() {
+        let body = render_html_body(MINIMAL_INPUT).unwrap();
+        // Body-only contract — none of the document-level wrappers
+        // emitted by `render_html` may appear here.
+        assert!(!body.contains("<!DOCTYPE"));
+        assert!(!body.contains("<html"));
+        assert!(!body.contains("</html>"));
+        assert!(!body.contains("<head"));
+        assert!(!body.contains("<style"));
+        assert!(!body.contains("<title>"));
+        // The song markup itself must still be present.
+        assert!(body.contains("<div class=\"song\">"));
+    }
+
+    #[test]
+    fn test_render_html_css_returns_canonical_block() {
+        let css = render_html_css();
+        // Pin the load-bearing selectors that make the
+        // chord-over-lyrics layout work.
+        assert!(css.contains(".chord-block"));
+        assert!(css.contains(".lyrics"));
+        // The full-document renderer embeds *exactly* this string —
+        // assert lockstep so future divergence between the WASM
+        // export and the embedded copy is caught immediately.
+        let full = render_html(MINIMAL_INPUT).unwrap();
+        assert!(full.contains(&css));
     }
 
     #[test]

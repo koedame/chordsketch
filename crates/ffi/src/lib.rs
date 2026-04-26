@@ -251,6 +251,83 @@ pub fn parse_and_render_pdf_with_warnings(
     })
 }
 
+/// Parse ChordPro input and render as a body-only HTML fragment.
+///
+/// Unlike [`parse_and_render_html`], the returned string is just the
+/// `<div class="song">...</div>` markup — no `<!DOCTYPE>`, `<html>`,
+/// `<head>`, `<title>`, or embedded `<style>` block. Use this from
+/// hosts that supply their own document envelope so the rendered
+/// chord-over-lyrics layout does not depend on HTML5's nested-document
+/// recovery rules — see #2279.
+///
+/// Pair with [`render_html_css`] to obtain the matching stylesheet.
+///
+/// Render warnings are forwarded to stderr via `flush_warnings`. Use
+/// [`parse_and_render_html_body_with_warnings`] to capture them
+/// programmatically.
+///
+/// See [`parse_and_render_text`] for `transpose` parameter documentation.
+///
+/// # Errors
+///
+/// Returns [`ChordSketchError::InvalidConfig`] when `config_json` cannot
+/// be parsed.
+#[must_use = "callers must handle parse and render errors"]
+pub fn parse_and_render_html_body(
+    input: String,
+    config_json: Option<String>,
+    transpose: Option<i8>,
+) -> Result<String, ChordSketchError> {
+    let config = resolve_config(config_json)?;
+    let songs = parse_songs(&input)?;
+    Ok(flush_warnings(
+        chordsketch_render_html::render_songs_body_with_warnings(
+            &songs,
+            transpose.unwrap_or(0),
+            &config,
+        ),
+    ))
+}
+
+/// Parse ChordPro input, render as a body-only HTML fragment, and return
+/// warnings alongside the output.
+///
+/// See [`parse_and_render_html_body`] for the body-only contract and
+/// [`parse_and_render_text_with_warnings`] for the warnings contract.
+///
+/// # Errors
+///
+/// Returns [`ChordSketchError::InvalidConfig`] when `config_json` cannot
+/// be parsed.
+#[must_use = "callers must handle parse and render errors"]
+pub fn parse_and_render_html_body_with_warnings(
+    input: String,
+    config_json: Option<String>,
+    transpose: Option<i8>,
+) -> Result<TextRenderWithWarnings, ChordSketchError> {
+    let config = resolve_config(config_json)?;
+    let songs = parse_songs(&input)?;
+    let result = chordsketch_render_html::render_songs_body_with_warnings(
+        &songs,
+        transpose.unwrap_or(0),
+        &config,
+    );
+    Ok(TextRenderWithWarnings {
+        output: result.output,
+        warnings: result.warnings,
+    })
+}
+
+/// Returns the canonical chord-over-lyrics CSS that
+/// [`parse_and_render_html`] embeds inside `<style>`.
+///
+/// Pair with [`parse_and_render_html_body`] when the consumer is
+/// supplying its own document envelope.
+#[must_use]
+pub fn render_html_css() -> String {
+    chordsketch_render_html::render_html_css().to_string()
+}
+
 /// A single validation issue reported by [`validate`].
 ///
 /// Mirrors the NAPI binding's `ValidationError` (#1990) and the UDL

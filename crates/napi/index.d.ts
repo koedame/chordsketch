@@ -150,6 +150,47 @@ export function renderPdfWithWarningsAndOptions(
 ): PdfRenderWithWarnings;
 
 /**
+ * Renders the ChordPro source to a body-only HTML fragment — just
+ * the `<div class="song">...</div>` markup, with no `<!DOCTYPE>`,
+ * `<html>`, `<head>`, `<title>`, or embedded `<style>`. Use this
+ * from hosts that supply their own document envelope so the
+ * chord-over-lyrics layout does not rely on HTML5's nested-document
+ * recovery rules. Pair with {@link renderHtmlCss} for the matching
+ * stylesheet (#2279).
+ */
+export function renderHtmlBody(source: string): string;
+
+/**
+ * Body-only counterpart to {@link renderHtmlWithOptions}.
+ */
+export function renderHtmlBodyWithOptions(
+  source: string,
+  options: RenderOptions,
+): string;
+
+/**
+ * Body-only counterpart to {@link renderHtmlWithWarnings}; returns
+ * the fragment alongside structured warnings.
+ */
+export function renderHtmlBodyWithWarnings(source: string): TextRenderWithWarnings;
+
+/**
+ * Body-only counterpart to {@link renderHtmlWithWarningsAndOptions}.
+ */
+export function renderHtmlBodyWithWarningsAndOptions(
+  source: string,
+  options: RenderOptions,
+): TextRenderWithWarnings;
+
+/**
+ * Returns the canonical chord-over-lyrics CSS that
+ * {@link renderHtml} / {@link renderHtmlWithOptions} embed inside
+ * `<style>`. Pair with {@link renderHtmlBody} when supplying your
+ * own document envelope (#2279).
+ */
+export function renderHtmlCss(): string;
+
+/**
  * Validates a ChordPro source document and returns a list of issues. An
  * empty array indicates the document parses cleanly.
  */
