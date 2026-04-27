@@ -492,6 +492,7 @@ pub fn render_html_css() -> String {
 /// line structure instead of reflowing onto subsequent rows.
 ///
 /// See [`render_html_with_options`] for the `options` format.
+#[must_use = "callers must handle render errors"]
 #[napi]
 pub fn render_html_css_with_options(options: RenderOptions) -> napi::Result<String> {
     let config = resolve_config(options.config)?;

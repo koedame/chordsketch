@@ -337,6 +337,7 @@ pub fn render_html_css() -> String {
 ///
 /// Returns [`ChordSketchError::InvalidConfig`] when `config_json` cannot
 /// be parsed.
+#[must_use = "callers must handle render errors"]
 pub fn render_html_css_with_config_json(
     config_json: Option<String>,
 ) -> Result<String, ChordSketchError> {

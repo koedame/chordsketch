@@ -369,6 +369,7 @@ pub fn render_html_css() -> String {
 ///
 /// Returns a `JsValue` error string if the `config` option value is not a
 /// known preset and cannot be parsed as RRJSON.
+#[must_use = "callers must handle render errors"]
 #[wasm_bindgen]
 pub fn render_html_css_with_options(options: JsValue) -> Result<String, JsValue> {
     let opts = deserialize_options(options)?;
