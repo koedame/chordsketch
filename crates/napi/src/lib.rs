@@ -483,7 +483,7 @@ pub fn render_html_body_with_warnings_and_options(
 #[must_use]
 #[napi]
 pub fn render_html_css() -> String {
-    chordsketch_render_html::render_html_css().to_string()
+    chordsketch_render_html::render_html_css()
 }
 
 /// A single validation issue reported by [`validate`]. Mirrors the

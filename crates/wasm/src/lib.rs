@@ -355,7 +355,7 @@ pub fn render_html_body_with_options(input: &str, options: JsValue) -> Result<St
 #[must_use]
 #[wasm_bindgen]
 pub fn render_html_css() -> String {
-    chordsketch_render_html::render_html_css().to_string()
+    chordsketch_render_html::render_html_css()
 }
 
 /// Structured render result returned by the `*_with_warnings` family.

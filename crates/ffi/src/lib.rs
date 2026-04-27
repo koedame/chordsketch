@@ -325,7 +325,7 @@ pub fn parse_and_render_html_body_with_warnings(
 /// supplying its own document envelope.
 #[must_use]
 pub fn render_html_css() -> String {
-    chordsketch_render_html::render_html_css().to_string()
+    chordsketch_render_html::render_html_css()
 }
 
 /// A single validation issue reported by [`validate`].
