@@ -12,7 +12,11 @@
  * always `null` for `type="module"` scripts (HTML spec).
  */
 
-import init, { render_html_with_options, render_text_with_options } from '@chordsketch/wasm';
+import init, {
+  render_html_body_with_options,
+  render_html_css,
+  render_text_with_options,
+} from '@chordsketch/wasm';
 
 /** VS Code WebView API acquired from the global injected by the host. */
 declare function acquireVsCodeApi(): {
@@ -137,12 +141,46 @@ function formatError(e: unknown): string {
 }
 
 /**
- * Wraps rendered HTML body content with baseline CSS.
+ * Canonical chord-over-lyrics CSS exported by `@chordsketch/wasm`.
  *
- * Mirrors the `HTML_FRAME_TEMPLATE` helper in `packages/ui-web/src/index.ts`.
- * The rendered HTML from `chordsketch-render-html` contains only the body
- * content (sections, chords-above-lyrics, chord diagrams) without a full
- * document wrapper.
+ * Assigned in {@link main} after `await init()` resolves — wasm-bindgen
+ * exports require WASM memory to be initialised before they are callable,
+ * and module-level evaluation runs before `main()`. Cached (not re-called
+ * on every render) because the value is byte-stable for the lifetime of a
+ * build. `wrapHtml` may only be called after `wasmReady` is `true`, which
+ * is set immediately after this assignment in `main()`, so `wrapHtml` is
+ * guaranteed to see the populated string.
+ */
+let CHORDSKETCH_CSS = '';
+
+/**
+ * Wraps a body-only HTML fragment from `render_html_body_with_options`
+ * inside a complete document for the preview iframe.
+ *
+ * Pre-#2279 this helper bespoke-defined a `<style>` block and then
+ * embedded the WASM output, which itself was already a complete
+ * `<!DOCTYPE>` document — `chord-block` / `lyrics` / `min-height`
+ * styles only survived because of HTML5's nested-document recovery
+ * silently dropping the inner envelope. Once that recovery diverged
+ * from the renderer's expectations, chord-less segments in
+ * chord-bearing lines floated up by ~1 chord-row and the lyrics
+ * baseline drifted (#2279).
+ *
+ * The fix has two parts:
+ *
+ *   1. Use `render_html_body_with_options` so the WASM output is
+ *      *just* the `<div class="song">...</div>` markup — no inner
+ *      document.
+ *   2. Inline `render_html_css()` (the canonical chord-over-lyrics
+ *      CSS) into the wrapper *first*, then layer the VS-Code-specific
+ *      theme overrides on top so they win cascade order.
+ *
+ * The theme block here keeps the preview close to VS Code's body
+ * styling (font, padding, line-height) without re-defining the
+ * load-bearing layout selectors. Removing the bespoke `.chord` color
+ * is intentional — the canonical CSS already covers it; the previous
+ * override was load-bearing only because of the double-wrap and is
+ * not worth preserving.
  */
 function wrapHtml(body: string): string {
   return `<!DOCTYPE html>
@@ -150,17 +188,24 @@ function wrapHtml(body: string): string {
 <head>
 <meta charset="UTF-8">
 <style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    padding: 1.5rem;
-    line-height: 1.6;
-    color: #333;
-  }
-  .chord { color: #e94560; font-weight: bold; }
-  h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.1rem; color: #666; margin-bottom: 1rem; }
-  section { margin-bottom: 1rem; }
-  .song-separator { border-top: 2px solid #ddd; margin: 2rem 0; }
+${CHORDSKETCH_CSS}
+/* VS Code preview theme overrides — applied after the canonical
+   chord-over-lyrics CSS so cascade order keeps the layout intact
+   while these tweaks take precedence on body / heading styles. */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  padding: 1.5rem;
+  line-height: 1.6;
+  color: #333;
+  /* Reset the canonical CSS's max-width centering so the preview
+     panel uses the full WebView column width. */
+  max-width: none;
+  margin: 0;
+}
+h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+h2 { font-size: 1.1rem; color: #666; margin-bottom: 1rem; }
+section { margin-bottom: 1rem; }
+.song-separator { border-top: 2px solid #ddd; margin: 2rem 0; }
 </style>
 </head>
 <body>${body}</body>
@@ -206,8 +251,9 @@ function safeGetState(): PanelState {
  * Renders the given ChordPro source text according to the active view mode
  * and current transpose offset.
  *
- * In HTML mode, `render_html_with_options` is called and the output is loaded
- * into the sandboxed iframe via `srcdoc`. In plain text mode,
+ * In HTML mode, `render_html_body_with_options` is called, the body fragment
+ * is wrapped in a full document by `wrapHtml`, and the result is loaded into
+ * the sandboxed iframe via `srcdoc`. In plain text mode,
  * `render_text_with_options` is called and the output is set as `textContent`
  * of the `<pre>` element (safe — no HTML parsing occurs).
  */
@@ -240,9 +286,9 @@ function renderPreview(text: string): void {
 
   try {
     if (viewMode === 'html') {
-      const html = render_html_with_options(text, options);
+      const body = render_html_body_with_options(text, options);
       hideError();
-      previewFrame.srcdoc = wrapHtml(html);
+      previewFrame.srcdoc = wrapHtml(body);
       previewFrame.style.display = 'block';
       textFrame.style.display = 'none';
     } else {
@@ -385,6 +431,14 @@ async function main(): Promise<void> {
   }
 
   loadingEl.style.display = 'none';
+
+  // Cache the canonical chord-over-lyrics CSS now that WASM memory is live.
+  // render_html_css() requires an initialised WASM heap (it allocates a String
+  // in WASM memory and copies bytes across the ABI boundary); calling it before
+  // init() resolves throws a TypeError that prevents the entire module from
+  // loading. The value is byte-stable for the lifetime of a build so a single
+  // call per session is correct.
+  CHORDSKETCH_CSS = render_html_css();
 
   // Unlock the wasmReady guard so renderPreview can now call WASM exports.
   wasmReady = true;
