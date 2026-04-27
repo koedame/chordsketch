@@ -1,0 +1,4 @@
+{define: [A]}
+{chord: [Am7]}
+{define: B frets x 2 4 4 4 2}
+[A]Hello [Am7]world

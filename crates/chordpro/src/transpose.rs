@@ -7,7 +7,9 @@
 //! Chords whose notation could not be parsed structurally (i.e., `detail` is
 //! `None`) are left unchanged — only their raw `name` is preserved.
 
-use crate::ast::{Chord, Line, LyricsLine, LyricsSegment, Song};
+use crate::ast::{
+    Chord, ChordDefinition, Directive, DirectiveKind, Line, LyricsLine, LyricsSegment, Song,
+};
 use crate::chord::{Accidental, ChordDetail, Note};
 
 /// The chromatic scale using sharps for enharmonic equivalents.
@@ -157,6 +159,10 @@ pub fn transpose(song: &Song, semitones: i8) -> Song {
         .iter()
         .map(|line| match line {
             Line::Lyrics(lyrics_line) => Line::Lyrics(transpose_lyrics(lyrics_line, semitones)),
+            Line::Directive(directive) => Line::Directive(
+                transpose_transposable_define(directive, semitones)
+                    .unwrap_or_else(|| directive.clone()),
+            ),
             other => other.clone(),
         })
         .collect();
@@ -165,6 +171,41 @@ pub fn transpose(song: &Song, semitones: i8) -> Song {
         metadata: song.metadata.clone(),
         lines: new_lines,
     }
+}
+
+/// If `directive` is a `{define: [X]}` or `{chord: [X]}` directive whose
+/// chord name was written in the transposable bracket form (R6.100.0),
+/// return a clone of the directive with the chord name shifted by
+/// `semitones`. Returns `None` for any other directive (including
+/// non-bracket / "fixed" defines), so the caller can keep the original
+/// node untouched — matching upstream `Song.pm:define_chord`'s default
+/// `$fixed = 1` path.
+///
+/// The re-emitted value preserves the bracket form: a transposable
+/// `{define: [A]}` shifted by 2 becomes `{define: [B]}`. Bracket form
+/// disallows other attributes (see [`ChordDefinition::parse_value`]), so
+/// the rewrite is just `[<new_name>]`.
+fn transpose_transposable_define(directive: &Directive, semitones: i8) -> Option<Directive> {
+    if !matches!(
+        directive.kind,
+        DirectiveKind::Define | DirectiveKind::ChordDirective
+    ) {
+        return None;
+    }
+    let value = directive.value.as_deref()?;
+    let def = ChordDefinition::parse_value(value);
+    if !def.transposable {
+        return None;
+    }
+    let chord = Chord::new(&def.name);
+    let transposed = transpose_chord(&chord, semitones);
+    let new_value = format!("[{}]", transposed.name);
+    Some(Directive {
+        name: directive.name.clone(),
+        value: Some(new_value),
+        kind: directive.kind.clone(),
+        selector: directive.selector.clone(),
+    })
 }
 
 /// Combine a file-level transpose offset with a CLI transpose offset.
@@ -451,5 +492,63 @@ mod tests {
         let (result, saturated) = combine_transpose(100, 27);
         assert_eq!(result, 127);
         assert!(!saturated);
+    }
+
+    // -- transposable bracket-form defines (R6.100.0, #2302) -------------
+
+    fn directive_value(line: &Line) -> &str {
+        match line {
+            Line::Directive(d) => d.value.as_deref().expect("directive must have value"),
+            _ => panic!("expected Line::Directive"),
+        }
+    }
+
+    #[test]
+    fn transpose_rewrites_bracket_form_define() {
+        // {define: [A]} is transposable — +2 must rewrite to [B].
+        let song = crate::parse("{define: [A]}\n[A]Hello").unwrap();
+        let transposed = transpose(&song, 2);
+        assert_eq!(directive_value(&transposed.lines[0]), "[B]");
+    }
+
+    #[test]
+    fn transpose_rewrites_bracket_form_chord_directive() {
+        // {chord: [G]} (alias of {define}) follows the same rule.
+        let song = crate::parse("{chord: [G]}\n[G]Hi").unwrap();
+        let transposed = transpose(&song, 5);
+        assert_eq!(directive_value(&transposed.lines[0]), "[C]");
+    }
+
+    #[test]
+    fn transpose_leaves_fixed_define_alone() {
+        // Non-bracket form is "fixed" (upstream `$fixed = 1` default).
+        // The directive value MUST round-trip unchanged.
+        let song = crate::parse("{define: A frets 0 2 2 1 0 0}\n[A]Hello").unwrap();
+        let transposed = transpose(&song, 2);
+        // The directive name "A" stays put, attributes preserved.
+        let v = directive_value(&transposed.lines[0]);
+        assert!(v.starts_with("A "), "fixed define must keep name 'A': {v}");
+        assert!(v.contains("frets"), "fixed define must preserve attrs: {v}");
+    }
+
+    #[test]
+    fn transpose_zero_is_noop_on_bracket_form() {
+        let song = crate::parse("{define: [A]}\n[A]Hi").unwrap();
+        let transposed = transpose(&song, 0);
+        assert_eq!(directive_value(&transposed.lines[0]), "[A]");
+    }
+
+    #[test]
+    fn transpose_negative_on_bracket_form() {
+        let song = crate::parse("{define: [G]}\n[G]Hi").unwrap();
+        let transposed = transpose(&song, -7);
+        assert_eq!(directive_value(&transposed.lines[0]), "[C]");
+    }
+
+    #[test]
+    fn transpose_bracket_form_with_extension() {
+        let song = crate::parse("{define: [Am7]}\n[Am7]Hi").unwrap();
+        let transposed = transpose(&song, 3);
+        assert_eq!(directive_value(&transposed.lines[0]), "[Cm7]");
     }
 }
