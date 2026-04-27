@@ -84,11 +84,14 @@ def replace_block_in_portfile(portfile_text: str, new_block: str) -> str:
         if start is not None and line.strip() == "":
             end = i
             break
-    if start is None or end is None:
+    if start is None:
         raise SystemExit(
-            "could not find cargo.crates block in Portfile — expected a "
-            "line starting with `cargo.crates` followed eventually by a "
-            "blank line"
+            "could not find a line starting with `cargo.crates` in Portfile"
+        )
+    if end is None:
+        raise SystemExit(
+            "found `cargo.crates` line in Portfile but no following blank line "
+            "— the block must be terminated by a blank line"
         )
     return "".join(lines[:start]) + new_block + "".join(lines[end:])
 
@@ -108,7 +111,15 @@ def cmd_apply() -> int:
         print(f"{PORTFILE.relative_to(REPO_ROOT)} already up to date "
               f"({len(crates)} crates).")
         return 0
-    PORTFILE.write_text(updated, encoding="utf-8")
+    # Write atomically: a temp sibling + Path.replace() guarantees POSIX
+    # rename semantics so an interrupted write cannot corrupt the Portfile.
+    tmp = PORTFILE.with_suffix(".tmp")
+    try:
+        tmp.write_text(updated, encoding="utf-8")
+        tmp.replace(PORTFILE)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
     print(f"Rewrote {PORTFILE.relative_to(REPO_ROOT)} ({len(crates)} crates).")
     return 0
 
