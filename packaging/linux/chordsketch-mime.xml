@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  XDG MIME-type definition for ChordPro source files.
+
+  Registered with `update-mime-database` against the system or per-user
+  MIME database (see `packaging/linux/README.md`). Without this file,
+  GNOME / KDE / XFCE / MATE file managers report `.cho` files as
+  `text/plain` and the `chordsketch.thumbnailer` MimeType match never
+  fires.
+
+  The four globs cover the file extensions the ChordPro reference
+  implementation accepts. `<sub-class-of type="text/plain"/>` lets text
+  editors that filter by `text/plain` (most of them) still open `.cho`
+  files via the "Open with..." menu without an explicit `text/x-chordpro`
+  association.
+-->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="text/x-chordpro">
+    <comment>ChordPro sheet music</comment>
+    <comment xml:lang="ja">ChordPro 楽譜</comment>
+    <glob pattern="*.cho"/>
+    <glob pattern="*.chopro"/>
+    <glob pattern="*.crd"/>
+    <glob pattern="*.chordpro"/>
+    <sub-class-of type="text/plain"/>
+  </mime-type>
+</mime-info>

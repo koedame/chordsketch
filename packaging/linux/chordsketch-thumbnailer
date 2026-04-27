@@ -1,0 +1,72 @@
+#!/bin/sh
+# XDG thumbnailer for ChordPro (.cho / .chopro / .crd / .chordpro) files.
+#
+# Wired in by `chordsketch.thumbnailer`, which the file manager (Files,
+# Nautilus, Nemo, Caja, Thunar, ...) reads from
+# `/usr/share/thumbnailers/` or `~/.local/share/thumbnailers/`. The
+# manager invokes this script with three arguments:
+#
+#   $1  Input file path     (the `.cho` source)
+#   $2  Output PNG path     (where to write the thumbnail)
+#   $3  Requested size      (longest edge in pixels)
+#
+# We render the source to PDF via `chordsketch -f pdf`, then rasterise
+# the first page with `pdftoppm` (poppler-utils) at the requested
+# pixel size. PDF → PNG is preferred over HTML → PNG because the PDF
+# renderer is in-process Rust (no headless browser dependency) and
+# keeps the chord-over-lyrics layout pixel-stable across distros.
+#
+# Soft dependencies (see the "Dependencies" section of the accompanying
+# `README.md`):
+#   - `chordsketch` — installed by the `chordsketch` package itself
+#   - `pdftoppm`    — `poppler-utils` package on Debian/Ubuntu/Arch/Fedora
+
+set -eu
+
+[ $# -eq 3 ] || { printf 'Usage: %s <input> <output> <size>\n' "$0" >&2; exit 1; }
+
+input=$1
+output=$2
+size=$3
+
+# Validate size is a positive integer before it reaches pdftoppm.
+case "$size" in
+    *[!0-9]*|'') printf 'Error: size must be a positive integer, got: %s\n' "$size" >&2; exit 1 ;;
+    0)           printf 'Error: size must be a positive integer (>0), got: 0\n' >&2; exit 1 ;;
+esac
+
+# Strip a leading `file://` if the file manager handed us a URI rather
+# than a path. The `%i` placeholder in `chordsketch.thumbnailer` is
+# documented as a path, but some managers substitute the URI form
+# regardless; accepting both keeps the contract robust against that.
+#
+# Handle both empty-authority (`file:///path`) and localhost-authority
+# (`file://localhost/path`) forms as specified by RFC 8089.
+case "$input" in
+    file:///*) input=${input#file://} ;;
+    file://localhost/*) input=${input#file://localhost} ;;
+esac
+
+# Working directory for the intermediate PDF. `mktemp -d` creates with
+# mode 0700 so even on a multi-user host the temp file is not
+# world-readable while the render runs.
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+pdf=$tmpdir/page.pdf
+
+# Discard renderer warnings on stderr so a transpose-clamp warning
+# does not appear in the file manager's log when the user just hovers
+# over a `.cho` to preview it. Render errors still propagate via the
+# non-zero exit status (`set -e` above).
+chordsketch -f pdf -o "$pdf" -- "$input" 2>/dev/null
+
+# `-singlefile` writes `${prefix}.png` instead of the default
+# `${prefix}-1.png`, so we know exactly what filename to move. `-r 96`
+# keeps the rendered DPI close to the playground/preview baseline so
+# typography matches the on-screen render the user sees in the editor.
+# `-scale-to` enforces the longest edge equal to the requested
+# thumbnail size.
+pdftoppm -png -singlefile -r 96 -scale-to "$size" "$pdf" "$tmpdir/out"
+
+mv "$tmpdir/out.png" "$output"
