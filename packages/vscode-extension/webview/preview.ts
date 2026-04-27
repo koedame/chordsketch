@@ -142,10 +142,16 @@ function formatError(e: unknown): string {
 
 /**
  * Canonical chord-over-lyrics CSS exported by `@chordsketch/wasm`.
- * Cached at module load so every render does not pay the WASM
- * round-trip; the value is byte-stable for the lifetime of a build.
+ *
+ * Assigned in {@link main} after `await init()` resolves — wasm-bindgen
+ * exports require WASM memory to be initialised before they are callable,
+ * and module-level evaluation runs before `main()`. Cached (not re-called
+ * on every render) because the value is byte-stable for the lifetime of a
+ * build. `wrapHtml` may only be called after `wasmReady` is `true`, which
+ * is set immediately after this assignment in `main()`, so `wrapHtml` is
+ * guaranteed to see the populated string.
  */
-const CHORDSKETCH_CSS = render_html_css();
+let CHORDSKETCH_CSS = '';
 
 /**
  * Wraps a body-only HTML fragment from `render_html_body_with_options`
@@ -245,8 +251,9 @@ function safeGetState(): PanelState {
  * Renders the given ChordPro source text according to the active view mode
  * and current transpose offset.
  *
- * In HTML mode, `render_html_with_options` is called and the output is loaded
- * into the sandboxed iframe via `srcdoc`. In plain text mode,
+ * In HTML mode, `render_html_body_with_options` is called, the body fragment
+ * is wrapped in a full document by `wrapHtml`, and the result is loaded into
+ * the sandboxed iframe via `srcdoc`. In plain text mode,
  * `render_text_with_options` is called and the output is set as `textContent`
  * of the `<pre>` element (safe — no HTML parsing occurs).
  */
@@ -424,6 +431,14 @@ async function main(): Promise<void> {
   }
 
   loadingEl.style.display = 'none';
+
+  // Cache the canonical chord-over-lyrics CSS now that WASM memory is live.
+  // render_html_css() requires an initialised WASM heap (it allocates a String
+  // in WASM memory and copies bytes across the ABI boundary); calling it before
+  // init() resolves throws a TypeError that prevents the entire module from
+  // loading. The value is byte-stable for the lifetime of a build so a single
+  // call per session is correct.
+  CHORDSKETCH_CSS = render_html_css();
 
   // Unlock the wasmReady guard so renderPreview can now call WASM exports.
   wasmReady = true;
