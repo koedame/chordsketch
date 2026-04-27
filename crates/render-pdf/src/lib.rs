@@ -537,6 +537,22 @@ pub fn render_songs_with_transpose(songs: &[Song], cli_transpose: i8, config: &C
     result.output
 }
 
+/// Push a `(title, page)` tuple into the ToC entry list, skipping the
+/// candidate when it equals the previous entry (adjacent-only dedup).
+///
+/// Mirrors upstream ChordPro `(PDF) Dedup lines in tables of contents
+/// and outlines.` (commit `55398859`, R6.100.0). The Perl implementation
+/// guards `push @{ $song->{body} }, { ... }` with
+/// `unless %prev && $prev{title} eq $title && $prev{pageno} eq $pageno`,
+/// where `%prev` only retains the immediately preceding entry — so a
+/// non-adjacent repeat is intentionally NOT deduped.
+fn push_toc_entry(entries: &mut Vec<(String, usize)>, title: String, page: usize) {
+    let candidate = (title, page);
+    if entries.last() != Some(&candidate) {
+        entries.push(candidate);
+    }
+}
+
 /// Render multiple [`Song`]s into a single PDF, returning warnings programmatically.
 ///
 /// This is the structured variant of [`render_songs_with_transpose`]. Instead
@@ -586,7 +602,7 @@ pub fn render_songs_with_warnings(
             .as_deref()
             .unwrap_or("Untitled")
             .to_string();
-        toc_entries.push((title, start_page));
+        push_toc_entry(&mut toc_entries, title, start_page);
         render_song_into_doc(
             song,
             cli_transpose,
@@ -4774,6 +4790,60 @@ mod toc_tests {
         assert!(bytes.ends_with(b"%%EOF\n"));
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("Table of Contents"));
+    }
+
+    // -- adjacent dedup (R6.100.0, upstream commit 55398859, #2294) -------
+
+    #[test]
+    fn test_push_toc_entry_skips_adjacent_duplicate() {
+        let mut entries = vec![("Song A".to_string(), 1)];
+        push_toc_entry(&mut entries, "Song A".to_string(), 1);
+        assert_eq!(entries, vec![("Song A".to_string(), 1)]);
+    }
+
+    #[test]
+    fn test_push_toc_entry_keeps_different_page() {
+        let mut entries = vec![("Song A".to_string(), 1)];
+        push_toc_entry(&mut entries, "Song A".to_string(), 2);
+        assert_eq!(
+            entries,
+            vec![("Song A".to_string(), 1), ("Song A".to_string(), 2)]
+        );
+    }
+
+    #[test]
+    fn test_push_toc_entry_keeps_different_title() {
+        let mut entries = vec![("Song A".to_string(), 1)];
+        push_toc_entry(&mut entries, "Song B".to_string(), 1);
+        assert_eq!(
+            entries,
+            vec![("Song A".to_string(), 1), ("Song B".to_string(), 1)]
+        );
+    }
+
+    #[test]
+    fn test_push_toc_entry_dedup_is_adjacent_only() {
+        // Upstream uses `%prev = ()` reset on section breaks and only stores
+        // the immediately preceding entry. Non-adjacent repeats MUST NOT be
+        // deduped.
+        let mut entries = vec![("Song A".to_string(), 1), ("Song B".to_string(), 2)];
+        push_toc_entry(&mut entries, "Song A".to_string(), 1);
+        assert_eq!(
+            entries,
+            vec![
+                ("Song A".to_string(), 1),
+                ("Song B".to_string(), 2),
+                ("Song A".to_string(), 1),
+            ],
+            "adjacent-only dedup must keep non-adjacent repeats"
+        );
+    }
+
+    #[test]
+    fn test_push_toc_entry_into_empty() {
+        let mut entries: Vec<(String, usize)> = Vec::new();
+        push_toc_entry(&mut entries, "Song A".to_string(), 1);
+        assert_eq!(entries, vec![("Song A".to_string(), 1)]);
     }
 
     #[test]
