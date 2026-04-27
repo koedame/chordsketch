@@ -623,8 +623,9 @@ const UKULELE_DOM7: &[StaticVoicing] = &[
 // dropped on import — `flat_to_sharp` resolves cross-spelling at lookup,
 // matching the guitar/ukulele convention.
 //
-// Fret order: indexes 0..5 follow the upstream `tuning` array order
-// (G4, C5, E4, A4, E5), i.e. physical string order on the instrument.
+// Fret order: the 5 entries (indices 0..=4) follow the upstream `tuning`
+// array order (G4, C5, E4, A4, E5), i.e. physical string order on the
+// instrument.
 // `-1` is a muted string (×) translated from the upstream `x` token.
 // ---------------------------------------------------------------------------
 
