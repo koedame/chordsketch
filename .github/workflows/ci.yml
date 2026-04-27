@@ -120,6 +120,22 @@ jobs:
       - name: Unit tests
         run: python3 -m unittest scripts/test_check_fixture_counts.py
 
+  macports-portfile-sync:
+    name: MacPorts Portfile sync
+    # Guards against `Cargo.lock` drifting from
+    # `packaging/macports/Portfile`'s `cargo.crates` block. Without
+    # this check, a dependency bump silently breaks the next MacPorts
+    # submission with "checksum mismatch on <crate>" the moment the
+    # cargo portgroup runs against the unpacked source. Same
+    # guarantee-style trigger as `fixture-counts`: runs on every PR,
+    # no path filter, Python-only, < 1 s wall clock.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Verify Portfile matches Cargo.lock
+        run: python3 scripts/macports-regen-cargo-crates.py --check
+
   test:
     name: Test (${{ matrix.os }}, ${{ matrix.rust }})
     runs-on: ${{ matrix.os }}
