@@ -43,10 +43,15 @@ for (const file of ['chordpro.tmLanguage.json', 'language-configuration.json']) 
 }
 
 // Copy the WASM binary for the WebView (browser build).
-// Prefer the installed npm package's web build over the local monorepo build.
-const wasmNpmWeb = path.join(here, 'node_modules', '@chordsketch', 'wasm', 'web', 'chordsketch_wasm_bg.wasm');
+// Prefer the local monorepo build over the installed npm package so a
+// developer (or CI step) that runs `node packages/npm/scripts/build.mjs`
+// against the in-tree `crates/wasm` source picks up new exports
+// immediately, without waiting for a manual `npm publish` cycle. The
+// node_modules copy from `npm install @chordsketch/wasm` remains a
+// fallback for ad-hoc clones where a Rust toolchain is unavailable.
 const wasmLocalWeb = path.join(repoRoot, 'packages', 'npm', 'web', 'chordsketch_wasm_bg.wasm');
-const wasmSrc = fs.existsSync(wasmNpmWeb) ? wasmNpmWeb : wasmLocalWeb;
+const wasmNpmWeb = path.join(here, 'node_modules', '@chordsketch', 'wasm', 'web', 'chordsketch_wasm_bg.wasm');
+const wasmSrc = fs.existsSync(wasmLocalWeb) ? wasmLocalWeb : wasmNpmWeb;
 const wasmDst = path.join(here, 'dist', 'webview', 'chordsketch_wasm_bg.wasm');
 if (fs.existsSync(wasmSrc)) {
   fs.copyFileSync(wasmSrc, wasmDst);
@@ -69,9 +74,11 @@ fs.mkdirSync(nodeDir, { recursive: true });
 fs.writeFileSync(path.join(nodeDir, 'package.json'), JSON.stringify({ type: 'commonjs' }, null, 2) + '\n');
 const wasmNodeFiles = ['chordsketch_wasm.js', 'chordsketch_wasm_bg.wasm'];
 for (const file of wasmNodeFiles) {
-  const npmSrc = path.join(here, 'node_modules', '@chordsketch', 'wasm', 'node', file);
+  // Same precedence rule as the web copy above — local in-tree build
+  // first, npm-published fallback second.
   const localSrc = path.join(repoRoot, 'packages', 'npm', 'node', file);
-  const src = fs.existsSync(npmSrc) ? npmSrc : localSrc;
+  const npmSrc = path.join(here, 'node_modules', '@chordsketch', 'wasm', 'node', file);
+  const src = fs.existsSync(localSrc) ? localSrc : npmSrc;
   if (fs.existsSync(src)) {
     fs.copyFileSync(src, path.join(nodeDir, file));
     console.log(`Copied ${path.relative(here, src)} → dist/node/${file}`);
@@ -95,10 +102,11 @@ const extensionBuild = {
 };
 
 // The WebView bundle imports from the wasm-pack web target's JS glue.
-// Prefer the installed npm package over the local monorepo build.
-const wasmJsNpm = path.join(here, 'node_modules', '@chordsketch', 'wasm', 'web', 'chordsketch_wasm.js');
+// Prefer the local monorepo build over the installed npm package — see
+// the matching comment on the binary copy above for the rationale.
 const wasmJsLocal = path.join(repoRoot, 'packages', 'npm', 'web', 'chordsketch_wasm.js');
-const wasmJsSrc = fs.existsSync(wasmJsNpm) ? wasmJsNpm : wasmJsLocal;
+const wasmJsNpm = path.join(here, 'node_modules', '@chordsketch', 'wasm', 'web', 'chordsketch_wasm.js');
+const wasmJsSrc = fs.existsSync(wasmJsLocal) ? wasmJsLocal : wasmJsNpm;
 
 /** @type {esbuild.BuildOptions} */
 const webviewBuild = {
