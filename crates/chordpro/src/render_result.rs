@@ -6,6 +6,7 @@
 //! three maintenance points for the same logic (issue #1874).
 
 use crate::ast::{CapoValidation, Metadata};
+use crate::config::Config;
 
 /// Maximum number of warnings any renderer accumulates for a single
 /// render pass (issue #1833). Without a cap, a pathological input such
@@ -56,6 +57,26 @@ pub fn validate_capo(metadata: &Metadata, warnings: &mut Vec<String>) {
                 format!("{{capo}} value {raw:?} is not a valid integer; ignored"),
             );
         }
+    }
+}
+
+/// Validate strict-mode requirements at the render boundary and push a
+/// warning when `settings.strict` is true and the song does not declare a
+/// `{key}` directive (ChordPro R6.100.0).
+///
+/// Renderers call this helper alongside [`validate_capo`] so the warning
+/// message is byte-identical across output formats — a user who pipes the
+/// same `.cho` file to text, HTML, and PDF sees the same warning regardless
+/// of which renderer they chose.
+pub fn validate_strict_key(metadata: &Metadata, config: &Config, warnings: &mut Vec<String>) {
+    if config.get_path("settings.strict").as_bool() != Some(true) {
+        return;
+    }
+    if metadata.key.is_none() {
+        push_warning(
+            warnings,
+            "song does not declare a {key} directive (settings.strict)",
+        );
     }
 }
 
@@ -185,5 +206,52 @@ mod tests {
         validate_capo(&md, &mut v);
         assert_eq!(v.len(), 1);
         assert!(v[0].contains("foo") && v[0].contains("not a valid integer"));
+    }
+
+    // -- validate_strict_key (R6.100.0) -----------------------------------
+
+    fn config_with_strict(strict: bool) -> Config {
+        Config::defaults()
+            .with_define(&format!("settings.strict={strict}"))
+            .expect("defining settings.strict must succeed")
+    }
+
+    #[test]
+    fn test_validate_strict_key_default_off_emits_nothing() {
+        let mut v = Vec::<String>::new();
+        let md = Metadata::default();
+        validate_strict_key(&md, &Config::defaults(), &mut v);
+        assert!(
+            v.is_empty(),
+            "default config has settings.strict=false; no warning expected"
+        );
+    }
+
+    #[test]
+    fn test_validate_strict_key_strict_off_with_missing_key_emits_nothing() {
+        let mut v = Vec::<String>::new();
+        let md = Metadata::default();
+        validate_strict_key(&md, &config_with_strict(false), &mut v);
+        assert!(v.is_empty());
+    }
+
+    #[test]
+    fn test_validate_strict_key_strict_on_with_missing_key_warns() {
+        let mut v = Vec::<String>::new();
+        let md = Metadata::default();
+        validate_strict_key(&md, &config_with_strict(true), &mut v);
+        assert_eq!(v.len(), 1);
+        assert!(v[0].contains("{key}") && v[0].contains("settings.strict"));
+    }
+
+    #[test]
+    fn test_validate_strict_key_strict_on_with_present_key_emits_nothing() {
+        let mut v = Vec::<String>::new();
+        let md = Metadata {
+            key: Some("C".to_string()),
+            ..Metadata::default()
+        };
+        validate_strict_key(&md, &config_with_strict(true), &mut v);
+        assert!(v.is_empty());
     }
 }
