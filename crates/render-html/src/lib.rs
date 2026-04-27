@@ -197,7 +197,7 @@ pub fn render_song_with_warnings(
         escape(title)
     );
     html.push_str("<style>\n");
-    html.push_str(CSS);
+    html.push_str(&css_for_wraplines(read_wraplines(config)));
     html.push_str("</style>\n</head>\n<body>\n");
     render_song_body_into(song, cli_transpose, config, &mut html, &mut warnings);
     html.push_str("</body>\n</html>\n");
@@ -705,7 +705,7 @@ pub fn render_songs_with_warnings(
         escape(title)
     );
     html.push_str("<style>\n");
-    html.push_str(CSS);
+    html.push_str(&css_for_wraplines(read_wraplines(config)));
     html.push_str("</style>\n</head>\n<body>\n");
 
     for (i, song) in songs.iter().enumerate() {
@@ -834,6 +834,11 @@ pub fn render_songs_body_with_warnings(
 /// The canonical chord-over-lyrics CSS that the full-document renderers
 /// embed inside `<style>`.
 ///
+/// Returns the default-configuration variant (`flex-wrap: wrap` on the
+/// `.line` rule, matching `settings.wraplines: true`). To obtain the CSS
+/// for a non-default `settings.wraplines`, call
+/// [`render_html_css_with_config`] instead.
+///
 /// Pair this with [`render_song_body`] / [`render_songs_body`] when the
 /// consumer is supplying its own document envelope: inline the returned
 /// string inside a `<style>` block, ship it as a separate file referenced
@@ -841,8 +846,36 @@ pub fn render_songs_body_with_warnings(
 /// stylesheet. The contract is byte-stable; consumers can hash the result
 /// for cache-busting filenames.
 #[must_use]
-pub fn render_html_css() -> &'static str {
-    CSS
+pub fn render_html_css() -> String {
+    css_for_wraplines(true)
+}
+
+/// Variant of [`render_html_css`] that honours `settings.wraplines` from
+/// the supplied config (R6.100.0). When `wraplines` is false, the `.line`
+/// rule emits `flex-wrap: nowrap` so chord/lyric runs that exceed the
+/// viewport width preserve the source line structure instead of reflowing.
+#[must_use]
+pub fn render_html_css_with_config(config: &Config) -> String {
+    css_for_wraplines(read_wraplines(config))
+}
+
+/// Read `settings.wraplines` from the config, defaulting to `true` when
+/// missing or non-boolean.
+fn read_wraplines(config: &Config) -> bool {
+    config.get_path("settings.wraplines").as_bool() != Some(false)
+}
+
+/// Build the embedded CSS string with the supplied wraplines value
+/// substituted into the `.line` rule.
+///
+/// The substitution targets a unique sentinel rather than the literal
+/// `flex-wrap: wrap` so that `.chord-diagrams-grid` (which intentionally
+/// keeps its own `flex-wrap: wrap`) is not affected.
+fn css_for_wraplines(wraplines: bool) -> String {
+    CSS_TEMPLATE.replace(
+        "__LINE_FLEX_WRAP__",
+        if wraplines { "wrap" } else { "nowrap" },
+    )
 }
 
 /// Parse a ChordPro source string and render it to HTML.
@@ -876,12 +909,17 @@ pub fn render(input: &str) -> String {
 // CSS
 // ---------------------------------------------------------------------------
 
-/// Embedded CSS for chord-over-lyrics layout.
-const CSS: &str = "\
+/// Embedded CSS template for chord-over-lyrics layout.
+///
+/// The `.line` rule contains a sentinel `__LINE_FLEX_WRAP__` substituted
+/// at render time by [`css_for_wraplines`] based on `settings.wraplines`.
+/// The substitution targets the sentinel rather than the literal value so
+/// `.chord-diagrams-grid`'s own `flex-wrap: wrap` is unaffected.
+const CSS_TEMPLATE: &str = "\
 body { font-family: serif; max-width: 800px; margin: 2em auto; padding: 0 1em; }
 h1 { margin-bottom: 0.2em; }
 h2 { margin-top: 0; font-weight: normal; color: #555; }
-.line { display: flex; flex-wrap: wrap; margin: 0.1em 0; }
+.line { display: flex; flex-wrap: __LINE_FLEX_WRAP__; margin: 0.1em 0; }
 .chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
 .chord { font-weight: bold; color: #b00; font-size: 0.9em; min-height: 1.2em; }
 .lyrics { white-space: pre; }
@@ -2211,12 +2249,80 @@ mod tests {
         assert!(css.contains(".chord-block"));
         assert!(css.contains(".chord "));
         assert!(css.contains(".lyrics"));
+        // Default config has settings.wraplines=true, so the canonical
+        // block must reference the wrap variant of the .line rule.
+        assert!(css.contains(".line { display: flex; flex-wrap: wrap;"));
         // The full-document renderer embeds *exactly* this string
         // inside its `<style>` block — assert the lockstep so a
         // future divergence is caught immediately.
         let song = chordsketch_chordpro::parse("{title: t}").unwrap();
         let full = render_song(&song);
-        assert!(full.contains(css));
+        assert!(full.contains(&css));
+    }
+
+    // -- settings.wraplines (R6.100.0, #2296) ------------------------------
+
+    #[test]
+    fn test_wraplines_default_is_wrap() {
+        // No setting → default true → wrap.
+        let css = render_html_css_with_config(&Config::defaults());
+        assert!(
+            css.contains(".line { display: flex; flex-wrap: wrap;"),
+            "default settings.wraplines must emit flex-wrap: wrap; got: {css}"
+        );
+        // The grid keeps its own wrap regardless.
+        assert!(
+            css.contains(".chord-diagrams-grid { display: flex; flex-wrap: wrap;"),
+            ".chord-diagrams-grid wrap must never be substituted"
+        );
+        // Sentinel must not survive.
+        assert!(
+            !css.contains("__LINE_FLEX_WRAP__"),
+            "the sentinel must always be replaced; got: {css}"
+        );
+    }
+
+    #[test]
+    fn test_wraplines_false_emits_nowrap() {
+        let cfg = Config::defaults()
+            .with_define("settings.wraplines=false")
+            .unwrap();
+        let css = render_html_css_with_config(&cfg);
+        assert!(
+            css.contains(".line { display: flex; flex-wrap: nowrap;"),
+            "settings.wraplines=false must emit flex-wrap: nowrap; got: {css}"
+        );
+        // .chord-diagrams-grid must keep its own wrap.
+        assert!(
+            css.contains(".chord-diagrams-grid { display: flex; flex-wrap: wrap;"),
+            ".chord-diagrams-grid wrap must NOT change with settings.wraplines"
+        );
+    }
+
+    #[test]
+    fn test_wraplines_full_document_embeds_configured_value() {
+        // The full-document renderer must embed the same CSS that
+        // render_html_css_with_config returns for the same config.
+        let cfg = Config::defaults()
+            .with_define("settings.wraplines=false")
+            .unwrap();
+        let song = chordsketch_chordpro::parse("{title: t}").unwrap();
+        let full = render_song_with_warnings(&song, 0, &cfg).output;
+        assert!(
+            full.contains(".line { display: flex; flex-wrap: nowrap;"),
+            "full document must embed nowrap when settings.wraplines=false"
+        );
+    }
+
+    #[test]
+    fn test_wraplines_true_explicit_matches_default() {
+        let cfg = Config::defaults()
+            .with_define("settings.wraplines=true")
+            .unwrap();
+        assert_eq!(
+            render_html_css_with_config(&cfg),
+            render_html_css_with_config(&Config::defaults())
+        );
     }
 
     #[test]

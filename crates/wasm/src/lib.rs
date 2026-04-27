@@ -355,7 +355,28 @@ pub fn render_html_body_with_options(input: &str, options: JsValue) -> Result<St
 #[must_use]
 #[wasm_bindgen]
 pub fn render_html_css() -> String {
-    chordsketch_render_html::render_html_css().to_string()
+    chordsketch_render_html::render_html_css()
+}
+
+/// Variant of [`render_html_css`] that honours `settings.wraplines` from
+/// the supplied options (R6.100.0). When `wraplines` is false, the `.line`
+/// rule emits `flex-wrap: nowrap` so chord/lyric runs preserve the source
+/// line structure instead of reflowing onto subsequent rows.
+///
+/// See [`render_html_with_options`] for the `options` format.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string if the `config` option value is not a
+/// known preset and cannot be parsed as RRJSON.
+#[must_use = "callers must handle render errors"]
+#[wasm_bindgen]
+pub fn render_html_css_with_options(options: JsValue) -> Result<String, JsValue> {
+    let opts = deserialize_options(options)?;
+    let config = resolve_config(&opts)?;
+    Ok(chordsketch_render_html::render_html_css_with_config(
+        &config,
+    ))
 }
 
 /// Structured render result returned by the `*_with_warnings` family.
