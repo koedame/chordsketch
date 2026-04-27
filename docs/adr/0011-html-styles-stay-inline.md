@@ -16,7 +16,7 @@ upstream model is:
 - Output emits one `<link rel="stylesheet" href="...">` per
   configured stylesheet. The `default` stylesheet has no `media`
   attribute; the others use `media="screen"` / `media="print"`.
-- A new `html.styles.embed: false` knob, when flipped to `true`,
+- A new `html.style.embed: false` knob, when flipped to `true`,
   inlines the file contents into a `<style media="...">` block via
   `File::LoadLines` + the `CP->findres` resource resolver.
 - Renaming: the old `display` slot was renamed to `screen`.
@@ -127,10 +127,13 @@ consumers (vscode-extension, react package, ui-web) are built on.
 - A user copying a `.cho` file with
   `{+config.html.styles.default: "my.css"}` from an upstream
   environment will see their override ignored: chordsketch will not
-  fetch `my.css`, and the override key (`html.styles.default`) does
-  not exist in the chordsketch schema, so the song-level override
-  layer drops it silently per `Config::with_song_overrides`'s
-  allowlist behaviour.
+  fetch `my.css`. The key `html.styles.default` matches the `html.`
+  override prefix so it passes the allowlist check in
+  `Config::with_song_overrides` and is silently added to the merged
+  config (no warning emitted). The override is inert because the
+  HTML renderer reads only `html.styles.body`, `html.styles.chord`,
+  and `html.styles.comment` — unknown `html.styles.*` keys are never
+  queried by the renderer.
 - The HTML output's `<style>` block content cannot be customised
   per-page beyond the `wraplines` knob without first re-deriving the
   CSS via `render_html_css_with_config` and editing the resulting
