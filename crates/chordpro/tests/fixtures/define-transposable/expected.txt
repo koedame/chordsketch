@@ -1,0 +1,100 @@
+Song {
+    metadata: Metadata {
+        title: None,
+        subtitles: [],
+        artists: [],
+        composers: [],
+        lyricists: [],
+        album: None,
+        year: None,
+        key: None,
+        tempo: None,
+        time: None,
+        capo: None,
+        sort_title: None,
+        sort_artist: None,
+        arrangers: [],
+        copyright: None,
+        duration: None,
+        tags: [],
+        custom: [],
+    },
+    lines: [
+        Directive(
+            Directive {
+                name: "define",
+                value: Some(
+                    "[A]",
+                ),
+                kind: Define,
+                selector: None,
+            },
+        ),
+        Directive(
+            Directive {
+                name: "chord",
+                value: Some(
+                    "[Am7]",
+                ),
+                kind: ChordDirective,
+                selector: None,
+            },
+        ),
+        Directive(
+            Directive {
+                name: "define",
+                value: Some(
+                    "B frets x 2 4 4 4 2",
+                ),
+                kind: Define,
+                selector: None,
+            },
+        ),
+        Lyrics(
+            LyricsLine {
+                segments: [
+                    LyricsSegment {
+                        chord: Some(
+                            Chord {
+                                name: "A",
+                                detail: Some(
+                                    ChordDetail {
+                                        root: A,
+                                        root_accidental: None,
+                                        quality: Major,
+                                        extension: None,
+                                        bass_note: None,
+                                    },
+                                ),
+                                display: None,
+                            },
+                        ),
+                        text: "Hello ",
+                        spans: [],
+                    },
+                    LyricsSegment {
+                        chord: Some(
+                            Chord {
+                                name: "Am7",
+                                detail: Some(
+                                    ChordDetail {
+                                        root: A,
+                                        root_accidental: None,
+                                        quality: Minor,
+                                        extension: Some(
+                                            "7",
+                                        ),
+                                        bass_note: None,
+                                    },
+                                ),
+                                display: None,
+                            },
+                        ),
+                        text: "world",
+                        spans: [],
+                    },
+                ],
+            },
+        ),
+    ],
+}

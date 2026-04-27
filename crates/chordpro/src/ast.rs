@@ -822,6 +822,19 @@ pub struct ChordDefinition {
     pub format: Option<String>,
     /// The raw definition value (for fretted definitions not yet parsed).
     pub raw: Option<String>,
+    /// True when the directive used the `[name]` bracket form introduced
+    /// by ChordPro upstream R6.100.0.
+    ///
+    /// Bracket form marks the chord name as transposable — the directive
+    /// is rewritten alongside lyrics chords when the song is transposed.
+    /// Per upstream `lib/ChordPro/Song.pm:define_chord`, bracket form
+    /// disallows other attributes (`frets`, `fingers`, `keys`, `copy`,
+    /// `copyall`, `display`, `format`); when attributes are present
+    /// upstream emits a `do_warn("Transposable chord ... does not allow
+    /// attributes")` and drops them. chordsketch silently drops the
+    /// attributes — surfacing the warning is a follow-up that requires a
+    /// parser-internal warnings channel.
+    pub transposable: bool,
 }
 
 impl ChordDefinition {
@@ -829,6 +842,13 @@ impl ChordDefinition {
     ///
     /// Recognizes `keys`, `copy`, `copyall`, and `display` tokens.
     /// Everything else is stored in `raw` for fretted chord definitions.
+    ///
+    /// The `[name]` bracket form (R6.100.0) is detected on the first
+    /// token: if the leading word is wrapped in `[ ]`, the brackets are
+    /// stripped, [`transposable`](Self::transposable) is set to `true`,
+    /// and any remaining attributes are dropped — matching upstream
+    /// `Song.pm:define_chord` which warns and drops attributes for the
+    /// bracket form.
     #[must_use]
     pub fn parse_value(value: &str) -> Self {
         let value = value.trim();
@@ -837,13 +857,42 @@ impl ChordDefinition {
         // next() is infallible here. If value is empty or whitespace-only after
         // trim(), name will be "" — the callers check def.display/format/raw
         // before using def.name, so an empty name is a harmless no-op.
-        let name = parts
+        let mut name = parts
             .next()
             .expect("splitn always yields at least one element")
             .to_string();
         // rest is None for single-word values (no whitespace); "" is the correct
         // default (no rest tokens to process).
         let rest = parts.next().unwrap_or("").trim();
+
+        // Detect the `[name]` bracket form (R6.100.0). The bracket form
+        // disallows further attributes, so we strip the brackets, set the
+        // transposable flag, and return immediately — matching the
+        // upstream `if ( $name =~ /^\[(.*)\]$/ ) { ... %kv = (); $name = $1; $fixed = 0; }`
+        // path in `Song.pm:define_chord` (without the `do_warn` step,
+        // which requires a warnings channel that is a separate follow-up).
+        if name.len() >= 2 && name.starts_with('[') && name.ends_with(']') {
+            // strip_prefix / strip_suffix operate on char boundaries, so
+            // chord names containing multi-byte characters (e.g. ♭) round-
+            // trip correctly. Both unwraps are infallible — guarded by the
+            // starts_with / ends_with check immediately above.
+            name = name
+                .strip_prefix('[')
+                .unwrap()
+                .strip_suffix(']')
+                .unwrap()
+                .to_string();
+            return Self {
+                name,
+                keys: None,
+                copy: None,
+                copyall: None,
+                display: None,
+                format: None,
+                raw: None,
+                transposable: true,
+            };
+        }
 
         let mut def = Self {
             name,
@@ -853,6 +902,7 @@ impl ChordDefinition {
             display: None,
             format: None,
             raw: None,
+            transposable: false,
         };
 
         if rest.is_empty() {
@@ -3531,6 +3581,81 @@ mod chord_definition_tests {
     fn has_src_returns_false_for_explicit_empty_string() {
         let attrs = ImageAttributes::new("");
         assert!(!attrs.has_src());
+    }
+
+    // -- transposable [name] bracket form (R6.100.0, #2302) ---------------
+
+    #[test]
+    fn parse_value_detects_bracket_form() {
+        let def = ChordDefinition::parse_value("[A]");
+        assert_eq!(def.name, "A");
+        assert!(def.transposable);
+        assert!(def.raw.is_none());
+    }
+
+    #[test]
+    fn parse_value_bracket_form_drops_attrs() {
+        // Upstream Song.pm warns and drops attributes for the bracket
+        // form; chordsketch silently drops them (warning emission is a
+        // separate follow-up) — verify the silently-dropped behavior.
+        let def = ChordDefinition::parse_value("[A] frets 0 2 2 1 0 0");
+        assert_eq!(def.name, "A");
+        assert!(def.transposable);
+        assert!(def.raw.is_none());
+        assert!(def.keys.is_none());
+        assert!(def.copy.is_none());
+        assert!(def.copyall.is_none());
+        assert!(def.display.is_none());
+        assert!(def.format.is_none());
+    }
+
+    #[test]
+    fn parse_value_bracket_form_drops_display_and_format() {
+        let def = ChordDefinition::parse_value("[Am] display=\"X\" format=\"%{root}%{quality}\"");
+        assert_eq!(def.name, "Am");
+        assert!(def.transposable);
+        assert!(def.display.is_none());
+        assert!(def.format.is_none());
+    }
+
+    #[test]
+    fn parse_value_no_brackets_is_not_transposable() {
+        let def = ChordDefinition::parse_value("A frets 0 2 2 1 0 0");
+        assert_eq!(def.name, "A");
+        assert!(!def.transposable);
+        assert!(def.raw.is_some());
+    }
+
+    #[test]
+    fn parse_value_extension_chord_in_brackets() {
+        // The bracket form passes the inner string through verbatim;
+        // extensions and slash chords must round-trip too.
+        let def = ChordDefinition::parse_value("[A#m7]");
+        assert_eq!(def.name, "A#m7");
+        assert!(def.transposable);
+    }
+
+    #[test]
+    fn parse_value_bracket_only_no_other_token() {
+        let def = ChordDefinition::parse_value("[]");
+        assert_eq!(def.name, "");
+        assert!(def.transposable);
+    }
+
+    #[test]
+    fn parse_value_unmatched_open_bracket_is_not_transposable() {
+        // "[A" without closing bracket is NOT bracket form; falls through
+        // to normal parsing and treats `[A` as a literal name.
+        let def = ChordDefinition::parse_value("[A");
+        assert_eq!(def.name, "[A");
+        assert!(!def.transposable);
+    }
+
+    #[test]
+    fn parse_value_unmatched_close_bracket_is_not_transposable() {
+        let def = ChordDefinition::parse_value("A]");
+        assert_eq!(def.name, "A]");
+        assert!(!def.transposable);
     }
 }
 
