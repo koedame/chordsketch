@@ -360,8 +360,18 @@ After the release workflow completes and the GitHub Release is published:
       wc -c chordsketch-${TAG}.tar.gz
       ```
    2. If the `cargo.crates` block needs updating (dependency versions
-      changed), regenerate it using MacPorts' `cargo2port.py` tool from a
-      local MacPorts install.
+      changed), regenerate it. Two options:
+      - In-tree, no MacPorts install needed:
+        ```bash
+        python3 scripts/macports-regen-cargo-crates.py --apply
+        ```
+        The script parses `Cargo.lock`, sorts the crates with checksum
+        entries, and rewrites the `cargo.crates ...` region of the
+        Portfile in place. `--check` exits non-zero if the Portfile has
+        drifted from `Cargo.lock`; useful for CI.
+      - On a Mac with MacPorts installed, run `cargo2port.py` from a
+        local MacPorts install. The output format is identical to the
+        in-tree script's, so either tool keeps the Portfile reproducible.
    3. Fork `macports/macports-ports` (or use the existing fork), place the
       Portfile in `textproc/chordsketch/Portfile`, and open a PR.
    4. Wait for MacPorts CI and maintainer review.
