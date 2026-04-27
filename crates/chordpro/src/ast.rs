@@ -872,7 +872,16 @@ impl ChordDefinition {
         // path in `Song.pm:define_chord` (without the `do_warn` step,
         // which requires a warnings channel that is a separate follow-up).
         if name.len() >= 2 && name.starts_with('[') && name.ends_with(']') {
-            name = name[1..name.len() - 1].to_string();
+            // strip_prefix / strip_suffix operate on char boundaries, so
+            // chord names containing multi-byte characters (e.g. ♭) round-
+            // trip correctly. Both unwraps are infallible — guarded by the
+            // starts_with / ends_with check immediately above.
+            name = name
+                .strip_prefix('[')
+                .unwrap()
+                .strip_suffix(']')
+                .unwrap()
+                .to_string();
             return Self {
                 name,
                 keys: None,
