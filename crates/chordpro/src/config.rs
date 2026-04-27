@@ -814,7 +814,13 @@ const DEFAULT_CONFIG: &str = r#"{
         columns: 1,
         suppress_empty_chords: true,
         lyrics_only: false,
-        transpose: 0
+        transpose: 0,
+        // Strict mode. When true, render-time validators (currently the
+        // missing-{key} check, see render_result::validate_strict_key) emit
+        // warnings for spec violations that are otherwise silent. Default is
+        // false, matching ChordPro R6.100.0 (which flipped its own default
+        // from true to false in the same release).
+        strict: false
     },
 
     // PDF rendering

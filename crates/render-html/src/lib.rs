@@ -26,7 +26,9 @@ use chordsketch_chordpro::canonical_chord_name;
 use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::escape::escape_xml as escape;
 use chordsketch_chordpro::inline_markup::{SpanAttributes, TextSpan};
-use chordsketch_chordpro::render_result::{RenderResult, push_warning, validate_capo};
+use chordsketch_chordpro::render_result::{
+    RenderResult, push_warning, validate_capo, validate_strict_key,
+};
 use chordsketch_chordpro::resolve_diagrams_instrument;
 use chordsketch_chordpro::transpose::transpose_chord;
 
@@ -235,6 +237,7 @@ fn render_song_body_into(
     html.push_str("<div class=\"song\">\n");
 
     validate_capo(&song.metadata, warnings);
+    validate_strict_key(&song.metadata, config, warnings);
     render_metadata(&song.metadata, html);
 
     // Tracks whether a multi-column div is currently open.
@@ -3022,6 +3025,56 @@ Verse text\n\
         assert!(
             !result.warnings.iter().any(|w| w.contains("capo")),
             "valid {{capo: 5}} should not warn; got {:?}",
+            result.warnings
+        );
+    }
+
+    // -- settings.strict missing-{key} warning (R6.100.0, #2291) ----------
+
+    #[test]
+    fn test_strict_off_with_missing_key_is_silent() {
+        let song = chordsketch_chordpro::parse("{title: T}").unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            !result
+                .warnings
+                .iter()
+                .any(|w| w.contains("settings.strict")),
+            "default settings.strict=false must not warn on missing {{key}}; got {:?}",
+            result.warnings
+        );
+    }
+
+    #[test]
+    fn test_strict_on_with_missing_key_warns() {
+        let song = chordsketch_chordpro::parse("{title: T}").unwrap();
+        let cfg = Config::defaults()
+            .with_define("settings.strict=true")
+            .unwrap();
+        let result = render_song_with_warnings(&song, 0, &cfg);
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("{key}") && w.contains("settings.strict")),
+            "expected missing-{{key}} warning under settings.strict; got {:?}",
+            result.warnings
+        );
+    }
+
+    #[test]
+    fn test_strict_on_with_present_key_is_silent() {
+        let song = chordsketch_chordpro::parse("{title: T}\n{key: G}").unwrap();
+        let cfg = Config::defaults()
+            .with_define("settings.strict=true")
+            .unwrap();
+        let result = render_song_with_warnings(&song, 0, &cfg);
+        assert!(
+            !result
+                .warnings
+                .iter()
+                .any(|w| w.contains("settings.strict")),
+            "settings.strict warning must not fire when {{key}} is present; got {:?}",
             result.warnings
         );
     }
