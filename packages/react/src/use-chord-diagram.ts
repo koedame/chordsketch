@@ -54,15 +54,8 @@ export interface ChordDiagramResult {
  */
 export type ChordDiagramWasmLoader = () => Promise<DiagramRenderer>;
 
-// The `chord_diagram_svg` export is added by a Rust-side change
-// paired with this PR (`crates/wasm/src/lib.rs`). The installed
-// `@chordsketch/wasm` package's type declarations do not include
-// it until the next `npm publish`; cast through `unknown` so
-// `tsc --noEmit` does not fail against a stale `.d.ts` in
-// `node_modules`. Replace with a direct cast once the WASM
-// package ships a release that includes the new export.
 const defaultLoader: ChordDiagramWasmLoader = () =>
-  import('@chordsketch/wasm') as unknown as Promise<DiagramRenderer>;
+  import('@chordsketch/wasm') as Promise<DiagramRenderer>;
 
 /**
  * Look up an SVG chord diagram for `(chord, instrument)` via
