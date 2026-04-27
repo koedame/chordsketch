@@ -373,7 +373,9 @@ pub fn render_html_css() -> String {
 pub fn render_html_css_with_options(options: JsValue) -> Result<String, JsValue> {
     let opts = deserialize_options(options)?;
     let config = resolve_config(&opts)?;
-    Ok(chordsketch_render_html::render_html_css_with_config(&config))
+    Ok(chordsketch_render_html::render_html_css_with_config(
+        &config,
+    ))
 }
 
 /// Structured render result returned by the `*_with_warnings` family.

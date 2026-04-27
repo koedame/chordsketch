@@ -495,7 +495,9 @@ pub fn render_html_css() -> String {
 #[napi]
 pub fn render_html_css_with_options(options: RenderOptions) -> napi::Result<String> {
     let config = resolve_config(options.config)?;
-    Ok(chordsketch_render_html::render_html_css_with_config(&config))
+    Ok(chordsketch_render_html::render_html_css_with_config(
+        &config,
+    ))
 }
 
 /// A single validation issue reported by [`validate`]. Mirrors the
