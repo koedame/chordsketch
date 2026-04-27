@@ -820,7 +820,15 @@ const DEFAULT_CONFIG: &str = r#"{
         // warnings for spec violations that are otherwise silent. Default is
         // false, matching ChordPro R6.100.0 (which flipped its own default
         // from true to false in the same release).
-        strict: false
+        strict: false,
+        // HTML line wrapping. When true (default), the `.line` flex container
+        // uses `flex-wrap: wrap` so chord/lyric runs that exceed the viewport
+        // width reflow onto subsequent rows. When false, `flex-wrap: nowrap`
+        // is emitted instead, preserving the source line structure even when
+        // it overflows. Default true matches ChordPro R6.100.0. Only the HTML
+        // renderer reads this setting; render-text and render-pdf have their
+        // own width-handling logic and ignore wraplines.
+        wraplines: true
     },
 
     // PDF rendering

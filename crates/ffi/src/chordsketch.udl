@@ -76,6 +76,12 @@ namespace chordsketch {
     /// supplying its own document envelope (#2279).
     string render_html_css();
 
+    /// Variant of `render_html_css` that honours `settings.wraplines`
+    /// from the supplied config (R6.100.0). When `wraplines` is false,
+    /// the `.line` rule emits `flex-wrap: nowrap`.
+    [Throws=ChordSketchError]
+    string render_html_css_with_config_json(string? config_json);
+
     /// Validate ChordPro input and return any parse errors as structured
     /// records. Returns an empty list if the input is valid.
     ///
