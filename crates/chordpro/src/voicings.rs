@@ -1,8 +1,10 @@
-//! Built-in chord voicing database for guitar, ukulele, and piano/keyboard.
+//! Built-in chord voicing database for guitar, ukulele, charango, and
+//! piano/keyboard.
 //!
-//! Provides 156 pre-defined chord voicings:
+//! Provides 312 pre-defined chord voicings:
 //! - 60 guitar voicings (5 families × 12 roots)
 //! - 36 ukulele voicings (3 families × 12 roots)
+//! - 156 charango voicings (13 families × 12 roots, ported from upstream)
 //! - 60 keyboard/piano voicings (5 families × 12 roots: major, minor, dom7, maj7, min7)
 //!
 //! All data is stored as compile-time static data — no external files, no runtime I/O.
@@ -14,8 +16,9 @@
 //!
 //! # Fret encoding
 //!
-//! `frets` arrays are ordered from the **lowest-pitched string to the
-//! highest-pitched string** (guitar: strings 6→1, ukulele: strings 4→1).
+//! `frets` arrays follow the per-instrument string-numbering convention
+//! used by the upstream voicing data — guitar strings 6→1, ukulele
+//! strings 4→1, charango in upstream `tuning` order (G4, C5, E4, A4, E5).
 //! Values are:
 //! - `-1` — muted (×)
 //! - `0`  — open string (○)
@@ -611,6 +614,805 @@ const UKULELE_DOM7: &[StaticVoicing] = &[
 ];
 
 // ---------------------------------------------------------------------------
+// Charango voicings (5 strings, standard tuning G4 C5 E4 A4 E5)
+//
+// 156 voicings ported from upstream ChordPro
+// `lib/ChordPro/res/config/charango.json` (commit 1e1d7249, R6.100.0,
+// contributed by @edwinjc). Upstream stores 220+ entries including flat-
+// rooted duplicates (Bb / Db / Eb / Gb / Ab); the 65 flat duplicates are
+// dropped on import — `flat_to_sharp` resolves cross-spelling at lookup,
+// matching the guitar/ukulele convention.
+//
+// Fret order: the 5 entries (indices 0..=4) follow the upstream `tuning`
+// array order (G4, C5, E4, A4, E5), i.e. physical string order on the
+// instrument.
+// `-1` is a muted string (×) translated from the upstream `x` token.
+// ---------------------------------------------------------------------------
+
+const CHARANGO: &[StaticVoicing] = &[
+    StaticVoicing {
+        name: "A",
+        base_fret: 1,
+        frets: &[2, 1, 0, 0, 0],
+    },
+    StaticVoicing {
+        name: "Am",
+        base_fret: 1,
+        frets: &[2, 0, 0, 0, 0],
+    },
+    StaticVoicing {
+        name: "A7",
+        base_fret: 1,
+        frets: &[0, 1, 0, 0, 0],
+    },
+    StaticVoicing {
+        name: "Am7",
+        base_fret: 1,
+        frets: &[0, 0, 0, 0, 0],
+    },
+    StaticVoicing {
+        name: "Adim",
+        base_fret: 3,
+        frets: &[-1, 1, 3, 1, 3],
+    },
+    StaticVoicing {
+        name: "Amaj7",
+        base_fret: 1,
+        frets: &[1, 1, 0, 0, 0],
+    },
+    StaticVoicing {
+        name: "A6",
+        base_fret: 1,
+        frets: &[2, 1, 0, 0, 2],
+    },
+    StaticVoicing {
+        name: "Asus2",
+        base_fret: 1,
+        frets: &[2, 4, 0, 2, 0],
+    },
+    StaticVoicing {
+        name: "Asus",
+        base_fret: 1,
+        frets: &[2, 2, 0, 0, 0],
+    },
+    StaticVoicing {
+        name: "Asus4",
+        base_fret: 1,
+        frets: &[2, 2, 0, 0, 0],
+    },
+    StaticVoicing {
+        name: "A+",
+        base_fret: 1,
+        frets: &[-1, 1, 1, 0, 1],
+    },
+    StaticVoicing {
+        name: "Aaug",
+        base_fret: 1,
+        frets: &[-1, 1, 1, 0, 1],
+    },
+    StaticVoicing {
+        name: "A9",
+        base_fret: 1,
+        frets: &[2, 1, 3, 2, 0],
+    },
+    StaticVoicing {
+        name: "A#",
+        base_fret: 1,
+        frets: &[3, 2, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "A#m",
+        base_fret: 1,
+        frets: &[3, 1, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "A#7",
+        base_fret: 1,
+        frets: &[1, 2, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "A#m7",
+        base_fret: 1,
+        frets: &[1, 1, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "A#dim",
+        base_fret: 1,
+        frets: &[-1, 1, 0, 1, 0],
+    },
+    StaticVoicing {
+        name: "A#maj7",
+        base_fret: 1,
+        frets: &[2, 2, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "A#6",
+        base_fret: 1,
+        frets: &[0, 2, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "A#sus2",
+        base_fret: 1,
+        frets: &[3, 0, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "A#sus",
+        base_fret: 1,
+        frets: &[3, 3, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "A#sus4",
+        base_fret: 1,
+        frets: &[3, 3, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "A#+",
+        base_fret: 1,
+        frets: &[-1, 2, 2, 1, 2],
+    },
+    StaticVoicing {
+        name: "A#aug",
+        base_fret: 1,
+        frets: &[-1, 2, 2, 1, 2],
+    },
+    StaticVoicing {
+        name: "A#9",
+        base_fret: 1,
+        frets: &[3, 2, 1, 3, 1],
+    },
+    StaticVoicing {
+        name: "B",
+        base_fret: 1,
+        frets: &[4, 3, 2, 2, 2],
+    },
+    StaticVoicing {
+        name: "Bm",
+        base_fret: 1,
+        frets: &[4, 2, 2, 2, 2],
+    },
+    StaticVoicing {
+        name: "B7",
+        base_fret: 1,
+        frets: &[4, 3, 2, 0, 0],
+    },
+    StaticVoicing {
+        name: "Bm7",
+        base_fret: 1,
+        frets: &[2, 2, 2, 2, 2],
+    },
+    StaticVoicing {
+        name: "Bdim",
+        base_fret: 1,
+        frets: &[-1, 2, 1, 2, 1],
+    },
+    StaticVoicing {
+        name: "Bmaj7",
+        base_fret: 1,
+        frets: &[3, 3, 2, 2, 2],
+    },
+    StaticVoicing {
+        name: "B6",
+        base_fret: 1,
+        frets: &[-1, 3, 2, 2, 4],
+    },
+    StaticVoicing {
+        name: "Bsus2",
+        base_fret: 1,
+        frets: &[-1, 1, 2, 2, 2],
+    },
+    StaticVoicing {
+        name: "Bsus",
+        base_fret: 1,
+        frets: &[4, 4, 2, 2, 2],
+    },
+    StaticVoicing {
+        name: "Bsus4",
+        base_fret: 1,
+        frets: &[4, 4, 2, 2, 2],
+    },
+    StaticVoicing {
+        name: "B+",
+        base_fret: 1,
+        frets: &[0, 3, 3, 2, 3],
+    },
+    StaticVoicing {
+        name: "Baug",
+        base_fret: 1,
+        frets: &[0, 3, 3, 2, 3],
+    },
+    StaticVoicing {
+        name: "B9",
+        base_fret: 3,
+        frets: &[2, 1, 3, 2, -1],
+    },
+    StaticVoicing {
+        name: "C",
+        base_fret: 1,
+        frets: &[0, 0, 0, 3, 0],
+    },
+    StaticVoicing {
+        name: "Cm",
+        base_fret: 1,
+        frets: &[0, 3, 3, 3, 3],
+    },
+    StaticVoicing {
+        name: "C7",
+        base_fret: 1,
+        frets: &[0, 0, 0, 1, 0],
+    },
+    StaticVoicing {
+        name: "Cm7",
+        base_fret: 1,
+        frets: &[3, 3, 3, 3, 3],
+    },
+    StaticVoicing {
+        name: "Cdim",
+        base_fret: 1,
+        frets: &[-1, 3, 2, 3, 2],
+    },
+    StaticVoicing {
+        name: "Cmaj7",
+        base_fret: 1,
+        frets: &[0, 0, 0, 2, 0],
+    },
+    StaticVoicing {
+        name: "C6",
+        base_fret: 2,
+        frets: &[0, 0, 0, 2, 4],
+    },
+    StaticVoicing {
+        name: "Csus2",
+        base_fret: 1,
+        frets: &[0, 2, 3, 3, 3],
+    },
+    StaticVoicing {
+        name: "Csus",
+        base_fret: 1,
+        frets: &[0, 0, 1, 3, 1],
+    },
+    StaticVoicing {
+        name: "Csus4",
+        base_fret: 1,
+        frets: &[0, 0, 1, 3, 1],
+    },
+    StaticVoicing {
+        name: "C+",
+        base_fret: 1,
+        frets: &[1, 0, 0, 3, 0],
+    },
+    StaticVoicing {
+        name: "Caug",
+        base_fret: 1,
+        frets: &[1, 0, 0, 3, 0],
+    },
+    StaticVoicing {
+        name: "C9",
+        base_fret: 1,
+        frets: &[3, 2, 3, 3, 0],
+    },
+    StaticVoicing {
+        name: "C#",
+        base_fret: 1,
+        frets: &[1, 1, 1, 4, 1],
+    },
+    StaticVoicing {
+        name: "C#m",
+        base_fret: 4,
+        frets: &[3, 1, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "C#7",
+        base_fret: 1,
+        frets: &[1, 1, 1, 2, 1],
+    },
+    StaticVoicing {
+        name: "C#m7",
+        base_fret: 1,
+        frets: &[1, 1, 0, 2, 0],
+    },
+    StaticVoicing {
+        name: "C#dim",
+        base_fret: 1,
+        frets: &[0, 4, 0, 4, 3],
+    },
+    StaticVoicing {
+        name: "C#maj7",
+        base_fret: 1,
+        frets: &[1, 1, 1, 3, 1],
+    },
+    StaticVoicing {
+        name: "C#6",
+        base_fret: 1,
+        frets: &[1, 1, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "C#sus2",
+        base_fret: 1,
+        frets: &[-1, 3, 4, 4, 4],
+    },
+    StaticVoicing {
+        name: "C#sus",
+        base_fret: 1,
+        frets: &[1, 1, 2, 4, 4],
+    },
+    StaticVoicing {
+        name: "C#sus4",
+        base_fret: 1,
+        frets: &[1, 1, 2, 4, 4],
+    },
+    StaticVoicing {
+        name: "C#+",
+        base_fret: 1,
+        frets: &[-1, 1, 1, 0, 1],
+    },
+    StaticVoicing {
+        name: "C#aug",
+        base_fret: 1,
+        frets: &[-1, 1, 1, 0, 1],
+    },
+    StaticVoicing {
+        name: "C#9",
+        base_fret: 1,
+        frets: &[4, 3, 1, 4, 4],
+    },
+    StaticVoicing {
+        name: "D",
+        base_fret: 1,
+        frets: &[2, 2, 2, 0, 2],
+    },
+    StaticVoicing {
+        name: "Dm",
+        base_fret: 1,
+        frets: &[2, 2, 1, 0, 1],
+    },
+    StaticVoicing {
+        name: "D7",
+        base_fret: 1,
+        frets: &[2, 0, 2, 0, 2],
+    },
+    StaticVoicing {
+        name: "Dm7",
+        base_fret: 5,
+        frets: &[1, 1, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "Ddim",
+        base_fret: 1,
+        frets: &[1, 2, 1, 5, 1],
+    },
+    StaticVoicing {
+        name: "Dmaj7",
+        base_fret: 1,
+        frets: &[2, 2, 2, 4, 2],
+    },
+    StaticVoicing {
+        name: "D6",
+        base_fret: 1,
+        frets: &[2, 2, 2, 2, 2],
+    },
+    StaticVoicing {
+        name: "Dsus2",
+        base_fret: 1,
+        frets: &[2, 2, 0, 5, 0],
+    },
+    StaticVoicing {
+        name: "Dsus",
+        base_fret: 1,
+        frets: &[0, 2, 3, 0, 3],
+    },
+    StaticVoicing {
+        name: "Dsus4",
+        base_fret: 1,
+        frets: &[0, 2, 3, 0, 3],
+    },
+    StaticVoicing {
+        name: "D+",
+        base_fret: 1,
+        frets: &[3, 2, 2, 5, 2],
+    },
+    StaticVoicing {
+        name: "Daug",
+        base_fret: 1,
+        frets: &[3, 2, 2, 5, 2],
+    },
+    StaticVoicing {
+        name: "D9",
+        base_fret: 1,
+        frets: &[2, 2, 0, 3, 2],
+    },
+    StaticVoicing {
+        name: "D#",
+        base_fret: 1,
+        frets: &[0, 3, 3, 1, 3],
+    },
+    StaticVoicing {
+        name: "D#m",
+        base_fret: 1,
+        frets: &[-1, 3, 2, 1, 2],
+    },
+    StaticVoicing {
+        name: "D#7",
+        base_fret: 1,
+        frets: &[3, 3, 3, 4, 3],
+    },
+    StaticVoicing {
+        name: "D#m7",
+        base_fret: 1,
+        frets: &[3, 3, 2, 4, 2],
+    },
+    StaticVoicing {
+        name: "D#dim",
+        base_fret: 1,
+        frets: &[2, 3, 2, 0, 2],
+    },
+    StaticVoicing {
+        name: "D#maj7",
+        base_fret: 1,
+        frets: &[3, 3, 3, 5, 3],
+    },
+    StaticVoicing {
+        name: "D#6",
+        base_fret: 1,
+        frets: &[3, 3, 3, 3, 3],
+    },
+    StaticVoicing {
+        name: "D#sus2",
+        base_fret: 1,
+        frets: &[3, 3, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "D#sus",
+        base_fret: 1,
+        frets: &[-1, 3, 4, 1, 4],
+    },
+    StaticVoicing {
+        name: "D#sus4",
+        base_fret: 1,
+        frets: &[-1, 3, 4, 1, 4],
+    },
+    StaticVoicing {
+        name: "D#+",
+        base_fret: 1,
+        frets: &[-1, 3, 3, 2, 3],
+    },
+    StaticVoicing {
+        name: "D#aug",
+        base_fret: 1,
+        frets: &[-1, 3, 3, 2, 3],
+    },
+    StaticVoicing {
+        name: "D#9",
+        base_fret: 1,
+        frets: &[0, 3, 1, 4, 1],
+    },
+    StaticVoicing {
+        name: "E",
+        base_fret: 1,
+        frets: &[1, 4, 0, 2, 0],
+    },
+    StaticVoicing {
+        name: "Em",
+        base_fret: 1,
+        frets: &[0, 4, 0, 2, 0],
+    },
+    StaticVoicing {
+        name: "E7",
+        base_fret: 1,
+        frets: &[1, 2, 0, 2, 0],
+    },
+    StaticVoicing {
+        name: "Em7",
+        base_fret: 1,
+        frets: &[0, 2, 0, 2, 0],
+    },
+    StaticVoicing {
+        name: "Edim",
+        base_fret: 1,
+        frets: &[0, 4, 0, 1, 0],
+    },
+    StaticVoicing {
+        name: "Emaj7",
+        base_fret: 1,
+        frets: &[1, 3, 0, 2, 0],
+    },
+    StaticVoicing {
+        name: "E6",
+        base_fret: 1,
+        frets: &[1, 1, 0, 2, 0],
+    },
+    StaticVoicing {
+        name: "Esus2",
+        base_fret: 1,
+        frets: &[4, 4, 2, 2, 2],
+    },
+    StaticVoicing {
+        name: "Esus",
+        base_fret: 1,
+        frets: &[2, 4, 0, 2, 0],
+    },
+    StaticVoicing {
+        name: "Esus4",
+        base_fret: 1,
+        frets: &[2, 4, 0, 2, 0],
+    },
+    StaticVoicing {
+        name: "E+",
+        base_fret: 1,
+        frets: &[1, 0, 0, 3, 0],
+    },
+    StaticVoicing {
+        name: "Eaug",
+        base_fret: 1,
+        frets: &[1, 0, 0, 3, 0],
+    },
+    StaticVoicing {
+        name: "E9",
+        base_fret: 1,
+        frets: &[1, 2, 0, 2, 2],
+    },
+    StaticVoicing {
+        name: "F",
+        base_fret: 1,
+        frets: &[2, 0, 1, 0, 1],
+    },
+    StaticVoicing {
+        name: "Fm",
+        base_fret: 1,
+        frets: &[1, 0, 1, 3, 1],
+    },
+    StaticVoicing {
+        name: "F7",
+        base_fret: 1,
+        frets: &[2, 3, 1, 0, 1],
+    },
+    StaticVoicing {
+        name: "Fm7",
+        base_fret: 1,
+        frets: &[1, 3, 1, 3, 1],
+    },
+    StaticVoicing {
+        name: "Fdim",
+        base_fret: 1,
+        frets: &[1, 5, 1, 2, 1],
+    },
+    StaticVoicing {
+        name: "Fmaj7",
+        base_fret: 1,
+        frets: &[2, 0, 1, 0, 0],
+    },
+    StaticVoicing {
+        name: "F6",
+        base_fret: 1,
+        frets: &[2, 2, 1, 3, 1],
+    },
+    StaticVoicing {
+        name: "Fsus2",
+        base_fret: 1,
+        frets: &[0, 0, 1, 3, 1],
+    },
+    StaticVoicing {
+        name: "Fsus",
+        base_fret: 1,
+        frets: &[-1, 0, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "Fsus4",
+        base_fret: 1,
+        frets: &[-1, 0, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "F+",
+        base_fret: 1,
+        frets: &[2, 1, 1, 4, 1],
+    },
+    StaticVoicing {
+        name: "Faug",
+        base_fret: 1,
+        frets: &[2, 1, 1, 4, 1],
+    },
+    StaticVoicing {
+        name: "F9",
+        base_fret: 1,
+        frets: &[0, 3, 1, 0, 1],
+    },
+    StaticVoicing {
+        name: "F#",
+        base_fret: 1,
+        frets: &[-1, 1, 2, 1, 2],
+    },
+    StaticVoicing {
+        name: "F#m",
+        base_fret: 1,
+        frets: &[2, 1, 2, 0, 2],
+    },
+    StaticVoicing {
+        name: "F#7",
+        base_fret: 1,
+        frets: &[3, 1, 2, 1, 0],
+    },
+    StaticVoicing {
+        name: "F#m7",
+        base_fret: 1,
+        frets: &[2, 1, 2, 0, 0],
+    },
+    StaticVoicing {
+        name: "F#dim",
+        base_fret: 1,
+        frets: &[2, 0, 2, 0, 2],
+    },
+    StaticVoicing {
+        name: "F#maj7",
+        base_fret: 1,
+        frets: &[-1, 1, 2, 1, 1],
+    },
+    StaticVoicing {
+        name: "F#6",
+        base_fret: 1,
+        frets: &[3, 3, 2, 4, 2],
+    },
+    StaticVoicing {
+        name: "F#sus2",
+        base_fret: 1,
+        frets: &[-1, 1, 2, 4, 4],
+    },
+    StaticVoicing {
+        name: "F#sus",
+        base_fret: 1,
+        frets: &[-1, 1, 2, 2, 2],
+    },
+    StaticVoicing {
+        name: "F#sus4",
+        base_fret: 1,
+        frets: &[-1, 1, 2, 2, 2],
+    },
+    StaticVoicing {
+        name: "F#+",
+        base_fret: 1,
+        frets: &[3, 2, 2, 5, 2],
+    },
+    StaticVoicing {
+        name: "F#aug",
+        base_fret: 1,
+        frets: &[3, 2, 2, 5, 2],
+    },
+    StaticVoicing {
+        name: "F#9",
+        base_fret: 1,
+        frets: &[1, 1, 2, 1, 0],
+    },
+    StaticVoicing {
+        name: "G",
+        base_fret: 1,
+        frets: &[0, 2, 3, 2, 3],
+    },
+    StaticVoicing {
+        name: "Gm",
+        base_fret: 1,
+        frets: &[0, 2, 3, 1, 3],
+    },
+    StaticVoicing {
+        name: "G7",
+        base_fret: 1,
+        frets: &[0, 2, 1, 2, 3],
+    },
+    StaticVoicing {
+        name: "Gm7",
+        base_fret: 1,
+        frets: &[0, 2, 1, 1, 1],
+    },
+    StaticVoicing {
+        name: "Gdim",
+        base_fret: 1,
+        frets: &[0, 1, 3, 1, 3],
+    },
+    StaticVoicing {
+        name: "Gmaj7",
+        base_fret: 1,
+        frets: &[0, 2, 3, 2, 2],
+    },
+    StaticVoicing {
+        name: "G6",
+        base_fret: 1,
+        frets: &[0, 2, 0, 2, 0],
+    },
+    StaticVoicing {
+        name: "Gsus2",
+        base_fret: 1,
+        frets: &[0, 2, 3, 0, 3],
+    },
+    StaticVoicing {
+        name: "Gsus",
+        base_fret: 1,
+        frets: &[0, 2, 3, 3, 3],
+    },
+    StaticVoicing {
+        name: "Gsus4",
+        base_fret: 1,
+        frets: &[0, 2, 3, 3, 3],
+    },
+    StaticVoicing {
+        name: "G+",
+        base_fret: 1,
+        frets: &[0, 3, 3, 2, 3],
+    },
+    StaticVoicing {
+        name: "Gaug",
+        base_fret: 1,
+        frets: &[0, 3, 3, 2, 3],
+    },
+    StaticVoicing {
+        name: "G9",
+        base_fret: 1,
+        frets: &[0, 2, 1, 2, 5],
+    },
+    StaticVoicing {
+        name: "G#",
+        base_fret: 1,
+        frets: &[1, 0, 4, 3, 4],
+    },
+    StaticVoicing {
+        name: "G#m",
+        base_fret: 1,
+        frets: &[-1, 3, 4, 2, 4],
+    },
+    StaticVoicing {
+        name: "G#7",
+        base_fret: 1,
+        frets: &[-1, 3, 4, 3, 2],
+    },
+    StaticVoicing {
+        name: "G#m7",
+        base_fret: 1,
+        frets: &[-1, 3, 4, 2, 2],
+    },
+    StaticVoicing {
+        name: "G#dim",
+        base_fret: 1,
+        frets: &[-1, 2, 4, 2, 4],
+    },
+    StaticVoicing {
+        name: "G#maj7",
+        base_fret: 1,
+        frets: &[0, 3, 4, 3, 3],
+    },
+    StaticVoicing {
+        name: "G#6",
+        base_fret: 1,
+        frets: &[1, 3, 1, 3, 1],
+    },
+    StaticVoicing {
+        name: "G#sus2",
+        base_fret: 1,
+        frets: &[-1, 3, 4, 1, 4],
+    },
+    StaticVoicing {
+        name: "G#sus",
+        base_fret: 1,
+        frets: &[-1, 3, 4, 4, 4],
+    },
+    StaticVoicing {
+        name: "G#sus4",
+        base_fret: 1,
+        frets: &[-1, 3, 4, 4, 4],
+    },
+    StaticVoicing {
+        name: "G#+",
+        base_fret: 1,
+        frets: &[-1, 0, 4, 3, 0],
+    },
+    StaticVoicing {
+        name: "G#aug",
+        base_fret: 1,
+        frets: &[-1, 0, 4, 3, 0],
+    },
+    StaticVoicing {
+        name: "G#9",
+        base_fret: 1,
+        frets: &[1, 0, 2, 1, 2],
+    },
+];
+
+// ---------------------------------------------------------------------------
 // Enharmonic root normalisation
 //
 // Splits the chord name into a flat root + suffix, normalises the root to
@@ -688,13 +1490,31 @@ pub fn ukulele_voicing(chord_name: &str) -> Option<DiagramData> {
     None
 }
 
+/// Looks up a charango voicing for `chord_name`.
+///
+/// Returns `None` if no voicing is available for the requested chord.
+/// Accepts both sharp and flat spellings; flat-rooted lookups are
+/// resolved via `flat_to_sharp` before consulting the table.
+///
+/// Data ported from upstream ChordPro `lib/ChordPro/res/config/charango.json`
+/// (commit `1e1d7249`, R6.100.0, contributed by [@edwinjc](https://github.com/edwinjc)).
+#[must_use]
+pub fn charango_voicing(chord_name: &str) -> Option<DiagramData> {
+    let canonical = flat_to_sharp(chord_name);
+    let name = canonical.as_deref().unwrap_or(chord_name);
+    CHARANGO
+        .iter()
+        .find(|v| v.name == name)
+        .map(StaticVoicing::to_diagram)
+}
+
 /// Looks up a chord diagram by name using a prioritised lookup chain.
 ///
 /// # Lookup order
 ///
 /// 1. `defines` — fretted `{define}` entries from the song file (highest priority).
-/// 2. Built-in voicing database — `guitar_voicing` or `ukulele_voicing` based on
-///    the `instrument` parameter.
+/// 2. Built-in voicing database — `guitar_voicing`, `ukulele_voicing`, or
+///    `charango_voicing` based on the `instrument` parameter.
 ///
 /// Returns `None` when no diagram is available (unknown chord / keyboard-only
 /// definition).
@@ -704,9 +1524,9 @@ pub fn ukulele_voicing(chord_name: &str) -> Option<DiagramData> {
 /// - `chord_name` — chord name as it appears in the lyrics (e.g., `"Am"`, `"C#m7"`).
 /// - `defines` — list of `(name, raw)` pairs from `{define}` directives.
 ///   Obtain via [`Song::fretted_defines`](crate::ast::Song::fretted_defines).
-/// - `instrument` — `"guitar"` or `"ukulele"` (case-insensitive). Anything else
-///   falls back to guitar. Returns `None` immediately for keyboard-family
-///   instruments (`"piano"`, `"keyboard"`, `"keys"`); use
+/// - `instrument` — `"guitar"`, `"ukulele"`, or `"charango"` (case-insensitive).
+///   Anything else falls back to guitar. Returns `None` immediately for
+///   keyboard-family instruments (`"piano"`, `"keyboard"`, `"keys"`); use
 ///   [`lookup_keyboard_voicing`] for those.
 /// - `frets_shown` — number of fret rows to display in the diagram.
 #[must_use]
@@ -744,6 +1564,7 @@ pub fn lookup_diagram(
     // 2. Built-in database.
     match instrument.to_ascii_lowercase().as_str() {
         "ukulele" | "uke" => ukulele_voicing(chord_name),
+        "charango" => charango_voicing(chord_name),
         _ => guitar_voicing(chord_name),
     }
 }
@@ -1577,5 +2398,64 @@ mod tests {
             lookup_diagram("Am", &[], "keys", 5).is_none(),
             "keys should return None from lookup_diagram"
         );
+    }
+
+    // --- charango (R6.100.0, upstream commit 1e1d7249, #2298) -----------
+
+    #[test]
+    fn charango_voicing_basic() {
+        // The first entry in the upstream JSON is `A` with frets [2,1,0,0,0],
+        // base 1. Pin it as a smoke check that the static array parsed and
+        // the lookup respects it.
+        let v = charango_voicing("A").expect("A must be present");
+        assert_eq!(v.strings, 5, "charango is a 5-string instrument");
+        assert_eq!(v.base_fret, 1);
+        assert_eq!(v.frets, vec![2, 1, 0, 0, 0]);
+    }
+
+    #[test]
+    fn charango_voicing_resolves_flat_to_sharp() {
+        // The upstream JSON ships both `A#` and `Bb` with identical frets;
+        // the chordsketch importer drops the flat duplicate and relies on
+        // `flat_to_sharp` for cross-spelling lookups (matches the
+        // ukulele/guitar precedent — see top-of-file doc comment).
+        let by_sharp = charango_voicing("A#").expect("A# must be present");
+        let by_flat = charango_voicing("Bb").expect("Bb must resolve via flat_to_sharp");
+        assert_eq!(by_sharp.frets, by_flat.frets);
+        assert_eq!(by_sharp.base_fret, by_flat.base_fret);
+    }
+
+    #[test]
+    fn charango_voicing_handles_muted_strings() {
+        // `Adim` upstream has frets `[ x, 1, 3, 1, 3 ]` (base 3); `x` must
+        // import as `-1`.
+        let v = charango_voicing("Adim").expect("Adim must be present");
+        assert_eq!(v.frets, vec![-1, 1, 3, 1, 3]);
+        assert_eq!(v.base_fret, 3);
+    }
+
+    #[test]
+    fn charango_voicing_unknown_returns_none() {
+        assert!(charango_voicing("NotAChord").is_none());
+    }
+
+    #[test]
+    fn lookup_diagram_dispatches_to_charango() {
+        let v = lookup_diagram("A", &[], "charango", 5).expect("charango dispatch");
+        assert_eq!(
+            v.strings, 5,
+            "charango dispatch must hit the 5-string table"
+        );
+        // Case-insensitivity (cf. the ukulele "Ukulele"/"UKULELE" precedent).
+        let upper = lookup_diagram("A", &[], "Charango", 5).expect("case-insensitive");
+        assert_eq!(upper.frets, v.frets);
+    }
+
+    #[test]
+    fn lookup_diagram_unknown_instrument_falls_back_to_guitar_not_charango() {
+        // Sanity: an unrecognised instrument string MUST still go to guitar.
+        // Charango voicings have 5 strings, guitar has 6.
+        let v = lookup_diagram("A", &[], "lute", 5).expect("fallback to guitar");
+        assert_eq!(v.strings, 6, "unknown instrument must fall back to guitar");
     }
 }

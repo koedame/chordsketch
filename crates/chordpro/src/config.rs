@@ -226,12 +226,13 @@ impl Config {
     ///
     /// Returns `None` if the name does not match a built-in preset.
     ///
-    /// Currently supported presets: `"guitar"`, `"ukulele"`.
+    /// Currently supported presets: `"guitar"`, `"ukulele"`, `"charango"`.
     #[must_use]
     pub fn preset(name: &str) -> Option<Self> {
         let rrjson = match name.to_ascii_lowercase().as_str() {
             "guitar" => PRESET_GUITAR,
             "ukulele" => PRESET_UKULELE,
+            "charango" => PRESET_CHARANGO,
             _ => return None,
         };
         Some(Self {
@@ -929,6 +930,25 @@ static PRESET_UKULELE: &str = r#"{
     }
 }"#;
 
+/// Charango preset configuration (5 strings, standard Andean tuning).
+///
+/// Tuning matches upstream ChordPro's `lib/ChordPro/res/config/charango.json`
+/// (commit `1e1d7249`, R6.100.0, contributed by @edwinjc): physical string
+/// order G4, C5, E4, A4, E5 — re-entrant (string 3 = E4 is the lowest
+/// pitch). `crates/chordpro/src/voicings.rs` ports the upstream chord
+/// shapes in this same string order.
+static PRESET_CHARANGO: &str = r#"{
+    instrument: {
+        type: "charango",
+        description: "Charango, 5 strings, standard tuning"
+    },
+    tuning: ["G4", "C5", "E4", "A4", "E5"],
+    diagrams: {
+        strings: 5,
+        frets: 5
+    }
+}"#;
+
 // ===========================================================================
 // Tests
 // ===========================================================================
@@ -1205,9 +1225,20 @@ mod tests {
     }
 
     #[test]
+    fn test_preset_charango() {
+        let config = Config::preset("charango").expect("charango preset should exist");
+        assert_eq!(
+            config.get_path("instrument.type"),
+            &Value::String("charango".to_string())
+        );
+        assert_eq!(config.get_path("diagrams.strings"), &Value::Number(5.0));
+    }
+
+    #[test]
     fn test_preset_case_insensitive() {
         assert!(Config::preset("Guitar").is_some());
         assert!(Config::preset("UKULELE").is_some());
+        assert!(Config::preset("Charango").is_some());
     }
 
     #[test]
@@ -1247,6 +1278,21 @@ mod tests {
         let config = Config::preset("guitar").unwrap();
         match config.get("tuning") {
             Value::Array(arr) => assert_eq!(arr.len(), 6),
+            _ => panic!("tuning should be an array"),
+        }
+    }
+
+    #[test]
+    fn test_charango_tuning_has_5_strings() {
+        let config = Config::preset("charango").unwrap();
+        match config.get("tuning") {
+            Value::Array(arr) => {
+                assert_eq!(arr.len(), 5);
+                // Upstream order: G4, C5, E4, A4, E5 — pin the third entry
+                // (E4) since that's the lowest-pitched string and most
+                // likely to surface a re-ordering regression.
+                assert_eq!(arr[2], Value::String("E4".to_string()));
+            }
             _ => panic!("tuning should be an array"),
         }
     }
