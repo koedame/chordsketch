@@ -179,6 +179,107 @@ impl core::fmt::Display for ChordDetail {
 }
 
 // ---------------------------------------------------------------------------
+// Canonical name (R6.100.0 keys.force-common / keys.flats)
+// ---------------------------------------------------------------------------
+
+/// 12-tone tables for re-spelling a root semitone, indexed `0..=11`.
+///
+/// `SHARP_NAMES_TABLE[s]` and `FLAT_NAMES_TABLE[s]` give the conventional
+/// sharp / flat enharmonic spellings, respectively.
+const SHARP_NAMES_TABLE: [&str; 12] = [
+    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+];
+const FLAT_NAMES_TABLE: [&str; 12] = [
+    "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B",
+];
+
+/// Convert a root note + accidental into a chromatic semitone index
+/// (`0` = C, `11` = B). Used by [`canonicalize_detail`] and mirrored by
+/// `transpose::note_to_semitone` (kept private to its module to avoid a
+/// cross-module type-coupling commitment).
+fn root_semitone(note: Note, accidental: Option<Accidental>) -> u8 {
+    let base = match note {
+        Note::C => 0,
+        Note::D => 2,
+        Note::E => 4,
+        Note::F => 5,
+        Note::G => 7,
+        Note::A => 9,
+        Note::B => 11,
+    };
+    match accidental {
+        Some(Accidental::Sharp) => (base + 1) % 12,
+        Some(Accidental::Flat) => (base + 11) % 12,
+        None => base,
+    }
+}
+
+/// Re-spell a parsed [`ChordDetail`] per upstream ChordPro's
+/// `keys.force-common` / `keys.flats` rule (R6.100.0). When
+/// `force_common` is `false` this is byte-equal to `format!("{detail}")`
+/// — the source spelling is preserved.
+///
+/// Reference: `lib/ChordPro/Chords/Parser.pm` `is_key_toosharp` /
+/// `keyname` in upstream R6.100.0.
+///
+/// **Toosharp set** (always re-spelled to flats under `force_common`):
+/// `C#`, `D#`, `G#`, `A#` → `Db`, `Eb`, `Ab`, `Bb`.
+///
+/// **F#/Gb special case** (controlled by `flats`):
+/// - `flats=false` → `F#` (sharp; chordsketch and upstream default)
+/// - `flats=true`  → `Gb` (flat)
+///
+/// **Minor adjustment**: upstream subtracts 3 semitones from the root
+/// before consulting the toosharp table when the chord quality is minor
+/// (`Parser.pm:863, 883`). This crate follows the upstream rule
+/// literally — see the in-source comment on the `match` below.
+///
+/// Bass notes in slash chords are emitted using the source spelling;
+/// upstream's `keyname()` only applies to the chord's primary key, not
+/// the bass.
+#[must_use]
+pub fn canonicalize_detail(detail: &ChordDetail, force_common: bool, flats: bool) -> String {
+    if !force_common {
+        return format!("{detail}");
+    }
+
+    let root_semi = root_semitone(detail.root, detail.root_accidental);
+    let key_semi = if detail.quality == ChordQuality::Minor {
+        // Upstream `Parser.pm:is_key_toosharp` subtracts 3 from the root
+        // ordinal for minor chords before consulting the table. This is
+        // mirrored here verbatim — the test corpus in `t/176_transpose.t`
+        // pins major-key behaviour explicitly; minor cases follow the same
+        // arithmetic.
+        (root_semi + 12 - 3) % 12
+    } else {
+        root_semi
+    };
+
+    let toosharp = matches!(key_semi, 1 | 3 | 8 | 10) || (key_semi == 6 && flats);
+    let root_name = if toosharp {
+        FLAT_NAMES_TABLE[root_semi as usize]
+    } else {
+        SHARP_NAMES_TABLE[root_semi as usize]
+    };
+
+    let mut out = String::with_capacity(detail.extension.as_deref().unwrap_or("").len() + 8);
+    out.push_str(root_name);
+    use core::fmt::Write as _;
+    let _ = write!(&mut out, "{}", detail.quality);
+    if let Some(ext) = detail.extension.as_deref() {
+        out.push_str(ext);
+    }
+    if let Some((bass, bass_acc)) = detail.bass_note {
+        out.push('/');
+        let _ = write!(&mut out, "{bass}");
+        if let Some(acc) = bass_acc {
+            let _ = write!(&mut out, "{acc}");
+        }
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
 // Parser
 // ---------------------------------------------------------------------------
 
@@ -841,5 +942,104 @@ mod tests {
     fn empty_bass_string_is_invalid() {
         // A trailing slash with no bass note should be rejected.
         assert!(parse_chord("G/").is_none());
+    }
+
+    // -- canonicalize_detail (R6.100.0 keys.force-common, #2300) ---------
+
+    fn canon(input: &str, force_common: bool, flats: bool) -> String {
+        let detail = parse_chord(input).expect("input must parse");
+        canonicalize_detail(&detail, force_common, flats)
+    }
+
+    #[test]
+    fn force_common_off_preserves_input_spelling() {
+        // When force-common is disabled, output is byte-equal to
+        // `format!("{detail}")` — the source spelling round-trips.
+        assert_eq!(canon("A#", false, false), "A#");
+        assert_eq!(canon("Bb", false, false), "Bb");
+        assert_eq!(canon("F#m7", false, false), "F#m7");
+    }
+
+    #[test]
+    fn force_common_rewrites_toosharp_majors() {
+        // The "toosharp" set per upstream is_key_toosharp at
+        // `lib/ChordPro/Chords/Parser.pm:879` in R6.100.0:
+        // {C# (1), D# (3), G# (8), A# (10)}. These render as flats under
+        // default keys.force-common = true.
+        assert_eq!(canon("C#", true, false), "Db");
+        assert_eq!(canon("D#", true, false), "Eb");
+        assert_eq!(canon("G#", true, false), "Ab");
+        assert_eq!(canon("A#", true, false), "Bb");
+    }
+
+    #[test]
+    fn force_common_preserves_normal_majors() {
+        // Roots NOT in the toosharp set keep their natural / sharp
+        // spelling: C, D, E, F, G, A, B all render unchanged.
+        for root in ["C", "D", "E", "F", "G", "A", "B"] {
+            assert_eq!(canon(root, true, false), root, "{root}");
+        }
+    }
+
+    #[test]
+    fn f_sharp_default_stays_sharp() {
+        // F# (key_semi 6) is the ambiguous case. Default keys.flats=false
+        // leaves it as F#.
+        assert_eq!(canon("F#", true, false), "F#");
+    }
+
+    #[test]
+    fn f_sharp_under_flats_becomes_gb() {
+        // keys.flats=true flips the F#/Gb special-case to flat.
+        assert_eq!(canon("F#", true, true), "Gb");
+        assert_eq!(canon("Gb", true, true), "Gb");
+    }
+
+    #[test]
+    fn force_common_preserves_extensions() {
+        // Major-quality toosharp roots keep their extensions intact when
+        // the root is re-spelled.
+        assert_eq!(canon("A#7", true, false), "Bb7");
+        assert_eq!(canon("D#maj7", true, false), "Ebmaj7");
+        assert_eq!(canon("G#sus4", true, false), "Absus4");
+        assert_eq!(canon("C#9", true, false), "Db9");
+    }
+
+    #[test]
+    fn force_common_preserves_bass_slash_chord() {
+        // Upstream's `keyname()` only normalises the chord's primary
+        // root; the bass spelling is left as-written (Parser.pm only
+        // reaches into nf_canon / ns_canon for the root). chordsketch
+        // mirrors this: the bass note in `G/B` round-trips, and a
+        // toosharp root pairs with a verbatim bass.
+        assert_eq!(canon("G/B", true, false), "G/B");
+        assert_eq!(canon("A#/E", true, false), "Bb/E");
+    }
+
+    #[test]
+    fn force_common_minor_shift_matches_upstream() {
+        // Upstream Parser.pm:863, 883 subtract 3 from the root ordinal
+        // for minor chords before consulting the toosharp / flat tables.
+        // The shift produces some surprising re-spellings; pin the upstream
+        // results literally so any divergence shows up immediately.
+
+        // F#m: root_ord 6, minor-shift → 3 (D# ord), 3 ∈ {1, 3, 8, 10}
+        //      → toosharp → flat → Gbm.
+        assert_eq!(canon("F#m", true, false), "Gbm");
+
+        // A#m: root_ord 10, minor-shift → 7 (G ord), 7 ∉ {1, 3, 8, 10}
+        //      → NOT toosharp → sharp name preserved → A#m. Note that the
+        //      *major* A# DOES re-spell to Bb (different test above).
+        assert_eq!(canon("A#m", true, false), "A#m");
+
+        // C#m: root_ord 1, minor-shift → 10 (A# ord), 10 ∈ {1, 3, 8, 10}
+        //      → toosharp → flat → Dbm. (Upstream applies the rewrite via
+        //      the post-shift ordinal even for minors.)
+        assert_eq!(canon("C#m", true, false), "Dbm");
+
+        // Em (a non-toosharp major-side root) is untouched whether or not
+        // the minor-shift is applied; pin it so a future regression in the
+        // arithmetic surfaces here.
+        assert_eq!(canon("Em", true, false), "Em");
     }
 }
