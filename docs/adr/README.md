@@ -87,3 +87,5 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0007](0007-tauri-updater-key-with-password.md) | Tauri updater key requires a non-empty password | Accepted (2026-04-25) |
 | [0008](0008-npm-publishing-is-local.md) | npm publishing is a maintainer-local manual operation | Accepted (2026-04-26) |
 | [0009](0009-release-event-cascade-credential.md) | Release event cascading requires a non-GITHUB_TOKEN credential | Accepted (2026-04-26) |
+| [0010](0010-image-path-resolution-stays-strict.md) | Image path resolution stays strict (declines R6.100 `~` and folder-next-to-song) | Accepted (2026-04-28) |
+| [0011](0011-html-styles-stay-inline.md) | HTML styles stay inline-per-element (declines R6.100 `default/screen/print` + `html.style.embed`) | Accepted (2026-04-28) |
