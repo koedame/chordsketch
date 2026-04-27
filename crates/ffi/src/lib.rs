@@ -328,6 +328,22 @@ pub fn render_html_css() -> String {
     chordsketch_render_html::render_html_css()
 }
 
+/// Variant of [`render_html_css`] that honours `settings.wraplines` from
+/// the supplied config (R6.100.0). When `wraplines` is false, the `.line`
+/// rule emits `flex-wrap: nowrap` so chord/lyric runs preserve the source
+/// line structure instead of reflowing onto subsequent rows.
+///
+/// # Errors
+///
+/// Returns [`ChordSketchError::InvalidConfig`] when `config_json` cannot
+/// be parsed.
+pub fn render_html_css_with_config_json(
+    config_json: Option<String>,
+) -> Result<String, ChordSketchError> {
+    let config = resolve_config(config_json)?;
+    Ok(chordsketch_render_html::render_html_css_with_config(&config))
+}
+
 /// A single validation issue reported by [`validate`].
 ///
 /// Mirrors the NAPI binding's `ValidationError` (#1990) and the UDL
