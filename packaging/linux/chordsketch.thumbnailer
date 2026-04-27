@@ -1,0 +1,4 @@
+[Thumbnailer Entry]
+TryExec=chordsketch-thumbnailer
+Exec=chordsketch-thumbnailer %i %o %s
+MimeType=text/x-chordpro;
