@@ -984,8 +984,10 @@ mod tests {
     #[test]
     fn f_sharp_default_stays_sharp() {
         // F# (key_semi 6) is the ambiguous case. Default keys.flats=false
-        // leaves it as F#.
+        // leaves it as F#. The enharmonic input Gb normalizes to the same
+        // sharp spelling, so the function is idempotent in both directions.
         assert_eq!(canon("F#", true, false), "F#");
+        assert_eq!(canon("Gb", true, false), "F#");
     }
 
     #[test]
