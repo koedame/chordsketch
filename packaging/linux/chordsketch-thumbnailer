@@ -16,23 +16,35 @@
 # renderer is in-process Rust (no headless browser dependency) and
 # keeps the chord-over-lyrics layout pixel-stable across distros.
 #
-# Soft dependencies (declared in `chordsketch-thumbnailer-deps` of the
-# accompanying `README.md`):
+# Soft dependencies (see the "Dependencies" section of the accompanying
+# `README.md`):
 #   - `chordsketch` — installed by the `chordsketch` package itself
 #   - `pdftoppm`    — `poppler-utils` package on Debian/Ubuntu/Arch/Fedora
 
 set -eu
 
+[ $# -eq 3 ] || { printf 'Usage: %s <input> <output> <size>\n' "$0" >&2; exit 1; }
+
 input=$1
 output=$2
 size=$3
+
+# Validate size is a positive integer before it reaches pdftoppm.
+case "$size" in
+    *[!0-9]*|'') printf 'Error: size must be a positive integer, got: %s\n' "$size" >&2; exit 1 ;;
+    0)           printf 'Error: size must be a positive integer (>0), got: 0\n' >&2; exit 1 ;;
+esac
 
 # Strip a leading `file://` if the file manager handed us a URI rather
 # than a path. The `%i` placeholder in `chordsketch.thumbnailer` is
 # documented as a path, but some managers substitute the URI form
 # regardless; accepting both keeps the contract robust against that.
+#
+# Handle both empty-authority (`file:///path`) and localhost-authority
+# (`file://localhost/path`) forms as specified by RFC 8089.
 case "$input" in
-    file://*) input=${input#file://} ;;
+    file:///*) input=${input#file://} ;;
+    file://localhost/*) input=${input#file://localhost} ;;
 esac
 
 # Working directory for the intermediate PDF. `mktemp -d` creates with
