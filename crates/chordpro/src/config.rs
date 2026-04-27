@@ -1043,6 +1043,7 @@ mod tests {
         let config = Config::defaults();
         assert_eq!(config.get_path("settings.columns"), &Value::Number(1.0));
         assert_eq!(config.get_path("settings.transpose"), &Value::Number(0.0));
+        assert_eq!(config.get_path("settings.strict"), &Value::Bool(false));
     }
 
     #[test]
