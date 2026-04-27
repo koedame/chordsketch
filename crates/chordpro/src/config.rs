@@ -832,6 +832,23 @@ const DEFAULT_CONFIG: &str = r#"{
         wraplines: true
     },
 
+    // Keys & enharmonic spelling (ChordPro R6.100.0).
+    //
+    // Reference: `lib/ChordPro/Chords/Parser.pm` `is_key_flat`,
+    // `is_key_toosharp`, `keyname` in upstream R6.100.0.
+    keys: {
+        // When true, normalize chord display names to their "common notation":
+        // too-sharp roots {C#, D#, G#, A#} render as their flat enharmonics
+        // {Db, Eb, Ab, Bb}. When false, the source spelling is preserved
+        // verbatim. Default true matches upstream.
+        "force-common": true,
+        // Controls only the F#/Gb ambiguous case. When false (default), the
+        // ambiguous root renders as F# (sharp). When true, it renders as Gb
+        // (flat) — the same flat-side normalization rule used for the rest
+        // of the toosharp set. Has no effect when force-common is false.
+        flats: false
+    },
+
     // PDF rendering
     pdf: {
         papersize: "a4",
