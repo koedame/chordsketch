@@ -55,6 +55,7 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           shared-key: ruby-x86_64-unknown-linux-gnu
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build
         run: cargo build -p chordsketch-ffi --release --target x86_64-unknown-linux-gnu
@@ -118,6 +119,7 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           shared-key: ruby-${{ matrix.target }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build
         env:
@@ -146,6 +148,7 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           shared-key: ruby-generate
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build FFI crate
         run: cargo build -p chordsketch-ffi
