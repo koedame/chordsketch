@@ -1,0 +1,128 @@
+name: MacPorts smoke
+
+on:
+  pull_request:
+    paths:
+      - "packaging/macports/**"
+      - ".github/workflows/macports-smoke.yml"
+      - "scripts/macports-regen-cargo-crates.py"
+  workflow_dispatch:
+  # No `push:` trigger: this workflow is heavy (~30+ min on a macOS
+  # runner) and the PR-time check plus a workflow_dispatch escape hatch
+  # cover the operational need. Adding `push: branches: [main]` would
+  # double-spend macOS minutes for no extra signal.
+
+# Cancel stale PR runs when a new commit is pushed to the same PR so
+# rebase / force-push does not leave two parallel jobs competing for
+# the macOS 5-job concurrency cap. `workflow_dispatch` runs to
+# completion. Per `.claude/rules/ci-parallelization.md` §5.
+concurrency:
+  group: macports-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  install:
+    name: sudo port install chordsketch
+    runs-on: macos-latest
+    # Wall-clock budget: the cargo portgroup downloads ~640 crates and
+    # compiles the full chordsketch crate graph from scratch on a fresh
+    # runner. Plus a handful of MacPorts build deps (rust toolchain,
+    # libiconv, etc.). 90 min is generous; lower if runs settle below.
+    timeout-minutes: 90
+    # `Swatinem/rust-cache` is intentionally absent: cargo runs inside
+    # the MacPorts sandbox under its own distfile cache. The action
+    # would not see those builds, so it would just bloat the workflow
+    # without speeding anything up. Matches `ci-parallelization.md`
+    # §2 (frequency-aware caching) — this workflow only fires on
+    # Portfile changes plus workflow_dispatch, well below the 7-day
+    # cache TTL.
+    env:
+      MACPORTS_VERSION: "2.10.7"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Resolve runner macOS codename
+        id: codename
+        run: |
+          set -euo pipefail
+          major=$(sw_vers -productVersion | cut -d. -f1)
+          case "$major" in
+            12) name=Monterey ;;
+            13) name=Ventura  ;;
+            14) name=Sonoma   ;;
+            15) name=Sequoia  ;;
+            *)
+              echo "unsupported macOS major version: $major" >&2
+              exit 1
+              ;;
+          esac
+          echo "name=$name"   >> "$GITHUB_OUTPUT"
+          echo "major=$major" >> "$GITHUB_OUTPUT"
+
+      - name: Install MacPorts from official .pkg
+        # All `${{ }}` interpolation goes through `env:` so no
+        # GitHub-controlled value is spliced into the shell directly.
+        env:
+          CODENAME: ${{ steps.codename.outputs.name }}
+          MAJOR: ${{ steps.codename.outputs.major }}
+        run: |
+          set -euo pipefail
+          pkg="MacPorts-${MACPORTS_VERSION}-${MAJOR}-${CODENAME}.pkg"
+          url="https://github.com/macports/macports-base/releases/download/v${MACPORTS_VERSION}/${pkg}"
+          curl -fL --retry 5 --retry-delay 5 -o "$pkg" "$url"
+          sudo installer -pkg "$pkg" -target /
+          # Expose MacPorts on PATH for subsequent steps.
+          echo "/opt/local/bin"  >> "$GITHUB_PATH"
+          echo "/opt/local/sbin" >> "$GITHUB_PATH"
+
+      - name: MacPorts selfupdate
+        # Pulls the upstream ports tree the cargo portgroup needs.
+        # Without this, `port lint` and the cargo portgroup itself
+        # cannot resolve their own dependencies.
+        run: sudo /opt/local/bin/port -v selfupdate
+
+      - name: Stand up local ports tree
+        # MacPorts only resolves Portfiles inside a registered ports
+        # tree. We register a workspace-local tree containing just
+        # `textproc/chordsketch/Portfile` and prepend it to
+        # `sources.conf` so it shadows whatever upstream ships later.
+        run: |
+          set -euo pipefail
+          local_ports="$GITHUB_WORKSPACE/local-ports"
+          mkdir -p "$local_ports/textproc/chordsketch"
+          cp packaging/macports/Portfile "$local_ports/textproc/chordsketch/Portfile"
+          # `portindex` writes a binary index next to the Portfiles;
+          # it does not need root.
+          (cd "$local_ports" && /opt/local/bin/portindex)
+          # Prepend the local source so it takes precedence on tie.
+          # `sed -i ''` is the BSD form (no backup suffix); GNU sed
+          # would need `-i` only.
+          sudo sed -i '' "1i\\
+          file://${local_ports}\\
+          " /opt/local/etc/macports/sources.conf
+          echo "Final sources.conf:"
+          cat /opt/local/etc/macports/sources.conf
+
+      - name: port lint
+        run: sudo /opt/local/bin/port lint --nitpick chordsketch
+
+      - name: port install (source build)
+        # `-s` forces source build. Binary archives would let us
+        # short-circuit the cargo build, but they only exist on the
+        # MacPorts buildbot side post-acceptance — we want to validate
+        # the recipe end-to-end here.
+        run: sudo /opt/local/bin/port -v install -s chordsketch
+
+      - name: Verify install (cli-render-smoke)
+        # Reuses the same composite action that drives README install
+        # smoke, so MacPorts gets the identical surface coverage as
+        # Homebrew, Scoop, and the bare cargo install path. Any new
+        # CLI invariant added there will be exercised here too.
+        uses: ./.github/actions/cli-render-smoke
