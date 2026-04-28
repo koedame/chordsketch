@@ -1,0 +1,208 @@
+name: Cache Prune
+
+# Prevents `v0-rust-*` cache generation accumulation on `refs/heads/main`
+# from gradually pushing the repo's GitHub Actions cache pool back toward
+# the 10 GB ceiling. As Cargo.toml / Cargo.lock evolve, each unique
+# env-hash + lockfile-hash combination produces a fresh
+# `Swatinem/rust-cache` entry under the same `shared-key` prefix; older
+# generations linger until the 7-day idle TTL fires. This pruner keeps
+# the newest entry per prefix and deletes the rest, holding the
+# steady-state cache pool flat regardless of churn frequency.
+#
+# Pairs with #2308 / #2309 (which stops PR + merge-queue runs from
+# saving zombie caches in the first place) and #2310 (which removes
+# the ~835 MB / run sccache write amplification on Linux + Windows
+# python.yml cells). See #2312 for the full rationale.
+
+on:
+  schedule:
+    # Daily at 04:00 UTC — outside the heaviest CI traffic windows so a
+    # delete-during-restore race is unlikely. Tag pushes (release.yml /
+    # post-release.yml / desktop-release.yml) and the regular weekday
+    # backlog of PR merges both peak earlier.
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "List candidates without deleting"
+        type: boolean
+        default: false
+
+# Mutually exclusive — two prunes seeing overlapping snapshots could
+# both try to delete the same cache (404 is harmless) but more
+# importantly could disagree on which generation is "newest" if a
+# fresh save lands between their listings. cancel-in-progress: false
+# preserves the earlier run so its in-flight deletes complete.
+concurrency:
+  group: cache-prune
+  cancel-in-progress: false
+
+# `actions: write` is required by the cache delete API. `contents: read`
+# is the project default per #1839; everything else stays at the
+# fail-closed default.
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  prune:
+    name: Prune stale rust-cache generations on main
+    runs-on: ubuntu-latest
+    steps:
+      - name: List, group, and prune caches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry-run || 'false' }}
+        run: |
+          set -euo pipefail
+          python3 <<'PYTHON'
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+
+          REPO = os.environ["REPO"]
+          DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
+
+          # rust-cache key shape:
+          #   v0-rust-{shared-key}-{os-arch}-{env-hash}-{lockfile-hash}
+          # env-hash and lockfile-hash are 8 lowercase hex chars each.
+          # Stripping the trailing `-{8hex}-{8hex}` yields the prefix
+          # that all generations of the same logical cache share.
+          RUST_KEY_RE = re.compile(r"^v0-rust-.*-[0-9a-f]{8}-[0-9a-f]{8}$")
+          SUFFIX_RE = re.compile(r"-[0-9a-f]{8}-[0-9a-f]{8}$")
+
+          MAIN_REF = "refs/heads/main"
+
+          def gh_paginate(path, jq):
+              # `gh api --paginate` follows Link headers. `--field` adds
+              # query-string params instead of POST body.
+              result = subprocess.run(
+                  ["gh", "api", "-X", "GET", path,
+                   "--field", "per_page=100", "--paginate", "--jq", jq],
+                  check=True, capture_output=True, text=True,
+              )
+              return [line for line in result.stdout.splitlines() if line]
+
+          def delete_cache(cache_id):
+              # 404 is benign — the cache was already evicted by LRU or
+              # deleted by a concurrent prune. Any other failure is
+              # logged and re-raised so the workflow surfaces the error.
+              proc = subprocess.run(
+                  ["gh", "api", "-X", "DELETE",
+                   f"repos/{REPO}/actions/caches/{cache_id}"],
+                  capture_output=True, text=True,
+              )
+              if proc.returncode == 0:
+                  return True
+              if "404" in proc.stderr or "Not Found" in proc.stderr:
+                  print(f"  (already gone) id={cache_id}")
+                  return True
+              sys.stderr.write(proc.stderr)
+              proc.check_returncode()
+              return False
+
+          print(f"Repo: {REPO}")
+          print(f"Dry-run: {DRY_RUN}")
+          print()
+
+          rows = gh_paginate(
+              f"repos/{REPO}/actions/caches",
+              ".actions_caches[] | "
+              "[.id, .key, .ref, .created_at, .size_in_bytes] | @tsv",
+          )
+
+          caches = []
+          for row in rows:
+              parts = row.split("\t")
+              if len(parts) != 5:
+                  continue
+              caches.append({
+                  "id": int(parts[0]),
+                  "key": parts[1],
+                  "ref": parts[2],
+                  "created_at": parts[3],
+                  "size": int(parts[4]),
+              })
+
+          print(f"Total active caches: {len(caches)}")
+
+          # Phase 1 — defense-in-depth against `save-if` regressions.
+          # Post-#2309 the `v0-rust-*` family must only land on
+          # `refs/heads/main`. If any appear on a PR or merge-queue
+          # ref it means a `Swatinem/rust-cache` invocation is missing
+          # `save-if: ${{ github.ref == 'refs/heads/main' }}` (or has
+          # bypassed it via `save-if: true`), and the entry is pure
+          # waste — PR-scoped caches can only be read by that one PR.
+          #
+          # Other non-main entries (sccache, node-cache, etc.) are
+          # left alone here: sccache writes from maturin-action have
+          # no save-if equivalent, and an in-flight PR's later push
+          # legitimately benefits from its own earlier sccache. Those
+          # naturally LRU out at the 7-day idle TTL.
+          off_main_rust = [
+              c for c in caches
+              if c["ref"] != MAIN_REF and RUST_KEY_RE.match(c["key"])
+          ]
+          print()
+          print(
+              f"Phase 1: v0-rust-* caches on non-{MAIN_REF} refs: "
+              f"{len(off_main_rust)}"
+          )
+          phase1_freed = 0
+          for c in off_main_rust:
+              size_mb = c["size"] / 1024 / 1024
+              action = "[dry] would delete" if DRY_RUN else "delete"
+              print(f"  {action} id={c['id']} ref={c['ref']} "
+                    f"key={c['key']} ({size_mb:.0f} MB)")
+              if not DRY_RUN:
+                  delete_cache(c["id"])
+              phase1_freed += c["size"]
+
+          # Phase 2 — collapse v0-rust-* generations on main.
+          rust_main = [
+              c for c in caches
+              if c["ref"] == MAIN_REF and RUST_KEY_RE.match(c["key"])
+          ]
+          groups = {}
+          for c in rust_main:
+              prefix = SUFFIX_RE.sub("", c["key"])
+              groups.setdefault(prefix, []).append(c)
+
+          stale = []
+          for prefix, items in groups.items():
+              # Newest first. Ties on created_at are unlikely (cache
+              # creates are timestamped by GitHub at single-second
+              # precision), but if they happen the larger id wins.
+              items.sort(
+                  key=lambda c: (c["created_at"], c["id"]),
+                  reverse=True,
+              )
+              for older in items[1:]:
+                  stale.append((prefix, older))
+
+          print()
+          print(
+              f"Phase 2: v0-rust-* prefixes: {len(groups)} | "
+              f"stale generations: {len(stale)}"
+          )
+          phase2_freed = 0
+          for prefix, c in stale:
+              size_mb = c["size"] / 1024 / 1024
+              action = "[dry] would delete" if DRY_RUN else "delete"
+              print(f"  {action} id={c['id']} key={c['key']} "
+                    f"created={c['created_at']} ({size_mb:.0f} MB)")
+              if not DRY_RUN:
+                  delete_cache(c["id"])
+              phase2_freed += c["size"]
+
+          print()
+          print(
+              f"Summary: phase1={phase1_freed/1024/1024:.0f} MB, "
+              f"phase2={phase2_freed/1024/1024:.0f} MB, "
+              f"total={(phase1_freed+phase2_freed)/1024/1024:.0f} MB "
+              f"({'would be ' if DRY_RUN else ''}reclaimed)"
+          )
+          PYTHON
