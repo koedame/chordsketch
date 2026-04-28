@@ -579,9 +579,10 @@ async function buildAppMenu(
       // avoid colliding with the editor-local navigation shortcuts
       // the AC for #2194 explicitly forbids — `<textarea>` and the
       // CodeMirror editor (#2072) leave both chords unbound, so the
-      // OS-level menu intercept (see the File-menu shortcut comment
-      // above) does not steal a key the user expects to see in the
-      // editor.
+      // OS-level menu intercept does not steal a key the user
+      // expects to see in the editor. See the `file-open`
+      // accelerator comment in this same `Promise.all` for the full
+      // rationale on why the OS-level chord wins over the WebView.
       accelerator: 'CmdOrCtrl+Shift+E',
       action: () => {
         handle.focusEditor();

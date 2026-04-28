@@ -971,13 +971,21 @@ export async function mountChordSketchUi(
       // Pick whichever output surface is currently visible — the
       // user's mental model of "preview" follows the format select,
       // so the focus shortcut should land on the surface they're
-      // actually looking at.
+      // actually looking at. `showPane()` always reveals exactly
+      // one of the three; the terminal `else` exists only as a
+      // forward-safety guard so a future arm added to `showPane`
+      // without a matching arm here fails loudly during dev rather
+      // than silently no-op'ing the shortcut.
       if (!preview.classList.contains('hidden')) {
         preview.focus();
       } else if (!textOutput.classList.contains('hidden')) {
         textOutput.focus();
       } else if (!pdfPane.classList.contains('hidden')) {
         pdfPane.focus();
+      } else {
+        console.warn(
+          'focusPreview: no preview surface visible — showPane() invariant broken?',
+        );
       }
     },
   };
