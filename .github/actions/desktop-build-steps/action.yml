@@ -100,6 +100,11 @@ runs:
         # dir from the root `Cargo.toml`, so the default
         # `workspaces: . -> target` is correct — no override.
         shared-key: ${{ inputs.cache-key-prefix }}-${{ inputs.target }}
+        # Only main pushes save the cache; PR and merge-queue runs
+        # restore via prefix matching against main's entry. See
+        # `.claude/rules/ci-parallelization.md` §2 for the rationale
+        # (10 GB Actions cache budget vs. duplicate PR caches).
+        save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Install Tauri system dependencies (Linux)
       # `runner.os` is a stable context value ('Linux' / 'macOS' /

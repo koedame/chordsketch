@@ -78,6 +78,7 @@ jobs:
           # Distinct shared-key per workflow + target so vscode-extension's
           # wasm-pack build does not thrash the cache shared by `wasm.yml`.
           shared-key: vscode-extension-wasm-pack
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build @chordsketch/wasm from source (web + node builds)
         run: node packages/npm/scripts/build.mjs
@@ -224,6 +225,7 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           shared-key: vscode-extension-wasm-pack
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build @chordsketch/wasm from source (web + node builds)
         run: node packages/npm/scripts/build.mjs

@@ -42,7 +42,8 @@ YAML noise.
 
 **Required (workflows that run at least weekly):**
 `ci.yml`, `wasm.yml`, `python.yml`, `ruby.yml`, `kotlin.yml`, `swift.yml`,
-`napi.yml`, `ffi.yml`, `deploy-playground.yml`, `readme-smoke.yml`
+`napi.yml`, `ffi.yml`, `deploy-playground.yml`, `readme-smoke.yml`,
+`coverage.yml`, `vscode-extension.yml`
 
 **Intentionally omitted (infrequent — cache expires before next run):**
 - `release.yml` — ~every 10 days on version tags
@@ -62,6 +63,32 @@ specific target, to avoid cache thrashing across targets:
   with:
     shared-key: kotlin-x86_64-unknown-linux-gnu
 ```
+
+Every `Swatinem/rust-cache` invocation MUST also pin `save-if` so only
+main pushes write to the cache:
+
+```yaml
+- uses: Swatinem/rust-cache@...
+  with:
+    shared-key: kotlin-x86_64-unknown-linux-gnu
+    save-if: ${{ github.ref == 'refs/heads/main' }}
+```
+
+The repository's GitHub Actions cache pool is capped at 10 GB with LRU
+eviction. Without this guard, the `Swatinem/rust-cache` default (`save-if:
+true`) saves a fresh entry on every PR ref and every
+`refs/heads/gh-readonly-queue/*` merge-queue ref. Those entries are bit-
+for-bit duplicates of `main`'s cache when the PR did not change
+`Cargo.lock`, but they cost the full per-cell size (typical: 200–500 MB)
+and are scoped to refs that no other run can read from. The pool fills
+within ~24 hours and LRU starts evicting the `main` caches that PR runs
+restore from — producing the `No cache found.` reports that motivated
+#2308.
+
+PR and `merge_group:` runs continue to **restore** cached entries via the
+`shared-key` prefix; they simply do not write back. Cargo.lock-changing
+PRs (mostly Dependabot) trade away one warm cache they would not have
+hit cleanly anyway in exchange for keeping `main`'s cache resident.
 
 ### Tool-version single source of truth
 

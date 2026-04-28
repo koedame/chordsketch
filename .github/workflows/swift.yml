@@ -89,6 +89,7 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           shared-key: swift-${{ matrix.target }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build library for ${{ matrix.target }}
         run: cargo build -p chordsketch-ffi --release --target ${{ matrix.target }}
@@ -138,6 +139,7 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           shared-key: swift-assemble
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Download static libraries
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
