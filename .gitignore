@@ -47,6 +47,13 @@ apps/desktop/src-tauri/gen/
 # Tools
 .serena/
 
+# Playwright MCP server scratch dir
+# Created at the repo root when the Playwright MCP server captures
+# page snapshots (`page-*.yml`) or console logs (`console-*.log`)
+# during a Claude Code session. Session-scoped debugging output, not
+# source. See #2305.
+.playwright-mcp/
+
 # Python (used by scripts/ and CI helpers, not a runtime dep)
 __pycache__/
 *.pyc
