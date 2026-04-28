@@ -471,6 +471,8 @@ async function buildAppMenu(
     pasteItem,
     selectAllItem,
     editMenuSep,
+    focusEditorItem,
+    focusPreviewItem,
     minimizeItem,
     maximizeItem,
     homepageItem,
@@ -570,6 +572,29 @@ async function buildAppMenu(
     PredefinedMenuItem.new({ item: 'Paste' }),
     PredefinedMenuItem.new({ item: 'SelectAll' }),
     PredefinedMenuItem.new({ item: 'Separator' }),
+    MenuItem.new({
+      id: 'view-focus-editor',
+      text: 'Focus Editor',
+      // `CmdOrCtrl+Shift+E` and `CmdOrCtrl+Shift+P` were chosen to
+      // avoid colliding with the editor-local navigation shortcuts
+      // the AC for #2194 explicitly forbids — `<textarea>` and the
+      // CodeMirror editor (#2072) leave both chords unbound, so the
+      // OS-level menu intercept (see the File-menu shortcut comment
+      // above) does not steal a key the user expects to see in the
+      // editor.
+      accelerator: 'CmdOrCtrl+Shift+E',
+      action: () => {
+        handle.focusEditor();
+      },
+    }),
+    MenuItem.new({
+      id: 'view-focus-preview',
+      text: 'Focus Preview',
+      accelerator: 'CmdOrCtrl+Shift+P',
+      action: () => {
+        handle.focusPreview();
+      },
+    }),
     PredefinedMenuItem.new({ item: 'Minimize' }),
     // macOS convention calls this "Zoom"; Tauri's predefined item
     // is `Maximize` and the platform layer renames the surface
@@ -636,6 +661,14 @@ async function buildAppMenu(
       selectAllItem,
     ],
   });
+  // View menu hosts the focus-toggle shortcuts (#2194). macOS HIG
+  // surfaces View between Edit and Window for navigation-related
+  // commands, and the same item list renders identically on
+  // Windows / Linux without further platform branching.
+  const viewMenu = await Submenu.new({
+    text: 'View',
+    items: [focusEditorItem, focusPreviewItem],
+  });
   const windowMenu = await Submenu.new({
     text: 'Window',
     items: [minimizeItem, maximizeItem],
@@ -646,7 +679,7 @@ async function buildAppMenu(
   });
 
   return Menu.new({
-    items: [appMenu, fileMenu, editMenu, windowMenu, helpMenu],
+    items: [appMenu, fileMenu, editMenu, viewMenu, windowMenu, helpMenu],
   });
 }
 
