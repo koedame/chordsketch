@@ -516,6 +516,15 @@ async function buildAppMenu(
     MenuItem.new({
       id: 'file-open',
       text: 'Open…',
+      // Tauri's accelerator parser maps `CmdOrCtrl` to ⌘ on macOS
+      // and `Ctrl` on Windows / Linux, matching the OS-conventional
+      // bindings called for in #2206. The menu accelerator wins over
+      // the WebView default (browser "Save Page As" for ⌘S, no
+      // default for ⌘O / ⌘⇧S) because Tauri intercepts the chord at
+      // the OS / window level before the WebView sees it, so the
+      // CodeMirror editor (#2072) and the playground `<textarea>`
+      // both remain unaffected.
+      accelerator: 'CmdOrCtrl+O',
       action: () => {
         void runOpen(handle, rebuildMenu);
       },
@@ -523,6 +532,7 @@ async function buildAppMenu(
     MenuItem.new({
       id: 'file-save',
       text: 'Save',
+      accelerator: 'CmdOrCtrl+S',
       action: () => {
         void runSave(handle, rebuildMenu);
       },
@@ -530,6 +540,7 @@ async function buildAppMenu(
     MenuItem.new({
       id: 'file-save-as',
       text: 'Save As…',
+      accelerator: 'CmdOrCtrl+Shift+S',
       action: () => {
         void runSaveAs(handle, rebuildMenu);
       },
