@@ -175,12 +175,22 @@ export interface ChordSketchUiHandle {
   /**
    * Adjust the transpose offset by `delta` semitones, clamped to the
    * same `[-11, 11]` window the trio buttons and the `<input>` itself
-   * enforce. Triggers the same debounced rerender path as a click on
-   * the existing `+` / `−` buttons so the preview stays in sync.
-   * Backs the desktop app's `View → Transpose Up / Down` shortcuts
-   * (#2190); hosts that bind the same action elsewhere (a custom
-   * floating control, a hardware MIDI pedal) reuse this method
-   * instead of synthesising click events on the trio buttons.
+   * enforce. `delta` must be a finite integer; non-finite (`NaN` /
+   * `Infinity`) or zero values are treated as no-ops, and fractional
+   * values are truncated toward zero. Triggers the same debounced
+   * rerender path as a click on the existing `+` / `−` buttons so
+   * the preview stays in sync. Backs the desktop app's `View →
+   * Transpose Up / Down` shortcuts (#2190); hosts that bind the same
+   * action elsewhere (a custom floating control, a hardware MIDI
+   * pedal) reuse this method instead of synthesising click events on
+   * the trio buttons.
+   *
+   * The signed-delta shape is intentionally distinct from
+   * `@chordsketch/react`'s `useTranspose` hook (`increment(step?)` /
+   * `decrement(step?)` / `reset()`) because the React hook keeps its
+   * state in user-supplied React state, while this handle drives the
+   * built-in DOM trio. Hosts that already use one shape are not
+   * expected to switch to the other.
    */
   stepTranspose(delta: number): void;
   /**
@@ -1007,15 +1017,32 @@ export async function mountChordSketchUi(
       }
     },
     stepTranspose(delta: number): void {
+      // Validate at the public-API boundary per
+      // `.claude/rules/defensive-inputs.md`. Non-finite `delta`
+      // (`NaN`/`±Infinity`) propagates through `getTranspose() +
+      // delta` and `Math.max/min` as `NaN`, which `setTranspose`
+      // would write into `transposeInput.value` as the literal
+      // string `"NaN"` — `getTranspose()` self-heals on the next
+      // read via `Number.isNaN`, but the `<input>` briefly displays
+      // bogus state and a render is scheduled with stale-feeling
+      // numbers. `Math.trunc` rounds fractional `delta` toward zero
+      // so a host passing `0.5` or `-1.7` produces a deterministic
+      // integer step instead of letting `transposeInput.value =
+      // "0.5"` drift away from `parseInt`'s truncation in
+      // `getTranspose()`. A truncated-to-zero `delta` falls into
+      // the early-return so we don't schedule a no-op render.
+      if (!Number.isFinite(delta)) return;
+      const step = Math.trunc(delta);
+      if (step === 0) return;
       // `setTranspose` clamps to `[TRANSPOSE_MIN, TRANSPOSE_MAX]`
-      // and schedules a render, so a `delta` larger than the
+      // and schedules a render, so a `step` larger than the
       // remaining headroom degrades to "snap to the boundary"
       // rather than overshooting. Reading via `getTranspose()`
       // (not `transposeInput.valueAsNumber`) keeps us using the
       // same clamp-and-fallback path as the click handlers, which
       // is the safer choice if a host calls this between an in-
       // progress edit and the next debounce tick.
-      setTranspose(getTranspose() + delta);
+      setTranspose(getTranspose() + step);
     },
     resetTranspose(): void {
       setTranspose(TRANSPOSE_RESET);
