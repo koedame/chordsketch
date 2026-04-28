@@ -518,13 +518,6 @@ jobs:
   library-smoke:
     name: Library Usage
     runs-on: ubuntu-latest
-    # Tolerate failure on non-PR runs while the `chordsketch-chordpro`
-    # rename (#2097) is still pre-release — crates.io only hosts the
-    # old `chordsketch-core` name until v0.3.0 publishes. The PR
-    # branch still exercises the snippet via workspace path-deps and
-    # fails hard on API drift. Remove this flag once v0.3.0 is on
-    # crates.io; tracked in #2169.
-    continue-on-error: ${{ github.event_name != 'pull_request' }}
     steps:
       # Checkout is needed even on non-PR runs because the PR branch
       # variant uses workspace path-deps. Cheap on shallow clone.
@@ -560,10 +553,10 @@ jobs:
             RENDER_DEP="chordsketch-render-text = { path = \"$GITHUB_WORKSPACE/crates/render-text\" }"
             MODE="workspace path deps (PR)"
           else
-            # Cargo `^0.1` means `>=0.1.0, <0.2.0` (the caret rules treat
+            # Cargo `^0.3` means `>=0.3.0, <0.4.0` (the caret rules treat
             # the leftmost non-zero as the breaking-change boundary).
-            # Bump policy: when the workspace bumps to 0.3.x, update both
-            # constraints below to `^0.3` in the same release PR.
+            # Bump policy: when the workspace bumps to 0.4.x, update both
+            # constraints below to `^0.4` in the same release PR.
             # Otherwise, daily smoke tests will silently stop resolving.
             CORE_DEP='chordsketch-chordpro = "^0.3"'
             RENDER_DEP='chordsketch-render-text = "^0.3"'
@@ -601,7 +594,25 @@ jobs:
           }
           EOF
           cd "$SCRATCH"
-          cargo run --quiet
+          # Retry the cargo invocation up to three times with a 10-second
+          # backoff to absorb transient crates.io 5xx / CDN flakes during
+          # `Updating crates.io index` or dependency fetches. Mirrors the
+          # `winget` job's retry shape (#2208) so a CDN blip on a daily /
+          # release-event run does not auto-file a `priority:high`
+          # tracking issue via `report-failure`. Three attempts + a fixed
+          # 10s gap matches the winget precedent. Genuine API drift
+          # (the failure mode `library-smoke` exists to catch) reproduces
+          # on every attempt and still fails the job.
+          attempt=0
+          until cargo run --quiet; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge 3 ]; then
+              echo "library-smoke cargo run failed after $attempt attempts" >&2
+              exit 1
+            fi
+            echo "library-smoke cargo run attempt $attempt failed; retrying in 10s" >&2
+            sleep 10
+          done
 
   usage-smoke:
     name: README Usage examples (source build)
