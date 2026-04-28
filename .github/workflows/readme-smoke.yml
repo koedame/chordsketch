@@ -594,7 +594,25 @@ jobs:
           }
           EOF
           cd "$SCRATCH"
-          cargo run --quiet
+          # Retry the cargo invocation up to three times with a 10-second
+          # backoff to absorb transient crates.io 5xx / CDN flakes during
+          # `Updating crates.io index` or dependency fetches. Mirrors the
+          # `winget` job's retry shape (#2208) so a CDN blip on a daily /
+          # release-event run does not auto-file a `priority:high`
+          # tracking issue via `report-failure`. Three attempts + a fixed
+          # 10s gap matches the winget precedent. Genuine API drift
+          # (the failure mode `library-smoke` exists to catch) reproduces
+          # on every attempt and still fails the job.
+          attempt=0
+          until cargo run --quiet; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge 3 ]; then
+              echo "library-smoke cargo run failed after $attempt attempts" >&2
+              exit 1
+            fi
+            echo "library-smoke cargo run attempt $attempt failed; retrying in 10s" >&2
+            sleep 10
+          done
 
   usage-smoke:
     name: README Usage examples (source build)
