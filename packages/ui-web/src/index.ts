@@ -172,6 +172,24 @@ export interface ChordSketchUiHandle {
    * Backs the desktop app's `View → Focus Preview` shortcut (#2194).
    */
   focusPreview(): void;
+  /**
+   * Adjust the transpose offset by `delta` semitones, clamped to the
+   * same `[-11, 11]` window the trio buttons and the `<input>` itself
+   * enforce. Triggers the same debounced rerender path as a click on
+   * the existing `+` / `−` buttons so the preview stays in sync.
+   * Backs the desktop app's `View → Transpose Up / Down` shortcuts
+   * (#2190); hosts that bind the same action elsewhere (a custom
+   * floating control, a hardware MIDI pedal) reuse this method
+   * instead of synthesising click events on the trio buttons.
+   */
+  stepTranspose(delta: number): void;
+  /**
+   * Reset the transpose offset to `0`, matching what `Reset` on the
+   * existing trio does. Surfaced so the desktop app can offer a
+   * `View → Reset Transpose` menu item without poking at the
+   * internal `<button>` (#2190).
+   */
+  resetTranspose(): void;
 }
 
 const RENDER_DEBOUNCE_MS = 300;
@@ -987,6 +1005,20 @@ export async function mountChordSketchUi(
           'focusPreview: no preview surface visible — showPane() invariant broken?',
         );
       }
+    },
+    stepTranspose(delta: number): void {
+      // `setTranspose` clamps to `[TRANSPOSE_MIN, TRANSPOSE_MAX]`
+      // and schedules a render, so a `delta` larger than the
+      // remaining headroom degrades to "snap to the boundary"
+      // rather than overshooting. Reading via `getTranspose()`
+      // (not `transposeInput.valueAsNumber`) keeps us using the
+      // same clamp-and-fallback path as the click handlers, which
+      // is the safer choice if a host calls this between an in-
+      // progress edit and the next debounce tick.
+      setTranspose(getTranspose() + delta);
+    },
+    resetTranspose(): void {
+      setTranspose(TRANSPOSE_RESET);
     },
   };
 }
