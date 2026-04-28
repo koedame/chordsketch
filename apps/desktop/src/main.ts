@@ -473,6 +473,10 @@ async function buildAppMenu(
     editMenuSep,
     focusEditorItem,
     focusPreviewItem,
+    viewMenuSep,
+    transposeUpItem,
+    transposeDownItem,
+    transposeResetItem,
     minimizeItem,
     maximizeItem,
     homepageItem,
@@ -596,6 +600,54 @@ async function buildAppMenu(
         handle.focusPreview();
       },
     }),
+    PredefinedMenuItem.new({ item: 'Separator' }),
+    MenuItem.new({
+      id: 'view-transpose-up',
+      text: 'Transpose Up',
+      // The issue (#2190) proposed `CmdOrCtrl+Up/Down`, but the same
+      // AC also forbids colliding with editor-local navigation. On
+      // macOS, CodeMirror's `standardKeymap` binds `Cmd-ArrowUp` /
+      // `Cmd-ArrowDown` to `cursorDocStart` / `cursorDocEnd`, and
+      // `<textarea>` uses the same chord for "move to start/end of
+      // text" — there is no Home / End key on most Mac keyboards, so
+      // shadowing those shortcuts at the OS-level menu would strand
+      // users who want to jump to the document boundaries. The
+      // `Alt` modifier (== ⌥ on macOS) takes the chord out of every
+      // CodeMirror default map and out of the `<textarea>` defaults
+      // on every platform, while staying close enough to the
+      // proposed `Cmd+Up/Down` to remain discoverable. Logic Pro's
+      // Option+Up/Down "transpose by semitone" convention is the
+      // closest established precedent. See the `file-open`
+      // accelerator comment in this same `Promise.all` for the
+      // general rationale on why the OS-level chord wins over the
+      // WebView.
+      accelerator: 'CmdOrCtrl+Alt+ArrowUp',
+      action: () => {
+        handle.stepTranspose(1);
+      },
+    }),
+    MenuItem.new({
+      id: 'view-transpose-down',
+      text: 'Transpose Down',
+      accelerator: 'CmdOrCtrl+Alt+ArrowDown',
+      action: () => {
+        handle.stepTranspose(-1);
+      },
+    }),
+    MenuItem.new({
+      id: 'view-transpose-reset',
+      text: 'Reset Transpose',
+      // No accelerator: ⌘0 is the natural "reset" chord by web
+      // convention but conflicts with browser zoom-reset, and there
+      // is no second free chord that is obviously a "transpose
+      // reset". Leaving the menu item without an accelerator keeps
+      // the action discoverable while deferring the binding choice
+      // — same pattern as `Export PDF…` / `Export HTML…`, which
+      // ship without accelerators in this menu.
+      action: () => {
+        handle.resetTranspose();
+      },
+    }),
     PredefinedMenuItem.new({ item: 'Minimize' }),
     // macOS convention calls this "Zoom"; Tauri's predefined item
     // is `Maximize` and the platform layer renames the surface
@@ -662,13 +714,24 @@ async function buildAppMenu(
       selectAllItem,
     ],
   });
-  // View menu hosts the focus-toggle shortcuts (#2194). macOS HIG
-  // surfaces View between Edit and Window for navigation-related
-  // commands, and the same item list renders identically on
-  // Windows / Linux without further platform branching.
+  // View menu hosts the focus-toggle shortcuts (#2194) and the
+  // transpose shortcuts (#2190). macOS HIG surfaces View between
+  // Edit and Window for navigation-related commands, and the same
+  // item list renders identically on Windows / Linux without
+  // further platform branching. The transpose group is separated
+  // from the focus-toggle group so a screen-reader user can tell
+  // the two are conceptually distinct, even though they share the
+  // submenu.
   const viewMenu = await Submenu.new({
     text: 'View',
-    items: [focusEditorItem, focusPreviewItem],
+    items: [
+      focusEditorItem,
+      focusPreviewItem,
+      viewMenuSep,
+      transposeUpItem,
+      transposeDownItem,
+      transposeResetItem,
+    ],
   });
   const windowMenu = await Submenu.new({
     text: 'Window',
