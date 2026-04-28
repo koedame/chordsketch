@@ -152,6 +152,9 @@ jobs:
       - name: Verify Portfile cargo.crates matches tagged Cargo.lock
         run: python3 scripts/macports-regen-cargo-crates.py --check
 
+      - name: Unit tests for the regen script
+        run: python3 -m unittest scripts/test_macports_regen_cargo_crates.py
+
   test:
     name: Test (${{ matrix.os }}, ${{ matrix.rust }})
     runs-on: ${{ matrix.os }}

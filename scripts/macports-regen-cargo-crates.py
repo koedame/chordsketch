@@ -58,8 +58,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PORTFILE = REPO_ROOT / "packaging" / "macports" / "Portfile"
 
+# Captured version must start with a digit and only carry semver-ish
+# characters. `\S+` would match anything non-whitespace, including
+# strings starting with `-` that `git show` could mis-parse as flags.
 GITHUB_SETUP_RE = re.compile(
-    r"^github\.setup\s+koedame\s+chordsketch\s+(\S+)\s+v\s*$",
+    r"^github\.setup\s+koedame\s+chordsketch\s+([0-9][0-9A-Za-z.+\-]*)\s+v\s*$",
     re.M,
 )
 
@@ -78,6 +81,15 @@ def portfile_tag() -> str:
 
 def read_cargo_lock(from_ref: str) -> str:
     """Return the contents of `Cargo.lock` at the given git revision."""
+    # Defense-in-depth: refuse refs that could be mis-parsed by `git
+    # show` as a flag. `git show` does not provide a `--` separator
+    # for revisions, so the only safe form is to validate the
+    # caller-supplied value.
+    if from_ref.startswith("-"):
+        raise SystemExit(
+            f"refusing to use git ref starting with '-': {from_ref!r} "
+            "(would be parsed by `git show` as a command-line option)"
+        )
     try:
         result = subprocess.run(
             ["git", "show", f"{from_ref}:Cargo.lock"],
@@ -87,12 +99,12 @@ def read_cargo_lock(from_ref: str) -> str:
             text=True,
         )
     except FileNotFoundError as exc:
-        raise SystemExit(f"git is required but not on PATH: {exc}")
+        raise SystemExit(f"git is required but not on PATH: {exc}") from exc
     except subprocess.CalledProcessError as exc:
         raise SystemExit(
             f"git show {from_ref}:Cargo.lock failed (exit {exc.returncode}): "
             f"{exc.stderr.strip()}"
-        )
+        ) from exc
     return result.stdout
 
 

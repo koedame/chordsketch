@@ -89,6 +89,21 @@ jobs:
           pkg="MacPorts-${MACPORTS_VERSION}-${MAJOR}-${CODENAME}.pkg"
           url="https://github.com/macports/macports-base/releases/download/v${MACPORTS_VERSION}/${pkg}"
           curl -fL --retry 5 --retry-delay 5 -o "$pkg" "$url"
+
+          # Defense-in-depth beyond HTTPS: refuse to install a .pkg
+          # whose embedded Apple Developer ID signature does not pass
+          # macOS's trust check. `pkgutil --check-signature` exits
+          # non-zero if the package is unsigned, has a broken
+          # signature, or chains to a non-trusted root, so a
+          # compromised release asset (or a typo in the URL that
+          # resolves to an attacker-served file) gets caught before
+          # `installer` runs as root. The signing identity is logged
+          # for audit. Per-version SHA256 pinning was considered and
+          # rejected: the GitHub release API does not expose digests
+          # for these assets, and per-codename hard-coded hashes
+          # would silently rot every MacPorts release.
+          sudo pkgutil --check-signature "$pkg"
+
           sudo installer -pkg "$pkg" -target /
           # Expose MacPorts on PATH for subsequent steps.
           echo "/opt/local/bin"  >> "$GITHUB_PATH"
@@ -129,16 +144,17 @@ jobs:
           # to the Portfiles; run under sudo so the index belongs to
           # root and the macports user can still read it.
           (cd "$local_ports" && sudo /opt/local/bin/portindex)
-          # Prepend the local source so it takes precedence on tie.
-          # `sed -i ''` is the BSD form (no backup suffix); GNU sed
-          # would need `-i` only.
-          sudo sed -i '' "1i\\
-          file://${local_ports}\\
-          " /opt/local/etc/macports/sources.conf
+          # Prepend the local source. The earlier BSD `sed -i ''`
+          # heredoc form leaked YAML continuation indentation into
+          # the inserted line, which MacPorts only happens to
+          # tolerate; this build is straightforward concat instead.
+          sources="/opt/local/etc/macports/sources.conf"
+          tmp="$(mktemp)"
+          { printf 'file://%s\n' "$local_ports"; sudo cat "$sources"; } > "$tmp"
+          sudo install -m 0644 "$tmp" "$sources"
+          rm -f "$tmp"
           echo "Final sources.conf:"
-          cat /opt/local/etc/macports/sources.conf
-          echo "Local ports tree contents:"
-          ls -la "$local_ports/textproc/chordsketch/"
+          cat "$sources"
 
       - name: port lint
         run: sudo /opt/local/bin/port lint --nitpick chordsketch
