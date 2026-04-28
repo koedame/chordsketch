@@ -237,6 +237,19 @@ main {
   background: #fff;
 }
 
+/*
+ * Focus rings on the three preview surfaces so the `View → Focus
+ * Preview` shortcut (#2194) gives keyboard users a visible landing.
+ * `outline-offset: -2px` keeps the ring inside the pane edge,
+ * matching the splitter's inward focus style above.
+ */
+#preview:focus-visible,
+#text-output:focus-visible,
+#pdf-pane:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 #text-output {
   flex: 1;
   padding: 1rem;

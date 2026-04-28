@@ -156,6 +156,22 @@ export interface ChordSketchUiHandle {
    * the same time it calls this.
    */
   setChordPro(value: string): void;
+  /**
+   * Move keyboard focus into the editor pane. Routes through the
+   * injected {@link EditorAdapter#focus} when present (the desktop
+   * CodeMirror factory and the default `<textarea>` factory both
+   * supply one); a no-op if the active editor adapter does not
+   * expose `focus`. Backs the desktop app's `View → Focus Editor`
+   * shortcut (#2194).
+   */
+  focusEditor(): void;
+  /**
+   * Move keyboard focus to the preview pane — specifically the
+   * currently visible output surface (HTML iframe / text `<pre>` /
+   * PDF download pane), so the focus follows the format select.
+   * Backs the desktop app's `View → Focus Preview` shortcut (#2194).
+   */
+  focusPreview(): void;
 }
 
 const RENDER_DEBOUNCE_MS = 300;
@@ -445,10 +461,18 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
   const textOutput = document.createElement('pre');
   textOutput.id = 'text-output';
   textOutput.className = 'hidden';
+  // `<pre>` is not focusable by default. `tabIndex = -1` lets
+  // {@link ChordSketchUiHandle.focusPreview} land focus here when
+  // the text format is selected without inserting the element into
+  // the natural Tab order. (#2194)
+  textOutput.tabIndex = -1;
 
   const pdfPane = document.createElement('div');
   pdfPane.id = 'pdf-pane';
   pdfPane.className = 'hidden';
+  // Same rationale as `textOutput.tabIndex` above — programmatic
+  // focus via `focusPreview()` only, no Tab-order insertion. (#2194)
+  pdfPane.tabIndex = -1;
   const pdfHint = document.createElement('p');
   pdfHint.textContent = 'Click the button to generate and download a PDF.';
   const downloadPdfBtn = document.createElement('button');
@@ -939,6 +963,30 @@ export async function mountChordSketchUi(
       // loads are discrete events — users expect the preview to
       // reflect the loaded file without a 300 ms debounce delay.
       render();
+    },
+    focusEditor(): void {
+      editor.focus?.();
+    },
+    focusPreview(): void {
+      // Pick whichever output surface is currently visible — the
+      // user's mental model of "preview" follows the format select,
+      // so the focus shortcut should land on the surface they're
+      // actually looking at. `showPane()` always reveals exactly
+      // one of the three; the terminal `else` exists only as a
+      // forward-safety guard so a future arm added to `showPane`
+      // without a matching arm here fails loudly during dev rather
+      // than silently no-op'ing the shortcut.
+      if (!preview.classList.contains('hidden')) {
+        preview.focus();
+      } else if (!textOutput.classList.contains('hidden')) {
+        textOutput.focus();
+      } else if (!pdfPane.classList.contains('hidden')) {
+        pdfPane.focus();
+      } else {
+        console.warn(
+          'focusPreview: no preview surface visible — showPane() invariant broken?',
+        );
+      }
     },
   };
 }
