@@ -80,7 +80,18 @@ jobs:
           args: --release --manifest-path crates/ffi/Cargo.toml --out dist
           target: ${{ matrix.target }}
           manylinux: manylinux2014
-          sccache: "true"
+          # sccache disabled — measured 0% hit rate on 4 of 5 recent
+          # ubuntu-latest runs despite an unchanged Cargo.lock. Root
+          # cause: maturin-action runs the wheel build inside a
+          # `manylinux2014` Docker container whose host path varies
+          # per runner instance; sccache's argument hash includes
+          # those absolute paths, so identical compilations produce
+          # different hashes across runs. Each run was writing ~244
+          # cache entries (~285 MB) that no future run could read,
+          # consuming the 10 GB Actions cache cap and forcing LRU
+          # eviction of warm caches read by sister workflows. See
+          # #2310 for the measurements and rationale.
+          sccache: "false"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -108,6 +119,12 @@ jobs:
           args: --release --manifest-path crates/ffi/Cargo.toml --out dist
           target: ${{ matrix.target }}
           manylinux: manylinux2014
+          # sccache stays enabled on macOS — measured 30-70% hit
+          # rate across the last 5 runs (vs 0% on Linux + Windows).
+          # macOS builds run natively on the runner (no
+          # `manylinux2014` Docker container) so absolute paths are
+          # stable enough for sccache's argument hash to match across
+          # runs. See #2310 for the cross-platform measurements.
           sccache: "true"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -137,17 +154,19 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
-      # Cache the workspace target/ directory between runs. Unlike sccache (which
-      # caches individual compilation-unit outputs and is still invoked via
-      # RUSTC_WRAPPER), Swatinem/rust-cache allows cargo to skip the rustc
-      # invocation entirely for unchanged crates on a warm cache hit.
+      # Cache the workspace target/ directory between runs.
       #
-      # Investigation (#1464) found that 30 compilation units consistently miss
-      # sccache on every Windows run — including documentation-only commits —
-      # because those units depend on UniFFI build.rs generated code with
-      # environment-specific paths that differ between runner instances.
-      # Those 30 misses account for ~390 of the ~420s build time.
-      # Caching target/ avoids recompiling those 30 units on warm runs.
+      # Investigation (#1464) found that the 30 compilation units that depend on
+      # UniFFI's `build.rs` generated code have environment-specific paths and
+      # consistently miss sccache (~390 of ~420s on a sccache-only build).
+      # Investigation #2310 generalised the finding: across the last 5 runs,
+      # the Windows cell hit sccache 0 / 5 times for *all* units, not just the
+      # 30 UniFFI-dependent ones, with each run writing ~223 cache entries
+      # (~270 MB) that no future run could read. sccache is therefore disabled
+      # on this cell (see `sccache: "false"` below). `Swatinem/rust-cache`
+      # remains the sole cache layer here: it works at the cargo level (skipping
+      # the rustc invocation entirely for unchanged crates on a warm hit), so
+      # it does not depend on stable absolute paths the way sccache does.
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           shared-key: python-x86_64-pc-windows-msvc
@@ -159,7 +178,12 @@ jobs:
           args: --release --manifest-path crates/ffi/Cargo.toml --out dist
           target: x64
           manylinux: manylinux2014
-          sccache: "true"
+          # sccache disabled per #2310 — measured 0% hit rate on every
+          # one of 5 recent runs. Same UniFFI build.rs path issue
+          # documented in #1464, but applies to every compilation
+          # unit on Windows, not only the 30 originally identified.
+          # Swatinem/rust-cache (above) covers this cell.
+          sccache: "false"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
