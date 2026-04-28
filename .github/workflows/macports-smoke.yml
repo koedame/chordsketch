@@ -7,10 +7,19 @@ on:
       - ".github/workflows/macports-smoke.yml"
       - "scripts/macports-regen-cargo-crates.py"
   workflow_dispatch:
-  # No `push:` trigger: this workflow is heavy (~30+ min on a macOS
-  # runner) and the PR-time check plus a workflow_dispatch escape hatch
-  # cover the operational need. Adding `push: branches: [main]` would
-  # double-spend macOS minutes for no extra signal.
+  # No `push:` trigger: the heavy steps (`port install -s` + verify)
+  # only fire on `workflow_dispatch` anyway, so a `push: branches:
+  # [main]` would just re-run the cheap PR-time path on every merge.
+  #
+  # Two-tier triggering by design:
+  # - PR runs: install MacPorts, register the local Portfile,
+  #   `port lint --nitpick`. Catches Tcl-syntax / required-field /
+  #   field-ordering bugs in <5 min.
+  # - `workflow_dispatch`: everything above, plus `port install -s
+  #   chordsketch` and the `cli-render-smoke` composite. ~30 min
+  #   wall-clock; reserved for release-time AC2 evidence runs and
+  #   any deliberate Portfile rebuild verification, not for routine
+  #   PR review.
 
 # Cancel stale PR runs when a new commit is pushed to the same PR so
 # rebase / force-push does not leave two parallel jobs competing for
@@ -28,13 +37,16 @@ defaults:
     shell: bash --noprofile --norc -euo pipefail {0}
 
 jobs:
-  install:
-    name: sudo port install chordsketch
+  smoke:
+    name: port lint (PR) / port install (dispatch)
     runs-on: macos-latest
-    # Wall-clock budget: the cargo portgroup downloads ~640 crates and
-    # compiles the full chordsketch crate graph from scratch on a fresh
-    # runner. Plus a handful of MacPorts build deps (rust toolchain,
-    # libiconv, etc.). 90 min is generous; lower if runs settle below.
+    # Wall-clock budget:
+    # - PR path (lint only): ~5 min — install MacPorts, selfupdate,
+    #   register tree, lint.
+    # - workflow_dispatch path: cargo portgroup downloads ~640 crates
+    #   and compiles the full chordsketch crate graph from scratch
+    #   on a fresh runner, plus MacPorts build deps. 90 min cap is
+    #   generous.
     timeout-minutes: 90
     # `Swatinem/rust-cache` is intentionally absent: cargo runs inside
     # the MacPorts sandbox under its own distfile cache. The action
@@ -131,7 +143,10 @@ jobs:
       - name: port lint
         run: sudo /opt/local/bin/port lint --nitpick chordsketch
 
+      # The remaining steps run only on `workflow_dispatch` — see the
+      # `on:` comment for the rationale. PR runs stop here.
       - name: port install (source build)
+        if: github.event_name == 'workflow_dispatch'
         # `-s` forces source build. Binary archives would let us
         # short-circuit the cargo build, but they only exist on the
         # MacPorts buildbot side post-acceptance — we want to validate
@@ -139,6 +154,7 @@ jobs:
         run: sudo /opt/local/bin/port -v install -s chordsketch
 
       - name: Verify install (cli-render-smoke)
+        if: github.event_name == 'workflow_dispatch'
         # Reuses the same composite action that drives README install
         # smoke, so MacPorts gets the identical surface coverage as
         # Homebrew, Scoop, and the bare cargo install path. Any new
