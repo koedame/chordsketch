@@ -73,10 +73,12 @@ let recents: string[] = [];
 // exactly one `<!DOCTYPE>` / `<html>` / `<body>`. Pre-#2321 this
 // adapter passed `render_html`'s full document through and ui-web
 // wrapped it again, leaving the desktop preview reliant on HTML5
-// nested-document recovery — the same structural defect described in
-// `packages/playground/src/main.ts` and the WebView is the same
-// embedding context (Chromium-derived WebView2 / WKWebView), so the
-// fix must propagate per `.claude/rules/fix-propagation.md`.
+// nested-document recovery — the same structural defect described
+// in `packages/playground/src/main.ts`. HTML5 nested-document
+// recovery is universal across the per-platform WebViews Tauri uses
+// (WebView2 / Chromium on Windows, WKWebView / WebKit on macOS,
+// webkit2gtk / WebKit on Linux), so the fix must propagate per
+// `.claude/rules/fix-propagation.md`.
 //
 // When `options.config` is unset we reuse a cached default CSS
 // (`render_html_css()` is byte-stable across the build); otherwise we
