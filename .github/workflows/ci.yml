@@ -87,7 +87,16 @@ jobs:
 
       - name: Build docs (warnings as errors)
         # See the clippy job for the `chordsketch-desktop` exclusion rationale.
-        run: cargo doc --workspace --exclude chordsketch-desktop --no-deps
+        #
+        # `--features chordsketch-render-ireal/png` doc-checks the
+        # feature-gated `png` module (#2064) too. Without it, broken
+        # intra-doc links inside that module would not surface, and a
+        # link from the always-on crate root into the gated module
+        # would fail rustdoc's broken-link check anyway because the
+        # gated module would not be in the rendered tree.
+        run: |
+          cargo doc --workspace --exclude chordsketch-desktop \
+            --features chordsketch-render-ireal/png --no-deps
         env:
           RUSTDOCFLAGS: "-D warnings"
 

@@ -47,15 +47,18 @@
 //! / `chordsketch-ireal`.
 //!
 //! Enabling the `png` cargo feature additionally pulls in `resvg`
-//! and `tiny-skia` for the [`png::render_png`] rasteriser. The
+//! and `tiny-skia` for the `png::render_png` rasteriser. The
 //! feature is off by default; SVG-only consumers stay on the
-//! single-dep build.
+//! single-dep build. (Inline code-span — not an intra-doc link —
+//! because the `png` module is `#[cfg(feature = "png")]` and a
+//! crate-level rustdoc link would break the default-features `cargo
+//! doc --no-deps` run that gates CI.)
 //!
 //! # Cargo features
 //!
 //! | Feature | Default? | Notes |
 //! |---|---|---|
-//! | `png` | off | Enables [`png::render_png`] (rasterises the SVG via `resvg`). |
+//! | `png` | off | Enables `png::render_png` (rasterises the SVG via `resvg`). |
 //!
 //! # Stability
 //!
