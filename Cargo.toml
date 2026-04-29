@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/chordpro",
+    "crates/ireal",
     "crates/render-text",
     "crates/render-html",
     "crates/render-pdf",
@@ -24,6 +25,7 @@ members = [
 # stop covering the new crate.
 default-members = [
     "crates/chordpro",
+    "crates/ireal",
     "crates/render-text",
     "crates/render-html",
     "crates/render-pdf",

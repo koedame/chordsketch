@@ -28,6 +28,7 @@ This is a Cargo workspace with the following crates:
 | Crate | Path | Kind | Dependencies |
 |---|---|---|---|
 | `chordsketch-chordpro` | `crates/chordpro` | lib | *none* (zero external deps) |
+| `chordsketch-ireal` | `crates/ireal` | lib | *none* (zero external deps). iReal Pro AST + zero-dep JSON debug serializer / parser (#2055); foundation for the iReal Pro feature set tracked under #2050. |
 | `chordsketch-render-text` | `crates/render-text` | lib | `chordsketch-chordpro` |
 | `chordsketch-render-html` | `crates/render-html` | lib | `chordsketch-chordpro` |
 | `chordsketch-render-pdf` | `crates/render-pdf` | lib | `chordsketch-chordpro` |
