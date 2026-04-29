@@ -38,10 +38,12 @@ impl Converter<Song, IrealSong> for ChordProToIreal {
 pub struct IrealToChordPro;
 
 impl Converter<IrealSong, Song> for IrealToChordPro {
-    fn convert(&self, _source: &IrealSong) -> Result<ConversionOutput<Song>, ConversionError> {
-        Err(ConversionError::NotImplemented(
-            "https://github.com/koedame/chordsketch/issues/2053",
-        ))
+    fn convert(&self, source: &IrealSong) -> Result<ConversionOutput<Song>, ConversionError> {
+        // The actual mapping logic lives in `crate::from_ireal` so
+        // the marker struct stays a thin pass-through. Keeping the
+        // logic in its own module lets the unit tests sit next to
+        // the implementation without polluting this file.
+        crate::from_ireal::convert(source)
     }
 }
 

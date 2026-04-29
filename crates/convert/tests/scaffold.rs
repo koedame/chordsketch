@@ -28,30 +28,28 @@ fn chordpro_to_ireal_currently_returns_not_implemented() {
 }
 
 #[test]
-fn ireal_to_chordpro_currently_returns_not_implemented() {
+fn ireal_to_chordpro_returns_song_after_2053() {
+    // #2053 landed, so this direction now produces a `Song`. The
+    // smoke check is "the output has at least one directive that
+    // came from the iReal metadata"; thorough coverage lives in
+    // `crates/convert/src/from_ireal.rs` unit tests.
     let song = IrealSong::new();
-    match ireal_to_chordpro(&song) {
-        Err(ConversionError::NotImplemented(tracking)) => {
-            assert!(
-                tracking.contains("/2053"),
-                "tracking pointer should reference #2053, got {tracking}"
-            );
-        }
-        other => panic!("expected NotImplemented, got {other:?}"),
-    }
+    let output = ireal_to_chordpro(&song).expect("post-#2053 conversion succeeds");
+    assert!(
+        !output.output.lines.is_empty(),
+        "iReal → ChordPro must emit at least the title directive even for an empty source"
+    );
 }
 
 #[test]
-fn marker_types_implement_converter_via_trait() {
-    // The free-function wrappers and the trait-method paths must
-    // produce structurally equal results; if a future change
-    // implements only one, this test catches the asymmetry.
-    // Asserting on the `NotImplemented` variant directly (rather
-    // than relying on `assert_eq!` of the wrapping `Result`) keeps
-    // the failure mode legible once #2053 / #2061 land and the
-    // `Ok` arm becomes reachable: a divergence would surface as a
-    // mismatched tracking URL or an unexpected variant rather than
-    // an opaque `Result` inequality.
+fn marker_types_dispatch_through_trait_and_free_fn() {
+    // The trait method and the free-function wrapper must agree.
+    // For ChordPro→iReal (still pre-#2061) both still return
+    // `NotImplemented` and we compare the tracking URL.
+    // For iReal→ChordPro (post-#2053) both succeed and we compare
+    // the resulting `Song::lines.len()` as a coarse equality
+    // check — the marker is stateless so the two paths must
+    // produce byte-identical outputs.
     let chordpro = Song::new();
     let ireal = IrealSong::new();
 
@@ -65,15 +63,15 @@ fn marker_types_implement_converter_via_trait() {
     };
     assert_eq!(trait_a, free_a, "ChordProToIreal trait/free-fn divergence");
 
-    let trait_b = match IrealToChordPro.convert(&ireal) {
-        Err(ConversionError::NotImplemented(url)) => url,
-        other => panic!("expected NotImplemented, got {other:?}"),
-    };
-    let free_b = match ireal_to_chordpro(&ireal) {
-        Err(ConversionError::NotImplemented(url)) => url,
-        other => panic!("expected NotImplemented, got {other:?}"),
-    };
-    assert_eq!(trait_b, free_b, "IrealToChordPro trait/free-fn divergence");
+    let trait_b = IrealToChordPro
+        .convert(&ireal)
+        .expect("iReal→ChordPro succeeds post-#2053");
+    let free_b = ireal_to_chordpro(&ireal).expect("free-fn matches");
+    assert_eq!(
+        trait_b.output.lines.len(),
+        free_b.output.lines.len(),
+        "IrealToChordPro trait/free-fn divergence"
+    );
 }
 
 #[test]

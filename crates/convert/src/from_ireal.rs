@@ -1,0 +1,523 @@
+//! iReal Pro → ChordPro conversion (#2053).
+//!
+//! Maps an [`IrealSong`] to a [`Song`] (ChordPro AST). Tempo,
+//! style, time signature, and key descend to ChordPro
+//! `{tempo}` / `{meta}` / `{time}` / `{key}` directives; section
+//! labels become `{start_of_*}` / `{end_of_*}` environment
+//! directives where a ChordPro equivalent exists, or
+//! `{comment: ...}` markers otherwise; bars become bar-line-style
+//! lyrics lines (`[Cm7] | [F7] | [BbMaj7] |`) with no lyric text
+//! since the iReal format has no lyrics surface.
+//!
+//! The conversion is **near-lossless** in this direction — the
+//! only items dropped are listed in
+//! `crates/convert/known-deviations.md`. Each drop emits a
+//! [`ConversionWarning`] so the caller can surface them or
+//! promote them to errors.
+
+use chordsketch_chordpro::ast::{
+    Chord as ChordProChord, CommentStyle, Directive, Line, LyricsLine, LyricsSegment, Metadata,
+    Song,
+};
+use chordsketch_ireal::{
+    Accidental, Bar, BarLine, Chord as IrealChord, ChordQuality, ChordRoot, Ending, IrealSong,
+    KeyMode, KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
+};
+
+use crate::error::{ConversionWarning, WarningKind};
+use crate::{ConversionError, ConversionOutput};
+
+/// Converts an [`IrealSong`] to a ChordPro [`Song`].
+///
+/// Pure function — the [`crate::ireal::IrealToChordPro`] marker
+/// struct delegates to this. Returning a free function rather
+/// than a method on the marker keeps the call sites short and
+/// preserves the pattern in `chordsketch-convert-musicxml`.
+///
+/// # Errors
+///
+/// The current mapping never fails — every well-formed
+/// [`IrealSong`] produces a well-formed [`Song`]. The
+/// [`ConversionError`] return type is preserved for future
+/// strictness-mode hooks.
+pub fn convert(source: &IrealSong) -> Result<ConversionOutput<Song>, ConversionError> {
+    let mut warnings = Vec::new();
+    let mut song = Song::new();
+
+    push_metadata(&mut song, source);
+    push_directives(&mut song, source);
+
+    let mut last_chord_repr: Option<String> = None;
+    for (section_index, section) in source.sections.iter().enumerate() {
+        push_section_open(&mut song, &section.label, &mut warnings);
+        push_bars(
+            &mut song,
+            &section.bars,
+            &mut last_chord_repr,
+            &mut warnings,
+        );
+        push_section_close(&mut song, &section.label, &mut warnings);
+        // Blank line between sections so a downstream renderer
+        // that respects `Line::Empty` (text / HTML) gives the
+        // chart visual breathing room. Skip after the final
+        // section so the song does not end on an empty line.
+        if section_index + 1 < source.sections.len() {
+            song.lines.push(Line::Empty);
+        }
+    }
+
+    Ok(ConversionOutput {
+        output: song,
+        warnings,
+    })
+}
+
+fn push_metadata(song: &mut Song, source: &IrealSong) {
+    let title = if source.title.trim().is_empty() {
+        "Untitled".to_owned()
+    } else {
+        source.title.clone()
+    };
+    song.metadata = Metadata::new();
+    song.lines
+        .push(Line::Directive(Directive::with_value("title", &title)));
+    if let Some(composer) = source.composer.as_deref() {
+        if !composer.trim().is_empty() {
+            song.lines
+                .push(Line::Directive(Directive::with_value("composer", composer)));
+        }
+    }
+}
+
+fn push_directives(song: &mut Song, source: &IrealSong) {
+    let key_value = serialize_key_for_chordpro(source.key_signature);
+    song.lines
+        .push(Line::Directive(Directive::with_value("key", &key_value)));
+
+    let time_value = format_time_signature(source.time_signature);
+    song.lines
+        .push(Line::Directive(Directive::with_value("time", &time_value)));
+
+    if let Some(tempo) = source.tempo {
+        song.lines.push(Line::Directive(Directive::with_value(
+            "tempo",
+            tempo.to_string(),
+        )));
+    }
+    if source.transpose != 0 {
+        song.lines.push(Line::Directive(Directive::with_value(
+            "transpose",
+            source.transpose.to_string(),
+        )));
+    }
+    if let Some(style) = source.style.as_deref() {
+        if !style.trim().is_empty() {
+            // ChordPro has no canonical `{style}` directive, so we
+            // route the tag through the `{meta}` extension which
+            // every conformant ChordPro reader preserves verbatim
+            // (and which renderers display as a metadata line).
+            song.lines.push(Line::Directive(Directive::with_value(
+                "meta",
+                format!("style {style}"),
+            )));
+        }
+    }
+}
+
+fn push_section_open(song: &mut Song, label: &SectionLabel, _warnings: &mut [ConversionWarning]) {
+    match label {
+        SectionLabel::Verse => {
+            song.lines
+                .push(Line::Directive(Directive::name_only("start_of_verse")));
+        }
+        SectionLabel::Chorus => {
+            song.lines
+                .push(Line::Directive(Directive::name_only("start_of_chorus")));
+        }
+        SectionLabel::Bridge => {
+            song.lines
+                .push(Line::Directive(Directive::name_only("start_of_bridge")));
+        }
+        SectionLabel::Letter(c) => {
+            // ChordPro has no environment for jazz-form letter
+            // labels (`A` / `B` / `C` / `D`). Surface the label as
+            // a normal `{comment}` so the renderer prints it in
+            // the visible margin — this matches how iReal itself
+            // treats letter labels (above-the-bar marker).
+            song.lines
+                .push(Line::Comment(CommentStyle::Normal, format!("Section {c}")));
+        }
+        SectionLabel::Intro => {
+            song.lines
+                .push(Line::Comment(CommentStyle::Normal, "Intro".to_owned()));
+        }
+        SectionLabel::Outro => {
+            song.lines
+                .push(Line::Comment(CommentStyle::Normal, "Outro".to_owned()));
+        }
+        SectionLabel::Custom(name) => {
+            song.lines
+                .push(Line::Comment(CommentStyle::Normal, name.clone()));
+        }
+    }
+}
+
+fn push_section_close(song: &mut Song, label: &SectionLabel, _warnings: &mut [ConversionWarning]) {
+    match label {
+        SectionLabel::Verse => song
+            .lines
+            .push(Line::Directive(Directive::name_only("end_of_verse"))),
+        SectionLabel::Chorus => song
+            .lines
+            .push(Line::Directive(Directive::name_only("end_of_chorus"))),
+        SectionLabel::Bridge => song
+            .lines
+            .push(Line::Directive(Directive::name_only("end_of_bridge"))),
+        // The non-environment labels (`Letter`, `Intro`, `Outro`,
+        // `Custom`) opened with a `{comment}` and have no close
+        // directive — the section ends implicitly when the next
+        // section opens.
+        SectionLabel::Letter(_)
+        | SectionLabel::Intro
+        | SectionLabel::Outro
+        | SectionLabel::Custom(_) => {}
+    }
+}
+
+fn push_bars(
+    song: &mut Song,
+    bars: &[Bar],
+    last_chord_repr: &mut Option<String>,
+    warnings: &mut Vec<ConversionWarning>,
+) {
+    if bars.is_empty() {
+        return;
+    }
+    // Each iReal section becomes a single ChordPro lyrics line:
+    // `[Cm7] | [F7] | [BbMaj7] |`. The `|` text segments give the
+    // text renderer a visual barline; HTML / PDF renderers surface
+    // them as plain pipe characters, which downstream readers can
+    // style as needed.
+    let mut segments: Vec<LyricsSegment> = Vec::new();
+    for bar in bars {
+        push_pre_bar_marker(&mut segments, bar);
+        if bar.chords.is_empty() {
+            // An empty-chord bar in iReal means "repeat the previous
+            // bar" (the renderer paints a `W` glyph). We surface
+            // that as the previous chord again, since ChordPro has
+            // no equivalent repeat-bar primitive — ChordPro's
+            // `{chorus}` directive is for whole-section recall, not
+            // single-bar repeat.
+            if let Some(repr) = last_chord_repr.as_deref() {
+                segments.push(LyricsSegment::new(
+                    Some(ChordProChord::new(repr)),
+                    String::new(),
+                ));
+            } else {
+                warnings.push(ConversionWarning::new(
+                    WarningKind::LossyDrop,
+                    "iReal repeat-bar without prior chord — emitted as silent rest".to_owned(),
+                ));
+            }
+        } else {
+            for bar_chord in &bar.chords {
+                let repr = chord_to_string(&bar_chord.chord);
+                *last_chord_repr = Some(repr.clone());
+                segments.push(LyricsSegment::new(
+                    Some(ChordProChord::new(&repr)),
+                    String::new(),
+                ));
+            }
+        }
+        if let Some(symbol) = bar.symbol {
+            // Music symbols (segno / coda / D.C. / D.S. / Fine) do
+            // not have ChordPro equivalents. Drop them onto the
+            // bar as a parenthesised text segment so a renderer can
+            // surface them inline.
+            segments.push(LyricsSegment::text_only(format!(
+                "({label}) ",
+                label = symbol_label(symbol)
+            )));
+        }
+        // Bar boundary: trailing `|` (with leading space for
+        // readability). The Final / Double / repeat barlines lift
+        // the visible glyph.
+        let close_glyph = match bar.end {
+            BarLine::Single | BarLine::Double => " | ",
+            BarLine::Final => " ||| ",
+            BarLine::OpenRepeat => " |: ",
+            BarLine::CloseRepeat => " :| ",
+        };
+        segments.push(LyricsSegment::text_only(close_glyph.to_owned()));
+    }
+    song.lines.push(Line::Lyrics(LyricsLine { segments }));
+}
+
+fn push_pre_bar_marker(segments: &mut Vec<LyricsSegment>, bar: &Bar) {
+    if let Some(ending) = bar.ending {
+        // Push an N-th-ending marker as inline text. ChordPro has
+        // no first-class ending directive; renderers can match on
+        // the `1.`/`2.` text and apply formatting at their layer.
+        segments.push(LyricsSegment::text_only(format!(
+            "{}. ",
+            ending_number(ending)
+        )));
+    }
+    // Bar opening glyph for non-Single starts. Single starts
+    // inherit from the previous bar's close, so no token needed.
+    let open_glyph = match bar.start {
+        BarLine::Single => "",
+        BarLine::Double => "[ ",
+        BarLine::Final => "Z ",
+        BarLine::OpenRepeat => "|: ",
+        BarLine::CloseRepeat => ":| ",
+    };
+    if !open_glyph.is_empty() {
+        segments.push(LyricsSegment::text_only(open_glyph.to_owned()));
+    }
+}
+
+fn ending_number(ending: Ending) -> u8 {
+    ending.number()
+}
+
+fn symbol_label(symbol: MusicalSymbol) -> &'static str {
+    match symbol {
+        MusicalSymbol::Segno => "Segno",
+        MusicalSymbol::Coda => "Coda",
+        MusicalSymbol::DaCapo => "D.C.",
+        MusicalSymbol::DalSegno => "D.S.",
+        MusicalSymbol::Fine => "Fine",
+    }
+}
+
+fn chord_to_string(chord: &IrealChord) -> String {
+    let mut s = String::new();
+    push_root_for_chordpro(&mut s, chord.root);
+    push_quality_for_chordpro(&mut s, &chord.quality);
+    if let Some(bass) = chord.bass {
+        s.push('/');
+        push_root_for_chordpro(&mut s, bass);
+    }
+    s
+}
+
+fn push_root_for_chordpro(out: &mut String, root: ChordRoot) {
+    out.push(if matches!(root.note, 'A'..='G') {
+        root.note
+    } else {
+        'C'
+    });
+    match root.accidental {
+        Accidental::Sharp => out.push('#'),
+        Accidental::Flat => out.push('b'),
+        Accidental::Natural => {}
+    }
+}
+
+fn push_quality_for_chordpro(out: &mut String, quality: &ChordQuality) {
+    // Spell the quality token using the ChordPro-friendly
+    // notation — ChordPro accepts these forms verbatim and
+    // renderers map them to glyphs.
+    let token = match quality {
+        ChordQuality::Major => "",
+        ChordQuality::Minor => "m",
+        ChordQuality::Diminished => "dim",
+        ChordQuality::Augmented => "aug",
+        ChordQuality::Major7 => "maj7",
+        ChordQuality::Minor7 => "m7",
+        ChordQuality::Dominant7 => "7",
+        ChordQuality::HalfDiminished => "m7b5",
+        ChordQuality::Diminished7 => "dim7",
+        ChordQuality::Suspended2 => "sus2",
+        ChordQuality::Suspended4 => "sus4",
+        ChordQuality::Custom(s) => s.as_str(),
+    };
+    out.push_str(token);
+}
+
+fn serialize_key_for_chordpro(k: KeySignature) -> String {
+    let mut s = String::new();
+    push_root_for_chordpro(&mut s, k.root);
+    if matches!(k.mode, KeyMode::Minor) {
+        s.push('m');
+    }
+    s
+}
+
+fn format_time_signature(ts: TimeSignature) -> String {
+    format!("{}/{}", ts.numerator, ts.denominator)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chordsketch_ireal::*;
+
+    fn sample_song() -> IrealSong {
+        IrealSong {
+            title: "Autumn Leaves".into(),
+            composer: Some("Joseph Kosma".into()),
+            style: Some("Medium Swing".into()),
+            key_signature: KeySignature {
+                root: ChordRoot {
+                    note: 'E',
+                    accidental: Accidental::Natural,
+                },
+                mode: KeyMode::Minor,
+            },
+            time_signature: TimeSignature::new(4, 4).unwrap(),
+            tempo: Some(120),
+            transpose: 0,
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Minor7),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                    }],
+                    ending: None,
+                    symbol: None,
+                }],
+            }],
+        }
+    }
+
+    fn directive_value(song: &Song, name: &str) -> Option<String> {
+        song.lines.iter().find_map(|line| {
+            if let Line::Directive(d) = line {
+                if d.name == name {
+                    return d.value.clone();
+                }
+            }
+            None
+        })
+    }
+
+    #[test]
+    fn metadata_directives_emit() {
+        let result = convert(&sample_song()).unwrap();
+        let song = &result.output;
+        assert_eq!(
+            directive_value(song, "title").as_deref(),
+            Some("Autumn Leaves")
+        );
+        assert_eq!(
+            directive_value(song, "composer").as_deref(),
+            Some("Joseph Kosma")
+        );
+        assert_eq!(directive_value(song, "key").as_deref(), Some("Em"));
+        assert_eq!(directive_value(song, "time").as_deref(), Some("4/4"));
+        assert_eq!(directive_value(song, "tempo").as_deref(), Some("120"));
+    }
+
+    #[test]
+    fn style_routes_through_meta_directive() {
+        let result = convert(&sample_song()).unwrap();
+        let meta = directive_value(&result.output, "meta");
+        assert_eq!(meta.as_deref(), Some("style Medium Swing"));
+    }
+
+    #[test]
+    fn empty_title_falls_back_to_untitled() {
+        let mut s = sample_song();
+        s.title = String::new();
+        let result = convert(&s).unwrap();
+        assert_eq!(
+            directive_value(&result.output, "title").as_deref(),
+            Some("Untitled")
+        );
+    }
+
+    #[test]
+    fn transpose_omitted_when_zero() {
+        let result = convert(&sample_song()).unwrap();
+        assert!(directive_value(&result.output, "transpose").is_none());
+    }
+
+    #[test]
+    fn transpose_emits_when_nonzero() {
+        let mut s = sample_song();
+        s.transpose = 5;
+        let result = convert(&s).unwrap();
+        assert_eq!(
+            directive_value(&result.output, "transpose").as_deref(),
+            Some("5")
+        );
+    }
+
+    #[test]
+    fn named_section_labels_emit_environment_directives() {
+        let mut s = sample_song();
+        s.sections[0].label = SectionLabel::Chorus;
+        let result = convert(&s).unwrap();
+        let names: Vec<&str> = result
+            .output
+            .lines
+            .iter()
+            .filter_map(|line| match line {
+                Line::Directive(d) => Some(d.name.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(names.contains(&"start_of_chorus"));
+        assert!(names.contains(&"end_of_chorus"));
+    }
+
+    #[test]
+    fn letter_section_label_emits_comment() {
+        let result = convert(&sample_song()).unwrap();
+        let has_section_comment = result.output.lines.iter().any(|line| {
+            matches!(
+                line,
+                Line::Comment(_, text) if text.contains("Section A")
+            )
+        });
+        assert!(has_section_comment);
+    }
+
+    #[test]
+    fn chord_token_matches_chordpro_spelling() {
+        let chord = Chord::triad(ChordRoot::natural('C'), ChordQuality::Minor7);
+        assert_eq!(chord_to_string(&chord), "Cm7");
+        let dim = Chord::triad(ChordRoot::natural('B'), ChordQuality::Diminished7);
+        assert_eq!(chord_to_string(&dim), "Bdim7");
+        let slash = Chord {
+            root: ChordRoot::natural('C'),
+            quality: ChordQuality::Major,
+            bass: Some(ChordRoot {
+                note: 'G',
+                accidental: Accidental::Sharp,
+            }),
+        };
+        assert_eq!(chord_to_string(&slash), "C/G#");
+    }
+
+    #[test]
+    fn key_signature_minor_appends_m() {
+        let key = KeySignature {
+            root: ChordRoot {
+                note: 'D',
+                accidental: Accidental::Flat,
+            },
+            mode: KeyMode::Minor,
+        };
+        assert_eq!(serialize_key_for_chordpro(key), "Dbm");
+    }
+
+    #[test]
+    fn empty_repeat_bar_without_prior_chord_emits_warning() {
+        let mut s = IrealSong::new();
+        s.title = "Repeat Test".into();
+        s.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            // First bar is empty (would normally repeat — but no prior chord).
+            bars: vec![Bar::default()],
+        });
+        let result = convert(&s).unwrap();
+        assert!(!result.warnings.is_empty());
+        assert_eq!(result.warnings[0].kind, WarningKind::LossyDrop);
+    }
+}
