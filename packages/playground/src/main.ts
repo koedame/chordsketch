@@ -27,11 +27,20 @@ import '@chordsketch/ui-web/style.css';
 // that survived only via HTML5 nested-document recovery — and
 // triggered "Blocked script execution in 'about:blank'" warnings on
 // some Chrome configurations. See #2321 §Background.
+//
+// render_html_css() requires an initialised WASM heap and allocates a
+// String across the ABI boundary on each call. The value is byte-stable
+// for the lifetime of a build (consistent with the VS Code extension's
+// single-call caching strategy), so we lazily cache it here.
+let _cachedHtmlCss: string | null = null;
 const composeHtmlBody = (input: string, options?: { transpose?: number; config?: string }): string => {
+  if (_cachedHtmlCss === null) {
+    _cachedHtmlCss = render_html_css();
+  }
   const body = options
     ? render_html_body_with_options(input, options)
     : render_html_body(input);
-  return `<style>${render_html_css()}</style>${body}`;
+  return `<style>${_cachedHtmlCss}</style>${body}`;
 };
 
 const renderers: Renderers = {
