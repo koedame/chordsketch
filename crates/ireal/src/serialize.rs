@@ -39,9 +39,13 @@ use crate::parser::MUSIC_PREFIX;
 #[must_use]
 pub fn irealb_serialize(song: &IrealSong) -> String {
     let body = serialize_song_body(song);
-    let mut url = String::with_capacity(body.len() + 16);
+    // Compute the encoded form first so the URL buffer can be sized
+    // from the actual encoded length rather than the raw body length
+    // (percent_encode expands non-alphanumeric bytes to 3 chars each).
+    let encoded = percent_encode(&body);
+    let mut url = String::with_capacity(encoded.len() + 9);
     url.push_str("irealb://");
-    url.push_str(&percent_encode(&body));
+    url.push_str(&encoded);
     url
 }
 
@@ -64,9 +68,10 @@ pub fn irealbook_serialize(songs: &[IrealSong], name: Option<&str>) -> String {
         body.push_str("===");
         body.push_str(n);
     }
-    let mut url = String::with_capacity(body.len() + 16);
+    let encoded = percent_encode(&body);
+    let mut url = String::with_capacity(encoded.len() + 12);
     url.push_str("irealbook://");
-    url.push_str(&percent_encode(&body));
+    url.push_str(&encoded);
     url
 }
 
@@ -92,12 +97,10 @@ const COMPOSER_PLACEHOLDER: &str = "Composer Unknown";
 const STYLE_PLACEHOLDER: &str = "Medium Swing";
 
 fn serialize_song_body(song: &IrealSong) -> String {
-    let title_owned: String;
     let title: &str = if song.title.trim().is_empty() {
         TITLE_PLACEHOLDER
     } else {
-        title_owned = song.title.clone();
-        title_owned.as_str()
+        &song.title
     };
     let composer = match song.composer.as_deref() {
         Some(s) if !s.trim().is_empty() => s,
@@ -113,7 +116,6 @@ fn serialize_song_body(song: &IrealSong) -> String {
     // `parse_song` filters Some(0) back to `None`. Emitting `"0"`
     // for `None` preserves the round trip.
     let bpm = song.tempo.unwrap_or(0).to_string();
-    let repeats = "0".to_string();
 
     // Use the 7-part shape (Title=Composer=Style=Key=Music=BPM=Repeats)
     // when transpose is zero, mirroring iReal's omission of an
@@ -134,8 +136,7 @@ fn serialize_song_body(song: &IrealSong) -> String {
     body.push_str(&music);
     body.push_str("==");
     body.push_str(&bpm);
-    body.push('=');
-    body.push_str(&repeats);
+    body.push_str("=0");
     body
 }
 
@@ -288,9 +289,14 @@ fn serialize_bar_open(out: &mut String, bar: &Bar) {
     match bar.start {
         BarLine::Single => {} // bar's left edge inherits from the previous bar
         BarLine::Double => out.push('['),
+        // `Final` and `CloseRepeat` as a bar *start* never arise from
+        // parser-produced ASTs (the parser's `start_new_bar` only sets
+        // start to `OpenRepeat` or `Double`). These arms exist so the
+        // match is exhaustive; the emitted glyphs are best-effort for
+        // manually-constructed ASTs and do not guarantee a round-trip.
         BarLine::Final => out.push('Z'),
         BarLine::OpenRepeat => out.push('{'),
-        BarLine::CloseRepeat => out.push(':'), // mid-bar close-repeat — rare
+        BarLine::CloseRepeat => out.push('}'),
     }
 }
 
@@ -388,6 +394,7 @@ fn obfusc50_apply(s: &str) -> String {
 }
 
 fn obfusc50_chunk(chunk: &[char]) -> String {
+    debug_assert_eq!(chunk.len(), 50, "obfusc50 chunk must be exactly 50 chars");
     let mut buf: [char; 50] = ['\0'; 50];
     buf.copy_from_slice(chunk);
     for k in 0..5 {
@@ -436,7 +443,10 @@ fn hex_upper(nibble: u8) -> char {
     match nibble {
         0..=9 => char::from(b'0' + nibble),
         10..=15 => char::from(b'A' + nibble - 10),
-        _ => '0',
+        // nibble comes from `b >> 4` or `b & 0x0f` on a u8, so the
+        // value is always 0..=15. Silently returning '0' here would
+        // produce wrong hex output rather than surfacing the bug.
+        _ => unreachable!("nibble is always 0..=15"),
     }
 }
 
@@ -446,16 +456,32 @@ mod tests {
     use crate::ast::*;
 
     #[test]
-    fn percent_encode_round_trip_via_parser() {
-        // Sanity: every ASCII byte we emit must round-trip via
-        // the parser's percent_decode (called by `parse`).
+    fn percent_encode_encodes_non_alphanumeric() {
+        // Sanity: only A-Za-z0-9 pass through; everything else is
+        // %XX-escaped. The full decode round-trip is verified by the
+        // integration tests that call `parse(irealb_serialize(…))`.
         let body = "abc=123==Afro";
         let encoded = percent_encode(body);
-        // Encode is greedy except for alphanumerics — the body's
-        // letters / digits stay literal, the `=` becomes `%3D`.
-        assert!(encoded.contains("%3D"));
-        // Round trip through the parser's decode by parsing a
-        // full URL we build from the encoded body.
+        // `=` is non-alphanumeric → encoded as %3D.
+        assert_eq!(
+            encoded, "abc%3D123%3D%3DAfro",
+            "only alphanumerics should pass through unencoded"
+        );
+        // No raw `=` survives encoding.
+        assert!(
+            !encoded.contains('='),
+            "raw `=` must not appear in percent-encoded output"
+        );
+        // Alphanumeric letters and digits are preserved verbatim.
+        assert!(
+            encoded.contains("abc"),
+            "alphanumeric letters must pass through"
+        );
+        assert!(encoded.contains("123"), "digits must pass through");
+        assert!(
+            encoded.contains("Afro"),
+            "alphanumeric run must pass through"
+        );
     }
 
     #[test]
@@ -538,6 +564,176 @@ mod tests {
     }
 
     #[test]
+    fn time_signature_12_8_round_trips() {
+        // Exercises the two-digit numerator branch in
+        // `serialize_time_signature` (numerator >= 10 → T128).
+        let mut song = IrealSong::new();
+        song.title = "12/8 Test".into();
+        song.composer = Some("T".into());
+        song.style = Some("Medium Swing".into());
+        song.time_signature = TimeSignature::new(12, 8).unwrap();
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        assert_eq!(parsed.time_signature, song.time_signature);
+    }
+
+    #[test]
+    fn custom_section_label_round_trips() {
+        // Exercises `SectionLabel::Custom` in `serialize_section_label`.
+        // The parser's `label_for` produces `Custom` for any char that
+        // is not one of the named variants. We use 'x' here (a lower-
+        // case letter not in the named set) so the round-trip lands back
+        // in `Custom("x")`.
+        let mut song = IrealSong::new();
+        song.title = "Custom Label".into();
+        song.composer = Some("T".into());
+        song.style = Some("Medium Swing".into());
+        song.sections = vec![Section {
+            label: SectionLabel::Custom("x".into()),
+            bars: vec![Bar {
+                start: BarLine::Double,
+                end: BarLine::Final,
+                chords: vec![BarChord {
+                    chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                    position: BeatPosition::on_beat(1).unwrap(),
+                }],
+                ending: None,
+                symbol: None,
+            }],
+        }];
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        let total_chords: usize = parsed
+            .sections
+            .iter()
+            .flat_map(|s| s.bars.iter())
+            .map(|b| b.chords.len())
+            .sum();
+        assert_eq!(
+            total_chords, 1,
+            "chord must survive Custom label round trip"
+        );
+    }
+
+    #[test]
+    fn musical_symbol_fine_round_trips() {
+        // Exercises `MusicalSymbol::Fine` in `serialize_symbol`.
+        // Fine is on a non-Single-start bar, so it's emitted before
+        // the open `[` glyph; the parser queues it and applies it
+        // to the same bar.
+        let song = IrealSong {
+            title: "Fine Test".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                    }],
+                    ending: None,
+                    symbol: Some(MusicalSymbol::Fine),
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        let found_fine = parsed
+            .sections
+            .iter()
+            .flat_map(|s| s.bars.iter())
+            .any(|b| b.symbol == Some(MusicalSymbol::Fine));
+        assert!(found_fine, "Fine symbol must survive the round trip");
+    }
+
+    #[test]
+    fn musical_symbol_da_capo_round_trips() {
+        // Exercises `MusicalSymbol::DaCapo` in `serialize_symbol`.
+        let song = IrealSong {
+            title: "DC Test".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('G'), ChordQuality::Dominant7),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                    }],
+                    ending: None,
+                    symbol: Some(MusicalSymbol::DaCapo),
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        let found = parsed
+            .sections
+            .iter()
+            .flat_map(|s| s.bars.iter())
+            .any(|b| b.symbol == Some(MusicalSymbol::DaCapo));
+        assert!(found, "DaCapo symbol must survive the round trip");
+    }
+
+    #[test]
+    fn musical_symbol_dal_segno_round_trips() {
+        // Exercises `MusicalSymbol::DalSegno` in `serialize_symbol`.
+        let song = IrealSong {
+            title: "DS Test".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('F'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                    }],
+                    ending: None,
+                    symbol: Some(MusicalSymbol::DalSegno),
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        let found = parsed
+            .sections
+            .iter()
+            .flat_map(|s| s.bars.iter())
+            .any(|b| b.symbol == Some(MusicalSymbol::DalSegno));
+        assert!(found, "DalSegno symbol must survive the round trip");
+    }
+
+    #[test]
+    fn obfusc50_apply_remaining_after_less_than_2() {
+        // Exercises the `remaining_after < 2` carve-out: when the tail
+        // after a 50-char chunk is only 1 char, that chunk is appended
+        // unscrambled (matching the upstream JS quirk in `unscramble`).
+        // A 101-char string has 1 char remaining after the second
+        // chunk boundary at position 100, triggering the carve-out
+        // for the chunk at position 50..100.
+        let original: String = (0..101)
+            .map(|i| char::from(b'a' + (i as u8 % 26)))
+            .collect();
+        let scrambled = obfusc50_apply(&original);
+        let unscrambled = obfusc50_apply(&scrambled);
+        assert_eq!(
+            unscrambled, original,
+            "obfusc50_apply must be self-inverse even with remaining_after < 2"
+        );
+    }
+
+    #[test]
     fn collection_round_trips() {
         let song1 = IrealSong {
             title: "First".into(),
@@ -563,6 +759,8 @@ mod tests {
         assert_eq!(parsed[0].tempo, song1.tempo);
         assert_eq!(parsed[1].title, song2.title);
         assert_eq!(parsed[1].composer, song2.composer);
+        assert_eq!(parsed[1].style, song2.style);
+        assert_eq!(parsed[1].tempo, song2.tempo);
         assert_eq!(name.as_deref(), Some("Playlist"));
     }
 }
