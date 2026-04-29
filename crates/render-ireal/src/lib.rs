@@ -1,5 +1,6 @@
 //! iReal Pro chart renderer — SVG with chord-name typography,
-//! repeat barlines, ending brackets, and section labels.
+//! repeat barlines, ending brackets, section labels, and music
+//! symbols.
 //!
 //! This crate renders an [`chordsketch_ireal::IrealSong`] AST as a
 //! fixed-size SVG document. The current scope covers the page
@@ -8,9 +9,10 @@
 //! chord-name typography (root + accidental at base size, quality
 //! / extensions raised as superscript, slash + bass back at base
 //! size), repeat / final / double barline glyphs, N-th-ending
-//! brackets with `1.` / `2.` labels, and section-letter labels
-//! above each section start. Music symbols (segno / coda / D.C.
-//! / D.S.) land in follow-up issue #2062. Tracked under
+//! brackets with `1.` / `2.` labels, section-letter labels above
+//! each section start, and music symbols (segno / coda glyphs;
+//! `D.C.` / `D.S.` / `Fine` text directives) above the bar that
+//! carries them. Tracked under
 //! [#2050](https://github.com/koedame/chordsketch/issues/2050).
 //!
 //! # Layout overview
@@ -29,11 +31,12 @@
 //!   base size on the original baseline. Bar boundaries display
 //!   the appropriate barline glyph (`Single` via the cell-rect
 //!   stroke; `Double`, `Final`, `OpenRepeat`, `CloseRepeat`
-//!   overlay the cell stroke). N-th-ending brackets and section-
-//!   letter labels sit above the row. Trailing cells in a
+//!   overlay the cell stroke). N-th-ending brackets, section-
+//!   letter labels, and music-symbol glyphs all sit above the
+//!   row in the same band; music symbols are drawn last so they
+//!   layer on top of any overlapping bracket. Trailing cells in a
 //!   section's last row are filled with empty placeholders so the
-//!   visible grid stays a clean rectangle; music symbols layer on
-//!   top in #2062.
+//!   visible grid stays a clean rectangle.
 //!
 //! # Dependency policy
 //!
@@ -46,17 +49,22 @@
 //! # Stability
 //!
 //! Pre-1.0. The SVG output structure is expected to grow new
-//! elements (music symbols) as #2062 lands. Existing elements
-//! stay stable so that crate consumers (the playground preview,
-//! the PDF rasteriser #2063, the PNG rasteriser #2064) can rely
-//! on a small set of stable selectors / IDs (`class="title"`,
-//! `class="composer"`, `class="meta"`, `class="bar-grid"`,
-//! `class="chord"`, `class="chord-root"`, `class="chord-ext"`,
-//! `class="chord-slash"`, `class="chord-bass"`, `class="empty"`,
-//! `class="section-label"`, `class="ending-bracket"`,
-//! `class="ending-label"`, `class="barline-double"`,
-//! `class="barline-final"`, `class="barline-repeat-thick"`,
-//! `class="barline-repeat-thin"`, `class="barline-repeat-dot"`).
+//! elements as the iReal Pro tracker (#2050) closes its remaining
+//! items. Existing elements stay stable so that crate consumers
+//! (the playground preview, the PDF rasteriser #2063, the PNG
+//! rasteriser #2064) can rely on a small set of stable selectors
+//! / IDs (`class="title"`, `class="composer"`, `class="meta"`,
+//! `class="bar-grid"`, `class="chord"`, `class="chord-root"`,
+//! `class="chord-ext"`, `class="chord-slash"`, `class="chord-bass"`,
+//! `class="empty"`, `class="section-label"`,
+//! `class="ending-bracket"`, `class="ending-label"`,
+//! `class="barline-double"`, `class="barline-final"`,
+//! `class="barline-repeat-thick"`, `class="barline-repeat-thin"`,
+//! `class="barline-repeat-dot"`, `class="music-symbol-segno-curve"`,
+//! `class="music-symbol-segno-slash"`,
+//! `class="music-symbol-segno-dot"`,
+//! `class="music-symbol-coda-circle"`,
+//! `class="music-symbol-coda-cross"`, `class="music-symbol-text"`).
 //!
 //! # Example
 //!
@@ -76,6 +84,7 @@ mod barlines;
 pub mod chord_typography;
 pub mod layout;
 mod markers;
+mod music_symbols;
 pub mod page;
 mod svg;
 
@@ -260,10 +269,13 @@ fill=\"none\" stroke=\"black\" stroke-width=\"1\" class=\"empty\"/>\n",
             h = empty.height,
         ));
     }
-    // Section labels and ending brackets sit ABOVE the cells, so
-    // paint them last to keep them on top of the row strokes.
+    // Section labels, ending brackets, and music-symbol glyphs all
+    // sit ABOVE the cells in the same band. Paint them last so the
+    // row strokes do not over-draw them; emit music symbols last so
+    // their glyphs sit on top of any overlapping ending bracket.
     out.push_str(&markers::render_section_labels(song, layout));
     out.push_str(&markers::render_endings(song, layout));
+    out.push_str(&music_symbols::render_music_symbols(song, layout));
     out.push_str("  </g>\n");
 }
 

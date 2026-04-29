@@ -7,7 +7,8 @@
 [![crates.io](https://img.shields.io/crates/v/chordsketch-render-ireal)](https://crates.io/crates/chordsketch-render-ireal)
 
 iReal Pro chart renderer — SVG with chord-name typography,
-repeat barlines, ending brackets, and section labels.
+repeat barlines, ending brackets, section labels, and music
+symbols.
 
 This crate renders an `IrealSong` AST as a fixed-size SVG document.
 The current scope covers the page frame, the metadata header
@@ -16,9 +17,9 @@ section line breaks, superscript chord-name typography (root +
 accidental at base size, quality / extensions raised as
 superscript at a smaller size, slash + bass back at base size),
 repeat / final / double barline glyphs, N-th-ending brackets
-with `1.` / `2.` labels, and section-letter labels above each
-section start. Music symbols (segno / coda / D.C. / D.S.) land
-in follow-up issue `#2062`.
+with `1.` / `2.` labels, section-letter labels above each
+section start, and music-symbol glyphs (segno / coda; `D.C.` /
+`D.S.` / `Fine` text directives) above the bar that carries them.
 
 Tracked under [#2050](https://github.com/koedame/chordsketch/issues/2050).
 
@@ -77,15 +78,16 @@ divided into:
   base size, quality / extensions raised as superscript at a
   smaller size, slash + bass returning to base size on the original
   baseline. Trailing cells in a section's last row are filled with
-  empty placeholders so the visible grid stays a clean rectangle;
-  barlines / repeats / endings / music symbols layer on top in
-  #2059 / #2062.
+  empty placeholders so the visible grid stays a clean rectangle.
+  Music-symbol glyphs sit in the same band as the section label
+  / ending bracket and are drawn last so they layer on top of any
+  overlap.
 
 ## Roadmap
 
 | Feature | Tracking issue |
 |---|---|
-| Music symbols via Bravura font (segno / coda / D.C. / D.S.) | [#2062](https://github.com/koedame/chordsketch/issues/2062) |
+| Bravura SMuFL font for high-fidelity music glyphs | [#2062](https://github.com/koedame/chordsketch/issues/2062) (deferred — current SVG primitive approximations avoid a ~3 MB per-export font payload) |
 | PNG rasterization via resvg | [#2064](https://github.com/koedame/chordsketch/issues/2064) |
 | PDF output layer | [#2063](https://github.com/koedame/chordsketch/issues/2063) |
 
@@ -100,7 +102,10 @@ cargo test -p chordsketch-render-ireal   # re-run without the env var to confirm
 
 The expected SVGs live under `tests/fixtures/<name>/expected.svg`
 (currently `basic`, `twelve_bar_blues`, `aaba_32bar`,
-`sixteen_bar_loop`, `section_break_irregular`, `multi_chord_bar`).
+`sixteen_bar_loop`, `section_break_irregular`, `multi_chord_bar`,
+`repeats_demo`, `endings_demo`, `section_markers_demo`,
+`final_barline_demo`, `segno_demo`, `coda_demo`, `dc_demo`,
+`ds_demo`, `fine_demo`).
 
 ## Links
 
