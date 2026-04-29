@@ -26,6 +26,17 @@ export interface Renderers {
    * success; rejection is surfaced as an init-time error in the UI.
    */
   init(): Promise<unknown>;
+  /**
+   * Render `input` as a **body fragment** — not a full HTML document.
+   * ui-web wraps the returned string in a minimal `<!DOCTYPE html>…</html>`
+   * envelope via `HTML_FRAME_TEMPLATE` before setting `iframe.srcdoc`.
+   *
+   * The returned string MUST NOT include `<!DOCTYPE>`, `<html>`, `<head>`,
+   * or outer `<body>` tags. Hosts are responsible for any
+   * layout/typography styling (typically via a `<style>` block prepended to
+   * the fragment). Returning a full document will produce a double-wrapped
+   * `srcdoc` and may cause rendering defects on some browsers (see #2321).
+   */
   renderHtml(input: string, options?: RenderOptions): string;
   renderText(input: string, options?: RenderOptions): string;
   renderPdf(input: string, options?: RenderOptions): Uint8Array;
