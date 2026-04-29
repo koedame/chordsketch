@@ -90,3 +90,4 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0010](0010-image-path-resolution-stays-strict.md) | Image path resolution stays strict (declines R6.100 `~` and folder-next-to-song) | Accepted (2026-04-28) |
 | [0011](0011-html-styles-stay-inline.md) | HTML styles stay inline-per-element (declines R6.100 `default/screen/print` + `html.style.embed`) | Accepted (2026-04-28) |
 | [0012](0012-macports-portfile-cargo-crates-tag-relative.md) | MacPorts Portfile cargo.crates is tag-relative, not HEAD-relative | Accepted (2026-04-29) |
+| [0013](0013-conditional-bot-driven-merge.md) | Bot-driven merge is allowed under explicit session permission | Accepted (2026-04-29) |

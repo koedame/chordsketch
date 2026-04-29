@@ -82,7 +82,9 @@ Additionally, these non-Rust packages exist:
 
 ## Merge Policy
 
-PRs are automatically reviewed; **merging is always a human action**.
+PRs are automatically reviewed; **merging defaults to a human action**, with
+a conditional carve-out for AI-assistant merges (see step 5 below and
+[ADR-0013](docs/adr/0013-conditional-bot-driven-merge.md)).
 
 1. **PR created** — CI runs (fmt, clippy, test, plus workflow-specific smoke jobs)
 2. **Auto-review** — Claude reviews with severity classification on CI success
@@ -91,13 +93,18 @@ PRs are automatically reviewed; **merging is always a human action**.
    create follow-up issues for findings; the in-PR fix is the only path.
 4. **Convergence** — loop iterates until the delta review surfaces zero findings
    (or the 3-iteration safety cap in `.claude/rules/pr-workflow.md` fires).
-5. **Ready for human merge** — when the review converges, Claude posts a
-   "Ready for human merge" comment. A human inspects the **full check rollup** (not
+5. **Ready for merge** — when the review converges, Claude posts a
+   "Ready for merge" comment. A human inspects the **full check rollup** (not
    just the required checks listed in branch protection), verifies there are no
-   review-bot-authored issues still open against the PR, and performs the squash merge.
+   review-bot-authored issues still open against the PR, and performs the squash
+   merge — *or* an AI assistant enqueues the merge via the merge queue when all
+   four conditions in `.claude/rules/pr-workflow.md`'s "Bot-driven merge:
+   conditional permission" section hold (explicit per-session user permission,
+   full check rollup green, auto-review converged on HEAD, merge-queue path).
 
-All PRs are **squash-merged**. Branch protection requires CI to pass on HEAD. Bots do
-NOT run `gh pr merge` — see `.claude/rules/pr-workflow.md` for the rationale.
+All PRs are **squash-merged**. Branch protection requires CI to pass on HEAD.
+Bot-driven merge is conditional on the four-clause check above — see
+`.claude/rules/pr-workflow.md` for the full rule.
 
 ## Parallel Development with tmux
 
