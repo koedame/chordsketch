@@ -1,0 +1,61 @@
+//! Page-layout constants used by the SVG skeleton.
+//!
+//! The constants are integer-valued so golden snapshots stay byte-
+//! stable. Changing any of them is a behavioural change that
+//! requires a fixture regen — the `render_basic_song_matches_golden`
+//! test in `tests/golden.rs` will fail and the maintainer
+//! intentionally regenerates the snapshot.
+
+/// Page width in SVG user units (matches A4 portrait at 72 DPI).
+pub const PAGE_WIDTH: i32 = 595;
+
+/// Page height in SVG user units (matches A4 portrait at 72 DPI).
+pub const PAGE_HEIGHT: i32 = 842;
+
+/// Horizontal margin from the page edge to the header / grid.
+pub const MARGIN_X: i32 = 40;
+
+/// Vertical margin from the top edge to the header band.
+pub const MARGIN_Y: i32 = 40;
+
+/// Vertical extent reserved for the metadata header band.
+pub const HEADER_BAND_HEIGHT: i32 = 80;
+
+/// Top edge of the bar grid (header band ends here).
+pub const GRID_TOP: i32 = MARGIN_Y + HEADER_BAND_HEIGHT;
+
+/// Number of bar cells per row in the 4-bar-per-line grid.
+pub const BARS_PER_ROW: usize = 4;
+
+/// Vertical extent of one bar-grid row.
+pub const BAR_ROW_HEIGHT: i32 = 50;
+
+/// Maximum bar count the renderer accepts before truncating.
+///
+/// Mirrors the bounds-check pattern used by `chordsketch-chordpro`
+/// chord-diagram rendering and the `MAX_COLUMNS = 32` clamp in the
+/// HTML renderer (per `.claude/rules/renderer-parity.md`'s
+/// "Validation Parity" clause). Without this cap, a malicious or
+/// malformed AST with millions of bars would (a) waste unbounded
+/// memory in `format!` and (b) overflow the `(row as i32) *
+/// BAR_ROW_HEIGHT` y-coordinate computation in the grid emitter.
+///
+/// `4096` bars is well past any real chart length (a typical jazz
+/// standard is 16–64 bars). When this cap is hit, surplus bars are
+/// silently truncated; documenting the limit in the public-API
+/// rustdoc lets future callers (#2057, #2059, #2060) detect when
+/// they need to surface a warning instead.
+pub const MAX_BARS: usize = 4096;
+
+// Compile-time invariants. Asserting `MAX_BARS` and `BARS_PER_ROW`
+// at build time keeps the y-coordinate arithmetic in `lib.rs`
+// safe-by-construction: even with `MAX_BARS = 4096`, the highest
+// `row_y` is well within `i32` range.
+const _: () = assert!(BARS_PER_ROW > 0);
+const _: () = assert!(MAX_BARS > 0);
+const _: () = {
+    let max_rows = MAX_BARS.div_ceil(BARS_PER_ROW);
+    // Conservatively check that `row_y = GRID_TOP + row * BAR_ROW_HEIGHT`
+    // stays within `i32` for every row up to the cap.
+    assert!(max_rows < (i32::MAX as usize) / (BAR_ROW_HEIGHT as usize));
+};

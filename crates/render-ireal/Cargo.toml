@@ -1,0 +1,16 @@
+[package]
+name = "chordsketch-render-ireal"
+version = "0.3.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["ireal", "chord", "music", "svg", "render"]
+categories = ["rendering", "text-processing"]
+description = "iReal Pro chart renderer (SVG skeleton)"
+readme = "README.md"
+
+[dependencies]
+chordsketch-ireal = { version = "0.3.0", path = "../ireal" }

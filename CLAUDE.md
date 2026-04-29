@@ -32,6 +32,7 @@ This is a Cargo workspace with the following crates:
 | `chordsketch-render-text` | `crates/render-text` | lib | `chordsketch-chordpro` |
 | `chordsketch-render-html` | `crates/render-html` | lib | `chordsketch-chordpro` |
 | `chordsketch-render-pdf` | `crates/render-pdf` | lib | `chordsketch-chordpro` |
+| `chordsketch-render-ireal` | `crates/render-ireal` | lib | `chordsketch-ireal`. iReal Pro chart SVG renderer — page frame + metadata header + empty 4-bar grid skeleton (#2058). Chord text / barlines / symbols / typography filled in by #2057 / #2059 / #2060 / #2062. |
 | `chordsketch-convert` | `crates/convert` | lib | `chordsketch-chordpro`, `chordsketch-ireal`. ChordPro ↔ iReal Pro conversion bridge — trait scaffold (#2051) returning `NotImplemented` until #2053 / #2061 fill in the directions. |
 | `chordsketch-convert-musicxml` | `crates/convert-musicxml` | lib | `chordsketch-chordpro` |
 | `chordsketch` (CLI) | `crates/cli` | bin | `chordsketch-chordpro`, `chordsketch-render-text`, `chordsketch-render-html`, `chordsketch-render-pdf`, `chordsketch-convert-musicxml` |
