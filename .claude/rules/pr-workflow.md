@@ -2,7 +2,12 @@
 
 ## Automated Flow (default)
 
-PRs are reviewed automatically; **merging is always a human action**.
+PRs are reviewed automatically; **merging defaults to a human
+action**. An AI assistant MAY enqueue the merge under explicit
+session permission and additional safeguards — see
+[ADR-0013](../../docs/adr/0013-conditional-bot-driven-merge.md)
+and the "Bot-driven merge: conditional permission" section
+below.
 
 1. **PR created** — author opens PR with code and tests.
 2. **CI runs** (cargo fmt --check, cargo clippy -- -D warnings, cargo test, plus
@@ -18,11 +23,13 @@ PRs are reviewed automatically; **merging is always a human action**.
    scope (e.g. a pre-existing defect in an unrelated crate surfaced in passing),
    the PR body's "Deferred" section records it with a one-line justification
    and a link to an existing tracker. The default is "fix it in this PR."
-6. **Ready for human merge** — when the review converges to zero findings,
-   Claude posts a single summary comment stating "Ready for human merge." Bots
-   **never** run `gh pr merge` in this repo. A human inspects the full check
-   rollup (not just the required checks listed in branch protection) and
-   performs the squash merge.
+6. **Ready for merge** — when the review converges to zero findings,
+   Claude posts a single summary comment stating "Ready for merge." If the
+   user has granted per-session merge permission and the four conditions in
+   the "Bot-driven merge: conditional permission" section below are met,
+   Claude enqueues the merge via the merge queue. Otherwise, a human
+   inspects the full check rollup (not just the required checks listed in
+   branch protection) and performs the squash merge.
 7. **Safety cap** — after 3 auto-review iterations, the process stops and waits for
    human intervention.
 
@@ -61,16 +68,62 @@ already underway) should be folded into that in-flight PR rather than
 orphaned — the rule's goal is that reviewer signal lands before context
 rots, and context is freshest while the code is still being edited.
 
-### Why bots do not merge
+### Bot-driven merge: conditional permission
+
+`gh pr merge` (or the equivalent `enqueuePullRequest` GraphQL
+mutation) MAY be executed by an AI assistant when **all four**
+conditions hold. See [ADR-0013](../../docs/adr/0013-conditional-bot-driven-merge.md)
+for the full rationale.
+
+1. **Explicit, current-session permission.** The user has stated
+   in the active session that the assistant may merge. Standing
+   memory entries from earlier sessions do NOT count — the grant
+   is per-session and explicit.
+
+2. **Full check rollup green.** Every check on the PR — required
+   AND non-required — is in the `pass` or `skipping` state.
+   Verified by reading `gh pr checks <PR>` output (not just the
+   required-status section). One `fail` or `pending` check
+   blocks the merge.
+
+3. **Auto-review converged.** The latest auto-review delta
+   reported "No findings" / "Ready for merge" against the PR's
+   HEAD commit. If the bot pushed its own fix commit, the
+   resulting auto-review iteration must have completed and
+   converged.
+
+4. **Merge queue path only.** Use `enqueuePullRequest` or
+   `gh pr merge --merge-queue`. Direct `gh pr merge --squash`
+   (without `--merge-queue`) bypasses the speculative-merge CI
+   run and is still prohibited.
+
+If any of (1)–(4) is not satisfied, post the "Ready for merge"
+comment and wait for the human merger.
+
+#### Historical rationale (superseded)
 
 A previous iteration of this workflow had bots run `gh pr merge --squash --auto` after
-review. This was removed after a PR was silently merged with two `README Install Smoke
-Tests` jobs in FAILURE state, because those jobs were not in the
-`required_status_checks.contexts` list of branch protection. `gh pr merge --auto` only
-waits for *required* checks, so any check not in the explicit list is ignored. The
-combination of "required-list drift" and "no human gate" produced a silent
-regression in coverage. Removing bot-driven merging closes the second hole and
-turns the first one into "PR sits open with red checks until a human looks."
+review. That behaviour was removed after a PR was silently merged with two
+`README Install Smoke Tests` jobs in FAILURE state, because those jobs were
+not in the `required_status_checks.contexts` list of branch protection.
+`gh pr merge --auto` only waits for *required* checks, so any check not in
+the explicit list was ignored. The combination of "required-list drift" and
+"no human gate" produced a silent regression.
+
+Two structural changes have since closed that gap:
+
+- The merge queue ([ADR-0003](../../docs/adr/0003-github-merge-queue.md))
+  re-runs CI against the speculative merge commit, so a PR with red
+  *required* checks cannot enter `main` even via bot enqueue.
+- Condition (2) above turns "non-required check failing" into a
+  blocking-by-rule case rather than a silent skip, eliminating the
+  required-list drift class.
+
+The previous absolute ban traded those structural protections for a
+single property — "the assistant cannot enqueue at all" — at the cost
+of a per-PR ping on every green PR the user had already authorised.
+[ADR-0013](../../docs/adr/0013-conditional-bot-driven-merge.md)
+records why the trade is no longer worth it.
 
 ## Manual Flow (optional)
 
