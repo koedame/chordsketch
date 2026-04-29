@@ -23,7 +23,8 @@ invariant the cargo portgroup actually needs, because every crate
 listed in `cargo.crates` is checksummed against the lockfile shipped
 inside the source tarball. Reading HEAD's Cargo.lock instead silently
 allowed Portfile/tarball drift, surfacing only at upstream build time
-as "checksum mismatch on <crate>".
+as "checksum mismatch on <crate>". See `docs/adr/0012-macports-
+portfile-cargo-crates-tag-relative.md` for the full rationale.
 
 Override with `--from-ref REF` (any git revision, e.g. `HEAD`) when
 preparing a Portfile bump for a release that has not been tagged yet.

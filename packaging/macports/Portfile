@@ -18,7 +18,9 @@
 # checksum listed here must match what the tarball's `Cargo.lock`
 # demands, otherwise the cargo portgroup rejects the build with
 # "checksum mismatch on <crate>". The `macports-portfile-sync` CI
-# guard pins this invariant on every PR.
+# guard pins this invariant on every PR. Rationale and the rejected
+# alternatives live in `docs/adr/0012-macports-portfile-cargo-crates-
+# tag-relative.md`.
 
 PortSystem          1.0
 PortGroup           github 1.0
