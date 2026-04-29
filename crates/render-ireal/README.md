@@ -6,15 +6,17 @@
 
 [![crates.io](https://img.shields.io/crates/v/chordsketch-render-ireal)](https://crates.io/crates/chordsketch-render-ireal)
 
-iReal Pro chart renderer — SVG skeleton.
+iReal Pro chart renderer — SVG with 4-bars-per-line grid layout.
 
-This crate is the SVG renderer scaffold for the iReal Pro feature
-set tracked under [#2050](https://github.com/koedame/chordsketch/issues/2050).
-It deliberately ships only the page frame, the metadata header
-(title / composer / style / key), and an empty 4-bar-per-line
-grid skeleton — chord text, barline shapes, repeat / ending
-brackets, music symbols, and chord-name typography each have their
-own follow-up issue.
+This crate renders an `IrealSong` AST as a fixed-size SVG document.
+The current scope (`#2058` scaffold + `#2060` layout engine) covers
+the page frame, the metadata header (title / composer / style /
+key), the 4-bars-per-line grid with section line breaks, and
+flat-layout chord text centred in each cell. Barlines, repeat /
+ending brackets, music symbols, and superscript chord-name
+typography land in follow-up issues (`#2057` / `#2059` / `#2062`).
+
+Tracked under [#2050](https://github.com/koedame/chordsketch/issues/2050).
 
 Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 

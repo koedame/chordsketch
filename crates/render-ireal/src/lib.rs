@@ -53,11 +53,14 @@
 
 #![forbid(unsafe_code)]
 
+mod chord_format;
+pub mod layout;
 pub mod page;
 mod svg;
 
-use chordsketch_ireal::{Accidental, IrealSong, KeyMode};
+use chordsketch_ireal::{Accidental, BarChord, IrealSong, KeyMode};
 
+pub use layout::{BarCoord, EmptyCell, Layout, compute_layout};
 pub use page::{
     BAR_ROW_HEIGHT, BARS_PER_ROW, GRID_TOP, HEADER_BAND_HEIGHT, MARGIN_X, MARGIN_Y, MAX_BARS,
     PAGE_HEIGHT, PAGE_WIDTH,
@@ -91,16 +94,7 @@ pub struct RenderOptions {}
 /// the y-coordinate arithmetic.
 #[must_use = "rendering produces a string the caller is expected to consume"]
 pub fn render_svg(song: &IrealSong, _options: &RenderOptions) -> String {
-    let raw_bar_count: usize = song
-        .sections
-        .iter()
-        .map(|s| s.bars.len())
-        // Use saturating addition so a malformed AST with 2^64-ish
-        // total bars (only reachable via a bug or attacker control)
-        // does not wrap to a smaller usize and bypass the cap below.
-        .fold(0usize, |acc, n| acc.saturating_add(n));
-    let bar_count = raw_bar_count.min(MAX_BARS);
-    let row_count = bar_count.div_ceil(BARS_PER_ROW);
+    let layout = compute_layout(song);
     let mut out = String::new();
     out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     out.push_str(&format!(
@@ -109,7 +103,7 @@ height=\"{PAGE_HEIGHT}\" viewBox=\"0 0 {PAGE_WIDTH} {PAGE_HEIGHT}\">\n"
     ));
     write_page_frame(&mut out);
     write_header(&mut out, song);
-    write_grid(&mut out, row_count);
+    write_grid(&mut out, song, &layout);
     out.push_str("</svg>\n");
     out
 }
@@ -197,47 +191,69 @@ fn format_key(song: &IrealSong) -> String {
     format!("{note_glyph}{acc} {mode}")
 }
 
-fn write_grid(out: &mut String, row_count: usize) {
-    if row_count == 0 {
+fn write_grid(out: &mut String, song: &IrealSong, layout: &Layout) {
+    if layout.bars.is_empty() && layout.trailing_empties.is_empty() {
         return;
     }
-    let grid_left = MARGIN_X;
-    let grid_right = PAGE_WIDTH - MARGIN_X;
-    // Integer division truncates the cell width, so the residual
-    // pixels are absorbed into the rightmost cell's width. Without
-    // this, the rightmost cell ends ≤ 3px short of `grid_right`
-    // and chord text / repeat brackets in #2057 / #2059 / #2060
-    // overflow the visible cell. The invariant the test
-    // `grid_aligns_to_right_margin` enforces:
-    //
-    //   sum of cell widths == grid_right - grid_left
-    //
-    // independent of the chosen `BARS_PER_ROW` and margin values.
-    let inner_width = grid_right - grid_left;
-    let base_cell_width = inner_width / BARS_PER_ROW as i32;
-    let leftover = inner_width - base_cell_width * (BARS_PER_ROW as i32);
     out.push_str("  <g class=\"bar-grid\">\n");
-    for row in 0..row_count {
-        // `row * BAR_ROW_HEIGHT` is bounded by the `MAX_BARS`
-        // compile-time assertion in `page.rs`, so the cast and
-        // multiplication cannot overflow `i32`.
-        let row_offset = i32::try_from(row).unwrap_or(i32::MAX);
-        let row_y = GRID_TOP + row_offset * BAR_ROW_HEIGHT;
-        let mut cell_x = grid_left;
-        for col in 0..BARS_PER_ROW {
-            let cell_width = if col == BARS_PER_ROW - 1 {
-                base_cell_width + leftover
-            } else {
-                base_cell_width
-            };
+    for cell in &layout.bars {
+        out.push_str(&format!(
+            "    <rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" \
+fill=\"none\" stroke=\"black\" stroke-width=\"1\"/>\n",
+            x = cell.x,
+            y = cell.y,
+            w = cell.width,
+            h = cell.height,
+        ));
+        let chords = chords_for_bar(song, cell);
+        if let Some(line) = render_bar_chord_text(chords) {
+            // Centre the chord text inside the cell. The 0.62
+            // y-fraction is the visual baseline iReal Pro itself
+            // uses — it lifts the text into the upper half of the
+            // cell so the future barline overlay (#2059) lives
+            // beneath it without collision.
+            let text_x = cell.x + cell.width / 2;
+            let text_y = cell.y + (cell.height * 62) / 100;
             out.push_str(&format!(
-                "    <rect x=\"{cell_x}\" y=\"{row_y}\" width=\"{cell_width}\" \
-height=\"{BAR_ROW_HEIGHT}\" fill=\"none\" stroke=\"black\" stroke-width=\"1\"/>\n"
+                "    <text x=\"{text_x}\" y=\"{text_y}\" font-family=\"sans-serif\" \
+font-size=\"14\" text-anchor=\"middle\" class=\"chord\">{line}</text>\n"
             ));
-            cell_x += cell_width;
         }
     }
+    for empty in &layout.trailing_empties {
+        out.push_str(&format!(
+            "    <rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" \
+fill=\"none\" stroke=\"black\" stroke-width=\"1\" class=\"empty\"/>\n",
+            x = empty.x,
+            y = empty.y,
+            w = empty.width,
+            h = empty.height,
+        ));
+    }
     out.push_str("  </g>\n");
+}
+
+fn chords_for_bar<'a>(song: &'a IrealSong, cell: &BarCoord) -> &'a [BarChord] {
+    // The layout engine guarantees `section_index` and
+    // `bar_index_in_section` are valid for the song that produced
+    // it, but defensive `get` lookups keep the renderer crash-free
+    // if a caller hand-rolls a `Layout` for a different song.
+    song.sections
+        .get(cell.section_index)
+        .and_then(|s| s.bars.get(cell.bar_index_in_section))
+        .map(|b| b.chords.as_slice())
+        .unwrap_or(&[])
+}
+
+fn render_bar_chord_text(chords: &[BarChord]) -> Option<String> {
+    if chords.is_empty() {
+        return None;
+    }
+    let raw = chord_format::format_bar_chord_line(chords);
+    if raw.is_empty() {
+        return None;
+    }
+    Some(svg::escape_xml(&raw))
 }
 
 /// Returns the library version (the workspace `Cargo.toml`
