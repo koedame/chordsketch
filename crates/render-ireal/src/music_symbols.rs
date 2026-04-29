@@ -5,8 +5,8 @@
 //! ending brackets occupy. The drawn shape is a SVG-primitive
 //! approximation of the SMuFL glyphs from Bravura — see the
 //! `## Deferred` section in PR #2062's body for the reasoning
-//! behind not bundling the Bravura font itself (≈ 3 MB
-//! per-export overhead).
+//! behind not bundling the Bravura font itself (megabyte-scale
+//! per-export overhead — measure the subset before re-proposing).
 //!
 //! ## Glyph shapes
 //!
@@ -35,6 +35,44 @@ const GLYPH_SIZE: i32 = 18;
 /// reach of the segno's stroke from its centre.
 const HALF_GLYPH: i32 = GLYPH_SIZE / 2;
 
+/// Horizontal inset from the cell's left edge for both the
+/// glyph-anchor (`glyph_cx = cell.x + HALF_GLYPH + GLYPH_LEFT_INSET`)
+/// and the text-directive starting `x`. Keeps the glyph clear of
+/// any barline overlay at the cell boundary and lets the segno /
+/// coda glyphs share their left-most extent with the leading edge
+/// of the `D.C.` / `D.S.` / `Fine` text directives.
+const GLYPH_LEFT_INSET: i32 = 4;
+
+/// Stroke width for the segno S-curve and the coda circle; thicker
+/// than the auxiliary 1-px slash / cross arms to read as the
+/// glyph's primary contour at small sizes.
+const GLYPH_STROKE_WIDTH: i32 = 2;
+
+/// Radius of the segno's two diagonally-opposed dots.
+const SEGNO_DOT_RADIUS: f32 = 1.5;
+
+/// Inset of the segno's S-curve hooks and dots from the bounding
+/// square — the curve doesn't reach the corners of the
+/// `HALF_GLYPH × HALF_GLYPH` bounding box, leaving a small visual
+/// margin that keeps the glyph from colliding with adjacent
+/// `barline-repeat-thick` strokes.
+const SEGNO_HOOK_INSET: i32 = 2;
+
+/// Vertical offset of the segno's dots from the curve's hooks —
+/// places the dots inside the open lobes of the S rather than on
+/// the corners.
+const SEGNO_DOT_INSET: i32 = 4;
+
+/// How far the coda's cross arms protrude past the circle's
+/// circumference. Mirrors SMuFL "coda" / U+1D10C: the cross
+/// extends slightly so it remains visible against any ground.
+const CODA_CROSS_EXTENSION: i32 = 3;
+
+/// Font size for the italicised text directives (`D.C.` / `D.S.`
+/// / `Fine`). Smaller than the chord-name base font so the
+/// directive does not visually compete with the chord text.
+const TEXT_DIRECTIVE_FONT_SIZE: i32 = 11;
+
 /// Renders music-symbol glyphs above each bar that carries one.
 ///
 /// Bars without a `Bar.symbol` produce no output. Symbols are
@@ -62,15 +100,23 @@ pub(crate) fn render_music_symbols(song: &IrealSong, layout: &Layout) -> String 
         else {
             continue;
         };
-        // Centre the glyph horizontally over the cell's left edge
-        // (iReal Pro's convention) — slightly inset to keep the
-        // glyph clear of any barline overlay at the cell boundary.
-        let glyph_cx = cell.x + HALF_GLYPH + 4;
+        // Anchor the glyph horizontally to `cell.x + HALF_GLYPH +
+        // GLYPH_LEFT_INSET` — the glyph occupies the band from
+        // `cell.x + GLYPH_LEFT_INSET` to `cell.x + GLYPH_LEFT_INSET
+        // + GLYPH_SIZE`. Text directives use the same
+        // `GLYPH_LEFT_INSET` so their left edge lines up with the
+        // segno / coda glyphs in adjacent bars; the rendering is
+        // intentionally asymmetric (centred glyph vs. left-aligned
+        // text run) because iReal Pro itself draws `D.C.` / `D.S.`
+        // / `Fine` as left-justified text directives, not as
+        // centred glyphs.
+        let glyph_cx = cell.x + HALF_GLYPH + GLYPH_LEFT_INSET;
         // Bottom edge of the glyph sits `SYMBOL_BOTTOM_GAP` above
-        // the row top. Glyph extends upward from there.
+        // the row top. The glyph centre is `HALF_GLYPH` above
+        // that — the symmetric square spans
+        // `glyph_cy − HALF_GLYPH` to `glyph_cy + HALF_GLYPH`.
         let glyph_bottom_y = cell.y - SYMBOL_BOTTOM_GAP;
-        let glyph_top_y = glyph_bottom_y - GLYPH_SIZE;
-        let glyph_cy = (glyph_top_y + glyph_bottom_y) / 2;
+        let glyph_cy = glyph_bottom_y - HALF_GLYPH;
         match symbol {
             MusicalSymbol::Segno => {
                 emit_segno(&mut out, glyph_cx, glyph_cy);
@@ -79,13 +125,13 @@ pub(crate) fn render_music_symbols(song: &IrealSong, layout: &Layout) -> String 
                 emit_coda(&mut out, glyph_cx, glyph_cy);
             }
             MusicalSymbol::DaCapo => {
-                emit_text_directive(&mut out, cell.x + 4, glyph_bottom_y, "D.C.");
+                emit_text_directive(&mut out, cell.x + GLYPH_LEFT_INSET, glyph_bottom_y, "D.C.");
             }
             MusicalSymbol::DalSegno => {
-                emit_text_directive(&mut out, cell.x + 4, glyph_bottom_y, "D.S.");
+                emit_text_directive(&mut out, cell.x + GLYPH_LEFT_INSET, glyph_bottom_y, "D.S.");
             }
             MusicalSymbol::Fine => {
-                emit_text_directive(&mut out, cell.x + 4, glyph_bottom_y, "Fine");
+                emit_text_directive(&mut out, cell.x + GLYPH_LEFT_INSET, glyph_bottom_y, "Fine");
             }
         }
     }
@@ -98,24 +144,23 @@ fn emit_segno(out: &mut String, cx: i32, cy: i32) {
     // opposed dots. The path data uses absolute SVG path
     // commands so the glyph renders identically across viewers.
     let r = HALF_GLYPH;
-    let stroke_width = 2;
     // S-curve: upper-right hook, then lower-left hook.
     out.push_str(&format!(
         "    <path d=\"M {x1} {y1} C {cx1} {cy1}, {cx2} {cy2}, {x2} {y2} \
-S {cx3} {cy3}, {x3} {y3}\" stroke=\"black\" stroke-width=\"{stroke_width}\" \
+S {cx3} {cy3}, {x3} {y3}\" stroke=\"black\" stroke-width=\"{GLYPH_STROKE_WIDTH}\" \
 fill=\"none\" class=\"music-symbol-segno-curve\"/>\n",
-        x1 = cx + r - 2,
-        y1 = cy - r + 2,
+        x1 = cx + r - SEGNO_HOOK_INSET,
+        y1 = cy - r + SEGNO_HOOK_INSET,
         cx1 = cx - r,
-        cy1 = cy - r + 2,
+        cy1 = cy - r + SEGNO_HOOK_INSET,
         cx2 = cx + r,
-        cy2 = cy - 2,
+        cy2 = cy - SEGNO_HOOK_INSET,
         x2 = cx,
-        y2 = cy + 2,
+        y2 = cy + SEGNO_HOOK_INSET,
         cx3 = cx + r,
-        cy3 = cy + r - 2,
-        x3 = cx - r + 2,
-        y3 = cy + r - 2,
+        cy3 = cy + r - SEGNO_HOOK_INSET,
+        x3 = cx - r + SEGNO_HOOK_INSET,
+        y3 = cy + r - SEGNO_HOOK_INSET,
     ));
     // Diagonal slash from upper-left to lower-right.
     out.push_str(&format!(
@@ -128,16 +173,16 @@ stroke=\"black\" stroke-width=\"1\" class=\"music-symbol-segno-slash\"/>\n",
     ));
     // Dots at upper-right and lower-left.
     out.push_str(&format!(
-        "    <circle cx=\"{cx_dot}\" cy=\"{cy_dot}\" r=\"1.5\" fill=\"black\" \
+        "    <circle cx=\"{cx_dot}\" cy=\"{cy_dot}\" r=\"{SEGNO_DOT_RADIUS}\" fill=\"black\" \
 class=\"music-symbol-segno-dot\"/>\n",
-        cx_dot = cx + r - 2,
-        cy_dot = cy - r + 4,
+        cx_dot = cx + r - SEGNO_HOOK_INSET,
+        cy_dot = cy - r + SEGNO_DOT_INSET,
     ));
     out.push_str(&format!(
-        "    <circle cx=\"{cx_dot}\" cy=\"{cy_dot}\" r=\"1.5\" fill=\"black\" \
+        "    <circle cx=\"{cx_dot}\" cy=\"{cy_dot}\" r=\"{SEGNO_DOT_RADIUS}\" fill=\"black\" \
 class=\"music-symbol-segno-dot\"/>\n",
-        cx_dot = cx - r + 2,
-        cy_dot = cy + r - 4,
+        cx_dot = cx - r + SEGNO_HOOK_INSET,
+        cy_dot = cy + r - SEGNO_DOT_INSET,
     ));
 }
 
@@ -146,30 +191,29 @@ fn emit_coda(out: &mut String, cx: i32, cy: i32) {
     // slightly past the circle (typical of SMuFL "coda" /
     // U+1D10C) so the cross is visible against any background.
     let r = HALF_GLYPH;
-    let stroke_width = 2;
-    let extension = 3;
     out.push_str(&format!(
         "    <circle cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\" fill=\"none\" stroke=\"black\" \
-stroke-width=\"{stroke_width}\" class=\"music-symbol-coda-circle\"/>\n"
+stroke-width=\"{GLYPH_STROKE_WIDTH}\" class=\"music-symbol-coda-circle\"/>\n"
     ));
     out.push_str(&format!(
         "    <line x1=\"{x1}\" y1=\"{cy}\" x2=\"{x2}\" y2=\"{cy}\" stroke=\"black\" \
 stroke-width=\"1\" class=\"music-symbol-coda-cross\"/>\n",
-        x1 = cx - r - extension,
-        x2 = cx + r + extension,
+        x1 = cx - r - CODA_CROSS_EXTENSION,
+        x2 = cx + r + CODA_CROSS_EXTENSION,
     ));
     out.push_str(&format!(
         "    <line x1=\"{cx}\" y1=\"{y1}\" x2=\"{cx}\" y2=\"{y2}\" stroke=\"black\" \
 stroke-width=\"1\" class=\"music-symbol-coda-cross\"/>\n",
-        y1 = cy - r - extension,
-        y2 = cy + r + extension,
+        y1 = cy - r - CODA_CROSS_EXTENSION,
+        y2 = cy + r + CODA_CROSS_EXTENSION,
     ));
 }
 
 fn emit_text_directive(out: &mut String, x: i32, baseline_y: i32, text: &str) {
     let escaped = svg::escape_xml(text);
     out.push_str(&format!(
-        "    <text x=\"{x}\" y=\"{baseline_y}\" font-family=\"serif\" font-size=\"11\" \
+        "    <text x=\"{x}\" y=\"{baseline_y}\" font-family=\"serif\" \
+font-size=\"{TEXT_DIRECTIVE_FONT_SIZE}\" \
 font-style=\"italic\" class=\"music-symbol-text\">{escaped}</text>\n"
     ));
 }
@@ -273,7 +317,12 @@ mod tests {
     #[test]
     fn each_symbol_anchors_to_its_bar_y() {
         // Two bars, each with a different symbol. The two glyphs
-        // should sit on the same `cy` since both bars are in row 0.
+        // should sit on the same `cy` since both bars are in row
+        // 0; this asserts equality of the segno's path-implied cy
+        // (the slash's `y2 = cy + r`) and the coda's `<circle
+        // cy="…">` so a future regression that anchors one glyph
+        // to the wrong y baseline (e.g. forgetting to subtract
+        // `HALF_GLYPH`) is caught.
         let mut song = IrealSong::new();
         song.sections.push(section(
             'A',
@@ -284,10 +333,30 @@ mod tests {
         ));
         let layout = compute_layout(&song);
         let svg = render_music_symbols(&song, &layout);
-        // Segno path appears at glyph_cx = first cell's left + HALF_GLYPH + 4.
-        // Coda circle appears at glyph_cx = second cell's left + HALF_GLYPH + 4.
-        assert!(svg.contains("class=\"music-symbol-segno-curve\""));
-        assert!(svg.contains("class=\"music-symbol-coda-circle\""));
+        let coda_cy = parse_attr(&svg, "music-symbol-coda-circle", "cy");
+        let segno_slash_y2 = parse_attr(&svg, "music-symbol-segno-slash", "y2");
+        let segno_slash_y1 = parse_attr(&svg, "music-symbol-segno-slash", "y1");
+        let segno_cy = (segno_slash_y1 + segno_slash_y2) / 2;
+        assert_eq!(
+            segno_cy, coda_cy,
+            "segno and coda in adjacent same-row bars must share cy: \
+             segno_cy={segno_cy} coda_cy={coda_cy}\n{svg}"
+        );
+    }
+
+    /// Pulls an `i32` attribute out of the first SVG element
+    /// matching `class_marker`. Returns the parsed value or panics
+    /// with a `{svg}`-bearing message — the caller's tests are
+    /// expected to construct inputs that produce a hit.
+    fn parse_attr(svg: &str, class_marker: &str, attr: &str) -> i32 {
+        let needle = format!("{attr}=\"");
+        let class_idx = svg.find(class_marker).expect("class marker present");
+        let elem_start = svg[..class_idx].rfind('<').expect("element open present");
+        let elem_end = elem_start + svg[elem_start..].find('>').expect("element close present");
+        let elem = &svg[elem_start..elem_end];
+        let val_start = elem.find(&needle).expect("attribute present") + needle.len();
+        let val_end = val_start + elem[val_start..].find('"').expect("attribute closed");
+        elem[val_start..val_end].parse().expect("attribute is i32")
     }
 
     #[test]

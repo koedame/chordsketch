@@ -87,7 +87,7 @@ divided into:
 
 | Feature | Tracking issue |
 |---|---|
-| Bravura SMuFL font for high-fidelity music glyphs | [#2062](https://github.com/koedame/chordsketch/issues/2062) (deferred — current SVG primitive approximations avoid a ~3 MB per-export font payload) |
+| Bravura SMuFL font for high-fidelity music glyphs | [#2062](https://github.com/koedame/chordsketch/issues/2062) (deferred — current SVG primitive approximations avoid embedding a megabyte-scale font in every export; measure the subset before re-proposing) |
 | PNG rasterization via resvg | [#2064](https://github.com/koedame/chordsketch/issues/2064) |
 | PDF output layer | [#2063](https://github.com/koedame/chordsketch/issues/2063) |
 
