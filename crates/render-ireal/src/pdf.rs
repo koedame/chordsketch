@@ -92,6 +92,7 @@ impl std::error::Error for PdfError {}
 /// let bytes = render_pdf(&song, &PdfOptions::default()).unwrap();
 /// assert_eq!(&bytes[..5], b"%PDF-");
 /// ```
+#[must_use = "the PDF bytes produced by render_pdf are expected to be consumed"]
 pub fn render_pdf(song: &IrealSong, _options: &PdfOptions) -> Result<Vec<u8>, PdfError> {
     let svg = render_svg(song, &RenderOptions::default());
     let usvg_options = svg2pdf::usvg::Options::default();
