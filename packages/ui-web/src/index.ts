@@ -26,6 +26,18 @@ export interface Renderers {
    * success; rejection is surfaced as an init-time error in the UI.
    */
   init(): Promise<unknown>;
+  /**
+   * Render `input` as a **body fragment** — not a full HTML document.
+   * ui-web wraps the returned string in a minimal `<!DOCTYPE html>…</html>`
+   * envelope via `HTML_FRAME_TEMPLATE` before setting `iframe.srcdoc`.
+   *
+   * The returned string MUST NOT include `<!DOCTYPE>`, `<html>`, `<head>`,
+   * or outer `<body>` tags. A top-level `<style>` element at the start of
+   * the fragment IS permitted and is the recommended way to inject
+   * host-supplied styling (the playground prepends `render_html_css()`
+   * this way). Returning a full document will produce a double-wrapped
+   * `srcdoc` and may cause rendering defects on some browsers (see #2321).
+   */
   renderHtml(input: string, options?: RenderOptions): string;
   renderText(input: string, options?: RenderOptions): string;
   renderPdf(input: string, options?: RenderOptions): Uint8Array;
@@ -204,23 +216,27 @@ export interface ChordSketchUiHandle {
 
 const RENDER_DEBOUNCE_MS = 300;
 
+// Minimal single-document frame for whatever HTML body fragment the
+// host's `Renderers.renderHtml` produces. Hosts are responsible for
+// supplying any layout/typography styling — typically by prepending a
+// `<style>` block to the body fragment (the playground does this with
+// `render_html_css()` from `@chordsketch/wasm`). The frame
+// intentionally carries no own styles so it cannot conflict with
+// whatever the body brings.
+//
+// Pre-#2321 this template embedded a second copy of body / chord /
+// section styles AND the playground passed a full
+// `<!DOCTYPE>...<body>...</body></html>` document through, so
+// `srcdoc` ended up with two `<!DOCTYPE>` / `<head>` / `<body>` pairs
+// that survived only via HTML5 nested-document recovery. That
+// double-wrap was the most likely structural source of the
+// user-reported "Blocked script execution in 'about:blank'" warning
+// and the format-toggle blank-preview symptom on certain Chrome
+// configurations.
 const HTML_FRAME_TEMPLATE = (body: string): string => `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    padding: 1.5rem;
-    line-height: 1.6;
-    color: #333;
-  }
-  .chord { color: #e94560; font-weight: bold; }
-  h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.1rem; color: #666; margin-bottom: 1rem; }
-  section { margin-bottom: 1rem; }
-  .song-separator { border-top: 2px solid #ddd; margin: 2rem 0; }
-</style>
 </head>
 <body>${body}</body>
 </html>`;
@@ -817,6 +833,19 @@ export async function mountChordSketchUi(
         const html = renderOpts
           ? renderers.renderHtml(input, renderOpts)
           : renderers.renderHtml(input);
+        // Defense in depth, paired with the double-wrap fix above.
+        // The user reported a blank-preview symptom on HTML → other →
+        // HTML toggle (#2321) that we could not reproduce in headless
+        // Chromium. The structural cause — `srcdoc` containing two
+        // `<!DOCTYPE>` / `<head>` / `<body>` pairs that survived only
+        // via HTML5 nested-document recovery — is fixed by the
+        // body-fragment + minimal-frame switch. If a separate
+        // same-string-assignment skip-navigation quirk also
+        // contributes, clearing `srcdoc` to '' before assigning the
+        // new content forces a navigation cycle at near-zero cost.
+        // Drop this empty-then-set if the symptom turns out to be
+        // fully covered by the double-wrap fix.
+        preview.srcdoc = '';
         preview.srcdoc = HTML_FRAME_TEMPLATE(html);
         hideError();
       } else if (format === 'text') {
