@@ -46,10 +46,11 @@ use std::fmt;
 /// it before invoking the obfusc50 unscramble.
 const MUSIC_PREFIX: &str = "1r34LbKcu7";
 
-/// Hard ceiling on the URL length the parser will accept. iReal
-/// Pro exports rarely exceed a few hundred KB even for large
-/// collections; the cap keeps an adversarial caller from forcing
-/// a multi-gigabyte allocation through repeated `%XX` expansions.
+/// Hard ceiling on the raw URL length the parser will accept.
+/// iReal Pro exports rarely exceed a few hundred KB even for large
+/// collections; the cap prevents a caller from supplying an
+/// arbitrarily large string and forcing proportionally large
+/// allocations in the per-song body buffers.
 pub const MAX_INPUT_BYTES: usize = 4 * 1024 * 1024;
 
 /// Errors produced by [`parse`] and [`parse_collection`].
@@ -129,10 +130,10 @@ pub fn parse_collection(url: &str) -> Result<(Vec<IrealSong>, Option<String>), P
         return Err(ParseError::InputTooLarge(url.len()));
     }
     let body_encoded = strip_prefix(url)?;
+    // percent_decode can only shrink the output (every `%XX` triplet
+    // maps to a single byte), so `body.len() <= body_encoded.len() <=
+    // url.len()`. The length check above already enforces the cap.
     let body = percent_decode(body_encoded)?;
-    if body.len() > MAX_INPUT_BYTES {
-        return Err(ParseError::InputTooLarge(body.len()));
-    }
 
     // Songs are separated by `===`. iReal also uses the trailing
     // segment after the final `===` as the playlist name when the
@@ -143,8 +144,10 @@ pub fn parse_collection(url: &str) -> Result<(Vec<IrealSong>, Option<String>), P
     // name only when there is more than one part. A single-song
     // `irealb://` URL has no `===` separator, so `parts` has just
     // one element and there is no name.
+    // Use `nonempty` so a trailing `===` with no name (empty segment)
+    // returns `None` rather than `Some("")`.
     let name = if parts.len() > 1 {
-        Some(parts.pop().unwrap_or("").to_owned())
+        parts.pop().and_then(nonempty)
     } else {
         None
     };
@@ -716,17 +719,28 @@ impl ChartParseState {
             // previous chord, fall back to treating the `W` as a
             // chord root spelling `C` (the JS reference does this
             // implicitly by leaving the `W` in the chord string).
-            if let Some(last) = self.last_chord.clone() {
-                format!("{}{}", last, after_w)
+            if let Some(ref last_root) = self.last_chord {
+                format!("{}{}", last_root, after_w)
             } else {
                 raw.to_owned()
             }
         } else {
-            self.last_chord = Some(strip_slash_bass(raw).to_owned());
+            // Store only the root (note + optional accidental) so that
+            // a subsequent `W{quality}` token resolves to the correct
+            // root. Storing the full chord string (including quality)
+            // would produce a double-quality concatenation, e.g.
+            // `last="Db-7"` followed by `W-7` → `"Db-7-7"` instead
+            // of `"Db-7"`.
+            let root = chord_root_str(strip_slash_bass(raw));
+            self.last_chord = Some(root.to_owned());
             raw.to_owned()
         };
         let chord = parse_chord(&resolved)?;
-        let position = BeatPosition::on_beat(1).unwrap();
+        // Beat positions are not encoded in the iReal URL format; the
+        // renderer distributes chords across beats based on count and
+        // time signature. Beat 1 is a structural placeholder here.
+        // See #2057 (render-ireal) for beat-distribution logic.
+        let position = BeatPosition::on_beat(1).expect("beat 1 is always a valid NonZeroU8");
         self.current_bar.chords.push(BarChord { chord, position });
         Ok(())
     }
@@ -816,6 +830,32 @@ fn strip_slash_bass(chord: &str) -> &str {
     chord.split('/').next().unwrap_or(chord)
 }
 
+/// Returns the root portion (note letter + optional accidental) of a
+/// raw chord token. Used so [`ChartParseState::last_chord`] stores
+/// only the root for `W` (invisible-slash) resolution.
+///
+/// Examples: `"Db-7"` → `"Db"`, `"C7"` → `"C"`, `"F#"` → `"F#"`.
+fn chord_root_str(s: &str) -> &str {
+    let mut iter = s.char_indices();
+    let Some((_, _root_ch)) = iter.next() else {
+        return s;
+    };
+    match iter.next() {
+        // '#' and 'b' immediately after the root letter are the accidental.
+        Some((_acc_idx, '#' | 'b')) => match iter.next() {
+            // Byte index of the char after the accidental is the start
+            // of the quality — slice up to (but not including) it.
+            Some((after_acc_idx, _)) => &s[..after_acc_idx],
+            // String is exactly root + accidental with nothing after.
+            None => s,
+        },
+        // Non-accidental char: quality starts here.
+        Some((qual_idx, _)) => &s[..qual_idx],
+        // String is just the root letter with nothing after.
+        None => s,
+    }
+}
+
 fn parse_chord(raw: &str) -> Result<Chord, ParseError> {
     let mut chars = raw.chars();
     let root_char = chars.next().ok_or(ParseError::InvalidChord(raw.into()))?;
@@ -883,6 +923,14 @@ fn parse_quality(raw: &str) -> ChordQuality {
     }
 }
 
+/// Parses the `Key` field from the iReal song body into a
+/// [`KeySignature`].
+///
+/// iReal Pro exports a short string such as `"C"`, `"Db"`, or
+/// `"F#-"`. If the field is absent or does not start with a valid
+/// note letter the function silently returns C major — matching the
+/// iReal app's own implicit default for charts with missing or
+/// unrecognised key fields.
 fn parse_key(raw: &str) -> KeySignature {
     let mut iter = raw.chars();
     let note = iter.next().unwrap_or('C');
@@ -980,20 +1028,6 @@ mod tests {
     }
 
     #[test]
-    fn obfusc50_self_inverse_via_assertion() {
-        // Sanity: applying it twice produces the input. (Already
-        // covered by `obfusc50_is_self_inverse`; left here as a
-        // regression marker if `obfusc50_swaps_documented_positions`
-        // is later edited without restoring the symmetric carve-out.)
-        let chunk: Vec<char> = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwx"
-            .chars()
-            .collect();
-        let once = obfusc50(&chunk);
-        let twice = obfusc50(&once.chars().collect::<Vec<_>>());
-        assert_eq!(twice, chunk.iter().collect::<String>());
-    }
-
-    #[test]
     fn unscramble_short_input_passes_through() {
         // Inputs <= 50 chars are appended unchanged.
         let s = "abc";
@@ -1028,6 +1062,40 @@ mod tests {
         assert_eq!(sharp_minor.root.note, 'F');
         assert_eq!(sharp_minor.root.accidental, Accidental::Sharp);
         assert_eq!(sharp_minor.quality, ChordQuality::Minor);
+    }
+
+    #[test]
+    fn chord_root_str_extracts_root_only() {
+        assert_eq!(chord_root_str("C"), "C");
+        assert_eq!(chord_root_str("C7"), "C");
+        assert_eq!(chord_root_str("C-7"), "C");
+        assert_eq!(chord_root_str("Db"), "Db");
+        assert_eq!(chord_root_str("Db-7"), "Db");
+        assert_eq!(chord_root_str("F#-"), "F#");
+        assert_eq!(chord_root_str("Bbmaj7"), "Bb");
+        // slash chords: strip_slash_bass is called first in practice,
+        // but chord_root_str must also handle them correctly alone.
+        assert_eq!(chord_root_str("C/G"), "C");
+    }
+
+    #[test]
+    fn w_resolution_uses_root_not_full_quality() {
+        // Regression test: when `W` follows a chord with a non-empty
+        // quality (e.g. `Db-7`), the resolved chord must use only the
+        // root (`Db`), not the full previous token (`Db-7`). The bug
+        // was that `last_chord` stored the full quality-bearing string,
+        // causing `W-7` to resolve to `"Db-7-7"` (a Custom quality)
+        // rather than `"Db-7"` (Minor7).
+        let mut state = ChartParseState::new();
+        // Push a chord with non-empty quality to set last_chord.
+        state.push_chord("Db-7").unwrap();
+        // Now push a W chord — should resolve to Db + quality "-7".
+        state.push_chord("W-7").unwrap();
+        let chords = &state.current_bar.chords;
+        assert_eq!(chords.len(), 2);
+        assert_eq!(chords[1].chord.root.note, 'D');
+        assert_eq!(chords[1].chord.root.accidental, Accidental::Flat);
+        assert_eq!(chords[1].chord.quality, ChordQuality::Minor7);
     }
 
     #[test]
