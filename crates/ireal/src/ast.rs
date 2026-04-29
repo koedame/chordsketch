@@ -325,6 +325,11 @@ pub struct ChordRoot {
 
 impl ChordRoot {
     /// Creates a root with a natural accidental.
+    ///
+    /// `note` is expected to be an uppercase ASCII letter in `'A'..='G'`.
+    /// No validation is performed here — enforcing valid note letters is
+    /// the responsibility of the iReal URL parser (#2054), which is the
+    /// public-API entry point.
     #[must_use]
     pub const fn natural(note: char) -> Self {
         Self {
