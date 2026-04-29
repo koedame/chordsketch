@@ -47,18 +47,20 @@
 //! / `chordsketch-ireal`.
 //!
 //! Enabling the `png` cargo feature additionally pulls in `resvg`
-//! and `tiny-skia` for the `png::render_png` rasteriser. The
-//! feature is off by default; SVG-only consumers stay on the
-//! single-dep build. (Inline code-span — not an intra-doc link —
-//! because the `png` module is `#[cfg(feature = "png")]` and a
-//! crate-level rustdoc link would break the default-features `cargo
-//! doc --no-deps` run that gates CI.)
+//! and `tiny-skia` for the `png::render_png` rasteriser; enabling
+//! `pdf` pulls in `svg2pdf` for the `pdf::render_pdf` converter.
+//! Both features are off by default; SVG-only consumers stay on
+//! the single-dep build. (Inline code-spans — not intra-doc links —
+//! because the `png` and `pdf` modules are `#[cfg(feature = ...)]`
+//! and a crate-level rustdoc link would break the default-features
+//! `cargo doc --no-deps` run that gates CI.)
 //!
 //! # Cargo features
 //!
 //! | Feature | Default? | Notes |
 //! |---|---|---|
 //! | `png` | off | Enables `png::render_png` (rasterises the SVG via `resvg`). |
+//! | `pdf` | off | Enables `pdf::render_pdf` (converts the SVG to PDF via `svg2pdf`). |
 //!
 //! # Stability
 //!
@@ -100,6 +102,8 @@ pub mod layout;
 mod markers;
 mod music_symbols;
 pub mod page;
+#[cfg(feature = "pdf")]
+pub mod pdf;
 #[cfg(feature = "png")]
 pub mod png;
 mod svg;
