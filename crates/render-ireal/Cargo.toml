@@ -25,8 +25,14 @@ chordsketch-ireal = { version = "0.3.0", path = "../ireal" }
 # applies here because pure-Rust SVG rasterisation has no zero-dep
 # alternative, and the feature gate keeps the cost off any caller
 # that does not need PNG output.
-resvg = { version = "0.47", optional = true }
-tiny-skia = { version = "0.12", optional = true }
+#
+# Pinned to 0.45.x (resvg) and 0.11.x (tiny-skia) because the
+# 0.46.0 / 0.47.0 line bumps the resvg MSRV to 1.87, but this
+# workspace's `rust-version = "1.85"` (set in the top-level
+# `[workspace.package]`) is exercised by the CI test matrix.
+# Lifting either pin requires raising the workspace MSRV first.
+resvg = { version = "0.45", optional = true }
+tiny-skia = { version = "0.11", optional = true }
 
 [features]
 # Enables the `render_png` function. Off by default to keep the
