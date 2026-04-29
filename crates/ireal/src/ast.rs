@@ -9,6 +9,23 @@
 //! place.
 //!
 //! See `ARCHITECTURE.md` for the field-level design rationale.
+//!
+//! # Public-field mutation contract
+//!
+//! Every struct in this module exposes its fields as `pub`, deliberately,
+//! so test fixtures and builders can mutate the AST inline. The
+//! validating constructors ([`TimeSignature::new`], [`Ending::new`],
+//! [`BeatPosition::on_beat`]) and the [`crate::json::FromJson`]
+//! deserializer enforce the documented value ranges; **direct
+//! field mutation bypasses those checks**. Downstream consumers
+//! (renderer in #2057, URL writer in #2052) are expected to treat
+//! ASTs constructed by anything other than a documented constructor /
+//! parser as untrusted and re-validate at their own boundary, per the
+//! "validate at the public boundary" rule in `defensive-inputs.md`.
+//! In particular: [`TimeSignature::numerator`] / [`TimeSignature::denominator`],
+//! [`IrealSong::transpose`], [`BeatPosition::subdivision`], and
+//! [`ChordRoot::note`] all carry doc-comment ranges that the type system
+//! does not enforce.
 
 use std::num::NonZeroU8;
 
@@ -254,7 +271,10 @@ pub struct BarChord {
 /// time-signature numerator) and an optional `subdivision` integer
 /// in the unit `2 ^ subdivision` of a beat. `subdivision == 0`
 /// (default) means "on the beat"; `subdivision == 1` means "the
-/// half-beat after"; etc. The discrete-integer layout keeps
+/// half-beat after"; etc. Practical values are 0..=3 (down to
+/// 32nd-note resolution); larger values are not produced by any
+/// known iReal Pro source format and are reserved for future grid-
+/// resolution increases. The discrete-integer layout keeps
 /// equality byte-stable for golden tests, which a `f32` would not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BeatPosition {
@@ -317,7 +337,9 @@ impl Chord {
 pub struct ChordRoot {
     /// The diatonic letter (`A` … `G`). Stored as the uppercase
     /// ASCII letter so the value is a structural enum-like key
-    /// without the round-trip cost of a real `enum`.
+    /// without the round-trip cost of a real `enum`. The
+    /// [`crate::json::FromJson`] deserializer enforces the
+    /// `A..=G` range; direct field assignment does not.
     pub note: char,
     /// Accidental on the root.
     pub accidental: Accidental,

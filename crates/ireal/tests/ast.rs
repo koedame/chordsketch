@@ -300,6 +300,123 @@ fn musical_symbol_variants_are_distinct() {
     assert_eq!(MusicalSymbol::Fine, MusicalSymbol::Fine);
 }
 
+#[test]
+fn json_rejects_recursion_depth_overflow() {
+    // Stack-overflow protection: deeply nested input is rejected with a
+    // structured error rather than crashing the process. The cap is
+    // documented as `MAX_DEPTH` (currently 128) — pick a depth above
+    // that so the test fails when the cap is removed.
+    let depth = chordsketch_ireal::json::MAX_DEPTH as usize + 16;
+    let nested = "[".repeat(depth) + &"]".repeat(depth);
+    let err = chordsketch_ireal::parse_json(&nested).expect_err("must reject deep nesting");
+    assert!(err.message.contains("MAX_DEPTH"), "unexpected error: {err}");
+}
+
+#[test]
+fn json_rejects_oversized_input() {
+    // Inputs above `MAX_INPUT_BYTES` are rejected up-front, before any
+    // parser allocation runs.
+    let oversized = String::from("[") + &"0,".repeat(chordsketch_ireal::json::MAX_INPUT_BYTES);
+    assert!(chordsketch_ireal::parse_json(&oversized).is_err());
+}
+
+#[test]
+fn json_rejects_leading_zeros_and_negative_zero() {
+    // RFC 8259 §6 forbids leading zeros. The serializer never emits
+    // them, so accepting them would let hand-written snapshots round-
+    // trip through paths the serializer cannot produce.
+    assert!(chordsketch_ireal::parse_json("01").is_err());
+    assert!(chordsketch_ireal::parse_json("-01").is_err());
+    assert!(chordsketch_ireal::parse_json("-0").is_err());
+    assert!(chordsketch_ireal::parse_json("0").is_ok());
+    assert!(chordsketch_ireal::parse_json("10").is_ok());
+}
+
+#[test]
+fn json_rejects_surrogate_pair_escapes() {
+    // The serializer never emits surrogate pairs (only C0-control
+    // escapes). Rejecting them makes the round-trip-only contract
+    // explicit.
+    assert!(chordsketch_ireal::parse_json("\"\\uD800\"").is_err());
+    assert!(chordsketch_ireal::parse_json("\"\\uDFFF\"").is_err());
+}
+
+#[test]
+fn json_rejects_oversized_array() {
+    let n = chordsketch_ireal::json::MAX_ARRAY_LEN + 1;
+    let mut s = String::from("[");
+    for i in 0..n {
+        if i > 0 {
+            s.push(',');
+        }
+        s.push('0');
+    }
+    s.push(']');
+    if s.len() <= chordsketch_ireal::json::MAX_INPUT_BYTES {
+        assert!(chordsketch_ireal::parse_json(&s).is_err());
+    } else {
+        // Still rejected — by the input-bytes cap before reaching the
+        // array-length cap. Both rejections satisfy this test's intent.
+        assert!(chordsketch_ireal::parse_json(&s).is_err());
+    }
+}
+
+#[test]
+fn json_round_trip_rejects_out_of_range_transpose() {
+    // Documented contract on `IrealSong.transpose` is `[-11, 11]`. The
+    // deserializer enforces the contract so a hand-written snapshot
+    // outside the range cannot land an invalid AST.
+    let json = "{\
+\"title\":\"\",\
+\"composer\":null,\
+\"style\":null,\
+\"key_signature\":{\"root\":{\"note\":\"C\",\"accidental\":\"natural\"},\"mode\":\"major\"},\
+\"time_signature\":{\"numerator\":4,\"denominator\":4},\
+\"tempo\":null,\
+\"transpose\":12,\
+\"sections\":[]\
+}";
+    let err = IrealSong::from_json_str(json).expect_err("must reject transpose=12");
+    assert!(err.message.contains("transpose"), "unexpected: {err}");
+}
+
+#[test]
+fn json_round_trip_rejects_invalid_chord_root_note() {
+    // `ChordRoot.note` is documented A..=G uppercase ASCII. A lowercase
+    // letter or non-letter is a structural lie that must not survive a
+    // round-trip.
+    let json = "{\
+\"title\":\"\",\
+\"composer\":null,\
+\"style\":null,\
+\"key_signature\":{\"root\":{\"note\":\"x\",\"accidental\":\"natural\"},\"mode\":\"major\"},\
+\"time_signature\":{\"numerator\":4,\"denominator\":4},\
+\"tempo\":null,\
+\"transpose\":0,\
+\"sections\":[]\
+}";
+    let err = IrealSong::from_json_str(json).expect_err("must reject note='x'");
+    assert!(err.message.contains("A..=G"), "unexpected: {err}");
+}
+
+#[test]
+fn json_round_trip_rejects_zero_tempo() {
+    // 0 BPM is meaningless; the serializer emits `null` for "no tempo
+    // recorded" and never `0`.
+    let json = "{\
+\"title\":\"\",\
+\"composer\":null,\
+\"style\":null,\
+\"key_signature\":{\"root\":{\"note\":\"C\",\"accidental\":\"natural\"},\"mode\":\"major\"},\
+\"time_signature\":{\"numerator\":4,\"denominator\":4},\
+\"tempo\":0,\
+\"transpose\":0,\
+\"sections\":[]\
+}";
+    let err = IrealSong::from_json_str(json).expect_err("must reject tempo=0");
+    assert!(err.message.contains("tempo"), "unexpected: {err}");
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

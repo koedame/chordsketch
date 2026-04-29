@@ -158,10 +158,56 @@ Format properties relied on by golden tests:
 
 The deserializer is round-trip-only: it accepts exactly the subset
 of JSON the serializer emits (no booleans, no floats, no trailing
-commas, no duplicate keys, no surrogate-pair `\u` escapes) and
-rejects anything else. Widening one half of the pair without the
-other is a structural defect — see the `json_round_trip_*` tests
-in `tests/ast.rs`.
+commas, no leading-zero or `-0` integers, no duplicate keys, no
+surrogate-pair `\u` escapes) and rejects anything else. Widening
+one half of the pair without the other is a structural defect —
+see the `json_round_trip_*` tests in `tests/ast.rs`.
+
+The deserializer additionally enforces value-range invariants the
+type system does not encode:
+
+- `IrealSong.transpose` clamped to `[-11, 11]` (matches the
+  `chordsketch-chordpro` clamp).
+- `IrealSong.tempo` rejected when `Some(0)`; "no tempo recorded"
+  is `None`.
+- `ChordRoot.note` restricted to ASCII `A..=G` uppercase.
+- `Ending::new(0)` and `BeatPosition::on_beat(0)` rejected via the
+  `NonZeroU8` field types.
+- `TimeSignature::new` enforces `numerator: 1..=12` and
+  `denominator ∈ {2, 4, 8}`.
+
+Out-of-range values produced by the serializer (i.e. supplied via
+direct `pub` field mutation, bypassing the validating constructors)
+will round-trip-fail in the deserializer — that is the load-bearing
+property of the round-trip-only contract.
+
+### Resource limits
+
+`parse_json` enforces:
+
+| Constant | Default |
+|---|---|
+| `MAX_INPUT_BYTES` | 4 MiB |
+| `MAX_DEPTH` | 128 |
+| `MAX_ARRAY_LEN` | 65 536 |
+| `MAX_OBJECT_FIELDS` | 65 536 |
+| `MAX_STRING_CHARS` | 1 048 576 |
+
+These bounds are documented `pub const`s and changing any of them
+is a review-required change. The duplicate-key check uses
+`BTreeSet<String>` to keep the per-object cost `O(n log n)`.
+
+### Diagnostic position semantics
+
+`JsonError::position` is the byte index in the source string where
+the parser detected the problem. For errors raised by the
+post-parse AST extractors (missing field, wrong variant tag, value
+out of documented range), the position is `0` because the parsed
+[`crate::json::JsonValue`] tree does not preserve source spans;
+the `message` is the only diagnostic for those cases. This is a
+deliberate trade-off — adding spans to the value tree would
+complicate every implementation of `FromJson` for marginal benefit
+in a debug-only format.
 
 If any property above changes, the tests
 `json_serialization_is_byte_stable`,

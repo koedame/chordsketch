@@ -363,6 +363,81 @@ impl ToJson for MusicalSymbol {
 // the top of this module and rejects anything outside that grammar with
 // `JsonError`. Parser scope and AST scope evolve together; widening one
 // without the other is a structural defect.
+//
+// # Resource limits
+//
+// The parser is intended for trusted debug-snapshot input but is hardened
+// for adversarial use anyway, because the AST surface is reachable from
+// every iReal-related follow-up crate and the bindings in #2067. Hard
+// limits below are documented constants — tweaking any of them is a
+// review-required change because raising the bound on adversarial input
+// linearly raises the worst-case memory cost.
+
+/// Hard cap on the input byte length accepted by [`parse_json`]. Larger
+/// inputs are rejected up-front so a single very-long string cannot
+/// dominate the heap.
+pub const MAX_INPUT_BYTES: usize = 4 * 1024 * 1024;
+
+/// Maximum nesting depth (objects + arrays). Protects against
+/// stack-overflow crashes from inputs like `[[[[[[…`.
+pub const MAX_DEPTH: u16 = 128;
+
+/// Maximum number of elements in any single array.
+pub const MAX_ARRAY_LEN: usize = 65_536;
+
+/// Maximum number of fields in any single object.
+pub const MAX_OBJECT_FIELDS: usize = 65_536;
+
+/// Maximum decoded length of any single JSON string in characters
+/// (after escape decoding). Keeps individual string-allocation cost
+/// bounded so a 4 MB input cannot decode into a much larger heap value.
+pub const MAX_STRING_CHARS: usize = 1 << 20;
+
+fn utf8_lead_width(b: u8) -> Option<usize> {
+    // Maps a UTF-8 leading byte to its scalar width in bytes. Returns
+    // `None` for continuation bytes (0x80..=0xBF) and invalid lead bytes
+    // (0xF8..). The single-byte ASCII case is handled by the caller.
+    if b < 0x80 {
+        Some(1)
+    } else if b < 0xC0 {
+        None
+    } else if b < 0xE0 {
+        Some(2)
+    } else if b < 0xF0 {
+        Some(3)
+    } else if b < 0xF8 {
+        Some(4)
+    } else {
+        None
+    }
+}
+
+fn truncate_for_message(s: &str) -> String {
+    // Cap user-controlled bytes that flow into `JsonError::message` so the
+    // error-string size stays bounded even if upstream relaxes
+    // `MAX_STRING_CHARS`. 64 chars is enough to identify a key/value
+    // without dominating a log line.
+    const LIMIT: usize = 64;
+    let mut out = String::new();
+    out.push('"');
+    for (i, ch) in s.chars().enumerate() {
+        if i >= LIMIT {
+            out.push('…');
+            break;
+        }
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c if (c as u32) < 0x20 => {
+                use core::fmt::Write;
+                let _ = write!(out, "\\u{:04x}", c as u32);
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
 
 /// An error produced by [`parse_json`] or one of the [`FromJson`] impls.
 ///
@@ -421,8 +496,13 @@ impl JsonValue {
                 .iter()
                 .find(|(k, _)| k == key)
                 .map(|(_, v)| v)
-                .ok_or_else(|| JsonError::new(0, format!("missing field {key:?}"))),
-            _ => Err(JsonError::new(0, format!("expected object for {key:?}"))),
+                .ok_or_else(|| {
+                    JsonError::new(0, format!("missing field {}", truncate_for_message(key)))
+                }),
+            _ => Err(JsonError::new(
+                0,
+                format!("expected object for {}", truncate_for_message(key)),
+            )),
         }
     }
 
@@ -468,15 +548,33 @@ impl JsonValue {
 ///
 /// The parser accepts only the subset of JSON that the [`ToJson`] impls in
 /// this module emit. In particular, floating-point numbers, booleans,
-/// trailing commas, and unquoted keys are rejected — see the module-level
-/// documentation for the format definition.
+/// trailing commas, leading-zero integers, and unquoted keys are rejected —
+/// see the module-level documentation for the format definition.
+///
+/// # Resource limits
+///
+/// The parser enforces [`MAX_INPUT_BYTES`], [`MAX_DEPTH`], [`MAX_ARRAY_LEN`],
+/// [`MAX_OBJECT_FIELDS`], and [`MAX_STRING_CHARS`]; inputs that exceed any
+/// of these bounds are rejected with a descriptive [`JsonError`] rather
+/// than allocating without bound. The constants are documented above.
 ///
 /// # Errors
 ///
 /// Returns `Err(JsonError)` if the input violates the supported subset
 /// (unexpected tokens, unterminated strings, duplicate object keys, integer
-/// overflow, leftover bytes after the top-level value, etc.).
+/// overflow, leftover bytes after the top-level value, etc.) or any of the
+/// resource limits documented above.
+#[must_use = "ignoring a parse result drops every error this function exists to surface"]
 pub fn parse_json(input: &str) -> Result<JsonValue, JsonError> {
+    if input.len() > MAX_INPUT_BYTES {
+        return Err(JsonError::new(
+            0,
+            format!(
+                "input length {} exceeds MAX_INPUT_BYTES ({MAX_INPUT_BYTES})",
+                input.len()
+            ),
+        ));
+    }
     let mut parser = Parser::new(input);
     let value = parser.parse_value()?;
     parser.skip_ws();
@@ -492,6 +590,9 @@ pub fn parse_json(input: &str) -> Result<JsonValue, JsonError> {
 struct Parser<'a> {
     bytes: &'a [u8],
     pos: usize,
+    /// Current nesting depth of arrays + objects. Increment on entry,
+    /// decrement on exit, reject above [`MAX_DEPTH`].
+    depth: u16,
 }
 
 impl<'a> Parser<'a> {
@@ -499,7 +600,25 @@ impl<'a> Parser<'a> {
         Self {
             bytes: input.as_bytes(),
             pos: 0,
+            depth: 0,
         }
+    }
+
+    fn enter_container(&mut self) -> Result<(), JsonError> {
+        if self.depth >= MAX_DEPTH {
+            return Err(JsonError::new(
+                self.pos,
+                format!("nesting depth exceeds MAX_DEPTH ({MAX_DEPTH})"),
+            ));
+        }
+        self.depth += 1;
+        Ok(())
+    }
+
+    fn leave_container(&mut self) {
+        // Decrement is bounds-safe because every `leave_container` is paired
+        // with a successful `enter_container` earlier in the call stack.
+        self.depth = self.depth.saturating_sub(1);
     }
 
     fn skip_ws(&mut self) {
@@ -564,7 +683,8 @@ impl<'a> Parser<'a> {
 
     fn parse_integer(&mut self) -> Result<JsonValue, JsonError> {
         let start = self.pos;
-        if self.peek() == Some(b'-') {
+        let negative = self.peek() == Some(b'-');
+        if negative {
             self.pos += 1;
         }
         let digit_start = self.pos;
@@ -577,6 +697,22 @@ impl<'a> Parser<'a> {
         }
         if self.pos == digit_start {
             return Err(JsonError::new(start, "expected digit".to_string()));
+        }
+        // RFC 8259 §6 forbids leading zeros (and `-0` is not produced by
+        // the serializer). Rejecting them here keeps the deserializer
+        // round-trip-only and prevents drift between hand-written
+        // snapshots and the serializer's output.
+        if self.bytes[digit_start] == b'0' && self.pos - digit_start > 1 {
+            return Err(JsonError::new(
+                digit_start,
+                "leading zeros are not permitted".to_string(),
+            ));
+        }
+        if negative && self.bytes[digit_start] == b'0' && self.pos - digit_start == 1 {
+            return Err(JsonError::new(
+                start,
+                "negative zero is not permitted".to_string(),
+            ));
         }
         if matches!(self.peek(), Some(b'.' | b'e' | b'E')) {
             return Err(JsonError::new(
@@ -596,7 +732,14 @@ impl<'a> Parser<'a> {
     fn parse_string(&mut self) -> Result<String, JsonError> {
         self.expect_byte(b'"')?;
         let mut out = String::new();
+        let mut chars_decoded: usize = 0;
         loop {
+            if chars_decoded > MAX_STRING_CHARS {
+                return Err(JsonError::new(
+                    self.pos,
+                    format!("decoded string exceeds MAX_STRING_CHARS ({MAX_STRING_CHARS})"),
+                ));
+            }
             match self.peek() {
                 Some(b'"') => {
                     self.pos += 1;
@@ -632,7 +775,16 @@ impl<'a> Parser<'a> {
                             // The serializer only emits `\uXXXX` for C0
                             // controls (U+0000..U+001F), which are all
                             // single-unit BMP scalars. UTF-16 surrogate
-                            // pairs are out of scope and rejected here.
+                            // pairs (`U+D800..=U+DFFF`) and any out-of-
+                            // range code unit are rejected here so a
+                            // hand-written snapshot cannot synthesise an
+                            // input the serializer would never emit.
+                            if (0xD800..=0xDFFF).contains(&code) {
+                                return Err(JsonError::new(
+                                    hex_start,
+                                    "surrogate-pair \\u escapes are not supported".to_string(),
+                                ));
+                            }
                             let ch = char::from_u32(code).ok_or_else(|| {
                                 JsonError::new(
                                     hex_start,
@@ -641,6 +793,7 @@ impl<'a> Parser<'a> {
                             })?;
                             out.push(ch);
                             self.pos += 4;
+                            chars_decoded += 1;
                         }
                         other => {
                             return Err(JsonError::new(
@@ -656,17 +809,34 @@ impl<'a> Parser<'a> {
                         format!("unescaped control byte 0x{b:02x} in string"),
                     ));
                 }
-                Some(_) => {
-                    // Decode one UTF-8 scalar at `self.pos` so multi-byte
-                    // characters are not split. Falling back to byte-level
-                    // copying would corrupt non-ASCII content.
-                    let rest = &self.bytes[self.pos..];
-                    let s = core::str::from_utf8(rest).map_err(|_| {
+                Some(b) if b < 0x80 => {
+                    // ASCII non-control byte: copy directly.
+                    out.push(b as char);
+                    self.pos += 1;
+                    chars_decoded += 1;
+                }
+                Some(b) => {
+                    // Multi-byte UTF-8 scalar. The leading byte determines
+                    // the width (2/3/4); the input is a `&str`, so the
+                    // remaining bytes are guaranteed to form a valid
+                    // continuation, but we validate the bounded slice to
+                    // avoid an unsafe `from_utf8_unchecked` and to keep
+                    // the work O(1) per char (the previous implementation
+                    // re-validated the entire remainder, which was O(N²)
+                    // on long non-ASCII strings).
+                    let width = utf8_lead_width(b).ok_or_else(|| {
+                        JsonError::new(self.pos, "invalid UTF-8 lead byte in string".to_string())
+                    })?;
+                    let chunk = self.bytes.get(self.pos..self.pos + width).ok_or_else(|| {
+                        JsonError::new(self.pos, "truncated UTF-8 sequence".to_string())
+                    })?;
+                    let s = core::str::from_utf8(chunk).map_err(|_| {
                         JsonError::new(self.pos, "invalid UTF-8 in string".to_string())
                     })?;
                     let ch = s.chars().next().expect("string is non-empty");
                     out.push(ch);
-                    self.pos += ch.len_utf8();
+                    self.pos += width;
+                    chars_decoded += 1;
                 }
                 None => {
                     return Err(JsonError::new(self.pos, "unterminated string".to_string()));
@@ -677,13 +847,21 @@ impl<'a> Parser<'a> {
 
     fn parse_array(&mut self) -> Result<JsonValue, JsonError> {
         self.expect_byte(b'[')?;
+        self.enter_container()?;
         self.skip_ws();
         let mut items = Vec::new();
         if self.peek() == Some(b']') {
             self.pos += 1;
+            self.leave_container();
             return Ok(JsonValue::Array(items));
         }
         loop {
+            if items.len() >= MAX_ARRAY_LEN {
+                return Err(JsonError::new(
+                    self.pos,
+                    format!("array length exceeds MAX_ARRAY_LEN ({MAX_ARRAY_LEN})"),
+                ));
+            }
             let value = self.parse_value()?;
             items.push(value);
             self.skip_ws();
@@ -694,6 +872,7 @@ impl<'a> Parser<'a> {
                 }
                 Some(b']') => {
                     self.pos += 1;
+                    self.leave_container();
                     return Ok(JsonValue::Array(items));
                 }
                 Some(b) => {
@@ -710,26 +889,39 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_object(&mut self) -> Result<JsonValue, JsonError> {
+        use std::collections::BTreeSet;
         self.expect_byte(b'{')?;
+        self.enter_container()?;
         self.skip_ws();
         let mut fields: Vec<(String, JsonValue)> = Vec::new();
+        let mut seen: BTreeSet<String> = BTreeSet::new();
         if self.peek() == Some(b'}') {
             self.pos += 1;
+            self.leave_container();
             return Ok(JsonValue::Object(fields));
         }
         loop {
+            if fields.len() >= MAX_OBJECT_FIELDS {
+                return Err(JsonError::new(
+                    self.pos,
+                    format!("object has more than MAX_OBJECT_FIELDS ({MAX_OBJECT_FIELDS}) fields"),
+                ));
+            }
             self.skip_ws();
             let key_pos = self.pos;
             let key = self.parse_string()?;
-            if fields.iter().any(|(k, _)| k == &key) {
+            // O(log n) duplicate-key check; the previous linear scan was
+            // quadratic on adversarial wide objects.
+            if seen.contains(&key) {
                 return Err(JsonError::new(
                     key_pos,
-                    format!("duplicate object key {key:?}"),
+                    format!("duplicate object key {}", truncate_for_message(&key)),
                 ));
             }
             self.skip_ws();
             self.expect_byte(b':')?;
             let value = self.parse_value()?;
+            seen.insert(key.clone());
             fields.push((key, value));
             self.skip_ws();
             match self.peek() {
@@ -738,6 +930,7 @@ impl<'a> Parser<'a> {
                 }
                 Some(b'}') => {
                     self.pos += 1;
+                    self.leave_container();
                     return Ok(JsonValue::Object(fields));
                 }
                 Some(b) => {
@@ -773,6 +966,7 @@ pub trait FromJson: Sized {
     /// when a required field is missing, or when a field carries a value
     /// outside the expected shape (e.g. a `numerator` of `0` for
     /// [`TimeSignature`]).
+    #[must_use = "ignoring a parse result drops every error this method exists to surface"]
     fn from_json_str(input: &str) -> Result<Self, JsonError> {
         let value = parse_json(input)?;
         Self::from_json_value(&value)
@@ -785,6 +979,7 @@ pub trait FromJson: Sized {
     /// # Errors
     ///
     /// See [`FromJson::from_json_str`].
+    #[must_use = "ignoring a parse result drops every error this method exists to surface"]
     fn from_json_value(value: &JsonValue) -> Result<Self, JsonError>;
 }
 
@@ -822,6 +1017,22 @@ fn extract_i8(value: &JsonValue) -> Result<i8, JsonError> {
     i8::try_from(n).map_err(|_| JsonError::new(0, format!("integer {n} out of i8 range")))
 }
 
+fn extract_root_note(value: &JsonValue) -> Result<char, JsonError> {
+    // `ChordRoot::note` is documented (and asserted by the parser in
+    // #2054) as an uppercase ASCII letter `A`..=`G`. Enforce it here so
+    // a hand-written snapshot cannot inject nonsense roots that round-
+    // trip silently and then surface as crashes in #2057 (renderer) or
+    // #2052 (URL serializer).
+    let ch = extract_char(value)?;
+    if !matches!(ch, 'A'..='G') {
+        return Err(JsonError::new(
+            0,
+            format!("chord root note must be one of A..=G, got {ch:?}"),
+        ));
+    }
+    Ok(ch)
+}
+
 impl FromJson for IrealSong {
     fn from_json_value(value: &JsonValue) -> Result<Self, JsonError> {
         let title = value.get("title")?.as_str()?.to_string();
@@ -830,7 +1041,21 @@ impl FromJson for IrealSong {
         let key_signature = KeySignature::from_json_value(value.get("key_signature")?)?;
         let time_signature = TimeSignature::from_json_value(value.get("time_signature")?)?;
         let tempo = extract_opt_u16(value.get("tempo")?)?;
+        if matches!(tempo, Some(0)) {
+            return Err(JsonError::new(0, "tempo must be non-zero".to_string()));
+        }
         let transpose = extract_i8(value.get("transpose")?)?;
+        if !(-11..=11).contains(&transpose) {
+            // Mirrors the `chordsketch-chordpro` clamp and the doc-comment
+            // contract on `IrealSong::transpose`. Rejecting here keeps the
+            // round-trip-only deserializer symmetric with the serializer
+            // (which never emits a value outside this range when called on
+            // a well-constructed AST).
+            return Err(JsonError::new(
+                0,
+                format!("transpose {transpose} out of range [-11, 11]"),
+            ));
+        }
         let sections = value
             .get("sections")?
             .as_array()?
@@ -882,7 +1107,7 @@ impl FromJson for SectionLabel {
             }
             other => Err(JsonError::new(
                 0,
-                format!("unknown section label kind {other:?}"),
+                format!("unknown section label kind {}", truncate_for_message(other)),
             )),
         }
     }
@@ -929,7 +1154,10 @@ impl FromJson for BarLine {
             "final" => Ok(Self::Final),
             "open_repeat" => Ok(Self::OpenRepeat),
             "close_repeat" => Ok(Self::CloseRepeat),
-            other => Err(JsonError::new(0, format!("unknown bar line {other:?}"))),
+            other => Err(JsonError::new(
+                0,
+                format!("unknown bar line {}", truncate_for_message(other)),
+            )),
         }
     }
 }
@@ -970,7 +1198,7 @@ impl FromJson for Chord {
 
 impl FromJson for ChordRoot {
     fn from_json_value(value: &JsonValue) -> Result<Self, JsonError> {
-        let note = extract_char(value.get("note")?)?;
+        let note = extract_root_note(value.get("note")?)?;
         let accidental = Accidental::from_json_value(value.get("accidental")?)?;
         Ok(Self { note, accidental })
     }
@@ -982,7 +1210,10 @@ impl FromJson for Accidental {
             "natural" => Ok(Self::Natural),
             "flat" => Ok(Self::Flat),
             "sharp" => Ok(Self::Sharp),
-            other => Err(JsonError::new(0, format!("unknown accidental {other:?}"))),
+            other => Err(JsonError::new(
+                0,
+                format!("unknown accidental {}", truncate_for_message(other)),
+            )),
         }
     }
 }
@@ -1008,7 +1239,7 @@ impl FromJson for ChordQuality {
             }
             other => Err(JsonError::new(
                 0,
-                format!("unknown chord quality kind {other:?}"),
+                format!("unknown chord quality kind {}", truncate_for_message(other)),
             )),
         }
     }
@@ -1027,7 +1258,10 @@ impl FromJson for KeyMode {
         match value.as_str()? {
             "major" => Ok(Self::Major),
             "minor" => Ok(Self::Minor),
-            other => Err(JsonError::new(0, format!("unknown key mode {other:?}"))),
+            other => Err(JsonError::new(
+                0,
+                format!("unknown key mode {}", truncate_for_message(other)),
+            )),
         }
     }
 }
@@ -1055,7 +1289,7 @@ impl FromJson for MusicalSymbol {
             "fine" => Ok(Self::Fine),
             other => Err(JsonError::new(
                 0,
-                format!("unknown musical symbol {other:?}"),
+                format!("unknown musical symbol {}", truncate_for_message(other)),
             )),
         }
     }
