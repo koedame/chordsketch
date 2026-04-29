@@ -1,10 +1,11 @@
 import init, {
-  render_html,
   render_text,
   render_pdf,
-  render_html_with_options,
   render_text_with_options,
   render_pdf_with_options,
+  render_html_body,
+  render_html_body_with_options,
+  render_html_css,
 } from '@chordsketch/wasm';
 import { mountChordSketchUi, type Renderers } from '@chordsketch/ui-web';
 import '@chordsketch/ui-web/style.css';
@@ -16,10 +17,26 @@ import '@chordsketch/ui-web/style.css';
 // avoiding an unused options object matches the original playground
 // behaviour and keeps render-pdf's binary output deterministic against
 // the pre-extraction baseline.
+//
+// `renderHtml` returns a body-only fragment (`<style>` + `<div
+// class="song">`) rather than the full document `render_html` emits.
+// ui-web's `HTML_FRAME_TEMPLATE` then wraps that fragment in exactly
+// one `<!DOCTYPE>` / `<html>` / `<body>`. Pre-#2321 the playground
+// passed the full document through and ui-web wrapped it again,
+// producing two `<!DOCTYPE>` / `<head>` / `<body>` pairs in `srcdoc`
+// that survived only via HTML5 nested-document recovery — and
+// triggered "Blocked script execution in 'about:blank'" warnings on
+// some Chrome configurations. See #2321 §Background.
+const composeHtmlBody = (input: string, options?: { transpose?: number; config?: string }): string => {
+  const body = options
+    ? render_html_body_with_options(input, options)
+    : render_html_body(input);
+  return `<style>${render_html_css()}</style>${body}`;
+};
+
 const renderers: Renderers = {
   init: () => init(),
-  renderHtml: (input, options) =>
-    options ? render_html_with_options(input, options) : render_html(input),
+  renderHtml: (input, options) => composeHtmlBody(input, options),
   renderText: (input, options) =>
     options ? render_text_with_options(input, options) : render_text(input),
   renderPdf: (input, options) =>
