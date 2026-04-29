@@ -65,12 +65,16 @@ assert!(svg.contains("<svg "));
 | `png::render_png` | `fn render_png(song: &IrealSong, options: &PngOptions) -> Result<Vec<u8>, PngError>` | PNG rasteriser; gated behind the `png` cargo feature. Internally calls `render_svg` and rasterises via `resvg` at the supplied DPI (default 300). |
 | `png::PngOptions` | `#[non_exhaustive]` struct, `Default`, `with_dpi(u32)` | DPI configuration for `render_png`. |
 | `png::PngError` | enum, `Debug + Display + Error` | `DpiOutOfRange`, `SvgParse`, `PixmapAlloc`, `PngEncode`. |
+| `pdf::render_pdf` | `fn render_pdf(song: &IrealSong, options: &PdfOptions) -> Result<Vec<u8>, PdfError>` | PDF converter; gated behind the `pdf` cargo feature. Internally calls `render_svg` and converts via `svg2pdf` to a single-page A4 PDF. |
+| `pdf::PdfOptions` | `#[non_exhaustive]` struct, `Default` | Configuration carrier for `render_pdf` (currently empty; struct kept for forward-compatibility). |
+| `pdf::PdfError` | enum, `Debug + Display + Error` | `SvgParse`, `Conversion`. |
 
 ## Cargo features
 
 | Feature | Default? | Notes |
 |---|---|---|
 | `png` | off | Enables `png::render_png` + `PngOptions` + `PngError`. Pulls in `resvg` and `tiny-skia`. Off by default to keep the SVG-only consumer's transitive-dep surface small. |
+| `pdf` | off | Enables `pdf::render_pdf` + `PdfOptions` + `PdfError`. Pulls in `svg2pdf` (and its transitive `usvg` / `pdf-writer` / `subsetter` stack). Off by default for the same reason as `png`. |
 
 ## PNG rasterisation
 
@@ -89,6 +93,25 @@ DPI scaling assumes the SVG viewBox is in CSS px (1 px = 1/96 inch),
 matching the [CSS Values 4](https://www.w3.org/TR/css-values-4/#absolute-lengths)
 absolute-length definition. The supported DPI range is `1..=1200`;
 out-of-range values return `PngError::DpiOutOfRange`.
+
+## PDF conversion
+
+```rust,ignore
+// Cargo.toml: chordsketch-render-ireal = { version = "VERSION", features = ["pdf"] }
+use chordsketch_ireal::IrealSong;
+use chordsketch_render_ireal::pdf::{render_pdf, PdfOptions};
+
+let song = IrealSong::new();
+let pdf = render_pdf(&song, &PdfOptions::default())?;
+assert_eq!(&pdf[..5], b"%PDF-");
+# Ok::<(), chordsketch_render_ireal::pdf::PdfError>(())
+```
+
+Emits a single-page A4 PDF (595 × 842 pt) with the chart as
+embedded vector content. Letter-sized output and multi-page
+overflow handling are deferred — the SVG renderer is itself
+single-page, so multi-page PDF would need SVG-side pagination
+first.
 
 ## Layout
 
@@ -115,7 +138,7 @@ divided into:
 | Feature | Tracking issue |
 |---|---|
 | Bravura SMuFL font for high-fidelity music glyphs | [#2062](https://github.com/koedame/chordsketch/issues/2062) (deferred — current SVG primitive approximations avoid embedding a megabyte-scale font in every export; measure the subset before re-proposing) |
-| PDF output layer | [#2063](https://github.com/koedame/chordsketch/issues/2063) |
+| Letter page size + multi-page PDF overflow | follow-up of [#2063](https://github.com/koedame/chordsketch/issues/2063) (current PDF emits single-page A4) |
 
 ## Regenerating the golden fixtures
 
