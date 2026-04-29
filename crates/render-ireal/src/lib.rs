@@ -304,7 +304,7 @@ fn write_bar_chord_text(out: &mut String, cell: &BarCoord, chords: &[BarChord]) 
     let text_x = cell.x + cell.width / 2;
     // Centre the chord text inside the cell. The 0.62 y-fraction
     // matches iReal Pro's baseline placement (slightly above
-    // mid-cell) so the future barline overlay (#2059) sits
+    // mid-cell) so the barline overlay (landed in #2059) sits
     // beneath without collision.
     let text_y = cell.y + (cell.height * 62) / 100;
     out.push_str(&format!(

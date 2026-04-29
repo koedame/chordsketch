@@ -77,8 +77,8 @@ fn render_barline(cell: &BarCoord, kind: BarLine, side: BarlineSide) -> String {
         BarLine::Single => String::new(),
         BarLine::Double => double_line(edge_x, side, y_top, y_bottom),
         BarLine::Final => final_line(edge_x, side, y_top, y_bottom),
-        BarLine::OpenRepeat => open_repeat(edge_x, side, y_top, y_bottom, cell.y, cell.height),
-        BarLine::CloseRepeat => close_repeat(edge_x, side, y_top, y_bottom, cell.y, cell.height),
+        BarLine::OpenRepeat => open_repeat(edge_x, side, y_top, y_bottom),
+        BarLine::CloseRepeat => close_repeat(edge_x, side, y_top, y_bottom),
     }
 }
 
@@ -137,14 +137,7 @@ fn final_line(edge_x: i32, side: BarlineSide, y_top: i32, y_bottom: i32) -> Stri
     out
 }
 
-fn open_repeat(
-    edge_x: i32,
-    side: BarlineSide,
-    y_top: i32,
-    y_bottom: i32,
-    cell_y: i32,
-    cell_h: i32,
-) -> String {
+fn open_repeat(edge_x: i32, side: BarlineSide, y_top: i32, y_bottom: i32) -> String {
     // `OpenRepeat` opens a repeat block, so the loud edge faces
     // out (toward the previous bar / row start). Layout from
     // outside to inside:
@@ -158,12 +151,10 @@ fn open_repeat(
         BarlineSide::Left => edge_x + 2 * BARLINE_GAP + REPEAT_DOT_R + 1,
         BarlineSide::Right => edge_x - 2 * BARLINE_GAP - REPEAT_DOT_R - 1,
     };
-    let thick_y_top = y_top;
-    let thick_y_bottom = y_bottom;
     out.push_str(&vertical_line(
         edge_x,
-        thick_y_top,
-        thick_y_bottom,
+        y_top,
+        y_bottom,
         2 * THICK_HALF_WIDTH + 1,
         "barline-repeat-thick",
     ));
@@ -174,7 +165,7 @@ fn open_repeat(
         1,
         "barline-repeat-thin",
     ));
-    let cell_centre = cell_y + cell_h / 2;
+    let cell_centre = (y_top + y_bottom) / 2;
     out.push_str(&dot(
         dots_x,
         cell_centre - REPEAT_DOT_OFFSET,
@@ -188,14 +179,7 @@ fn open_repeat(
     out
 }
 
-fn close_repeat(
-    edge_x: i32,
-    side: BarlineSide,
-    y_top: i32,
-    y_bottom: i32,
-    cell_y: i32,
-    cell_h: i32,
-) -> String {
+fn close_repeat(edge_x: i32, side: BarlineSide, y_top: i32, y_bottom: i32) -> String {
     // Mirror of `open_repeat`: the loud edge faces the bar's exit
     // boundary, so the dots sit on the cell-interior side and the
     // thick line sits on the outside.
@@ -208,14 +192,15 @@ fn close_repeat(
         BarlineSide::Left => edge_x + 2 * BARLINE_GAP + REPEAT_DOT_R + 1,
         BarlineSide::Right => edge_x - 2 * BARLINE_GAP - REPEAT_DOT_R - 1,
     };
+    let cell_centre = (y_top + y_bottom) / 2;
     out.push_str(&dot(
         dots_x,
-        cell_y + cell_h / 2 - REPEAT_DOT_OFFSET,
+        cell_centre - REPEAT_DOT_OFFSET,
         "barline-repeat-dot",
     ));
     out.push_str(&dot(
         dots_x,
-        cell_y + cell_h / 2 + REPEAT_DOT_OFFSET,
+        cell_centre + REPEAT_DOT_OFFSET,
         "barline-repeat-dot",
     ));
     out.push_str(&vertical_line(
