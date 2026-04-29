@@ -69,7 +69,7 @@ following hold:
    the existing "inspects the full check rollup" clause.
 
 3. **Auto-review converged.** The latest auto-review delta
-   reported "No findings" / "Ready for human merge" against the
+   reported "No findings" / "Ready for merge" against the
    PR's HEAD commit. If the bot's own most recent fix commit
    produced a new auto-review iteration, that iteration must
    have completed and converged.
@@ -81,7 +81,7 @@ following hold:
    speculative-merge CI run and are still prohibited.
 
 If any of (1)–(4) is not satisfied, the assistant posts the
-existing "Ready for human merge" comment and waits.
+existing "Ready for merge" comment and waits.
 
 ## Rationale
 
@@ -155,11 +155,12 @@ failure surface.
 **Gained:**
 
 - The "Ready for human merge → user enqueues by hand" handoff
-  becomes "Ready for human merge → if pre-authorised, the
+  becomes "Ready for merge → if pre-authorised, the
   assistant enqueues; otherwise, comment and wait." Removes a
   per-PR ping for green PRs the user has already authorised.
-- The hook denial flow that triggered this ADR no longer fires
-  on grants the user actually intended.
+- The Claude Code pre-tool-use hook that blocked `gh pr merge`
+  commands under the old absolute prohibition no longer fires on
+  grants the user actually intended.
 
 **Negative:**
 
@@ -210,6 +211,3 @@ failure surface.
 - `.claude/rules/pr-workflow.md` "Why bots do not merge"
   section — superseded by the conditional clauses introduced
   in this ADR.
-- Memory `feedback_no_bot_merge` — superseded; the persistent
-  memory will be updated to reflect the new policy in a
-  later session.
