@@ -276,3 +276,179 @@ fn multi_chord_bar() -> IrealSong {
 fn render_multi_chord_bar() {
     check_golden("multi_chord_bar", &multi_chord_bar());
 }
+
+// ---------------------------------------------------------------------------
+// Marker fixtures (per #2059 AC: "Golden SVG fixtures for each marker type")
+// ---------------------------------------------------------------------------
+
+use chordsketch_ireal::{BarLine, Ending};
+
+/// Bar with explicit start/end barlines and chord. Shorthand for the
+/// repeats / final-barline fixtures below.
+fn marked_bar(start: BarLine, end: BarLine, note: char, q: ChordQuality) -> Bar {
+    Bar {
+        start,
+        end,
+        chords: vec![BarChord {
+            chord: Chord::triad(ChordRoot::natural(note), q),
+            position: BeatPosition::on_beat(1).unwrap(),
+        }],
+        ..Bar::new()
+    }
+}
+
+/// Bar with an N-th-ending tag plus a chord.
+fn ending_bar(n: u8, note: char, q: ChordQuality) -> Bar {
+    Bar {
+        ending: Ending::new(n),
+        chords: vec![BarChord {
+            chord: Chord::triad(ChordRoot::natural(note), q),
+            position: BeatPosition::on_beat(1).unwrap(),
+        }],
+        ..Bar::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Fixture: open / close repeat barlines
+// ---------------------------------------------------------------------------
+
+fn repeats_demo() -> IrealSong {
+    let mut song = IrealSong::new();
+    song.title = "Repeats Demo".into();
+    song.style = Some("Medium Swing".into());
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![
+            marked_bar(
+                BarLine::OpenRepeat,
+                BarLine::Single,
+                'C',
+                ChordQuality::Major7,
+            ),
+            marked_bar(BarLine::Single, BarLine::Single, 'A', ChordQuality::Minor7),
+            marked_bar(BarLine::Single, BarLine::Single, 'D', ChordQuality::Minor7),
+            marked_bar(
+                BarLine::Single,
+                BarLine::CloseRepeat,
+                'G',
+                ChordQuality::Dominant7,
+            ),
+        ],
+    });
+    song
+}
+
+#[test]
+fn render_repeats_demo() {
+    check_golden("repeats_demo", &repeats_demo());
+}
+
+// ---------------------------------------------------------------------------
+// Fixture: N-th endings (1. and 2.)
+// ---------------------------------------------------------------------------
+
+fn endings_demo() -> IrealSong {
+    let mut song = IrealSong::new();
+    song.title = "Endings Demo".into();
+    song.style = Some("Medium Swing".into());
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![
+            // Bar 1 — common run.
+            Bar {
+                chords: vec![BarChord {
+                    chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major7),
+                    position: BeatPosition::on_beat(1).unwrap(),
+                }],
+                ..Bar::new()
+            },
+            // Bars 2–3 — first ending.
+            ending_bar(1, 'A', ChordQuality::Minor7),
+            ending_bar(1, 'D', ChordQuality::Minor7),
+            // Bar 4 — second ending (single bar).
+            ending_bar(2, 'G', ChordQuality::Dominant7),
+        ],
+    });
+    song
+}
+
+#[test]
+fn render_endings_demo() {
+    check_golden("endings_demo", &endings_demo());
+}
+
+// ---------------------------------------------------------------------------
+// Fixture: section letters / verse / chorus / bridge / custom
+// ---------------------------------------------------------------------------
+
+fn section_markers_demo() -> IrealSong {
+    let mut song = IrealSong::new();
+    song.title = "Section Markers Demo".into();
+    song.style = Some("Medium Swing".into());
+    let chord_bar = || -> Bar {
+        Bar {
+            chords: vec![BarChord {
+                chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major7),
+                position: BeatPosition::on_beat(1).unwrap(),
+            }],
+            ..Bar::new()
+        }
+    };
+    song.sections.push(Section {
+        label: SectionLabel::Intro,
+        bars: vec![chord_bar()],
+    });
+    song.sections.push(Section {
+        label: SectionLabel::Verse,
+        bars: vec![chord_bar(), chord_bar()],
+    });
+    song.sections.push(Section {
+        label: SectionLabel::Chorus,
+        bars: vec![chord_bar(), chord_bar()],
+    });
+    song.sections.push(Section {
+        label: SectionLabel::Letter('B'),
+        bars: vec![chord_bar()],
+    });
+    song.sections.push(Section {
+        label: SectionLabel::Outro,
+        bars: vec![chord_bar()],
+    });
+    song
+}
+
+#[test]
+fn render_section_markers_demo() {
+    check_golden("section_markers_demo", &section_markers_demo());
+}
+
+// ---------------------------------------------------------------------------
+// Fixture: final + double barlines
+// ---------------------------------------------------------------------------
+
+fn final_barline_demo() -> IrealSong {
+    let mut song = IrealSong::new();
+    song.title = "Final Barline Demo".into();
+    song.style = Some("Medium Swing".into());
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![
+            marked_bar(BarLine::Single, BarLine::Double, 'C', ChordQuality::Major7),
+            marked_bar(BarLine::Double, BarLine::Single, 'F', ChordQuality::Major7),
+            marked_bar(
+                BarLine::Single,
+                BarLine::Single,
+                'G',
+                ChordQuality::Dominant7,
+            ),
+            marked_bar(BarLine::Single, BarLine::Final, 'C', ChordQuality::Major7),
+        ],
+    });
+    song
+}
+
+#[test]
+fn render_final_barline_demo() {
+    check_golden("final_barline_demo", &final_barline_demo());
+}

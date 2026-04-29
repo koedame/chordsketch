@@ -1,14 +1,16 @@
-//! iReal Pro chart renderer — SVG with chord-name typography.
+//! iReal Pro chart renderer — SVG with chord-name typography,
+//! repeat barlines, ending brackets, and section labels.
 //!
 //! This crate renders an [`chordsketch_ireal::IrealSong`] AST as a
 //! fixed-size SVG document. The current scope covers the page
 //! frame, the metadata header (title / composer / style / key),
-//! the 4-bars-per-line grid with section line breaks, and
-//! superscript chord-name typography (root + accidental at base
-//! size, quality / extensions raised as superscript, slash + bass
-//! back at base size). Barlines, repeat / ending brackets, and
-//! music symbols land in follow-up issues
-//! (#2059 / #2062). Tracked under
+//! the 4-bars-per-line grid with section line breaks, superscript
+//! chord-name typography (root + accidental at base size, quality
+//! / extensions raised as superscript, slash + bass back at base
+//! size), repeat / final / double barline glyphs, N-th-ending
+//! brackets with `1.` / `2.` labels, and section-letter labels
+//! above each section start. Music symbols (segno / coda / D.C.
+//! / D.S.) land in follow-up issue #2062. Tracked under
 //! [#2050](https://github.com/koedame/chordsketch/issues/2050).
 //!
 //! # Layout overview
@@ -24,10 +26,14 @@
 //!   centred chord-name `<text>` with mixed `<tspan>` runs:
 //!   root + accidental at base size, quality / extensions
 //!   raised as superscript at a smaller size, slash + bass at
-//!   base size on the original baseline. Trailing cells in a
+//!   base size on the original baseline. Bar boundaries display
+//!   the appropriate barline glyph (`Single` via the cell-rect
+//!   stroke; `Double`, `Final`, `OpenRepeat`, `CloseRepeat`
+//!   overlay the cell stroke). N-th-ending brackets and section-
+//!   letter labels sit above the row. Trailing cells in a
 //!   section's last row are filled with empty placeholders so the
-//!   visible grid stays a clean rectangle; barlines / repeats /
-//!   endings / music symbols layer on top in #2059 / #2062.
+//!   visible grid stays a clean rectangle; music symbols layer on
+//!   top in #2062.
 //!
 //! # Dependency policy
 //!
@@ -40,14 +46,17 @@
 //! # Stability
 //!
 //! Pre-1.0. The SVG output structure is expected to grow new
-//! elements (barlines, music symbols) as #2059 / #2062 land.
-//! Existing elements stay stable so that crate consumers (the
-//! playground preview, the PDF rasteriser #2063, the PNG
-//! rasteriser #2064) can rely on a small set of stable selectors
-//! / IDs (`class="title"`, `class="composer"`, `class="meta"`,
-//! `class="bar-grid"`, `class="chord"`, `class="chord-root"`,
-//! `class="chord-ext"`, `class="chord-slash"`, `class="chord-bass"`,
-//! `class="empty"`).
+//! elements (music symbols) as #2062 lands. Existing elements
+//! stay stable so that crate consumers (the playground preview,
+//! the PDF rasteriser #2063, the PNG rasteriser #2064) can rely
+//! on a small set of stable selectors / IDs (`class="title"`,
+//! `class="composer"`, `class="meta"`, `class="bar-grid"`,
+//! `class="chord"`, `class="chord-root"`, `class="chord-ext"`,
+//! `class="chord-slash"`, `class="chord-bass"`, `class="empty"`,
+//! `class="section-label"`, `class="ending-bracket"`,
+//! `class="ending-label"`, `class="barline-double"`,
+//! `class="barline-final"`, `class="barline-repeat-thick"`,
+//! `class="barline-repeat-thin"`, `class="barline-repeat-dot"`).
 //!
 //! # Example
 //!
@@ -63,8 +72,10 @@
 
 #![forbid(unsafe_code)]
 
+mod barlines;
 pub mod chord_typography;
 pub mod layout;
+mod markers;
 pub mod page;
 mod svg;
 
@@ -75,7 +86,7 @@ pub use layout::{BarCoord, EmptyCell, Layout, compute_layout};
 pub use page::{
     BAR_ROW_HEIGHT, BARS_PER_ROW, CHORD_FONT_SIZE_BASE, CHORD_FONT_SIZE_SUPERSCRIPT,
     CHORD_SUPERSCRIPT_DY, GRID_TOP, HEADER_BAND_HEIGHT, MARGIN_X, MARGIN_Y, MAX_BARS,
-    MAX_CHORDS_PER_BAR, PAGE_HEIGHT, PAGE_WIDTH,
+    MAX_CHORDS_PER_BAR, MAX_SECTIONS, PAGE_HEIGHT, PAGE_WIDTH,
 };
 
 /// Caller-supplied render configuration.
@@ -226,14 +237,19 @@ fill=\"none\" stroke=\"black\" stroke-width=\"1\"/>\n",
         ));
         let chords = chords_for_bar(song, cell);
         write_bar_chord_text(out, cell, chords);
+        // Overlay non-Single barline glyphs for the bar's start
+        // (left edge) and end (right edge). The cell rectangle's
+        // stroke already provides the simple line for `Single`,
+        // so `barlines::*` returns an empty string there.
+        if let Some(bar) = song
+            .sections
+            .get(cell.section_index)
+            .and_then(|s| s.bars.get(cell.bar_index_in_section))
+        {
+            out.push_str(&barlines::render_left_barline(cell, bar.start));
+            out.push_str(&barlines::render_right_barline(cell, bar.end));
+        }
     }
-    // Paint trailing empties AFTER all bars. With `fill="none"`
-    // SVG rectangles, paint order is invisible today — but #2059
-    // is expected to add bar-level barlines / repeat brackets
-    // and may rely on cell painting being interleaved by row.
-    // Document the contract so #2059 either preserves the
-    // bars-then-empties order or migrates to a row-interleaved
-    // emit pattern explicitly.
     for empty in &layout.trailing_empties {
         out.push_str(&format!(
             "    <rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" \
@@ -244,6 +260,10 @@ fill=\"none\" stroke=\"black\" stroke-width=\"1\" class=\"empty\"/>\n",
             h = empty.height,
         ));
     }
+    // Section labels and ending brackets sit ABOVE the cells, so
+    // paint them last to keep them on top of the row strokes.
+    out.push_str(&markers::render_section_labels(song, layout));
+    out.push_str(&markers::render_endings(song, layout));
     out.push_str("  </g>\n");
 }
 
@@ -267,7 +287,8 @@ fn chords_for_bar<'a>(song: &'a IrealSong, cell: &BarCoord) -> &'a [BarChord] {
 /// Multi-chord bars (split bars) are rendered as a single
 /// space-separated `<text>` whose children alternate per chord.
 /// Beat-aware horizontal placement (one chord per beat slot)
-/// requires bar-cell subdivision and is deferred to #2059.
+/// requires bar-cell subdivision and is deferred to a follow-up
+/// of the iReal Pro tracker (#2050).
 fn write_bar_chord_text(out: &mut String, cell: &BarCoord, chords: &[BarChord]) {
     if chords.is_empty() {
         return;
@@ -283,7 +304,7 @@ fn write_bar_chord_text(out: &mut String, cell: &BarCoord, chords: &[BarChord]) 
     let text_x = cell.x + cell.width / 2;
     // Centre the chord text inside the cell. The 0.62 y-fraction
     // matches iReal Pro's baseline placement (slightly above
-    // mid-cell) so the future barline overlay (#2059) sits
+    // mid-cell) so the barline overlay (landed in #2059) sits
     // beneath without collision.
     let text_y = cell.y + (cell.height * 62) / 100;
     out.push_str(&format!(

@@ -68,5 +68,9 @@
     <text x="360" y="501" font-family="serif" font-size="14" text-anchor="middle" class="chord"><tspan class="chord-root">B</tspan><tspan class="chord-ext" font-size="10" dy="-4">7</tspan></text>
     <rect x="424" y="470" width="131" height="50" fill="none" stroke="black" stroke-width="1"/>
     <text x="489" y="501" font-family="serif" font-size="14" text-anchor="middle" class="chord"><tspan class="chord-root">E</tspan><tspan class="chord-ext" font-size="10" dy="-4">maj7</tspan></text>
+    <text x="40" y="114" font-family="sans-serif" font-size="12" font-weight="bold" class="section-label">A</text>
+    <text x="40" y="214" font-family="sans-serif" font-size="12" font-weight="bold" class="section-label">A</text>
+    <text x="40" y="314" font-family="sans-serif" font-size="12" font-weight="bold" class="section-label">B</text>
+    <text x="40" y="414" font-family="sans-serif" font-size="12" font-weight="bold" class="section-label">A</text>
   </g>
 </svg>

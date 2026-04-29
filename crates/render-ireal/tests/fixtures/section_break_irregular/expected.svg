@@ -32,5 +32,8 @@
     <rect x="168" y="220" width="128" height="50" fill="none" stroke="black" stroke-width="1" class="empty"/>
     <rect x="296" y="220" width="128" height="50" fill="none" stroke="black" stroke-width="1" class="empty"/>
     <rect x="424" y="220" width="131" height="50" fill="none" stroke="black" stroke-width="1" class="empty"/>
+    <text x="40" y="114" font-family="sans-serif" font-size="12" font-weight="bold" class="section-label">I</text>
+    <text x="40" y="164" font-family="sans-serif" font-size="12" font-weight="bold" class="section-label">V</text>
+    <text x="40" y="264" font-family="sans-serif" font-size="12" font-weight="bold" class="section-label">O</text>
   </g>
 </svg>

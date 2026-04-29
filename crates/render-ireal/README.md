@@ -6,16 +6,19 @@
 
 [![crates.io](https://img.shields.io/crates/v/chordsketch-render-ireal)](https://crates.io/crates/chordsketch-render-ireal)
 
-iReal Pro chart renderer — SVG with chord-name typography.
+iReal Pro chart renderer — SVG with chord-name typography,
+repeat barlines, ending brackets, and section labels.
 
 This crate renders an `IrealSong` AST as a fixed-size SVG document.
 The current scope covers the page frame, the metadata header
 (title / composer / style / key), the 4-bars-per-line grid with
-section line breaks, and superscript chord-name typography (root
-+ accidental at base size, quality / extensions raised as
-superscript at a smaller size, slash + bass back at base size).
-Barlines, repeat / ending brackets, and music symbols land in
-follow-up issues (`#2059` / `#2062`).
+section line breaks, superscript chord-name typography (root +
+accidental at base size, quality / extensions raised as
+superscript at a smaller size, slash + bass back at base size),
+repeat / final / double barline glyphs, N-th-ending brackets
+with `1.` / `2.` labels, and section-letter labels above each
+section start. Music symbols (segno / coda / D.C. / D.S.) land
+in follow-up issue `#2062`.
 
 Tracked under [#2050](https://github.com/koedame/chordsketch/issues/2050).
 
@@ -82,7 +85,6 @@ divided into:
 
 | Feature | Tracking issue |
 |---|---|
-| Repeat barlines, endings, section markers | [#2059](https://github.com/koedame/chordsketch/issues/2059) |
 | Music symbols via Bravura font (segno / coda / D.C. / D.S.) | [#2062](https://github.com/koedame/chordsketch/issues/2062) |
 | PNG rasterization via resvg | [#2064](https://github.com/koedame/chordsketch/issues/2064) |
 | PDF output layer | [#2063](https://github.com/koedame/chordsketch/issues/2063) |

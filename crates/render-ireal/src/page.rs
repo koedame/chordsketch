@@ -61,6 +61,20 @@ pub const CHORD_FONT_SIZE_SUPERSCRIPT: i32 = 10;
 /// extensions.
 pub const CHORD_SUPERSCRIPT_DY: i32 = -4;
 
+/// Maximum number of sections the renderer lays out before
+/// truncating.
+///
+/// `IrealSong.sections` is `pub Vec<Section>` and unvalidated; an
+/// in-process AST consumer (FFI / NAPI / library) can therefore
+/// hand the renderer a `Vec` of arbitrary length. Without this
+/// cap, `compute_layout`'s `section_row_starts` bookkeeping would
+/// allocate proportionally to `song.sections.len()`. `1024` is
+/// far above any practical iReal Pro chart (a typical jazz
+/// standard has 1–8 sections); when the cap is hit, surplus
+/// sections are silently truncated, mirroring the `MAX_BARS` /
+/// `MAX_CHORDS_PER_BAR` posture.
+pub const MAX_SECTIONS: usize = 1024;
+
 /// Maximum number of chords the renderer lays out inside a single
 /// bar before truncating.
 ///
@@ -82,6 +96,7 @@ pub const MAX_CHORDS_PER_BAR: usize = 64;
 const _: () = assert!(BARS_PER_ROW > 0);
 const _: () = assert!(MAX_BARS > 0);
 const _: () = assert!(MAX_CHORDS_PER_BAR > 0);
+const _: () = assert!(MAX_SECTIONS > 0);
 const _: () = {
     let max_rows = MAX_BARS.div_ceil(BARS_PER_ROW);
     // Conservatively check that `row_y = GRID_TOP + row * BAR_ROW_HEIGHT`
