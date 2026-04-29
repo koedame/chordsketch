@@ -14,3 +14,21 @@ readme = "README.md"
 
 [dependencies]
 chordsketch-ireal = { version = "0.3.0", path = "../ireal" }
+
+# `resvg` and `tiny-skia` are pulled in only when the `png` feature is
+# enabled. Without the gate the default build stays at the same lean
+# transitive-dep surface as the SVG-only renderer (just
+# `chordsketch-ireal`); turning the feature on adds the SVG parser
+# (`usvg`, re-exported by `resvg`) and the rasteriser (`tiny-skia`)
+# plus their image-encoding stack. The renderer-crate dependency
+# carve-out in `CLAUDE.md` ("minimal external crates when justified")
+# applies here because pure-Rust SVG rasterisation has no zero-dep
+# alternative, and the feature gate keeps the cost off any caller
+# that does not need PNG output.
+resvg = { version = "0.47", optional = true }
+tiny-skia = { version = "0.12", optional = true }
+
+[features]
+# Enables the `render_png` function. Off by default to keep the
+# transitive-dep surface small for the SVG-only common case.
+png = ["dep:resvg", "dep:tiny-skia"]

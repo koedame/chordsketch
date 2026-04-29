@@ -46,6 +46,17 @@
 //! mirrors the zero-external-dep posture of `chordsketch-chordpro`
 //! / `chordsketch-ireal`.
 //!
+//! Enabling the `png` cargo feature additionally pulls in `resvg`
+//! and `tiny-skia` for the [`png::render_png`] rasteriser. The
+//! feature is off by default; SVG-only consumers stay on the
+//! single-dep build.
+//!
+//! # Cargo features
+//!
+//! | Feature | Default? | Notes |
+//! |---|---|---|
+//! | `png` | off | Enables [`png::render_png`] (rasterises the SVG via `resvg`). |
+//!
 //! # Stability
 //!
 //! Pre-1.0. The SVG output structure is expected to grow new
@@ -86,6 +97,8 @@ pub mod layout;
 mod markers;
 mod music_symbols;
 pub mod page;
+#[cfg(feature = "png")]
+pub mod png;
 mod svg;
 
 use chordsketch_ireal::{Accidental, BarChord, IrealSong, KeyMode};
