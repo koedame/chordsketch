@@ -29,10 +29,12 @@ use crate::{ConversionError, ConversionOutput, Converter};
 pub struct ChordProToIreal;
 
 impl Converter<Song, IrealSong> for ChordProToIreal {
-    fn convert(&self, _source: &Song) -> Result<ConversionOutput<IrealSong>, ConversionError> {
-        Err(ConversionError::NotImplemented(
-            "https://github.com/koedame/chordsketch/issues/2061",
-        ))
+    fn convert(&self, source: &Song) -> Result<ConversionOutput<IrealSong>, ConversionError> {
+        // The actual mapping logic lives in `crate::to_ireal` so
+        // the marker struct stays a thin pass-through, mirroring
+        // the iReal→ChordPro side that delegates to
+        // `crate::from_ireal`.
+        crate::to_ireal::convert(source)
     }
 }
 

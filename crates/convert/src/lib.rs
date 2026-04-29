@@ -1,12 +1,15 @@
 //! ChordPro ↔ iReal Pro format-conversion bridge.
 //!
-//! This crate is the trait scaffold for the bidirectional converter
-//! tracked under [#2050](https://github.com/koedame/chordsketch/issues/2050).
-//! It deliberately ships only the public API shape — every conversion
-//! function returns [`ConversionError::NotImplemented`] until the
-//! direction-specific follow-up issues land. Locking the surface in
-//! up front lets the bindings (#2067) and the CLI auto-detect path
-//! (#2066) reference stable types from day one.
+//! Bidirectional converter tracked under
+//! [#2050](https://github.com/koedame/chordsketch/issues/2050).
+//! Both directions are now implemented:
+//!
+//! - **iReal → ChordPro** ([#2053](https://github.com/koedame/chordsketch/issues/2053))
+//!   — near-lossless; lives in [`crate::from_ireal`].
+//! - **ChordPro → iReal** ([#2061](https://github.com/koedame/chordsketch/issues/2061))
+//!   — lossy (lyrics drop, fonts / colours / capo dropped); lives
+//!   in [`crate::to_ireal`]. Every drop surfaces as a
+//!   [`ConversionWarning`] so callers never silently lose data.
 //!
 //! # Layout
 //!
@@ -48,16 +51,14 @@
 //!
 //! ```
 //! use chordsketch_chordpro::ast::Song;
-//! use chordsketch_convert::{ConversionError, chordpro_to_ireal};
+//! use chordsketch_convert::chordpro_to_ireal;
 //!
 //! let song = Song::new();
-//! match chordpro_to_ireal(&song) {
-//!     Ok(_output) => unreachable!("scaffold returns NotImplemented"),
-//!     Err(ConversionError::NotImplemented(tracking_url)) => {
-//!         assert!(tracking_url.contains("issues/2061"));
-//!     }
-//!     Err(_) => unreachable!("scaffold only returns NotImplemented"),
-//! }
+//! let result = chordpro_to_ireal(&song).expect("conversion succeeds");
+//! // An empty source produces an empty `IrealSong` with no
+//! // warnings — there is no metadata, no lyrics, and no
+//! // sections to drop.
+//! assert!(result.warnings.is_empty());
 //! ```
 
 #![forbid(unsafe_code)]
@@ -65,6 +66,7 @@
 pub mod error;
 pub mod from_ireal;
 pub mod ireal;
+pub mod to_ireal;
 
 pub use error::{ConversionError, ConversionWarning, WarningKind};
 pub use ireal::{ChordProToIreal, IrealToChordPro, chordpro_to_ireal, ireal_to_chordpro};
