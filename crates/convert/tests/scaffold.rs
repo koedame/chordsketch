@@ -14,17 +14,19 @@ use chordsketch_convert::{
 use chordsketch_ireal::IrealSong;
 
 #[test]
-fn chordpro_to_ireal_currently_returns_not_implemented() {
+fn chordpro_to_ireal_returns_ireal_song_after_2061() {
+    // #2061 landed, so this direction now produces an
+    // `IrealSong`. Smoke check: an empty `Song::new()` source
+    // converts cleanly with no warnings (no metadata, no lines,
+    // nothing to drop). Thorough coverage lives in
+    // `crates/convert/src/to_ireal.rs` unit tests.
     let song = Song::new();
-    match chordpro_to_ireal(&song) {
-        Err(ConversionError::NotImplemented(tracking)) => {
-            assert!(
-                tracking.contains("/2061"),
-                "tracking pointer should reference #2061, got {tracking}"
-            );
-        }
-        other => panic!("expected NotImplemented, got {other:?}"),
-    }
+    let output = chordpro_to_ireal(&song).expect("post-#2061 conversion succeeds");
+    assert!(
+        output.warnings.is_empty(),
+        "empty Song should produce no warnings, got: {:?}",
+        output.warnings
+    );
 }
 
 #[test]
@@ -43,25 +45,23 @@ fn ireal_to_chordpro_returns_song_after_2053() {
 
 #[test]
 fn marker_types_dispatch_through_trait_and_free_fn() {
-    // The trait method and the free-function wrapper must agree.
-    // For ChordPro→iReal (still pre-#2061) both still return
-    // `NotImplemented` and we compare the tracking URL.
-    // For iReal→ChordPro (post-#2053) both succeed and we compare
-    // the resulting `Song::lines.len()` as a coarse equality
-    // check — the marker is stateless so the two paths must
-    // produce byte-identical outputs.
+    // The trait method and the free-function wrapper must agree
+    // in both directions. The markers are stateless so the two
+    // paths must produce byte-identical outputs; we compare the
+    // serialised JSON shape (via `chordsketch_ireal::ToJson` /
+    // `chordsketch-chordpro` line counts) as a coarse equality
+    // check.
     let chordpro = Song::new();
     let ireal = IrealSong::new();
 
-    let trait_a = match ChordProToIreal.convert(&chordpro) {
-        Err(ConversionError::NotImplemented(url)) => url,
-        other => panic!("expected NotImplemented, got {other:?}"),
-    };
-    let free_a = match chordpro_to_ireal(&chordpro) {
-        Err(ConversionError::NotImplemented(url)) => url,
-        other => panic!("expected NotImplemented, got {other:?}"),
-    };
-    assert_eq!(trait_a, free_a, "ChordProToIreal trait/free-fn divergence");
+    let trait_a = ChordProToIreal
+        .convert(&chordpro)
+        .expect("ChordProToIreal succeeds post-#2061");
+    let free_a = chordpro_to_ireal(&chordpro).expect("free-fn matches");
+    assert_eq!(
+        trait_a.output.title, free_a.output.title,
+        "ChordProToIreal trait/free-fn divergence on title"
+    );
 
     let trait_b = IrealToChordPro
         .convert(&ireal)
