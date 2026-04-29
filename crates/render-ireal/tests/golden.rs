@@ -384,6 +384,49 @@ fn slash_chord_without_quality_uses_unshifted_slash_span() {
 }
 
 #[test]
+fn multi_chord_bar_restores_baseline_between_chords() {
+    // When the first chord in a split bar has an Extension span (e.g.
+    // Minor7), the SVG `dy` cursor is raised after it. Without an
+    // explicit restore on the inter-chord separator, every subsequent
+    // chord's root renders at the wrong (raised) baseline.
+    //
+    // This test verifies that the separator `<tspan>` carries the
+    // inverse `dy` and base `font-size` so the second chord's root
+    // lands on the cell baseline.
+    let bar = Bar {
+        chords: vec![
+            BarChord {
+                chord: Chord::triad(ChordRoot::natural('A'), ChordQuality::Minor7),
+                position: BeatPosition::on_beat(1).unwrap(),
+            },
+            BarChord {
+                chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Minor7),
+                position: BeatPosition::on_beat(3).unwrap(),
+            },
+        ],
+        ..Bar::new()
+    };
+    let mut song = IrealSong::new();
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![bar],
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    // The separator between the two chords must restore the baseline:
+    // font-size restored to base and dy=+4 (inverse of the -4 raise).
+    assert!(
+        svg.contains("font-size=\"14\" dy=\"4\""),
+        "separator must carry baseline restore: {svg}"
+    );
+    // The second chord's root must follow the restored separator —
+    // confirm D root and its extension both appear.
+    assert!(
+        svg.contains("<tspan class=\"chord-root\">D</tspan>"),
+        "second chord root must appear: {svg}"
+    );
+}
+
+#[test]
 fn version_returns_nonempty_semver_string() {
     let v = version();
     assert!(!v.is_empty(), "version() must not return an empty string");

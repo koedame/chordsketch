@@ -291,12 +291,31 @@ fn write_bar_chord_text(out: &mut String, cell: &BarCoord, chords: &[BarChord]) 
 font-size=\"{base}\" text-anchor=\"middle\" class=\"chord\">",
         base = page::CHORD_FONT_SIZE_BASE,
     ));
+    // Track whether the previous chord's last span raised the SVG
+    // text cursor off the base baseline (i.e. ended with an
+    // Extension span). SVG `dy` is cumulative within a `<text>`;
+    // without an explicit restore, every subsequent glyph — including
+    // the inter-chord separator and the next chord's root — inherits
+    // the raised position and renders too high.
+    let mut prev_ended_raised = false;
     for (i, bc) in chords.iter().take(chord_limit).enumerate() {
         if i > 0 {
-            // Inter-chord separator stays on the base baseline.
-            out.push_str("<tspan>\u{00A0}</tspan>");
+            // If the previous chord ended with a raised Extension span,
+            // restore the baseline on the separator so the next chord's
+            // root lands at the cell baseline.
+            if prev_ended_raised {
+                let restore_dy = -page::CHORD_SUPERSCRIPT_DY;
+                out.push_str(&format!(
+                    "<tspan font-size=\"{base}\" dy=\"{restore_dy}\">\u{00A0}</tspan>",
+                    base = page::CHORD_FONT_SIZE_BASE,
+                ));
+            } else {
+                out.push_str("<tspan>\u{00A0}</tspan>");
+            }
         }
         let typography = chord_typography::chord_to_typography(&bc.chord);
+        prev_ended_raised =
+            matches!(typography.spans.last(), Some(s) if s.kind == SpanKind::Extension);
         write_chord_spans(out, &typography);
     }
     out.push_str("</text>\n");
