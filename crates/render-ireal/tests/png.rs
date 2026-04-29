@@ -185,3 +185,27 @@ fn png_error_display_includes_dpi() {
     );
     assert!(msg.contains(&MAX_DPI.to_string()));
 }
+
+#[test]
+fn png_error_display_covers_remaining_variants() {
+    // The other three variants (`SvgParse`, `PixmapAlloc`,
+    // `PngEncode`) only fire on internal-consistency / OOM bugs that
+    // are not reachable via `render_png` with any production input.
+    // Construct each variant directly and assert the `Display` arm
+    // includes the diagnostic payload — this is the only path that
+    // exercises the formatter for those branches and keeps the
+    // patch-coverage gate from regressing if a maintainer tweaks one
+    // of the messages.
+    let svg = format!("{}", PngError::SvgParse("unexpected token".into()));
+    assert!(svg.contains("SVG parse failed"));
+    assert!(svg.contains("unexpected token"));
+
+    let alloc = format!("{}", PngError::PixmapAlloc(123, 456));
+    assert!(alloc.contains("123"));
+    assert!(alloc.contains("456"));
+    assert!(alloc.contains("pixmap allocation failed"));
+
+    let encode = format!("{}", PngError::PngEncode("io error".into()));
+    assert!(encode.contains("PNG encode failed"));
+    assert!(encode.contains("io error"));
+}
