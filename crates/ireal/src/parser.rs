@@ -43,8 +43,11 @@ use std::fmt;
 /// Bytes-after-`irealb://` magic that marks the start of the
 /// chord-chart body. Every iReal Pro export prefixes the (still
 /// scrambled) chord chart with this constant; the parser strips
-/// it before invoking the obfusc50 unscramble.
-const MUSIC_PREFIX: &str = "1r34LbKcu7";
+/// it before invoking the obfusc50 unscramble. The serializer
+/// in `crate::serialize` consumes this constant when building
+/// the inverse music body, so it is `pub(crate)` rather than
+/// fully private.
+pub(crate) const MUSIC_PREFIX: &str = "1r34LbKcu7";
 
 /// Hard ceiling on the raw URL length the parser will accept.
 /// iReal Pro exports rarely exceed a few hundred KB even for large
