@@ -104,6 +104,12 @@ fn conversion_error_display_includes_tracking_url() {
 }
 
 #[test]
+fn version_is_nonempty() {
+    let v = chordsketch_convert::version();
+    assert!(!v.is_empty(), "version() must not return an empty string");
+}
+
+#[test]
 fn warning_kind_variants_are_distinct() {
     assert_ne!(WarningKind::LossyDrop, WarningKind::Approximated);
     assert_ne!(WarningKind::Approximated, WarningKind::Unsupported);

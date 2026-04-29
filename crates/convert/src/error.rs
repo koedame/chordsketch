@@ -65,7 +65,13 @@ impl std::error::Error for ConversionError {}
 /// lossy-but-successful runs; callers decide whether to fail on a
 /// non-empty warning list. This keeps the strictness policy in the
 /// caller's hands rather than baking it into the converter.
+///
+/// Marked `#[non_exhaustive]` so additional diagnostic fields can be
+/// appended in a follow-up PR without breaking downstream code that
+/// currently constructs `ConversionWarning` values only via
+/// [`ConversionWarning::new`].
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ConversionWarning {
     /// Class of information loss.
     pub kind: WarningKind,
