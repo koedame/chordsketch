@@ -671,6 +671,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "chordsketch-convert"
+version = "0.3.0"
+dependencies = [
+ "chordsketch-chordpro",
+ "chordsketch-ireal",
+]
+
+[[package]]
 name = "chordsketch-convert-musicxml"
 version = "0.3.0"
 dependencies = [

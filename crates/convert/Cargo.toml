@@ -1,0 +1,19 @@
+[package]
+name = "chordsketch-convert"
+version = "0.3.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["chordpro", "ireal", "music", "converter"]
+categories = ["parser-implementations", "text-processing"]
+description = "ChordPro ↔ iReal Pro format-conversion bridge (trait scaffold)"
+readme = "README.md"
+
+[dependencies]
+chordsketch-chordpro = { version = "0.3.0", path = "../chordpro" }
+chordsketch-ireal = { version = "0.3.0", path = "../ireal" }
+
+[dev-dependencies]
