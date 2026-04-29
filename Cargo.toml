@@ -10,6 +10,7 @@ members = [
     "crates/wasm",
     "crates/napi",
     "crates/ffi",
+    "crates/convert",
     "crates/convert-musicxml",
     "apps/desktop/src-tauri",
 ]
@@ -34,6 +35,7 @@ default-members = [
     "crates/wasm",
     "crates/napi",
     "crates/ffi",
+    "crates/convert",
     "crates/convert-musicxml",
 ]
 resolver = "3"
