@@ -449,28 +449,15 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
             }
         }
         // T<numerator><denominator> — time signature directive.
+        // iReal uses 2-digit packed form: T44 = 4/4, T34 = 3/4,
+        // T68 = 6/8, T128 = 12/8 (3 digits when the numerator
+        // is two-digit). Try the longer match first.
         if let Some(after_t) = rest.strip_prefix('T') {
-            let digits: String = after_t.chars().take_while(|c| c.is_ascii_digit()).collect();
-            // iReal uses 2-digit packed form: T44 = 4/4, T34 = 3/4,
-            // T68 = 6/8, T128 = 12/8 (3 digits when the numerator
-            // is two-digit). Try the longer match first.
-            if digits.len() >= 3
-                && let (Ok(num), Ok(den)) = (digits[..2].parse::<u8>(), digits[2..3].parse::<u8>())
-                && let Some(ts) = TimeSignature::new(num, den)
-            {
+            if let Some((ts, consumed)) = parse_time_signature(after_t) {
                 state.set_time_signature(ts);
-                rest = &after_t[3..];
+                rest = &after_t[consumed..];
                 continue;
             }
-            if digits.len() >= 2
-                && let (Ok(num), Ok(den)) = (digits[..1].parse::<u8>(), digits[1..2].parse::<u8>())
-                && let Some(ts) = TimeSignature::new(num, den)
-            {
-                state.set_time_signature(ts);
-                rest = &after_t[2..];
-                continue;
-            }
-            // Fall through if we cannot recognise the digit count.
         }
         if let Some(r) = rest.strip_prefix('x') {
             // "Repeat previous measure" — stays as-is in the
@@ -550,13 +537,14 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
             continue;
         }
         if let Some(after_n) = rest.strip_prefix('N') {
-            if let Some(d) = after_n.chars().next()
-                && d.is_ascii_digit()
-                && let Some(ending) = Ending::new(d.to_digit(10).unwrap() as u8)
-            {
-                state.queue_ending(ending);
-                rest = &after_n['0'.len_utf8()..];
-                continue;
+            if let Some(d) = after_n.chars().next() {
+                if let Some(digit_value) = d.to_digit(10) {
+                    if let Some(ending) = Ending::new(digit_value as u8) {
+                        state.queue_ending(ending);
+                        rest = &after_n[d.len_utf8()..];
+                        continue;
+                    }
+                }
             }
         }
         if let Some(r) = rest.strip_prefix('Z') {
@@ -589,6 +577,38 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
     state.finish_bar();
     let chart = state.into_chart();
     Ok(chart)
+}
+
+/// Parses a `Tnd` (or `Tnnd`) time-signature token from the
+/// post-`T` slice. Returns `Some((TimeSignature, consumed_bytes))`
+/// on success or `None` if the digit run does not form a
+/// recognised iReal time signature.
+///
+/// Implemented as a free function (rather than a `let`-chain
+/// inline match) because the workspace pins `rust-version = 1.85`,
+/// which predates stable `if let && let` chains (#53667 — those
+/// landed in 1.88).
+fn parse_time_signature(after_t: &str) -> Option<(TimeSignature, usize)> {
+    let digits: String = after_t.chars().take_while(|c| c.is_ascii_digit()).collect();
+    if digits.len() >= 3 {
+        let num = digits[..2].parse::<u8>().ok();
+        let den = digits[2..3].parse::<u8>().ok();
+        if let (Some(n), Some(d)) = (num, den) {
+            if let Some(ts) = TimeSignature::new(n, d) {
+                return Some((ts, 3));
+            }
+        }
+    }
+    if digits.len() >= 2 {
+        let num = digits[..1].parse::<u8>().ok();
+        let den = digits[1..2].parse::<u8>().ok();
+        if let (Some(n), Some(d)) = (num, den) {
+            if let Some(ts) = TimeSignature::new(n, d) {
+                return Some((ts, 2));
+            }
+        }
+    }
+    None
 }
 
 /// Returns the byte length of the chord token starting at
