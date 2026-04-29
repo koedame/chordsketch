@@ -267,16 +267,13 @@ fn render_bar_chord_text(chords: &[BarChord]) -> Option<String> {
     if chords.is_empty() {
         return None;
     }
+    // `format_bar_chord_line` is guaranteed non-empty for a
+    // non-empty input by `const_assert!(MAX_CHORDS_PER_BAR > 0)`
+    // in `page.rs` and `write_root` always pushing at least one
+    // character. The previous defense-in-depth `raw.is_empty()`
+    // guard was unreachable and removed per the auto-review
+    // request — coverage is the canary that the property holds.
     let raw = chord_format::format_bar_chord_line(chords);
-    // Defense-in-depth: today `format_bar_chord_line` only returns
-    // empty when `chords` is empty (already filtered above), but if
-    // a future formatter returns empty for some new edge case —
-    // e.g. all chords truncated by `MAX_CHORDS_PER_BAR` to zero —
-    // skip emitting an empty `<text>` element rather than
-    // producing malformed-but-valid SVG.
-    if raw.is_empty() {
-        return None;
-    }
     Some(svg::escape_xml(&raw))
 }
 

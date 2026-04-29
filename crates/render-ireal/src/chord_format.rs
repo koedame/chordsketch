@@ -188,6 +188,12 @@ mod tests {
     // ---- quality_glyph coverage ----
 
     #[test]
+    fn formats_minor_triad() {
+        let chord = Chord::triad(ChordRoot::natural('A'), ChordQuality::Minor);
+        assert_eq!(format_chord(&chord), "Am");
+    }
+
+    #[test]
     fn formats_diminished() {
         let chord = Chord::triad(ChordRoot::natural('B'), ChordQuality::Diminished);
         assert_eq!(format_chord(&chord), "Bdim");
