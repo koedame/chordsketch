@@ -1,17 +1,21 @@
-//! ChordPro ↔ iReal Pro conversion stubs.
+//! ChordPro ↔ iReal Pro converter dispatch.
 //!
-//! The actual implementations live in the follow-up issues:
+//! Holds the marker types for the two directions and the
+//! ergonomic free-function wrappers.
 //!
-//! - **iReal → ChordPro**: [#2053](https://github.com/koedame/chordsketch/issues/2053).
-//!   Near-lossless; tempo and style descend to ChordPro directives.
-//! - **ChordPro → iReal**: [#2061](https://github.com/koedame/chordsketch/issues/2061).
-//!   Lyrics are dropped (iReal has no lyrics surface) — that drop
-//!   surfaces as a [`crate::ConversionWarning`] with
-//!   [`crate::WarningKind::LossyDrop`].
-//!
-//! - **iReal → ChordPro** (#2053): implemented — see [`crate::from_ireal`].
-//! - **ChordPro → iReal** (#2061): not yet implemented —
-//!   [`chordpro_to_ireal`] returns [`ConversionError::NotImplemented`].
+//! - **iReal → ChordPro**
+//!   ([#2053](https://github.com/koedame/chordsketch/issues/2053)):
+//!   implemented; the [`IrealToChordPro`] marker delegates to
+//!   [`crate::from_ireal::convert`]. Near-lossless; the documented
+//!   drops live in `crates/convert/known-deviations.md`.
+//! - **ChordPro → iReal**
+//!   ([#2061](https://github.com/koedame/chordsketch/issues/2061)):
+//!   not yet implemented; [`ChordProToIreal`] still returns
+//!   [`ConversionError::NotImplemented`] pointing at the tracking
+//!   issue. Lyrics will be dropped (iReal has no lyrics surface)
+//!   — that drop will surface as a [`crate::ConversionWarning`]
+//!   with [`crate::WarningKind::LossyDrop`] when the
+//!   implementation lands.
 
 use chordsketch_chordpro::ast::Song;
 use chordsketch_ireal::IrealSong;

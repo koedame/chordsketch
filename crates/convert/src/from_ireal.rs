@@ -263,10 +263,7 @@ fn push_pre_bar_marker(segments: &mut Vec<LyricsSegment>, bar: &Bar) {
         // Push an N-th-ending marker as inline text. ChordPro has
         // no first-class ending directive; renderers can match on
         // the `1.`/`2.` text and apply formatting at their layer.
-        segments.push(LyricsSegment::text_only(format!(
-            "{}. ",
-            ending.number()
-        )));
+        segments.push(LyricsSegment::text_only(format!("{}. ", ending.number())));
     }
     // Bar opening glyph for non-Single starts. Single starts
     // inherit from the previous bar's close, so no token needed.
