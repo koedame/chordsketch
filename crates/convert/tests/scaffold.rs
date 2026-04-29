@@ -46,14 +46,34 @@ fn marker_types_implement_converter_via_trait() {
     // The free-function wrappers and the trait-method paths must
     // produce structurally equal results; if a future change
     // implements only one, this test catches the asymmetry.
+    // Asserting on the `NotImplemented` variant directly (rather
+    // than relying on `assert_eq!` of the wrapping `Result`) keeps
+    // the failure mode legible once #2053 / #2061 land and the
+    // `Ok` arm becomes reachable: a divergence would surface as a
+    // mismatched tracking URL or an unexpected variant rather than
+    // an opaque `Result` inequality.
     let chordpro = Song::new();
     let ireal = IrealSong::new();
-    let trait_a = ChordProToIreal.convert(&chordpro);
-    let free_a = chordpro_to_ireal(&chordpro);
-    assert_eq!(trait_a, free_a);
-    let trait_b = IrealToChordPro.convert(&ireal);
-    let free_b = ireal_to_chordpro(&ireal);
-    assert_eq!(trait_b, free_b);
+
+    let trait_a = match ChordProToIreal.convert(&chordpro) {
+        Err(ConversionError::NotImplemented(url)) => url,
+        other => panic!("expected NotImplemented, got {other:?}"),
+    };
+    let free_a = match chordpro_to_ireal(&chordpro) {
+        Err(ConversionError::NotImplemented(url)) => url,
+        other => panic!("expected NotImplemented, got {other:?}"),
+    };
+    assert_eq!(trait_a, free_a, "ChordProToIreal trait/free-fn divergence");
+
+    let trait_b = match IrealToChordPro.convert(&ireal) {
+        Err(ConversionError::NotImplemented(url)) => url,
+        other => panic!("expected NotImplemented, got {other:?}"),
+    };
+    let free_b = match ireal_to_chordpro(&ireal) {
+        Err(ConversionError::NotImplemented(url)) => url,
+        other => panic!("expected NotImplemented, got {other:?}"),
+    };
+    assert_eq!(trait_b, free_b, "IrealToChordPro trait/free-fn divergence");
 }
 
 #[test]

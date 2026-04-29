@@ -39,9 +39,26 @@
 //!
 //! Pre-1.0 — the trait surface is intentionally narrow so the
 //! follow-up issues can fill in implementations without breaking
-//! the bindings or CLI. Adding new `ConversionError` variants is
-//! a non-breaking change; renaming an existing variant is
-//! breaking.
+//! the bindings or CLI. [`ConversionError`] and [`WarningKind`]
+//! are both `#[non_exhaustive]`, so adding a new variant is
+//! non-breaking for downstream `match` expressions; renaming an
+//! existing variant remains breaking.
+//!
+//! # Example
+//!
+//! ```
+//! use chordsketch_chordpro::ast::Song;
+//! use chordsketch_convert::{ConversionError, chordpro_to_ireal};
+//!
+//! let song = Song::new();
+//! match chordpro_to_ireal(&song) {
+//!     Ok(_output) => unreachable!("scaffold returns NotImplemented"),
+//!     Err(ConversionError::NotImplemented(tracking_url)) => {
+//!         assert!(tracking_url.contains("issues/2061"));
+//!     }
+//!     Err(_) => unreachable!("scaffold only returns NotImplemented"),
+//! }
+//! ```
 
 #![forbid(unsafe_code)]
 
@@ -92,6 +109,24 @@ impl<T> ConversionOutput<T> {
 /// struct (or extending an existing one) and re-exporting an
 /// ergonomic free function from this crate's root.
 ///
+/// # Why a trait in addition to free functions
+///
+/// The free functions in [`crate::ireal`] are the ergonomic entry
+/// point for a known direction. The trait exists for two callers
+/// the free functions cannot serve:
+///
+/// - **Generic dispatch.** A future pipeline that runs the same
+///   ChordSketch `Song` through several converters
+///   (`Vec<Box<dyn Converter<Song, MusicXml>>>` etc.) needs a
+///   uniform type to hold them. The CLI auto-detect path (#2066)
+///   is the first concrete consumer.
+/// - **Configurable converters.** Once #2053 / #2061 land, an
+///   implementation may need configuration (strictness level,
+///   warning thresholds). A marker struct with fields holds that
+///   state; the free function then becomes a thin wrapper around
+///   the default-configured marker. Keeping the trait in place
+///   from day one avoids a breaking re-shape later.
+///
 /// # Errors
 ///
 /// Implementations return [`ConversionError`]; see that type for the
@@ -107,6 +142,7 @@ pub trait Converter<Source, Target> {
     /// See [`ConversionError`] for the documented failure modes.
     /// While the scaffold is in place every implementation returns
     /// [`ConversionError::NotImplemented`].
+    #[must_use = "ignoring a conversion result drops both warnings and errors"]
     fn convert(&self, source: &Source) -> Result<ConversionOutput<Target>, ConversionError>;
 }
 

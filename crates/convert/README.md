@@ -18,17 +18,17 @@ Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 
 ## Installation
 
-Replace `VERSION` with the latest release shown on the badge above.
+Add via `cargo add` (resolves to the latest published version automatically):
+
+```bash
+cargo add chordsketch-convert
+```
+
+Or pin manually — replace `VERSION` with the value shown on the badge above:
 
 ```toml
 [dependencies]
 chordsketch-convert = "VERSION"
-```
-
-Or via `cargo add`:
-
-```bash
-cargo add chordsketch-convert
 ```
 
 ## Quick start

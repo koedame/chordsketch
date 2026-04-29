@@ -15,5 +15,3 @@ readme = "README.md"
 [dependencies]
 chordsketch-chordpro = { version = "0.3.0", path = "../chordpro" }
 chordsketch-ireal = { version = "0.3.0", path = "../ireal" }
-
-[dev-dependencies]

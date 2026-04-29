@@ -8,12 +8,27 @@
 /// returns with real implementations; new variants are added at
 /// the bottom of the enum to preserve compatibility with code that
 /// matches on the existing variants.
+///
+/// Marked `#[non_exhaustive]` so adding a new variant in a follow-up
+/// PR is non-breaking for downstream `match` expressions, matching
+/// the additive-evolution contract documented at the crate root.
+///
+/// # Note for future implementers
+///
+/// Once #2053 / #2061 land, [`Self::InvalidSource`] and
+/// [`Self::UnrepresentableTarget`] will carry parser-derived,
+/// potentially attacker-controlled text. Implementations SHOULD
+/// truncate or sanitise their messages before constructing these
+/// variants; downstream `Display` consumers and log forwarders
+/// MUST NOT assume bounded length until that bound is enforced
+/// upstream. (Same pattern as `chordsketch_ireal::json::truncate_for_message`.)
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ConversionError {
     /// The conversion direction is recognised but not yet
     /// implemented in this crate version. The contained `&'static
-    /// str` names the issue tracking the implementation so callers
-    /// can give a useful diagnostic.
+    /// str` is the URL of the issue tracking the implementation
+    /// so callers can give a useful diagnostic.
     NotImplemented(&'static str),
     /// The source value was structurally invalid and could not be
     /// converted at all (distinct from a lossy-but-successful
@@ -25,11 +40,14 @@ pub enum ConversionError {
     UnrepresentableTarget(String),
 }
 
-impl core::fmt::Display for ConversionError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl std::fmt::Display for ConversionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NotImplemented(tracking) => {
-                write!(f, "conversion not yet implemented (tracked at {tracking})")
+            Self::NotImplemented(tracking_url) => {
+                write!(
+                    f,
+                    "conversion not yet implemented (tracked at {tracking_url})"
+                )
             }
             Self::InvalidSource(msg) => write!(f, "invalid source: {msg}"),
             Self::UnrepresentableTarget(msg) => {
@@ -70,8 +88,14 @@ impl ConversionWarning {
 /// Class of information loss in a [`ConversionWarning`].
 ///
 /// New variants are appended; existing variants are stable across
-/// minor versions.
+/// minor versions. Marked `#[non_exhaustive]` so adding a variant
+/// is non-breaking for downstream `match` arms.
+///
+/// `Copy` is intentional here because every variant is fieldless,
+/// matching the per-warning struct (`ConversionWarning`) which
+/// owns the attached message and is therefore not `Copy`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum WarningKind {
     /// A feature in the source format has no equivalent in the
     /// target format and was dropped (e.g. lyrics on a
