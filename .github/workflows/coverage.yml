@@ -66,7 +66,16 @@ jobs:
         # `chordsketch-desktop` is excluded (Tauri scaffold, covered by
         # `desktop-smoke` in ci.yml). See the matching exclusions in
         # ci.yml and .claude/rules/ci-parallelization.md.
-        run: cargo llvm-cov --workspace --exclude chordsketch-desktop --lcov --output-path lcov.info
+        #
+        # `--features chordsketch-render-ireal/png` turns on the PNG
+        # rasteriser (#2064) so its module compiles and the
+        # feature-gated `tests/png.rs` suite runs — without this,
+        # the patch coverage gate would skip the new lines because
+        # they would not be in the compiled crate.
+        run: |
+          cargo llvm-cov --workspace --exclude chordsketch-desktop \
+            --features chordsketch-render-ireal/png \
+            --lcov --output-path lcov.info
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0

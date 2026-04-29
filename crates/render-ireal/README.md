@@ -62,6 +62,33 @@ assert!(svg.contains("<svg "));
 | `compute_layout` | `fn compute_layout(song: &IrealSong) -> Layout` | Computes per-bar coordinates without rendering — useful to drive a non-SVG layout (e.g. canvas, web component grid). |
 | `chord_to_typography` | `fn chord_to_typography(chord: &Chord) -> ChordTypography` | Splits a chord into root/extension/slash/bass `<tspan>`-ready spans. Public so the future PNG (#2064) / PDF (#2063) layers can compute alternative layouts. |
 | `page::*` | `pub const i32` / `pub const usize` | Page-layout constants (`PAGE_WIDTH`, `PAGE_HEIGHT`, `MARGIN_X`, `MARGIN_Y`, `HEADER_BAND_HEIGHT`, `GRID_TOP`, `BARS_PER_ROW`, `BAR_ROW_HEIGHT`, `MAX_BARS`, `MAX_CHORDS_PER_BAR`, `CHORD_FONT_SIZE_BASE`, `CHORD_FONT_SIZE_SUPERSCRIPT`, `CHORD_SUPERSCRIPT_DY`). Changing any of them is a behavioural change that requires a fixture regen. |
+| `png::render_png` | `fn render_png(song: &IrealSong, options: &PngOptions) -> Result<Vec<u8>, PngError>` | PNG rasteriser; gated behind the `png` cargo feature. Internally calls `render_svg` and rasterises via `resvg` at the supplied DPI (default 300). |
+| `png::PngOptions` | `#[non_exhaustive]` struct, `Default`, `with_dpi(u32)` | DPI configuration for `render_png`. |
+| `png::PngError` | enum, `Debug + Display + Error` | `DpiOutOfRange`, `SvgParse`, `PixmapAlloc`, `PngEncode`. |
+
+## Cargo features
+
+| Feature | Default? | Notes |
+|---|---|---|
+| `png` | off | Enables `png::render_png` + `PngOptions` + `PngError`. Pulls in `resvg` and `tiny-skia`. Off by default to keep the SVG-only consumer's transitive-dep surface small. |
+
+## PNG rasterisation
+
+```rust,ignore
+// Cargo.toml: chordsketch-render-ireal = { version = "VERSION", features = ["png"] }
+use chordsketch_ireal::IrealSong;
+use chordsketch_render_ireal::png::{render_png, PngOptions};
+
+let song = IrealSong::new();
+let png = render_png(&song, &PngOptions::default())?;            // 300 DPI
+let lo  = render_png(&song, &PngOptions::with_dpi(150))?;        // half resolution
+# Ok::<(), chordsketch_render_ireal::png::PngError>(())
+```
+
+DPI scaling assumes the SVG viewBox is in CSS px (1 px = 1/96 inch),
+matching the [CSS Values 4](https://www.w3.org/TR/css-values-4/#absolute-lengths)
+absolute-length definition. The supported DPI range is `1..=1200`;
+out-of-range values return `PngError::DpiOutOfRange`.
 
 ## Layout
 
@@ -88,7 +115,6 @@ divided into:
 | Feature | Tracking issue |
 |---|---|
 | Bravura SMuFL font for high-fidelity music glyphs | [#2062](https://github.com/koedame/chordsketch/issues/2062) (deferred — current SVG primitive approximations avoid embedding a megabyte-scale font in every export; measure the subset before re-proposing) |
-| PNG rasterization via resvg | [#2064](https://github.com/koedame/chordsketch/issues/2064) |
 | PDF output layer | [#2063](https://github.com/koedame/chordsketch/issues/2063) |
 
 ## Regenerating the golden fixtures

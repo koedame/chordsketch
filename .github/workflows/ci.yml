@@ -64,6 +64,14 @@ jobs:
         # coverage is tracked in #2077.
         run: cargo clippy --workspace --exclude chordsketch-desktop --all-targets -- -D warnings
 
+      - name: Clippy lints (chordsketch-render-ireal --features png)
+        # The `png` feature is off by default (#2064); the workspace
+        # clippy run above does not exercise it, so a clippy
+        # regression inside the feature-gated module would not
+        # surface. Mirror the feature-gated test step in the test
+        # job and lint it explicitly.
+        run: cargo clippy -p chordsketch-render-ireal --features png --all-targets -- -D warnings
+
   doc:
     name: Docs
     runs-on: ubuntu-latest
@@ -79,7 +87,16 @@ jobs:
 
       - name: Build docs (warnings as errors)
         # See the clippy job for the `chordsketch-desktop` exclusion rationale.
-        run: cargo doc --workspace --exclude chordsketch-desktop --no-deps
+        #
+        # `--features chordsketch-render-ireal/png` doc-checks the
+        # feature-gated `png` module (#2064) too. Without it, broken
+        # intra-doc links inside that module would not surface, and a
+        # link from the always-on crate root into the gated module
+        # would fail rustdoc's broken-link check anyway because the
+        # gated module would not be in the rendered tree.
+        run: |
+          cargo doc --workspace --exclude chordsketch-desktop \
+            --features chordsketch-render-ireal/png --no-deps
         env:
           RUSTDOCFLAGS: "-D warnings"
 
@@ -177,6 +194,14 @@ jobs:
       - name: Run tests
         # See the clippy job for the `chordsketch-desktop` exclusion rationale.
         run: cargo test --workspace --exclude chordsketch-desktop
+
+      - name: Run feature-gated tests (chordsketch-render-ireal --features png)
+        # The `png` feature is off by default to keep the
+        # transitive-dep surface small for SVG-only consumers
+        # (#2064). Without an explicit feature pass here the
+        # `tests/png.rs` suite never compiles in CI; a regression in
+        # the `render_png` pipeline would slip through unnoticed.
+        run: cargo test -p chordsketch-render-ireal --features png
 
   desktop-smoke:
     name: Desktop smoke (Linux)
