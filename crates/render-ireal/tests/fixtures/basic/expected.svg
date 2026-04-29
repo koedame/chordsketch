@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="595" height="842" viewBox="0 0 595 842">
+  <rect x="0" y="0" width="595" height="842" fill="white" stroke="black" stroke-width="1"/>
+  <text x="40" y="72" font-family="sans-serif" font-size="24" class="title">Autumn Leaves</text>
+  <text x="555" y="72" font-family="sans-serif" font-size="14" text-anchor="end" class="composer">Joseph Kosma</text>
+  <text x="40" y="100" font-family="sans-serif" font-size="12" class="meta">Medium Swing • E minor</text>
+  <g class="bar-grid">
+    <rect x="40" y="120" width="128" height="50" fill="none" stroke="black" stroke-width="1"/>
+    <rect x="168" y="120" width="128" height="50" fill="none" stroke="black" stroke-width="1"/>
+    <rect x="296" y="120" width="128" height="50" fill="none" stroke="black" stroke-width="1"/>
+    <rect x="424" y="120" width="128" height="50" fill="none" stroke="black" stroke-width="1"/>
+  </g>
+</svg>
