@@ -359,22 +359,39 @@ After the release workflow completes and the GitHub Release is published:
       openssl dgst -sha256 chordsketch-${TAG}.tar.gz
       wc -c chordsketch-${TAG}.tar.gz
       ```
-   2. If the `cargo.crates` block needs updating (dependency versions
-      changed), regenerate it. Two options:
+   2. Regenerate the `cargo.crates` block from the **tagged** `Cargo.lock`.
+      The cargo portgroup downloads each crate listed in `cargo.crates` and
+      validates its checksum against the lockfile shipped inside the
+      source tarball — so the right input is always
+      `git show ${TAG}:Cargo.lock`, never HEAD's lockfile. Two options:
       - In-tree, no MacPorts install needed:
         ```bash
+        # Bump the Portfile's `github.setup` to the new tag *first*,
+        # then run the regen script — it auto-detects the tag from
+        # the Portfile and reads `git show v<TAG>:Cargo.lock`.
         python3 scripts/macports-regen-cargo-crates.py --apply
         ```
-        The script parses `Cargo.lock`, sorts the crates with checksum
-        entries, and rewrites the `cargo.crates ...` region of the
-        Portfile in place. `--check` exits non-zero if the Portfile has
-        drifted from `Cargo.lock`; useful for CI.
+        Use `--from-ref HEAD` instead when the new tag does not yet
+        exist (release rehearsal against unreleased commits). The
+        bare `--check` form is what the `macports-portfile-sync` CI
+        guard runs on every PR, so running it locally before pushing
+        catches drift before CI.
       - On a Mac with MacPorts installed, run `cargo2port.py` from a
-        local MacPorts install. The output format is identical to the
-        in-tree script's, so either tool keeps the Portfile reproducible.
-   3. Fork `macports/macports-ports` (or use the existing fork), place the
+        local MacPorts install **after** checking out the tag (so
+        `Cargo.lock` in the working tree is the tagged one). The output
+        format is identical to the in-tree script's, so either tool
+        keeps the Portfile reproducible.
+   3. Validate the Portfile end-to-end. Trigger
+      `.github/workflows/macports-smoke.yml` via `gh workflow run
+      macports-smoke.yml`; it spins up a `macos-latest` runner,
+      installs MacPorts from the official `.pkg`, registers the
+      in-tree Portfile as a local source, and runs `port lint` plus
+      `port install -s chordsketch` followed by the `cli-render-smoke`
+      composite. A green run is the local-equivalent evidence that
+      `sudo port install` works against the tagged source tarball.
+   4. Fork `macports/macports-ports` (or use the existing fork), place the
       Portfile in `textproc/chordsketch/Portfile`, and open a PR.
-   4. Wait for MacPorts CI and maintainer review.
+   5. Wait for MacPorts CI and maintainer review.
 
 6. **Automated channel rollup** — `.github/workflows/release-verify.yml`
    has `on: release: types: [published]`, but like the other publish

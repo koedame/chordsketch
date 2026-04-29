@@ -126,19 +126,34 @@ jobs:
 
   macports-portfile-sync:
     name: MacPorts Portfile sync
-    # Guards against `Cargo.lock` drifting from
-    # `packaging/macports/Portfile`'s `cargo.crates` block. Without
-    # this check, a dependency bump silently breaks the next MacPorts
-    # submission with "checksum mismatch on <crate>" the moment the
-    # cargo portgroup runs against the unpacked source. Same
-    # guarantee-style trigger as `fixture-counts`: runs on every PR,
-    # no path filter, Python-only, < 1 s wall clock.
+    # Guards against the `cargo.crates` block in
+    # `packaging/macports/Portfile` drifting from the `Cargo.lock`
+    # shipped in the source tarball that the Portfile's `github.setup`
+    # line points at. The cargo portgroup downloads each crate listed
+    # in `cargo.crates` and validates its checksum against what the
+    # tarball's lockfile demands; if the two are out of sync, the
+    # upstream MacPorts build fails with "checksum mismatch on
+    # <crate>" before any compilation begins. This is therefore a
+    # tag-relative check: HEAD's Cargo.lock is irrelevant — the only
+    # lockfile that matters is the one inside the tarball.
+    # Same guarantee-style trigger as `fixture-counts`: runs on every
+    # PR, no path filter, Python-only, < 1 s wall clock.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # Need the tagged commit reachable so `git show
+          # vX.Y.Z:Cargo.lock` works inside the regen script. The
+          # script auto-detects the tag from the Portfile's
+          # `github.setup` line, so no explicit tag wiring is needed
+          # here.
+          fetch-depth: 0
 
-      - name: Verify Portfile matches Cargo.lock
+      - name: Verify Portfile cargo.crates matches tagged Cargo.lock
         run: python3 scripts/macports-regen-cargo-crates.py --check
+
+      - name: Unit tests for the regen script
+        run: python3 -m unittest scripts/test_macports_regen_cargo_crates.py
 
   test:
     name: Test (${{ matrix.os }}, ${{ matrix.rust }})
