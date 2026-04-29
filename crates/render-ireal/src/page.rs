@@ -43,9 +43,23 @@ pub const BAR_ROW_HEIGHT: i32 = 50;
 /// `4096` bars is well past any real chart length (a typical jazz
 /// standard is 16–64 bars). When this cap is hit, surplus bars are
 /// silently truncated; documenting the limit in the public-API
-/// rustdoc lets future callers (#2057, #2059, #2060) detect when
-/// they need to surface a warning instead.
+/// rustdoc lets future callers (#2057, #2059) detect when they
+/// need to surface a warning instead.
 pub const MAX_BARS: usize = 4096;
+
+/// Maximum number of chords the renderer lays out inside a single
+/// bar before truncating.
+///
+/// `BarChord` is `pub` and the AST allows direct field assignment,
+/// so a malformed in-process `Vec<BarChord>` could in principle
+/// hold `usize::MAX/2` entries. The flat-layout chord-name
+/// formatter joins them with a space into a single `<text>`
+/// element; without this cap, an adversarial AST could OOM the
+/// renderer on one bar. `64` is far above the iReal Pro grid's
+/// practical limit (an 8/8 bar with sub-beat changes tops out at
+/// ~16 chord placements). When the cap is hit, surplus chords are
+/// silently truncated.
+pub const MAX_CHORDS_PER_BAR: usize = 64;
 
 // Compile-time invariants. Asserting `MAX_BARS` and `BARS_PER_ROW`
 // at build time keeps the y-coordinate arithmetic in `lib.rs`
@@ -53,6 +67,7 @@ pub const MAX_BARS: usize = 4096;
 // `row_y` is well within `i32` range.
 const _: () = assert!(BARS_PER_ROW > 0);
 const _: () = assert!(MAX_BARS > 0);
+const _: () = assert!(MAX_CHORDS_PER_BAR > 0);
 const _: () = {
     let max_rows = MAX_BARS.div_ceil(BARS_PER_ROW);
     // Conservatively check that `row_y = GRID_TOP + row * BAR_ROW_HEIGHT`
