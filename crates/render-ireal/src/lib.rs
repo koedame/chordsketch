@@ -59,8 +59,8 @@ mod svg;
 use chordsketch_ireal::{Accidental, IrealSong, KeyMode};
 
 pub use page::{
-    BAR_ROW_HEIGHT, BARS_PER_ROW, GRID_TOP, HEADER_BAND_HEIGHT, MARGIN_X, MARGIN_Y, PAGE_HEIGHT,
-    PAGE_WIDTH,
+    BAR_ROW_HEIGHT, BARS_PER_ROW, GRID_TOP, HEADER_BAND_HEIGHT, MARGIN_X, MARGIN_Y, MAX_BARS,
+    PAGE_HEIGHT, PAGE_WIDTH,
 };
 
 /// Caller-supplied render configuration.
@@ -79,10 +79,28 @@ pub struct RenderOptions {}
 /// The output is well-formed SVG 1.1 with deterministic integer
 /// coordinates so golden tests remain byte-stable. See the crate
 /// documentation for the layout contract.
+///
+/// # Resource limits
+///
+/// The bar count is clamped to [`MAX_BARS`] before any allocation;
+/// surplus bars are silently truncated. This mirrors the input-
+/// bounds-check pattern in `chordsketch-chordpro`'s chord-diagram
+/// renderer and the `MAX_COLUMNS` clamp in the HTML renderer (per
+/// the validation-parity clause in `.claude/rules/renderer-parity.md`)
+/// and prevents both unbounded `format!` allocation and overflow in
+/// the y-coordinate arithmetic.
 #[must_use = "rendering produces a string the caller is expected to consume"]
 pub fn render_svg(song: &IrealSong, _options: &RenderOptions) -> String {
-    let bar_count: usize = song.sections.iter().map(|s| s.bars.len()).sum();
-    let row_count = bar_count.div_ceil(BARS_PER_ROW.max(1));
+    let raw_bar_count: usize = song
+        .sections
+        .iter()
+        .map(|s| s.bars.len())
+        // Use saturating addition so a malformed AST with 2^64-ish
+        // total bars (only reachable via a bug or attacker control)
+        // does not wrap to a smaller usize and bypass the cap below.
+        .fold(0usize, |acc, n| acc.saturating_add(n));
+    let bar_count = raw_bar_count.min(MAX_BARS);
+    let row_count = bar_count.div_ceil(BARS_PER_ROW);
     let mut out = String::new();
     out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     out.push_str(&format!(
@@ -107,11 +125,18 @@ fn write_header(out: &mut String, song: &IrealSong) {
     let header_top = MARGIN_Y;
     let title_y = header_top + 32;
     let meta_y = header_top + 60;
-    let title_text = if song.title.is_empty() {
-        "Untitled".to_string()
+    // Always run the title through `escape_xml`, even on the
+    // hard-coded fallback. Asymmetric sanitisation (one branch
+    // escaped, one branch raw) is the structural defect class
+    // `.claude/rules/sanitizer-security.md` calls out; routing both
+    // branches through the same helper closes the future-localisation
+    // hole even though "Untitled" itself contains no reserved chars.
+    let raw_title = if song.title.is_empty() {
+        "Untitled"
     } else {
-        svg::escape_xml(&song.title)
+        song.title.as_str()
     };
+    let title_text = svg::escape_xml(raw_title);
     out.push_str(&format!(
         "  <text x=\"{MARGIN_X}\" y=\"{title_y}\" font-family=\"sans-serif\" \
 font-size=\"24\" class=\"title\">{title_text}</text>\n"
@@ -138,16 +163,28 @@ fn format_style_and_key(song: &IrealSong) -> String {
     // app's behaviour without putting the default in the AST.
     let style = song.style.as_deref().unwrap_or("Medium Swing");
     let key = format_key(song);
-    let combined = if key.is_empty() {
-        style.to_string()
-    } else {
-        format!("{style} \u{2022} {key}")
-    };
+    // `format_key` always returns a non-empty string (mode is
+    // always present), so we unconditionally interpolate both;
+    // the dead empty-key branch was removed to reflect the
+    // structural invariant.
+    let combined = format!("{style} \u{2022} {key}");
     svg::escape_xml(&combined)
 }
 
 fn format_key(song: &IrealSong) -> String {
     let root = song.key_signature.root;
+    // The AST documents `root.note` as `'A'..='G'` uppercase ASCII
+    // but the field is `pub` and not validated at construction. A
+    // malformed AST that flows in via direct field assignment must
+    // still produce a deterministic, non-malicious string — fall
+    // back to `'?'` so a corrupted root is visually distinct from
+    // any valid one and `escape_xml` cannot be tricked by a
+    // structural character.
+    let note_glyph = if matches!(root.note, 'A'..='G') {
+        root.note
+    } else {
+        '?'
+    };
     let acc = match root.accidental {
         Accidental::Natural => "",
         Accidental::Flat => "\u{266D}",
@@ -157,7 +194,7 @@ fn format_key(song: &IrealSong) -> String {
         KeyMode::Major => "major",
         KeyMode::Minor => "minor",
     };
-    format!("{}{acc} {mode}", root.note)
+    format!("{note_glyph}{acc} {mode}")
 }
 
 fn write_grid(out: &mut String, row_count: usize) {
@@ -166,16 +203,38 @@ fn write_grid(out: &mut String, row_count: usize) {
     }
     let grid_left = MARGIN_X;
     let grid_right = PAGE_WIDTH - MARGIN_X;
-    let cell_width = (grid_right - grid_left) / BARS_PER_ROW as i32;
+    // Integer division truncates the cell width, so the residual
+    // pixels are absorbed into the rightmost cell's width. Without
+    // this, the rightmost cell ends ≤ 3px short of `grid_right`
+    // and chord text / repeat brackets in #2057 / #2059 / #2060
+    // overflow the visible cell. The invariant the test
+    // `grid_aligns_to_right_margin` enforces:
+    //
+    //   sum of cell widths == grid_right - grid_left
+    //
+    // independent of the chosen `BARS_PER_ROW` and margin values.
+    let inner_width = grid_right - grid_left;
+    let base_cell_width = inner_width / BARS_PER_ROW as i32;
+    let leftover = inner_width - base_cell_width * (BARS_PER_ROW as i32);
     out.push_str("  <g class=\"bar-grid\">\n");
     for row in 0..row_count {
-        let row_y = GRID_TOP + (row as i32) * BAR_ROW_HEIGHT;
+        // `row * BAR_ROW_HEIGHT` is bounded by the `MAX_BARS`
+        // compile-time assertion in `page.rs`, so the cast and
+        // multiplication cannot overflow `i32`.
+        let row_offset = i32::try_from(row).unwrap_or(i32::MAX);
+        let row_y = GRID_TOP + row_offset * BAR_ROW_HEIGHT;
+        let mut cell_x = grid_left;
         for col in 0..BARS_PER_ROW {
-            let cell_x = grid_left + (col as i32) * cell_width;
+            let cell_width = if col == BARS_PER_ROW - 1 {
+                base_cell_width + leftover
+            } else {
+                base_cell_width
+            };
             out.push_str(&format!(
                 "    <rect x=\"{cell_x}\" y=\"{row_y}\" width=\"{cell_width}\" \
 height=\"{BAR_ROW_HEIGHT}\" fill=\"none\" stroke=\"black\" stroke-width=\"1\"/>\n"
             ));
+            cell_x += cell_width;
         }
     }
     out.push_str("  </g>\n");

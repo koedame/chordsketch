@@ -165,3 +165,126 @@ fn multi_row_bar_grid_emits_one_row_per_four_bars() {
         "expected 13 <rect> elements (1 frame + 12 cells), got {cell_count}: {svg}"
     );
 }
+
+#[test]
+fn grid_aligns_to_right_margin() {
+    // The right edge of the rightmost cell must hit exactly
+    // `PAGE_WIDTH - MARGIN_X` (515 with the current constants),
+    // not 3px short of it. Integer-division remainder is absorbed
+    // into the last cell's width.
+    use chordsketch_render_ireal::{MARGIN_X, PAGE_WIDTH};
+    let mut song = IrealSong::new();
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![Bar::new()],
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    // The last cell of the first (and only) row appears as the
+    // last `<rect ... fill="none"` in the output (`fill="white"`
+    // is the page frame). Pull its `x` and `width` and check that
+    // x + width == PAGE_WIDTH - MARGIN_X.
+    let needle = "fill=\"none\"";
+    let last_rect = svg
+        .rmatch_indices(needle)
+        .map(|(idx, _)| &svg[..idx])
+        .next()
+        .and_then(|prefix| prefix.rfind("<rect"))
+        .map(|start| &svg[start..])
+        .expect("at least one cell rect");
+    let last_open = last_rect.find('>').expect("rect tag closes");
+    let header = &last_rect[..=last_open];
+    let x: i32 = parse_attr(header, "x");
+    let width: i32 = parse_attr(header, "width");
+    assert_eq!(
+        x + width,
+        PAGE_WIDTH - MARGIN_X,
+        "rightmost cell ends at {} but expected {}: {header}",
+        x + width,
+        PAGE_WIDTH - MARGIN_X
+    );
+}
+
+fn parse_attr(tag: &str, name: &str) -> i32 {
+    let needle = format!("{name}=\"");
+    let start = tag
+        .find(&needle)
+        .unwrap_or_else(|| panic!("attr {name:?} missing in {tag}"))
+        + needle.len();
+    let rest = &tag[start..];
+    let end = rest
+        .find('"')
+        .unwrap_or_else(|| panic!("attr {name:?} unterminated"));
+    rest[..end]
+        .parse()
+        .unwrap_or_else(|_| panic!("attr {name:?} not an integer"))
+}
+
+#[test]
+fn render_clamps_bar_count_to_max_bars() {
+    // An adversarial AST with > MAX_BARS bars must not allocate
+    // an unbounded number of `<rect>` elements; surplus bars are
+    // silently truncated. This keeps the renderer's memory cost
+    // bounded and the y-coordinate arithmetic safe.
+    use chordsketch_render_ireal::{BARS_PER_ROW, MAX_BARS};
+    let mut song = IrealSong::new();
+    let bar_count = MAX_BARS + 100;
+    let mut bars = Vec::with_capacity(bar_count);
+    for _ in 0..bar_count {
+        bars.push(Bar::new());
+    }
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars,
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    let rect_count = svg.matches("<rect").count();
+    // Expected: 1 frame + (MAX_BARS / BARS_PER_ROW) rows × BARS_PER_ROW cells.
+    let expected_rows = MAX_BARS.div_ceil(BARS_PER_ROW);
+    let expected_rect = 1 + expected_rows * BARS_PER_ROW;
+    assert_eq!(
+        rect_count, expected_rect,
+        "expected {expected_rect} rects (1 frame + clamped grid), got {rect_count}"
+    );
+}
+
+#[test]
+fn out_of_range_chord_root_falls_back_to_question_mark() {
+    // Direct field assignment on `pub` AST fields can produce an
+    // out-of-range note letter; the renderer falls back to `?` so
+    // a corrupted root produces a deterministic, visually distinct
+    // output rather than nonsense.
+    use chordsketch_ireal::{Accidental, ChordRoot};
+    let mut song = IrealSong::new();
+    song.key_signature.root = ChordRoot {
+        note: 'X',
+        accidental: Accidental::Natural,
+    };
+    let svg = render_svg(&song, &RenderOptions::default());
+    assert!(
+        svg.contains("? major"),
+        "expected `? major` fallback for out-of-range note: {svg}"
+    );
+    assert!(
+        !svg.contains("X major"),
+        "out-of-range note must not flow into the SVG: {svg}"
+    );
+}
+
+#[test]
+fn xml_illegal_control_chars_are_stripped_from_title() {
+    // Adversarial title containing C0 controls (NUL, BEL, ESC)
+    // must not appear in the SVG output — they are stripped, not
+    // escaped, because XML 1.0 forbids them entirely.
+    let mut song = IrealSong::new();
+    song.title = "ti\u{0000}tle\u{001B}".into();
+    let svg = render_svg(&song, &RenderOptions::default());
+    assert!(svg.contains(">title<"), "expected stripped title: {svg}");
+    assert!(
+        !svg.contains('\u{0000}'),
+        "NUL must be stripped from the SVG"
+    );
+    assert!(
+        !svg.contains('\u{001B}'),
+        "ESC must be stripped from the SVG"
+    );
+}

@@ -8,6 +8,6 @@
     <rect x="40" y="120" width="128" height="50" fill="none" stroke="black" stroke-width="1"/>
     <rect x="168" y="120" width="128" height="50" fill="none" stroke="black" stroke-width="1"/>
     <rect x="296" y="120" width="128" height="50" fill="none" stroke="black" stroke-width="1"/>
-    <rect x="424" y="120" width="128" height="50" fill="none" stroke="black" stroke-width="1"/>
+    <rect x="424" y="120" width="131" height="50" fill="none" stroke="black" stroke-width="1"/>
   </g>
 </svg>
