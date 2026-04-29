@@ -163,6 +163,18 @@ struct Cli {
     /// (#1827)
     #[arg(long = "warnings-json")]
     warnings_json: bool,
+
+    /// Input format. `auto` (the default) sniffs each argument:
+    /// strings starting with `irealb://` / `irealbook://` (or
+    /// files whose first non-whitespace bytes match) are routed
+    /// through the iReal Pro renderer (#2066). Use `chordpro` or
+    /// `ireal` to force detection.
+    ///
+    /// When the input is iReal, the output is always SVG; the
+    /// `--format text|html|pdf` flag (which selects the ChordPro
+    /// output format) is ignored.
+    #[arg(long = "from", default_value = "auto")]
+    input_format: InputFormat,
 }
 
 /// Available subcommands.
@@ -247,6 +259,30 @@ enum Format {
     Pdf,
 }
 
+/// Input-format detection for the `render` mode.
+///
+/// Auto-detection inspects the first non-whitespace bytes of the
+/// argument: a URL or file body that starts with `irealb://` or
+/// `irealbook://` is treated as an iReal Pro export and routed
+/// through `chordsketch-ireal` + `chordsketch-render-ireal`;
+/// anything else parses as ChordPro source.
+///
+/// The flag forces detection — useful when a piece of ChordPro
+/// happens to start with an `irealb://`-shaped URL inside lyrics,
+/// or when an iReal export is stored without the `.cho` extension
+/// the auto-sniffer might otherwise miss.
+#[derive(Clone, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
+enum InputFormat {
+    /// Detect from the first bytes of each argument (URL prefix
+    /// or file content).
+    #[default]
+    Auto,
+    /// Force ChordPro parsing.
+    Chordpro,
+    /// Force iReal Pro `irealb://` URL parsing.
+    Ireal,
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
@@ -279,6 +315,15 @@ fn main() -> ExitCode {
         let mut cmd = Cli::command();
         clap_complete::generate(shell, &mut cmd, "chordsketch", &mut io::stdout());
         return ExitCode::SUCCESS;
+    }
+
+    // Format dispatch: route iReal Pro `irealb://` URLs and
+    // `*.irealb` / `*.cho`-with-iReal-prefix files through the
+    // iReal pipeline (#2066). The detection runs before the
+    // ChordPro config / parser flow so a single iReal argument
+    // does not pull the project-level config-load path.
+    if should_route_to_ireal(&cli.input_format, &cli.files) {
+        return run_ireal_render(&cli.files, cli.output.as_deref());
     }
 
     // Derive project directory from the first input file for project-level config.
@@ -478,6 +523,115 @@ fn main() -> ExitCode {
     } else {
         ExitCode::SUCCESS
     }
+}
+
+/// Returns `true` if every argument in `files` should be routed
+/// through the iReal pipeline.
+///
+/// `--from chordpro` / `--from ireal` short-circuit detection.
+/// On `auto` we sniff each argument: a string that itself starts
+/// with `irealb://` / `irealbook://` is an iReal URL passed inline,
+/// otherwise we read the file's first non-whitespace bytes and
+/// check the same prefix. A mix of iReal and ChordPro arguments
+/// returns `false` here; the per-file dispatch below errors with a
+/// clear message rather than silently choosing one path.
+fn should_route_to_ireal(input_format: &InputFormat, files: &[String]) -> bool {
+    match input_format {
+        InputFormat::Chordpro => false,
+        InputFormat::Ireal => true,
+        InputFormat::Auto => files.iter().all(|f| sniff_is_ireal(f)),
+    }
+}
+
+/// Returns `true` if the argument is — or names a file whose body
+/// begins with — an `irealb://` / `irealbook://` URL.
+///
+/// Reads at most the first KiB of the file before sniffing so an
+/// adversarial caller cannot force a multi-GiB read just to make
+/// the detection decision.
+fn sniff_is_ireal(arg: &str) -> bool {
+    let trimmed = arg.trim_start();
+    if trimmed.starts_with("irealb://") || trimmed.starts_with("irealbook://") {
+        return true;
+    }
+    // Fall back to reading the file's first KiB. Errors during
+    // sniff fall back to "not iReal" so we don't pre-empt the
+    // ChordPro path's own error reporting.
+    use std::io::Read;
+    let Ok(mut file) = fs::File::open(arg) else {
+        return false;
+    };
+    let mut head = [0_u8; 1024];
+    let Ok(n) = file.read(&mut head) else {
+        return false;
+    };
+    let head = &head[..n];
+    let Ok(text) = std::str::from_utf8(head) else {
+        return false;
+    };
+    let trimmed = text.trim_start();
+    trimmed.starts_with("irealb://") || trimmed.starts_with("irealbook://")
+}
+
+/// Renders a list of iReal Pro inputs to a single SVG document.
+///
+/// Each argument is parsed via `chordsketch_ireal::parse_collection`
+/// and every contained song is rendered with
+/// `chordsketch_render_ireal::render_svg`. The rendered SVG bodies
+/// are concatenated; multi-song / multi-file inputs produce one
+/// SVG per chart, in argument order.
+///
+/// `output` is the `--output` path (or `None` for stdout). Output
+/// is always SVG when the iReal pipeline runs — the
+/// `--format text|html|pdf` flag is documented as ignored.
+fn run_ireal_render(files: &[String], output: Option<&str>) -> ExitCode {
+    let mut combined = String::new();
+    let mut had_error = false;
+    for arg in files {
+        let url = match read_ireal_input(arg) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("error: {arg}: {e}");
+                had_error = true;
+                continue;
+            }
+        };
+        let songs = match chordsketch_ireal::parse_collection(&url) {
+            Ok((s, _name)) => s,
+            Err(e) => {
+                eprintln!("error: {arg}: {e}");
+                had_error = true;
+                continue;
+            }
+        };
+        for song in &songs {
+            let svg = chordsketch_render_ireal::render_svg(
+                song,
+                &chordsketch_render_ireal::RenderOptions::default(),
+            );
+            combined.push_str(&svg);
+        }
+    }
+    let write_result = write_text(&output.map(str::to_owned), &combined);
+    if let Err(e) = write_result {
+        eprintln!("error: {e}");
+        return ExitCode::FAILURE;
+    }
+    if had_error {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+/// Reads an iReal input — either a URL string passed inline or a
+/// file containing such a URL.
+fn read_ireal_input(arg: &str) -> Result<String, String> {
+    let trimmed_arg = arg.trim_start();
+    if trimmed_arg.starts_with("irealb://") || trimmed_arg.starts_with("irealbook://") {
+        return Ok(trimmed_arg.to_owned());
+    }
+    read_file_clamped(arg).map(|s| s.trim().to_owned())
 }
 
 /// Write text output to a file or stdout.
