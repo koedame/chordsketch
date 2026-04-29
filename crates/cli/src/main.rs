@@ -557,7 +557,6 @@ fn sniff_is_ireal(arg: &str) -> bool {
     // Fall back to reading the file's first KiB. Errors during
     // sniff fall back to "not iReal" so we don't pre-empt the
     // ChordPro path's own error reporting.
-    use std::io::Read;
     let Ok(mut file) = fs::File::open(arg) else {
         return false;
     };
@@ -587,6 +586,14 @@ fn sniff_is_ireal(arg: &str) -> bool {
 fn run_ireal_render(files: &[String], output: Option<&str>) -> ExitCode {
     let mut combined = String::new();
     let mut had_error = false;
+    // Track whether the first SVG has been emitted so we can strip the XML
+    // processing instruction from subsequent charts. Each `render_svg` call
+    // produces a complete SVG document (including `<?xml version="1.0"...?>`);
+    // concatenating multiple declarations would produce invalid XML. Keeping
+    // exactly one declaration at the top makes the combined output a single
+    // well-formed XML stream where each chart after the first is a valid SVG
+    // fragment (the declaration is optional per XML spec §2.8).
+    let mut first_svg = true;
     for arg in files {
         let url = match read_ireal_input(arg) {
             Ok(s) => s,
@@ -609,7 +616,16 @@ fn run_ireal_render(files: &[String], output: Option<&str>) -> ExitCode {
                 song,
                 &chordsketch_render_ireal::RenderOptions::default(),
             );
-            combined.push_str(&svg);
+            if first_svg {
+                first_svg = false;
+                combined.push_str(&svg);
+            } else {
+                // Strip the XML processing instruction from subsequent charts.
+                let stripped = svg
+                    .strip_prefix("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+                    .unwrap_or(&svg);
+                combined.push_str(stripped);
+            }
         }
     }
     let write_result = write_text(&output.map(str::to_owned), &combined);

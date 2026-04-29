@@ -943,7 +943,7 @@ fn ireal_file_input_is_auto_detected() {
 }
 
 #[test]
-fn from_ireal_forces_iref_pipeline_even_for_chordpro_argument() {
+fn from_ireal_forces_ireal_pipeline_even_for_chordpro_argument() {
     // Forcing `--from ireal` on a non-iReal argument should
     // surface the iReal parser's `MissingPrefix` error rather than
     // silently falling back to the ChordPro path. This keeps
@@ -994,4 +994,42 @@ fn ireal_help_text_documents_from_flag() {
         .success()
         .stdout(predicate::str::contains("--from"))
         .stdout(predicate::str::contains("ireal"));
+}
+
+#[test]
+fn ireal_nonexistent_file_with_forced_ireal_reports_error() {
+    // When `--from ireal` is used and the file does not exist,
+    // `read_ireal_input` returns Err and the CLI reports an error
+    // message and exits 1 (exercises the read_ireal_input Err branch).
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args([
+            "/nonexistent/__chordsketch_test__.irealb",
+            "--from",
+            "ireal",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error"));
+}
+
+#[test]
+fn ireal_multi_arg_produces_single_xml_declaration() {
+    // Two separate single-song iReal URLs as arguments must produce
+    // exactly one <?xml?> processing instruction. Duplicate declarations
+    // produce invalid XML and would break downstream XML parsers.
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args([TINY_IREAL_URL, TINY_IREAL_URL])
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+        ))
+        .stdout(predicate::function(|out: &str| {
+            out.matches("<?xml").count() == 1
+        }))
+        .stdout(predicate::function(|out: &str| {
+            out.matches("<svg ").count() == 2
+        }));
 }
