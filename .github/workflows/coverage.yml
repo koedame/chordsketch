@@ -67,14 +67,15 @@ jobs:
         # `desktop-smoke` in ci.yml). See the matching exclusions in
         # ci.yml and .claude/rules/ci-parallelization.md.
         #
-        # `--features chordsketch-render-ireal/png` turns on the PNG
-        # rasteriser (#2064) so its module compiles and the
-        # feature-gated `tests/png.rs` suite runs — without this,
-        # the patch coverage gate would skip the new lines because
-        # they would not be in the compiled crate.
+        # `--features chordsketch-render-ireal/png,chordsketch-render-ireal/pdf`
+        # turns on the PNG rasteriser (#2064) and PDF converter
+        # (#2063) so both feature-gated modules compile and their
+        # respective test suites run — without this, the patch
+        # coverage gate would skip the new lines because they would
+        # not be in the compiled crate.
         run: |
           cargo llvm-cov --workspace --exclude chordsketch-desktop \
-            --features chordsketch-render-ireal/png \
+            --features chordsketch-render-ireal/png,chordsketch-render-ireal/pdf \
             --lcov --output-path lcov.info
 
       - name: Upload to Codecov
