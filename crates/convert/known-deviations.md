@@ -80,8 +80,76 @@ intact via #2061.
 
 ## ChordPro → iReal Pro (#2061)
 
-*Not yet implemented.* Documentation of expected drops will land
-with the implementation.
+Implemented in `src/to_ireal.rs`. **Lossy** in this direction —
+iReal Pro has no lyrics surface and a much narrower metadata
+shape than ChordPro. Every drop surfaces as a
+[`ConversionWarning`] at runtime so the caller never silently
+loses data.
+
+### Lyric text
+
+iReal stores chords-and-bars only; there is no lyric line. Every
+`LyricsLine` segment with non-empty text contributes to a
+single aggregated `WarningKind::LossyDrop` warning ("lyrics
+dropped"). The chord annotations are preserved as `BarChord`s.
+
+### Comments (`{comment}` / `{comment_italic}` / `{comment_box}`)
+
+iReal has no inline comment surface. All `Line::Comment` entries
+drop with a single aggregated `WarningKind::LossyDrop` warning.
+
+### Subtitles, artists, lyricists, album, year, copyright, tags
+
+iReal's metadata model is just `title / composer / style / key /
+time / tempo / transpose`; everything else surfaces as a separate
+`WarningKind::LossyDrop` warning per category. The composer
+field is filled from the *first* ChordPro composer if multiple
+are present.
+
+### Section labels
+
+ChordPro environment directives map to iReal section labels:
+
+| ChordPro | iReal |
+|---|---|
+| `{start_of_verse}` ... `{end_of_verse}` | `SectionLabel::Verse` |
+| `{start_of_chorus}` ... `{end_of_chorus}` | `SectionLabel::Chorus` |
+| `{start_of_bridge}` ... `{end_of_bridge}` | `SectionLabel::Bridge` |
+| (no directive — bare lyrics) | `SectionLabel::Letter('A')` (default; warns with `WarningKind::Approximated`) |
+| `{start_of_tab}` / `{start_of_grid}` / others | dropped silently |
+
+### Bar grouping
+
+ChordPro is line-oriented (chords float over lyrics); iReal is
+bar-oriented (chords sit inside bars). Each `LyricsLine` becomes
+a **single bar** containing every chord in that line, in source
+order, all positioned on beat 1. This is structurally lossy
+compared to a hand-laid-out iReal chart but produces a usable
+round trip for short-form chord-only sources. Beat-position
+recovery is out of scope for this direction.
+
+### Fonts / sizes / colours
+
+`{textfont}`, `{textsize}`, `{textcolour}`, `{chordfont}`,
+`{chordsize}`, `{chordcolour}`, `{tabfont}`, `{tabsize}`,
+`{tabcolour}` all drop with a single aggregated
+`WarningKind::LossyDrop` per class (font / colour) — iReal has
+no typography or theming surface.
+
+### `{capo}`
+
+Dropped with `WarningKind::LossyDrop` — iReal has no capo
+representation.
+
+### `{define}` chord shapes
+
+Dropped with `WarningKind::LossyDrop` — iReal stores only chord
+names, not shapes / fingerings.
+
+### Non-`style` `{meta}` directives
+
+Only `{meta: style <name>}` round-trips. Any other `{meta: K V}`
+contributes one aggregated `WarningKind::LossyDrop` warning.
 
 [`ConversionWarning`]: https://docs.rs/chordsketch-convert/latest/chordsketch_convert/struct.ConversionWarning.html
 [`WarningKind::LossyDrop`]: https://docs.rs/chordsketch-convert/latest/chordsketch_convert/enum.WarningKind.html
