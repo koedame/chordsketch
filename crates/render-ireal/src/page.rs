@@ -67,6 +67,7 @@ pub const MAX_CHORDS_PER_BAR: usize = 64;
 // `row_y` is well within `i32` range.
 const _: () = assert!(BARS_PER_ROW > 0);
 const _: () = assert!(MAX_BARS > 0);
+const _: () = assert!(MAX_CHORDS_PER_BAR > 0);
 const _: () = {
     let max_rows = MAX_BARS.div_ceil(BARS_PER_ROW);
     // Conservatively check that `row_y = GRID_TOP + row * BAR_ROW_HEIGHT`
