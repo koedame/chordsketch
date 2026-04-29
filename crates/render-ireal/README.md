@@ -6,15 +6,16 @@
 
 [![crates.io](https://img.shields.io/crates/v/chordsketch-render-ireal)](https://crates.io/crates/chordsketch-render-ireal)
 
-iReal Pro chart renderer — SVG with 4-bars-per-line grid layout.
+iReal Pro chart renderer — SVG with chord-name typography.
 
 This crate renders an `IrealSong` AST as a fixed-size SVG document.
-The current scope (`#2058` scaffold + `#2060` layout engine) covers
-the page frame, the metadata header (title / composer / style /
-key), the 4-bars-per-line grid with section line breaks, and
-flat-layout chord text centred in each cell. Barlines, repeat /
-ending brackets, music symbols, and superscript chord-name
-typography land in follow-up issues (`#2057` / `#2059` / `#2062`).
+The current scope covers the page frame, the metadata header
+(title / composer / style / key), the 4-bars-per-line grid with
+section line breaks, and superscript chord-name typography (root
++ accidental at base size, quality / extensions raised as
+superscript at a smaller size, slash + bass back at base size).
+Barlines, repeat / ending brackets, and music symbols land in
+follow-up issues (`#2059` / `#2062`).
 
 Tracked under [#2050](https://github.com/koedame/chordsketch/issues/2050).
 
@@ -54,7 +55,9 @@ assert!(svg.contains("<svg "));
 | `render_svg` | `fn render_svg(song: &IrealSong, options: &RenderOptions) -> String` | Returns a fixed-size SVG document. Output is byte-stable for a given input. |
 | `RenderOptions` | `#[non_exhaustive]` struct, `Default` | Caller-supplied configuration; the scaffold accepts only defaults. |
 | `version()` | `fn version() -> &'static str` | Library version baked in at compile time. |
-| `page::*` | `pub const i32` / `pub const usize` | Page-layout constants (`PAGE_WIDTH`, `PAGE_HEIGHT`, `MARGIN_X`, `MARGIN_Y`, `HEADER_BAND_HEIGHT`, `GRID_TOP`, `BARS_PER_ROW`, `BAR_ROW_HEIGHT`). Changing any of them is a behavioural change that requires a fixture regen. |
+| `compute_layout` | `fn compute_layout(song: &IrealSong) -> Layout` | Computes per-bar coordinates without rendering — useful to drive a non-SVG layout (e.g. canvas, web component grid). |
+| `chord_to_typography` | `fn chord_to_typography(chord: &Chord) -> ChordTypography` | Splits a chord into root/extension/slash/bass `<tspan>`-ready spans. Public so the future PNG (#2064) / PDF (#2063) layers can compute alternative layouts. |
+| `page::*` | `pub const i32` / `pub const usize` | Page-layout constants (`PAGE_WIDTH`, `PAGE_HEIGHT`, `MARGIN_X`, `MARGIN_Y`, `HEADER_BAND_HEIGHT`, `GRID_TOP`, `BARS_PER_ROW`, `BAR_ROW_HEIGHT`, `MAX_BARS`, `MAX_CHORDS_PER_BAR`, `CHORD_FONT_SIZE_BASE`, `CHORD_FONT_SIZE_SUPERSCRIPT`, `CHORD_SUPERSCRIPT_DY`). Changing any of them is a behavioural change that requires a fixture regen. |
 
 ## Layout
 

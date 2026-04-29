@@ -70,12 +70,12 @@ mod svg;
 
 use chordsketch_ireal::{Accidental, BarChord, IrealSong, KeyMode};
 
-pub use chord_typography::{ChordTypography, SpanKind, TypographySpan};
+pub use chord_typography::{ChordTypography, SpanKind, TypographySpan, chord_to_typography};
 pub use layout::{BarCoord, EmptyCell, Layout, compute_layout};
 pub use page::{
     BAR_ROW_HEIGHT, BARS_PER_ROW, CHORD_FONT_SIZE_BASE, CHORD_FONT_SIZE_SUPERSCRIPT,
-    CHORD_SUPERSCRIPT_DY, GRID_TOP, HEADER_BAND_HEIGHT, MARGIN_X, MARGIN_Y, MAX_BARS, PAGE_HEIGHT,
-    PAGE_WIDTH,
+    CHORD_SUPERSCRIPT_DY, GRID_TOP, HEADER_BAND_HEIGHT, MARGIN_X, MARGIN_Y, MAX_BARS,
+    MAX_CHORDS_PER_BAR, PAGE_HEIGHT, PAGE_WIDTH,
 };
 
 /// Caller-supplied render configuration.

@@ -66,9 +66,16 @@ pub struct ChordTypography {
     pub spans: Vec<TypographySpan>,
 }
 
-/// Decomposes `chord` into typography spans.
+/// Decomposes `chord` into typography spans suitable for SVG
+/// `<tspan>` emission.
+///
+/// The returned [`ChordTypography`] is the layer the renderer uses
+/// to lay out a chord; downstream consumers (the future PNG
+/// rasteriser #2064 and the PDF rasteriser #2063) can also inspect
+/// the spans to compute alternative layouts without re-rendering
+/// the SVG.
 #[must_use]
-pub(crate) fn chord_to_typography(chord: &Chord) -> ChordTypography {
+pub fn chord_to_typography(chord: &Chord) -> ChordTypography {
     let mut spans = Vec::with_capacity(4);
     spans.push(TypographySpan {
         text: format_root(chord.root),

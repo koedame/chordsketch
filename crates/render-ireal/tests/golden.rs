@@ -427,6 +427,73 @@ fn multi_chord_bar_restores_baseline_between_chords() {
 }
 
 #[test]
+fn excess_chords_per_bar_render_at_most_max_chords_per_bar_root_spans() {
+    // Regression test ported from the deleted `chord_format.rs`
+    // (`excess_chords_per_bar_are_truncated`). An adversarial AST
+    // with > MAX_CHORDS_PER_BAR chords in a single bar must
+    // produce exactly `MAX_CHORDS_PER_BAR` chord-root spans —
+    // surplus chords are truncated to keep the renderer's
+    // allocation bounded.
+    use chordsketch_render_ireal::MAX_CHORDS_PER_BAR;
+    let mut chords = Vec::with_capacity(MAX_CHORDS_PER_BAR + 100);
+    for _ in 0..(MAX_CHORDS_PER_BAR + 100) {
+        chords.push(BarChord {
+            chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+            position: BeatPosition::on_beat(1).unwrap(),
+        });
+    }
+    let bar = Bar {
+        chords,
+        ..Bar::new()
+    };
+    let mut song = IrealSong::new();
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![bar],
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    let root_spans = svg.matches("class=\"chord-root\"").count();
+    assert_eq!(
+        root_spans, MAX_CHORDS_PER_BAR,
+        "expected exactly MAX_CHORDS_PER_BAR={MAX_CHORDS_PER_BAR} root spans"
+    );
+}
+
+#[test]
+fn custom_quality_xml_reserved_chars_are_escaped_at_emit_boundary() {
+    // `ChordQuality::Custom` is attacker-controlled in principle.
+    // The typography splitter passes it through verbatim by
+    // design (XML escaping is the renderer's job); this test
+    // asserts the contract end-to-end so a refactor that
+    // bypasses `escape_xml` at the embedding boundary cannot
+    // smuggle markup through.
+    let bar = Bar {
+        chords: vec![BarChord {
+            chord: Chord::triad(
+                ChordRoot::natural('C'),
+                ChordQuality::Custom("<x>&\"'".into()),
+            ),
+            position: BeatPosition::on_beat(1).unwrap(),
+        }],
+        ..Bar::new()
+    };
+    let mut song = IrealSong::new();
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![bar],
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    assert!(
+        svg.contains("&lt;x&gt;&amp;&quot;&apos;"),
+        "custom quality not escaped: {svg}"
+    );
+    assert!(
+        !svg.contains("<x>"),
+        "raw custom-quality markup leaked: {svg}"
+    );
+}
+
+#[test]
 fn version_returns_nonempty_semver_string() {
     let v = version();
     assert!(!v.is_empty(), "version() must not return an empty string");
