@@ -710,6 +710,7 @@ version = "0.3.0"
 dependencies = [
  "chordsketch-chordpro",
  "chordsketch-ireal",
+ "chordsketch-render-text",
 ]
 
 [[package]]

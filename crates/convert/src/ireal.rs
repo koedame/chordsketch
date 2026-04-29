@@ -1,17 +1,21 @@
-//! ChordPro ↔ iReal Pro conversion stubs.
+//! ChordPro ↔ iReal Pro converter dispatch.
 //!
-//! The actual implementations live in the follow-up issues:
+//! Holds the marker types for the two directions and the
+//! ergonomic free-function wrappers.
 //!
-//! - **iReal → ChordPro**: [#2053](https://github.com/koedame/chordsketch/issues/2053).
-//!   Near-lossless; tempo and style descend to ChordPro directives.
-//! - **ChordPro → iReal**: [#2061](https://github.com/koedame/chordsketch/issues/2061).
-//!   Lyrics are dropped (iReal has no lyrics surface) — that drop
-//!   surfaces as a [`crate::ConversionWarning`] with
-//!   [`crate::WarningKind::LossyDrop`].
-//!
-//! Until those issues land, [`chordpro_to_ireal`] and
-//! [`ireal_to_chordpro`] return [`ConversionError::NotImplemented`]
-//! pointing at the tracking issue.
+//! - **iReal → ChordPro**
+//!   ([#2053](https://github.com/koedame/chordsketch/issues/2053)):
+//!   implemented; the [`IrealToChordPro`] marker delegates to
+//!   [`crate::from_ireal::convert`]. Near-lossless; the documented
+//!   drops live in `crates/convert/known-deviations.md`.
+//! - **ChordPro → iReal**
+//!   ([#2061](https://github.com/koedame/chordsketch/issues/2061)):
+//!   not yet implemented; [`ChordProToIreal`] still returns
+//!   [`ConversionError::NotImplemented`] pointing at the tracking
+//!   issue. Lyrics will be dropped (iReal has no lyrics surface)
+//!   — that drop will surface as a [`crate::ConversionWarning`]
+//!   with [`crate::WarningKind::LossyDrop`] when the
+//!   implementation lands.
 
 use chordsketch_chordpro::ast::Song;
 use chordsketch_ireal::IrealSong;
@@ -38,10 +42,12 @@ impl Converter<Song, IrealSong> for ChordProToIreal {
 pub struct IrealToChordPro;
 
 impl Converter<IrealSong, Song> for IrealToChordPro {
-    fn convert(&self, _source: &IrealSong) -> Result<ConversionOutput<Song>, ConversionError> {
-        Err(ConversionError::NotImplemented(
-            "https://github.com/koedame/chordsketch/issues/2053",
-        ))
+    fn convert(&self, source: &IrealSong) -> Result<ConversionOutput<Song>, ConversionError> {
+        // The actual mapping logic lives in `crate::from_ireal` so
+        // the marker struct stays a thin pass-through. Keeping the
+        // logic in its own module lets the unit tests sit next to
+        // the implementation without polluting this file.
+        crate::from_ireal::convert(source)
     }
 }
 
@@ -60,8 +66,14 @@ pub fn chordpro_to_ireal(song: &Song) -> Result<ConversionOutput<IrealSong>, Con
 ///
 /// # Errors
 ///
-/// Currently always returns [`ConversionError::NotImplemented`].
-/// See [`crate::ireal`] for the tracking issue.
+/// The current implementation never returns an error — every
+/// well-formed [`IrealSong`] produces a well-formed [`Song`].
+/// The `Result` return type is preserved so future
+/// strictness-mode hooks can introduce
+/// [`ConversionError::InvalidSource`] without a breaking change.
+/// Lossy but successful conversions return `Ok` with a non-empty
+/// `warnings` list; see [`crate::from_ireal`] for the full
+/// mapping.
 #[must_use = "ignoring a conversion result drops both warnings and errors"]
 pub fn ireal_to_chordpro(song: &IrealSong) -> Result<ConversionOutput<Song>, ConversionError> {
     IrealToChordPro.convert(song)

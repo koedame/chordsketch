@@ -15,3 +15,8 @@ readme = "README.md"
 [dependencies]
 chordsketch-chordpro = { version = "0.3.0", path = "../chordpro" }
 chordsketch-ireal = { version = "0.3.0", path = "../ireal" }
+
+[dev-dependencies]
+# Integration tests in `tests/from_ireal.rs` round-trip through
+# `render-text` to confirm a converted Song actually renders.
+chordsketch-render-text = { version = "0.3.0", path = "../render-text" }
