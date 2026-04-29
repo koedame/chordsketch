@@ -6,15 +6,17 @@
 
 [![crates.io](https://img.shields.io/crates/v/chordsketch-render-ireal)](https://crates.io/crates/chordsketch-render-ireal)
 
-iReal Pro chart renderer — SVG skeleton.
+iReal Pro chart renderer — SVG with 4-bars-per-line grid layout.
 
-This crate is the SVG renderer scaffold for the iReal Pro feature
-set tracked under [#2050](https://github.com/koedame/chordsketch/issues/2050).
-It deliberately ships only the page frame, the metadata header
-(title / composer / style / key), and an empty 4-bar-per-line
-grid skeleton — chord text, barline shapes, repeat / ending
-brackets, music symbols, and chord-name typography each have their
-own follow-up issue.
+This crate renders an `IrealSong` AST as a fixed-size SVG document.
+The current scope (`#2058` scaffold + `#2060` layout engine) covers
+the page frame, the metadata header (title / composer / style /
+key), the 4-bars-per-line grid with section line breaks, and
+flat-layout chord text centred in each cell. Barlines, repeat /
+ending brackets, music symbols, and superscript chord-name
+typography land in follow-up issues (`#2057` / `#2059` / `#2062`).
+
+Tracked under [#2050](https://github.com/koedame/chordsketch/issues/2050).
 
 Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 
@@ -63,23 +65,24 @@ divided into:
 - **Header band** — title (top), composer (right, omitted if
   absent), style + key (left, beneath the title; falls back to
   iReal Pro's "Medium Swing" default when style is unset).
-- **Bar grid** — bars laid out 4-per-row in equal-width cells
-  below the header. Each cell is currently an empty `<rect>`;
-  chord text and inner glyphs are filled in by the follow-up
-  crates / issues.
+- **Bar grid** — bars laid out 4-per-row by `compute_layout`. Each
+  cell carries a centred chord-name `<text>` (flat layout — full
+  superscript typography lands in #2057). Trailing cells in a
+  section's last row are filled with empty placeholders so the
+  visible grid stays a clean rectangle; barlines / repeats /
+  endings / music symbols layer on top in #2059 / #2062.
 
 ## Roadmap
 
 | Feature | Tracking issue |
 |---|---|
-| 4-bars-per-line grid layout engine | [#2060](https://github.com/koedame/chordsketch/issues/2060) |
 | Repeat barlines, endings, section markers | [#2059](https://github.com/koedame/chordsketch/issues/2059) |
 | Chord-name typography with superscripts | [#2057](https://github.com/koedame/chordsketch/issues/2057) |
 | Music symbols via Bravura font (segno / coda / D.C. / D.S.) | [#2062](https://github.com/koedame/chordsketch/issues/2062) |
 | PNG rasterization via resvg | [#2064](https://github.com/koedame/chordsketch/issues/2064) |
 | PDF output layer | [#2063](https://github.com/koedame/chordsketch/issues/2063) |
 
-## Regenerating the golden fixture
+## Regenerating the golden fixtures
 
 When the renderer changes intentionally:
 
@@ -88,7 +91,9 @@ UPDATE_GOLDEN=1 cargo test -p chordsketch-render-ireal
 cargo test -p chordsketch-render-ireal   # re-run without the env var to confirm
 ```
 
-The expected SVG lives at `tests/fixtures/basic/expected.svg`.
+The expected SVGs live under `tests/fixtures/<name>/expected.svg`
+(currently `basic`, `twelve_bar_blues`, `aaba_32bar`,
+`sixteen_bar_loop`, `section_break_irregular`, `multi_chord_bar`).
 
 ## Links
 
