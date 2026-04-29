@@ -9,9 +9,9 @@
 //!   surfaces as a [`crate::ConversionWarning`] with
 //!   [`crate::WarningKind::LossyDrop`].
 //!
-//! Until those issues land, [`chordpro_to_ireal`] and
-//! [`ireal_to_chordpro`] return [`ConversionError::NotImplemented`]
-//! pointing at the tracking issue.
+//! - **iReal → ChordPro** (#2053): implemented — see [`crate::from_ireal`].
+//! - **ChordPro → iReal** (#2061): not yet implemented —
+//!   [`chordpro_to_ireal`] returns [`ConversionError::NotImplemented`].
 
 use chordsketch_chordpro::ast::Song;
 use chordsketch_ireal::IrealSong;
@@ -62,8 +62,11 @@ pub fn chordpro_to_ireal(song: &Song) -> Result<ConversionOutput<IrealSong>, Con
 ///
 /// # Errors
 ///
-/// Currently always returns [`ConversionError::NotImplemented`].
-/// See [`crate::ireal`] for the tracking issue.
+/// Returns [`ConversionError::InvalidSource`] if the source AST
+/// cannot be represented in ChordPro at all (not expected for
+/// well-formed ASTs produced by the iReal parser). Lossy but
+/// successful conversions return `Ok` with a non-empty `warnings`
+/// list. See [`crate::from_ireal`] for the full mapping.
 #[must_use = "ignoring a conversion result drops both warnings and errors"]
 pub fn ireal_to_chordpro(song: &IrealSong) -> Result<ConversionOutput<Song>, ConversionError> {
     IrealToChordPro.convert(song)

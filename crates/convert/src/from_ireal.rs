@@ -10,18 +10,23 @@
 //! since the iReal format has no lyrics surface.
 //!
 //! The conversion is **near-lossless** in this direction — the
-//! only items dropped are listed in
-//! `crates/convert/known-deviations.md`. Each drop emits a
-//! [`ConversionWarning`] so the caller can surface them or
-//! promote them to errors.
+//! only items dropped or approximated are listed in
+//! `crates/convert/known-deviations.md`. Truly lossy drops
+//! (where no equivalent ChordPro primitive exists and information
+//! cannot be recovered on the return trip) emit a
+//! [`ConversionWarning`] with [`crate::WarningKind::LossyDrop`].
+//! Representational approximations (where the information is
+//! preserved as inline text or an alternative directive) are
+//! silent — callers receive a non-empty `warnings` list only when
+//! data is irretrievably lost.
 
 use chordsketch_chordpro::ast::{
     Chord as ChordProChord, CommentStyle, Directive, Line, LyricsLine, LyricsSegment, Metadata,
     Song,
 };
 use chordsketch_ireal::{
-    Accidental, Bar, BarLine, Chord as IrealChord, ChordQuality, ChordRoot, Ending, IrealSong,
-    KeyMode, KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
+    Accidental, Bar, BarLine, Chord as IrealChord, ChordQuality, ChordRoot, IrealSong, KeyMode,
+    KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
 };
 
 use crate::error::{ConversionWarning, WarningKind};
@@ -49,14 +54,14 @@ pub fn convert(source: &IrealSong) -> Result<ConversionOutput<Song>, ConversionE
 
     let mut last_chord_repr: Option<String> = None;
     for (section_index, section) in source.sections.iter().enumerate() {
-        push_section_open(&mut song, &section.label, &mut warnings);
+        push_section_open(&mut song, &section.label);
         push_bars(
             &mut song,
             &section.bars,
             &mut last_chord_repr,
             &mut warnings,
         );
-        push_section_close(&mut song, &section.label, &mut warnings);
+        push_section_close(&mut song, &section.label);
         // Blank line between sections so a downstream renderer
         // that respects `Line::Empty` (text / HTML) gives the
         // chart visual breathing room. Skip after the final
@@ -124,7 +129,7 @@ fn push_directives(song: &mut Song, source: &IrealSong) {
     }
 }
 
-fn push_section_open(song: &mut Song, label: &SectionLabel, _warnings: &mut [ConversionWarning]) {
+fn push_section_open(song: &mut Song, label: &SectionLabel) {
     match label {
         SectionLabel::Verse => {
             song.lines
@@ -162,7 +167,7 @@ fn push_section_open(song: &mut Song, label: &SectionLabel, _warnings: &mut [Con
     }
 }
 
-fn push_section_close(song: &mut Song, label: &SectionLabel, _warnings: &mut [ConversionWarning]) {
+fn push_section_close(song: &mut Song, label: &SectionLabel) {
     match label {
         SectionLabel::Verse => song
             .lines
@@ -260,7 +265,7 @@ fn push_pre_bar_marker(segments: &mut Vec<LyricsSegment>, bar: &Bar) {
         // the `1.`/`2.` text and apply formatting at their layer.
         segments.push(LyricsSegment::text_only(format!(
             "{}. ",
-            ending_number(ending)
+            ending.number()
         )));
     }
     // Bar opening glyph for non-Single starts. Single starts
@@ -275,10 +280,6 @@ fn push_pre_bar_marker(segments: &mut Vec<LyricsSegment>, bar: &Bar) {
     if !open_glyph.is_empty() {
         segments.push(LyricsSegment::text_only(open_glyph.to_owned()));
     }
-}
-
-fn ending_number(ending: Ending) -> u8 {
-    ending.number()
 }
 
 fn symbol_label(symbol: MusicalSymbol) -> &'static str {
@@ -306,6 +307,12 @@ fn push_root_for_chordpro(out: &mut String, root: ChordRoot) {
     out.push(if matches!(root.note, 'A'..='G') {
         root.note
     } else {
+        // `ChordRoot::note` is guaranteed to be in `'A'..='G'` by
+        // the iReal parser (#2054) and the `FromJson` deserialiser.
+        // Direct field mutation can violate this guarantee; falling
+        // back to `'C'` (the most neutral pitch class) keeps the
+        // converter producing structurally valid ChordPro rather than
+        // emitting a non-letter that no ChordPro parser would accept.
         'C'
     });
     match root.accidental {
