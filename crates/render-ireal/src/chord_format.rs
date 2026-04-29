@@ -185,6 +185,60 @@ mod tests {
         assert_eq!(line, expected);
     }
 
+    // ---- quality_glyph coverage ----
+
+    #[test]
+    fn formats_diminished() {
+        let chord = Chord::triad(ChordRoot::natural('B'), ChordQuality::Diminished);
+        assert_eq!(format_chord(&chord), "Bdim");
+    }
+
+    #[test]
+    fn formats_augmented() {
+        let chord = Chord::triad(ChordRoot::natural('C'), ChordQuality::Augmented);
+        assert_eq!(format_chord(&chord), "Caug");
+    }
+
+    #[test]
+    fn formats_major_seventh() {
+        let chord = Chord::triad(ChordRoot::natural('D'), ChordQuality::Major7);
+        assert_eq!(format_chord(&chord), "Dmaj7");
+    }
+
+    #[test]
+    fn formats_diminished_seventh() {
+        let chord = Chord::triad(ChordRoot::natural('G'), ChordQuality::Diminished7);
+        assert_eq!(format_chord(&chord), "Gdim7");
+    }
+
+    #[test]
+    fn formats_suspended_second() {
+        let chord = Chord::triad(ChordRoot::natural('A'), ChordQuality::Suspended2);
+        assert_eq!(format_chord(&chord), "Asus2");
+    }
+
+    #[test]
+    fn formats_suspended_fourth() {
+        let chord = Chord::triad(ChordRoot::natural('E'), ChordQuality::Suspended4);
+        assert_eq!(format_chord(&chord), "Esus4");
+    }
+
+    // ---- write_root accidental coverage ----
+
+    #[test]
+    fn formats_sharp_root() {
+        // Accidental::Sharp in write_root — the one untested arm
+        // after formats_flat_root covers Accidental::Flat.
+        let chord = Chord::triad(
+            ChordRoot {
+                note: 'F',
+                accidental: Accidental::Sharp,
+            },
+            ChordQuality::Minor7,
+        );
+        assert_eq!(format_chord(&chord), "F\u{266F}m7");
+    }
+
     #[test]
     fn empty_bar_chord_line_is_empty() {
         assert_eq!(format_bar_chord_line(&[]), "");
