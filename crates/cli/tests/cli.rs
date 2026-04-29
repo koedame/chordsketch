@@ -903,3 +903,133 @@ fn test_warnings_json_quote_count_is_balanced() {
         );
     }
 }
+
+// -----------------------------------------------------------------
+// iReal Pro auto-detection (#2066)
+//
+// `chordsketch <irealb://...>` and `chordsketch <file-with-ireal>`
+// route through the iReal pipeline and emit SVG. The
+// `--from chordpro|ireal|auto` flag overrides the auto-sniffer.
+
+/// A minimal, deliberately-small iReal Pro URL sourced from the
+/// upstream `pianosnake/ireal-reader` test corpus. Exercising the
+/// real wire format guards against regressions in the parser
+/// dispatch, the percent-decode, and the obfusc50 unscramble.
+const TINY_IREAL_URL: &str = "irealb://%54=%66==%41%66%72%6F=%43==%31%72%33%34%4C%62%4B%63%75%37,%37%47,%2D%20%3E%43,%44,%37%42,%2D%23%46,%47%7C,%37%44,%41%2D,%45,%2D%45%7C,%37%42,%2D%23%46,%45%2D,%7C%44%3C%34%33%54%7C%43,%44%2D%37,%7C%46,%47%37,%43%20%7C%20==%31%34%30=%33";
+
+#[test]
+fn ireal_url_argument_renders_svg_to_stdout() {
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .arg(TINY_IREAL_URL)
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+        ))
+        .stdout(predicate::str::contains("<svg "));
+}
+
+#[test]
+fn ireal_file_input_is_auto_detected() {
+    let mut file = NamedTempFile::new().unwrap();
+    write!(file, "{TINY_IREAL_URL}").unwrap();
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .arg(file.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("<svg "));
+}
+
+#[test]
+fn from_ireal_forces_ireal_pipeline_even_for_chordpro_argument() {
+    // Forcing `--from ireal` on a non-iReal argument should
+    // surface the iReal parser's `MissingPrefix` error rather than
+    // silently falling back to the ChordPro path. This keeps
+    // `--from` honest: when the user asks for the iReal path, a
+    // ChordPro file is a parse error, not a soft fallback.
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args([&fixture("simple.cho"), "--from", "ireal"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("irealb://"));
+}
+
+#[test]
+fn from_chordpro_overrides_ireal_url_detection() {
+    // `--from chordpro` must skip the iReal sniffer. Passing an
+    // iReal URL with that flag forces the ChordPro parser, which
+    // legitimately reports a parse error rather than silently
+    // dispatching to the iReal pipeline.
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args([TINY_IREAL_URL, "--from", "chordpro"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error"));
+}
+
+#[test]
+fn ireal_output_to_file() {
+    let out = NamedTempFile::new().unwrap();
+    let out_path = out.path().to_string_lossy().to_string();
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args([TINY_IREAL_URL, "-o", &out_path])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+    let body = std::fs::read_to_string(&out_path).unwrap();
+    assert!(body.contains("<svg "));
+}
+
+#[test]
+fn ireal_help_text_documents_from_flag() {
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--from"))
+        .stdout(predicate::str::contains("ireal"));
+}
+
+#[test]
+fn ireal_nonexistent_file_with_forced_ireal_reports_error() {
+    // When `--from ireal` is used and the file does not exist,
+    // `read_ireal_input` returns Err and the CLI reports an error
+    // message and exits 1 (exercises the read_ireal_input Err branch).
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args([
+            "/nonexistent/__chordsketch_test__.irealb",
+            "--from",
+            "ireal",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error"));
+}
+
+#[test]
+fn ireal_multi_arg_produces_single_xml_declaration() {
+    // Two separate single-song iReal URLs as arguments must produce
+    // exactly one <?xml?> processing instruction. Duplicate declarations
+    // produce invalid XML and would break downstream XML parsers.
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args([TINY_IREAL_URL, TINY_IREAL_URL])
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+        ))
+        .stdout(predicate::function(|out: &str| {
+            out.matches("<?xml").count() == 1
+        }))
+        .stdout(predicate::function(|out: &str| {
+            out.matches("<svg ").count() == 2
+        }));
+}

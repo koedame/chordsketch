@@ -18,9 +18,11 @@ path = "src/main.rs"
 
 [dependencies]
 chordsketch-chordpro = { version = "0.3.0", path = "../chordpro" }
+chordsketch-ireal = { version = "0.3.0", path = "../ireal" }
 chordsketch-render-text = { version = "0.3.0", path = "../render-text" }
 chordsketch-render-html = { version = "0.3.0", path = "../render-html" }
 chordsketch-render-pdf = { version = "0.3.0", path = "../render-pdf" }
+chordsketch-render-ireal = { version = "0.3.0", path = "../render-ireal" }
 chordsketch-convert-musicxml = { version = "0.3.0", path = "../convert-musicxml" }
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
