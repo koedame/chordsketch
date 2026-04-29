@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="595" height="842" viewBox="0 0 595 842">
+  <rect x="0" y="0" width="595" height="842" fill="white" stroke="black" stroke-width="1"/>
+  <text x="40" y="72" font-family="sans-serif" font-size="24" class="title">Segno Demo</text>
+  <text x="40" y="100" font-family="sans-serif" font-size="12" class="meta">Medium Swing • C major</text>
+  <g class="bar-grid">
+    <rect x="40" y="120" width="128" height="50" fill="none" stroke="black" stroke-width="1"/>
+    <text x="104" y="151" font-family="serif" font-size="14" text-anchor="middle" class="chord"><tspan class="chord-root">C</tspan><tspan class="chord-ext" font-size="10" dy="-4">maj7</tspan></text>
+    <rect x="168" y="120" width="128" height="50" fill="none" stroke="black" stroke-width="1"/>
+    <text x="232" y="151" font-family="serif" font-size="14" text-anchor="middle" class="chord"><tspan class="chord-root">A</tspan><tspan class="chord-ext" font-size="10" dy="-4">m7</tspan></text>
+    <rect x="296" y="120" width="128" height="50" fill="none" stroke="black" stroke-width="1"/>
+    <text x="360" y="151" font-family="serif" font-size="14" text-anchor="middle" class="chord"><tspan class="chord-root">D</tspan><tspan class="chord-ext" font-size="10" dy="-4">m7</tspan></text>
+    <rect x="424" y="120" width="131" height="50" fill="none" stroke="black" stroke-width="1"/>
+    <text x="489" y="151" font-family="serif" font-size="14" text-anchor="middle" class="chord"><tspan class="chord-root">G</tspan><tspan class="chord-ext" font-size="10" dy="-4">7</tspan></text>
+    <text x="40" y="114" font-family="sans-serif" font-size="12" font-weight="bold" class="section-label">A</text>
+    <path d="M 188 94 C 172 94, 190 99, 181 103 S 190 108, 174 108" stroke="black" stroke-width="2" fill="none" class="music-symbol-segno-curve"/>
+    <line x1="172" y1="92" x2="190" y2="110" stroke="black" stroke-width="1" class="music-symbol-segno-slash"/>
+    <circle cx="188" cy="96" r="1.5" fill="black" class="music-symbol-segno-dot"/>
+    <circle cx="174" cy="106" r="1.5" fill="black" class="music-symbol-segno-dot"/>
+  </g>
+</svg>
