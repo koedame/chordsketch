@@ -6,17 +6,19 @@ import init, {
   render_html_body,
   render_html_body_with_options,
   render_html_css,
+  render_html_css_with_options,
 } from '@chordsketch/wasm';
 import { mountChordSketchUi, type Renderers } from '@chordsketch/ui-web';
 import '@chordsketch/ui-web/style.css';
 
 // Adapter from the wasm-bindgen export shape to the ui-web `Renderers`
-// interface. The thin wrapper exists so the wasm functions can keep
-// their no-options overload (used when `transpose` is 0) — calling the
-// `_with_options` variants for every render would still be correct but
-// avoiding an unused options object matches the original playground
-// behaviour and keeps render-pdf's binary output deterministic against
-// the pre-extraction baseline.
+// interface. The text and pdf branches preserve the no-options
+// overload (used when `transpose === 0`) so the common no-transpose
+// path doesn't allocate an options object — matches the original
+// playground behaviour and keeps render-pdf's binary output
+// deterministic against the pre-extraction baseline. The HTML branch
+// always routes through `composeHtmlBody` because it has to combine
+// two wasm calls (body + CSS) regardless.
 //
 // `renderHtml` returns a body-only fragment (`<style>` + `<div
 // class="song">`) rather than the full document `render_html` emits.
@@ -28,19 +30,34 @@ import '@chordsketch/ui-web/style.css';
 // triggered "Blocked script execution in 'about:blank'" warnings on
 // some Chrome configurations. See #2321 §Background.
 //
-// render_html_css() requires an initialised WASM heap and allocates a
-// String across the ABI boundary on each call. The value is byte-stable
-// for the lifetime of a build (consistent with the VS Code extension's
-// single-call caching strategy), so we lazily cache it here.
+// `render_html_css()` allocates a String across the ABI boundary on
+// each call but is byte-stable across the build (the VS Code
+// extension uses the same single-call caching strategy). The cache
+// only applies when `options.config` is unset; with a config, body
+// and CSS must be computed against the same options or class hooks
+// in the body can drift from selectors in the CSS.
+//
+// IMPORTANT: do NOT cache the result of a thrown
+// `render_html_css_with_options(options)` call. The current `render_html_css()`
+// is infallible (returns `String`, not `Result`), but the with-options
+// variant returns `Result<String, JsValue>`. A future refactor that
+// wraps the no-options path in a `try` MUST re-throw — silently
+// caching empty CSS would produce unstyled output with no error
+// surfaced.
 let _cachedHtmlCss: string | null = null;
-const composeHtmlBody = (input: string, options?: { transpose?: number; config?: string }): string => {
-  if (_cachedHtmlCss === null) {
-    _cachedHtmlCss = render_html_css();
-  }
+const composeHtmlBody = (
+  input: string,
+  options?: { transpose?: number; config?: string },
+): string => {
   const body = options
     ? render_html_body_with_options(input, options)
     : render_html_body(input);
-  return `<style>${_cachedHtmlCss}</style>${body}`;
+  // Top-level `<style>` is permitted at the start of the fragment per
+  // the `Renderers.renderHtml` contract; ui-web does not strip it.
+  const css = options?.config !== undefined
+    ? render_html_css_with_options(options)
+    : (_cachedHtmlCss ??= render_html_css());
+  return `<style>${css}</style>${body}`;
 };
 
 const renderers: Renderers = {

@@ -1,10 +1,12 @@
 import init, {
-  render_html,
   render_text,
   render_pdf,
-  render_html_with_options,
   render_text_with_options,
   render_pdf_with_options,
+  render_html_body,
+  render_html_body_with_options,
+  render_html_css,
+  render_html_css_with_options,
 } from '@chordsketch/wasm';
 import {
   mountChordSketchUi,
@@ -62,13 +64,44 @@ let recents: string[] = [];
 // Adapter from the wasm-bindgen export shape to the ui-web `Renderers`
 // interface. Mirrors `packages/playground/src/main.ts` so the desktop
 // WebView and the browser playground share the same render pipeline;
-// keeping the no-options overloads avoids an unused options object on
-// the common `transpose === 0` path, matching the playground's
-// pre-extraction rendering baseline.
+// keeping the no-options overloads on text / pdf avoids an unused
+// options object on the common `transpose === 0` path, matching the
+// playground's pre-extraction rendering baseline.
+//
+// `renderHtml` returns a body-only fragment (`<style>` + `<div
+// class="song">`) and ui-web's `HTML_FRAME_TEMPLATE` wraps it in
+// exactly one `<!DOCTYPE>` / `<html>` / `<body>`. Pre-#2321 this
+// adapter passed `render_html`'s full document through and ui-web
+// wrapped it again, leaving the desktop preview reliant on HTML5
+// nested-document recovery — the same structural defect described in
+// `packages/playground/src/main.ts` and the WebView is the same
+// embedding context (Chromium-derived WebView2 / WKWebView), so the
+// fix must propagate per `.claude/rules/fix-propagation.md`.
+//
+// When `options.config` is unset we reuse a cached default CSS
+// (`render_html_css()` is byte-stable across the build); otherwise we
+// call `render_html_css_with_options(options)` so the body and CSS
+// are computed against the same config. Mirrors the playground
+// adapter byte-for-byte.
+let _cachedHtmlCss: string | null = null;
+const composeHtmlBody = (
+  input: string,
+  options?: { transpose?: number; config?: string },
+): string => {
+  const body = options
+    ? render_html_body_with_options(input, options)
+    : render_html_body(input);
+  // Top-level `<style>` is permitted at the start of the fragment per
+  // the `Renderers.renderHtml` contract; ui-web does not strip it.
+  const css = options?.config !== undefined
+    ? render_html_css_with_options(options)
+    : (_cachedHtmlCss ??= render_html_css());
+  return `<style>${css}</style>${body}`;
+};
+
 const renderers: Renderers = {
   init: () => init(),
-  renderHtml: (input, options) =>
-    options ? render_html_with_options(input, options) : render_html(input),
+  renderHtml: (input, options) => composeHtmlBody(input, options),
   renderText: (input, options) =>
     options ? render_text_with_options(input, options) : render_text(input),
   renderPdf: (input, options) =>

@@ -20,6 +20,9 @@ declare module '@chordsketch/wasm' {
     options: { transpose?: number; config?: string },
   ): string;
   export function render_html_css(): string;
+  export function render_html_css_with_options(
+    options: { transpose?: number; config?: string },
+  ): string;
   export interface ValidationError {
     line: number;
     column: number;

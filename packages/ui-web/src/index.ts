@@ -32,9 +32,10 @@ export interface Renderers {
    * envelope via `HTML_FRAME_TEMPLATE` before setting `iframe.srcdoc`.
    *
    * The returned string MUST NOT include `<!DOCTYPE>`, `<html>`, `<head>`,
-   * or outer `<body>` tags. Hosts are responsible for any
-   * layout/typography styling (typically via a `<style>` block prepended to
-   * the fragment). Returning a full document will produce a double-wrapped
+   * or outer `<body>` tags. A top-level `<style>` element at the start of
+   * the fragment IS permitted and is the recommended way to inject
+   * host-supplied styling (the playground prepends `render_html_css()`
+   * this way). Returning a full document will produce a double-wrapped
    * `srcdoc` and may cause rendering defects on some browsers (see #2321).
    */
   renderHtml(input: string, options?: RenderOptions): string;
@@ -832,14 +833,18 @@ export async function mountChordSketchUi(
         const html = renderOpts
           ? renderers.renderHtml(input, renderOpts)
           : renderers.renderHtml(input);
-        // Defensive empty-then-set: when the user toggles
-        // HTML → other → HTML on unchanged input + transpose, the
-        // composed `srcdoc` string is byte-identical to the previous
-        // render. Some Chromium configurations have been observed to
-        // leave a previously-hidden iframe blank after re-toggling
-        // visible because the same-string assignment did not
-        // re-navigate. Clearing first guarantees a navigation cycle.
-        // Filed via #2321.
+        // Defense in depth, paired with the double-wrap fix above.
+        // The user reported a blank-preview symptom on HTML → other →
+        // HTML toggle (#2321) that we could not reproduce in headless
+        // Chromium. The structural cause — `srcdoc` containing two
+        // `<!DOCTYPE>` / `<head>` / `<body>` pairs that survived only
+        // via HTML5 nested-document recovery — is fixed by the
+        // body-fragment + minimal-frame switch. If a separate
+        // same-string-assignment skip-navigation quirk also
+        // contributes, clearing `srcdoc` to '' before assigning the
+        // new content forces a navigation cycle at near-zero cost.
+        // Drop this empty-then-set if the symptom turns out to be
+        // fully covered by the double-wrap fix.
         preview.srcdoc = '';
         preview.srcdoc = HTML_FRAME_TEMPLATE(html);
         hideError();
