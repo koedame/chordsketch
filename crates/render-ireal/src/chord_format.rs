@@ -8,11 +8,15 @@
 
 use chordsketch_ireal::{Accidental, Chord, ChordQuality, ChordRoot};
 
+use crate::page::MAX_CHORDS_PER_BAR;
+
 /// Returns the display string for the given chord.
 ///
 /// Format: `<root><accidental><quality>[/<bass>]`. Examples:
 /// `C`, `Cm7`, `B♭7`, `F♯m7♭5`, `C/G`. The quality string for
-/// [`ChordQuality::Custom`] is used verbatim.
+/// [`ChordQuality::Custom`] is included verbatim in the
+/// formatter's output; the SVG renderer applies XML escaping at
+/// the embedding site (`crate::svg::escape_xml`).
 #[must_use]
 pub(crate) fn format_chord(chord: &Chord) -> String {
     let mut out = String::new();
@@ -26,17 +30,7 @@ pub(crate) fn format_chord(chord: &Chord) -> String {
 }
 
 fn write_root(out: &mut String, root: ChordRoot) {
-    // The deserializer enforces `A..=G`, but downstream consumers can
-    // construct an AST with arbitrary `note` chars via direct field
-    // assignment. Fall back to `?` (matching the renderer's
-    // `format_key` fallback) so bogus input surfaces visibly rather
-    // than producing nonsense.
-    let glyph = if matches!(root.note, 'A'..='G') {
-        root.note
-    } else {
-        '?'
-    };
-    out.push(glyph);
+    out.push(crate::note_glyph_or_fallback(root.note));
     out.push_str(match root.accidental {
         Accidental::Natural => "",
         Accidental::Flat => "\u{266D}",
@@ -65,10 +59,17 @@ fn quality_glyph(q: &ChordQuality) -> &str {
 /// a single ASCII space between each rendered chord. Used by the
 /// flat-layout pass; the typography pass (#2057) replaces this with
 /// beat-aware horizontal placement.
+///
+/// Truncates the chord list to [`MAX_CHORDS_PER_BAR`] before joining
+/// so an adversarial AST cannot grow the rendered string without
+/// bound. Surplus chords are silently dropped — the cap is far
+/// above any practical iReal Pro chart layout, so a hit indicates
+/// malformed input rather than legitimate notation.
 #[must_use]
 pub(crate) fn format_bar_chord_line(chords: &[chordsketch_ireal::BarChord]) -> String {
     let mut out = String::new();
-    for (i, bc) in chords.iter().enumerate() {
+    let limit = chords.len().min(MAX_CHORDS_PER_BAR);
+    for (i, bc) in chords.iter().take(limit).enumerate() {
         if i > 0 {
             out.push(' ');
         }
@@ -144,6 +145,44 @@ mod tests {
             ChordQuality::Major,
         );
         assert_eq!(format_chord(&chord), "?");
+    }
+
+    #[test]
+    fn out_of_range_bass_falls_back_to_question_mark() {
+        // The `?`-fallback for `note` must apply symmetrically to
+        // the slash-chord bass; otherwise an attacker-supplied bass
+        // could smuggle through the formatter even when the root
+        // is sanitised.
+        let chord = Chord {
+            root: ChordRoot::natural('C'),
+            quality: ChordQuality::Major,
+            bass: Some(ChordRoot {
+                note: '<',
+                accidental: Accidental::Natural,
+            }),
+        };
+        assert_eq!(format_chord(&chord), "C/?");
+    }
+
+    #[test]
+    fn excess_chords_per_bar_are_truncated() {
+        use crate::page::MAX_CHORDS_PER_BAR;
+        // An adversarial AST with > MAX_CHORDS_PER_BAR chords
+        // must produce a bounded string. We do not assert exact
+        // output (the joined text grows with the cap) — only that
+        // the formatter returns rather than allocating without
+        // bound, and that the rendered length is consistent with
+        // exactly `MAX_CHORDS_PER_BAR` chords.
+        let bc = || BarChord {
+            chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+            position: BeatPosition::on_beat(1).unwrap(),
+        };
+        let chords = vec![bc(); MAX_CHORDS_PER_BAR + 100];
+        let line = format_bar_chord_line(&chords);
+        let expected = std::iter::repeat_n("C", MAX_CHORDS_PER_BAR)
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert_eq!(line, expected);
     }
 
     #[test]

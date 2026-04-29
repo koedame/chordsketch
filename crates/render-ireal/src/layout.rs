@@ -118,7 +118,11 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
     let mut section_row_starts = Vec::with_capacity(song.sections.len());
     let mut row: usize = 0;
     let mut col: usize = 0;
-    let mut section_started_row = false;
+    // Highest row index that holds rendered content (bar OR
+    // trailing empty). Used to derive `total_rows` cleanly even
+    // when an empty trailing section bumps `row` past the last
+    // visible content.
+    let mut last_visible_row: Option<usize> = None;
     for (section_idx, section) in song.sections.iter().enumerate() {
         // Before opening a new section that does not start at the
         // row's left margin, emit empty trailers to fill the rest
@@ -133,11 +137,11 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
                 base_cell_width,
                 last_cell_width,
             );
+            last_visible_row = Some(row);
             row += 1;
             col = 0;
         }
         section_row_starts.push(row);
-        section_started_row = false;
         if section.bars.is_empty() {
             // Empty section consumed no rows; the next non-empty
             // section will land on the same row this one would
@@ -153,7 +157,6 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
                 row += 1;
                 col = 0;
             }
-            section_started_row = true;
             let cell_width = if col == BARS_PER_ROW - 1 {
                 last_cell_width
             } else {
@@ -169,6 +172,7 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
                 section_index: section_idx,
                 bar_index_in_section: bar_idx,
             });
+            last_visible_row = Some(row);
             col += 1;
         }
         if bars.len() >= MAX_BARS {
@@ -185,13 +189,11 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
             base_cell_width,
             last_cell_width,
         );
+        last_visible_row = Some(row);
     }
-    let total_rows = if bars.is_empty() {
-        0
-    } else if section_started_row && col == 0 {
-        row
-    } else {
-        row + 1
+    let total_rows = match last_visible_row {
+        Some(r) => r + 1,
+        None => 0,
     };
     Layout {
         bars,
@@ -380,6 +382,24 @@ mod tests {
         );
         let expected_rows = MAX_BARS.div_ceil(BARS_PER_ROW);
         assert_eq!(layout.total_rows, expected_rows);
+    }
+
+    #[test]
+    fn trailing_empty_section_row_start_can_exceed_total_rows() {
+        // When a song ends with empty section(s) following a non-
+        // empty one, `section_row_starts` records a row index for
+        // the empty section that is past `total_rows` — i.e. the
+        // row would have been used had the section had bars. The
+        // renderer's section-label path (#2059) reads
+        // `section_row_starts` and must tolerate this case rather
+        // than indexing an out-of-bounds row.
+        let layout = compute_layout(&song_with_bars(&[4, 0]));
+        assert_eq!(layout.total_rows, 1);
+        assert_eq!(layout.section_row_starts, vec![0, 1]);
+        assert!(
+            layout.section_row_starts[1] >= layout.total_rows,
+            "trailing empty section's row pointer should sit past total_rows"
+        );
     }
 
     #[test]
