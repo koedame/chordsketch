@@ -452,3 +452,85 @@ fn final_barline_demo() -> IrealSong {
 fn render_final_barline_demo() {
     check_golden("final_barline_demo", &final_barline_demo());
 }
+
+// ---------------------------------------------------------------------------
+// Music-symbol fixtures (#2062 AC: golden coverage for each MusicalSymbol
+// variant). Each demo places the symbol on a distinct bar so the glyph's
+// horizontal anchor (cell.x + HALF_GLYPH + 4) is exercised at a non-trivial
+// offset — a regression that drops the symbol back to bar 1 would surface
+// as a coordinate drift in the snapshot.
+// ---------------------------------------------------------------------------
+
+use chordsketch_ireal::MusicalSymbol;
+
+/// Bar with chord and a music symbol.
+fn symbol_bar(symbol: MusicalSymbol, note: char, q: ChordQuality) -> Bar {
+    Bar {
+        symbol: Some(symbol),
+        chords: vec![BarChord {
+            chord: Chord::triad(ChordRoot::natural(note), q),
+            position: BeatPosition::on_beat(1).unwrap(),
+        }],
+        ..Bar::new()
+    }
+}
+
+fn music_symbol_demo(symbol: MusicalSymbol, title: &str) -> IrealSong {
+    let mut song = IrealSong::new();
+    song.title = title.into();
+    song.style = Some("Medium Swing".into());
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![
+            // Bar 1 — plain.
+            bar_with_chord('C', ChordQuality::Major7),
+            // Bar 2 — carries the symbol.
+            symbol_bar(symbol, 'A', ChordQuality::Minor7),
+            // Bar 3 — plain.
+            bar_with_chord('D', ChordQuality::Minor7),
+            // Bar 4 — plain.
+            bar_with_chord('G', ChordQuality::Dominant7),
+        ],
+    });
+    song
+}
+
+#[test]
+fn render_segno_demo() {
+    check_golden(
+        "segno_demo",
+        &music_symbol_demo(MusicalSymbol::Segno, "Segno Demo"),
+    );
+}
+
+#[test]
+fn render_coda_demo() {
+    check_golden(
+        "coda_demo",
+        &music_symbol_demo(MusicalSymbol::Coda, "Coda Demo"),
+    );
+}
+
+#[test]
+fn render_dc_demo() {
+    check_golden(
+        "dc_demo",
+        &music_symbol_demo(MusicalSymbol::DaCapo, "Da Capo Demo"),
+    );
+}
+
+#[test]
+fn render_ds_demo() {
+    check_golden(
+        "ds_demo",
+        &music_symbol_demo(MusicalSymbol::DalSegno, "Dal Segno Demo"),
+    );
+}
+
+#[test]
+fn render_fine_demo() {
+    check_golden(
+        "fine_demo",
+        &music_symbol_demo(MusicalSymbol::Fine, "Fine Demo"),
+    );
+}
