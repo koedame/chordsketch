@@ -39,7 +39,7 @@ pub fn convert(source: &Song) -> Result<ConversionOutput<IrealSong>, ConversionE
     let mut ireal = IrealSong::new();
 
     populate_metadata(&mut ireal, source, &mut warnings);
-    populate_extras_from_directives(&mut ireal, source);
+    populate_extras_from_directives(&mut ireal, source, &mut warnings);
     populate_sections(&mut ireal, source, &mut warnings);
     push_unsupported_warnings(&mut warnings, source);
 
@@ -59,6 +59,12 @@ fn populate_metadata(ireal: &mut IrealSong, source: &Song, warnings: &mut Vec<Co
         if !composer.trim().is_empty() {
             ireal.composer = Some(composer.clone());
         }
+    }
+    if source.metadata.composers.len() > 1 {
+        warnings.push(ConversionWarning::new(
+            WarningKind::LossyDrop,
+            "extra composers dropped — iReal stores only a single composer field",
+        ));
     }
     if let Some(key_str) = source.metadata.key.as_deref() {
         if let Some(ks) = parse_chordpro_key(key_str) {
@@ -122,7 +128,11 @@ fn populate_metadata(ireal: &mut IrealSong, source: &Song, warnings: &mut Vec<Co
     }
 }
 
-fn populate_extras_from_directives(ireal: &mut IrealSong, source: &Song) {
+fn populate_extras_from_directives(
+    ireal: &mut IrealSong,
+    source: &Song,
+    warnings: &mut Vec<ConversionWarning>,
+) {
     // The iReal-specific style tag is round-tripped via
     // `{meta: style <name>}`, mirroring what `from_ireal` emits.
     // Other `{meta}` lines (e.g. arbitrary key-value pairs) are
@@ -140,13 +150,23 @@ fn populate_extras_from_directives(ireal: &mut IrealSong, source: &Song) {
                     }
                 }
             }
-            // Some ChordPro files set `{transpose: N}`. iReal
-            // stores transpose in `[-11, 11]`; clamp out-of-range
-            // values silently — the parser does the same.
+            // Some ChordPro files set `{transpose: N}`. iReal stores
+            // transpose in `[-11, 11]`. Parse as i32 so values outside
+            // the i8 range are still detected and warned about rather
+            // than silently dropped by a parse failure.
             if d.kind == DirectiveKind::Transpose {
                 if let Some(value) = d.value.as_deref() {
-                    if let Ok(n) = value.parse::<i8>() {
-                        ireal.transpose = n.clamp(-11, 11);
+                    if let Ok(n) = value.trim().parse::<i32>() {
+                        let clamped = n.clamp(-11, 11) as i8;
+                        if n != i32::from(clamped) {
+                            warnings.push(ConversionWarning::new(
+                                WarningKind::LossyDrop,
+                                format!(
+                                    "{{transpose: {n}}} clamped to {clamped} — iReal transpose range is [-11, 11]"
+                                ),
+                            ));
+                        }
+                        ireal.transpose = clamped;
                     }
                 }
             }
@@ -226,7 +246,7 @@ fn populate_sections(ireal: &mut IrealSong, source: &Song, warnings: &mut Vec<Co
     if has_default_section {
         warnings.push(ConversionWarning::new(
             WarningKind::Approximated,
-            "no ChordPro section directive found; chords routed into a default `Section A`",
+            "chords found outside any section directive; routed into a default `Section A`",
         ));
     }
     ireal.sections = sections;
@@ -343,7 +363,22 @@ fn push_unsupported_warnings(warnings: &mut Vec<ConversionWarning>, source: &Son
 
 fn parse_chordpro_chord(name: &str) -> IrealChord {
     let mut chars = name.chars();
-    let root_char = chars.next().unwrap_or('C');
+    // Guard against empty chord names. They are not produced by the ChordPro
+    // parser in practice, but `Chord::new("")` is not rejected by the AST
+    // type, so a direct-AST builder can reach this path. Without the guard
+    // `&name[after_root..]` below would panic on an empty string because
+    // `root_char.len_utf8()` would be 1 (from the `unwrap_or` fallback) but
+    // `name.len()` is 0.
+    let root_char = match chars.next() {
+        Some(c) => c,
+        None => {
+            return IrealChord {
+                root: ChordRoot::natural('C'),
+                quality: ChordQuality::Major,
+                bass: None,
+            };
+        }
+    };
     let mut iter = chars.clone();
     let (acc_consumed, root_acc) = match iter.next() {
         Some('#') => ('#'.len_utf8(), Accidental::Sharp),
@@ -351,6 +386,11 @@ fn parse_chordpro_chord(name: &str) -> IrealChord {
         _ => (0, Accidental::Natural),
     };
     let after_root = root_char.len_utf8() + acc_consumed;
+    // Safety: `root_char` was decoded from `name` (non-empty, checked above),
+    // and `after_root` is the sum of `root_char.len_utf8()` (a valid UTF-8
+    // boundary in `name`) and `acc_consumed` (0 or 1, for the ASCII chars `#`
+    // / `b`). The accidental is only counted when it is actually present as
+    // the next byte, so `after_root <= name.len()` always holds.
     let body = &name[after_root..];
     let (quality_str, bass_str) = match body.find('/') {
         Some(idx) => (&body[..idx], Some(&body[idx + '/'.len_utf8()..])),
@@ -358,6 +398,10 @@ fn parse_chordpro_chord(name: &str) -> IrealChord {
     };
     let quality = parse_chordpro_quality(quality_str);
     let root = ChordRoot {
+        // Non-A-to-G root characters (including lowercase) are not valid
+        // ChordPro chord roots. Fall back to 'C' as a best-effort
+        // placeholder so the quality token (e.g. "7" in "H7") is still
+        // preserved in the output rather than losing the entire chord.
         note: if matches!(root_char, 'A'..='G') {
             root_char
         } else {
@@ -634,5 +678,105 @@ mod tests {
             .push(Line::Directive(Directive::with_value("capo", "3")));
         let result = convert(&song).unwrap();
         assert!(result.warnings.iter().any(|w| w.message.contains("capo")));
+    }
+
+    #[test]
+    fn colour_directive_emits_lossy_warning() {
+        let mut song = song_with_metadata("T", None, None, None, None);
+        song.lines.push(Line::Directive(Directive::with_value(
+            "textcolour",
+            "#FF0000",
+        )));
+        let result = convert(&song).unwrap();
+        assert!(result.warnings.iter().any(|w| w.message.contains("colour")));
+    }
+
+    #[test]
+    fn chord_define_directive_emits_lossy_warning() {
+        let mut song = song_with_metadata("T", None, None, None, None);
+        song.lines.push(Line::Directive(Directive::with_value(
+            "define",
+            "C base-fret 1 frets 0 3 2 0 1 0",
+        )));
+        let result = convert(&song).unwrap();
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.message.contains("define") || w.message.contains("chord-shape"))
+        );
+    }
+
+    #[test]
+    fn non_style_meta_directive_emits_lossy_warning() {
+        let mut song = song_with_metadata("T", None, None, None, None);
+        song.lines.push(Line::Directive(Directive::with_value(
+            "meta",
+            "custom_key some_value",
+        )));
+        let result = convert(&song).unwrap();
+        assert!(result.warnings.iter().any(|w| w.message.contains("meta")));
+    }
+
+    #[test]
+    fn transpose_directive_maps_and_warns_when_clamped() {
+        // In-range value: no warning, stored as-is.
+        let mut song = song_with_metadata("T", None, None, None, None);
+        song.lines
+            .push(Line::Directive(Directive::with_value("transpose", "5")));
+        let result = convert(&song).unwrap();
+        assert_eq!(result.output.transpose, 5);
+        assert!(
+            !result
+                .warnings
+                .iter()
+                .any(|w| w.message.contains("transpose")),
+            "in-range transpose should not warn"
+        );
+
+        // Out-of-range value: clamped + warning emitted.
+        let mut song2 = song_with_metadata("T", None, None, None, None);
+        song2
+            .lines
+            .push(Line::Directive(Directive::with_value("transpose", "15")));
+        let result2 = convert(&song2).unwrap();
+        assert_eq!(result2.output.transpose, 11);
+        assert!(
+            result2.warnings.iter().any(
+                |w| matches!(w.kind, WarningKind::LossyDrop) && w.message.contains("transpose")
+            ),
+            "out-of-range transpose must warn"
+        );
+    }
+
+    #[test]
+    fn multiple_composers_emits_lossy_warning() {
+        let mut song = Song::new();
+        song.metadata = Metadata {
+            title: Some("T".to_owned()),
+            composers: vec!["Alice".to_owned(), "Bob".to_owned()],
+            ..Metadata::new()
+        };
+        let result = convert(&song).unwrap();
+        // First composer is preserved.
+        assert_eq!(result.output.composer.as_deref(), Some("Alice"));
+        // Extra composer warning is emitted.
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| matches!(w.kind, WarningKind::LossyDrop) && w.message.contains("composer")),
+            "extra composers must warn"
+        );
+    }
+
+    #[test]
+    fn empty_chord_name_does_not_panic() {
+        // Regression test for the empty-string panic in `parse_chordpro_chord`.
+        // `Chord::new("")` is valid in the ChordPro AST; the converter must
+        // handle it gracefully rather than panicking on `&""[1..]`.
+        let c = parse_chordpro_chord("");
+        assert_eq!(c.root.note, 'C');
+        assert_eq!(c.quality, ChordQuality::Major);
     }
 }

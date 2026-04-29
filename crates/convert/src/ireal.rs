@@ -10,12 +10,11 @@
 //!   drops live in `crates/convert/known-deviations.md`.
 //! - **ChordPro → iReal**
 //!   ([#2061](https://github.com/koedame/chordsketch/issues/2061)):
-//!   not yet implemented; [`ChordProToIreal`] still returns
-//!   [`ConversionError::NotImplemented`] pointing at the tracking
-//!   issue. Lyrics will be dropped (iReal has no lyrics surface)
-//!   — that drop will surface as a [`crate::ConversionWarning`]
-//!   with [`crate::WarningKind::LossyDrop`] when the
-//!   implementation lands.
+//!   implemented; [`ChordProToIreal`] delegates to
+//!   [`crate::to_ireal::convert`]. Lossy (lyrics / fonts / colours /
+//!   capo dropped); every drop surfaces as a [`crate::ConversionWarning`]
+//!   with [`crate::WarningKind::LossyDrop`]. Full mapping table in
+//!   `crates/convert/known-deviations.md`.
 
 use chordsketch_chordpro::ast::Song;
 use chordsketch_ireal::IrealSong;
@@ -57,8 +56,11 @@ impl Converter<IrealSong, Song> for IrealToChordPro {
 ///
 /// # Errors
 ///
-/// Currently always returns [`ConversionError::NotImplemented`].
-/// See [`crate::ireal`] for the tracking issue.
+/// The current mapping never returns `Err` — every well-formed
+/// [`Song`] produces a (possibly warning-laden) [`IrealSong`].
+/// The [`ConversionError`] return type is preserved so future
+/// strictness-mode hooks can introduce
+/// [`ConversionError::InvalidSource`] without a breaking change.
 #[must_use = "ignoring a conversion result drops both warnings and errors"]
 pub fn chordpro_to_ireal(song: &Song) -> Result<ConversionOutput<IrealSong>, ConversionError> {
     ChordProToIreal.convert(song)
