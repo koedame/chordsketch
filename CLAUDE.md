@@ -32,7 +32,7 @@ This is a Cargo workspace with the following crates:
 | `chordsketch-render-text` | `crates/render-text` | lib | `chordsketch-chordpro` |
 | `chordsketch-render-html` | `crates/render-html` | lib | `chordsketch-chordpro` |
 | `chordsketch-render-pdf` | `crates/render-pdf` | lib | `chordsketch-chordpro` |
-| `chordsketch-render-ireal` | `crates/render-ireal` | lib | `chordsketch-ireal`. iReal Pro chart SVG renderer — page frame + metadata header + 4-bars-per-line grid layout engine with section line breaks + superscript chord-name typography (#2058 scaffold + #2060 layout + #2057 typography). Barlines / repeats / endings / music symbols filled in by #2059 / #2062. |
+| `chordsketch-render-ireal` | `crates/render-ireal` | lib | `chordsketch-ireal`. iReal Pro chart SVG renderer — page frame + metadata header + 4-bars-per-line grid layout engine with section line breaks + superscript chord-name typography + repeat / final / double barlines + N-th-ending brackets + section-letter labels (#2058 scaffold + #2060 layout + #2057 typography + #2059 barlines/markers). Music symbols (segno / coda / D.C. / D.S.) filled in by #2062. |
 | `chordsketch-convert` | `crates/convert` | lib | `chordsketch-chordpro`, `chordsketch-ireal`. ChordPro ↔ iReal Pro conversion bridge — trait scaffold (#2051) returning `NotImplemented` until #2053 / #2061 fill in the directions. |
 | `chordsketch-convert-musicxml` | `crates/convert-musicxml` | lib | `chordsketch-chordpro` |
 | `chordsketch` (CLI) | `crates/cli` | bin | `chordsketch-chordpro`, `chordsketch-render-text`, `chordsketch-render-html`, `chordsketch-render-pdf`, `chordsketch-convert-musicxml` |

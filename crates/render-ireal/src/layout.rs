@@ -175,8 +175,13 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
             last_visible_row = Some(row);
             col += 1;
         }
+        // Continue (rather than break) so every section pushes a
+        // `section_row_starts` entry even when its bars were
+        // entirely truncated by `MAX_BARS`. The marker layer
+        // (#2059) reads this slice in lockstep with `song.sections`
+        // and would otherwise index out of bounds.
         if bars.len() >= MAX_BARS {
-            break;
+            continue;
         }
     }
     // Fill trailers for the very last partial row (no following

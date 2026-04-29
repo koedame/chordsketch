@@ -63,8 +63,10 @@
 
 #![forbid(unsafe_code)]
 
+mod barlines;
 pub mod chord_typography;
 pub mod layout;
+mod markers;
 pub mod page;
 mod svg;
 
@@ -226,14 +228,19 @@ fill=\"none\" stroke=\"black\" stroke-width=\"1\"/>\n",
         ));
         let chords = chords_for_bar(song, cell);
         write_bar_chord_text(out, cell, chords);
+        // Overlay non-Single barline glyphs for the bar's start
+        // (left edge) and end (right edge). The cell rectangle's
+        // stroke already provides the simple line for `Single`,
+        // so `barlines::*` returns an empty string there.
+        if let Some(bar) = song
+            .sections
+            .get(cell.section_index)
+            .and_then(|s| s.bars.get(cell.bar_index_in_section))
+        {
+            out.push_str(&barlines::render_left_barline(cell, bar.start));
+            out.push_str(&barlines::render_right_barline(cell, bar.end));
+        }
     }
-    // Paint trailing empties AFTER all bars. With `fill="none"`
-    // SVG rectangles, paint order is invisible today — but #2059
-    // is expected to add bar-level barlines / repeat brackets
-    // and may rely on cell painting being interleaved by row.
-    // Document the contract so #2059 either preserves the
-    // bars-then-empties order or migrates to a row-interleaved
-    // emit pattern explicitly.
     for empty in &layout.trailing_empties {
         out.push_str(&format!(
             "    <rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" \
@@ -244,6 +251,10 @@ fill=\"none\" stroke=\"black\" stroke-width=\"1\" class=\"empty\"/>\n",
             h = empty.height,
         ));
     }
+    // Section labels and ending brackets sit ABOVE the cells, so
+    // paint them last to keep them on top of the row strokes.
+    out.push_str(&markers::render_section_labels(song, layout));
+    out.push_str(&markers::render_endings(song, layout));
     out.push_str("  </g>\n");
 }
 
