@@ -101,7 +101,12 @@ pub(crate) fn render_endings(song: &IrealSong, layout: &Layout) -> String {
             .map(|e| e.number());
         match (run, bar_ending) {
             (None, Some(n)) => run = Some((n, idx, idx)),
-            (Some((n, first, _)), Some(m)) if m == n && same_row(layout, idx - 1, idx) => {
+            // Compare `idx` against the run's `last` (not `idx -
+            // 1`) so the underflow case at `idx == 0` is
+            // structurally impossible — the `(None, Some(n))`
+            // arm above handles the run's first bar, so reaching
+            // this arm always implies `last < idx`.
+            (Some((n, first, last)), Some(m)) if m == n && same_row(layout, last, idx) => {
                 run = Some((n, first, idx));
             }
             (Some((n, first, last)), Some(m)) => {

@@ -1,14 +1,16 @@
-//! iReal Pro chart renderer — SVG with chord-name typography.
+//! iReal Pro chart renderer — SVG with chord-name typography,
+//! repeat barlines, ending brackets, and section labels.
 //!
 //! This crate renders an [`chordsketch_ireal::IrealSong`] AST as a
 //! fixed-size SVG document. The current scope covers the page
 //! frame, the metadata header (title / composer / style / key),
-//! the 4-bars-per-line grid with section line breaks, and
-//! superscript chord-name typography (root + accidental at base
-//! size, quality / extensions raised as superscript, slash + bass
-//! back at base size). Barlines, repeat / ending brackets, and
-//! music symbols land in follow-up issues
-//! (#2059 / #2062). Tracked under
+//! the 4-bars-per-line grid with section line breaks, superscript
+//! chord-name typography (root + accidental at base size, quality
+//! / extensions raised as superscript, slash + bass back at base
+//! size), repeat / final / double barline glyphs, N-th-ending
+//! brackets with `1.` / `2.` labels, and section-letter labels
+//! above each section start. Music symbols (segno / coda / D.C.
+//! / D.S.) land in follow-up issue #2062. Tracked under
 //! [#2050](https://github.com/koedame/chordsketch/issues/2050).
 //!
 //! # Layout overview
@@ -24,10 +26,14 @@
 //!   centred chord-name `<text>` with mixed `<tspan>` runs:
 //!   root + accidental at base size, quality / extensions
 //!   raised as superscript at a smaller size, slash + bass at
-//!   base size on the original baseline. Trailing cells in a
+//!   base size on the original baseline. Bar boundaries display
+//!   the appropriate barline glyph (`Single` via the cell-rect
+//!   stroke; `Double`, `Final`, `OpenRepeat`, `CloseRepeat`
+//!   overlay the cell stroke). N-th-ending brackets and section-
+//!   letter labels sit above the row. Trailing cells in a
 //!   section's last row are filled with empty placeholders so the
-//!   visible grid stays a clean rectangle; barlines / repeats /
-//!   endings / music symbols layer on top in #2059 / #2062.
+//!   visible grid stays a clean rectangle; music symbols layer on
+//!   top in #2062.
 //!
 //! # Dependency policy
 //!
@@ -40,14 +46,17 @@
 //! # Stability
 //!
 //! Pre-1.0. The SVG output structure is expected to grow new
-//! elements (barlines, music symbols) as #2059 / #2062 land.
-//! Existing elements stay stable so that crate consumers (the
-//! playground preview, the PDF rasteriser #2063, the PNG
-//! rasteriser #2064) can rely on a small set of stable selectors
-//! / IDs (`class="title"`, `class="composer"`, `class="meta"`,
-//! `class="bar-grid"`, `class="chord"`, `class="chord-root"`,
-//! `class="chord-ext"`, `class="chord-slash"`, `class="chord-bass"`,
-//! `class="empty"`).
+//! elements (music symbols) as #2062 lands. Existing elements
+//! stay stable so that crate consumers (the playground preview,
+//! the PDF rasteriser #2063, the PNG rasteriser #2064) can rely
+//! on a small set of stable selectors / IDs (`class="title"`,
+//! `class="composer"`, `class="meta"`, `class="bar-grid"`,
+//! `class="chord"`, `class="chord-root"`, `class="chord-ext"`,
+//! `class="chord-slash"`, `class="chord-bass"`, `class="empty"`,
+//! `class="section-label"`, `class="ending-bracket"`,
+//! `class="ending-label"`, `class="barline-double"`,
+//! `class="barline-final"`, `class="barline-repeat-thick"`,
+//! `class="barline-repeat-thin"`, `class="barline-repeat-dot"`).
 //!
 //! # Example
 //!
@@ -278,7 +287,8 @@ fn chords_for_bar<'a>(song: &'a IrealSong, cell: &BarCoord) -> &'a [BarChord] {
 /// Multi-chord bars (split bars) are rendered as a single
 /// space-separated `<text>` whose children alternate per chord.
 /// Beat-aware horizontal placement (one chord per beat slot)
-/// requires bar-cell subdivision and is deferred to #2059.
+/// requires bar-cell subdivision and is deferred to a follow-up
+/// of the iReal Pro tracker (#2050).
 fn write_bar_chord_text(out: &mut String, cell: &BarCoord, chords: &[BarChord]) {
     if chords.is_empty() {
         return;

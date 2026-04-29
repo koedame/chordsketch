@@ -21,7 +21,9 @@
 
 use chordsketch_ireal::IrealSong;
 
-use crate::page::{BAR_ROW_HEIGHT, BARS_PER_ROW, GRID_TOP, MARGIN_X, MAX_BARS, PAGE_WIDTH};
+use crate::page::{
+    BAR_ROW_HEIGHT, BARS_PER_ROW, GRID_TOP, MARGIN_X, MAX_BARS, MAX_SECTIONS, PAGE_WIDTH,
+};
 
 /// Page coordinates of a single bar cell.
 ///
@@ -123,7 +125,11 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
     // when an empty trailing section bumps `row` past the last
     // visible content.
     let mut last_visible_row: Option<usize> = None;
-    for (section_idx, section) in song.sections.iter().enumerate() {
+    // Clamp the section iterator to `MAX_SECTIONS` so an
+    // adversarially-large `Vec<Section>` cannot dominate
+    // `section_row_starts` allocation. The cap mirrors the
+    // `MAX_BARS` / `MAX_CHORDS_PER_BAR` truncation posture.
+    for (section_idx, section) in song.sections.iter().take(MAX_SECTIONS).enumerate() {
         // Before opening a new section that does not start at the
         // row's left margin, emit empty trailers to fill the rest
         // of the current row so the visible grid stays a clean
@@ -243,7 +249,9 @@ fn row_y(row: usize) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::{Layout, compute_layout};
-    use crate::page::{BAR_ROW_HEIGHT, BARS_PER_ROW, GRID_TOP, MARGIN_X, MAX_BARS, PAGE_WIDTH};
+    use crate::page::{
+        BAR_ROW_HEIGHT, BARS_PER_ROW, GRID_TOP, MARGIN_X, MAX_BARS, MAX_SECTIONS, PAGE_WIDTH,
+    };
     use chordsketch_ireal::{Bar, IrealSong, Section, SectionLabel};
 
     fn song_with_bars(per_section: &[usize]) -> IrealSong {
@@ -387,6 +395,49 @@ mod tests {
         );
         let expected_rows = MAX_BARS.div_ceil(BARS_PER_ROW);
         assert_eq!(layout.total_rows, expected_rows);
+    }
+
+    #[test]
+    fn truncated_sections_still_record_section_row_starts() {
+        // Direct regression for the `break → continue` invariant
+        // in `compute_layout`: when section 0 fills the entire
+        // `MAX_BARS` budget, every subsequent section must still
+        // push a `section_row_starts` entry so marker layers
+        // (#2059) can index in lockstep with `song.sections`.
+        let mut song = IrealSong::new();
+        song.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars: (0..MAX_BARS).map(|_| Bar::new()).collect(),
+        });
+        song.sections.push(Section {
+            label: SectionLabel::Letter('B'),
+            bars: vec![Bar::new(), Bar::new()],
+        });
+        let layout = compute_layout(&song);
+        assert_eq!(
+            layout.section_row_starts.len(),
+            2,
+            "section_row_starts must align 1:1 with song.sections"
+        );
+        assert_eq!(layout.bars.len(), MAX_BARS, "MAX_BARS clamp preserved");
+    }
+
+    #[test]
+    fn excess_section_count_clamps_to_max_sections() {
+        use crate::page::MAX_SECTIONS;
+        let mut song = IrealSong::new();
+        for _ in 0..(MAX_SECTIONS + 100) {
+            song.sections.push(Section {
+                label: SectionLabel::Letter('A'),
+                bars: Vec::new(),
+            });
+        }
+        let layout = compute_layout(&song);
+        assert!(
+            layout.section_row_starts.len() <= MAX_SECTIONS,
+            "compute_layout must clamp to MAX_SECTIONS, got {}",
+            layout.section_row_starts.len()
+        );
     }
 
     #[test]

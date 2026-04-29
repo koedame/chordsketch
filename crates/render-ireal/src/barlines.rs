@@ -99,7 +99,13 @@ fn dot(cx: i32, cy: i32, class: &str) -> String {
 fn double_line(edge_x: i32, side: BarlineSide, y_top: i32, y_bottom: i32) -> String {
     // The cell-rect stroke already draws one line at `edge_x`. Add
     // a second line offset toward the cell interior so the pair
-    // forms a visible "||".
+    // forms a visible "||". Adjacent cells whose shared boundary
+    // is `Double` will produce two overlay strokes (one from each
+    // side) — both sit on the cell-interior side of `edge_x`, so
+    // visually three strokes can appear at the boundary. This is
+    // the documented limitation; sister-site coordination across
+    // adjacent bars is deferred until #2062 / #2063 force a
+    // single-pass barline emitter.
     let inner_x = match side {
         BarlineSide::Left => edge_x + BARLINE_GAP,
         BarlineSide::Right => edge_x - BARLINE_GAP,
@@ -108,19 +114,27 @@ fn double_line(edge_x: i32, side: BarlineSide, y_top: i32, y_bottom: i32) -> Str
 }
 
 fn final_line(edge_x: i32, side: BarlineSide, y_top: i32, y_bottom: i32) -> String {
-    // Thick line offset toward the cell interior, paired with the
-    // existing thin cell-rect stroke at `edge_x`.
-    let thick_x = match side {
+    // The Final glyph reads "thin → thick" toward the chart's
+    // outer edge — the convention shows the loud line at the bar
+    // boundary and a thinner line just inside it. We emit both:
+    // the thick line ON the boundary (`edge_x`) overrides the
+    // cell-rect's thin stroke there; the thin overlay sits on
+    // the cell-interior side at `± BARLINE_GAP` so a final bar
+    // surrounded by Single neighbours reads as a clear pair.
+    let mut out = String::new();
+    let inner_x = match side {
         BarlineSide::Left => edge_x + BARLINE_GAP,
         BarlineSide::Right => edge_x - BARLINE_GAP,
     };
-    vertical_line(
-        thick_x,
+    out.push_str(&vertical_line(
+        edge_x,
         y_top,
         y_bottom,
         2 * THICK_HALF_WIDTH + 1,
         "barline-final",
-    )
+    ));
+    out.push_str(&vertical_line(inner_x, y_top, y_bottom, 1, "barline-final"));
+    out
 }
 
 fn open_repeat(
@@ -253,11 +267,18 @@ mod tests {
     }
 
     #[test]
-    fn final_barline_emits_thick_line_with_stroke_width_3() {
+    fn final_barline_emits_thick_plus_thin_line_pair() {
+        // Standard music notation reads "thin → thick" toward the
+        // chart's outer edge for a Final barline. The renderer
+        // emits the thick line on the cell boundary and the thin
+        // line on the cell-interior side.
         let svg = render_right_barline(&coord(), BarLine::Final);
-        assert_eq!(svg.matches("<line").count(), 1);
+        assert_eq!(svg.matches("<line").count(), 2);
         assert!(svg.contains("stroke-width=\"3\""));
-        assert!(svg.contains("class=\"barline-final\""));
+        assert!(svg.contains("stroke-width=\"1\""));
+        // Both lines carry the `barline-final` class so styling
+        // can target the pair as one logical glyph.
+        assert_eq!(svg.matches("class=\"barline-final\"").count(), 2);
     }
 
     #[test]
@@ -309,14 +330,16 @@ mod tests {
     }
 
     #[test]
-    fn final_barline_on_left_side_offsets_thick_line_into_cell() {
-        // The Final glyph on the LEFT side of a cell sits to the
-        // right of the cell-rect stroke. This case is unusual
-        // (Final is typically a `bar.end`) but the AST allows it.
+    fn final_barline_on_left_side_emits_thick_plus_thin() {
+        // The Final glyph on the LEFT side of a cell pairs the
+        // thick line on the boundary (cell.x = 40) with the thin
+        // line on the cell-interior side (40 + BARLINE_GAP = 43).
+        // Final is usually a `bar.end`, but the AST allows it on
+        // either side.
         let svg = render_left_barline(&coord(), BarLine::Final);
-        // The thick line's x should be cell.x + BARLINE_GAP = 43.
-        assert!(svg.contains(" x1=\"43\""), "expected x1=43: {svg}");
-        assert!(svg.contains("stroke-width=\"3\""));
+        assert!(svg.contains(" x1=\"40\""), "expected boundary x1=40: {svg}");
+        assert!(svg.contains(" x1=\"43\""), "expected interior x1=43: {svg}");
+        assert_eq!(svg.matches("stroke-width=\"3\"").count(), 1);
     }
 
     #[test]
