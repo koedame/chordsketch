@@ -139,9 +139,9 @@ pub(crate) fn render_music_symbols(song: &IrealSong, layout: &Layout) -> String 
 }
 
 fn emit_segno(out: &mut String, cx: i32, cy: i32) {
-    // Stylised segno: an S-curve approximated with two arcs, a
-    // diagonal slash through the centre, and two diagonally-
-    // opposed dots. The path data uses absolute SVG path
+    // Stylised segno: an S-curve drawn with cubic Bézier (`C`/`S`)
+    // path segments, a diagonal slash through the centre, and two
+    // diagonally-opposed dots. The path data uses absolute SVG path
     // commands so the glyph renders identically across viewers.
     let r = HALF_GLYPH;
     // S-curve: upper-right hook, then lower-left hook.
