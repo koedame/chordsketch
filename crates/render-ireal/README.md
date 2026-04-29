@@ -66,18 +66,20 @@ divided into:
   absent), style + key (left, beneath the title; falls back to
   iReal Pro's "Medium Swing" default when style is unset).
 - **Bar grid** — bars laid out 4-per-row by `compute_layout`. Each
-  cell carries a centred chord-name `<text>` (flat layout — full
-  superscript typography lands in #2057). Trailing cells in a
-  section's last row are filled with empty placeholders so the
-  visible grid stays a clean rectangle; barlines / repeats /
-  endings / music symbols layer on top in #2059 / #2062.
+  cell carries a centred chord-name `<text>` whose `<tspan>` runs
+  apply iReal Pro's typography convention: root + accidental at
+  base size, quality / extensions raised as superscript at a
+  smaller size, slash + bass returning to base size on the original
+  baseline. Trailing cells in a section's last row are filled with
+  empty placeholders so the visible grid stays a clean rectangle;
+  barlines / repeats / endings / music symbols layer on top in
+  #2059 / #2062.
 
 ## Roadmap
 
 | Feature | Tracking issue |
 |---|---|
 | Repeat barlines, endings, section markers | [#2059](https://github.com/koedame/chordsketch/issues/2059) |
-| Chord-name typography with superscripts | [#2057](https://github.com/koedame/chordsketch/issues/2057) |
 | Music symbols via Bravura font (segno / coda / D.C. / D.S.) | [#2062](https://github.com/koedame/chordsketch/issues/2062) |
 | PNG rasterization via resvg | [#2064](https://github.com/koedame/chordsketch/issues/2064) |
 | PDF output layer | [#2063](https://github.com/koedame/chordsketch/issues/2063) |

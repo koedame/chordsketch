@@ -306,6 +306,84 @@ fn sharp_key_emits_unicode_sharp_glyph() {
 }
 
 #[test]
+fn slash_chord_renders_with_chord_slash_and_chord_bass_classes() {
+    // Exercises the `SpanKind::Slash` + `SpanKind::Bass` SVG-emit
+    // path. Without a slash chord in any progression fixture, the
+    // `chord-slash` / `chord-bass` `<tspan>` branches were
+    // unexercised for coverage purposes.
+    let bar = Bar {
+        chords: vec![BarChord {
+            chord: Chord {
+                root: ChordRoot::natural('C'),
+                quality: ChordQuality::Major7,
+                bass: Some(ChordRoot::natural('G')),
+            },
+            position: BeatPosition::on_beat(1).unwrap(),
+        }],
+        ..Bar::new()
+    };
+    let mut song = IrealSong::new();
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![bar],
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    assert!(
+        svg.contains("class=\"chord-root\">C</tspan>"),
+        "expected root span: {svg}"
+    );
+    assert!(
+        svg.contains("class=\"chord-ext\""),
+        "expected extension span: {svg}"
+    );
+    assert!(
+        svg.contains("class=\"chord-slash\""),
+        "expected slash span: {svg}"
+    );
+    assert!(
+        svg.contains("class=\"chord-bass\""),
+        "expected bass span: {svg}"
+    );
+    // The slash and bass spans must reset font-size + apply the
+    // inverse `dy` so the baseline returns to the cell centre
+    // after the raised extension.
+    assert!(
+        svg.contains("dy=\"4\""),
+        "expected baseline restore on slash span: {svg}"
+    );
+}
+
+#[test]
+fn slash_chord_without_quality_uses_unshifted_slash_span() {
+    // When the chord has no quality (Major triad), the slash and
+    // bass run on the original baseline directly — no `dy`
+    // restore is needed because no extension preceded them.
+    let bar = Bar {
+        chords: vec![BarChord {
+            chord: Chord {
+                root: ChordRoot::natural('C'),
+                quality: ChordQuality::Major,
+                bass: Some(ChordRoot::natural('E')),
+            },
+            position: BeatPosition::on_beat(1).unwrap(),
+        }],
+        ..Bar::new()
+    };
+    let mut song = IrealSong::new();
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![bar],
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    assert!(svg.contains("<tspan class=\"chord-slash\">/</tspan>"));
+    assert!(svg.contains("<tspan class=\"chord-bass\">E</tspan>"));
+    assert!(
+        !svg.contains("class=\"chord-slash\" font-size"),
+        "no font-size override expected when no extension precedes slash"
+    );
+}
+
+#[test]
 fn version_returns_nonempty_semver_string() {
     let v = version();
     assert!(!v.is_empty(), "version() must not return an empty string");

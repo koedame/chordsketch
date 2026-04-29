@@ -43,9 +43,23 @@ pub const BAR_ROW_HEIGHT: i32 = 50;
 /// `4096` bars is well past any real chart length (a typical jazz
 /// standard is 16–64 bars). When this cap is hit, surplus bars are
 /// silently truncated; documenting the limit in the public-API
-/// rustdoc lets future callers (#2057, #2059) detect when they
-/// need to surface a warning instead.
+/// rustdoc lets future callers (#2059) detect when they need to
+/// surface a warning instead.
 pub const MAX_BARS: usize = 4096;
+
+/// Base font size for chord-name typography (root, slash, bass).
+pub const CHORD_FONT_SIZE_BASE: i32 = 14;
+
+/// Smaller font size used for raised-baseline extension spans
+/// (e.g. `maj7`, `m7♭5`, `sus4`). Mirrors iReal Pro's superscript
+/// proportion — ≈ 70% of the base size.
+pub const CHORD_FONT_SIZE_SUPERSCRIPT: i32 = 10;
+
+/// Baseline shift for the extension span — negative is "up" in
+/// SVG coordinates. Approximately a third of the base font size,
+/// matching iReal Pro's visual offset for superscript chord
+/// extensions.
+pub const CHORD_SUPERSCRIPT_DY: i32 = -4;
 
 /// Maximum number of chords the renderer lays out inside a single
 /// bar before truncating.

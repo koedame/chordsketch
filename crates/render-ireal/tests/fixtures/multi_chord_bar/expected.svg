@@ -5,12 +5,12 @@
   <text x="40" y="100" font-family="sans-serif" font-size="12" class="meta">Medium Swing • C major</text>
   <g class="bar-grid">
     <rect x="40" y="120" width="128" height="50" fill="none" stroke="black" stroke-width="1"/>
-    <text x="104" y="151" font-family="sans-serif" font-size="14" text-anchor="middle" class="chord">Cmaj7</text>
+    <text x="104" y="151" font-family="serif" font-size="14" text-anchor="middle" class="chord"><tspan class="chord-root">C</tspan><tspan class="chord-ext" font-size="10" dy="-4">maj7</tspan></text>
     <rect x="168" y="120" width="128" height="50" fill="none" stroke="black" stroke-width="1"/>
-    <text x="232" y="151" font-family="sans-serif" font-size="14" text-anchor="middle" class="chord">Am7 Dm7</text>
+    <text x="232" y="151" font-family="serif" font-size="14" text-anchor="middle" class="chord"><tspan class="chord-root">A</tspan><tspan class="chord-ext" font-size="10" dy="-4">m7</tspan><tspan> </tspan><tspan class="chord-root">D</tspan><tspan class="chord-ext" font-size="10" dy="-4">m7</tspan></text>
     <rect x="296" y="120" width="128" height="50" fill="none" stroke="black" stroke-width="1"/>
-    <text x="360" y="151" font-family="sans-serif" font-size="14" text-anchor="middle" class="chord">G7</text>
+    <text x="360" y="151" font-family="serif" font-size="14" text-anchor="middle" class="chord"><tspan class="chord-root">G</tspan><tspan class="chord-ext" font-size="10" dy="-4">7</tspan></text>
     <rect x="424" y="120" width="131" height="50" fill="none" stroke="black" stroke-width="1"/>
-    <text x="489" y="151" font-family="sans-serif" font-size="14" text-anchor="middle" class="chord">Cmaj7</text>
+    <text x="489" y="151" font-family="serif" font-size="14" text-anchor="middle" class="chord"><tspan class="chord-root">C</tspan><tspan class="chord-ext" font-size="10" dy="-4">maj7</tspan></text>
   </g>
 </svg>

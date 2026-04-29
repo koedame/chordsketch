@@ -1,13 +1,14 @@
-//! iReal Pro chart renderer — SVG with 4-bars-per-line grid.
+//! iReal Pro chart renderer — SVG with chord-name typography.
 //!
 //! This crate renders an [`chordsketch_ireal::IrealSong`] AST as a
-//! fixed-size SVG document. The current scope (#2058 scaffold +
-//! #2060 layout engine) ships the page frame, the metadata header
-//! (title / composer / style / key), the 4-bars-per-line grid with
-//! section line breaks, and flat-layout chord-name text centred in
-//! each cell. Barlines, repeat / ending brackets, music symbols,
-//! and superscript chord-name typography land in follow-up issues
-//! (#2057 / #2059 / #2062). Tracked under
+//! fixed-size SVG document. The current scope covers the page
+//! frame, the metadata header (title / composer / style / key),
+//! the 4-bars-per-line grid with section line breaks, and
+//! superscript chord-name typography (root + accidental at base
+//! size, quality / extensions raised as superscript, slash + bass
+//! back at base size). Barlines, repeat / ending brackets, and
+//! music symbols land in follow-up issues
+//! (#2059 / #2062). Tracked under
 //! [#2050](https://github.com/koedame/chordsketch/issues/2050).
 //!
 //! # Layout overview
@@ -20,11 +21,13 @@
 //!   (left, beneath the title).
 //! - **Bar grid** — bars laid out 4-per-row by the
 //!   [`layout::compute_layout`] engine. Each cell carries a
-//!   centred chord-name `<text>` (flat layout — superscript
-//!   typography lands in #2057). Trailing cells in a section's
-//!   last row are filled with empty placeholders so the visible
-//!   grid stays a clean rectangle; barlines / repeats / endings
-//!   / music symbols layer on top in #2059 / #2062.
+//!   centred chord-name `<text>` with mixed `<tspan>` runs:
+//!   root + accidental at base size, quality / extensions
+//!   raised as superscript at a smaller size, slash + bass at
+//!   base size on the original baseline. Trailing cells in a
+//!   section's last row are filled with empty placeholders so the
+//!   visible grid stays a clean rectangle; barlines / repeats /
+//!   endings / music symbols layer on top in #2059 / #2062.
 //!
 //! # Dependency policy
 //!
@@ -37,11 +40,14 @@
 //! # Stability
 //!
 //! Pre-1.0. The SVG output structure is expected to grow new
-//! elements (barlines, music symbols, superscript chord
-//! typography) as #2057 / #2059 / #2062 land. Existing elements
-//! stay stable so that crate consumers (the playground preview,
-//! the PDF rasteriser #2063, the PNG rasteriser #2064) can rely
-//! on a small set of stable selectors / IDs.
+//! elements (barlines, music symbols) as #2059 / #2062 land.
+//! Existing elements stay stable so that crate consumers (the
+//! playground preview, the PDF rasteriser #2063, the PNG
+//! rasteriser #2064) can rely on a small set of stable selectors
+//! / IDs (`class="title"`, `class="composer"`, `class="meta"`,
+//! `class="bar-grid"`, `class="chord"`, `class="chord-root"`,
+//! `class="chord-ext"`, `class="chord-slash"`, `class="chord-bass"`,
+//! `class="empty"`).
 //!
 //! # Example
 //!
@@ -57,17 +63,19 @@
 
 #![forbid(unsafe_code)]
 
-mod chord_format;
+pub mod chord_typography;
 pub mod layout;
 pub mod page;
 mod svg;
 
 use chordsketch_ireal::{Accidental, BarChord, IrealSong, KeyMode};
 
+pub use chord_typography::{ChordTypography, SpanKind, TypographySpan};
 pub use layout::{BarCoord, EmptyCell, Layout, compute_layout};
 pub use page::{
-    BAR_ROW_HEIGHT, BARS_PER_ROW, GRID_TOP, HEADER_BAND_HEIGHT, MARGIN_X, MARGIN_Y, MAX_BARS,
-    PAGE_HEIGHT, PAGE_WIDTH,
+    BAR_ROW_HEIGHT, BARS_PER_ROW, CHORD_FONT_SIZE_BASE, CHORD_FONT_SIZE_SUPERSCRIPT,
+    CHORD_SUPERSCRIPT_DY, GRID_TOP, HEADER_BAND_HEIGHT, MARGIN_X, MARGIN_Y, MAX_BARS, PAGE_HEIGHT,
+    PAGE_WIDTH,
 };
 
 /// Caller-supplied render configuration.
@@ -186,9 +194,9 @@ fn format_key(song: &IrealSong) -> String {
 
 /// Returns `note` if it is in the documented `'A'..='G'` uppercase
 /// ASCII range, otherwise `'?'`. Single source of truth for the
-/// out-of-range fallback shared between [`format_key`] and the
-/// [`crate::chord_format::format_chord`] root / bass writers, so a
-/// future tightening of the rule (per
+/// out-of-range fallback shared between [`format_key`] and
+/// [`crate::chord_typography::chord_to_typography`]'s root / bass
+/// writers, so a future tightening of the rule (per
 /// `.claude/rules/sanitizer-security.md` "security asymmetry")
 /// only needs to change one site.
 ///
@@ -217,19 +225,7 @@ fill=\"none\" stroke=\"black\" stroke-width=\"1\"/>\n",
             h = cell.height,
         ));
         let chords = chords_for_bar(song, cell);
-        if let Some(line) = render_bar_chord_text(chords) {
-            // Centre the chord text inside the cell. The 0.62
-            // y-fraction is the visual baseline iReal Pro itself
-            // uses — it lifts the text into the upper half of the
-            // cell so the future barline overlay (#2059) lives
-            // beneath it without collision.
-            let text_x = cell.x + cell.width / 2;
-            let text_y = cell.y + (cell.height * 62) / 100;
-            out.push_str(&format!(
-                "    <text x=\"{text_x}\" y=\"{text_y}\" font-family=\"sans-serif\" \
-font-size=\"14\" text-anchor=\"middle\" class=\"chord\">{line}</text>\n"
-            ));
-        }
+        write_bar_chord_text(out, cell, chords);
     }
     // Paint trailing empties AFTER all bars. With `fill="none"`
     // SVG rectangles, paint order is invisible today — but #2059
@@ -263,21 +259,89 @@ fn chords_for_bar<'a>(song: &'a IrealSong, cell: &BarCoord) -> &'a [BarChord] {
         .unwrap_or(&[])
 }
 
-fn render_bar_chord_text(chords: &[BarChord]) -> Option<String> {
+/// Emits one `<text>` element per bar containing typography
+/// `<tspan>` runs — root + accidental at base size, quality /
+/// extension(s) raised as superscript at a smaller size, slash +
+/// bass returning to the base size on the original baseline.
+///
+/// Multi-chord bars (split bars) are rendered as a single
+/// space-separated `<text>` whose children alternate per chord.
+/// Beat-aware horizontal placement (one chord per beat slot)
+/// requires bar-cell subdivision and is deferred to #2059.
+fn write_bar_chord_text(out: &mut String, cell: &BarCoord, chords: &[BarChord]) {
     if chords.is_empty() {
-        return None;
+        return;
     }
-    let raw = chord_format::format_bar_chord_line(chords);
-    // Defense-in-depth: today `format_bar_chord_line` only returns
-    // empty when `chords` is empty (already filtered above), but if
-    // a future formatter returns empty for some new edge case —
-    // e.g. all chords truncated by `MAX_CHORDS_PER_BAR` to zero —
-    // skip emitting an empty `<text>` element rather than
-    // producing malformed-but-valid SVG.
-    if raw.is_empty() {
-        return None;
+    // Apply the same per-bar truncation the previous flat
+    // formatter did — without it an adversarial AST with
+    // `usize::MAX/2` chords in one bar would OOM the renderer on a
+    // single `<text>` element. The compile-time
+    // `const_assert!(MAX_CHORDS_PER_BAR > 0)` in `page.rs` keeps
+    // `chord_limit` non-zero whenever `chords` is non-empty, so no
+    // additional zero-guard is needed here.
+    let chord_limit = chords.len().min(page::MAX_CHORDS_PER_BAR);
+    let text_x = cell.x + cell.width / 2;
+    // Centre the chord text inside the cell. The 0.62 y-fraction
+    // matches iReal Pro's baseline placement (slightly above
+    // mid-cell) so the future barline overlay (#2059) sits
+    // beneath without collision.
+    let text_y = cell.y + (cell.height * 62) / 100;
+    out.push_str(&format!(
+        "    <text x=\"{text_x}\" y=\"{text_y}\" font-family=\"serif\" \
+font-size=\"{base}\" text-anchor=\"middle\" class=\"chord\">",
+        base = page::CHORD_FONT_SIZE_BASE,
+    ));
+    for (i, bc) in chords.iter().take(chord_limit).enumerate() {
+        if i > 0 {
+            // Inter-chord separator stays on the base baseline.
+            out.push_str("<tspan>\u{00A0}</tspan>");
+        }
+        let typography = chord_typography::chord_to_typography(&bc.chord);
+        write_chord_spans(out, &typography);
     }
-    Some(svg::escape_xml(&raw))
+    out.push_str("</text>\n");
+}
+
+fn write_chord_spans(out: &mut String, typography: &ChordTypography) {
+    let mut prev_kind: Option<SpanKind> = None;
+    for span in &typography.spans {
+        let escaped = svg::escape_xml(&span.text);
+        match span.kind {
+            SpanKind::Root => {
+                out.push_str(&format!("<tspan class=\"chord-root\">{escaped}</tspan>"));
+            }
+            SpanKind::Extension => {
+                // Smaller font + raised baseline. `dy` is relative
+                // to the previous span's baseline, so we only need
+                // to apply the shift once on entry.
+                out.push_str(&format!(
+                    "<tspan class=\"chord-ext\" font-size=\"{size}\" dy=\"{dy}\">{escaped}</tspan>",
+                    size = page::CHORD_FONT_SIZE_SUPERSCRIPT,
+                    dy = page::CHORD_SUPERSCRIPT_DY,
+                ));
+            }
+            SpanKind::Slash | SpanKind::Bass => {
+                let class = if matches!(span.kind, SpanKind::Slash) {
+                    "chord-slash"
+                } else {
+                    "chord-bass"
+                };
+                // If the previous span raised the baseline, return
+                // it to the original via the inverse `dy` shift,
+                // and restore the base font size.
+                if matches!(prev_kind, Some(SpanKind::Extension)) {
+                    let restore_dy = -page::CHORD_SUPERSCRIPT_DY;
+                    out.push_str(&format!(
+                        "<tspan class=\"{class}\" font-size=\"{base}\" dy=\"{restore_dy}\">{escaped}</tspan>",
+                        base = page::CHORD_FONT_SIZE_BASE,
+                    ));
+                } else {
+                    out.push_str(&format!("<tspan class=\"{class}\">{escaped}</tspan>"));
+                }
+            }
+        }
+        prev_kind = Some(span.kind);
+    }
 }
 
 /// Returns the library version (the workspace `Cargo.toml`
