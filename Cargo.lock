@@ -749,6 +749,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "chordsketch-render-ireal"
+version = "0.3.0"
+dependencies = [
+ "chordsketch-ireal",
+]
+
+[[package]]
 name = "chordsketch-render-pdf"
 version = "0.3.0"
 dependencies = [

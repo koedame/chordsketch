@@ -15,3 +15,4 @@
 # runner sees.
 crates/*/tests/fixtures/**/input.cho text eol=lf
 crates/*/tests/fixtures/**/expected.txt text eol=lf
+crates/*/tests/fixtures/**/expected.svg text eol=lf

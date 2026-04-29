@@ -1,0 +1,318 @@
+//! Golden-snapshot test for the SVG skeleton.
+//!
+//! Builds the same `IrealSong` every run (an "Autumn Leaves" stub
+//! with one bar) and asserts the renderer's output is byte-identical
+//! to `tests/fixtures/basic/expected.svg`.
+//!
+//! When the renderer changes intentionally (constants, header
+//! layout, grid math), regenerate the snapshot:
+//!
+//! ```bash
+//! UPDATE_GOLDEN=1 cargo test -p chordsketch-render-ireal
+//! ```
+//!
+//! and re-run the test without the env var to confirm parity. Drop
+//! the env var from the commit — it is read only at test time.
+
+use chordsketch_ireal::{
+    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, IrealSong,
+    KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
+};
+use chordsketch_render_ireal::{RenderOptions, render_svg, version};
+
+const EXPECTED: &str = include_str!("fixtures/basic/expected.svg");
+
+fn build_basic_song() -> IrealSong {
+    let chord = Chord::triad(ChordRoot::natural('C'), ChordQuality::Minor7);
+    let bar_chord = BarChord {
+        chord,
+        position: BeatPosition::on_beat(1).unwrap(),
+    };
+    let bar = Bar {
+        start: BarLine::OpenRepeat,
+        end: BarLine::CloseRepeat,
+        chords: vec![bar_chord],
+        ending: None,
+        symbol: Some(MusicalSymbol::Segno),
+    };
+    IrealSong {
+        title: "Autumn Leaves".into(),
+        composer: Some("Joseph Kosma".into()),
+        style: Some("Medium Swing".into()),
+        key_signature: KeySignature {
+            root: ChordRoot {
+                note: 'E',
+                accidental: Accidental::Natural,
+            },
+            mode: KeyMode::Minor,
+        },
+        time_signature: TimeSignature::default(),
+        tempo: Some(120),
+        transpose: 0,
+        sections: vec![Section {
+            label: SectionLabel::Letter('A'),
+            bars: vec![bar],
+        }],
+    }
+}
+
+#[test]
+fn render_basic_song_matches_golden() {
+    let song = build_basic_song();
+    let actual = render_svg(&song, &RenderOptions::default());
+    if std::env::var_os("UPDATE_GOLDEN").is_some() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/basic/expected.svg"
+        );
+        std::fs::write(path, &actual).expect("write golden fixture");
+    }
+    assert_eq!(
+        actual, EXPECTED,
+        "render output drifted; rerun with UPDATE_GOLDEN=1 to regenerate"
+    );
+}
+
+#[test]
+fn empty_song_renders_well_formed_svg_with_no_grid() {
+    // A song with zero bars must still produce a valid SVG: page
+    // frame + header band, but the `<g class="bar-grid">` is
+    // omitted because the row count rounds down to zero. The
+    // renderer must not emit an empty `<g>` (which would change
+    // the byte-stable layout once chord text lands).
+    let song = IrealSong::new();
+    let actual = render_svg(&song, &RenderOptions::default());
+    assert!(actual.starts_with("<?xml version=\"1.0\""));
+    assert!(actual.contains("<svg "));
+    assert!(actual.ends_with("</svg>\n"));
+    assert!(
+        !actual.contains("class=\"bar-grid\""),
+        "empty song must not emit a bar-grid group: {actual}"
+    );
+}
+
+#[test]
+fn header_uses_default_text_when_metadata_is_missing() {
+    // Title falls back to "Untitled"; style and key fall back
+    // to the default "Medium Swing" + "C major".
+    let song = IrealSong::new();
+    let svg = render_svg(&song, &RenderOptions::default());
+    assert!(svg.contains(">Untitled<"), "expected Untitled fallback");
+    assert!(
+        svg.contains("Medium Swing"),
+        "expected default style placeholder: {svg}"
+    );
+    assert!(
+        svg.contains("C major"),
+        "expected default key placeholder: {svg}"
+    );
+    assert!(
+        !svg.contains("class=\"composer\""),
+        "absent composer must omit the composer text element"
+    );
+}
+
+#[test]
+fn xml_reserved_chars_in_title_are_escaped() {
+    // Adversarial title is escaped before reaching the SVG so a
+    // future caller cannot smuggle markup through the public API.
+    let mut song = IrealSong::new();
+    song.title = "<bad>&\"foo\"".into();
+    let svg = render_svg(&song, &RenderOptions::default());
+    assert!(
+        svg.contains("&lt;bad&gt;&amp;&quot;foo&quot;"),
+        "title was not escaped: {svg}"
+    );
+    assert!(
+        !svg.contains("<bad>"),
+        "unescaped tag leaked into output: {svg}"
+    );
+}
+
+#[test]
+fn flat_key_emits_unicode_flat_glyph() {
+    // The key formatter renders the flat sign as U+266D, which
+    // passes through `escape_xml` unchanged because flats are not
+    // XML-reserved.
+    let mut song = IrealSong::new();
+    song.key_signature.root = ChordRoot {
+        note: 'B',
+        accidental: Accidental::Flat,
+    };
+    let svg = render_svg(&song, &RenderOptions::default());
+    assert!(svg.contains("B\u{266D} major"), "missing flat glyph: {svg}");
+}
+
+#[test]
+fn multi_row_bar_grid_emits_one_row_per_four_bars() {
+    // 9 bars round up to 3 rows (4 + 4 + 1, with the last row's
+    // trailing 3 cells still drawn empty per the documented
+    // "fixed 4-cell grid" contract).
+    let mut song = IrealSong::new();
+    let mut bars = Vec::with_capacity(9);
+    for _ in 0..9 {
+        bars.push(Bar::new());
+    }
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars,
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    let cell_count = svg.matches("<rect").count();
+    // 1 page frame + 12 grid cells (3 rows × 4 cells) = 13.
+    assert_eq!(
+        cell_count, 13,
+        "expected 13 <rect> elements (1 frame + 12 cells), got {cell_count}: {svg}"
+    );
+}
+
+#[test]
+fn grid_aligns_to_right_margin() {
+    // The right edge of the rightmost cell must hit exactly
+    // `PAGE_WIDTH - MARGIN_X` (515 with the current constants),
+    // not 3px short of it. Integer-division remainder is absorbed
+    // into the last cell's width.
+    use chordsketch_render_ireal::{MARGIN_X, PAGE_WIDTH};
+    let mut song = IrealSong::new();
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![Bar::new()],
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    // The last cell of the first (and only) row appears as the
+    // last `<rect ... fill="none"` in the output (`fill="white"`
+    // is the page frame). Pull its `x` and `width` and check that
+    // x + width == PAGE_WIDTH - MARGIN_X.
+    let needle = "fill=\"none\"";
+    let last_rect = svg
+        .rmatch_indices(needle)
+        .map(|(idx, _)| &svg[..idx])
+        .next()
+        .and_then(|prefix| prefix.rfind("<rect"))
+        .map(|start| &svg[start..])
+        .expect("at least one cell rect");
+    let last_open = last_rect.find('>').expect("rect tag closes");
+    let header = &last_rect[..=last_open];
+    let x: i32 = parse_attr(header, "x");
+    let width: i32 = parse_attr(header, "width");
+    assert_eq!(
+        x + width,
+        PAGE_WIDTH - MARGIN_X,
+        "rightmost cell ends at {} but expected {}: {header}",
+        x + width,
+        PAGE_WIDTH - MARGIN_X
+    );
+}
+
+fn parse_attr(tag: &str, name: &str) -> i32 {
+    let needle = format!("{name}=\"");
+    let start = tag
+        .find(&needle)
+        .unwrap_or_else(|| panic!("attr {name:?} missing in {tag}"))
+        + needle.len();
+    let rest = &tag[start..];
+    let end = rest
+        .find('"')
+        .unwrap_or_else(|| panic!("attr {name:?} unterminated"));
+    rest[..end]
+        .parse()
+        .unwrap_or_else(|_| panic!("attr {name:?} not an integer"))
+}
+
+#[test]
+fn render_clamps_bar_count_to_max_bars() {
+    // An adversarial AST with > MAX_BARS bars must not allocate
+    // an unbounded number of `<rect>` elements; surplus bars are
+    // silently truncated. This keeps the renderer's memory cost
+    // bounded and the y-coordinate arithmetic safe.
+    use chordsketch_render_ireal::{BARS_PER_ROW, MAX_BARS};
+    let mut song = IrealSong::new();
+    let bar_count = MAX_BARS + 100;
+    let mut bars = Vec::with_capacity(bar_count);
+    for _ in 0..bar_count {
+        bars.push(Bar::new());
+    }
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars,
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    let rect_count = svg.matches("<rect").count();
+    // Expected: 1 frame + (MAX_BARS / BARS_PER_ROW) rows × BARS_PER_ROW cells.
+    let expected_rows = MAX_BARS.div_ceil(BARS_PER_ROW);
+    let expected_rect = 1 + expected_rows * BARS_PER_ROW;
+    assert_eq!(
+        rect_count, expected_rect,
+        "expected {expected_rect} rects (1 frame + clamped grid), got {rect_count}"
+    );
+}
+
+#[test]
+fn out_of_range_chord_root_falls_back_to_question_mark() {
+    // Direct field assignment on `pub` AST fields can produce an
+    // out-of-range note letter; the renderer falls back to `?` so
+    // a corrupted root produces a deterministic, visually distinct
+    // output rather than nonsense.
+    use chordsketch_ireal::{Accidental, ChordRoot};
+    let mut song = IrealSong::new();
+    song.key_signature.root = ChordRoot {
+        note: 'X',
+        accidental: Accidental::Natural,
+    };
+    let svg = render_svg(&song, &RenderOptions::default());
+    assert!(
+        svg.contains("? major"),
+        "expected `? major` fallback for out-of-range note: {svg}"
+    );
+    assert!(
+        !svg.contains("X major"),
+        "out-of-range note must not flow into the SVG: {svg}"
+    );
+}
+
+#[test]
+fn xml_illegal_control_chars_are_stripped_from_title() {
+    // Adversarial title containing C0 controls (NUL, BEL, ESC)
+    // must not appear in the SVG output — they are stripped, not
+    // escaped, because XML 1.0 forbids them entirely.
+    let mut song = IrealSong::new();
+    song.title = "ti\u{0000}tle\u{001B}".into();
+    let svg = render_svg(&song, &RenderOptions::default());
+    assert!(svg.contains(">title<"), "expected stripped title: {svg}");
+    assert!(
+        !svg.contains('\u{0000}'),
+        "NUL must be stripped from the SVG"
+    );
+    assert!(
+        !svg.contains('\u{001B}'),
+        "ESC must be stripped from the SVG"
+    );
+}
+
+#[test]
+fn sharp_key_emits_unicode_sharp_glyph() {
+    // The key formatter renders the sharp sign as U+266F, which passes
+    // through `escape_xml` unchanged because sharps are not XML-reserved.
+    let mut song = IrealSong::new();
+    song.key_signature.root = ChordRoot {
+        note: 'F',
+        accidental: Accidental::Sharp,
+    };
+    let svg = render_svg(&song, &RenderOptions::default());
+    assert!(
+        svg.contains("F\u{266F} major"),
+        "missing sharp glyph: {svg}"
+    );
+}
+
+#[test]
+fn version_returns_nonempty_semver_string() {
+    let v = version();
+    assert!(!v.is_empty(), "version() must not return an empty string");
+    // The version is baked in from Cargo.toml at compile time; it must
+    // start with a digit (semver major component).
+    assert!(
+        v.chars().next().is_some_and(|c| c.is_ascii_digit()),
+        "version() should start with a digit: {v}"
+    );
+}
