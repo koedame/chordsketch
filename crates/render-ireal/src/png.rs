@@ -131,6 +131,7 @@ impl std::error::Error for PngError {}
 /// let bytes = render_png(&song, &PngOptions::default()).unwrap();
 /// assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
 /// ```
+#[must_use = "the PNG bytes produced by render_png are expected to be consumed"]
 pub fn render_png(song: &IrealSong, options: &PngOptions) -> Result<Vec<u8>, PngError> {
     let dpi = options.dpi.unwrap_or(DEFAULT_DPI);
     if dpi == 0 || dpi > MAX_DPI {
