@@ -63,6 +63,7 @@
 #![forbid(unsafe_code)]
 
 pub mod error;
+pub mod from_ireal;
 pub mod ireal;
 
 pub use error::{ConversionError, ConversionWarning, WarningKind};
