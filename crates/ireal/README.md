@@ -6,13 +6,15 @@
 
 [![crates.io](https://img.shields.io/crates/v/chordsketch-ireal)](https://crates.io/crates/chordsketch-ireal)
 
-iReal Pro AST types and a zero-dependency JSON debug serializer / parser.
+iReal Pro AST types, a zero-dependency JSON debug serializer /
+parser, and an `irealb://` URL parser.
 
-This crate is the foundational scaffold for the iReal Pro feature
-set tracked under [#2050](https://github.com/koedame/chordsketch/issues/2050).
-It deliberately ships only the AST shape — no `irealb://` URL parser,
-no URL serializer, no renderer — so the cross-cutting AST stabilises
-before the follow-up crates layer features on top.
+This crate is the foundation for the iReal Pro feature set tracked
+under [#2050](https://github.com/koedame/chordsketch/issues/2050).
+It carries the AST shape, the URL parser (#2054), and a debug-only
+JSON dump format. The URL serializer (#2052), conversion to / from
+ChordPro (#2053 / #2061), and the iReal-style renderer
+(#2058 et seq) live in their own crates.
 
 Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 
@@ -66,6 +68,8 @@ assert_eq!(parsed, song);
 | `ToJson` | `fn to_json(&self, &mut String)` and `fn to_json_string(&self) -> String` | Hand-rolled, byte-stable, compact JSON. |
 | `FromJson` | `fn from_json_str(&str) -> Result<Self, JsonError>` and `fn from_json_value(&JsonValue) -> Result<Self, JsonError>` | Round-trip-only deserializer; accepts only the subset `ToJson` emits. |
 | `parse_json` | `fn parse_json(&str) -> Result<JsonValue, JsonError>` | Free function for the underlying JSON value tree. |
+| `parse` / `parse_collection` | `fn parse(url: &str) -> Result<IrealSong, ParseError>` and `fn parse_collection(url: &str) -> Result<(Vec<IrealSong>, Option<String>), ParseError>` | `irealb://` / `irealbook://` URL parser. See `FORMAT.md` for the grammar. |
+| `ParseError` | enum, `Debug + Display + Error` | Error variants from the URL parser. |
 
 Validating constructors: `TimeSignature::new`, `Ending::new`,
 `BeatPosition::on_beat` all return `Option`. Direct field
@@ -91,7 +95,6 @@ All constants are `pub` in `chordsketch_ireal::json`.
 
 | Feature | Tracking issue |
 |---|---|
-| `irealb://` URL parser | [#2054](https://github.com/koedame/chordsketch/issues/2054) |
 | AST → `irealb://` URL serializer | [#2052](https://github.com/koedame/chordsketch/issues/2052) |
 | iReal → ChordPro conversion | [#2053](https://github.com/koedame/chordsketch/issues/2053) |
 | ChordPro → iReal conversion (lossy) | [#2061](https://github.com/koedame/chordsketch/issues/2061) |
