@@ -7,13 +7,13 @@
 [![crates.io](https://img.shields.io/crates/v/chordsketch-ireal)](https://crates.io/crates/chordsketch-ireal)
 
 iReal Pro AST types, a zero-dependency JSON debug serializer /
-parser, and an `irealb://` URL parser.
+parser, and an `irealb://` URL parser + serializer.
 
 This crate is the foundation for the iReal Pro feature set tracked
 under [#2050](https://github.com/koedame/chordsketch/issues/2050).
-It carries the AST shape, the URL parser (#2054), and a debug-only
-JSON dump format. The URL serializer (#2052), conversion to / from
-ChordPro (#2053 / #2061), and the iReal-style renderer
+It carries the AST shape, the URL parser (#2054), the URL
+serializer (#2052), and a debug-only JSON dump format. Conversion
+to / from ChordPro (#2053 / #2061) and the iReal-style renderer
 (#2058 et seq) live in their own crates.
 
 Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
@@ -70,6 +70,7 @@ assert_eq!(parsed, song);
 | `parse_json` | `fn parse_json(&str) -> Result<JsonValue, JsonError>` | Free function for the underlying JSON value tree. |
 | `parse` / `parse_collection` | `fn parse(url: &str) -> Result<IrealSong, ParseError>` and `fn parse_collection(url: &str) -> Result<(Vec<IrealSong>, Option<String>), ParseError>` | `irealb://` / `irealbook://` URL parser. See `FORMAT.md` for the grammar. |
 | `ParseError` | enum, `Debug + Display + Error` | Error variants from the URL parser. |
+| `irealb_serialize` / `irealbook_serialize` | `fn irealb_serialize(song: &IrealSong) -> String` and `fn irealbook_serialize(songs: &[IrealSong], name: Option<&str>) -> String` | Inverse of `parse` / `parse_collection`. AST-level round trip; URL bytes need not match the original. |
 
 Validating constructors: `TimeSignature::new`, `Ending::new`,
 `BeatPosition::on_beat` all return `Option`. Direct field
@@ -95,7 +96,6 @@ All constants are `pub` in `chordsketch_ireal::json`.
 
 | Feature | Tracking issue |
 |---|---|
-| AST → `irealb://` URL serializer | [#2052](https://github.com/koedame/chordsketch/issues/2052) |
 | iReal → ChordPro conversion | [#2053](https://github.com/koedame/chordsketch/issues/2053) |
 | ChordPro → iReal conversion (lossy) | [#2061](https://github.com/koedame/chordsketch/issues/2061) |
 | SVG / PNG / PDF renderer | [#2058](https://github.com/koedame/chordsketch/issues/2058) and follow-ups |
