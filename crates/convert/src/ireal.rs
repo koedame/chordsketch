@@ -66,11 +66,14 @@ pub fn chordpro_to_ireal(song: &Song) -> Result<ConversionOutput<IrealSong>, Con
 ///
 /// # Errors
 ///
-/// Returns [`ConversionError::InvalidSource`] if the source AST
-/// cannot be represented in ChordPro at all (not expected for
-/// well-formed ASTs produced by the iReal parser). Lossy but
-/// successful conversions return `Ok` with a non-empty `warnings`
-/// list. See [`crate::from_ireal`] for the full mapping.
+/// The current implementation never returns an error — every
+/// well-formed [`IrealSong`] produces a well-formed [`Song`].
+/// The `Result` return type is preserved so future
+/// strictness-mode hooks can introduce
+/// [`ConversionError::InvalidSource`] without a breaking change.
+/// Lossy but successful conversions return `Ok` with a non-empty
+/// `warnings` list; see [`crate::from_ireal`] for the full
+/// mapping.
 #[must_use = "ignoring a conversion result drops both warnings and errors"]
 pub fn ireal_to_chordpro(song: &IrealSong) -> Result<ConversionOutput<Song>, ConversionError> {
     IrealToChordPro.convert(song)
