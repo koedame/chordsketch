@@ -752,14 +752,22 @@ impl<'a> Parser<'a> {
                     })?;
                     self.pos += 1;
                     match escape {
-                        b'"' => out.push('"'),
-                        b'\\' => out.push('\\'),
-                        b'/' => out.push('/'),
-                        b'n' => out.push('\n'),
-                        b'r' => out.push('\r'),
-                        b't' => out.push('\t'),
-                        b'b' => out.push('\u{08}'),
-                        b'f' => out.push('\u{0c}'),
+                        b'"' | b'\\' | b'/' | b'n' | b'r' | b't' | b'b' | b'f' => {
+                            let ch = match escape {
+                                b'"' => '"',
+                                b'\\' => '\\',
+                                b'/' => '/',
+                                b'n' => '\n',
+                                b'r' => '\r',
+                                b't' => '\t',
+                                b'b' => '\u{08}',
+                                b'f' => '\u{0c}',
+                                // SAFETY: all arms covered by the outer match guard
+                                _ => unreachable!(),
+                            };
+                            out.push(ch);
+                            chars_decoded += 1;
+                        }
                         b'u' => {
                             let hex_start = self.pos;
                             let hex =

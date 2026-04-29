@@ -352,13 +352,9 @@ fn json_rejects_oversized_array() {
         s.push('0');
     }
     s.push(']');
-    if s.len() <= chordsketch_ireal::json::MAX_INPUT_BYTES {
-        assert!(chordsketch_ireal::parse_json(&s).is_err());
-    } else {
-        // Still rejected — by the input-bytes cap before reaching the
-        // array-length cap. Both rejections satisfy this test's intent.
-        assert!(chordsketch_ireal::parse_json(&s).is_err());
-    }
+    // Rejected by MAX_ARRAY_LEN (the string fits within MAX_INPUT_BYTES at
+    // current constants — both caps are independent rejection paths anyway).
+    assert!(chordsketch_ireal::parse_json(&s).is_err());
 }
 
 #[test]
