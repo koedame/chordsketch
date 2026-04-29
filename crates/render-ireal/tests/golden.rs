@@ -18,7 +18,7 @@ use chordsketch_ireal::{
     Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, IrealSong,
     KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
 };
-use chordsketch_render_ireal::{render_svg, version, RenderOptions};
+use chordsketch_render_ireal::{RenderOptions, render_svg, version};
 
 const EXPECTED: &str = include_str!("fixtures/basic/expected.svg");
 
@@ -299,7 +299,10 @@ fn sharp_key_emits_unicode_sharp_glyph() {
         accidental: Accidental::Sharp,
     };
     let svg = render_svg(&song, &RenderOptions::default());
-    assert!(svg.contains("F\u{266F} major"), "missing sharp glyph: {svg}");
+    assert!(
+        svg.contains("F\u{266F} major"),
+        "missing sharp glyph: {svg}"
+    );
 }
 
 #[test]
@@ -309,7 +312,7 @@ fn version_returns_nonempty_semver_string() {
     // The version is baked in from Cargo.toml at compile time; it must
     // start with a digit (semver major component).
     assert!(
-        v.chars().next().map_or(false, |c| c.is_ascii_digit()),
+        v.chars().next().is_some_and(|c| c.is_ascii_digit()),
         "version() should start with a digit: {v}"
     );
 }
