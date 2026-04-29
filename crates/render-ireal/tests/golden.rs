@@ -306,6 +306,194 @@ fn sharp_key_emits_unicode_sharp_glyph() {
 }
 
 #[test]
+fn slash_chord_renders_with_chord_slash_and_chord_bass_classes() {
+    // Exercises the `SpanKind::Slash` + `SpanKind::Bass` SVG-emit
+    // path. Without a slash chord in any progression fixture, the
+    // `chord-slash` / `chord-bass` `<tspan>` branches were
+    // unexercised for coverage purposes.
+    let bar = Bar {
+        chords: vec![BarChord {
+            chord: Chord {
+                root: ChordRoot::natural('C'),
+                quality: ChordQuality::Major7,
+                bass: Some(ChordRoot::natural('G')),
+            },
+            position: BeatPosition::on_beat(1).unwrap(),
+        }],
+        ..Bar::new()
+    };
+    let mut song = IrealSong::new();
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![bar],
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    assert!(
+        svg.contains("class=\"chord-root\">C</tspan>"),
+        "expected root span: {svg}"
+    );
+    assert!(
+        svg.contains("class=\"chord-ext\""),
+        "expected extension span: {svg}"
+    );
+    assert!(
+        svg.contains("class=\"chord-slash\""),
+        "expected slash span: {svg}"
+    );
+    assert!(
+        svg.contains("class=\"chord-bass\""),
+        "expected bass span: {svg}"
+    );
+    // The slash and bass spans must reset font-size + apply the
+    // inverse `dy` so the baseline returns to the cell centre
+    // after the raised extension.
+    assert!(
+        svg.contains("dy=\"4\""),
+        "expected baseline restore on slash span: {svg}"
+    );
+}
+
+#[test]
+fn slash_chord_without_quality_uses_unshifted_slash_span() {
+    // When the chord has no quality (Major triad), the slash and
+    // bass run on the original baseline directly — no `dy`
+    // restore is needed because no extension preceded them.
+    let bar = Bar {
+        chords: vec![BarChord {
+            chord: Chord {
+                root: ChordRoot::natural('C'),
+                quality: ChordQuality::Major,
+                bass: Some(ChordRoot::natural('E')),
+            },
+            position: BeatPosition::on_beat(1).unwrap(),
+        }],
+        ..Bar::new()
+    };
+    let mut song = IrealSong::new();
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![bar],
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    assert!(svg.contains("<tspan class=\"chord-slash\">/</tspan>"));
+    assert!(svg.contains("<tspan class=\"chord-bass\">E</tspan>"));
+    assert!(
+        !svg.contains("class=\"chord-slash\" font-size"),
+        "no font-size override expected when no extension precedes slash"
+    );
+}
+
+#[test]
+fn multi_chord_bar_restores_baseline_between_chords() {
+    // When the first chord in a split bar has an Extension span (e.g.
+    // Minor7), the SVG `dy` cursor is raised after it. Without an
+    // explicit restore on the inter-chord separator, every subsequent
+    // chord's root renders at the wrong (raised) baseline.
+    //
+    // This test verifies that the separator `<tspan>` carries the
+    // inverse `dy` and base `font-size` so the second chord's root
+    // lands on the cell baseline.
+    let bar = Bar {
+        chords: vec![
+            BarChord {
+                chord: Chord::triad(ChordRoot::natural('A'), ChordQuality::Minor7),
+                position: BeatPosition::on_beat(1).unwrap(),
+            },
+            BarChord {
+                chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Minor7),
+                position: BeatPosition::on_beat(3).unwrap(),
+            },
+        ],
+        ..Bar::new()
+    };
+    let mut song = IrealSong::new();
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![bar],
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    // The separator between the two chords must restore the baseline:
+    // font-size restored to base and dy=+4 (inverse of the -4 raise).
+    assert!(
+        svg.contains("font-size=\"14\" dy=\"4\""),
+        "separator must carry baseline restore: {svg}"
+    );
+    // The second chord's root must follow the restored separator —
+    // confirm D root and its extension both appear.
+    assert!(
+        svg.contains("<tspan class=\"chord-root\">D</tspan>"),
+        "second chord root must appear: {svg}"
+    );
+}
+
+#[test]
+fn excess_chords_per_bar_render_at_most_max_chords_per_bar_root_spans() {
+    // Regression test ported from the deleted `chord_format.rs`
+    // (`excess_chords_per_bar_are_truncated`). An adversarial AST
+    // with > MAX_CHORDS_PER_BAR chords in a single bar must
+    // produce exactly `MAX_CHORDS_PER_BAR` chord-root spans —
+    // surplus chords are truncated to keep the renderer's
+    // allocation bounded.
+    use chordsketch_render_ireal::MAX_CHORDS_PER_BAR;
+    let mut chords = Vec::with_capacity(MAX_CHORDS_PER_BAR + 100);
+    for _ in 0..(MAX_CHORDS_PER_BAR + 100) {
+        chords.push(BarChord {
+            chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+            position: BeatPosition::on_beat(1).unwrap(),
+        });
+    }
+    let bar = Bar {
+        chords,
+        ..Bar::new()
+    };
+    let mut song = IrealSong::new();
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![bar],
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    let root_spans = svg.matches("class=\"chord-root\"").count();
+    assert_eq!(
+        root_spans, MAX_CHORDS_PER_BAR,
+        "expected exactly MAX_CHORDS_PER_BAR={MAX_CHORDS_PER_BAR} root spans"
+    );
+}
+
+#[test]
+fn custom_quality_xml_reserved_chars_are_escaped_at_emit_boundary() {
+    // `ChordQuality::Custom` is attacker-controlled in principle.
+    // The typography splitter passes it through verbatim by
+    // design (XML escaping is the renderer's job); this test
+    // asserts the contract end-to-end so a refactor that
+    // bypasses `escape_xml` at the embedding boundary cannot
+    // smuggle markup through.
+    let bar = Bar {
+        chords: vec![BarChord {
+            chord: Chord::triad(
+                ChordRoot::natural('C'),
+                ChordQuality::Custom("<x>&\"'".into()),
+            ),
+            position: BeatPosition::on_beat(1).unwrap(),
+        }],
+        ..Bar::new()
+    };
+    let mut song = IrealSong::new();
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![bar],
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    assert!(
+        svg.contains("&lt;x&gt;&amp;&quot;&apos;"),
+        "custom quality not escaped: {svg}"
+    );
+    assert!(
+        !svg.contains("<x>"),
+        "raw custom-quality markup leaked: {svg}"
+    );
+}
+
+#[test]
 fn version_returns_nonempty_semver_string() {
     let v = version();
     assert!(!v.is_empty(), "version() must not return an empty string");
