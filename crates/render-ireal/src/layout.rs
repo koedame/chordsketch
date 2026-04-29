@@ -249,9 +249,7 @@ fn row_y(row: usize) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::{Layout, compute_layout};
-    use crate::page::{
-        BAR_ROW_HEIGHT, BARS_PER_ROW, GRID_TOP, MARGIN_X, MAX_BARS, MAX_SECTIONS, PAGE_WIDTH,
-    };
+    use crate::page::{BAR_ROW_HEIGHT, BARS_PER_ROW, GRID_TOP, MARGIN_X, MAX_BARS, PAGE_WIDTH};
     use chordsketch_ireal::{Bar, IrealSong, Section, SectionLabel};
 
     fn song_with_bars(per_section: &[usize]) -> IrealSong {
