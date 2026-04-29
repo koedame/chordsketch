@@ -14,6 +14,15 @@ declare module '@chordsketch/wasm' {
     input: string,
     options: { transpose?: number; config?: string },
   ): Uint8Array;
+  export function render_html_body(input: string): string;
+  export function render_html_body_with_options(
+    input: string,
+    options: { transpose?: number; config?: string },
+  ): string;
+  export function render_html_css(): string;
+  export function render_html_css_with_options(
+    options: { transpose?: number; config?: string },
+  ): string;
   export interface ValidationError {
     line: number;
     column: number;
