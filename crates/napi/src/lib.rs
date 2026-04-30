@@ -754,6 +754,59 @@ pub fn render_ireal_svg(input: String) -> Result<String> {
     do_render_ireal_svg(&input).map_err(|reason| Error::new(Status::GenericFailure, reason))
 }
 
+/// Run the iReal URL → AST JSON pipeline; native helper. See
+/// [`do_convert_chordpro_to_irealb`] for the `Result<_, String>`
+/// rationale.
+fn do_parse_irealb(input: &str) -> std::result::Result<String, String> {
+    use chordsketch_ireal::ToJson;
+    let song = chordsketch_ireal::parse(input).map_err(|e| format!("parse failed: {e}"))?;
+    Ok(song.to_json_string())
+}
+
+/// Run the AST JSON → iReal URL pipeline; native helper.
+fn do_serialize_irealb(input: &str) -> std::result::Result<String, String> {
+    use chordsketch_ireal::FromJson;
+    let song = chordsketch_ireal::IrealSong::from_json_str(input)
+        .map_err(|e| format!("invalid AST JSON: {e}"))?;
+    Ok(chordsketch_ireal::irealb_serialize(&song))
+}
+
+/// Parse an `irealb://` URL into an AST-shaped JSON string
+/// (#2067 Phase 2b).
+///
+/// The returned JSON object mirrors the `IrealSong` AST in
+/// `chordsketch-ireal`. Pair with [`serialize_irealb`] for the
+/// inverse direction. Field additions are non-breaking; field
+/// removals or renames require a major version bump.
+///
+/// # Errors
+///
+/// Rejects with status `GenericFailure` when the URL is not a
+/// valid `irealb://` payload.
+#[must_use = "callers must handle parse errors"]
+#[napi]
+pub fn parse_irealb(input: String) -> Result<String> {
+    do_parse_irealb(&input).map_err(|reason| Error::new(Status::GenericFailure, reason))
+}
+
+/// Serialize an AST-shaped JSON string into an `irealb://` URL
+/// (#2067 Phase 2b).
+///
+/// The input must match the JSON shape produced by
+/// [`parse_irealb`]. Round-trip identity is guaranteed for any
+/// JSON `parse_irealb` produced on the same library version.
+///
+/// # Errors
+///
+/// Rejects with status `GenericFailure` when the input is not
+/// valid JSON or does not match the AST shape (missing required
+/// fields, out-of-range values).
+#[must_use = "callers must handle serialization errors"]
+#[napi]
+pub fn serialize_irealb(input: String) -> Result<String> {
+    do_serialize_irealb(&input).map_err(|reason| Error::new(Status::GenericFailure, reason))
+}
+
 // Unit tests exercise the underlying rendering and parsing logic directly
 // via chordsketch_chordpro and renderer crates. The napi wrapper functions
 // cannot be tested natively because they depend on the Node.js runtime for
@@ -1130,6 +1183,59 @@ mod tests {
     #[test]
     fn test_render_ireal_svg_invalid_url_errors() {
         let result = super::do_render_ireal_svg("not a url");
+        assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    // ---- iReal Pro AST round-trip (#2067 Phase 2b) ----
+
+    #[test]
+    fn test_parse_irealb_emits_ast_json() {
+        let json = super::do_parse_irealb(TINY_IREAL_URL).unwrap();
+        assert!(json.starts_with('{'), "expected JSON object, got: {json}");
+        assert!(
+            json.contains("\"sections\""),
+            "JSON must include the sections array, got: {json}"
+        );
+        assert!(
+            json.contains("\"key_signature\""),
+            "JSON must include the key_signature field, got: {json}"
+        );
+    }
+
+    #[test]
+    fn test_parse_irealb_invalid_url_errors() {
+        let result = super::do_parse_irealb("not a url");
+        assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    #[test]
+    fn test_serialize_irealb_round_trip() {
+        // parse → serialize → parse must yield byte-equal JSON.
+        let json1 = super::do_parse_irealb(TINY_IREAL_URL).unwrap();
+        let url2 = super::do_serialize_irealb(&json1).unwrap();
+        assert!(
+            url2.starts_with("irealb://"),
+            "expected irealb:// URL, got: {url2}"
+        );
+        let json2 = super::do_parse_irealb(&url2).unwrap();
+        assert_eq!(
+            json1, json2,
+            "AST JSON must be stable across a parse → serialize → parse round-trip"
+        );
+    }
+
+    #[test]
+    fn test_serialize_irealb_invalid_json_errors() {
+        let result = super::do_serialize_irealb("{ not real json");
+        assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    #[test]
+    fn test_serialize_irealb_missing_required_field_errors() {
+        // `IrealSong::from_json_value` requires every documented field.
+        // An empty object should be rejected, not silently filled with
+        // defaults.
+        let result = super::do_serialize_irealb("{}");
         assert!(result.is_err(), "expected error, got {result:?}");
     }
 }

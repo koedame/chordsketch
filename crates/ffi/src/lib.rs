@@ -493,6 +493,7 @@ fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> Stri
 ///
 /// Returns [`ChordSketchError::ConversionFailed`] when the
 /// converter rejects the source as unrepresentable in iReal.
+#[must_use = "callers must handle conversion errors"]
 pub fn convert_chordpro_to_irealb(
     input: String,
 ) -> Result<ConversionWithWarnings, ChordSketchError> {
@@ -541,6 +542,7 @@ pub fn convert_chordpro_to_irealb(
 ///
 /// Returns [`ChordSketchError::ConversionFailed`] when the URL
 /// is not a valid `irealb://` payload.
+#[must_use = "callers must handle conversion errors"]
 pub fn convert_irealb_to_chordpro_text(
     input: String,
 ) -> Result<ConversionWithWarnings, ChordSketchError> {
@@ -577,6 +579,7 @@ pub fn convert_irealb_to_chordpro_text(
 /// is not a valid `irealb://` payload. Successful renders never
 /// fail — the SVG renderer is total once it has a parsed
 /// [`chordsketch_ireal::IrealSong`].
+#[must_use = "callers must handle conversion errors"]
 pub fn render_ireal_svg(input: String) -> Result<String, ChordSketchError> {
     let ireal =
         chordsketch_ireal::parse(&input).map_err(|e| ChordSketchError::ConversionFailed {
@@ -586,6 +589,52 @@ pub fn render_ireal_svg(input: String) -> Result<String, ChordSketchError> {
         &ireal,
         &chordsketch_render_ireal::RenderOptions::default(),
     ))
+}
+
+/// Parse an `irealb://` URL into an AST-shaped JSON string
+/// (#2067 Phase 2b).
+///
+/// The returned JSON object mirrors the
+/// [`chordsketch_ireal::IrealSong`] AST. Pair with
+/// [`serialize_irealb`] for the inverse direction. Field
+/// additions are non-breaking; field removals or renames require
+/// a major version bump.
+///
+/// # Errors
+///
+/// Returns [`ChordSketchError::ConversionFailed`] when the URL is
+/// not a valid `irealb://` payload.
+#[must_use = "callers must handle parse errors"]
+pub fn parse_irealb(input: String) -> Result<String, ChordSketchError> {
+    use chordsketch_ireal::ToJson;
+    let song =
+        chordsketch_ireal::parse(&input).map_err(|e| ChordSketchError::ConversionFailed {
+            reason: e.to_string(),
+        })?;
+    Ok(song.to_json_string())
+}
+
+/// Serialize an AST-shaped JSON string into an `irealb://` URL
+/// (#2067 Phase 2b).
+///
+/// The input must match the JSON shape produced by
+/// [`parse_irealb`]. Round-trip identity is guaranteed for any
+/// JSON `parse_irealb` produced on the same library version.
+///
+/// # Errors
+///
+/// Returns [`ChordSketchError::ConversionFailed`] when the input
+/// is not valid JSON or does not match the AST shape (missing
+/// required fields, out-of-range values).
+#[must_use = "callers must handle serialization errors"]
+pub fn serialize_irealb(input: String) -> Result<String, ChordSketchError> {
+    use chordsketch_ireal::FromJson;
+    let song = chordsketch_ireal::IrealSong::from_json_str(&input).map_err(|e| {
+        ChordSketchError::ConversionFailed {
+            reason: format!("invalid AST JSON: {e}"),
+        }
+    })?;
+    Ok(chordsketch_ireal::irealb_serialize(&song))
 }
 
 #[cfg(test)]
@@ -960,6 +1009,71 @@ mod tests {
         // Sister-binding parity with
         // `test_convert_irealb_to_chordpro_text_invalid_url_errors`.
         let result = render_ireal_svg("not a url".to_string());
+        assert!(
+            matches!(result, Err(ChordSketchError::ConversionFailed { .. })),
+            "expected ConversionFailed; got {result:?}"
+        );
+    }
+
+    // ---- iReal Pro AST round-trip (#2067 Phase 2b) ----
+
+    #[test]
+    fn test_parse_irealb_emits_ast_json() {
+        let json = parse_irealb(TINY_IREAL_URL.to_string()).expect("parse succeeds");
+        assert!(json.starts_with('{'), "expected JSON object, got: {json}");
+        assert!(
+            json.contains("\"sections\""),
+            "JSON must include the sections array, got: {json}"
+        );
+        assert!(
+            json.contains("\"key_signature\""),
+            "JSON must include the key_signature field, got: {json}"
+        );
+    }
+
+    #[test]
+    fn test_parse_irealb_invalid_url_errors() {
+        let result = parse_irealb("not a url".to_string());
+        assert!(
+            matches!(result, Err(ChordSketchError::ConversionFailed { .. })),
+            "expected ConversionFailed; got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_serialize_irealb_round_trip() {
+        // parse → serialize → parse must yield byte-equal JSON. The
+        // first → JSON edge is `chordsketch_ireal::ToJson`; the JSON
+        // → URL → JSON loop pins the wire-format contract advertised
+        // in the public docstring.
+        let json1 = parse_irealb(TINY_IREAL_URL.to_string()).expect("parse succeeds");
+        let url2 = serialize_irealb(json1.clone()).expect("serialize succeeds");
+        assert!(
+            url2.starts_with("irealb://"),
+            "expected irealb:// URL, got: {url2}"
+        );
+        let json2 = parse_irealb(url2).expect("re-parse succeeds");
+        assert_eq!(
+            json1, json2,
+            "AST JSON must be stable across a parse → serialize → parse round-trip"
+        );
+    }
+
+    #[test]
+    fn test_serialize_irealb_invalid_json_errors() {
+        let result = serialize_irealb("{ not real json".to_string());
+        assert!(
+            matches!(result, Err(ChordSketchError::ConversionFailed { .. })),
+            "expected ConversionFailed; got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_serialize_irealb_missing_required_field_errors() {
+        // `IrealSong::from_json_value` requires every documented field.
+        // An empty object should be rejected, not silently filled with
+        // defaults.
+        let result = serialize_irealb("{}".to_string());
         assert!(
             matches!(result, Err(ChordSketchError::ConversionFailed { .. })),
             "expected ConversionFailed; got {result:?}"
