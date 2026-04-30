@@ -8,7 +8,9 @@ from chordsketch._native import (
     parse_and_render_html,
     parse_and_render_pdf,
     parse_and_render_text,
+    parse_irealb,
     render_ireal_svg,
+    serialize_irealb,
     validate,
     version,
 )
@@ -21,7 +23,9 @@ __all__ = [
     "parse_and_render_html",
     "parse_and_render_pdf",
     "parse_and_render_text",
+    "parse_irealb",
     "render_ireal_svg",
+    "serialize_irealb",
     "validate",
     "version",
 ]

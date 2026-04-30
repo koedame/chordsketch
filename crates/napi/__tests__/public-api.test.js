@@ -157,4 +157,45 @@ describe("NAPI public API surface", () => {
   test("renderIrealSvg throws on invalid URL", () => {
     expect(() => m.renderIrealSvg("not a url")).toThrow();
   });
+
+  // ---- iReal Pro AST round-trip (#2067 Phase 2b) ----
+
+  test("parseIrealb returns AST-shaped JSON", () => {
+    const json = m.parseIrealb(TINY_IREAL_URL);
+    expect(typeof json).toBe("string");
+    const obj = JSON.parse(json);
+    expect(typeof obj).toBe("object");
+    expect(obj).not.toBeNull();
+    // AST top-level fields the public docstring promises.
+    expect(obj).toHaveProperty("title");
+    expect(obj).toHaveProperty("sections");
+    expect(obj).toHaveProperty("key_signature");
+    expect(obj).toHaveProperty("time_signature");
+    expect(Array.isArray(obj.sections)).toBe(true);
+  });
+
+  test("parseIrealb throws on invalid URL", () => {
+    expect(() => m.parseIrealb("not a url")).toThrow();
+  });
+
+  test("serializeIrealb round-trips with parseIrealb", () => {
+    const json1 = m.parseIrealb(TINY_IREAL_URL);
+    const url2 = m.serializeIrealb(json1);
+    expect(typeof url2).toBe("string");
+    expect(url2.startsWith("irealb://")).toBe(true);
+    // Re-parse must produce the same AST JSON; pins the wire-format
+    // stability promise documented on parseIrealb.
+    const json2 = m.parseIrealb(url2);
+    expect(json2).toBe(json1);
+  });
+
+  test("serializeIrealb throws on invalid JSON", () => {
+    expect(() => m.serializeIrealb("{ not real json")).toThrow();
+  });
+
+  test("serializeIrealb throws on missing required fields", () => {
+    // Empty object lacks every documented IrealSong field; the
+    // deserializer must reject rather than fabricate defaults.
+    expect(() => m.serializeIrealb("{}")).toThrow();
+  });
 });

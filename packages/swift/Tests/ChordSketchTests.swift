@@ -65,4 +65,22 @@ final class ChordSketchTests: XCTestCase {
             "expected SVG document, got: \(svg.prefix(200))"
         )
     }
+
+    // iReal Pro AST round-trip (#2067 Phase 2b).
+
+    func testParseIrealbEmitsAstJson() throws {
+        let json = try ChordSketch.parseIrealb(input: tinyIrealUrl)
+        XCTAssertTrue(json.hasPrefix("{"), "expected JSON object, got: \(json.prefix(200))")
+        XCTAssertTrue(json.contains("\"sections\""))
+        XCTAssertTrue(json.contains("\"key_signature\""))
+    }
+
+    func testSerializeIrealbRoundTrip() throws {
+        let json1 = try ChordSketch.parseIrealb(input: tinyIrealUrl)
+        let url2 = try ChordSketch.serializeIrealb(input: json1)
+        XCTAssertTrue(url2.hasPrefix("irealb://"), "unexpected output: \(url2)")
+        let json2 = try ChordSketch.parseIrealb(input: url2)
+        XCTAssertEqual(json1, json2,
+            "AST JSON must be stable across a parse → serialize → parse round-trip")
+    }
 }

@@ -266,3 +266,29 @@ export function convertIrealbToChordproText(input: string): ConversionWithWarnin
  * @throws when the input is not a valid `irealb://` payload.
  */
 export function renderIrealSvg(input: string): string;
+
+/**
+ * Parse an `irealb://` URL into an AST-shaped JSON string
+ * (#2067 Phase 2b).
+ *
+ * The returned JSON object mirrors the `IrealSong` AST in
+ * `chordsketch-ireal`. Pair with {@link serializeIrealb} for the
+ * inverse direction. Field additions are non-breaking; field
+ * removals or renames require a major version bump.
+ *
+ * @throws when the input is not a valid `irealb://` payload.
+ */
+export function parseIrealb(input: string): string;
+
+/**
+ * Serialize an AST-shaped JSON string into an `irealb://` URL
+ * (#2067 Phase 2b).
+ *
+ * The input must match the JSON shape produced by
+ * {@link parseIrealb}. Round-trip identity is guaranteed for any
+ * JSON `parseIrealb` produced on the same library version.
+ *
+ * @throws when the input is not valid JSON or does not match the
+ *         AST shape (missing required fields, out-of-range values).
+ */
+export function serializeIrealb(input: string): string;
