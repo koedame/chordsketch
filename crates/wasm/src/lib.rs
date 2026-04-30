@@ -987,7 +987,7 @@ fn do_render_ireal_png(input: &str) -> Result<Vec<u8>, String> {
         &ireal,
         &chordsketch_render_ireal::png::PngOptions::default(),
     )
-    .map_err(|e| format!("render failed: {e}"))
+    .map_err(|e| format!("PNG render failed: {e}"))
 }
 
 /// Run the iReal PDF-render pipeline; native helper used by the
@@ -998,7 +998,7 @@ fn do_render_ireal_pdf(input: &str) -> Result<Vec<u8>, String> {
         &ireal,
         &chordsketch_render_ireal::pdf::PdfOptions::default(),
     )
-    .map_err(|e| format!("render failed: {e}"))
+    .map_err(|e| format!("PDF render failed: {e}"))
 }
 
 /// Render an `irealb://` URL as an iReal Pro-style PNG image
