@@ -113,6 +113,7 @@ All render functions accept three parameters:
 |----------|---------|--------|-------------|
 | `convertChordproToIrealb(input:)` | `ConversionWithWarnings` | `ChordSketchError` | ChordPro → `irealb://` URL (lossy: drops lyrics, fonts, capo) |
 | `convertIrealbToChordproText(input:)` | `ConversionWithWarnings` | `ChordSketchError` | `irealb://` URL → rendered ChordPro text |
+| `renderIrealSvg(input:)` | `String` (SVG document) | `ChordSketchError` | `irealb://` URL → iReal Pro-style SVG chart |
 
 `ConversionWithWarnings` exposes `output: String` and
 `warnings: [String]`. Each warning is a `"<kind>: <message>"`

@@ -78,6 +78,7 @@ All render methods accept three arguments:
 |--------|---------|-------------|
 | `Chordsketch.convert_chordpro_to_irealb(input)` | `ConversionWithWarnings` | ChordPro → `irealb://` URL (lossy: drops lyrics, fonts, capo) |
 | `Chordsketch.convert_irealb_to_chordpro_text(input)` | `ConversionWithWarnings` | `irealb://` URL → rendered ChordPro text |
+| `Chordsketch.render_ireal_svg(input)` | `String` (SVG document) | `irealb://` URL → iReal Pro-style SVG chart |
 
 `ConversionWithWarnings` exposes `output` (String) and
 `warnings` (Array<String>). Each warning is a
