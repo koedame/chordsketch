@@ -120,6 +120,8 @@ const html = render_html_with_options(input, {
 | `convertChordproToIrealb(input)` | ChordPro source | `{ output: string, warnings: string[] }` — `output` is an `irealb://` URL |
 | `convertIrealbToChordproText(input)` | `irealb://` URL | `{ output: string, warnings: string[] }` — `output` is rendered ChordPro text |
 | `renderIrealSvg(input)` | `irealb://` URL | `string` — full SVG document (iReal Pro-style chart) |
+| `parseIrealb(input)` | `irealb://` URL | `string` — AST-shaped JSON mirroring `IrealSong` |
+| `serializeIrealb(input)` | AST-shaped JSON | `string` — `irealb://` URL (round-trips with `parseIrealb`) |
 
 `convertChordproToIrealb` is lossy: lyrics, fonts / colours, and
 capo are dropped because iReal has no surface for them. Each

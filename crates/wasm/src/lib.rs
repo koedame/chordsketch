@@ -924,6 +924,62 @@ pub fn render_ireal_svg(input: &str) -> Result<String, JsValue> {
     do_render_ireal_svg(input).map_err(|e| JsValue::from_str(&e))
 }
 
+/// Run the iReal URL → AST JSON pipeline; native helper used by the
+/// wasm wrapper and by Rust unit tests.
+fn do_parse_irealb(input: &str) -> Result<String, String> {
+    use chordsketch_ireal::ToJson;
+    let song = chordsketch_ireal::parse(input).map_err(|e| format!("parse failed: {e}"))?;
+    Ok(song.to_json_string())
+}
+
+/// Run the AST JSON → iReal URL pipeline; native helper used by the
+/// wasm wrapper and by Rust unit tests.
+fn do_serialize_irealb(input: &str) -> Result<String, String> {
+    use chordsketch_ireal::FromJson;
+    let song = chordsketch_ireal::IrealSong::from_json_str(input)
+        .map_err(|e| format!("invalid AST JSON: {e}"))?;
+    Ok(chordsketch_ireal::irealb_serialize(&song))
+}
+
+/// Parse an `irealb://` URL into an AST-shaped JSON string
+/// (#2067 Phase 2b).
+///
+/// Returns the song as a JSON object whose shape mirrors
+/// [`chordsketch_ireal::IrealSong`]. The format is the
+/// AST wire format and follows the AST's stability promise:
+/// new optional fields may appear in minor releases; renames or
+/// removals require a major bump. Pair with [`serializeIrealb`]
+/// for the inverse direction.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string when the URL is not a valid
+/// `irealb://` payload.
+#[must_use = "callers must handle parse errors"]
+#[wasm_bindgen(js_name = parseIrealb)]
+pub fn parse_irealb(input: &str) -> Result<String, JsValue> {
+    do_parse_irealb(input).map_err(|e| JsValue::from_str(&e))
+}
+
+/// Serialize an AST-shaped JSON string into an `irealb://` URL
+/// (#2067 Phase 2b).
+///
+/// The input must match the JSON shape produced by [`parseIrealb`].
+/// Round-trip identity is guaranteed for any JSON that came out of
+/// `parseIrealb` on the same library version (modulo URL-encoding
+/// differences inside the iReal serializer's own deterministic output).
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string when the input is not valid JSON
+/// or does not match the AST shape (e.g. missing required fields,
+/// out-of-range values).
+#[must_use = "callers must handle serialization errors"]
+#[wasm_bindgen(js_name = serializeIrealb)]
+pub fn serialize_irealb(input: &str) -> Result<String, JsValue> {
+    do_serialize_irealb(input).map_err(|e| JsValue::from_str(&e))
+}
+
 #[wasm_bindgen(typescript_custom_section)]
 const RENDER_IREAL_SVG_TS: &'static str = r#"
 /**
@@ -935,6 +991,35 @@ const RENDER_IREAL_SVG_TS: &'static str = r#"
  * @throws when the input is not a valid `irealb://` payload.
  */
 export function renderIrealSvg(input: string): string;
+"#;
+
+#[wasm_bindgen(typescript_custom_section)]
+const PARSE_SERIALIZE_IREALB_TS: &'static str = r#"
+/**
+ * Parse an `irealb://` URL into an AST-shaped JSON string
+ * (#2067 Phase 2b).
+ *
+ * The returned JSON mirrors the `IrealSong` AST in
+ * `chordsketch-ireal`. Pair with {@link serializeIrealb} for the
+ * inverse direction. Field additions are non-breaking; field
+ * removals or renames require a major version bump.
+ *
+ * @throws when the input is not a valid `irealb://` payload.
+ */
+export function parseIrealb(input: string): string;
+
+/**
+ * Serialize an AST-shaped JSON string into an `irealb://` URL
+ * (#2067 Phase 2b).
+ *
+ * The input must match the JSON shape produced by
+ * {@link parseIrealb}. Round-trips are stable for any JSON
+ * `parseIrealb` produced on the same library version.
+ *
+ * @throws when the input is not valid JSON or does not match the
+ *         AST shape.
+ */
+export function serializeIrealb(input: string): string;
 "#;
 
 #[wasm_bindgen(typescript_custom_section)]
@@ -1224,6 +1309,63 @@ mod tests {
     #[test]
     fn test_render_ireal_svg_invalid_url_errors() {
         let result = do_render_ireal_svg("not a url");
+        assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    // ---- iReal Pro AST round-trip (#2067 Phase 2b) ----
+
+    #[test]
+    fn test_parse_irealb_emits_ast_json() {
+        let json = do_parse_irealb(TINY_IREAL_URL).unwrap();
+        assert!(json.starts_with('{'), "expected JSON object, got: {json}");
+        assert!(
+            json.contains("\"sections\""),
+            "JSON must include the sections array, got: {json}"
+        );
+        assert!(
+            json.contains("\"key_signature\""),
+            "JSON must include the key_signature field, got: {json}"
+        );
+    }
+
+    #[test]
+    fn test_parse_irealb_invalid_url_errors() {
+        let result = do_parse_irealb("not a url");
+        assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    #[test]
+    fn test_serialize_irealb_round_trip() {
+        // parse → serialize → parse must yield byte-equal JSON. The
+        // first → JSON edge is `chordsketch_ireal::ToJson`; the JSON
+        // → URL → JSON loop pins the wire-format contract advertised
+        // in the public docstring.
+        let json1 = do_parse_irealb(TINY_IREAL_URL).unwrap();
+        let url2 = do_serialize_irealb(&json1).unwrap();
+        assert!(
+            url2.starts_with("irealb://"),
+            "expected irealb:// URL, got: {url2}"
+        );
+        let json2 = do_parse_irealb(&url2).unwrap();
+        assert_eq!(
+            json1, json2,
+            "AST JSON must be stable across a parse → serialize → parse round-trip"
+        );
+    }
+
+    #[test]
+    fn test_serialize_irealb_invalid_json_errors() {
+        let result = do_serialize_irealb("{ not real json");
+        assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    #[test]
+    fn test_serialize_irealb_missing_required_field_errors() {
+        // `IrealSong::from_json_value` requires `title`, `composer`,
+        // `style`, `key_signature`, `time_signature`, `tempo`,
+        // `transpose`, `sections`. An empty object is missing all of
+        // them; the deserializer must reject rather than fabricate.
+        let result = do_serialize_irealb("{}");
         assert!(result.is_err(), "expected error, got {result:?}");
     }
 }
@@ -1729,5 +1871,52 @@ mod wasm_tests {
     fn render_ireal_svg_invalid_url_errors() {
         let result = render_ireal_svg("not a url");
         assert!(result.is_err(), "expected JsValue Err for invalid URL");
+    }
+
+    // ---- iReal Pro AST round-trip (#2067 Phase 2b) ----
+
+    /// `parseIrealb` returns a JSON string the JS side can `JSON.parse`,
+    /// and the parsed object exposes the AST-level fields (`title`,
+    /// `sections`, …). Confirms the boundary contract for the typed
+    /// d.ts wrapper without dragging in a serde DTO.
+    #[wasm_bindgen_test]
+    fn parse_irealb_emits_ast_json() {
+        let json = parse_irealb(TINY_IREAL_URL_WASM).unwrap();
+        assert!(json.starts_with('{'), "expected JSON object, got: {json}");
+        assert!(
+            json.contains("\"sections\""),
+            "JSON must include the sections array, got: {json}"
+        );
+    }
+
+    /// Invalid URL surfaces as a `JsValue` error, not a panic.
+    #[wasm_bindgen_test]
+    fn parse_irealb_invalid_url_errors() {
+        let result = parse_irealb("not a url");
+        assert!(result.is_err(), "expected JsValue Err for invalid URL");
+    }
+
+    /// Round-trip: `serializeIrealb(parseIrealb(url))` produces an
+    /// `irealb://` URL whose re-parse matches the original JSON.
+    #[wasm_bindgen_test]
+    fn serialize_irealb_round_trip() {
+        let json1 = parse_irealb(TINY_IREAL_URL_WASM).unwrap();
+        let url2 = serialize_irealb(&json1).unwrap();
+        assert!(
+            url2.starts_with("irealb://"),
+            "expected irealb:// URL, got: {url2}"
+        );
+        let json2 = parse_irealb(&url2).unwrap();
+        assert_eq!(
+            json1, json2,
+            "AST JSON must be stable across a parse → serialize → parse round-trip"
+        );
+    }
+
+    /// Invalid JSON surfaces as a `JsValue` error, not a panic.
+    #[wasm_bindgen_test]
+    fn serialize_irealb_invalid_json_errors() {
+        let result = serialize_irealb("{ not real json");
+        assert!(result.is_err(), "expected JsValue Err for invalid JSON");
     }
 }

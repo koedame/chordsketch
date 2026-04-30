@@ -66,4 +66,22 @@ class TestChordSketch < Minitest::Test
     svg = Chordsketch.render_ireal_svg(TINY_IREAL_URL)
     assert svg.include?("<svg"), "expected SVG document, got: #{svg[0..200]}"
   end
+
+  # iReal Pro AST round-trip (#2067 Phase 2b).
+
+  def test_parse_irealb_emits_ast_json
+    json = Chordsketch.parse_irealb(TINY_IREAL_URL)
+    assert json.start_with?("{"), "expected JSON object, got: #{json[0..200]}"
+    assert_includes json, '"sections"'
+    assert_includes json, '"key_signature"'
+  end
+
+  def test_serialize_irealb_round_trip
+    json1 = Chordsketch.parse_irealb(TINY_IREAL_URL)
+    url2 = Chordsketch.serialize_irealb(json1)
+    assert url2.start_with?("irealb://"), "unexpected output: #{url2}"
+    json2 = Chordsketch.parse_irealb(url2)
+    assert_equal json1, json2,
+                 "AST JSON must be stable across a parse → serialize → parse round-trip"
+  end
 end

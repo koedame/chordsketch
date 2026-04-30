@@ -153,6 +153,32 @@ namespace chordsketch {
     /// SVG renderer is total once it has a parsed song.
     [Throws=ChordSketchError]
     string render_ireal_svg(string input);
+
+    /// Parse an `irealb://` URL into an AST-shaped JSON string
+    /// (#2067 Phase 2b).
+    ///
+    /// The returned JSON object mirrors the `IrealSong` AST in
+    /// `chordsketch-ireal`. Pair with `serialize_irealb` for the
+    /// inverse direction. Field additions are non-breaking; field
+    /// removals or renames require a major version bump.
+    ///
+    /// Throws `ConversionFailed` when the URL is not a valid
+    /// `irealb://` payload.
+    [Throws=ChordSketchError]
+    string parse_irealb(string input);
+
+    /// Serialize an AST-shaped JSON string into an `irealb://` URL
+    /// (#2067 Phase 2b).
+    ///
+    /// The input must match the JSON shape produced by
+    /// `parse_irealb`. Round-trip identity is guaranteed for any
+    /// JSON `parse_irealb` produced on the same library version.
+    ///
+    /// Throws `ConversionFailed` when the input is not valid JSON
+    /// or does not match the AST shape (missing required fields,
+    /// out-of-range values).
+    [Throws=ChordSketchError]
+    string serialize_irealb(string input);
 };
 
 /// Structured render result for text / HTML output.
