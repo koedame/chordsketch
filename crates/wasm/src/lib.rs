@@ -948,7 +948,7 @@ fn do_serialize_irealb(input: &str) -> Result<String, String> {
 /// [`chordsketch_ireal::IrealSong`]. The format is the
 /// AST wire format and follows the AST's stability promise:
 /// new optional fields may appear in minor releases; renames or
-/// removals require a major bump. Pair with [`serializeIrealb`]
+/// removals require a major bump. Pair with [`serialize_irealb`]
 /// for the inverse direction.
 ///
 /// # Errors
@@ -964,9 +964,9 @@ pub fn parse_irealb(input: &str) -> Result<String, JsValue> {
 /// Serialize an AST-shaped JSON string into an `irealb://` URL
 /// (#2067 Phase 2b).
 ///
-/// The input must match the JSON shape produced by [`parseIrealb`].
+/// The input must match the JSON shape produced by [`parse_irealb`].
 /// Round-trip identity is guaranteed for any JSON that came out of
-/// `parseIrealb` on the same library version (modulo URL-encoding
+/// `parse_irealb` on the same library version (modulo URL-encoding
 /// differences inside the iReal serializer's own deterministic output).
 ///
 /// # Errors
