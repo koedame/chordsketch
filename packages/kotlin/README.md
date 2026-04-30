@@ -88,6 +88,8 @@ All render functions accept three parameters:
 | `convertChordproToIrealb(input)` | `ConversionWithWarnings` | `ChordSketchException` | ChordPro → `irealb://` URL (lossy: drops lyrics, fonts, capo) |
 | `convertIrealbToChordproText(input)` | `ConversionWithWarnings` | `ChordSketchException` | `irealb://` URL → rendered ChordPro text |
 | `renderIrealSvg(input)` | `String` (SVG document) | `ChordSketchException` | `irealb://` URL → iReal Pro-style SVG chart |
+| `renderIrealPng(input)` | `ByteArray` (PNG bytes) | `ChordSketchException` | `irealb://` URL → PNG image (300 DPI default, A4-equivalent canvas) |
+| `renderIrealPdf(input)` | `ByteArray` (PDF bytes) | `ChordSketchException` | `irealb://` URL → single-page A4 PDF document |
 | `parseIrealb(input)` | `String` (JSON) | `ChordSketchException` | `irealb://` URL → AST-shaped JSON mirroring `IrealSong` |
 | `serializeIrealb(input)` | `String` (URL) | `ChordSketchException` | AST-shaped JSON → `irealb://` URL (round-trips with `parseIrealb`) |
 

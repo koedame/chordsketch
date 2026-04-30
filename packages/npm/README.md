@@ -120,6 +120,8 @@ const html = render_html_with_options(input, {
 | `convertChordproToIrealb(input)` | ChordPro source | `{ output: string, warnings: string[] }` — `output` is an `irealb://` URL |
 | `convertIrealbToChordproText(input)` | `irealb://` URL | `{ output: string, warnings: string[] }` — `output` is rendered ChordPro text |
 | `renderIrealSvg(input)` | `irealb://` URL | `string` — full SVG document (iReal Pro-style chart) |
+| `renderIrealPng(input)` | `irealb://` URL | `Uint8Array` — encoded PNG (300 DPI default, A4-equivalent canvas) |
+| `renderIrealPdf(input)` | `irealb://` URL | `Uint8Array` — single-page A4 PDF (vector content) |
 | `parseIrealb(input)` | `irealb://` URL | `string` — AST-shaped JSON mirroring `IrealSong` |
 | `serializeIrealb(input)` | AST-shaped JSON | `string` — `irealb://` URL (round-trips with `parseIrealb`) |
 

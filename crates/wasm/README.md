@@ -75,6 +75,8 @@ The exported wasm-bindgen functions are:
 | `convertChordproToIrealb(input)` | Convert ChordPro source to an `irealb://` URL (lossy — drops lyrics, fonts, capo) | `{ output: string, warnings: string[] }` |
 | `convertIrealbToChordproText(input)` | Convert an `irealb://` URL to rendered ChordPro text | `{ output: string, warnings: string[] }` |
 | `renderIrealSvg(input)` | Render an `irealb://` URL as an iReal Pro-style SVG chart | `string` (SVG document) |
+| `renderIrealPng(input)` | Render an `irealb://` URL as a PNG image (300 DPI default) | `Uint8Array` (PNG bytes) |
+| `renderIrealPdf(input)` | Render an `irealb://` URL as a single-page A4 PDF | `Uint8Array` (PDF bytes) |
 | `parseIrealb(input)` | Parse an `irealb://` URL into AST-shaped JSON (mirrors `IrealSong`) | `string` (JSON) |
 | `serializeIrealb(input)` | Serialize an AST-shaped JSON string back into an `irealb://` URL (round-trip with `parseIrealb`) | `string` (URL) |
 | `version()` | Library version string | `string` |

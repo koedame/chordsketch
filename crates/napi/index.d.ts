@@ -292,3 +292,30 @@ export function parseIrealb(input: string): string;
  *         AST shape (missing required fields, out-of-range values).
  */
 export function serializeIrealb(input: string): string;
+
+/**
+ * Render an `irealb://` URL as an iReal Pro-style PNG image
+ * (#2067 Phase 2c).
+ *
+ * Wraps `chordsketch-render-ireal::png::render_png` with the
+ * default `PngOptions` (300 DPI, A4-equivalent canvas). Returned
+ * as a `Buffer` of the encoded PNG bytes.
+ *
+ * @throws when the input is not a valid `irealb://` payload, or
+ *         when the underlying rasteriser fails.
+ */
+export function renderIrealPng(input: string): Buffer;
+
+/**
+ * Render an `irealb://` URL as a single-page A4 PDF document
+ * (#2067 Phase 2c).
+ *
+ * Wraps `chordsketch-render-ireal::pdf::render_pdf` with the
+ * default `PdfOptions`. Returned as a `Buffer` of the PDF byte
+ * stream; the chart is embedded as vector content, so the PDF is
+ * resolution-independent.
+ *
+ * @throws when the input is not a valid `irealb://` payload, or
+ *         when the underlying converter fails.
+ */
+export function renderIrealPdf(input: string): Buffer;

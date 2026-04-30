@@ -84,4 +84,21 @@ class TestChordSketch < Minitest::Test
     assert_equal json1, json2,
                  "AST JSON must be stable across a parse → serialize → parse round-trip"
   end
+
+  # iReal Pro PNG / PDF render (#2067 Phase 2c).
+
+  def test_render_ireal_png
+    png = Chordsketch.render_ireal_png(TINY_IREAL_URL)
+    assert_kind_of String, png
+    # PNG signature: 89 50 4E 47 0D 0A 1A 0A
+    assert_equal "\x89PNG\r\n\x1A\n".b, png[0, 8].b,
+                 "expected PNG signature, got: #{png[0, 8].bytes}"
+  end
+
+  def test_render_ireal_pdf
+    pdf = Chordsketch.render_ireal_pdf(TINY_IREAL_URL)
+    assert_kind_of String, pdf
+    assert_equal "%PDF-".b, pdf[0, 5].b,
+                 "expected PDF signature, got: #{pdf[0, 5]}"
+  end
 end

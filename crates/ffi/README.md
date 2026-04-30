@@ -65,6 +65,8 @@ All render functions accept the same three arguments:
 | `convert_chordpro_to_irealb(input)` | `ConversionWithWarnings { output: str, warnings: list[str] }` | Convert ChordPro source to an `irealb://` URL (lossy — drops lyrics, fonts, capo) |
 | `convert_irealb_to_chordpro_text(input)` | `ConversionWithWarnings { output: str, warnings: list[str] }` | Convert an `irealb://` URL to rendered ChordPro text |
 | `render_ireal_svg(input)` | `str` (SVG document) | Render an `irealb://` URL as an iReal Pro-style SVG chart |
+| `render_ireal_png(input)` | `bytes` (PNG byte stream) | Render an `irealb://` URL as a PNG image (300 DPI default, A4-equivalent canvas) |
+| `render_ireal_pdf(input)` | `bytes` (PDF byte stream) | Render an `irealb://` URL as a single-page A4 PDF document |
 | `parse_irealb(input)` | `str` (JSON) | Parse an `irealb://` URL into AST-shaped JSON (mirrors `IrealSong`) |
 | `serialize_irealb(input)` | `str` (URL) | Serialize an AST-shaped JSON string back into an `irealb://` URL (round-trips with `parse_irealb`) |
 
