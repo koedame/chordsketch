@@ -212,3 +212,45 @@ export function validate(source: string): ValidationError[];
  * not one of the supported values.
  */
 export function chordDiagramSvg(chord: string, instrument: string): string | null;
+
+/**
+ * Result returned by {@link convertChordproToIrealb} and
+ * {@link convertIrealbToChordproText} (#2067 Phase 1).
+ *
+ * Mirrors the WASM `ConversionWithWarnings` interface and the
+ * UDL `ConversionWithWarnings` dictionary so every binding
+ * presents the same surface. Each warning is a
+ * `"<kind>: <message>"` string (`kind` is `lossy-drop`,
+ * `approximated`, or `unsupported`).
+ */
+export interface ConversionWithWarnings {
+  /** Converted output string. */
+  output: string;
+  /** Conversion warnings (lossy drops, approximations, unsupported features). */
+  warnings: string[];
+}
+
+/**
+ * Convert a ChordPro source string into an `irealb://` URL
+ * (#2067 Phase 1).
+ *
+ * Lossy: lyrics, fonts / colours, capo are dropped because iReal
+ * has no surface for them. Each drop appears in the returned
+ * {@link ConversionWithWarnings.warnings}.
+ *
+ * @throws when the converter rejects the source as unrepresentable
+ *         in iReal.
+ */
+export function convertChordproToIrealb(input: string): ConversionWithWarnings;
+
+/**
+ * Convert an `irealb://` URL into rendered ChordPro text
+ * (#2067 Phase 1).
+ *
+ * The output is the `chordsketch-render-text` rendering of the
+ * converted song, not raw ChordPro source — there is no source
+ * emitter in the workspace yet (deferred to a follow-up PR).
+ *
+ * @throws when the input is not a valid `irealb://` payload.
+ */
+export function convertIrealbToChordproText(input: string): ConversionWithWarnings;

@@ -19,6 +19,8 @@ chordsketch-chordpro = { version = "0.3.0", path = "../chordpro" }
 chordsketch-render-text = { version = "0.3.0", path = "../render-text" }
 chordsketch-render-html = { version = "0.3.0", path = "../render-html" }
 chordsketch-render-pdf = { version = "0.3.0", path = "../render-pdf" }
+chordsketch-ireal = { version = "0.3.0", path = "../ireal" }
+chordsketch-convert = { version = "0.3.0", path = "../convert" }
 # `napi` and `napi-derive` are pinned to exact patch versions because the
 # `#[napi]` macro emits ABI-sensitive C glue against the Node-API ABI.
 # Caret ranges (`"3"`) would let a 3.5 release land via a casual `cargo

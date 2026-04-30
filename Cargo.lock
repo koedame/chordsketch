@@ -741,6 +741,8 @@ name = "chordsketch-ffi"
 version = "0.3.0"
 dependencies = [
  "chordsketch-chordpro",
+ "chordsketch-convert",
+ "chordsketch-ireal",
  "chordsketch-render-html",
  "chordsketch-render-pdf",
  "chordsketch-render-text",
@@ -768,6 +770,8 @@ name = "chordsketch-napi"
 version = "0.3.0"
 dependencies = [
  "chordsketch-chordpro",
+ "chordsketch-convert",
+ "chordsketch-ireal",
  "chordsketch-render-html",
  "chordsketch-render-pdf",
  "chordsketch-render-text",
@@ -817,6 +821,8 @@ name = "chordsketch-wasm"
 version = "0.3.0"
 dependencies = [
  "chordsketch-chordpro",
+ "chordsketch-convert",
+ "chordsketch-ireal",
  "chordsketch-render-html",
  "chordsketch-render-pdf",
  "chordsketch-render-text",
