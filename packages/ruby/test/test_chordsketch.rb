@@ -59,4 +59,11 @@ class TestChordSketch < Minitest::Test
     assert_includes result.output, "|"
     assert_kind_of Array, result.warnings
   end
+
+  # iReal Pro SVG render (#2067 Phase 2a).
+
+  def test_render_ireal_svg
+    svg = Chordsketch.render_ireal_svg(TINY_IREAL_URL)
+    assert svg.include?("<svg"), "expected SVG document, got: #{svg[0..200]}"
+  end
 end

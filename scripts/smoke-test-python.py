@@ -62,4 +62,9 @@ assert "|" in result.output, "rendered text missing barlines"
 assert isinstance(result.warnings, list)
 print("convert_irealb_to_chordpro_text: OK")
 
+# iReal Pro SVG render (#2067 Phase 2a).
+svg = chordsketch.render_ireal_svg(TINY_IREAL_URL)
+assert "<svg" in svg, f"expected SVG document, got: {svg[:200]}"
+print("render_ireal_svg: OK")
+
 print("All smoke tests passed!")

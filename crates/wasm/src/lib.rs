@@ -897,6 +897,46 @@ pub fn convert_irealb_to_chordpro_text(input: &str) -> Result<JsValue, JsValue> 
     serde_wasm_bindgen::to_value(&payload).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// Run the iReal SVG-render pipeline; native helper used by the
+/// wasm wrapper and the unit tests.
+fn do_render_ireal_svg(input: &str) -> Result<String, String> {
+    let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
+    Ok(chordsketch_render_ireal::render_svg(
+        &ireal,
+        &chordsketch_render_ireal::RenderOptions::default(),
+    ))
+}
+
+/// Render an `irealb://` URL as an iReal Pro-style SVG chart
+/// (#2067 Phase 2a).
+///
+/// Pipeline: `chordsketch_ireal::parse` →
+/// `chordsketch_render_ireal::render_svg` with default
+/// `RenderOptions`.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string when the URL is not a valid
+/// `irealb://` payload.
+#[must_use = "callers must handle conversion errors"]
+#[wasm_bindgen(js_name = renderIrealSvg)]
+pub fn render_ireal_svg(input: &str) -> Result<String, JsValue> {
+    do_render_ireal_svg(input).map_err(|e| JsValue::from_str(&e))
+}
+
+#[wasm_bindgen(typescript_custom_section)]
+const RENDER_IREAL_SVG_TS: &'static str = r#"
+/**
+ * Render an `irealb://` URL as an iReal Pro-style SVG chart
+ * (#2067 Phase 2a).
+ *
+ * Output is a complete, self-contained `<svg>` document.
+ *
+ * @throws when the input is not a valid `irealb://` payload.
+ */
+export function renderIrealSvg(input: string): string;
+"#;
+
 #[wasm_bindgen(typescript_custom_section)]
 const CONVERSION_WITH_WARNINGS_TS: &'static str = r#"
 /**
@@ -1166,6 +1206,24 @@ mod tests {
     #[test]
     fn test_convert_irealb_to_chordpro_text_invalid_url_errors() {
         let result = do_convert_irealb_to_chordpro_text("not a url");
+        assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    // ---- iReal Pro SVG render (#2067 Phase 2a) ----
+
+    #[test]
+    fn test_render_ireal_svg_emits_svg_document() {
+        let svg = do_render_ireal_svg(TINY_IREAL_URL).unwrap();
+        assert!(
+            svg.contains("<svg"),
+            "expected SVG document, got: {}",
+            &svg[..svg.len().min(200)]
+        );
+    }
+
+    #[test]
+    fn test_render_ireal_svg_invalid_url_errors() {
+        let result = do_render_ireal_svg("not a url");
         assert!(result.is_err(), "expected error, got {result:?}");
     }
 }
@@ -1644,5 +1702,32 @@ mod wasm_tests {
                 "console.warn entry should start with 'chordsketch:', got: {entry}"
             );
         }
+    }
+
+    // ---- iReal Pro SVG render (#2067 Phase 2a) ----
+
+    /// Tiny `irealb://` fixture; reused in `mod wasm_tests` so the
+    /// public-API test does not depend on `mod tests`'s `const`.
+    const TINY_IREAL_URL_WASM: &str = "irealb://%54=%66==%41%66%72%6F=%43==%31%72%33%34%4C%62%4B%63%75%37,%37%47,%2D%20%3E%43,%44,%37%42,%2D%23%46,%47%7C,%37%44,%41%2D,%45,%2D%45%7C,%37%42,%2D%23%46,%45%2D,%7C%44%3C%34%33%54%7C%43,%44%2D%37,%7C%46,%47%37,%43%20%7C%20==%31%34%30=%33";
+
+    /// Exercises the public `renderIrealSvg` wrapper through the
+    /// actual `JsValue` boundary. Asserts that the returned string
+    /// looks like an SVG document (the exact body is the
+    /// `chordsketch-render-ireal` crate's test surface).
+    #[wasm_bindgen_test]
+    fn render_ireal_svg_emits_svg_document() {
+        let svg = render_ireal_svg(TINY_IREAL_URL_WASM).unwrap();
+        assert!(
+            svg.contains("<svg"),
+            "expected SVG document, got: {}",
+            &svg[..svg.len().min(200)]
+        );
+    }
+
+    /// Invalid URL surfaces as a `JsValue` error, not a panic.
+    #[wasm_bindgen_test]
+    fn render_ireal_svg_invalid_url_errors() {
+        let result = render_ireal_svg("not a url");
+        assert!(result.is_err(), "expected JsValue Err for invalid URL");
     }
 }

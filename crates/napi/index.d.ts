@@ -254,3 +254,15 @@ export function convertChordproToIrealb(input: string): ConversionWithWarnings;
  * @throws when the input is not a valid `irealb://` payload.
  */
 export function convertIrealbToChordproText(input: string): ConversionWithWarnings;
+
+/**
+ * Render an `irealb://` URL as an iReal Pro-style SVG chart
+ * (#2067 Phase 2a).
+ *
+ * Wraps `chordsketch-render-ireal::render_svg` with default
+ * `RenderOptions`. The output is a complete, self-contained
+ * `<svg>` document.
+ *
+ * @throws when the input is not a valid `irealb://` payload.
+ */
+export function renderIrealSvg(input: string): string;

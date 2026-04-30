@@ -55,4 +55,14 @@ final class ChordSketchTests: XCTestCase {
         let result = try ChordSketch.convertIrealbToChordproText(input: tinyIrealUrl)
         XCTAssertTrue(result.output.contains("|"), "expected barlines in output: \(result.output)")
     }
+
+    // iReal Pro SVG render (#2067 Phase 2a).
+
+    func testRenderIrealSvg() throws {
+        let svg = try ChordSketch.renderIrealSvg(input: tinyIrealUrl)
+        XCTAssertTrue(
+            svg.contains("<svg"),
+            "expected SVG document, got: \(svg.prefix(200))"
+        )
+    }
 }

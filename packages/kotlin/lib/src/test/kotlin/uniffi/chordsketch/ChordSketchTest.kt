@@ -73,4 +73,15 @@ class ChordSketchTest {
         val result = convertIrealbToChordproText(tinyIrealUrl)
         assertTrue(result.output.contains("|"), "expected barlines in output: ${result.output}")
     }
+
+    // iReal Pro SVG render (#2067 Phase 2a).
+
+    @Test
+    fun testRenderIrealSvg() {
+        val svg = renderIrealSvg(tinyIrealUrl)
+        assertTrue(
+            svg.contains("<svg"),
+            "expected SVG document, got: ${svg.take(200)}",
+        )
+    }
 }

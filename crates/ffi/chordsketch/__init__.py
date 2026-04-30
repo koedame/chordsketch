@@ -8,6 +8,7 @@ from chordsketch._native import (
     parse_and_render_html,
     parse_and_render_pdf,
     parse_and_render_text,
+    render_ireal_svg,
     validate,
     version,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "parse_and_render_html",
     "parse_and_render_pdf",
     "parse_and_render_text",
+    "render_ireal_svg",
     "validate",
     "version",
 ]

@@ -725,6 +725,35 @@ pub fn convert_irealb_to_chordpro_text(input: String) -> Result<ConversionWithWa
     Ok(ConversionWithWarnings { output, warnings })
 }
 
+/// Run the iReal SVG-render pipeline; native helper so the Rust
+/// unit tests can exercise the path without linking against
+/// `napi::Error`'s `Drop` impl. See `do_convert_chordpro_to_irealb`
+/// for the full rationale.
+fn do_render_ireal_svg(input: &str) -> std::result::Result<String, String> {
+    let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
+    Ok(chordsketch_render_ireal::render_svg(
+        &ireal,
+        &chordsketch_render_ireal::RenderOptions::default(),
+    ))
+}
+
+/// Render an `irealb://` URL as an iReal Pro-style SVG chart
+/// (#2067 Phase 2a).
+///
+/// Pipeline: `chordsketch_ireal::parse` →
+/// `chordsketch_render_ireal::render_svg` with default
+/// `RenderOptions`.
+///
+/// # Errors
+///
+/// Rejects with status `GenericFailure` when the URL is not a
+/// valid `irealb://` payload.
+#[must_use = "callers must handle conversion errors"]
+#[napi]
+pub fn render_ireal_svg(input: String) -> Result<String> {
+    do_render_ireal_svg(&input).map_err(|reason| Error::new(Status::GenericFailure, reason))
+}
+
 // Unit tests exercise the underlying rendering and parsing logic directly
 // via chordsketch_chordpro and renderer crates. The napi wrapper functions
 // cannot be tested natively because they depend on the Node.js runtime for
@@ -1083,6 +1112,24 @@ mod tests {
     #[test]
     fn test_convert_irealb_to_chordpro_text_invalid_url_errors() {
         let result = super::do_convert_irealb_to_chordpro_text("not a url");
+        assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    // ---- iReal Pro SVG render (#2067 Phase 2a) ----
+
+    #[test]
+    fn test_render_ireal_svg_emits_svg_document() {
+        let svg = super::do_render_ireal_svg(TINY_IREAL_URL).unwrap();
+        assert!(
+            svg.contains("<svg"),
+            "expected SVG document, got: {}",
+            &svg[..svg.len().min(200)]
+        );
+    }
+
+    #[test]
+    fn test_render_ireal_svg_invalid_url_errors() {
+        let result = super::do_render_ireal_svg("not a url");
         assert!(result.is_err(), "expected error, got {result:?}");
     }
 }

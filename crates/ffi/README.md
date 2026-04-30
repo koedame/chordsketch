@@ -64,6 +64,7 @@ All render functions accept the same three arguments:
 |----------|---------|-------------|
 | `convert_chordpro_to_irealb(input)` | `ConversionWithWarnings { output: str, warnings: list[str] }` | Convert ChordPro source to an `irealb://` URL (lossy — drops lyrics, fonts, capo) |
 | `convert_irealb_to_chordpro_text(input)` | `ConversionWithWarnings { output: str, warnings: list[str] }` | Convert an `irealb://` URL to rendered ChordPro text |
+| `render_ireal_svg(input)` | `str` (SVG document) | Render an `irealb://` URL as an iReal Pro-style SVG chart |
 
 `output` of `convert_irealb_to_chordpro_text` is the rendered text
 representation of the converted song (`chordsketch-render-text`

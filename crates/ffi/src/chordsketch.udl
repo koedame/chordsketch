@@ -139,6 +139,20 @@ namespace chordsketch {
     /// `irealb://` payload.
     [Throws=ChordSketchError]
     ConversionWithWarnings convert_irealb_to_chordpro_text(string input);
+
+    /// Render an `irealb://` URL as an iReal Pro-style SVG chart
+    /// (#2067 Phase 2a).
+    ///
+    /// Wraps `chordsketch-render-ireal::render_svg` with default
+    /// `RenderOptions`. The SVG output is a complete, self-contained
+    /// `<svg>` document that can be embedded in HTML, opened in a
+    /// browser, or further rasterised via `resvg` / `svg2pdf`.
+    ///
+    /// Throws `ConversionFailed` when the URL is not a valid
+    /// `irealb://` payload. Successful renders never fail — the
+    /// SVG renderer is total once it has a parsed song.
+    [Throws=ChordSketchError]
+    string render_ireal_svg(string input);
 };
 
 /// Structured render result for text / HTML output.
