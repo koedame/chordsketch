@@ -19,6 +19,12 @@ pub enum ChordSketchError {
         /// Human-readable description of why the config is invalid.
         reason: String,
     },
+    /// A ChordPro ↔ iReal Pro conversion failed (#2067).
+    #[error("conversion failed: {reason}")]
+    ConversionFailed {
+        /// Parser or converter diagnostic.
+        reason: String,
+    },
 }
 
 /// Resolve a [`chordsketch_chordpro::config::Config`] from an optional JSON/preset string.
@@ -439,6 +445,125 @@ pub fn chord_diagram_svg(
     }
 }
 
+/// Structured result for ChordPro ↔ iReal Pro conversions
+/// (#2067 Phase 1).
+///
+/// Mirrors the WASM and NAPI `ConversionWithWarnings` shape so
+/// every binding presents the same surface — `output` plus a
+/// `warnings` list of human-readable diagnostics. Warning
+/// strings are rendered via [`chordsketch_convert::ConversionWarning`]'s
+/// `Display` impl so callers see one stable text format
+/// regardless of which language they consume the binding from.
+#[derive(Debug)]
+pub struct ConversionWithWarnings {
+    /// Converted output string.
+    pub output: String,
+    /// Warnings captured during conversion.
+    pub warnings: Vec<String>,
+}
+
+/// Format a [`chordsketch_convert::ConversionWarning`] as a stable
+/// `"<kind>: <message>"` string for FFI consumers.
+fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> String {
+    let kind = match w.kind {
+        chordsketch_convert::WarningKind::LossyDrop => "lossy-drop",
+        chordsketch_convert::WarningKind::Approximated => "approximated",
+        chordsketch_convert::WarningKind::Unsupported => "unsupported",
+        // `WarningKind` is `#[non_exhaustive]`; this catch-all keeps
+        // the binding compiling if a future variant is added without
+        // a matching arm here, falling back to the variant's `Debug`
+        // form. Sister-binding fallback in WASM/NAPI does the same.
+        _ => "warning",
+    };
+    format!("{kind}: {}", w.message)
+}
+
+/// Convert a ChordPro source string into an `irealb://` URL
+/// (#2067 Phase 1).
+///
+/// Pipeline: `parse_multi_lenient` → first parsed song →
+/// [`chordsketch_convert::chordpro_to_ireal`] →
+/// [`chordsketch_ireal::irealb_serialize`].
+///
+/// Conversion is lossy: lyrics, fonts / colours, and capo are
+/// dropped (iReal has no surface for them). Each drop appears in
+/// the returned `warnings` list.
+///
+/// # Errors
+///
+/// Returns [`ChordSketchError::ConversionFailed`] when the
+/// converter rejects the source as unrepresentable in iReal.
+pub fn convert_chordpro_to_irealb(
+    input: String,
+) -> Result<ConversionWithWarnings, ChordSketchError> {
+    let parse_result = chordsketch_chordpro::parse_multi_lenient(&input);
+    // `split_at_new_song` unconditionally pushes `&input[seg_start..]`
+    // last, so `parse_multi_lenient` always returns at least one result;
+    // `next()` is provably `Some` — use `expect` to make the invariant
+    // explicit and catch any future regression immediately.
+    let song = parse_result
+        .results
+        .into_iter()
+        .next()
+        .map(|r| r.song)
+        .expect("parse_multi_lenient always returns at least one result");
+    let converted = chordsketch_convert::chordpro_to_ireal(&song).map_err(|e| {
+        ChordSketchError::ConversionFailed {
+            reason: e.to_string(),
+        }
+    })?;
+    let url = chordsketch_ireal::irealb_serialize(&converted.output);
+    Ok(ConversionWithWarnings {
+        output: url,
+        warnings: converted
+            .warnings
+            .iter()
+            .map(format_conversion_warning)
+            .collect(),
+    })
+}
+
+/// Convert an `irealb://` URL into rendered ChordPro text
+/// (#2067 Phase 1).
+///
+/// Pipeline: [`chordsketch_ireal::parse`] →
+/// [`chordsketch_convert::ireal_to_chordpro`] →
+/// [`chordsketch_render_text::render_song`].
+///
+/// The output is the rendered text representation of the
+/// converted song, not raw ChordPro source — there is no
+/// ChordPro source emitter in the workspace yet (deferred to a
+/// follow-up PR). Bar boundaries (`|`) survive the conversion
+/// (asserted in the per-binding tests); other surface details
+/// follow `chordsketch-render-text`'s own formatting contract.
+///
+/// # Errors
+///
+/// Returns [`ChordSketchError::ConversionFailed`] when the URL
+/// is not a valid `irealb://` payload.
+pub fn convert_irealb_to_chordpro_text(
+    input: String,
+) -> Result<ConversionWithWarnings, ChordSketchError> {
+    let ireal =
+        chordsketch_ireal::parse(&input).map_err(|e| ChordSketchError::ConversionFailed {
+            reason: e.to_string(),
+        })?;
+    let converted = chordsketch_convert::ireal_to_chordpro(&ireal).map_err(|e| {
+        ChordSketchError::ConversionFailed {
+            reason: e.to_string(),
+        }
+    })?;
+    let text = chordsketch_render_text::render_song(&converted.output);
+    Ok(ConversionWithWarnings {
+        output: text,
+        warnings: converted
+            .warnings
+            .iter()
+            .map(format_conversion_warning)
+            .collect(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -728,6 +853,64 @@ mod tests {
         assert!(
             matches!(result, Err(ChordSketchError::InvalidConfig { .. })),
             "expected InvalidConfig; got {result:?}"
+        );
+    }
+
+    // ---- iReal Pro conversion bindings (#2067 Phase 1) ----
+
+    /// Reused tiny `irealb://` fixture from `chordsketch-convert`'s
+    /// `from_ireal.rs` integration tests — a deterministic source for
+    /// the `irealb_to_chordpro_text` direction.
+    const TINY_IREAL_URL: &str = "irealb://%54=%66==%41%66%72%6F=%43==%31%72%33%34%4C%62%4B%63%75%37,%37%47,%2D%20%3E%43,%44,%37%42,%2D%23%46,%47%7C,%37%44,%41%2D,%45,%2D%45%7C,%37%42,%2D%23%46,%45%2D,%7C%44%3C%34%33%54%7C%43,%44%2D%37,%7C%46,%47%37,%43%20%7C%20==%31%34%30=%33";
+
+    #[test]
+    fn test_convert_chordpro_to_irealb_returns_url() {
+        // Smoke test: a minimal ChordPro source produces an
+        // `irealb://`-prefixed URL. Asserts only the protocol scheme
+        // because `irealb_serialize`'s exact body is the serializer's
+        // own test surface (#2052).
+        let result = convert_chordpro_to_irealb(MINIMAL_INPUT.to_string())
+            .expect("conversion succeeds for valid ChordPro");
+        assert!(
+            result.output.starts_with("irealb://"),
+            "expected irealb:// URL, got: {}",
+            result.output
+        );
+    }
+
+    #[test]
+    fn test_convert_chordpro_to_irealb_empty_input_succeeds() {
+        // Edge case: empty input. The lenient parser produces a
+        // trailing empty `Song`, which converts to an empty
+        // `IrealSong` with no warnings. Should not error.
+        let result = convert_chordpro_to_irealb(String::new()).expect("empty input must not error");
+        assert!(result.output.starts_with("irealb://"));
+    }
+
+    #[test]
+    fn test_convert_irealb_to_chordpro_text_renders_barlines() {
+        // Round-trip: parse the tiny URL, convert to a ChordPro AST,
+        // render as text. The renderer's barline handling is the
+        // structural integrity check (per `convert/tests/from_ireal.rs`).
+        let result = convert_irealb_to_chordpro_text(TINY_IREAL_URL.to_string())
+            .expect("conversion succeeds for known-good URL");
+        assert!(!result.output.is_empty(), "rendered text must not be empty");
+        assert!(
+            result.output.contains('|'),
+            "rendered text must preserve bar boundaries; got: {}",
+            result.output
+        );
+    }
+
+    #[test]
+    fn test_convert_irealb_to_chordpro_text_invalid_url_errors() {
+        // Invalid URL surfaces through `ConversionFailed` rather than
+        // panicking. Distinct error variant so consumers can branch
+        // on conversion vs config failures.
+        let result = convert_irealb_to_chordpro_text("not a url".to_string());
+        assert!(
+            matches!(result, Err(ChordSketchError::ConversionFailed { .. })),
+            "expected ConversionFailed; got {result:?}"
         );
     }
 }

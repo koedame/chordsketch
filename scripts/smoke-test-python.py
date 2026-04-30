@@ -49,4 +49,17 @@ print("Config preset: OK")
 chordsketch.parse_and_render_text("{title: Test}\n[C]Hello", None, 2)
 print("Transpose: OK")
 
+# iReal Pro conversion (#2067 Phase 1).
+TINY_IREAL_URL = "irealb://%54=%66==%41%66%72%6F=%43==%31%72%33%34%4C%62%4B%63%75%37,%37%47,%2D%20%3E%43,%44,%37%42,%2D%23%46,%47%7C,%37%44,%41%2D,%45,%2D%45%7C,%37%42,%2D%23%46,%45%2D,%7C%44%3C%34%33%54%7C%43,%44%2D%37,%7C%46,%47%37,%43%20%7C%20==%31%34%30=%33"
+
+result = chordsketch.convert_chordpro_to_irealb("{title: Test}\n[C]Hello")
+assert result.output.startswith("irealb://"), f"unexpected output: {result.output}"
+assert isinstance(result.warnings, list)
+print("convert_chordpro_to_irealb: OK")
+
+result = chordsketch.convert_irealb_to_chordpro_text(TINY_IREAL_URL)
+assert "|" in result.output, "rendered text missing barlines"
+assert isinstance(result.warnings, list)
+print("convert_irealb_to_chordpro_text: OK")
+
 print("All smoke tests passed!")
