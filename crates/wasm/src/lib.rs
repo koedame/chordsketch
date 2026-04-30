@@ -966,8 +966,7 @@ pub fn parse_irealb(input: &str) -> Result<String, JsValue> {
 ///
 /// The input must match the JSON shape produced by [`parse_irealb`].
 /// Round-trip identity is guaranteed for any JSON that came out of
-/// `parse_irealb` on the same library version (modulo URL-encoding
-/// differences inside the iReal serializer's own deterministic output).
+/// `parse_irealb` on the same library version.
 ///
 /// # Errors
 ///
@@ -1918,5 +1917,17 @@ mod wasm_tests {
     fn serialize_irealb_invalid_json_errors() {
         let result = serialize_irealb("{ not real json");
         assert!(result.is_err(), "expected JsValue Err for invalid JSON");
+    }
+
+    /// An empty JSON object (missing every required `IrealSong` field)
+    /// surfaces as a `JsValue` error, not a panic or a silently
+    /// default-filled song.
+    #[wasm_bindgen_test]
+    fn serialize_irealb_missing_required_field_errors() {
+        let result = serialize_irealb("{}");
+        assert!(
+            result.is_err(),
+            "expected JsValue Err for missing required fields"
+        );
     }
 }

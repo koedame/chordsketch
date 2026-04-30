@@ -493,6 +493,7 @@ fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> Stri
 ///
 /// Returns [`ChordSketchError::ConversionFailed`] when the
 /// converter rejects the source as unrepresentable in iReal.
+#[must_use = "callers must handle conversion errors"]
 pub fn convert_chordpro_to_irealb(
     input: String,
 ) -> Result<ConversionWithWarnings, ChordSketchError> {
@@ -541,6 +542,7 @@ pub fn convert_chordpro_to_irealb(
 ///
 /// Returns [`ChordSketchError::ConversionFailed`] when the URL
 /// is not a valid `irealb://` payload.
+#[must_use = "callers must handle conversion errors"]
 pub fn convert_irealb_to_chordpro_text(
     input: String,
 ) -> Result<ConversionWithWarnings, ChordSketchError> {
@@ -577,6 +579,7 @@ pub fn convert_irealb_to_chordpro_text(
 /// is not a valid `irealb://` payload. Successful renders never
 /// fail — the SVG renderer is total once it has a parsed
 /// [`chordsketch_ireal::IrealSong`].
+#[must_use = "callers must handle conversion errors"]
 pub fn render_ireal_svg(input: String) -> Result<String, ChordSketchError> {
     let ireal =
         chordsketch_ireal::parse(&input).map_err(|e| ChordSketchError::ConversionFailed {
@@ -601,6 +604,7 @@ pub fn render_ireal_svg(input: String) -> Result<String, ChordSketchError> {
 ///
 /// Returns [`ChordSketchError::ConversionFailed`] when the URL is
 /// not a valid `irealb://` payload.
+#[must_use = "callers must handle parse errors"]
 pub fn parse_irealb(input: String) -> Result<String, ChordSketchError> {
     use chordsketch_ireal::ToJson;
     let song =
@@ -622,6 +626,7 @@ pub fn parse_irealb(input: String) -> Result<String, ChordSketchError> {
 /// Returns [`ChordSketchError::ConversionFailed`] when the input
 /// is not valid JSON or does not match the AST shape (missing
 /// required fields, out-of-range values).
+#[must_use = "callers must handle serialization errors"]
 pub fn serialize_irealb(input: String) -> Result<String, ChordSketchError> {
     use chordsketch_ireal::FromJson;
     let song = chordsketch_ireal::IrealSong::from_json_str(&input).map_err(|e| {
