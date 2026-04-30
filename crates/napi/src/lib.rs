@@ -644,12 +644,15 @@ fn do_convert_chordpro_to_irealb(
     input: &str,
 ) -> std::result::Result<(String, Vec<String>), String> {
     let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
+    // `split_at_new_song` unconditionally pushes `&input[seg_start..]`
+    // last, so `parse_multi_lenient` always returns at least one result;
+    // `next()` is provably `Some`.
     let song = parse_result
         .results
         .into_iter()
         .next()
         .map(|r| r.song)
-        .unwrap_or_default();
+        .expect("parse_multi_lenient always returns at least one result");
     let converted = chordsketch_convert::chordpro_to_ireal(&song)
         .map_err(|e| format!("conversion failed: {e}"))?;
     let url = chordsketch_ireal::irealb_serialize(&converted.output);
@@ -1057,6 +1060,14 @@ mod tests {
             url.starts_with("irealb://"),
             "expected irealb:// URL, got: {url}"
         );
+    }
+
+    #[test]
+    fn test_convert_chordpro_to_irealb_empty_input_succeeds() {
+        // Edge case: empty input. The lenient parser always returns at
+        // least one segment, so conversion must succeed without error.
+        let (url, _warnings) = super::do_convert_chordpro_to_irealb("").unwrap();
+        assert!(url.starts_with("irealb://"));
     }
 
     #[test]

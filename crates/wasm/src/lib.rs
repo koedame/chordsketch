@@ -822,12 +822,15 @@ fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> Stri
 /// the wasm wrapper and by Rust unit tests in this file.
 fn do_convert_chordpro_to_irealb(input: &str) -> Result<ConversionWithWarnings, String> {
     let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
+    // `split_at_new_song` unconditionally pushes `&input[seg_start..]`
+    // last, so `parse_multi_lenient` always returns at least one result;
+    // `next()` is provably `Some`.
     let song = parse_result
         .results
         .into_iter()
         .next()
         .map(|r| r.song)
-        .unwrap_or_default();
+        .expect("parse_multi_lenient always returns at least one result");
     let converted = chordsketch_convert::chordpro_to_ireal(&song)
         .map_err(|e| format!("conversion failed: {e}"))?;
     let url = chordsketch_ireal::irealb_serialize(&converted.output);
@@ -1116,6 +1119,54 @@ mod tests {
         );
         assert!(pdf.output.starts_with(b"%PDF"));
         assert!(pdf.warnings.is_empty());
+    }
+
+    // ---- iReal Pro conversion bindings (#2067 Phase 1) ----
+
+    /// Reused tiny `irealb://` fixture from
+    /// `chordsketch-convert/tests/from_ireal.rs`.
+    const TINY_IREAL_URL: &str = "irealb://%54=%66==%41%66%72%6F=%43==%31%72%33%34%4C%62%4B%63%75%37,%37%47,%2D%20%3E%43,%44,%37%42,%2D%23%46,%47%7C,%37%44,%41%2D,%45,%2D%45%7C,%37%42,%2D%23%46,%45%2D,%7C%44%3C%34%33%54%7C%43,%44%2D%37,%7C%46,%47%37,%43%20%7C%20==%31%34%30=%33";
+
+    #[test]
+    fn test_convert_chordpro_to_irealb_helper() {
+        // `do_convert_chordpro_to_irealb` is a native helper that does not
+        // call any wasm-bindgen imports, so it can run under `cargo test`.
+        // The actual `#[wasm_bindgen]` wrapper is exercised by `wasm-pack
+        // test --node` via the `wasm_tests` module below.
+        let payload = do_convert_chordpro_to_irealb(MINIMAL_INPUT).unwrap();
+        assert!(
+            payload.output.starts_with("irealb://"),
+            "expected irealb:// URL, got: {}",
+            payload.output
+        );
+    }
+
+    #[test]
+    fn test_convert_chordpro_to_irealb_empty_input_succeeds() {
+        // Edge case: empty input. The lenient parser always returns at
+        // least one segment, so conversion must succeed (empty IrealSong).
+        let payload = do_convert_chordpro_to_irealb("").unwrap();
+        assert!(payload.output.starts_with("irealb://"));
+    }
+
+    #[test]
+    fn test_convert_irealb_to_chordpro_text_helper() {
+        let payload = do_convert_irealb_to_chordpro_text(TINY_IREAL_URL).unwrap();
+        assert!(
+            !payload.output.is_empty(),
+            "rendered text must not be empty"
+        );
+        assert!(
+            payload.output.contains('|'),
+            "rendered text must preserve bar boundaries; got: {}",
+            payload.output
+        );
+    }
+
+    #[test]
+    fn test_convert_irealb_to_chordpro_text_invalid_url_errors() {
+        let result = do_convert_irealb_to_chordpro_text("not a url");
+        assert!(result.is_err(), "expected error, got {result:?}");
     }
 }
 
@@ -1593,46 +1644,5 @@ mod wasm_tests {
                 "console.warn entry should start with 'chordsketch:', got: {entry}"
             );
         }
-    }
-
-    // ---- iReal Pro conversion bindings (#2067 Phase 1) ----
-
-    /// Reused tiny `irealb://` fixture from
-    /// `chordsketch-convert/tests/from_ireal.rs`.
-    const TINY_IREAL_URL: &str = "irealb://%54=%66==%41%66%72%6F=%43==%31%72%33%34%4C%62%4B%63%75%37,%37%47,%2D%20%3E%43,%44,%37%42,%2D%23%46,%47%7C,%37%44,%41%2D,%45,%2D%45%7C,%37%42,%2D%23%46,%45%2D,%7C%44%3C%34%33%54%7C%43,%44%2D%37,%7C%46,%47%37,%43%20%7C%20==%31%34%30=%33";
-
-    #[test]
-    fn test_convert_chordpro_to_irealb_helper() {
-        // Native helper test — the wasm wrapper itself is exercised
-        // via wasm-bindgen-test (run by `wasm-pack test --node` in
-        // the wasm.yml workflow). Asserting at the helper level
-        // keeps a regression in the conversion pipeline visible to
-        // `cargo test`.
-        let payload = super::do_convert_chordpro_to_irealb(MINIMAL_INPUT).unwrap();
-        assert!(
-            payload.output.starts_with("irealb://"),
-            "expected irealb:// URL, got: {}",
-            payload.output
-        );
-    }
-
-    #[test]
-    fn test_convert_irealb_to_chordpro_text_helper() {
-        let payload = super::do_convert_irealb_to_chordpro_text(TINY_IREAL_URL).unwrap();
-        assert!(
-            !payload.output.is_empty(),
-            "rendered text must not be empty"
-        );
-        assert!(
-            payload.output.contains('|'),
-            "rendered text must preserve bar boundaries; got: {}",
-            payload.output
-        );
-    }
-
-    #[test]
-    fn test_convert_irealb_to_chordpro_text_invalid_url_errors() {
-        let result = super::do_convert_irealb_to_chordpro_text("not a url");
-        assert!(result.is_err(), "expected error, got {result:?}");
     }
 }

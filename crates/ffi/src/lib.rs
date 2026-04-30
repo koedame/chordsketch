@@ -497,15 +497,16 @@ pub fn convert_chordpro_to_irealb(
     input: String,
 ) -> Result<ConversionWithWarnings, ChordSketchError> {
     let parse_result = chordsketch_chordpro::parse_multi_lenient(&input);
-    // The lenient parser always returns at least one segment
-    // (see `parse_songs` above), so `next()` is guaranteed to
-    // hit the trailing segment even on empty input.
+    // `split_at_new_song` unconditionally pushes `&input[seg_start..]`
+    // last, so `parse_multi_lenient` always returns at least one result;
+    // `next()` is provably `Some` — use `expect` to make the invariant
+    // explicit and catch any future regression immediately.
     let song = parse_result
         .results
         .into_iter()
         .next()
         .map(|r| r.song)
-        .unwrap_or_default();
+        .expect("parse_multi_lenient always returns at least one result");
     let converted = chordsketch_convert::chordpro_to_ireal(&song).map_err(|e| {
         ChordSketchError::ConversionFailed {
             reason: e.to_string(),
