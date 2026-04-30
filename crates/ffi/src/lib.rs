@@ -564,6 +564,30 @@ pub fn convert_irealb_to_chordpro_text(
     })
 }
 
+/// Render an `irealb://` URL as an iReal Pro-style SVG chart
+/// (#2067 Phase 2a).
+///
+/// Pipeline: [`chordsketch_ireal::parse`] →
+/// [`chordsketch_render_ireal::render_svg`] with the default
+/// [`chordsketch_render_ireal::RenderOptions`].
+///
+/// # Errors
+///
+/// Returns [`ChordSketchError::ConversionFailed`] when the URL
+/// is not a valid `irealb://` payload. Successful renders never
+/// fail — the SVG renderer is total once it has a parsed
+/// [`chordsketch_ireal::IrealSong`].
+pub fn render_ireal_svg(input: String) -> Result<String, ChordSketchError> {
+    let ireal =
+        chordsketch_ireal::parse(&input).map_err(|e| ChordSketchError::ConversionFailed {
+            reason: e.to_string(),
+        })?;
+    Ok(chordsketch_render_ireal::render_svg(
+        &ireal,
+        &chordsketch_render_ireal::RenderOptions::default(),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -908,6 +932,34 @@ mod tests {
         // panicking. Distinct error variant so consumers can branch
         // on conversion vs config failures.
         let result = convert_irealb_to_chordpro_text("not a url".to_string());
+        assert!(
+            matches!(result, Err(ChordSketchError::ConversionFailed { .. })),
+            "expected ConversionFailed; got {result:?}"
+        );
+    }
+
+    // ---- iReal Pro SVG render (#2067 Phase 2a) ----
+
+    #[test]
+    fn test_render_ireal_svg_emits_svg_document() {
+        // Smoke test: a valid `irealb://` URL produces a string that
+        // begins with `<svg`. Asserting only the prefix because the
+        // exact SVG content is `chordsketch-render-ireal`'s test
+        // surface, not this binding's.
+        let svg = render_ireal_svg(TINY_IREAL_URL.to_string())
+            .expect("render succeeds for known-good URL");
+        assert!(
+            svg.contains("<svg"),
+            "expected SVG document, got: {}",
+            &svg[..svg.len().min(200)]
+        );
+    }
+
+    #[test]
+    fn test_render_ireal_svg_invalid_url_errors() {
+        // Sister-binding parity with
+        // `test_convert_irealb_to_chordpro_text_invalid_url_errors`.
+        let result = render_ireal_svg("not a url".to_string());
         assert!(
             matches!(result, Err(ChordSketchError::ConversionFailed { .. })),
             "expected ConversionFailed; got {result:?}"

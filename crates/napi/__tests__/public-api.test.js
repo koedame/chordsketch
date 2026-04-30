@@ -145,4 +145,16 @@ describe("NAPI public API surface", () => {
     // `test_convert_irealb_to_chordpro_text_invalid_url_errors`.
     expect(() => m.convertIrealbToChordproText("not a url")).toThrow();
   });
+
+  // ---- iReal Pro SVG render (#2067 Phase 2a) ----
+
+  test("renderIrealSvg emits an SVG document", () => {
+    const svg = m.renderIrealSvg(TINY_IREAL_URL);
+    expect(typeof svg).toBe("string");
+    expect(svg.includes("<svg")).toBe(true);
+  });
+
+  test("renderIrealSvg throws on invalid URL", () => {
+    expect(() => m.renderIrealSvg("not a url")).toThrow();
+  });
 });
