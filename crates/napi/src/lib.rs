@@ -649,7 +649,7 @@ fn do_convert_chordpro_to_irealb(
         .into_iter()
         .next()
         .map(|r| r.song)
-        .unwrap_or_else(chordsketch_chordpro::ast::Song::new);
+        .unwrap_or_default();
     let converted = chordsketch_convert::chordpro_to_ireal(&song)
         .map_err(|e| format!("conversion failed: {e}"))?;
     let url = chordsketch_ireal::irealb_serialize(&converted.output);

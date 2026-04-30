@@ -794,7 +794,10 @@ export function validate(input: string): ValidationError[];
 /// `ConversionWithWarnings` dictionary so every binding presents
 /// the same surface — `output` is the converted string, `warnings`
 /// is a list of `"<kind>: <message>"` diagnostic strings.
-#[derive(Serialize)]
+///
+/// `Debug` is required for the `{result:?}` formatter used by the
+/// `assert!` calls in the unit tests below.
+#[derive(Debug, Serialize)]
 struct ConversionWithWarnings {
     output: String,
     warnings: Vec<String>,
@@ -824,7 +827,7 @@ fn do_convert_chordpro_to_irealb(input: &str) -> Result<ConversionWithWarnings, 
         .into_iter()
         .next()
         .map(|r| r.song)
-        .unwrap_or_else(chordsketch_chordpro::ast::Song::new);
+        .unwrap_or_default();
     let converted = chordsketch_convert::chordpro_to_ireal(&song)
         .map_err(|e| format!("conversion failed: {e}"))?;
     let url = chordsketch_ireal::irealb_serialize(&converted.output);
