@@ -867,7 +867,7 @@ fn do_convert_irealb_to_chordpro_text(input: &str) -> Result<ConversionWithWarni
 /// Returns a `JsValue` error string when the converter rejects the
 /// source as unrepresentable in iReal.
 #[must_use = "callers must handle conversion errors"]
-#[wasm_bindgen(js_name = convertChordProToIrealb)]
+#[wasm_bindgen(js_name = convertChordproToIrealb)]
 pub fn convert_chordpro_to_irealb(input: &str) -> Result<JsValue, JsValue> {
     let payload = do_convert_chordpro_to_irealb(input).map_err(|e| JsValue::from_str(&e))?;
     serde_wasm_bindgen::to_value(&payload).map_err(|e| JsValue::from_str(&e.to_string()))
@@ -885,7 +885,7 @@ pub fn convert_chordpro_to_irealb(input: &str) -> Result<JsValue, JsValue> {
 /// Returns a `JsValue` error string when the URL is not a valid
 /// `irealb://` payload.
 #[must_use = "callers must handle conversion errors"]
-#[wasm_bindgen(js_name = convertIrealbToChordProText)]
+#[wasm_bindgen(js_name = convertIrealbToChordproText)]
 pub fn convert_irealb_to_chordpro_text(input: &str) -> Result<JsValue, JsValue> {
     let payload = do_convert_irealb_to_chordpro_text(input).map_err(|e| JsValue::from_str(&e))?;
     serde_wasm_bindgen::to_value(&payload).map_err(|e| JsValue::from_str(&e.to_string()))
@@ -894,8 +894,8 @@ pub fn convert_irealb_to_chordpro_text(input: &str) -> Result<JsValue, JsValue> 
 #[wasm_bindgen(typescript_custom_section)]
 const CONVERSION_WITH_WARNINGS_TS: &'static str = r#"
 /**
- * Result returned by {@link convertChordProToIrealb} and
- * {@link convertIrealbToChordProText} (#2067 Phase 1).
+ * Result returned by {@link convertChordproToIrealb} and
+ * {@link convertIrealbToChordproText} (#2067 Phase 1).
  *
  * `output` is the converted string (an `irealb://` URL or rendered
  * ChordPro text, depending on direction). `warnings` is a list of
@@ -922,7 +922,7 @@ export interface ConversionWithWarnings {
  * @throws when the converter rejects the source as unrepresentable
  *         in iReal.
  */
-export function convertChordProToIrealb(input: string): ConversionWithWarnings;
+export function convertChordproToIrealb(input: string): ConversionWithWarnings;
 
 /**
  * Convert an `irealb://` URL into rendered ChordPro text.
@@ -932,7 +932,7 @@ export function convertChordProToIrealb(input: string): ConversionWithWarnings;
  *
  * @throws when the input is not a valid `irealb://` payload.
  */
-export function convertIrealbToChordProText(input: string): ConversionWithWarnings;
+export function convertIrealbToChordproText(input: string): ConversionWithWarnings;
 "#;
 
 #[cfg(test)]

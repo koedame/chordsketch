@@ -129,9 +129,11 @@ namespace chordsketch {
     ///
     /// The output is the `chordsketch-render-text` rendering of the
     /// converted song, not raw ChordPro source — there is no
-    /// ChordPro source emitter yet (tracked for a follow-up). The
-    /// rendered text preserves bar boundaries (`|`), chord lines,
-    /// and section labels.
+    /// ChordPro source emitter yet (tracked for a follow-up). Bar
+    /// boundaries (`|`) survive the conversion (asserted by the
+    /// per-binding tests); other surface details (chord lines,
+    /// section labels, etc.) are governed by `render-text`'s own
+    /// formatting contract.
     ///
     /// Throws `ConversionFailed` when the URL is not a valid
     /// `irealb://` payload.

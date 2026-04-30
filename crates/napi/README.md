@@ -70,23 +70,23 @@ console.log(`ChordSketch ${version()}`);
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `convertChordProToIrealb(source)` | `{ output: string, warnings: string[] }` | Convert ChordPro source to an `irealb://` URL (lossy — drops lyrics, fonts, capo) |
-| `convertIrealbToChordProText(url)` | `{ output: string, warnings: string[] }` | Convert an `irealb://` URL to rendered ChordPro text |
+| `convertChordproToIrealb(source)` | `{ output: string, warnings: string[] }` | Convert ChordPro source to an `irealb://` URL (lossy — drops lyrics, fonts, capo) |
+| `convertIrealbToChordproText(url)` | `{ output: string, warnings: string[] }` | Convert an `irealb://` URL to rendered ChordPro text |
 
-The `output` of `convertIrealbToChordProText` is the
+The `output` of `convertIrealbToChordproText` is the
 `chordsketch-render-text` rendering of the converted song, not raw
 ChordPro source. The `warnings` array contains
 `"<kind>: <message>"` strings (`kind` is `lossy-drop`,
 `approximated`, or `unsupported`).
 
 ```js
-import { convertChordProToIrealb, convertIrealbToChordProText } from '@chordsketch/node';
+import { convertChordproToIrealb, convertIrealbToChordproText } from '@chordsketch/node';
 
-const { output: url, warnings } = convertChordProToIrealb(`{title: Test}\n[C]Hello`);
+const { output: url, warnings } = convertChordproToIrealb(`{title: Test}\n[C]Hello`);
 console.log(url);       // "irealb://..."
 console.log(warnings);  // ["lossy-drop: lyrics are dropped", ...]
 
-const { output: text } = convertIrealbToChordProText(url);
+const { output: text } = convertIrealbToChordproText(url);
 console.log(text);
 ```
 

@@ -117,26 +117,26 @@ const html = render_html_with_options(input, {
 
 | Function | Input | Output |
 |----------|-------|--------|
-| `convertChordProToIrealb(input)` | ChordPro source | `{ output: string, warnings: string[] }` — `output` is an `irealb://` URL |
-| `convertIrealbToChordProText(input)` | `irealb://` URL | `{ output: string, warnings: string[] }` — `output` is rendered ChordPro text |
+| `convertChordproToIrealb(input)` | ChordPro source | `{ output: string, warnings: string[] }` — `output` is an `irealb://` URL |
+| `convertIrealbToChordproText(input)` | `irealb://` URL | `{ output: string, warnings: string[] }` — `output` is rendered ChordPro text |
 
-`convertChordProToIrealb` is lossy: lyrics, fonts / colours, and
+`convertChordproToIrealb` is lossy: lyrics, fonts / colours, and
 capo are dropped because iReal has no surface for them. Each
 drop appears in `warnings` as a `"<kind>: <message>"` string
 (`kind` is `lossy-drop`, `approximated`, or `unsupported`).
 
-`convertIrealbToChordProText` returns the
+`convertIrealbToChordproText` returns the
 `chordsketch-render-text` rendering of the converted song, not
 raw ChordPro source — there is no source emitter yet.
 
 ```js
-import { convertChordProToIrealb, convertIrealbToChordProText } from '@chordsketch/wasm';
+import { convertChordproToIrealb, convertIrealbToChordproText } from '@chordsketch/wasm';
 
-const { output: url, warnings } = convertChordProToIrealb('{title: Test}\n[C]Hello');
+const { output: url, warnings } = convertChordproToIrealb('{title: Test}\n[C]Hello');
 console.log(url);       // "irealb://..."
 console.log(warnings);  // ["lossy-drop: lyrics are dropped", ...]
 
-const { output: text } = convertIrealbToChordProText(url);
+const { output: text } = convertIrealbToChordproText(url);
 console.log(text);
 ```
 

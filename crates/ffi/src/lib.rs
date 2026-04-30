@@ -532,8 +532,9 @@ pub fn convert_chordpro_to_irealb(
 /// The output is the rendered text representation of the
 /// converted song, not raw ChordPro source — there is no
 /// ChordPro source emitter in the workspace yet (deferred to a
-/// follow-up PR). The rendered text preserves bar boundaries
-/// (`|`), chord lines, and section labels.
+/// follow-up PR). Bar boundaries (`|`) survive the conversion
+/// (asserted in the per-binding tests); other surface details
+/// follow `chordsketch-render-text`'s own formatting contract.
 ///
 /// # Errors
 ///
