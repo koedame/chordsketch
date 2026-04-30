@@ -110,6 +110,33 @@ namespace chordsketch {
     /// the instrument is unsupported.
     [Throws=ChordSketchError]
     string? chord_diagram_svg(string chord, string instrument);
+
+    /// Convert a ChordPro source string into an `irealb://` URL
+    /// (#2067 Phase 1).
+    ///
+    /// Lossy: lyrics, fonts, colours, and capo are dropped; iReal
+    /// has no surface for them. Every drop surfaces in `warnings`
+    /// so callers never silently lose data.
+    ///
+    /// Throws `ConversionFailed` when the source is structurally
+    /// invalid for the iReal target format (e.g. a time signature
+    /// outside iReal's representable range).
+    [Throws=ChordSketchError]
+    ConversionWithWarnings convert_chordpro_to_irealb(string input);
+
+    /// Convert an `irealb://` URL into rendered ChordPro text
+    /// (#2067 Phase 1).
+    ///
+    /// The output is the `chordsketch-render-text` rendering of the
+    /// converted song, not raw ChordPro source — there is no
+    /// ChordPro source emitter yet (tracked for a follow-up). The
+    /// rendered text preserves bar boundaries (`|`), chord lines,
+    /// and section labels.
+    ///
+    /// Throws `ConversionFailed` when the URL is not a valid
+    /// `irealb://` payload.
+    [Throws=ChordSketchError]
+    ConversionWithWarnings convert_irealb_to_chordpro_text(string input);
 };
 
 /// Structured render result for text / HTML output.
@@ -135,6 +162,23 @@ dictionary PdfRenderWithWarnings {
     sequence<string> warnings;
 };
 
+/// Structured result for ChordPro ↔ iReal Pro conversions
+/// (#2067 Phase 1).
+///
+/// `output` is the converted string (an `irealb://` URL or
+/// rendered ChordPro text, depending on direction). `warnings`
+/// holds human-readable descriptions of any information that
+/// was dropped or approximated during the conversion. An empty
+/// warning list indicates a clean (lossless-on-this-input)
+/// conversion.
+dictionary ConversionWithWarnings {
+    /// Converted output string.
+    string output;
+    /// Warnings captured during conversion (lossy drops,
+    /// approximated fields, unsupported features).
+    sequence<string> warnings;
+};
+
 /// A single validation issue reported by `validate()`.
 ///
 /// Matches the NAPI `ValidationError` interface introduced in #1990 and
@@ -155,4 +199,8 @@ interface ChordSketchError {
     NoSongsFound();
     /// Invalid configuration string.
     InvalidConfig(string reason);
+    /// A ChordPro ↔ iReal Pro conversion failed (#2067).
+    /// The contained `reason` is the parser or converter's
+    /// human-readable diagnostic.
+    ConversionFailed(string reason);
 };

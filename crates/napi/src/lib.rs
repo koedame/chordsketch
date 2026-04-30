@@ -600,6 +600,128 @@ pub fn chord_diagram_svg(chord: String, instrument: String) -> Result<Option<Str
     }
 }
 
+/// Structured result for ChordPro ↔ iReal Pro conversions
+/// (#2067 Phase 1).
+///
+/// Mirrors the FFI / WASM `ConversionWithWarnings` shape so every
+/// binding exposes the same surface: `output` is the converted
+/// string, `warnings` is a list of human-readable diagnostics.
+#[napi(object)]
+pub struct ConversionWithWarnings {
+    /// Converted output string.
+    pub output: String,
+    /// Warnings captured during conversion.
+    pub warnings: Vec<String>,
+}
+
+/// Format a [`chordsketch_convert::ConversionWarning`] as a stable
+/// `"<kind>: <message>"` string. Keeps WASM / NAPI / FFI in lockstep.
+fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> String {
+    let kind = match w.kind {
+        chordsketch_convert::WarningKind::LossyDrop => "lossy-drop",
+        chordsketch_convert::WarningKind::Approximated => "approximated",
+        chordsketch_convert::WarningKind::Unsupported => "unsupported",
+        // `WarningKind` is `#[non_exhaustive]`; fall back to a generic
+        // tag so a future variant addition does not silently break
+        // this binding's compilation. Sister bindings do the same.
+        _ => "warning",
+    };
+    format!("{kind}: {}", w.message)
+}
+
+/// Run the ChordPro → iReal pipeline and return `(url, warnings)`.
+///
+/// Returns `Result<_, String>` (not `napi::Result`) so the Rust unit
+/// tests in this file can exercise the conversion logic without
+/// pulling in `napi::Error`'s `Drop` impl, which references
+/// `napi_reference_unref` / `napi_delete_reference`. Those symbols are
+/// only resolved at runtime by the Node.js host, so a test binary
+/// that links them fails with `undefined symbol` (this NAPI crate's
+/// existing test pattern is to call the underlying chordpro logic
+/// directly for the same reason). The `#[napi]` wrapper below maps
+/// the `String` error into `napi::Error` at the binding boundary.
+fn do_convert_chordpro_to_irealb(
+    input: &str,
+) -> std::result::Result<(String, Vec<String>), String> {
+    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
+    let song = parse_result
+        .results
+        .into_iter()
+        .next()
+        .map(|r| r.song)
+        .unwrap_or_else(chordsketch_chordpro::ast::Song::new);
+    let converted = chordsketch_convert::chordpro_to_ireal(&song)
+        .map_err(|e| format!("conversion failed: {e}"))?;
+    let url = chordsketch_ireal::irealb_serialize(&converted.output);
+    Ok((
+        url,
+        converted
+            .warnings
+            .iter()
+            .map(format_conversion_warning)
+            .collect(),
+    ))
+}
+
+/// Run the iReal → ChordPro pipeline and return `(rendered_text, warnings)`.
+///
+/// Same `Result<_, String>` contract as
+/// [`do_convert_chordpro_to_irealb`] — see that function's note for
+/// why the helper does not return `napi::Result`.
+fn do_convert_irealb_to_chordpro_text(
+    input: &str,
+) -> std::result::Result<(String, Vec<String>), String> {
+    let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
+    let converted = chordsketch_convert::ireal_to_chordpro(&ireal)
+        .map_err(|e| format!("conversion failed: {e}"))?;
+    let text = chordsketch_render_text::render_song(&converted.output);
+    Ok((
+        text,
+        converted
+            .warnings
+            .iter()
+            .map(format_conversion_warning)
+            .collect(),
+    ))
+}
+
+/// Convert a ChordPro source string into an `irealb://` URL
+/// (#2067 Phase 1).
+///
+/// Lossy: lyrics, fonts / colours, capo are dropped (iReal has no
+/// surface for them). Each drop appears in the returned `warnings`.
+///
+/// # Errors
+///
+/// Rejects with status `GenericFailure` when the converter
+/// surfaces a [`chordsketch_convert::ConversionError`].
+#[must_use = "callers must handle conversion errors"]
+#[napi]
+pub fn convert_chordpro_to_irealb(input: String) -> Result<ConversionWithWarnings> {
+    let (output, warnings) = do_convert_chordpro_to_irealb(&input)
+        .map_err(|reason| Error::new(Status::GenericFailure, reason))?;
+    Ok(ConversionWithWarnings { output, warnings })
+}
+
+/// Convert an `irealb://` URL into rendered ChordPro text
+/// (#2067 Phase 1).
+///
+/// Output is the `chordsketch-render-text` rendering of the
+/// converted song, not raw ChordPro source — there is no source
+/// emitter in the workspace yet (deferred to a follow-up PR).
+///
+/// # Errors
+///
+/// Rejects with status `GenericFailure` when the URL is not a
+/// valid `irealb://` payload.
+#[must_use = "callers must handle conversion errors"]
+#[napi]
+pub fn convert_irealb_to_chordpro_text(input: String) -> Result<ConversionWithWarnings> {
+    let (output, warnings) = do_convert_irealb_to_chordpro_text(&input)
+        .map_err(|reason| Error::new(Status::GenericFailure, reason))?;
+    Ok(ConversionWithWarnings { output, warnings })
+}
+
 // Unit tests exercise the underlying rendering and parsing logic directly
 // via chordsketch_chordpro and renderer crates. The napi wrapper functions
 // cannot be tested natively because they depend on the Node.js runtime for
@@ -918,5 +1040,38 @@ mod tests {
         // so a future rename of the "guitar" preset would surface here.
         let preset = chordsketch_chordpro::config::Config::preset("guitar");
         assert!(preset.is_some(), "the 'guitar' preset must be available");
+    }
+
+    // ---- iReal Pro conversion bindings (#2067 Phase 1) ----
+
+    /// Reused tiny `irealb://` fixture from
+    /// `chordsketch-convert/tests/from_ireal.rs`.
+    const TINY_IREAL_URL: &str = "irealb://%54=%66==%41%66%72%6F=%43==%31%72%33%34%4C%62%4B%63%75%37,%37%47,%2D%20%3E%43,%44,%37%42,%2D%23%46,%47%7C,%37%44,%41%2D,%45,%2D%45%7C,%37%42,%2D%23%46,%45%2D,%7C%44%3C%34%33%54%7C%43,%44%2D%37,%7C%46,%47%37,%43%20%7C%20==%31%34%30=%33";
+
+    #[test]
+    fn test_convert_chordpro_to_irealb_helper() {
+        // Exercises the napi-free helper so a regression in the
+        // pipeline surfaces in Rust unit tests, not only via Jest.
+        let (url, _warnings) = super::do_convert_chordpro_to_irealb(MINIMAL_INPUT).unwrap();
+        assert!(
+            url.starts_with("irealb://"),
+            "expected irealb:// URL, got: {url}"
+        );
+    }
+
+    #[test]
+    fn test_convert_irealb_to_chordpro_text_helper() {
+        let (text, _warnings) = super::do_convert_irealb_to_chordpro_text(TINY_IREAL_URL).unwrap();
+        assert!(!text.is_empty(), "rendered text must not be empty");
+        assert!(
+            text.contains('|'),
+            "rendered text must preserve bar boundaries; got: {text}"
+        );
+    }
+
+    #[test]
+    fn test_convert_irealb_to_chordpro_text_invalid_url_errors() {
+        let result = super::do_convert_irealb_to_chordpro_text("not a url");
+        assert!(result.is_err(), "expected error, got {result:?}");
     }
 }

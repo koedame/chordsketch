@@ -72,6 +72,8 @@ The exported wasm-bindgen functions are:
 | `renderTextWithWarningsAndOptions(input, opts)` | `renderTextWithWarnings` + `{ transpose?, config? }` options | `{ output: string, warnings: string[] }` |
 | `renderHtmlWithWarningsAndOptions(input, opts)` | `renderHtmlWithWarnings` + `{ transpose?, config? }` options | `{ output: string, warnings: string[] }` |
 | `renderPdfWithWarningsAndOptions(input, opts)` | `renderPdfWithWarnings` + `{ transpose?, config? }` options | `{ output: Uint8Array, warnings: string[] }` |
+| `convertChordProToIrealb(input)` | Convert ChordPro source to an `irealb://` URL (lossy — drops lyrics, fonts, capo) | `{ output: string, warnings: string[] }` |
+| `convertIrealbToChordProText(input)` | Convert an `irealb://` URL to rendered ChordPro text | `{ output: string, warnings: string[] }` |
 | `version()` | Library version string | `string` |
 
 Each element of `warnings` is a plain UTF-8 string containing a

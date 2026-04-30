@@ -786,6 +786,155 @@ export interface ValidationError {
 export function validate(input: string): ValidationError[];
 "#;
 
+// ---- iReal Pro conversion bindings (#2067 Phase 1) ----
+
+/// Serializable shape returned by both conversion entry points.
+///
+/// Mirrors the NAPI `ConversionWithWarnings` and the UDL
+/// `ConversionWithWarnings` dictionary so every binding presents
+/// the same surface — `output` is the converted string, `warnings`
+/// is a list of `"<kind>: <message>"` diagnostic strings.
+#[derive(Serialize)]
+struct ConversionWithWarnings {
+    output: String,
+    warnings: Vec<String>,
+}
+
+/// Format a [`chordsketch_convert::ConversionWarning`] as a stable
+/// `"<kind>: <message>"` string. Mirror of NAPI / FFI's helper.
+fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> String {
+    let kind = match w.kind {
+        chordsketch_convert::WarningKind::LossyDrop => "lossy-drop",
+        chordsketch_convert::WarningKind::Approximated => "approximated",
+        chordsketch_convert::WarningKind::Unsupported => "unsupported",
+        // `WarningKind` is `#[non_exhaustive]`; falling back to a
+        // generic tag here keeps the binding compiling against a
+        // future variant. Sister bindings do the same.
+        _ => "warning",
+    };
+    format!("{kind}: {}", w.message)
+}
+
+/// Run the ChordPro → iReal pipeline; native-test helper used by
+/// the wasm wrapper and by Rust unit tests in this file.
+fn do_convert_chordpro_to_irealb(input: &str) -> Result<ConversionWithWarnings, String> {
+    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
+    let song = parse_result
+        .results
+        .into_iter()
+        .next()
+        .map(|r| r.song)
+        .unwrap_or_else(chordsketch_chordpro::ast::Song::new);
+    let converted = chordsketch_convert::chordpro_to_ireal(&song)
+        .map_err(|e| format!("conversion failed: {e}"))?;
+    let url = chordsketch_ireal::irealb_serialize(&converted.output);
+    Ok(ConversionWithWarnings {
+        output: url,
+        warnings: converted
+            .warnings
+            .iter()
+            .map(format_conversion_warning)
+            .collect(),
+    })
+}
+
+/// Run the iReal → ChordPro pipeline; native-test helper used by
+/// the wasm wrapper and by Rust unit tests.
+fn do_convert_irealb_to_chordpro_text(input: &str) -> Result<ConversionWithWarnings, String> {
+    let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
+    let converted = chordsketch_convert::ireal_to_chordpro(&ireal)
+        .map_err(|e| format!("conversion failed: {e}"))?;
+    let text = chordsketch_render_text::render_song(&converted.output);
+    Ok(ConversionWithWarnings {
+        output: text,
+        warnings: converted
+            .warnings
+            .iter()
+            .map(format_conversion_warning)
+            .collect(),
+    })
+}
+
+/// Convert a ChordPro source string into an `irealb://` URL
+/// (#2067 Phase 1).
+///
+/// Lossy: lyrics, fonts / colours, and capo are dropped (iReal has
+/// no surface for them). Each drop appears in the returned
+/// `warnings` list.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string when the converter rejects the
+/// source as unrepresentable in iReal.
+#[must_use = "callers must handle conversion errors"]
+#[wasm_bindgen(js_name = convertChordProToIrealb)]
+pub fn convert_chordpro_to_irealb(input: &str) -> Result<JsValue, JsValue> {
+    let payload = do_convert_chordpro_to_irealb(input).map_err(|e| JsValue::from_str(&e))?;
+    serde_wasm_bindgen::to_value(&payload).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Convert an `irealb://` URL into rendered ChordPro text
+/// (#2067 Phase 1).
+///
+/// Output is the `chordsketch-render-text` rendering of the
+/// converted song, not raw ChordPro source — there is no source
+/// emitter in the workspace yet (deferred to a follow-up PR).
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string when the URL is not a valid
+/// `irealb://` payload.
+#[must_use = "callers must handle conversion errors"]
+#[wasm_bindgen(js_name = convertIrealbToChordProText)]
+pub fn convert_irealb_to_chordpro_text(input: &str) -> Result<JsValue, JsValue> {
+    let payload = do_convert_irealb_to_chordpro_text(input).map_err(|e| JsValue::from_str(&e))?;
+    serde_wasm_bindgen::to_value(&payload).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+#[wasm_bindgen(typescript_custom_section)]
+const CONVERSION_WITH_WARNINGS_TS: &'static str = r#"
+/**
+ * Result returned by {@link convertChordProToIrealb} and
+ * {@link convertIrealbToChordProText} (#2067 Phase 1).
+ *
+ * `output` is the converted string (an `irealb://` URL or rendered
+ * ChordPro text, depending on direction). `warnings` is a list of
+ * `"<kind>: <message>"` diagnostic strings describing information
+ * that was dropped or approximated during the conversion.
+ *
+ * Matches the NAPI `ConversionWithWarnings` interface and the FFI
+ * `ConversionWithWarnings` dictionary.
+ */
+export interface ConversionWithWarnings {
+  /** Converted output string. */
+  output: string;
+  /** Conversion warnings (lossy drops, approximations, unsupported). */
+  warnings: string[];
+}
+
+/**
+ * Convert a ChordPro source string into an `irealb://` URL.
+ *
+ * Lossy: lyrics, fonts / colours, capo are dropped because iReal
+ * has no surface for them. Every drop surfaces in
+ * {@link ConversionWithWarnings.warnings}.
+ *
+ * @throws when the converter rejects the source as unrepresentable
+ *         in iReal.
+ */
+export function convertChordProToIrealb(input: string): ConversionWithWarnings;
+
+/**
+ * Convert an `irealb://` URL into rendered ChordPro text.
+ *
+ * The output is the `chordsketch-render-text` rendering of the
+ * converted song, not raw ChordPro source.
+ *
+ * @throws when the input is not a valid `irealb://` payload.
+ */
+export function convertIrealbToChordProText(input: string): ConversionWithWarnings;
+"#;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1441,5 +1590,46 @@ mod wasm_tests {
                 "console.warn entry should start with 'chordsketch:', got: {entry}"
             );
         }
+    }
+
+    // ---- iReal Pro conversion bindings (#2067 Phase 1) ----
+
+    /// Reused tiny `irealb://` fixture from
+    /// `chordsketch-convert/tests/from_ireal.rs`.
+    const TINY_IREAL_URL: &str = "irealb://%54=%66==%41%66%72%6F=%43==%31%72%33%34%4C%62%4B%63%75%37,%37%47,%2D%20%3E%43,%44,%37%42,%2D%23%46,%47%7C,%37%44,%41%2D,%45,%2D%45%7C,%37%42,%2D%23%46,%45%2D,%7C%44%3C%34%33%54%7C%43,%44%2D%37,%7C%46,%47%37,%43%20%7C%20==%31%34%30=%33";
+
+    #[test]
+    fn test_convert_chordpro_to_irealb_helper() {
+        // Native helper test — the wasm wrapper itself is exercised
+        // via wasm-bindgen-test (run by `wasm-pack test --node` in
+        // the wasm.yml workflow). Asserting at the helper level
+        // keeps a regression in the conversion pipeline visible to
+        // `cargo test`.
+        let payload = super::do_convert_chordpro_to_irealb(MINIMAL_INPUT).unwrap();
+        assert!(
+            payload.output.starts_with("irealb://"),
+            "expected irealb:// URL, got: {}",
+            payload.output
+        );
+    }
+
+    #[test]
+    fn test_convert_irealb_to_chordpro_text_helper() {
+        let payload = super::do_convert_irealb_to_chordpro_text(TINY_IREAL_URL).unwrap();
+        assert!(
+            !payload.output.is_empty(),
+            "rendered text must not be empty"
+        );
+        assert!(
+            payload.output.contains('|'),
+            "rendered text must preserve bar boundaries; got: {}",
+            payload.output
+        );
+    }
+
+    #[test]
+    fn test_convert_irealb_to_chordpro_text_invalid_url_errors() {
+        let result = super::do_convert_irealb_to_chordpro_text("not a url");
+        assert!(result.is_err(), "expected error, got {result:?}");
     }
 }

@@ -72,6 +72,26 @@ All render methods accept three arguments:
 | `Chordsketch.parse_and_render_html(input, config_json, transpose)` | `String` | Full HTML document |
 | `Chordsketch.parse_and_render_pdf(input, config_json, transpose)` | `String` | Raw PDF bytes (binary string) |
 
+### iReal Pro conversion
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `Chordsketch.convert_chordpro_to_irealb(input)` | `ConversionWithWarnings` | ChordPro → `irealb://` URL (lossy: drops lyrics, fonts, capo) |
+| `Chordsketch.convert_irealb_to_chordpro_text(input)` | `ConversionWithWarnings` | `irealb://` URL → rendered ChordPro text |
+
+`ConversionWithWarnings` exposes `output` (String) and
+`warnings` (Array<String>). Each warning is a
+`"<kind>: <message>"` string (`kind` is `lossy-drop`,
+`approximated`, or `unsupported`). The `output` of
+`convert_irealb_to_chordpro_text` is the rendered text
+representation of the converted song, not raw ChordPro source.
+
+```ruby
+result = Chordsketch.convert_chordpro_to_irealb("{title: Test}\n[C]Hello")
+puts result.output    # "irealb://..."
+puts result.warnings  # ["lossy-drop: lyrics are dropped", ...]
+```
+
 ### Validation
 
 ```ruby

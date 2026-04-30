@@ -58,6 +58,28 @@ All render functions accept the same three arguments:
 | `parse_and_render_html_with_warnings(input, config_json, transpose)` | `TextRenderWithWarnings { output: str, warnings: list[str] }` | HTML + captured warnings |
 | `parse_and_render_pdf_with_warnings(input, config_json, transpose)` | `PdfRenderWithWarnings { output: bytes, warnings: list[str] }` | PDF + captured warnings |
 
+### iReal Pro conversion
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `convert_chordpro_to_irealb(input)` | `ConversionWithWarnings { output: str, warnings: list[str] }` | Convert ChordPro source to an `irealb://` URL (lossy — drops lyrics, fonts, capo) |
+| `convert_irealb_to_chordpro_text(input)` | `ConversionWithWarnings { output: str, warnings: list[str] }` | Convert an `irealb://` URL to rendered ChordPro text |
+
+`output` of `convert_irealb_to_chordpro_text` is the rendered text
+representation of the converted song (`chordsketch-render-text`
+output), not raw ChordPro source. Each `warnings` entry is a
+`"<kind>: <message>"` string (`kind` is `lossy-drop`,
+`approximated`, or `unsupported`).
+
+```python
+result = chordsketch.convert_chordpro_to_irealb("{title: Test}\n[C]Hello")
+print(result.output)    # "irealb://..."
+print(result.warnings)  # ["lossy-drop: lyrics are dropped", ...]
+
+text = chordsketch.convert_irealb_to_chordpro_text(result.output)
+print(text.output)
+```
+
 The `*_with_warnings` variants return the render warnings (transpose
 saturation, chorus recall limits, `{columns}` clamp, etc.) as a list
 alongside the output instead of forwarding them to `sys.stderr` /
