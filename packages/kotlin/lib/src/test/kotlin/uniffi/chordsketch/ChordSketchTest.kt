@@ -85,6 +85,29 @@ class ChordSketchTest {
         )
     }
 
+    // iReal Pro AST round-trip (#2067 Phase 2b).
+
+    @Test
+    fun testParseIrealb() {
+        val json = parseIrealb(tinyIrealUrl)
+        assertTrue(json.startsWith("{"), "expected JSON object, got: ${json.take(200)}")
+        assertTrue(json.contains("\"sections\""), "JSON must include the sections array")
+        assertTrue(json.contains("\"key_signature\""), "JSON must include the key_signature field")
+    }
+
+    @Test
+    fun testSerializeIrealbRoundTrip() {
+        val json1 = parseIrealb(tinyIrealUrl)
+        val url2 = serializeIrealb(json1)
+        assertTrue(url2.startsWith("irealb://"), "unexpected output: $url2")
+        val json2 = parseIrealb(url2)
+        assertEquals(
+            json1,
+            json2,
+            "AST JSON must be stable across a parse → serialize → parse round-trip",
+        )
+    }
+
     // iReal Pro PNG / PDF render (#2067 Phase 2c).
 
     @Test
