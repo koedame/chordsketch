@@ -67,6 +67,21 @@ svg = chordsketch.render_ireal_svg(TINY_IREAL_URL)
 assert "<svg" in svg, f"expected SVG document, got: {svg[:200]}"
 print("render_ireal_svg: OK")
 
+# iReal Pro AST round-trip (#2067 Phase 2b).
+json_ast = chordsketch.parse_irealb(TINY_IREAL_URL)
+assert json_ast.startswith("{"), f"expected JSON object, got: {json_ast[:200]}"
+assert '"sections"' in json_ast, "JSON must include the sections array"
+assert '"key_signature"' in json_ast, "JSON must include the key_signature field"
+print("parse_irealb: OK")
+
+url2 = chordsketch.serialize_irealb(json_ast)
+assert url2.startswith("irealb://"), f"unexpected output: {url2}"
+json_ast2 = chordsketch.parse_irealb(url2)
+assert json_ast == json_ast2, (
+    "AST JSON must be stable across a parse → serialize → parse round-trip"
+)
+print("serialize_irealb (round-trip): OK")
+
 # iReal Pro PNG render (#2067 Phase 2c).
 png = chordsketch.render_ireal_png(TINY_IREAL_URL)
 assert isinstance(png, bytes), f"expected bytes, got {type(png)}"
