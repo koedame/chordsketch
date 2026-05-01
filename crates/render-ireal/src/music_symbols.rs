@@ -54,10 +54,13 @@ const GLYPH_LEFT_INSET: i32 = 4;
 const TEXT_DIRECTIVE_FONT_SIZE: i32 = 11;
 
 /// SVG `scale(s, -s)` factor that maps font units to SVG units. The
-/// Y component is negated because OpenType outlines have +Y up
-/// while SVG has +Y down. Rendered as `{:.4}` so the golden
-/// snapshots are byte-stable regardless of the platform's
-/// `f32 → str` formatter.
+/// Y component is negated at the call site because OpenType
+/// outlines have +Y up while SVG has +Y down. Emitted with `{:.4}`
+/// so the golden snapshots pin a fixed digit count; without that,
+/// the default `f32` `Display` formatter would expand the value to
+/// however many digits round-trip — fine for parsing, but a future
+/// `core::fmt` change to that round-trip width would silently
+/// rewrite every iReal SVG snapshot.
 fn glyph_scale() -> f32 {
     GLYPH_SIZE as f32 / bravura::UPEM as f32
 }
@@ -212,6 +215,14 @@ mod tests {
         assert!(render_music_symbols(&song, &layout).is_empty());
     }
 
+    /// Number of leading bytes of the path constants to compare
+    /// against in `*_emits_bravura_outline`. Bravura outline path
+    /// strings are pure ASCII (pinned by `bravura::tests::
+    /// glyph_paths_are_ascii`), so byte-slicing on the `&str`
+    /// borrows on a `char` boundary by construction — no
+    /// `chars().take(N)` round-trip needed.
+    const PREFIX_LEN: usize = 32;
+
     #[test]
     fn segno_emits_bravura_outline() {
         let mut song = IrealSong::new();
@@ -224,7 +235,7 @@ mod tests {
         // catches a regression that swaps the path data for a
         // different glyph.
         assert!(
-            svg.contains(&format!("d=\"{}", &bravura::SEGNO_PATH_D[..32])),
+            svg.contains(&format!("d=\"{}", &bravura::SEGNO_PATH_D[..PREFIX_LEN])),
             "{svg}"
         );
     }
@@ -238,7 +249,7 @@ mod tests {
         let svg = render_music_symbols(&song, &layout);
         assert!(svg.contains("class=\"music-symbol-coda\""));
         assert!(
-            svg.contains(&format!("d=\"{}", &bravura::CODA_PATH_D[..32])),
+            svg.contains(&format!("d=\"{}", &bravura::CODA_PATH_D[..PREFIX_LEN])),
             "{svg}"
         );
     }
@@ -279,9 +290,13 @@ mod tests {
         // Two bars in the same row, one with segno and one with
         // coda. The outer `translate(glyph_cx, glyph_cy)` of each
         // glyph's transform must share the same `glyph_cy` because
-        // both bars sit on row 0 — catches a regression that
-        // anchors one symbol to a different vertical baseline (e.g.
-        // forgetting to subtract `HALF_GLYPH`).
+        // both bars sit on row 0 — catches *asymmetric* anchoring
+        // regressions between segno and coda. A uniform y-baseline
+        // shift (e.g. forgetting to subtract `HALF_GLYPH`) would
+        // move both glyphs identically and the equality assertion
+        // alone would still pass, so the test also pins the
+        // absolute value to the expected
+        // `cell.y - SYMBOL_BOTTOM_GAP - HALF_GLYPH` computation.
         let mut song = IrealSong::new();
         song.sections.push(section(
             'A',
@@ -299,15 +314,26 @@ mod tests {
             "segno and coda in adjacent same-row bars must share cy: \
              segno_cy={segno_cy} coda_cy={coda_cy}\n{svg}"
         );
+        let row_top = layout.bars[0].y;
+        let expected_cy = row_top - SYMBOL_BOTTOM_GAP - HALF_GLYPH;
+        assert_eq!(
+            segno_cy, expected_cy,
+            "anchor drifted from cell.y - SYMBOL_BOTTOM_GAP - HALF_GLYPH = {expected_cy}: got {segno_cy}\n{svg}"
+        );
     }
 
     /// Pulls the `Y` argument of the FIRST `translate(X,Y)` clause
-    /// out of the `transform=` attribute on the element carrying
-    /// `class_marker`. The renderer's transform composition is
+    /// out of the `transform=` attribute on the element whose class
+    /// is exactly `class_marker`. The match is anchored on
+    /// `class="<marker>"` (closing quote included) so a hypothetical
+    /// future `music-symbol-segno-foo` class would not false-positive
+    /// against `music-symbol-segno`. The renderer's transform
+    /// composition is
     /// `translate(glyph_cx,glyph_cy) scale(...) translate(...)`, so
     /// the first clause carries the SVG anchor.
     fn parse_outer_translate_cy(svg: &str, class_marker: &str) -> i32 {
-        let class_idx = svg.find(class_marker).expect("class marker present");
+        let needle = format!("class=\"{class_marker}\"");
+        let class_idx = svg.find(&needle).expect("class marker present");
         let elem_start = svg[..class_idx].rfind('<').expect("element open present");
         let elem_end = elem_start + svg[elem_start..].find('>').expect("element close present");
         let elem = &svg[elem_start..elem_end];

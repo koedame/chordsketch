@@ -91,4 +91,4 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0011](0011-html-styles-stay-inline.md) | HTML styles stay inline-per-element (declines R6.100 `default/screen/print` + `html.style.embed`) | Accepted (2026-04-28) |
 | [0012](0012-macports-portfile-cargo-crates-tag-relative.md) | MacPorts Portfile cargo.crates is tag-relative, not HEAD-relative | Accepted (2026-04-29) |
 | [0013](0013-conditional-bot-driven-merge.md) | Bot-driven merge is allowed under explicit session permission | Accepted (2026-04-29) |
-| [0014](0014-bravura-glyphs-as-svg-paths.md) | Bravura SMuFL glyphs ship as inline SVG paths, not as a bundled font | Accepted (2026-05-02) |
+| [0014](0014-bravura-glyphs-as-svg-paths.md) | Bravura SMuFL glyphs ship as inline SVG paths, not as a bundled font | Accepted (2026-05-01) |

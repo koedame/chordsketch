@@ -78,6 +78,18 @@ mod tests {
         assert!(CODA_PATH_D.starts_with('M'), "{CODA_PATH_D:.40}…");
     }
 
+    /// The path strings are pure ASCII — `extract-bravura-paths.py`
+    /// rejects any extracted glyph that is not, but pinning the
+    /// invariant in a Rust test means the byte-slicing the tests in
+    /// `music_symbols.rs` perform on these constants stays valid
+    /// even if a future contributor edits `bravura.rs` by hand
+    /// rather than via the script.
+    #[test]
+    fn glyph_paths_are_ascii() {
+        assert!(SEGNO_PATH_D.is_ascii());
+        assert!(CODA_PATH_D.is_ascii());
+    }
+
     /// The SMuFL Bravura `head.unitsPerEm` is 1000. A regression that
     /// regenerates the paths against a font with a different em would
     /// change the visual scale; pin the value so an inadvertent
@@ -85,5 +97,23 @@ mod tests {
     #[test]
     fn upem_matches_bravura_head_table() {
         assert_eq!(UPEM, 1000);
+    }
+
+    /// Pin the bbox-center constants. A future regenerator that
+    /// picks up a slightly different Bravura release would shift
+    /// these by a font unit or two; without pinning them here, the
+    /// drift would only surface in the golden snapshots — by which
+    /// point the goldens would already have been regenerated. With
+    /// this test, `cargo test` fails fast in `bravura.rs` before
+    /// the renderer outputs anything.
+    #[test]
+    fn glyph_centers_match_pinned_commit() {
+        assert_eq!(SEGNO_FONT_CX, 277);
+        assert_eq!(SEGNO_FONT_CY, 366);
+        // CODA_FONT_CX is `f32`; compare with a float literal. The
+        // value comes from `(-4 + 955) / 2 = 475.5` — exactly
+        // representable in `f32`, so equality is safe.
+        assert_eq!(CODA_FONT_CX, 475.5);
+        assert_eq!(CODA_FONT_CY, 370);
     }
 }
