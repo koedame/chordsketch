@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -67,8 +68,9 @@ def main() -> int:
     args = parser.parse_args()
 
     raw = fetch(args.source)
-    tmp_path = Path("Bravura.tmp.otf")
-    tmp_path.write_bytes(raw)
+    with tempfile.NamedTemporaryFile(suffix=".otf", delete=False) as tmp_f:
+        tmp_f.write(raw)
+        tmp_path = Path(tmp_f.name)
     try:
         font = TTFont(tmp_path)
     finally:
@@ -82,6 +84,7 @@ def main() -> int:
     print(f"// upem = {upem}")
     print()
 
+    ok = True
     for label, codepoint in GLYPHS:
         glyph_name = cmap[codepoint]
         glyph = glyph_set[glyph_name]
@@ -95,6 +98,7 @@ def main() -> int:
                 f"// !! {label}: empty bounds — glyph missing from font?",
                 file=sys.stderr,
             )
+            ok = False
             continue
         cx = (bounds[0] + bounds[2]) / 2
         cy = (bounds[1] + bounds[3]) / 2
@@ -105,13 +109,17 @@ def main() -> int:
         print(f"//   center  = ({cx}, {cy})")
         # Bravura's outlines never contain a `\` or `"`, so embedding the
         # raw path string in a Rust `&str` literal is safe without any
-        # additional escaping. If that ever changes, this assertion will
-        # catch it before we emit a malformed Rust constant.
-        assert "\\" not in path_d and '"' not in path_d, path_d
+        # additional escaping. Use an explicit check (not `assert`) so the
+        # guard remains active even when the interpreter runs with `-O`.
+        if "\\" in path_d or '"' in path_d:
+            raise ValueError(
+                f"{label}: path_d contains characters requiring Rust escaping: "
+                f"{path_d[:80]!r}"
+            )
         print(f'const {label}_PATH_D: &str = "{path_d}";')
         print()
 
-    return 0
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
