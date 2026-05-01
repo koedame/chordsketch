@@ -83,4 +83,21 @@ final class ChordSketchTests: XCTestCase {
         XCTAssertEqual(json1, json2,
             "AST JSON must be stable across a parse → serialize → parse round-trip")
     }
+
+    // iReal Pro PNG / PDF render (#2067 Phase 2c).
+
+    func testRenderIrealPng() throws {
+        let png = try ChordSketch.renderIrealPng(input: tinyIrealUrl)
+        XCTAssertGreaterThanOrEqual(png.count, 8)
+        // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+        XCTAssertEqual(Array(png.prefix(8)),
+                       [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+                       "expected PNG signature, got: \(Array(png.prefix(8)))")
+    }
+
+    func testRenderIrealPdf() throws {
+        let pdf = try ChordSketch.renderIrealPdf(input: tinyIrealUrl)
+        XCTAssertGreaterThanOrEqual(pdf.count, 5)
+        XCTAssertEqual(String(bytes: Array(pdf.prefix(5)), encoding: .ascii), "%PDF-")
+    }
 }

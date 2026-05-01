@@ -637,6 +637,61 @@ pub fn serialize_irealb(input: String) -> Result<String, ChordSketchError> {
     Ok(chordsketch_ireal::irealb_serialize(&song))
 }
 
+/// Render an `irealb://` URL as an iReal Pro-style PNG image
+/// (#2067 Phase 2c).
+///
+/// Pipeline: [`chordsketch_ireal::parse`] →
+/// [`chordsketch_render_ireal::png::render_png`] with the default
+/// [`chordsketch_render_ireal::png::PngOptions`] (300 DPI,
+/// A4-equivalent canvas).
+///
+/// # Errors
+///
+/// Returns [`ChordSketchError::ConversionFailed`] when the URL is
+/// not a valid `irealb://` payload, or when the underlying
+/// rasteriser fails.
+#[must_use = "callers must handle render errors"]
+pub fn render_ireal_png(input: String) -> Result<Vec<u8>, ChordSketchError> {
+    let ireal =
+        chordsketch_ireal::parse(&input).map_err(|e| ChordSketchError::ConversionFailed {
+            reason: e.to_string(),
+        })?;
+    chordsketch_render_ireal::png::render_png(
+        &ireal,
+        &chordsketch_render_ireal::png::PngOptions::default(),
+    )
+    .map_err(|e| ChordSketchError::ConversionFailed {
+        reason: format!("PNG render failed: {e}"),
+    })
+}
+
+/// Render an `irealb://` URL as a single-page A4 PDF document
+/// (#2067 Phase 2c).
+///
+/// Pipeline: [`chordsketch_ireal::parse`] →
+/// [`chordsketch_render_ireal::pdf::render_pdf`] with the default
+/// [`chordsketch_render_ireal::pdf::PdfOptions`].
+///
+/// # Errors
+///
+/// Returns [`ChordSketchError::ConversionFailed`] when the URL is
+/// not a valid `irealb://` payload, or when the underlying
+/// converter fails.
+#[must_use = "callers must handle render errors"]
+pub fn render_ireal_pdf(input: String) -> Result<Vec<u8>, ChordSketchError> {
+    let ireal =
+        chordsketch_ireal::parse(&input).map_err(|e| ChordSketchError::ConversionFailed {
+            reason: e.to_string(),
+        })?;
+    chordsketch_render_ireal::pdf::render_pdf(
+        &ireal,
+        &chordsketch_render_ireal::pdf::PdfOptions::default(),
+    )
+    .map_err(|e| ChordSketchError::ConversionFailed {
+        reason: format!("PDF render failed: {e}"),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1074,6 +1129,48 @@ mod tests {
         // An empty object should be rejected, not silently filled with
         // defaults.
         let result = serialize_irealb("{}".to_string());
+        assert!(
+            matches!(result, Err(ChordSketchError::ConversionFailed { .. })),
+            "expected ConversionFailed; got {result:?}"
+        );
+    }
+
+    // ---- iReal Pro PNG / PDF render (#2067 Phase 2c) ----
+
+    #[test]
+    fn test_render_ireal_png_emits_png_bytes() {
+        let bytes = render_ireal_png(TINY_IREAL_URL.to_string())
+            .expect("render succeeds for known-good URL");
+        assert!(
+            bytes.len() >= 8 && &bytes[..8] == b"\x89PNG\r\n\x1a\n",
+            "expected PNG signature, got first bytes: {:?}",
+            &bytes[..bytes.len().min(8)]
+        );
+    }
+
+    #[test]
+    fn test_render_ireal_png_invalid_url_errors() {
+        let result = render_ireal_png("not a url".to_string());
+        assert!(
+            matches!(result, Err(ChordSketchError::ConversionFailed { .. })),
+            "expected ConversionFailed; got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_render_ireal_pdf_emits_pdf_bytes() {
+        let bytes = render_ireal_pdf(TINY_IREAL_URL.to_string())
+            .expect("render succeeds for known-good URL");
+        assert!(
+            bytes.starts_with(b"%PDF-"),
+            "expected PDF signature, got first bytes: {:?}",
+            &bytes[..bytes.len().min(8)]
+        );
+    }
+
+    #[test]
+    fn test_render_ireal_pdf_invalid_url_errors() {
+        let result = render_ireal_pdf("not a url".to_string());
         assert!(
             matches!(result, Err(ChordSketchError::ConversionFailed { .. })),
             "expected ConversionFailed; got {result:?}"

@@ -807,6 +807,70 @@ pub fn serialize_irealb(input: String) -> Result<String> {
     do_serialize_irealb(&input).map_err(|reason| Error::new(Status::GenericFailure, reason))
 }
 
+/// Run the iReal PNG-rasterise pipeline; native helper so the Rust
+/// unit tests can exercise the path without linking against
+/// `napi::Error`'s `Drop` impl. See `do_render_ireal_svg` for the
+/// full rationale.
+fn do_render_ireal_png(input: &str) -> std::result::Result<Vec<u8>, String> {
+    let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
+    chordsketch_render_ireal::png::render_png(
+        &ireal,
+        &chordsketch_render_ireal::png::PngOptions::default(),
+    )
+    .map_err(|e| format!("PNG render failed: {e}"))
+}
+
+/// Run the iReal PDF-render pipeline; native helper.
+fn do_render_ireal_pdf(input: &str) -> std::result::Result<Vec<u8>, String> {
+    let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
+    chordsketch_render_ireal::pdf::render_pdf(
+        &ireal,
+        &chordsketch_render_ireal::pdf::PdfOptions::default(),
+    )
+    .map_err(|e| format!("PDF render failed: {e}"))
+}
+
+/// Render an `irealb://` URL as an iReal Pro-style PNG image
+/// (#2067 Phase 2c).
+///
+/// Pipeline: `chordsketch_ireal::parse` →
+/// `chordsketch_render_ireal::png::render_png` with default
+/// `PngOptions` (300 DPI). Returned as a `Buffer` so Node.js
+/// callers can write it directly to a file or stream.
+///
+/// # Errors
+///
+/// Rejects with status `GenericFailure` when the URL is not a
+/// valid `irealb://` payload, or when the underlying rasteriser
+/// fails.
+#[must_use = "callers must handle render errors"]
+#[napi]
+pub fn render_ireal_png(input: String) -> Result<Buffer> {
+    let bytes =
+        do_render_ireal_png(&input).map_err(|reason| Error::new(Status::GenericFailure, reason))?;
+    Ok(bytes.into())
+}
+
+/// Render an `irealb://` URL as a single-page A4 PDF document
+/// (#2067 Phase 2c).
+///
+/// Pipeline: `chordsketch_ireal::parse` →
+/// `chordsketch_render_ireal::pdf::render_pdf` with default
+/// `PdfOptions`. Returned as a `Buffer` of the PDF byte stream.
+///
+/// # Errors
+///
+/// Rejects with status `GenericFailure` when the URL is not a
+/// valid `irealb://` payload, or when the underlying converter
+/// fails.
+#[must_use = "callers must handle render errors"]
+#[napi]
+pub fn render_ireal_pdf(input: String) -> Result<Buffer> {
+    let bytes =
+        do_render_ireal_pdf(&input).map_err(|reason| Error::new(Status::GenericFailure, reason))?;
+    Ok(bytes.into())
+}
+
 // Unit tests exercise the underlying rendering and parsing logic directly
 // via chordsketch_chordpro and renderer crates. The napi wrapper functions
 // cannot be tested natively because they depend on the Node.js runtime for
@@ -1236,6 +1300,40 @@ mod tests {
         // An empty object should be rejected, not silently filled with
         // defaults.
         let result = super::do_serialize_irealb("{}");
+        assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    // ---- iReal Pro PNG / PDF render (#2067 Phase 2c) ----
+
+    #[test]
+    fn test_render_ireal_png_emits_png_bytes() {
+        let bytes = super::do_render_ireal_png(TINY_IREAL_URL).unwrap();
+        assert!(
+            bytes.len() >= 8 && &bytes[..8] == b"\x89PNG\r\n\x1a\n",
+            "expected PNG signature, got first bytes: {:?}",
+            &bytes[..bytes.len().min(8)]
+        );
+    }
+
+    #[test]
+    fn test_render_ireal_png_invalid_url_errors() {
+        let result = super::do_render_ireal_png("not a url");
+        assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    #[test]
+    fn test_render_ireal_pdf_emits_pdf_bytes() {
+        let bytes = super::do_render_ireal_pdf(TINY_IREAL_URL).unwrap();
+        assert!(
+            bytes.starts_with(b"%PDF-"),
+            "expected PDF signature, got first bytes: {:?}",
+            &bytes[..bytes.len().min(8)]
+        );
+    }
+
+    #[test]
+    fn test_render_ireal_pdf_invalid_url_errors() {
+        let result = super::do_render_ireal_pdf("not a url");
         assert!(result.is_err(), "expected error, got {result:?}");
     }
 }

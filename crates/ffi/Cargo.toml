@@ -21,7 +21,7 @@ chordsketch-render-html = { version = "0.3.0", path = "../render-html" }
 chordsketch-render-pdf = { version = "0.3.0", path = "../render-pdf" }
 chordsketch-ireal = { version = "0.3.0", path = "../ireal" }
 chordsketch-convert = { version = "0.3.0", path = "../convert" }
-chordsketch-render-ireal = { version = "0.3.0", path = "../render-ireal" }
+chordsketch-render-ireal = { version = "0.3.0", path = "../render-ireal", features = ["png", "pdf"] }
 # `uniffi` is pinned to an exact patch version because the .udl + scaffolding
 # generated layout is part of the FFI surface — Python/Swift/Kotlin/Ruby
 # bindings depend on the binary being byte-compatible with the bindgen output.
