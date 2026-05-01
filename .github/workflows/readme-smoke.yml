@@ -495,7 +495,28 @@ jobs:
       - name: Install via Snap
         run: |
           set -euo pipefail
-          sudo snap install chordsketch
+          # `sudo snap install` consults `api.snapcraft.io` and the
+          # Snap Store CDN. Both have non-trivial transient-failure
+          # rates — status.snapcraft.io logged 12+ short Snap Store
+          # incidents on 2026-05-01 alone, plus one multi-hour
+          # outage that day that blocked PR #2344 (an unrelated
+          # test-only change) from merging for 5+ hours. Retry with
+          # the same shape as the `winget` and `library-smoke`
+          # steps in this file so a sub-2.5-min Snap Store flake
+          # does not block an otherwise green PR's merge-queue
+          # eligibility. A sustained outage (>2.5 min) still surfaces
+          # as a real failure via `report-failure`'s tracking-issue
+          # path. See #2345.
+          attempt=0
+          until sudo snap install chordsketch; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge 3 ]; then
+              echo "snap install failed after $attempt attempts" >&2
+              exit 1
+            fi
+            echo "snap install attempt $attempt failed; retrying in 10s" >&2
+            sleep 10
+          done
           chordsketch --version
 
       - name: Render smoke
