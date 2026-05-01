@@ -979,6 +979,64 @@ pub fn serialize_irealb(input: &str) -> Result<String, JsValue> {
     do_serialize_irealb(input).map_err(|e| JsValue::from_str(&e))
 }
 
+/// Run the iReal PNG-rasterise pipeline; native helper used by the
+/// wasm wrapper and by Rust unit tests.
+fn do_render_ireal_png(input: &str) -> Result<Vec<u8>, String> {
+    let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
+    chordsketch_render_ireal::png::render_png(
+        &ireal,
+        &chordsketch_render_ireal::png::PngOptions::default(),
+    )
+    .map_err(|e| format!("PNG render failed: {e}"))
+}
+
+/// Run the iReal PDF-render pipeline; native helper used by the
+/// wasm wrapper and by Rust unit tests.
+fn do_render_ireal_pdf(input: &str) -> Result<Vec<u8>, String> {
+    let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
+    chordsketch_render_ireal::pdf::render_pdf(
+        &ireal,
+        &chordsketch_render_ireal::pdf::PdfOptions::default(),
+    )
+    .map_err(|e| format!("PDF render failed: {e}"))
+}
+
+/// Render an `irealb://` URL as an iReal Pro-style PNG image
+/// (#2067 Phase 2c).
+///
+/// Pipeline: `chordsketch_ireal::parse` →
+/// `chordsketch_render_ireal::png::render_png` with default
+/// `PngOptions` (300 DPI, A4-equivalent canvas). Returned as a
+/// `Uint8Array` of the encoded PNG bytes.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string when the URL is not a valid
+/// `irealb://` payload, or when the underlying rasteriser fails
+/// (e.g. internal SVG parse error).
+#[must_use = "callers must handle render errors"]
+#[wasm_bindgen(js_name = renderIrealPng)]
+pub fn render_ireal_png(input: &str) -> Result<Vec<u8>, JsValue> {
+    do_render_ireal_png(input).map_err(|e| JsValue::from_str(&e))
+}
+
+/// Render an `irealb://` URL as a single-page A4 PDF document
+/// (#2067 Phase 2c).
+///
+/// Pipeline: `chordsketch_ireal::parse` →
+/// `chordsketch_render_ireal::pdf::render_pdf` with default
+/// `PdfOptions`. Returned as a `Uint8Array` of the PDF byte stream.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string when the URL is not a valid
+/// `irealb://` payload, or when the underlying converter fails.
+#[must_use = "callers must handle render errors"]
+#[wasm_bindgen(js_name = renderIrealPdf)]
+pub fn render_ireal_pdf(input: &str) -> Result<Vec<u8>, JsValue> {
+    do_render_ireal_pdf(input).map_err(|e| JsValue::from_str(&e))
+}
+
 #[wasm_bindgen(typescript_custom_section)]
 const RENDER_IREAL_SVG_TS: &'static str = r#"
 /**
@@ -990,6 +1048,32 @@ const RENDER_IREAL_SVG_TS: &'static str = r#"
  * @throws when the input is not a valid `irealb://` payload.
  */
 export function renderIrealSvg(input: string): string;
+"#;
+
+#[wasm_bindgen(typescript_custom_section)]
+const RENDER_IREAL_PNG_PDF_TS: &'static str = r#"
+/**
+ * Render an `irealb://` URL as a PNG image (#2067 Phase 2c).
+ *
+ * Pipeline: parse → SVG render → resvg rasterise. Output is the
+ * encoded PNG byte stream at the renderer's default 300 DPI.
+ *
+ * @throws when the input is not a valid `irealb://` payload, or when
+ *         the underlying rasteriser fails.
+ */
+export function renderIrealPng(input: string): Uint8Array;
+
+/**
+ * Render an `irealb://` URL as a single-page A4 PDF document
+ * (#2067 Phase 2c).
+ *
+ * Pipeline: parse → SVG render → svg2pdf conversion. Output is the
+ * PDF byte stream; vector content scales without resolution loss.
+ *
+ * @throws when the input is not a valid `irealb://` payload, or when
+ *         the underlying converter fails.
+ */
+export function renderIrealPdf(input: string): Uint8Array;
 "#;
 
 #[wasm_bindgen(typescript_custom_section)]
@@ -1365,6 +1449,40 @@ mod tests {
         // `transpose`, `sections`. An empty object is missing all of
         // them; the deserializer must reject rather than fabricate.
         let result = do_serialize_irealb("{}");
+        assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    // ---- iReal Pro PNG / PDF render (#2067 Phase 2c) ----
+
+    #[test]
+    fn test_render_ireal_png_emits_png_bytes() {
+        let bytes = do_render_ireal_png(TINY_IREAL_URL).unwrap();
+        assert!(
+            bytes.len() >= 8 && &bytes[..8] == b"\x89PNG\r\n\x1a\n",
+            "expected PNG signature, got first bytes: {:?}",
+            &bytes[..bytes.len().min(8)]
+        );
+    }
+
+    #[test]
+    fn test_render_ireal_png_invalid_url_errors() {
+        let result = do_render_ireal_png("not a url");
+        assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    #[test]
+    fn test_render_ireal_pdf_emits_pdf_bytes() {
+        let bytes = do_render_ireal_pdf(TINY_IREAL_URL).unwrap();
+        assert!(
+            bytes.starts_with(b"%PDF-"),
+            "expected PDF signature, got first bytes: {:?}",
+            &bytes[..bytes.len().min(8)]
+        );
+    }
+
+    #[test]
+    fn test_render_ireal_pdf_invalid_url_errors() {
+        let result = do_render_ireal_pdf("not a url");
         assert!(result.is_err(), "expected error, got {result:?}");
     }
 }
@@ -1929,5 +2047,47 @@ mod wasm_tests {
             result.is_err(),
             "expected JsValue Err for missing required fields"
         );
+    }
+
+    // ---- iReal Pro PNG / PDF render (#2067 Phase 2c) ----
+
+    /// Exercises the public `renderIrealPng` wrapper through the
+    /// actual `JsValue` boundary. Asserts the returned `Uint8Array`
+    /// starts with the PNG magic bytes.
+    #[wasm_bindgen_test]
+    fn render_ireal_png_emits_png_bytes() {
+        let bytes = render_ireal_png(TINY_IREAL_URL_WASM).unwrap();
+        assert!(
+            bytes.len() >= 8 && &bytes[..8] == b"\x89PNG\r\n\x1a\n",
+            "expected PNG signature, got first bytes: {:?}",
+            &bytes[..bytes.len().min(8)]
+        );
+    }
+
+    /// Invalid URL surfaces as a `JsValue` error, not a panic.
+    #[wasm_bindgen_test]
+    fn render_ireal_png_invalid_url_errors() {
+        let result = render_ireal_png("not a url");
+        assert!(result.is_err(), "expected JsValue Err for invalid URL");
+    }
+
+    /// Exercises the public `renderIrealPdf` wrapper through the
+    /// actual `JsValue` boundary. Asserts the returned `Uint8Array`
+    /// starts with the PDF magic bytes.
+    #[wasm_bindgen_test]
+    fn render_ireal_pdf_emits_pdf_bytes() {
+        let bytes = render_ireal_pdf(TINY_IREAL_URL_WASM).unwrap();
+        assert!(
+            bytes.starts_with(b"%PDF-"),
+            "expected PDF signature, got first bytes: {:?}",
+            &bytes[..bytes.len().min(8)]
+        );
+    }
+
+    /// Invalid URL surfaces as a `JsValue` error, not a panic.
+    #[wasm_bindgen_test]
+    fn render_ireal_pdf_invalid_url_errors() {
+        let result = render_ireal_pdf("not a url");
+        assert!(result.is_err(), "expected JsValue Err for invalid URL");
     }
 }

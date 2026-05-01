@@ -179,6 +179,30 @@ namespace chordsketch {
     /// out-of-range values).
     [Throws=ChordSketchError]
     string serialize_irealb(string input);
+
+    /// Render an `irealb://` URL as an iReal Pro-style PNG image
+    /// (#2067 Phase 2c).
+    ///
+    /// Wraps `chordsketch-render-ireal::png::render_png` with the
+    /// default `PngOptions` (300 DPI, A4-equivalent canvas). The
+    /// returned byte stream is a complete PNG file.
+    ///
+    /// Throws `ConversionFailed` when the URL is not a valid
+    /// `irealb://` payload, or when the underlying rasteriser fails.
+    [Throws=ChordSketchError]
+    bytes render_ireal_png(string input);
+
+    /// Render an `irealb://` URL as a single-page A4 PDF document
+    /// (#2067 Phase 2c).
+    ///
+    /// Wraps `chordsketch-render-ireal::pdf::render_pdf` with the
+    /// default `PdfOptions`. The chart is embedded as vector
+    /// content, so the PDF is resolution-independent.
+    ///
+    /// Throws `ConversionFailed` when the URL is not a valid
+    /// `irealb://` payload, or when the underlying converter fails.
+    [Throws=ChordSketchError]
+    bytes render_ireal_pdf(string input);
 };
 
 /// Structured render result for text / HTML output.

@@ -84,4 +84,26 @@ class ChordSketchTest {
             "expected SVG document, got: ${svg.take(200)}",
         )
     }
+
+    // iReal Pro PNG / PDF render (#2067 Phase 2c).
+
+    @Test
+    fun testRenderIrealPng() {
+        val png = renderIrealPng(tinyIrealUrl)
+        assertTrue(png.size >= 8, "expected at least 8 bytes, got ${png.size}")
+        // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+        val signature = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+        assertEquals(
+            signature.toList(),
+            png.sliceArray(0..7).toList(),
+            "expected PNG signature, got: ${png.sliceArray(0..7).toList()}",
+        )
+    }
+
+    @Test
+    fun testRenderIrealPdf() {
+        val pdf = renderIrealPdf(tinyIrealUrl)
+        assertTrue(pdf.size >= 5, "expected at least 5 bytes, got ${pdf.size}")
+        assertEquals("%PDF-", String(pdf.sliceArray(0..4)))
+    }
 }

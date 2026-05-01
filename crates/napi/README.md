@@ -73,6 +73,8 @@ console.log(`ChordSketch ${version()}`);
 | `convertChordproToIrealb(source)` | `{ output: string, warnings: string[] }` | Convert ChordPro source to an `irealb://` URL (lossy — drops lyrics, fonts, capo) |
 | `convertIrealbToChordproText(url)` | `{ output: string, warnings: string[] }` | Convert an `irealb://` URL to rendered ChordPro text |
 | `renderIrealSvg(url)` | `string` (SVG document) | Render an `irealb://` URL as an iReal Pro-style SVG chart |
+| `renderIrealPng(url)` | `Buffer` (PNG bytes) | Render an `irealb://` URL as a PNG image (300 DPI default, A4-equivalent canvas) |
+| `renderIrealPdf(url)` | `Buffer` (PDF bytes) | Render an `irealb://` URL as a single-page A4 PDF document |
 | `parseIrealb(url)` | `string` (JSON) | Parse an `irealb://` URL into AST-shaped JSON (mirrors `IrealSong`) |
 | `serializeIrealb(json)` | `string` (URL) | Serialize an AST-shaped JSON string back into an `irealb://` URL (round-trips with `parseIrealb`) |
 

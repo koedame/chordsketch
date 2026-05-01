@@ -198,4 +198,30 @@ describe("NAPI public API surface", () => {
     // deserializer must reject rather than fabricate defaults.
     expect(() => m.serializeIrealb("{}")).toThrow();
   });
+
+  // ---- iReal Pro PNG / PDF render (#2067 Phase 2c) ----
+
+  test("renderIrealPng emits a PNG byte stream", () => {
+    const buf = m.renderIrealPng(TINY_IREAL_URL);
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    expect(buf.length).toBeGreaterThan(8);
+    // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+    expect(buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])))
+      .toBe(true);
+  });
+
+  test("renderIrealPng throws on invalid URL", () => {
+    expect(() => m.renderIrealPng("not a url")).toThrow();
+  });
+
+  test("renderIrealPdf emits a PDF byte stream", () => {
+    const buf = m.renderIrealPdf(TINY_IREAL_URL);
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    expect(buf.length).toBeGreaterThan(5);
+    expect(buf.slice(0, 5).toString("ascii")).toBe("%PDF-");
+  });
+
+  test("renderIrealPdf throws on invalid URL", () => {
+    expect(() => m.renderIrealPdf("not a url")).toThrow();
+  });
 });

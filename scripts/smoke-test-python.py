@@ -67,4 +67,16 @@ svg = chordsketch.render_ireal_svg(TINY_IREAL_URL)
 assert "<svg" in svg, f"expected SVG document, got: {svg[:200]}"
 print("render_ireal_svg: OK")
 
+# iReal Pro PNG render (#2067 Phase 2c).
+png = chordsketch.render_ireal_png(TINY_IREAL_URL)
+assert isinstance(png, bytes), f"expected bytes, got {type(png)}"
+assert png[:8] == b"\x89PNG\r\n\x1a\n", f"expected PNG signature, got: {png[:8]!r}"
+print("render_ireal_png: OK")
+
+# iReal Pro PDF render (#2067 Phase 2c).
+pdf = chordsketch.render_ireal_pdf(TINY_IREAL_URL)
+assert isinstance(pdf, bytes), f"expected bytes, got {type(pdf)}"
+assert pdf[:5] == b"%PDF-", f"expected PDF signature, got: {pdf[:5]!r}"
+print("render_ireal_pdf: OK")
+
 print("All smoke tests passed!")

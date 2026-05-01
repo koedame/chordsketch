@@ -79,6 +79,8 @@ All render methods accept three arguments:
 | `Chordsketch.convert_chordpro_to_irealb(input)` | `ConversionWithWarnings` | ChordPro → `irealb://` URL (lossy: drops lyrics, fonts, capo) |
 | `Chordsketch.convert_irealb_to_chordpro_text(input)` | `ConversionWithWarnings` | `irealb://` URL → rendered ChordPro text |
 | `Chordsketch.render_ireal_svg(input)` | `String` (SVG document) | `irealb://` URL → iReal Pro-style SVG chart |
+| `Chordsketch.render_ireal_png(input)` | `String` (PNG bytes, ASCII-8BIT) | `irealb://` URL → PNG image (300 DPI default, A4-equivalent canvas) |
+| `Chordsketch.render_ireal_pdf(input)` | `String` (PDF bytes, ASCII-8BIT) | `irealb://` URL → single-page A4 PDF document |
 | `Chordsketch.parse_irealb(input)` | `String` (JSON) | `irealb://` URL → AST-shaped JSON mirroring `IrealSong` |
 | `Chordsketch.serialize_irealb(input)` | `String` (URL) | AST-shaped JSON → `irealb://` URL (round-trips with `parse_irealb`) |
 
