@@ -1,7 +1,7 @@
 # 0014. Bravura SMuFL glyphs ship as inline SVG paths, not as a bundled font
 
 - **Status**: Accepted
-- **Date**: 2026-05-02
+- **Date**: 2026-05-01
 
 ## Context
 
