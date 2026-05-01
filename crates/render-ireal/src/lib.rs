@@ -76,11 +76,20 @@
 //! `class="ending-bracket"`, `class="ending-label"`,
 //! `class="barline-double"`, `class="barline-final"`,
 //! `class="barline-repeat-thick"`, `class="barline-repeat-thin"`,
-//! `class="barline-repeat-dot"`, `class="music-symbol-segno-curve"`,
-//! `class="music-symbol-segno-slash"`,
-//! `class="music-symbol-segno-dot"`,
-//! `class="music-symbol-coda-circle"`,
-//! `class="music-symbol-coda-cross"`, `class="music-symbol-text"`).
+//! `class="barline-repeat-dot"`, `class="music-symbol-segno"`,
+//! `class="music-symbol-coda"`, `class="music-symbol-text"`).
+//!
+//! The previous segno / coda selector set
+//! (`music-symbol-segno-curve` / `-slash` / `-dot` and
+//! `music-symbol-coda-circle` / `-cross`) covered SVG-primitive
+//! approximations and was removed when #2348 swapped in real
+//! Bravura SMuFL outlines as a single `<path>` element each.
+//! Stylesheets that previously targeted any of those selectors
+//! should retarget to the consolidated
+//! `class="music-symbol-segno"` / `class="music-symbol-coda"`,
+//! which is now a single filled `<path>` per glyph (no stroke).
+//! The crate is pre-1.0 so this is documented as a stability note
+//! rather than a breaking-change deprecation cycle.
 //!
 //! # Example
 //!
@@ -97,6 +106,7 @@
 #![forbid(unsafe_code)]
 
 mod barlines;
+mod bravura;
 pub mod chord_typography;
 pub mod layout;
 mod markers;
