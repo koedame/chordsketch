@@ -1,0 +1,47 @@
+ChordSketch
+Copyright (c) ChordSketch contributors
+
+This product includes software developed by third parties, listed below
+together with the licenses under which they are redistributed. The full
+ChordSketch license is in `LICENSE` (or `LICENSE-MIT` / `LICENSE-AGPL`
+where the layered SDK / application split applies, per `CLAUDE.md`'s
+License Policy).
+
+
+===============================================================================
+Bravura — SMuFL music font (Steinberg Media Technologies GmbH)
+===============================================================================
+
+`crates/render-ireal/src/bravura.rs` contains SVG `<path>` outlines
+extracted from the Bravura font (https://github.com/steinbergmedia/bravura).
+Currently exposed glyphs:
+
+  - U+E047 SEGNO
+  - U+E048 CODA
+
+These outlines are derivative works of Bravura and are redistributed
+under the SIL Open Font License, Version 1.1 — the same terms as the
+upstream Bravura font.
+
+Reserved Font Name "Bravura".
+
+Copyright © 2015 Steinberg Media Technologies GmbH (http://www.steinberg.net),
+with Reserved Font Name "Bravura".
+
+This Font Software is licensed under the SIL Open Font License,
+Version 1.1.  This license is copied in `crates/render-ireal/LICENSE-OFL.txt`
+and is also available with a FAQ at: https://openfontlicense.org
+
+A short summary, NOT a substitute for the license text:
+
+  - You may use, study, modify, and redistribute the Font Software,
+    bundled or unbundled, free of charge.
+  - You may not sell the Font Software by itself.
+  - Modified versions must use a different name and must not use the
+    Reserved Font Name.
+  - Modified versions must remain under the OFL and ship the OFL
+    license text alongside any redistribution.
+
+ChordSketch's redistribution complies by retaining this NOTICE entry,
+shipping the OFL text at `crates/render-ireal/LICENSE-OFL.txt`, and
+documenting the extraction provenance in `crates/render-ireal/src/bravura.rs`.

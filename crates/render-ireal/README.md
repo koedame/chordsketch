@@ -8,7 +8,7 @@
 
 iReal Pro chart renderer — SVG with chord-name typography,
 repeat barlines, ending brackets, section labels, and music
-symbols.
+symbols (Bravura SMuFL outlines for segno / coda).
 
 This crate renders an `IrealSong` AST as a fixed-size SVG document.
 The current scope covers the page frame, the metadata header
@@ -18,8 +18,10 @@ accidental at base size, quality / extensions raised as
 superscript at a smaller size, slash + bass back at base size),
 repeat / final / double barline glyphs, N-th-ending brackets
 with `1.` / `2.` labels, section-letter labels above each
-section start, and music-symbol glyphs (segno / coda; `D.C.` /
-`D.S.` / `Fine` text directives) above the bar that carries them.
+section start, and music-symbol glyphs (segno / coda baked from
+the Bravura SMuFL font; `D.C.` / `D.S.` / `Fine` rendered as
+italic text directives, matching iReal Pro's data model) above
+the bar that carries them.
 
 Tracked under [#2050](https://github.com/koedame/chordsketch/issues/2050).
 
@@ -137,7 +139,6 @@ divided into:
 
 | Feature | Tracking issue |
 |---|---|
-| Bravura SMuFL font for high-fidelity music glyphs | [#2062](https://github.com/koedame/chordsketch/issues/2062) (deferred — current SVG primitive approximations avoid embedding a megabyte-scale font in every export; measure the subset before re-proposing) |
 | Letter page size + multi-page PDF overflow | follow-up of [#2063](https://github.com/koedame/chordsketch/issues/2063) (current PDF emits single-page A4) |
 
 ## Regenerating the golden fixtures
@@ -165,4 +166,14 @@ The expected SVGs live under `tests/fixtures/<name>/expected.svg`
 
 ## License
 
-MIT.
+The crate sources are licensed under MIT.
+
+The segno (U+E047) and coda (U+E048) glyph outlines baked into
+`src/bravura.rs` are derived from the [Bravura SMuFL font][bravura]
+and are redistributed under the [SIL Open Font License 1.1][ofl] —
+the OFL text is at `LICENSE-OFL.txt` and the attribution required by
+§4 of the license is in the project-level `NOTICE`. ADR-0014 records
+why the renderer bakes path data instead of bundling the font binary.
+
+[bravura]: https://github.com/steinbergmedia/bravura
+[ofl]: https://openfontlicense.org
