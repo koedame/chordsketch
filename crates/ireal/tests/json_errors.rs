@@ -159,7 +159,7 @@ fn parse_json_rejects_unterminated_string() {
     let err = parse_json("\"unterminated").expect_err("unterminated string must error");
     let msg = err.message.to_lowercase();
     assert!(
-        msg.contains("unterminated") || msg.contains("end of input") || msg.contains("expected"),
+        msg.contains("unterminated") || msg.contains("end of input"),
         "error must indicate unterminated string; got {:?}",
         err.message
     );

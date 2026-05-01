@@ -995,7 +995,7 @@ mod tests {
         );
         assert!(
             !warnings.is_empty(),
-            "transpose saturation must surface as a warning"
+            "out-of-musical-range transpose must surface as a warning"
         );
     }
 
@@ -1472,7 +1472,7 @@ mod tests {
         let err = resolve_options_inner(None, 200).unwrap_err();
         assert!(
             err.contains("out of range"),
-            "transpose overflow must short-circuit before config errors; got {err:?}"
+            "out-of-range transpose (200) must propagate as a validation error; got {err:?}"
         );
     }
 
@@ -1548,10 +1548,11 @@ mod tests {
         // insensitive; the helper's `to_ascii_lowercase` must honour
         // that promise for every alias.
         for variant in ["GUITAR", "Guitar", "gUiTaR"] {
-            let result = chord_diagram_svg_inner("C", variant);
+            let svg = chord_diagram_svg_inner("C", variant)
+                .unwrap_or_else(|e| panic!("case variant {variant:?} must not error; got {e:?}"));
             assert!(
-                result.is_ok(),
-                "case variant {variant:?} must resolve; got {result:?}"
+                svg.is_some(),
+                "case variant {variant:?} must find a guitar-C diagram; got None"
             );
         }
     }

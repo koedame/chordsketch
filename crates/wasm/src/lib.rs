@@ -1602,7 +1602,7 @@ mod tests {
         .unwrap();
         assert!(
             !warnings.is_empty(),
-            "saturating transpose must surface a warning"
+            "out-of-musical-range transpose must surface a warning"
         );
     }
 
