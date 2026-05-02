@@ -9,6 +9,15 @@ Updates are **event-driven**, not periodic. After a PR merges to `main`, evaluat
 whether any of the triggers below apply and, if so, open a dedicated documentation PR
 promptly.
 
+This rule covers per-PR documentation hygiene. Release-time
+documentation sync (verifying every cross-reference still matches
+workspace state before a version bump) is a separate hard gate
+defined in [`release-doc-sync.md`](release-doc-sync.md). Per-PR
+authors should expect the release-time check to catch any drift
+they leave behind here, but should not rely on it — the cost of
+fixing drift at release time, against ~30+ accumulated commits, is
+much higher than fixing it in the originating PR.
+
 ## Update Triggers
 
 | Event | What to update |

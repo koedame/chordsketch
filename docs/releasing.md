@@ -60,6 +60,13 @@ at post-release verification rather than before the tag is cut.
    ```bash
    python3 scripts/check-version-consistency.py
    ```
+5. **Release-time documentation sync.** Run the §§1–6 cross-reference
+   checks in [`.claude/rules/release-doc-sync.md`](../.claude/rules/release-doc-sync.md)
+   against the release-cut commit. This catches CHANGELOG /
+   `docs/releasing.md` / `CLAUDE.md` / `README.md` / binding-README /
+   release-process-ADR drift before the version-bump commit lands. The
+   rule's §Why documents the v0.3.0 → next-release window failure that
+   motivated it.
 
 ### Checklist
 
