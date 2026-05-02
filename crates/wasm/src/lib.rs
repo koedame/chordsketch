@@ -59,6 +59,17 @@ struct RenderOptions {
 /// (which on native test targets panics on any wasm-bindgen-imported
 /// method call). The wasm-bindgen call sites convert via
 /// [`resolve_config`].
+///
+/// Sister-site note: the napi binding's equivalent helper takes
+/// `Option<&str>` because its caller (`resolve_options_inner`) also
+/// dispatches `try_parse_transpose` against the same options struct.
+/// Wasm's `RenderOptions.transpose` is already an `i8` (validated by
+/// `serde_wasm_bindgen` at deserialise time), so this helper only
+/// owns the config-parse branch and takes `&RenderOptions` directly
+/// to match the call sites that already hold a borrowed options
+/// reference. The semantic contract — return `String` error for the
+/// "not a preset and not valid RRJSON" case — is identical across
+/// both bindings.
 fn resolve_config_inner(
     opts: &RenderOptions,
 ) -> std::result::Result<chordsketch_chordpro::config::Config, String> {

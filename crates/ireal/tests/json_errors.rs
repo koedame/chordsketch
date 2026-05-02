@@ -188,13 +188,21 @@ fn parse_json_rejects_object_with_duplicate_key() {
 #[test]
 fn parse_json_rejects_unterminated_array() {
     let err = parse_json("[1,2").expect_err("unterminated array must error");
-    assert!(!err.message.is_empty());
+    assert!(
+        err.message.to_lowercase().contains("unterminated array"),
+        "error must name the unterminated array; got {:?}",
+        err.message
+    );
 }
 
 #[test]
 fn parse_json_rejects_unterminated_object() {
     let err = parse_json(r#"{"a":1"#).expect_err("unterminated object must error");
-    assert!(!err.message.is_empty());
+    assert!(
+        err.message.to_lowercase().contains("unterminated object"),
+        "error must name the unterminated object; got {:?}",
+        err.message
+    );
 }
 
 // ---- FromJson type-mismatch paths exercise JsonValue::as_* error arms --
@@ -333,12 +341,15 @@ fn from_json_rejects_unknown_musical_symbol() {
 #[test]
 fn parse_json_rejects_integer_overflow() {
     // A value larger than i64::MAX must fail rather than silently
-    // saturate.
+    // saturate. The parser reports `i64::FromStr` failures verbatim
+    // through the "integer parse:" prefix so the byte position points
+    // at the offending token.
     let huge = format!("{}0", i64::MAX);
     let err = parse_json(&huge).expect_err("> i64::MAX must error");
     assert!(
-        !err.message.is_empty(),
-        "overflow error must have a non-empty message"
+        err.message.contains("integer parse"),
+        "overflow error must carry the `integer parse` prefix; got {:?}",
+        err.message
     );
 }
 

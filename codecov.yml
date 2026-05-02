@@ -26,10 +26,20 @@
 # the runtime. #2350 refactored every binding wrapper into a
 # pure-Rust `*_inner` / `*_core` helper that is unit-testable, lifting
 # the lib.rs *helpers* to ~85-90%. The unreachable thunk lines pull
-# the file-level number back to ~67% (napi) / ~73% (wasm). Raising the
-# floor above the thunk overhead requires running the language-runtime
-# integration tests (jest, wasm-bindgen-test, Python smoke) under a
-# coverage-instrumented runtime — tracked separately.
+# the file-level number back to ~67% (napi) / ~73% (wasm).
+#
+# As a side effect, the bindings-group intra-group skew documented in
+# `.claude/rules/fix-propagation.md` §Coverage Floors widens past the
+# 10pp ceiling: ffi 88.17% / wasm 72.61% / napi 67.17% spans 21.0pp.
+# ffi is unaffected because UniFFI emits its own typed error path
+# (`Result<_, ChordSketchError>`) rather than a proc-macro ABI thunk,
+# so the thunk-overhead asymmetry is structural and #2350 cannot close
+# it. The 65% floor and the relaxed skew are tracked together at #2352;
+# closing #2352 (instrumenting the language-runtime integration tests
+# — jest, wasm-bindgen-test, Python smoke — under a coverage-instrumented
+# runtime) is the prerequisite for raising the floor back to 70% and
+# the skew back to 10pp. Until then, this note is the single source of
+# truth for *why* the gates here disagree with that rule's table.
 #
 # Codecov does not natively enforce intra-group skew; the skew clause lives
 # as a reviewer rule in `.claude/rules/renderer-parity.md` and
