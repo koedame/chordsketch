@@ -23,7 +23,8 @@ previewing `.cho` / `.chordpro` / `.chopro` files pleasant inside VS Code.
 The extension also recognises `.irealb` / `.irealbook` (iReal Pro) files
 as their own `irealb` language id so the ChordPro grammar does not
 misapply to a percent-encoded `irealb://` URL line. Syntax highlighting
-and a dedicated grammar for iReal Pro files are tracked separately.
+and a dedicated grammar for iReal Pro files are tracked under
+[#2357](https://github.com/koedame/chordsketch/issues/2357).
 
 The extension is built on the [ChordSketch](https://github.com/koedame/chordsketch)
 toolchain — a Rust reimplementation of the ChordPro reference

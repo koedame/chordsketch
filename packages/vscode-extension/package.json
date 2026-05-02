@@ -20,7 +20,9 @@
     "chord",
     "music",
     "lyrics",
-    "cho"
+    "cho",
+    "irealb",
+    "ireal pro"
   ],
   "repository": {
     "type": "git",
@@ -54,7 +56,7 @@
           ".irealb",
           ".irealbook"
         ],
-        "configuration": "./irealb-language-configuration.json"
+        "configuration": "./dist/syntaxes/irealb-language-configuration.json"
       }
     ],
     "grammars": [

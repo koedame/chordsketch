@@ -32,7 +32,11 @@ if (fs.existsSync(syntaxesDst)) {
   fs.rmSync(syntaxesDst, { recursive: true });
 }
 fs.mkdirSync(syntaxesDst, { recursive: true });
-for (const file of ['chordpro.tmLanguage.json', 'language-configuration.json']) {
+for (const file of [
+  'chordpro.tmLanguage.json',
+  'language-configuration.json',
+  'irealb-language-configuration.json',
+]) {
   const src = path.join(syntaxesSrc, file);
   if (fs.existsSync(src)) {
     fs.copyFileSync(src, path.join(syntaxesDst, file));
