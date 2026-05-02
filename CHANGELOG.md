@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   use real Bravura SMuFL outlines baked into `bravura.rs` as static SVG
   `<path>` data; `D.C.` / `D.S.` / `Fine` remain italic text because
   iReal Pro models them as text directives. (#2058, #2060, #2057, #2059,
-  #2062, #2349 / ADR-0014)
+  #2062, #2348 / ADR-0014)
 - `chordsketch-render-ireal`: PNG rasterisation via `resvg` (#2064) and
   PDF conversion via `svg2pdf` (#2063).
 - `chordsketch-ireal`: parse `irealb://` URLs into iReal AST (#2054)
@@ -28,11 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New crate `chordsketch-convert` — bidirectional ChordPro ↔ iReal Pro
   conversion. (#2051, #2053, #2061)
 - CLI auto-detects ChordPro vs `irealb://` input. (#2335)
+
+#### Bindings (multi-format track, #2067)
+
 - All bindings (WASM / NAPI / FFI, with FFI flowing to Python / Kotlin /
   Swift / Ruby) expose the iReal Pro surface in four phases: conversion
   APIs (Phase 1, #2339), `render_ireal_svg` (Phase 2a, #2340), AST parse
   / serialize (Phase 2b, #2341), and `render_ireal_png` /
-  `render_ireal_pdf` (Phase 2c, #2342). Tracked under #2067.
+  `render_ireal_pdf` (Phase 2c, #2342).
 
 #### ChordPro parser
 
@@ -72,8 +75,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All `@chordsketch/*` npm publishing is now maintainer-local rather
   than CI-driven; the corresponding `environment:` blocks were removed
   from the publish workflows. (#2275, ADR-0008)
-- `desktop-release.yml` requires `RELEASE_DISPATCH_TOKEN` to cascade
-  release events to downstream channels. (#2277, ADR-0009)
+- `release.yml` and `desktop-release.yml` now require
+  `RELEASE_DISPATCH_TOKEN` (a fine-grained PAT, not `GITHUB_TOKEN`) on
+  the `gh release create` step so the eight downstream `release:
+  published` workflows fire automatically. (#2277, ADR-0009)
 
 ### Fixed
 

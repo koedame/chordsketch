@@ -130,14 +130,14 @@ at post-release verification rather than before the tag is cut.
 
 6. **Publish to crates.io** in dependency order. The two zero-dep
    foundations (`chordsketch-chordpro` and `chordsketch-ireal`) come
-   first; renderers + `chordsketch-convert-musicxml` (which all depend
-   only on those) come next; `chordsketch-render-ireal` depends on
-   `chordsketch-ireal`; `chordsketch-convert` depends on chordpro +
-   ireal (`chordsketch-render-text` is a dev-dependency only and does
-   not need to precede `chordsketch-convert` for the publish to
-   succeed, though it appears earlier in the script anyway); the CLI
-   (`chordsketch`) depends on chordpro + ireal +
-   render-text/html/pdf/ireal + convert-musicxml.
+   first. Crates that depend only on one foundation come next:
+   `chordsketch-render-text` / `-render-html` / `-render-pdf` /
+   `-convert-musicxml` depend on `chordsketch-chordpro`;
+   `chordsketch-render-ireal` depends on `chordsketch-ireal`. Then
+   `chordsketch-convert` (depends on chordpro + ireal;
+   `chordsketch-render-text` is a `[dev-dependencies]` entry only and
+   does not gate the publish) and the CLI (`chordsketch`, depends on
+   chordpro + ireal + render-text/html/pdf/ireal + convert-musicxml).
 
    ```bash
    cargo publish -p chordsketch-chordpro
