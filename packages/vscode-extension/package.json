@@ -50,12 +50,14 @@
       {
         "id": "irealb",
         "aliases": [
-          "iReal Pro"
+          "iReal Pro",
+          "irealb"
         ],
         "extensions": [
           ".irealb",
           ".irealbook"
         ],
+        "firstLine": "^irealb://",
         "configuration": "./dist/syntaxes/irealb-language-configuration.json"
       }
     ],

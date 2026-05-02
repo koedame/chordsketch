@@ -24,7 +24,7 @@ const watch = process.argv.includes('--watch');
 fs.mkdirSync(path.join(here, 'dist', 'syntaxes'), { recursive: true });
 fs.mkdirSync(path.join(here, 'dist', 'webview'), { recursive: true });
 
-// Copy only the two VS Code-required files from repo root syntaxes/.
+// Copy VS Code-required files from repo root syntaxes/.
 const syntaxesSrc = path.join(repoRoot, 'syntaxes');
 const syntaxesDst = path.join(here, 'dist', 'syntaxes');
 // Clean destination first to avoid stale files from previous builds.
