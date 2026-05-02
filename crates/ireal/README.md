@@ -77,6 +77,27 @@ Validating constructors: `TimeSignature::new`, `Ending::new`,
 mutation bypasses these checks — see the module-level "Public-field
 mutation contract" comment in `ast.rs`.
 
+## File extension convention
+
+The upstream iReal Pro app does not register a file extension —
+URLs are typically pasted into clipboard / email / chat without a
+backing file. ChordSketch establishes the following project-local
+convention so the URL can be saved to disk and round-tripped:
+
+| Extension | Body | URL prefix |
+|---|---|---|
+| `.irealb` | Single song — one `irealb://...` URL on a single line | `irealb://` |
+| `.irealbook` | Multi-song collection — one `irealbook://...` URL on a single line | `irealbook://` |
+
+`parse_collection` accepts both prefixes; the extension distinction
+is for dialog filters, OS associations, and editor-mode hints. The
+authoritative grammar reference is [`FORMAT.md`](./FORMAT.md). The
+convention is consumed by the CLI sniff
+([`crates/cli/src/main.rs`](../cli/src/main.rs)), the Tauri desktop
+file associations
+([`apps/desktop/src-tauri/tauri.conf.json`](../../apps/desktop/src-tauri/tauri.conf.json)),
+and the VS Code / JetBrains / Zed editor integrations.
+
 ## Configuration / limits
 
 The deserializer enforces hard caps to keep adversarial input
