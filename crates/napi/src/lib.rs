@@ -288,9 +288,11 @@ fn do_render_pdf_with_warnings(
 /// `serde_wasm_bindgen`) rejects integers that do not fit in `i8`.
 /// napi-rs has no built-in `i8` unmarshaling — the wire type is `i32` —
 /// so the check has to run here at the first opportunity. Mapped to an
-/// `InvalidArg` error at the `#[napi]` boundary by [`resolve_options`]
-/// (and by [`render_html_css_with_options`]), giving the same failure
-/// shape across all four bindings for the same input (issue #1826).
+/// `InvalidArg` error at the `#[napi]` boundary by [`resolve_options`],
+/// giving the same failure shape across all four bindings for the same
+/// input (issue #1826). `render_html_css_with_options` does not appear
+/// here because it has no `transpose` argument — the CSS renderer is
+/// transpose-invariant.
 ///
 /// The previous implementation clamped instead of rejecting, which
 /// silently produced a different musical result for inputs outside
