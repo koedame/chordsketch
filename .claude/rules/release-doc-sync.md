@@ -56,9 +56,11 @@ deferred to "the next release."
   entry)`).
 - The "all renderers" / "all foundations" shorthand, where used,
   expands to the full set currently in the workspace.
-- Verify per crate:
+- Verify per crate (scoped to `[dependencies]` only — excludes
+  `[dev-dependencies]` and `[build-dependencies]`):
   ```bash
-  grep -E '^chordsketch-[a-z-]+ = ' crates/<NAME>/Cargo.toml
+  awk '/^\[dependencies\]/{p=1;next} /^\[/{p=0} p && /^chordsketch-/' \
+    crates/<NAME>/Cargo.toml
   ```
 
 ### 4. `README.md` Features section
