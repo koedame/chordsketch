@@ -54,6 +54,17 @@ assert!(svg.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
 assert!(svg.contains("<svg "));
 ```
 
+## Input format
+
+The renderer takes an in-memory `IrealSong` (and a slice of them
+for multi-song collections). Upstream parsing from the on-disk
+`.irealb` (single song) / `.irealbook` (multi-song collection)
+file extensions is the responsibility of `chordsketch-ireal`'s
+`parse` / `parse_collection`. See
+[`crates/ireal/FORMAT.md`](../ireal/FORMAT.md) §"File extension
+convention" for the project-local convention these extensions
+encode.
+
 ## API
 
 | Item | Signature | Notes |
