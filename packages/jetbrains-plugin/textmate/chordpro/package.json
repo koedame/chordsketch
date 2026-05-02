@@ -7,6 +7,12 @@
                 "aliases": ["ChordPro"],
                 "extensions": [".cho", ".chordpro", ".chopro"],
                 "configuration": "./language-configuration.json"
+            },
+            {
+                "id": "irealb",
+                "aliases": ["iReal Pro"],
+                "extensions": [".irealb", ".irealbook"],
+                "configuration": "./irealb-language-configuration.json"
             }
         ],
         "grammars": [

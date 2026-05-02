@@ -15,6 +15,7 @@ project &mdash; a Rust implementation of the ChordPro file format.</p>
   <li>Syntax highlighting for directives, chords, comments, and delegate blocks</li>
   <li>File type recognition for .cho, .chordpro, and .chopro extensions</li>
   <li>Bracket matching and auto-closing for { } and [ ]</li>
+  <li>Recognises .irealb / .irealbook (iReal Pro) files as a separate language id; no grammar registered yet</li>
 </ul>
     ]]></description>
 
