@@ -28,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New crate `chordsketch-convert` — bidirectional ChordPro ↔ iReal Pro
   conversion. (#2051, #2053, #2061)
 - CLI auto-detects ChordPro vs `irealb://` input. (#2335)
+- CLI: `.irealb` (single song) and `.irealbook` (collection) file
+  extensions are authoritative for iReal-pipeline dispatch
+  (case-insensitive); the existing first-KiB content sniffer is
+  retained as fallback for untyped files. (#2358)
+- Desktop (Tauri): Open / Save dialogs surface a dedicated iReal Pro
+  filter group, and `bundle.fileAssociations` registers `.irealb` /
+  `.irealbook` as OS-level associations on macOS, Windows, and Linux.
+  (#2358)
 
 #### Bindings (multi-format track, #2067)
 

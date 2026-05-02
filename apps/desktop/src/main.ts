@@ -41,9 +41,28 @@ const UNTITLED_LABEL = 'Untitled';
 const MAX_RECENTS = 10;
 const RECENTS_STORAGE_KEY = 'chordsketch-desktop-recent-files';
 
+// Open / Save dialogs surface ChordPro and iReal Pro files side by
+// side so a user with a mixed library can pick either format from
+// the same picker. The first filter group is the default selection
+// on every platform — keep ChordPro first so the existing default
+// stays.
+//
+// `.irealb` is the project-local convention for a single iReal Pro
+// song (one `irealb://...` URL per file); `.irealbook` is the
+// multi-song collection variant (one `irealbook://...` URL). The
+// upstream iReal Pro app does not register a file extension, so
+// these are first-class to ChordSketch's pipeline only.
 const CHORDPRO_FILTERS = [
   { name: 'ChordPro', extensions: ['cho', 'chopro', 'crd', 'chordpro'] },
-  { name: 'All files', extensions: ['*'] },
+];
+const IREALB_FILTERS = [
+  { name: 'iReal Pro', extensions: ['irealb', 'irealbook'] },
+];
+const ALL_FILES_FILTER = { name: 'All files', extensions: ['*'] };
+const OPEN_SAVE_FILTERS = [
+  ...CHORDPRO_FILTERS,
+  ...IREALB_FILTERS,
+  ALL_FILES_FILTER,
 ];
 
 const EXPORT_FILTERS: Record<
@@ -194,7 +213,7 @@ async function runOpen(
     const picked = await open({
       multiple: false,
       directory: false,
-      filters: CHORDPRO_FILTERS,
+      filters: OPEN_SAVE_FILTERS,
     });
     if (typeof picked === 'string') target = picked;
     if (!target) return; // User cancelled.
@@ -291,7 +310,7 @@ async function runSaveAs(
 ): Promise<void> {
   const picked = await save({
     defaultPath: currentPath ?? `${UNTITLED_LABEL.toLowerCase()}.cho`,
-    filters: CHORDPRO_FILTERS,
+    filters: OPEN_SAVE_FILTERS,
   });
   if (!picked) return;
 
