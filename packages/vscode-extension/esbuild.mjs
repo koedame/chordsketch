@@ -24,7 +24,7 @@ const watch = process.argv.includes('--watch');
 fs.mkdirSync(path.join(here, 'dist', 'syntaxes'), { recursive: true });
 fs.mkdirSync(path.join(here, 'dist', 'webview'), { recursive: true });
 
-// Copy only the two VS Code-required files from repo root syntaxes/.
+// Copy VS Code-required files from repo root syntaxes/.
 const syntaxesSrc = path.join(repoRoot, 'syntaxes');
 const syntaxesDst = path.join(here, 'dist', 'syntaxes');
 // Clean destination first to avoid stale files from previous builds.
@@ -32,7 +32,11 @@ if (fs.existsSync(syntaxesDst)) {
   fs.rmSync(syntaxesDst, { recursive: true });
 }
 fs.mkdirSync(syntaxesDst, { recursive: true });
-for (const file of ['chordpro.tmLanguage.json', 'language-configuration.json']) {
+for (const file of [
+  'chordpro.tmLanguage.json',
+  'language-configuration.json',
+  'irealb-language-configuration.json',
+]) {
   const src = path.join(syntaxesSrc, file);
   if (fs.existsSync(src)) {
     fs.copyFileSync(src, path.join(syntaxesDst, file));
