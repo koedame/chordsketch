@@ -56,8 +56,9 @@ assert!(svg.contains("<svg "));
 
 ## Input format
 
-The renderer takes an in-memory `IrealSong` (and a slice of them
-for multi-song collections). Upstream parsing from the on-disk
+The renderer takes a single in-memory `IrealSong`; for multi-song
+collections callers invoke the renderer once per song. Upstream
+parsing from the on-disk
 `.irealb` (single song) / `.irealbook` (multi-song collection)
 file extensions is the responsibility of `chordsketch-ireal`'s
 `parse` / `parse_collection`. See
