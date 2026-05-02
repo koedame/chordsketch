@@ -24,17 +24,24 @@ pub struct RenderOptions {
 }
 
 /// Resolve a config from an optional preset name or RRJSON string.
-fn resolve_config(config: Option<String>) -> Result<chordsketch_chordpro::config::Config> {
+///
+/// Returns `Result<_, String>` (not `napi::Result`) so unit tests can
+/// exercise this helper without pulling in `napi::Error`'s `Drop` impl,
+/// which references `napi_reference_unref` / `napi_delete_reference` —
+/// symbols the Node.js host resolves at runtime, so a native test
+/// binary that links them fails with `undefined symbol`. The `#[napi]`
+/// wrappers below convert the `String` error into `napi::Error` at the
+/// binding boundary.
+fn resolve_config_inner(
+    config: Option<&str>,
+) -> std::result::Result<chordsketch_chordpro::config::Config, String> {
     match config {
         Some(name) => {
-            if let Some(preset) = chordsketch_chordpro::config::Config::preset(&name) {
+            if let Some(preset) = chordsketch_chordpro::config::Config::preset(name) {
                 Ok(preset)
             } else {
-                chordsketch_chordpro::config::Config::parse(&name).map_err(|e| {
-                    Error::new(
-                        Status::InvalidArg,
-                        format!("invalid config (not a known preset and not valid RRJSON): {e}"),
-                    )
+                chordsketch_chordpro::config::Config::parse(name).map_err(|e| {
+                    format!("invalid config (not a known preset and not valid RRJSON): {e}")
                 })
             }
         }
@@ -48,13 +55,10 @@ fn resolve_config(config: Option<String>) -> Result<chordsketch_chordpro::config
 /// (`split_at_new_song` unconditionally pushes the trailing segment, even
 /// for empty input — see `chordsketch_chordpro::parser`), so the resulting
 /// `Vec<Song>` is never empty. The previous `is_empty()` guard was dead
-/// code. See #1083. The function still returns `Result` because the
-/// `*_with_options` callers use the same `napi::Result` channel for
-/// their `resolve_config` failures.
-fn parse_songs(input: &str) -> Result<Vec<chordsketch_chordpro::ast::Song>> {
+/// code (#1083) and the previous `Result` return type was vestigial.
+fn parse_songs(input: &str) -> Vec<chordsketch_chordpro::ast::Song> {
     let result = chordsketch_chordpro::parse_multi_lenient(input);
-    let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
-    Ok(songs)
+    result.results.into_iter().map(|r| r.song).collect()
 }
 
 /// Forward each warning in a [`RenderResult`] to `eprintln!` and unwrap the
@@ -75,7 +79,11 @@ fn flush_warnings<T>(result: RenderResult<T>) -> T {
 /// Parse and render songs as a string, forwarding any render warnings to stderr.
 ///
 /// Single source of truth for all string-output render calls. Accepts a
-/// `render_fn` so it can be shared by text and HTML renderers.
+/// `render_fn` so it can be shared by text and HTML renderers. Pure
+/// Rust — no `napi::Result` — so unit tests can exercise the full
+/// parse → render → flush_warnings path natively. See
+/// [`resolve_config_inner`] for the `napi::Error::Drop` linkage
+/// rationale.
 fn do_render_string(
     input: &str,
     config: &chordsketch_chordpro::config::Config,
@@ -85,9 +93,9 @@ fn do_render_string(
         i8,
         &chordsketch_chordpro::config::Config,
     ) -> RenderResult<String>,
-) -> Result<String> {
-    let songs = parse_songs(input)?;
-    Ok(flush_warnings(render_fn(&songs, transpose, config)))
+) -> String {
+    let songs = parse_songs(input);
+    flush_warnings(render_fn(&songs, transpose, config))
 }
 
 /// Parse and render songs as bytes, forwarding any render warnings to stderr.
@@ -102,9 +110,9 @@ fn do_render_bytes(
         i8,
         &chordsketch_chordpro::config::Config,
     ) -> RenderResult<Vec<u8>>,
-) -> Result<Vec<u8>> {
-    let songs = parse_songs(input)?;
-    Ok(flush_warnings(render_fn(&songs, transpose, config)))
+) -> Vec<u8> {
+    let songs = parse_songs(input);
+    flush_warnings(render_fn(&songs, transpose, config))
 }
 
 /// Render ChordPro input as plain text using default configuration.
@@ -114,12 +122,12 @@ fn do_render_bytes(
 #[must_use = "callers must handle render errors"]
 #[napi]
 pub fn render_text(input: String) -> Result<String> {
-    do_render_string(
+    Ok(do_render_string(
         &input,
         &chordsketch_chordpro::config::Config::defaults(),
         0,
         chordsketch_render_text::render_songs_with_warnings,
-    )
+    ))
 }
 
 /// Render ChordPro input as an HTML document using default configuration.
@@ -129,12 +137,12 @@ pub fn render_text(input: String) -> Result<String> {
 #[must_use = "callers must handle render errors"]
 #[napi]
 pub fn render_html(input: String) -> Result<String> {
-    do_render_string(
+    Ok(do_render_string(
         &input,
         &chordsketch_chordpro::config::Config::defaults(),
         0,
         chordsketch_render_html::render_songs_with_warnings,
-    )
+    ))
 }
 
 /// Render ChordPro input as a PDF document using default configuration
@@ -150,7 +158,7 @@ pub fn render_pdf(input: String) -> Result<Buffer> {
         &chordsketch_chordpro::config::Config::defaults(),
         0,
         chordsketch_render_pdf::render_songs_with_warnings,
-    )?;
+    );
     Ok(bytes.into())
 }
 
@@ -185,7 +193,13 @@ pub struct PdfRenderWithWarnings {
 ///
 /// Shared by `render_text_with_warnings` and `render_html_with_warnings`
 /// so both variants route through the same parse + render + capture
-/// pipeline without the `flush_warnings` stderr side effect.
+/// pipeline without the `flush_warnings` stderr side effect. Returns a
+/// `(String, Vec<String>)` tuple so unit tests can drive it without
+/// constructing the napi-coupled `TextRenderWithWarnings` struct (the
+/// `#[napi(object)]` attribute is fine in native builds, but staying
+/// in plain Rust types here keeps this helper symmetric with
+/// `do_render_pdf_with_warnings`, which cannot return its struct
+/// natively because of the `Buffer` field).
 fn do_render_string_with_warnings(
     input: &str,
     config: &chordsketch_chordpro::config::Config,
@@ -195,13 +209,10 @@ fn do_render_string_with_warnings(
         i8,
         &chordsketch_chordpro::config::Config,
     ) -> RenderResult<String>,
-) -> Result<TextRenderWithWarnings> {
-    let songs = parse_songs(input)?;
+) -> (String, Vec<String>) {
+    let songs = parse_songs(input);
     let result = render_fn(&songs, transpose, config);
-    Ok(TextRenderWithWarnings {
-        output: result.output,
-        warnings: result.warnings,
-    })
+    (result.output, result.warnings)
 }
 
 /// Render ChordPro input as plain text, returning both output and
@@ -214,12 +225,13 @@ fn do_render_string_with_warnings(
 #[must_use = "callers must handle render errors"]
 #[napi]
 pub fn render_text_with_warnings(input: String) -> Result<TextRenderWithWarnings> {
-    do_render_string_with_warnings(
+    let (output, warnings) = do_render_string_with_warnings(
         &input,
         &chordsketch_chordpro::config::Config::defaults(),
         0,
         chordsketch_render_text::render_songs_with_warnings,
-    )
+    );
+    Ok(TextRenderWithWarnings { output, warnings })
 }
 
 /// Render ChordPro input as HTML, returning both output and captured
@@ -229,12 +241,13 @@ pub fn render_text_with_warnings(input: String) -> Result<TextRenderWithWarnings
 #[must_use = "callers must handle render errors"]
 #[napi]
 pub fn render_html_with_warnings(input: String) -> Result<TextRenderWithWarnings> {
-    do_render_string_with_warnings(
+    let (output, warnings) = do_render_string_with_warnings(
         &input,
         &chordsketch_chordpro::config::Config::defaults(),
         0,
         chordsketch_render_html::render_songs_with_warnings,
-    )
+    );
+    Ok(TextRenderWithWarnings { output, warnings })
 }
 
 /// Render ChordPro input as a PDF document, returning the byte stream
@@ -244,24 +257,28 @@ pub fn render_html_with_warnings(input: String) -> Result<TextRenderWithWarnings
 #[must_use = "callers must handle render errors"]
 #[napi]
 pub fn render_pdf_with_warnings(input: String) -> Result<PdfRenderWithWarnings> {
-    do_render_pdf_with_warnings(&input, &chordsketch_chordpro::config::Config::defaults(), 0)
+    let (bytes, warnings) =
+        do_render_pdf_with_warnings(&input, &chordsketch_chordpro::config::Config::defaults(), 0);
+    Ok(PdfRenderWithWarnings {
+        output: bytes.into(),
+        warnings,
+    })
 }
 
 /// Shared implementation for the PDF `*_with_warnings` variants. Extracted
 /// so [`render_pdf_with_warnings`] and
 /// [`render_pdf_with_warnings_and_options`] route through the same
-/// parse + render + capture pipeline.
+/// parse + render + capture pipeline. Returns a `(Vec<u8>, Vec<String>)`
+/// tuple so unit tests can drive it without constructing
+/// `PdfRenderWithWarnings`, whose `Buffer` field is napi-coupled.
 fn do_render_pdf_with_warnings(
     input: &str,
     config: &chordsketch_chordpro::config::Config,
     transpose: i8,
-) -> Result<PdfRenderWithWarnings> {
-    let songs = parse_songs(input)?;
+) -> (Vec<u8>, Vec<String>) {
+    let songs = parse_songs(input);
     let result = chordsketch_render_pdf::render_songs_with_warnings(&songs, transpose, config);
-    Ok(PdfRenderWithWarnings {
-        output: result.output.into(),
-        warnings: result.warnings,
-    })
+    (result.output, result.warnings)
 }
 
 /// Coerce a JS-supplied transposition value to `i8`, rejecting
@@ -270,26 +287,20 @@ fn do_render_pdf_with_warnings(
 /// Every other binding (CLI via clap, UniFFI at the boundary, WASM via
 /// `serde_wasm_bindgen`) rejects integers that do not fit in `i8`.
 /// napi-rs has no built-in `i8` unmarshaling — the wire type is `i32` —
-/// so the check has to run here at the first opportunity. Returning an
-/// `InvalidArg` error gives the same failure shape across all four
-/// bindings for the same input (issue #1826).
+/// so the check has to run here at the first opportunity. Mapped to an
+/// `InvalidArg` error at the `#[napi]` boundary by [`resolve_options`],
+/// giving the same failure shape across all four bindings for the same
+/// input (issue #1826). `render_html_css_with_options` does not appear
+/// here because it has no `transpose` argument — the CSS renderer is
+/// transpose-invariant.
 ///
 /// The previous implementation clamped instead of rejecting, which
 /// silently produced a different musical result for inputs outside
 /// `-128..=127` compared with the other three bindings. See #1065 for
 /// the earlier iteration of this divergence.
-fn parse_transpose(raw: i32) -> Result<i8> {
-    try_parse_transpose(raw).map_err(|msg| Error::new(Status::InvalidArg, msg))
-}
-
-/// Pure-Rust cousin of [`parse_transpose`] that returns an owned error
-/// message instead of a `napi::Error`.
 ///
-/// This separation keeps the validation logic unit-testable: `napi::Error`
-/// has a `Drop` impl that references Node-API symbols, so constructing
-/// one inside a plain `cargo test` binary would fail to link. Tests call
-/// this helper directly; production callers go through `parse_transpose`
-/// and get a proper `napi::Error`.
+/// Pure Rust — see [`resolve_config_inner`] for the `napi::Error::Drop`
+/// linkage rationale.
 fn try_parse_transpose(raw: i32) -> std::result::Result<i8, String> {
     i8::try_from(raw).map_err(|_| {
         format!(
@@ -299,46 +310,65 @@ fn try_parse_transpose(raw: i32) -> std::result::Result<i8, String> {
     })
 }
 
+/// Pure-Rust resolution of the `(config, transpose)` pair that every
+/// `*_with_options` entry point needs. Returns a `String` error so
+/// unit tests can drive every options-validation branch without
+/// constructing `napi::Error`. The `#[napi]` wrappers convert at the
+/// boundary via [`resolve_options`].
+fn resolve_options_inner(
+    config: Option<&str>,
+    transpose: i32,
+) -> std::result::Result<(chordsketch_chordpro::config::Config, i8), String> {
+    let config = resolve_config_inner(config)?;
+    let transpose = try_parse_transpose(transpose)?;
+    Ok((config, transpose))
+}
+
+/// `napi::Result` wrapper around [`resolve_options_inner`]. Single
+/// source of truth for the `String` → `napi::Error` mapping done by
+/// every `*_with_options` entry point.
+fn resolve_options(options: RenderOptions) -> Result<(chordsketch_chordpro::config::Config, i8)> {
+    resolve_options_inner(options.config.as_deref(), options.transpose.unwrap_or(0))
+        .map_err(|msg| Error::new(Status::InvalidArg, msg))
+}
+
 /// Render ChordPro input as plain text with options.
 #[must_use = "callers must handle render errors"]
 #[napi]
 pub fn render_text_with_options(input: String, options: RenderOptions) -> Result<String> {
-    let config = resolve_config(options.config)?;
-    let transpose = parse_transpose(options.transpose.unwrap_or(0))?;
-    do_render_string(
+    let (config, transpose) = resolve_options(options)?;
+    Ok(do_render_string(
         &input,
         &config,
         transpose,
         chordsketch_render_text::render_songs_with_warnings,
-    )
+    ))
 }
 
 /// Render ChordPro input as an HTML document with options.
 #[must_use = "callers must handle render errors"]
 #[napi]
 pub fn render_html_with_options(input: String, options: RenderOptions) -> Result<String> {
-    let config = resolve_config(options.config)?;
-    let transpose = parse_transpose(options.transpose.unwrap_or(0))?;
-    do_render_string(
+    let (config, transpose) = resolve_options(options)?;
+    Ok(do_render_string(
         &input,
         &config,
         transpose,
         chordsketch_render_html::render_songs_with_warnings,
-    )
+    ))
 }
 
 /// Render ChordPro input as a PDF document with options (returned as a Buffer).
 #[must_use = "callers must handle render errors"]
 #[napi]
 pub fn render_pdf_with_options(input: String, options: RenderOptions) -> Result<Buffer> {
-    let config = resolve_config(options.config)?;
-    let transpose = parse_transpose(options.transpose.unwrap_or(0))?;
+    let (config, transpose) = resolve_options(options)?;
     let bytes = do_render_bytes(
         &input,
         &config,
         transpose,
         chordsketch_render_pdf::render_songs_with_warnings,
-    )?;
+    );
     Ok(bytes.into())
 }
 
@@ -353,14 +383,14 @@ pub fn render_text_with_warnings_and_options(
     input: String,
     options: RenderOptions,
 ) -> Result<TextRenderWithWarnings> {
-    let config = resolve_config(options.config)?;
-    let transpose = parse_transpose(options.transpose.unwrap_or(0))?;
-    do_render_string_with_warnings(
+    let (config, transpose) = resolve_options(options)?;
+    let (output, warnings) = do_render_string_with_warnings(
         &input,
         &config,
         transpose,
         chordsketch_render_text::render_songs_with_warnings,
-    )
+    );
+    Ok(TextRenderWithWarnings { output, warnings })
 }
 
 /// Render ChordPro input as HTML with options, returning both output and
@@ -373,14 +403,14 @@ pub fn render_html_with_warnings_and_options(
     input: String,
     options: RenderOptions,
 ) -> Result<TextRenderWithWarnings> {
-    let config = resolve_config(options.config)?;
-    let transpose = parse_transpose(options.transpose.unwrap_or(0))?;
-    do_render_string_with_warnings(
+    let (config, transpose) = resolve_options(options)?;
+    let (output, warnings) = do_render_string_with_warnings(
         &input,
         &config,
         transpose,
         chordsketch_render_html::render_songs_with_warnings,
-    )
+    );
+    Ok(TextRenderWithWarnings { output, warnings })
 }
 
 /// Render ChordPro input as a PDF document with options, returning the byte
@@ -393,9 +423,12 @@ pub fn render_pdf_with_warnings_and_options(
     input: String,
     options: RenderOptions,
 ) -> Result<PdfRenderWithWarnings> {
-    let config = resolve_config(options.config)?;
-    let transpose = parse_transpose(options.transpose.unwrap_or(0))?;
-    do_render_pdf_with_warnings(&input, &config, transpose)
+    let (config, transpose) = resolve_options(options)?;
+    let (bytes, warnings) = do_render_pdf_with_warnings(&input, &config, transpose);
+    Ok(PdfRenderWithWarnings {
+        output: bytes.into(),
+        warnings,
+    })
 }
 
 /// Render ChordPro input as a body-only HTML fragment using default
@@ -412,12 +445,12 @@ pub fn render_pdf_with_warnings_and_options(
 #[must_use = "callers must handle render errors"]
 #[napi]
 pub fn render_html_body(input: String) -> Result<String> {
-    do_render_string(
+    Ok(do_render_string(
         &input,
         &chordsketch_chordpro::config::Config::defaults(),
         0,
         chordsketch_render_html::render_songs_body_with_warnings,
-    )
+    ))
 }
 
 /// Render ChordPro input as a body-only HTML fragment with options.
@@ -426,14 +459,13 @@ pub fn render_html_body(input: String) -> Result<String> {
 #[must_use = "callers must handle render errors"]
 #[napi]
 pub fn render_html_body_with_options(input: String, options: RenderOptions) -> Result<String> {
-    let config = resolve_config(options.config)?;
-    let transpose = parse_transpose(options.transpose.unwrap_or(0))?;
-    do_render_string(
+    let (config, transpose) = resolve_options(options)?;
+    Ok(do_render_string(
         &input,
         &config,
         transpose,
         chordsketch_render_html::render_songs_body_with_warnings,
-    )
+    ))
 }
 
 /// Render ChordPro input as a body-only HTML fragment, returning both
@@ -444,12 +476,13 @@ pub fn render_html_body_with_options(input: String, options: RenderOptions) -> R
 #[must_use = "callers must handle render errors"]
 #[napi]
 pub fn render_html_body_with_warnings(input: String) -> Result<TextRenderWithWarnings> {
-    do_render_string_with_warnings(
+    let (output, warnings) = do_render_string_with_warnings(
         &input,
         &chordsketch_chordpro::config::Config::defaults(),
         0,
         chordsketch_render_html::render_songs_body_with_warnings,
-    )
+    );
+    Ok(TextRenderWithWarnings { output, warnings })
 }
 
 /// Render ChordPro input as a body-only HTML fragment with options,
@@ -464,14 +497,14 @@ pub fn render_html_body_with_warnings_and_options(
     input: String,
     options: RenderOptions,
 ) -> Result<TextRenderWithWarnings> {
-    let config = resolve_config(options.config)?;
-    let transpose = parse_transpose(options.transpose.unwrap_or(0))?;
-    do_render_string_with_warnings(
+    let (config, transpose) = resolve_options(options)?;
+    let (output, warnings) = do_render_string_with_warnings(
         &input,
         &config,
         transpose,
         chordsketch_render_html::render_songs_body_with_warnings,
-    )
+    );
+    Ok(TextRenderWithWarnings { output, warnings })
 }
 
 /// Returns the canonical chord-over-lyrics CSS that
@@ -486,6 +519,14 @@ pub fn render_html_css() -> String {
     chordsketch_render_html::render_html_css()
 }
 
+/// Pure-Rust implementation of [`render_html_css_with_options`].
+fn render_html_css_with_options_inner(config: Option<&str>) -> std::result::Result<String, String> {
+    let config = resolve_config_inner(config)?;
+    Ok(chordsketch_render_html::render_html_css_with_config(
+        &config,
+    ))
+}
+
 /// Variant of [`render_html_css`] that honours `settings.wraplines` from
 /// the supplied options (R6.100.0). When `wraplines` is false, the `.line`
 /// rule emits `flex-wrap: nowrap` so chord/lyric runs preserve the source
@@ -495,10 +536,8 @@ pub fn render_html_css() -> String {
 #[must_use = "callers must handle render errors"]
 #[napi]
 pub fn render_html_css_with_options(options: RenderOptions) -> napi::Result<String> {
-    let config = resolve_config(options.config)?;
-    Ok(chordsketch_render_html::render_html_css_with_config(
-        &config,
-    ))
+    render_html_css_with_options_inner(options.config.as_deref())
+        .map_err(|msg| Error::new(Status::InvalidArg, msg))
 }
 
 /// A single validation issue reported by [`validate`]. Mirrors the
@@ -554,6 +593,32 @@ pub fn version() -> String {
     chordsketch_chordpro::version().to_string()
 }
 
+/// Pure-Rust implementation of [`chord_diagram_svg`].
+fn chord_diagram_svg_inner(
+    chord: &str,
+    instrument: &str,
+) -> std::result::Result<Option<String>, String> {
+    use chordsketch_chordpro::chord_diagram::{render_keyboard_svg, render_svg};
+    use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
+
+    match instrument.to_ascii_lowercase().as_str() {
+        "piano" | "keyboard" | "keys" => {
+            Ok(lookup_keyboard_voicing(chord, &[]).map(|v| render_keyboard_svg(&v)))
+        }
+        "guitar" | "ukulele" | "uke" => {
+            // `frets_shown = 5` matches the default ChordPro HTML
+            // renderer (`crates/render-html` emits 5-fret diagrams
+            // when no `{chordfrets}` directive is set), keeping
+            // diagrams produced via NAPI visually consistent with
+            // sheets rendered through the same binding.
+            Ok(lookup_diagram(chord, &[], instrument, 5).map(|d| render_svg(&d)))
+        }
+        other => Err(format!(
+            "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
+        )),
+    }
+}
+
 /// Look up an SVG chord diagram for the given chord name and
 /// instrument, mirroring the WASM `chord_diagram_svg` export
 /// added in #2164.
@@ -576,28 +641,7 @@ pub fn version() -> String {
 #[must_use = "callers must handle the unknown-instrument error"]
 #[napi]
 pub fn chord_diagram_svg(chord: String, instrument: String) -> Result<Option<String>> {
-    use chordsketch_chordpro::chord_diagram::{render_keyboard_svg, render_svg};
-    use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
-
-    match instrument.to_ascii_lowercase().as_str() {
-        "piano" | "keyboard" | "keys" => {
-            Ok(lookup_keyboard_voicing(&chord, &[]).map(|v| render_keyboard_svg(&v)))
-        }
-        "guitar" | "ukulele" | "uke" => {
-            // `frets_shown = 5` matches the default ChordPro HTML
-            // renderer (`crates/render-html` emits 5-fret diagrams
-            // when no `{chordfrets}` directive is set), keeping
-            // diagrams produced via NAPI visually consistent with
-            // sheets rendered through the same binding.
-            Ok(lookup_diagram(&chord, &[], &instrument, 5).map(|d| render_svg(&d)))
-        }
-        other => Err(Error::new(
-            Status::InvalidArg,
-            format!(
-                "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
-            ),
-        )),
-    }
+    chord_diagram_svg_inner(&chord, &instrument).map_err(|msg| Error::new(Status::InvalidArg, msg))
 }
 
 /// Structured result for ChordPro ↔ iReal Pro conversions
@@ -871,61 +915,102 @@ pub fn render_ireal_pdf(input: String) -> Result<Buffer> {
     Ok(bytes.into())
 }
 
-// Unit tests exercise the underlying rendering and parsing logic directly
-// via chordsketch_chordpro and renderer crates. The napi wrapper functions
-// cannot be tested natively because they depend on the Node.js runtime for
-// linking (Buffer, napi::Error, etc.).
+// Unit tests exercise the pure-Rust helpers (`do_render_*`,
+// `resolve_*_inner`, `try_parse_transpose`, `chord_diagram_svg_inner`,
+// `do_convert_*`, `do_render_ireal_*`, `do_parse_irealb`,
+// `do_serialize_irealb`, …) that every `#[napi] pub fn` wraps. The
+// `#[napi]` wrappers themselves cannot be called from `cargo test --lib`
+// because their return types reference `napi::Error`, whose `Drop` impl
+// links against `napi_reference_unref` / `napi_delete_reference` —
+// symbols only resolved by the Node.js host at runtime. The wrappers'
+// bodies are 1–3 line shims around the helpers, so exercising the
+// helpers covers the binding's full business logic.
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     const MINIMAL_INPUT: &str = "{title: Test}\n[C]Hello";
 
     #[test]
     fn test_render_text_returns_content() {
-        let result = chordsketch_chordpro::parse_multi_lenient(MINIMAL_INPUT);
-        let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
-        assert!(!songs.is_empty());
-        // Use render_songs_with_warnings to match the code path used by the NAPI
-        // binding's do_render_string (via flush_warnings).
-        let text = chordsketch_render_text::render_songs_with_warnings(
-            &songs,
-            0,
+        // Drives the pure-Rust `do_render_string` helper that
+        // `render_text` / `render_text_with_options` /
+        // `render_html_body_with_options` all delegate to.
+        let text = do_render_string(
+            MINIMAL_INPUT,
             &chordsketch_chordpro::config::Config::defaults(),
-        )
-        .output;
+            0,
+            chordsketch_render_text::render_songs_with_warnings,
+        );
         assert!(!text.is_empty());
         assert!(text.contains("Test"));
     }
 
     #[test]
     fn test_render_html_returns_content() {
-        let result = chordsketch_chordpro::parse_multi_lenient(MINIMAL_INPUT);
-        let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
-        // Use render_songs_with_warnings to match the code path used by the NAPI
-        // binding's do_render_string (via flush_warnings).
-        let html = chordsketch_render_html::render_songs_with_warnings(
-            &songs,
-            0,
+        let html = do_render_string(
+            MINIMAL_INPUT,
             &chordsketch_chordpro::config::Config::defaults(),
-        )
-        .output;
+            0,
+            chordsketch_render_html::render_songs_with_warnings,
+        );
         assert!(!html.is_empty());
         assert!(html.contains("Test"));
     }
 
     #[test]
     fn test_render_pdf_returns_bytes() {
-        let result = chordsketch_chordpro::parse_multi_lenient(MINIMAL_INPUT);
-        let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
-        // Use render_songs_with_warnings to match the code path used by the NAPI
-        // binding's do_render_bytes (via flush_warnings).
-        let bytes = chordsketch_render_pdf::render_songs_with_warnings(
-            &songs,
-            0,
+        let bytes = do_render_bytes(
+            MINIMAL_INPUT,
             &chordsketch_chordpro::config::Config::defaults(),
-        )
-        .output;
+            0,
+            chordsketch_render_pdf::render_songs_with_warnings,
+        );
         assert!(!bytes.is_empty());
         assert!(bytes.starts_with(b"%PDF"));
+    }
+
+    #[test]
+    fn test_do_render_string_with_warnings_returns_tuple() {
+        // `*_with_warnings` family routes through this. Empty warning
+        // list on minimal input pins the contract: no spurious
+        // diagnostics for valid documents.
+        let (output, warnings) = do_render_string_with_warnings(
+            MINIMAL_INPUT,
+            &chordsketch_chordpro::config::Config::defaults(),
+            0,
+            chordsketch_render_text::render_songs_with_warnings,
+        );
+        assert!(output.contains("Test"));
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn test_do_render_string_with_warnings_captures_saturation() {
+        // Out-of-range transpose produces a renderer warning, which the
+        // helper must surface in the second tuple element so that the
+        // `#[napi]` wrapper can wrap it into `TextRenderWithWarnings`.
+        let (_, warnings) = do_render_string_with_warnings(
+            "{title: T}\n{transpose: 100}\n[C]Hello",
+            &chordsketch_chordpro::config::Config::defaults(),
+            100,
+            chordsketch_render_text::render_songs_with_warnings,
+        );
+        assert!(
+            !warnings.is_empty(),
+            "out-of-musical-range transpose must surface as a warning"
+        );
+    }
+
+    #[test]
+    fn test_do_render_pdf_with_warnings_returns_tuple() {
+        let (bytes, warnings) = do_render_pdf_with_warnings(
+            MINIMAL_INPUT,
+            &chordsketch_chordpro::config::Config::defaults(),
+            0,
+        );
+        assert!(bytes.starts_with(b"%PDF"));
+        assert!(warnings.is_empty());
     }
 
     #[test]
@@ -1335,5 +1420,157 @@ mod tests {
     fn test_render_ireal_pdf_invalid_url_errors() {
         let result = super::do_render_ireal_pdf("not a url");
         assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    // ---- pure-Rust helpers behind every `*_with_options` napi wrapper ----
+
+    #[test]
+    fn test_resolve_config_inner_default_when_none() {
+        let cfg = resolve_config_inner(None).unwrap();
+        // Default config equals the workspace default; assert against
+        // the public constructor to pin the equality contract.
+        let expected = chordsketch_chordpro::config::Config::defaults();
+        assert_eq!(format!("{cfg:?}"), format!("{expected:?}"));
+    }
+
+    #[test]
+    fn test_resolve_config_inner_preset_resolves() {
+        // Every supported preset must round-trip through the helper.
+        for preset in ["guitar", "ukulele"] {
+            assert!(
+                resolve_config_inner(Some(preset)).is_ok(),
+                "preset {preset:?} must resolve"
+            );
+        }
+    }
+
+    #[test]
+    fn test_resolve_config_inner_inline_rrjson_parses() {
+        let cfg = resolve_config_inner(Some(r#"{ "settings": { "transpose": 2 } }"#));
+        assert!(cfg.is_ok(), "valid inline RRJSON must parse, got {cfg:?}");
+    }
+
+    #[test]
+    fn test_resolve_config_inner_invalid_rrjson_errors() {
+        let err = resolve_config_inner(Some("{ invalid rrjson !!!")).unwrap_err();
+        assert!(
+            err.contains("not a known preset and not valid RRJSON"),
+            "error must point at both failure modes; got {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_resolve_options_inner_pairs_config_and_transpose() {
+        // Config came from the preset path; transpose is forwarded
+        // unchanged because 5 fits in i8.
+        let (cfg, transpose) = resolve_options_inner(Some("guitar"), 5).unwrap();
+        let preset = chordsketch_chordpro::config::Config::preset("guitar")
+            .expect("guitar preset must exist");
+        assert_eq!(format!("{cfg:?}"), format!("{preset:?}"));
+        assert_eq!(transpose, 5);
+    }
+
+    #[test]
+    fn test_resolve_options_inner_propagates_transpose_overflow() {
+        let err = resolve_options_inner(None, 200).unwrap_err();
+        assert!(
+            err.contains("out of range"),
+            "out-of-range transpose (200) must propagate as a validation error; got {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_resolve_options_inner_propagates_config_error() {
+        let err = resolve_options_inner(Some("not a preset and not valid"), 0).unwrap_err();
+        assert!(
+            err.contains("not a known preset and not valid RRJSON"),
+            "config error must propagate; got {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_render_html_css_with_options_inner_default() {
+        let css = render_html_css_with_options_inner(None).unwrap();
+        // Same canonical chord-block CSS as `render_html_css()`.
+        assert!(css.contains(".chord-block"));
+        assert!(css.contains(".lyrics"));
+    }
+
+    #[test]
+    fn test_render_html_css_with_options_inner_invalid_config_errors() {
+        let err = render_html_css_with_options_inner(Some("{ invalid rrjson !!!")).unwrap_err();
+        assert!(err.contains("not a known preset and not valid RRJSON"));
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_inner_guitar_known_chord_returns_svg() {
+        let svg = chord_diagram_svg_inner("C", "guitar").unwrap();
+        let svg = svg.expect("guitar C must have a built-in diagram");
+        assert!(svg.contains("<svg"));
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_inner_ukulele_alias_resolves() {
+        // "uke" is documented as an alias for "ukulele".
+        let svg = chord_diagram_svg_inner("C", "uke").unwrap();
+        assert!(svg.is_some(), "ukulele C must resolve via the uke alias");
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_inner_piano_keyboard_aliases_resolve() {
+        for alias in ["piano", "keyboard", "keys"] {
+            let result = chord_diagram_svg_inner("C", alias);
+            assert!(
+                result.is_ok(),
+                "{alias:?} must be accepted as a piano alias; got {result:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_inner_unknown_chord_returns_none() {
+        // Unknown chord under a known instrument must yield Ok(None),
+        // not Err — the docstring promises hosts can render their own
+        // fallback for misses.
+        let result = chord_diagram_svg_inner("XYZ-not-a-chord", "guitar").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_inner_unknown_instrument_errors() {
+        let err = chord_diagram_svg_inner("C", "harmonica").unwrap_err();
+        assert!(
+            err.contains("unknown instrument") && err.contains("harmonica"),
+            "error must name the offending instrument; got {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_inner_instrument_lookup_is_case_insensitive() {
+        // The wrapper documents the instrument argument as case-
+        // insensitive; the helper's `to_ascii_lowercase` must honour
+        // that promise for every alias.
+        for variant in ["GUITAR", "Guitar", "gUiTaR"] {
+            let svg = chord_diagram_svg_inner("C", variant)
+                .unwrap_or_else(|e| panic!("case variant {variant:?} must not error; got {e:?}"));
+            assert!(
+                svg.is_some(),
+                "case variant {variant:?} must find a guitar-C diagram; got None"
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_songs_always_returns_at_least_one() {
+        // Lenient parser contract pinned at the binding boundary: the
+        // `*_with_options` wrappers rely on this to skip an `is_empty`
+        // guard. See #1083 for the prior dead-code removal.
+        for input in ["", "no directives", MINIMAL_INPUT] {
+            let songs = parse_songs(input);
+            assert!(
+                !songs.is_empty(),
+                "parse_songs({input:?}) returned an empty Vec"
+            );
+        }
     }
 }
