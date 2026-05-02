@@ -16,8 +16,13 @@ the next release-cut commit catches the drift.
 Before changing `## [X.Y.Z] - Unreleased` to
 `## [X.Y.Z] - YYYY-MM-DD` in `CHANGELOG.md` (Step 2 of
 `docs/releasing.md`), the release maintainer MUST verify each of the
-following. Any drift found is fixed in the same release PR — never
-deferred to "the next release."
+following. Any drift found MUST be fixed in the same release PR;
+deferring drift to a later release window is prohibited and reproduces
+this rule's documented failure mode.
+
+All commands assume the workspace root as the current working
+directory (the repository's top level — the directory containing
+`Cargo.toml`, `crates/`, and `docs/`).
 
 ### 1. CHANGELOG completeness
 
@@ -25,9 +30,11 @@ deferred to "the next release."
 - Every commit on `main` since the previous release tag whose subject
   matches `^(feat|fix)\(` has either a corresponding bullet or a
   deliberate exclusion reason recorded in the release PR body.
-- Verify:
+- Verify (`<release-cut-ref>` is the commit that will become the
+  release tag — typically `HEAD` of the release-cut branch, or
+  `origin/main` if the release is being cut directly from main):
   ```bash
-  git log <previous-tag>..origin/main --pretty='%s' \
+  git log <previous-tag>..<release-cut-ref> --pretty='%s' \
     | grep -E '^(feat|fix)\('
   ```
 - Internal-only commits (`ci`, `chore`, `test`, `refactor`, `docs`)
@@ -74,14 +81,42 @@ deferred to "the next release."
 
 ### 5. Binding READMEs
 
-- Each language binding's README at the public surface lists every
-  function exported from the corresponding manifest in this release:
-  - `crates/{wasm,napi,ffi}/README.md` ↔ each crate's exported
-    functions in `lib.rs` / `*.udl` / `index.d.ts`.
-  - `packages/{npm,swift,kotlin,ruby}/README.md` ↔ the surface their
-    binding generator publishes.
+- Every binding crate listed in `CLAUDE.md`'s Architecture table that
+  exposes a public surface (any `cdylib` / `staticlib`, plus the CLI
+  bin crate's `crates/cli/README.md`) has its `README.md` API list
+  matching the actual exported functions.
+- Every consumer-facing language package listed in `CLAUDE.md`'s
+  Additionally-these-non-Rust-packages table that ships its own README
+  (`packages/<lang>/README.md`) has its API list matching the surface
+  the binding generator publishes (UniFFI for swift / kotlin / ruby /
+  python, napi-rs for `@chordsketch/node`, wasm-bindgen for
+  `@chordsketch/wasm`).
+- The current set at the time of writing is `crates/{wasm,napi,ffi}/`
+  and `packages/{npm,swift,kotlin,ruby}/`. New bindings added later
+  inherit the rule automatically — derive the check set from the
+  CLAUDE.md table at verification time, not from this list.
 - Pay special attention to functions added inside the release window
   (every `feat(bindings):` commit since the previous tag).
+
+### 6. Release-time security ADR alignment
+
+Release-time is when stale signing-/credential-handling docs would
+mislead an on-call maintainer the most. Before the release-cut, verify
+that every release-process ADR still matches its referent workflow on
+disk:
+
+- ADR-0007 (Tauri updater key with password) ↔
+  `.github/workflows/desktop-release.yml` updater-bundle signing step
+  + `apps/desktop/src-tauri/tauri.conf.json` updater public-key field.
+- ADR-0008 (npm publishing is local) ↔ no `npm publish` invocation in
+  any `.github/workflows/*.yml`. Verify with
+  `grep -RnE 'npm[[:space:]]+publish' .github/workflows/`.
+- ADR-0009 (release-event cascade credential) ↔ `release.yml` and
+  `desktop-release.yml` use `secrets.RELEASE_DISPATCH_TOKEN` (NOT
+  `secrets.GITHUB_TOKEN`) on every `gh release create` step.
+
+A drift here is a §6 finding regardless of CHANGELOG / Cargo.toml
+state and blocks the release-cut commit identically.
 
 ## Verification procedure
 
@@ -92,13 +127,16 @@ release maintainer SHOULD:
 
 1. Enumerate the commit set:
    ```bash
-   git log <previous-tag>..origin/main --pretty=oneline
+   git log <previous-tag>..<release-cut-ref> --pretty=oneline
    ```
-2. Run through §§1–5 above against that commit set.
+2. Run through §§1–6 above against that commit set.
 3. Open a single docs PR fixing every drift found before the
    release-cut commit lands.
 4. In the release-cut commit message, cite the verification:
-   `release-doc-sync.md §§1–5 verified at <SHA>`.
+   `release-doc-sync.md §§1–6 verified against <verification-SHA>`,
+   where `<verification-SHA>` is the workspace tip at the moment the
+   checklist was run (typically the parent of the release-cut commit
+   itself).
 
 A drift discovered AFTER the release-cut commit MUST be fixed by a
 follow-up docs PR before the next release window opens. Do not
@@ -108,9 +146,9 @@ reproduces.
 
 ## Why
 
-In the v0.3.0 → next-release window (2026-04-25 → 2026-05-02), 39
-user-visible commits landed and four documentation cross-references
-drifted silently:
+In the window between v0.3.0 (2026-04-25) and the audit that produced
+this rule, 39 user-visible commits landed and four documentation
+cross-references drifted silently:
 
 - `CHANGELOG.md` `[Unreleased]` was empty despite the 39 commits
   (`git log v0.3.0..origin/main --pretty='%s' | grep -cE '^(feat|fix)\('`
