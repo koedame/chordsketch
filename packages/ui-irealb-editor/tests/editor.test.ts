@@ -218,6 +218,34 @@ describe('createIrealbEditor', () => {
     expect(() => editor.destroy()).not.toThrow();
   });
 
+  test('onChange unsubscription stops handler delivery', () => {
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+
+    const handler = vi.fn();
+    const unsub = editor.onChange(handler);
+
+    const titleInput = editor.element.querySelector<HTMLInputElement>(
+      'input[type="text"]',
+    );
+    if (!titleInput) throw new Error('title input not rendered');
+
+    // Fire before unsubscribing — the handler must be called.
+    titleInput.value = 'Before Unsub';
+    titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    // Unsubscribe.
+    unsub();
+
+    // Fire after unsubscribing — the handler must NOT be called again.
+    titleInput.value = 'After Unsub';
+    titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    editor.destroy();
+  });
+
   test('initialValue === "" seeds an empty chart without invoking parseIrealb', () => {
     // Empty-string fast path: skipping the wasm parse keeps a
     // freshly-mounted editor predictable when the host has not yet

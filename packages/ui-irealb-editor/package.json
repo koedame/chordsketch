@@ -25,7 +25,7 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@chordsketch/wasm": "0.3.0"
+    "@chordsketch/wasm": "^0.3.0"
   },
   "peerDependenciesMeta": {
     "@chordsketch/wasm": {
