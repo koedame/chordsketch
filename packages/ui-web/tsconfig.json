@@ -11,5 +11,5 @@
     "forceConsistentCasingInFileNames": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"]
   },
-  "include": ["src"]
+  "include": ["src", "tests", "vitest.config.ts"]
 }
