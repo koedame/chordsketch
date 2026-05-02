@@ -77,7 +77,7 @@ Each sister-site group carries a numeric coverage floor enforced by
 | Group | Group floor | Max intra-group skew |
 |---|---|---|
 | Renderers (`render-text`, `render-html`, `render-pdf`) | 80% | 5 pp |
-| Bindings (`chordsketch-ffi`, `chordsketch-napi`, `chordsketch-wasm`) | 70% | 10 pp |
+| Bindings (`chordsketch-ffi`, `chordsketch-napi`, `chordsketch-wasm`) | 65% (target 70% — see #2352) | 10 pp aspirational; structurally ~21 pp until #2352 |
 | `chordsketch-chordpro` (standalone) | 85% | — |
 | Patch (new lines in any PR) | 70% | — |
 
@@ -90,10 +90,24 @@ siblings. Severity defaults to Medium, raised to High if the drop is
 in a security-relevant function.
 
 Binding floors are intentionally lower because the lines `llvm-cov` sees
-are mostly marshalling glue; the public API surface is exercised via
-language-runtime integration tests (jest, wasm_bindgen_test, Python
-smoke) that llvm-cov does not observe. Raising the floors requires
-closing that observability gap first.
+are mostly marshalling glue plus the napi-derive / wasm-bindgen ABI
+thunks, which are attributed to the `#[napi]` / `#[wasm_bindgen]`
+source line but unreachable from `cargo llvm-cov` (the test binary
+does not link the Node-API / `serde_wasm_bindgen` runtime they call
+into). The public API surface is exercised via language-runtime
+integration tests (jest, wasm_bindgen_test, Python smoke) that
+llvm-cov does not observe. ffi is the lone exception in this group —
+UniFFI emits its own typed error path (`Result<_, ChordSketchError>`)
+rather than a proc-macro ABI thunk, so it lands at ~88% while
+napi/wasm sit at ~67-73%, producing a structural ~21 pp skew that no
+in-process refactor can close. Raising the floor back to 70% and the
+skew back to 10 pp is gated on #2352 (instrumenting jest /
+wasm-bindgen-test / Python smoke under a coverage-instrumented
+runtime). Until #2352 ships, the table above documents both the
+enforced floor (65%) and the aspirational target (70%); the
+aspirational skew is similarly waived. See `codecov.yml` §Bindings
+note for the single source of truth tying the gate values to this
+rationale.
 
 ## Why
 

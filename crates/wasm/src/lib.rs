@@ -54,11 +54,25 @@ struct RenderOptions {
 
 /// Resolve a [`chordsketch_chordpro::config::Config`] from the options.
 ///
-/// # Errors
+/// Pure-Rust core: returns a plain `String` error so unit tests can
+/// drive every config-parse branch without constructing a `JsValue`
+/// (which on native test targets panics on any wasm-bindgen-imported
+/// method call). The wasm-bindgen call sites convert via
+/// [`resolve_config`].
 ///
-/// Returns an error string if the config value is not a known preset
-/// and cannot be parsed as RRJSON.
-fn resolve_config(opts: &RenderOptions) -> Result<chordsketch_chordpro::config::Config, JsValue> {
+/// Sister-site note: the napi binding's equivalent helper takes
+/// `Option<&str>` because its caller (`resolve_options_inner`) also
+/// dispatches `try_parse_transpose` against the same options struct.
+/// Wasm's `RenderOptions.transpose` is already an `i8` (validated by
+/// `serde_wasm_bindgen` at deserialise time), so this helper only
+/// owns the config-parse branch and takes `&RenderOptions` directly
+/// to match the call sites that already hold a borrowed options
+/// reference. The semantic contract — return `String` error for the
+/// "not a preset and not valid RRJSON" case — is identical across
+/// both bindings.
+fn resolve_config_inner(
+    opts: &RenderOptions,
+) -> std::result::Result<chordsketch_chordpro::config::Config, String> {
     match &opts.config {
         Some(name) => {
             // Try as a preset first, then as inline RRJSON.
@@ -66,14 +80,19 @@ fn resolve_config(opts: &RenderOptions) -> Result<chordsketch_chordpro::config::
                 Ok(preset)
             } else {
                 chordsketch_chordpro::config::Config::parse(name).map_err(|e| {
-                    JsValue::from_str(&format!(
-                        "invalid config (not a known preset and not valid RRJSON): {e}"
-                    ))
+                    format!("invalid config (not a known preset and not valid RRJSON): {e}")
                 })
             }
         }
         None => Ok(chordsketch_chordpro::config::Config::defaults()),
     }
+}
+
+/// `JsValue`-error wrapper around [`resolve_config_inner`]. The single
+/// source of truth for the `String` → `JsValue` mapping done by every
+/// wasm-bindgen entry point.
+fn resolve_config(opts: &RenderOptions) -> Result<chordsketch_chordpro::config::Config, JsValue> {
+    resolve_config_inner(opts).map_err(|e| JsValue::from_str(&e))
 }
 
 /// Forward each warning in a [`RenderResult`] to `console.warn` and
@@ -393,6 +412,25 @@ struct StringWithWarnings {
     warnings: Vec<String>,
 }
 
+/// Pure-Rust core for the `*_with_warnings` family: parse + render +
+/// capture warnings, returning `(output, warnings)`. Unit-testable
+/// without touching the wasm-bindgen serialisation boundary.
+fn render_string_with_warnings_core(
+    input: &str,
+    opts: &RenderOptions,
+    render_fn: fn(
+        &[chordsketch_chordpro::ast::Song],
+        i8,
+        &chordsketch_chordpro::config::Config,
+    ) -> RenderResult<String>,
+) -> std::result::Result<(String, Vec<String>), String> {
+    let config = resolve_config_inner(opts)?;
+    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
+    let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
+    let result = render_fn(&songs, opts.transpose, &config);
+    Ok((result.output, result.warnings))
+}
+
 /// String-returning render that captures warnings instead of
 /// forwarding them to `console.warn`.
 ///
@@ -400,7 +438,11 @@ struct StringWithWarnings {
 /// no-options `render_*_with_warnings` family (which passes
 /// `RenderOptions::default()`) and the `render_*_with_warnings_and_options`
 /// family introduced in #1895. Config resolution is shared with
-/// `render_string_inner` via [`resolve_config`].
+/// `render_string_inner` via [`resolve_config`]. Wasm-bindgen wrapper
+/// over [`render_string_with_warnings_core`] — the wrapper exists
+/// solely to pack `(output, warnings)` into a `JsValue` via
+/// `serde_wasm_bindgen::to_value`, which can only be called on a
+/// wasm32 target / under `wasm-pack test --node`.
 fn render_string_with_warnings_inner(
     input: &str,
     opts: RenderOptions,
@@ -410,15 +452,28 @@ fn render_string_with_warnings_inner(
         &chordsketch_chordpro::config::Config,
     ) -> RenderResult<String>,
 ) -> Result<JsValue, JsValue> {
-    let config = resolve_config(&opts)?;
+    let (output, warnings) = render_string_with_warnings_core(input, &opts, render_fn)
+        .map_err(|e| JsValue::from_str(&e))?;
+    let payload = StringWithWarnings { output, warnings };
+    serde_wasm_bindgen::to_value(&payload).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Pure-Rust core for the bytes-returning `*_with_warnings` family.
+/// See [`render_string_with_warnings_core`] for the rationale.
+fn render_bytes_with_warnings_core(
+    input: &str,
+    opts: &RenderOptions,
+    render_fn: fn(
+        &[chordsketch_chordpro::ast::Song],
+        i8,
+        &chordsketch_chordpro::config::Config,
+    ) -> RenderResult<Vec<u8>>,
+) -> std::result::Result<(Vec<u8>, Vec<String>), String> {
+    let config = resolve_config_inner(opts)?;
     let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
     let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
     let result = render_fn(&songs, opts.transpose, &config);
-    let payload = StringWithWarnings {
-        output: result.output,
-        warnings: result.warnings,
-    };
-    serde_wasm_bindgen::to_value(&payload).map_err(|e| JsValue::from_str(&e.to_string()))
+    Ok((result.output, result.warnings))
 }
 
 /// Bytes-returning render that captures warnings and returns a JS
@@ -429,6 +484,10 @@ fn render_string_with_warnings_inner(
 /// would produce from a `Vec<u8>` field.
 ///
 /// Accepts `RenderOptions` to match [`render_string_with_warnings_inner`].
+/// The wasm32 path constructs a `js_sys::Object` with a `Uint8Array`
+/// output; on native tests we fall back to the serde serialization
+/// (which is dead-code unless a test deliberately exercises this
+/// shell — `wasm-pack test --node` covers the `Uint8Array` path).
 #[cfg(target_arch = "wasm32")]
 fn render_bytes_with_warnings_inner(
     input: &str,
@@ -439,16 +498,14 @@ fn render_bytes_with_warnings_inner(
         &chordsketch_chordpro::config::Config,
     ) -> RenderResult<Vec<u8>>,
 ) -> Result<JsValue, JsValue> {
-    let config = resolve_config(&opts)?;
-    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
-    let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
-    let result = render_fn(&songs, opts.transpose, &config);
+    let (bytes, warnings) = render_bytes_with_warnings_core(input, &opts, render_fn)
+        .map_err(|e| JsValue::from_str(&e))?;
     let obj = js_sys::Object::new();
-    let bytes = js_sys::Uint8Array::from(result.output.as_slice());
-    js_sys::Reflect::set(&obj, &JsValue::from_str("output"), &bytes.into())?;
-    let warnings = serde_wasm_bindgen::to_value(&result.warnings)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
-    js_sys::Reflect::set(&obj, &JsValue::from_str("warnings"), &warnings)?;
+    let arr = js_sys::Uint8Array::from(bytes.as_slice());
+    js_sys::Reflect::set(&obj, &JsValue::from_str("output"), &arr.into())?;
+    let warnings_js =
+        serde_wasm_bindgen::to_value(&warnings).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    js_sys::Reflect::set(&obj, &JsValue::from_str("warnings"), &warnings_js)?;
     Ok(obj.into())
 }
 
@@ -466,18 +523,16 @@ fn render_bytes_with_warnings_inner(
     // a serde serialization so the unit tests can at least round-trip
     // the *structure* of the return value (the byte payload lands as a
     // plain array, which is fine for shape-only tests).
-    let config = resolve_config(&opts)?;
-    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
-    let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
-    let result = render_fn(&songs, opts.transpose, &config);
+    let (bytes, warnings) = render_bytes_with_warnings_core(input, &opts, render_fn)
+        .map_err(|e| JsValue::from_str(&e))?;
     #[derive(Serialize)]
     struct BytesWithWarnings {
         output: Vec<u8>,
         warnings: Vec<String>,
     }
     serde_wasm_bindgen::to_value(&BytesWithWarnings {
-        output: result.output,
-        warnings: result.warnings,
+        output: bytes,
+        warnings,
     })
     .map_err(|e| JsValue::from_str(&e.to_string()))
 }
@@ -1485,6 +1540,189 @@ mod tests {
         let result = do_render_ireal_pdf("not a url");
         assert!(result.is_err(), "expected error, got {result:?}");
     }
+
+    // ---- pure-Rust cores behind every `*_with_warnings*` wrapper -------
+
+    #[test]
+    fn test_resolve_config_inner_default() {
+        let opts = RenderOptions::default();
+        let cfg = resolve_config_inner(&opts).unwrap();
+        let expected = chordsketch_chordpro::config::Config::defaults();
+        assert_eq!(format!("{cfg:?}"), format!("{expected:?}"));
+    }
+
+    #[test]
+    fn test_resolve_config_inner_preset_resolves() {
+        let opts = RenderOptions {
+            transpose: 0,
+            config: Some("guitar".to_string()),
+        };
+        assert!(resolve_config_inner(&opts).is_ok());
+    }
+
+    #[test]
+    fn test_resolve_config_inner_inline_rrjson_parses() {
+        let opts = RenderOptions {
+            transpose: 0,
+            config: Some(r#"{ "settings": { "transpose": 2 } }"#.to_string()),
+        };
+        assert!(resolve_config_inner(&opts).is_ok());
+    }
+
+    #[test]
+    fn test_resolve_config_inner_invalid_rrjson_errors() {
+        let opts = RenderOptions {
+            transpose: 0,
+            config: Some("{ invalid rrjson !!!".to_string()),
+        };
+        let err = resolve_config_inner(&opts).unwrap_err();
+        assert!(
+            err.contains("not a known preset and not valid RRJSON"),
+            "error must point at both failure modes; got {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_render_string_with_warnings_core_emits_output_and_no_warnings_on_clean_input() {
+        // Drives the pure-Rust core that every `render_*_with_warnings*`
+        // wasm-bindgen wrapper delegates to.
+        let (output, warnings) = render_string_with_warnings_core(
+            MINIMAL_INPUT,
+            &RenderOptions::default(),
+            chordsketch_render_html::render_songs_with_warnings,
+        )
+        .unwrap();
+        assert!(output.contains("<html"), "must emit a full HTML document");
+        assert!(output.contains("Test"), "must reach the rendered title");
+        assert!(warnings.is_empty(), "minimal input should have no warnings");
+    }
+
+    #[test]
+    fn test_render_string_with_warnings_core_captures_saturation_warning() {
+        // Saturating transpose = renderer must surface a warning rather
+        // than dropping it. Pins the contract for the wasm wrapper.
+        let opts = RenderOptions {
+            transpose: 100,
+            config: None,
+        };
+        let (_output, warnings) = render_string_with_warnings_core(
+            "{title: T}\n{transpose: 100}\n[C]Hello",
+            &opts,
+            chordsketch_render_text::render_songs_with_warnings,
+        )
+        .unwrap();
+        assert!(
+            !warnings.is_empty(),
+            "out-of-musical-range transpose must surface a warning"
+        );
+    }
+
+    #[test]
+    fn test_render_string_with_warnings_core_propagates_config_error() {
+        let opts = RenderOptions {
+            transpose: 0,
+            config: Some("not a preset and not valid".to_string()),
+        };
+        let err = render_string_with_warnings_core(
+            MINIMAL_INPUT,
+            &opts,
+            chordsketch_render_text::render_songs_with_warnings,
+        )
+        .unwrap_err();
+        assert!(err.contains("not a known preset and not valid RRJSON"));
+    }
+
+    #[test]
+    fn test_render_string_with_warnings_core_text_route() {
+        let (output, _) = render_string_with_warnings_core(
+            MINIMAL_INPUT,
+            &RenderOptions::default(),
+            chordsketch_render_text::render_songs_with_warnings,
+        )
+        .unwrap();
+        // Text path emits no HTML envelope.
+        assert!(!output.contains("<html"));
+        assert!(output.contains("Test"));
+    }
+
+    #[test]
+    fn test_render_bytes_with_warnings_core_emits_pdf_signature() {
+        let (bytes, warnings) = render_bytes_with_warnings_core(
+            MINIMAL_INPUT,
+            &RenderOptions::default(),
+            chordsketch_render_pdf::render_songs_with_warnings,
+        )
+        .unwrap();
+        assert!(bytes.starts_with(b"%PDF"));
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn test_render_bytes_with_warnings_core_propagates_config_error() {
+        let opts = RenderOptions {
+            transpose: 0,
+            config: Some("{ broken }".to_string()),
+        };
+        let err = render_bytes_with_warnings_core(
+            MINIMAL_INPUT,
+            &opts,
+            chordsketch_render_pdf::render_songs_with_warnings,
+        )
+        .unwrap_err();
+        assert!(err.contains("not a known preset"));
+    }
+
+    #[test]
+    fn test_render_string_inner_threads_transpose() {
+        // Plumbing guard: a refactor that forgot to forward
+        // `opts.transpose` into the renderer would compile but silently
+        // ignore the option.
+        let zero = render_string_inner(
+            MINIMAL_INPUT,
+            RenderOptions::default(),
+            chordsketch_render_text::render_songs_with_warnings,
+        )
+        .unwrap();
+        let shifted = render_string_inner(
+            MINIMAL_INPUT,
+            RenderOptions {
+                transpose: 2,
+                config: None,
+            },
+            chordsketch_render_text::render_songs_with_warnings,
+        )
+        .unwrap();
+        assert_ne!(zero, shifted, "transpose=2 must alter rendered text");
+    }
+
+    #[test]
+    fn test_render_bytes_inner_threads_transpose() {
+        let zero = render_bytes_inner(
+            MINIMAL_INPUT,
+            RenderOptions::default(),
+            chordsketch_render_pdf::render_songs_with_warnings,
+        )
+        .unwrap();
+        let shifted = render_bytes_inner(
+            MINIMAL_INPUT,
+            RenderOptions {
+                transpose: 2,
+                config: None,
+            },
+            chordsketch_render_pdf::render_songs_with_warnings,
+        )
+        .unwrap();
+        assert_ne!(zero, shifted, "transpose=2 must alter PDF byte stream");
+        assert!(zero.starts_with(b"%PDF"));
+    }
+
+    // Note: `render_string_inner` / `render_bytes_inner` Err-path tests
+    // are intentionally absent here. Their error variant is `JsValue`,
+    // whose `Drop` calls a wasm-bindgen-imported function that panics
+    // on non-wasm32 targets. The Err path is exercised at the
+    // pure-Rust core level by `test_resolve_config_inner_*` and
+    // `test_render_string_with_warnings_core_propagates_config_error`,
+    // and at the JS boundary by the wasm32 integration tests below.
 }
 
 /// Integration tests that exercise the actual `#[wasm_bindgen]` ->
