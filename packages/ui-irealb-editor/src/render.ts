@@ -137,9 +137,12 @@ export function render(
   });
   listen(tempoInput, 'input', () => {
     const n = Number.parseInt(tempoInput.value, 10);
-    if (!Number.isFinite(n) || n < 0) {
-      // Reject NaN / negative; `change` event will re-fire with a
-      // valid integer when the user moves focus away.
+    if (!Number.isFinite(n) || n < 0 || n > 999) {
+      // Reject NaN / out-of-range values; `change` event will
+      // re-fire with a valid integer when the user moves focus away.
+      // Upper bound 999 matches the `max` HTML attribute and prevents
+      // values the Rust serialiser rejects from silently breaking the
+      // serialize/getValue cycle (cf. transpose guard `n < -11 || n > 11`).
       return;
     }
     state.song.tempo = n === 0 ? null : n;
