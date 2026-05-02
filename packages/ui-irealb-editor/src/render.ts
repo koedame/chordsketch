@@ -1,0 +1,400 @@
+// Pure DOM renderer for `IrealbEditorState`. `render(state, onUserEdit)`
+// appends the form + read-only bar grid to a freshly-created root
+// element, wires `input` / `change` listeners on the form fields so a
+// user edit mutates `state.song` in place and calls `onUserEdit`, and
+// returns the root + a `dispose` function that releases the listeners.
+//
+// The design is intentionally diff-free: every `setValue` in the
+// editor adapter calls `dispose` then re-runs `render` rather than
+// patching individual nodes. iRealb chart edits do not happen at
+// keystroke speed (the user is changing metadata fields one click at
+// a time), so the simpler "rebuild on demand" path stays well under
+// any perceptible latency floor and avoids the bookkeeping cost a
+// real diff would impose.
+
+import type {
+  Accidental,
+  Bar,
+  Chord,
+  ChordQuality,
+  ChordRoot,
+  KeyMode,
+  Section,
+  SectionLabel,
+} from './ast.js';
+import { clearChildren, el, field } from './dom.js';
+import type { IrealbEditorState } from './state.js';
+
+/** Result returned by {@link render}. `dispose` removes every event
+ * listener registered during this render pass; call before
+ * re-rendering or before tearing the editor down. */
+export interface RenderHandle {
+  /** Disconnect every listener registered by this render pass. */
+  dispose(): void;
+}
+
+/** Build the form + read-only bar grid into `root` from `state`.
+ * `onUserEdit` is called after every successful user-initiated
+ * mutation; the editor adapter wraps that in a re-serialise +
+ * onChange dispatch. */
+export function render(
+  root: HTMLElement,
+  state: IrealbEditorState,
+  onUserEdit: () => void,
+): RenderHandle {
+  clearChildren(root);
+  const cleanups: Array<() => void> = [];
+
+  /** Subscribe to an event and remember how to unsubscribe. */
+  const listen = <K extends keyof HTMLElementEventMap>(
+    target: HTMLElement,
+    type: K,
+    handler: (ev: HTMLElementEventMap[K]) => void,
+  ): void => {
+    target.addEventListener(type, handler);
+    cleanups.push(() => target.removeEventListener(type, handler));
+  };
+
+  // ---- Header (metadata form) -----------------------------------------------
+  const header = el('div', { class: 'irealb-editor__header' });
+
+  const titleInput = el('input', {
+    attrs: { type: 'text', value: state.song.title },
+    class: 'irealb-editor__input',
+  });
+  listen(titleInput, 'input', () => {
+    state.song.title = titleInput.value;
+    onUserEdit();
+  });
+  header.appendChild(field('Title', titleInput));
+
+  const composerInput = el('input', {
+    attrs: { type: 'text', value: state.song.composer ?? '' },
+    class: 'irealb-editor__input',
+  });
+  listen(composerInput, 'input', () => {
+    const v = composerInput.value;
+    state.song.composer = v === '' ? null : v;
+    onUserEdit();
+  });
+  header.appendChild(field('Composer', composerInput));
+
+  const styleInput = el('input', {
+    attrs: { type: 'text', value: state.song.style ?? '' },
+    class: 'irealb-editor__input',
+  });
+  listen(styleInput, 'input', () => {
+    const v = styleInput.value;
+    state.song.style = v === '' ? null : v;
+    onUserEdit();
+  });
+  header.appendChild(field('Style', styleInput));
+
+  // Key root: combined "letter + accidental" dropdown (12 enharmonic
+  // names). Splitting note and accidental into two selects exposed a
+  // double-update race in early prototypes (a user picking "A♭" via
+  // letter→A then accidental→flat would briefly serialise as A
+  // natural). One select makes the change atomic.
+  const keyRootSelect = makeKeyRootSelect(state.song.key_signature.root);
+  listen(keyRootSelect, 'change', () => {
+    state.song.key_signature.root = decodeKeyRootValue(keyRootSelect.value);
+    onUserEdit();
+  });
+  header.appendChild(field('Key root', keyRootSelect));
+
+  const keyModeSelect = makeKeyModeSelect(state.song.key_signature.mode);
+  listen(keyModeSelect, 'change', () => {
+    state.song.key_signature.mode = keyModeSelect.value as KeyMode;
+    onUserEdit();
+  });
+  header.appendChild(field('Key mode', keyModeSelect));
+
+  const timeNumSelect = makeTimeNumeratorSelect(state.song.time_signature.numerator);
+  listen(timeNumSelect, 'change', () => {
+    state.song.time_signature.numerator = Number.parseInt(timeNumSelect.value, 10);
+    onUserEdit();
+  });
+  header.appendChild(field('Time numerator', timeNumSelect));
+
+  const timeDenSelect = makeTimeDenominatorSelect(state.song.time_signature.denominator);
+  listen(timeDenSelect, 'change', () => {
+    state.song.time_signature.denominator = Number.parseInt(timeDenSelect.value, 10);
+    onUserEdit();
+  });
+  header.appendChild(field('Time denominator', timeDenSelect));
+
+  const tempoInput = el('input', {
+    attrs: {
+      type: 'number',
+      min: 0,
+      max: 999,
+      step: 1,
+      // 0 represents "unset" in the form — serialised as `null` in
+      // the AST so a chart with no tempo round-trips byte-equal.
+      value: state.song.tempo ?? 0,
+    },
+    class: 'irealb-editor__input',
+  });
+  listen(tempoInput, 'input', () => {
+    const n = Number.parseInt(tempoInput.value, 10);
+    if (!Number.isFinite(n) || n < 0) {
+      // Reject NaN / negative; `change` event will re-fire with a
+      // valid integer when the user moves focus away.
+      return;
+    }
+    state.song.tempo = n === 0 ? null : n;
+    onUserEdit();
+  });
+  header.appendChild(field('Tempo (0 = unset)', tempoInput));
+
+  const transposeInput = el('input', {
+    attrs: {
+      type: 'number',
+      min: -11,
+      max: 11,
+      step: 1,
+      value: state.song.transpose,
+    },
+    class: 'irealb-editor__input',
+  });
+  listen(transposeInput, 'input', () => {
+    const n = Number.parseInt(transposeInput.value, 10);
+    if (!Number.isFinite(n) || n < -11 || n > 11) {
+      // Out-of-range values are dropped; the iReal AST clamps to
+      // `[-11, 11]` and a serialiser-side error would surface as a
+      // missed onChange anyway.
+      return;
+    }
+    state.song.transpose = n;
+    onUserEdit();
+  });
+  header.appendChild(field('Transpose', transposeInput));
+
+  root.appendChild(header);
+
+  // ---- Bar grid (read-only) -------------------------------------------------
+  const grid = el('div', { class: 'irealb-editor__grid' });
+  for (const section of state.song.sections) {
+    grid.appendChild(renderSection(section));
+  }
+  root.appendChild(grid);
+
+  return {
+    dispose() {
+      for (const cleanup of cleanups) cleanup();
+      cleanups.length = 0;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Section / bar rendering
+// ---------------------------------------------------------------------------
+
+function renderSection(section: Section): HTMLElement {
+  const wrapper = el('div', { class: 'irealb-editor__section' });
+  const heading = el('h3', {
+    class: 'irealb-editor__section-label',
+    text: formatSectionLabel(section.label),
+  });
+  wrapper.appendChild(heading);
+
+  // 4-bars-per-line CSS grid. The grid template lives in style.css; we
+  // just emit a flat list of `<div>` cells. CSS handles the wrap.
+  const row = el('div', { class: 'irealb-editor__bars' });
+  for (const bar of section.bars) {
+    row.appendChild(renderBar(bar));
+  }
+  wrapper.appendChild(row);
+  return wrapper;
+}
+
+function renderBar(bar: Bar): HTMLElement {
+  const text = bar.chords.map((c) => formatChord(c.chord)).join(' ');
+  // The bar cell is structural — read-only is enforced by the cell
+  // not being an input at all (no `<input disabled>` round-trip,
+  // tabindex stays default, ARIA stays implicit). #2364 turns the
+  // cell into a popover trigger; #2368 layers ARIA grid semantics.
+  return el('div', {
+    class: 'irealb-editor__bar',
+    text: text || ' ', // U+00A0 keeps empty cells height-stable.
+  });
+}
+
+function formatSectionLabel(label: SectionLabel): string {
+  switch (label.kind) {
+    case 'letter':
+      return label.value;
+    case 'verse':
+      return 'Verse';
+    case 'chorus':
+      return 'Chorus';
+    case 'intro':
+      return 'Intro';
+    case 'outro':
+      return 'Outro';
+    case 'bridge':
+      return 'Bridge';
+    case 'custom':
+      return label.value;
+  }
+}
+
+function formatChord(chord: Chord): string {
+  const root = formatChordRoot(chord.root);
+  const quality = formatChordQuality(chord.quality);
+  const bass = chord.bass !== null ? `/${formatChordRoot(chord.bass)}` : '';
+  return `${root}${quality}${bass}`;
+}
+
+function formatChordRoot(root: ChordRoot): string {
+  return `${root.note}${formatAccidental(root.accidental)}`;
+}
+
+function formatAccidental(a: Accidental): string {
+  switch (a) {
+    case 'natural':
+      return '';
+    case 'sharp':
+      return '♯'; // ♯
+    case 'flat':
+      return '♭'; // ♭
+  }
+}
+
+function formatChordQuality(q: ChordQuality): string {
+  switch (q.kind) {
+    case 'major':
+      return '';
+    case 'minor':
+      return 'm';
+    case 'diminished':
+      return 'dim';
+    case 'augmented':
+      return 'aug';
+    case 'major7':
+      return 'maj7';
+    case 'minor7':
+      return 'm7';
+    case 'dominant7':
+      return '7';
+    case 'half_diminished':
+      return 'm7♭5'; // m7♭5 — the iReal Pro convention.
+    case 'diminished7':
+      return 'dim7';
+    case 'suspended2':
+      return 'sus2';
+    case 'suspended4':
+      return 'sus4';
+    case 'custom':
+      return q.value;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Form helpers — key / time / mode dropdowns
+// ---------------------------------------------------------------------------
+
+/** Encoded form value for a (note, accidental) pair: `"C-natural"`,
+ * `"C-sharp"`, `"D-flat"`, etc. The hyphen is unambiguous (note
+ * letters are A..G, accidentals are flat/natural/sharp). */
+function encodeKeyRootValue(root: ChordRoot): string {
+  return `${root.note}-${root.accidental}`;
+}
+
+function decodeKeyRootValue(v: string): ChordRoot {
+  const [note, accidental] = v.split('-');
+  if (
+    !note ||
+    note.length !== 1 ||
+    note < 'A' ||
+    note > 'G' ||
+    (accidental !== 'natural' && accidental !== 'sharp' && accidental !== 'flat')
+  ) {
+    // Defensive fallback: only the dropdown can put values into this
+    // path, but a future refactor that introduces a free-text root
+    // input would need this guard.
+    return { note: 'C', accidental: 'natural' };
+  }
+  return { note, accidental };
+}
+
+const KEY_ROOT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = (() => {
+  const out: Array<{ value: string; label: string }> = [];
+  for (const note of ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const) {
+    for (const accidental of ['natural', 'sharp', 'flat'] as const) {
+      const value = `${note}-${accidental}`;
+      const sym = accidental === 'sharp' ? '♯' : accidental === 'flat' ? '♭' : '';
+      out.push({ value, label: `${note}${sym}` });
+    }
+  }
+  return out;
+})();
+
+function makeKeyRootSelect(current: ChordRoot): HTMLSelectElement {
+  return makeSelect(
+    KEY_ROOT_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+    encodeKeyRootValue(current),
+  );
+}
+
+function makeKeyModeSelect(current: KeyMode): HTMLSelectElement {
+  return makeSelect(
+    [
+      { value: 'major', label: 'Major' },
+      { value: 'minor', label: 'Minor' },
+    ],
+    current,
+  );
+}
+
+function makeTimeNumeratorSelect(current: number): HTMLSelectElement {
+  // Numerator range matches `chordsketch_ireal::TimeSignature::new`:
+  // `1..=12`. The Rust validator rejects 0 / >12, so the dropdown
+  // never offers them.
+  const opts = [];
+  for (let n = 1; n <= 12; n += 1) {
+    opts.push({ value: String(n), label: String(n) });
+  }
+  return makeSelect(opts, String(current));
+}
+
+function makeTimeDenominatorSelect(current: number): HTMLSelectElement {
+  // Denominator allow-list matches `chordsketch_ireal::TimeSignature::new`:
+  // `2 | 4 | 8`. `1` and `16` are rejected by the validator.
+  return makeSelect(
+    [
+      { value: '2', label: '2' },
+      { value: '4', label: '4' },
+      { value: '8', label: '8' },
+    ],
+    String(current),
+  );
+}
+
+function makeSelect(
+  options: ReadonlyArray<{ value: string; label: string }>,
+  current: string,
+): HTMLSelectElement {
+  const select = el('select', { class: 'irealb-editor__select' });
+  let matched = false;
+  for (const o of options) {
+    const opt = el('option', { attrs: { value: o.value }, text: o.label });
+    if (o.value === current) {
+      opt.selected = true;
+      matched = true;
+    }
+    select.appendChild(opt);
+  }
+  if (!matched && options.length > 0) {
+    // Selected value is not in the option list (e.g. an unusual
+    // imported value the dropdown does not enumerate). Force the
+    // first option visually so the form does not show a blank
+    // selection — the AST keeps its actual value until the user
+    // explicitly picks one. Returning here matches what `<select>`
+    // does by default in most browsers but pins the behaviour
+    // across jsdom + headless test runs.
+    select.selectedIndex = 0;
+  }
+  return select;
+}

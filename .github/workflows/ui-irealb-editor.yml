@@ -1,0 +1,55 @@
+name: "@chordsketch/ui-irealb-editor"
+
+# Typecheck and run vitest unit tests for @chordsketch/ui-irealb-editor.
+# The package is private (not published) and currently consumed only
+# by the playground / desktop runtime swap landing in #2366. The
+# wasm bridge is injected and stubbed in tests, so this workflow
+# does not need to build @chordsketch/wasm — keeping it tightly
+# scoped to the editor's own logic. Mirrors `ui-web.yml`.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/ui-irealb-editor/**'
+      - '.github/workflows/ui-irealb-editor.yml'
+  pull_request:
+    paths:
+      - 'packages/ui-irealb-editor/**'
+      - '.github/workflows/ui-irealb-editor.yml'
+
+# Cancel stale PR runs on force-push / rebase. Main / workflow_dispatch
+# runs always go to completion (gated on pull_request event).
+concurrency:
+  group: ui-irealb-editor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+    working-directory: packages/ui-irealb-editor
+
+jobs:
+  typecheck-and-test:
+    name: Typecheck and test @chordsketch/ui-irealb-editor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: packages/ui-irealb-editor/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Run vitest tests
+        run: npm test
