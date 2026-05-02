@@ -24,6 +24,25 @@ Both prefixes carry the same body grammar. iReal generates
 `irealbook://` when the export holds a named playlist; `irealb://`
 appears for single charts.
 
+### File extension convention
+
+The upstream iReal Pro app does not register a file extension —
+URLs are typically pasted into clipboard / email / chat without a
+backing file. ChordSketch establishes the following project-local
+convention so the URL can be saved to disk and round-tripped:
+
+| Extension | Body | URL prefix |
+|---|---|---|
+| `.irealb` | Single song — one `irealb://...` URL on a single line | `irealb://` |
+| `.irealbook` | Multi-song collection — one `irealbook://...` URL on a single line | `irealbook://` |
+
+`parse_collection` accepts both prefixes; the extension distinction
+is for dialog filters, OS associations, and editor-mode hints only.
+Sister sites that consume this convention: the CLI sniff
+(`crates/cli/src/main.rs`), the Tauri desktop file associations
+(`apps/desktop/src-tauri/tauri.conf.json`), and the VS Code /
+JetBrains / Zed editor integrations.
+
 ## Top-level body structure
 
 After percent-decoding the URL body, songs are separated by `===`:

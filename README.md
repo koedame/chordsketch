@@ -27,7 +27,11 @@ into a structured AST and rendering to plain text, HTML, and PDF.
 - Image directive
 - Multi-page PDF with page control
 - iReal Pro support: parse `irealb://` URLs, render charts to SVG / PNG /
-  PDF, and convert bidirectionally between ChordPro and iReal Pro
+  PDF, and convert bidirectionally between ChordPro and iReal Pro.
+  ChordSketch establishes `.irealb` (single song) and `.irealbook`
+  (multi-song collection) as project-local file extensions; both are
+  picked up by the CLI sniff, the desktop OS file associations, and
+  the editor integrations (VS Code, JetBrains, Zed).
 
 ## Try it Online
 
