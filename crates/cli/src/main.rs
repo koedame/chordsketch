@@ -165,10 +165,11 @@ struct Cli {
     warnings_json: bool,
 
     /// Input format. `auto` (the default) sniffs each argument:
-    /// strings starting with `irealb://` / `irealbook://` (or
-    /// files whose first non-whitespace bytes match) are routed
-    /// through the iReal Pro renderer (#2066). Use `chordpro` or
-    /// `ireal` to force detection.
+    /// inline `irealb://` / `irealbook://` URLs, files whose path
+    /// ends in `.irealb` / `.irealbook` (case-insensitive), and
+    /// files whose first non-whitespace bytes match the same
+    /// prefix all route through the iReal Pro renderer (#2066,
+    /// #2358). Use `chordpro` or `ireal` to force detection.
     ///
     /// When the input is iReal, the output is always SVG; the
     /// `--format text|html|pdf` flag (which selects the ChordPro
@@ -261,16 +262,17 @@ enum Format {
 
 /// Input-format detection for the `render` mode.
 ///
-/// Auto-detection inspects the first non-whitespace bytes of the
-/// argument: a URL or file body that starts with `irealb://` or
-/// `irealbook://` is treated as an iReal Pro export and routed
-/// through `chordsketch-ireal` + `chordsketch-render-ireal`;
-/// anything else parses as ChordPro source.
+/// Auto-detection checks each argument in order: (1) a string that
+/// starts with `irealb://` / `irealbook://` is an inline iReal URL;
+/// (2) a file whose path ends in `.irealb` / `.irealbook`
+/// (case-insensitive) is routed through the iReal pipeline on the
+/// strength of its extension; (3) for all other files, the first KiB
+/// of content is sniffed for the same URL prefix. Anything that does
+/// not match any of these three checks is treated as ChordPro source.
 ///
 /// The flag forces detection — useful when a piece of ChordPro
 /// happens to start with an `irealb://`-shaped URL inside lyrics,
-/// or when an iReal export is stored without the `.cho` extension
-/// the auto-sniffer might otherwise miss.
+/// or when an iReal export is stored with a non-standard extension.
 #[derive(Clone, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
 enum InputFormat {
     /// Detect from the first bytes of each argument (URL prefix
@@ -529,10 +531,9 @@ fn main() -> ExitCode {
 /// through the iReal pipeline.
 ///
 /// `--from chordpro` / `--from ireal` short-circuit detection.
-/// On `auto` we sniff each argument: a string that itself starts
-/// with `irealb://` / `irealbook://` is an iReal URL passed inline,
-/// otherwise we read the file's first non-whitespace bytes and
-/// check the same prefix. A mix of iReal and ChordPro arguments
+/// On `auto` we call `sniff_is_ireal` for each argument, which
+/// checks (in order): inline URL prefix → file extension →
+/// first-KiB content sniff. A mix of iReal and ChordPro arguments
 /// returns `false` here; the per-file dispatch below errors with a
 /// clear message rather than silently choosing one path.
 fn should_route_to_ireal(input_format: &InputFormat, files: &[String]) -> bool {
@@ -543,15 +544,46 @@ fn should_route_to_ireal(input_format: &InputFormat, files: &[String]) -> bool {
     }
 }
 
+/// Returns `true` if `path`'s file extension matches the iReal
+/// convention — `.irealb` (single song) or `.irealbook` (collection),
+/// case-insensitive so a Windows-exported `FOO.IREALB` matches.
+///
+/// `Path::extension` returns only the final extension component, so
+/// `foo.irealb.txt` returns the `txt` extension and is NOT classified
+/// as iReal — the file's content sniffer is the canonical fallback for
+/// such untyped or compound-suffix names.
+fn ireal_extension(path: &str) -> bool {
+    Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            ext.eq_ignore_ascii_case("irealb") || ext.eq_ignore_ascii_case("irealbook")
+        })
+}
+
 /// Returns `true` if the argument is — or names a file whose body
 /// begins with — an `irealb://` / `irealbook://` URL.
 ///
-/// Reads at most the first KiB of the file before sniffing so an
-/// adversarial caller cannot force a multi-GiB read just to make
-/// the detection decision.
+/// Detection order:
+///
+/// 1. Inline URL — a string starting with `irealb://` /
+///    `irealbook://` is iReal regardless of how it would resolve as
+///    a file path.
+/// 2. File extension — `.irealb` / `.irealbook` (case-insensitive)
+///    is authoritative on every OS; the body is parsed by the iReal
+///    pipeline whether or not the file is currently readable, so
+///    typo-ed paths still surface a clear iReal-side error rather
+///    than being silently routed through the ChordPro parser.
+/// 3. Content sniff — for untyped files (no recognised extension),
+///    reads at most the first KiB and matches the same prefix as
+///    step 1. An adversarial caller cannot force a multi-GiB read
+///    just to make the detection decision.
 fn sniff_is_ireal(arg: &str) -> bool {
     let trimmed = arg.trim_start();
     if trimmed.starts_with("irealb://") || trimmed.starts_with("irealbook://") {
+        return true;
+    }
+    if ireal_extension(arg) {
         return true;
     }
     // Fall back to reading the file's first KiB. Errors during
