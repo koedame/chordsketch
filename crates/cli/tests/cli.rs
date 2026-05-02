@@ -1020,21 +1020,43 @@ fn ireal_nonexistent_file_with_forced_ireal_reports_error() {
 // untyped files. (#2358)
 
 #[test]
-fn ireal_dot_irealb_extension_routes_to_ireal_pipeline() {
-    // A `.irealb` file routes through the iReal pipeline on the
-    // strength of its extension alone — extension dispatch is
-    // authoritative on every OS.
-    let mut file = tempfile::Builder::new()
+fn ireal_dot_irealb_extension_authoritative_over_content() {
+    // An empty `.irealb` file MUST route through the iReal
+    // pipeline on the strength of its extension alone, surfacing
+    // the iReal parser's `MissingPrefix` error. This is the
+    // unique signal that the extension shortcut fired — without
+    // it, an empty body would fall through to the ChordPro
+    // pipeline (which renders an empty file as a successful
+    // exit-0 noop).
+    let file = tempfile::Builder::new()
         .suffix(".irealb")
         .tempfile()
         .unwrap();
-    write!(file, "{TINY_IREAL_URL}").unwrap();
     Command::cargo_bin("chordsketch")
         .unwrap()
         .arg(file.path())
         .assert()
-        .success()
-        .stdout(predicate::str::contains("<svg "));
+        .failure()
+        .stderr(predicate::str::contains("irealb://"));
+}
+
+#[test]
+fn ireal_extension_match_is_case_insensitive() {
+    // Windows-exported iReal libraries sometimes uppercase the
+    // file extension. `.IREALB` MUST be treated identically to
+    // `.irealb`. Re-uses the empty-body trick from above so the
+    // assertion proves the extension shortcut, not the content
+    // sniffer.
+    let file = tempfile::Builder::new()
+        .suffix(".IREALB")
+        .tempfile()
+        .unwrap();
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .arg(file.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("irealb://"));
 }
 
 #[test]
@@ -1088,14 +1110,16 @@ fn ireal_untyped_extension_falls_back_to_content_sniff() {
 fn from_chordpro_overrides_irealb_extension() {
     // `--from chordpro` is a force override; the iReal pipeline
     // must NOT run even when the file's extension would otherwise
-    // route there. Mirrors the existing inline-URL override test
-    // (`from_chordpro_overrides_ireal_url_detection`).
+    // route there. The ChordPro renderer is forgiving and prints
+    // the irealb URL as plain-text body (exit 0), so the assertion
+    // is "succeeded but emitted no SVG" — uniquely proving the
+    // iReal path was bypassed.
     let mut file = tempfile::Builder::new()
         .suffix(".irealb")
         .tempfile()
         .unwrap();
     write!(file, "{TINY_IREAL_URL}").unwrap();
-    let output = Command::cargo_bin("chordsketch")
+    Command::cargo_bin("chordsketch")
         .unwrap()
         .args([
             file.path().to_str().unwrap(),
@@ -1104,13 +1128,10 @@ fn from_chordpro_overrides_irealb_extension() {
             "--format",
             "text",
         ])
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        !stdout.contains("<svg "),
-        "iReal pipeline must not run when --from chordpro is forced; got stdout:\n{stdout}"
-    );
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("<svg ").not())
+        .stdout(predicate::str::contains("<?xml ").not());
 }
 
 #[test]
