@@ -44,6 +44,17 @@
           ".chopro"
         ],
         "configuration": "./dist/syntaxes/language-configuration.json"
+      },
+      {
+        "id": "irealb",
+        "aliases": [
+          "iReal Pro"
+        ],
+        "extensions": [
+          ".irealb",
+          ".irealbook"
+        ],
+        "configuration": "./irealb-language-configuration.json"
       }
     ],
     "grammars": [
