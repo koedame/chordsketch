@@ -262,16 +262,17 @@ enum Format {
 
 /// Input-format detection for the `render` mode.
 ///
-/// Auto-detection inspects the first non-whitespace bytes of the
-/// argument: a URL or file body that starts with `irealb://` or
-/// `irealbook://` is treated as an iReal Pro export and routed
-/// through `chordsketch-ireal` + `chordsketch-render-ireal`;
-/// anything else parses as ChordPro source.
+/// Auto-detection checks each argument in order: (1) a string that
+/// starts with `irealb://` / `irealbook://` is an inline iReal URL;
+/// (2) a file whose path ends in `.irealb` / `.irealbook`
+/// (case-insensitive) is routed through the iReal pipeline on the
+/// strength of its extension; (3) for all other files, the first KiB
+/// of content is sniffed for the same URL prefix. Anything that does
+/// not match any of these three checks is treated as ChordPro source.
 ///
 /// The flag forces detection — useful when a piece of ChordPro
 /// happens to start with an `irealb://`-shaped URL inside lyrics,
-/// or when an iReal export is stored without the `.cho` extension
-/// the auto-sniffer might otherwise miss.
+/// or when an iReal export is stored with a non-standard extension.
 #[derive(Clone, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
 enum InputFormat {
     /// Detect from the first bytes of each argument (URL prefix
@@ -530,10 +531,9 @@ fn main() -> ExitCode {
 /// through the iReal pipeline.
 ///
 /// `--from chordpro` / `--from ireal` short-circuit detection.
-/// On `auto` we sniff each argument: a string that itself starts
-/// with `irealb://` / `irealbook://` is an iReal URL passed inline,
-/// otherwise we read the file's first non-whitespace bytes and
-/// check the same prefix. A mix of iReal and ChordPro arguments
+/// On `auto` we call `sniff_is_ireal` for each argument, which
+/// checks (in order): inline URL prefix → file extension →
+/// first-KiB content sniff. A mix of iReal and ChordPro arguments
 /// returns `false` here; the per-file dispatch below errors with a
 /// clear message rather than silently choosing one path.
 fn should_route_to_ireal(input_format: &InputFormat, files: &[String]) -> bool {
