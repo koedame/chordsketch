@@ -56,7 +56,14 @@ export interface Renderers {
    * document (including the leading `<?xml ?>` PI). When the
    * helper is absent, ui-web falls back to the existing ChordPro
    * pipeline so a host that does not bundle the iReal renderer
-   * keeps the pre-#2362 behaviour byte-for-byte. (#2362)
+   * keeps the pre-#2362 behaviour byte-for-byte.
+   *
+   * `options.transpose` is forwarded but the upstream iReal
+   * pipeline (`chordsketch_render_ireal::render_svg`) currently
+   * ignores it — iReal charts emit a fixed-key SVG. Hosts MAY
+   * surface a "transpose ignored for iReal input" hint when the
+   * editor flips to iReal mode; the playground and desktop
+   * adapters today do not. (#2362)
    */
   renderSvg?(input: string, options?: RenderOptions): string;
 }
@@ -854,6 +861,14 @@ export async function mountChordSketchUi(
     // #2363+). When `renderSvg` is absent, the existing ChordPro
     // path is taken unchanged so hosts that do not bundle the
     // iReal renderer keep their pre-#2362 byte-equal behaviour.
+    //
+    // The SVG document — including its leading `<?xml ?>` PI — is
+    // intentionally embedded inside the HTML `<body>` produced by
+    // `HTML_FRAME_TEMPLATE`. Browsers tolerate this (the PI inside
+    // `<body>` is treated as a comment in HTML parsing mode), and
+    // the iframe `sandbox` attribute (set without `allow-scripts`)
+    // makes the parser-recovery shape security-irrelevant — any
+    // scriptable content the SVG contained would be inert anyway.
     const trimmedInput = input.trimStart();
     if (
       renderers.renderSvg !== undefined &&

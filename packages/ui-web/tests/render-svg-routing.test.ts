@@ -83,11 +83,14 @@ describe('iReal Pro SVG routing', () => {
     // Clear mount-time call history so the assertions below count
     // only the renders triggered by `setChordPro`.
     vi.clearAllMocks();
-    handle.setChordPro(
-      'irealbook://%50%6C%61%79%6C%69%73%74%3D%51%75%69%63%6B%62%6F%6F%6B',
-    );
+    const collectionUrl =
+      'irealbook://%50%6C%61%79%6C%69%73%74%3D%51%75%69%63%6B%62%6F%6F%6B';
+    handle.setChordPro(collectionUrl);
 
     expect(renderSvg).toHaveBeenCalledTimes(1);
+    // Pin the input that flowed into renderSvg so a regression that
+    // truncates or rewrites the URL en route is caught.
+    expect(renderSvg).toHaveBeenCalledWith(collectionUrl);
     expect(renderers.renderHtml).not.toHaveBeenCalled();
 
     handle.destroy();
@@ -172,9 +175,16 @@ describe('iReal Pro SVG routing', () => {
     // Clear mount-time call history so the assertions below count
     // only the renders triggered by `setChordPro`.
     vi.clearAllMocks();
-    handle.setChordPro(`   \n  ${SAMPLE_IREALB}`);
+    const padded = `   \n  ${SAMPLE_IREALB}`;
+    handle.setChordPro(padded);
 
     expect(renderSvg).toHaveBeenCalledTimes(1);
+    // The URL passed through MUST be the original (whitespace-and-all)
+    // — ui-web does NOT strip the leading whitespace before forwarding
+    // to renderSvg. Pinning this ensures a future refactor that adds
+    // a "normalize leading whitespace" pass at the routing site has
+    // to update both the input contract and this assertion together.
+    expect(renderSvg).toHaveBeenCalledWith(padded);
     expect(renderers.renderHtml).not.toHaveBeenCalled();
 
     handle.destroy();
