@@ -7,6 +7,7 @@ import init, {
   render_html_body_with_options,
   render_html_css,
   render_html_css_with_options,
+  renderIrealSvg,
 } from '@chordsketch/wasm';
 import { mountChordSketchUi, type Renderers } from '@chordsketch/ui-web';
 import '@chordsketch/ui-web/style.css';
@@ -67,6 +68,14 @@ const renderers: Renderers = {
     options ? render_text_with_options(input, options) : render_text(input),
   renderPdf: (input, options) =>
     options ? render_pdf_with_options(input, options) : render_pdf(input),
+  // The wasm `renderIrealSvg` ignores transpose / config (the iReal
+  // pipeline emits a static SVG chart); ui-web's contract still
+  // forwards `options`, so we accept and discard the second arg.
+  // The export is camelCased via `#[wasm_bindgen(js_name = renderIrealSvg)]`
+  // in `crates/wasm/src/lib.rs`; the snake_case `renderText` / `renderPdf`
+  // siblings keep their Rust names because they predate the
+  // `js_name` rename convention.
+  renderSvg: (input) => renderIrealSvg(input),
 };
 
 const root = document.getElementById('app');

@@ -10,9 +10,9 @@
 // functions; a desktop host could instead route through a native binary
 // over IPC and supply the same shape.
 
-import { SAMPLE_CHORDPRO } from './sample';
+import { SAMPLE_CHORDPRO, SAMPLE_IREALB } from './sample';
 
-export { SAMPLE_CHORDPRO };
+export { SAMPLE_CHORDPRO, SAMPLE_IREALB };
 
 export interface RenderOptions {
   transpose?: number;
@@ -41,6 +41,31 @@ export interface Renderers {
   renderHtml(input: string, options?: RenderOptions): string;
   renderText(input: string, options?: RenderOptions): string;
   renderPdf(input: string, options?: RenderOptions): Uint8Array;
+  /**
+   * Render `input` as an SVG fragment. Optional — only hosts that
+   * also expose iReal Pro support need to provide this.
+   *
+   * When present, ui-web routes editor content that starts with
+   * `irealb://` or `irealbook://` through this renderer instead of
+   * the ChordPro path: the returned SVG document is wrapped in
+   * `HTML_FRAME_TEMPLATE` and assigned to the preview iframe
+   * `srcdoc`, regardless of the current `format` selector. The
+   * `format` selector continues to govern ChordPro inputs as before.
+   *
+   * The implementation is expected to return a complete SVG
+   * document (including the leading `<?xml ?>` PI). When the
+   * helper is absent, ui-web falls back to the existing ChordPro
+   * pipeline so a host that does not bundle the iReal renderer
+   * keeps the pre-#2362 behaviour byte-for-byte.
+   *
+   * `options.transpose` is forwarded but the upstream iReal
+   * pipeline (`chordsketch_render_ireal::render_svg`) currently
+   * ignores it — iReal charts emit a fixed-key SVG. Hosts MAY
+   * surface a "transpose ignored for iReal input" hint when the
+   * editor flips to iReal mode; the playground and desktop
+   * adapters today do not. (#2362)
+   */
+  renderSvg?(input: string, options?: RenderOptions): string;
 }
 
 /**
@@ -822,10 +847,52 @@ export async function mountChordSketchUi(
       return;
     }
 
-    const format = formatSelect.value;
     const transpose = getTranspose();
     const renderOpts: RenderOptions | undefined =
       transpose !== 0 ? { transpose } : undefined;
+
+    // iReal Pro routing: when the editor body begins with an
+    // `irealb://` or `irealbook://` URL AND the host supplied a
+    // `renderSvg` implementation, render the iReal chart and route
+    // the SVG to the preview iframe regardless of the format
+    // selector. The selector is bypassed because the iReal pipeline
+    // emits SVG only — there is no text or PDF analogue at the
+    // ui-web layer in this PR (read-only preview; editing comes in
+    // #2363+). When `renderSvg` is absent, the existing ChordPro
+    // path is taken unchanged so hosts that do not bundle the
+    // iReal renderer keep their pre-#2362 byte-equal behaviour.
+    //
+    // The SVG document — including its leading `<?xml ?>` PI — is
+    // intentionally embedded inside the HTML `<body>` produced by
+    // `HTML_FRAME_TEMPLATE`. Browsers tolerate this (the PI inside
+    // `<body>` is treated as a comment in HTML parsing mode), and
+    // the iframe `sandbox` attribute (set without `allow-scripts`)
+    // makes the parser-recovery shape security-irrelevant — any
+    // scriptable content the SVG contained would be inert anyway.
+    const trimmedInput = input.trimStart();
+    if (
+      renderers.renderSvg !== undefined &&
+      (trimmedInput.startsWith('irealb://') ||
+        trimmedInput.startsWith('irealbook://'))
+    ) {
+      try {
+        showPane('html');
+        const svg = renderOpts
+          ? renderers.renderSvg(input, renderOpts)
+          : renderers.renderSvg(input);
+        // Mirror the same empty-then-set assignment used on the
+        // ChordPro html branch below — see #2321 for the structural
+        // cause of the blank-preview symptom on `srcdoc` reuse.
+        preview.srcdoc = '';
+        preview.srcdoc = HTML_FRAME_TEMPLATE(svg);
+        hideError();
+      } catch (e) {
+        showError(formatError(e));
+      }
+      return;
+    }
+
+    const format = formatSelect.value;
 
     try {
       if (format === 'html') {
