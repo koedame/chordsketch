@@ -2,7 +2,7 @@
 
 ## Versioning Policy
 
-All ten Rust crates in the workspace share the same version number and are
+All thirteen Rust crates in the workspace share the same version number and are
 bumped in lockstep. This project follows [Semantic Versioning](https://semver.org/):
 
 - **Major** (1.0.0) — breaking API changes
@@ -65,17 +65,20 @@ at post-release verification rather than before the tag is cut.
 
 1. **Update version** in every versioned manifest:
 
-   Workspace Cargo.toml files (all ten crates):
+   Workspace Cargo.toml files (all thirteen crates):
    - `crates/chordpro/Cargo.toml`
+   - `crates/ireal/Cargo.toml`
    - `crates/render-text/Cargo.toml`
    - `crates/render-html/Cargo.toml`
    - `crates/render-pdf/Cargo.toml`
+   - `crates/render-ireal/Cargo.toml`
+   - `crates/convert/Cargo.toml`
+   - `crates/convert-musicxml/Cargo.toml`
    - `crates/cli/Cargo.toml`
    - `crates/wasm/Cargo.toml`
    - `crates/ffi/Cargo.toml`
    - `crates/napi/Cargo.toml`
    - `crates/lsp/Cargo.toml`
-   - `crates/convert-musicxml/Cargo.toml`
    - Update inter-crate dependency `version = ` fields to match.
 
    Non-Rust manifests:
@@ -125,15 +128,25 @@ at post-release verification rather than before the tag is cut.
    `.github/workflows/release.yml`, which builds binaries for all targets and
    creates a GitHub Release with archives attached.
 
-6. **Publish to crates.io** in dependency order:
+6. **Publish to crates.io** in dependency order. The two zero-dep
+   foundations (`chordsketch-chordpro` and `chordsketch-ireal`) come
+   first; renderers + `chordsketch-convert-musicxml` (which all depend
+   only on those) come next; `chordsketch-render-ireal` depends on
+   `chordsketch-ireal`; `chordsketch-convert` depends on chordpro +
+   ireal + render-text; the CLI (`chordsketch`) depends on chordpro +
+   ireal + render-text/html/pdf/ireal + convert-musicxml.
+
    ```bash
    cargo publish -p chordsketch-chordpro
+   cargo publish -p chordsketch-ireal
    # Wait ~30 seconds for the crates.io index to update
    cargo publish -p chordsketch-render-text
    cargo publish -p chordsketch-render-html
    cargo publish -p chordsketch-render-pdf
+   cargo publish -p chordsketch-render-ireal
    cargo publish -p chordsketch-convert-musicxml
-   # Wait ~30 seconds for renderer/converter crates to propagate
+   # Wait ~30 seconds for renderer crates to propagate
+   cargo publish -p chordsketch-convert
    cargo publish -p chordsketch
    ```
 
