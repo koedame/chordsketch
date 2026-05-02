@@ -1,0 +1,12 @@
+name = "iReal Pro"
+path_suffixes = ["irealb", "irealbook"]
+# No `grammar` field is set: an iReal Pro file body is a single
+# percent-encoded `irealb://` URL line, not a tree-sitter grammar.
+# Registering the language id without a grammar is enough to stop
+# the chordpro grammar from being misapplied to `.irealb` files
+# (which would happen if the chordpro language claimed those
+# suffixes). Syntax highlighting via a dedicated grammar is
+# tracked under #2357. (#2360)
+line_comments = []
+block_comment = []
+brackets = []

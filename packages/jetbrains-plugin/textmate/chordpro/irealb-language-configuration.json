@@ -1,0 +1,3 @@
+{
+  "$comment": "iReal Pro file body is a single percent-encoded URL line. There are no comment markers, brackets, surroundingPairs, or autoClosingPairs in the format — only the URL string. This stub exists so the JetBrains TextMate plugin recognises `.irealb` / `.irealbook` files as their own language id rather than mis-applying the chordpro grammar (#2360). Mirrors the package-local sibling at `syntaxes/irealb-language-configuration.json` (#2359). Syntax highlighting via a dedicated TextMate grammar is intentionally deferred to a future PR per the parent tracker #2357."
+}
