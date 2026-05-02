@@ -133,8 +133,11 @@ at post-release verification rather than before the tag is cut.
    first; renderers + `chordsketch-convert-musicxml` (which all depend
    only on those) come next; `chordsketch-render-ireal` depends on
    `chordsketch-ireal`; `chordsketch-convert` depends on chordpro +
-   ireal + render-text; the CLI (`chordsketch`) depends on chordpro +
-   ireal + render-text/html/pdf/ireal + convert-musicxml.
+   ireal (`chordsketch-render-text` is a dev-dependency only and does
+   not need to precede `chordsketch-convert` for the publish to
+   succeed, though it appears earlier in the script anyway); the CLI
+   (`chordsketch`) depends on chordpro + ireal +
+   render-text/html/pdf/ireal + convert-musicxml.
 
    ```bash
    cargo publish -p chordsketch-chordpro
@@ -231,14 +234,17 @@ publishing dependents. This typically takes 10-30 seconds.
 
 Publishing order:
 1. `chordsketch-chordpro` (no internal dependencies)
-2. `chordsketch-render-text` (depends on `chordsketch-chordpro`)
-3. `chordsketch-render-html` (depends on `chordsketch-chordpro`)
-4. `chordsketch-render-pdf` (depends on `chordsketch-chordpro`)
-5. `chordsketch-convert-musicxml` (depends on `chordsketch-chordpro`)
-6. `chordsketch` (depends on all five above)
+2. `chordsketch-ireal` (no internal dependencies)
+3. `chordsketch-render-text` (depends on `chordsketch-chordpro`)
+4. `chordsketch-render-html` (depends on `chordsketch-chordpro`)
+5. `chordsketch-render-pdf` (depends on `chordsketch-chordpro`)
+6. `chordsketch-render-ireal` (depends on `chordsketch-ireal`)
+7. `chordsketch-convert-musicxml` (depends on `chordsketch-chordpro`)
+8. `chordsketch-convert` (depends on `chordsketch-chordpro` + `chordsketch-ireal`)
+9. `chordsketch` (depends on all above)
 
-Steps 2-5 can be published in any order among themselves, but all must complete
-before step 6.
+Steps 3-7 can be published in any order among themselves, but all must complete
+before steps 8-9. Step 8 must complete before step 9.
 
 ## Distribution Channels
 
@@ -253,7 +259,7 @@ When adding a new channel, update both.
 
 | Channel | Identifier | Trigger | Required secret(s) | Verified by |
 |---|---|---|---|---|
-| crates.io | `chordsketch` (CLI) + 5 lib crates | manual `cargo publish` (Step 6) | maintainer's `~/.cargo/credentials` | `cargo-install` job |
+| crates.io | `chordsketch` (CLI) + 8 lib crates | manual `cargo publish` (Step 6) | maintainer's `~/.cargo/credentials` | `cargo-install` job |
 | GitHub Releases | binary archives | `release.yml` on tag push | `GITHUB_TOKEN` | `source-build` job |
 | GHCR | `ghcr.io/koedame/chordsketch` | `docker.yml` on `release: published` | `GITHUB_TOKEN` (push), org policy must allow public packages | `docker-ghcr` job |
 | Docker Hub | `docker.io/koedame/chordsketch` | `docker.yml` on `release: published` | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | `docker-hub` job |
