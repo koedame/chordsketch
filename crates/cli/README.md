@@ -67,6 +67,8 @@ chordsketch convert --to musicxml song.cho -o song.xml
 
 # Render an iReal Pro export — pass the URL directly or a file containing it
 chordsketch 'irealb://%54=…'
+chordsketch song.irealb            # `.irealb` (single song) routes through the iReal pipeline
+chordsketch songs.irealbook        # `.irealbook` (multi-song collection) renders one chart per song
 chordsketch chart.txt              # auto-detected if the body starts with irealb://
 chordsketch chart.txt --from ireal # force the iReal pipeline
 ```
@@ -85,7 +87,7 @@ chordsketch chart.txt --from ireal # force the iReal pipeline
 | Flag | Value | Description |
 |---|---|---|
 | `-f`, `--format` | `text` \| `html` \| `pdf` | Output format for the default render command. Defaults to `text`. (Ignored when the input is an iReal Pro `irealb://` URL — the iReal pipeline always emits SVG.) |
-| `--from` | `auto` \| `chordpro` \| `ireal` | Input format. `auto` (the default) sniffs each argument: strings starting with `irealb://` / `irealbook://` (or files whose first non-whitespace bytes match) route through the iReal renderer. `chordpro` and `ireal` force detection. |
+| `--from` | `auto` \| `chordpro` \| `ireal` | Input format. `auto` (the default) sniffs each argument: inline `irealb://` / `irealbook://` URLs, files whose path ends in `.irealb` / `.irealbook` (case-insensitive), or files whose first non-whitespace bytes match the same prefix all route through the iReal renderer. `chordpro` and `ireal` force detection. |
 | `-o`, `--output` | *path* | Write output to a file instead of stdout. For `-f pdf` this writes the binary PDF stream. |
 | `-t`, `--transpose` | *i8* | Transpose every chord by N semitones. Combines additively with any `{transpose: N}` directive in the file. |
 | `-c`, `--config` | *path* or *preset* | Load a custom config file or the named built-in preset (`default`, `ukulele`, `piano`, `guitar`, …). May be repeated — later values override earlier ones. Paths are trusted; do not pass attacker-supplied values. |

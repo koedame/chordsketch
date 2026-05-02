@@ -1013,6 +1013,106 @@ fn ireal_nonexistent_file_with_forced_ireal_reports_error() {
         .stderr(predicate::str::contains("error"));
 }
 
+// `.irealb` (single song) and `.irealbook` (collection) are
+// authoritative file extensions — the iReal pipeline runs based
+// on the extension regardless of whether the file is currently
+// readable, with the existing content sniffer kept as fallback for
+// untyped files. (#2358)
+
+#[test]
+fn ireal_dot_irealb_extension_routes_to_ireal_pipeline() {
+    // A `.irealb` file routes through the iReal pipeline on the
+    // strength of its extension alone — extension dispatch is
+    // authoritative on every OS.
+    let mut file = tempfile::Builder::new()
+        .suffix(".irealb")
+        .tempfile()
+        .unwrap();
+    write!(file, "{TINY_IREAL_URL}").unwrap();
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .arg(file.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("<svg "));
+}
+
+#[test]
+fn ireal_dot_irealbook_extension_routes_collection() {
+    // A `.irealbook` file holding a multi-song collection URL
+    // produces one SVG chart per song. Re-uses the
+    // `chordsketch-ireal` parser fixture so the assertion stays
+    // honest if the fixture grows or shrinks (the count below
+    // tracks the fixture name, not a hardcoded literal).
+    let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../ireal/tests/fixtures/parser/three_songs/url.txt");
+    let collection_url = std::fs::read_to_string(&fixture_path)
+        .unwrap_or_else(|e| panic!("read {}: {}", fixture_path.display(), e))
+        .trim()
+        .to_owned();
+    let mut file = tempfile::Builder::new()
+        .suffix(".irealbook")
+        .tempfile()
+        .unwrap();
+    write!(file, "{collection_url}").unwrap();
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .arg(file.path())
+        .assert()
+        .success()
+        .stdout(predicate::function(|out: &str| {
+            // The fixture name asserts three songs; the renderer
+            // emits one `<svg ` element per song.
+            out.matches("<svg ").count() == 3
+        }));
+}
+
+#[test]
+fn ireal_untyped_extension_falls_back_to_content_sniff() {
+    // Regression guard: a file whose extension is neither
+    // `.irealb` nor `.irealbook` must still be routed via the
+    // first-KiB content sniffer when the body starts with
+    // `irealb://`. The extension-aware shortcut MUST NOT break
+    // content-only detection for untyped files.
+    let mut file = tempfile::Builder::new().suffix(".txt").tempfile().unwrap();
+    write!(file, "{TINY_IREAL_URL}").unwrap();
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .arg(file.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("<svg "));
+}
+
+#[test]
+fn from_chordpro_overrides_irealb_extension() {
+    // `--from chordpro` is a force override; the iReal pipeline
+    // must NOT run even when the file's extension would otherwise
+    // route there. Mirrors the existing inline-URL override test
+    // (`from_chordpro_overrides_ireal_url_detection`).
+    let mut file = tempfile::Builder::new()
+        .suffix(".irealb")
+        .tempfile()
+        .unwrap();
+    write!(file, "{TINY_IREAL_URL}").unwrap();
+    let output = Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args([
+            file.path().to_str().unwrap(),
+            "--from",
+            "chordpro",
+            "--format",
+            "text",
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("<svg "),
+        "iReal pipeline must not run when --from chordpro is forced; got stdout:\n{stdout}"
+    );
+}
+
 #[test]
 fn ireal_multi_arg_produces_single_xml_declaration() {
     // Two separate single-song iReal URLs as arguments must produce

@@ -165,10 +165,11 @@ struct Cli {
     warnings_json: bool,
 
     /// Input format. `auto` (the default) sniffs each argument:
-    /// strings starting with `irealb://` / `irealbook://` (or
-    /// files whose first non-whitespace bytes match) are routed
-    /// through the iReal Pro renderer (#2066). Use `chordpro` or
-    /// `ireal` to force detection.
+    /// inline `irealb://` / `irealbook://` URLs, files whose path
+    /// ends in `.irealb` / `.irealbook` (case-insensitive), and
+    /// files whose first non-whitespace bytes match the same
+    /// prefix all route through the iReal Pro renderer (#2066,
+    /// #2358). Use `chordpro` or `ireal` to force detection.
     ///
     /// When the input is iReal, the output is always SVG; the
     /// `--format text|html|pdf` flag (which selects the ChordPro
@@ -543,15 +544,46 @@ fn should_route_to_ireal(input_format: &InputFormat, files: &[String]) -> bool {
     }
 }
 
+/// Returns `true` if `path`'s file extension matches the iReal
+/// convention — `.irealb` (single song) or `.irealbook` (collection),
+/// case-insensitive so a Windows-exported `FOO.IREALB` matches.
+///
+/// `Path::extension` returns only the final extension component, so
+/// `foo.irealb.txt` returns the `txt` extension and is NOT classified
+/// as iReal — the file's content sniffer is the canonical fallback for
+/// such untyped or compound-suffix names.
+fn ireal_extension(path: &str) -> bool {
+    Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            ext.eq_ignore_ascii_case("irealb") || ext.eq_ignore_ascii_case("irealbook")
+        })
+}
+
 /// Returns `true` if the argument is — or names a file whose body
 /// begins with — an `irealb://` / `irealbook://` URL.
 ///
-/// Reads at most the first KiB of the file before sniffing so an
-/// adversarial caller cannot force a multi-GiB read just to make
-/// the detection decision.
+/// Detection order:
+///
+/// 1. Inline URL — a string starting with `irealb://` /
+///    `irealbook://` is iReal regardless of how it would resolve as
+///    a file path.
+/// 2. File extension — `.irealb` / `.irealbook` (case-insensitive)
+///    is authoritative on every OS; the body is parsed by the iReal
+///    pipeline whether or not the file is currently readable, so
+///    typo-ed paths still surface a clear iReal-side error rather
+///    than being silently routed through the ChordPro parser.
+/// 3. Content sniff — for untyped files (no recognised extension),
+///    reads at most the first KiB and matches the same prefix as
+///    step 1. An adversarial caller cannot force a multi-GiB read
+///    just to make the detection decision.
 fn sniff_is_ireal(arg: &str) -> bool {
     let trimmed = arg.trim_start();
     if trimmed.starts_with("irealb://") || trimmed.starts_with("irealbook://") {
+        return true;
+    }
+    if ireal_extension(arg) {
         return true;
     }
     // Fall back to reading the file's first KiB. Errors during
