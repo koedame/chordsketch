@@ -7,6 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### iReal Pro support (multi-format track, #2050)
+
+- New crate `chordsketch-ireal` — iReal Pro AST + zero-dependency JSON
+  debug serializer / parser foundation. (#2055)
+- New crate `chordsketch-render-ireal` — iReal Pro chart SVG renderer
+  with a 4-bars-per-line grid layout engine, superscript chord-name
+  typography, repeat / final / double barlines, N-th-ending brackets,
+  section-letter labels, and music-symbol glyphs. Segno / coda glyphs
+  use real Bravura SMuFL outlines baked into `bravura.rs` as static SVG
+  `<path>` data; `D.C.` / `D.S.` / `Fine` remain italic text because
+  iReal Pro models them as text directives. (#2058, #2060, #2057, #2059,
+  #2062, #2348 / ADR-0014)
+- `chordsketch-render-ireal`: PNG rasterisation via `resvg` (#2064) and
+  PDF conversion via `svg2pdf` (#2063).
+- `chordsketch-ireal`: parse `irealb://` URLs into iReal AST (#2054)
+  and serialize `IrealSong` back to `irealb://` (#2052).
+- New crate `chordsketch-convert` — bidirectional ChordPro ↔ iReal Pro
+  conversion. (#2051, #2053, #2061)
+- CLI auto-detects ChordPro vs `irealb://` input. (#2335)
+
+#### Bindings (multi-format track, #2067)
+
+- All bindings (WASM / NAPI / FFI, with FFI flowing to Python / Kotlin /
+  Swift / Ruby) expose the iReal Pro surface in four phases: conversion
+  APIs (Phase 1, #2339), `render_ireal_svg` (Phase 2a, #2340), AST parse
+  / serialize (Phase 2b, #2341), and `render_ireal_png` /
+  `render_ireal_pdf` (Phase 2c, #2342).
+
+#### ChordPro parser
+
+- `settings.strict` mode + missing-`{key}` warning for songs without
+  an explicit key directive. (#2293)
+- `keys.force-common` / `keys.flats` config + canonicalizer to drive
+  enharmonic spelling. (#2301)
+- Transposable `{chord: [X]}` / `{define: [X]}` directives — the chord
+  inside the directive value now follows the song's transpose. (#2303)
+- Charango instrument voicings added to the built-in chord-diagram
+  database. (#2299)
+
+#### Renderers
+
+- `chordsketch-render-html`: body-only HTML export + new
+  `render_html_css()` to surface the embedded stylesheet separately.
+  (#2284)
+- `chordsketch-render-html`: new `settings.wraplines` option for
+  long-line wrapping behavior. (#2297)
+
+#### Desktop app
+
+- Native menu filled out (About / Preferences / Window / Help). (#2283)
+- File I/O keyboard shortcuts: `Cmd/Ctrl+O` / `Cmd/Ctrl+S` /
+  `Cmd/Ctrl+Shift+S`. (#2307)
+- Focus-toggle keyboard shortcuts: `Cmd/Ctrl+Shift+E` /
+  `Cmd/Ctrl+Shift+P`. (#2314)
+- Transpose keyboard shortcuts: `Cmd/Ctrl+Alt+ArrowUp` /
+  `Cmd/Ctrl+Alt+ArrowDown`. (#2315)
+
+#### Linux
+
+- Standalone GNOME thumbnailer for `.cho` files (part of #861). (#2290)
+
+### Changed
+
+- All `@chordsketch/*` npm publishing is now maintainer-local rather
+  than CI-driven; the corresponding `environment:` blocks were removed
+  from the publish workflows. (#2275, ADR-0008)
+- `release.yml` and `desktop-release.yml` now require
+  `RELEASE_DISPATCH_TOKEN` (a fine-grained PAT, not `GITHUB_TOKEN`) on
+  the `gh release create` step so the eight downstream `release:
+  published` workflows fire automatically. (#2277, ADR-0009)
+
+### Fixed
+
+- `chordsketch-render-pdf`: ToC no longer emits adjacent duplicate
+  entries. (#2295)
+- VS Code extension: body-only render preview eliminates lyric baseline
+  drift between editor and preview. (#2285)
+- Desktop updater: rotated pubkey to one paired with a non-empty
+  password and superseded ADR-0005 accordingly. (#2256, #2259, #2262,
+  ADR-0007)
+- Desktop release: per-arch `.app.tar.gz` naming and `desktop-v*`
+  releases are no longer marked as the repo's `latest`. (#2278)
+- `ui-web`: apply viewport flex chain to the mount root so the
+  preview pane fills available height. (#2281)
+- Playground / `ui-web`: drop double-wrapped HTML doc, ship favicon,
+  add defensive iframe reload. (#2322)
+
 ## [0.3.0] - 2026-04-25
 
 ### Added

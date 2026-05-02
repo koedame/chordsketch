@@ -26,6 +26,8 @@ into a structured AST and rendering to plain text, HTML, and PDF.
 - Font, size, and color directives
 - Image directive
 - Multi-page PDF with page control
+- iReal Pro support: parse `irealb://` URLs, render charts to SVG / PNG /
+  PDF, and convert bidirectionally between ChordPro and iReal Pro
 
 ## Try it Online
 
