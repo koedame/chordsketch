@@ -241,10 +241,11 @@ Publishing order:
 6. `chordsketch-render-ireal` (depends on `chordsketch-ireal`)
 7. `chordsketch-convert-musicxml` (depends on `chordsketch-chordpro`)
 8. `chordsketch-convert` (depends on `chordsketch-chordpro` + `chordsketch-ireal`)
-9. `chordsketch` (depends on all above)
+9. `chordsketch` (depends on 1–7; does not depend on `chordsketch-convert`)
 
-Steps 3-7 can be published in any order among themselves, but all must complete
-before steps 8-9. Step 8 must complete before step 9.
+Steps 3-7 can be published in any order among themselves. All of steps 1-7 must
+complete before step 9. Step 8 only requires steps 1-2 and is independent of
+step 9 — the bash script in Step 6 above orders them sequentially for simplicity.
 
 ## Distribution Channels
 
