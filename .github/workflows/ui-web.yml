@@ -48,7 +48,7 @@ jobs:
           cache-dependency-path: packages/ui-web/package-lock.json
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci
 
       - name: Typecheck (tsc --noEmit)
         run: npm run typecheck
