@@ -7,6 +7,7 @@ import init, {
   render_html_body_with_options,
   render_html_css,
   render_html_css_with_options,
+  render_ireal_svg,
 } from '@chordsketch/wasm';
 import { mountChordSketchUi, type Renderers } from '@chordsketch/ui-web';
 import '@chordsketch/ui-web/style.css';
@@ -67,6 +68,10 @@ const renderers: Renderers = {
     options ? render_text_with_options(input, options) : render_text(input),
   renderPdf: (input, options) =>
     options ? render_pdf_with_options(input, options) : render_pdf(input),
+  // The wasm `render_ireal_svg` ignores transpose / config (the iReal
+  // pipeline emits a static SVG chart); ui-web's contract still
+  // forwards `options`, so we accept and discard the second arg.
+  renderSvg: (input) => render_ireal_svg(input),
 };
 
 const root = document.getElementById('app');
