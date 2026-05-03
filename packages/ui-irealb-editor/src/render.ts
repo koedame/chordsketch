@@ -39,6 +39,41 @@ export type OpenBarPopover = (
   barIndex: number,
 ) => void;
 
+/** Mutators the renderer invokes for structural edits (#2365). The
+ * editor adapter implements each one as a `state.song` mutation
+ * followed by `renderNow()` + `fireUserEdit()`. Threading them as a
+ * single object keeps `render`'s signature stable while letting the
+ * adapter own the rebuild + notification cycle. */
+export interface StructuralOps {
+  /** Append a new section after the last one. The label dialog is
+   * opened by the adapter; the new section starts with one default
+   * bar so the user can immediately click to edit. */
+  addSection(): void;
+  /** Replace a section's label. */
+  renameSection(secIndex: number, label: SectionLabel): void;
+  /** Delete a section. The adapter invokes `confirmDeleteSection`
+   * internally; returning `false` from that hook cancels the
+   * operation before any AST mutation occurs. */
+  deleteSection(secIndex: number): void;
+  /** Move a section one position up (lower index). No-op at index 0. */
+  moveSectionUp(secIndex: number): void;
+  /** Move a section one position down (higher index). No-op at the
+   * last section. */
+  moveSectionDown(secIndex: number): void;
+  /** Append a fresh bar to a section. */
+  addBar(secIndex: number): void;
+  /** Delete a bar. The renderer does not require a confirm; the AST
+   * stores undo-equivalent state via the URL field that the host
+   * can re-load. */
+  deleteBar(secIndex: number, barIndex: number): void;
+  /** Move a bar one position left within its section. No-op at
+   * the first bar. */
+  moveBarLeft(secIndex: number, barIndex: number): void;
+  /** Move a bar one position right within its section. No-op at
+   * the last bar. */
+  moveBarRight(secIndex: number, barIndex: number): void;
+}
+
 /** Result returned by {@link render}. `dispose` removes every event
  * listener registered during this render pass; call before
  * re-rendering or before tearing the editor down. */
@@ -49,16 +84,18 @@ export interface RenderHandle {
 
 /** Build the form + bar grid into `root` from `state`. `onUserEdit`
  * fires after every successful user-initiated mutation;
- * `openBarPopover` fires when a user clicks a bar cell — the
- * editor adapter passes a callback that opens the bar-edit popover
- * (#2364). The adapter is responsible for the popover's mount
- * container, focus management, and the post-save re-render +
- * onUserEdit dispatch. */
+ * `openBarPopover` fires when a user clicks a bar cell (the
+ * adapter opens the bar-edit popover, #2364); `ops` exposes the
+ * structural mutations the per-section / per-bar UI buttons drive
+ * (#2365). The adapter owns the popover container, structural
+ * confirm dialogs, and the post-mutation re-render + onUserEdit
+ * dispatch. */
 export function render(
   root: HTMLElement,
   state: IrealbEditorState,
   onUserEdit: () => void,
   openBarPopover: OpenBarPopover,
+  ops: StructuralOps,
 ): RenderHandle {
   clearChildren(root);
   const cleanups: Array<() => void> = [];
@@ -200,9 +237,25 @@ export function render(
 
   // ---- Bar grid -------------------------------------------------------------
   const grid = el('div', { class: 'irealb-editor__grid' });
+  const sectionsCount = state.song.sections.length;
   state.song.sections.forEach((section, secIndex) => {
-    grid.appendChild(renderSection(section, secIndex, openBarPopover, listen));
+    grid.appendChild(
+      renderSection(section, secIndex, sectionsCount, openBarPopover, ops, listen),
+    );
   });
+
+  // "Add Section" trailer — always present so the user can append
+  // to an empty chart too. Click → the adapter opens the section-
+  // label dialog and then calls `ops.addSection`.
+  const addSectionBtn = el('button', {
+    class: 'irealb-editor__add-section',
+    attrs: { type: 'button' },
+    text: '+ Add section',
+  });
+  listen(addSectionBtn, 'click', () => {
+    ops.addSection();
+  });
+  grid.appendChild(addSectionBtn);
   root.appendChild(grid);
 
   return {
@@ -220,29 +273,97 @@ export function render(
 function renderSection(
   section: Section,
   secIndex: number,
+  sectionsCount: number,
   openBarPopover: OpenBarPopover,
+  ops: StructuralOps,
   listen: <K extends keyof HTMLElementEventMap>(
     target: HTMLElement,
     type: K,
     handler: (ev: HTMLElementEventMap[K]) => void,
   ) => void,
 ): HTMLElement {
-  const wrapper = el('div', { class: 'irealb-editor__section' });
+  const wrapper = el('div', {
+    class: 'irealb-editor__section',
+    attrs: { 'data-section-index': String(secIndex) },
+  });
+
+  // Section header: label + per-section action buttons (rename,
+  // delete, move up/down). The header sits inline with the label so
+  // the actions stay visually attached to their target section.
+  const headerRow = el('div', { class: 'irealb-editor__section-header' });
   const heading = el('h3', {
     class: 'irealb-editor__section-label',
     text: formatSectionLabel(section.label),
   });
-  wrapper.appendChild(heading);
+  headerRow.appendChild(heading);
 
-  // 4-bars-per-line CSS grid. The grid template lives in style.css;
-  // we emit a flat list of `<button>` cells (button so click +
-  // keyboard activation come for free; ARIA grid semantics arrive
-  // in #2368).
+  const renameBtn = el('button', {
+    class: 'irealb-editor__section-action',
+    attrs: { type: 'button', 'aria-label': 'Rename section' },
+    text: '✎',
+  });
+  listen(renameBtn, 'click', () => {
+    ops.renameSection(secIndex, section.label);
+  });
+  headerRow.appendChild(renameBtn);
+
+  const upBtn = el('button', {
+    class: 'irealb-editor__section-action',
+    attrs: { type: 'button', 'aria-label': 'Move section up' },
+    text: '↑',
+  });
+  if (secIndex === 0) upBtn.setAttribute('disabled', '');
+  listen(upBtn, 'click', () => {
+    ops.moveSectionUp(secIndex);
+  });
+  headerRow.appendChild(upBtn);
+
+  const downBtn = el('button', {
+    class: 'irealb-editor__section-action',
+    attrs: { type: 'button', 'aria-label': 'Move section down' },
+    text: '↓',
+  });
+  if (secIndex === sectionsCount - 1) downBtn.setAttribute('disabled', '');
+  listen(downBtn, 'click', () => {
+    ops.moveSectionDown(secIndex);
+  });
+  headerRow.appendChild(downBtn);
+
+  const deleteSectionBtn = el('button', {
+    class: 'irealb-editor__section-action irealb-editor__section-action--danger',
+    attrs: { type: 'button', 'aria-label': 'Delete section' },
+    text: '×',
+  });
+  listen(deleteSectionBtn, 'click', () => {
+    ops.deleteSection(secIndex);
+  });
+  headerRow.appendChild(deleteSectionBtn);
+
+  wrapper.appendChild(headerRow);
+
+  // 4-bars-per-line CSS grid. Emits a flat list of bar wrappers
+  // (each wrapper holds the bar `<button>` plus its delete /
+  // reorder controls). ARIA grid semantics arrive in #2368.
   const row = el('div', { class: 'irealb-editor__bars' });
+  const barsCount = section.bars.length;
   section.bars.forEach((bar, barIndex) => {
-    row.appendChild(renderBar(bar, secIndex, barIndex, openBarPopover, listen));
+    row.appendChild(
+      renderBar(bar, secIndex, barIndex, barsCount, openBarPopover, ops, listen),
+    );
   });
   wrapper.appendChild(row);
+
+  // Append-bar trailer.
+  const addBarBtn = el('button', {
+    class: 'irealb-editor__add-bar',
+    attrs: { type: 'button' },
+    text: '+ Add bar',
+  });
+  listen(addBarBtn, 'click', () => {
+    ops.addBar(secIndex);
+  });
+  wrapper.appendChild(addBarBtn);
+
   return wrapper;
 }
 
@@ -250,18 +371,26 @@ function renderBar(
   bar: Bar,
   secIndex: number,
   barIndex: number,
+  barsCount: number,
   openBarPopover: OpenBarPopover,
+  ops: StructuralOps,
   listen: <K extends keyof HTMLElementEventMap>(
     target: HTMLElement,
     type: K,
     handler: (ev: HTMLElementEventMap[K]) => void,
   ) => void,
 ): HTMLElement {
+  const wrapper = el('div', {
+    class: 'irealb-editor__bar-wrapper',
+    attrs: { 'data-bar-index': String(barIndex) },
+  });
+
   const text = bar.chords.map((c) => formatChord(c.chord)).join(' ');
   // `<button type="button">` so the cell announces as a button to
   // screen readers and so Enter / Space activation works without
   // explicit keyboard handlers. ARIA grid semantics on the wrapping
-  // grid (`role="grid"` / `gridcell`) are deferred to #2368.
+  // grid (`role="grid"` / `gridcell`) are deferred to #2368;
+  // keyboard shortcuts for delete / reorder are deferred to #2376.
   const cell = el('button', {
     class: 'irealb-editor__bar',
     attrs: {
@@ -273,7 +402,44 @@ function renderBar(
   listen(cell, 'click', () => {
     openBarPopover(bar, cell, secIndex, barIndex);
   });
-  return cell;
+  wrapper.appendChild(cell);
+
+  const actions = el('div', { class: 'irealb-editor__bar-actions' });
+
+  const leftBtn = el('button', {
+    class: 'irealb-editor__bar-action',
+    attrs: { type: 'button', 'aria-label': 'Move bar left' },
+    text: '←',
+  });
+  if (barIndex === 0) leftBtn.setAttribute('disabled', '');
+  listen(leftBtn, 'click', () => {
+    ops.moveBarLeft(secIndex, barIndex);
+  });
+  actions.appendChild(leftBtn);
+
+  const rightBtn = el('button', {
+    class: 'irealb-editor__bar-action',
+    attrs: { type: 'button', 'aria-label': 'Move bar right' },
+    text: '→',
+  });
+  if (barIndex === barsCount - 1) rightBtn.setAttribute('disabled', '');
+  listen(rightBtn, 'click', () => {
+    ops.moveBarRight(secIndex, barIndex);
+  });
+  actions.appendChild(rightBtn);
+
+  const deleteBtn = el('button', {
+    class: 'irealb-editor__bar-action irealb-editor__bar-action--danger',
+    attrs: { type: 'button', 'aria-label': 'Delete bar' },
+    text: '×',
+  });
+  listen(deleteBtn, 'click', () => {
+    ops.deleteBar(secIndex, barIndex);
+  });
+  actions.appendChild(deleteBtn);
+
+  wrapper.appendChild(actions);
+  return wrapper;
 }
 
 function formatSectionLabel(label: SectionLabel): string {
