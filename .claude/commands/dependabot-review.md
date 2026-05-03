@@ -46,8 +46,8 @@ Sort the working list by `createdAt` ascending (oldest first). This keeps
 processing order stable across invocations and lets Dependabot's
 auto-rebase finish on the older PRs before the newer ones come up.
 
-Use `TaskCreate` to record one task per PR. Set the first task to
-`in_progress` and the rest to `pending` — this is the maintainer's
+Use `TodoWrite` to record one task per PR. Set the first task to
+`in_progress` and the rest to `todo` — this is the maintainer's
 visibility into how far the loop has progressed if the session is
 interrupted.
 
@@ -85,10 +85,16 @@ needs. Use the following template, substituting `<PR>`, `<DEP>`,
 > 2. **Diff inspection.** Run `gh pr diff <PR>` and confirm the diff
 >    only touches `Cargo.toml` / `Cargo.lock` (cargo bumps) or a
 >    single workflow file's `uses:` line (github-actions bumps).
->    A Dependabot PR that touches anything else — source files,
->    additional manifests, lock-file entries beyond the named
->    dependency, CI configuration — is suspicious. Report `BLOCKED`
->    with a description of the unexpected change.
+>    Cargo bumps routinely update transitive sub-crates in
+>    `Cargo.lock` (e.g. bumping `serde` also moves `serde_derive`;
+>    bumping `tokio` also moves `tokio-macros`); those entries are
+>    expected. A Dependabot PR is suspicious when it touches
+>    anything else — source files, additional manifests, `Cargo.lock`
+>    entries for packages whose names do not share a common prefix
+>    with the named dependency and that are not reachable from its
+>    entry in `Cargo.lock`, or CI configuration beyond the single
+>    `uses:` line. Report `BLOCKED` with a description of the
+>    unexpected change.
 >
 > 3. **Advisory check.** For `<ECOSYSTEM>`:
 >    - **cargo**: install `cargo-audit` if not present (`cargo install
@@ -227,9 +233,10 @@ apply per merge:
    ```
    Every line must report `pass` or `skipping`. If any line is
    `pending`, wait — Dependabot may have just rebased the PR after a
-   prior merge and CI is still re-running. Use `Monitor` (or repeated
-   `gh pr checks` with a 60-second `sleep`) until either everything
-   is green or any check fails. If a check fails, revisit step 2a
+   prior merge and CI is still re-running. Use `Monitor` to stream check-status
+   events (preferred); if `Monitor` is unavailable, fall back to
+   repeated `gh pr checks` polls until everything is green or a
+   check fails. If a check fails, revisit step 2a
    for that PR (the failure may be a regression the prior audit
    missed).
 3. **Auto-review converged on HEAD**: the audit subagent that just
