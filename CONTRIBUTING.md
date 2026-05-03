@@ -72,11 +72,13 @@ npm run dev
 6. **Click "Squash and merge"** (or run `gh pr merge <N> --squash`).
    Branch protection requires status checks to pass and your branch
    to be up to date with `main`. If `main` moved after your last
-   push, GitHub will prompt you to update your branch — do that
-   from the PR page or with `git rebase origin/main && git push
-   --force-with-lease`, which re-runs CI against the new tip
-   before the merge button re-enables. (Direct squash merges
-   replaced the merge queue in
+   push, GitHub will prompt you to update your branch. Run
+   `git rebase origin/main && git push --force-with-lease` to do
+   so without introducing a merge commit (the surrounding flow
+   squashes on merge, so a clean linear branch history is
+   preferable). Either path re-runs CI against the new tip before
+   the merge button re-enables. (Direct squash merges replaced the
+   merge queue in
    [ADR-0015](docs/adr/0015-disable-github-merge-queue.md);
    the older "Merge when ready" / `--merge-queue` path is no longer
    in use.)

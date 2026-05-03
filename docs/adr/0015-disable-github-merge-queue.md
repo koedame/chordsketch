@@ -16,9 +16,13 @@ speculative merge commit re-runs the full required-check matrix on
 top of the PR's pre-merge CI, so every merge pays the
 `Test (matrix × 6)` cost twice: once as `pull_request:` on the head
 commit, then again as `merge_group:` on the speculative merge
-commit. macOS-bearing required cells dominate the second pass for
-~8–12 minutes apiece, and the click-to-landed window grew to span
-both runs back-to-back.
+commit. Measured against the most recent 30 successful
+`merge_group:` runs of `ci.yml`
+(`gh run list --workflow=ci.yml --event=merge_group --limit 30`),
+the second pass added a median of ~200 s (~3.3 min) and a 90th-
+percentile of ~445 s (~7.5 min) to every merge — i.e., the
+click-to-landed window typically grew by 3–8 minutes per PR, on
+top of the original pre-merge CI duration.
 
 The benefit of the second pass — catching semantic conflicts that
 manifested only when the PR diff is composed against the current
@@ -27,8 +31,16 @@ already runs against a recent base, contributors rebase before
 opening the PR, and content conflicts (the only conflict class the
 queue can detect) are caught earlier by the existing branch
 protection's "Branch must be up to date before merging" rule when
-that rule fires. Cases where the queue's speculative CI failed for
-a reason the PR's own CI had not surfaced have been rare.
+that rule fires. The empirical record across the queue's active
+period (sampled via
+`gh run list --workflow=ci.yml --event=merge_group --status=failure --limit 100`)
+returned exactly two `merge_group` failures, and inspection of
+both runs (24845736567 — Format step `HTTP 500` from
+`actions/checkout`; 24973252062 — non-required Desktop smoke job
+flake) confirmed both were transient GitHub-infra failures, not
+semantic conflicts a pre-merge CI run had missed. Zero
+queue-only-detected regressions across the queue's active period
+is the load-bearing data point for the cost-benefit shift.
 
 The cost-benefit traded that motivated ADR-0003 was
 "`O(open_PRs)` CI fan-out vs. one extra CI pass per merge." With
@@ -69,15 +81,15 @@ squash-merges. Specifically:
 
 ## Rationale
 
-1. **Wall-clock cost was paid twice per merge for a rare benefit.**
-   Required-check cells (notably `Test (macos-latest, *)` and
-   `Test (windows-latest, *)`) ran once on the PR's head commit and
-   once on the speculative merge commit. Both passes covered the
-   same code with the same Cargo.lock; the second pass differed
-   only in being composed against the most recent `main`. Semantic
-   conflicts that survive both the author's local build and the
-   PR's pre-merge CI are not common at this repo's commit
-   frequency.
+1. **Wall-clock cost was paid twice per merge for a benefit that
+   never observably fired.** Required-check cells ran once on the
+   PR's head commit and once on the speculative merge commit. Both
+   passes covered the same code with the same `Cargo.lock`; the
+   second pass differed only in being composed against the most
+   recent `main`. The Context section records zero queue-only-
+   detected regressions across the queue's active period; semantic
+   conflicts that would survive both the author's local build and
+   the PR's pre-merge CI are bounded by that empirical record.
 
 2. **Branch protection's existing "must be up to date" rule
    covers the conflict class the queue detected.** GitHub blocks
@@ -111,8 +123,10 @@ squash-merges. Specifically:
 Positive:
 
 - Click-to-landed wall-clock drops by one full required-check
-  matrix run per merge — typically ~8–12 minutes saved per merge,
-  bounded by the slowest macOS cell.
+  matrix run per merge. Sampled across the most recent 30
+  successful `merge_group:` runs, the second pass added a median
+  of ~200 s (~3.3 min) and a 90th-percentile of ~445 s (~7.5 min)
+  per merge; that range is the expected wall-clock saving.
 - One fewer infrastructural concept (`merge_group:` events,
   `gh-readonly-queue/*` refs, queue position UI) to teach new
   contributors and to track in `.claude/rules/`.
