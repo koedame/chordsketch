@@ -25,7 +25,7 @@ import { openBarPopover, type BarPopoverHandle } from './popover.js';
 import { render, type RenderHandle, type StructuralOps } from './render.js';
 import { IrealbEditorState, type IrealbWasm, makeStateFromUrl } from './state.js';
 
-export type { IrealSong } from './ast.js';
+export type { IrealSong, SectionLabel } from './ast.js';
 export type { IrealbWasm } from './state.js';
 export { SAMPLE_IREALB } from './sample.js';
 
@@ -440,8 +440,11 @@ function formatSectionLabelForPrompt(label: SectionLabel): string {
 export function parseSectionLabel(s: string): SectionLabel | null {
   const trimmed = s.trim();
   if (trimmed === '') return null;
-  if (trimmed.length === 1 && trimmed >= 'A' && trimmed <= 'Z') {
-    return { kind: 'letter', value: trimmed };
+  if (trimmed.length === 1) {
+    const upper = trimmed.toUpperCase();
+    if (upper >= 'A' && upper <= 'Z') {
+      return { kind: 'letter', value: upper };
+    }
   }
   switch (trimmed.toLowerCase()) {
     case 'verse':

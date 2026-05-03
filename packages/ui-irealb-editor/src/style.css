@@ -111,6 +111,10 @@
   color: #1f2933;
 }
 
+.irealb-editor__section-action:hover:not(:disabled) {
+  background: #f5f7fa;
+}
+
 .irealb-editor__section-action:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -175,6 +179,10 @@
   font: inherit;
   font-size: 0.75rem;
   color: #52606d;
+}
+
+.irealb-editor__bar-action:hover:not(:disabled) {
+  background: #f5f7fa;
 }
 
 .irealb-editor__bar-action:disabled {

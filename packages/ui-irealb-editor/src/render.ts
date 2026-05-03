@@ -51,8 +51,9 @@ export interface StructuralOps {
   addSection(): void;
   /** Replace a section's label. */
   renameSection(secIndex: number, label: SectionLabel): void;
-  /** Delete a section after a confirmation prompt. The adapter shows
-   * the prompt; this method is only called once the user confirms. */
+  /** Delete a section. The adapter invokes `confirmDeleteSection`
+   * internally; returning `false` from that hook cancels the
+   * operation before any AST mutation occurs. */
   deleteSection(secIndex: number): void;
   /** Move a section one position up (lower index). No-op at index 0. */
   moveSectionUp(secIndex: number): void;

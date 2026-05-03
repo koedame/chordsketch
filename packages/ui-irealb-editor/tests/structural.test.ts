@@ -125,6 +125,14 @@ describe('parseSectionLabel', () => {
     expect(parseSectionLabel('   ')).toBeNull();
   });
 
+  test('single lowercase letter is normalised to uppercase Letter', () => {
+    // iReal Pro section labels are uppercase by convention; normalising
+    // prevents a user who types 'a' from accidentally creating a Custom
+    // label rather than the intended Letter variant.
+    expect(parseSectionLabel('a')).toEqual({ kind: 'letter', value: 'A' });
+    expect(parseSectionLabel('z')).toEqual({ kind: 'letter', value: 'Z' });
+  });
+
   test('multi-letter all-caps falls into Custom (not Letter)', () => {
     // The Letter variant is for single uppercase letters only;
     // "AB" is not a valid jazz-form label, so it round-trips as
