@@ -208,10 +208,17 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
     }
   };
 
+  // Selectors below are scoped to `.irealb-editor__section` /
+  // `.irealb-editor__bar-wrapper` so a host that wraps the editor in
+  // a container that re-uses `data-section-index` / `data-bar-index`
+  // (e.g. an outer "song book" widget) does not match foreign nodes
+  // and steal focus from the editor's own buttons.
+
   /** Locate the freshly-mounted "Move section up/down" / "Rename
    * section" / "Delete section" button on a specific section. */
   const sectionActionSelector = (secIndex: number, ariaLabel: string): string =>
-    `[data-section-index="${secIndex}"] button[aria-label="${ariaLabel}"]`;
+    `.irealb-editor__section[data-section-index="${secIndex}"] ` +
+    `button[aria-label="${ariaLabel}"]`;
 
   /** Locate the freshly-mounted "Move bar left/right" / "Delete bar"
    * button on a specific bar. */
@@ -220,7 +227,9 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
     barIndex: number,
     ariaLabel: string,
   ): string =>
-    `[data-section-index="${secIndex}"] [data-bar-index="${barIndex}"] button[aria-label="${ariaLabel}"]`;
+    `.irealb-editor__section[data-section-index="${secIndex}"] ` +
+    `.irealb-editor__bar-wrapper[data-bar-index="${barIndex}"] ` +
+    `button[aria-label="${ariaLabel}"]`;
 
   // The op closures reference `renderNow` and `focusAfterRender`,
   // which are declared further down in this function. The closures
@@ -332,7 +341,9 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       fireUserEdit();
       // Focus the new bar's edit button (its <button class="bar">).
       focusAfterRender([
-        `[data-section-index="${secIndex}"] [data-bar-index="${newBarIndex}"] .irealb-editor__bar`,
+        `.irealb-editor__section[data-section-index="${secIndex}"] ` +
+          `.irealb-editor__bar-wrapper[data-bar-index="${newBarIndex}"] ` +
+          `.irealb-editor__bar`,
       ]);
     },
     deleteBar: (secIndex, barIndex) => {
@@ -349,7 +360,7 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       const remaining = section.bars.length;
       if (remaining === 0) {
         focusAfterRender([
-          `[data-section-index="${secIndex}"] .irealb-editor__add-bar`,
+          `.irealb-editor__section[data-section-index="${secIndex}"] .irealb-editor__add-bar`,
         ]);
       } else {
         const nextIndex = barIndex < remaining ? barIndex : remaining - 1;
@@ -371,7 +382,9 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       focusAfterRender([
         barActionSelector(secIndex, barIndex - 1, 'Move bar left'),
         barActionSelector(secIndex, barIndex - 1, 'Move bar right'),
-        `[data-section-index="${secIndex}"] [data-bar-index="${barIndex - 1}"] .irealb-editor__bar`,
+        `.irealb-editor__section[data-section-index="${secIndex}"] ` +
+          `.irealb-editor__bar-wrapper[data-bar-index="${barIndex - 1}"] ` +
+          `.irealb-editor__bar`,
       ]);
     },
     moveBarRight: (secIndex, barIndex) => {
@@ -389,7 +402,9 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       focusAfterRender([
         barActionSelector(secIndex, barIndex + 1, 'Move bar right'),
         barActionSelector(secIndex, barIndex + 1, 'Move bar left'),
-        `[data-section-index="${secIndex}"] [data-bar-index="${barIndex + 1}"] .irealb-editor__bar`,
+        `.irealb-editor__section[data-section-index="${secIndex}"] ` +
+          `.irealb-editor__bar-wrapper[data-bar-index="${barIndex + 1}"] ` +
+          `.irealb-editor__bar`,
       ]);
     },
   };

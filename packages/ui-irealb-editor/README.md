@@ -27,14 +27,14 @@ Shipped:
   `promptSectionLabel` and `confirmDeleteSection` default to
   `window.prompt` / `window.confirm` and can be overridden by the
   host (or by tests).
+- #2376 — bar-cell keyboard shortcuts (see "Keyboard shortcuts"
+  below).
 
 Subsequent iterations:
 
 - #2366 — `@chordsketch/ui-web` runtime swap + iRealb input toggle.
 - #2367 — desktop integration (Open / Save dispatch + View menu).
 - #2368 — keyboard navigation + ARIA grid semantics.
-- #2376 — keyboard shortcuts for bar delete / reorder (deferred from
-  #2365 so binding decisions stay deliberate).
 
 ## Design
 
@@ -79,6 +79,37 @@ interface IrealbWasm {
 The `EditorAdapter` returned matches the `@chordsketch/ui-web`
 contract verbatim: `getValue` / `setValue` / `onChange` / `destroy`,
 plus `element` for DOM mounting.
+
+## Keyboard shortcuts
+
+Once a bar cell has keyboard focus (Tab into it, or click it), the
+following shortcuts are active. Each one mirrors the equivalent
+per-bar UI button so the keyboard path is a strict superset of the
+mouse path — never a different operation.
+
+| Shortcut                  | Action                                |
+|---------------------------|---------------------------------------|
+| `Delete` / `Backspace`    | Remove the bar (no confirmation)      |
+| `Alt`+`ArrowLeft`         | Move the bar one position left        |
+| `Alt`+`ArrowRight`        | Move the bar one position right       |
+
+After a reorder, focus stays on the bar cell at its new position so
+a repeated `Alt`+`ArrowLeft` keeps moving the same bar leftward
+without re-grabbing focus. After a delete, focus moves to the
+next-sibling bar cell — or to the section's "+ Add bar" trailer if
+the section is now empty — so a keyboard user can keep working in
+the same column.
+
+Move shortcuts at the section boundary (`Alt`+`ArrowLeft` on the
+first bar / `Alt`+`ArrowRight` on the last bar) are bounded no-ops:
+they `preventDefault` (defence against any host-level handler that
+treats the chord as history navigation) but do not mutate the AST.
+
+Cross-section bar moves are not yet wired; drag-and-drop is the
+planned path for that and is tracked under #2357. Section-level
+shortcuts (move section, delete section) are also out of scope —
+those operations remain reachable through the per-section UI
+buttons.
 
 ## Tests
 
