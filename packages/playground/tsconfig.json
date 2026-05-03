@@ -21,7 +21,9 @@
   "include": [
     "src",
     "tests",
+    "tests-e2e",
     "vitest.config.ts",
+    "playwright.config.ts",
     "../ui-web/src",
     "../ui-irealb-editor/src"
   ]
