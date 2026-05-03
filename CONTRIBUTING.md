@@ -76,7 +76,7 @@ npm run dev
    `git rebase origin/main && git push --force-with-lease` to do
    so without introducing a merge commit (the surrounding flow
    squashes on merge, so a clean linear branch history is
-   preferable). Either path re-runs CI against the new tip before
+   preferable). This re-runs CI against the new tip before
    the merge button re-enables. (Direct squash merges replaced the
    merge queue in
    [ADR-0015](docs/adr/0015-disable-github-merge-queue.md);
