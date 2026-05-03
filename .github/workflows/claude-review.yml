@@ -29,7 +29,8 @@ jobs:
             const prNumber = prs[0].number;
             const headSha = context.payload.workflow_run.head_sha;
 
-            // Skip Dependabot PRs (handled by claude-dependabot.yml)
+            // Skip Dependabot PRs — reviewed manually via the
+            // `/dependabot-review` slash command, not by this workflow.
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,

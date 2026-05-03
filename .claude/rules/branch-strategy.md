@@ -10,4 +10,10 @@
 
 - Dependabot branches (`dependabot/...`) are managed by GitHub's Dependabot service.
 - These do NOT follow the `issue-{N}-{slug}` naming convention — this is expected.
-- Claude Code automatically reviews these via `.github/workflows/claude-dependabot.yml` and approves the PR if everything passes. **Merging is always a human action** — see [Pull Request Workflow](pr-workflow.md).
+- Dependabot PRs receive **no automated review**. The maintainer invokes
+  the `/dependabot-review` slash command (`.claude/commands/dependabot-review.md`),
+  which audits each open Dependabot PR — reading the dependency's CHANGELOG,
+  checking for advisories, running build/test/clippy, applying any required
+  code-side fixes — and squash-merges the safe ones. See [ADR-0016](../../docs/adr/0016-dependabot-review-skill.md)
+  for the policy rationale and [Pull Request Workflow](pr-workflow.md) §"Bot-driven
+  merge: conditional permission" for the four-clause merge gate the skill operates under.
