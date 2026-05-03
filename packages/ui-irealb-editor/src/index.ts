@@ -126,6 +126,20 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
         // Re-render so the bar cell reflects the new chord/text and
         // so the next click anchors on the freshly-mounted button.
         renderNow();
+        // Return focus to the rebuilt bar cell so keyboard users
+        // keep their navigation position. The original `anchor`
+        // button is detached by `renderNow()` (clearChildren +
+        // full grid rebuild), so `dispose()` cannot return focus
+        // there; we must locate the new cell before `dispose()`
+        // runs. Compute the cell's global index by summing bar
+        // counts for all preceding sections.
+        let globalOffset = 0;
+        for (let s = 0; s < secIndex; s++) {
+          globalOffset += state.song.sections[s]?.bars.length ?? 0;
+        }
+        const cells = element.querySelectorAll<HTMLButtonElement>('.irealb-editor__bar');
+        const newCell = cells[globalOffset + barIndex];
+        if (newCell) newCell.focus();
         fireUserEdit();
       },
       onClose: () => {

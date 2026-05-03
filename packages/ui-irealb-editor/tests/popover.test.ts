@@ -442,6 +442,40 @@ describe('bar-edit popover', () => {
     editor.destroy();
   });
 
+  test('Save restores focus to the rebuilt bar cell at (secIndex, barIndex)', () => {
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+    document.body.appendChild(editor.element);
+
+    // Open popover on bar 0 (section 0, bar 0), save without edits.
+    bar(editor, 0).click();
+    const dialog = popoverOf(editor);
+    clickButton(dialog, 'Save');
+
+    // Popover gone; focus should land on the rebuilt bar-0 cell.
+    expect(editor.element.querySelector('.irealb-editor__popover')).toBeNull();
+    expect(document.activeElement).toBe(bar(editor, 0));
+
+    editor.destroy();
+    editor.element.remove();
+  });
+
+  test('Save on bar 1 restores focus to bar 1 (correct global offset)', () => {
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+    document.body.appendChild(editor.element);
+
+    // Bar 1 is section 0, barIndex 1.
+    bar(editor, 1).click();
+    const dialog = popoverOf(editor);
+    clickButton(dialog, 'Save');
+
+    expect(document.activeElement).toBe(bar(editor, 1));
+
+    editor.destroy();
+    editor.element.remove();
+  });
+
   test('opening a second popover closes the first (one-at-a-time)', () => {
     const wasm = makeStubWasm();
     const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });

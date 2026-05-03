@@ -172,6 +172,14 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
   const chordsSection = el('div', { class: 'irealb-editor__popover-chords' });
   body.appendChild(chordsSection);
 
+  // `listen` pushes to the outer `cleanups` array, which means each
+  // `renderChordsSection` call adds listeners for newly-created chord
+  // row elements while old stale entries (from the previous render)
+  // remain in `cleanups`. Those stale entries are safe no-ops in
+  // `dispose()`: `removeEventListener` on a detached element is a
+  // silent no-op per the spec. The accumulation is bounded to the
+  // number of chord-row interactions in one popover session, so the
+  // memory overhead is negligible in practice.
   const renderChordsSection = (): void => {
     clearChildren(chordsSection);
     chordsSection.appendChild(el('h4', { text: 'Chords' }));
