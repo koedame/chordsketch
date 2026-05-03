@@ -27,15 +27,11 @@ export interface Renderers {
    * so an editor adapter MAY safely call into wasm-backed renderer
    * helpers from its constructor (e.g. `parseIrealb` /
    * `serializeIrealb` exposed via the same wasm bundle that the
-   * renderers consume). Resolves on success; rejection is surfaced
-   * as an init-time error in the UI and `mountChordSketchUi` rejects
-   * before any DOM is built into `root`.
-   *
-   * The "before the editor factory" half of this contract was added
-   * in the PR for #2397 — the original mount path called
-   * `createEditor` synchronously and only awaited `init()` afterward,
-   * which silently broke any factory that touched wasm at
-   * construction time (the iRealb bar-grid editor in #2363 / #2388).
+   * renderers consume). Resolves on success; on rejection
+   * `mountChordSketchUi` shows the message in the in-page error
+   * banner (the layout scaffold is built first so the banner is
+   * visible) and re-throws so the host promise also sees it. See
+   * #2397 for the regression that motivated the ordering.
    */
   init(): Promise<unknown>;
   /**
@@ -128,19 +124,15 @@ export interface EditorFactoryOptions {
 
 /**
  * Produces an {@link EditorAdapter} mounted inside the editor pane.
- * Called exactly once per `mountChordSketchUi` call, AFTER
- * {@link Renderers.init} has resolved and BEFORE the first render.
- * The factory MAY synchronously invoke wasm-backed helpers from the
- * same renderer bundle (e.g. `parseIrealb` for the iRealb adapter)
- * because the wasm module is guaranteed to be initialised by the
- * time it runs.
+ * Called exactly once per `mountChordSketchUi` call, after
+ * {@link Renderers.init} has resolved and before the first render —
+ * factories may synchronously invoke wasm-backed helpers from the
+ * renderer bundle in their constructor. {@link
+ * ChordSketchUiHandle.replaceEditor} uses the same type and
+ * naturally satisfies the same precondition.
  *
  * Passing `undefined` to {@link MountOptions.createEditor} selects
- * the built-in `<textarea>` implementation. The post-mount
- * {@link ChordSketchUiHandle.replaceEditor} path uses this same
- * type — at that point `Renderers.init` has long since resolved, so
- * the contract is naturally satisfied without any additional
- * sequencing on the caller's part.
+ * the built-in `<textarea>` implementation.
  */
 export type EditorFactory = (options: EditorFactoryOptions) => EditorAdapter;
 
@@ -172,13 +164,8 @@ export interface MountOptions {
    * matches the pre-#2072 playground exactly. The desktop app
    * injects a CodeMirror-based factory so ui-web stays
    * framework-agnostic and the playground bundle does not need to
-   * pull in CodeMirror.
-   *
-   * Invocation order: `mountChordSketchUi` first awaits
-   * {@link Renderers.init}, then calls this factory exactly once.
-   * Factories are therefore free to use wasm-backed helpers from
-   * the renderer bundle (e.g. `parseIrealb` in the iRealb editor)
-   * synchronously in their constructor — see {@link EditorFactory}.
+   * pull in CodeMirror. See {@link EditorFactory} for the
+   * invocation-order contract relative to {@link Renderers.init}.
    */
   createEditor?: EditorFactory;
   /**
@@ -743,11 +730,6 @@ export async function mountChordSketchUi(
     errorDiv,
   } = nodes;
 
-  // Both helpers are declared here (rather than further down near
-  // their original render-path callers) so the init-failure catch
-  // block below can call them without hitting the TDZ. The order
-  // matters because `await renderers.init()` MUST run before
-  // `createEditor` — see the contract on `Renderers.init` JSDoc.
   const showError = (msg: string): void => {
     errorDiv.textContent = msg;
     errorDiv.classList.remove('hidden');

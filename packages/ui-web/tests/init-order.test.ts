@@ -1,23 +1,7 @@
-// Init-order regression suite for the contract documented on
-// `Renderers.init` and `EditorFactory`: the mount-time editor
-// factory MUST run after `renderers.init()` resolves, so a factory
-// is free to call into wasm-backed helpers from the same renderer
-// bundle (`parseIrealb` in the iRealb bar-grid editor, future
-// tree-sitter / wasm grammars in alternative ChordPro editors)
-// during construction.
-//
-// Pre-#2397 the mount path called `createEditor` synchronously and
-// only awaited init afterward. The iRealb factory threw a
-// `__wbindgen_free` undefined TypeError because `parseIrealb` was
-// invoked against an uninitialised wasm module, which silently
-// prevented the editor from mounting in the playground and the
-// desktop app — neither suite caught it because both ui-web's
-// existing tests and `ui-irealb-editor`'s suite use synchronous
-// stubs that never observe the race.
-//
-// These assertions are intentionally adversarial: every helper
-// here is structured to fail fast if the historical order ever
-// returns. A green run of this file is part of the contract.
+// Init-order regression suite for `mountChordSketchUi`: the editor
+// factory must run after `renderers.init()` resolves so factories
+// can call wasm-backed helpers from their constructor. See #2397
+// and the `Renderers.init` JSDoc.
 
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
@@ -84,14 +68,36 @@ function makeMinimalAdapter(value: string): EditorAdapter {
   };
 }
 
+/**
+ * Yield long enough that any non-awaited synchronous code path
+ * would have completed. Stronger than `await Promise.resolve()`
+ * (which only flushes one microtask checkpoint) — a `setTimeout(0)`
+ * round-trip drains microtasks AND the macrotask queue, so the
+ * test still fails if a future refactor inserts another
+ * `await` in `mountChordSketchUi` ahead of the factory call.
+ */
+function flushTask(): Promise<void> {
+  return new Promise((r) => setTimeout(r, 0));
+}
+
 describe('mountChordSketchUi init order', () => {
   test('createEditor runs only after renderers.init() resolves', async () => {
     const renderers = makeSlowInitRenderers();
-    let initFlagAtFactory: boolean | null = null;
+    // Monotonic tick captured at init-resolution and factory-call
+    // sites. Asserting `initTick < factoryTick` survives any future
+    // internal `await` in `mountChordSketchUi` ahead of the factory
+    // call — a single boolean would silently re-pass once a refactor
+    // moved the factory call later but kept it before init.
+    let nextTick = 0;
+    let initTick: number | null = null;
+    let factoryTick: number | null = null;
+    const realResolve = renderers.resolveInit;
+    renderers.resolveInit = (): void => {
+      initTick = nextTick++;
+      realResolve();
+    };
     const factory: EditorFactory = (options) => {
-      // The contract under test: by the time the factory is
-      // invoked, `renderers.init()` must have resolved.
-      initFlagAtFactory = renderers.initFlag.done;
+      factoryTick = nextTick++;
       return makeMinimalAdapter(options.initialValue);
     };
 
@@ -102,25 +108,22 @@ describe('mountChordSketchUi init order', () => {
       initialChordPro: 'seed',
     });
 
-    // Yield several microtasks so any non-awaited synchronous
-    // factory call would have already fired. The factory MUST
-    // still be unobserved at this point.
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(initFlagAtFactory).toBeNull();
+    await flushTask();
+    expect(factoryTick).toBeNull();
 
     renderers.resolveInit();
 
     const handle = await mountPromise;
-    expect(initFlagAtFactory).toBe(true);
+    if (initTick === null || factoryTick === null) {
+      throw new Error('init or factory never observed');
+    }
+    expect(initTick).toBeLessThan(factoryTick);
     handle.destroy();
   });
 
   test('factory may safely call a renderer helper during construction', async () => {
-    // Stand-in for `wasm.parseIrealb`: a method on `renderers` that
-    // throws unless `init()` has resolved. Pre-#2397 the iRealb
-    // factory tripped this exact pattern against the real wasm
-    // bundle.
+    // Stand-in for `wasm.parseIrealb`: a renderer method that
+    // throws unless `init()` has resolved.
     const renderers = makeSlowInitRenderers();
     const renderHtmlImpl = renderers.renderHtml;
     renderers.renderHtml = vi.fn((input: string, options) => {
@@ -133,10 +136,6 @@ describe('mountChordSketchUi init order', () => {
     });
 
     const factory: EditorFactory = (options) => {
-      // The factory exercises the renderer helper synchronously —
-      // exactly the shape the iRealb adapter follows with
-      // `wasm.parseIrealb`. With the contract honoured this is a
-      // no-throw call; without it the entire mount rejects.
       renderers.renderHtml(options.initialValue);
       return makeMinimalAdapter(options.initialValue);
     };
@@ -155,10 +154,6 @@ describe('mountChordSketchUi init order', () => {
   });
 
   test('init() rejection propagates without ever invoking the factory', async () => {
-    // Symmetric guarantee: a failing init must NOT degrade to
-    // calling the factory anyway. Pre-#2397 the factory would have
-    // run regardless because the mount sequence ignored init's
-    // outcome until later in the function.
     const initError = new Error('wasm fetch failed');
     const renderers: Renderers = {
       init: vi.fn(() => Promise.reject(initError)),
@@ -167,7 +162,7 @@ describe('mountChordSketchUi init order', () => {
       renderPdf: vi.fn(() => new Uint8Array()),
     };
 
-    const factory = vi.fn<EditorFactory>(() => makeMinimalAdapter(''));
+    const factory = vi.fn((): EditorAdapter => makeMinimalAdapter(''));
 
     const root = mountRoot();
     await expect(

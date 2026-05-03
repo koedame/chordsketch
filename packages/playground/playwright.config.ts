@@ -15,18 +15,17 @@ import { defineConfig, devices } from '@playwright/test';
 
 const PORT = Number(process.env.PLAYWRIGHT_PLAYGROUND_PORT ?? 4173);
 const HOST = '127.0.0.1';
+const isCI = process.env.CI === 'true';
 
 export default defineConfig({
   testDir: './tests-e2e',
   // The playground is a single-page app; tests are I/O bound on
   // wasm fetch. Keeping the worker count low keeps the CI runner
   // memory ceiling well below the GitHub-hosted 7 GB.
-  workers: process.env.CI === 'true' ? 1 : 2,
+  workers: isCI ? 1 : 2,
   fullyParallel: true,
-  retries: process.env.CI === 'true' ? 1 : 0,
-  reporter: process.env.CI === 'true'
-    ? [['list'], ['github']]
-    : [['list']],
+  retries: isCI ? 1 : 0,
+  reporter: isCI ? [['list'], ['github']] : [['list']],
   use: {
     baseURL: `http://${HOST}:${PORT}/chordsketch/`,
     trace: 'on-first-retry',
@@ -51,6 +50,6 @@ export default defineConfig({
     command: `npx vite preview --port ${PORT} --host ${HOST} --strictPort`,
     url: `http://${HOST}:${PORT}/chordsketch/`,
     timeout: 60_000,
-    reuseExistingServer: process.env.CI !== 'true',
+    reuseExistingServer: !isCI,
   },
 });

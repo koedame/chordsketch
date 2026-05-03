@@ -161,26 +161,14 @@ const irealbEditorFactory: EditorFactory = (
 // (accessibility tweaks, IME composition, focus handling) flows
 // through to both call sites without divergence.
 /**
- * Wrap the format-specific factory with a "fall back to the format's
- * sample seed if the carried-over content is incompatible" recovery
- * path. The runtime swap (#2366) forwards the previous editor's
- * `getValue()` straight into the next factory; that lets a user
- * paste an `irealb://` URL into the textarea then flip the toggle
- * to edit it visually. But going the other direction — ChordPro
- * text already in the textarea, then flipping to iRealb — used to
- * leave the editor unmounted because `parseIrealb(<chordpro>)`
- * threw inside `createIrealbEditor`'s constructor and `ui-web`'s
- * `replaceEditor` propagated the throw to the preview pane error
- * banner without ever attaching a new adapter (#2397 sister-site
- * audit).
- *
- * Recovery is "rebuild with the format's sample seed." We discard
- * the user's text in this case rather than dropping silently into
- * an empty editor — the sample gives the user something concrete to
- * read while they decide what to do, and matches the mount-time
- * behaviour for the same format. A brief `console.warn` makes the
- * lossy fallback discoverable in dev tools without nagging the user
- * with an alert.
+ * On runtime swap, the previous editor's value is forwarded as
+ * `initialValue` to the new factory. ChordPro text fed to the
+ * iRealb factory throws inside `parseIrealb`; without recovery the
+ * user lands on an unmounted editor. Falls back to the format's
+ * sample seed (lossy — the carried-over text is discarded; logged
+ * via `console.warn`). The recursion guard prevents an infinite
+ * loop if the seed itself ever fails to parse. See #2397 sister-
+ * site audit.
  */
 const factoryFor = (format: InputFormat): EditorFactory => {
   const base: EditorFactory =
@@ -190,10 +178,6 @@ const factoryFor = (format: InputFormat): EditorFactory => {
     try {
       return base(options);
     } catch (e) {
-      // Avoid an infinite retry loop if the seed itself is invalid
-      // for the target factory — that would be a bug in the sample
-      // constants, not a user-content issue, and the original error
-      // is the right thing to surface.
       if (options.initialValue === seed) throw e;
       console.warn(
         `${format} editor could not parse carried-over content; ` +

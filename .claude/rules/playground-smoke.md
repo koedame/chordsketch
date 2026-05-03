@@ -1,5 +1,10 @@
 # Playground Smoke Discipline
 
+Origin: #2397, where `mountChordSketchUi` shipped a wasm-init race
+that no in-process suite caught — three test layers (ui-web,
+ui-irealb-editor, playground) each green, each blind to the
+integration.
+
 `@chordsketch/ui-web`'s `mountChordSketchUi` integrates several
 otherwise-independent layers (renderer wasm bundle, editor adapter
 factory, format-toggle host wiring) at runtime. Each layer carries

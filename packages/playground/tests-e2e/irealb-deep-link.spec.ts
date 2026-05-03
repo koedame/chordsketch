@@ -10,15 +10,18 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('iRealb deep link', () => {
-  test('?#format=irealb mounts the bar grid without console errors', async ({
+  test('?#format=irealb mounts the bar grid without uncaught exceptions', async ({
     page,
   }) => {
-    const consoleErrors: string[] = [];
+    // `pageerror` fires only on uncaught exceptions reaching the
+    // window — exactly the failure surface the pre-fix mount
+    // produced (`__wbindgen_free` TypeError from `parseIrealb`).
+    // Asserting an empty list catches this whole regression class
+    // without coupling to a specific wasm-bindgen symbol name (it
+    // could be renamed upstream and still leave the bug intact).
+    const pageErrors: string[] = [];
     page.on('pageerror', (err) => {
-      consoleErrors.push(err.message);
-    });
-    page.on('console', (msg) => {
-      if (msg.type() === 'error') consoleErrors.push(msg.text());
+      pageErrors.push(err.message);
     });
 
     await page.goto('./#format=irealb');
@@ -30,13 +33,7 @@ test.describe('iRealb deep link', () => {
     // who reloads sees a consistent state.
     await expect(page.locator('#input-format')).toHaveValue('irealb');
 
-    // The pre-fix failure surface was a `__wbindgen_free` undefined
-    // TypeError. We assert the absence of any pageerror because
-    // any throw during mount points at a regression in the same
-    // class.
-    expect(
-      consoleErrors.filter((m) => m.includes('__wbindgen_free')),
-    ).toEqual([]);
+    expect(pageErrors).toEqual([]);
   });
 
   test('clicking a bar opens the popover editor', async ({ page }) => {
