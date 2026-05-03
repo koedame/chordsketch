@@ -35,6 +35,7 @@ export default defineConfig({
       allow: [
         resolve(here, '../../packages/npm'),
         resolve(here, '../../packages/ui-web'),
+        resolve(here, '../../packages/ui-irealb-editor'),
       ],
     },
   },
@@ -48,6 +49,18 @@ export default defineConfig({
         '../../packages/ui-web/src/style.css',
       ),
       '@chordsketch/ui-web': resolve(here, '../../packages/ui-web/src/index.ts'),
+      // iRealb bar-grid GUI editor (#2367). Same alias pattern as
+      // ui-web — TS sources are consumed directly and the `/style.css`
+      // alias is listed first so Vite resolves it before the bare
+      // package alias.
+      '@chordsketch/ui-irealb-editor/style.css': resolve(
+        here,
+        '../../packages/ui-irealb-editor/src/style.css',
+      ),
+      '@chordsketch/ui-irealb-editor': resolve(
+        here,
+        '../../packages/ui-irealb-editor/src/index.ts',
+      ),
       '@chordsketch/wasm': resolve(
         here,
         '../../packages/npm/web/chordsketch_wasm.js',
