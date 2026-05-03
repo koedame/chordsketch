@@ -127,7 +127,15 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
   const draft: Bar = JSON.parse(JSON.stringify(bar)) as Bar;
 
   const minter = new FieldIdMinter();
+  // `cleanups` runs once on dispose. `chordCleanups` is reset on
+  // every `renderChordsSection` rebuild — without that scoping,
+  // adding / removing / reordering rows N times pushes O(N) dead
+  // listener references onto `cleanups` (each row registers ~5
+  // listeners, the old DOM is detached but the handler entries
+  // linger until dispose). Splitting them keeps the rebuild cycle
+  // memory-bounded even across long popover sessions.
   const cleanups: Array<() => void> = [];
+  const chordCleanups: Array<() => void> = [];
   let disposed = false;
 
   const listen = <K extends keyof HTMLElementEventMap>(
@@ -137,6 +145,18 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
   ): void => {
     target.addEventListener(type, handler);
     cleanups.push(() => target.removeEventListener(type, handler));
+  };
+
+  /** Register a listener that lives only until the next chord-rows
+   * rebuild. Used for per-row handlers that `renderChordsSection`
+   * rebuilds. */
+  const listenChord = <K extends keyof HTMLElementEventMap>(
+    target: HTMLElement,
+    type: K,
+    handler: (ev: HTMLElementEventMap[K]) => void,
+  ): void => {
+    target.addEventListener(type, handler);
+    chordCleanups.push(() => target.removeEventListener(type, handler));
   };
 
   // ---- Dialog shell --------------------------------------------------------
@@ -181,6 +201,11 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
   // number of chord-row interactions in one popover session, so the
   // memory overhead is negligible in practice.
   const renderChordsSection = (): void => {
+    // Drain listeners from the previous rebuild so they do not
+    // accumulate on the popover-wide `cleanups` list.
+    for (const c of chordCleanups) c();
+    chordCleanups.length = 0;
+
     clearChildren(chordsSection);
     chordsSection.appendChild(el('h4', { text: 'Chords' }));
 
@@ -193,7 +218,7 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
       attrs: { type: 'button' },
       text: '+ Add chord',
     });
-    listen(addBtn, 'click', () => {
+    listenChord(addBtn, 'click', () => {
       draft.chords.push(makeDefaultBarChord());
       renderChordsSection();
     });
@@ -212,19 +237,24 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
 
     // Root note letter
     const rootSelect = makeNoteLetterSelect(bc.chord.root.note);
-    listen(rootSelect, 'change', () => {
+    listenChord(rootSelect, 'change', () => {
       bc.chord.root.note = rootSelect.value;
     });
     row.appendChild(field('Root', rootSelect, minter));
 
     // Root accidental
     const accSelect = makeAccidentalSelect(bc.chord.root.accidental);
-    listen(accSelect, 'change', () => {
+    listenChord(accSelect, 'change', () => {
       bc.chord.root.accidental = accSelect.value as Accidental;
     });
     row.appendChild(field('Acc.', accSelect, minter));
 
-    // Quality (and Custom string)
+    // Quality (and Custom string). The Custom field is wrapped in a
+    // `<div class="irealb-editor__field">` containing both the
+    // `<label>Custom</label>` and the `<input>`. Toggling
+    // `customInput.style.display` alone leaves the label visible
+    // hovering above empty space, so we hide / show the wrapping
+    // div instead.
     const qualitySelect = makeQualitySelect(bc.chord.quality);
     const customInput = el('input', {
       attrs: {
@@ -234,28 +264,39 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
       },
       class: 'irealb-editor__input',
     });
-    customInput.style.display = bc.chord.quality.kind === 'custom' ? '' : 'none';
-    listen(qualitySelect, 'change', () => {
+    const customField = field('Custom', customInput, minter);
+    customField.style.display = bc.chord.quality.kind === 'custom' ? '' : 'none';
+    listenChord(qualitySelect, 'change', () => {
       const v = qualitySelect.value;
       if (v === 'custom') {
         bc.chord.quality = { kind: 'custom', value: customInput.value };
-        customInput.style.display = '';
+        customField.style.display = '';
       } else {
         bc.chord.quality = { kind: v } as ChordQuality;
-        customInput.style.display = 'none';
+        customField.style.display = 'none';
       }
     });
-    listen(customInput, 'input', () => {
+    listenChord(customInput, 'input', () => {
       if (bc.chord.quality.kind === 'custom') {
         bc.chord.quality.value = customInput.value;
       }
     });
     row.appendChild(field('Quality', qualitySelect, minter));
-    row.appendChild(field('Custom', customInput, minter));
+    row.appendChild(customField);
 
     // Bass note (optional). Single text input "X" / "X♭" / "" rather
     // than a paired letter+accidental select to keep the row narrow;
-    // parses on save / blur.
+    // parses on every keystroke. Three input states matter:
+    //
+    //   - empty           -> bass cleared (`null`)
+    //   - valid (A..G + optional accidental) -> ChordRoot assigned
+    //   - invalid         -> AST untouched, error class on the input
+    //                        so the user sees the input is rejected
+    //                        instead of silently losing the previous
+    //                        bass value (the pre-fix behaviour
+    //                        nullified `bass` on every unparseable
+    //                        keystroke — `code-style.md` Silent
+    //                        Fallback violation).
     const bassInput = el('input', {
       attrs: {
         type: 'text',
@@ -264,15 +305,20 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
       },
       class: 'irealb-editor__input',
     });
-    listen(bassInput, 'input', () => {
-      const parsed = parseBassInput(bassInput.value);
-      bc.chord.bass = parsed;
+    listenChord(bassInput, 'input', () => {
+      const result = parseBassInput(bassInput.value);
+      if (result === 'invalid') {
+        bassInput.classList.add('irealb-editor__input--invalid');
+        return;
+      }
+      bassInput.classList.remove('irealb-editor__input--invalid');
+      bc.chord.bass = result;
     });
     row.appendChild(field('Bass', bassInput, minter));
 
     // Beat position
     const posSelect = makeBeatPositionSelect(bc.position);
-    listen(posSelect, 'change', () => {
+    listenChord(posSelect, 'change', () => {
       const opt = BEAT_POSITION_OPTIONS.find((o) => o.value === posSelect.value);
       if (!opt) {
         // The dropdown is the only producer of values reaching this
@@ -290,7 +336,7 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
       text: '↑',
     });
     if (index === 0) upBtn.setAttribute('disabled', '');
-    listen(upBtn, 'click', () => {
+    listenChord(upBtn, 'click', () => {
       if (index === 0) return;
       const tmp = draft.chords[index - 1];
       const cur = draft.chords[index];
@@ -307,7 +353,7 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
       text: '↓',
     });
     if (index === draft.chords.length - 1) downBtn.setAttribute('disabled', '');
-    listen(downBtn, 'click', () => {
+    listenChord(downBtn, 'click', () => {
       if (index === draft.chords.length - 1) return;
       const tmp = draft.chords[index + 1];
       const cur = draft.chords[index];
@@ -323,7 +369,7 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
       attrs: { type: 'button', 'aria-label': 'Remove chord' },
       text: '×',
     });
-    listen(removeBtn, 'click', () => {
+    listenChord(removeBtn, 'click', () => {
       draft.chords.splice(index, 1);
       renderChordsSection();
     });
@@ -455,6 +501,8 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
   function dispose(): void {
     if (disposed) return;
     disposed = true;
+    for (const cleanup of chordCleanups) cleanup();
+    chordCleanups.length = 0;
     for (const cleanup of cleanups) cleanup();
     cleanups.length = 0;
     if (dialog.parentNode !== null) {
@@ -557,21 +605,30 @@ function formatBass(root: ChordRoot): string {
   return `${root.note}${acc}`;
 }
 
-/** Parse a free-text bass entry into a `ChordRoot` or `null` for
- * empty input. Accepts `A`–`G` followed by optional `♭`/`♯`/`b`/`#`.
- * Returns the previous value's null on unrecognised input so the
- * AST stays well-formed; the input keeps the typed string for
- * the user to correct. */
-function parseBassInput(s: string): ChordRoot | null {
+/** Parse a free-text bass entry into one of three outcomes:
+ *
+ *   - `null`     — empty input; the chord is no longer a slash chord.
+ *   - `ChordRoot` — `A`..`G` followed by optional `♭` / `♯` / `b` / `#`.
+ *   - `'invalid'` — anything else; the caller should NOT mutate the
+ *                   AST (the previous bass stays intact) and SHOULD
+ *                   surface the rejection visually (e.g. an
+ *                   `--invalid` modifier class on the input).
+ *
+ * The pre-fix version returned `null` for both empty input and
+ * garbage, which silently wiped a previously-valid bass on any
+ * unparseable keystroke (`code-style.md` Silent Fallback). The
+ * three-valued return distinguishes the cases at the type level so
+ * the call site can act differently. */
+function parseBassInput(s: string): ChordRoot | null | 'invalid' {
   const trimmed = s.trim();
   if (trimmed === '') return null;
   const note = trimmed.charAt(0).toUpperCase();
-  if (note < 'A' || note > 'G') return null;
+  if (note < 'A' || note > 'G') return 'invalid';
   const rest = trimmed.slice(1);
   let accidental: Accidental = 'natural';
   if (rest === '♯' || rest === '#') accidental = 'sharp';
   else if (rest === '♭' || rest === 'b') accidental = 'flat';
-  else if (rest !== '') return null;
+  else if (rest !== '') return 'invalid';
   return { note, accidental };
 }
 

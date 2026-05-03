@@ -58,6 +58,19 @@
   border-color: #4c6ef5;
 }
 
+/* Applied by `popover.ts` when the bass input cannot be parsed. The
+ * AST keeps its previous bass value while the visual cue tells the
+ * user the field is rejected. */
+.irealb-editor__input--invalid {
+  border-color: #c92a2a;
+  background: #fff5f5;
+}
+
+.irealb-editor__input--invalid:focus {
+  outline-color: #c92a2a;
+  border-color: #c92a2a;
+}
+
 .irealb-editor__grid {
   display: flex;
   flex-direction: column;
@@ -90,7 +103,12 @@
 }
 
 .irealb-editor__bar {
+  /* As of #2364 the cell is a real <button>, which inherits from a
+   * UA stylesheet rather than the editor root. Re-establish the
+   * monospace stack and 1rem size explicitly so the cell text
+   * matches the pre-#2364 <div> rendering byte-for-byte. */
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 1rem;
   border: 1px solid #cbd2d9;
   background: #f5f7fa;
   padding: 0.6rem 0.5rem;
@@ -98,13 +116,8 @@
   text-align: center;
   color: #1f2933;
   border-radius: 3px;
-  /* As of #2364 the cell is a real <button> — the click opens the
-   * bar-edit popover. Cursor + hover + focus affordances reflect
-   * that. */
   cursor: pointer;
   user-select: none;
-  font: inherit;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
 .irealb-editor__bar:hover {

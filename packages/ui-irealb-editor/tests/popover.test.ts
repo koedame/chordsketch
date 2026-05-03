@@ -369,6 +369,71 @@ describe('bar-edit popover', () => {
     editor.destroy();
   });
 
+  test('invalid bass input keeps the previous bass intact and flags the field', () => {
+    // Per `parseBassInput`'s three-valued contract, garbage input
+    // does NOT clobber an existing bass — the AST keeps its
+    // previous value and the input gains the `--invalid` modifier
+    // class so the user can see the rejection. Empty input still
+    // clears the bass (intentional difference between "user typed
+    // nothing" and "user typed garbage").
+    const wasm = makeStubWasm();
+    // Seed the first chord with a bass so the assertion has
+    // something to preserve.
+    const seed: IrealSong = JSON.parse(JSON.stringify(SAMPLE_SONG));
+    const firstChord = seed.sections[0]?.bars[0]?.chords[0];
+    if (!firstChord) throw new Error('seed chord missing');
+    firstChord.chord.bass = { note: 'G', accidental: 'natural' };
+    const seedUrl = `irealb://json:${encodeURIComponent(JSON.stringify(seed))}`;
+    const editor = createIrealbEditor({ initialValue: seedUrl, wasm });
+
+    bar(editor, 0).click();
+    const dialog = popoverOf(editor);
+    const row = dialog.querySelector<HTMLElement>('[data-row-index="0"]');
+    if (!row) throw new Error('first chord row not rendered');
+    const bassInput = inputIn(row, 'input[placeholder^="/X"]');
+
+    // Garbage input — the input gains the invalid class; the AST
+    // bass stays at G natural.
+    bassInput.value = 'ZZZ';
+    bassInput.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(bassInput.classList.contains('irealb-editor__input--invalid')).toBe(true);
+    clickButton(dialog, 'Save');
+    expect(readSong(editor).sections[0]?.bars[0]?.chords[0]?.chord.bass).toEqual({
+      note: 'G',
+      accidental: 'natural',
+    });
+
+    // Reopen, type a valid value -> invalid class is cleared and
+    // AST takes the new bass.
+    bar(editor, 0).click();
+    const dialog2 = popoverOf(editor);
+    const row2 = dialog2.querySelector<HTMLElement>('[data-row-index="0"]');
+    if (!row2) throw new Error('first chord row not rendered after reopen');
+    const bassInput2 = inputIn(row2, 'input[placeholder^="/X"]');
+    bassInput2.value = 'A♭';
+    bassInput2.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(bassInput2.classList.contains('irealb-editor__input--invalid')).toBe(false);
+    clickButton(dialog2, 'Save');
+    expect(readSong(editor).sections[0]?.bars[0]?.chords[0]?.chord.bass).toEqual({
+      note: 'A',
+      accidental: 'flat',
+    });
+
+    // Empty string still clears the bass — distinguishes the
+    // intentional "no slash chord" case from garbage.
+    bar(editor, 0).click();
+    const dialog3 = popoverOf(editor);
+    const row3 = dialog3.querySelector<HTMLElement>('[data-row-index="0"]');
+    if (!row3) throw new Error('first chord row not rendered after second reopen');
+    const bassInput3 = inputIn(row3, 'input[placeholder^="/X"]');
+    bassInput3.value = '';
+    bassInput3.dispatchEvent(new Event('input', { bubbles: true }));
+    clickButton(dialog3, 'Save');
+    expect(readSong(editor).sections[0]?.bars[0]?.chords[0]?.chord.bass).toBeNull();
+
+    editor.destroy();
+  });
+
   test('beat position select updates BarChord.position on save', () => {
     const wasm = makeStubWasm();
     const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
