@@ -5,14 +5,15 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-  # Fires when a PR enters the GitHub Merge Queue. The queue runs CI
-  # on a speculative merge commit before appending it to main. All
-  # checks listed in branch protection's required_status_checks must
-  # exist in this workflow (or another workflow that also handles
-  # merge_group) for the queue to consider a PR "green" and land it.
-  # The event has no effect until merge queue is enabled on `main` via
-  # repository / branch protection settings; until then this is a
-  # no-op trigger that never fires.
+  # GitHub Merge Queue was disabled on `main` per
+  # docs/adr/0015-disable-github-merge-queue.md, so no `merge_group`
+  # event is produced today and this trigger is a no-op. It is kept
+  # in place so that re-enabling the queue (should a future ADR
+  # supersede 0015) does not require a workflow edit, and so the
+  # secret-access caveat documented in ADR-0015 remains a single-edit
+  # change rather than a workflow-and-rule change. Removing this line
+  # is safe; do not add new `merge_group:` triggers without first
+  # superseding ADR-0015.
   merge_group:
 
 concurrency:

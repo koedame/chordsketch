@@ -69,18 +69,23 @@ npm run dev
    ```
 
 5. **Open a PR** with `Closes #N` in the description. PRs are squash-merged.
-6. **Click "Merge when ready"** (or run `gh pr merge --merge-queue`).
-   `main` is protected by GitHub Merge Queue: the queue creates a
-   temporary speculative merge commit combining your PR branch with
-   the current tip of `main`, runs CI once against that commit, and
-   lands the PR if CI passes. Your branch history is not rewritten;
-   you do not need to manually update or rebase your branch before
-   merging — the queue does it for you.
+6. **Click "Squash and merge"** (or run `gh pr merge <N> --squash`).
+   Branch protection requires status checks to pass and your branch
+   to be up to date with `main`. If `main` moved after your last
+   push, GitHub will prompt you to update your branch. Run
+   `git rebase origin/main && git push --force-with-lease` to do
+   so without introducing a merge commit (the surrounding flow
+   squashes on merge, so a clean linear branch history is
+   preferable). This re-runs CI against the new tip before
+   the merge button re-enables. (Direct squash merges replaced the
+   merge queue in
+   [ADR-0015](docs/adr/0015-disable-github-merge-queue.md);
+   the older "Merge when ready" / `--merge-queue` path is no longer
+   in use.)
 
-CI runs `cargo fmt --check`, `cargo clippy -- -D warnings`, and `cargo test`
-on every PR and on every speculative merge commit created by the merge
-queue. A Claude-powered auto-review classifies findings by severity and
-may push fix commits directly.
+CI runs `cargo fmt --check`, `cargo clippy -- -D warnings`, and
+`cargo test` on every PR. A Claude-powered auto-review classifies
+findings by severity and may push fix commits directly.
 
 ## Code Style
 

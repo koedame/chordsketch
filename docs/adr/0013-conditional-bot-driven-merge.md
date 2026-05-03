@@ -1,7 +1,17 @@
 # 0013. Bot-driven merge is allowed under explicit session permission
 
-- **Status**: Accepted
+- **Status**: Accepted (condition 4 updated by ADR-0015 on 2026-05-03)
 - **Date**: 2026-04-29
+
+> **Update (2026-05-03):** Condition (4) below ("Merge queue path
+> only") was made unreachable by
+> [ADR-0015](0015-disable-github-merge-queue.md), which disables
+> GitHub Merge Queue on `main`. The current operational condition
+> (4) is "Direct squash merge via `gh pr merge --squash`." The
+> body of this ADR is preserved verbatim for historical context;
+> for the active rule, see `.claude/rules/pr-workflow.md`
+> §"Bot-driven merge: conditional permission" and ADR-0015's
+> "Decision" section.
 
 ## Context
 

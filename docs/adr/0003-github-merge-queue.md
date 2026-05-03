@@ -1,6 +1,6 @@
 # 0003. GitHub Merge Queue replaces the auto-update-branch cascade
 
-- **Status**: Accepted
+- **Status**: Superseded by ADR-0015
 - **Date**: 2026-04-22
 
 ## Context
