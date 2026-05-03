@@ -433,10 +433,10 @@ function formatSectionLabelForPrompt(label: SectionLabel): string {
 
 /** Parse a free-text section label into the closest `SectionLabel`
  * variant. Empty input is treated as cancellation (returns `null`).
- * Single A..Z letter -> `Letter`; named variants
- * (`verse`/`chorus`/`intro`/`outro`/`bridge`, case-insensitive)
- * map to their dedicated variant; anything else falls into
- * `Custom` so unusual labels survive the round trip. */
+ * Single A–Z letter (case-insensitive, normalised to uppercase) ->
+ * `Letter`; named variants (`verse`/`chorus`/`intro`/`outro`/`bridge`,
+ * case-insensitive) map to their dedicated variant; anything else
+ * falls into `Custom` so unusual labels survive the round trip. */
 export function parseSectionLabel(s: string): SectionLabel | null {
   const trimmed = s.trim();
   if (trimmed === '') return null;
