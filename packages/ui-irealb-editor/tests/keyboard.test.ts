@@ -232,6 +232,26 @@ describe('keyboard shortcuts: bar delete', () => {
     editor.destroy();
     editor.element.remove();
   });
+
+  test('Delete with Meta modifier does not trigger the shortcut', () => {
+    // Meta (Cmd on macOS) is gated alongside Ctrl so Cmd+Delete
+    // quick-trash does not silently remove a bar.
+    const wasm = makeStubWasm();
+    const onChange = vi.fn();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+    document.body.appendChild(editor.element);
+    editor.onChange(onChange);
+
+    const cells = getCells(editor);
+    cells[0]?.focus();
+    dispatchKey(cells[0] as HTMLElement, 'Delete', { meta: true });
+
+    expect(readSong(editor).sections[0]?.bars.length).toBe(3);
+    expect(onChange).not.toHaveBeenCalled();
+
+    editor.destroy();
+    editor.element.remove();
+  });
 });
 
 describe('keyboard shortcuts: bar reorder', () => {
@@ -386,6 +406,28 @@ describe('keyboard shortcuts: bar reorder', () => {
     expect(readSong(editor).sections[0]?.bars.length).toBe(3);
     // The popover open did not call onChange; deleting via Delete
     // should not have fired it either.
+    expect(onChange).not.toHaveBeenCalled();
+
+    editor.destroy();
+    editor.element.remove();
+  });
+
+  test('Backspace does not fire while a bar popover holds focus', () => {
+    // Symmetric coverage for Backspace: the popover guard in
+    // handleBarCellKeydown applies to both Delete and Backspace via
+    // the same early-return, so both keys must be pinned.
+    const wasm = makeStubWasm();
+    const onChange = vi.fn();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+    document.body.appendChild(editor.element);
+    editor.onChange(onChange);
+
+    const cells = getCells(editor);
+    cells[1]?.click(); // open popover for the F bar
+    expect(editor.element.querySelector('.irealb-editor__popover')).not.toBeNull();
+
+    dispatchKey(cells[1] as HTMLElement, 'Backspace');
+    expect(readSong(editor).sections[0]?.bars.length).toBe(3);
     expect(onChange).not.toHaveBeenCalled();
 
     editor.destroy();
