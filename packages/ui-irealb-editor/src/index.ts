@@ -19,10 +19,10 @@
 // musical symbol). Structural section / bar edits arrive in #2365,
 // keyboard navigation + ARIA in #2368.
 
-import type { Bar, IrealSong } from './ast.js';
+import type { Bar, IrealSong, Section, SectionLabel } from './ast.js';
 import { clearChildren } from './dom.js';
 import { openBarPopover, type BarPopoverHandle } from './popover.js';
-import { render, type RenderHandle } from './render.js';
+import { render, type RenderHandle, type StructuralOps } from './render.js';
 import { IrealbEditorState, type IrealbWasm, makeStateFromUrl } from './state.js';
 
 export type { IrealSong } from './ast.js';
@@ -62,12 +62,29 @@ export interface CreateIrealbEditorOptions {
    * tests) supplies an object whose two methods come from
    * `@chordsketch/wasm`'s `parseIrealb` / `serializeIrealb`. */
   wasm: IrealbWasm;
+  /** Optional override for the section-label prompt (#2365). The
+   * default uses `window.prompt` to ask for `"A"` / `"Verse"` /
+   * `"Chorus"` / `"Intro"` / `"Outro"` / `"Bridge"` / single
+   * letter / arbitrary text; tests inject a stub that returns a
+   * canned label without blocking on the modal prompt. Returning
+   * `null` cancels the operation (no AST mutation). */
+  promptSectionLabel?: (current: SectionLabel | null) => SectionLabel | null;
+  /** Optional override for the delete-section confirmation
+   * (#2365). Defaults to `window.confirm`. Tests inject a stub
+   * that returns a canned boolean. Returning `false` cancels the
+   * delete (no AST mutation). */
+  confirmDeleteSection?: (label: SectionLabel) => boolean;
 }
 
 /** Build an `EditorAdapter` mounted inside a freshly-created `<div>`.
  * Caller appends `adapter.element` into the desired DOM container. */
 export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAdapter {
-  const { initialValue, wasm } = options;
+  const {
+    initialValue,
+    wasm,
+    promptSectionLabel = defaultPromptSectionLabel,
+    confirmDeleteSection = defaultConfirmDeleteSection,
+  } = options;
 
   const element = document.createElement('div');
   element.classList.add('irealb-editor');
@@ -148,12 +165,131 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
     });
   };
 
+  // Structural ops (#2365). Each mutation closes the popover (a
+  // grid rebuild detaches the popover's anchor anyway), splices /
+  // mutates `state.song`, then re-renders + fires onChange. The
+  // "delete section" path consults the host-supplied
+  // `confirmDeleteSection`; the "rename" / "add section" paths
+  // consult `promptSectionLabel`. Rename uses the existing label
+  // as the prompt seed; add uses `null` to signal "no current
+  // label."
+  const dismissPopover = (): void => {
+    if (popoverHandle !== null) {
+      popoverHandle.dispose();
+      popoverHandle = null;
+    }
+  };
+
+  const ops: StructuralOps = {
+    addSection: () => {
+      if (destroyed) return;
+      const label = promptSectionLabel(null);
+      if (label === null) return;
+      dismissPopover();
+      state.song.sections.push(makeDefaultSection(label));
+      renderNow();
+      fireUserEdit();
+    },
+    renameSection: (secIndex, current) => {
+      if (destroyed) return;
+      const section = state.song.sections[secIndex];
+      if (!section) return;
+      const next = promptSectionLabel(current);
+      if (next === null) return;
+      dismissPopover();
+      section.label = next;
+      renderNow();
+      fireUserEdit();
+    },
+    deleteSection: (secIndex) => {
+      if (destroyed) return;
+      const section = state.song.sections[secIndex];
+      if (!section) return;
+      if (!confirmDeleteSection(section.label)) return;
+      dismissPopover();
+      state.song.sections.splice(secIndex, 1);
+      renderNow();
+      fireUserEdit();
+    },
+    moveSectionUp: (secIndex) => {
+      if (destroyed) return;
+      if (secIndex <= 0 || secIndex >= state.song.sections.length) return;
+      dismissPopover();
+      const cur = state.song.sections[secIndex];
+      const prev = state.song.sections[secIndex - 1];
+      if (!cur || !prev) return;
+      state.song.sections[secIndex - 1] = cur;
+      state.song.sections[secIndex] = prev;
+      renderNow();
+      fireUserEdit();
+    },
+    moveSectionDown: (secIndex) => {
+      if (destroyed) return;
+      if (secIndex < 0 || secIndex >= state.song.sections.length - 1) return;
+      dismissPopover();
+      const cur = state.song.sections[secIndex];
+      const next = state.song.sections[secIndex + 1];
+      if (!cur || !next) return;
+      state.song.sections[secIndex + 1] = cur;
+      state.song.sections[secIndex] = next;
+      renderNow();
+      fireUserEdit();
+    },
+    addBar: (secIndex) => {
+      if (destroyed) return;
+      const section = state.song.sections[secIndex];
+      if (!section) return;
+      dismissPopover();
+      section.bars.push(makeDefaultBar());
+      renderNow();
+      fireUserEdit();
+    },
+    deleteBar: (secIndex, barIndex) => {
+      if (destroyed) return;
+      const section = state.song.sections[secIndex];
+      if (!section) return;
+      if (barIndex < 0 || barIndex >= section.bars.length) return;
+      dismissPopover();
+      section.bars.splice(barIndex, 1);
+      renderNow();
+      fireUserEdit();
+    },
+    moveBarLeft: (secIndex, barIndex) => {
+      if (destroyed) return;
+      const section = state.song.sections[secIndex];
+      if (!section) return;
+      if (barIndex <= 0 || barIndex >= section.bars.length) return;
+      dismissPopover();
+      const cur = section.bars[barIndex];
+      const prev = section.bars[barIndex - 1];
+      if (!cur || !prev) return;
+      section.bars[barIndex - 1] = cur;
+      section.bars[barIndex] = prev;
+      renderNow();
+      fireUserEdit();
+    },
+    moveBarRight: (secIndex, barIndex) => {
+      if (destroyed) return;
+      const section = state.song.sections[secIndex];
+      if (!section) return;
+      if (barIndex < 0 || barIndex >= section.bars.length - 1) return;
+      dismissPopover();
+      const cur = section.bars[barIndex];
+      const next = section.bars[barIndex + 1];
+      if (!cur || !next) return;
+      section.bars[barIndex + 1] = cur;
+      section.bars[barIndex] = next;
+      renderNow();
+      fireUserEdit();
+    },
+  };
+
   const renderNow = (): void => {
     if (renderHandle !== null) {
       renderHandle.dispose();
       renderHandle = null;
     }
-    renderHandle = render(element, state, fireUserEdit, handleOpenPopover);
+    renderHandle = render(element, state, fireUserEdit, handleOpenPopover, ops);
   };
 
   renderNow();
@@ -233,4 +369,91 @@ function makeEmptySong(): IrealSong {
     transpose: 0,
     sections: [],
   };
+}
+
+/** Default new bar — single barlines, no chords, no ending, no
+ * symbol. Used by `addBar` and by `addSection` (which seeds the
+ * new section with one starter bar so the user can immediately
+ * click to open the popover). */
+function makeDefaultBar(): Bar {
+  return {
+    start: 'single',
+    end: 'single',
+    chords: [],
+    ending: null,
+    symbol: null,
+  };
+}
+
+/** Default new section: the supplied label + one default bar. */
+function makeDefaultSection(label: SectionLabel): Section {
+  return { label, bars: [makeDefaultBar()] };
+}
+
+/** Default `promptSectionLabel`: ask via `window.prompt`, parse the
+ * reply into a `SectionLabel`. Empty / cancelled returns `null`.
+ * The rules mirror the named variants in `ast.ts` so a user typing
+ * `"Verse"` ends up with `{kind: 'verse'}` rather than `{kind:
+ * 'custom', value: 'Verse'}`. */
+function defaultPromptSectionLabel(current: SectionLabel | null): SectionLabel | null {
+  const seed = current !== null ? formatSectionLabelForPrompt(current) : 'A';
+  const reply = window.prompt(
+    'Section label (A–Z, Verse, Chorus, Intro, Outro, Bridge, or any text):',
+    seed,
+  );
+  if (reply === null) return null;
+  return parseSectionLabel(reply);
+}
+
+/** Default delete-section confirmation. */
+function defaultConfirmDeleteSection(label: SectionLabel): boolean {
+  return window.confirm(`Delete section "${formatSectionLabelForPrompt(label)}"?`);
+}
+
+/** Map a `SectionLabel` to the string form `defaultPromptSectionLabel`
+ * round-trips through. */
+function formatSectionLabelForPrompt(label: SectionLabel): string {
+  switch (label.kind) {
+    case 'letter':
+      return label.value;
+    case 'verse':
+      return 'Verse';
+    case 'chorus':
+      return 'Chorus';
+    case 'intro':
+      return 'Intro';
+    case 'outro':
+      return 'Outro';
+    case 'bridge':
+      return 'Bridge';
+    case 'custom':
+      return label.value;
+  }
+}
+
+/** Parse a free-text section label into the closest `SectionLabel`
+ * variant. Empty input is treated as cancellation (returns `null`).
+ * Single A..Z letter -> `Letter`; named variants
+ * (`verse`/`chorus`/`intro`/`outro`/`bridge`, case-insensitive)
+ * map to their dedicated variant; anything else falls into
+ * `Custom` so unusual labels survive the round trip. */
+export function parseSectionLabel(s: string): SectionLabel | null {
+  const trimmed = s.trim();
+  if (trimmed === '') return null;
+  if (trimmed.length === 1 && trimmed >= 'A' && trimmed <= 'Z') {
+    return { kind: 'letter', value: trimmed };
+  }
+  switch (trimmed.toLowerCase()) {
+    case 'verse':
+      return { kind: 'verse' };
+    case 'chorus':
+      return { kind: 'chorus' };
+    case 'intro':
+      return { kind: 'intro' };
+    case 'outro':
+      return { kind: 'outro' };
+    case 'bridge':
+      return { kind: 'bridge' };
+  }
+  return { kind: 'custom', value: trimmed };
 }

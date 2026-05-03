@@ -83,23 +83,112 @@
   gap: 0.5rem;
 }
 
-.irealb-editor__section-label {
-  margin: 0;
-  font-size: 0.95rem;
-  color: #52606d;
+.irealb-editor__section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   border-bottom: 1px solid #e4e7eb;
   padding-bottom: 0.25rem;
 }
 
-/* 4 bars per line. Per the AC: each bar is rendered as a disabled
- * cell (no inputs yet — bar editing arrives in #2364). The grid
- * wraps when the section has more than 4 bars; sections with <4
- * bars right-pad with empty grid cells (handled by the implicit
- * `grid-template-columns` track count). */
+.irealb-editor__section-label {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #52606d;
+  flex: 1;
+}
+
+/* Per-section action buttons (rename / move / delete) — added in
+ * #2365. Sit inline with the section heading so they stay visually
+ * attached to their target section. */
+.irealb-editor__section-action {
+  background: #ffffff;
+  border: 1px solid #cbd2d9;
+  border-radius: 4px;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
+  font: inherit;
+  color: #1f2933;
+}
+
+.irealb-editor__section-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.irealb-editor__section-action--danger {
+  border-color: #fab4b4;
+  color: #c92a2a;
+}
+
+.irealb-editor__section-action--danger:hover:not(:disabled) {
+  background: #fff5f5;
+}
+
+/* Add-section / add-bar trailers (#2365). Dashed outline so they
+ * read as "drop zone" rather than primary control. */
+.irealb-editor__add-section,
+.irealb-editor__add-bar {
+  align-self: flex-start;
+  background: #f5f7fa;
+  border: 1px dashed #cbd2d9;
+  border-radius: 4px;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  font: inherit;
+  color: #1f2933;
+}
+
+.irealb-editor__add-section:hover,
+.irealb-editor__add-bar:hover {
+  background: #e4ebf1;
+}
+
+/* 4 bars per line. The grid wraps when the section has more than
+ * 4 bars; sections with <4 bars right-pad with empty grid cells. */
 .irealb-editor__bars {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.25rem;
+}
+
+/* Bar wrapper holds the bar `<button>` plus the per-bar action
+ * micro-controls beneath it (#2365). */
+.irealb-editor__bar-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.irealb-editor__bar-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.15rem;
+}
+
+.irealb-editor__bar-action {
+  background: #ffffff;
+  border: 1px solid #cbd2d9;
+  border-radius: 3px;
+  padding: 0.1rem 0.35rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  color: #52606d;
+}
+
+.irealb-editor__bar-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.irealb-editor__bar-action--danger {
+  border-color: #fab4b4;
+  color: #c92a2a;
+}
+
+.irealb-editor__bar-action--danger:hover:not(:disabled) {
+  background: #fff5f5;
 }
 
 .irealb-editor__bar {

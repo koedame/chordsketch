@@ -20,13 +20,21 @@ Shipped:
   optional `/X` bass + beat position 1 / 1.5 / … / 4.5, with
   add / remove / reorder), N-th ending number (1–9, empty = none),
   and musical symbol (None / Segno / Coda / D.C. / D.S. / Fine).
+- #2365 — structural editing via per-section + per-bar UI buttons:
+  Add Section (with label prompt), Rename / Delete (with confirm) /
+  Move up / Move down per section; Add Bar / Delete bar / Move bar
+  left + right within each section. The two host hooks
+  `promptSectionLabel` and `confirmDeleteSection` default to
+  `window.prompt` / `window.confirm` and can be overridden by the
+  host (or by tests).
 
 Subsequent iterations:
 
-- #2365 — section management and bar add / remove / reorder.
 - #2366 — `@chordsketch/ui-web` runtime swap + iRealb input toggle.
 - #2367 — desktop integration (Open / Save dispatch + View menu).
 - #2368 — keyboard navigation + ARIA grid semantics.
+- #2376 — keyboard shortcuts for bar delete / reorder (deferred from
+  #2365 so binding decisions stay deliberate).
 
 ## Design
 
