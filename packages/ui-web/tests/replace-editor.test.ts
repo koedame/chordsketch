@@ -301,6 +301,44 @@ describe('replaceEditor', () => {
 
     handle.destroy();
   });
+
+  test('consecutive swaps (A→B→C) destroy each outgoing adapter and carry values forward', async () => {
+    const renderers = makeRenderers();
+    const a = makeRecordingFactory();
+    const b = makeRecordingFactory();
+    const c = makeRecordingFactory();
+    const root = mountRoot();
+
+    const handle = await mountChordSketchUi(root, {
+      renderers,
+      initialChordPro: 'value-A',
+      createEditor: a.factory,
+    });
+
+    // First swap A→B: A is destroyed, B receives A's edited value.
+    (a.current() as unknown as { fire: (v: string) => void }).fire('value-A-edited');
+    handle.replaceEditor(b.factory);
+    expect(a.current()?.destroyed).toBe(true);
+    expect(b.buildCount()).toBe(1);
+    expect(b.current()?.initialValueSeen).toBe('value-A-edited');
+
+    // Second swap B→C: B is destroyed, C receives B's edited value.
+    (b.current() as unknown as { fire: (v: string) => void }).fire('value-B-edited');
+    handle.replaceEditor(c.factory);
+    expect(b.current()?.destroyed).toBe(true);
+    expect(c.buildCount()).toBe(1);
+    expect(c.current()?.initialValueSeen).toBe('value-B-edited');
+
+    // Each adapter must have been subscribed via onChange exactly once —
+    // accumulated subscriptions would mean a prior swap leaked its handler.
+    expect(b.current()?.onChangeAttached).toBe(1);
+    expect(c.current()?.onChangeAttached).toBe(1);
+
+    // getChordPro must read from the live (C) adapter.
+    expect(handle.getChordPro()).toBe('value-B-edited');
+
+    handle.destroy();
+  });
 });
 
 describe('headerControls slot', () => {
