@@ -54,6 +54,11 @@ apps/desktop/src-tauri/gen/
 # source. See #2305.
 .playwright-mcp/
 
+# Playwright (`packages/playground/tests-e2e`) reports + traces.
+# Uploaded by `playground-smoke.yml` on failure; otherwise local-only.
+packages/playground/playwright-report/
+packages/playground/test-results/
+
 # Python (used by scripts/ and CI helpers, not a runtime dep)
 __pycache__/
 *.pyc

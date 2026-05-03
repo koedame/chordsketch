@@ -160,8 +160,50 @@ const irealbEditorFactory: EditorFactory = (
 // mount-time one and any future ui-web bug fix to the textarea
 // (accessibility tweaks, IME composition, focus handling) flows
 // through to both call sites without divergence.
-const factoryFor = (format: InputFormat): EditorFactory =>
-  format === 'irealb' ? irealbEditorFactory : defaultTextareaEditor;
+/**
+ * Wrap the format-specific factory with a "fall back to the format's
+ * sample seed if the carried-over content is incompatible" recovery
+ * path. The runtime swap (#2366) forwards the previous editor's
+ * `getValue()` straight into the next factory; that lets a user
+ * paste an `irealb://` URL into the textarea then flip the toggle
+ * to edit it visually. But going the other direction — ChordPro
+ * text already in the textarea, then flipping to iRealb — used to
+ * leave the editor unmounted because `parseIrealb(<chordpro>)`
+ * threw inside `createIrealbEditor`'s constructor and `ui-web`'s
+ * `replaceEditor` propagated the throw to the preview pane error
+ * banner without ever attaching a new adapter (#2397 sister-site
+ * audit).
+ *
+ * Recovery is "rebuild with the format's sample seed." We discard
+ * the user's text in this case rather than dropping silently into
+ * an empty editor — the sample gives the user something concrete to
+ * read while they decide what to do, and matches the mount-time
+ * behaviour for the same format. A brief `console.warn` makes the
+ * lossy fallback discoverable in dev tools without nagging the user
+ * with an alert.
+ */
+const factoryFor = (format: InputFormat): EditorFactory => {
+  const base: EditorFactory =
+    format === 'irealb' ? irealbEditorFactory : defaultTextareaEditor;
+  const seed = format === 'irealb' ? SAMPLE_IREALB : SAMPLE_CHORDPRO;
+  return (options) => {
+    try {
+      return base(options);
+    } catch (e) {
+      // Avoid an infinite retry loop if the seed itself is invalid
+      // for the target factory — that would be a bug in the sample
+      // constants, not a user-content issue, and the original error
+      // is the right thing to surface.
+      if (options.initialValue === seed) throw e;
+      console.warn(
+        `${format} editor could not parse carried-over content; ` +
+          `falling back to the built-in sample. Original error:`,
+        e,
+      );
+      return base({ ...options, initialValue: seed });
+    }
+  };
+};
 
 const initialFormat = detectInitialFormat(SAMPLE_CHORDPRO);
 const initialContent = initialFormat === 'irealb' ? SAMPLE_IREALB : SAMPLE_CHORDPRO;

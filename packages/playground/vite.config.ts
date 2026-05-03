@@ -43,7 +43,18 @@ export default defineConfig({
   },
   server: {
     fs: {
-      allow: ['../npm', '../ui-web', '../ui-irealb-editor'],
+      // The playground root must be listed explicitly. Vite would
+      // implicitly include the project root, but supplying any
+      // `fs.allow` entry overrides that default — without `here`
+      // the dev server returns 403 for `index.html` itself when
+      // started via `npx vite` from this directory. Caught while
+      // reproducing #2397.
+      allow: [
+        here,
+        resolve(here, '../npm'),
+        resolve(here, '../ui-web'),
+        resolve(here, '../ui-irealb-editor'),
+      ],
     },
   },
 });
