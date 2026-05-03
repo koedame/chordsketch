@@ -271,14 +271,28 @@ async function setEditorMode(
 /**
  * Synchronous probe: does `value` parse as an `irealb://` URL via
  * the wasm `parseIrealb` exported function? Returns `false` on any
- * thrown error. Used by `setEditorMode` to decide whether the
- * chordpro → irealb-grid transition can proceed without prompting.
+ * thrown error. Used by `setEditorMode` and `runOpen` to validate
+ * before any destructive state mutation.
+ *
+ * Note: a successful pre-flight parse here means the wasm bridge
+ * will parse the same URL a second time inside `createIrealbEditor`'s
+ * `makeStateFromUrl` after the swap completes. The duplicate cost is
+ * a single sub-millisecond wasm call against URLs that are bounded
+ * by the 10 MiB `MAX_OPEN_SIZE_BYTES` cap; threading the parsed
+ * `IrealSong` through the factory contract to skip the second parse
+ * would require widening `EditorFactoryOptions` for one host's
+ * benefit and is not justified at this volume. The error path is
+ * `console.debug`-logged so a user repeatedly probing a malformed
+ * buffer can still find the underlying message in devtools without
+ * raising it to the UI.
  */
 function canParseAsIrealbUrl(value: string): boolean {
   try {
     parseIrealb(value);
     return true;
-  } catch {
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.debug('canParseAsIrealbUrl: parse failed', e);
     return false;
   }
 }
@@ -371,18 +385,42 @@ async function runOpen(
   try {
     const content = await invoke<string>('open_file', { path: target });
     const targetMode = detectModeForExtension(target);
+    // Validate `content` BEFORE any destructive state mutation so a
+    // malformed iRealb file cannot leave the app half-swapped: editor
+    // mounted as the new mode, `currentEditorMode` advanced, but
+    // `currentPath` / `lastSavedContent` still pointing at the old
+    // file (so the title bar shows the wrong filename and Save would
+    // overwrite the old document with the empty new chart). The
+    // failure window is collapsed to "before mode change" — the user
+    // sees a friendly error and the previous editor stays intact.
+    if (targetMode === 'irealb-grid' && !canParseAsIrealbUrl(content)) {
+      await message(
+        'This file does not contain a valid irealb:// URL.',
+        { title: 'Open failed', kind: 'error' },
+      );
+      return;
+    }
     if (targetMode !== null && targetMode !== currentEditorMode) {
       // Clear the current editor before swapping so the new factory's
       // `initialValue` carryover is empty. Otherwise a chordpro →
       // irealb-grid transition would feed `parseIrealb` ChordPro
       // text and throw via the H1 safety fix in ui-web; conversely
       // an irealb-grid → chordpro transition would feed CodeMirror
-      // an iRealb URL (harmless) but the irealb adapter's getValue
-      // can throw on a partially-edited state. Either way, going
-      // through an empty intermediate keeps the swap deterministic.
+      // an iRealb URL (harmless on the CodeMirror side, but the
+      // re-render fired by `replaceEditor`'s closure would still
+      // route through the iRealb-aware preview). Going through an
+      // empty intermediate keeps the swap deterministic and side-
+      // steps `replaceEditor`'s `getValue()` capture from carrying
+      // stale-format content into the new factory's parser.
       handle.setChordPro('');
       currentEditorMode = targetMode;
       handle.replaceEditor(factoryForMode(targetMode));
+      // Rebuild the menu inside the swap window so the View radio
+      // immediately reflects the new mode, even though the
+      // post-load rebuild below would otherwise pick it up. Decoupling
+      // the two means a future intermediate failure (between the
+      // swap and the load) cannot leave the menu radio out of sync.
+      await rebuildMenu();
     }
     // Load the file content into the (now correctly typed) editor.
     handle.setChordPro(content);
@@ -472,8 +510,15 @@ async function runSaveAs(
   handle: ChordSketchUiHandle,
   rebuildMenu: MenuRebuilder,
 ): Promise<void> {
+  // Suggest a default extension that matches the active editor
+  // mode. Saving an `.cho` file containing an `irealb://` URL would
+  // otherwise be classified as ChordPro by every consumer that keys
+  // off the file extension (this app's own `runOpen`, the CLI, the
+  // VS Code extension), creating a silent format/extension mismatch.
+  const defaultExt =
+    currentEditorMode === 'chordpro' ? 'cho' : 'irealb';
   const picked = await save({
-    defaultPath: currentPath ?? `${UNTITLED_LABEL.toLowerCase()}.cho`,
+    defaultPath: currentPath ?? `${UNTITLED_LABEL.toLowerCase()}.${defaultExt}`,
     filters: OPEN_SAVE_FILTERS,
   });
   if (!picked) return;

@@ -2,11 +2,13 @@
 // desktop app. The dual-package npm build regenerates the canonical
 // `packages/npm/web/chordsketch_wasm.d.ts` via `wasm-pack`; this
 // shim exists so a checkout without a fresh wasm build (the typical
-// case for first-time clones) still typechecks. Mirrors the
-// equivalent shim in `packages/playground/src/wasm.d.ts`. The
-// declarations below cover only the imports the desktop entry
-// uses — keep them in sync with `apps/desktop/src/main.ts` whenever
-// a new wasm export is added here.
+// case for first-time clones) still typechecks. The declarations
+// below cover only the *subset* of `packages/playground/src/wasm.d.ts`
+// the desktop entry imports — when a new wasm export is added to
+// `apps/desktop/src/main.ts`, add it here too. (The desktop omits
+// `validate` / `ValidationError` because no menu / handler currently
+// surfaces parser diagnostics; add those declarations alongside the
+// import that needs them.)
 declare module '@chordsketch/wasm' {
   export function render_html(input: string): string;
   export function render_text(input: string): string;
