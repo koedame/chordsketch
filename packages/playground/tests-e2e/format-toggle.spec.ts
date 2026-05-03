@@ -40,8 +40,9 @@ test.describe('playground editor mount', () => {
     // Sample chart has multiple bars across at least one section;
     // a non-zero count proves the wasm parse + grid render fired.
     const bars = editor.locator('.irealb-editor__bar');
+    // `toBeVisible()` on the first bar already implies count >= 1; a
+    // visible bar is the meaningful anchor that wasm parse + grid render fired.
     await expect(bars.first()).toBeVisible();
-    expect(await bars.count()).toBeGreaterThan(0);
     // The textarea adapter must have been torn down; leaving both
     // mounted would mean `replaceEditor` skipped `destroy()`.
     await expect(page.locator('textarea#editor')).toHaveCount(0);
