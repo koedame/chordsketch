@@ -4,11 +4,11 @@
 // injected wasm bridge whenever a user-initiated edit completes.
 //
 // Why a class rather than a plain object: the class collocates the
-// wasm bridge, the `dirty` flag, and the parse/serialize methods, so
-// `render.ts` does not have to thread the wasm functions through
-// every event handler. The state object itself is exposed via
-// `state.song` for direct field mutation — no setters / no proxies,
-// matching the "plain DOM, plain TS" idiom used throughout `ui-web`.
+// wasm bridge with the parse / serialize methods, so `render.ts`
+// does not have to thread the wasm functions through every event
+// handler. The state object itself is exposed via `state.song` for
+// direct field mutation — no setters / no proxies, matching the
+// "plain DOM, plain TS" idiom used throughout `ui-web`.
 
 import type { IrealSong } from './ast.js';
 

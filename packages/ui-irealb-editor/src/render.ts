@@ -22,7 +22,7 @@ import type {
   Section,
   SectionLabel,
 } from './ast.js';
-import { clearChildren, el, field } from './dom.js';
+import { clearChildren, el, field, FieldIdMinter } from './dom.js';
 import type { IrealbEditorState } from './state.js';
 
 /** Result returned by {@link render}. `dispose` removes every event
@@ -44,6 +44,11 @@ export function render(
 ): RenderHandle {
   clearChildren(root);
   const cleanups: Array<() => void> = [];
+  // Per-render ID minter so two coexisting editors in the same
+  // document do not interleave field IDs. The minter resets on
+  // every render pass (rebuild-on-demand model) — IDs are not
+  // expected to be stable across renders.
+  const minter = new FieldIdMinter();
 
   /** Subscribe to an event and remember how to unsubscribe. */
   const listen = <K extends keyof HTMLElementEventMap>(
@@ -66,7 +71,7 @@ export function render(
     state.song.title = titleInput.value;
     onUserEdit();
   });
-  header.appendChild(field('Title', titleInput));
+  header.appendChild(field('Title', titleInput, minter));
 
   const composerInput = el('input', {
     attrs: { type: 'text', value: state.song.composer ?? '' },
@@ -77,7 +82,7 @@ export function render(
     state.song.composer = v === '' ? null : v;
     onUserEdit();
   });
-  header.appendChild(field('Composer', composerInput));
+  header.appendChild(field('Composer', composerInput, minter));
 
   const styleInput = el('input', {
     attrs: { type: 'text', value: state.song.style ?? '' },
@@ -88,7 +93,7 @@ export function render(
     state.song.style = v === '' ? null : v;
     onUserEdit();
   });
-  header.appendChild(field('Style', styleInput));
+  header.appendChild(field('Style', styleInput, minter));
 
   // Key root: combined "letter + accidental" dropdown (12 enharmonic
   // names). Splitting note and accidental into two selects exposed a
@@ -100,28 +105,28 @@ export function render(
     state.song.key_signature.root = decodeKeyRootValue(keyRootSelect.value);
     onUserEdit();
   });
-  header.appendChild(field('Key root', keyRootSelect));
+  header.appendChild(field('Key root', keyRootSelect, minter));
 
   const keyModeSelect = makeKeyModeSelect(state.song.key_signature.mode);
   listen(keyModeSelect, 'change', () => {
     state.song.key_signature.mode = keyModeSelect.value as KeyMode;
     onUserEdit();
   });
-  header.appendChild(field('Key mode', keyModeSelect));
+  header.appendChild(field('Key mode', keyModeSelect, minter));
 
   const timeNumSelect = makeTimeNumeratorSelect(state.song.time_signature.numerator);
   listen(timeNumSelect, 'change', () => {
     state.song.time_signature.numerator = Number.parseInt(timeNumSelect.value, 10);
     onUserEdit();
   });
-  header.appendChild(field('Time numerator', timeNumSelect));
+  header.appendChild(field('Time numerator', timeNumSelect, minter));
 
   const timeDenSelect = makeTimeDenominatorSelect(state.song.time_signature.denominator);
   listen(timeDenSelect, 'change', () => {
     state.song.time_signature.denominator = Number.parseInt(timeDenSelect.value, 10);
     onUserEdit();
   });
-  header.appendChild(field('Time denominator', timeDenSelect));
+  header.appendChild(field('Time denominator', timeDenSelect, minter));
 
   const tempoInput = el('input', {
     attrs: {
@@ -148,7 +153,7 @@ export function render(
     state.song.tempo = n === 0 ? null : n;
     onUserEdit();
   });
-  header.appendChild(field('Tempo (0 = unset)', tempoInput));
+  header.appendChild(field('Tempo (0 = unset)', tempoInput, minter));
 
   const transposeInput = el('input', {
     attrs: {
@@ -171,7 +176,7 @@ export function render(
     state.song.transpose = n;
     onUserEdit();
   });
-  header.appendChild(field('Transpose', transposeInput));
+  header.appendChild(field('Transpose', transposeInput, minter));
 
   root.appendChild(header);
 
@@ -282,7 +287,11 @@ function formatChordQuality(q: ChordQuality): string {
     case 'dominant7':
       return '7';
     case 'half_diminished':
-      return 'm7♭5'; // m7♭5 — the iReal Pro convention.
+      // `m7♭5` mirrors `crates/render-ireal/src/chord_typography.rs`
+      // (HalfDiminished arm) — the iReal Pro convention. Keep both
+      // sites in lockstep so the bar-grid editor and the SVG
+      // renderer present the same glyph for the same AST.
+      return 'm7♭5';
     case 'diminished7':
       return 'dim7';
     case 'suspended2':
@@ -314,10 +323,12 @@ function decodeKeyRootValue(v: string): ChordRoot {
     note > 'G' ||
     (accidental !== 'natural' && accidental !== 'sharp' && accidental !== 'flat')
   ) {
-    // Defensive fallback: only the dropdown can put values into this
-    // path, but a future refactor that introduces a free-text root
-    // input would need this guard.
-    return { note: 'C', accidental: 'natural' };
+    // The dropdown is the only producer of values reaching this
+    // function; an unrecognised value means a contract violation
+    // (e.g. a future refactor that introduces a free-text root
+    // input without updating this site). Throw so the bug is
+    // surfaced rather than silently coerced into C natural.
+    throw new Error(`decodeKeyRootValue: invalid value: ${v}`);
   }
   return { note, accidental };
 }

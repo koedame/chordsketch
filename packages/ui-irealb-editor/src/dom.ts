@@ -51,22 +51,34 @@ export function clearChildren(parent: Node): void {
   }
 }
 
+/** Per-editor-instance ID minter used by {@link field}. Constructed
+ * once per editor mount so two coexisting editors in the same
+ * document do not interleave IDs (relevant for headless test
+ * harnesses that mount multiple editors in one jsdom and assert on
+ * stable IDs, and for future split-pane / multi-tab desktop hosts). */
+export class FieldIdMinter {
+  private counter = 0;
+
+  /** Generate a fresh ID. Format mirrors the pre-instance helper
+   * so existing CSS selectors / accessibility tooling that grep
+   * for `irealb-editor-field-` continue to work. */
+  next(): string {
+    this.counter += 1;
+    return `irealb-editor-field-${this.counter}`;
+  }
+}
+
 /** Helper for grouping a `<label>` + `<input>` pair so the form
- * layout stays declarative. Returns the wrapper `<div>` so the caller
- * can attach event listeners on the contained input via the second
- * tuple member. */
+ * layout stays declarative. Returns the wrapper `<div>`; assigns
+ * `input.id` from the per-editor `minter` if the input does not
+ * already have one. */
 export function field(
   labelText: string,
   input: HTMLInputElement | HTMLSelectElement,
+  minter: FieldIdMinter,
 ): HTMLDivElement {
-  const id = input.id || generateFieldId();
+  const id = input.id || minter.next();
   input.id = id;
   const label = el('label', { attrs: { for: id }, text: labelText });
   return el('div', { class: 'irealb-editor__field', children: [label, input] });
-}
-
-let fieldIdCounter = 0;
-function generateFieldId(): string {
-  fieldIdCounter += 1;
-  return `irealb-editor-field-${fieldIdCounter}`;
 }

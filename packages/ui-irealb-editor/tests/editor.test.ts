@@ -269,3 +269,201 @@ describe('createIrealbEditor', () => {
     editor.destroy();
   });
 });
+
+// Per-field coverage: each header form field gets one test that
+// proves a user mutation flows into the AST and out through
+// serializeIrealb. Catches regressions where one field's `input` /
+// `change` listener is silently dropped (e.g. a refactor that
+// renames a field but forgets to re-wire its handler).
+describe('createIrealbEditor — per-field mutation coverage', () => {
+  function readSong(editor: ReturnType<typeof createIrealbEditor>): IrealSong {
+    const url = editor.getValue();
+    const json = decodeURIComponent(url.slice('irealb://json:'.length));
+    return JSON.parse(json) as IrealSong;
+  }
+
+  function selectInput(
+    editor: ReturnType<typeof createIrealbEditor>,
+    selector: string,
+  ): HTMLInputElement {
+    const el = editor.element.querySelector<HTMLInputElement>(selector);
+    if (!el) throw new Error(`input not rendered: ${selector}`);
+    return el;
+  }
+
+  function selectSelect(
+    editor: ReturnType<typeof createIrealbEditor>,
+    selector: string,
+  ): HTMLSelectElement {
+    const el = editor.element.querySelector<HTMLSelectElement>(selector);
+    if (!el) throw new Error(`select not rendered: ${selector}`);
+    return el;
+  }
+
+  test('text inputs (title / composer / style) propagate to AST', () => {
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+
+    const [title, composer, style] = editor.element.querySelectorAll<HTMLInputElement>(
+      'input[type="text"]',
+    );
+    if (!title || !composer || !style) {
+      throw new Error('expected three text inputs for title / composer / style');
+    }
+    title.value = 'New Title';
+    title.dispatchEvent(new Event('input', { bubbles: true }));
+    composer.value = 'New Composer';
+    composer.dispatchEvent(new Event('input', { bubbles: true }));
+    style.value = 'New Style';
+    style.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const song = readSong(editor);
+    expect(song.title).toBe('New Title');
+    expect(song.composer).toBe('New Composer');
+    expect(song.style).toBe('New Style');
+
+    // Empty string in composer / style serialises as null — pins
+    // the Option-mapping contract documented in render.ts.
+    composer.value = '';
+    composer.dispatchEvent(new Event('input', { bubbles: true }));
+    style.value = '';
+    style.dispatchEvent(new Event('input', { bubbles: true }));
+    const cleared = readSong(editor);
+    expect(cleared.composer).toBeNull();
+    expect(cleared.style).toBeNull();
+
+    editor.destroy();
+  });
+
+  test('key root + accidental select propagates to AST', () => {
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+
+    // The first <select> is the key-root dropdown (combined letter
+    // + accidental). Switching to D-flat must update both fields
+    // atomically — splitting the dropdown previously caused a
+    // double-update race that a test like this would catch.
+    const selects = editor.element.querySelectorAll<HTMLSelectElement>('select');
+    const keyRoot = selects[0];
+    if (!keyRoot) throw new Error('key root select not rendered');
+    keyRoot.value = 'D-flat';
+    keyRoot.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const song = readSong(editor);
+    expect(song.key_signature.root).toEqual({ note: 'D', accidental: 'flat' });
+
+    editor.destroy();
+  });
+
+  test('key mode select propagates to AST', () => {
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+
+    const selects = editor.element.querySelectorAll<HTMLSelectElement>('select');
+    const keyMode = selects[1];
+    if (!keyMode) throw new Error('key mode select not rendered');
+    keyMode.value = 'minor';
+    keyMode.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(readSong(editor).key_signature.mode).toBe('minor');
+
+    editor.destroy();
+  });
+
+  test('time numerator / denominator selects propagate to AST', () => {
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+
+    const selects = editor.element.querySelectorAll<HTMLSelectElement>('select');
+    const num = selects[2];
+    const den = selects[3];
+    if (!num || !den) throw new Error('time signature selects not rendered');
+    num.value = '7';
+    num.dispatchEvent(new Event('change', { bubbles: true }));
+    den.value = '8';
+    den.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(readSong(editor).time_signature).toEqual({ numerator: 7, denominator: 8 });
+
+    editor.destroy();
+  });
+
+  test('tempo input propagates to AST and 0 maps to null', () => {
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+
+    const tempo = selectInput(editor, 'input[type="number"][min="0"]');
+    tempo.value = '180';
+    tempo.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(readSong(editor).tempo).toBe(180);
+
+    // `0` is the form's "unset" sentinel; the AST stores it as null
+    // so a chart without a tempo round-trips byte-equal.
+    tempo.value = '0';
+    tempo.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(readSong(editor).tempo).toBeNull();
+
+    editor.destroy();
+  });
+
+  test('transpose input propagates to AST within the [-11, 11] window', () => {
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+
+    // Match the transpose input by its min attribute since both
+    // numeric inputs share `type="number"`. min="-11" is unique.
+    const transpose = selectInput(editor, 'input[type="number"][min="-11"]');
+    transpose.value = '5';
+    transpose.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(readSong(editor).transpose).toBe(5);
+
+    transpose.value = '-7';
+    transpose.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(readSong(editor).transpose).toBe(-7);
+
+    // Out-of-range values are dropped (the AST keeps the previous
+    // value). 99 > 11, so the AST stays at -7.
+    transpose.value = '99';
+    transpose.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(readSong(editor).transpose).toBe(-7);
+
+    editor.destroy();
+  });
+
+  test('decodeKeyRootValue throws on unrecognised dropdown value (contract violation)', () => {
+    // Dropdown values are produced exclusively by the package; an
+    // invalid value reaching the change handler means a contract
+    // violation (e.g. a future free-text root input bypassing the
+    // allow-list). We verify the throw rather than a silent C-natural
+    // fallback so the bug surfaces.
+    //
+    // jsdom does not propagate listener exceptions back through
+    // dispatchEvent — they go to `window.onerror`. We capture via
+    // an `error` event listener so the assertion sees the throw
+    // even though dispatchEvent itself does not re-raise.
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+    const keyRoot = selectSelect(editor, 'select');
+
+    const captured: Error[] = [];
+    const onError = (ev: ErrorEvent): void => {
+      ev.preventDefault();
+      if (ev.error instanceof Error) captured.push(ev.error);
+    };
+    window.addEventListener('error', onError);
+
+    try {
+      // Programmatically force an out-of-band value — `<select>`
+      // will accept this even though no <option> matches.
+      keyRoot.value = 'Z-bogus';
+      keyRoot.dispatchEvent(new Event('change', { bubbles: true }));
+    } finally {
+      window.removeEventListener('error', onError);
+    }
+
+    expect(captured.length).toBeGreaterThan(0);
+    expect(captured[0]?.message).toMatch(/decodeKeyRootValue/);
+
+    editor.destroy();
+  });
+});

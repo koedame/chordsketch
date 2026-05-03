@@ -79,17 +79,16 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
 
   const fireUserEdit = (): void => {
     if (destroyed) return;
-    let url: string;
-    try {
-      url = state.toUrl();
-    } catch {
-      // A transiently-invalid AST (e.g. mid-edit numeric field) is
-      // skipped rather than reported. The next valid edit will
-      // re-fire onChange. This mirrors how `defaultTextareaEditor`
-      // in ui-web folds `input` events: each successful edit drives
-      // exactly one onChange, no error surface.
-      return;
-    }
+    // Form-event handlers in render.ts only assign known-valid
+    // primitives (range-checked numerics, allow-listed enum values,
+    // free-text strings) to the AST. The AST therefore stays in a
+    // serialisable state across every user edit, so toUrl() is
+    // expected to succeed. A throw here means a bug — either in
+    // this package's mutation logic or in the wasm serialiser —
+    // that we want surfaced, not swallowed. Let the throw propagate
+    // out of the DOM event handler; the host's window.onerror /
+    // ErrorBoundary equivalent picks it up.
+    const url = state.toUrl();
     for (const handler of changeHandlers) handler(url);
   };
 
@@ -107,16 +106,14 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
     element,
     getValue(): string {
       if (destroyed) return '';
-      try {
-        return state.toUrl();
-      } catch {
-        // Match the empty-state contract: a chart that fails to
-        // serialise (should be unreachable from the form-driven
-        // mutation paths but possible after a future programmatic
-        // mutation) reads as empty so the host's getValue chain
-        // does not throw. The next valid edit restores the URL.
-        return '';
-      }
+      // toUrl() throws on a non-serialisable AST. The form-driven
+      // mutation paths cannot produce one (see fireUserEdit's
+      // rationale), so reaching the throw branch means a bug. Let
+      // it propagate rather than silently masking it as an empty
+      // chart — the host can distinguish "no chart loaded" (would
+      // call setValue('') first, getValue returns '') from "chart
+      // failed to serialise" (a thrown Error) only if we propagate.
+      return state.toUrl();
     },
     setValue(value: string): void {
       if (destroyed) return;
