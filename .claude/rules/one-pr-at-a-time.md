@@ -35,20 +35,21 @@ isolation:
    `github-action-ci.yml`, `release.yml`, `post-release.yml`), so the
    macOS 5-job ceiling is the practical bottleneck long before the
    20-job total.
-2. **Speculative-merge CI runs.** GitHub Merge Queue
-   (enabled on `main` in #2107; rationale in
-   [ADR-0003](../../docs/adr/0003-github-merge-queue.md)) runs CI
-   once per queued merge against a speculative merge commit. A
-   large fan-in of queued PRs still consumes runner minutes
-   linearly in the queue depth; macOS-bearing required checks
-   (Test matrix) are the bottleneck. The queue replaces the
-   earlier `auto-update-branch.yml` cascade, so rebase churn on
-   every open PR is gone, but the macOS ceiling still applies to
-   the queue's own CI runs.
+2. **Rebase churn after every merge.** Branch protection requires
+   PR branches to be up to date with `main` before merging. When a
+   PR lands, every other open PR's branch falls behind, and each
+   author has to rebase + re-run pre-merge CI before that PR can be
+   merged in turn. Holding multiple PRs open during this cycle
+   means the same matrix runs repeatedly across all open branches,
+   and macOS-bearing required cells are the bottleneck. (Direct
+   squash merges replaced the merge queue in
+   [ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md);
+   the rebase-before-merge rule now carries the role the queue's
+   speculative-merge CI used to play.)
 
 Keeping the open-PR-against-main count at one eliminates the first
-bottleneck and keeps the queue itself short, so a given PR's
-wait-in-queue time does not grow with the number of drivers active
+bottleneck and avoids cascading rebases, so a given PR's
+wall-clock-to-merge does not grow with the number of drivers active
 simultaneously.
 
 ## Exception criteria
@@ -58,15 +59,15 @@ following hold, and the parallel window is called out in each PR's
 body:
 
 - The PRs modify strictly disjoint files. Overlapping files would
-  force one of the two to be rejected from the merge queue as a
-  speculative-merge conflict, producing churn that the queue was
-  meant to eliminate.
+  force one PR's branch to be rebased after the other lands, and
+  the rebase-and-rerun cycle is exactly what the serial-PR rule
+  exists to avoid.
 - There is a hard deadline that makes the parallel runner load
   acceptable — e.g. an active release freeze, a CVE patch, or an
   external registry timeout window.
-- The author has verified the Actions queue is not already saturated
-  (e.g. `gh run list --status queued --limit 100` is short) and the
-  merge queue itself is short (no more than ~1–2 PRs ahead).
+- The author has verified the Actions queue is not already
+  saturated (e.g. `gh run list --status queued --limit 100` is
+  short) before opening the second PR.
 
 Purely documentation changes that do not touch any Rust file or
 `.github/workflows/` (such as adding a rule file under
