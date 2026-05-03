@@ -82,20 +82,42 @@ export interface RenderHandle {
   dispose(): void;
 }
 
+/** Identifies a bar cell by its (sectionIndex, barIndex) pair. Used
+ * by the roving-tabindex bookkeeping and the focus-restoration
+ * helpers in `index.ts`. */
+export interface ActiveBarRef {
+  secIndex: number;
+  barIndex: number;
+}
+
+/** Number of bar cells per visual row in the bar grid. The CSS layout
+ * uses `grid-template-columns: repeat(4, ...)`, and the ARIA `role="grid"`
+ * semantics added in #2368 reflect the same wrap so `aria-rowindex` /
+ * `aria-colindex` agree with what a sighted user sees. Changing this
+ * value MUST update `style.css` `.irealb-editor__row` in lockstep. */
+export const BARS_PER_ROW = 4;
+
 /** Build the form + bar grid into `root` from `state`. `onUserEdit`
  * fires after every successful user-initiated mutation;
  * `openBarPopover` fires when a user clicks a bar cell (the
  * adapter opens the bar-edit popover, #2364); `ops` exposes the
  * structural mutations the per-section / per-bar UI buttons drive
- * (#2365). The adapter owns the popover container, structural
- * confirm dialogs, and the post-mutation re-render + onUserEdit
- * dispatch. */
+ * (#2365); `activeBar` controls which cell holds `tabindex="0"`
+ * after this render pass — every other cell receives `tabindex="-1"`
+ * per the W3C APG roving-tabindex pattern (#2368), so the entire
+ * grid contributes one Tab stop instead of one per bar; `setActiveBar`
+ * is invoked when the user focuses a different cell so the adapter
+ * can persist the new active bar across re-renders. The adapter
+ * owns the popover container, structural confirm dialogs, and the
+ * post-mutation re-render + onUserEdit dispatch. */
 export function render(
   root: HTMLElement,
   state: IrealbEditorState,
   onUserEdit: () => void,
   openBarPopover: OpenBarPopover,
   ops: StructuralOps,
+  activeBar: ActiveBarRef | null,
+  setActiveBar: (ref: ActiveBarRef) => void,
 ): RenderHandle {
   clearChildren(root);
   const cleanups: Array<() => void> = [];
@@ -240,7 +262,17 @@ export function render(
   const sectionsCount = state.song.sections.length;
   state.song.sections.forEach((section, secIndex) => {
     grid.appendChild(
-      renderSection(section, secIndex, sectionsCount, openBarPopover, ops, listen, root),
+      renderSection(
+        section,
+        secIndex,
+        sectionsCount,
+        openBarPopover,
+        ops,
+        listen,
+        root,
+        activeBar,
+        setActiveBar,
+      ),
     );
   });
 
@@ -282,6 +314,8 @@ function renderSection(
     handler: (ev: HTMLElementEventMap[K]) => void,
   ) => void,
   root: HTMLElement,
+  activeBar: ActiveBarRef | null,
+  setActiveBar: (ref: ActiveBarRef) => void,
 ): HTMLElement {
   const wrapper = el('div', {
     class: 'irealb-editor__section',
@@ -342,17 +376,65 @@ function renderSection(
 
   wrapper.appendChild(headerRow);
 
-  // 4-bars-per-line CSS grid. Emits a flat list of bar wrappers
-  // (each wrapper holds the bar `<button>` plus its delete /
-  // reorder controls). ARIA grid semantics arrive in #2368.
-  const row = el('div', { class: 'irealb-editor__bars' });
+  // 4-bars-per-line layout. Bars are grouped into `role="row"`
+  // containers so the grid's ARIA semantics (`role="grid"` /
+  // `aria-rowcount` / `aria-colcount` / `aria-rowindex` /
+  // `aria-colindex`) match the visual wrap a sighted user sees.
+  // The CSS layout moves from the parent (`.irealb-editor__bars`)
+  // down to each row (`.irealb-editor__row`) so empty trailing
+  // cells in the last row do not stretch the row's last bar.
   const barsCount = section.bars.length;
-  section.bars.forEach((bar, barIndex) => {
-    row.appendChild(
-      renderBar(bar, secIndex, barIndex, barsCount, openBarPopover, ops, listen, root),
-    );
+  // `rowCount` matches the number of `role="row"` children we
+  // actually render — including 0 for an empty section. Reporting
+  // a higher row count would diverge from the accessibility tree
+  // (ARIA 1.2: `aria-rowcount` SHOULD agree with the rendered row
+  // descendants). Screen-reader verbalisation of "0 rows" is
+  // strictly correct for an empty grid; the user opens the
+  // structural "+ Add bar" trailer (which is sibling to the grid)
+  // to populate the first row.
+  const rowCount = Math.ceil(barsCount / BARS_PER_ROW);
+  const grid = el('div', {
+    class: 'irealb-editor__bars',
+    attrs: {
+      role: 'grid',
+      'aria-rowcount': String(rowCount),
+      'aria-colcount': String(BARS_PER_ROW),
+      'aria-label': `Bars in section ${formatSectionLabel(section.label)}`,
+    },
   });
-  wrapper.appendChild(row);
+
+  for (let rowIdx = 0; rowIdx < rowCount; rowIdx += 1) {
+    const rowEl = el('div', {
+      class: 'irealb-editor__row',
+      attrs: {
+        role: 'row',
+        // 1-based per ARIA spec.
+        'aria-rowindex': String(rowIdx + 1),
+      },
+    });
+    const startBar = rowIdx * BARS_PER_ROW;
+    const endBar = Math.min(startBar + BARS_PER_ROW, barsCount);
+    for (let barIndex = startBar; barIndex < endBar; barIndex += 1) {
+      const bar = section.bars[barIndex];
+      if (!bar) continue;
+      rowEl.appendChild(
+        renderBar(
+          bar,
+          secIndex,
+          barIndex,
+          barsCount,
+          openBarPopover,
+          ops,
+          listen,
+          root,
+          activeBar,
+          setActiveBar,
+        ),
+      );
+    }
+    grid.appendChild(rowEl);
+  }
+  wrapper.appendChild(grid);
 
   // Append-bar trailer.
   const addBarBtn = el('button', {
@@ -381,31 +463,60 @@ function renderBar(
     handler: (ev: HTMLElementEventMap[K]) => void,
   ) => void,
   root: HTMLElement,
+  activeBar: ActiveBarRef | null,
+  setActiveBar: (ref: ActiveBarRef) => void,
 ): HTMLElement {
+  const colIndex = barIndex % BARS_PER_ROW;
   const wrapper = el('div', {
     class: 'irealb-editor__bar-wrapper',
-    attrs: { 'data-bar-index': String(barIndex) },
+    attrs: {
+      'data-bar-index': String(barIndex),
+      role: 'gridcell',
+      // 1-based per ARIA spec, matches the row's `aria-rowindex`
+      // shape so a screen reader announces consistent indices.
+      'aria-colindex': String(colIndex + 1),
+    },
   });
 
   const text = bar.chords.map((c) => formatChord(c.chord)).join(' ');
+  // Roving tabindex (#2368) — only the active bar receives
+  // `tabindex="0"`; every other cell is `tabindex="-1"` so the
+  // entire grid contributes a single Tab stop. Per the W3C APG
+  // grid pattern, Arrow / Home / End cycle focus inside the grid;
+  // Tab moves to the next interactive element after the grid.
+  const isActiveBar =
+    activeBar !== null &&
+    activeBar.secIndex === secIndex &&
+    activeBar.barIndex === barIndex;
   // `<button type="button">` so the cell announces as a button to
   // screen readers and so Enter / Space activation works without
-  // explicit keyboard handlers. ARIA grid semantics on the wrapping
-  // grid (`role="grid"` / `gridcell`) are deferred to #2368.
+  // explicit keyboard handlers.
   const cell = el('button', {
     class: 'irealb-editor__bar',
     attrs: {
       type: 'button',
       'aria-label': `Edit bar ${barIndex + 1}`,
+      tabindex: isActiveBar ? '0' : '-1',
     },
     text: text || ' ', // U+00A0 keeps empty cells height-stable.
   });
   listen(cell, 'click', () => {
     openBarPopover(bar, cell, secIndex, barIndex);
   });
-  // Keyboard shortcuts (#2376) for the focused bar cell:
-  //   Delete / Backspace          → remove the bar
-  //   Alt+ArrowLeft / ArrowRight  → reorder within the section
+  // Track focus to keep the roving-tabindex active ref in sync.
+  // Persisting via the adapter (rather than mutating sibling
+  // `tabindex` attributes here) means a re-render driven by a
+  // structural op keeps the right cell focusable, even though the
+  // DOM nodes themselves are rebuilt.
+  listen(cell, 'focus', () => {
+    setActiveBar({ secIndex, barIndex });
+  });
+  // Keyboard shortcuts for the focused bar cell:
+  //   Arrow{Left,Right,Up,Down}    → roving navigation within section (#2368)
+  //   Home / End                   → first / last bar of the section (#2368)
+  //   Enter / Space                → open popover (default <button> activation)
+  //   Delete / Backspace           → remove the bar (#2376)
+  //   Alt+ArrowLeft / ArrowRight   → reorder within the section (#2376)
   // Behaviour mirrors the per-bar `×` / `←` / `→` UI buttons. The
   // delete shortcut intentionally has no confirmation prompt — the
   // UI `×` button is also unconfirmed, and an asymmetric path would
@@ -489,7 +600,13 @@ function handleBarCellKeydown(
   // honouring the focus trap) can bypass the trap; bailing on an
   // active popover keeps destructive shortcuts off the cell while a
   // modal owns the user's input.
-  if (root.querySelector('.irealb-editor__popover') !== null) return;
+  //
+  // Walk up to the editor root because the popover is mounted under
+  // the editor's `element` (one level above `root`, which is a
+  // dedicated grid sub-container as of #2368) — querying within
+  // `root` alone would miss the popover.
+  const editorRoot = root.closest<HTMLElement>('.irealb-editor') ?? root;
+  if (editorRoot.querySelector('.irealb-editor__popover') !== null) return;
 
   // Reject any modifier combination outside the two we recognise.
   // `ctrlKey` / `metaKey` are always disqualifying; `shiftKey` is
@@ -512,6 +629,43 @@ function handleBarCellKeydown(
       return;
     }
     return;
+  }
+
+  // Roving navigation (#2368). All four arrows + Home + End move
+  // focus *within the current section's grid*; navigation does not
+  // cross section boundaries. The W3C APG grid pattern says Up /
+  // Down should move by row — with `BARS_PER_ROW` cells per row,
+  // Up subtracts 4 from `barIndex` and Down adds 4. Home jumps to
+  // the first bar of the section, End to the last.
+  if (!ev.altKey && !ev.shiftKey) {
+    let nextBarIndex: number | null = null;
+    switch (ev.key) {
+      case 'ArrowLeft':
+        if (barIndex > 0) nextBarIndex = barIndex - 1;
+        break;
+      case 'ArrowRight':
+        if (barIndex < barsCount - 1) nextBarIndex = barIndex + 1;
+        break;
+      case 'ArrowUp':
+        if (barIndex - BARS_PER_ROW >= 0) nextBarIndex = barIndex - BARS_PER_ROW;
+        break;
+      case 'ArrowDown':
+        if (barIndex + BARS_PER_ROW < barsCount) {
+          nextBarIndex = barIndex + BARS_PER_ROW;
+        }
+        break;
+      case 'Home':
+        if (barIndex !== 0) nextBarIndex = 0;
+        break;
+      case 'End':
+        if (barIndex !== barsCount - 1) nextBarIndex = barsCount - 1;
+        break;
+    }
+    if (nextBarIndex !== null) {
+      ev.preventDefault();
+      focusBarCell(root, secIndex, nextBarIndex);
+      return;
+    }
   }
 
   if (!ev.altKey && !ev.shiftKey && (ev.key === 'Delete' || ev.key === 'Backspace')) {
