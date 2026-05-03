@@ -26,8 +26,10 @@
     "paths": {
       "@chordsketch/wasm": ["../../packages/npm/web/chordsketch_wasm"],
       "@chordsketch/ui-web": ["../../packages/ui-web/src/index.ts"],
-      "@chordsketch/ui-web/style.css": ["../../packages/ui-web/src/style.css"]
+      "@chordsketch/ui-web/style.css": ["../../packages/ui-web/src/style.css"],
+      "@chordsketch/ui-irealb-editor": ["../../packages/ui-irealb-editor/src/index.ts"],
+      "@chordsketch/ui-irealb-editor/style.css": ["../../packages/ui-irealb-editor/src/style.css"]
     }
   },
-  "include": ["src", "../../packages/ui-web/src"]
+  "include": ["src", "../../packages/ui-web/src", "../../packages/ui-irealb-editor/src"]
 }

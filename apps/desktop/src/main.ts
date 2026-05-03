@@ -8,17 +8,26 @@ import init, {
   render_html_css,
   render_html_css_with_options,
   renderIrealSvg,
+  parseIrealb,
+  serializeIrealb,
 } from '@chordsketch/wasm';
 import {
+  defaultTextareaEditor,
   mountChordSketchUi,
   type ChordSketchUiHandle,
+  type EditorAdapter,
+  type EditorFactory,
+  type EditorFactoryOptions,
   type Renderers,
 } from '@chordsketch/ui-web';
 import '@chordsketch/ui-web/style.css';
+import { createIrealbEditor } from '@chordsketch/ui-irealb-editor';
+import '@chordsketch/ui-irealb-editor/style.css';
 import './codemirror-editor.css';
 import { codemirrorEditorFactory } from './codemirror-editor';
 import { invoke } from '@tauri-apps/api/core';
 import {
+  CheckMenuItem,
   Menu,
   MenuItem,
   PredefinedMenuItem,
@@ -81,6 +90,23 @@ let currentPath: string | null = null;
 let lastSavedContent = '';
 let recents: string[] = [];
 
+// ---- Editor mode (#2367) -------------------------------------------------
+//
+// `chordpro` — CodeMirror with the tree-sitter-chordpro grammar
+//              (#2072). The default for a fresh launch and for any
+//              opened ChordPro file (`.cho` / `.chordpro` / etc.).
+// `irealb-grid` — `@chordsketch/ui-irealb-editor`'s bar-grid GUI.
+//              The default for any opened iRealb file (`.irealb` /
+//              `.irealbook`).
+// `irealb-text` — Plain `<textarea>` for raw `irealb://` URL editing.
+//              Surfaced via the View menu as a fallback when the user
+//              wants to read or hand-edit the URL string. NOT
+//              CodeMirror — iRealb URLs are not ChordPro and the
+//              grammar would mis-highlight them as ChordPro tokens.
+type EditorMode = 'chordpro' | 'irealb-grid' | 'irealb-text';
+
+let currentEditorMode: EditorMode = 'chordpro';
+
 // Adapter from the wasm-bindgen export shape to the ui-web `Renderers`
 // interface. Mirrors `packages/playground/src/main.ts` so the desktop
 // WebView and the browser playground share the same render pipeline;
@@ -141,6 +167,134 @@ const renderers: Renderers = {
 const root = document.getElementById('app');
 if (!root) {
   throw new Error('Desktop entry point #app element missing from index.html');
+}
+
+// ---- Editor factories (#2367) --------------------------------------------
+//
+// One factory per `EditorMode`. The desktop entry constructs all
+// three at module scope so menu handlers can swap between them
+// without re-importing per call. The iRealb factory closes over the
+// wasm bridge so the `EditorFactory` signature (`options =>
+// EditorAdapter`) stays compatible with `MountOptions.createEditor`
+// and `ChordSketchUiHandle.replaceEditor`.
+
+const irealbGridFactory: EditorFactory = (
+  options: EditorFactoryOptions,
+): EditorAdapter =>
+  createIrealbEditor({
+    initialValue: options.initialValue,
+    placeholder: options.placeholder,
+    wasm: { parseIrealb, serializeIrealb },
+  });
+
+function factoryForMode(mode: EditorMode): EditorFactory {
+  switch (mode) {
+    case 'chordpro':
+      return codemirrorEditorFactory;
+    case 'irealb-grid':
+      return irealbGridFactory;
+    case 'irealb-text':
+      // The default ui-web textarea is reused so the URL-text mode
+      // surface stays byte-equal to the playground's plain-text path.
+      return defaultTextareaEditor;
+  }
+}
+
+/**
+ * Pick the appropriate editor mode for a freshly-opened file. The
+ * extension list intentionally mirrors `OPEN_SAVE_FILTERS` so the
+ * dispatch and the picker agree on which extensions are first-class.
+ * Returns `null` for unknown extensions so the caller leaves the
+ * current mode unchanged — matches the existing behaviour for
+ * plain-text imports without a recognised suffix.
+ */
+function detectModeForExtension(path: string): EditorMode | null {
+  const lower = path.toLowerCase();
+  // Anchor the match to the trailing dot so a file named
+  // `cool.irealbook.bak` does not accidentally route through the
+  // grid editor.
+  const dot = lower.lastIndexOf('.');
+  if (dot < 0) return null;
+  const ext = lower.slice(dot + 1);
+  if (ext === 'irealb' || ext === 'irealbook') return 'irealb-grid';
+  if (ext === 'cho' || ext === 'chopro' || ext === 'chordpro' || ext === 'crd') {
+    return 'chordpro';
+  }
+  return null;
+}
+
+/**
+ * Swap the active editor adapter and update the radio-style View
+ * menu items to reflect the new mode. The mode change is treated as
+ * a programmatic load (per the `replaceEditor` contract): the carry-
+ * over content is preserved, but `onChordProChange` is not fired and
+ * `lastSavedContent` is left untouched — the file's saved state has
+ * not changed, only the surface used to view it. Calling with the
+ * same mode is a cheap no-op (avoids an unnecessary DOM rebuild).
+ *
+ * Pre-flight check for the chordpro → irealb-grid transition: the
+ * iRealb factory calls `parseIrealb()` synchronously on the carried-
+ * over content and throws if it is not a valid `irealb://` URL. The
+ * H1 safety fix in ui-web (PR #2388) catches the throw and leaves
+ * the previous editor intact, but `currentEditorMode` would already
+ * have advanced — leaving the View menu radio checked on a mode the
+ * user never actually entered. Validate up-front and ask the user
+ * to discard the ChordPro buffer before switching when needed.
+ */
+async function setEditorMode(
+  handle: ChordSketchUiHandle,
+  mode: EditorMode,
+  rebuildMenu: MenuRebuilder,
+): Promise<void> {
+  if (currentEditorMode === mode) return;
+  if (mode === 'irealb-grid') {
+    const carryover = handle.getChordPro();
+    if (carryover.length > 0 && !canParseAsIrealbUrl(carryover)) {
+      const confirmed = await ask(
+        'The current document is not an iRealb URL. Switching to grid ' +
+          'mode will discard the current content. Continue?',
+        { title: 'Switch to grid mode?', kind: 'warning' },
+      );
+      if (!confirmed) return;
+      // Clear before swap so the iRealb factory's `initialValue` is
+      // empty and `createIrealbEditor` seeds an empty song instead
+      // of throwing on `parseIrealb('not-a-url')`.
+      handle.setChordPro('');
+    }
+  }
+  currentEditorMode = mode;
+  handle.replaceEditor(factoryForMode(mode));
+  await rebuildMenu();
+  await updateWindowTitle(handle);
+}
+
+/**
+ * Synchronous probe: does `value` parse as an `irealb://` URL via
+ * the wasm `parseIrealb` exported function? Returns `false` on any
+ * thrown error. Used by `setEditorMode` and `runOpen` to validate
+ * before any destructive state mutation.
+ *
+ * Note: a successful pre-flight parse here means the wasm bridge
+ * will parse the same URL a second time inside `createIrealbEditor`'s
+ * `makeStateFromUrl` after the swap completes. The duplicate cost is
+ * a single sub-millisecond wasm call against URLs that are bounded
+ * by the 10 MiB `MAX_OPEN_SIZE_BYTES` cap; threading the parsed
+ * `IrealSong` through the factory contract to skip the second parse
+ * would require widening `EditorFactoryOptions` for one host's
+ * benefit and is not justified at this volume. The error path is
+ * `console.debug`-logged so a user repeatedly probing a malformed
+ * buffer can still find the underlying message in devtools without
+ * raising it to the UI.
+ */
+function canParseAsIrealbUrl(value: string): boolean {
+  try {
+    parseIrealb(value);
+    return true;
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.debug('canParseAsIrealbUrl: parse failed', e);
+    return false;
+  }
 }
 
 // ---- Recents persistence -------------------------------------------------
@@ -230,6 +384,45 @@ async function runOpen(
 
   try {
     const content = await invoke<string>('open_file', { path: target });
+    const targetMode = detectModeForExtension(target);
+    // Validate `content` BEFORE any destructive state mutation so a
+    // malformed iRealb file cannot leave the app half-swapped: editor
+    // mounted as the new mode, `currentEditorMode` advanced, but
+    // `currentPath` / `lastSavedContent` still pointing at the old
+    // file (so the title bar shows the wrong filename and Save would
+    // overwrite the old document with the empty new chart). The
+    // failure window is collapsed to "before mode change" — the user
+    // sees a friendly error and the previous editor stays intact.
+    if (targetMode === 'irealb-grid' && !canParseAsIrealbUrl(content)) {
+      await message(
+        'This file does not contain a valid irealb:// URL.',
+        { title: 'Open failed', kind: 'error' },
+      );
+      return;
+    }
+    if (targetMode !== null && targetMode !== currentEditorMode) {
+      // Clear the current editor before swapping so the new factory's
+      // `initialValue` carryover is empty. Otherwise a chordpro →
+      // irealb-grid transition would feed `parseIrealb` ChordPro
+      // text and throw via the H1 safety fix in ui-web; conversely
+      // an irealb-grid → chordpro transition would feed CodeMirror
+      // an iRealb URL (harmless on the CodeMirror side, but the
+      // re-render fired by `replaceEditor`'s closure would still
+      // route through the iRealb-aware preview). Going through an
+      // empty intermediate keeps the swap deterministic and side-
+      // steps `replaceEditor`'s `getValue()` capture from carrying
+      // stale-format content into the new factory's parser.
+      handle.setChordPro('');
+      currentEditorMode = targetMode;
+      handle.replaceEditor(factoryForMode(targetMode));
+      // Rebuild the menu inside the swap window so the View radio
+      // immediately reflects the new mode, even though the
+      // post-load rebuild below would otherwise pick it up. Decoupling
+      // the two means a future intermediate failure (between the
+      // swap and the load) cannot leave the menu radio out of sync.
+      await rebuildMenu();
+    }
+    // Load the file content into the (now correctly typed) editor.
     handle.setChordPro(content);
     currentPath = target;
     lastSavedContent = content;
@@ -317,8 +510,15 @@ async function runSaveAs(
   handle: ChordSketchUiHandle,
   rebuildMenu: MenuRebuilder,
 ): Promise<void> {
+  // Suggest a default extension that matches the active editor
+  // mode. Saving an `.cho` file containing an `irealb://` URL would
+  // otherwise be classified as ChordPro by every consumer that keys
+  // off the file extension (this app's own `runOpen`, the CLI, the
+  // VS Code extension), creating a silent format/extension mismatch.
+  const defaultExt =
+    currentEditorMode === 'chordpro' ? 'cho' : 'irealb';
   const picked = await save({
-    defaultPath: currentPath ?? `${UNTITLED_LABEL.toLowerCase()}.cho`,
+    defaultPath: currentPath ?? `${UNTITLED_LABEL.toLowerCase()}.${defaultExt}`,
     filters: OPEN_SAVE_FILTERS,
   });
   if (!picked) return;
@@ -539,6 +739,8 @@ async function buildAppMenu(
     viewMenuSep,
     transposeUpItem,
     transposeDownItem,
+    editAsGridItem,
+    editAsUrlTextItem,
     transposeResetItem,
     minimizeItem,
     maximizeItem,
@@ -697,6 +899,31 @@ async function buildAppMenu(
         handle.stepTranspose(-1);
       },
     }),
+    CheckMenuItem.new({
+      id: 'view-edit-as-grid',
+      text: 'Edit as Grid',
+      // The pair below is a logical radio group: only one of
+      // `view-edit-as-grid` / `view-edit-as-url-text` is checked at
+      // a time. Tauri does not provide a `RadioMenuItem` primitive,
+      // so we model the radio behaviour by toggling both checks via
+      // the menu rebuild that fires after `setEditorMode`. Selecting
+      // an already-checked item is a no-op via `setEditorMode`'s
+      // same-mode guard. The CodeMirror mode (`chordpro`) leaves
+      // both items unchecked; the View menu only carries the iRealb
+      // surface choice because CodeMirror is the implicit fallback.
+      checked: currentEditorMode === 'irealb-grid',
+      action: () => {
+        void setEditorMode(handle, 'irealb-grid', rebuildMenu);
+      },
+    }),
+    CheckMenuItem.new({
+      id: 'view-edit-as-url-text',
+      text: 'Edit as URL Text',
+      checked: currentEditorMode === 'irealb-text',
+      action: () => {
+        void setEditorMode(handle, 'irealb-text', rebuildMenu);
+      },
+    }),
     MenuItem.new({
       id: 'view-transpose-reset',
       text: 'Reset Transpose',
@@ -777,14 +1004,17 @@ async function buildAppMenu(
       selectAllItem,
     ],
   });
-  // View menu hosts the focus-toggle shortcuts (#2194) and the
-  // transpose shortcuts (#2190). macOS HIG surfaces View between
-  // Edit and Window for navigation-related commands, and the same
-  // item list renders identically on Windows / Linux without
-  // further platform branching. The transpose group is separated
-  // from the focus-toggle group so a screen-reader user can tell
-  // the two are conceptually distinct, even though they share the
-  // submenu.
+  // The "Edit as Grid" / "Edit as URL Text" radio pair lives in its
+  // own separator block (#2367) so the iRealb editing-surface choice
+  // stays visually distinct from the focus and transpose clusters.
+  const viewMenuSep2 = await PredefinedMenuItem.new({ item: 'Separator' });
+  // View menu hosts the focus-toggle shortcuts (#2194), the transpose
+  // shortcuts (#2190), and the iRealb editor-surface radio pair
+  // (#2367). macOS HIG surfaces View between Edit and Window for
+  // navigation-related commands, and the same item list renders
+  // identically on Windows / Linux without further platform
+  // branching. Each cluster is separated so a screen-reader user can
+  // tell the three are conceptually distinct.
   const viewMenu = await Submenu.new({
     text: 'View',
     items: [
@@ -794,6 +1024,9 @@ async function buildAppMenu(
       transposeUpItem,
       transposeDownItem,
       transposeResetItem,
+      viewMenuSep2,
+      editAsGridItem,
+      editAsUrlTextItem,
     ],
   });
   const windowMenu = await Submenu.new({
