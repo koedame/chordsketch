@@ -455,6 +455,170 @@ describe('bar structural management', () => {
     editor.destroy();
   });
 
+  test('Add bar in a section seeded with one default bar shows two bars after click', () => {
+    // Empty-section coverage: a section freshly created via Add
+    // Section starts with one default bar (per the seeding rule).
+    // Append-bar must work on it and bump the count to 2 — pinning
+    // the empty-to-non-empty boundary catches a regression where
+    // render skips the section's add-bar trailer for short
+    // sections, or where addBar mutates the wrong section.
+    const wasm = makeStubWasm();
+    const promptSectionLabel = vi.fn((): SectionLabel => ({ kind: 'verse' }));
+    const editor = createIrealbEditor({
+      initialValue: SAMPLE_URL,
+      wasm,
+      promptSectionLabel,
+    });
+
+    clickByText(editor, '+ Add section');
+    const addBarBtns = Array.from(
+      editor.element.querySelectorAll<HTMLButtonElement>(
+        '.irealb-editor__add-bar',
+      ),
+    );
+    expect(addBarBtns.length).toBe(3); // one per section, including the new one
+    addBarBtns[2]?.click();
+
+    const song = readSong(editor);
+    expect(song.sections[2]?.bars.length).toBe(2);
+    // Other sections still have their original bar counts.
+    expect(song.sections[0]?.bars.length).toBe(2);
+    expect(song.sections[1]?.bars.length).toBe(1);
+
+    editor.destroy();
+  });
+
+  test('Rename section with the same label suppresses the onChange dispatch', () => {
+    // The user opens the rename prompt and submits the existing
+    // label unchanged (or types it identically). The AST does not
+    // drift, so onChange subscribers should NOT receive a
+    // duplicate URL — pinning this avoids dispatching a
+    // distinguishable-from-a-real-edit notification.
+    const wasm = makeStubWasm();
+    const onChange = vi.fn();
+    const promptSectionLabel = vi.fn(
+      (current: SectionLabel | null): SectionLabel => current!,
+    );
+    const editor = createIrealbEditor({
+      initialValue: SAMPLE_URL,
+      wasm,
+      promptSectionLabel,
+    });
+    editor.onChange(onChange);
+
+    clickAction(editor, 'Rename section', 0);
+    expect(promptSectionLabel).toHaveBeenCalledTimes(1);
+    expect(onChange).not.toHaveBeenCalled();
+    // Label is unchanged in the AST as well.
+    expect(readSong(editor).sections[0]?.label).toEqual({
+      kind: 'letter',
+      value: 'A',
+    });
+
+    editor.destroy();
+  });
+
+  test('Move section up restores keyboard focus inside the moved section', () => {
+    // Focus follows the moved item so a repeat-press keeps the
+    // user's keyboard context on it. When the move lands the
+    // section at the top (index 0), the same-direction "Move
+    // section up" button is disabled, so the implementation falls
+    // back to the next non-disabled action button on the same
+    // section ("Move section down") per the focusAfterRender
+    // selector chain. Either way, the focused element belongs to
+    // the moved section. Mirrors the popover Save focus-restoration
+    // introduced for #2364.
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+    document.body.appendChild(editor.element);
+
+    clickAction(editor, 'Move section up', 1);
+    const focused = document.activeElement;
+    // The fallback chain for moveSectionUp at the new top is
+    // [Move up (disabled) -> Move down -> Rename]. jsdom skips
+    // the disabled button and lands on Move down.
+    expect(focused?.getAttribute('aria-label')).toBe('Move section down');
+    const sectionWrapper = focused?.closest<HTMLElement>('[data-section-index]');
+    expect(sectionWrapper?.getAttribute('data-section-index')).toBe('0');
+
+    editor.destroy();
+    editor.element.remove();
+  });
+
+  test('Move bar right restores keyboard focus inside the moved bar', () => {
+    // Section A's first bar moves right to position 1 (the last
+    // position in a 2-bar section), where "Move bar right" is
+    // disabled. The fallback chain selects "Move bar left" on the
+    // same wrapper.
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+    document.body.appendChild(editor.element);
+
+    clickAction(editor, 'Move bar right', 0);
+    const focused = document.activeElement;
+    expect(focused?.getAttribute('aria-label')).toBe('Move bar left');
+    const wrapper = focused?.closest<HTMLElement>('[data-bar-index]');
+    expect(wrapper?.getAttribute('data-bar-index')).toBe('1');
+    const sectionWrapper = focused?.closest<HTMLElement>('[data-section-index]');
+    expect(sectionWrapper?.getAttribute('data-section-index')).toBe('0');
+
+    editor.destroy();
+    editor.element.remove();
+  });
+
+  test('Move bar inside a 3-bar section keeps focus on the same-direction button', () => {
+    // When the move does NOT land on an endpoint, the
+    // same-direction button stays enabled and focus lands on it
+    // — the canonical "repeat-press keeps moving the same item"
+    // case.
+    const wasm = makeStubWasm();
+    const seed: IrealSong = JSON.parse(JSON.stringify(SAMPLE_SONG));
+    const sectionA = seed.sections[0];
+    if (!sectionA) throw new Error('seed missing section A');
+    sectionA.bars.push({
+      start: 'single',
+      end: 'single',
+      chords: [],
+      ending: null,
+      symbol: null,
+    });
+    const seedUrl = `irealb://json:${encodeURIComponent(JSON.stringify(seed))}`;
+    const editor = createIrealbEditor({ initialValue: seedUrl, wasm });
+    document.body.appendChild(editor.element);
+
+    // Move bar 0 right -> bar lands at index 1 (middle of 3
+    // bars). "Move bar right" stays enabled.
+    clickAction(editor, 'Move bar right', 0);
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Move bar right');
+    const wrapper = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(
+      '[data-bar-index]',
+    );
+    expect(wrapper?.getAttribute('data-bar-index')).toBe('1');
+
+    editor.destroy();
+    editor.element.remove();
+  });
+
+  test('Delete bar focuses the next-sibling bar (or the add-bar trailer if none remain)', () => {
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+    document.body.appendChild(editor.element);
+
+    // Section A has 2 bars. Delete bar 0 -> remaining bar is at
+    // index 0. Focus should land on the remaining bar's Delete.
+    clickAction(editor, 'Delete bar', 0);
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Delete bar');
+
+    // Now delete the last remaining bar in section A. Focus should
+    // fall back to that section's "+ Add bar" trailer.
+    clickAction(editor, 'Delete bar', 0);
+    const focused = document.activeElement;
+    expect(focused?.classList.contains('irealb-editor__add-bar')).toBe(true);
+
+    editor.destroy();
+    editor.element.remove();
+  });
+
   test('Structural ops dismiss any open bar popover', () => {
     const wasm = makeStubWasm();
     const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });

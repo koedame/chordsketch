@@ -173,6 +173,17 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
   // consult `promptSectionLabel`. Rename uses the existing label
   // as the prompt seed; add uses `null` to signal "no current
   // label."
+  //
+  // Focus restoration: every op finishes with `renderNow()`, which
+  // detaches the just-clicked button. Without explicit follow-up,
+  // focus drops to <body> and a keyboard user repeating Move-up
+  // has to mouse back to the button between presses. The
+  // `focusAfterRender` helper locates the freshly-mounted button
+  // by `data-section-index` / `data-bar-index` (both already
+  // emitted by render.ts) so focus follows the moved item; for
+  // delete ops it falls back to the next-sibling item (or the
+  // previous, if the deleted item was last). Mirrors the popover
+  // Save focus-restoration introduced for #2364.
   const dismissPopover = (): void => {
     if (popoverHandle !== null) {
       popoverHandle.dispose();
@@ -180,15 +191,62 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
     }
   };
 
+  /** Re-focus the first non-disabled button matching one of
+   * `selectors` inside `element`, in priority order. Skips
+   * `<button disabled>` (jsdom + browsers both refuse to focus a
+   * disabled button) so a move op that lands an item on an
+   * endpoint (where the same-direction button is disabled) falls
+   * through to a sensible alternative. No-op if every selector
+   * misses or matches only disabled elements. */
+  const focusAfterRender = (selectors: string[]): void => {
+    for (const selector of selectors) {
+      const target = element.querySelector<HTMLElement>(selector);
+      if (!target) continue;
+      if (target instanceof HTMLButtonElement && target.disabled) continue;
+      target.focus();
+      return;
+    }
+  };
+
+  /** Locate the freshly-mounted "Move section up/down" / "Rename
+   * section" / "Delete section" button on a specific section. */
+  const sectionActionSelector = (secIndex: number, ariaLabel: string): string =>
+    `[data-section-index="${secIndex}"] button[aria-label="${ariaLabel}"]`;
+
+  /** Locate the freshly-mounted "Move bar left/right" / "Delete bar"
+   * button on a specific bar. */
+  const barActionSelector = (
+    secIndex: number,
+    barIndex: number,
+    ariaLabel: string,
+  ): string =>
+    `[data-section-index="${secIndex}"] [data-bar-index="${barIndex}"] button[aria-label="${ariaLabel}"]`;
+
+  // The op closures reference `renderNow` and `focusAfterRender`,
+  // which are declared further down in this function. The closures
+  // capture them lexically; reads happen only when an op fires
+  // (i.e. on user click), well after the `let` / `const` bindings
+  // are initialised, so the temporal-dead-zone window is unreachable
+  // in practice. Do NOT reorder the declarations to put `renderNow`
+  // above `ops` without first verifying nothing in the construction
+  // path calls into `ops`.
   const ops: StructuralOps = {
     addSection: () => {
       if (destroyed) return;
       const label = promptSectionLabel(null);
       if (label === null) return;
       dismissPopover();
+      const newIndex = state.song.sections.length;
       state.song.sections.push(makeDefaultSection(label));
       renderNow();
       fireUserEdit();
+      // Focus the new section's "Move section up" button — the
+      // closest analogue to the just-clicked "+ Add section"
+      // trailer (which does not exist on a per-section basis).
+      focusAfterRender([
+        sectionActionSelector(newIndex, 'Move section up'),
+        sectionActionSelector(newIndex, 'Rename section'),
+      ]);
     },
     renameSection: (secIndex, current) => {
       if (destroyed) return;
@@ -196,10 +254,15 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       if (!section) return;
       const next = promptSectionLabel(current);
       if (next === null) return;
+      // No-op if the label is structurally unchanged. Suppresses a
+      // duplicate-URL onChange dispatch that subscribers cannot
+      // distinguish from a real edit.
+      if (sectionLabelEquals(current, next)) return;
       dismissPopover();
       section.label = next;
       renderNow();
       fireUserEdit();
+      focusAfterRender([sectionActionSelector(secIndex, 'Rename section')]);
     },
     deleteSection: (secIndex) => {
       if (destroyed) return;
@@ -210,39 +273,67 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       state.song.sections.splice(secIndex, 1);
       renderNow();
       fireUserEdit();
+      // Focus the next-sibling section's "Delete section" button
+      // (the same kind that was just activated). If the deleted
+      // section was the last one, focus the new last section's
+      // button instead. If no sections remain, focus the
+      // "+ Add section" trailer.
+      const remaining = state.song.sections.length;
+      if (remaining === 0) {
+        focusAfterRender(['.irealb-editor__add-section']);
+      } else {
+        const nextIndex = secIndex < remaining ? secIndex : remaining - 1;
+        focusAfterRender([sectionActionSelector(nextIndex, 'Delete section')]);
+      }
     },
     moveSectionUp: (secIndex) => {
       if (destroyed) return;
       if (secIndex <= 0 || secIndex >= state.song.sections.length) return;
       dismissPopover();
-      const cur = state.song.sections[secIndex];
-      const prev = state.song.sections[secIndex - 1];
-      if (!cur || !prev) return;
+      const cur = state.song.sections[secIndex] as Section;
+      const prev = state.song.sections[secIndex - 1] as Section;
       state.song.sections[secIndex - 1] = cur;
       state.song.sections[secIndex] = prev;
       renderNow();
       fireUserEdit();
+      // The moved section is now at secIndex - 1. Focus its
+      // "Move section up" button so a repeat-press keeps moving
+      // the same section upward.
+      focusAfterRender([
+        sectionActionSelector(secIndex - 1, 'Move section up'),
+        sectionActionSelector(secIndex - 1, 'Move section down'),
+        sectionActionSelector(secIndex - 1, 'Rename section'),
+      ]);
     },
     moveSectionDown: (secIndex) => {
       if (destroyed) return;
       if (secIndex < 0 || secIndex >= state.song.sections.length - 1) return;
       dismissPopover();
-      const cur = state.song.sections[secIndex];
-      const next = state.song.sections[secIndex + 1];
-      if (!cur || !next) return;
+      const cur = state.song.sections[secIndex] as Section;
+      const next = state.song.sections[secIndex + 1] as Section;
       state.song.sections[secIndex + 1] = cur;
       state.song.sections[secIndex] = next;
       renderNow();
       fireUserEdit();
+      focusAfterRender([
+        sectionActionSelector(secIndex + 1, 'Move section down'),
+        sectionActionSelector(secIndex + 1, 'Move section up'),
+        sectionActionSelector(secIndex + 1, 'Rename section'),
+      ]);
     },
     addBar: (secIndex) => {
       if (destroyed) return;
       const section = state.song.sections[secIndex];
       if (!section) return;
       dismissPopover();
+      const newBarIndex = section.bars.length;
       section.bars.push(makeDefaultBar());
       renderNow();
       fireUserEdit();
+      // Focus the new bar's edit button (its <button class="bar">).
+      focusAfterRender([
+        `[data-section-index="${secIndex}"] [data-bar-index="${newBarIndex}"] .irealb-editor__bar`,
+      ]);
     },
     deleteBar: (secIndex, barIndex) => {
       if (destroyed) return;
@@ -253,6 +344,17 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       section.bars.splice(barIndex, 1);
       renderNow();
       fireUserEdit();
+      // Focus the next-sibling bar's Delete button (or the new
+      // last bar's, or the section's "+ Add bar" trailer).
+      const remaining = section.bars.length;
+      if (remaining === 0) {
+        focusAfterRender([
+          `[data-section-index="${secIndex}"] .irealb-editor__add-bar`,
+        ]);
+      } else {
+        const nextIndex = barIndex < remaining ? barIndex : remaining - 1;
+        focusAfterRender([barActionSelector(secIndex, nextIndex, 'Delete bar')]);
+      }
     },
     moveBarLeft: (secIndex, barIndex) => {
       if (destroyed) return;
@@ -260,13 +362,17 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       if (!section) return;
       if (barIndex <= 0 || barIndex >= section.bars.length) return;
       dismissPopover();
-      const cur = section.bars[barIndex];
-      const prev = section.bars[barIndex - 1];
-      if (!cur || !prev) return;
+      const cur = section.bars[barIndex] as Bar;
+      const prev = section.bars[barIndex - 1] as Bar;
       section.bars[barIndex - 1] = cur;
       section.bars[barIndex] = prev;
       renderNow();
       fireUserEdit();
+      focusAfterRender([
+        barActionSelector(secIndex, barIndex - 1, 'Move bar left'),
+        barActionSelector(secIndex, barIndex - 1, 'Move bar right'),
+        `[data-section-index="${secIndex}"] [data-bar-index="${barIndex - 1}"] .irealb-editor__bar`,
+      ]);
     },
     moveBarRight: (secIndex, barIndex) => {
       if (destroyed) return;
@@ -274,13 +380,17 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       if (!section) return;
       if (barIndex < 0 || barIndex >= section.bars.length - 1) return;
       dismissPopover();
-      const cur = section.bars[barIndex];
-      const next = section.bars[barIndex + 1];
-      if (!cur || !next) return;
+      const cur = section.bars[barIndex] as Bar;
+      const next = section.bars[barIndex + 1] as Bar;
       section.bars[barIndex + 1] = cur;
       section.bars[barIndex] = next;
       renderNow();
       fireUserEdit();
+      focusAfterRender([
+        barActionSelector(secIndex, barIndex + 1, 'Move bar right'),
+        barActionSelector(secIndex, barIndex + 1, 'Move bar left'),
+        `[data-section-index="${secIndex}"] [data-bar-index="${barIndex + 1}"] .irealb-editor__bar`,
+      ]);
     },
   };
 
@@ -388,6 +498,20 @@ function makeDefaultBar(): Bar {
 /** Default new section: the supplied label + one default bar. */
 function makeDefaultSection(label: SectionLabel): Section {
   return { label, bars: [makeDefaultBar()] };
+}
+
+/** Structural equality on `SectionLabel`. Used by `renameSection`
+ * to suppress a no-op edit (which would otherwise dispatch a
+ * duplicate-URL onChange that subscribers cannot distinguish from
+ * a real edit). */
+function sectionLabelEquals(a: SectionLabel | null, b: SectionLabel | null): boolean {
+  if (a === null || b === null) return a === b;
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'letter' && b.kind === 'letter') return a.value === b.value;
+  if (a.kind === 'custom' && b.kind === 'custom') return a.value === b.value;
+  // The remaining kinds (`verse` / `chorus` / `intro` / `outro` /
+  // `bridge`) carry no payload, so kind equality is sufficient.
+  return true;
 }
 
 /** Default `promptSectionLabel`: ask via `window.prompt`, parse the
