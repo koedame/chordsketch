@@ -443,14 +443,14 @@ describe('replaceEditor', () => {
     });
 
     // First swap A→B: A is destroyed, B receives A's edited value.
-    (a.current() as unknown as { fire: (v: string) => void }).fire('value-A-edited');
+    fireOn(a.current(), 'value-A-edited');
     handle.replaceEditor(b.factory);
     expect(a.current()?.destroyed).toBe(true);
     expect(b.buildCount()).toBe(1);
     expect(b.current()?.initialValueSeen).toBe('value-A-edited');
 
     // Second swap B→C: B is destroyed, C receives B's edited value.
-    (b.current() as unknown as { fire: (v: string) => void }).fire('value-B-edited');
+    fireOn(b.current(), 'value-B-edited');
     handle.replaceEditor(c.factory);
     expect(b.current()?.destroyed).toBe(true);
     expect(c.buildCount()).toBe(1);
