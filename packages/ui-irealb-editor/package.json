@@ -1,0 +1,40 @@
+{
+  "name": "@chordsketch/ui-irealb-editor",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Bar-grid GUI editor for iReal Pro charts; pluggable into @chordsketch/ui-web via the EditorAdapter contract.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./style.css": "./src/style.css",
+    "./sample": {
+      "types": "./src/sample.ts",
+      "default": "./src/sample.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@chordsketch/wasm": "^0.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@chordsketch/wasm": {
+      "optional": false
+    }
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
