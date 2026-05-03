@@ -401,6 +401,19 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       const prev = state.song.sections[secIndex - 1] as Section;
       state.song.sections[secIndex - 1] = cur;
       state.song.sections[secIndex] = prev;
+      // Re-anchor the roving-tabindex active bar against the moved
+      // sections so the user's "I was on this bar" position follows
+      // the section content rather than the numeric index. Without
+      // this, swapping sections would leave `activeBar.secIndex`
+      // pointing at the same number — which now references a
+      // different section's content. (#2389 review L2.)
+      if (activeBar !== null) {
+        if (activeBar.secIndex === secIndex) {
+          activeBar = { secIndex: secIndex - 1, barIndex: activeBar.barIndex };
+        } else if (activeBar.secIndex === secIndex - 1) {
+          activeBar = { secIndex, barIndex: activeBar.barIndex };
+        }
+      }
       renderNow();
       fireUserEdit();
       announce(
@@ -423,6 +436,15 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       const next = state.song.sections[secIndex + 1] as Section;
       state.song.sections[secIndex + 1] = cur;
       state.song.sections[secIndex] = next;
+      // Re-anchor the roving-tabindex active bar — see moveSectionUp
+      // for the rationale. (#2389 review L2.)
+      if (activeBar !== null) {
+        if (activeBar.secIndex === secIndex) {
+          activeBar = { secIndex: secIndex + 1, barIndex: activeBar.barIndex };
+        } else if (activeBar.secIndex === secIndex + 1) {
+          activeBar = { secIndex, barIndex: activeBar.barIndex };
+        }
+      }
       renderNow();
       fireUserEdit();
       announce(

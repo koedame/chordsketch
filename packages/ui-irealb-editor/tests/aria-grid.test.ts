@@ -161,7 +161,10 @@ describe('ARIA grid semantics', () => {
     }
   });
 
-  test('empty section still carries role="grid" with aria-rowcount=1', () => {
+  test('empty section reports aria-rowcount=0 matching the empty accessibility tree', () => {
+    // ARIA 1.2: `aria-rowcount` SHOULD agree with the rendered
+    // `role="row"` descendant count. An empty section has zero
+    // rows and zero cells — both the attribute and the DOM agree.
     const wasm = makeStubWasm({
       title: 't',
       composer: null,
@@ -177,7 +180,10 @@ describe('ARIA grid semantics', () => {
       const grid = editor.element.querySelector('.irealb-editor__bars');
       expect(grid).not.toBeNull();
       expect((grid as HTMLElement).getAttribute('role')).toBe('grid');
-      expect((grid as HTMLElement).getAttribute('aria-rowcount')).toBe('1');
+      expect((grid as HTMLElement).getAttribute('aria-rowcount')).toBe('0');
+      // No `role="row"` children either — keeps the rendered tree
+      // consistent with the announced rowcount.
+      expect(editor.element.querySelectorAll('.irealb-editor__row').length).toBe(0);
       expect(getCells(editor).length).toBe(0);
     } finally {
       editor.destroy();
@@ -231,20 +237,125 @@ describe('roving tabindex', () => {
       titleInput.dispatchEvent(new Event('input', { bubbles: true }));
       // Title edit doesn't trigger renderNow (form-only), so cells
       // remain. The roving state was updated by the focus listener
-      // (fired by `cell2.focus()`). Trigger a renderNow via deleteBar
-      // on a different bar so the new cells reflect activeBar.
+      // (fired by `cell2.focus()`). Trigger a renderNow via
+      // deleteBar so the post-render cells reflect activeBar.
+      // Note: this assertion verifies the "exactly one cell remains
+      // tabbable after a structural rerender" invariant, not the
+      // identity of the surviving cell — the active bar may shift
+      // when an earlier sibling is removed.
       const deleteBtns = Array.from(
         editor.element.querySelectorAll<HTMLButtonElement>(
           'button[aria-label="Delete bar"]',
         ),
       );
-      // Delete the first bar so the active bar (index 2) re-anchors
-      // — index 2 of the post-delete grid is the same logical cell,
-      // and its tabindex should be 0.
       deleteBtns[0]?.click();
       const cellsAfter = getCells(editor);
       const tabbable = cellsAfter.filter((c) => c.tabIndex === 0);
       expect(tabbable.length).toBe(1);
+    });
+    editor.destroy();
+  });
+
+  test('moving a section preserves the active bar against the moved section, not the index', () => {
+    // Two sections (A, B), each with 2 bars. Focus a bar in section
+    // A (the upper one), then move section A down. The active bar
+    // should follow section A to its new position rather than stay
+    // at the old numeric secIndex (which now references section B).
+    const wasm = makeStubWasm({
+      title: 'Move test',
+      composer: null,
+      style: null,
+      key_signature: { root: { note: 'C', accidental: 'natural' }, mode: 'major' },
+      time_signature: { numerator: 4, denominator: 4 },
+      tempo: null,
+      transpose: 0,
+      sections: [
+        {
+          label: { kind: 'letter', value: 'A' },
+          bars: [
+            {
+              start: 'single', end: 'single', chords: [
+                {
+                  chord: {
+                    root: { note: 'C', accidental: 'natural' },
+                    quality: { kind: 'major' },
+                    bass: null,
+                  },
+                  position: { beat: 1, subdivision: 0 },
+                },
+              ], ending: null, symbol: null,
+            },
+            {
+              start: 'single', end: 'single', chords: [
+                {
+                  chord: {
+                    root: { note: 'F', accidental: 'natural' },
+                    quality: { kind: 'major' },
+                    bass: null,
+                  },
+                  position: { beat: 1, subdivision: 0 },
+                },
+              ], ending: null, symbol: null,
+            },
+          ],
+        },
+        {
+          label: { kind: 'letter', value: 'B' },
+          bars: [
+            {
+              start: 'single', end: 'single', chords: [
+                {
+                  chord: {
+                    root: { note: 'G', accidental: 'natural' },
+                    quality: { kind: 'major' },
+                    bass: null,
+                  },
+                  position: { beat: 1, subdivision: 0 },
+                },
+              ], ending: null, symbol: null,
+            },
+            {
+              start: 'single', end: 'single', chords: [
+                {
+                  chord: {
+                    root: { note: 'A', accidental: 'natural' },
+                    quality: { kind: 'major' },
+                    bass: null,
+                  },
+                  position: { beat: 1, subdivision: 0 },
+                },
+              ], ending: null, symbol: null,
+            },
+          ],
+        },
+      ],
+    });
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+    withMounted(editor, () => {
+      // Focus the second bar of section A (the F chord, index 1
+      // within section index 0).
+      const sectionA = editor.element.querySelector<HTMLElement>(
+        '.irealb-editor__section[data-section-index="0"]',
+      );
+      const sectionACells = sectionA?.querySelectorAll<HTMLButtonElement>('.irealb-editor__bar');
+      sectionACells?.[1]?.focus();
+      expect(sectionACells?.[1]?.textContent).toContain('F');
+
+      // Move section A down. Section A now sits at secIndex=1, B at 0.
+      const sectionADownBtn = sectionA?.querySelector<HTMLButtonElement>(
+        'button[aria-label="Move section down"]',
+      );
+      sectionADownBtn?.click();
+
+      // The tabbable cell should be in the new section A position
+      // (now secIndex=1), at the same barIndex (1, the F chord).
+      const newSectionA = editor.element.querySelector<HTMLElement>(
+        '.irealb-editor__section[data-section-index="1"]',
+      );
+      const newCells = newSectionA?.querySelectorAll<HTMLButtonElement>('.irealb-editor__bar');
+      const tabbable = Array.from(newCells ?? []).filter((c) => c.tabIndex === 0);
+      expect(tabbable.length).toBe(1);
+      expect(tabbable[0]?.textContent).toContain('F');
     });
     editor.destroy();
   });

@@ -384,24 +384,26 @@ function renderSection(
   // down to each row (`.irealb-editor__row`) so empty trailing
   // cells in the last row do not stretch the row's last bar.
   const barsCount = section.bars.length;
-  const rowCount = Math.max(1, Math.ceil(barsCount / BARS_PER_ROW));
+  // `rowCount` matches the number of `role="row"` children we
+  // actually render — including 0 for an empty section. Reporting
+  // a higher row count would diverge from the accessibility tree
+  // (ARIA 1.2: `aria-rowcount` SHOULD agree with the rendered row
+  // descendants). Screen-reader verbalisation of "0 rows" is
+  // strictly correct for an empty grid; the user opens the
+  // structural "+ Add bar" trailer (which is sibling to the grid)
+  // to populate the first row.
+  const rowCount = Math.ceil(barsCount / BARS_PER_ROW);
   const grid = el('div', {
     class: 'irealb-editor__bars',
     attrs: {
       role: 'grid',
-      // `aria-rowcount` is at least 1 even for an empty section so
-      // assistive tech announces a stable shape ("1 row, 4 columns")
-      // rather than "0 rows" — which screen readers vary in how they
-      // verbalise. The grid is still empty visually; the count refers
-      // to the implicit row that the next "+ Add bar" insertion will
-      // populate.
       'aria-rowcount': String(rowCount),
       'aria-colcount': String(BARS_PER_ROW),
       'aria-label': `Bars in section ${formatSectionLabel(section.label)}`,
     },
   });
 
-  for (let rowIdx = 0; rowIdx < Math.ceil(barsCount / BARS_PER_ROW); rowIdx += 1) {
+  for (let rowIdx = 0; rowIdx < rowCount; rowIdx += 1) {
     const rowEl = el('div', {
       class: 'irealb-editor__row',
       attrs: {
