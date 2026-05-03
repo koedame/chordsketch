@@ -8,16 +8,21 @@ This is a private workspace package; not published to npm.
 
 ## Status
 
-First iteration (#2363):
+Shipped:
 
-- Header form: title, composer, style, key (root + accidental + mode),
-  time signature (numerator / denominator), tempo, transpose.
-- Bar grid: read-only display of each bar's chords joined by spaces,
-  4 bars per line, with section labels.
+- #2363 — header form (title / composer / style / key + accidental +
+  mode / time numerator + denominator / tempo / transpose) plus a
+  4-bars-per-line grid of section + bar cells.
+- #2364 — clicking a bar cell opens a modal popover (W3C APG dialog
+  pattern: focus trap, Escape / outside-click dismissal) that edits
+  every field of the underlying `Bar`: start / end barlines, chord
+  rows (root + accidental + 12 named qualities + Custom string +
+  optional `/X` bass + beat position 1 / 1.5 / … / 4.5, with
+  add / remove / reorder), N-th ending number (1–9, empty = none),
+  and musical symbol (None / Segno / Coda / D.C. / D.S. / Fine).
 
 Subsequent iterations:
 
-- #2364 — bar popover for chord / barline / ending / musical symbol.
 - #2365 — section management and bar add / remove / reorder.
 - #2366 — `@chordsketch/ui-web` runtime swap + iRealb input toggle.
 - #2367 — desktop integration (Open / Save dispatch + View menu).

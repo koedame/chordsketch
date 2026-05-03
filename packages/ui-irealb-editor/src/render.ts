@@ -25,6 +25,20 @@ import type {
 import { clearChildren, el, field, FieldIdMinter } from './dom.js';
 import type { IrealbEditorState } from './state.js';
 
+/** Callback signature used by the bar grid to delegate "user clicked
+ * a bar cell" up to the editor adapter. The adapter opens the
+ * popover (built in `popover.ts`), which on Save replaces the bar
+ * via `(secIndex, barIndex, next)` and then triggers a full
+ * re-render plus the user-edit notification. Threading the
+ * callback through render avoids importing `popover.ts` here —
+ * `render.ts` stays the pure-DOM half of the package. */
+export type OpenBarPopover = (
+  bar: Bar,
+  anchor: HTMLElement,
+  secIndex: number,
+  barIndex: number,
+) => void;
+
 /** Result returned by {@link render}. `dispose` removes every event
  * listener registered during this render pass; call before
  * re-rendering or before tearing the editor down. */
@@ -33,14 +47,18 @@ export interface RenderHandle {
   dispose(): void;
 }
 
-/** Build the form + read-only bar grid into `root` from `state`.
- * `onUserEdit` is called after every successful user-initiated
- * mutation; the editor adapter wraps that in a re-serialise +
- * onChange dispatch. */
+/** Build the form + bar grid into `root` from `state`. `onUserEdit`
+ * fires after every successful user-initiated mutation;
+ * `openBarPopover` fires when a user clicks a bar cell — the
+ * editor adapter passes a callback that opens the bar-edit popover
+ * (#2364). The adapter is responsible for the popover's mount
+ * container, focus management, and the post-save re-render +
+ * onUserEdit dispatch. */
 export function render(
   root: HTMLElement,
   state: IrealbEditorState,
   onUserEdit: () => void,
+  openBarPopover: OpenBarPopover,
 ): RenderHandle {
   clearChildren(root);
   const cleanups: Array<() => void> = [];
@@ -180,11 +198,11 @@ export function render(
 
   root.appendChild(header);
 
-  // ---- Bar grid (read-only) -------------------------------------------------
+  // ---- Bar grid -------------------------------------------------------------
   const grid = el('div', { class: 'irealb-editor__grid' });
-  for (const section of state.song.sections) {
-    grid.appendChild(renderSection(section));
-  }
+  state.song.sections.forEach((section, secIndex) => {
+    grid.appendChild(renderSection(section, secIndex, openBarPopover, listen));
+  });
   root.appendChild(grid);
 
   return {
@@ -199,7 +217,16 @@ export function render(
 // Section / bar rendering
 // ---------------------------------------------------------------------------
 
-function renderSection(section: Section): HTMLElement {
+function renderSection(
+  section: Section,
+  secIndex: number,
+  openBarPopover: OpenBarPopover,
+  listen: <K extends keyof HTMLElementEventMap>(
+    target: HTMLElement,
+    type: K,
+    handler: (ev: HTMLElementEventMap[K]) => void,
+  ) => void,
+): HTMLElement {
   const wrapper = el('div', { class: 'irealb-editor__section' });
   const heading = el('h3', {
     class: 'irealb-editor__section-label',
@@ -207,26 +234,46 @@ function renderSection(section: Section): HTMLElement {
   });
   wrapper.appendChild(heading);
 
-  // 4-bars-per-line CSS grid. The grid template lives in style.css; we
-  // just emit a flat list of `<div>` cells. CSS handles the wrap.
+  // 4-bars-per-line CSS grid. The grid template lives in style.css;
+  // we emit a flat list of `<button>` cells (button so click +
+  // keyboard activation come for free; ARIA grid semantics arrive
+  // in #2368).
   const row = el('div', { class: 'irealb-editor__bars' });
-  for (const bar of section.bars) {
-    row.appendChild(renderBar(bar));
-  }
+  section.bars.forEach((bar, barIndex) => {
+    row.appendChild(renderBar(bar, secIndex, barIndex, openBarPopover, listen));
+  });
   wrapper.appendChild(row);
   return wrapper;
 }
 
-function renderBar(bar: Bar): HTMLElement {
+function renderBar(
+  bar: Bar,
+  secIndex: number,
+  barIndex: number,
+  openBarPopover: OpenBarPopover,
+  listen: <K extends keyof HTMLElementEventMap>(
+    target: HTMLElement,
+    type: K,
+    handler: (ev: HTMLElementEventMap[K]) => void,
+  ) => void,
+): HTMLElement {
   const text = bar.chords.map((c) => formatChord(c.chord)).join(' ');
-  // The bar cell is structural — read-only is enforced by the cell
-  // not being an input at all (no `<input disabled>` round-trip,
-  // tabindex stays default, ARIA stays implicit). #2364 turns the
-  // cell into a popover trigger; #2368 layers ARIA grid semantics.
-  return el('div', {
+  // `<button type="button">` so the cell announces as a button to
+  // screen readers and so Enter / Space activation works without
+  // explicit keyboard handlers. ARIA grid semantics on the wrapping
+  // grid (`role="grid"` / `gridcell`) are deferred to #2368.
+  const cell = el('button', {
     class: 'irealb-editor__bar',
+    attrs: {
+      type: 'button',
+      'aria-label': `Edit bar ${barIndex + 1}`,
+    },
     text: text || ' ', // U+00A0 keeps empty cells height-stable.
   });
+  listen(cell, 'click', () => {
+    openBarPopover(bar, cell, secIndex, barIndex);
+  });
+  return cell;
 }
 
 function formatSectionLabel(label: SectionLabel): string {
