@@ -27,9 +27,9 @@ below.
    Claude posts a single summary comment stating "Ready for merge." If the
    user has granted per-session merge permission and the four conditions in
    the "Bot-driven merge: conditional permission" section below are met,
-   Claude enqueues the merge via the merge queue. Otherwise, a human
-   inspects the full check rollup (not just the required checks listed in
-   branch protection) and performs the squash merge.
+   Claude squash-merges directly via `gh pr merge --squash`. Otherwise, a
+   human inspects the full check rollup (not just the required checks
+   listed in branch protection) and performs the squash merge.
 7. **Safety cap** — after 3 auto-review iterations, the process stops and waits for
    human intervention.
 
@@ -70,10 +70,12 @@ rots, and context is freshest while the code is still being edited.
 
 ### Bot-driven merge: conditional permission
 
-`gh pr merge` (or the equivalent `enqueuePullRequest` GraphQL
-mutation) MAY be executed by an AI assistant when **all four**
-conditions hold. See [ADR-0013](../../docs/adr/0013-conditional-bot-driven-merge.md)
-for the full rationale.
+`gh pr merge --squash` MAY be executed by an AI assistant when
+**all four** conditions hold. See
+[ADR-0013](../../docs/adr/0013-conditional-bot-driven-merge.md) for
+the bot-merge rationale and
+[ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md) for
+why condition (4) is a direct squash and not a merge-queue enqueue.
 
 1. **Explicit, current-session permission.** The user has stated
    in the active session that the assistant may merge. Standing
@@ -92,10 +94,14 @@ for the full rationale.
    resulting auto-review iteration must have completed and
    converged.
 
-4. **Merge queue path only.** Use `enqueuePullRequest` or
-   `gh pr merge --merge-queue`. Direct `gh pr merge --squash`
-   (without `--merge-queue`) bypasses the speculative-merge CI
-   run and is still prohibited.
+4. **Direct squash merge.** Use `gh pr merge <N> --squash` (or the
+   equivalent `mergePullRequest` GraphQL mutation with
+   `mergeMethod: SQUASH`). Auto-merge is disabled at the repo
+   level (`enablePullRequestAutoMerge: false`); the assistant's
+   `--squash` invocation runs synchronously against the PR's
+   current HEAD. The merge queue is no longer in use
+   ([ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md));
+   `enqueuePullRequest` / `--merge-queue` paths are not available.
 
 If any of (1)–(4) is not satisfied, post the "Ready for merge"
 comment and wait for the human merger.
@@ -110,18 +116,24 @@ not in the `required_status_checks.contexts` list of branch protection.
 the explicit list was ignored. The combination of "required-list drift" and
 "no human gate" produced a silent regression.
 
-Two structural changes have since closed that gap:
+Condition (2) above ("Full check rollup green") closed that gap by
+turning "non-required check failing" into a blocking-by-rule case
+rather than a silent skip — eliminating the required-list drift
+class regardless of which merge mechanism is used.
 
-- The merge queue ([ADR-0003](../../docs/adr/0003-github-merge-queue.md))
-  re-runs CI against the speculative merge commit, so a PR with red
-  *required* checks cannot enter `main` even via bot enqueue.
-- Condition (2) above turns "non-required check failing" into a
-  blocking-by-rule case rather than a silent skip, eliminating the
-  required-list drift class.
+A second structural protection — the merge queue's speculative-merge
+CI re-run, originally from
+[ADR-0003](../../docs/adr/0003-github-merge-queue.md) — was removed in
+[ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md). The
+queue's protection against red *required* checks landing on `main` is
+now policy-only via condition (2), not policy + structural. ADR-0015
+documents why the wall-clock cost of the queue's second CI pass no
+longer justified its defence-in-depth value at this repo's scale.
 
-The previous absolute ban traded those structural protections for a
-single property — "the assistant cannot enqueue at all" — at the cost
-of a per-PR ping on every green PR the user had already authorised.
+The previous absolute ban on bot-driven merging traded condition (2)
+for a single property — "the assistant cannot enqueue at all" — at
+the cost of a per-PR ping on every green PR the user had already
+authorised.
 [ADR-0013](../../docs/adr/0013-conditional-bot-driven-merge.md)
 records why the trade is no longer worth it.
 
@@ -137,47 +149,31 @@ For local review before pushing, or when the automated flow is not desired:
 
 - All changes enter `main` via pull request — no direct pushes.
 - All PRs are **squash-merged** (merge commits and rebase merging are disabled).
-- Branch protection enforces that status checks pass on the HEAD commit before merging.
-- `main` is protected by **GitHub Merge Queue**
-  (rationale: [ADR-0003](../../docs/adr/0003-github-merge-queue.md)).
-  When a human clicks "Merge when ready" (or runs
-  `gh pr merge --merge-queue`), the PR enters the queue; GitHub
-  creates a speculative merge commit against the current tip of
-  `main`, CI runs against that merge commit (the `merge_group:`
-  trigger in `ci.yml`), and the PR lands only if CI passes on the
-  merge commit. The queue replaces the old `auto-update-branch.yml`
-  rebase-fan-out loop — there is no longer a per-merge cascade that
-  re-runs CI on every open PR.
+- Branch protection enforces that status checks pass on the HEAD
+  commit before merging, and that the PR branch is up-to-date with
+  `main` before merging — the latter rule forces a rebase-and-rerun
+  whenever `main` has moved, which catches the content-conflict
+  class the merge queue used to detect.
+- The merge action is `gh pr merge <N> --squash` (or the GitHub UI's
+  "Squash and merge" button). The merge queue is no longer in use
+  ([ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md));
+  `gh pr merge --merge-queue` and the `enqueuePullRequest` GraphQL
+  mutation are not part of the flow.
 
-### Merge Queue expectations
+### Workflow trigger expectations
 
 - Workflows that produce `required_status_checks` MUST include
-  `merge_group:` alongside `pull_request:` in their `on:` block. The
-  queue's speculative merge commit runs against the `merge_group`
-  event, and any required check that does not fire on that event
-  blocks the queue indefinitely.
-- Non-required workflows that compute on PR events (smoke jobs,
-  language-binding builds, etc.) do NOT need `merge_group:` triggers
-  — the queue does not wait on them. Adding them produces wasted CI
-  runs on every queued merge.
-- If CI fails against the speculative merge commit, GitHub removes
-  the PR from the queue automatically. The author investigates,
-  pushes a fix, and re-queues manually.
-
-### Secret-access caveat for `merge_group:` events
-
-Unlike `pull_request:` from forks (which run with restricted
-permissions and no secret access), `merge_group:` events run on a
-GitHub-built merge commit with **full repo-secret access** — the
-same posture as `push:` to a protected branch. That means a queued
-PR that touches `.github/workflows/`, `Cargo.toml`, or any other
-file the speculative merge commit will execute in CI gains
-secret-bearing CI on the queue's merge commit.
-
-The "Merge when ready" click is the gate for this. Reviewers MUST
-scrutinise diffs touching `.github/`, build scripts, or anything
-that runs as a CI step before clicking. Treat workflow-file diffs
-the same way you would treat a `push:` directly to `main`.
+  `pull_request:` in their `on:` block. Required checks fire against
+  the PR's head commit; branch protection's "must be up to date"
+  rule forces re-run after rebase.
+- `merge_group:` triggers are obsolete under
+  [ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md).
+  Existing `merge_group:` lines may stay as cheap no-ops (they will
+  never fire) or be cleaned up in follow-up PRs; new workflows
+  SHOULD NOT add `merge_group:`. There is no `merge_group` event to
+  gate on.
+- Non-required workflows (smoke jobs, language-binding builds, etc.)
+  fire on `pull_request:` and `push:` to `main` as appropriate.
 
 ### Severity Definitions
 

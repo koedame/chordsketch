@@ -76,18 +76,23 @@ main pushes write to the cache:
 
 The repository's GitHub Actions cache pool is capped at 10 GB with LRU
 eviction. Without this guard, the `Swatinem/rust-cache` default (`save-if:
-true`) saves a fresh entry on every PR ref and every
-`refs/heads/gh-readonly-queue/*` merge-queue ref. Those entries are bit-
-for-bit duplicates of `main`'s cache when the PR did not change
-`Cargo.lock`, but they cost the full per-cell size (typical: 200–500 MB)
-and are scoped to refs that no other run can read from. The pool fills
+true`) saves a fresh entry on every PR ref. Those entries are bit-for-bit
+duplicates of `main`'s cache when the PR did not change `Cargo.lock`,
+but they cost the full per-cell size (typical: 200–500 MB) and are
+scoped to refs that no other run can read from. The pool fills
 within ~24 hours and LRU starts evicting the `main` caches that PR runs
 restore from — producing the `No cache found.` reports that motivated
 #2308.
 
-PR and `merge_group:` runs continue to **restore** cached entries via the
-`shared-key` prefix; they simply do not write back. Cargo.lock-changing
-PRs (mostly Dependabot) trade away one warm cache they would not have
+(The historical `refs/heads/gh-readonly-queue/*` write path was
+retired together with the merge queue itself in
+[ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md). The
+`save-if` guard is preserved so the same eviction problem does not
+return through the PR-ref path.)
+
+PR runs continue to **restore** cached entries via the `shared-key`
+prefix; they simply do not write back. Cargo.lock-changing PRs
+(mostly Dependabot) trade away one warm cache they would not have
 hit cleanly anyway in exchange for keeping `main`'s cache resident.
 
 ### Tool-version single source of truth
@@ -161,13 +166,17 @@ block.
 **Why:** GitHub-hosted runners are capped at 5 concurrent macOS jobs
 on the Free / Pro / Team plans
 (https://docs.github.com/en/actions/reference/actions-limits). When a
-PR is rebased (or a GitHub Merge Queue speculative-merge failure
-pushes the author to re-queue — see
-[ADR-0003](../../docs/adr/0003-github-merge-queue.md) for the
-queue's role in this picture), the old run continues occupying
-macOS slots while the new run starts behind it in the 5-job queue.
-Without cancel-in-progress, N pushes to one PR produce N parallel
-macOS pipelines competing for the same ceiling.
+PR is rebased — required after `main` moves, since branch protection
+gates merging on the branch being up to date — the old run continues
+occupying macOS slots while the new run starts behind it in the 5-job
+queue. Without cancel-in-progress, N pushes to one PR produce N
+parallel macOS pipelines competing for the same ceiling. (Direct
+squash merges replaced the merge queue in
+[ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md); the
+"speculative-merge failure pushes the author to re-queue" path that
+ADR-0003 contemplated is no longer reachable, but the
+rebase-after-`main`-moves path remains and motivates this section
+identically.)
 
 ### Release/tag-triggered workflows
 
