@@ -42,7 +42,7 @@ semantic conflicts a pre-merge CI run had missed. Zero
 queue-only-detected regressions across the queue's active period
 is the load-bearing data point for the cost-benefit shift.
 
-The cost-benefit traded that motivated ADR-0003 was
+The cost-benefit trade that motivated ADR-0003 was
 "`O(open_PRs)` CI fan-out vs. one extra CI pass per merge." With
 the cascade gone permanently and serial merge discipline already
 encoded in `.claude/rules/one-pr-at-a-time.md`, the second pass is
