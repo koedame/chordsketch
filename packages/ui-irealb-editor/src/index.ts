@@ -13,12 +13,15 @@
 //      URL via `wasm.serializeIrealb` and dispatches the resulting
 //      string to every `onChange` subscriber.
 //
-// This first iteration intentionally leaves the bar grid read-only.
-// Bar-popover editing arrives in #2364, structural section / bar
-// edits in #2365, keyboard navigation + ARIA in #2368.
+// As of #2364, bar cells are interactive — clicking opens a popover
+// dialog that edits every field of the underlying `Bar` (start /
+// end barlines, chord rows, optional N-th ending number, optional
+// musical symbol). Structural section / bar edits arrive in #2365,
+// keyboard navigation + ARIA in #2368.
 
-import type { IrealSong } from './ast.js';
+import type { Bar, IrealSong } from './ast.js';
 import { clearChildren } from './dom.js';
+import { openBarPopover, type BarPopoverHandle } from './popover.js';
 import { render, type RenderHandle } from './render.js';
 import { IrealbEditorState, type IrealbWasm, makeStateFromUrl } from './state.js';
 
@@ -75,6 +78,7 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
 
   const changeHandlers = new Set<(value: string) => void>();
   let renderHandle: RenderHandle | null = null;
+  let popoverHandle: BarPopoverHandle | null = null;
   let destroyed = false;
 
   const fireUserEdit = (): void => {
@@ -92,12 +96,50 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
     for (const handler of changeHandlers) handler(url);
   };
 
+  // Bar-popover open callback. The renderer hands us the `bar` plus
+  // its (sectionIndex, barIndex) so we can splice the saved value
+  // back into the AST without rebuilding it from object identity
+  // (which would break after a setValue rebuild). One popover at a
+  // time — clicking a second cell while a popover is open closes
+  // the first; this avoids stacked dialogs and keeps focus
+  // management deterministic.
+  const handleOpenPopover = (
+    bar: Bar,
+    anchor: HTMLElement,
+    secIndex: number,
+    barIndex: number,
+  ): void => {
+    if (destroyed) return;
+    if (popoverHandle !== null) {
+      popoverHandle.dispose();
+      popoverHandle = null;
+    }
+    popoverHandle = openBarPopover({
+      container: element,
+      bar,
+      anchor,
+      onSave: (next: Bar) => {
+        const section = state.song.sections[secIndex];
+        if (!section) return;
+        if (barIndex < 0 || barIndex >= section.bars.length) return;
+        section.bars[barIndex] = next;
+        // Re-render so the bar cell reflects the new chord/text and
+        // so the next click anchors on the freshly-mounted button.
+        renderNow();
+        fireUserEdit();
+      },
+      onClose: () => {
+        popoverHandle = null;
+      },
+    });
+  };
+
   const renderNow = (): void => {
     if (renderHandle !== null) {
       renderHandle.dispose();
       renderHandle = null;
     }
-    renderHandle = render(element, state, fireUserEdit);
+    renderHandle = render(element, state, fireUserEdit, handleOpenPopover);
   };
 
   renderNow();
@@ -120,7 +162,13 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       // Per `EditorAdapter` contract: setValue MUST NOT fire
       // onChange — it represents a host-driven load, not a user
       // edit. We rebuild the DOM (so form fields reflect the new
-      // state) but do not call `fireUserEdit`.
+      // state) but do not call `fireUserEdit`. Any open popover
+      // is dismissed: it would otherwise reference a Bar from the
+      // pre-load AST and on Save corrupt the freshly-loaded chart.
+      if (popoverHandle !== null) {
+        popoverHandle.dispose();
+        popoverHandle = null;
+      }
       if (value.length === 0) {
         state.song = makeEmptySong();
       } else {
@@ -137,6 +185,10 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
     destroy(): void {
       if (destroyed) return;
       destroyed = true;
+      if (popoverHandle !== null) {
+        popoverHandle.dispose();
+        popoverHandle = null;
+      }
       if (renderHandle !== null) {
         renderHandle.dispose();
         renderHandle = null;

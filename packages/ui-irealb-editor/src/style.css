@@ -98,8 +98,133 @@
   text-align: center;
   color: #1f2933;
   border-radius: 3px;
-  /* Cell is structurally read-only: no `<input>` inside, default
-   * cursor, no focus ring. #2364 will add a click handler that
-   * opens the chord-edit popover. */
+  /* As of #2364 the cell is a real <button> — the click opens the
+   * bar-edit popover. Cursor + hover + focus affordances reflect
+   * that. */
+  cursor: pointer;
   user-select: none;
+  font: inherit;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.irealb-editor__bar:hover {
+  background: #e4ebf1;
+}
+
+.irealb-editor__bar:focus-visible {
+  outline: 2px solid #4c6ef5;
+  outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Bar-edit popover (#2364). Rendered as a child of `.irealb-editor` so
+ * the host's stacking context owns z-index. Positioned absolutely
+ * via inline styles set by `popover.ts` (top / left = anchor's
+ * bounding rect); the rules below only handle look + intra-popover
+ * layout.
+ * --------------------------------------------------------------------------- */
+
+.irealb-editor__popover {
+  position: absolute;
+  z-index: 100;
+  background: #ffffff;
+  border: 1px solid #9aa5b1;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+  padding: 0.75rem;
+  min-width: 320px;
+  max-width: 540px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.irealb-editor__popover-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.irealb-editor__popover-chords {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border-top: 1px solid #e4e7eb;
+  padding-top: 0.4rem;
+}
+
+.irealb-editor__popover-chords h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  color: #52606d;
+  letter-spacing: 0.04em;
+}
+
+.irealb-editor__popover-chordrow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto auto auto;
+  gap: 0.3rem;
+  align-items: end;
+}
+
+.irealb-editor__popover-rowbtn {
+  background: #ffffff;
+  border: 1px solid #cbd2d9;
+  border-radius: 4px;
+  padding: 0.35rem 0.55rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.irealb-editor__popover-rowbtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.irealb-editor__popover-addrow {
+  align-self: flex-start;
+  background: #f5f7fa;
+  border: 1px dashed #cbd2d9;
+  border-radius: 4px;
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+  font: inherit;
+  color: #1f2933;
+}
+
+.irealb-editor__popover-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  border-top: 1px solid #e4e7eb;
+  padding-top: 0.5rem;
+}
+
+.irealb-editor__popover-cancel,
+.irealb-editor__popover-save {
+  font: inherit;
+  padding: 0.45rem 0.9rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.irealb-editor__popover-cancel {
+  background: #ffffff;
+  border: 1px solid #cbd2d9;
+  color: #1f2933;
+}
+
+.irealb-editor__popover-save {
+  background: #4c6ef5;
+  border: 1px solid #4c6ef5;
+  color: #ffffff;
+}
+
+.irealb-editor__popover-save:hover {
+  background: #3b5bdb;
+  border-color: #3b5bdb;
 }
