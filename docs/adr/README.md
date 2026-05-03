@@ -93,3 +93,4 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0013](0013-conditional-bot-driven-merge.md) | Bot-driven merge is allowed under explicit session permission | Accepted (2026-04-29; condition 4 updated by ADR-0015) |
 | [0014](0014-bravura-glyphs-as-svg-paths.md) | Bravura SMuFL glyphs ship as inline SVG paths, not as a bundled font | Accepted (2026-05-01) |
 | [0015](0015-disable-github-merge-queue.md) | Disable GitHub Merge Queue (supersedes ADR-0003) | Accepted (2026-05-03) |
+| [0016](0016-dependabot-review-skill.md) | Dependabot review moves from a CI bot to a session skill; major bumps are no longer suppressed | Accepted (2026-05-03) |
