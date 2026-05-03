@@ -1,0 +1,105 @@
+/* All selectors are namespaced under `.irealb-editor` so the editor
+ * does not leak styles into the host page. The host (playground or
+ * desktop WebView) imports this file via
+ * `@chordsketch/ui-irealb-editor/style.css`. */
+
+.irealb-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: #1f2933;
+  background: #ffffff;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+}
+
+.irealb-editor__header {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.irealb-editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  min-width: 0;
+}
+
+.irealb-editor__field label {
+  color: #52606d;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+}
+
+.irealb-editor__input,
+.irealb-editor__select {
+  font: inherit;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #cbd2d9;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1f2933;
+  min-width: 0;
+}
+
+.irealb-editor__input:focus,
+.irealb-editor__select:focus {
+  outline: 2px solid #4c6ef5;
+  outline-offset: 1px;
+  border-color: #4c6ef5;
+}
+
+.irealb-editor__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.irealb-editor__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.irealb-editor__section-label {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #52606d;
+  border-bottom: 1px solid #e4e7eb;
+  padding-bottom: 0.25rem;
+}
+
+/* 4 bars per line. Per the AC: each bar is rendered as a disabled
+ * cell (no inputs yet — bar editing arrives in #2364). The grid
+ * wraps when the section has more than 4 bars; sections with <4
+ * bars right-pad with empty grid cells (handled by the implicit
+ * `grid-template-columns` track count). */
+.irealb-editor__bars {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.irealb-editor__bar {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  border: 1px solid #cbd2d9;
+  background: #f5f7fa;
+  padding: 0.6rem 0.5rem;
+  min-height: 2.5rem;
+  text-align: center;
+  color: #1f2933;
+  border-radius: 3px;
+  /* Cell is structurally read-only: no `<input>` inside, default
+   * cursor, no focus ring. #2364 will add a click handler that
+   * opens the chord-edit popover. */
+  user-select: none;
+}
