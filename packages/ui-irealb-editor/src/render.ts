@@ -240,7 +240,7 @@ export function render(
   const sectionsCount = state.song.sections.length;
   state.song.sections.forEach((section, secIndex) => {
     grid.appendChild(
-      renderSection(section, secIndex, sectionsCount, openBarPopover, ops, listen),
+      renderSection(section, secIndex, sectionsCount, openBarPopover, ops, listen, root),
     );
   });
 
@@ -281,6 +281,7 @@ function renderSection(
     type: K,
     handler: (ev: HTMLElementEventMap[K]) => void,
   ) => void,
+  root: HTMLElement,
 ): HTMLElement {
   const wrapper = el('div', {
     class: 'irealb-editor__section',
@@ -348,7 +349,7 @@ function renderSection(
   const barsCount = section.bars.length;
   section.bars.forEach((bar, barIndex) => {
     row.appendChild(
-      renderBar(bar, secIndex, barIndex, barsCount, openBarPopover, ops, listen),
+      renderBar(bar, secIndex, barIndex, barsCount, openBarPopover, ops, listen, root),
     );
   });
   wrapper.appendChild(row);
@@ -379,6 +380,7 @@ function renderBar(
     type: K,
     handler: (ev: HTMLElementEventMap[K]) => void,
   ) => void,
+  root: HTMLElement,
 ): HTMLElement {
   const wrapper = el('div', {
     class: 'irealb-editor__bar-wrapper',
@@ -389,8 +391,7 @@ function renderBar(
   // `<button type="button">` so the cell announces as a button to
   // screen readers and so Enter / Space activation works without
   // explicit keyboard handlers. ARIA grid semantics on the wrapping
-  // grid (`role="grid"` / `gridcell`) are deferred to #2368;
-  // keyboard shortcuts for delete / reorder are deferred to #2376.
+  // grid (`role="grid"` / `gridcell`) are deferred to #2368.
   const cell = el('button', {
     class: 'irealb-editor__bar',
     attrs: {
@@ -401,6 +402,16 @@ function renderBar(
   });
   listen(cell, 'click', () => {
     openBarPopover(bar, cell, secIndex, barIndex);
+  });
+  // Keyboard shortcuts (#2376) for the focused bar cell:
+  //   Delete / Backspace          → remove the bar
+  //   Alt+ArrowLeft / ArrowRight  → reorder within the section
+  // Behaviour mirrors the per-bar `×` / `←` / `→` UI buttons. The
+  // delete shortcut intentionally has no confirmation prompt — the
+  // UI `×` button is also unconfirmed, and an asymmetric path would
+  // surprise keyboard users.
+  listen(cell, 'keydown', (ev) => {
+    handleBarCellKeydown(ev, secIndex, barIndex, barsCount, ops, root);
   });
   wrapper.appendChild(cell);
 
@@ -440,6 +451,86 @@ function renderBar(
 
   wrapper.appendChild(actions);
   return wrapper;
+}
+
+/** Bar-cell `keydown` handler (#2376). Dispatches to the structural
+ * ops object, then re-focuses the freshly-rendered bar cell so a
+ * keyboard user can repeat the shortcut without re-grabbing focus.
+ *
+ * The structural ops in `index.ts` already restore focus — but they
+ * target the action buttons (`Move bar left/right`, `Delete bar`),
+ * which is the right behaviour for a click on those buttons but not
+ * for a keyboard user who was driving the cell directly. We let the
+ * op fire first, then override focus to land back on the bar cell
+ * (or, on delete, the next-sibling cell or the section's
+ * "+ Add bar" trailer if the section was emptied).
+ *
+ * Modifier-key gating: shortcuts only fire with the documented
+ * modifier set (`Alt` for arrow keys, no modifier for Delete /
+ * Backspace). Combinations such as `Ctrl+Backspace`, `Meta+Delete`,
+ * or `Alt+Shift+ArrowLeft` are left to the platform / browser so we
+ * do not silently shadow OS-level bindings (e.g. text-editor
+ * jump-by-word selection that some screen readers map onto bar
+ * cells via assistive overlays). */
+function handleBarCellKeydown(
+  ev: KeyboardEvent,
+  secIndex: number,
+  barIndex: number,
+  barsCount: number,
+  ops: StructuralOps,
+  root: HTMLElement,
+): void {
+  // Reject any modifier combination outside the two we recognise.
+  // `ctrlKey` / `metaKey` are always disqualifying; `shiftKey` is
+  // disqualifying in combination with `altKey` (see rationale above).
+  if (ev.ctrlKey || ev.metaKey) return;
+
+  if (ev.altKey && !ev.shiftKey) {
+    if (ev.key === 'ArrowLeft') {
+      ev.preventDefault();
+      if (barIndex === 0) return; // bounded no-op at the first bar
+      ops.moveBarLeft(secIndex, barIndex);
+      focusBarCell(root, secIndex, barIndex - 1);
+      return;
+    }
+    if (ev.key === 'ArrowRight') {
+      ev.preventDefault();
+      if (barIndex === barsCount - 1) return; // bounded no-op at the last bar
+      ops.moveBarRight(secIndex, barIndex);
+      focusBarCell(root, secIndex, barIndex + 1);
+      return;
+    }
+    return;
+  }
+
+  if (!ev.altKey && !ev.shiftKey && (ev.key === 'Delete' || ev.key === 'Backspace')) {
+    ev.preventDefault();
+    ops.deleteBar(secIndex, barIndex);
+    // Restore focus on the post-delete grid. The structural op has
+    // already pointed focus at the next-sibling Delete button; we
+    // override it with the matching bar cell (or the section's
+    // "+ Add bar" trailer if the section is now empty) so a
+    // keyboard user can keep deleting from the same focus context.
+    const sectionEl = root.querySelector<HTMLElement>(
+      `[data-section-index="${secIndex}"]`,
+    );
+    if (sectionEl === null) return;
+    const cells = sectionEl.querySelectorAll<HTMLButtonElement>('.irealb-editor__bar');
+    if (cells.length === 0) {
+      sectionEl.querySelector<HTMLButtonElement>('.irealb-editor__add-bar')?.focus();
+      return;
+    }
+    const nextIndex = Math.min(barIndex, cells.length - 1);
+    cells[nextIndex]?.focus();
+  }
+}
+
+function focusBarCell(root: HTMLElement, secIndex: number, barIndex: number): void {
+  root
+    .querySelector<HTMLButtonElement>(
+      `[data-section-index="${secIndex}"] [data-bar-index="${barIndex}"] .irealb-editor__bar`,
+    )
+    ?.focus();
 }
 
 function formatSectionLabel(label: SectionLabel): string {
