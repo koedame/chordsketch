@@ -669,4 +669,107 @@ describe('live region announces structural edits', () => {
       editor.destroy();
     }
   });
+
+  test('renaming a section announces "Section renamed from L to L2"', async () => {
+    const wasm = makeStubWasm(makeSongWithBars(1));
+    const editor = createIrealbEditor({
+      initialValue: SAMPLE_URL,
+      wasm,
+      // Stub that always renames to section B, regardless of current label.
+      promptSectionLabel: () => ({ kind: 'letter', value: 'B' }),
+    });
+    try {
+      const live = getLive(editor);
+      const renameBtn = editor.element.querySelector<HTMLButtonElement>(
+        'button[aria-label="Rename section"]',
+      );
+      renameBtn?.click();
+      await Promise.resolve();
+      expect(live.textContent).toContain('renamed');
+      expect(live.textContent).toContain('A');
+      expect(live.textContent).toContain('B');
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('moving a section up announces "Section L moved up"', async () => {
+    // Two-section song so section B (index 1) can move up.
+    const song: IrealSong = {
+      title: 'Move-section announce test',
+      composer: null,
+      style: null,
+      key_signature: { root: { note: 'C', accidental: 'natural' }, mode: 'major' },
+      time_signature: { numerator: 4, denominator: 4 },
+      tempo: null,
+      transpose: 0,
+      sections: [
+        {
+          label: { kind: 'letter', value: 'A' },
+          bars: [{ start: 'single', end: 'single', chords: [], ending: null, symbol: null }],
+        },
+        {
+          label: { kind: 'letter', value: 'B' },
+          bars: [{ start: 'single', end: 'single', chords: [], ending: null, symbol: null }],
+        },
+      ],
+    };
+    const wasm = makeStubWasm(song);
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+    try {
+      const live = getLive(editor);
+      // Section B is at index 1; click its "Move section up" button.
+      const sectionEls = editor.element.querySelectorAll<HTMLElement>(
+        '.irealb-editor__section',
+      );
+      const upBtn = sectionEls[1]?.querySelector<HTMLButtonElement>(
+        'button[aria-label="Move section up"]',
+      );
+      upBtn?.click();
+      await Promise.resolve();
+      expect(live.textContent).toContain('Section B moved up');
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('moving a section down announces "Section L moved down"', async () => {
+    // Two-section song so section A (index 0) can move down.
+    const song: IrealSong = {
+      title: 'Move-section announce test',
+      composer: null,
+      style: null,
+      key_signature: { root: { note: 'C', accidental: 'natural' }, mode: 'major' },
+      time_signature: { numerator: 4, denominator: 4 },
+      tempo: null,
+      transpose: 0,
+      sections: [
+        {
+          label: { kind: 'letter', value: 'A' },
+          bars: [{ start: 'single', end: 'single', chords: [], ending: null, symbol: null }],
+        },
+        {
+          label: { kind: 'letter', value: 'B' },
+          bars: [{ start: 'single', end: 'single', chords: [], ending: null, symbol: null }],
+        },
+      ],
+    };
+    const wasm = makeStubWasm(song);
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+    try {
+      const live = getLive(editor);
+      // Section A is at index 0; click its "Move section down" button.
+      const sectionEls = editor.element.querySelectorAll<HTMLElement>(
+        '.irealb-editor__section',
+      );
+      const downBtn = sectionEls[0]?.querySelector<HTMLButtonElement>(
+        'button[aria-label="Move section down"]',
+      );
+      downBtn?.click();
+      await Promise.resolve();
+      expect(live.textContent).toContain('Section A moved down');
+    } finally {
+      editor.destroy();
+    }
+  });
 });
