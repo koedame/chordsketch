@@ -108,6 +108,17 @@ function mountRoot(): HTMLElement {
   return root;
 }
 
+/**
+ * Drive a recording adapter's `fire` backdoor that simulates a
+ * user-typed input. The double cast widens the test-only field
+ * onto the public adapter shape; collected here so callers do not
+ * repeat the pattern at every call site.
+ */
+function fireOn(adapter: RecordingAdapter | null, value: string): void {
+  if (adapter === null) throw new Error('no recording adapter to fire on');
+  (adapter as unknown as { fire: (v: string) => void }).fire(value);
+}
+
 afterEach(() => {
   while (mounted.length > 0) {
     const root = mounted.pop();
@@ -132,7 +143,7 @@ describe('replaceEditor', () => {
 
     // Simulate user typing — when the swap fires we should carry
     // 'edited-A' across, not the original 'seed-A'.
-    (before as unknown as { fire: (v: string) => void }).fire('edited-A');
+    fireOn(before, 'edited-A');
 
     handle.replaceEditor(b.factory);
 
@@ -164,7 +175,7 @@ describe('replaceEditor', () => {
     expect(onChordProChange).not.toHaveBeenCalled();
 
     // Simulate a user edit on the new adapter — should propagate.
-    (b.current() as unknown as { fire: (v: string) => void }).fire('post-swap-edit');
+    fireOn(b.current(), 'post-swap-edit');
     expect(onChordProChange).toHaveBeenCalledTimes(1);
     expect(onChordProChange).toHaveBeenCalledWith('post-swap-edit');
 
@@ -186,7 +197,7 @@ describe('replaceEditor', () => {
       initialChordPro: 'initial',
       createEditor: a.factory,
     });
-    (a.current() as unknown as { fire: (v: string) => void }).fire('mid-edit');
+    fireOn(a.current(), 'mid-edit');
     vi.clearAllMocks();
 
     handle.replaceEditor(b.factory);
@@ -217,7 +228,7 @@ describe('replaceEditor', () => {
 
       // Queue a debounced render via the outgoing adapter. The
       // 300 ms timer is not yet expired.
-      (a.current() as unknown as { fire: (v: string) => void }).fire('queued');
+      fireOn(a.current(), 'queued');
       expect(renderers.renderHtml).not.toHaveBeenCalled();
 
       handle.replaceEditor(b.factory);
@@ -283,6 +294,122 @@ describe('replaceEditor', () => {
     expect(b.buildCount()).toBe(0);
   });
 
+  test('factory throw leaves the previous editor intact and surfaces the error', async () => {
+    const renderers = makeRenderers();
+    const a = makeRecordingFactory();
+    const root = mountRoot();
+
+    const handle = await mountChordSketchUi(root, {
+      renderers,
+      initialChordPro: 'survives',
+      createEditor: a.factory,
+    });
+    fireOn(a.current(), 'mid-edit');
+    vi.clearAllMocks();
+
+    const throwingFactory: EditorFactory = () => {
+      throw new Error('boom');
+    };
+    handle.replaceEditor(throwingFactory);
+
+    // Previous adapter survives — not destroyed, still in pane,
+    // still backing getChordPro / getValue.
+    expect(a.current()?.destroyed).toBe(false);
+    const editorPane = root.querySelector('#editor-pane');
+    if (!(editorPane instanceof HTMLElement)) {
+      throw new Error('editor-pane not mounted');
+    }
+    expect(editorPane.firstElementChild).toBe(a.current()?.element);
+    expect(handle.getChordPro()).toBe('mid-edit');
+    // Error is surfaced via the preview pane's error region.
+    const errorDiv = root.querySelector('#error');
+    if (!(errorDiv instanceof HTMLElement)) {
+      throw new Error('error region not mounted');
+    }
+    expect(errorDiv.classList.contains('hidden')).toBe(false);
+    expect(errorDiv.textContent).toContain('boom');
+    // No render fired on the failed swap — the preview reflects
+    // whatever the previous adapter had drawn.
+    expect(renderers.renderHtml).not.toHaveBeenCalled();
+
+    // The user can still edit on the surviving adapter (subscriber
+    // chain wasn't torn down).
+    const onEdit = vi.fn();
+    const before = a.current();
+    if (!before) throw new Error('current adapter null');
+    before.onChange(onEdit);
+    fireOn(before, 'post-throw-edit');
+    expect(onEdit).toHaveBeenCalledWith('post-throw-edit');
+
+    handle.destroy();
+  });
+
+  test('focus is restored when the outgoing editor had focus', async () => {
+    const renderers = makeRenderers();
+    const a = makeRecordingFactory();
+    const b = makeRecordingFactory();
+    const root = mountRoot();
+
+    const handle = await mountChordSketchUi(root, {
+      renderers,
+      initialChordPro: '',
+      createEditor: a.factory,
+    });
+    // Make the recording adapter focusable + give it focus —
+    // jsdom honours `tabIndex = 0` + `focus()` on a plain <div>.
+    const beforeEl = a.current()?.element as HTMLElement;
+    beforeEl.tabIndex = 0;
+    beforeEl.focus();
+    expect(document.activeElement).toBe(beforeEl);
+    // Augment factory `b` so the post-swap adapter exposes a real
+    // focus method that lands on its element.
+    handle.replaceEditor((options) => {
+      const adapter = b.factory(options);
+      const el = adapter.element as HTMLElement;
+      el.tabIndex = 0;
+      adapter.focus = () => el.focus();
+      return adapter;
+    });
+    expect(document.activeElement).toBe(b.current()?.element);
+
+    handle.destroy();
+  });
+
+  test('focus is NOT moved when the outgoing editor did not have focus', async () => {
+    const renderers = makeRenderers();
+    const a = makeRecordingFactory();
+    const b = makeRecordingFactory();
+    const root = mountRoot();
+
+    const handle = await mountChordSketchUi(root, {
+      renderers,
+      initialChordPro: '',
+      createEditor: a.factory,
+    });
+    // Focus lives outside the editor pane (e.g. on the format
+    // select). The swap must not steal it.
+    const formatSelect = root.querySelector('#format');
+    if (!(formatSelect instanceof HTMLSelectElement)) {
+      throw new Error('format select not mounted');
+    }
+    formatSelect.focus();
+    expect(document.activeElement).toBe(formatSelect);
+
+    let focusCalls = 0;
+    handle.replaceEditor((options) => {
+      const adapter = b.factory(options);
+      adapter.focus = () => {
+        focusCalls += 1;
+      };
+      return adapter;
+    });
+
+    expect(focusCalls).toBe(0);
+    expect(document.activeElement).toBe(formatSelect);
+
+    handle.destroy();
+  });
+
   test('getChordPro reads from the post-swap adapter', async () => {
     const renderers = makeRenderers();
     const a = makeRecordingFactory();
@@ -295,7 +422,7 @@ describe('replaceEditor', () => {
       createEditor: a.factory,
     });
     handle.replaceEditor(b.factory);
-    (b.current() as unknown as { fire: (v: string) => void }).fire('B-content');
+    fireOn(b.current(), 'B-content');
 
     expect(handle.getChordPro()).toBe('B-content');
 
@@ -376,6 +503,36 @@ describe('headerControls slot', () => {
     expect(transposeIdx).toBeLessThan(aIdx);
 
     handle.destroy();
+  });
+
+  test('dedupes the same element passed twice and warns', async () => {
+    const renderers = makeRenderers();
+    const a = document.createElement('button');
+    a.id = 'host-button-dup';
+    a.textContent = 'A';
+    const root = mountRoot();
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const handle = await mountChordSketchUi(root, {
+        renderers,
+        initialChordPro: '',
+        headerControls: [a, a],
+      });
+
+      const controls = root.querySelector('.controls');
+      if (!(controls instanceof HTMLElement)) {
+        throw new Error('controls bar not mounted');
+      }
+      // Element appears exactly once even though it was passed twice.
+      const matches = controls.querySelectorAll('#host-button-dup');
+      expect(matches.length).toBe(1);
+      expect(warn).toHaveBeenCalledTimes(1);
+
+      handle.destroy();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   test('omitting headerControls leaves the controls bar at its built-in shape', async () => {

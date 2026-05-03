@@ -18,5 +18,11 @@
       "@chordsketch/ui-irealb-editor/style.css": ["../ui-irealb-editor/src/style.css"]
     }
   },
-  "include": ["src", "../ui-web/src", "../ui-irealb-editor/src"]
+  "include": [
+    "src",
+    "tests",
+    "vitest.config.ts",
+    "../ui-web/src",
+    "../ui-irealb-editor/src"
+  ]
 }

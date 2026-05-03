@@ -325,8 +325,23 @@ interface UiNodes {
  * playground behaviour from before the `EditorAdapter` split: one
  * `<textarea id="editor">` inside the editor pane, `input` events
  * proxied to the change subscriber, no placeholder announcements.
+ *
+ * Exported so hosts that drive the runtime swap path (#2366) can
+ * pass it back into {@link ChordSketchUiHandle.replaceEditor} —
+ * the mount-time default selected by `MountOptions.createEditor =
+ * undefined` is not reachable at swap time, where the contract
+ * requires an explicit factory. Reusing this export instead of
+ * re-implementing the textarea in each host keeps the swapped-in
+ * surface byte-equal to the mount-time one and avoids the
+ * fix-propagation defect class
+ * (`.claude/rules/fix-propagation.md`) of two divergent textarea
+ * factories.
+ *
+ * The returned `<textarea>` carries `id="editor"` because
+ * `style.css` targets `#editor` for the editor-pane font and
+ * background; renaming the id would silently de-style the editor.
  */
-function defaultTextareaEditor(options: EditorFactoryOptions): EditorAdapter {
+export function defaultTextareaEditor(options: EditorFactoryOptions): EditorAdapter {
   const textarea = document.createElement('textarea');
   textarea.id = 'editor';
   textarea.spellcheck = false;
@@ -533,7 +548,23 @@ function buildDom(
   // NOT add CSS rules targeting these elements — the host styles
   // them, typically by reusing the namespaced `.controls label` /
   // `.controls select` rules already in `style.css`.
+  //
+  // Dedupe by element identity per `.claude/rules/defensive-inputs.md`
+  // — the same node passed twice would otherwise be silently
+  // reparented (the second `appendChild` moves the node, leaving
+  // the first slot empty). A duplicated entry is more likely a host
+  // bug than an intentional double-mount, so warn and skip rather
+  // than silently mutate.
+  const seenHeaderControls = new Set<HTMLElement>();
   for (const el of headerControls) {
+    if (seenHeaderControls.has(el)) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        'mountChordSketchUi: duplicate headerControls entry ignored',
+      );
+      continue;
+    }
+    seenHeaderControls.add(el);
     controls.appendChild(el);
   }
   header.appendChild(controls);
@@ -1208,6 +1239,35 @@ export async function mountChordSketchUi(
       // destroyed instance, which would silently wipe the editor
       // contents on swap.
       const previous = editor.getValue();
+      // Build the new adapter BEFORE tearing down the old one.
+      // The factory MAY throw — the iRealb factory in particular
+      // calls `parseIrealb` synchronously on `initialValue`, which
+      // throws on any non-`irealb://` text. If the throw landed
+      // after `editor.destroy()` had already run, the handle would
+      // be left with a destroyed adapter, no DOM, and no error
+      // surfaced to the user. By constructing first, we keep the
+      // existing editor as the failure-mode baseline: the user
+      // sees the error in the preview pane and the carried-over
+      // text remains in the (still-mounted) original adapter.
+      let next: EditorAdapter;
+      try {
+        next = factory({
+          initialValue: previous,
+          placeholder: 'Enter ChordPro here...',
+        });
+      } catch (e) {
+        showError(formatError(e));
+        return;
+      }
+      // Preserve focus across the swap if it was inside the
+      // outgoing editor's DOM. Without this, a keyboard user
+      // toggling format from inside the editor lands focus on
+      // <body> and has to Tab back into the pane. Read the
+      // intent BEFORE tear-down because `document.activeElement`
+      // resets to <body> the moment we detach the old element.
+      const restoreFocus =
+        editorPaneEl.contains(document.activeElement) &&
+        document.activeElement !== editorPaneEl;
       // Cancel any debounce queued by the outgoing adapter — its
       // closure resolves `editor.getValue()` lazily, but by the
       // time the timer fires `editor` will have been reassigned to
@@ -1229,12 +1289,10 @@ export async function mountChordSketchUi(
       while (editorPaneEl.firstChild !== null) {
         editorPaneEl.removeChild(editorPaneEl.firstChild);
       }
-      editor = factory({
-        initialValue: previous,
-        placeholder: 'Enter ChordPro here...',
-      });
+      editor = next;
       editorPaneEl.appendChild(editor.element);
       unsubscribeEditor = editor.onChange(onEditorInput);
+      if (restoreFocus) editor.focus?.();
       // Programmatic swap → immediate render, not the debounced
       // path. Mirrors `setChordPro`'s rationale: a host-driven
       // load is a discrete event and the user expects the preview
