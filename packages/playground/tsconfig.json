@@ -13,8 +13,16 @@
     "paths": {
       "@chordsketch/wasm": ["../npm/web/chordsketch_wasm"],
       "@chordsketch/ui-web": ["../ui-web/src/index.ts"],
-      "@chordsketch/ui-web/style.css": ["../ui-web/src/style.css"]
+      "@chordsketch/ui-web/style.css": ["../ui-web/src/style.css"],
+      "@chordsketch/ui-irealb-editor": ["../ui-irealb-editor/src/index.ts"],
+      "@chordsketch/ui-irealb-editor/style.css": ["../ui-irealb-editor/src/style.css"]
     }
   },
-  "include": ["src", "../ui-web/src"]
+  "include": [
+    "src",
+    "tests",
+    "vitest.config.ts",
+    "../ui-web/src",
+    "../ui-irealb-editor/src"
+  ]
 }
