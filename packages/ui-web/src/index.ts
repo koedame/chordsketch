@@ -22,8 +22,16 @@ export interface RenderOptions {
 export interface Renderers {
   /**
    * Initialise the renderer backend (e.g. fetch + instantiate the WASM
-   * module). Called exactly once before any render call. Resolves on
-   * success; rejection is surfaced as an init-time error in the UI.
+   * module). Called exactly once before any render call AND before the
+   * mount-time {@link MountOptions.createEditor} factory is invoked,
+   * so an editor adapter MAY safely call into wasm-backed renderer
+   * helpers from its constructor (e.g. `parseIrealb` /
+   * `serializeIrealb` exposed via the same wasm bundle that the
+   * renderers consume). Resolves on success; on rejection
+   * `mountChordSketchUi` shows the message in the in-page error
+   * banner (the layout scaffold is built first so the banner is
+   * visible) and re-throws so the host promise also sees it. See
+   * #2397 for the regression that motivated the ordering.
    */
   init(): Promise<unknown>;
   /**
@@ -116,9 +124,15 @@ export interface EditorFactoryOptions {
 
 /**
  * Produces an {@link EditorAdapter} mounted inside the editor pane.
- * Called exactly once per `mountChordSketchUi` call, before the
- * first render. Passing `undefined` selects the built-in
- * `<textarea>` implementation.
+ * Called exactly once per `mountChordSketchUi` call, after
+ * {@link Renderers.init} has resolved and before the first render —
+ * factories may synchronously invoke wasm-backed helpers from the
+ * renderer bundle in their constructor. {@link
+ * ChordSketchUiHandle.replaceEditor} uses the same type and
+ * naturally satisfies the same precondition.
+ *
+ * Passing `undefined` to {@link MountOptions.createEditor} selects
+ * the built-in `<textarea>` implementation.
  */
 export type EditorFactory = (options: EditorFactoryOptions) => EditorAdapter;
 
@@ -150,7 +164,8 @@ export interface MountOptions {
    * matches the pre-#2072 playground exactly. The desktop app
    * injects a CodeMirror-based factory so ui-web stays
    * framework-agnostic and the playground bundle does not need to
-   * pull in CodeMirror.
+   * pull in CodeMirror. See {@link EditorFactory} for the
+   * invocation-order contract relative to {@link Renderers.init}.
    */
   createEditor?: EditorFactory;
   /**
@@ -715,6 +730,22 @@ export async function mountChordSketchUi(
     errorDiv,
   } = nodes;
 
+  const showError = (msg: string): void => {
+    errorDiv.textContent = msg;
+    errorDiv.classList.remove('hidden');
+  };
+
+  const hideError = (): void => {
+    errorDiv.classList.add('hidden');
+  };
+
+  try {
+    await renderers.init();
+  } catch (e) {
+    showError(`Failed to initialise renderer: ${formatError(e)}`);
+    throw e;
+  }
+
   // `editor` and `unsubscribeEditor` are reassigned by
   // `replaceEditor` (#2366), so they cannot be `const` even though
   // the initial values are set exactly once here. The `let` binding
@@ -910,15 +941,6 @@ export async function mountChordSketchUi(
     scheduleRender();
   };
 
-  const showError = (msg: string): void => {
-    errorDiv.textContent = msg;
-    errorDiv.classList.remove('hidden');
-  };
-
-  const hideError = (): void => {
-    errorDiv.classList.add('hidden');
-  };
-
   const showPane = (pane: 'html' | 'text' | 'pdf'): void => {
     preview.classList.toggle('hidden', pane !== 'html');
     textOutput.classList.toggle('hidden', pane !== 'text');
@@ -1075,13 +1097,6 @@ export async function mountChordSketchUi(
     }
     debounceTimer = setTimeout(render, RENDER_DEBOUNCE_MS);
   };
-
-  try {
-    await renderers.init();
-  } catch (e) {
-    showError(`Failed to initialise renderer: ${formatError(e)}`);
-    throw e;
-  }
 
   // `initialValue` was already seeded by the factory; no second
   // assignment needed here.

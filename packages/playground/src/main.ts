@@ -160,8 +160,34 @@ const irealbEditorFactory: EditorFactory = (
 // mount-time one and any future ui-web bug fix to the textarea
 // (accessibility tweaks, IME composition, focus handling) flows
 // through to both call sites without divergence.
-const factoryFor = (format: InputFormat): EditorFactory =>
-  format === 'irealb' ? irealbEditorFactory : defaultTextareaEditor;
+/**
+ * On runtime swap, the previous editor's value is forwarded as
+ * `initialValue` to the new factory. ChordPro text fed to the
+ * iRealb factory throws inside `parseIrealb`; without recovery the
+ * user lands on an unmounted editor. Falls back to the format's
+ * sample seed (lossy — the carried-over text is discarded; logged
+ * via `console.warn`). The recursion guard prevents an infinite
+ * loop if the seed itself ever fails to parse. See #2397 sister-
+ * site audit.
+ */
+const factoryFor = (format: InputFormat): EditorFactory => {
+  const base: EditorFactory =
+    format === 'irealb' ? irealbEditorFactory : defaultTextareaEditor;
+  const seed = format === 'irealb' ? SAMPLE_IREALB : SAMPLE_CHORDPRO;
+  return (options) => {
+    try {
+      return base(options);
+    } catch (e) {
+      if (options.initialValue === seed) throw e;
+      console.warn(
+        `${format} editor could not parse carried-over content; ` +
+          `falling back to the built-in sample. Original error:`,
+        e,
+      );
+      return base({ ...options, initialValue: seed });
+    }
+  };
+};
 
 const initialFormat = detectInitialFormat(SAMPLE_CHORDPRO);
 const initialContent = initialFormat === 'irealb' ? SAMPLE_IREALB : SAMPLE_CHORDPRO;
