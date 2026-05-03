@@ -27,11 +27,23 @@ export default defineConfig({
       // alias so Vite resolves it correctly.
       '@chordsketch/ui-web/style.css': resolve(here, '../ui-web/src/style.css'),
       '@chordsketch/ui-web': resolve(here, '../ui-web/src/index.ts'),
+      // iRealb bar-grid GUI editor (#2366). Same alias pattern as
+      // ui-web: TS sources are consumed directly, longer specifier
+      // listed first so the css alias resolves before the bare
+      // package alias.
+      '@chordsketch/ui-irealb-editor/style.css': resolve(
+        here,
+        '../ui-irealb-editor/src/style.css',
+      ),
+      '@chordsketch/ui-irealb-editor': resolve(
+        here,
+        '../ui-irealb-editor/src/index.ts',
+      ),
     },
   },
   server: {
     fs: {
-      allow: ['../npm', '../ui-web'],
+      allow: ['../npm', '../ui-web', '../ui-irealb-editor'],
     },
   },
 });

@@ -30,5 +30,15 @@ declare module '@chordsketch/wasm' {
   }
   export function validate(input: string): ValidationError[];
   export function version(): string;
+  // iReal Pro bindings (#2055 / #2058 / #2335). Camel-cased on the
+  // JS side via `#[wasm_bindgen(js_name = ...)]`; the snake_case
+  // siblings (`render_html`, `render_text`) predate that rename
+  // convention. `parseIrealb` / `serializeIrealb` satisfy the
+  // `IrealbWasm` interface in `@chordsketch/ui-irealb-editor` —
+  // the playground passes these two functions through to the
+  // editor factory unchanged (#2366).
+  export function renderIrealSvg(input: string): string;
+  export function parseIrealb(input: string): string;
+  export function serializeIrealb(input: string): string;
   export default function init(): Promise<void>;
 }
