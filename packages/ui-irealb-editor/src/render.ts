@@ -480,6 +480,17 @@ function handleBarCellKeydown(
   ops: StructuralOps,
   root: HTMLElement,
 ): void {
+  // Defense in depth against a focus-trap regression in popover.ts.
+  // The bar popover is a W3C APG modal dialog whose focus trap
+  // structurally prevents `keydown` from reaching this handler while
+  // the dialog is open — a real browser cannot focus a bar cell at
+  // that point. A `dispatchEvent` from a test (or, more worryingly,
+  // a future assistive-tech overlay that synthesises events without
+  // honouring the focus trap) can bypass the trap; bailing on an
+  // active popover keeps destructive shortcuts off the cell while a
+  // modal owns the user's input.
+  if (root.querySelector('.irealb-editor__popover') !== null) return;
+
   // Reject any modifier combination outside the two we recognise.
   // `ctrlKey` / `metaKey` are always disqualifying; `shiftKey` is
   // disqualifying in combination with `altKey` (see rationale above).
@@ -512,9 +523,13 @@ function handleBarCellKeydown(
     // "+ Add bar" trailer if the section is now empty) so a
     // keyboard user can keep deleting from the same focus context.
     const sectionEl = root.querySelector<HTMLElement>(
-      `[data-section-index="${secIndex}"]`,
+      `.irealb-editor__section[data-section-index="${secIndex}"]`,
     );
     if (sectionEl === null) return;
+    // `cells` ordering tracks `barIndex` because `renderBar` appends
+    // bars in order and `querySelectorAll` returns nodes in document
+    // order. A future drag-reorder or virtualised grid would need to
+    // re-establish this invariant before re-using this lookup.
     const cells = sectionEl.querySelectorAll<HTMLButtonElement>('.irealb-editor__bar');
     if (cells.length === 0) {
       sectionEl.querySelector<HTMLButtonElement>('.irealb-editor__add-bar')?.focus();
@@ -526,9 +541,16 @@ function handleBarCellKeydown(
 }
 
 function focusBarCell(root: HTMLElement, secIndex: number, barIndex: number): void {
+  // Selectors are scoped to `.irealb-editor__section` /
+  // `.irealb-editor__bar-wrapper` so a host that wraps the editor in
+  // a container that re-uses `data-section-index` / `data-bar-index`
+  // (e.g. an outer "song book" widget) does not match those foreign
+  // nodes and steal focus.
   root
     .querySelector<HTMLButtonElement>(
-      `[data-section-index="${secIndex}"] [data-bar-index="${barIndex}"] .irealb-editor__bar`,
+      `.irealb-editor__section[data-section-index="${secIndex}"] ` +
+        `.irealb-editor__bar-wrapper[data-bar-index="${barIndex}"] ` +
+        `.irealb-editor__bar`,
     )
     ?.focus();
 }

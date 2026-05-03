@@ -102,8 +102,8 @@ the same column.
 
 Move shortcuts at the section boundary (`Alt`+`ArrowLeft` on the
 first bar / `Alt`+`ArrowRight` on the last bar) are bounded no-ops:
-they `preventDefault` (so the browser does not fire its native
-back-navigation chord) but do not mutate the AST.
+they `preventDefault` (defence against any host-level handler that
+treats the chord as history navigation) but do not mutate the AST.
 
 Cross-section bar moves are not yet wired; drag-and-drop is the
 planned path for that and is tracked under #2357. Section-level

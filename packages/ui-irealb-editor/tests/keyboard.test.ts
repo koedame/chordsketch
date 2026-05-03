@@ -358,6 +358,40 @@ describe('keyboard shortcuts: bar reorder', () => {
     editor.element.remove();
   });
 
+  test('Bar-cell shortcut does not fire while a bar popover holds focus', () => {
+    // The popover is a W3C APG dialog with a Tab focus trap, so a
+    // user driving the keyboard cannot focus a bar cell while the
+    // popover is open. Pinning the invariant here guards against a
+    // future refactor that drops the trap (or adds a non-modal mode)
+    // and would otherwise let Delete/Backspace silently delete the
+    // bar the popover is editing.
+    const wasm = makeStubWasm();
+    const onChange = vi.fn();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+    document.body.appendChild(editor.element);
+    editor.onChange(onChange);
+
+    const cells = getCells(editor);
+    cells[1]?.click(); // open popover for the F bar
+    expect(editor.element.querySelector('.irealb-editor__popover')).not.toBeNull();
+
+    // While the popover is open, focus is trapped inside it. The
+    // bar cell does not receive keyboard events; dispatching one
+    // directly on the (now-blurred) cell verifies that no AST
+    // mutation occurs even if a synthetic event somehow reaches it.
+    // The test asserts the AST is unchanged — covering both the
+    // "focus trap prevented the keystroke" and the "handler ran but
+    // no side effect" reading.
+    dispatchKey(cells[1] as HTMLElement, 'Delete');
+    expect(readSong(editor).sections[0]?.bars.length).toBe(3);
+    // The popover open did not call onChange; deleting via Delete
+    // should not have fired it either.
+    expect(onChange).not.toHaveBeenCalled();
+
+    editor.destroy();
+    editor.element.remove();
+  });
+
   test('Alt+Shift+ArrowLeft does not trigger the shortcut', () => {
     // The Alt+Shift+arrow chord is reserved by some IMEs / screen
     // readers (e.g. NVDA / VoiceOver overlay key) for jump-by-word
