@@ -153,6 +153,22 @@ export interface MountOptions {
    * pull in CodeMirror.
    */
   createEditor?: EditorFactory;
+  /**
+   * Optional host-supplied controls appended to the right edge of
+   * the header `controls` bar (after the existing format select and
+   * transpose group). Each entry is appended in order; ui-web does
+   * not own them — the host wires its own listeners and is
+   * responsible for keeping the elements alive across UI rebuilds.
+   *
+   * Used by the playground (#2366) to inject the ChordPro / iRealb
+   * input-format `<select>` next to the existing render-format
+   * select, without forcing every consumer to construct the
+   * surrounding `<header>` chrome themselves. Hosts that supply
+   * `replaceEditor` typically pair it with this slot so the format
+   * toggle lives in the same visual cluster as the renderer
+   * controls.
+   */
+  headerControls?: HTMLElement[];
 }
 
 /**
@@ -237,6 +253,27 @@ export interface ChordSketchUiHandle {
    * internal `<button>` (#2190).
    */
   resetTranspose(): void;
+  /**
+   * Tear down the active editor adapter and replace it with a new
+   * one built from `factory`. The previous adapter's `getValue()`
+   * is forwarded to the new factory as `initialValue` so the
+   * editor swap is content-preserving — the host that calls this
+   * is typically toggling input formats (ChordPro ↔ iRealb in the
+   * playground, #2366) and expects the in-progress text to survive
+   * the swap. The change handler registered at mount time is
+   * re-attached to the new adapter, and an immediate render is
+   * scheduled (not the debounced path) so the preview reflects the
+   * new editor's interpretation of the carried-over content
+   * without the 300 ms input delay.
+   *
+   * Counts as a programmatic load, not a user edit:
+   * {@link MountOptions.onChordProChange} is NOT fired by the swap
+   * itself — only by subsequent user input on the new adapter. A
+   * pending debounced render queued by the previous adapter is
+   * cancelled before tear-down so the stale closure does not
+   * resurrect the old `getValue()`.
+   */
+  replaceEditor(factory: EditorFactory): void;
 }
 
 const RENDER_DEBOUNCE_MS = 300;
@@ -378,7 +415,11 @@ function parseStoredSplitRatio(raw: string | null): number | null {
  * markup byte-for-byte so visual regression versus the pre-extraction
  * playground is empty.
  */
-function buildDom(root: HTMLElement, title: string): UiNodes {
+function buildDom(
+  root: HTMLElement,
+  title: string,
+  headerControls: HTMLElement[],
+): UiNodes {
   // The iframe sandbox is intentionally restrictive — empty `sandbox`
   // would block scripts/forms/storage so the rendered HTML cannot run JS
   // or steal cookies. We do allow popups so anchor clicks (e.g. from
@@ -486,6 +527,15 @@ function buildDom(root: HTMLElement, title: string): UiNodes {
   );
 
   controls.append(formatLabel, transposeGroup);
+  // Host-supplied controls are appended after the built-in format
+  // and transpose clusters so a future built-in addition does not
+  // visually displace whatever the host injected here. ui-web does
+  // NOT add CSS rules targeting these elements — the host styles
+  // them, typically by reusing the namespaced `.controls label` /
+  // `.controls select` rules already in `style.css`.
+  for (const el of headerControls) {
+    controls.appendChild(el);
+  }
   header.appendChild(controls);
 
   const main = document.createElement('main');
@@ -609,13 +659,14 @@ export async function mountChordSketchUi(
     documentTitle,
     onChordProChange,
     createEditor = defaultTextareaEditor,
+    headerControls = [],
   } = options;
 
   if (documentTitle !== undefined) {
     document.title = documentTitle;
   }
 
-  const nodes = buildDom(root, title);
+  const nodes = buildDom(root, title, headerControls);
   const {
     editorPaneEl,
     formatSelect,
@@ -633,7 +684,13 @@ export async function mountChordSketchUi(
     errorDiv,
   } = nodes;
 
-  const editor = createEditor({
+  // `editor` and `unsubscribeEditor` are reassigned by
+  // `replaceEditor` (#2366), so they cannot be `const` even though
+  // the initial values are set exactly once here. The `let` binding
+  // is captured by the render / destroy / handle closures below;
+  // each captures the variable, not the initial value, so the
+  // post-swap reads see the new adapter.
+  let editor = createEditor({
     initialValue: initialChordPro,
     placeholder: 'Enter ChordPro here...',
   });
@@ -1017,7 +1074,7 @@ export async function mountChordSketchUi(
     setTranspose(TRANSPOSE_RESET);
   };
 
-  const unsubscribeEditor = editor.onChange(onEditorInput);
+  let unsubscribeEditor = editor.onChange(onEditorInput);
   formatSelect.addEventListener('change', render);
   transposeInput.addEventListener('input', onTransposeInput);
   transposeDecrementBtn.addEventListener('click', onTransposeDecrement);
@@ -1142,6 +1199,47 @@ export async function mountChordSketchUi(
     },
     resetTranspose(): void {
       setTranspose(TRANSPOSE_RESET);
+    },
+    replaceEditor(factory: EditorFactory): void {
+      if (destroyed) return;
+      // Capture the carry-over value BEFORE tearing down the old
+      // adapter — `getValue()` after `destroy()` is contractually
+      // undefined and the iRealb adapter (#2363) returns '' for a
+      // destroyed instance, which would silently wipe the editor
+      // contents on swap.
+      const previous = editor.getValue();
+      // Cancel any debounce queued by the outgoing adapter — its
+      // closure resolves `editor.getValue()` lazily, but by the
+      // time the timer fires `editor` will have been reassigned to
+      // the new adapter, so the stale render would re-encode the
+      // carried-over value through the WRONG renderer (e.g. ChordPro
+      // text passed to `renderSvg`). The post-swap `render()` below
+      // is the canonical re-render — there is no information lost
+      // by dropping the queued one.
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      unsubscribeEditor();
+      editor.destroy();
+      // Detach the previous adapter's root element. The factory is
+      // free to mount its own DOM via the `EditorAdapter.element`
+      // property; clearing the pane first avoids stacking adapters
+      // when a host swaps repeatedly.
+      while (editorPaneEl.firstChild !== null) {
+        editorPaneEl.removeChild(editorPaneEl.firstChild);
+      }
+      editor = factory({
+        initialValue: previous,
+        placeholder: 'Enter ChordPro here...',
+      });
+      editorPaneEl.appendChild(editor.element);
+      unsubscribeEditor = editor.onChange(onEditorInput);
+      // Programmatic swap → immediate render, not the debounced
+      // path. Mirrors `setChordPro`'s rationale: a host-driven
+      // load is a discrete event and the user expects the preview
+      // to refresh without the 300 ms input delay.
+      render();
     },
   };
 }

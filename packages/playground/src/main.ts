@@ -8,9 +8,21 @@ import init, {
   render_html_css,
   render_html_css_with_options,
   renderIrealSvg,
+  parseIrealb,
+  serializeIrealb,
 } from '@chordsketch/wasm';
-import { mountChordSketchUi, type Renderers } from '@chordsketch/ui-web';
+import {
+  mountChordSketchUi,
+  SAMPLE_CHORDPRO,
+  SAMPLE_IREALB,
+  type EditorAdapter,
+  type EditorFactory,
+  type EditorFactoryOptions,
+  type Renderers,
+} from '@chordsketch/ui-web';
 import '@chordsketch/ui-web/style.css';
+import { createIrealbEditor } from '@chordsketch/ui-irealb-editor';
+import '@chordsketch/ui-irealb-editor/style.css';
 
 // Adapter from the wasm-bindgen export shape to the ui-web `Renderers`
 // interface. The text and pdf branches preserve the no-options
@@ -83,4 +95,174 @@ if (!root) {
   throw new Error('Playground entry point #app element missing from index.html');
 }
 
-void mountChordSketchUi(root, { renderers });
+// ---------------------------------------------------------------
+// Format toggle (#2366) — ChordPro `<textarea>` ↔ iRealb bar grid.
+// ---------------------------------------------------------------
+//
+// `format` is a top-level concern of the playground host, not of
+// `@chordsketch/ui-web`: ui-web takes a single `EditorFactory` at
+// mount time and otherwise has no opinion on input format. The
+// runtime swap is exposed via `handle.replaceEditor(factory)`,
+// which preserves the in-progress editor value across the swap so
+// users who paste a URL into the textarea and flip the toggle do
+// not lose their input.
+
+type InputFormat = 'chordpro' | 'irealb';
+
+const FORMAT_HASH_KEY = 'format';
+
+/**
+ * Decide which input format to mount with. The URL hash takes
+ * precedence (so a deep link like `#format=irealb` opens the iRealb
+ * grid even when the seed value is empty); otherwise the heuristic
+ * is "starts with `irealb://` or `irealbook://`" — the same sniffer
+ * ui-web uses to route the SVG preview path (#2362).
+ */
+function detectInitialFormat(value: string): InputFormat {
+  const hash = parseFormatHash(window.location.hash);
+  if (hash !== null) return hash;
+  const trimmed = value.trimStart();
+  if (trimmed.startsWith('irealb://') || trimmed.startsWith('irealbook://')) {
+    return 'irealb';
+  }
+  return 'chordpro';
+}
+
+/**
+ * Parse `#format=chordpro` / `#format=irealb` out of a location
+ * hash fragment. Returns `null` for any other shape so the caller
+ * falls back to the value-based sniffer. We tolerate both the
+ * leading `#` and the bare hash body so the helper composes with
+ * `URLSearchParams`-style consumption.
+ */
+function parseFormatHash(hash: string): InputFormat | null {
+  const body = hash.startsWith('#') ? hash.slice(1) : hash;
+  if (body.length === 0) return null;
+  const params = new URLSearchParams(body);
+  const value = params.get(FORMAT_HASH_KEY);
+  if (value === 'chordpro' || value === 'irealb') return value;
+  return null;
+}
+
+/**
+ * Persist the active format to `window.location.hash` so a reload
+ * lands on the same editor. Uses `history.replaceState` to avoid
+ * polluting the back stack with one entry per toggle. Other hash
+ * keys (none today, but room for future deep-links) are preserved.
+ */
+function writeFormatHash(format: InputFormat): void {
+  const current = window.location.hash.startsWith('#')
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  const params = new URLSearchParams(current);
+  params.set(FORMAT_HASH_KEY, format);
+  const next = `#${params.toString()}`;
+  window.history.replaceState(window.history.state, '', next);
+}
+
+/**
+ * Editor factory for the iRealb path. Closes over the wasm bridge
+ * so ui-web can call it with just the `EditorFactoryOptions`
+ * argument. The two `IrealbWasm` methods are passed straight from
+ * `@chordsketch/wasm`'s named exports — the editor package is
+ * peer-dep'd on the wasm package so it does not import them
+ * directly.
+ */
+const irealbEditorFactory: EditorFactory = (
+  options: EditorFactoryOptions,
+): EditorAdapter =>
+  createIrealbEditor({
+    initialValue: options.initialValue,
+    placeholder: options.placeholder,
+    wasm: { parseIrealb, serializeIrealb },
+  });
+
+/**
+ * Trivial textarea factory mirroring `defaultTextareaEditor`
+ * inside `@chordsketch/ui-web`. ui-web's mount-time default is
+ * accessible only by passing `undefined` for `MountOptions.createEditor`,
+ * but `replaceEditor` requires an explicit factory — passing
+ * `undefined` would be a contract violation. Re-implementing the
+ * textarea here keeps the post-swap surface byte-equal to the
+ * mount-time one without exposing a private ui-web symbol.
+ */
+const chordproEditorFactory: EditorFactory = (
+  options: EditorFactoryOptions,
+): EditorAdapter => {
+  const textarea = document.createElement('textarea');
+  textarea.id = 'editor';
+  textarea.spellcheck = false;
+  if (options.placeholder !== undefined) {
+    textarea.placeholder = options.placeholder;
+  }
+  textarea.value = options.initialValue;
+  const listeners = new Set<(value: string) => void>();
+  const onInput = (): void => {
+    for (const handler of listeners) handler(textarea.value);
+  };
+  textarea.addEventListener('input', onInput);
+  return {
+    element: textarea,
+    getValue: () => textarea.value,
+    setValue: (value: string) => {
+      textarea.value = value;
+    },
+    onChange(handler) {
+      listeners.add(handler);
+      return () => {
+        listeners.delete(handler);
+      };
+    },
+    focus: () => {
+      textarea.focus();
+    },
+    destroy: () => {
+      listeners.clear();
+      textarea.removeEventListener('input', onInput);
+    },
+  };
+};
+
+const factoryFor = (format: InputFormat): EditorFactory =>
+  format === 'irealb' ? irealbEditorFactory : chordproEditorFactory;
+
+const initialFormat = detectInitialFormat(SAMPLE_CHORDPRO);
+const initialContent = initialFormat === 'irealb' ? SAMPLE_IREALB : SAMPLE_CHORDPRO;
+
+// Build the input-format <select> outside the mount so the same
+// element survives editor swaps — ui-web owns its own DOM, but
+// `headerControls` are guests retained across `replaceEditor`.
+const inputFormatLabel = document.createElement('label');
+inputFormatLabel.append('Input: ');
+const inputFormatSelect = document.createElement('select');
+inputFormatSelect.id = 'input-format';
+inputFormatSelect.setAttribute('aria-label', 'Editor input format');
+for (const [value, label] of [
+  ['chordpro', 'ChordPro'],
+  ['irealb', 'iRealb'],
+] as const) {
+  const opt = document.createElement('option');
+  opt.value = value;
+  opt.textContent = label;
+  if (value === initialFormat) opt.selected = true;
+  inputFormatSelect.appendChild(opt);
+}
+inputFormatLabel.appendChild(inputFormatSelect);
+
+void mountChordSketchUi(root, {
+  renderers,
+  initialChordPro: initialContent,
+  createEditor: factoryFor(initialFormat),
+  headerControls: [inputFormatLabel],
+}).then((handle) => {
+  inputFormatSelect.addEventListener('change', () => {
+    const next: InputFormat =
+      inputFormatSelect.value === 'irealb' ? 'irealb' : 'chordpro';
+    // Persist BEFORE the swap so a host that throws inside the
+    // factory (e.g. iRealb parse failure on stale carry-over text)
+    // still leaves the URL hash on the format the user chose —
+    // reloading then re-attempts the swap with a clean slate.
+    writeFormatHash(next);
+    handle.replaceEditor(factoryFor(next));
+  });
+});
