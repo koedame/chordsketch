@@ -38,9 +38,10 @@ actually works in the deployed bundle.
 - `tests-e2e/format-toggle.spec.ts`: default ChordPro mount,
   ChordPro -> iRealb runtime swap, iRealb -> ChordPro runtime swap.
 - `tests-e2e/irealb-deep-link.spec.ts`: `?#format=irealb` cold load
-  mounts the bar-grid editor, no `__wbindgen_free` errors land on the
-  console (the pre-#2397 failure surface), clicking a bar opens the
-  popover dialog.
+  mounts the bar-grid editor, no uncaught exceptions reach the page
+  (`pageerror` listener — covers the pre-#2397 failure surface and
+  any future regression in the same class), clicking a bar opens
+  the popover dialog.
 
 ## Where it runs
 
@@ -72,10 +73,14 @@ actually works in the deployed bundle.
   failure was that `?#format=irealb` rendered the SVG preview just
   fine, so a smoke that only checked "the page didn't error" would
   have shipped a green CI on the broken state.
-- Capture pageerror / console.error in deep-link specs and assert
-  the message list is empty for known-bad strings (e.g.
-  `__wbindgen_free`). This is cheap and catches the silent-mount
-  failure mode that motivated the rule.
+- Register a `pageerror` listener before navigation in deep-link
+  specs and assert the captured list stays `[]`. `pageerror`
+  fires only on uncaught exceptions reaching the window, so the
+  assertion is decoupled from any specific symbol name (a
+  filter-for-`__wbindgen_free` check would silently pass once
+  wasm-bindgen renamed the symbol while leaving the bug intact).
+  Avoid capturing `console.error` in the same list — third-party
+  warnings would create false positives that desensitise readers.
 
 ## Why a separate rule
 

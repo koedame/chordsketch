@@ -37,8 +37,6 @@ test.describe('playground editor mount', () => {
 
     const editor = page.locator('.irealb-editor');
     await expect(editor).toBeVisible();
-    // Visibility of `.first()` already implies count >= 1, which is
-    // what we care about — the wasm parse + grid render fired.
     await expect(editor.locator('.irealb-editor__bar').first()).toBeVisible();
     // The textarea adapter must have been torn down; leaving both
     // mounted would mean `replaceEditor` skipped `destroy()`.
