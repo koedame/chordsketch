@@ -17,9 +17,20 @@ export function el<K extends keyof HTMLElementTagNameMap>(
 ): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
   if (init?.class !== undefined) {
-    const classes = Array.isArray(init.class) ? init.class : [init.class];
-    for (const c of classes) {
-      if (c) node.classList.add(c);
+    // Accept either an array (`['a', 'b']`) or a single string —
+    // and a single string may contain multiple whitespace-
+    // separated class names (`'a b'`), the same shape as the HTML
+    // `class=` attribute. Splitting on whitespace keeps call sites
+    // tidy when adding modifier classes (`'foo foo--danger'`)
+    // without having to allocate an array literal each time.
+    // `classList.add` rejects names containing whitespace, so we
+    // must split before calling it.
+    const raw = Array.isArray(init.class) ? init.class : [init.class];
+    for (const entry of raw) {
+      if (!entry) continue;
+      for (const c of entry.split(/\s+/)) {
+        if (c) node.classList.add(c);
+      }
     }
   }
   if (init?.attrs) {
