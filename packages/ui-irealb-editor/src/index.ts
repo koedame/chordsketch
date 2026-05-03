@@ -20,9 +20,14 @@
 // keyboard navigation + ARIA in #2368.
 
 import type { Bar, IrealSong, Section, SectionLabel } from './ast.js';
-import { clearChildren } from './dom.js';
+import { clearChildren, el } from './dom.js';
 import { openBarPopover, type BarPopoverHandle } from './popover.js';
-import { render, type RenderHandle, type StructuralOps } from './render.js';
+import {
+  render,
+  type ActiveBarRef,
+  type RenderHandle,
+  type StructuralOps,
+} from './render.js';
 import { IrealbEditorState, type IrealbWasm, makeStateFromUrl } from './state.js';
 
 export type { IrealSong, SectionLabel } from './ast.js';
@@ -89,6 +94,36 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
   const element = document.createElement('div');
   element.classList.add('irealb-editor');
 
+  // ARIA live region for structural-edit announcements (#2368). Held
+  // outside the grid so a re-render of `.irealb-editor__grid` does
+  // not detach it — `aria-live` regions whose nodes are removed and
+  // re-added in the same task can fail to announce on some screen
+  // readers (NVDA in particular). The region carries a visually-
+  // hidden class via `style.css` so it stays in the accessibility
+  // tree without occupying layout.
+  const liveRegion = el('div', {
+    class: 'irealb-editor__sr-only irealb-editor__live',
+    attrs: { 'aria-live': 'polite', 'aria-atomic': 'true' },
+  });
+  element.appendChild(liveRegion);
+
+  /** Push a single sentence into the live region. Read by polite
+   * screen readers after the next idle tick. We blank the region
+   * first so two consecutive identical messages still announce —
+   * `aria-live="polite"` only fires when the text content changes,
+   * so the no-op assignment of the same string would otherwise be
+   * silent. */
+  const announce = (message: string): void => {
+    if (destroyed) return;
+    liveRegion.textContent = '';
+    // Defer the actual text by a microtask so the screen reader
+    // observes the empty-then-populated transition as a change.
+    queueMicrotask(() => {
+      if (destroyed) return;
+      liveRegion.textContent = message;
+    });
+  };
+
   const state = initialValue.length > 0
     ? makeStateFromUrl(wasm, initialValue)
     : new IrealbEditorState(wasm, makeEmptySong());
@@ -97,6 +132,62 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
   let renderHandle: RenderHandle | null = null;
   let popoverHandle: BarPopoverHandle | null = null;
   let destroyed = false;
+  // Roving-tabindex active bar (#2368). `null` when the chart has no
+  // bars (an empty section or a song with no sections at all). The
+  // adapter is the source of truth — `render()` reads this to mark
+  // exactly one cell with `tabindex="0"` and updates it via the
+  // `setActiveBar` callback when the user focuses a different cell.
+  let activeBar: ActiveBarRef | null = null;
+  const setActiveBar = (ref: ActiveBarRef): void => {
+    activeBar = ref;
+  };
+  /** Clamp `activeBar` to the current `state.song` shape. Called at
+   * the top of every render pass so a structural edit (delete bar /
+   * delete section) does not leave the active ref pointing at a
+   * non-existent cell — the would-be focused button would silently
+   * lose its `tabindex="0"` slot and the grid would have zero Tab
+   * stops. Empty grids set `activeBar` to `null`. */
+  const reconcileActiveBar = (): void => {
+    const sections = state.song.sections;
+    if (sections.length === 0) {
+      activeBar = null;
+      return;
+    }
+    if (activeBar === null) {
+      // Default to the first bar of the first section that has any
+      // bars; fall back to (0, 0) so the grid still has one Tab
+      // stop even when every section is empty.
+      for (let s = 0; s < sections.length; s += 1) {
+        const section = sections[s];
+        if (section && section.bars.length > 0) {
+          activeBar = { secIndex: s, barIndex: 0 };
+          return;
+        }
+      }
+      activeBar = { secIndex: 0, barIndex: 0 };
+      return;
+    }
+    const sec = sections[activeBar.secIndex];
+    if (!sec || sec.bars.length === 0) {
+      // The active section was deleted or emptied. Re-anchor on the
+      // first non-empty section, or at (0, 0) if every section is
+      // empty.
+      for (let s = 0; s < sections.length; s += 1) {
+        const section = sections[s];
+        if (section && section.bars.length > 0) {
+          activeBar = { secIndex: s, barIndex: 0 };
+          return;
+        }
+      }
+      activeBar = { secIndex: 0, barIndex: 0 };
+      return;
+    }
+    if (activeBar.barIndex >= sec.bars.length) {
+      // The active bar was beyond the (possibly truncated) section's
+      // tail; clamp to the new last bar.
+      activeBar = { secIndex: activeBar.secIndex, barIndex: sec.bars.length - 1 };
+    }
+  };
 
   const fireUserEdit = (): void => {
     if (destroyed) return;
@@ -249,6 +340,7 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       state.song.sections.push(makeDefaultSection(label));
       renderNow();
       fireUserEdit();
+      announce(`Section ${formatSectionLabelForPrompt(label)} added`);
       // Focus the new section's "Move section up" button — the
       // closest analogue to the just-clicked "+ Add section"
       // trailer (which does not exist on a per-section basis).
@@ -271,6 +363,10 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       section.label = next;
       renderNow();
       fireUserEdit();
+      announce(
+        `Section renamed from ${formatSectionLabelForPrompt(current)} ` +
+          `to ${formatSectionLabelForPrompt(next)}`,
+      );
       focusAfterRender([sectionActionSelector(secIndex, 'Rename section')]);
     },
     deleteSection: (secIndex) => {
@@ -278,10 +374,12 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       const section = state.song.sections[secIndex];
       if (!section) return;
       if (!confirmDeleteSection(section.label)) return;
+      const removedLabel = section.label;
       dismissPopover();
       state.song.sections.splice(secIndex, 1);
       renderNow();
       fireUserEdit();
+      announce(`Section ${formatSectionLabelForPrompt(removedLabel)} deleted`);
       // Focus the next-sibling section's "Delete section" button
       // (the same kind that was just activated). If the deleted
       // section was the last one, focus the new last section's
@@ -305,6 +403,9 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       state.song.sections[secIndex] = prev;
       renderNow();
       fireUserEdit();
+      announce(
+        `Section ${formatSectionLabelForPrompt(cur.label)} moved up`,
+      );
       // The moved section is now at secIndex - 1. Focus its
       // "Move section up" button so a repeat-press keeps moving
       // the same section upward.
@@ -324,6 +425,9 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       state.song.sections[secIndex] = next;
       renderNow();
       fireUserEdit();
+      announce(
+        `Section ${formatSectionLabelForPrompt(cur.label)} moved down`,
+      );
       focusAfterRender([
         sectionActionSelector(secIndex + 1, 'Move section down'),
         sectionActionSelector(secIndex + 1, 'Move section up'),
@@ -339,6 +443,9 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       section.bars.push(makeDefaultBar());
       renderNow();
       fireUserEdit();
+      announce(
+        `Bar ${newBarIndex + 1} added to section ${formatSectionLabelForPrompt(section.label)}`,
+      );
       // Focus the new bar's edit button (its <button class="bar">).
       focusAfterRender([
         `.irealb-editor__section[data-section-index="${secIndex}"] ` +
@@ -351,10 +458,15 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       const section = state.song.sections[secIndex];
       if (!section) return;
       if (barIndex < 0 || barIndex >= section.bars.length) return;
+      const removedBarNumber = barIndex + 1;
+      const sectionLabel = section.label;
       dismissPopover();
       section.bars.splice(barIndex, 1);
       renderNow();
       fireUserEdit();
+      announce(
+        `Bar ${removedBarNumber} deleted from section ${formatSectionLabelForPrompt(sectionLabel)}`,
+      );
       // Focus the next-sibling bar's Delete button (or the new
       // last bar's, or the section's "+ Add bar" trailer).
       const remaining = section.bars.length;
@@ -379,6 +491,7 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       section.bars[barIndex] = prev;
       renderNow();
       fireUserEdit();
+      announce(`Bar ${barIndex + 1} moved left`);
       focusAfterRender([
         barActionSelector(secIndex, barIndex - 1, 'Move bar left'),
         barActionSelector(secIndex, barIndex - 1, 'Move bar right'),
@@ -399,6 +512,7 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
       section.bars[barIndex] = next;
       renderNow();
       fireUserEdit();
+      announce(`Bar ${barIndex + 1} moved right`);
       focusAfterRender([
         barActionSelector(secIndex, barIndex + 1, 'Move bar right'),
         barActionSelector(secIndex, barIndex + 1, 'Move bar left'),
@@ -409,12 +523,28 @@ export function createIrealbEditor(options: CreateIrealbEditorOptions): EditorAd
     },
   };
 
+  // Rebuild target element for the form + grid (separate from
+  // `element` so the live region survives across re-renders). The
+  // grid container is created once and only its children are
+  // rebuilt, matching how `render()` already works on its own root.
+  const gridRoot = el('div', { class: 'irealb-editor__root' });
+  element.appendChild(gridRoot);
+
   const renderNow = (): void => {
     if (renderHandle !== null) {
       renderHandle.dispose();
       renderHandle = null;
     }
-    renderHandle = render(element, state, fireUserEdit, handleOpenPopover, ops);
+    reconcileActiveBar();
+    renderHandle = render(
+      gridRoot,
+      state,
+      fireUserEdit,
+      handleOpenPopover,
+      ops,
+      activeBar,
+      setActiveBar,
+    );
   };
 
   renderNow();

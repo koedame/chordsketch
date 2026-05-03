@@ -17,6 +17,23 @@
   overflow: auto;
 }
 
+/* Visually-hidden but reachable by screen readers — used by the
+ * announce() helper in `index.ts` (#2368) to surface structural
+ * edits ("Bar 5 deleted", "Section B added") in an ARIA live
+ * region without occupying visual layout. The classic clip-rect
+ * pattern keeps the node in the accessibility tree. */
+.irealb-editor__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .irealb-editor__header {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -148,9 +165,19 @@
   background: #e4ebf1;
 }
 
-/* 4 bars per line. The grid wraps when the section has more than
- * 4 bars; sections with <4 bars right-pad with empty grid cells. */
+/* 4 bars per line. Bars are grouped into `.irealb-editor__row`
+ * children so the ARIA grid semantics added in #2368
+ * (`role="row"` per row, `role="gridcell"` per bar wrapper)
+ * line up with the visual wrap. The CSS layout moves to each
+ * row so a partial last row does not stretch its bars across
+ * the full grid width. */
 .irealb-editor__bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.irealb-editor__row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.25rem;
