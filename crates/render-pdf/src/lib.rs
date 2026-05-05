@@ -6635,6 +6635,25 @@ mod info_title_tests {
     }
 
     #[test]
+    fn set_doc_title_passes_through_at_cap_and_truncates_one_over() {
+        let mut at_cap = PdfDocument::with_margins(10.0, 10.0, 10.0, 10.0);
+        at_cap.set_doc_title(Some(&"A".repeat(PdfDocument::MAX_TITLE_CHARS)));
+        assert_eq!(
+            at_cap.doc_title.as_deref().map(|s| s.chars().count()),
+            Some(PdfDocument::MAX_TITLE_CHARS),
+            "input exactly at cap must pass through unchanged"
+        );
+
+        let mut over_cap = PdfDocument::with_margins(10.0, 10.0, 10.0, 10.0);
+        over_cap.set_doc_title(Some(&"A".repeat(PdfDocument::MAX_TITLE_CHARS + 1)));
+        assert_eq!(
+            over_cap.doc_title.as_deref().map(|s| s.chars().count()),
+            Some(PdfDocument::MAX_TITLE_CHARS),
+            "input one char over cap must truncate"
+        );
+    }
+
+    #[test]
     fn set_doc_title_truncates_at_char_boundary_for_multibyte_input() {
         let mut doc = PdfDocument::with_margins(10.0, 10.0, 10.0, 10.0);
         // Each '日' is 3 bytes in UTF-8 but counts as 1 char.
