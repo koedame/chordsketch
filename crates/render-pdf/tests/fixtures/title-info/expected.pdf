@@ -1,0 +1,67 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> /ProcSet [/PDF /Text] >> /Kids [7 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 164 >>
+stream
+BT
+/F2 18 Tf
+56 786 Td
+(PDF Title Metadata Demo) Tj
+ET
+BT
+/F2 9 Tf
+56 756 Td
+(C) Tj
+ET
+BT
+/F2 9 Tf
+84.12 756 Td
+(G) Tj
+ET
+BT
+/F1 11 Tf
+56 745 Td
+(Hello world) Tj
+ET
+endstream
+endobj
+9 0 obj
+<< /Title <FEFF0050004400460020005400690074006C00650020004D0065007400610064006100740061002000440065006D006F> >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000230 00000 n 
+0000000327 00000 n 
+0000000429 00000 n 
+0000000534 00000 n 
+0000000643 00000 n 
+0000000706 00000 n 
+0000000921 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R /Info 9 0 R >>
+startxref
+1048
+%%EOF

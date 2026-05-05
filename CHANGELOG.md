@@ -63,6 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (#2284)
 - `chordsketch-render-html`: new `settings.wraplines` option for
   long-line wrapping behavior. (#2297)
+- `chordsketch-render-pdf`: PDF `/Info` `/Title` is now populated from
+  `{title}` for single-song renders, encoded as a UTF-16BE hex string.
+  Multi-song renders deliberately omit `/Info` because chordsketch has
+  no songbook abstraction. Mirrors upstream ChordPro R6.101.0. (#2399)
 
 #### Desktop app
 
