@@ -2374,9 +2374,10 @@ impl PdfDocument {
     /// Maximum number of input chars accepted for the PDF `/Info` `/Title`.
     ///
     /// PDF readers truncate long titles in their title bar well below this
-    /// bound, and the UTF-16BE hex encoder emits up to 4 ASCII bytes per
-    /// BMP char (8 for supplementary-plane), so the upper bound on the
-    /// emitted hex literal is `4 * MAX_TITLE_CHARS + 5` (BOM + brackets) —
+    /// bound. The UTF-16BE hex encoder emits 4 hex bytes per BMP char and
+    /// 8 per supplementary-plane char, so the strict upper bound on the
+    /// emitted hex literal is `8 * MAX_TITLE_CHARS + 6` (worst case: all
+    /// supplementary-plane chars, plus `<FEFF` BOM prefix and closing `>`) —
     /// well under any DoS-relevant size. The cap defends against pathological
     /// `{title:...}` directives in untrusted `.cho` input (per
     /// `.claude/rules/defensive-inputs.md` § Resource Limits).
