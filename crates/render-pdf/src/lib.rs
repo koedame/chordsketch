@@ -218,18 +218,25 @@ fn build_to_unicode_cmap(cid_glyphs: &BTreeMap<u16, char>) -> String {
 /// mark, hex-encoded inside angle brackets. The hex form sidesteps PDF
 /// string-escape rules for `(`, `)`, `\`, NUL and CR, so any title — ASCII
 /// or otherwise — round-trips losslessly into the `/Info` dictionary.
+///
+/// Lone surrogates cannot reach this encoder because Rust's `char` is a
+/// Unicode Scalar Value (U+D800..U+DFFF excluded by construction), which is
+/// the load-bearing safety property for the surrogate-pair branch below.
 fn pdf_title_hex_string(s: &str) -> String {
-    let mut out = String::from("<FEFF");
+    use std::fmt::Write as _;
+    let mut out = String::with_capacity(5 + 4 * s.len() + 1);
+    out.push_str("<FEFF");
     for ch in s.chars() {
         let cp = ch as u32;
         if cp <= 0xFFFF {
-            out.push_str(&format!("{cp:04X}"));
+            // `write!` into a `String` is infallible.
+            let _ = write!(out, "{cp:04X}");
         } else {
             // Encode supplementary-plane codepoints as UTF-16 surrogate pairs.
             let offset = cp - 0x10000;
             let hi = 0xD800u32 + (offset >> 10);
             let lo = 0xDC00u32 + (offset & 0x3FF);
-            out.push_str(&format!("{hi:04X}{lo:04X}"));
+            let _ = write!(out, "{hi:04X}{lo:04X}");
         }
     }
     out.push('>');
@@ -596,8 +603,10 @@ fn push_toc_entry(entries: &mut Vec<(String, usize)>, title: String, page: usize
 /// when songs are reordered). Upstream ChordPro R6.101.0's "if any" clause
 /// authorises omission when no songbook title exists.
 ///
-/// When `songs.len() <= 1`, this delegates to [`render_song_with_warnings`],
-/// which does emit `/Title` from the single song's `{title}`.
+/// When `songs.len() == 1`, delegates to [`render_song_with_warnings`],
+/// which does emit `/Title` from the single song's `{title}`. When
+/// `songs.len() == 0`, returns an empty result with no PDF bytes (and
+/// therefore no `/Info` either).
 #[must_use = "caller must check warnings in the returned RenderResult"]
 pub fn render_songs_with_warnings(
     songs: &[Song],
@@ -2362,18 +2371,40 @@ impl PdfDocument {
         }
     }
 
+    /// Maximum number of input chars accepted for the PDF `/Info` `/Title`.
+    ///
+    /// PDF readers truncate long titles in their title bar well below this
+    /// bound, and the UTF-16BE hex encoder emits up to 4 ASCII bytes per
+    /// BMP char (8 for supplementary-plane), so the upper bound on the
+    /// emitted hex literal is `4 * MAX_TITLE_CHARS + 5` (BOM + brackets) —
+    /// well under any DoS-relevant size. The cap defends against pathological
+    /// `{title:...}` directives in untrusted `.cho` input (per
+    /// `.claude/rules/defensive-inputs.md` § Resource Limits).
+    const MAX_TITLE_CHARS: usize = 1024;
+
     /// Set the document title used in the PDF `/Info` dictionary `/Title` entry.
     ///
     /// `None`, the empty string, and whitespace-only strings normalise to no
     /// `/Info` emission — matching upstream ChordPro R6.101.0's "if any"
-    /// clause. The string is later encoded as a UTF-16BE PDF hex literal so
-    /// any Unicode title is preserved without escape concerns.
+    /// clause. The chordpro parser already trims directive values (per
+    /// `parser.rs`'s `value.map(|v| v.trim().to_string())`), but `trim()` is
+    /// applied here too so this method is robust on its own to any future
+    /// caller that doesn't pre-normalise.
+    ///
+    /// Inputs longer than [`MAX_TITLE_CHARS`](Self::MAX_TITLE_CHARS) are
+    /// truncated at a char boundary to bound `/Info` allocation.
+    ///
+    /// The string is later encoded as a UTF-16BE PDF hex literal so any
+    /// Unicode title is preserved without escape concerns.
     fn set_doc_title(&mut self, title: Option<&str>) {
         self.doc_title = title.and_then(|t| {
-            if t.trim().is_empty() {
+            let trimmed = t.trim();
+            if trimmed.is_empty() {
                 None
+            } else if trimmed.chars().count() > Self::MAX_TITLE_CHARS {
+                Some(trimmed.chars().take(Self::MAX_TITLE_CHARS).collect())
             } else {
-                Some(t.to_string())
+                Some(trimmed.to_string())
             }
         });
     }
@@ -6572,10 +6603,57 @@ mod info_title_tests {
             "trailer should reference /Info when {{title}} is set; got: {s}"
         );
         // /Title hex literal with UTF-16BE BOM + ASCII codepoints of "Hello".
+        // The hex case is pinned uppercase by `pdf_title_hex_string`'s
+        // `{cp:04X}` formatter; if that ever changes, this assertion will
+        // fail loudly rather than drift silently.
         assert!(
             s.contains("<FEFF00480065006C006C006F>"),
             "PDF should contain UTF-16BE-encoded title bytes; got: {s}"
         );
+    }
+
+    #[test]
+    fn set_doc_title_caps_oversized_input() {
+        let mut doc = PdfDocument::with_margins(10.0, 10.0, 10.0, 10.0);
+        // Build a title 100x larger than the cap.
+        let big = "A".repeat(PdfDocument::MAX_TITLE_CHARS * 100);
+        doc.set_doc_title(Some(&big));
+        let stored = doc.doc_title.expect("title should be stored");
+        assert_eq!(
+            stored.chars().count(),
+            PdfDocument::MAX_TITLE_CHARS,
+            "oversized title must be truncated to MAX_TITLE_CHARS"
+        );
+        // Hex output is bounded too: 5 (BOM literal) + 4*N + 1 (closing >).
+        let hex = pdf_title_hex_string(&stored);
+        let expected_max = 5 + 4 * PdfDocument::MAX_TITLE_CHARS + 1;
+        assert!(
+            hex.len() <= expected_max,
+            "hex literal must be bounded; got {} bytes, max {expected_max}",
+            hex.len()
+        );
+    }
+
+    #[test]
+    fn set_doc_title_truncates_at_char_boundary_for_multibyte_input() {
+        let mut doc = PdfDocument::with_margins(10.0, 10.0, 10.0, 10.0);
+        // Each '日' is 3 bytes in UTF-8 but counts as 1 char.
+        let big: String = "日".repeat(PdfDocument::MAX_TITLE_CHARS + 50);
+        doc.set_doc_title(Some(&big));
+        let stored = doc.doc_title.expect("title should be stored");
+        assert_eq!(stored.chars().count(), PdfDocument::MAX_TITLE_CHARS);
+        // The truncation must not split a multi-byte codepoint.
+        assert!(
+            stored.is_char_boundary(stored.len()),
+            "truncation produced an invalid UTF-8 boundary"
+        );
+    }
+
+    #[test]
+    fn set_doc_title_trims_leading_and_trailing_whitespace() {
+        let mut doc = PdfDocument::with_margins(10.0, 10.0, 10.0, 10.0);
+        doc.set_doc_title(Some("   Hello World   "));
+        assert_eq!(doc.doc_title.as_deref(), Some("Hello World"));
     }
 
     #[test]
