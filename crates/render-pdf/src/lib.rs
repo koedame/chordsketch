@@ -212,6 +212,37 @@ fn build_to_unicode_cmap(cid_glyphs: &BTreeMap<u16, char>) -> String {
     cmap
 }
 
+/// Encode a string as a UTF-16BE PDF hex-string literal.
+///
+/// Returns a `<FEFF...>` literal: UTF-16BE bytes prefixed by a byte-order
+/// mark, hex-encoded inside angle brackets. The hex form sidesteps PDF
+/// string-escape rules for `(`, `)`, `\`, NUL and CR, so any title — ASCII
+/// or otherwise — round-trips losslessly into the `/Info` dictionary.
+///
+/// Lone surrogates cannot reach this encoder because Rust's `char` is a
+/// Unicode Scalar Value (U+D800..U+DFFF excluded by construction), which is
+/// the load-bearing safety property for the surrogate-pair branch below.
+fn pdf_title_hex_string(s: &str) -> String {
+    use std::fmt::Write as _;
+    let mut out = String::with_capacity(5 + 4 * s.len() + 1);
+    out.push_str("<FEFF");
+    for ch in s.chars() {
+        let cp = ch as u32;
+        if cp <= 0xFFFF {
+            // `write!` into a `String` is infallible.
+            let _ = write!(out, "{cp:04X}");
+        } else {
+            // Encode supplementary-plane codepoints as UTF-16 surrogate pairs.
+            let offset = cp - 0x10000;
+            let hi = 0xD800u32 + (offset >> 10);
+            let lo = 0xDC00u32 + (offset & 0x3FF);
+            let _ = write!(out, "{hi:04X}{lo:04X}");
+        }
+    }
+    out.push('>');
+    out
+}
+
 // ---------------------------------------------------------------------------
 // Formatting state
 // ---------------------------------------------------------------------------
@@ -502,6 +533,10 @@ pub fn render_song_with_warnings(
         &song_config
     };
     let mut doc = PdfDocument::from_config_with_warnings(effective_config, &mut warnings);
+    // Mirror upstream ChordPro R6.101.0: default PDF /Title to the song's
+    // {title}, if any. Whitespace-only and missing titles are normalised by
+    // `set_doc_title` to "no /Info object emitted".
+    doc.set_doc_title(song.metadata.title.as_deref());
     render_song_into_doc(
         song,
         cli_transpose,
@@ -558,6 +593,20 @@ fn push_toc_entry(entries: &mut Vec<(String, usize)>, title: String, page: usize
 /// This is the structured variant of [`render_songs_with_transpose`]. Instead
 /// of printing warnings to stderr, they are collected into
 /// [`RenderResult::warnings`].
+///
+/// # PDF `/Title` metadata
+///
+/// When `songs.len() >= 2`, the produced PDF intentionally omits the `/Info`
+/// dictionary. chordsketch has no songbook abstraction, so there is no
+/// aggregate title to embed, and defaulting `/Title` to the first song's
+/// `{title}` would silently lie in viewers' title bars (and would change
+/// when songs are reordered). Upstream ChordPro R6.101.0's "if any" clause
+/// authorises omission when no songbook title exists.
+///
+/// When `songs.len() == 1`, delegates to [`render_song_with_warnings`],
+/// which does emit `/Title` from the single song's `{title}`. When
+/// `songs.len() == 0`, returns an empty result with no PDF bytes (and
+/// therefore no `/Info` either).
 #[must_use = "caller must check warnings in the returned RenderResult"]
 pub fn render_songs_with_warnings(
     songs: &[Song],
@@ -2287,6 +2336,15 @@ struct PdfDocument {
     /// GID 0 is excluded from the ToUnicode CMap in `build_to_unicode_cmap`
     /// (PDF spec §9.10.3 forbids it as a source entry).
     cid_glyphs: BTreeMap<u16, char>,
+    /// Optional document title for the PDF `/Info` dictionary `/Title` entry.
+    ///
+    /// Set via [`set_doc_title`](Self::set_doc_title). When non-empty, an
+    /// `/Info` indirect object is emitted in [`build_pdf`](Self::build_pdf)
+    /// and referenced from the trailer. When `None`, no `/Info` object is
+    /// emitted — matching upstream ChordPro R6.101.0 ("default PDF title
+    /// to songbook title, if any") and avoiding a misleading title for
+    /// multi-song output, which has no aggregate title concept.
+    doc_title: Option<String>,
 }
 
 impl PdfDocument {
@@ -2309,7 +2367,47 @@ impl PdfDocument {
             margin_left: left,
             margin_right: right,
             cid_glyphs: BTreeMap::new(),
+            doc_title: None,
         }
+    }
+
+    /// Maximum number of input chars accepted for the PDF `/Info` `/Title`.
+    ///
+    /// PDF readers truncate long titles in their title bar well below this
+    /// bound. The UTF-16BE hex encoder emits 4 hex bytes per BMP char and
+    /// 8 per supplementary-plane char, so the strict upper bound on the
+    /// emitted hex literal is `8 * MAX_TITLE_CHARS + 6` (worst case: all
+    /// supplementary-plane chars, plus `<FEFF` BOM prefix and closing `>`) —
+    /// well under any DoS-relevant size. The cap defends against pathological
+    /// `{title:...}` directives in untrusted `.cho` input (per
+    /// `.claude/rules/defensive-inputs.md` § Resource Limits).
+    const MAX_TITLE_CHARS: usize = 1024;
+
+    /// Set the document title used in the PDF `/Info` dictionary `/Title` entry.
+    ///
+    /// `None`, the empty string, and whitespace-only strings normalise to no
+    /// `/Info` emission — matching upstream ChordPro R6.101.0's "if any"
+    /// clause. The chordpro parser already trims directive values (per
+    /// `parser.rs`'s `value.map(|v| v.trim().to_string())`), but `trim()` is
+    /// applied here too so this method is robust on its own to any future
+    /// caller that doesn't pre-normalise.
+    ///
+    /// Inputs longer than [`MAX_TITLE_CHARS`](Self::MAX_TITLE_CHARS) are
+    /// truncated at a char boundary to bound `/Info` allocation.
+    ///
+    /// The string is later encoded as a UTF-16BE PDF hex literal so any
+    /// Unicode title is preserved without escape concerns.
+    fn set_doc_title(&mut self, title: Option<&str>) {
+        self.doc_title = title.and_then(|t| {
+            let trimmed = t.trim();
+            if trimmed.is_empty() {
+                None
+            } else if trimmed.chars().count() > Self::MAX_TITLE_CHARS {
+                Some(trimmed.chars().take(Self::MAX_TITLE_CHARS).collect())
+            } else {
+                Some(trimmed.to_string())
+            }
+        });
     }
 
     /// Maximum allowed margin value in points. A4 short side is 595pt, so
@@ -3186,6 +3284,28 @@ impl PdfDocument {
             pdf.extend_from_slice(stream_obj.as_bytes());
         }
 
+        // /Info dictionary (optional, last object before xref).
+        //
+        // Placed after the page+content streams so prior object byte offsets
+        // are unchanged when /Info is added or removed; only the new object's
+        // offset and the trailer's `startxref` value shift.
+        //
+        // Mirrors upstream ChordPro R6.101.0 emergency-fix item "Default PDF
+        // title property to songbook title, if any." `set_doc_title` already
+        // normalised None / empty / whitespace-only to `None`, so reaching
+        // this branch implies a non-empty title to embed.
+        let info_obj_num = if let Some(title) = &self.doc_title {
+            offsets.push(pdf.len());
+            let n = offsets.len();
+            let title_hex = pdf_title_hex_string(title);
+            pdf.extend_from_slice(
+                format!("{n} 0 obj\n<< /Title {title_hex} >>\nendobj\n").as_bytes(),
+            );
+            Some(n)
+        } else {
+            None
+        };
+
         // Cross-reference table
         let xref_offset = pdf.len();
         let num_objects = offsets.len() + 1; // +1 for object 0
@@ -3196,9 +3316,12 @@ impl PdfDocument {
         }
 
         // Trailer
+        let info_ref = info_obj_num
+            .map(|n| format!(" /Info {n} 0 R"))
+            .unwrap_or_default();
         pdf.extend_from_slice(
             format!(
-                "trailer\n<< /Size {num_objects} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n"
+                "trailer\n<< /Size {num_objects} /Root 1 0 R{info_ref} >>\nstartxref\n{xref_offset}\n%%EOF\n"
             )
             .as_bytes(),
         );
@@ -6445,5 +6568,154 @@ mod png_tests {
         let result = render_songs_with_warnings(&songs, 0, &Config::defaults());
         // Should not panic and should return empty output.
         assert!(result.output.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod info_title_tests {
+    use super::*;
+
+    #[test]
+    fn pdf_title_hex_string_encodes_ascii_with_bom() {
+        assert_eq!(pdf_title_hex_string("AB"), "<FEFF00410042>");
+    }
+
+    #[test]
+    fn pdf_title_hex_string_encodes_bmp_codepoints() {
+        // U+65E5 日 + U+672C 本 → UTF-16BE 65E5 672C
+        assert_eq!(pdf_title_hex_string("日本"), "<FEFF65E5672C>");
+    }
+
+    #[test]
+    fn pdf_title_hex_string_encodes_supplementary_plane_with_surrogate_pair() {
+        // U+1F3B5 🎵 → high surrogate D83C, low surrogate DFB5
+        assert_eq!(pdf_title_hex_string("🎵"), "<FEFFD83CDFB5>");
+    }
+
+    #[test]
+    fn render_song_emits_info_title_for_titled_song() {
+        let input = "{title: Hello}\n\nHello world\n";
+        let song = chordsketch_chordpro::parse(input).expect("parse");
+        let pdf = render_song(&song);
+        let s = String::from_utf8_lossy(&pdf);
+        // /Info reference in trailer.
+        assert!(
+            s.contains("/Info "),
+            "trailer should reference /Info when {{title}} is set; got: {s}"
+        );
+        // /Title hex literal with UTF-16BE BOM + ASCII codepoints of "Hello".
+        // The hex case is pinned uppercase by `pdf_title_hex_string`'s
+        // `{cp:04X}` formatter; if that ever changes, this assertion will
+        // fail loudly rather than drift silently.
+        assert!(
+            s.contains("<FEFF00480065006C006C006F>"),
+            "PDF should contain UTF-16BE-encoded title bytes; got: {s}"
+        );
+    }
+
+    #[test]
+    fn set_doc_title_caps_oversized_input() {
+        let mut doc = PdfDocument::with_margins(10.0, 10.0, 10.0, 10.0);
+        // Build a title 100x larger than the cap.
+        let big = "A".repeat(PdfDocument::MAX_TITLE_CHARS * 100);
+        doc.set_doc_title(Some(&big));
+        let stored = doc.doc_title.expect("title should be stored");
+        assert_eq!(
+            stored.chars().count(),
+            PdfDocument::MAX_TITLE_CHARS,
+            "oversized title must be truncated to MAX_TITLE_CHARS"
+        );
+        // Hex output is bounded too: 5 (BOM literal) + 4*N + 1 (closing >).
+        let hex = pdf_title_hex_string(&stored);
+        let expected_max = 5 + 4 * PdfDocument::MAX_TITLE_CHARS + 1;
+        assert!(
+            hex.len() <= expected_max,
+            "hex literal must be bounded; got {} bytes, max {expected_max}",
+            hex.len()
+        );
+    }
+
+    #[test]
+    fn set_doc_title_passes_through_at_cap_and_truncates_one_over() {
+        let mut at_cap = PdfDocument::with_margins(10.0, 10.0, 10.0, 10.0);
+        at_cap.set_doc_title(Some(&"A".repeat(PdfDocument::MAX_TITLE_CHARS)));
+        assert_eq!(
+            at_cap.doc_title.as_deref().map(|s| s.chars().count()),
+            Some(PdfDocument::MAX_TITLE_CHARS),
+            "input exactly at cap must pass through unchanged"
+        );
+
+        let mut over_cap = PdfDocument::with_margins(10.0, 10.0, 10.0, 10.0);
+        over_cap.set_doc_title(Some(&"A".repeat(PdfDocument::MAX_TITLE_CHARS + 1)));
+        assert_eq!(
+            over_cap.doc_title.as_deref().map(|s| s.chars().count()),
+            Some(PdfDocument::MAX_TITLE_CHARS),
+            "input one char over cap must truncate"
+        );
+    }
+
+    #[test]
+    fn set_doc_title_truncates_at_char_boundary_for_multibyte_input() {
+        let mut doc = PdfDocument::with_margins(10.0, 10.0, 10.0, 10.0);
+        // Each '日' is 3 bytes in UTF-8 but counts as 1 char.
+        let big: String = "日".repeat(PdfDocument::MAX_TITLE_CHARS + 50);
+        doc.set_doc_title(Some(&big));
+        let stored = doc.doc_title.expect("title should be stored");
+        assert_eq!(stored.chars().count(), PdfDocument::MAX_TITLE_CHARS);
+        // The truncation must not split a multi-byte codepoint.
+        assert!(
+            stored.is_char_boundary(stored.len()),
+            "truncation produced an invalid UTF-8 boundary"
+        );
+    }
+
+    #[test]
+    fn set_doc_title_trims_leading_and_trailing_whitespace() {
+        let mut doc = PdfDocument::with_margins(10.0, 10.0, 10.0, 10.0);
+        doc.set_doc_title(Some("   Hello World   "));
+        assert_eq!(doc.doc_title.as_deref(), Some("Hello World"));
+    }
+
+    #[test]
+    fn render_song_omits_info_when_title_missing() {
+        let input = "Just a lyric line\n";
+        let song = chordsketch_chordpro::parse(input).expect("parse");
+        let pdf = render_song(&song);
+        let s = String::from_utf8_lossy(&pdf);
+        assert!(
+            !s.contains("/Info "),
+            "no /Info should be emitted when {{title}} is absent"
+        );
+        assert!(
+            !s.contains("/Title "),
+            "no /Title should be emitted when {{title}} is absent"
+        );
+    }
+
+    #[test]
+    fn render_song_omits_info_for_whitespace_only_title() {
+        let input = "{title:    }\n\nbody\n";
+        let song = chordsketch_chordpro::parse(input).expect("parse");
+        let pdf = render_song(&song);
+        let s = String::from_utf8_lossy(&pdf);
+        assert!(
+            !s.contains("/Info "),
+            "whitespace-only title must normalise to no /Info"
+        );
+    }
+
+    #[test]
+    fn render_songs_omits_info_for_multi_song_output() {
+        // Two songs trigger the multi-song TOC path. There is no songbook
+        // abstraction, so /Info must NOT default to the first song's title.
+        let input = "{title: One}\n\nfirst body\n\n{new_song}\n{title: Two}\n\nsecond body\n";
+        let songs = chordsketch_chordpro::parse_multi(input).expect("parse_multi");
+        assert!(songs.len() >= 2, "expected multi-song parse");
+        let pdf = render_songs(&songs);
+        let s = String::from_utf8_lossy(&pdf);
+        assert!(
+            !s.contains("/Info "),
+            "multi-song render must not emit /Info; got trailer fragment: {s}"
+        );
     }
 }
