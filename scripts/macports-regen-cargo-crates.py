@@ -29,6 +29,25 @@ portfile-cargo-crates-tag-relative.md` for the full rationale.
 Override with `--from-ref REF` (any git revision, e.g. `HEAD`) when
 preparing a Portfile bump for a release that has not been tagged yet.
 
+`--check` carries one graceful behaviour the other commands do not:
+when the tag is auto-resolved from the Portfile and that tag does
+not yet exist (i.e. a release-cut PR has bumped `github.setup` to
+the new version but the corresponding `vX.Y.Z` tag is created only
+post-merge), the check **falls back to comparing against
+`HEAD:Cargo.lock`** with a clear advisory note on stderr. This
+keeps the in-PR signal useful (the `cargo.crates` block must still
+match SOMETHING coherent — HEAD if the tag is unavailable) without
+forcing the maintainer to revert their Portfile bump out of the
+release-cut PR. After the tag is pushed, the next normal CI run
+validates against the real tagged `Cargo.lock` per the original
+invariant. See ADR-0012 §"Release-cut window" and #2413 for the
+rationale.
+
+The fallback is intentionally scoped to `--check` with an
+auto-resolved tag. If the caller explicitly passes `--from-ref REF`
+and `REF` does not exist, the script still fails — explicit
+user intent is preserved.
+
 Usage:
     # Print the cargo.crates block we would generate from the
     # Portfile's tagged Cargo.lock
@@ -41,7 +60,8 @@ Usage:
 
     # Verify the Portfile matches the tagged Cargo.lock; exits
     # non-zero on drift. The `macports-portfile-sync` CI guard runs
-    # this on every PR.
+    # this on every PR. Falls back to HEAD when the auto-resolved
+    # tag does not yet exist (release-cut window).
     python3 scripts/macports-regen-cargo-crates.py --check
 
     # Pre-tag refresh: regenerate from a not-yet-tagged ref.
@@ -80,8 +100,28 @@ def portfile_tag() -> str:
     return f"v{m.group(1)}"
 
 
+class GitRefMissingError(Exception):
+    """Raised when `git show <ref>:<path>` fails because `<ref>` does not exist.
+
+    Distinct from generic `git show` failures so callers can choose to
+    handle "tag not yet created" specifically (see `cmd_check`'s
+    release-cut fallback) without swallowing other git errors.
+    """
+
+    def __init__(self, ref: str, stderr: str) -> None:
+        super().__init__(f"git ref does not exist: {ref!r} ({stderr})")
+        self.ref = ref
+        self.stderr = stderr
+
+
 def read_cargo_lock(from_ref: str) -> str:
-    """Return the contents of `Cargo.lock` at the given git revision."""
+    """Return the contents of `Cargo.lock` at the given git revision.
+
+    Raises `GitRefMissingError` if `from_ref` does not resolve to any
+    object reachable from the local repository. Other failure modes
+    (git not installed, permission errors, missing `Cargo.lock` at
+    the resolved ref) raise `SystemExit` with a descriptive message.
+    """
     # Defense-in-depth: refuse refs that could be mis-parsed by `git
     # show` as a flag. `git show` does not provide a `--` separator
     # for revisions, so the only safe form is to validate the
@@ -102,9 +142,24 @@ def read_cargo_lock(from_ref: str) -> str:
     except FileNotFoundError as exc:
         raise SystemExit(f"git is required but not on PATH: {exc}") from exc
     except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr.strip()
+        # `git show <missing-ref>:<path>` emits one of:
+        #   fatal: invalid object name '<ref>'.
+        #   fatal: bad revision '<ref>'.
+        # depending on what kind of name was passed. Both indicate the
+        # ref itself is unreachable, which is the case the release-cut
+        # fallback in `cmd_check` wants to detect specifically. Any
+        # other CalledProcessError (e.g. ref exists but lacks a
+        # `Cargo.lock` at that revision) stays a hard error.
+        marker_invalid_ref = (
+            "invalid object name" in stderr.lower()
+            or "bad revision" in stderr.lower()
+        )
+        if marker_invalid_ref:
+            raise GitRefMissingError(from_ref, stderr) from exc
         raise SystemExit(
             f"git show {from_ref}:Cargo.lock failed (exit {exc.returncode}): "
-            f"{exc.stderr.strip()}"
+            f"{stderr}"
         ) from exc
     return result.stdout
 
@@ -192,8 +247,35 @@ def cmd_apply(from_ref: str) -> int:
     return 0
 
 
-def cmd_check(from_ref: str) -> int:
-    crates = parse_cargo_lock(read_cargo_lock(from_ref))
+def cmd_check(from_ref: str, *, allow_tag_fallback: bool) -> int:
+    """Verify the Portfile matches `Cargo.lock@from_ref`.
+
+    When `allow_tag_fallback=True` and the auto-resolved tag does not
+    yet exist (release-cut window), fall back to comparing against
+    `HEAD:Cargo.lock` with an advisory note on stderr instead of
+    failing. `--check` invocations without an explicit `--from-ref`
+    pass `allow_tag_fallback=True`; explicit refs do not, so user
+    intent is preserved.
+    """
+    effective_ref = from_ref
+    try:
+        text = read_cargo_lock(from_ref)
+    except GitRefMissingError as exc:
+        if not allow_tag_fallback:
+            sys.stderr.write(
+                f"git ref '{exc.ref}' does not exist: {exc.stderr}\n"
+            )
+            return 1
+        sys.stderr.write(
+            f"NOTE: tag '{exc.ref}' does not yet exist — assuming this is "
+            f"a release-cut PR window (see #2413).\n"
+            f"      Falling back to HEAD:Cargo.lock for advisory check; "
+            f"the next normal CI run after the tag is pushed will validate "
+            f"against the real tagged Cargo.lock.\n"
+        )
+        effective_ref = "HEAD"
+        text = read_cargo_lock(effective_ref)
+    crates = parse_cargo_lock(text)
     new_block = render_block(crates)
     portfile = PORTFILE.read_text(encoding="utf-8")
     expected = replace_block_in_portfile(portfile, new_block)
@@ -201,10 +283,10 @@ def cmd_check(from_ref: str) -> int:
         return 0
     sys.stderr.write(
         f"{PORTFILE.relative_to(REPO_ROOT)} cargo.crates block drifted from "
-        f"Cargo.lock@{from_ref}.\n"
+        f"Cargo.lock@{effective_ref}.\n"
         "\n"
         f"Refresh with: python3 scripts/macports-regen-cargo-crates.py "
-        f"--apply --from-ref {from_ref}\n"
+        f"--apply --from-ref {effective_ref}\n"
     )
     return 1
 
@@ -227,12 +309,15 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    from_ref = args.from_ref if args.from_ref is not None else portfile_tag()
+    auto_resolved = args.from_ref is None
+    from_ref = args.from_ref if not auto_resolved else portfile_tag()
 
     if args.apply:
         return cmd_apply(from_ref)
     if args.check:
-        return cmd_check(from_ref)
+        # Auto-resolved tag may not yet exist in a release-cut PR; allow
+        # graceful fallback to HEAD in that one case (see #2413).
+        return cmd_check(from_ref, allow_tag_fallback=auto_resolved)
     return cmd_print(from_ref)
 
 

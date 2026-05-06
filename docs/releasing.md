@@ -399,10 +399,21 @@ After the release workflow completes and the GitHub Release is published:
         python3 scripts/macports-regen-cargo-crates.py --apply
         ```
         Use `--from-ref HEAD` instead when the new tag does not yet
-        exist (release rehearsal against unreleased commits). The
-        bare `--check` form is what the `macports-portfile-sync` CI
-        guard runs on every PR, so running it locally before pushing
-        catches drift before CI.
+        exist (release rehearsal against unreleased commits, or the
+        release-cut PR itself bumping the Portfile inline before the
+        merge → tag-push sequence). The bare `--check` form is what
+        the `macports-portfile-sync` CI guard runs on every PR, so
+        running it locally before pushing catches drift before CI.
+
+        The CI guard also tolerates the **release-cut window** —
+        when the auto-resolved tag does not yet exist, `--check`
+        falls back to comparing against `HEAD:Cargo.lock` with a
+        clear advisory note on stderr, instead of failing. This
+        means a release-cut PR can bump `github.setup` and
+        regenerate `cargo.crates` (against HEAD via `--apply
+        --from-ref HEAD`) inline; the next normal CI run, after
+        the tag is pushed, validates against the real tagged
+        `Cargo.lock`. See #2413 / ADR-0012 for the rationale.
       - On a Mac with MacPorts installed, run `cargo2port.py` from a
         local MacPorts install **after** checking out the tag (so
         `Cargo.lock` in the working tree is the tagged one). The output
