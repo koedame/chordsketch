@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `scripts/macports-regen-cargo-crates.py --check`: when the tag
+  auto-resolved from `packaging/macports/Portfile`'s `github.setup`
+  line does not yet exist (release-cut PR window), gracefully fall
+  back to comparing the `cargo.crates` block against
+  `HEAD:Cargo.lock` with an advisory note on stderr instead of
+  failing. Explicit `--from-ref REF` invocations still fail
+  loudly when `REF` is missing — preserves user intent. The
+  next normal CI run, after the tag is pushed, validates against
+  the real tagged `Cargo.lock` per the original tag-relative
+  invariant (ADR-0012). Removes the workaround that forced the
+  v0.4.0 release-cut PR to revert its Portfile bump and ship a
+  separate post-release Portfile refresh PR. (#2413)
+
 ## [0.4.0] - 2026-05-06
 
 ### Added

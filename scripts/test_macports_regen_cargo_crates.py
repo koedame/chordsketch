@@ -6,18 +6,24 @@ The pure functions (`portfile_tag`, `parse_cargo_lock`, `render_block`,
 `read_cargo_lock`) are unit-tested against synthetic fixtures so the
 suite is independent of the real Portfile / Cargo.lock.
 
-Tests intentionally do NOT exercise the `git show` subprocess path —
-that would couple the suite to the host's git history. The `from_ref`
-validation guard (refuses values starting with `-`) IS covered because
-it short-circuits before any subprocess call.
+Tests intentionally do NOT exercise the `git show` subprocess path
+end-to-end — that would couple the suite to the host's git history.
+The `from_ref` validation guard (refuses values starting with `-`)
+IS covered because it short-circuits before any subprocess call. The
+`GitRefMissingError` classification path is covered by patching
+`subprocess.run` to return a synthesised CalledProcessError, and
+`cmd_check`'s release-cut fallback is covered by patching
+`read_cargo_lock` itself.
 """
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
@@ -205,6 +211,147 @@ class ReadCargoLockGuardTests(unittest.TestCase):
     def test_rejects_simple_dash_prefix(self) -> None:
         with self.assertRaises(SystemExit):
             mod.read_cargo_lock("-foo")
+
+
+def _make_called_process_error(stderr: str) -> subprocess.CalledProcessError:
+    err = subprocess.CalledProcessError(returncode=128, cmd=["git", "show"])
+    err.stderr = stderr
+    return err
+
+
+class ReadCargoLockGitRefMissingTests(unittest.TestCase):
+    """Verify the `GitRefMissingError` classification."""
+
+    def test_invalid_object_name_raises_GitRefMissingError(self) -> None:
+        # The exact stderr `git show` emits when a ref does not exist.
+        err = _make_called_process_error(
+            "fatal: invalid object name 'v9.9.9'."
+        )
+        with patch.object(mod.subprocess, "run", side_effect=err):
+            with self.assertRaises(mod.GitRefMissingError) as cm:
+                mod.read_cargo_lock("v9.9.9")
+        self.assertEqual(cm.exception.ref, "v9.9.9")
+        self.assertIn("invalid object name", cm.exception.stderr)
+
+    def test_bad_revision_also_classified_as_GitRefMissingError(self) -> None:
+        # Some git versions emit "bad revision" instead. Both indicate
+        # the ref is unreachable.
+        err = _make_called_process_error("fatal: bad revision 'vNOPE'.")
+        with patch.object(mod.subprocess, "run", side_effect=err):
+            with self.assertRaises(mod.GitRefMissingError):
+                mod.read_cargo_lock("vNOPE")
+
+    def test_unrelated_git_error_still_raises_SystemExit(self) -> None:
+        # E.g., the ref exists but has no `Cargo.lock` at that revision.
+        err = _make_called_process_error(
+            "fatal: path 'Cargo.lock' does not exist in 'v0.0.1'"
+        )
+        with patch.object(mod.subprocess, "run", side_effect=err):
+            with self.assertRaises(SystemExit) as cm:
+                mod.read_cargo_lock("v0.0.1")
+        # Must NOT degrade to GitRefMissingError — that would silently
+        # mask a real "Cargo.lock missing" defect on a tagged release.
+        self.assertNotIsInstance(cm.exception, mod.GitRefMissingError)
+
+
+def _matching_portfile() -> str:
+    """Portfile whose cargo.crates block matches CARGO_LOCK_FIXTURE exactly."""
+    return (
+        "PortSystem 1.0\n"
+        "PortGroup github 1.0\n"
+        "PortGroup cargo 1.0\n"
+        "\n"
+        "github.setup        koedame chordsketch 0.5.0 v\n"
+        "revision            0\n"
+        "categories          textproc music\n"
+        "license             MIT\n"
+        "\n"
+        + mod.render_block(mod.parse_cargo_lock(CARGO_LOCK_FIXTURE))
+        + "\n"
+        "build.dir ${worksrcpath}\n"
+    )
+
+
+class CmdCheckFallbackTests(unittest.TestCase):
+    """`cmd_check` graceful fallback during the release-cut window (#2413)."""
+
+    def _setup_portfile(self, tmp: str, body: str) -> Path:
+        root = Path(tmp)
+        portfile = root / "packaging" / "macports" / "Portfile"
+        portfile.parent.mkdir(parents=True)
+        portfile.write_text(body, encoding="utf-8")
+        mod.REPO_ROOT = root
+        mod.PORTFILE = portfile
+        return portfile
+
+    def test_fallback_passes_when_block_matches_HEAD(self) -> None:
+        # Simulate a release-cut PR: Portfile points at v0.5.0 (not yet
+        # tagged) but the cargo.crates block was regenerated against
+        # HEAD's Cargo.lock, so the fallback comparison succeeds.
+        with TemporaryDirectory() as tmp:
+            self._setup_portfile(tmp, _matching_portfile())
+
+            def _fake_read(ref: str) -> str:
+                if ref == "v0.5.0":
+                    raise mod.GitRefMissingError(
+                        "v0.5.0", "fatal: invalid object name 'v0.5.0'."
+                    )
+                if ref == "HEAD":
+                    return CARGO_LOCK_FIXTURE
+                self.fail(f"unexpected ref: {ref}")
+
+            with patch.object(mod, "read_cargo_lock", side_effect=_fake_read):
+                rc = mod.cmd_check("v0.5.0", allow_tag_fallback=True)
+            self.assertEqual(rc, 0)
+
+    def test_fallback_disabled_returns_1_on_missing_ref(self) -> None:
+        # An explicit `--from-ref` that does not exist must NOT silently
+        # fall back to HEAD — explicit user intent is preserved.
+        with TemporaryDirectory() as tmp:
+            self._setup_portfile(tmp, _matching_portfile())
+
+            def _fake_read(ref: str) -> str:
+                raise mod.GitRefMissingError(
+                    ref, f"fatal: invalid object name '{ref}'."
+                )
+
+            with patch.object(mod, "read_cargo_lock", side_effect=_fake_read):
+                rc = mod.cmd_check("vNOPE", allow_tag_fallback=False)
+            self.assertEqual(rc, 1)
+
+    def test_fallback_still_reports_drift(self) -> None:
+        # When the fallback comparison surfaces actual drift between
+        # Portfile and HEAD, cmd_check must still report it (return 1)
+        # — the fallback is a venue change, not a free pass.
+        with TemporaryDirectory() as tmp:
+            # Portfile has a cargo.crates block that does NOT match HEAD's
+            # Cargo.lock contents.
+            stale_portfile = (
+                "PortSystem 1.0\n"
+                "PortGroup github 1.0\n"
+                "PortGroup cargo 1.0\n"
+                "\n"
+                "github.setup        koedame chordsketch 0.5.0 v\n"
+                "revision            0\n"
+                "license             MIT\n"
+                "\n"
+                "cargo.crates \\\n"
+                "    stale 0.0.0 stalestalestalestalestalestalestalestalestalestalestalestale\n"
+                "\n"
+                "build.dir ${worksrcpath}\n"
+            )
+            self._setup_portfile(tmp, stale_portfile)
+
+            def _fake_read(ref: str) -> str:
+                if ref == "v0.5.0":
+                    raise mod.GitRefMissingError(
+                        "v0.5.0", "fatal: invalid object name 'v0.5.0'."
+                    )
+                return CARGO_LOCK_FIXTURE
+
+            with patch.object(mod, "read_cargo_lock", side_effect=_fake_read):
+                rc = mod.cmd_check("v0.5.0", allow_tag_fallback=True)
+            self.assertEqual(rc, 1)
 
 
 if __name__ == "__main__":
