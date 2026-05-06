@@ -113,7 +113,7 @@ the
 
 | Function | Description | Return type |
 |---|---|---|
-| `chord_diagram_svg(chord, instrument)` | Render a chord diagram as inline SVG. `instrument` is `"guitar"`, `"ukulele"` (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `null` when the chord is not in the built-in voicing database; throws on unknown instrument | `string \| null` (SVG markup) |
+| `chord_diagram_svg(chord, instrument)` | Render a chord diagram as inline SVG. `instrument` is case-insensitive: `"guitar"`, `"ukulele"` (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `null` when the chord is not in the built-in voicing database; throws on unknown instrument | `string \| null` (SVG markup) |
 
 ### iReal Pro
 

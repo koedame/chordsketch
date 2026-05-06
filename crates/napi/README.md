@@ -149,7 +149,7 @@ for (const { line, column, message } of errors) {
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `chordDiagramSvg(chord, instrument)` | `string \| null` (SVG markup) | Render a chord diagram as inline SVG. `instrument` is `"guitar"`, `"ukulele"` (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `null` when the chord is not in the built-in voicing database; throws on unknown instrument. |
+| `chordDiagramSvg(chord, instrument)` | `string \| null` (SVG markup) | Render a chord diagram as inline SVG. `instrument` is case-insensitive: `"guitar"`, `"ukulele"` (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `null` when the chord is not in the built-in voicing database; throws on unknown instrument. |
 
 ### Utility
 
@@ -162,7 +162,8 @@ for (const { line, column, message } of errors) {
 ```ts
 interface RenderOptions {
   /** Semitone transposition offset. Default: 0.
-   *  Values outside the i8 range (-128..127) are clamped, then reduced mod 12. */
+   *  Values outside -128..=127 cause the function to throw with an `InvalidArg`
+   *  error (matches CLI / UniFFI / WASM binding semantics — no silent clamping). */
   transpose?: number;
 
   /** Preset name ("guitar", "ukulele") or inline RRJSON configuration string. */
