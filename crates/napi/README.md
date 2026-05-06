@@ -50,22 +50,46 @@ console.log(`ChordSketch ${version()}`);
 
 ## API
 
-### Rendering
+The tables below cover every `#[napi]`-exported `pub fn` in
+[`crates/napi/src/lib.rs`](src/lib.rs).
+
+### Basic rendering
 
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `renderText(source)` | `string` | Plain text: chord names above lyric lines |
 | `renderHtml(source)` | `string` | Full HTML document |
 | `renderPdf(source)` | `Buffer` | Raw PDF bytes |
+
+### Rendering with options
+
+| Function | Returns | Description |
+|----------|---------|-------------|
 | `renderTextWithOptions(source, options)` | `string` | Text with transposition / config |
 | `renderHtmlWithOptions(source, options)` | `string` | HTML with transposition / config |
 | `renderPdfWithOptions(source, options)` | `Buffer` | PDF with transposition / config |
+
+### Body-only HTML and stylesheet
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `renderHtmlBody(source)` | `string` | Body-only `<div class="song">…</div>` HTML fragment with no `<!DOCTYPE>` / `<html>` / `<head>` / `<title>` / embedded `<style>` — pair with `renderHtmlCss` when the host supplies its own document envelope |
+| `renderHtmlBodyWithOptions(source, options)` | `string` | Same as `renderHtmlBody`, with transposition / config |
+| `renderHtmlCss()` | `string` | Canonical chord-over-lyrics CSS that `renderHtml` embeds inside `<style>` (byte-stable; safe to hash for cache-busting) |
+| `renderHtmlCssWithOptions(options)` | `string` | Variant of `renderHtmlCss` that honours `settings.wraplines` from the supplied options (when `wraplines` is false, `.line` emits `flex-wrap: nowrap`) |
+
+### Captured warnings
+
+| Function | Returns | Description |
+|----------|---------|-------------|
 | `renderTextWithWarnings(source)` | `{ output: string, warnings: string[] }` | Text render that captures warnings as structured data |
 | `renderHtmlWithWarnings(source)` | `{ output: string, warnings: string[] }` | HTML render with captured warnings |
 | `renderPdfWithWarnings(source)` | `{ output: Buffer, warnings: string[] }` | PDF render with captured warnings |
+| `renderHtmlBodyWithWarnings(source)` | `{ output: string, warnings: string[] }` | Body-only HTML fragment with captured warnings (body counterpart to `renderHtmlWithWarnings`) |
 | `renderTextWithWarningsAndOptions(source, options)` | `{ output: string, warnings: string[] }` | `renderTextWithWarnings` + transposition / config |
 | `renderHtmlWithWarningsAndOptions(source, options)` | `{ output: string, warnings: string[] }` | `renderHtmlWithWarnings` + transposition / config |
 | `renderPdfWithWarningsAndOptions(source, options)` | `{ output: Buffer, warnings: string[] }` | `renderPdfWithWarnings` + transposition / config |
+| `renderHtmlBodyWithWarningsAndOptions(source, options)` | `{ output: string, warnings: string[] }` | `renderHtmlBodyWithWarnings` + transposition / config |
 
 ### iReal Pro conversion
 
@@ -108,14 +132,24 @@ console.log(text);
 
 ### Validation
 
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `validate(source)` | `ValidationError[]` (`{ line: number, column: number, message: string }`, line / column one-based) | Validate ChordPro input and return any parse errors as structured records (empty array if clean). Mirrors the WASM `validate` shape and the FFI `ValidationError` dictionary. |
+
 ```js
 import { validate } from '@chordsketch/node';
 
-const errors = validate(source); // string[] — empty array if clean
-for (const msg of errors) {
-  console.warn(msg);
+const errors = validate(source); // ValidationError[] — empty array if clean
+for (const { line, column, message } of errors) {
+  console.warn(`line ${line}, column ${column}: ${message}`);
 }
 ```
+
+### Chord diagrams
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `chordDiagramSvg(chord, instrument)` | `string \| null` (SVG markup) | Render a chord diagram as inline SVG. `instrument` is `"guitar"`, `"ukulele"` (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `null` when the chord is not in the built-in voicing database; throws on unknown instrument. |
 
 ### Utility
 
