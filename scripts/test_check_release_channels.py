@@ -227,12 +227,14 @@ class VerifyChannelTests(unittest.TestCase):
         with patch(
             "check_release_channels._ghcr_pull_token",
             return_value="fake-bearer-token",
-        ), patch(
+        ) as mock_token, patch(
             "check_release_channels._http_head_ok",
             return_value=True,
         ) as mock_head:
             result = check_release_channels.verify_channel(channel, "v0.2.0", force_stale=False)
         self.assertTrue(result.ok)
+        # Token must be fetched for the exact package being probed.
+        mock_token.assert_called_once_with("koedame/chordsketch")
         # The image tag is the bare semver (`0.2.0`, not `v0.2.0`) —
         # `docker.yml` uses `metadata-action` with
         # `pattern={{version}}` which strips the `v` from the git tag.
