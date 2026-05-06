@@ -30,20 +30,3 @@
 #                    human-actionable)
 #   tracking_issue — GitHub issue number, as a string or integer
 
-[[allowed_skews]]
-file = "packaging/macports/Portfile"
-field = "github.setup version"
-current_value = "0.3.0"
-reason = """
-The MacPorts Portfile sync CI guard reads `git show v<TAG>:Cargo.lock`
-where `<TAG>` is taken from this `github.setup` line. Bumping the
-Portfile to 0.4.0 in the release-cut PR causes that guard to fail
-because `v0.4.0` does not yet exist as a tag — the tag is only
-created post-merge. `docs/releasing.md` §5 (Post-Release > MacPorts
-Portfile) is the canonical place to bump the Portfile (version +
-checksums + `cargo.crates` regen, all together, against the tagged
-source tarball).
-"""
-expires_at = "Post-release MacPorts Portfile refresh PR for v0.4.0 (per docs/releasing.md §5)"
-tracking_issue = 2413
-
