@@ -5,7 +5,8 @@
 # ChordSketch for Swift
 
 [ChordSketch](https://github.com/koedame/chordsketch) Swift package —
-parse and render [ChordPro](https://www.chordpro.org/) files on Apple platforms
+parse and render [ChordPro](https://www.chordpro.org/) and
+[iReal Pro](https://www.irealpro.com/) chord charts on Apple platforms
 via a prebuilt XCFramework backed by Rust.
 
 **Prebuilt XCFramework — no Rust build step required.**

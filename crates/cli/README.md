@@ -5,8 +5,11 @@
 # chordsketch
 
 Command-line tool for rendering [ChordPro](https://www.chordpro.org/)
-files to plain text, HTML, and PDF, plus importers and exporters for
-plain chord+lyrics sheets, ABC notation, and MusicXML.
+and [iReal Pro](https://www.irealpro.com/) chord charts. ChordPro
+renders to plain text, HTML, and PDF; iReal Pro `irealb://` URLs and
+`.irealb` / `.irealbook` files render to SVG. Includes importers and
+exporters for plain chord+lyrics sheets, ABC notation, and MusicXML,
+plus bidirectional ChordPro ↔ iReal Pro conversion.
 
 Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 
