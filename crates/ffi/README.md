@@ -40,24 +40,45 @@ print(chordsketch.version())
 
 ## API
 
-### Rendering
+The tables below cover every function in
+[`crates/ffi/src/chordsketch.udl`](src/chordsketch.udl) (UniFFI's
+`namespace chordsketch { ... }` block is the authoritative export
+surface for all language bindings).
 
-All render functions accept the same three arguments:
+### Render-function parameters
+
+`parse_and_render_*` functions all accept the same three arguments:
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `input` | `str` | ChordPro source text |
 | `config_json` | `str \| None` | Preset name (`"guitar"`, `"ukulele"`) or inline RRJSON; `None` for defaults |
-| `transpose` | `int \| None` | Semitone offset (-128..127); `None` defaults to 0 |
+| `transpose` | `int \| None` | Semitone offset; must fit in `i8` (`-128..=127`). Out-of-range values raise `ChordSketchError.InvalidConfig`. `None` defaults to 0. |
+
+### Basic rendering
 
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `parse_and_render_text(input, config_json, transpose)` | `str` | Plain text output |
 | `parse_and_render_html(input, config_json, transpose)` | `str` | Full HTML document |
 | `parse_and_render_pdf(input, config_json, transpose)` | `bytes` | Raw PDF bytes |
+
+### Body-only HTML and stylesheet
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `parse_and_render_html_body(input, config_json, transpose)` | `str` | Body-only `<div class="song">…</div>` HTML fragment with no `<!DOCTYPE>` / `<html>` / `<head>` / `<title>` / embedded `<style>` — pair with `render_html_css` when the host supplies its own document envelope |
+| `render_html_css()` | `str` | Canonical chord-over-lyrics CSS that `parse_and_render_html` embeds inside `<style>` (byte-stable; safe to hash for cache-busting) |
+| `render_html_css_with_config_json(config_json)` | `str` | Variant of `render_html_css` that honours `settings.wraplines` from the supplied config (when `wraplines` is false, `.line` emits `flex-wrap: nowrap`) |
+
+### Captured warnings
+
+| Function | Returns | Description |
+|----------|---------|-------------|
 | `parse_and_render_text_with_warnings(input, config_json, transpose)` | `TextRenderWithWarnings { output: str, warnings: list[str] }` | Plain text + captured warnings |
 | `parse_and_render_html_with_warnings(input, config_json, transpose)` | `TextRenderWithWarnings { output: str, warnings: list[str] }` | HTML + captured warnings |
 | `parse_and_render_pdf_with_warnings(input, config_json, transpose)` | `PdfRenderWithWarnings { output: bytes, warnings: list[str] }` | PDF + captured warnings |
+| `parse_and_render_html_body_with_warnings(input, config_json, transpose)` | `TextRenderWithWarnings { output: str, warnings: list[str] }` | Body-only HTML fragment + captured warnings (body counterpart to `parse_and_render_html_with_warnings`) |
 
 ### iReal Pro conversion
 
@@ -95,16 +116,30 @@ See #1827.
 
 ### Validation
 
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `validate(input)` | `list[ValidationError]` (`{ line: int, column: int, message: str }`, line / column one-based) | Validate ChordPro input and return any parse errors as structured records (empty list if clean). Mirrors the WASM `validate` shape and the NAPI `ValidationError[]` interface. |
+
 ```python
 errors = chordsketch.validate(source)  # list[ValidationError] — empty if clean
 for e in errors:
     print(f"line {e.line}, column {e.column}: {e.message}")
 ```
 
+### Chord diagrams
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `chord_diagram_svg(chord, instrument)` | `str \| None` (SVG markup) | Render a chord diagram as inline SVG. `instrument` is case-insensitive: `"guitar"`, `"ukulele"` (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `None` when the chord is not in the built-in voicing database; raises `ChordSketchError.InvalidConfig` on unknown instrument. |
+
 ### Utility
 
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `version()` | `str` | Library version string |
+
 ```python
-print(chordsketch.version())  # e.g. "0.2.0"
+print(chordsketch.version())  # e.g. "0.3.0"
 ```
 
 ## Options
@@ -132,9 +167,10 @@ except chordsketch.ChordSketchError as e:
     print(e)
 ```
 
-`ChordSketchError` has two variants:
+`ChordSketchError` has three variants:
 - `NoSongsFound` — the input produced no parseable songs (rare with lenient parsing)
-- `InvalidConfig` — the `config_json` argument is not a known preset and not valid RRJSON
+- `InvalidConfig(reason)` — the `config_json` argument is not a known preset and not valid RRJSON, or `transpose` is outside the `i8` range, or `chord_diagram_svg` was called with an unsupported instrument
+- `ConversionFailed(reason)` — a ChordPro ↔ iReal Pro conversion failed (`convert_chordpro_to_irealb`, `convert_irealb_to_chordpro_text`, `render_ireal_*`, `parse_irealb`, `serialize_irealb`)
 
 Parse errors in the ChordPro input are **not** raised — the renderer is lenient
 and produces a best-effort result. Call `validate()` to surface diagnostics.
