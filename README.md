@@ -6,14 +6,18 @@
 
 [![codecov](https://codecov.io/gh/koedame/chordsketch/branch/main/graph/badge.svg)](https://codecov.io/gh/koedame/chordsketch)
 
-A Rust implementation of the [ChordPro](https://www.chordpro.org/) file format
-parser and renderer. 100% ChordPro compatible. Supports parsing ChordPro files
-into a structured AST and rendering to plain text, HTML, and PDF.
+A Rust implementation of the [ChordPro](https://www.chordpro.org/) and
+[iReal Pro](https://www.irealpro.com/) chord chart formats. 100% ChordPro
+compatible (parse to a structured AST, render to plain text, HTML, and
+PDF), full `irealb://` URL parsing, iReal Pro chart rendering to SVG /
+PNG / PDF, and bidirectional ChordPro ↔ iReal Pro conversion.
 
 ## Features
 
-- Full [ChordPro](https://www.chordpro.org/chordpro/) format parser with zero
-  external dependencies in the core crate
+### ChordPro
+
+- Full [ChordPro](https://www.chordpro.org/chordpro/) format parser with
+  zero external dependencies in the core crate
 - Three output formats: plain text, HTML, and PDF
 - Chord transposition
 - Configuration file system (chordsketch.json)
@@ -26,17 +30,30 @@ into a structured AST and rendering to plain text, HTML, and PDF.
 - Font, size, and color directives
 - Image directive
 - Multi-page PDF with page control
-- iReal Pro support: parse `irealb://` URLs, render charts to SVG / PNG /
-  PDF, and convert bidirectionally between ChordPro and iReal Pro.
-  ChordSketch establishes `.irealb` (single song) and `.irealbook`
-  (multi-song collection) as project-local file extensions; both are
-  picked up by the CLI sniff, the desktop OS file associations, and
-  the editor integrations (VS Code, JetBrains, Zed).
+
+### iReal Pro
+
+- Full `irealb://` URL parser (single-song and multi-song collections)
+  with zero external dependencies in the core crate
+- Chart renderer producing SVG, PNG (via resvg), and PDF (via svg2pdf)
+  — 4-bars-per-line grid layout, repeat / final / double barlines,
+  N-th-ending brackets, section-letter labels, and Bravura SMuFL music
+  symbols (segno, coda)
+- Bidirectional ChordPro ↔ iReal Pro conversion with structured
+  warnings for lossy drops
+- `.irealb` (single song) and `.irealbook` (multi-song collection) file
+  extensions — picked up by the CLI sniff, the desktop OS file
+  associations, and the editor integrations (VS Code, JetBrains, Zed)
+- Bar-grid GUI editor (`@chordsketch/ui-irealb-editor`) with header
+  metadata editing, per-bar popovers, and structural section / bar
+  reordering
 
 ## Try it Online
 
 **[ChordSketch Playground](https://koedame.github.io/chordsketch/)** — try
-ChordPro rendering directly in your browser, no installation required.
+ChordPro and iReal Pro rendering directly in your browser, no installation
+required. The format toggle in the header switches between the ChordPro
+text editor and the iReal Pro bar-grid GUI editor at runtime.
 
 ## Editor Integration
 
@@ -161,13 +178,13 @@ needed regardless of install path) is tracked in
 ## Usage
 
 ```bash
-# Render to plain text (default)
+# Render a ChordPro file to plain text (default)
 chordsketch song.cho
 
-# Render to HTML
+# Render a ChordPro file to HTML
 chordsketch -f html song.cho -o song.html
 
-# Render to PDF
+# Render a ChordPro file to PDF
 chordsketch -f pdf song.cho -o song.pdf
 
 # Transpose up 2 semitones
@@ -176,13 +193,23 @@ chordsketch --transpose 2 song.cho
 # Use a custom config file
 chordsketch -c myconfig.json song.cho
 
-# Process multiple files
+# Process multiple ChordPro files
 chordsketch -f pdf song1.cho song2.cho -o songbook.pdf
+
+# Render an iReal Pro chart from a URL (always emits SVG)
+chordsketch 'irealb://%54=…'
+
+# Render an iReal Pro chart from an .irealb file (single song)
+chordsketch song.irealb
+
+# Render an iReal Pro chart from an .irealbook file (multi-song collection)
+chordsketch songs.irealbook
 ```
 
 ## Library Usage
 
-The core parser and renderers are available as separate library crates:
+The core parsers and renderers are available as separate library crates,
+one set per format. ChordPro:
 
 ```rust
 use chordsketch_chordpro::parser::parse;
@@ -194,14 +221,29 @@ let text = render_song(&song);
 println!("{text}");
 ```
 
+iReal Pro:
+
+```rust
+use chordsketch_ireal::parse as parse_ireal;
+use chordsketch_render_ireal::{render_svg, RenderOptions};
+
+let url = "irealb://%54=%66==%41%66%72%6F=%43==%31%72%33%34%4C%62%4B%63%75%37,%37%47,%2D%20%3E%43,%44,%37%42,%2D%23%46,%47%7C,%37%44,%41%2D,%45,%2D%45%7C,%37%42,%2D%23%46,%45%2D,%7C%44%3C%34%33%54%7C%43,%44%2D%37,%7C%46,%47%37,%43%20%7C%20==%31%34%30=%33";
+let song = parse_ireal(url).expect("valid irealb URL");
+let svg = render_svg(&song, &RenderOptions::default());
+println!("{svg}");
+```
+
 ## Workspace Structure
 
 | Crate | Description |
 |---|---|
-| [`chordsketch-chordpro`](crates/chordpro) | Parser, AST, and transforms (zero external dependencies) |
-| [`chordsketch-render-text`](crates/render-text) | Plain text renderer |
-| [`chordsketch-render-html`](crates/render-html) | HTML renderer |
-| [`chordsketch-render-pdf`](crates/render-pdf) | PDF renderer |
+| [`chordsketch-chordpro`](crates/chordpro) | ChordPro parser, AST, and transforms (zero external dependencies) |
+| [`chordsketch-render-text`](crates/render-text) | ChordPro plain text renderer |
+| [`chordsketch-render-html`](crates/render-html) | ChordPro HTML renderer |
+| [`chordsketch-render-pdf`](crates/render-pdf) | ChordPro PDF renderer |
+| [`chordsketch-ireal`](crates/ireal) | iReal Pro AST and `irealb://` URL parser / serializer (zero external dependencies) |
+| [`chordsketch-render-ireal`](crates/render-ireal) | iReal Pro chart renderer (SVG / PNG / PDF) |
+| [`chordsketch-convert`](crates/convert) | Bidirectional ChordPro ↔ iReal Pro converter |
 | [`chordsketch-convert-musicxml`](crates/convert-musicxml) | MusicXML ↔ ChordPro bidirectional converter |
 | [`chordsketch-wasm`](crates/wasm) | WebAssembly bindings via wasm-bindgen |
 | [`chordsketch-ffi`](crates/ffi) | UniFFI bindings for Python, Ruby, Swift, and Kotlin |
@@ -215,6 +257,9 @@ println!("{text}");
 |---|---|---|
 | [`@chordsketch/wasm`](packages/npm) | `packages/npm` | npm WASM package with TypeScript types |
 | [`@chordsketch/node`](crates/napi) | `crates/napi` | Native Node.js addon (prebuilt binaries, no Rust required) |
+| [`@chordsketch/ui-web`](packages/ui-web) | `packages/ui-web` | Framework-agnostic editor + preview UI shared by the playground and the desktop app |
+| [`@chordsketch/ui-irealb-editor`](packages/ui-irealb-editor) | `packages/ui-irealb-editor` | Bar-grid GUI editor for iReal Pro charts; pluggable into `@chordsketch/ui-web` |
+| [`@chordsketch/react`](packages/react) | `packages/react` | React component library |
 | [Python `chordsketch`](crates/ffi) | `crates/ffi` | Python package via UniFFI + maturin |
 | [Swift `ChordSketch`](packages/swift) | `packages/swift` | Swift package with XCFramework |
 | [Kotlin `chordsketch`](packages/kotlin) | `packages/kotlin` | Kotlin/JVM package via JNI |
@@ -224,7 +269,7 @@ println!("{text}");
 | [Zed extension](packages/zed-extension) | `packages/zed-extension` | Tree-sitter highlighting and LSP for Zed |
 | [`tree-sitter-chordpro`](packages/tree-sitter-chordpro) | `packages/tree-sitter-chordpro` | Tree-sitter grammar for ChordPro |
 | [GitHub Action](packages/github-action) | `packages/github-action` | Composite action for rendering ChordPro in CI |
-| [Playground](packages/playground) | `packages/playground` | Browser-based ChordPro editor and renderer |
+| [Playground](packages/playground) | `packages/playground` | Browser-based ChordPro and iReal Pro editor and renderer |
 
 ## GitHub Actions
 

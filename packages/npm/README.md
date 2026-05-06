@@ -5,8 +5,9 @@
 # @chordsketch/wasm
 
 [ChordSketch](https://github.com/koedame/chordsketch) compiled to
-WebAssembly — parse and render [ChordPro](https://www.chordpro.org/) files
-in the browser **or** in Node.js with the same package.
+WebAssembly — parse and render [ChordPro](https://www.chordpro.org/) and
+[iReal Pro](https://www.irealpro.com/) chord charts in the browser **or**
+in Node.js with the same package.
 
 ## Installation
 

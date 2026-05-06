@@ -5,7 +5,8 @@
 # @chordsketch/node
 
 [ChordSketch](https://github.com/koedame/chordsketch) native Node.js addon —
-parse and render [ChordPro](https://www.chordpro.org/) files with native
+parse and render [ChordPro](https://www.chordpro.org/) and
+[iReal Pro](https://www.irealpro.com/) chord charts with native
 performance via [napi-rs](https://napi.rs/).
 
 **Prebuilt binaries — no Rust toolchain required.**

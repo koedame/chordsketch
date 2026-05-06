@@ -20,3 +20,6 @@
 [Usage] chordsketch --transpose 2 song.cho
 [Usage] chordsketch -c myconfig.json song.cho
 [Usage] chordsketch -f pdf song1.cho song2.cho -o songbook.pdf
+[Usage] chordsketch 'irealb://%54=…'
+[Usage] chordsketch song.irealb
+[Usage] chordsketch songs.irealbook
