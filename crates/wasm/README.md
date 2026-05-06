@@ -58,29 +58,65 @@ a dual-package layout).
 
 ## API
 
-The exported wasm-bindgen functions are:
+The exported wasm-bindgen functions are grouped below. The
+`### iReal Pro` subsection mirrors the structure of the
+[`### iReal Pro conversion` table in `packages/npm/README.md`](https://github.com/koedame/chordsketch/blob/main/packages/npm/README.md#ireal-pro-conversion)
+and stays in lockstep with the `*_ireal*` / `*_irealb*` /
+`convert_*irealb*` exports in
+[`crates/wasm/src/lib.rs`](src/lib.rs).
+
+### Basic rendering
 
 | Function | Description | Return type |
 |---|---|---|
 | `render_text(input)` | Render ChordPro to plain text | `string` |
 | `render_html(input)` | Render ChordPro to HTML5 | `string` |
 | `render_pdf(input)` | Render ChordPro to a PDF byte array | `Uint8Array` |
-| `render_text_with_options(input, opts)` | Same, with `{ transpose?, config? }` | `string` |
-| `render_html_with_options(input, opts)` | Same, with `{ transpose?, config? }` | `string` |
-| `render_pdf_with_options(input, opts)` | Same, with `{ transpose?, config? }` | `Uint8Array` |
+
+### Rendering with options
+
+| Function | Description | Return type |
+|---|---|---|
+| `render_text_with_options(input, opts)` | Same as `render_text`, with `{ transpose?, config? }` | `string` |
+| `render_html_with_options(input, opts)` | Same as `render_html`, with `{ transpose?, config? }` | `string` |
+| `render_pdf_with_options(input, opts)` | Same as `render_pdf`, with `{ transpose?, config? }` | `Uint8Array` |
+
+### Captured warnings
+
+| Function | Description | Return type |
+|---|---|---|
 | `renderTextWithWarnings(input)` | Plain-text render that captures warnings instead of forwarding to `console.warn` | `{ output: string, warnings: string[] }` |
 | `renderHtmlWithWarnings(input)` | HTML render with captured warnings | `{ output: string, warnings: string[] }` |
 | `renderPdfWithWarnings(input)` | PDF render with captured warnings | `{ output: Uint8Array, warnings: string[] }` |
 | `renderTextWithWarningsAndOptions(input, opts)` | `renderTextWithWarnings` + `{ transpose?, config? }` options | `{ output: string, warnings: string[] }` |
 | `renderHtmlWithWarningsAndOptions(input, opts)` | `renderHtmlWithWarnings` + `{ transpose?, config? }` options | `{ output: string, warnings: string[] }` |
 | `renderPdfWithWarningsAndOptions(input, opts)` | `renderPdfWithWarnings` + `{ transpose?, config? }` options | `{ output: Uint8Array, warnings: string[] }` |
+
+### iReal Pro
+
+| Function | Description | Return type |
+|---|---|---|
 | `convertChordproToIrealb(input)` | Convert ChordPro source to an `irealb://` URL (lossy — drops lyrics, fonts, capo) | `{ output: string, warnings: string[] }` |
 | `convertIrealbToChordproText(input)` | Convert an `irealb://` URL to rendered ChordPro text | `{ output: string, warnings: string[] }` |
 | `renderIrealSvg(input)` | Render an `irealb://` URL as an iReal Pro-style SVG chart | `string` (SVG document) |
-| `renderIrealPng(input)` | Render an `irealb://` URL as a PNG image (300 DPI default) | `Uint8Array` (PNG bytes) |
+| `renderIrealPng(input)` | Render an `irealb://` URL as a PNG image (300 DPI default, A4-equivalent canvas) | `Uint8Array` (PNG bytes) |
 | `renderIrealPdf(input)` | Render an `irealb://` URL as a single-page A4 PDF | `Uint8Array` (PDF bytes) |
 | `parseIrealb(input)` | Parse an `irealb://` URL into AST-shaped JSON (mirrors `IrealSong`) | `string` (JSON) |
 | `serializeIrealb(input)` | Serialize an AST-shaped JSON string back into an `irealb://` URL (round-trip with `parseIrealb`) | `string` (URL) |
+
+`convertChordproToIrealb` is lossy: lyrics, fonts / colours, and capo
+are dropped because iReal has no surface for them. Each drop appears in
+`warnings` as a `"<kind>: <message>"` string (`kind` is `lossy-drop`,
+`approximated`, or `unsupported`).
+
+`convertIrealbToChordproText` returns the `chordsketch-render-text`
+rendering of the converted song, not raw ChordPro source — there is no
+source emitter yet.
+
+### Utility
+
+| Function | Description | Return type |
+|---|---|---|
 | `version()` | Library version string | `string` |
 
 Each element of `warnings` is a plain UTF-8 string containing a
