@@ -6,7 +6,7 @@ description: >
   and windows-latest (git-bash) runners.
 inputs:
   fixtures-dir:
-    description: "Directory containing sample.cho, song2.cho, sample-config.json."
+    description: "Directory containing sample.cho, song2.cho, sample-config.json, sample.irealb, and sample.irealbook."
     required: false
     default: ".github/fixtures"
 runs:
