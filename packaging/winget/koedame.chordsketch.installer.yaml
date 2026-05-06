@@ -1,10 +1,10 @@
 PackageIdentifier: koedame.chordsketch
-PackageVersion: 0.3.0
+PackageVersion: 0.4.0
 InstallerType: zip
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/koedame/chordsketch/releases/download/v0.3.0/chordsketch-v0.3.0-x86_64-pc-windows-msvc.zip
-    # SHA256 must be recomputed after the v0.3.0 release artifact is published.
+    InstallerUrl: https://github.com/koedame/chordsketch/releases/download/v0.4.0/chordsketch-v0.4.0-x86_64-pc-windows-msvc.zip
+    # SHA256 must be recomputed after the v0.4.0 release artifact is published.
     # Run: curl -L <InstallerUrl> | sha256sum  (uppercase the hex output)
     # This value is the v0.2.2 hash and is intentionally stale — do not
     # submit this manifest to winget-pkgs until the hash is refreshed.

@@ -202,7 +202,7 @@ jobs:
           # 0.1.0 → 0.1.1 fix, in the publish PR itself). The README sync
           # check (.github/workflows/readme-sync.yml) does not catch this
           # automatically because the version string lives only here.
-          npm install '@chordsketch/wasm@0.3.0'
+          npm install '@chordsketch/wasm@0.4.0'
 
       - name: Smoke test text + HTML + PDF render
         run: |
@@ -583,13 +583,13 @@ jobs:
             INCLUDE_IREAL=1
             MODE="workspace path deps (PR, ChordPro + iReal)"
           else
-            # Cargo `^0.3` means `>=0.3.0, <0.4.0` (the caret rules treat
+            # Cargo `^0.4` means `>=0.4.0, <0.5.0` (the caret rules treat
             # the leftmost non-zero as the breaking-change boundary).
-            # Bump policy: when the workspace bumps to 0.4.x, update both
-            # constraints below to `^0.4` in the same release PR.
+            # Bump policy: when the workspace bumps to 0.5.x, update both
+            # constraints below to `^0.5` in the same release PR.
             # Otherwise, daily smoke tests will silently stop resolving.
-            CORE_DEP='chordsketch-chordpro = "^0.3"'
-            RENDER_DEP='chordsketch-render-text = "^0.3"'
+            CORE_DEP='chordsketch-chordpro = "^0.4"'
+            RENDER_DEP='chordsketch-render-text = "^0.4"'
             IREAL_DEP=''
             IREAL_RENDER_DEP=''
             INCLUDE_IREAL=0

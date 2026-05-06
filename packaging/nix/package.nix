@@ -5,9 +5,9 @@
 # checkout and submit a PR.
 #
 # Last verified build: v0.2.0 on x86_64-linux with nixpkgs unstable.
-# v0.3.0 hashes are intentionally blank (see `hash` / `cargoHash`
-# below) — the release PR #1897 bumped `version` but leaves the
-# derivation in its "awaiting-build" state per the workflow below.
+# v0.4.0 hashes are intentionally blank (see `hash` / `cargoHash`
+# below) — the release PR bumps `version` but leaves the derivation
+# in its "awaiting-build" state per the workflow below.
 #
 # When bumping to a new release, update `version` and recompute `hash`
 # and `cargoHash` by setting both to "" and building once — nix will
@@ -22,7 +22,7 @@
 
 rustPlatform.buildRustPackage rec {
   pname = "chordsketch";
-  version = "0.3.0";
+  version = "0.4.0";
 
   src = fetchFromGitHub {
     owner = "koedame";
