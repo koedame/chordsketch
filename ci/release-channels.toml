@@ -263,9 +263,9 @@ notes = "Publishes via .github/workflows/ruby.yml."
 
 [[channels]]
 id = "maven-central"
-display = "Maven Central — io.github.koedame:chordsketch"
+display = "Maven Central — me.koeda:chordsketch"
 kind = "maven-central"
-package = "io.github.koedame:chordsketch"
+package = "me.koeda:chordsketch"
 expected_version = "tag"
 required_secrets = [
     "CENTRAL_PORTAL_USERNAME",

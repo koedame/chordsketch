@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `scripts/check-release-channels.py`: the `ghcr`, `docker-hub`,
+  and `maven-central` probes returned `<error>` on every release in
+  the rollup table, even though the underlying publishes succeeded.
+  Three independent bugs:
+  - **Docker Hub / GHCR**: the probe URLs prepended a `v` to the
+    version (`tags/v0.4.0/`, `manifests/v0.4.0`), but `docker.yml`
+    uses `metadata-action` with `pattern={{version}}` which strips
+    the `v` and pushes images as `0.4.0`, `0.4`, `latest`. The
+    probe URLs now match the bare semver.
+  - **GHCR auth**: anonymous GET against the v2 manifest endpoint
+    always returned 401 because the Docker Registry v2 protocol
+    requires `Authorization: Bearer <token>` even for public
+    packages. The probe now fetches a pull token from
+    `https://ghcr.io/token?…&scope=repository:<repo>:pull` first.
+    Token availability is itself the visibility check for public
+    packages.
+  - **GHCR Accept header**: the manifest endpoint returns 404
+    unless the request advertises a manifest media type via
+    `Accept`. Multi-arch images come back as either OCI
+    image-index or Docker manifest-list, so the probe now sends
+    both content types in the negotiation list.
+  - **Maven Central**: `ci/release-channels.toml` declared the
+    package as `io.github.koedame:chordsketch`, but the actual
+    publish coordinates are `me.koeda:chordsketch` (reverse-DNS
+    of the `koeda.me` domain registered on Sonatype Central
+    Portal). The probe is also rebuilt to read the authoritative
+    `repo1.maven.org/maven2/<group>/<artifact>/maven-metadata.xml`
+    rather than `search.maven.org/solrsearch`, which was
+    empirically not indexing this artifact at all. Sister
+    references in `.github/workflows/kotlin.yml` deployment URL
+    and `docs/releasing.md` Distribution Channels table are
+    corrected. (#2418)
+
 ### Changed
 
 - `scripts/macports-regen-cargo-crates.py --check`: when the tag

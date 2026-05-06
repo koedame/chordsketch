@@ -216,7 +216,7 @@ jobs:
     continue-on-error: true
     environment:
       name: maven-central
-      url: https://repo1.maven.org/maven2/io/github/koedame/chordsketch/
+      url: https://repo1.maven.org/maven2/me/koeda/chordsketch/
     # Enforce `bash -euo pipefail` in `run:` blocks. Scoped to this job
     # rather than workflow-level because kotlin.yml has a Windows matrix
     # cell (build-jni-others) whose `run:` blocks must keep pwsh defaults.

@@ -73,19 +73,36 @@ def _http_get_text(url: str) -> str:
         return resp.read().decode("utf-8")
 
 
-def _http_head_ok(url: str) -> bool:
-    """Return True if the URL responds 200 to an unauthenticated GET.
+def _http_head_ok(
+    url: str,
+    *,
+    bearer_token: str | None = None,
+    accept: str | None = None,
+) -> bool:
+    """Return True if the URL responds 200/206 to a GET request.
 
     HEAD is technically what we want, but several container registries (GHCR
     in particular) return 401 on HEAD for public images while responding 200
     to GET. Using GET with `Range: bytes=0-0` avoids downloading the manifest
     body while still matching what the public visibility contract actually
     guarantees.
+
+    Pass `bearer_token` when the registry requires an OAuth bearer (GHCR
+    enforces this even for public packages — anonymous GET always returns
+    401, so the caller must obtain a pull token first via
+    `_ghcr_pull_token`).
+
+    Pass `accept` to override the Accept header. GHCR's manifest endpoint
+    returns 404 unless the request explicitly negotiates a manifest media
+    type (OCI / Docker v2); without an Accept header, the registry cannot
+    resolve which manifest representation to serve.
     """
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": USER_AGENT, "Range": "bytes=0-0"},
-    )
+    headers = {"User-Agent": USER_AGENT, "Range": "bytes=0-0"}
+    if bearer_token is not None:
+        headers["Authorization"] = f"Bearer {bearer_token}"
+    if accept is not None:
+        headers["Accept"] = accept
+    req = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:  # noqa: S310
             return resp.status in (200, 206)
@@ -97,6 +114,33 @@ def _http_head_ok(url: str) -> bool:
         return False
     except urllib.error.URLError:
         return False
+
+
+def _ghcr_pull_token(repo: str) -> str | None:
+    """Fetch an anonymous GHCR pull token for `<repo>` (e.g. `koedame/chordsketch`).
+
+    GHCR follows the Docker Registry v2 token-handshake: even for public
+    packages, manifest GETs require an `Authorization: Bearer <token>`
+    header. The token endpoint serves it without credentials when the
+    package's visibility is `public`.
+
+    Returns the token string on success, or `None` if the token endpoint
+    is unreachable / returns a malformed payload (which indicates the
+    package is private or the registry is misbehaving — both surface as
+    `_check_ghcr` failures, which is the right outcome).
+    """
+    url = (
+        "https://ghcr.io/token?service=ghcr.io"
+        f"&scope=repository:{repo}:pull"
+    )
+    try:
+        payload = _http_get_json(url)
+    except Exception:  # noqa: BLE001
+        return None
+    token = payload.get("token")
+    if isinstance(token, str) and token:
+        return token
+    return None
 
 
 def _normalize_tag(tag: str) -> str:
@@ -131,37 +175,70 @@ def _check_npm(channel: Channel, version: str) -> CheckResult:
 
 
 def _check_ghcr(channel: Channel, version: str) -> CheckResult:
-    # Two assertions: (1) the tag exists, (2) public anonymous GET returns 200.
-    # Both are satisfied by the same request.
-    url = f"https://ghcr.io/v2/{channel.package}/manifests/v{version}"
-    if _http_head_ok(url):
+    # Two assertions: (1) the tag exists, (2) the package is public
+    # (anonymous Bearer-token GET returns 200).
+    #
+    # GHCR follows the Docker Registry v2 token-handshake: the
+    # manifest endpoint requires `Authorization: Bearer <token>` even
+    # for public packages, and anonymous GET returns 401. The probe
+    # therefore acquires a pull token first via
+    # `https://ghcr.io/token?…&scope=repository:<repo>:pull`, then
+    # GETs the manifest with that token. Token acquisition itself
+    # succeeds anonymously only when the package is public — which
+    # is exactly the visibility contract this check is asserting.
+    #
+    # The image tag is the bare `X.Y.Z` (no `v` prefix) — `docker.yml`
+    # uses `docker/metadata-action` with `pattern={{version}}`, which
+    # strips the `v` from the source git tag. The previous probe
+    # targeted `manifests/v<version>` and 404'd on every release (#2418).
+    token = _ghcr_pull_token(channel.package)
+    if token is None:
+        return _error(
+            channel, version,
+            "GHCR pull token unavailable (package private or token endpoint unreachable)",
+        )
+    url = f"https://ghcr.io/v2/{channel.package}/manifests/{version}"
+    # GHCR's manifest endpoint returns 404 unless the request explicitly
+    # negotiates a manifest media type. Both OCI and Docker v2 formats
+    # are listed because `docker.yml` builds multi-arch images that
+    # surface as either an OCI image-index or a Docker manifest-list,
+    # depending on the registry's content negotiation.
+    manifest_accept = ",".join([
+        "application/vnd.oci.image.index.v1+json",
+        "application/vnd.oci.image.manifest.v1+json",
+        "application/vnd.docker.distribution.manifest.list.v2+json",
+        "application/vnd.docker.distribution.manifest.v2+json",
+    ])
+    if _http_head_ok(url, bearer_token=token, accept=manifest_accept):
         return CheckResult(
             channel_id=channel.id,
             ok=True,
-            observed=f"v{version}",
-            expected=f"v{version}",
+            observed=version,
+            expected=version,
             detail="GHCR manifest is publicly reachable",
         )
     return _error(channel, version, "GHCR manifest not publicly reachable (visibility or missing tag)")
 
 
 def _check_docker_hub(channel: Channel, version: str) -> CheckResult:
-    url = f"https://hub.docker.com/v2/repositories/{channel.package}/tags/v{version}/"
+    # Docker Hub tag matches the published image's bare semver
+    # (`0.4.0`, `0.4`, `latest`) — `docker.yml` uses
+    # `docker/metadata-action` with `pattern={{version}}` which
+    # strips the `v` from the git tag. The previous probe targeted
+    # `tags/v<version>/` and 404'd on every release (#2418).
+    url = f"https://hub.docker.com/v2/repositories/{channel.package}/tags/{version}/"
     try:
         payload = _http_get_json(url)
     except Exception as exc:  # noqa: BLE001
         return _error(channel, version, f"Docker Hub API error: {exc}")
-    # Docker Hub's tag API returns `"name": "v0.2.0"` — the value already
-    # carries the `v` prefix, so `observed` must use it as-is. A previous
-    # f"v{name}" produced `vv0.2.0` in the display table. See #1512.
     name = str(payload.get("name") or "<missing>")
     observed = name
-    if name == f"v{version}":
+    if name == version:
         return CheckResult(
             channel_id=channel.id,
             ok=True,
             observed=observed,
-            expected=f"v{version}",
+            expected=version,
             detail="Docker Hub tag present",
         )
     return _error(channel, version, f"Docker Hub tag mismatch: got {observed}")
@@ -253,21 +330,37 @@ def _check_rubygems(channel: Channel, version: str) -> CheckResult:
 
 
 def _check_maven_central(channel: Channel, version: str) -> CheckResult:
-    # channel.package is "io.github.koedame:chordsketch"; split into g and a.
+    # channel.package is "me.koeda:chordsketch"; split into g and a.
     try:
         group_id, artifact_id = channel.package.split(":", 1)
     except ValueError:
         return _error(channel, version, f"maven package must be 'group:artifact', got {channel.package!r}")
-    query = f"g:{group_id} AND a:{artifact_id}"
-    url = f"https://search.maven.org/solrsearch/select?q={urllib.parse.quote(query)}&wt=json&rows=1"
+    # Read the authoritative maven-metadata.xml from the canonical Maven
+    # Central repository (`repo1.maven.org/maven2`) rather than the
+    # `search.maven.org` solrsearch index. The solrsearch index lags
+    # publication arbitrarily — empirically, `me.koeda:chordsketch`
+    # was unreachable via solrsearch even after multiple releases were
+    # accepted by `repo1.maven.org`, producing a perpetual `<error>` in
+    # the rollup table (#2418). The metadata.xml endpoint serves the
+    # same data the cargo portgroup / Maven clients consume to resolve
+    # versions, so it is the publication source of truth.
+    group_path = group_id.replace(".", "/")
+    url = (
+        f"https://repo1.maven.org/maven2/{group_path}/{artifact_id}"
+        "/maven-metadata.xml"
+    )
     try:
-        payload = _http_get_json(url)
+        text = _http_get_text(url)
     except Exception as exc:  # noqa: BLE001
-        return _error(channel, version, f"Maven Central search error: {exc}")
-    docs = payload.get("response", {}).get("docs", [])
-    if not docs:
-        return _error(channel, version, "artifact not found on Maven Central")
-    observed = str(docs[0].get("latestVersion") or "<missing>")
+        return _error(channel, version, f"Maven Central metadata error: {exc}")
+    # Extract `<release>` from `<versioning><release>X.Y.Z</release>`.
+    # Use a narrow regex rather than full XML parsing because the file
+    # is a small, well-known, attacker-uncontrolled document and the
+    # regex avoids any XXE surface.
+    m = re.search(r"<release>([^<]+)</release>", text)
+    if not m:
+        return _error(channel, version, "Maven Central metadata missing <release>")
+    observed = m.group(1).strip()
     return _compare(channel, version, observed)
 
 

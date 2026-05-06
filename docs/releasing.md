@@ -284,7 +284,7 @@ When adding a new channel, update both.
 | VS Code Marketplace | `koedame.chordsketch` (1 universal + 7 platform-specific VSIXes, #1789) | `vscode-extension.yml` on `release: published` | `VSCE_PAT` (PAT, Marketplace Publish scope) | `vscode-marketplace` rollup entry |
 | PyPI | `chordsketch` | `python.yml` on tag push | none (OIDC trusted publisher) | `pypi` rollup entry |
 | RubyGems | `chordsketch` | `ruby.yml` on tag push | none (OIDC trusted publisher) | `rubygems` rollup entry |
-| Maven Central | `io.github.koedame:chordsketch` | `kotlin.yml` on tag push | `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `SIGNING_KEY`, `SIGNING_PASSWORD` | `maven-central` rollup entry |
+| Maven Central | `me.koeda:chordsketch` | `kotlin.yml` on tag push | `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `SIGNING_KEY`, `SIGNING_PASSWORD` | `maven-central` rollup entry |
 | CocoaPods | `ChordSketch` | `post-release.yml` on `release: published` | `COCOAPODS_TRUNK_TOKEN` | `cocoapods` rollup entry |
 | JetBrains Marketplace | `me.koeda.chordsketch` | manual `./gradlew publishPlugin` | `JETBRAINS_MARKETPLACE_TOKEN` | not yet automated |
 | from source | `git clone` + `cargo install --path crates/cli` | always available | none | `source-build` job |
