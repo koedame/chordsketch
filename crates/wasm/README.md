@@ -85,7 +85,7 @@ the
 
 | Function | Description | Return type |
 |---|---|---|
-| `render_html_body(input)` | Render ChordPro to a body-only `<div class="song">…</div>` HTML fragment with no `<!DOCTYPE>` / `<html>` / `<head>` / embedded `<style>` — pair with `render_html_css` when the host supplies its own document envelope | `string` |
+| `render_html_body(input)` | Render ChordPro to a body-only `<div class="song">…</div>` HTML fragment with no `<!DOCTYPE>` / `<html>` / `<head>` / `<title>` / embedded `<style>` — pair with `render_html_css` when the host supplies its own document envelope | `string` |
 | `render_html_body_with_options(input, opts)` | Same as `render_html_body`, with `{ transpose?, config? }` | `string` |
 | `render_html_css()` | Return the canonical chord-over-lyrics CSS that `render_html` embeds inside `<style>` (byte-stable; safe to hash for cache-busting) | `string` |
 | `render_html_css_with_options(opts)` | Variant of `render_html_css` that honours `settings.wraplines` from `{ transpose?, config? }` (when `wraplines` is false, `.line` emits `flex-wrap: nowrap`) | `string` |
