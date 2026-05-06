@@ -561,12 +561,27 @@ jobs:
           # post-release API drift between README and published crates
           # is caught daily. Both are necessary; one alone leaves a
           # window where README and reality can disagree.
+          #
+          # The iReal Pro half of the README's Library Usage section
+          # (chordsketch-ireal + chordsketch-render-ireal) is tested
+          # under PR mode only, because both crates are in `##
+          # [Unreleased]` per CHANGELOG.md and have not been published
+          # to crates.io yet. The daily cron / release event paths
+          # therefore skip the iReal snippet until the first
+          # iReal-supporting release lands; flipping the iReal half on
+          # for crates.io mode is tracked in #2403 (the same follow-up
+          # that removes the cli-render-smoke continue-on-error
+          # carve-out). See #2400 (origin) and #2403 (release
+          # follow-up).
           SCRATCH=/tmp/library-smoke
           mkdir -p "$SCRATCH/src"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             CORE_DEP="chordsketch-chordpro = { path = \"$GITHUB_WORKSPACE/crates/chordpro\" }"
             RENDER_DEP="chordsketch-render-text = { path = \"$GITHUB_WORKSPACE/crates/render-text\" }"
-            MODE="workspace path deps (PR)"
+            IREAL_DEP="chordsketch-ireal = { path = \"$GITHUB_WORKSPACE/crates/ireal\" }"
+            IREAL_RENDER_DEP="chordsketch-render-ireal = { path = \"$GITHUB_WORKSPACE/crates/render-ireal\" }"
+            INCLUDE_IREAL=1
+            MODE="workspace path deps (PR, ChordPro + iReal)"
           else
             # Cargo `^0.3` means `>=0.3.0, <0.4.0` (the caret rules treat
             # the leftmost non-zero as the breaking-change boundary).
@@ -575,21 +590,61 @@ jobs:
             # Otherwise, daily smoke tests will silently stop resolving.
             CORE_DEP='chordsketch-chordpro = "^0.3"'
             RENDER_DEP='chordsketch-render-text = "^0.3"'
-            MODE="crates.io published"
+            IREAL_DEP=''
+            IREAL_RENDER_DEP=''
+            INCLUDE_IREAL=0
+            MODE="crates.io published (ChordPro only — iReal not yet published)"
           fi
           echo "library-smoke mode: $MODE"
-          cat > "$SCRATCH/Cargo.toml" << EOF
-          [package]
-          name = "library-smoke"
-          version = "0.0.0"
-          edition = "2021"
-          publish = false
+          {
+            echo '[package]'
+            echo 'name = "library-smoke"'
+            echo 'version = "0.0.0"'
+            echo 'edition = "2021"'
+            echo 'publish = false'
+            echo ''
+            echo '[dependencies]'
+            echo "$CORE_DEP"
+            echo "$RENDER_DEP"
+            if [ "$INCLUDE_IREAL" = "1" ]; then
+              echo "$IREAL_DEP"
+              echo "$IREAL_RENDER_DEP"
+            fi
+          } > "$SCRATCH/Cargo.toml"
+          if [ "$INCLUDE_IREAL" = "1" ]; then
+            cat > "$SCRATCH/src/main.rs" << 'EOF'
+          use chordsketch_chordpro::parser::parse;
+          use chordsketch_render_text::render_song;
 
-          [dependencies]
-          $CORE_DEP
-          $RENDER_DEP
+          use chordsketch_ireal::parse as parse_ireal;
+          use chordsketch_render_ireal::{render_svg, RenderOptions};
+
+          fn main() {
+              // --- ChordPro snippet (mirrors README ## Library Usage) ---
+              let input = "{title: Amazing Grace}\n{subtitle: Traditional}\n\n[G]Amazing [G7]grace, how [C]sweet the [G]sound";
+              let song = parse(input).unwrap();
+              let text = render_song(&song);
+              println!("{text}");
+
+              assert!(text.contains("Amazing Grace"), "missing title in output: {text}");
+              assert!(text.contains("Traditional"), "missing subtitle in output: {text}");
+              assert!(text.contains("sweet the"), "missing lyric in output: {text}");
+
+              // --- iReal Pro snippet (mirrors README ## Library Usage) ---
+              // Same URL embedded in the README snippet. Comes from
+              // crates/ireal/tests/fixtures/parser/tiny/url.txt.
+              let url = "irealb://%54=%66==%41%66%72%6F=%43==%31%72%33%34%4C%62%4B%63%75%37,%37%47,%2D%20%3E%43,%44,%37%42,%2D%23%46,%47%7C,%37%44,%41%2D,%45,%2D%45%7C,%37%42,%2D%23%46,%45%2D,%7C%44%3C%34%33%54%7C%43,%44%2D%37,%7C%46,%47%37,%43%20%7C%20==%31%34%30=%33";
+              let ireal_song = parse_ireal(url).expect("valid irealb URL");
+              let svg = render_svg(&ireal_song, &RenderOptions::default());
+
+              assert!(svg.starts_with("<?xml"), "iReal SVG should start with XML decl: {svg:.80}");
+              assert!(svg.contains("<svg"), "iReal SVG should contain <svg element");
+              assert!(svg.len() > 200, "iReal SVG suspiciously short ({} bytes)", svg.len());
+              println!("ireal svg: {} bytes", svg.len());
+          }
           EOF
-          cat > "$SCRATCH/src/main.rs" << 'EOF'
+          else
+            cat > "$SCRATCH/src/main.rs" << 'EOF'
           use chordsketch_chordpro::parser::parse;
           use chordsketch_render_text::render_song;
 
@@ -608,6 +663,7 @@ jobs:
               assert!(text.contains("sweet the"), "missing lyric in output: {text}");
           }
           EOF
+          fi
           cd "$SCRATCH"
           # Retry the cargo invocation up to three times with a 10-second
           # backoff to absorb transient crates.io 5xx / CDN flakes during

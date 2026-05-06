@@ -95,11 +95,11 @@ runs:
     # Workspace-HEAD jobs (source-build, usage-smoke) build from current
     # code and DO run these steps successfully, providing full end-to-end
     # coverage of the new commands on every PR. After the next release
-    # publishes iReal-supporting binaries to every channel, a follow-up
-    # PR removes `continue-on-error: true` so iReal smoke becomes
-    # hard-gating on every install path. Until then, failures still
-    # surface visibly in the job log — they just don't fail the job.
-    # See #2400.
+    # publishes iReal-supporting binaries to every channel, the carve-out
+    # is removed so iReal smoke becomes hard-gating on every install
+    # path — that work is tracked in #2403. Until then, failures still
+    # surface visibly in the job log; they just don't fail the job.
+    # See #2400 (origin) and #2403 (carve-out removal).
 
     - name: Render iReal Pro from irealb:// URL
       shell: bash
@@ -138,7 +138,13 @@ runs:
         # single song — the same structural sanity check used for the
         # ChordPro multi-file PDF above. If the .irealbook dispatch
         # silently rendered only the first song, this check fails.
-        single_size=$(wc -c < out-ireal-file.svg)
+        # Re-render the single-song .irealb in this step so the size
+        # comparison is independent of whether the prior continue-on-
+        # error step succeeded or not — otherwise a missing
+        # out-ireal-file.svg would make `wc -c` error out and silently
+        # invalidate this assertion.
+        chordsketch "${{ inputs.fixtures-dir }}/sample.irealb" > out-ireal-single.svg
+        single_size=$(wc -c < out-ireal-single.svg)
         book_size=$(wc -c < out-ireal-book.svg)
         if [ "$book_size" -le "$single_size" ]; then
           echo "Multi-song iRealbook SVG ($book_size bytes) is not larger than single-song .irealb SVG ($single_size bytes)" >&2

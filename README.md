@@ -34,7 +34,7 @@ PNG / PDF, and bidirectional ChordPro ↔ iReal Pro conversion.
 ### iReal Pro
 
 - Full `irealb://` URL parser (single-song and multi-song collections)
-  with zero external dependencies in the foundation crate
+  with zero external dependencies in the core crate
 - Chart renderer producing SVG, PNG (via resvg), and PDF (via svg2pdf)
   — 4-bars-per-line grid layout, repeat / final / double barlines,
   N-th-ending brackets, section-letter labels, and Bravura SMuFL music
@@ -202,7 +202,7 @@ chordsketch 'irealb://%54=…'
 # Render an iReal Pro chart from an .irealb file (single song)
 chordsketch song.irealb
 
-# Render an iReal Pro multi-song collection from an .irealbook file
+# Render an iReal Pro chart from an .irealbook file (multi-song collection)
 chordsketch songs.irealbook
 ```
 
@@ -227,8 +227,8 @@ iReal Pro:
 use chordsketch_ireal::parse as parse_ireal;
 use chordsketch_render_ireal::{render_svg, RenderOptions};
 
-let url = "irealb://%54=…";
-let song = parse_ireal(url).unwrap();
+let url = "irealb://%54=%66==%41%66%72%6F=%43==%31%72%33%34%4C%62%4B%63%75%37,%37%47,%2D%20%3E%43,%44,%37%42,%2D%23%46,%47%7C,%37%44,%41%2D,%45,%2D%45%7C,%37%42,%2D%23%46,%45%2D,%7C%44%3C%34%33%54%7C%43,%44%2D%37,%7C%46,%47%37,%43%20%7C%20==%31%34%30=%33";
+let song = parse_ireal(url).expect("valid irealb URL");
 let svg = render_svg(&song, &RenderOptions::default());
 println!("{svg}");
 ```

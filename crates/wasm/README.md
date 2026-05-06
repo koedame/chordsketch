@@ -5,8 +5,10 @@
 # chordsketch-wasm
 
 The Rust-side WebAssembly bindings crate for [ChordSketch](https://github.com/koedame/chordsketch).
-It wraps `chordsketch-chordpro` and the three renderers with `wasm-bindgen`
-entry points that are consumed from JavaScript/TypeScript.
+It wraps `chordsketch-chordpro` (with text / HTML / PDF renderers) plus
+the iReal Pro parser, chart renderer, and ChordPro ↔ iReal Pro converter
+(`chordsketch-ireal`, `chordsketch-render-ireal`, `chordsketch-convert`)
+with `wasm-bindgen` entry points consumed from JavaScript/TypeScript.
 
 **If you want to use ChordSketch from Node.js or a browser, install
 [`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsketch/wasm)
