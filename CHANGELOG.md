@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-06
+
 ### Added
 
 #### iReal Pro support (multi-format track, #2050)
@@ -36,6 +38,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   filter group, and `bundle.fileAssociations` registers `.irealb` /
   `.irealbook` as OS-level associations on macOS, Windows, and Linux.
   (#2358)
+- `@chordsketch/ui-web`: routes `irealb://` input through
+  `render_ireal_svg` to render a read-only iReal Pro chart preview
+  alongside the ChordPro pipeline. (#2362)
+- VS Code extension: registers `.irealb` / `.irealbook` as a new
+  language id with TextMate grammar so iReal files highlight
+  separately from ChordPro. (#2359)
+- JetBrains plugin and Zed extension: register `.irealb` /
+  `.irealbook` extensions for the same separate-language treatment.
+  (#2360)
+
+#### iReal Pro bar-grid editor (`@chordsketch/ui-irealb-editor`)
+
+- New private workspace package — pluggable bar-grid GUI editor for
+  iReal Pro charts that slots into `@chordsketch/ui-web`'s
+  `MountOptions.createEditor` via the `EditorAdapter` contract.
+  Scaffolded with header metadata editing (title / composer / style /
+  key / time / tempo / transpose) plus a 4-bars-per-line read-only
+  grid. (#2363)
+- Bar popover for inline editing of chord, barline, ending, and
+  music-symbol fields. (#2364)
+- Structural section / bar add / remove / reorder operations with
+  ChordPro round-trip stability. (#2365)
+- Keyboard shortcuts for bar delete and reorder. (#2376)
+- Roving-tabindex grid navigation, `role="grid"` / `role="row"` /
+  `role="gridcell"` ARIA semantics, and a polite live region for
+  structural-edit announcements. (#2368)
+- Playground / `@chordsketch/ui-web`: runtime editor swap via
+  `ChordSketchUiHandle.replaceEditor` driving a ChordPro / iRealb
+  format toggle in the playground header. (#2366)
+- Desktop (Tauri): Open / Save dispatch routes `.irealb` /
+  `.irealbook` files to the grid editor, with a View → Edit as Grid
+  / Edit as URL Text menu pair to switch between the bar-grid GUI
+  and the raw URL textarea. (#2367)
 
 #### Bindings (multi-format track, #2067)
 
@@ -107,6 +142,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preview pane fills available height. (#2281)
 - Playground / `ui-web`: drop double-wrapped HTML doc, ship favicon,
   add defensive iframe reload. (#2322)
+- `@chordsketch/ui-web`: `mountChordSketchUi` now awaits
+  `Renderers.init()` before invoking the editor factory, so factories
+  may safely use wasm-backed helpers in their constructors.
+  Playground gains a Playwright browser smoke
+  (`packages/playground/tests-e2e/`) so the wasm-init race that
+  motivated this fix cannot recur silently. (#2397)
 
 ## [0.3.0] - 2026-04-25
 
