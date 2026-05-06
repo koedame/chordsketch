@@ -58,12 +58,12 @@ a dual-package layout).
 
 ## API
 
-The exported wasm-bindgen functions are grouped below. The
-`### iReal Pro` subsection mirrors the structure of the
-[`### iReal Pro conversion` table in `packages/npm/README.md`](https://github.com/koedame/chordsketch/blob/main/packages/npm/README.md#ireal-pro-conversion)
-and stays in lockstep with the `*_ireal*` / `*_irealb*` /
-`convert_*irealb*` exports in
-[`crates/wasm/src/lib.rs`](src/lib.rs).
+The tables below cover every `#[wasm_bindgen]`-exported `pub fn`
+in [`crates/wasm/src/lib.rs`](src/lib.rs) (the `start` lifecycle
+hook and the `console` `extern "C"` shim are intentionally
+omitted). The `### iReal Pro` subsection mirrors the structure of
+the
+[`### iReal Pro conversion` table in `packages/npm/README.md`](https://github.com/koedame/chordsketch/blob/main/packages/npm/README.md#ireal-pro-conversion).
 
 ### Basic rendering
 
@@ -81,6 +81,15 @@ and stays in lockstep with the `*_ireal*` / `*_irealb*` /
 | `render_html_with_options(input, opts)` | Same as `render_html`, with `{ transpose?, config? }` | `string` |
 | `render_pdf_with_options(input, opts)` | Same as `render_pdf`, with `{ transpose?, config? }` | `Uint8Array` |
 
+### Body-only HTML and stylesheet
+
+| Function | Description | Return type |
+|---|---|---|
+| `render_html_body(input)` | Render ChordPro to a body-only `<div class="song">…</div>` HTML fragment with no `<!DOCTYPE>` / `<html>` / `<head>` / `<title>` / embedded `<style>` — pair with `render_html_css` when the host supplies its own document envelope | `string` |
+| `render_html_body_with_options(input, opts)` | Same as `render_html_body`, with `{ transpose?, config? }` | `string` |
+| `render_html_css()` | Return the canonical chord-over-lyrics CSS that `render_html` embeds inside `<style>` (byte-stable; safe to hash for cache-busting) | `string` |
+| `render_html_css_with_options(opts)` | Variant of `render_html_css` that honours `settings.wraplines` from `{ transpose?, config? }` (when `wraplines` is false, `.line` emits `flex-wrap: nowrap`) | `string` |
+
 ### Captured warnings
 
 | Function | Description | Return type |
@@ -88,9 +97,23 @@ and stays in lockstep with the `*_ireal*` / `*_irealb*` /
 | `renderTextWithWarnings(input)` | Plain-text render that captures warnings instead of forwarding to `console.warn` | `{ output: string, warnings: string[] }` |
 | `renderHtmlWithWarnings(input)` | HTML render with captured warnings | `{ output: string, warnings: string[] }` |
 | `renderPdfWithWarnings(input)` | PDF render with captured warnings | `{ output: Uint8Array, warnings: string[] }` |
+| `renderHtmlBodyWithWarnings(input)` | Body-only HTML fragment with captured warnings (body counterpart to `renderHtmlWithWarnings`) | `{ output: string, warnings: string[] }` |
 | `renderTextWithWarningsAndOptions(input, opts)` | `renderTextWithWarnings` + `{ transpose?, config? }` options | `{ output: string, warnings: string[] }` |
 | `renderHtmlWithWarningsAndOptions(input, opts)` | `renderHtmlWithWarnings` + `{ transpose?, config? }` options | `{ output: string, warnings: string[] }` |
 | `renderPdfWithWarningsAndOptions(input, opts)` | `renderPdfWithWarnings` + `{ transpose?, config? }` options | `{ output: Uint8Array, warnings: string[] }` |
+| `renderHtmlBodyWithWarningsAndOptions(input, opts)` | `renderHtmlBodyWithWarnings` + `{ transpose?, config? }` options | `{ output: string, warnings: string[] }` |
+
+### Validation
+
+| Function | Description | Return type |
+|---|---|---|
+| `validate(input)` | Validate ChordPro input and return any parse errors as structured records (empty array if valid). Matches the NAPI `ValidationError[]` shape and the FFI `ValidationError` dictionary | `ValidationError[]` (`{ line: number, column: number, message: string }`, line / column one-based) |
+
+### Chord diagrams
+
+| Function | Description | Return type |
+|---|---|---|
+| `chord_diagram_svg(chord, instrument)` | Render a chord diagram as inline SVG. `instrument` is `"guitar"`, `"ukulele"` (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `null` when the chord is not in the built-in voicing database; throws on unknown instrument | `string \| null` (SVG markup) |
 
 ### iReal Pro
 
