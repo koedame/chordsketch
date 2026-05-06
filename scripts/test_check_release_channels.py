@@ -225,22 +225,70 @@ class VerifyChannelTests(unittest.TestCase):
     def test_ghcr_head_ok_path(self) -> None:
         channel = _fake_channel(kind="ghcr", package="koedame/chordsketch")
         with patch(
+            "check_release_channels._ghcr_pull_token",
+            return_value="fake-bearer-token",
+        ), patch(
             "check_release_channels._http_head_ok",
             return_value=True,
         ) as mock_head:
             result = check_release_channels.verify_channel(channel, "v0.2.0", force_stale=False)
         self.assertTrue(result.ok)
-        # The URL must include the v-prefixed tag, matching the Docker
-        # Registry v2 manifest path contract.
-        called_url = mock_head.call_args.args[0]
-        self.assertEqual(called_url, "https://ghcr.io/v2/koedame/chordsketch/manifests/v0.2.0")
+        # The image tag is the bare semver (`0.2.0`, not `v0.2.0`) —
+        # `docker.yml` uses `metadata-action` with
+        # `pattern={{version}}` which strips the `v` from the git tag.
+        # Probing with `manifests/v0.2.0` 404'd on every release before
+        # this fix (#2418). The probe must also pass a Bearer token
+        # because GHCR requires auth even for public packages.
+        called = mock_head.call_args
+        self.assertEqual(
+            called.args[0],
+            "https://ghcr.io/v2/koedame/chordsketch/manifests/0.2.0",
+        )
+        self.assertEqual(called.kwargs.get("bearer_token"), "fake-bearer-token")
+        # GHCR's manifest endpoint returns 404 without an Accept header
+        # negotiating a manifest media type. Both OCI and Docker v2
+        # formats must be advertised — `docker.yml` produces multi-arch
+        # images that come back as either an OCI image-index or a
+        # Docker manifest-list.
+        accept = called.kwargs.get("accept", "")
+        self.assertIn("application/vnd.oci.image.index.v1+json", accept)
+        self.assertIn(
+            "application/vnd.docker.distribution.manifest.list.v2+json",
+            accept,
+        )
+        self.assertEqual(result.observed, "0.2.0")
+        self.assertEqual(result.expected, "0.2.0")
 
     def test_ghcr_head_fail_path(self) -> None:
         channel = _fake_channel(kind="ghcr", package="koedame/chordsketch")
-        with patch("check_release_channels._http_head_ok", return_value=False):
+        with patch(
+            "check_release_channels._ghcr_pull_token",
+            return_value="fake-bearer-token",
+        ), patch(
+            "check_release_channels._http_head_ok",
+            return_value=False,
+        ):
             result = check_release_channels.verify_channel(channel, "v0.2.0", force_stale=False)
         self.assertFalse(result.ok)
         self.assertIn("not publicly reachable", result.detail)
+
+    def test_ghcr_token_unavailable_reports_distinct_error(self) -> None:
+        # When `_ghcr_pull_token` returns None (token endpoint
+        # unreachable, or package is private), the manifest GET is
+        # never attempted — the failure is attributed to the visibility
+        # / token layer specifically so on-call can act on it directly
+        # without inspecting the manifest URL.
+        channel = _fake_channel(kind="ghcr", package="koedame/chordsketch")
+        with patch(
+            "check_release_channels._ghcr_pull_token",
+            return_value=None,
+        ), patch(
+            "check_release_channels._http_head_ok",
+        ) as mock_head:
+            result = check_release_channels.verify_channel(channel, "v0.2.0", force_stale=False)
+        self.assertFalse(result.ok)
+        self.assertIn("pull token unavailable", result.detail)
+        mock_head.assert_not_called()
 
     def test_pypi_mismatch(self) -> None:
         channel = _fake_channel(kind="pypi", package="chordsketch")
@@ -264,27 +312,33 @@ class VerifyChannelTests(unittest.TestCase):
     # response-parsing breaks. See #1516.
     # ----------------------------------------------------------------
 
-    def test_docker_hub_match_no_double_v_prefix(self) -> None:
-        """Regression test for #1512: Docker Hub returns `name: v0.2.0` (with
-        the `v` already), so `observed` must not add another `v`."""
+    def test_docker_hub_match_bare_semver_tag(self) -> None:
+        """Regression test for #2418: Docker Hub tags are bare semver
+        (`0.2.0`, `0.2`, `latest`) — `docker.yml` uses metadata-action
+        with `pattern={{version}}` which strips the `v` prefix from the
+        git tag. The probe URL must therefore target `tags/0.2.0/`,
+        and the API's `name` field comes back as `0.2.0` (without `v`).
+        Earlier the probe targeted `tags/v0.2.0/` and 404'd on every
+        release."""
         channel = _fake_channel(kind="docker-hub", package="koedame/chordsketch")
         with patch(
             "check_release_channels._http_get_json",
-            return_value={"name": "v0.2.0"},
+            return_value={"name": "0.2.0"},
         ) as mock_http:
             result = check_release_channels.verify_channel(channel, "v0.2.0", force_stale=False)
         self.assertTrue(result.ok, f"expected OK, got {result}")
-        self.assertEqual(result.observed, "v0.2.0")  # NOT "vv0.2.0"
+        self.assertEqual(result.observed, "0.2.0")
+        self.assertEqual(result.expected, "0.2.0")
         self.assertEqual(
             mock_http.call_args.args[0],
-            "https://hub.docker.com/v2/repositories/koedame/chordsketch/tags/v0.2.0/",
+            "https://hub.docker.com/v2/repositories/koedame/chordsketch/tags/0.2.0/",
         )
 
     def test_docker_hub_mismatch(self) -> None:
         channel = _fake_channel(kind="docker-hub", package="koedame/chordsketch")
         with patch(
             "check_release_channels._http_get_json",
-            return_value={"name": "v0.1.9"},
+            return_value={"name": "0.1.9"},
         ):
             result = check_release_channels.verify_channel(channel, "v0.2.0", force_stale=False)
         self.assertFalse(result.ok)
@@ -430,18 +484,35 @@ end
         )
 
     def test_maven_central_match(self) -> None:
+        # Maven groupId is `me.koeda` (reverse-DNS of the koeda.me
+        # domain registered on Sonatype Central Portal), NOT
+        # `io.github.koedame`. The probe also reads the canonical
+        # `repo1.maven.org/maven2/<group>/<artifact>/maven-metadata.xml`
+        # rather than `search.maven.org/solrsearch` because the latter
+        # was empirically not indexing this artifact, surfacing as
+        # `<error>` in the rollup table for every release until #2418.
         channel = _fake_channel(
-            kind="maven-central", package="io.github.koedame:chordsketch"
+            kind="maven-central", package="me.koeda:chordsketch"
+        )
+        fake_metadata = (
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            "<metadata>\n"
+            "  <groupId>me.koeda</groupId>\n"
+            "  <artifactId>chordsketch</artifactId>\n"
+            "  <versioning>\n"
+            "    <latest>0.2.0</latest>\n"
+            "    <release>0.2.0</release>\n"
+            "    <versions>\n"
+            "      <version>0.1.0</version>\n"
+            "      <version>0.2.0</version>\n"
+            "    </versions>\n"
+            "    <lastUpdated>20260506110000</lastUpdated>\n"
+            "  </versioning>\n"
+            "</metadata>\n"
         )
         with patch(
-            "check_release_channels._http_get_json",
-            return_value={
-                "response": {
-                    "docs": [
-                        {"latestVersion": "0.2.0"},
-                    ]
-                }
-            },
+            "check_release_channels._http_get_text",
+            return_value=fake_metadata,
         ) as mock_http:
             result = check_release_channels.verify_channel(
                 channel, "v0.2.0", force_stale=False
@@ -449,27 +520,54 @@ end
         self.assertTrue(result.ok, f"expected OK, got {result}")
         self.assertEqual(result.observed, "0.2.0")
         called_url = mock_http.call_args.args[0]
-        # The solrsearch query must URL-encode the AND+group+artifact
-        # expression correctly so ":" and spaces round-trip through
-        # maven's search index.
-        self.assertIn(
-            "q=g%3Aio.github.koedame%20AND%20a%3Achordsketch",
+        # The group's dots must be converted to slashes in the
+        # repository path: `me.koeda` → `me/koeda/`.
+        self.assertEqual(
             called_url,
+            "https://repo1.maven.org/maven2/me/koeda/chordsketch/maven-metadata.xml",
         )
 
-    def test_maven_central_not_found(self) -> None:
+    def test_maven_central_metadata_missing_release(self) -> None:
+        # If the metadata.xml is reachable but lacks a <release> element,
+        # treat as error rather than silently passing on `<missing>`.
         channel = _fake_channel(
-            kind="maven-central", package="io.github.koedame:chordsketch"
+            kind="maven-central", package="me.koeda:chordsketch"
+        )
+        bad_metadata = (
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            "<metadata>\n"
+            "  <groupId>me.koeda</groupId>\n"
+            "  <artifactId>chordsketch</artifactId>\n"
+            "  <versioning>\n"
+            "    <versions/>\n"
+            "  </versioning>\n"
+            "</metadata>\n"
         )
         with patch(
-            "check_release_channels._http_get_json",
-            return_value={"response": {"docs": []}},
+            "check_release_channels._http_get_text",
+            return_value=bad_metadata,
         ):
             result = check_release_channels.verify_channel(
                 channel, "v0.2.0", force_stale=False
             )
         self.assertFalse(result.ok)
-        self.assertIn("not found on Maven Central", result.detail)
+        self.assertIn("missing <release>", result.detail)
+
+    def test_maven_central_metadata_unreachable(self) -> None:
+        # Network / 404 / other transport failure must surface as a
+        # _error result rather than crashing the whole rollup.
+        channel = _fake_channel(
+            kind="maven-central", package="me.koeda:chordsketch"
+        )
+        with patch(
+            "check_release_channels._http_get_text",
+            side_effect=RuntimeError("HTTP 404"),
+        ):
+            result = check_release_channels.verify_channel(
+                channel, "v0.2.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertIn("Maven Central metadata error", result.detail)
 
 
 class CliOutputOrderingTests(unittest.TestCase):
