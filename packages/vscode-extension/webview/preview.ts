@@ -154,6 +154,19 @@ function formatError(e: unknown): string {
 let CHORDSKETCH_CSS = '';
 
 /**
+ * Monotonic per-WebView counter feeding the `wrapHtml` cache-bust
+ * comment. Incremented before each iframe `srcdoc` assignment so the
+ * produced string is byte-different on every render — required
+ * because the iframe is hidden via `style.display = 'none'` while
+ * the user is in Plain text mode and Chromium can elide the
+ * same-value re-assignment navigation when toggling back to HTML,
+ * leaving the iframe blank even though the attribute is present.
+ * Mirrors the `srcdocCounter` in `packages/ui-web/src/index.ts` per
+ * `.claude/rules/fix-propagation.md` (#2421).
+ */
+let srcdocCounter = 0;
+
+/**
  * Wraps a body-only HTML fragment from `render_html_body_with_options`
  * inside a complete document for the preview iframe.
  *
@@ -181,12 +194,17 @@ let CHORDSKETCH_CSS = '';
  * is intentional — the canonical CSS already covers it; the previous
  * override was load-bearing only because of the double-wrap and is
  * not worth preserving.
+ *
+ * `cacheBust` is rendered as an HTML comment in `<head>` so the
+ * resulting string is byte-different on every render — see the
+ * `srcdocCounter` doc comment above for why this matters (#2421).
  */
-function wrapHtml(body: string): string {
+function wrapHtml(body: string, cacheBust: number): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- r:${cacheBust} -->
 <style>
 ${CHORDSKETCH_CSS}
 /* VS Code preview theme overrides — applied after the canonical
@@ -288,9 +306,17 @@ function renderPreview(text: string): void {
     if (viewMode === 'html') {
       const body = render_html_body_with_options(text, options);
       hideError();
-      previewFrame.srcdoc = wrapHtml(body);
-      previewFrame.style.display = 'block';
+      // Reveal the iframe BEFORE assigning `srcdoc` so the navigation
+      // happens against an attached frame. Chromium can defer
+      // navigation on a `display: none` iframe and, paired with the
+      // same-value coalescing covered by `srcdocCounter`, that path
+      // produced the format-toggle blank-preview symptom (#2421).
+      // `wrapHtml` cache-busts the produced string monotonically so
+      // the IDL-property write is guaranteed to differ from the
+      // previous render.
       textFrame.style.display = 'none';
+      previewFrame.style.display = 'block';
+      previewFrame.srcdoc = wrapHtml(body, ++srcdocCounter);
     } else {
       const plain = render_text_with_options(text, options);
       hideError();
