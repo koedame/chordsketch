@@ -310,10 +310,20 @@ const RENDER_DEBOUNCE_MS = 300;
 // user-reported "Blocked script execution in 'about:blank'" warning
 // and the format-toggle blank-preview symptom on certain Chrome
 // configurations.
-const HTML_FRAME_TEMPLATE = (body: string): string => `<!DOCTYPE html>
+//
+// `cacheBust` is a monotonic per-mount counter rendered as an HTML
+// comment inside `<head>`. It guarantees the resulting `srcdoc`
+// string is byte-different on every render so the iframe's
+// navigation hook cannot elide the assignment as a no-op when the
+// produced body would otherwise be byte-equal to the previous
+// render — the residual format-toggle blank-preview symptom #2421
+// reported after the #2321 / PR #2322 fix landed. The comment is
+// ignored by HTML rendering and adds ~12 bytes per srcdoc.
+const HTML_FRAME_TEMPLATE = (body: string, cacheBust: number): string => `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
+<!-- r:${cacheBust} -->
 </head>
 <body>${body}</body>
 </html>`;
@@ -905,6 +915,13 @@ export async function mountChordSketchUi(
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // Monotonic per-mount counter feeding the `HTML_FRAME_TEMPLATE`
+  // cache-bust comment. Incremented before every iframe `srcdoc`
+  // assignment so the produced string is byte-different on every
+  // render, defeating the same-string-skip-navigation quirk that
+  // surfaced after the #2321 fix (#2421).
+  let srcdocCounter = 0;
+
   const getTranspose = (): number => {
     const val = parseInt(transposeInput.value, 10);
     // Clamp to `TRANSPOSE_MIN..=TRANSPOSE_MAX`. Empty/non-numeric
@@ -990,11 +1007,9 @@ export async function mountChordSketchUi(
         const svg = renderOpts
           ? renderers.renderSvg(input, renderOpts)
           : renderers.renderSvg(input);
-        // Mirror the same empty-then-set assignment used on the
-        // ChordPro html branch below — see #2321 for the structural
-        // cause of the blank-preview symptom on `srcdoc` reuse.
-        preview.srcdoc = '';
-        preview.srcdoc = HTML_FRAME_TEMPLATE(svg);
+        // Cache-busting `srcdoc` write — see the matching ChordPro
+        // html branch below for the rationale (#2421).
+        preview.srcdoc = HTML_FRAME_TEMPLATE(svg, ++srcdocCounter);
         hideError();
       } catch (e) {
         showError(formatError(e));
@@ -1010,20 +1025,22 @@ export async function mountChordSketchUi(
         const html = renderOpts
           ? renderers.renderHtml(input, renderOpts)
           : renderers.renderHtml(input);
-        // Defense in depth, paired with the double-wrap fix above.
-        // The user reported a blank-preview symptom on HTML → other →
-        // HTML toggle (#2321) that we could not reproduce in headless
-        // Chromium. The structural cause — `srcdoc` containing two
-        // `<!DOCTYPE>` / `<head>` / `<body>` pairs that survived only
-        // via HTML5 nested-document recovery — is fixed by the
-        // body-fragment + minimal-frame switch. If a separate
-        // same-string-assignment skip-navigation quirk also
-        // contributes, clearing `srcdoc` to '' before assigning the
-        // new content forces a navigation cycle at near-zero cost.
-        // Drop this empty-then-set if the symptom turns out to be
-        // fully covered by the double-wrap fix.
-        preview.srcdoc = '';
-        preview.srcdoc = HTML_FRAME_TEMPLATE(html);
+        // Force a fresh iframe navigation on every render. The
+        // empty-then-set sequence introduced by #2321 / PR #2322
+        // turned out to leave the format-toggle blank-preview
+        // symptom on the HTML → Text → HTML path reachable in
+        // some Chrome configurations: two synchronous writes to
+        // the same IDL property in a single task can be coalesced
+        // by the browser, and when the resulting attribute value
+        // is byte-equal to the previous render the navigation
+        // hook treats it as a no-op — leaving the iframe blank
+        // when its document had been discarded while hidden via
+        // `display: none`. `HTML_FRAME_TEMPLATE` now emits a
+        // monotonically-increasing cache-bust comment in `<head>`
+        // so the assigned string is guaranteed to be different on
+        // every render, which forces the navigation regardless of
+        // attribute coalescing or document discard. (#2421)
+        preview.srcdoc = HTML_FRAME_TEMPLATE(html, ++srcdocCounter);
         hideError();
       } else if (format === 'text') {
         showPane('text');
