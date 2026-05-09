@@ -201,8 +201,14 @@ const designSystemTheme = EditorView.theme(
       outline: '1px solid var(--cs-crimson-300, #EC8AA3)',
     },
     '&.cm-focused': {
+      // No focus outline / inset border. The CodeMirror caret
+      // (`--cs-crimson-500`, drawn 2 px wide via the `.cm-cursor`
+      // rule above) and the selection background already make
+      // the active state legible without a frame around the
+      // whole pane. Suppress CodeMirror's default `outline:
+      // 1px dotted` so the editor sits flush inside its host
+      // pane.
       outline: 'none',
-      boxShadow: 'inset 0 0 0 1px var(--cs-crimson-500, #BD1642)',
     },
   },
   { dark: false },
