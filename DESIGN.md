@@ -20,9 +20,9 @@ components, and tone. Implementation references the tokens defined in
   background); raster derivatives ship as `assets/logo-128.png` (VS Code
   extension icon) and `assets/logo-256.png` (high-DPI / Marketplace
   README headers).
-- **Wordmark** — "ChordSketch" set in Noto Sans JP 700. Japanese
-  reading コードスケッチ is documented for ja-JP localization but
-  does not appear in default UI surfaces.
+- **Wordmark** — "ChordSketch" set in Noto Sans JP 700. The ja-JP
+  localization name (romanized: "Koodo Suketchi") is documented in the
+  locale resource file; it does not appear in default English UI surfaces.
 - **Clearspace** — At least ¼ of the mark's height on every side. When
   paired with the wordmark, leave ≥ 24px between the two.
 - **Minimum size** — 24px (mobile UI) / 32px (print).

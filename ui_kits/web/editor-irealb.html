@@ -104,8 +104,8 @@ a { color: inherit; text-decoration: none; }
 /* 4 bars per line in equal-width columns. iReal Pro's printed layouts
    alternate between equal and content-driven widths depending on the
    chart, but the equal-grid look is closer to the engraved feel of the
-   Even 8ths 3 / Rock 3 PDFs in /tmp/, and avoids flex auto-width
-   reflowing the chart awkwardly when content density differs. */
+   iReal Pro "Even 8ths 3" / "Rock 3" printed exports, and avoids flex
+   auto-width reflowing the chart awkwardly when content density differs. */
 .chart-line { display: grid; grid-template-columns: repeat(4, 1fr); align-items: stretch; }
 /* Coda destination — same column geometry as the main chart so the bars
    line up vertically with the form above; only an extra margin separates
@@ -205,7 +205,7 @@ a { color: inherit; text-decoration: none; }
 
 /* Section marker — small black-filled square with white letter, anchored at
    the top-left of the first bar of a section. Matches iReal Pro's printed
-   chart convention (see /tmp/Even 8ths 3.pdf, /tmp/Rock 3.pdf). */
+   chart convention for section labels. */
 .bar .section-marker {
   position: absolute;
   left: -20px;
@@ -324,10 +324,9 @@ a { color: inherit; text-decoration: none; }
    superscript next to the root. Quality (m, 7, ø7, Δ7, m7♭5) — small
    subscript that hangs slightly below the baseline. Multiple
    sub-quality lines stack vertically (e.g. "7♯9" over "♯5").
-   Matches iReal Pro's chart engraving in /tmp/Even 8ths 3.pdf and
-   /tmp/Rock 3.pdf. Implemented with inline-block + vertical-align so
-   the typography flows like text (the PDFs are typeset, not laid out
-   with flexbox). */
+   Matches iReal Pro's chart engraving style. Implemented with
+   inline-block + vertical-align so the typography flows like text
+   (iReal Pro PDFs are typeset, not laid out with flexbox). */
 .chord {
   display: inline-block;
   white-space: nowrap;
