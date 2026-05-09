@@ -1,14 +1,19 @@
+/// <reference types="vite/client" />
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import init, {
-  parseIrealb,
-  renderIrealSvg,
-  serializeIrealb,
-  validate,
-  version as wasmVersion,
-} from '@chordsketch/wasm';
-import { SAMPLE_CHORDPRO, SAMPLE_IREALB } from '@chordsketch/ui-web';
+// React Grab — point at any UI element and press ⌘C / Ctrl-C to
+// copy the source-file location + React component name + HTML
+// snippet to the clipboard, ready to paste into a coding agent.
+// Local dev only; `import.meta.env.DEV` is the Vite-recommended
+// gate per https://github.com/aidenybai/react-grab so the script
+// is dropped from the production bundle.
+if (import.meta.env.DEV) {
+  void import('react-grab');
+}
+
+import init, { validate, version as wasmVersion } from '@chordsketch/wasm';
+import { SAMPLE_CHORDPRO } from '@chordsketch/ui-web';
 import {
   PdfExport,
   RendererPreview,
@@ -16,20 +21,24 @@ import {
   type SourceEditorHandle,
 } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
-import { createIrealbEditor } from '@chordsketch/ui-irealb-editor';
-import '@chordsketch/ui-irealb-editor/style.css';
 
 import './playground.css';
 
 // ---------------------------------------------------------------
 // WASM bootstrap.
 // ---------------------------------------------------------------
+//
+// `init()` must resolve before any wasm-backed function is called.
+// `<RendererPreview>` and `<SourceEditor>` from `@chordsketch/react`
+// either don't depend on wasm (the editor is pure CodeMirror) or
+// gate their first render on the same module's lazy loader, so the
+// playground only needs to kick off `init()` once at module load
+// to warm the path.
 
 const wasmReady: Promise<unknown> = init();
 
 // Snapshot the wasm version once init resolves so the status bar
-// can show it without firing a fresh import on every render. The
-// `version()` export is synchronous after wasm init.
+// can show it without firing a fresh import on every render.
 let cachedVersion: string | null = null;
 void wasmReady.then(() => {
   try {
@@ -116,14 +125,8 @@ const DEFAULT_SAMPLE = SAMPLES[0]!;
 // ---------------------------------------------------------------
 // localStorage persistence.
 // ---------------------------------------------------------------
-//
-// Per-format key so swapping ChordPro ↔ iRealb does not clobber
-// the other format's draft. Reads are guarded against `null`
-// (private mode / disabled storage); writes are best-effort.
 
-const STORAGE_KEY_CHORDPRO = 'chordsketch:playground:chordpro:source';
-const STORAGE_KEY_IREALB = 'chordsketch:playground:irealb:source';
-const STORAGE_KEY_FORMAT = 'chordsketch:playground:input-format';
+const STORAGE_KEY_SOURCE = 'chordsketch:playground:chordpro:source';
 
 function loadFromStorage(key: string, fallback: string): string {
   if (typeof window === 'undefined') return fallback;
@@ -142,34 +145,6 @@ function saveToStorage(key: string, value: string): void {
   } catch {
     // QuotaExceeded / disabled storage — ignore.
   }
-}
-
-// ---------------------------------------------------------------
-// URL hash for input format deep-link.
-// ---------------------------------------------------------------
-
-type InputFormat = 'chordpro' | 'irealb';
-
-function readFormatHash(): InputFormat | null {
-  if (typeof window === 'undefined') return null;
-  const m = window.location.hash.match(/(?:^|[#&])format=(chordpro|irealb)\b/);
-  return m ? (m[1] as InputFormat) : null;
-}
-
-function writeFormatHash(format: InputFormat): void {
-  if (typeof window === 'undefined') return;
-  const body = window.location.hash.replace(/^#/, '');
-  const params = new URLSearchParams(body || '');
-  params.set('format', format);
-  window.history.replaceState(window.history.state, '', `#${params.toString()}`);
-}
-
-function detectInitialFormat(): InputFormat {
-  const fromHash = readFormatHash();
-  if (fromHash) return fromHash;
-  const fromStorage = loadFromStorage(STORAGE_KEY_FORMAT, '');
-  if (fromStorage === 'chordpro' || fromStorage === 'irealb') return fromStorage;
-  return 'chordpro';
 }
 
 // ---------------------------------------------------------------
@@ -216,130 +191,7 @@ function runValidate(source: string): Warning[] {
 }
 
 // ---------------------------------------------------------------
-// IrealbPane — React wrapper around the imperative bar-grid
-// editor. Mirrors the structure used in earlier revisions of the
-// playground; restored here per the "全機能" directive.
-// ---------------------------------------------------------------
-
-const SVG_FRAME_TEMPLATE = (svg: string, cacheBust: number): string =>
-  `<!DOCTYPE html><html><head><meta charset="UTF-8"><!-- r:${cacheBust} --><style>html,body{margin:0;padding:1rem;background:#FFFFFF;font-family:"Noto Sans JP",system-ui,-apple-system,sans-serif}svg{display:block;max-width:100%;height:auto}</style></head><body>${stripXmlProlog(
-    svg,
-  )}</body></html>`;
-
-function stripXmlProlog(svg: string): string {
-  return svg.replace(/^\s*<\?xml[^?]*\?>\s*/u, '');
-}
-
-interface IrealbPaneProps {
-  initialValue: string;
-  onChange: (value: string) => void;
-}
-
-function IrealbPane({ initialValue, onChange }: IrealbPaneProps): JSX.Element {
-  const editorContainerRef = useRef<HTMLDivElement>(null);
-  const previewIframeRef = useRef<HTMLIFrameElement>(null);
-  const cacheBustRef = useRef<number>(0);
-  const [source, setSource] = useState<string>(initialValue);
-  const [svg, setSvg] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const host = editorContainerRef.current;
-    if (!host) return;
-    let cancelled = false;
-    let cleanup: (() => void) | null = null;
-    wasmReady
-      .then(() => {
-        if (cancelled || !host) return;
-        const adapter = createIrealbEditor({
-          initialValue,
-          wasm: { parseIrealb, serializeIrealb },
-        });
-        host.replaceChildren(adapter.element);
-        const off = adapter.onChange((next: string) => {
-          setSource(next);
-          onChange(next);
-        });
-        cleanup = () => {
-          off();
-          adapter.destroy();
-        };
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : String(e));
-      });
-    return () => {
-      cancelled = true;
-      cleanup?.();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    wasmReady
-      .then(() => {
-        if (cancelled) return;
-        try {
-          const next = renderIrealSvg(source);
-          setSvg(next);
-          setError(null);
-        } catch (e) {
-          setError(e instanceof Error ? e.message : String(e));
-        }
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : String(e));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [source]);
-
-  useEffect(() => {
-    const iframe = previewIframeRef.current;
-    if (!iframe || error !== null) return;
-    cacheBustRef.current += 1;
-    iframe.srcdoc = SVG_FRAME_TEMPLATE(svg, cacheBustRef.current);
-  }, [svg, error]);
-
-  return (
-    <main className="editor">
-      <section className="pane source">
-        <header className="pane-head">
-          <p className="eyebrow">Source · iRealb</p>
-          <span className="meta">Bar-grid editor</span>
-        </header>
-        <div ref={editorContainerRef} className="pane-body chordsketch-app__irealb-host" />
-      </section>
-      <section className="pane preview">
-        <header className="pane-head">
-          <p className="eyebrow">Preview · SVG</p>
-          <span className="meta">Live · iRealb chart</span>
-        </header>
-        <div className="pane-body">
-          {error ? (
-            <pre className="chordsketch-app__error" role="alert">
-              {error}
-            </pre>
-          ) : (
-            <iframe
-              ref={previewIframeRef}
-              className="chordsketch-app__irealb-frame"
-              title="iRealb chart preview"
-              sandbox="allow-popups allow-popups-to-escape-sandbox"
-            />
-          )}
-        </div>
-      </section>
-    </main>
-  );
-}
-
-// ---------------------------------------------------------------
-// Helpers (download, clipboard, format helpers).
+// Helpers.
 // ---------------------------------------------------------------
 
 const TRANSPOSE_MIN = -11;
@@ -361,17 +213,9 @@ function formatTranspose(value: number): string {
 type View = 'split' | 'source' | 'preview';
 
 function PlaygroundApp(): JSX.Element {
-  // Source state — separate per input format so toggling does
-  // not lose either draft. `localStorage` rehydrates on first
-  // mount; subsequent edits flush back via an effect.
-  const [chordProSource, setChordProSource] = useState<string>(() =>
-    loadFromStorage(STORAGE_KEY_CHORDPRO, DEFAULT_SAMPLE.source),
+  const [source, setSource] = useState<string>(() =>
+    loadFromStorage(STORAGE_KEY_SOURCE, DEFAULT_SAMPLE.source),
   );
-  const [irealbSource, setIrealbSource] = useState<string>(() =>
-    loadFromStorage(STORAGE_KEY_IREALB, SAMPLE_IREALB),
-  );
-
-  const [inputFormat, setInputFormat] = useState<InputFormat>(detectInitialFormat);
   const [transpose, setTranspose] = useState<number>(0);
   const [view, setView] = useState<View>('split');
   const [sampleId, setSampleId] = useState<string>(DEFAULT_SAMPLE.id);
@@ -380,21 +224,10 @@ function PlaygroundApp(): JSX.Element {
 
   const editorRef = useRef<SourceEditorHandle | null>(null);
 
-  // Persist source + format. Throttling not needed — localStorage
-  // writes are synchronous and 10s of KB of source is well under
-  // any noticeable cost per keystroke.
   useEffect(() => {
-    saveToStorage(STORAGE_KEY_CHORDPRO, chordProSource);
-  }, [chordProSource]);
-  useEffect(() => {
-    saveToStorage(STORAGE_KEY_IREALB, irealbSource);
-  }, [irealbSource]);
-  useEffect(() => {
-    saveToStorage(STORAGE_KEY_FORMAT, inputFormat);
-    writeFormatHash(inputFormat);
-  }, [inputFormat]);
+    saveToStorage(STORAGE_KEY_SOURCE, source);
+  }, [source]);
 
-  // Version — wasm may not be ready at first render; poll once.
   useEffect(() => {
     if (version !== null) return;
     void wasmReady.then(() => {
@@ -406,51 +239,33 @@ function PlaygroundApp(): JSX.Element {
     });
   }, [version]);
 
-  const handleChordProChange = useCallback((next: string) => {
-    setChordProSource(next);
-  }, []);
-  const handleIrealbChange = useCallback((next: string) => {
-    setIrealbSource(next);
+  const handleSourceChange = useCallback((next: string) => {
+    setSource(next);
   }, []);
 
-  const stats = useMemo(
-    () => computeStats(inputFormat === 'chordpro' ? chordProSource : irealbSource),
-    [chordProSource, irealbSource, inputFormat],
-  );
+  const stats = useMemo(() => computeStats(source), [source]);
 
-  // Validation only applies to ChordPro. iRealb has its own
-  // parse error surface inside the bar-grid editor.
-  const warnings = useMemo<Warning[]>(
-    () => (inputFormat === 'chordpro' ? runValidate(chordProSource) : []),
-    [chordProSource, inputFormat],
-  );
+  const warnings = useMemo<Warning[]>(() => runValidate(source), [source]);
 
   const previewMeta = useMemo(() => {
     const transposeLabel = transpose === 0 ? '' : ` · ${formatTranspose(transpose)}`;
     return `Live · HTML${transposeLabel}`;
   }, [transpose]);
 
-  const handleSamplePick = useCallback(
-    (id: string) => {
-      const sample = SAMPLES.find((s) => s.id === id);
-      if (!sample) return;
-      setSampleId(id);
-      setChordProSource(sample.source);
-      editorRef.current?.setValue(sample.source);
-    },
-    [],
-  );
+  const handleSamplePick = useCallback((id: string) => {
+    const sample = SAMPLES.find((s) => s.id === id);
+    if (!sample) return;
+    setSampleId(id);
+    setSource(sample.source);
+    editorRef.current?.setValue(sample.source);
+  }, []);
 
   const handleResetDraft = useCallback(() => {
     const sample = SAMPLES.find((s) => s.id === sampleId) ?? DEFAULT_SAMPLE;
-    setChordProSource(sample.source);
+    setSource(sample.source);
     editorRef.current?.setValue(sample.source);
   }, [sampleId]);
 
-  // Quick-insert helpers — paste a placeholder into the editor at
-  // the caret, leaving the placeholder selected so the next
-  // keystroke overwrites it. Fires a real user-edit so onChange /
-  // localStorage persistence flow normally.
   const insert = useCallback((text: string, selectInside = true) => {
     editorRef.current?.insertAtCursor(text, selectInside);
   }, []);
@@ -465,19 +280,17 @@ function PlaygroundApp(): JSX.Element {
         <nav className="crumbs" aria-label="Breadcrumb">
           <span className="current">Playground</span>
           <span className="sep">›</span>
-          <span>{inputFormat === 'chordpro' ? 'ChordPro' : 'iRealb'}</span>
+          <span>ChordPro</span>
         </nav>
         <div className="actions">
-          {inputFormat === 'chordpro' && (
-            <PdfExport
-              source={chordProSource}
-              options={{ transpose }}
-              filename="chordsketch-output.pdf"
-              className="btn btn-secondary btn-sm"
-            >
-              Download PDF
-            </PdfExport>
-          )}
+          <PdfExport
+            source={source}
+            options={{ transpose }}
+            filename="chordsketch-output.pdf"
+            className="btn btn-secondary btn-sm"
+          >
+            Download PDF
+          </PdfExport>
           <a
             className="btn btn-ghost btn-sm"
             href="https://github.com/koedame/chordsketch"
@@ -502,178 +315,146 @@ function PlaygroundApp(): JSX.Element {
 
       <div className="toolbar" role="toolbar" aria-label="Editor tools">
         <div className="tool-group">
-          <span className="label">Input</span>
-          <div className="segmented" role="group" aria-label="Input format">
-            {(['chordpro', 'irealb'] as const).map((f) => (
+          <span className="label">Transpose</span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            aria-label="Transpose down one semitone"
+            onClick={() =>
+              setTranspose((v) => clamp(v - 1, TRANSPOSE_MIN, TRANSPOSE_MAX))
+            }
+            disabled={transpose <= TRANSPOSE_MIN}
+          >
+            −
+          </button>
+          <span className="transpose-value" aria-live="polite">
+            {formatTranspose(transpose)}
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            aria-label="Transpose up one semitone"
+            onClick={() =>
+              setTranspose((v) => clamp(v + 1, TRANSPOSE_MIN, TRANSPOSE_MAX))
+            }
+            disabled={transpose >= TRANSPOSE_MAX}
+          >
+            +
+          </button>
+          {transpose !== 0 && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setTranspose(0)}
+            >
+              Reset
+            </button>
+          )}
+        </div>
+
+        <div className="tool-group">
+          <span className="label">View</span>
+          <div className="segmented" role="group" aria-label="Pane visibility">
+            {(['split', 'source', 'preview'] as const).map((v) => (
               <button
-                key={f}
+                key={v}
                 type="button"
-                aria-pressed={inputFormat === f}
-                onClick={() => setInputFormat(f)}
+                aria-pressed={view === v}
+                onClick={() => setView(v)}
               >
-                {f === 'chordpro' ? 'ChordPro' : 'iRealb'}
+                {v === 'split' ? 'Split' : v === 'source' ? 'Source' : 'Preview'}
               </button>
             ))}
           </div>
         </div>
 
-        {inputFormat === 'chordpro' && (
-          <>
-            <div className="tool-group">
-              <span className="label">Transpose</span>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                aria-label="Transpose down one semitone"
-                onClick={() =>
-                  setTranspose((v) => clamp(v - 1, TRANSPOSE_MIN, TRANSPOSE_MAX))
-                }
-                disabled={transpose <= TRANSPOSE_MIN}
-              >
-                −
-              </button>
-              <span className="transpose-value" aria-live="polite">
-                {formatTranspose(transpose)}
-              </span>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                aria-label="Transpose up one semitone"
-                onClick={() =>
-                  setTranspose((v) => clamp(v + 1, TRANSPOSE_MIN, TRANSPOSE_MAX))
-                }
-                disabled={transpose >= TRANSPOSE_MAX}
-              >
-                +
-              </button>
-              {transpose !== 0 && (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => setTranspose(0)}
-                >
-                  Reset
-                </button>
-              )}
-            </div>
+        <div className="tool-group">
+          <span className="label">Sample</span>
+          <select
+            className="chordsketch-app__select"
+            value={sampleId}
+            onChange={(e) => handleSamplePick(e.currentTarget.value)}
+            aria-label="Sample song"
+          >
+            {SAMPLES.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={handleResetDraft}
+            title="Reset the source to the selected sample"
+          >
+            Reset
+          </button>
+        </div>
 
-            <div className="tool-group">
-              <span className="label">View</span>
-              <div className="segmented" role="group" aria-label="Pane visibility">
-                {(['split', 'source', 'preview'] as const).map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    aria-pressed={view === v}
-                    onClick={() => setView(v)}
-                  >
-                    {v === 'split' ? 'Split' : v === 'source' ? 'Source' : 'Preview'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="tool-group">
-              <span className="label">Sample</span>
-              <select
-                className="chordsketch-app__select"
-                value={sampleId}
-                onChange={(e) => handleSamplePick(e.currentTarget.value)}
-                aria-label="Sample song"
-              >
-                {SAMPLES.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={handleResetDraft}
-                title="Reset the source to the selected sample"
-              >
-                Reset
-              </button>
-            </div>
-
-            <div className="tool-group">
-              <span className="label">Insert</span>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() => insert('[C]')}
-              >
-                [Chord]
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() => insert('{title: }')}
-              >
-                {'{directive}'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() =>
-                  insert('\n{start_of_verse}\n\n{end_of_verse}\n', false)
-                }
-              >
-                Section
-              </button>
-            </div>
-          </>
-        )}
+        <div className="tool-group">
+          <span className="label">Insert</span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => insert('[C]')}
+          >
+            [Chord]
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => insert('{title: }')}
+          >
+            {'{directive}'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() =>
+              insert('\n{start_of_verse}\n\n{end_of_verse}\n', false)
+            }
+          >
+            Section
+          </button>
+        </div>
       </div>
 
-      {inputFormat === 'chordpro' ? (
-        <main
-          className={`editor${view === 'source' ? ' editor--source-only' : ''}${
-            view === 'preview' ? ' editor--preview-only' : ''
-          }`}
-        >
-          {view !== 'preview' && (
-            <section className="pane source">
-              <header className="pane-head">
-                <p className="eyebrow">Source · ChordPro</p>
-                <span className="meta">
-                  UTF-8 · LF · {stats.lines} {stats.lines === 1 ? 'line' : 'lines'}
-                </span>
-              </header>
-              <div className="pane-body">
-                <SourceEditor
-                  ref={editorRef}
-                  value={chordProSource}
-                  onChange={handleChordProChange}
-                  placeholder="Paste your ChordPro here…"
-                />
-              </div>
-            </section>
-          )}
-          {view !== 'source' && (
-            <section className="pane preview">
-              <header className="pane-head">
-                <p className="eyebrow">Preview · HTML</p>
-                <span className="meta">{previewMeta}</span>
-              </header>
-              <div className="pane-body">
-                <RendererPreview
-                  source={chordProSource}
-                  transpose={transpose}
-                  format="html"
-                />
-              </div>
-            </section>
-          )}
-        </main>
-      ) : (
-        <IrealbPane
-          key="irealb"
-          initialValue={irealbSource}
-          onChange={handleIrealbChange}
-        />
-      )}
+      <main
+        className={`editor${view === 'source' ? ' editor--source-only' : ''}${
+          view === 'preview' ? ' editor--preview-only' : ''
+        }`}
+      >
+        {view !== 'preview' && (
+          <section className="pane source">
+            <header className="pane-head">
+              <p className="eyebrow">Source · ChordPro</p>
+              <span className="meta">
+                UTF-8 · LF · {stats.lines} {stats.lines === 1 ? 'line' : 'lines'}
+              </span>
+            </header>
+            <div className="pane-body">
+              <SourceEditor
+                ref={editorRef}
+                value={source}
+                onChange={handleSourceChange}
+                placeholder="Paste your ChordPro here…"
+              />
+            </div>
+          </section>
+        )}
+        {view !== 'source' && (
+          <section className="pane preview">
+            <header className="pane-head">
+              <p className="eyebrow">Preview · HTML</p>
+              <span className="meta">{previewMeta}</span>
+            </header>
+            <div className="pane-body">
+              <RendererPreview source={source} transpose={transpose} format="html" />
+            </div>
+          </section>
+        )}
+      </main>
 
       <footer className="status" role="status" aria-live="polite">
         <button
@@ -699,12 +480,17 @@ function PlaygroundApp(): JSX.Element {
         </span>
         <span className="spacer" />
         <span className="item">UTF-8</span>
-        <span className="item">{inputFormat === 'chordpro' ? 'ChordPro' : 'iRealb'}</span>
+        <span className="item">ChordPro</span>
         {version && <span className="item">v{version}</span>}
       </footer>
 
       {warnings.length > 0 && warningsExpanded && (
-        <aside id="status-warnings" className="status-warnings" role="region" aria-label="Validation warnings">
+        <aside
+          id="status-warnings"
+          className="status-warnings"
+          role="region"
+          aria-label="Validation warnings"
+        >
           <ul>
             {warnings.map((w, i) => (
               <li key={i}>
