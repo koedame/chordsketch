@@ -12,7 +12,6 @@ import init, {
   serializeIrealb,
 } from '@chordsketch/wasm';
 import {
-  defaultTextareaEditor,
   mountChordSketchUi,
   SAMPLE_CHORDPRO,
   SAMPLE_IREALB,
@@ -24,6 +23,7 @@ import {
 import '@chordsketch/ui-web/style.css';
 import { createIrealbEditor } from '@chordsketch/ui-irealb-editor';
 import '@chordsketch/ui-irealb-editor/style.css';
+import { createCodeMirrorChordProEditor } from './codemirror-chordpro';
 import {
   parseFormatHash,
   writeFormatHash,
@@ -155,11 +155,10 @@ const irealbEditorFactory: EditorFactory = (
 // `replaceEditor` requires an explicit factory — passing `undefined`
 // is only meaningful at mount time, where it picks up ui-web's
 // built-in textarea via `MountOptions.createEditor` defaulting. The
-// playground re-uses the same `defaultTextareaEditor` export at
-// swap time so the post-swap textarea is byte-equal to the
-// mount-time one and any future ui-web bug fix to the textarea
-// (accessibility tweaks, IME composition, focus handling) flows
-// through to both call sites without divergence.
+// playground supplies its own factories at every mount point so
+// the post-swap editor is constructed from the same code path
+// regardless of how the swap was triggered (URL hash, format
+// toggle, runtime API).
 /**
  * On runtime swap, the previous editor's value is forwarded as
  * `initialValue` to the new factory. ChordPro text fed to the
@@ -172,7 +171,7 @@ const irealbEditorFactory: EditorFactory = (
  */
 const factoryFor = (format: InputFormat): EditorFactory => {
   const base: EditorFactory =
-    format === 'irealb' ? irealbEditorFactory : defaultTextareaEditor;
+    format === 'irealb' ? irealbEditorFactory : createCodeMirrorChordProEditor;
   const seed = format === 'irealb' ? SAMPLE_IREALB : SAMPLE_CHORDPRO;
   return (options) => {
     try {
