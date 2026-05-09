@@ -108,9 +108,9 @@ a { color: inherit; }
 <div class="toolbar" role="toolbar" aria-label="Editor tools">
   <div class="tool-group">
     <span class="label">Format</span>
-    <div class="segmented" role="tablist">
-      <a href="editor.html" aria-pressed="true">ChordPro</a>
-      <a href="editor-irealb.html" aria-pressed="false">iReal Pro</a>
+    <div class="segmented" role="group" aria-label="Format">
+      <a href="editor.html" aria-current="page">ChordPro</a>
+      <a href="editor-irealb.html">iReal Pro</a>
     </div>
   </div>
   <div class="tool-group">
@@ -121,7 +121,7 @@ a { color: inherit; }
   </div>
   <div class="tool-group">
     <span class="label">View</span>
-    <div class="segmented" role="tablist">
+    <div class="segmented" role="group" aria-label="View">
       <button aria-pressed="true">Split</button>
       <button>Source</button>
       <button>Preview</button>

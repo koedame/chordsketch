@@ -595,9 +595,9 @@ a { color: inherit; text-decoration: none; }
 <div class="toolbar" role="toolbar" aria-label="Editor tools">
   <div class="tool-group">
     <span class="label">Format</span>
-    <div class="segmented" role="tablist">
-      <a href="editor.html" aria-pressed="false">ChordPro</a>
-      <a href="editor-irealb.html" aria-pressed="true">iReal Pro</a>
+    <div class="segmented" role="group" aria-label="Format">
+      <a href="editor.html">ChordPro</a>
+      <a href="editor-irealb.html" aria-current="page">iReal Pro</a>
     </div>
   </div>
   <div class="tool-group">
@@ -608,14 +608,14 @@ a { color: inherit; text-decoration: none; }
   </div>
   <div class="tool-group">
     <span class="label">Width</span>
-    <div class="segmented" role="tablist" aria-label="Chord width">
+    <div class="segmented" role="group" aria-label="Chord width">
       <button aria-pressed="true" title="Normal width">N</button>
       <button aria-pressed="false" title="Small width — compresses chord glyphs horizontally so several chords fit in a tight bar">S</button>
     </div>
   </div>
   <div class="tool-group">
     <span class="label">Chord</span>
-    <div class="segmented" role="tablist" aria-label="Chord input target">
+    <div class="segmented" role="group" aria-label="Chord input target">
       <button aria-pressed="true">Regular</button>
       <button aria-pressed="false" title="Small alternate chord rendered above the primary chord">Alternate</button>
     </div>
@@ -942,7 +942,7 @@ a { color: inherit; text-decoration: none; }
     </div>
     <div class="row">
       <span class="label">Quality</span>
-      <div class="chips" role="radiogroup">
+      <div class="chips" role="group">
         <button class="chip">M</button>
         <button class="chip">−</button>
         <button class="chip">7</button>
@@ -963,7 +963,7 @@ a { color: inherit; text-decoration: none; }
     </div>
     <div class="row">
       <span class="label">Section</span>
-      <div class="chips" role="radiogroup">
+      <div class="chips" role="group">
         <button class="chip">A</button>
         <button class="chip">B</button>
         <button class="chip">C</button>
@@ -974,7 +974,7 @@ a { color: inherit; text-decoration: none; }
     </div>
     <div class="row">
       <span class="label">Barline (left)</span>
-      <div class="chips" role="radiogroup">
+      <div class="chips" role="group">
         <button class="chip smufl" aria-pressed="true" title="Single">&#xE030;</button>
         <button class="chip smufl" title="Double">&#xE031;</button>
         <button class="chip smufl" title="Repeat start">&#xE040;</button>
@@ -982,7 +982,7 @@ a { color: inherit; text-decoration: none; }
     </div>
     <div class="row">
       <span class="label">Barline (right)</span>
-      <div class="chips" role="radiogroup">
+      <div class="chips" role="group">
         <button class="chip smufl" aria-pressed="true" title="Single">&#xE030;</button>
         <button class="chip smufl" title="Double">&#xE031;</button>
         <button class="chip smufl" title="Repeat end">&#xE041;</button>
@@ -991,7 +991,7 @@ a { color: inherit; text-decoration: none; }
     </div>
     <div class="row">
       <span class="label">Ending</span>
-      <div class="chips" role="radiogroup">
+      <div class="chips" role="group">
         <button class="chip" aria-pressed="true">none</button>
         <button class="chip">1.</button>
         <button class="chip">2.</button>
@@ -1000,7 +1000,7 @@ a { color: inherit; text-decoration: none; }
     </div>
     <div class="row">
       <span class="label">Symbol</span>
-      <div class="chips" role="radiogroup">
+      <div class="chips" role="group">
         <button class="chip" aria-pressed="true">none</button>
         <button class="chip smufl" title="Segno">&#xE047;</button>
         <button class="chip smufl" title="Coda">&#xE048;</button>
@@ -1012,7 +1012,7 @@ a { color: inherit; text-decoration: none; }
     </div>
     <div class="row">
       <span class="label">Bar content</span>
-      <div class="chips" role="radiogroup">
+      <div class="chips" role="group">
         <button class="chip">Chord</button>
         <button class="chip">N.C.</button>
         <button class="chip" title="Invisible root — moving bass over a held chord">Invisible root</button>
@@ -1022,7 +1022,7 @@ a { color: inherit; text-decoration: none; }
     </div>
     <div class="row">
       <span class="label">Spacer (after this bar)</span>
-      <div class="chips" role="radiogroup">
+      <div class="chips" role="group">
         <button class="chip" aria-pressed="true">none</button>
         <button class="chip" title="Vertical spacer × 1">×1</button>
         <button class="chip" title="Vertical spacer × 2">×2</button>
