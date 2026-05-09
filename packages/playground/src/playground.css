@@ -525,12 +525,27 @@ a {
   padding: 0;
 }
 
-/* Tool-group inside the topnav `actions` cluster — host context
- * already has `gap: 0.5rem`, so the inter-group divider that the
- * global `.toolbar` applies makes no sense here. Strip the
- * `border-right` and side padding so the embedded group sits
- * flush against its neighbours. */
-.topnav__tool-group {
-  border-right: 0;
-  padding: 0;
+/* Sample picker embedded in the topnav `actions` cluster — the
+ * eyebrow `.label` sits inline with the `<select>`, no surrounding
+ * `.tool-group` wrapper because the host's `.actions` cluster
+ * already supplies the `gap`. */
+.topnav__sample {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.topnav__sample > .label {
+  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  color: var(--cs-text-tertiary, #8A8790);
+}
+
+/* `.segmented` already styles the View pill; the modifier hook
+ * stays in case future topnav-specific overrides (compact size,
+ * narrower padding) become necessary. */
+.topnav__view {
+  /* no-op — inherits `.segmented` */
 }

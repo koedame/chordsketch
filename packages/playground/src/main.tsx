@@ -320,12 +320,6 @@ function PlaygroundApp(): JSX.Element {
     editorRef.current?.setValue(sample.source);
   }, []);
 
-  const handleResetDraft = useCallback(() => {
-    const sample = SAMPLES.find((s) => s.id === sampleId) ?? DEFAULT_SAMPLE;
-    setSource(sample.source);
-    editorRef.current?.setValue(sample.source);
-  }, [sampleId]);
-
   const insert = useCallback((text: string, selectInside = true) => {
     editorRef.current?.insertAtCursor(text, selectInside);
   }, []);
@@ -343,7 +337,7 @@ function PlaygroundApp(): JSX.Element {
           <span>ChordPro</span>
         </nav>
         <div className="actions">
-          <div className="tool-group topnav__tool-group">
+          <label className="topnav__sample">
             <span className="label">Sample</span>
             <select
               className="chordsketch-app__select"
@@ -357,14 +351,18 @@ function PlaygroundApp(): JSX.Element {
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={handleResetDraft}
-              title="Reset the source to the selected sample"
-            >
-              Reset
-            </button>
+          </label>
+          <div className="topnav__view segmented" role="group" aria-label="Pane visibility">
+            {(['split', 'source', 'preview'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                onClick={() => setView(v)}
+              >
+                {v === 'split' ? 'Split' : v === 'source' ? 'Source' : 'Preview'}
+              </button>
+            ))}
           </div>
           <a
             className="btn btn-ghost btn-sm"
@@ -388,24 +386,6 @@ function PlaygroundApp(): JSX.Element {
         </div>
       </header>
 
-      <div className="toolbar" role="toolbar" aria-label="Editor tools">
-        <div className="tool-group">
-          <span className="label">View</span>
-          <div className="segmented" role="group" aria-label="Pane visibility">
-            {(['split', 'source', 'preview'] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={view === v}
-                onClick={() => setView(v)}
-              >
-                {v === 'split' ? 'Split' : v === 'source' ? 'Source' : 'Preview'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-      </div>
 
       <main
         className={`editor${view === 'source' ? ' editor--source-only' : ''}${
