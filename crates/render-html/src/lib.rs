@@ -936,6 +936,7 @@ const CSS_TEMPLATE: &str = "\
 body { font-family: \"Noto Sans JP\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-size: 1rem; line-height: 1.6875; color: #0A0A0B; max-width: 720px; margin: 2em auto; padding: 0 1em; }
 h1 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-weight: 700; font-size: 1.875rem; letter-spacing: -0.02em; color: #0A0A0B; margin-bottom: 0.2em; }
 h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-weight: 400; font-size: 1rem; color: #67646D; margin-top: 0; }
+.meta { font-family: \"JetBrains Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace; font-size: 0.8125rem; color: #67646D; margin: 0.5em 0 1.5em; font-feature-settings: \"tnum\" 1; }
 .line { display: flex; flex-wrap: __LINE_FLEX_WRAP__; margin: 0.1em 0; }
 .chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
 .chord { font-family: \"Roboto\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 1rem; letter-spacing: 0.01em; min-height: 1.2em; }
@@ -960,13 +961,48 @@ img { max-width: 100%; height: auto; }
 // Metadata
 // ---------------------------------------------------------------------------
 
-/// Render song metadata (title, subtitle) as HTML header elements.
+/// Render song metadata as HTML header elements.
+///
+/// Layout matches the design-system reference at
+/// `design-system/ui_kits/web/editor.html`:
+///
+///   <h1>{title}</h1>
+///   <h2>{subtitle}</h2>          (one per `{subtitle}` directive)
+///   <p class="meta">Artist · Key G · Capo N · BPM T · 4/4</p>
+///
+/// The meta strip is suppressed entirely when none of the
+/// artist / key / capo / tempo / time fields are populated, so a
+/// minimal `{title: T}`-only document still renders just an `<h1>`.
 fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut String) {
     if let Some(title) = &metadata.title {
         let _ = writeln!(html, "<h1>{}</h1>", escape(title));
     }
     for subtitle in &metadata.subtitles {
         let _ = writeln!(html, "<h2>{}</h2>", escape(subtitle));
+    }
+
+    // Build the meta strip in document order: artist → key → capo
+    // → tempo → time. Each segment is escaped before insertion;
+    // segments that are absent (or empty after trimming) are
+    // skipped so we never emit a stray separator.
+    let mut parts: Vec<String> = Vec::new();
+    if !metadata.artists.is_empty() {
+        parts.push(escape(&metadata.artists.join(", ")));
+    }
+    if let Some(key) = metadata.key.as_deref().filter(|s| !s.trim().is_empty()) {
+        parts.push(format!("Key {}", escape(key)));
+    }
+    if let Some(capo) = metadata.capo.as_deref().filter(|s| !s.trim().is_empty()) {
+        parts.push(format!("Capo {}", escape(capo)));
+    }
+    if let Some(tempo) = metadata.tempo.as_deref().filter(|s| !s.trim().is_empty()) {
+        parts.push(format!("BPM {}", escape(tempo)));
+    }
+    if let Some(time) = metadata.time.as_deref().filter(|s| !s.trim().is_empty()) {
+        parts.push(escape(time));
+    }
+    if !parts.is_empty() {
+        let _ = writeln!(html, "<p class=\"meta\">{}</p>", parts.join(" · "));
     }
 }
 
