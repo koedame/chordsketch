@@ -22,12 +22,18 @@
 .chordsketch-source-editor,
 .chordsketch-split-layout,
 .chordsketch-preview {
+  /* Crimson — the only accent. */
   --cs-crimson-50: #FDF2F5;
   --cs-crimson-100: #FBE1E8;
   --cs-crimson-300: #EC8AA3;
   --cs-crimson-500: #BD1642;
   --cs-crimson-600: #A30F37;
   --cs-crimson-700: #87092C;
+  --cs-crimson-900: #480418;
+  --cs-crimson: var(--cs-crimson-500);
+  --cs-fg-on-crimson: #FFFFFF;
+
+  /* Ink — warm neutrals. */
   --cs-ink-0: #FFFFFF;
   --cs-ink-50: #FAFAF7;
   --cs-ink-100: #F6F4F7;
@@ -37,6 +43,8 @@
   --cs-ink-600: #67646D;
   --cs-ink-700: #44424A;
   --cs-ink-1000: #0A0A0B;
+
+  /* Surface / border / text aliases. */
   --cs-canvas: var(--cs-ink-50);
   --cs-surface: var(--cs-ink-0);
   --cs-surface-hover: var(--cs-ink-100);
@@ -46,14 +54,84 @@
   --cs-text-strong: var(--cs-ink-700);
   --cs-text-secondary: var(--cs-ink-600);
   --cs-text-tertiary: var(--cs-ink-500);
+
+  /* Semantic. */
+  --cs-success-surface: #E8F3EC;
+  --cs-success-fg: #1A6B3A;
+  --cs-warning-surface: #FBF1D9;
+  --cs-warning-fg: #8A5A07;
+  --cs-danger-surface: #FBE1E8;
+  --cs-danger-fg: #A30F37;
+  --cs-info-surface: #E6EEF7;
   --cs-info-fg: #1F4F8A;
+
+  /* Focus. */
+  --cs-focus-ring: 0 0 0 2px var(--cs-ink-0), 0 0 0 4px var(--cs-crimson-500);
+
+  /* Typography families. */
   --cs-font-jp: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --cs-font-display: "Noto Sans JP", system-ui, sans-serif;
   --cs-font-latin: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --cs-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --cs-font-sans: var(--cs-font-jp);
   --cs-font-chord: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-  --cs-focus-ring: 0 0 0 2px var(--cs-ink-0), 0 0 0 4px var(--cs-crimson-500);
+  --cs-font-chart-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --cs-font-music: "Bravura Text", "Noto Music", "Symbola", serif;
+
+  /* Type scale. */
+  --cs-fs-10: 0.625rem;
+  --cs-fs-12: 0.75rem;
+  --cs-fs-13: 0.8125rem;
+  --cs-fs-14: 0.875rem;
+  --cs-fs-15: 0.9375rem;
+  --cs-fs-16: 1rem;
+  --cs-fs-18: 1.125rem;
+  --cs-fs-24: 1.5rem;
+  --cs-fs-30: 1.875rem;
+  --cs-fs-36: 2.25rem;
+  --cs-fs-48: 3rem;
+  --cs-fs-60: 3.75rem;
+  --cs-fs-72: 4.5rem;
+
+  /* 4pt spacing scale. */
+  --cs-sp-1: 0.25rem;
+  --cs-sp-2: 0.5rem;
+  --cs-sp-3: 0.75rem;
+  --cs-sp-4: 1rem;
+  --cs-sp-5: 1.25rem;
+  --cs-sp-6: 1.5rem;
+  --cs-sp-8: 2rem;
+  --cs-sp-10: 2.5rem;
+  --cs-sp-12: 3rem;
+  --cs-sp-16: 4rem;
+  --cs-sp-20: 5rem;
+  --cs-sp-24: 6rem;
+  --cs-sp-32: 8rem;
+
+  /* Radius. */
+  --cs-r-1: 2px;
+  --cs-r-2: 4px;
+  --cs-r-3: 8px;
+  --cs-r-4: 12px;
+  --cs-r-full: 9999px;
+
+  /* Elevation. */
+  --cs-e-1: 0 1px 2px rgba(10, 10, 11, 0.04);
+  --cs-e-2: 0 4px 12px rgba(10, 10, 11, 0.08);
+  --cs-e-3: 0 16px 32px rgba(10, 10, 11, 0.12);
+  --cs-e-overlay: 0 24px 48px rgba(10, 10, 11, 0.18);
+
+  /* Motion. */
   --cs-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --cs-dur-1: 120ms;
+  --cs-dur-2: 200ms;
+  --cs-dur-3: 280ms;
+  --cs-dur-4: 400ms;
+
+  /* Container max-widths. */
+  --cs-maxw-app: 1280px;
+  --cs-maxw-reading: 720px;
+  --cs-maxw-guide: 1080px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -62,6 +140,9 @@
   .chordsketch-split-layout,
   .chordsketch-preview {
     --cs-dur-1: 0ms;
+    --cs-dur-2: 0ms;
+    --cs-dur-3: 0ms;
+    --cs-dur-4: 0ms;
   }
 }
 
