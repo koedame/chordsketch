@@ -1,11 +1,20 @@
 /*
  * App-level styles for the ChordSketch playground React shell.
- * The reusable surfaces (`<SourceEditor>`, `<SplitLayout>`,
- * `<RendererPreview>`, `<Transpose>`) bring their own styling via
- * `@chordsketch/react/styles.css`. This stylesheet only covers
- * the playground-specific chrome that lives outside those
- * components: the header bar, the brand mark, and the format
- * controls' visual treatment.
+ *
+ * The visual chrome here mirrors the design-system editor reference
+ * at `design-system/ui_kits/web/editor.html`: top-nav with the
+ * brand mark + breadcrumb, a toolbar row with eyebrow-labelled
+ * `tool-group`s and `segmented` controls, two `pane`s with
+ * `pane-head` eyebrows above their bodies, and a status footer
+ * with monospaced metadata. Class names are kept identical to the
+ * reference so anyone already familiar with that file can navigate
+ * this stylesheet without re-learning the vocabulary.
+ *
+ * The reusable components from `@chordsketch/react`
+ * (`<SourceEditor>`, `<RendererPreview>`, `<Transpose>`) bring
+ * their own styling via `@chordsketch/react/styles.css`. The
+ * rules below override that styling where the editor.html chrome
+ * demands a tighter fit.
  */
 
 * {
@@ -22,11 +31,21 @@ body,
 
 body {
   font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  font-size: 1rem;
+  line-height: 1.6875;
   background: var(--cs-canvas, #FAFAF7);
   color: var(--cs-text-primary, #0A0A0B);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+a {
+  color: inherit;
+}
+
+/* ----------------------------------------------------------------
+ * App shell
+ * ---------------------------------------------------------------- */
 
 .chordsketch-app {
   height: 100vh;
@@ -36,163 +55,360 @@ body {
   background: var(--cs-canvas, #FAFAF7);
 }
 
-.chordsketch-app__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+/* ----------------------------------------------------------------
+ * Top nav (`.topnav`) — brand + breadcrumb + actions on the right.
+ * No save state / undo / save button: the playground has no
+ * persistence, so those reference-only chrome elements are
+ * intentionally omitted.
+ * ---------------------------------------------------------------- */
+
+.topnav {
   height: 56px;
-  padding: 0 1.5rem;
   background: var(--cs-surface, #FFFFFF);
   border-bottom: 1px solid var(--cs-border, #E8E6EA);
+  display: flex;
+  align-items: center;
+  padding: 0 1.5rem;
+  gap: 1rem;
   flex-shrink: 0;
 }
 
-.chordsketch-app__title {
-  display: inline-flex;
+.topnav .brand {
+  display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin: 0;
   font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
   font-weight: 700;
   font-size: 1rem;
   letter-spacing: -0.01em;
+  text-decoration: none;
   color: var(--cs-text-primary, #0A0A0B);
 }
 
-.chordsketch-app__brand-mark {
-  display: inline-block;
+.topnav .brand .mark {
   width: 24px;
   height: 24px;
   border-radius: 2px;
-  /* Canonical brand mark — quill on a `--crimson-500` field. The
-   * SVG path is the same one shipped at `assets/logo.svg`
-   * (DESIGN.md §1). Inlined as a data URL so the playground
-   * shell stays self-contained. */
+  display: block;
   background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><rect width="180" height="180" fill="%23BD1642"/><path d="M82.9328334,100.501459 C84.0311093,98.5297919 86.368868,97.6656987 88.5433381,98.2694599 C88.6578145,98.3008392 88.7693854,98.3264075 88.8821185,98.3548813 C89.0669078,98.400207 89.2522781,98.4437894 89.4422973,98.4821419 C89.5375974,98.5013181 89.635222,98.5239809 89.7287788,98.5408328 C89.7729423,98.5489682 89.8165246,98.5507115 89.8606881,98.5559414 C90.8235681,98.7198111 91.8404902,98.8000027 92.9044814,98.7738532 C95.0353691,98.7209733 97.3208289,98.282244 99.5969912,97.4140831 C106.959508,94.607378 111.430478,88.4041529 109.583748,83.5589548 C108.201896,79.9334821 103.674558,78.0966301 98.3993475,78.5760363 C98.7985621,78.4499379 99.1977766,78.3168664 99.5969912,78.1646186 C106.959508,75.3579135 111.430478,69.1546885 109.583748,64.3089092 C108.201896,60.6840176 103.674558,58.8471657 98.3993475,59.3259907 C98.7985621,59.1998924 99.1977766,59.0668209 99.5969912,58.9145731 C106.959508,56.107868 111.430478,49.904643 109.583748,45.0588637 C107.736436,40.2136655 100.270484,38.5604407 92.9079679,41.3671458 C89.9879487,42.4805302 87.5246727,44.1291063 85.7284976,46.0141894 C84.9382039,46.8498088 84.3135231,47.672063 83.8195895,48.5140746 C66.608037,74.3247206 75.0897488,157.615874 75.0897488,157.615874 C75.5546275,146.069449 77.4478459,110.345846 82.9328334,100.501459 Z" fill="%23FFFFFF"/></svg>');
   background-size: cover;
   background-repeat: no-repeat;
   flex-shrink: 0;
 }
 
-.chordsketch-app__controls {
+.topnav .crumbs {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.chordsketch-app__control-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
-  font-weight: 600;
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--cs-text-secondary, #67646D);
-}
-
-.chordsketch-app__select {
-  height: 32px;
-  padding: 0 0.75rem;
-  background: var(--cs-surface, #FFFFFF);
-  color: var(--cs-text-primary, #0A0A0B);
-  border: 1px solid var(--cs-border-strong, #D4D1D6);
-  border-radius: 4px;
-  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
-  font-weight: 500;
-  font-size: 0.8125rem;
-  letter-spacing: 0;
-  text-transform: none;
-  transition: border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.chordsketch-app__select:hover:not(:disabled) {
-  border-color: var(--cs-ink-500, #8A8790);
-}
-
-.chordsketch-app__select:focus-visible {
-  outline: none;
-  border-color: var(--cs-crimson-500, #BD1642);
-  box-shadow: 0 0 0 2px var(--cs-ink-0, #FFFFFF), 0 0 0 4px var(--cs-crimson-500, #BD1642);
-}
-
-.chordsketch-app__select:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.chordsketch-app__transpose {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
-  font-weight: 600;
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--cs-text-secondary, #67646D);
-}
-
-.chordsketch-app__transpose .chordsketch-transpose__button {
-  height: 32px;
-  min-width: 32px;
-  padding: 0 0.75rem;
-  background: var(--cs-surface, #FFFFFF);
-  color: var(--cs-text-primary, #0A0A0B);
-  border: 1px solid var(--cs-border-strong, #D4D1D6);
-  border-radius: 4px;
-  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
-  font-weight: 500;
+  gap: 0.75rem;
+  margin-left: 1.5rem;
   font-size: 0.875rem;
-  letter-spacing: 0;
-  text-transform: none;
-  line-height: 1;
+  color: var(--cs-text-secondary, #67646D);
+}
+
+.topnav .crumbs .sep {
+  color: var(--cs-text-tertiary, #8A8790);
+}
+
+.topnav .crumbs .current {
+  color: var(--cs-text-primary, #0A0A0B);
+  font-weight: 500;
+}
+
+.topnav .actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ----------------------------------------------------------------
+ * Buttons (`.btn` + variants) — same vocabulary as the reference.
+ * ---------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 36px;
+  padding: 0 1rem;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  font: 500 0.875rem/1 var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  cursor: pointer;
   transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
     border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  text-decoration: none;
 }
 
-.chordsketch-app__transpose .chordsketch-transpose__button:hover:not(:disabled) {
-  background: var(--cs-surface-hover, #F6F4F7);
-  border-color: var(--cs-ink-500, #8A8790);
-}
-
-.chordsketch-app__transpose .chordsketch-transpose__button:focus-visible {
+.btn:focus-visible {
   outline: none;
-  border-color: var(--cs-crimson-500, #BD1642);
   box-shadow: 0 0 0 2px var(--cs-ink-0, #FFFFFF), 0 0 0 4px var(--cs-crimson-500, #BD1642);
 }
 
-.chordsketch-app__transpose .chordsketch-transpose__value {
-  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
-  font-feature-settings: "tnum" 1;
-  letter-spacing: 0;
-  text-transform: none;
+.btn-secondary {
+  background: var(--cs-surface, #FFFFFF);
+  color: var(--cs-text-primary, #0A0A0B);
+  border-color: var(--cs-border-strong, #D4D1D6);
+}
+.btn-secondary:hover {
+  background: var(--cs-ink-100, #F6F4F7);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--cs-text-secondary, #67646D);
+}
+.btn-ghost:hover {
+  background: var(--cs-ink-100, #F6F4F7);
   color: var(--cs-text-primary, #0A0A0B);
 }
 
-.chordsketch-app__split {
+.btn-icon {
+  padding: 0;
+  width: 36px;
+  justify-content: center;
+}
+
+.btn-sm {
+  height: 28px;
+  padding: 0 0.75rem;
+  font-size: 0.8125rem;
+}
+
+/* ----------------------------------------------------------------
+ * Toolbar — eyebrow-labelled tool-groups separated by hairline
+ * dividers, segmented controls.
+ * ---------------------------------------------------------------- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.5rem;
+  background: var(--cs-surface, #FFFFFF);
+  border-bottom: 1px solid var(--cs-border, #E8E6EA);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.75rem;
+  border-right: 1px solid var(--cs-border, #E8E6EA);
+  height: 28px;
+}
+
+.tool-group:last-of-type {
+  border-right: 0;
+}
+
+.tool-group .label {
+  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cs-text-tertiary, #8A8790);
+  margin-right: 0.5rem;
+}
+
+.tool-group .transpose-value {
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.8125rem;
+  padding: 0 0.5rem;
+  min-width: 28px;
+  text-align: center;
+  color: var(--cs-text-primary, #0A0A0B);
+  font-feature-settings: "tnum" 1;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--cs-border-strong, #D4D1D6);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.segmented button {
+  background: var(--cs-surface, #FFFFFF);
+  border: 0;
+  padding: 0 0.75rem;
+  height: 28px;
+  font: 500 0.8125rem/1 var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  color: var(--cs-text-secondary, #67646D);
+  cursor: pointer;
+  border-right: 1px solid var(--cs-border, #E8E6EA);
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.segmented button:last-child {
+  border-right: 0;
+}
+
+.segmented button:hover {
+  background: var(--cs-ink-100, #F6F4F7);
+  color: var(--cs-text-primary, #0A0A0B);
+}
+
+.segmented button:focus-visible {
+  outline: none;
+  /* Inset focus so the highlight stays inside the segmented
+   * pill — an outer ring would clip the rounded corners. */
+  box-shadow: inset 0 0 0 2px var(--cs-crimson-500, #BD1642);
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--cs-ink-1000, #0A0A0B);
+  color: var(--cs-ink-0, #FFFFFF);
+}
+
+/* ----------------------------------------------------------------
+ * Editor split + panes
+ * ---------------------------------------------------------------- */
+
+.editor {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  min-height: 0;
+  background: var(--cs-canvas, #FAFAF7);
+}
+
+.editor.editor--source-only,
+.editor.editor--preview-only {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 900px) {
+  .editor {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+  .pane.source {
+    border-right: 0;
+    border-bottom: 1px solid var(--cs-border, #E8E6EA);
+  }
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--cs-surface, #FFFFFF);
+}
+
+.pane.source {
+  border-right: 1px solid var(--cs-border, #E8E6EA);
+}
+
+.editor--source-only .pane.source,
+.editor--preview-only .pane.preview {
+  border-right: 0;
+}
+
+.pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: var(--cs-canvas, #FAFAF7);
+  border-bottom: 1px solid var(--cs-border, #E8E6EA);
+  flex-shrink: 0;
+}
+
+.pane-head .eyebrow {
+  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cs-text-secondary, #67646D);
+  margin: 0;
+}
+
+.pane-head .meta {
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.75rem;
+  color: var(--cs-text-tertiary, #8A8790);
+  font-feature-settings: "tnum" 1;
+}
+
+.pane-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pane.source .pane-body > .chordsketch-source-editor {
   flex: 1;
   min-height: 0;
 }
 
+.pane.preview > .pane-body > .chordsketch-preview {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ----------------------------------------------------------------
+ * Status footer
+ * ---------------------------------------------------------------- */
+
+.status {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1.5rem;
+  background: var(--cs-surface, #FFFFFF);
+  border-top: 1px solid var(--cs-border, #E8E6EA);
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.75rem;
+  color: var(--cs-text-secondary, #67646D);
+  gap: 1.5rem;
+  flex-shrink: 0;
+  font-feature-settings: "tnum" 1;
+}
+
+.status .item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status .spacer {
+  flex: 1;
+}
+
+.status .ok {
+  color: var(--cs-success-fg, #1A6B3A);
+}
+
+.status .warn {
+  color: var(--cs-warning-fg, #8A5A07);
+}
+
 @media (max-width: 768px) {
-  .chordsketch-app__header {
+  .topnav {
     height: auto;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.75rem;
+    flex-wrap: wrap;
     padding: 0.75rem 1rem;
+    gap: 0.5rem;
   }
-  .chordsketch-app__title {
-    justify-content: flex-start;
+  .topnav .crumbs {
+    margin-left: 0;
   }
-  .chordsketch-app__controls {
-    justify-content: flex-start;
-    gap: 0.75rem;
+  .toolbar {
+    padding: 0.5rem 1rem;
+  }
+  .status {
+    flex-wrap: wrap;
+    padding: 0.5rem 1rem;
+    gap: 0.75rem 1.25rem;
   }
 }
