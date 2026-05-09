@@ -59,7 +59,18 @@ export const chordProLanguage = StreamLanguage.define<ChordProState>({
       }
       if (state.inDirective === 'key') {
         if (stream.match(/[A-Za-z_][A-Za-z0-9_]*/)) {
-          state.inDirective = stream.peek() === ':' ? 'value' : null;
+          // If `}` follows immediately (no-value directive like
+          // `{soc}`), stay in `'key'` state so the next token
+          // call catches `}` as punctuation via the
+          // `stream.eat('}')` guard above. End-of-line and any
+          // other unexpected character resets to `null` so the
+          // directive state does not leak across line
+          // boundaries. (Bot review nit on the playground-local
+          // sibling, ported here when this code moved into
+          // `@chordsketch/react`.)
+          const peeked = stream.peek();
+          state.inDirective =
+            peeked === ':' ? 'value' : peeked === '}' ? 'key' : null;
           return 'keyword';
         }
         // Unexpected character inside a directive — treat as a
