@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Table — ChordSketch Components</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="../tokens.css">
+<style>
+* { box-sizing: border-box; } html, body { margin: 0; }
+body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875; color: var(--text-primary); background: var(--canvas); -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+.container { max-width: 1080px; margin: 0 auto; padding: var(--sp-12) var(--sp-6); }
+.preview-back { font-family: var(--font-latin); font-size: var(--fs-12); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-secondary); }
+.preview-back:hover { color: var(--text-primary); }
+.eyebrow { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-secondary); margin: var(--sp-8) 0 var(--sp-2); }
+.preview-h1 { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-36); line-height: 1.111; letter-spacing: -0.02em; margin: 0 0 var(--sp-3); }
+.preview-deck { color: var(--text-secondary); margin: 0 0 var(--sp-12); max-width: 56ch; }
+.group { margin-bottom: var(--sp-12); }
+.group h2 { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-secondary); margin: 0 0 var(--sp-4); }
+.frame { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); overflow: hidden; }
+
+table.t { width: 100%; border-collapse: collapse; font-size: var(--fs-14); }
+table.t thead th {
+  text-align: left;
+  font-family: var(--font-latin);
+  font-weight: 600;
+  font-size: var(--fs-12);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--canvas);
+  white-space: nowrap;
+}
+table.t thead th.sortable { cursor: pointer; user-select: none; }
+table.t thead th.sortable .arrow { display: inline-flex; margin-left: var(--sp-1); color: var(--text-tertiary); }
+table.t thead th[aria-sort="ascending"] .arrow,
+table.t thead th[aria-sort="descending"] .arrow { color: var(--crimson-500); }
+table.t tbody td { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); vertical-align: middle; }
+table.t tbody tr:hover { background: var(--ink-50); }
+table.t tbody tr:last-child td { border-bottom: 0; }
+table.t .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-secondary); text-align: right; }
+table.t .title { font-weight: 500; }
+table.t .artist { color: var(--text-secondary); }
+table.t .key { font-family: var(--font-mono); font-weight: 600; }
+table.t .key.crimson { color: var(--crimson-500); }
+table.t .badge { display: inline-flex; align-items: center; padding: 2px var(--sp-2); border-radius: var(--r-1); font-family: var(--font-mono); font-weight: 600; font-size: var(--fs-12); background: var(--ink-100); color: var(--text-strong); border: 1px solid var(--border); }
+table.t .more { color: var(--text-tertiary); }
+
+.toolbar { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
+.toolbar input { height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-2); background: var(--ink-50); font: 400 var(--fs-13)/1 var(--font-jp); width: 220px; }
+.toolbar input:focus { outline: none; border-color: var(--crimson-500); box-shadow: var(--focus-ring); }
+.toolbar .count { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-tertiary); }
+
+caption { caption-side: top; text-align: left; padding: var(--sp-4) var(--sp-4) var(--sp-2); font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-tertiary); }
+</style>
+</head>
+<body>
+<main class="container">
+  <a href="index.html" class="preview-back">← Components</a>
+  <p class="eyebrow">Component</p>
+  <h1 class="preview-h1">Table</h1>
+  <p class="preview-deck">Eyebrow header (Inter 600, +0.12em UPPER), tabular-nums for numeric columns, hover row tinted with <code style="font-family: var(--font-mono);">--ink-50</code>.</p>
+
+  <section class="group">
+    <h2>Library table</h2>
+    <div class="frame">
+      <div class="toolbar">
+        <input type="search" placeholder="Filter …">
+        <span class="count">8 of 248</span>
+      </div>
+      <table class="t" aria-label="Library">
+        <thead>
+          <tr>
+            <th style="width: 40px;">#</th>
+            <th class="sortable" aria-sort="ascending">Title <span class="arrow">↑</span></th>
+            <th>Artist</th>
+            <th>Key</th>
+            <th>BPM</th>
+            <th>Capo</th>
+            <th>Format</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">1</td>
+            <td class="title">Country Roads</td>
+            <td class="artist">John Denver</td>
+            <td class="key crimson">G</td>
+            <td class="num">82</td>
+            <td class="num">0</td>
+            <td><span class="badge">ChordPro</span></td>
+            <td class="num">2 hours ago</td>
+          </tr>
+          <tr>
+            <td class="num">2</td>
+            <td class="title">Wonderwall</td>
+            <td class="artist">Oasis</td>
+            <td class="key">Em</td>
+            <td class="num">87</td>
+            <td class="num">0</td>
+            <td><span class="badge">ChordPro</span></td>
+            <td class="num">1 day ago</td>
+          </tr>
+          <tr>
+            <td class="num">3</td>
+            <td class="title">Yesterday</td>
+            <td class="artist">The Beatles</td>
+            <td class="key">F</td>
+            <td class="num">96</td>
+            <td class="num">0</td>
+            <td><span class="badge">ChordPro</span></td>
+            <td class="num">2 days ago</td>
+          </tr>
+          <tr>
+            <td class="num">4</td>
+            <td class="title">Let It Be</td>
+            <td class="artist">The Beatles</td>
+            <td class="key">C</td>
+            <td class="num">73</td>
+            <td class="num">0</td>
+            <td><span class="badge">ChordPro</span></td>
+            <td class="num">4 days ago</td>
+          </tr>
+          <tr>
+            <td class="num">5</td>
+            <td class="title">Autumn Leaves</td>
+            <td class="artist">Bill Evans Trio</td>
+            <td class="key">Em</td>
+            <td class="num">124</td>
+            <td class="num">0</td>
+            <td><span class="badge">iReal Pro</span></td>
+            <td class="num">6 days ago</td>
+          </tr>
+          <tr>
+            <td class="num">6</td>
+            <td class="title">Stand By Me</td>
+            <td class="artist">Ben E. King</td>
+            <td class="key">A</td>
+            <td class="num">118</td>
+            <td class="num">0</td>
+            <td><span class="badge">ChordPro</span></td>
+            <td class="num">8 days ago</td>
+          </tr>
+          <tr>
+            <td class="num">7</td>
+            <td class="title">Hallelujah</td>
+            <td class="artist">Leonard Cohen</td>
+            <td class="key">C</td>
+            <td class="num">72</td>
+            <td class="num">0</td>
+            <td><span class="badge">ChordPro</span></td>
+            <td class="num">2 weeks ago</td>
+          </tr>
+          <tr>
+            <td class="num">8</td>
+            <td class="title">Hotel California</td>
+            <td class="artist">Eagles</td>
+            <td class="key">Bm</td>
+            <td class="num">75</td>
+            <td class="num">7</td>
+            <td><span class="badge">iReal Pro</span></td>
+            <td class="num">2 weeks ago</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Compact · stats</h2>
+    <div class="frame">
+      <table class="t" aria-label="Setlist preview">
+        <caption>Setlist preview — illustrative only</caption>
+        <thead>
+          <tr>
+            <th>Song</th>
+            <th>Key</th>
+            <th>Tempo</th>
+            <th>Bars</th>
+            <th>Style</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Autumn Leaves</td><td class="num">Em</td><td class="num">120</td><td class="num">32</td><td class="num">Jazz</td></tr>
+          <tr><td>Blue Bossa</td><td class="num">Cm</td><td class="num">160</td><td class="num">16</td><td class="num">Bossa</td></tr>
+          <tr><td>So What</td><td class="num">Dm</td><td class="num">132</td><td class="num">32</td><td class="num">Modal</td></tr>
+          <tr><td>Take Five</td><td class="num">E♭m</td><td class="num">176</td><td class="num">24</td><td class="num">5/4</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+</body>
+</html>
