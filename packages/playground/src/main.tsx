@@ -354,29 +354,6 @@ function formatTranspose(value: number): string {
   return value > 0 ? `+${value}` : String(value);
 }
 
-function downloadBlob(filename: string, mime: string, body: string): void {
-  const blob = new Blob([body], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  // Defer revoke so Safari has a chance to start the download.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-async function copyText(text: string): Promise<boolean> {
-  if (typeof navigator === 'undefined' || !navigator.clipboard) return false;
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 // ---------------------------------------------------------------
 // PlaygroundApp
 // ---------------------------------------------------------------
@@ -399,7 +376,6 @@ function PlaygroundApp(): JSX.Element {
   const [transpose, setTranspose] = useState<number>(0);
   const [view, setView] = useState<View>('split');
   const [sampleId, setSampleId] = useState<string>(DEFAULT_SAMPLE.id);
-  const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [warningsExpanded, setWarningsExpanded] = useState<boolean>(false);
   const [version, setVersion] = useState<string | null>(cachedVersion);
 
@@ -482,25 +458,6 @@ function PlaygroundApp(): JSX.Element {
     editorRef.current?.insertAtCursor(text, selectInside);
   }, []);
 
-  const handleCopy = useCallback(async () => {
-    const source = inputFormat === 'chordpro' ? chordProSource : irealbSource;
-    const ok = await copyText(source);
-    setCopyFeedback(ok ? 'copied' : 'failed');
-    setTimeout(() => setCopyFeedback('idle'), 1500);
-  }, [chordProSource, irealbSource, inputFormat]);
-
-  const handleDownload = useCallback(() => {
-    if (inputFormat === 'chordpro') {
-      downloadBlob('chordsketch-source.cho', 'text/plain;charset=utf-8', chordProSource);
-    } else {
-      downloadBlob(
-        'chordsketch-source.irealb.json',
-        'application/json;charset=utf-8',
-        irealbSource,
-      );
-    }
-  }, [chordProSource, irealbSource, inputFormat]);
-
   return (
     <div className="chordsketch-app">
       <header className="topnav">
@@ -514,25 +471,6 @@ function PlaygroundApp(): JSX.Element {
           <span>{inputFormat === 'chordpro' ? 'ChordPro' : 'iRealb'}</span>
         </nav>
         <div className="actions">
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={handleCopy}
-            aria-live="polite"
-          >
-            {copyFeedback === 'copied'
-              ? 'Copied'
-              : copyFeedback === 'failed'
-                ? 'Copy failed'
-                : 'Copy source'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={handleDownload}
-          >
-            Download
-          </button>
           <a
             className="btn btn-ghost btn-sm"
             href="https://github.com/koedame/chordsketch"
