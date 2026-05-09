@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Avatars — ChordSketch Components</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="../tokens.css">
+<style>
+* { box-sizing: border-box; } html, body { margin: 0; }
+body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875; color: var(--text-primary); background: var(--canvas); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+.container { max-width: 960px; margin: 0 auto; padding: var(--sp-12) var(--sp-6); }
+.preview-back { font-family: var(--font-latin); font-size: var(--fs-12); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-secondary); text-decoration: none; }
+.preview-back:hover { color: var(--text-primary); }
+.eyebrow { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-secondary); margin: var(--sp-8) 0 var(--sp-2); }
+.preview-h1 { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-36); line-height: 1.111; letter-spacing: -0.02em; margin: 0 0 var(--sp-3); }
+.preview-deck { color: var(--text-secondary); margin: 0 0 var(--sp-12); max-width: 56ch; }
+.group { margin-bottom: var(--sp-12); }
+.group h2 { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-secondary); margin: 0 0 var(--sp-4); }
+.frame { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); padding: var(--sp-8); display: flex; flex-wrap: wrap; gap: var(--sp-6); align-items: center; }
+
+.avatar { display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-full); font-family: var(--font-latin); font-weight: 600; color: var(--ink-0); }
+.avatar.s24 { width: 24px; height: 24px; font-size: 10px; }
+.avatar.s28 { width: 28px; height: 28px; font-size: 11px; }
+.avatar.s36 { width: 36px; height: 36px; font-size: 13px; }
+.avatar.s48 { width: 48px; height: 48px; font-size: 16px; }
+
+.avatar.crimson { background: var(--crimson-500); }
+.avatar.ink     { background: var(--ink-700); }
+.avatar.warm    { background: #C97A4F; }
+.avatar.olive   { background: #6E7E4A; }
+.avatar.steel   { background: #4A6E7E; }
+.avatar.muted   { background: var(--ink-300); color: var(--text-strong); }
+
+.avatars { display: inline-flex; }
+.avatars > .avatar { border: 2px solid var(--surface); margin-left: -8px; }
+.avatars > .avatar:first-child { margin-left: 0; }
+.avatars.lg > .avatar { margin-left: -10px; }
+
+.with-meta { display: inline-flex; align-items: center; gap: var(--sp-3); }
+.with-meta .name { font-family: var(--font-jp); font-weight: 600; font-size: var(--fs-14); }
+.with-meta .role { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-tertiary); }
+
+.presence { position: relative; }
+.presence::after { content: ""; position: absolute; right: -2px; bottom: -2px; width: 10px; height: 10px; border: 2px solid var(--surface); border-radius: var(--r-full); background: var(--success-fg); }
+</style>
+</head>
+<body>
+<main class="container">
+  <a href="index.html" class="preview-back">← Components</a>
+  <p class="eyebrow">Component</p>
+  <h1 class="preview-h1">Avatars</h1>
+  <p class="preview-deck">Sizes 24 / 28 / 36 / 48 px. Stacked overlap of 8 px (10 px at 48). Initials use Inter 600.</p>
+
+  <section class="group">
+    <h2>Sizes</h2>
+    <div class="frame">
+      <span class="avatar s24 crimson">SL</span>
+      <span class="avatar s28 ink">MC</span>
+      <span class="avatar s36 warm">AT</span>
+      <span class="avatar s48 olive">RH</span>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Stacked +N</h2>
+    <div class="frame">
+      <span class="avatars">
+        <span class="avatar s28 crimson">SL</span>
+        <span class="avatar s28 ink">MC</span>
+        <span class="avatar s28 warm">AT</span>
+      </span>
+      <span class="avatars">
+        <span class="avatar s28 crimson">SL</span>
+        <span class="avatar s28 ink">MC</span>
+        <span class="avatar s28 warm">AT</span>
+        <span class="avatar s28 olive">RH</span>
+        <span class="avatar s28 muted">+3</span>
+      </span>
+      <span class="avatars lg">
+        <span class="avatar s48 crimson">SL</span>
+        <span class="avatar s48 ink">MC</span>
+        <span class="avatar s48 warm">AT</span>
+        <span class="avatar s48 muted">+5</span>
+      </span>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>With metadata</h2>
+    <div class="frame" style="flex-direction: column; align-items: stretch; gap: var(--sp-4);">
+      <div class="with-meta">
+        <span class="avatar s36 crimson presence">SL</span>
+        <div>
+          <div class="name">Sarah Lee</div>
+          <div class="role">koedame · owner</div>
+        </div>
+      </div>
+      <div class="with-meta">
+        <span class="avatar s36 ink">MC</span>
+        <div>
+          <div class="name">Mike Chen</div>
+          <div class="role">editor · added 2 songs</div>
+        </div>
+      </div>
+      <div class="with-meta">
+        <span class="avatar s36 warm">AT</span>
+        <div>
+          <div class="name">Alex Tanaka</div>
+          <div class="role">viewer</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

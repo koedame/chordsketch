@@ -1,0 +1,130 @@
+/*
+ * ChordSketch — Design Tokens
+ *
+ * Source of truth for color, typography, space, radius, elevation,
+ * and motion. See DESIGN.md for usage guidance and rationale.
+ */
+
+:root {
+  /* ---------- Color: Crimson (the only accent) ---------- */
+  --crimson-50:  #FDF2F5;
+  --crimson-100: #FBE1E8;
+  --crimson-300: #EC8AA3;
+  --crimson-500: #BD1642;
+  --crimson-600: #A30F37;
+  --crimson-700: #87092C;
+  --crimson-900: #480418;
+  --crimson:        var(--crimson-500);
+  --fg-on-crimson:  #FFFFFF;
+
+  /* ---------- Color: Ink (warm neutrals) ---------- */
+  --ink-0:    #FFFFFF;
+  --ink-50:   #FAFAF7;
+  --ink-100:  #F6F4F7;
+  --ink-200:  #E8E6EA;
+  --ink-300:  #D4D1D6;
+  --ink-500:  #8A8790;
+  --ink-600:  #67646D;
+  --ink-700:  #44424A;
+  --ink-1000: #0A0A0B;
+
+  /* Surface / border aliases */
+  --canvas:        var(--ink-50);
+  --surface:       var(--ink-0);
+  --surface-hover: var(--ink-100);
+  --border:        var(--ink-200);
+  --border-strong: var(--ink-300);
+
+  /* Text aliases */
+  --text-primary:   var(--ink-1000);
+  --text-strong:    var(--ink-700);
+  --text-secondary: var(--ink-600);
+  --text-tertiary:  var(--ink-500);
+
+  /* ---------- Color: Semantic ---------- */
+  --success-surface: #E8F3EC;
+  --success-fg:      #1A6B3A;
+  --warning-surface: #FBF1D9;
+  --warning-fg:      #8A5A07;
+  --danger-surface:  #FBE1E8;
+  --danger-fg:       #A30F37;
+  --info-surface:    #E6EEF7;
+  --info-fg:         #1F4F8A;
+
+  /* ---------- Focus ---------- */
+  --focus-ring: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
+
+  /* ---------- Typography: families ---------- */
+  --font-jp:      "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Noto Sans JP", system-ui, sans-serif;
+  --font-latin:   "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans:    var(--font-jp);
+  /* SMuFL music notation (segno, coda, accidentals, barlines, etc.).
+     iReal Pro / render-ireal use Bravura Text. See ADR-0014. */
+  --font-music:   "Bravura Text", "Noto Music", "Symbola", serif;
+
+  /* ---------- Typography: sizes (rem at 16px root) ---------- */
+  --fs-10: 0.625rem;
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-15: 0.9375rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-24: 1.5rem;
+  --fs-30: 1.875rem;
+  --fs-36: 2.25rem;
+  --fs-48: 3rem;
+  --fs-60: 3.75rem;
+  --fs-72: 4.5rem;
+
+  /* ---------- Space: 4pt baseline ---------- */
+  --sp-1:  0.25rem;   /*  4 */
+  --sp-2:  0.5rem;    /*  8 */
+  --sp-3:  0.75rem;   /* 12 */
+  --sp-4:  1rem;      /* 16 */
+  --sp-5:  1.25rem;   /* 20 */
+  --sp-6:  1.5rem;    /* 24 */
+  --sp-8:  2rem;      /* 32 */
+  --sp-10: 2.5rem;    /* 40 */
+  --sp-12: 3rem;      /* 48 */
+  --sp-16: 4rem;      /* 64 */
+  --sp-20: 5rem;      /* 80 */
+  --sp-24: 6rem;      /* 96 */
+  --sp-32: 8rem;      /* 128 */
+
+  /* ---------- Radius ---------- */
+  --r-1:    2px;
+  --r-2:    4px;   /* button */
+  --r-3:    8px;   /* card */
+  --r-4:    12px;  /* modal */
+  --r-full: 9999px;
+
+  /* ---------- Elevation ---------- */
+  --e-1:       0 1px 2px rgba(10, 10, 11, 0.04);
+  --e-2:       0 4px 12px rgba(10, 10, 11, 0.08);   /* popover */
+  --e-3:       0 16px 32px rgba(10, 10, 11, 0.12);  /* modal */
+  --e-overlay: 0 24px 48px rgba(10, 10, 11, 0.18);  /* command palette */
+
+  /* ---------- Motion ---------- */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-1: 120ms;  /* hover / focus */
+  --dur-2: 200ms;  /* state */
+  --dur-3: 280ms;  /* dialog */
+  --dur-4: 400ms;  /* page */
+
+  /* ---------- Container max-widths ---------- */
+  --maxw-app:     1280px;
+  --maxw-reading: 720px;
+  --maxw-guide:   1080px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 0ms;
+    --dur-2: 0ms;
+    --dur-3: 0ms;
+    --dur-4: 0ms;
+  }
+}

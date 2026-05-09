@@ -1,0 +1,1054 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor · iReal Pro — ChordSketch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700;900&family=Roboto:wght@400;500;700;900&family=Source+Serif+4:ital,wght@0,400;0,700;0,900;1,400&display=swap">
+<link rel="stylesheet" href="../../tokens.css">
+<style>
+@font-face {
+  font-family: "Bravura Text";
+  src: url("https://cdn.jsdelivr.net/gh/steinbergmedia/bravura/redist/woff/BravuraText.woff2") format("woff2"),
+       url("https://cdn.jsdelivr.net/gh/steinbergmedia/bravura/redist/woff/BravuraText.woff") format("woff");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+  /* SMuFL Private Use Area glyphs (segno, coda, time-sig digits,
+     barline glyphs, etc.) + the standard music accidentals (♯ ♭ ♮)
+     ONLY. Chord-symbol text — root letter, digits, qualities — uses a
+     regular text font instead of Bravura, with Greek / Latin Unicode
+     stand-ins for the chord qualities (Δ for maj7, ø for half-dim,
+     ° for dim, − for minor). That way the whole chord reads at one
+     consistent weight from a regular text font; Bravura is reserved
+     for symbols that genuinely have no Latin / Greek equivalent. */
+  unicode-range: U+E000-F8FF, U+266D-266F;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875; color: var(--text-primary); background: var(--canvas); -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; min-height: 100vh; }
+a { color: inherit; text-decoration: none; }
+
+/* ---------- Top nav ---------- */
+.topnav { height: 56px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 var(--sp-6); gap: var(--sp-4); }
+.topnav .brand { display: flex; align-items: center; gap: var(--sp-3); font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-16); letter-spacing: -0.01em; }
+.topnav .brand .mark { width: 24px; height: 24px; border-radius: var(--r-1); display: block; }
+.topnav .crumbs { display: flex; align-items: center; gap: var(--sp-3); margin-left: var(--sp-6); font-size: var(--fs-14); color: var(--text-secondary); }
+.topnav .crumbs .sep { color: var(--text-tertiary); }
+.topnav .crumbs .current { color: var(--text-primary); font-weight: 500; }
+.topnav .save-state { display: inline-flex; align-items: center; gap: var(--sp-2); font-family: var(--font-latin); font-weight: 500; font-size: var(--fs-13); color: var(--success-fg); margin-left: var(--sp-3); }
+.topnav .save-state .dot { width: 6px; height: 6px; border-radius: var(--r-full); background: currentColor; }
+.topnav .actions { margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); }
+
+.btn { display: inline-flex; align-items: center; gap: var(--sp-2); height: 36px; padding: 0 var(--sp-4); border-radius: var(--r-2); border: 1px solid transparent; font: 500 var(--fs-14)/1 var(--font-jp); cursor: pointer; transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out); text-decoration: none; }
+.btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.btn-primary { background: var(--crimson-500); color: var(--fg-on-crimson); }
+.btn-primary:hover { background: var(--crimson-600); }
+.btn-secondary { background: var(--surface); color: var(--text-primary); border-color: var(--border-strong); }
+.btn-secondary:hover { background: var(--ink-100); }
+.btn-ghost { background: transparent; color: var(--text-secondary); }
+.btn-ghost:hover { background: var(--ink-100); color: var(--text-primary); }
+.btn-icon { padding: 0; width: 36px; justify-content: center; }
+.btn-sm { height: 28px; padding: 0 var(--sp-3); font-size: var(--fs-13); }
+
+/* ---------- Toolbar ---------- */
+.toolbar { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-6); background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.tool-group { display: flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-3); border-right: 1px solid var(--border); height: 28px; }
+.tool-group:last-of-type { border-right: 0; }
+.tool-group .label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); margin-right: var(--sp-2); }
+.segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--r-2); overflow: hidden; }
+.segmented a, .segmented button { background: var(--surface); border: 0; padding: 0 var(--sp-3); height: 28px; font: 500 var(--fs-13)/1 var(--font-jp); color: var(--text-secondary); cursor: pointer; border-right: 1px solid var(--border); display: inline-flex; align-items: center; text-decoration: none; }
+.segmented a:last-child, .segmented button:last-child { border-right: 0; }
+.segmented [aria-pressed="true"] { background: var(--ink-1000); color: var(--ink-0); }
+
+/* ---------- Page ---------- */
+.page { flex: 1; max-width: var(--maxw-app); width: 100%; margin: 0 auto; padding: var(--sp-8) var(--sp-6); display: grid; grid-template-columns: 1fr 320px; gap: var(--sp-8); align-items: start; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; } .inspector { order: 2; } }
+
+/* ---------- Metadata card ---------- */
+.meta-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); padding: var(--sp-5) var(--sp-6); margin-bottom: var(--sp-6); }
+.meta-card h1 { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-30); line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 var(--sp-1); }
+.meta-card .composer { font-family: var(--font-jp); font-weight: 400; font-size: var(--fs-14); color: var(--text-secondary); margin: 0 0 var(--sp-5); }
+.meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--sp-4); }
+.meta-field { display: flex; flex-direction: column; gap: 4px; }
+.meta-field label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+.meta-field input, .meta-field select { height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-2); background: var(--ink-50); font: 500 var(--fs-14)/1 var(--font-mono); color: var(--text-primary); transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out); font-variant-numeric: tabular-nums; }
+.meta-field input:focus, .meta-field select:focus { outline: none; border-color: var(--crimson-500); background: var(--surface); box-shadow: var(--focus-ring); }
+
+/* ============================================================
+   iReal Pro chart — engraved in black on white, no cell grid.
+   Bars are separated by left border-lines only; section markers
+   are small bordered letters anchored at the top-left of the
+   first bar of a section. Chord typography uses Source Serif
+   (a Garamond/Times-class serif close to iReal's house face) for
+   letters and digits, and Bravura Text for SMuFL accidentals,
+   chord-symbol qualities, barline glyphs, and segno / coda.
+   ============================================================ */
+.chart { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); padding: var(--sp-10) var(--sp-12); color: var(--ink-1000); }
+
+.chart-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: baseline; gap: var(--sp-4); padding-bottom: var(--sp-6); margin-bottom: var(--sp-6); border-bottom: 1px solid var(--border); font-family: "Source Serif 4", Georgia, "Times New Roman", serif; color: var(--ink-1000); }
+.chart-header .style { font-style: italic; font-size: var(--fs-14); }
+.chart-header .title { font-weight: 700; font-size: var(--fs-18); text-align: center; }
+.chart-header .type { text-align: right; font-size: var(--fs-14); }
+
+/* Lines have an explicit vertical gap. Section markers ([A] [B] [C])
+   are absolutely positioned above the first bar of their section and
+   sit visually inside this gap rather than colliding with the previous
+   line's bars. iReal Pro uses the same convention — section letters
+   live in inter-line whitespace, not on top of music. */
+.chart-body { display: flex; flex-direction: column; gap: 32px; }
+
+/* 4 bars per line in equal-width columns. iReal Pro's printed layouts
+   alternate between equal and content-driven widths depending on the
+   chart, but the equal-grid look is closer to the engraved feel of the
+   Even 8ths 3 / Rock 3 PDFs in /tmp/, and avoids flex auto-width
+   reflowing the chart awkwardly when content density differs. */
+.chart-line { display: grid; grid-template-columns: repeat(4, 1fr); align-items: stretch; }
+/* Coda destination — same column geometry as the main chart so the bars
+   line up vertically with the form above; only an extra margin separates
+   it as an out-of-form block. */
+.chart-line.coda-line { margin-top: var(--sp-8); }
+
+/* Each bar carries its left barline. The chart line's last bar gets a right
+   barline. Bars are sized by content (flex auto), so chord text fills more
+   of the bar's vertical space — matching iReal Pro's printed density. */
+.bar {
+  position: relative;
+  padding: 2px var(--sp-3) 2px var(--sp-3);
+  /* The bar is a metric grid: 4 columns for 4/4, 3 columns for 3/4
+     (override `--beats` per chart or per bar). Each chord lives in the
+     grid column corresponding to its beat — beat 1 by default, or
+     `data-beat="2|3|4"` on the chord — so chord placement is metrically
+     accurate without CSS positioning hacks. */
+  display: grid;
+  grid-template-columns: repeat(var(--beats, 4), 1fr);
+  align-items: center;
+  border-left: 1.5px solid var(--ink-1000);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.bar > .chord                 { grid-column: 1; justify-self: start; align-self: center; }
+.bar > .chord[data-beat="2"]  { grid-column: 2; }
+.bar > .chord[data-beat="3"]  { grid-column: 3; }
+.bar > .chord[data-beat="4"]  { grid-column: 4; }
+
+/* iReal Pro convention: every line reserves an indent at its left edge.
+   The first barline of every line begins at the same offset from the
+   chart-card content edge — so chord roots stack vertically across
+   lines. The reserved gap holds the time signature (line 1 only,
+   typeset BEFORE the repeat-start barline as in standard music
+   notation), section markers ([A] [B] [C]), or Coda glyphs. */
+.chart-line { position: relative; padding-left: 26px; }
+.chart-line > .time-sig {
+  /* Sits in the reserved indent area, before the first bar's barline,
+     centered both horizontally and vertically against the chord row. */
+  position: absolute;
+  left: 0;
+  width: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-right: 0;
+}
+.bar:hover { background: rgba(189, 22, 66, 0.05); }
+.bar.active { background: var(--crimson-50); outline: 1.5px solid var(--crimson-500); outline-offset: -1.5px; z-index: 2; }
+
+/* End-of-line single barline. Skipped when the last bar already carries
+   its own glyph-based barline (repeat-end or final), so we never need
+   `!important` to override. */
+.chart-line .bar:last-child:not(.repeat-end):not(.final) { border-right: 1.5px solid var(--ink-1000); }
+
+/* All barlines render at the same vertical extent: single barlines use
+   border-left at the bar's full height, and special barlines use SMuFL
+   glyphs sized to match. The bar's min-height drives both via the
+   shared `--barline-h` token, so changing the bar height keeps the
+   single barline and the engraved glyphs in lockstep. */
+.bar {
+  --barline-h: 58px;
+  min-height: var(--barline-h);
+}
+.bar.repeat-start,
+.bar.repeat-end,
+.bar.final { position: relative; }
+.bar.repeat-start::before,
+.bar.repeat-end::after,
+.bar.final::after {
+  font-family: var(--font-music);
+  font-weight: normal;
+  /* Empirically tuned so the visible Bravura barline strokes occupy the
+     same y-range (1px..57px within a 58px bar = 57px tall) as the 1.5px
+     border-left used on adjacent single barlines. Verified by reading
+     pixel data from a Playwright screenshot of the rendered DOM:
+       single barline:   y=1..57, h=57
+       repeat-start:     y=1..57, h=57
+       repeat-end:       y=1..57, h=57
+       final:            y=1..57, h=57
+     The values below (font-size 71px, top -1px) were the last in a
+     series of probe edits at this `--barline-h: 58px` setting. If the
+     bar height is changed, both numbers must be re-tuned — Bravura's
+     glyph metrics aren't perfectly proportional with font-size. */
+  font-size: 71px;
+  line-height: 1;
+  color: var(--ink-1000);
+  position: absolute;
+  top: -1px;
+  pointer-events: none;
+}
+.bar.repeat-start { border-left: 0; padding-left: calc(var(--sp-4) + 12px); }
+.bar.repeat-start::before { content: "\E040"; left: -2px; }    /* repeatLeft */
+.bar.repeat-end   { border-right: 0; padding-right: calc(var(--sp-3) + 12px); }
+.bar.repeat-end::after   { content: "\E041"; right: -2px; }    /* repeatRight */
+.bar.final        { border-right: 0; padding-right: calc(var(--sp-3) + 10px); }
+.bar.final::after        { content: "\E032"; right: -2px; }    /* barlineFinal */
+
+/* Section marker — small black-filled square with white letter, anchored at
+   the top-left of the first bar of a section. Matches iReal Pro's printed
+   chart convention (see /tmp/Even 8ths 3.pdf, /tmp/Rock 3.pdf). */
+.bar .section-marker {
+  position: absolute;
+  left: -20px;
+  /* Sit centered in the inter-line gap above this bar. */
+  top: -16px;
+  width: 20px;
+  height: 20px;
+  background: var(--ink-1000);
+  color: var(--ink-0);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Roboto", system-ui, sans-serif;
+  font-weight: 900;
+  font-size: var(--fs-15);
+  z-index: 3;
+  letter-spacing: 0;
+}
+
+/* Time signature stacked at the very start of the chart. Uses Bravura's
+   purpose-built timeSig digits (U+E080–E089) which are proportioned for
+   two-line stacked rendering. Stacked total height ≈ chord-root height so
+   the two read as one engraved unit. */
+.time-sig {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* Regular text digits (Roboto Bold) instead of Bravura's timeSig
+     glyphs. Bravura's timeSig digits sit close to the baseline by
+     design, which makes a stacked time signature look bottom-heavy
+     in plain CSS line-boxes; standard text digits center naturally. */
+  font-family: "Roboto", system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink-1000);
+  margin-right: 0;
+  flex-shrink: 0;
+  letter-spacing: 0;
+}
+.time-sig span {
+  display: block;
+  text-align: center;
+  width: 1em;
+  line-height: 1.05;
+}
+.time-sig span:first-child { border-bottom: 1.5px solid currentColor; }
+
+/* Bar text-symbol (italic, e.g. D.C. al Coda) */
+.bar .text-mark {
+  position: absolute;
+  left: var(--sp-5);
+  bottom: -22px;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-style: italic;
+  font-size: var(--fs-13);
+  color: var(--ink-1000);
+  white-space: nowrap;
+}
+
+/* SMuFL glyph anchored above a CHORD (segno / coda). iReal Pro engraves
+   these symbols above the chord they cue, not above the barline — so
+   the glyph is grid-placed into the beat column the chord lives in
+   (`data-beat="1|2|3|4"`), then absolutely lifted above the bar with
+   translateY. Defaults to beat 1 (the first chord of the bar). */
+.bar .glyph-mark {
+  position: absolute;
+  grid-column: 1;
+  justify-self: start;
+  top: -2px;
+  transform: translateY(-100%);
+  font-family: var(--font-music);
+  font-style: normal;
+  font-size: 32px;
+  line-height: 1;
+  color: var(--ink-1000);
+  pointer-events: none;
+}
+.bar .glyph-mark[data-beat="2"] { grid-column: 2; }
+.bar .glyph-mark[data-beat="3"] { grid-column: 3; }
+.bar .glyph-mark[data-beat="4"] { grid-column: 4; }
+
+/* ---------- Volta / repeat-ending brackets ----------
+   Standard music-notation 1st / 2nd ending brackets. The bracket sits
+   above the bar(s) it covers, with a horizontal line, a downward tail
+   at the LEFT end (always), an optional CLOSING tail at the right end
+   (1st ending only — 2nd-ending brackets stay open at the right because
+   the music continues forward), and a small numeric label ("1." / "2.")
+   at the upper-left of the bracket. */
+.bar.ending { position: relative; }
+.bar > .ending-bracket {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -22px;
+  height: 18px;
+  border-top: 1.5px solid var(--ink-1000);
+  border-left: 1.5px solid var(--ink-1000);
+  box-sizing: border-box;
+  padding: 2px 0 0 5px;
+  font-family: "Roboto", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink-1000);
+  line-height: 1;
+}
+/* 1st ending closes at the right (the repeat sends you back from here);
+   2nd ending stays open at the right (music continues into the next
+   section). */
+.bar.ending-1 > .ending-bracket { border-right: 1.5px solid var(--ink-1000); }
+
+/* ---------- Chord typography ----------
+   Root letter — heavy serif (Source Serif Black 900) at chart-symbol
+   size. Accidentals (♯ / ♭) — Bravura SMuFL csym glyphs, raised
+   superscript next to the root. Quality (m, 7, ø7, Δ7, m7♭5) — small
+   subscript that hangs slightly below the baseline. Multiple
+   sub-quality lines stack vertically (e.g. "7♯9" over "♯5").
+   Matches iReal Pro's chart engraving in /tmp/Even 8ths 3.pdf and
+   /tmp/Rock 3.pdf. Implemented with inline-block + vertical-align so
+   the typography flows like text (the PDFs are typeset, not laid out
+   with flexbox). */
+.chord {
+  display: inline-block;
+  white-space: nowrap;
+  /* Chord text (root letter, digits, qualities) all uses one regular
+     text font at one weight. Quality glyphs are rendered with Latin /
+     Greek stand-ins (Δ for maj7, ø for half-dim, − for minor, ° for
+     dim, + for aug) which all live in the regular font's glyph set —
+     this keeps minor signs visible and digits balanced instead of
+     fighting a music-font weight mismatch. Accidentals (♯ ♭) still
+     come from Bravura since Roboto lacks proper music sharp / flat
+     shapes. */
+  font-family: "Roboto", system-ui, -apple-system, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink-1000);
+  line-height: 1;
+  vertical-align: baseline;
+}
+.chord-root {
+  font-size: 44px;
+  display: inline-block;
+  line-height: 1;
+}
+.chord-acc {
+  /* Sharp / flat next to the root letter, raised superscript but kept
+     within the root letter's vertical extent. Accidental glyph from
+     Bravura Text — same weight family as the rest of the chord. */
+  font-family: var(--font-music);
+  font-weight: normal;
+  font-size: 26px;
+  display: inline-block;
+  vertical-align: 0.18em;
+  margin-left: -2px;
+  line-height: 1;
+}
+.chord-qual {
+  /* Inherits chord font (Source Serif at chord weight). Quality glyphs
+     (Δ for maj7, ø for half-dim, − for minor, ° for dim, + for aug)
+     are regular Unicode characters that render in the same font as
+     the digits, so the whole quality reads at one consistent weight. */
+  font-size: 22px;
+  display: inline-block;
+  vertical-align: -0.15em;
+  margin-left: 0;
+  letter-spacing: -0.005em;
+  line-height: 1;
+}
+.chord-qual .smufl { font-family: var(--font-music); font-weight: normal; }
+/* Stacked quality lines (e.g. "7♯9" above "♯5"). */
+.chord-qual.stacked { vertical-align: -0.5em; line-height: 0.95; }
+.chord-qual.stacked > span { display: block; }
+
+/* Slash chord — root chord over bass note separated by a horizontal rule.
+   Used for figures like "D−/A" or "E♭−7/D♭". */
+.chord.slash { display: inline-flex; flex-direction: column; align-items: center; line-height: 0.95; gap: 0; vertical-align: middle; }
+.chord.slash .top, .chord.slash .bot { display: inline-block; line-height: 1; }
+.chord.slash .bot { font-size: 18px; padding-top: 2px; border-top: 1px solid var(--ink-1000); margin-top: 2px; }
+
+/* SMuFL utility — beats more-specific component selectors that use the
+   `font:` shorthand (which would otherwise reset font-family back to mono). */
+.smufl { font-family: var(--font-music) !important; font-style: normal; line-height: 1; }
+
+/* ---------- Bar-content variants beyond the regular chord cell ---------- */
+
+/* No-Chord bar: literal "N.C." rendered in the chord typeface so it sits
+   on the same baseline as a regular chord. */
+.chord.nc { font-family: "Roboto", system-ui, sans-serif; font-weight: 700; font-size: 22px; letter-spacing: 0.02em; }
+
+/* Invisible-root: the chord root is intentionally not rendered (the
+   chord is held; only the bass moves). Visually this is a slash chord
+   with the top half blank — a horizontal divider plus a bass note
+   below. The oval icon in the iReal Pro editor toolbar is a button
+   glyph, not a chart rendering. */
+.chord.invisible-root { display: inline-flex; flex-direction: column; align-items: center; line-height: 1; gap: 0; }
+.chord.invisible-root .bass {
+  font-family: "Roboto", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  border-top: 1.5px solid var(--ink-1000);
+  padding-top: 2px;
+  /* Reserve space ABOVE the divider equal to the chord-root height so
+     the invisible-root cell shares vertical metrics with neighbouring
+     bars. */
+  margin-top: 28px;
+  min-width: 28px;
+  text-align: center;
+  line-height: 1;
+}
+
+/* Repeat-1-bar / repeat-2-bars slash glyphs render as a single SMuFL
+   character occupying the chord cell. */
+.bar > .repeat-bar {
+  font-family: var(--font-music);
+  font-size: 36px;
+  line-height: 1;
+  color: var(--ink-1000);
+  align-self: center;
+  justify-self: center;
+  grid-column: 1 / -1;
+}
+
+/* Alternate chord — a smaller chord rendered ABOVE the primary chord in
+   the same beat column. Sits inline above the primary so it scrolls with
+   the bar. */
+.chord-stack { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.chord-stack .alt {
+  font-family: "Roboto", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-secondary);
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+/* Fermata glyph anchored above its chord. Bravura's fermataAbove visible
+   ink sits in the top ~25% of the rendered font-size box; the element
+   is positioned so the visible arc lands JUST above the chord, not
+   floating in the middle of the inter-line gap. */
+.bar > .fermata {
+  position: absolute;
+  top: -22px;
+  font-family: var(--font-music);
+  font-style: normal;
+  font-size: 56px;
+  line-height: 1;
+  color: var(--ink-1000);
+  pointer-events: none;
+  grid-column: 1;
+  justify-self: center;
+}
+.bar > .fermata[data-beat="2"] { grid-column: 2; }
+.bar > .fermata[data-beat="3"] { grid-column: 3; }
+.bar > .fermata[data-beat="4"] { grid-column: 4; }
+
+/* Last-bar (END) playback marker — small "END" text rendered below the
+   bar's right barline, not on top of any glyph. The right barline is
+   unchanged; "END" is just a label that sits underneath it. */
+.bar.last-bar .end-mark {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  transform: translate(50%, 100%);
+  font-family: "Roboto", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ink-1000);
+  line-height: 1;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Vertical spacer between chart-line rows. */
+.chart-line-spacer { height: var(--sp-6); }
+.chart-line-spacer.x2 { height: var(--sp-12); }
+.chart-line-spacer.x3 { height: var(--sp-20); }
+
+/* Chord width modes. The chart-wide `.chart.compact` modifier scales
+   chord glyphs horizontally (Normal=1, Small=0.7) without touching
+   vertical metrics — matches iReal Pro's N / S toggle. */
+.chart.compact .chord { transform: scaleX(0.72); transform-origin: left center; }
+
+/* ---------- Player controls strip ----------
+   Sits below the chart body. Mocks the iReal Pro editor's bottom strip:
+   style label / Play / Time / Repeats / Tempo / Key. Non-functional. */
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  margin-top: var(--sp-8);
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--ink-1000);
+  color: var(--ink-0);
+  border-radius: var(--r-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-13);
+  font-variant-numeric: tabular-nums;
+}
+.player-controls .play-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-full);
+  background: var(--crimson-500);
+  color: var(--fg-on-crimson);
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.player-controls .pc-stat { display: inline-flex; flex-direction: column; gap: 2px; min-width: 56px; }
+.player-controls .pc-stat .label {
+  font-family: var(--font-latin);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-300);
+}
+.player-controls .pc-stat .value { font-weight: 600; color: var(--ink-0); }
+
+/* ============================================================
+   Inspector
+   ============================================================ */
+.inspector { position: sticky; top: var(--sp-8); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); padding: var(--sp-5); }
+.inspector header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-4); padding-bottom: var(--sp-3); border-bottom: 1px solid var(--border); }
+.inspector header .title { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-16); }
+.inspector header .pos { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-tertiary); }
+.inspector .row { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.inspector .row > .label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+.inspector input.chord-input { width: 100%; height: 36px; padding: 0 var(--sp-3); border: 1px solid var(--border-strong); border-radius: var(--r-2); font: 500 var(--fs-18)/1 "Roboto", system-ui, sans-serif; color: var(--ink-1000); background: var(--ink-50); }
+.inspector input.chord-input:focus { outline: none; border-color: var(--crimson-500); background: var(--surface); box-shadow: var(--focus-ring); }
+.inspector .chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.inspector .chip { display: inline-flex; align-items: center; padding: var(--sp-1) var(--sp-3); border: 1px solid var(--border-strong); border-radius: var(--r-full); background: var(--surface); font: 500 var(--fs-13)/1 "Roboto", system-ui, sans-serif; color: var(--text-secondary); cursor: pointer; min-height: 28px; }
+/* SMuFL music-symbol chips render their glyph larger than the regular
+   text-chip font-size, since Bravura draws the visible ink at a small
+   fraction of the rendered em-square. */
+.inspector .chip.smufl { font-size: 20px; line-height: 1; padding-top: 0; padding-bottom: 0; }
+/* Fermata's visible-ink ratio is ~28% (vs ~70% for segno/coda), so the
+   chip wraps the glyph in an inner span and scales just the glyph via
+   transform — keeping chip box dimensions identical to its neighbours
+   while the visible ink reads at the same scale. The translateY shifts
+   the visible arc down so its centre lands on the chip's vertical
+   centre (Bravura draws fermataAbove well above the baseline). */
+.inspector .chip.smufl .scale-up {
+  display: inline-block;
+  transform: translateY(35%) scale(1.9);
+  transform-origin: center;
+  line-height: 1;
+}
+.inspector .chip[aria-pressed="true"] { background: var(--ink-1000); color: var(--ink-0); border-color: var(--ink-1000); }
+.inspector .chip:hover:not([aria-pressed="true"]) { color: var(--text-primary); background: var(--ink-100); }
+.inspector .footer { display: flex; gap: var(--sp-2); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+
+/* ---------- Status ---------- */
+.status { display: flex; align-items: center; padding: var(--sp-2) var(--sp-6); background: var(--surface); border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-secondary); gap: var(--sp-6); }
+.status .item { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.status .spacer { flex: 1; }
+.status .ok { color: var(--success-fg); }
+</style>
+</head>
+<body>
+
+<header class="topnav">
+  <a class="brand" href="../../ChordSketch%20Design%20System.html">
+    <img class="mark" src="../../assets/logo.svg" alt="" width="24" height="24">
+    ChordSketch
+  </a>
+  <div class="crumbs">
+    <a href="library.html">Library</a>
+    <span class="sep">›</span>
+    <span class="current">Autumn Leaves</span>
+  </div>
+  <span class="save-state" aria-live="polite"><span class="dot"></span>Saved · 14:32</span>
+  <div class="actions">
+    <button class="btn btn-ghost btn-sm">⌘K · Commands</button>
+    <button class="btn btn-ghost btn-icon" aria-label="Undo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg></button>
+    <button class="btn btn-ghost btn-icon" aria-label="Redo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 15-6.7L21 13"/></svg></button>
+    <a href="viewer.html" class="btn btn-secondary">Preview</a>
+    <button class="btn btn-primary">Save</button>
+  </div>
+</header>
+
+<div class="toolbar" role="toolbar" aria-label="Editor tools">
+  <div class="tool-group">
+    <span class="label">Format</span>
+    <div class="segmented" role="tablist">
+      <a href="editor.html" aria-pressed="false">ChordPro</a>
+      <a href="editor-irealb.html" aria-pressed="true">iReal Pro</a>
+    </div>
+  </div>
+  <div class="tool-group">
+    <span class="label">Transpose</span>
+    <button class="btn btn-secondary btn-sm" aria-label="Transpose down">−</button>
+    <span style="font-family: var(--font-mono); font-size: var(--fs-13); padding: 0 var(--sp-2); min-width: 28px; text-align: center;">+0</span>
+    <button class="btn btn-secondary btn-sm" aria-label="Transpose up">+</button>
+  </div>
+  <div class="tool-group">
+    <span class="label">Width</span>
+    <div class="segmented" role="tablist" aria-label="Chord width">
+      <button aria-pressed="true" title="Normal width">N</button>
+      <button aria-pressed="false" title="Small width — compresses chord glyphs horizontally so several chords fit in a tight bar">S</button>
+    </div>
+  </div>
+  <div class="tool-group">
+    <span class="label">Chord</span>
+    <div class="segmented" role="tablist" aria-label="Chord input target">
+      <button aria-pressed="true">Regular</button>
+      <button aria-pressed="false" title="Small alternate chord rendered above the primary chord">Alternate</button>
+    </div>
+  </div>
+  <div class="tool-group">
+    <span class="label">Insert</span>
+    <button class="btn btn-ghost btn-sm">Bar</button>
+    <button class="btn btn-ghost btn-sm">Section</button>
+    <button class="btn btn-ghost btn-sm">Repeat</button>
+    <button class="btn btn-ghost btn-sm">Ending</button>
+    <button class="btn btn-ghost btn-sm">Symbol</button>
+  </div>
+  <div class="tool-group">
+    <span class="label">Layout</span>
+    <span style="font-family: var(--font-mono); font-size: var(--fs-13); color: var(--text-secondary);">4 bars / line</span>
+  </div>
+</div>
+
+<main class="page">
+  <div>
+
+    <section class="meta-card" aria-label="Chart metadata">
+      <h1>Autumn Leaves</h1>
+      <p class="composer">Joseph Kosma · Johnny Mercer · Jacques Prévert</p>
+      <div class="meta-grid">
+        <div class="meta-field"><label for="title">Title</label><input id="title" value="Autumn Leaves"></div>
+        <div class="meta-field"><label for="composer">Composer</label><input id="composer" value="Joseph Kosma"></div>
+        <div class="meta-field"><label for="style">Style</label>
+          <select id="style">
+            <optgroup label="Jazz">
+              <option>Afro 12/8</option>
+              <option>Ballad Double Time Feel</option>
+              <option>Ballad Even</option>
+              <option>Ballad Melodic</option>
+              <option>Ballad Swing</option>
+              <option>Blue Note</option>
+              <option>Bossa Nova</option>
+              <option>Bossa/Swing</option>
+              <option>Doo Doo Cats</option>
+              <option>Even 8ths</option>
+              <option>Even 8ths Open</option>
+              <option>Even 16ths</option>
+              <option>Guitar Trio</option>
+              <option>Gypsy Jazz</option>
+              <option>Latin</option>
+              <option>Latin/Swing</option>
+              <option>Long Notes</option>
+              <option selected>Medium Swing</option>
+              <option>Medium Up Swing</option>
+              <option>Medium Up Swing 2</option>
+              <option>New Orleans Swing</option>
+              <option>Second Line</option>
+              <option>Slow Swing</option>
+              <option>Swing Two/Four</option>
+              <option>Trad Jazz</option>
+              <option>Up Tempo Swing</option>
+              <option>Up Tempo Swing 2</option>
+            </optgroup>
+            <optgroup label="Latin">
+              <option>Argentina: Tango</option>
+              <option>Brazil: Bossa Acoustic</option>
+              <option>Brazil: Bossa Electric</option>
+              <option>Brazil: Samba</option>
+              <option>Cuba: Bolero</option>
+              <option>Cuba: Cha Cha Cha</option>
+              <option>Cuba: Son Montuno 2-3</option>
+              <option>Cuba: Son Montuno 3-2</option>
+            </optgroup>
+            <optgroup label="Pop">
+              <option>Bluegrass</option>
+              <option>Country</option>
+              <option>Disco</option>
+              <option>Funk</option>
+              <option>Glam Funk</option>
+              <option>House</option>
+              <option>Reggae</option>
+              <option>Rock</option>
+              <option>Rock 12/8</option>
+              <option>RnB</option>
+              <option>Shuffle</option>
+              <option>Slow Rock</option>
+              <option>Smooth</option>
+              <option>Soul</option>
+              <option>Virtual Funk</option>
+            </optgroup>
+            <optgroup label="Blues">
+              <option>Chicago Shuffle</option>
+              <option>Flat Tire</option>
+              <option>Funky</option>
+              <option>Gospel</option>
+              <option>Lucille</option>
+              <option>Mo-Slo</option>
+              <option>Muddy</option>
+              <option>Nola</option>
+              <option>Shout</option>
+              <option>Slo-Mo</option>
+              <option>Stax</option>
+              <option>Texas Rock</option>
+            </optgroup>
+            <optgroup label="Brazilian">
+              <option>Afoxe</option>
+              <option>Baiao</option>
+              <option>Bossa Ballad</option>
+              <option>Bossa Cha</option>
+              <option>Bossa Nova</option>
+              <option>Maracatu</option>
+              <option>Partido Alto</option>
+              <option>Samba</option>
+              <option>Samba Brush</option>
+              <option>Samba Fast</option>
+              <option>Samba Percussion</option>
+            </optgroup>
+            <optgroup label="Salsa">
+              <option>Cuba: Afro 6/8</option>
+              <option>Cuba: Bolero</option>
+              <option>Cuba: Cha Cha Cha</option>
+              <option>Cuba: Comparsa</option>
+              <option>Cuba: Danzon</option>
+              <option>Cuba: Guajira</option>
+              <option>Cuba: Guaracha</option>
+              <option>Cuba: Mambo</option>
+              <option>Cuba: Mozambique</option>
+              <option>Cuba: Rumba Guaguanco</option>
+              <option>Cuba: Son Montuno 2-3</option>
+              <option>Cuba: Songo</option>
+              <option>Cuba: Timba</option>
+              <option>Dominican Republic: Merengue</option>
+              <option>Puerto Rico: Bomba</option>
+              <option>Puerto Rico: Plena</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="meta-field"><label for="key">Key</label>
+          <select id="key" style="color: var(--crimson-500); font-weight: 700;"><option>C</option><option>D</option><option selected>Em</option><option>F</option><option>G</option><option>Am</option></select>
+        </div>
+        <div class="meta-field"><label for="time">Time</label>
+          <select id="time">
+            <option>2/2</option><option>3/2</option>
+            <option>2/4</option><option>3/4</option><option selected>4/4</option><option>5/4</option><option>6/4</option><option>7/4</option>
+            <option>3/8</option><option>5/8</option><option>6/8</option><option>7/8</option><option>9/8</option><option>12/8</option>
+          </select>
+        </div>
+        <div class="meta-field"><label for="tempo">Tempo</label><input id="tempo" type="number" value="124"></div>
+      </div>
+      <div style="display: flex; gap: var(--sp-2); margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--border); align-items: center;">
+        <span style="font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); margin-right: var(--sp-2);">Key change</span>
+        <button class="btn btn-secondary btn-sm" title="Update the key signature display only — chord symbols are unchanged">Set</button>
+        <button class="btn btn-secondary btn-sm" title="Change the key and transpose every chord in the chart to match">Set and Transpose</button>
+      </div>
+    </section>
+
+    <section class="chart" aria-label="iReal Pro chart">
+      <header class="chart-header">
+        <span class="style">(Medium Swing)</span>
+        <span class="title">Autumn Leaves</span>
+        <span class="type">Lead Sheet</span>
+      </header>
+
+      <div class="chart-body">
+        <!-- Line 1 — chart begins with time signature, then repeat-start barline -->
+        <div class="chart-line">
+          <span class="time-sig"><span>4</span><span>4</span></span>
+          <div class="bar repeat-start">
+            <span class="section-marker">A</span>
+            <span class="chord">
+              <span class="chord-root">A</span><span class="chord-qual">−7</span>
+            </span>
+          </div>
+          <div class="bar"><span class="chord"><span class="chord-root">D</span><span class="chord-qual">7</span></span></div>
+          <div class="bar"><span class="chord"><span class="chord-root">G</span><span class="chord-qual">Δ7</span></span></div>
+          <div class="bar"><span class="chord"><span class="chord-root">C</span><span class="chord-qual">Δ7</span></span></div>
+        </div>
+
+        <!-- Line 2 — A section closes with repeat-end. The last two bars
+             demonstrate 1st / 2nd ending brackets: bar 3 ("1.") ends with
+             the repeat-end barline, bar 4 ("2.") is the alternate ending
+             that the second pass takes. E7♯9 demonstrates a tension qual:
+             digit 7 + sharp accidental (Bravura ♯) + digit 9. -->
+        <div class="chart-line">
+          <div class="bar"><span class="chord"><span class="chord-root">F</span><span class="chord-acc">&#x266F;</span><span class="chord-qual">ø7</span></span></div>
+          <div class="bar"><span class="chord"><span class="chord-root">B</span><span class="chord-qual">7<span class="smufl">&#x266D;</span>9</span></span></div>
+          <div class="bar active repeat-end ending ending-1" aria-current="true">
+            <span class="ending-bracket">1.</span>
+            <span class="chord"><span class="chord-root">E</span><span class="chord-qual">−7</span></span>
+          </div>
+          <div class="bar ending ending-2">
+            <span class="ending-bracket">2.</span>
+            <span class="chord"><span class="chord-root">E</span><span class="chord-qual">7<span class="smufl">&#x266F;</span>9</span></span>
+          </div>
+        </div>
+
+        <!-- Line 3 — B section -->
+        <div class="chart-line">
+          <div class="bar">
+            <span class="section-marker">B</span>
+            <span class="chord"><span class="chord-root">F</span><span class="chord-acc">&#x266F;</span><span class="chord-qual">ø7</span></span>
+          </div>
+          <div class="bar"><span class="chord"><span class="chord-root">B</span><span class="chord-qual">7</span></span></div>
+          <div class="bar"><span class="chord"><span class="chord-root">E</span><span class="chord-qual">−7</span></span></div>
+          <div class="bar"><span class="chord"><span class="chord-root">E</span><span class="chord-qual">−7</span></span></div>
+        </div>
+
+        <!-- Line 4 — last bar uses a slash chord (Gmaj7/D, Gmaj7 over D bass)
+             rendered with the .chord.slash component: top chord stacked on
+             a bass note separated by a horizontal divider. -->
+        <div class="chart-line">
+          <div class="bar"><span class="chord"><span class="chord-root">A</span><span class="chord-qual">−7</span></span></div>
+          <div class="bar"><span class="chord"><span class="chord-root">D</span><span class="chord-qual">7</span></span></div>
+          <!-- Fermata anchored above the chord on this bar (SMuFL fermataAbove). -->
+          <div class="bar">
+            <span class="fermata" aria-label="Fermata">&#xE4C0;</span>
+            <span class="chord"><span class="chord-root">G</span><span class="chord-qual">Δ7</span></span>
+          </div>
+          <div class="bar">
+            <span class="chord slash">
+              <span class="top"><span class="chord-root">G</span><span class="chord-qual">Δ7</span></span>
+              <span class="bot">D</span>
+            </span>
+            <span class="text-mark">rit.</span>
+          </div>
+        </div>
+
+        <!-- Line 5 — C section. Demonstrates an Em7/B slash chord, an A13
+             tension, and an Alternate-chord (small "A7♭13" above the
+             primary A13). -->
+        <div class="chart-line">
+          <div class="bar">
+            <span class="section-marker">C</span>
+            <span class="chord"><span class="chord-root">F</span><span class="chord-acc">&#x266F;</span><span class="chord-qual">ø7</span></span>
+          </div>
+          <div class="bar"><span class="chord"><span class="chord-root">B</span><span class="chord-qual">7</span></span></div>
+          <div class="bar">
+            <span class="chord slash">
+              <span class="top"><span class="chord-root">E</span><span class="chord-qual">−7</span></span>
+              <span class="bot">B</span>
+            </span>
+          </div>
+          <div class="bar">
+            <span class="chord-stack">
+              <span class="alt">A7<span class="smufl">&#x266D;</span>13</span>
+              <span class="chord"><span class="chord-root">A</span><span class="chord-qual">13</span></span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Line 6 — C section closes. G7♭9♯5 shows the .chord-qual.stacked
+             layout (two qual lines: "7♭9" above "♯5"). Cmaj7♯11 shows a
+             single-line tension. Last bar carries two chords plus the
+             Coda glyph + D.C. al Coda text-mark. -->
+        <div class="chart-line">
+          <div class="bar"><span class="chord"><span class="chord-root">D</span><span class="chord-qual">−7</span></span></div>
+          <div class="bar"><span class="chord"><span class="chord-root">G</span><span class="chord-qual stacked"><span>7<span class="smufl">&#x266D;</span>9</span><span><span class="smufl">&#x266F;</span>5</span></span></span></div>
+          <div class="bar"><span class="chord"><span class="chord-root">C</span><span class="chord-qual">Δ7<span class="smufl">&#x266F;</span>11</span></span></div>
+          <div class="bar final">
+            <span class="chord"><span class="chord-root">B</span><span class="chord-qual">−7</span></span>
+            <span class="chord" data-beat="3"><span class="chord-root">E</span><span class="chord-qual">7<span class="smufl">&#x266D;</span>9</span></span>
+            <span class="glyph-mark" data-beat="3" aria-label="Coda">&#xE048;</span>
+            <span class="text-mark">D.C. al Coda</span>
+          </div>
+        </div>
+
+        <!-- Coda destination — separate single line with Coda glyph at start.
+             Mock [D] section marker added so we can preview how a section
+             label coexists with the Coda glyph in the same indent area. -->
+        <div class="chart-line coda-line">
+          <div class="bar">
+            <span class="section-marker">D</span>
+            <span class="chord"><span class="chord-root">A</span><span class="chord-qual">−7</span></span>
+            <span class="glyph-mark" aria-label="Coda">&#xE048;</span>
+          </div>
+          <div class="bar"><span class="chord"><span class="chord-root">D</span><span class="chord-qual">7</span></span></div>
+          <div class="bar"><span class="chord"><span class="chord-root">G</span><span class="chord-qual">Δ7</span></span></div>
+          <div class="bar final last-bar">
+            <span class="chord"><span class="chord-root">E</span><span class="chord-qual">−7</span></span>
+            <span class="end-mark">END</span>
+          </div>
+        </div>
+
+        <!-- Showcase line — bars demonstrating bar-content variants that
+             aren't part of the Autumn Leaves form: N.C. (no chord),
+             invisible-root chord with a moving bass, repeat-1-bar slash
+             glyph, and repeat-2-bars slash glyph. -->
+        <div class="chart-line" style="margin-top: var(--sp-12);">
+          <div class="bar">
+            <span class="chord nc">N.C.</span>
+            <span class="text-mark">free time</span>
+          </div>
+          <div class="bar">
+            <span class="chord invisible-root" aria-label="Invisible root over D bass">
+              <span class="bass">D</span>
+            </span>
+          </div>
+          <div class="bar">
+            <span class="repeat-bar smufl" aria-label="Repeat 1 bar">&#xE500;</span>
+          </div>
+          <div class="bar final"><span class="repeat-bar smufl" aria-label="Repeat 2 bars">&#xE501;</span></div>
+        </div>
+      </div>
+
+      <!-- Player controls strip — non-functional mock that mirrors iReal
+           Pro's bottom toolbar (style label, play, time, repeats, tempo,
+           key indicator). -->
+      <div class="player-controls" role="toolbar" aria-label="Playback controls">
+        <span class="pc-stat"><span class="label">Style</span><span class="value">Medium Swing</span></span>
+        <button class="play-btn" aria-label="Play">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+        </button>
+        <span class="pc-stat"><span class="label">Time</span><span class="value">00:00</span></span>
+        <span class="pc-stat"><span class="label">Repeats</span><span class="value">1</span></span>
+        <span class="pc-stat"><span class="label">Tempo</span><span class="value">124</span></span>
+        <span class="pc-stat"><span class="label">Key</span><span class="value" style="color: var(--crimson-300);">Em</span></span>
+      </div>
+    </section>
+  </div>
+
+  <aside class="inspector" aria-label="Selected bar inspector">
+    <header>
+      <span class="title">Bar 7</span>
+      <span class="pos">Section A · beat 1</span>
+    </header>
+    <div class="row">
+      <span class="label">Chord</span>
+      <input class="chord-input" type="text" value="Em7" aria-label="Chord symbol">
+    </div>
+    <div class="row">
+      <span class="label">Quality</span>
+      <div class="chips" role="radiogroup">
+        <button class="chip">M</button>
+        <button class="chip">−</button>
+        <button class="chip">7</button>
+        <button class="chip" aria-pressed="true">−7</button>
+        <button class="chip">Δ7</button>
+        <button class="chip">ø7</button>
+        <button class="chip">°</button>
+        <button class="chip">+</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="label">Bass</span>
+      <input class="chord-input" type="text" value="" placeholder="(none)" style="font-size: var(--fs-14); color: var(--text-secondary);">
+    </div>
+    <div class="row">
+      <span class="label">Alternate chord</span>
+      <input class="chord-input" type="text" value="" placeholder="(none)" style="font-size: var(--fs-14); color: var(--text-secondary);">
+    </div>
+    <div class="row">
+      <span class="label">Section</span>
+      <div class="chips" role="radiogroup">
+        <button class="chip">A</button>
+        <button class="chip">B</button>
+        <button class="chip">C</button>
+        <button class="chip">D</button>
+        <button class="chip" title="Verse">V</button>
+        <button class="chip" aria-pressed="true">none</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="label">Barline (left)</span>
+      <div class="chips" role="radiogroup">
+        <button class="chip smufl" aria-pressed="true" title="Single">&#xE030;</button>
+        <button class="chip smufl" title="Double">&#xE031;</button>
+        <button class="chip smufl" title="Repeat start">&#xE040;</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="label">Barline (right)</span>
+      <div class="chips" role="radiogroup">
+        <button class="chip smufl" aria-pressed="true" title="Single">&#xE030;</button>
+        <button class="chip smufl" title="Double">&#xE031;</button>
+        <button class="chip smufl" title="Repeat end">&#xE041;</button>
+        <button class="chip smufl" title="Final">&#xE032;</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="label">Ending</span>
+      <div class="chips" role="radiogroup">
+        <button class="chip" aria-pressed="true">none</button>
+        <button class="chip">1.</button>
+        <button class="chip">2.</button>
+        <button class="chip">3.</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="label">Symbol</span>
+      <div class="chips" role="radiogroup">
+        <button class="chip" aria-pressed="true">none</button>
+        <button class="chip smufl" title="Segno">&#xE047;</button>
+        <button class="chip smufl" title="Coda">&#xE048;</button>
+        <button class="chip smufl" title="Fermata"><span class="scale-up">&#xE4C0;</span></button>
+        <button class="chip">D.C.</button>
+        <button class="chip">D.S.</button>
+        <button class="chip">Fine</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="label">Bar content</span>
+      <div class="chips" role="radiogroup">
+        <button class="chip">Chord</button>
+        <button class="chip">N.C.</button>
+        <button class="chip" title="Invisible root — moving bass over a held chord">Invisible root</button>
+        <button class="chip smufl" title="Repeat one bar">&#xE500;</button>
+        <button class="chip smufl" title="Repeat two bars">&#xE501;</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="label">Spacer (after this bar)</span>
+      <div class="chips" role="radiogroup">
+        <button class="chip" aria-pressed="true">none</button>
+        <button class="chip" title="Vertical spacer × 1">×1</button>
+        <button class="chip" title="Vertical spacer × 2">×2</button>
+        <button class="chip" title="Vertical spacer × 3">×3</button>
+        <button class="chip" title="Mark this bar as the playback end">END</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="label">Text label</span>
+      <input class="chord-input" type="text" value="" placeholder="(no text — e.g. Repeat 4×, to Bridge)" style="font-size: var(--fs-14); color: var(--text-secondary);">
+    </div>
+    <div class="footer">
+      <button class="btn btn-secondary btn-sm" style="flex: 1;">Duplicate</button>
+      <button class="btn btn-ghost btn-sm" style="color: var(--danger-fg);">Delete</button>
+    </div>
+  </aside>
+</main>
+
+<footer class="status" role="status" aria-live="polite">
+  <span class="item"><span class="ok">●</span>Parsed · 0 warnings</span>
+  <span class="item">3 sections · 24 bars</span>
+  <span class="item">Key Em · 4/4 · 124 BPM</span>
+  <span class="spacer"></span>
+  <span class="item">Bar 7 selected</span>
+  <span class="item">irealb://</span>
+</footer>
+
+</body>
+</html>
