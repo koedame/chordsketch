@@ -54,8 +54,15 @@ export interface ChordDiagramResult {
  */
 export type ChordDiagramWasmLoader = () => Promise<DiagramRenderer>;
 
+// Two-step cast through `unknown` — the wasm module's TS types,
+// when resolved against the `chordsketch-wasm` JS bundle (which is
+// what host bundlers see), do not formally include
+// `chord_diagram_svg`'s typed signature even though the export is
+// present at runtime. The `DiagramRenderer` shape models the
+// runtime contract; consumers that pass their own loader are
+// expected to satisfy it directly.
 const defaultLoader: ChordDiagramWasmLoader = () =>
-  import('@chordsketch/wasm') as Promise<DiagramRenderer>;
+  import('@chordsketch/wasm') as unknown as Promise<DiagramRenderer>;
 
 /**
  * Look up an SVG chord diagram for `(chord, instrument)` via

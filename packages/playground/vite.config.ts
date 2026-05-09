@@ -1,11 +1,13 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   base: '/chordsketch/',
+  plugins: [react()],
   build: {
     outDir: 'dist',
   },
@@ -39,6 +41,12 @@ export default defineConfig({
         here,
         '../ui-irealb-editor/src/index.ts',
       ),
+      // React component library (#2454). Same alias pattern as
+      // ui-web — Vite consumes the TS sources directly. Longer
+      // specifier (`/styles.css`) is listed before the bare package
+      // alias so Vite resolves it correctly.
+      '@chordsketch/react/styles.css': resolve(here, '../react/src/styles.css'),
+      '@chordsketch/react': resolve(here, '../react/src/index.ts'),
     },
   },
   server: {
@@ -54,6 +62,7 @@ export default defineConfig({
         resolve(here, '../npm'),
         resolve(here, '../ui-web'),
         resolve(here, '../ui-irealb-editor'),
+        resolve(here, '../react'),
       ],
     },
   },

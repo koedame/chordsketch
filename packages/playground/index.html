@@ -22,13 +22,13 @@
 </head>
 <body>
   <!--
-    The editor / preview / controls DOM is built by
-    `mountChordSketchUi` from `@chordsketch/ui-web`. Keep this body
-    minimal: a single `#app` mount point lets the desktop scaffold
-    (#2069) reuse the same library against an empty Tauri WebView.
-    See `packages/ui-web/README.md` for the API contract.
+    React entry: a single `#app` mount point that `main.tsx`
+    `createRoot()`s into. The components inside come from
+    `@chordsketch/react` (SourceEditor, SplitLayout,
+    RendererPreview, Transpose) and the playground's own
+    `IrealbPane` wrapper around the imperative iRealb editor.
   -->
   <div id="app"></div>
-  <script type="module" src="/src/main.ts"></script>
+  <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

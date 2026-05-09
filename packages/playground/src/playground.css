@@ -1,0 +1,241 @@
+/*
+ * App-level styles for the ChordSketch playground React shell.
+ * The reusable surfaces (`<SourceEditor>`, `<SplitLayout>`,
+ * `<RendererPreview>`, `<Transpose>`) bring their own styling via
+ * `@chordsketch/react/styles.css`. This stylesheet only covers
+ * the playground-specific chrome that lives outside those
+ * components: the header bar, the brand mark, the iRealb pane
+ * scaffolding, and the format controls' visual treatment.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  background: var(--cs-canvas, #FAFAF7);
+  color: var(--cs-text-primary, #0A0A0B);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.chordsketch-app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--cs-canvas, #FAFAF7);
+}
+
+.chordsketch-app__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  height: 56px;
+  padding: 0 1.5rem;
+  background: var(--cs-surface, #FFFFFF);
+  border-bottom: 1px solid var(--cs-border, #E8E6EA);
+  flex-shrink: 0;
+}
+
+.chordsketch-app__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  color: var(--cs-text-primary, #0A0A0B);
+}
+
+.chordsketch-app__brand-mark {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border-radius: 2px;
+  /* Canonical brand mark — quill on a `--crimson-500` field. The
+   * SVG path is the same one shipped at `assets/logo.svg`
+   * (DESIGN.md §1). Inlined as a data URL so the playground
+   * shell stays self-contained. */
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><rect width="180" height="180" fill="%23BD1642"/><path d="M82.9328334,100.501459 C84.0311093,98.5297919 86.368868,97.6656987 88.5433381,98.2694599 C88.6578145,98.3008392 88.7693854,98.3264075 88.8821185,98.3548813 C89.0669078,98.400207 89.2522781,98.4437894 89.4422973,98.4821419 C89.5375974,98.5013181 89.635222,98.5239809 89.7287788,98.5408328 C89.7729423,98.5489682 89.8165246,98.5507115 89.8606881,98.5559414 C90.8235681,98.7198111 91.8404902,98.8000027 92.9044814,98.7738532 C95.0353691,98.7209733 97.3208289,98.282244 99.5969912,97.4140831 C106.959508,94.607378 111.430478,88.4041529 109.583748,83.5589548 C108.201896,79.9334821 103.674558,78.0966301 98.3993475,78.5760363 C98.7985621,78.4499379 99.1977766,78.3168664 99.5969912,78.1646186 C106.959508,75.3579135 111.430478,69.1546885 109.583748,64.3089092 C108.201896,60.6840176 103.674558,58.8471657 98.3993475,59.3259907 C98.7985621,59.1998924 99.1977766,59.0668209 99.5969912,58.9145731 C106.959508,56.107868 111.430478,49.904643 109.583748,45.0588637 C107.736436,40.2136655 100.270484,38.5604407 92.9079679,41.3671458 C89.9879487,42.4805302 87.5246727,44.1291063 85.7284976,46.0141894 C84.9382039,46.8498088 84.3135231,47.672063 83.8195895,48.5140746 C66.608037,74.3247206 75.0897488,157.615874 75.0897488,157.615874 C75.5546275,146.069449 77.4478459,110.345846 82.9328334,100.501459 Z" fill="%23FFFFFF"/></svg>');
+  background-size: cover;
+  background-repeat: no-repeat;
+  flex-shrink: 0;
+}
+
+.chordsketch-app__controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.chordsketch-app__control-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cs-text-secondary, #67646D);
+}
+
+.chordsketch-app__select {
+  height: 32px;
+  padding: 0 0.75rem;
+  background: var(--cs-surface, #FFFFFF);
+  color: var(--cs-text-primary, #0A0A0B);
+  border: 1px solid var(--cs-border-strong, #D4D1D6);
+  border-radius: 4px;
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+  text-transform: none;
+  transition: border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.chordsketch-app__select:hover:not(:disabled) {
+  border-color: var(--cs-ink-500, #8A8790);
+}
+
+.chordsketch-app__select:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500, #BD1642);
+  box-shadow: 0 0 0 2px var(--cs-ink-0, #FFFFFF), 0 0 0 4px var(--cs-crimson-500, #BD1642);
+}
+
+.chordsketch-app__select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chordsketch-app__transpose {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cs-text-secondary, #67646D);
+}
+
+.chordsketch-app__transpose .chordsketch-transpose__button {
+  height: 32px;
+  min-width: 32px;
+  padding: 0 0.75rem;
+  background: var(--cs-surface, #FFFFFF);
+  color: var(--cs-text-primary, #0A0A0B);
+  border: 1px solid var(--cs-border-strong, #D4D1D6);
+  border-radius: 4px;
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  font-weight: 500;
+  font-size: 0.875rem;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1;
+  transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.chordsketch-app__transpose .chordsketch-transpose__button:hover:not(:disabled) {
+  background: var(--cs-surface-hover, #F6F4F7);
+  border-color: var(--cs-ink-500, #8A8790);
+}
+
+.chordsketch-app__transpose .chordsketch-transpose__button:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500, #BD1642);
+  box-shadow: 0 0 0 2px var(--cs-ink-0, #FFFFFF), 0 0 0 4px var(--cs-crimson-500, #BD1642);
+}
+
+.chordsketch-app__transpose .chordsketch-transpose__value {
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--cs-text-primary, #0A0A0B);
+}
+
+.chordsketch-app__split {
+  flex: 1;
+  min-height: 0;
+}
+
+.chordsketch-app__irealb-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--cs-surface, #FFFFFF);
+}
+
+.chordsketch-app__irealb-host > .irealb-editor {
+  flex: 1;
+  min-height: 100%;
+}
+
+.chordsketch-app__irealb-preview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--cs-surface, #FFFFFF);
+}
+
+.chordsketch-app__irealb-frame {
+  flex: 1;
+  border: none;
+  width: 100%;
+  height: 100%;
+  background: var(--cs-surface, #FFFFFF);
+}
+
+.chordsketch-app__error {
+  margin: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--cs-crimson-100, #FBE1E8);
+  color: var(--cs-crimson-700, #87092C);
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.8125rem;
+  border: 1px solid var(--cs-crimson-300, #EC8AA3);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+@media (max-width: 768px) {
+  .chordsketch-app__header {
+    height: auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+  }
+  .chordsketch-app__title {
+    justify-content: flex-start;
+  }
+  .chordsketch-app__controls {
+    justify-content: flex-start;
+    gap: 0.75rem;
+  }
+}

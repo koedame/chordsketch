@@ -31,6 +31,21 @@ export {
 } from './use-transpose';
 export { useDebounced } from './use-debounced';
 
+// Editor + layout primitives (#2454). The CodeMirror-backed
+// `<SourceEditor>` is heavier than the existing `<ChordEditor>`
+// (textarea) and adds its own dependency tree under
+// `@codemirror/*`; tree-shaking drops it from bundles that do not
+// import it.
+export { SourceEditor, type SourceEditorHandle, type SourceEditorProps } from './source-editor';
+export { chordProLanguage, chordProTagTable } from './chordpro-language';
+export { SplitLayout, type SplitLayoutProps } from './split-layout';
+export {
+  RendererPreview,
+  type PreviewFormat,
+  type RendererPreviewProps,
+} from './renderer-preview';
+export { Playground, type PlaygroundProps } from './playground';
+
 /**
  * The running version of `@chordsketch/react`. Returns the string
  * declared in this package's `package.json` so consumers can verify
