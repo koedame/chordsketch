@@ -78,7 +78,12 @@ const chordProLanguage = StreamLanguage.define<ChordProState>({
       }
       if (state.inDirective === 'key') {
         if (stream.match(/[A-Za-z_][A-Za-z0-9_]*/)) {
-          state.inDirective = stream.peek() === ':' ? 'value' : null;
+          // If `}` follows immediately (no-value directive like `{soc}`),
+          // stay in 'key' state so the next token call catches `}` as
+          // punctuation via the `stream.eat('}')` guard above.
+          // End-of-line or unexpected char → reset to null.
+          const next = stream.peek();
+          state.inDirective = next === ':' ? 'value' : next === '}' ? 'key' : null;
           return 'keyword';
         }
         // Unexpected character inside a directive — treat as
