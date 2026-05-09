@@ -196,6 +196,8 @@ function runValidate(source: string): Warning[] {
 
 const TRANSPOSE_MIN = -11;
 const TRANSPOSE_MAX = 11;
+const CAPO_MIN = 0;
+const CAPO_MAX = 12;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -204,6 +206,42 @@ function clamp(value: number, min: number, max: number): number {
 function formatTranspose(value: number): string {
   if (value === 0) return '+0';
   return value > 0 ? `+${value}` : String(value);
+}
+
+// `{capo: N}` is just a metadata directive in ChordPro — the renderer
+// surfaces it in the meta strip below the title but does not transpose
+// chords by it. So the playground's Capo control round-trips through
+// the source: the UI reads the current capo by parsing the directive,
+// and a button click rewrites the source to set / update / remove it.
+// Two-way sync stays consistent because the displayed value is always
+// derived from `source`, never held as an independent state.
+const CAPO_DIRECTIVE_RE = /\{capo:\s*(-?\d+)\s*\}\s*\n?/;
+
+function readCapo(source: string): number {
+  const match = source.match(CAPO_DIRECTIVE_RE);
+  if (!match) return 0;
+  const n = parseInt(match[1], 10);
+  return Number.isFinite(n) ? clamp(n, CAPO_MIN, CAPO_MAX) : 0;
+}
+
+function setCapoInSource(source: string, capo: number): string {
+  const directive = capo === 0 ? '' : `{capo: ${capo}}\n`;
+  if (CAPO_DIRECTIVE_RE.test(source)) {
+    return source.replace(CAPO_DIRECTIVE_RE, directive);
+  }
+  if (capo === 0) return source;
+  // No existing capo directive — insert one. Try to slot it in
+  // alongside the other metadata directives at the top: after
+  // `{key: …}` if present, otherwise after `{title: …}`, otherwise
+  // at the very start. This keeps `{capo}` next to its conceptual
+  // siblings instead of dropping it on a random line in the lyrics.
+  const anchorRe = /^(\{(?:title|subtitle|artist|key|tempo|time)[^}]*\}\s*\n)+/;
+  const anchor = source.match(anchorRe);
+  if (anchor) {
+    const idx = anchor.index! + anchor[0].length;
+    return `${source.slice(0, idx)}${directive}${source.slice(idx)}`;
+  }
+  return `${directive}${source}`;
 }
 
 // ---------------------------------------------------------------
@@ -247,6 +285,28 @@ function PlaygroundApp(): JSX.Element {
 
   const warnings = useMemo<Warning[]>(() => runValidate(source), [source]);
 
+  // Capo is derived from the source so manual edits to `{capo: N}`
+  // and toolbar button clicks stay in sync without an explicit
+  // `useEffect`.
+  const capo = useMemo(() => readCapo(source), [source]);
+
+  // Bump capo with the functional `setSource` form so rapid clicks
+  // in the same event-loop tick read the latest value, not the
+  // closure-captured one. The controlled `<SourceEditor value>`
+  // prop syncs the CodeMirror doc on the next render via
+  // `<SourceEditor>`'s value-sync effect, so we don't need to call
+  // `editorRef.current?.setValue` here.
+  const stepCapo = useCallback((delta: number) => {
+    setSource((current) => {
+      const next = clamp(readCapo(current) + delta, CAPO_MIN, CAPO_MAX);
+      return setCapoInSource(current, next);
+    });
+  }, []);
+
+  const resetCapo = useCallback(() => {
+    setSource((current) => setCapoInSource(current, 0));
+  }, []);
+
   const previewMeta = useMemo(() => {
     const transposeLabel = transpose === 0 ? '' : ` · ${formatTranspose(transpose)}`;
     return `Live · HTML${transposeLabel}`;
@@ -283,14 +343,29 @@ function PlaygroundApp(): JSX.Element {
           <span>ChordPro</span>
         </nav>
         <div className="actions">
-          <PdfExport
-            source={source}
-            options={{ transpose }}
-            filename="chordsketch-output.pdf"
-            className="btn btn-secondary btn-sm"
-          >
-            Download PDF
-          </PdfExport>
+          <div className="tool-group topnav__tool-group">
+            <span className="label">Sample</span>
+            <select
+              className="chordsketch-app__select"
+              value={sampleId}
+              onChange={(e) => handleSamplePick(e.currentTarget.value)}
+              aria-label="Sample song"
+            >
+              {SAMPLES.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={handleResetDraft}
+              title="Reset the source to the selected sample"
+            >
+              Reset
+            </button>
+          </div>
           <a
             className="btn btn-ghost btn-sm"
             href="https://github.com/koedame/chordsketch"
@@ -315,44 +390,6 @@ function PlaygroundApp(): JSX.Element {
 
       <div className="toolbar" role="toolbar" aria-label="Editor tools">
         <div className="tool-group">
-          <span className="label">Transpose</span>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            aria-label="Transpose down one semitone"
-            onClick={() =>
-              setTranspose((v) => clamp(v - 1, TRANSPOSE_MIN, TRANSPOSE_MAX))
-            }
-            disabled={transpose <= TRANSPOSE_MIN}
-          >
-            −
-          </button>
-          <span className="transpose-value" aria-live="polite">
-            {formatTranspose(transpose)}
-          </span>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            aria-label="Transpose up one semitone"
-            onClick={() =>
-              setTranspose((v) => clamp(v + 1, TRANSPOSE_MIN, TRANSPOSE_MAX))
-            }
-            disabled={transpose >= TRANSPOSE_MAX}
-          >
-            +
-          </button>
-          {transpose !== 0 && (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => setTranspose(0)}
-            >
-              Reset
-            </button>
-          )}
-        </div>
-
-        <div className="tool-group">
           <span className="label">View</span>
           <div className="segmented" role="group" aria-label="Pane visibility">
             {(['split', 'source', 'preview'] as const).map((v) => (
@@ -366,30 +403,6 @@ function PlaygroundApp(): JSX.Element {
               </button>
             ))}
           </div>
-        </div>
-
-        <div className="tool-group">
-          <span className="label">Sample</span>
-          <select
-            className="chordsketch-app__select"
-            value={sampleId}
-            onChange={(e) => handleSamplePick(e.currentTarget.value)}
-            aria-label="Sample song"
-          >
-            {SAMPLES.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={handleResetDraft}
-            title="Reset the source to the selected sample"
-          >
-            Reset
-          </button>
         </div>
 
       </div>
@@ -451,6 +464,111 @@ function PlaygroundApp(): JSX.Element {
               <p className="eyebrow">Preview · HTML</p>
               <span className="meta">{previewMeta}</span>
             </header>
+            <div
+              className="pane-toolbar"
+              role="toolbar"
+              aria-label="Preview performance controls"
+            >
+              <div className="tool-group">
+                <span className="label">Transpose</span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  aria-label="Transpose down one semitone"
+                  onClick={() =>
+                    setTranspose((v) => clamp(v - 1, TRANSPOSE_MIN, TRANSPOSE_MAX))
+                  }
+                  disabled={transpose <= TRANSPOSE_MIN}
+                >
+                  −
+                </button>
+                <span className="transpose-value" aria-live="polite">
+                  {formatTranspose(transpose)}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  aria-label="Transpose up one semitone"
+                  onClick={() =>
+                    setTranspose((v) => clamp(v + 1, TRANSPOSE_MIN, TRANSPOSE_MAX))
+                  }
+                  disabled={transpose >= TRANSPOSE_MAX}
+                >
+                  +
+                </button>
+                {transpose !== 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setTranspose(0)}
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+
+              <div className="tool-group">
+                <span className="label">Capo</span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  aria-label="Capo down one fret"
+                  onClick={() => stepCapo(-1)}
+                  disabled={capo <= CAPO_MIN}
+                >
+                  −
+                </button>
+                <span className="transpose-value" aria-live="polite">
+                  {capo}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  aria-label="Capo up one fret"
+                  onClick={() => stepCapo(1)}
+                  disabled={capo >= CAPO_MAX}
+                >
+                  +
+                </button>
+                {capo !== 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={resetCapo}
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+
+              <div className="tool-group">
+                <span className="label">Export</span>
+                <PdfExport
+                  source={source}
+                  options={{ transpose }}
+                  filename="chordsketch-output.pdf"
+                  className="btn btn-secondary btn-sm"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Download PDF
+                </PdfExport>
+              </div>
+            </div>
             <div className="pane-body">
               <RendererPreview source={source} transpose={transpose} format="html" />
             </div>

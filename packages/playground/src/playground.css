@@ -524,3 +524,13 @@ a {
   border-right: 0;
   padding: 0;
 }
+
+/* Tool-group inside the topnav `actions` cluster — host context
+ * already has `gap: 0.5rem`, so the inter-group divider that the
+ * global `.toolbar` applies makes no sense here. Strip the
+ * `border-right` and side padding so the embedded group sits
+ * flush against its neighbours. */
+.topnav__tool-group {
+  border-right: 0;
+  padding: 0;
+}
