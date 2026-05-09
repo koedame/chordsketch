@@ -17,6 +17,7 @@ import { EditorState } from '@codemirror/state';
 import {
   EditorView,
   drawSelection,
+  highlightActiveLine,
   highlightActiveLineGutter,
   keymap,
   lineNumbers,
@@ -179,25 +180,28 @@ const designSystemTheme = EditorView.theme(
       fontSize: '0.8125rem',
     },
     '.cm-activeLineGutter': {
-      // Only the gutter line-number bumps to a slightly darker
-      // ink so the user can still tell where the caret is at a
-      // glance. The line body itself is left at the default
-      // background so a selection's `--cs-crimson-100` wash
-      // is the only colour in the editor body — no two
-      // overlapping pale layers fighting for legibility.
-      backgroundColor: 'transparent',
+      backgroundColor: 'var(--cs-surface-hover, #F6F4F7)',
       color: 'var(--cs-text-secondary, #67646D)',
       fontWeight: '600',
+    },
+    '.cm-activeLine': {
+      backgroundColor: 'var(--cs-surface-hover, #F6F4F7)',
     },
     '.cm-cursor': {
       borderLeftWidth: '2px',
       borderLeftColor: 'var(--cs-crimson-500, #BD1642)',
     },
+    // Selection background: a semi-transparent crimson-500 so the
+    // wash is visible whether the line behind it is the plain
+    // surface or the `--cs-surface-hover` active-line bg. The
+    // earlier value (`--cs-crimson-100`) sat too close to the
+    // active-line tint and made the selection vanish on the
+    // caret line.
     '.cm-selectionBackground, ::selection': {
-      backgroundColor: 'var(--cs-crimson-100, #FBE1E8) !important',
+      backgroundColor: 'rgba(189, 22, 66, 0.2) !important',
     },
     '&.cm-focused .cm-selectionBackground': {
-      backgroundColor: 'var(--cs-crimson-100, #FBE1E8) !important',
+      backgroundColor: 'rgba(189, 22, 66, 0.2) !important',
     },
     '.cm-matchingBracket': {
       backgroundColor: 'var(--cs-crimson-50, #FDF2F5)',
@@ -281,6 +285,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
 
       const extensions = [
         ...(noLineNumbers ? [] : [lineNumbers(), highlightActiveLineGutter()]),
+        highlightActiveLine(),
         drawSelection(),
         bracketMatching(),
         history(),
