@@ -392,32 +392,6 @@ function PlaygroundApp(): JSX.Element {
           </button>
         </div>
 
-        <div className="tool-group">
-          <span className="label">Insert</span>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => insert('[C]')}
-          >
-            [Chord]
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => insert('{title: }')}
-          >
-            {'{directive}'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() =>
-              insert('\n{start_of_verse}\n\n{end_of_verse}\n', false)
-            }
-          >
-            Section
-          </button>
-        </div>
       </div>
 
       <main
@@ -433,6 +407,34 @@ function PlaygroundApp(): JSX.Element {
                 UTF-8 · LF · {stats.lines} {stats.lines === 1 ? 'line' : 'lines'}
               </span>
             </header>
+            <div className="pane-toolbar" role="toolbar" aria-label="Editor insert helpers">
+              <div className="tool-group">
+                <span className="label">Insert</span>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => insert('[C]')}
+                >
+                  [Chord]
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => insert('{title: }')}
+                >
+                  {'{directive}'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() =>
+                    insert('\n{start_of_verse}\n\n{end_of_verse}\n', false)
+                  }
+                >
+                  Section
+                </button>
+              </div>
+            </div>
             <div className="pane-body">
               <SourceEditor
                 ref={editorRef}
