@@ -135,8 +135,9 @@ Token aliases in `tokens.css`:
 - Lyric = Noto Sans JP 400 / 16–18px.
 - Chord and lyric are **stacked vertically** (`flex-direction: column`)
   inside a `.pair`, and `.pair` elements flow as `inline-flex`.
-- Section labels (Verse / Chorus / Bridge) use the eyebrow style with a
-  horizontal rule.
+- Section labels (Verse / Chorus / Bridge) use the eyebrow style — no
+  border or rule above; vertical rhythm is carried by `--sp-6` /
+  `--sp-8` margins on the label.
 
 ---
 
