@@ -17,7 +17,6 @@ import { EditorState } from '@codemirror/state';
 import {
   EditorView,
   drawSelection,
-  highlightActiveLine,
   highlightActiveLineGutter,
   keymap,
   lineNumbers,
@@ -180,11 +179,15 @@ const designSystemTheme = EditorView.theme(
       fontSize: '0.8125rem',
     },
     '.cm-activeLineGutter': {
-      backgroundColor: 'var(--cs-surface-hover, #F6F4F7)',
+      // Only the gutter line-number bumps to a slightly darker
+      // ink so the user can still tell where the caret is at a
+      // glance. The line body itself is left at the default
+      // background so a selection's `--cs-crimson-100` wash
+      // is the only colour in the editor body — no two
+      // overlapping pale layers fighting for legibility.
+      backgroundColor: 'transparent',
       color: 'var(--cs-text-secondary, #67646D)',
-    },
-    '.cm-activeLine': {
-      backgroundColor: 'var(--cs-surface-hover, #F6F4F7)',
+      fontWeight: '600',
     },
     '.cm-cursor': {
       borderLeftWidth: '2px',
@@ -278,7 +281,6 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
 
       const extensions = [
         ...(noLineNumbers ? [] : [lineNumbers(), highlightActiveLineGutter()]),
-        highlightActiveLine(),
         drawSelection(),
         bracketMatching(),
         history(),
