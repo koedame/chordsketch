@@ -942,7 +942,7 @@ h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-w
 .lyrics { font-family: \"Noto Sans JP\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 400; font-size: 1.125rem; white-space: pre; }
 .empty-line { height: 1em; }
 section { margin: 1em 0; }
-section > .section-label, .chorus-recall > .section-label { font-family: \"Inter\", system-ui, -apple-system, sans-serif; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em; color: #67646D; margin-bottom: 0.5em; }
+section > .section-label, .chorus-recall > .section-label { font-family: \"Inter\", system-ui, -apple-system, sans-serif; font-weight: 600; font-size: 0.75rem; color: #67646D; margin-bottom: 0.5em; }
 .comment { font-family: \"Inter\", system-ui, -apple-system, sans-serif; font-style: italic; color: #8A8790; margin: 0.3em 0; }
 .comment-box { border: 1px solid #D4D1D6; border-radius: 4px; padding: 0.2em 0.5em; display: inline-block; margin: 0.3em 0; }
 .chorus-recall { margin: 1em 0; }

@@ -68,7 +68,7 @@ a { color: inherit; text-decoration: none; }
 .toolbar { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-6); background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .tool-group { display: flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-3); border-right: 1px solid var(--border); height: 28px; }
 .tool-group:last-of-type { border-right: 0; }
-.tool-group .label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); margin-right: var(--sp-2); }
+.tool-group .label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); margin-right: var(--sp-2); }
 .segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--r-2); overflow: hidden; }
 .segmented a, .segmented button { background: var(--surface); border: 0; padding: 0 var(--sp-3); height: 28px; font: 500 var(--fs-13)/1 var(--font-jp); color: var(--text-secondary); cursor: pointer; border-right: 1px solid var(--border); display: inline-flex; align-items: center; text-decoration: none; }
 .segmented a:last-child, .segmented button:last-child { border-right: 0; }
@@ -84,7 +84,7 @@ a { color: inherit; text-decoration: none; }
 .meta-card .composer { font-family: var(--font-jp); font-weight: 400; font-size: var(--fs-14); color: var(--text-secondary); margin: 0 0 var(--sp-5); }
 .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--sp-4); }
 .meta-field { display: flex; flex-direction: column; gap: 4px; }
-.meta-field label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+.meta-field label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); }
 .meta-field input, .meta-field select { height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-2); background: var(--ink-50); font: 500 var(--fs-14)/1 var(--font-mono); color: var(--text-primary); transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out); font-variant-numeric: tabular-nums; }
 .meta-field input:focus, .meta-field select:focus { outline: none; border-color: var(--crimson-500); background: var(--surface); box-shadow: var(--focus-ring); }
 
@@ -482,7 +482,7 @@ a { color: inherit; text-decoration: none; }
   font-family: var(--font-chord);
   font-weight: 700;
   font-size: 11px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   color: var(--ink-1000);
   line-height: 1;
   pointer-events: none;
@@ -533,8 +533,8 @@ a { color: inherit; text-decoration: none; }
   font-family: var(--font-latin);
   font-weight: 600;
   font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+
   color: var(--ink-300);
 }
 .player-controls .pc-stat .value { font-weight: 600; color: var(--ink-0); }
@@ -547,7 +547,7 @@ a { color: inherit; text-decoration: none; }
 .inspector header .title { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-16); }
 .inspector header .pos { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-tertiary); }
 .inspector .row { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
-.inspector .row > .label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+.inspector .row > .label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); }
 .inspector input.chord-input { width: 100%; height: 36px; padding: 0 var(--sp-3); border: 1px solid var(--border-strong); border-radius: var(--r-2); font: 500 var(--fs-18)/1 var(--font-chord); color: var(--ink-1000); background: var(--ink-50); }
 .inspector input.chord-input:focus { outline: none; border-color: var(--crimson-500); background: var(--surface); box-shadow: var(--focus-ring); }
 .inspector .chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
@@ -770,7 +770,7 @@ a { color: inherit; text-decoration: none; }
         <div class="meta-field"><label for="tempo">Tempo</label><input id="tempo" type="number" value="124"></div>
       </div>
       <div style="display: flex; gap: var(--sp-2); margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--border); align-items: center;">
-        <span style="font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); margin-right: var(--sp-2);">Key change</span>
+        <span style="font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); margin-right: var(--sp-2);">Key change</span>
         <button class="btn btn-secondary btn-sm" title="Update the key signature display only — chord symbols are unchanged">Set</button>
         <button class="btn btn-secondary btn-sm" title="Change the key and transpose every chord in the chart to match">Set and Transpose</button>
       </div>

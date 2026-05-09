@@ -125,7 +125,7 @@ Token aliases in `tokens.css`:
 | H5      | Noto Sans JP   | 600 | 18 / 26      | `0`       |
 | Body    | Noto Sans JP   | 400 | 16 / 27      | `0`       |
 | Small   | Noto Sans JP   | 400 | 13 / 22      | `0`       |
-| Eyebrow | Inter          | 600 | 12 / 16      | `+0.12em` UPPER |
+| Eyebrow | Inter          | 600 | 12 / 16      | `0`       |
 | Mono    | JetBrains Mono | 600 | 14 / 26      | `0`       |
 | Meta    | Inter          | 500 | 13 / 22      | `0` tabular-nums |
 

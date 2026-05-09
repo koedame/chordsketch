@@ -30,18 +30,15 @@
   --ink-600: #67646D;
   --ink-700: #44424A;
   --ink-1000: #0A0A0B;
-
   --canvas: var(--ink-50);
   --surface: var(--ink-0);
   --surface-hover: var(--ink-100);
   --border: var(--ink-200);
   --border-strong: var(--ink-300);
-
   --text-primary: var(--ink-1000);
   --text-strong: var(--ink-700);
   --text-secondary: var(--ink-600);
   --text-tertiary: var(--ink-500);
-
   --success-surface: #E8F3EC;
   --success-fg: #1A6B3A;
   --warning-surface: #FBF1D9;
@@ -50,9 +47,7 @@
   --danger-fg: #A30F37;
   --info-surface: #E6EEF7;
   --info-fg: #1F4F8A;
-
   --focus-ring: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
-
   --font-jp: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --font-display: "Noto Sans JP", system-ui, sans-serif;
   --font-latin: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
@@ -100,13 +95,11 @@
   --e-2: 0 4px 12px rgba(10, 10, 11, 0.08);
   --e-3: 0 16px 32px rgba(10, 10, 11, 0.12);
   --e-overlay: 0 24px 48px rgba(10, 10, 11, 0.18);
-
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur-1: 120ms;
   --dur-2: 200ms;
   --dur-3: 280ms;
   --dur-4: 400ms;
-
   --maxw-app: 1280px;
   --maxw-reading: 720px;
   --maxw-guide: 1080px;
@@ -244,8 +237,7 @@ header h1::before {
   font-family: var(--font-latin);
   font-weight: 600;
   font-size: var(--fs-12);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: var(--text-secondary);
 }
 
@@ -292,8 +284,7 @@ header h1::before {
   font-family: var(--font-latin);
   font-weight: 600;
   font-size: var(--fs-12);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: var(--text-secondary);
 }
 
@@ -370,7 +361,6 @@ main {
    * only takes effect in the two-column desktop layout.
    */
   --editor-ratio: 0.5;
-
   flex: 1;
   display: flex;
   min-height: 0;

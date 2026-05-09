@@ -208,8 +208,7 @@ a {
   font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
   font-weight: 600;
   font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: var(--cs-text-tertiary, #8A8790);
   margin-right: 0.5rem;
 }
@@ -327,8 +326,7 @@ a {
   font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
   font-weight: 600;
   font-size: 0.75rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: var(--cs-text-secondary, #67646D);
   margin: 0;
 }

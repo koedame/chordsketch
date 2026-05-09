@@ -29,10 +29,8 @@
   --ink-600: #67646D;
   --ink-700: #44424A;
   --ink-1000: #0A0A0B;
-
   --danger-surface: #FBE1E8;
   --danger-fg: #A30F37;
-
   --font-jp: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --font-latin: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -95,8 +93,7 @@
   color: var(--ink-600);
   font-weight: 600;
   font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
 }
 
 .irealb-editor__input,
@@ -163,8 +160,7 @@
   font-family: var(--font-latin);
   font-weight: 600;
   font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
   color: var(--ink-600);
   flex: 1;
 }
@@ -406,9 +402,8 @@
   font-family: var(--font-latin);
   font-size: 0.75rem;
   font-weight: 600;
-  text-transform: uppercase;
   color: var(--ink-600);
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
 }
 
 .irealb-editor__popover-chordrow {

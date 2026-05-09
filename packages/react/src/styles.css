@@ -426,8 +426,7 @@
   font-family: var(--cs-font-latin);
   font-weight: 600;
   font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: var(--cs-text-secondary);
 }
 
@@ -464,8 +463,7 @@
   font-family: var(--cs-font-latin);
   font-weight: 600;
   font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: var(--cs-text-secondary);
 }
 

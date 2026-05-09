@@ -14,7 +14,7 @@ html, body { margin: 0; }
 body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875; color: var(--text-primary); background: var(--canvas); -webkit-font-smoothing: antialiased; }
 a { color: inherit; text-decoration: none; }
 .container { max-width: 960px; margin: 0 auto; padding: var(--sp-16) var(--sp-6); }
-.eyebrow { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-secondary); margin: 0 0 var(--sp-3); }
+.eyebrow { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); margin: 0 0 var(--sp-3); }
 h1 { font-family: var(--font-display); font-weight: 900; font-size: var(--fs-60); line-height: 1.05; letter-spacing: -0.03em; margin: 0 0 var(--sp-3); }
 .deck { color: var(--text-secondary); margin: 0 0 var(--sp-12); max-width: 56ch; font-size: var(--fs-18); }
 .list { list-style: none; padding: 0; margin: 0; counter-reset: idx; }
@@ -24,7 +24,7 @@ h1 { font-family: var(--font-display); font-weight: 900; font-size: var(--fs-60)
 .list a::before { content: counter(idx, decimal-leading-zero); font-family: var(--font-mono); font-size: var(--fs-13); color: var(--text-tertiary); }
 .list .name { font-family: var(--font-jp); font-weight: 600; font-size: var(--fs-18); }
 .list .meta { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-secondary); }
-.back { font-family: var(--font-latin); font-size: var(--fs-12); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-secondary); }
+.back { font-family: var(--font-latin); font-size: var(--fs-12); font-weight: 600; letter-spacing: 0; color: var(--text-secondary); }
 .back:hover { color: var(--text-primary); }
 </style>
 </head>
