@@ -85,21 +85,32 @@ Not pure gray. A faint red tint keeps it in harmony with crimson.
 - `#fff` on `--crimson-500` = 6.2:1 ✓
 - `--ink-500` is for supporting copy only; never use it for body text.
 
+Ratios verified with the [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/).
+Re-measure when a token's hex value changes.
+
 ---
 
 ## 3. Typography
 
-**No mincho / serif.** Sans-serif and monospace only.
+UI text is sans-serif and monospace. The chart-rendering surface is
+the one place a serif is allowed: iReal Pro charts use Source Serif 4
+italic for `D.C.` / `D.S.` / `Fine` text marks and the chart header,
+matching the engraved-feel of iReal Pro's own charts. Outside the
+chart surface, no serifs.
 
 | Family | Role | Weights |
 |---|---|---|
 | **Noto Sans JP**   | Japanese UI throughout, display | 400 / 500 / 700 / **900** |
 | **Inter**          | Latin, numerals, eyebrow labels | 400 / 500 / 600 / 700 / 800 |
-| **JetBrains Mono** | Code, chord progressions (`[G]`), ChordPro source | 400 / 600 / **700** |
+| **JetBrains Mono** | Code, ChordPro source, monospaced UI elements | 400 / 600 / **700** |
+| **Roboto**         | Chord glyphs (`[G]`, `Am7`) and section letters in chart-rendering surfaces. Chosen for its stable Latin-numeric balance at small sizes. | 400 / 500 / 700 / 900 |
+| **Source Serif 4** | iReal Pro chart text marks (`D.C.`, `D.S.`, `Fine`) and chart header. Italic-leaning, evokes engraved sheet music. *Chart surfaces only.* | 400 / 700 / 900 (italic 400) |
 | **Bravura Text**   | SMuFL music glyphs — accidentals (♯ ♭), barlines, segno / coda, repeat dots. Used by `chordsketch-render-ireal` and the iReal Pro editor surface. | 400 |
 
+Token aliases in `tokens.css`:
 `--font-jp` = body, `--font-display` = display (Noto Sans JP 900),
 `--font-latin` = Inter, `--font-mono` = JetBrains Mono,
+`--font-chord` = Roboto, `--font-chart-serif` = Source Serif 4,
 `--font-music` = Bravura Text (see [ADR-0014](docs/adr/0014-bravura-glyphs-as-svg-paths.md)).
 
 ### 3.1 Scale
@@ -120,7 +131,7 @@ Not pure gray. A faint red tint keeps it in harmony with crimson.
 
 ### 3.2 Chord-sheet typesetting (the heart of the product)
 
-- Chord (`[G]`) = `--crimson-500` + JetBrains Mono 700 / 16px.
+- Chord (`[G]`) = `--crimson-500` + Roboto 700 / 16px (`--font-chord`).
 - Lyric = Noto Sans JP 400 / 16–18px.
 - Chord and lyric are **stacked vertically** (`flex-direction: column`)
   inside a `.pair`, and `.pair` elements flow as `inline-flex`.
@@ -164,7 +175,7 @@ Not pure gray. A faint red tint keeps it in harmony with crimson.
 
 Every component depends on tokens in `tokens.css`. Only the minimum
 requirements are listed here; visual detail will live in
-`ChordSketch Design System.html` and `preview/components-*.html` once
+`design-system.html` and `preview/components-*.html` once
 those artifacts are produced.
 
 | Category   | Variants |
@@ -227,7 +238,7 @@ those artifacts are produced.
 | File | Contents |
 |---|---|
 | `tokens.css` | Source of truth for every design token |
-| `ChordSketch Design System.html` | Long-form visual guide (single page) |
+| `design-system.html` | Long-form visual guide (single page) |
 | `ui_kits/web/library.html` | Full-screen sample — library |
 | `ui_kits/web/viewer.html` | Full-screen sample — chord sheet viewer |
 | `ui_kits/web/editor.html` | Full-screen sample — ChordPro split editor (source + live preview) |
@@ -252,4 +263,6 @@ those artifacts are produced.
 ## 10. Changelog
 
 - **v1.0** — Initial. Crimson + Warm Ink + Noto Sans JP / Inter /
-  JetBrains Mono. Mincho / serif typefaces are explicitly out of scope.
+  JetBrains Mono / Roboto / Source Serif 4 / Bravura Text. Source
+  Serif 4 is restricted to chart-rendering surfaces (iReal Pro); UI
+  text remains sans-serif and monospace.

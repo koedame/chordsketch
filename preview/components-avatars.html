@@ -23,16 +23,13 @@ a { color: inherit; }
 .frame { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); padding: var(--sp-8); display: flex; flex-wrap: wrap; gap: var(--sp-6); align-items: center; }
 
 .avatar { display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-full); font-family: var(--font-latin); font-weight: 600; color: var(--ink-0); }
-.avatar.s24 { width: 24px; height: 24px; font-size: 10px; }
-.avatar.s28 { width: 28px; height: 28px; font-size: 11px; }
-.avatar.s36 { width: 36px; height: 36px; font-size: 13px; }
-.avatar.s48 { width: 48px; height: 48px; font-size: 16px; }
+.avatar.s24 { width: 24px; height: 24px; font-size: var(--fs-10); }
+.avatar.s28 { width: 28px; height: 28px; font-size: var(--fs-10); }
+.avatar.s36 { width: 36px; height: 36px; font-size: var(--fs-13); }
+.avatar.s48 { width: 48px; height: 48px; font-size: var(--fs-16); }
 
 .avatar.crimson { background: var(--crimson-500); }
 .avatar.ink     { background: var(--ink-700); }
-.avatar.warm    { background: #C97A4F; }
-.avatar.olive   { background: #6E7E4A; }
-.avatar.steel   { background: #4A6E7E; }
 .avatar.muted   { background: var(--ink-300); color: var(--text-strong); }
 
 .avatars { display: inline-flex; }
@@ -60,8 +57,8 @@ a { color: inherit; }
     <div class="frame">
       <span class="avatar s24 crimson">SL</span>
       <span class="avatar s28 ink">MC</span>
-      <span class="avatar s36 warm">AT</span>
-      <span class="avatar s48 olive">RH</span>
+      <span class="avatar s36 ink">AT</span>
+      <span class="avatar s48 muted">RH</span>
     </div>
   </section>
 
@@ -71,19 +68,19 @@ a { color: inherit; }
       <span class="avatars">
         <span class="avatar s28 crimson">SL</span>
         <span class="avatar s28 ink">MC</span>
-        <span class="avatar s28 warm">AT</span>
+        <span class="avatar s28 ink">AT</span>
       </span>
       <span class="avatars">
         <span class="avatar s28 crimson">SL</span>
         <span class="avatar s28 ink">MC</span>
-        <span class="avatar s28 warm">AT</span>
-        <span class="avatar s28 olive">RH</span>
+        <span class="avatar s28 ink">AT</span>
+        <span class="avatar s28 muted">RH</span>
         <span class="avatar s28 muted">+3</span>
       </span>
       <span class="avatars lg">
         <span class="avatar s48 crimson">SL</span>
         <span class="avatar s48 ink">MC</span>
-        <span class="avatar s48 warm">AT</span>
+        <span class="avatar s48 ink">AT</span>
         <span class="avatar s48 muted">+5</span>
       </span>
     </div>
@@ -107,7 +104,7 @@ a { color: inherit; }
         </div>
       </div>
       <div class="with-meta">
-        <span class="avatar s36 warm">AT</span>
+        <span class="avatar s36 ink">AT</span>
         <div>
           <div class="name">Alex Tanaka</div>
           <div class="role">viewer</div>

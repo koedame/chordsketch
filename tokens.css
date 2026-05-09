@@ -60,6 +60,14 @@
   --font-latin:   "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-sans:    var(--font-jp);
+  /* Chord glyphs (`[G]`, `Am7`) and section letters in chart-rendering
+     surfaces. Roboto's Latin-numeric balance reads cleanly at small
+     sizes and matches the chord typography in iReal Pro / render-ireal. */
+  --font-chord:   "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  /* iReal Pro chart text marks (D.C., D.S., Fine) and chart header.
+     Italic Source Serif 4 evokes engraved sheet music. CHART SURFACES
+     ONLY — outside the chart, UI text is sans-serif and monospace. */
+  --font-chart-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
   /* SMuFL music notation (segno, coda, accidentals, barlines, etc.).
      iReal Pro / render-ireal use Bravura Text. See ADR-0014. */
   --font-music:   "Bravura Text", "Noto Music", "Symbola", serif;

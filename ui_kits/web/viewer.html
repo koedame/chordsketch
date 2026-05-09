@@ -63,7 +63,7 @@ a { color: inherit; }
 .section-label:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
 .line { font-size: 0; margin-bottom: var(--sp-3); }
 .pair { display: inline-flex; flex-direction: column; align-items: flex-start; vertical-align: bottom; }
-.pair .chord { font-family: "Roboto", system-ui, sans-serif; font-weight: 700; font-size: var(--fs-16); color: var(--crimson-500); line-height: 1.4; min-height: 1.4em; }
+.pair .chord { font-family: var(--font-chord); font-weight: 700; font-size: var(--fs-16); color: var(--crimson-500); line-height: 1.4; min-height: 1.4em; }
 .pair .lyric { font-family: var(--font-jp); font-weight: 400; font-size: var(--fs-18); line-height: 1.5; white-space: pre; }
 
 .sidebar { position: sticky; top: 72px; }
@@ -78,14 +78,14 @@ a { color: inherit; }
 
 .contributors { display: flex; align-items: center; gap: var(--sp-3); }
 .avatars { display: inline-flex; }
-.avatars > * { width: 28px; height: 28px; border-radius: var(--r-full); border: 2px solid var(--surface); margin-left: -8px; background: var(--ink-200); display: flex; align-items: center; justify-content: center; font-family: var(--font-latin); font-weight: 600; font-size: 11px; color: var(--text-secondary); }
+.avatars > * { width: 28px; height: 28px; border-radius: var(--r-full); border: 2px solid var(--surface); margin-left: -8px; background: var(--ink-200); display: flex; align-items: center; justify-content: center; font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-10); color: var(--text-secondary); }
 .avatars > *:first-child { margin-left: 0; }
 </style>
 </head>
 <body>
 
 <header class="topnav">
-  <a class="brand" href="../../ChordSketch%20Design%20System.html">
+  <a class="brand" href="../../design-system.html">
     <img class="mark" src="../../assets/logo.svg" alt="" width="24" height="24">
     ChordSketch
   </a>
