@@ -74,7 +74,8 @@ const FORMAT_OPTIONS: ReadonlyArray<{ value: PreviewFormat; label: string }> = [
  * Opinionated all-in-one ChordPro playground. Composes
  * {@link SourceEditor}, {@link RendererPreview}, {@link Transpose},
  * and {@link SplitLayout} into a header-plus-split layout that
- * matches the design-system reference at `ui_kits/web/editor.html`.
+ * matches the design-system reference at
+ * `design-system/ui_kits/web/editor.html`.
  *
  * Each piece is independently exported, so hosts that want a
  * different arrangement (vertical stack, no header, custom format

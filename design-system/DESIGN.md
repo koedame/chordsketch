@@ -235,10 +235,17 @@ those artifacts are produced.
 
 ## 9. Related files
 
+All design-system artefacts live under `design-system/` at the
+repo root. Paths in this section are relative to `DESIGN.md`
+itself (i.e. relative to the `design-system/` folder). The
+brand-mark assets stay at the repo root because they are also
+consumed by package READMEs and the VS Code Marketplace
+listing — see `.claude/rules/package-documentation.md`.
+
 | File | Contents |
 |---|---|
 | `tokens.css` | Source of truth for every design token |
-| `design-system.html` | Long-form visual guide (single page) |
+| `index.html` | Long-form visual guide (single page) |
 | `ui_kits/web/library.html` | Full-screen sample — library |
 | `ui_kits/web/viewer.html` | Full-screen sample — chord sheet viewer |
 | `ui_kits/web/editor.html` | Full-screen sample — ChordPro split editor (source + live preview) |
@@ -254,9 +261,9 @@ those artifacts are produced.
 | `preview/components-table.html` | Library table, stats table |
 | `preview/components-toast.html` | Default, success, danger, warning, stack |
 | `preview/components-progress.html` | Linear bar, spinner, skeleton |
-| `assets/logo.svg` | Brand mark (vector, 180×180, `#BD1642` field) |
-| `assets/logo-128.png` | Raster derivative — VS Code extension icon |
-| `assets/logo-256.png` | Raster derivative — Marketplace README header / high-DPI contexts |
+| `../assets/logo.svg` | Brand mark (vector, 180×180, `#BD1642` field) |
+| `../assets/logo-128.png` | Raster derivative — VS Code extension icon |
+| `../assets/logo-256.png` | Raster derivative — Marketplace README header / high-DPI contexts |
 
 ---
 

@@ -9,10 +9,11 @@
  *
  * Design-system tokens are exposed under the `--cs-*` namespace so
  * consumers can override them per-element without colliding with
- * the workspace `tokens.css` (`--crimson-*`, `--ink-*`, …) when both
- * are loaded into the same document. The namespace is local to this
- * package's selectors. See DESIGN.md §2 / §3 for the colour and
- * type roles. Hosts that ship the workspace `tokens.css` get the
+ * the workspace `design-system/tokens.css` (`--crimson-*`,
+ * `--ink-*`, …) when both are loaded into the same document. The
+ * namespace is local to this package's selectors. See
+ * `design-system/DESIGN.md` §2 / §3 for the colour and type roles.
+ * Hosts that ship the workspace `design-system/tokens.css` get the
  * full design language; hosts that ship just this stylesheet get
  * the inline fallbacks below — visually equivalent for
  * `:root`-level rendering.

@@ -78,7 +78,7 @@ export interface SourceEditorProps extends Omit<HTMLAttributes<HTMLDivElement>, 
 
 /**
  * Default highlight style — mirrors the `.tok-*` rules in the
- * design-system reference (`ui_kits/web/editor.html`):
+ * design-system reference (`design-system/ui_kits/web/editor.html`):
  *
  *   `.tok-chord     { color: var(--crimson-500); font-weight: 600; }`
  *   `.tok-directive { color: var(--text-secondary); }`
@@ -93,7 +93,7 @@ export interface SourceEditorProps extends Omit<HTMLAttributes<HTMLDivElement>, 
  * matching the plain "Country Roads" / "John Denver" copy in the
  * editor.html reference. Colours pull through CSS variables
  * defined in `@chordsketch/react/styles.css` (and the workspace
- * `tokens.css`) with inline fallbacks so the editor renders
+ * `design-system/tokens.css`) with inline fallbacks so the editor renders
  * correctly even if the host has not loaded the stylesheet yet.
  *
  * `tok-key` (special-cased value of the `{key: …}` directive) and

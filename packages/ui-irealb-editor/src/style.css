@@ -3,8 +3,9 @@
  * desktop WebView) imports this file via
  * `@chordsketch/ui-irealb-editor/style.css`.
  *
- * Tokens come from the design system (see `tokens.css` at the
- * workspace root and DESIGN.md §9). The host typically provides
+ * Tokens come from the design system (see
+ * `design-system/tokens.css` at the workspace root and
+ * `design-system/DESIGN.md` §9). The host typically provides
  * them — `@chordsketch/ui-web/style.css` ships an inline copy of
  * the same `:root` block — but the per-package fallback below
  * keeps the editor visually correct when consumed standalone.

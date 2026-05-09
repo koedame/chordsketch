@@ -915,8 +915,9 @@ pub fn render(input: &str) -> String {
 /// at render time by [`css_for_wraplines`] based on `settings.wraplines`.
 /// The substitution targets the sentinel rather than the literal value so
 /// `.chord-diagrams-grid`'s own `flex-wrap: wrap` is unaffected.
-// Design tokens from `tokens.css` at the workspace root (see
-// DESIGN.md §2 / §3). The font stacks fall back to system-ui so the
+// Design tokens from `design-system/tokens.css` at the workspace
+// root (see `design-system/DESIGN.md` §2 / §3). The font stacks
+// fall back to system-ui so the
 // document is readable when the design fonts are not installed; a
 // host that loads Noto Sans JP / Inter / JetBrains Mono / Roboto
 // (e.g. the playground or the desktop WebView) gets the full
