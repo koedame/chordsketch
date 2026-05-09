@@ -4,21 +4,20 @@
 <meta charset="utf-8">
 <title>Display + Transpose Test</title>
 <style>
-body { font-family: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-size: 1rem; line-height: 1.6875; color: #0A0A0B; max-width: 800px; margin: 2em auto; padding: 0 1em; }
+body { font-family: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-size: 1rem; line-height: 1.6875; color: #0A0A0B; max-width: 720px; margin: 2em auto; padding: 0 1em; }
 h1 { font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif; font-weight: 700; font-size: 1.875rem; letter-spacing: -0.02em; color: #0A0A0B; margin-bottom: 0.2em; }
 h2 { font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif; font-weight: 400; font-size: 1rem; color: #67646D; margin-top: 0; }
 .line { display: flex; flex-wrap: wrap; margin: 0.1em 0; }
 .chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
-.chord { font-family: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 0.9em; letter-spacing: 0.01em; min-height: 1.2em; }
-.lyrics { white-space: pre; }
+.chord { font-family: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 1rem; letter-spacing: 0.01em; min-height: 1.2em; }
+.lyrics { font-family: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-weight: 400; font-size: 1.125rem; white-space: pre; }
 .empty-line { height: 1em; }
 section { margin: 1em 0; }
-section > .section-label { font-family: "Inter", system-ui, -apple-system, sans-serif; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em; color: #67646D; border-top: 1px solid #E8E6EA; padding-top: 0.5em; margin-bottom: 0.5em; }
-section:first-of-type > .section-label { border-top: 0; padding-top: 0; }
+section > .section-label, .chorus-recall > .section-label { font-family: "Inter", system-ui, -apple-system, sans-serif; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em; color: #67646D; border-top: 1px solid #E8E6EA; padding-top: 0.5em; margin-bottom: 0.5em; }
+section:first-of-type > .section-label, .chorus-recall:first-of-type > .section-label { border-top: 0; padding-top: 0; }
 .comment { font-family: "Inter", system-ui, -apple-system, sans-serif; font-style: italic; color: #8A8790; margin: 0.3em 0; }
 .comment-box { border: 1px solid #D4D1D6; border-radius: 4px; padding: 0.2em 0.5em; display: inline-block; margin: 0.3em 0; }
 .chorus-recall { margin: 1em 0; }
-.chorus-recall > .section-label { font-family: "Inter", system-ui, -apple-system, sans-serif; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em; color: #67646D; margin-bottom: 0.3em; }
 img { max-width: 100%; height: auto; }
 .chord-diagrams-grid { display: flex; flex-wrap: wrap; gap: 0.5em; margin: 0.5em 0; }
 .chord-diagram-container { display: inline-block; vertical-align: top; }

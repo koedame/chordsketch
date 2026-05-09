@@ -53,16 +53,27 @@
   --focus-ring: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
 
   --font-jp: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Noto Sans JP", system-ui, sans-serif;
   --font-latin: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: var(--font-jp);
   --font-chord: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-chart-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-music: "Bravura Text", "Noto Music", "Symbola", serif;
 
+  --fs-10: 0.625rem;
   --fs-12: 0.75rem;
   --fs-13: 0.8125rem;
   --fs-14: 0.875rem;
   --fs-15: 0.9375rem;
   --fs-16: 1rem;
   --fs-18: 1.125rem;
+  --fs-24: 1.5rem;
+  --fs-30: 1.875rem;
+  --fs-36: 2.25rem;
+  --fs-48: 3rem;
+  --fs-60: 3.75rem;
+  --fs-72: 4.5rem;
 
   --sp-1: 0.25rem;
   --sp-2: 0.5rem;
@@ -71,24 +82,41 @@
   --sp-5: 1.25rem;
   --sp-6: 1.5rem;
   --sp-8: 2rem;
+  --sp-10: 2.5rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+  --sp-20: 5rem;
+  --sp-24: 6rem;
+  --sp-32: 8rem;
 
   --r-1: 2px;
   --r-2: 4px;
   --r-3: 8px;
+  --r-4: 12px;
   --r-full: 9999px;
 
   --e-1: 0 1px 2px rgba(10, 10, 11, 0.04);
   --e-2: 0 4px 12px rgba(10, 10, 11, 0.08);
+  --e-3: 0 16px 32px rgba(10, 10, 11, 0.12);
+  --e-overlay: 0 24px 48px rgba(10, 10, 11, 0.18);
 
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur-1: 120ms;
   --dur-2: 200ms;
+  --dur-3: 280ms;
+  --dur-4: 400ms;
+
+  --maxw-app: 1280px;
+  --maxw-reading: 720px;
+  --maxw-guide: 1080px;
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-1: 0ms;
     --dur-2: 0ms;
+    --dur-3: 0ms;
+    --dur-4: 0ms;
   }
 }
 
@@ -187,7 +215,13 @@ header h1::before {
   width: 24px;
   height: 24px;
   border-radius: var(--r-1);
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><rect width="180" height="180" rx="20" fill="%23BD1642"/><path d="M59 132 L101 56 L114 64 L72 140 Z" fill="white"/><circle cx="58" cy="134" r="6" fill="white"/></svg>');
+  /* Canonical brand mark — quill on a `--crimson-500` field. The SVG
+   * path is the same one shipped at `assets/logo.svg` (the
+   * authoritative asset per DESIGN.md §1). It is inlined as a data
+   * URL so the ui-web package remains self-contained and does not
+   * depend on the host providing the asset at a particular path.
+   * Update both files in lockstep when the mark is redrawn. */
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><rect width="180" height="180" fill="%23BD1642"/><path d="M82.9328334,100.501459 C84.0311093,98.5297919 86.368868,97.6656987 88.5433381,98.2694599 C88.6578145,98.3008392 88.7693854,98.3264075 88.8821185,98.3548813 C89.0669078,98.400207 89.2522781,98.4437894 89.4422973,98.4821419 C89.5375974,98.5013181 89.635222,98.5239809 89.7287788,98.5408328 C89.7729423,98.5489682 89.8165246,98.5507115 89.8606881,98.5559414 C90.8235681,98.7198111 91.8404902,98.8000027 92.9044814,98.7738532 C95.0353691,98.7209733 97.3208289,98.282244 99.5969912,97.4140831 C106.959508,94.607378 111.430478,88.4041529 109.583748,83.5589548 C108.201896,79.9334821 103.674558,78.0966301 98.3993475,78.5760363 C98.7985621,78.4499379 99.1977766,78.3168664 99.5969912,78.1646186 C106.959508,75.3579135 111.430478,69.1546885 109.583748,64.3089092 C108.201896,60.6840176 103.674558,58.8471657 98.3993475,59.3259907 C98.7985621,59.1998924 99.1977766,59.0668209 99.5969912,58.9145731 C106.959508,56.107868 111.430478,49.904643 109.583748,45.0588637 C107.736436,40.2136655 100.270484,38.5604407 92.9079679,41.3671458 C89.9879487,42.4805302 87.5246727,44.1291063 85.7284976,46.0141894 C84.9382039,46.8498088 84.3135231,47.672063 83.8195895,48.5140746 C66.608037,74.3247206 75.0897488,157.615874 75.0897488,157.615874 C75.5546275,146.069449 77.4478459,110.345846 82.9328334,100.501459 Z" fill="%23FFFFFF"/></svg>');
   background-size: cover;
   background-repeat: no-repeat;
   flex-shrink: 0;
