@@ -549,3 +549,44 @@ a {
 .topnav__view {
   /* no-op — inherits `.segmented` */
 }
+
+/* ----------------------------------------------------------------
+ * Form select — mirrors `.select` from
+ * `design-system/preview/components-forms.html`. The reference
+ * defines `height: 36px` for full-size form fields; the topnav
+ * cluster uses a compact 28 px variant to sit alongside the
+ * 28 px `.btn-sm` and `.segmented` controls. The native dropdown
+ * arrow is preserved (the reference does not strip it) so the
+ * select still feels like a native form control across browsers.
+ * ---------------------------------------------------------------- */
+
+.chordsketch-app__select {
+  height: 28px;
+  padding: 0 0.75rem;
+  background: var(--cs-surface, #FFFFFF);
+  color: var(--cs-text-primary, #0A0A0B);
+  border: 1px solid var(--cs-border-strong, #D4D1D6);
+  border-radius: 4px;
+  font: 500 0.8125rem/1 var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  cursor: pointer;
+  transition: background var(--cs-dur-1, 120ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)),
+    border-color var(--cs-dur-1, 120ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)),
+    box-shadow var(--cs-dur-1, 120ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1));
+}
+
+.chordsketch-app__select:hover:not(:disabled) {
+  border-color: var(--cs-text-secondary, #67646D);
+}
+
+.chordsketch-app__select:focus,
+.chordsketch-app__select:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500, #BD1642);
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #FFFFFF, 0 0 0 4px #BD1642);
+}
+
+.chordsketch-app__select:disabled {
+  background: var(--cs-ink-50, #FAFAF7);
+  color: var(--cs-text-tertiary, #8A8790);
+  cursor: not-allowed;
+}

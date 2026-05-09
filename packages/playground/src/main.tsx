@@ -337,6 +337,18 @@ function PlaygroundApp(): JSX.Element {
           <span>ChordPro</span>
         </nav>
         <div className="actions">
+          <div className="topnav__view segmented" role="group" aria-label="Pane visibility">
+            {(['split', 'source', 'preview'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                onClick={() => setView(v)}
+              >
+                {v === 'split' ? 'Split' : v === 'source' ? 'Source' : 'Preview'}
+              </button>
+            ))}
+          </div>
           <label className="topnav__sample">
             <span className="label">Sample</span>
             <select
@@ -352,18 +364,6 @@ function PlaygroundApp(): JSX.Element {
               ))}
             </select>
           </label>
-          <div className="topnav__view segmented" role="group" aria-label="Pane visibility">
-            {(['split', 'source', 'preview'] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={view === v}
-                onClick={() => setView(v)}
-              >
-                {v === 'split' ? 'Split' : v === 'source' ? 'Source' : 'Preview'}
-              </button>
-            ))}
-          </div>
           <a
             className="btn btn-ghost btn-sm"
             href="https://github.com/koedame/chordsketch"
