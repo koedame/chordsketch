@@ -63,6 +63,16 @@ Additionally, these non-Rust packages exist:
 | ChordPro (Zed extension) | `packages/zed-extension` | Zed editor extension with tree-sitter highlighting and LSP integration (not in workspace; targets wasm32-wasi) |
 | ChordPro (JetBrains plugin) | `packages/jetbrains-plugin` | JetBrains IDE plugin with TextMate syntax highlighting for ChordPro files |
 
+The repository also ships a static design-system reference at the repo root:
+`DESIGN.md` (rationale + token reference), `tokens.css` (single source of
+truth for color / typography / space / radius / elevation / motion),
+`design-system.html` (visual landing page), `preview/` (10 component
+preview pages + index), and `ui_kits/web/` (four product-surface demos:
+editor, viewer, library, iReal Pro chart editor). These are static
+HTML/CSS — no build step. Token decisions in `tokens.css` are the
+authoritative reference for `@chordsketch/ui-web`, `@chordsketch/react`,
+the playground, and the desktop app.
+
 ### Dependency Policy
 
 - `chordsketch-chordpro` must have **zero external dependencies**. All parsing and AST logic

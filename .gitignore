@@ -62,3 +62,6 @@ packages/playground/test-results/
 # Python (used by scripts/ and CI helpers, not a runtime dep)
 __pycache__/
 *.pyc
+
+# Local scratch / reference assets (screenshots, sample PDFs)
+tmp/

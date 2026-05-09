@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forms — ChordSketch Components</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="../tokens.css">
+<style>
+* { box-sizing: border-box; } html, body { margin: 0; }
+body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875; color: var(--text-primary); background: var(--canvas); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+.container { max-width: 960px; margin: 0 auto; padding: var(--sp-12) var(--sp-6); }
+.preview-back { font-family: var(--font-latin); font-size: var(--fs-12); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-secondary); text-decoration: none; }
+.preview-back:hover { color: var(--text-primary); }
+.eyebrow { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-secondary); margin: var(--sp-8) 0 var(--sp-2); }
+.preview-h1 { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-36); line-height: 1.111; letter-spacing: -0.02em; margin: 0 0 var(--sp-3); }
+.preview-deck { color: var(--text-secondary); margin: 0 0 var(--sp-12); max-width: 56ch; }
+.group { margin-bottom: var(--sp-12); }
+.group h2 { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-secondary); margin: 0 0 var(--sp-4); }
+.frame { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); padding: var(--sp-8); display: grid; gap: var(--sp-6); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+
+.field { display: flex; flex-direction: column; gap: var(--sp-2); }
+.field > label { font-family: var(--font-jp); font-weight: 500; font-size: var(--fs-14); color: var(--text-primary); }
+.field .help { font-size: var(--fs-13); color: var(--text-secondary); }
+.field .err { font-size: var(--fs-13); color: var(--danger-fg); }
+
+.input, .textarea, .select {
+  width: 100%; padding: 0 var(--sp-3); height: 36px;
+  border: 1px solid var(--border-strong); border-radius: var(--r-2);
+  background: var(--surface); font: 400 var(--fs-14)/1 var(--font-jp); color: var(--text-primary);
+  transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+.textarea { height: auto; padding: var(--sp-3); line-height: 1.6; resize: vertical; min-height: 96px; font-family: var(--font-jp); }
+.input:hover, .textarea:hover, .select:hover { border-color: var(--text-secondary); }
+.input:focus, .textarea:focus, .select:focus { outline: none; border-color: var(--crimson-500); box-shadow: var(--focus-ring); }
+.input.error { border-color: var(--danger-fg); }
+.input:disabled, .textarea:disabled, .select:disabled { background: var(--ink-50); color: var(--text-tertiary); cursor: not-allowed; }
+.input::placeholder { color: var(--text-tertiary); }
+
+/* Segmented */
+.segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--r-2); overflow: hidden; }
+.segmented button { background: var(--surface); border: 0; padding: 0 var(--sp-4); height: 36px; font: 500 var(--fs-14)/1 var(--font-jp); color: var(--text-secondary); cursor: pointer; border-right: 1px solid var(--border); }
+.segmented button:last-child { border-right: 0; }
+.segmented button[aria-pressed="true"] { background: var(--ink-1000); color: var(--ink-0); }
+
+/* Checkbox */
+.check, .radio { display: inline-flex; align-items: center; gap: var(--sp-2); cursor: pointer; user-select: none; font-size: var(--fs-14); }
+.check input, .radio input { position: absolute; opacity: 0; pointer-events: none; }
+.check .box, .radio .box { width: 18px; height: 18px; border: 1px solid var(--border-strong); background: var(--surface); display: inline-flex; align-items: center; justify-content: center; transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out); }
+.check .box { border-radius: var(--r-1); }
+.radio .box { border-radius: var(--r-full); }
+.check input:checked + .box, .radio input:checked + .box { background: var(--crimson-500); border-color: var(--crimson-500); }
+.check input:checked + .box::before { content: ""; width: 10px; height: 6px; border-left: 2px solid var(--ink-0); border-bottom: 2px solid var(--ink-0); transform: rotate(-45deg) translate(1px, -1px); }
+.radio input:checked + .box::before { content: ""; width: 6px; height: 6px; border-radius: var(--r-full); background: var(--ink-0); }
+.check input:focus-visible + .box, .radio input:focus-visible + .box { box-shadow: var(--focus-ring); outline: none; }
+
+/* Switch */
+.switch { display: inline-flex; align-items: center; gap: var(--sp-3); cursor: pointer; font-size: var(--fs-14); }
+.switch input { position: absolute; opacity: 0; }
+.switch .track { width: 36px; height: 20px; border-radius: var(--r-full); background: var(--ink-300); position: relative; transition: background var(--dur-1) var(--ease-out); }
+.switch .track::before { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: var(--r-full); background: var(--ink-0); transition: transform var(--dur-2) var(--ease-out); box-shadow: var(--e-1); }
+.switch input:checked + .track { background: var(--crimson-500); }
+.switch input:checked + .track::before { transform: translateX(16px); }
+.switch input:focus-visible + .track { box-shadow: var(--focus-ring); }
+</style>
+</head>
+<body>
+<main class="container">
+  <a href="index.html" class="preview-back">← Components</a>
+  <p class="eyebrow">Component</p>
+  <h1 class="preview-h1">Forms</h1>
+  <p class="preview-deck">Inputs, selects, textareas, segmented controls, checkboxes, radios, switches. All focus rings use <code style="font-family: var(--font-mono);">--focus-ring</code>.</p>
+
+  <section class="group">
+    <h2>Text input</h2>
+    <div class="frame">
+      <div class="field">
+        <label for="title">Title</label>
+        <input id="title" class="input" placeholder="Country Roads" value="Country Roads">
+        <span class="help">Displayed as the song's main title when published.</span>
+      </div>
+      <div class="field">
+        <label for="bpm">BPM</label>
+        <input id="bpm" class="input" type="number" value="82" inputmode="numeric" style="font-family: var(--font-mono); font-variant-numeric: tabular-nums;">
+        <span class="help">Whole number, 1–300.</span>
+      </div>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" class="input error" type="email" value="not-an-email">
+        <span class="err">Enter a valid email address.</span>
+      </div>
+      <div class="field">
+        <label for="readonly">Owner</label>
+        <input id="readonly" class="input" value="koedame" disabled>
+        <span class="help">Read-only.</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Textarea</h2>
+    <div class="frame" style="grid-template-columns: 1fr;">
+      <div class="field">
+        <label for="cho">ChordPro source</label>
+        <textarea id="cho" class="textarea" style="font-family: var(--font-mono); font-size: var(--fs-14);">{title: Country Roads}
+{artist: John Denver}
+{key: G}
+{capo: 0}
+
+[G]Almost heaven, [Em]West Virginia
+[D]Blue Ridge Mountains, [C]Shenandoah [G]River</textarea>
+        <span class="help">ChordPro 6.0 directives are supported.</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Select</h2>
+    <div class="frame">
+      <div class="field">
+        <label for="key">Key</label>
+        <select id="key" class="select" style="font-family: var(--font-mono);">
+          <option>C</option><option>C#</option><option>D</option><option>D#</option><option>E</option>
+          <option>F</option><option>F#</option><option selected>G</option><option>G#</option>
+          <option>A</option><option>A#</option><option>B</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="format">Format</label>
+        <select id="format" class="select">
+          <option>ChordPro</option>
+          <option>iReal Pro</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Segmented</h2>
+    <div class="frame">
+      <div class="segmented" role="group" aria-label="Format">
+        <button aria-pressed="true">ChordPro</button>
+        <button aria-pressed="false">iReal Pro</button>
+      </div>
+      <div class="segmented" role="group" aria-label="View">
+        <button aria-pressed="true">Split</button>
+        <button aria-pressed="false">Source</button>
+        <button aria-pressed="false">Preview</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Checkbox · Radio · Switch</h2>
+    <div class="frame">
+      <div style="display: flex; flex-direction: column; gap: var(--sp-3);">
+        <label class="check"><input type="checkbox" checked><span class="box"></span>Show lyrics</label>
+        <label class="check"><input type="checkbox"><span class="box"></span>Show section labels</label>
+        <label class="check"><input type="checkbox" disabled><span class="box"></span>Show tab notation (disabled)</label>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: var(--sp-3);">
+        <label class="radio"><input type="radio" name="ed" checked><span class="box"></span>Text editor</label>
+        <label class="radio"><input type="radio" name="ed"><span class="box"></span>Bar-grid editor</label>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: var(--sp-3);">
+        <label class="switch"><input type="checkbox" checked><span class="track"></span>Live preview</label>
+        <label class="switch"><input type="checkbox"><span class="track"></span>Dark mode</label>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>
