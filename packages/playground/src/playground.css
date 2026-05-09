@@ -4,8 +4,8 @@
  * `<RendererPreview>`, `<Transpose>`) bring their own styling via
  * `@chordsketch/react/styles.css`. This stylesheet only covers
  * the playground-specific chrome that lives outside those
- * components: the header bar, the brand mark, the iRealb pane
- * scaffolding, and the format controls' visual treatment.
+ * components: the header bar, the brand mark, and the format
+ * controls' visual treatment.
  */
 
 * {
@@ -178,49 +178,6 @@ body {
 .chordsketch-app__split {
   flex: 1;
   min-height: 0;
-}
-
-.chordsketch-app__irealb-host {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  background: var(--cs-surface, #FFFFFF);
-}
-
-.chordsketch-app__irealb-host > .irealb-editor {
-  flex: 1;
-  min-height: 100%;
-}
-
-.chordsketch-app__irealb-preview {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--cs-surface, #FFFFFF);
-}
-
-.chordsketch-app__irealb-frame {
-  flex: 1;
-  border: none;
-  width: 100%;
-  height: 100%;
-  background: var(--cs-surface, #FFFFFF);
-}
-
-.chordsketch-app__error {
-  margin: 1rem;
-  padding: 0.75rem 1rem;
-  background: var(--cs-crimson-100, #FBE1E8);
-  color: var(--cs-crimson-700, #87092C);
-  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
-  font-size: 0.8125rem;
-  border: 1px solid var(--cs-crimson-300, #EC8AA3);
-  border-radius: 4px;
-  white-space: pre-wrap;
-  word-wrap: break-word;
 }
 
 @media (max-width: 768px) {

@@ -7,6 +7,11 @@
 // asserts the marker is present and increments — a regression that
 // drops the cache-bust would collapse it to a constant string and
 // fail this test loudly.
+//
+// Selectors target the React playground (#2454):
+// `iframe.chordsketch-preview__frame` is the HTML preview iframe
+// rendered by `<RendererPreview>`; the format `<select>` is
+// labelled "Format" and lives inside `.chordsketch-app__controls`.
 
 import { expect, test } from '@playwright/test';
 
@@ -15,19 +20,19 @@ test.describe('playground render-format toggle', () => {
     page,
   }) => {
     await page.goto('./');
-    const iframe = page.locator('iframe#preview');
+    const iframe = page.locator('iframe.chordsketch-preview__frame');
     await expect(iframe).toBeVisible();
 
     const initialSrcdoc = await iframe.getAttribute('srcdoc');
     expect(initialSrcdoc, 'mount-time srcdoc should be populated').toBeTruthy();
     expect(initialSrcdoc).toMatch(/<!--\s*r:\d+\s*-->/);
 
-    const formatSelect = page.locator('select#format');
+    const formatSelect = page.getByLabel('Format');
     await formatSelect.selectOption('text');
-    // The text pane is now visible; the iframe still carries its
-    // previous `srcdoc` value but is hidden via `display: none`.
-    const textPane = page.locator('pre#text-output');
-    await expect(textPane).toBeVisible();
+    // Text format renders inside `<ChordSheet format="text">` —
+    // a `<pre class="chordsketch-sheet__text">` inside the
+    // preview wrapper.
+    await expect(page.locator('.chordsketch-sheet__text')).toBeVisible();
 
     await formatSelect.selectOption('html');
     await expect(iframe).toBeVisible();
@@ -48,8 +53,8 @@ test.describe('playground render-format toggle', () => {
     page,
   }) => {
     await page.goto('./');
-    const iframe = page.locator('iframe#preview');
-    const formatSelect = page.locator('select#format');
+    const iframe = page.locator('iframe.chordsketch-preview__frame');
+    const formatSelect = page.getByLabel('Format');
     await expect(iframe).toBeVisible();
 
     const seen = new Set<string>();
