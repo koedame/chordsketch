@@ -1,16 +1,52 @@
 /* All selectors are namespaced under `.irealb-editor` so the editor
  * does not leak styles into the host page. The host (playground or
  * desktop WebView) imports this file via
- * `@chordsketch/ui-irealb-editor/style.css`. */
+ * `@chordsketch/ui-irealb-editor/style.css`.
+ *
+ * Tokens come from the design system (see `tokens.css` at the
+ * workspace root and DESIGN.md §9). The host typically provides
+ * them — `@chordsketch/ui-web/style.css` ships an inline copy of
+ * the same `:root` block — but the per-package fallback below
+ * keeps the editor visually correct when consumed standalone.
+ */
+
+:root {
+  --crimson-100: #FBE1E8;
+  --crimson-300: #EC8AA3;
+  --crimson-500: #BD1642;
+  --crimson-600: #A30F37;
+  --crimson-700: #87092C;
+  --crimson-900: #480418;
+
+  --ink-0: #FFFFFF;
+  --ink-50: #FAFAF7;
+  --ink-100: #F6F4F7;
+  --ink-200: #E8E6EA;
+  --ink-300: #D4D1D6;
+  --ink-500: #8A8790;
+  --ink-600: #67646D;
+  --ink-700: #44424A;
+  --ink-1000: #0A0A0B;
+
+  --danger-surface: #FBE1E8;
+  --danger-fg: #A30F37;
+
+  --font-jp: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-latin: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-chord: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
 
 .irealb-editor {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1rem;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color: #1f2933;
-  background: #ffffff;
+  gap: var(--sp-4, 1rem);
+  padding: var(--sp-6, 1.5rem);
+  font-family: var(--font-jp);
+  font-size: var(--fs-14, 0.875rem);
+  line-height: 1.5;
+  color: var(--ink-1000);
+  background: var(--ink-0);
   width: 100%;
   height: 100%;
   box-sizing: border-box;
@@ -48,74 +84,86 @@
 .irealb-editor__field {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.85rem;
+  gap: 0.375rem;
   min-width: 0;
 }
 
 .irealb-editor__field label {
-  color: #52606d;
+  font-family: var(--font-latin);
+  color: var(--ink-600);
   font-weight: 600;
+  font-size: 0.75rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.7rem;
+  letter-spacing: 0.08em;
 }
 
 .irealb-editor__input,
 .irealb-editor__select {
-  font: inherit;
-  padding: 0.4rem 0.5rem;
-  border: 1px solid #cbd2d9;
+  font: 500 0.8125rem/1.4 var(--font-jp);
+  height: 32px;
+  padding: 0 0.625rem;
+  border: 1px solid var(--ink-300);
   border-radius: 4px;
-  background: #ffffff;
-  color: #1f2933;
+  background: var(--ink-0);
+  color: var(--ink-1000);
   min-width: 0;
+  transition: border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.irealb-editor__input:hover,
+.irealb-editor__select:hover {
+  border-color: var(--ink-500);
 }
 
 .irealb-editor__input:focus,
 .irealb-editor__select:focus {
-  outline: 2px solid #4c6ef5;
-  outline-offset: 1px;
-  border-color: #4c6ef5;
+  outline: none;
+  border-color: var(--crimson-500);
+  box-shadow: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
 }
 
 /* Applied by `popover.ts` when the bass input cannot be parsed. The
  * AST keeps its previous bass value while the visual cue tells the
  * user the field is rejected. */
 .irealb-editor__input--invalid {
-  border-color: #c92a2a;
-  background: #fff5f5;
+  border-color: var(--crimson-500);
+  background: var(--danger-surface);
 }
 
 .irealb-editor__input--invalid:focus {
-  outline-color: #c92a2a;
-  border-color: #c92a2a;
+  border-color: var(--crimson-600);
+  box-shadow: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-600);
 }
 
 .irealb-editor__grid {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .irealb-editor__section {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.625rem;
 }
 
 .irealb-editor__section-header {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  border-bottom: 1px solid #e4e7eb;
-  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--ink-200);
+  padding-bottom: 0.375rem;
 }
 
 .irealb-editor__section-label {
   margin: 0;
-  font-size: 0.95rem;
-  color: #52606d;
+  font-family: var(--font-latin);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-600);
   flex: 1;
 }
 
@@ -123,17 +171,32 @@
  * #2365. Sit inline with the section heading so they stay visually
  * attached to their target section. */
 .irealb-editor__section-action {
-  background: #ffffff;
-  border: 1px solid #cbd2d9;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 0.4rem;
+  background: var(--ink-0);
+  border: 1px solid var(--ink-300);
   border-radius: 4px;
-  padding: 0.2rem 0.45rem;
   cursor: pointer;
-  font: inherit;
-  color: #1f2933;
+  font: 500 0.75rem/1 var(--font-jp);
+  color: var(--ink-700);
+  transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .irealb-editor__section-action:hover:not(:disabled) {
-  background: #f5f7fa;
+  background: var(--ink-100);
+  border-color: var(--ink-500);
+}
+
+.irealb-editor__section-action:focus-visible {
+  outline: none;
+  border-color: var(--crimson-500);
+  box-shadow: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
 }
 
 .irealb-editor__section-action:disabled {
@@ -142,12 +205,14 @@
 }
 
 .irealb-editor__section-action--danger {
-  border-color: #fab4b4;
-  color: #c92a2a;
+  border-color: var(--crimson-300);
+  color: var(--crimson-600);
 }
 
 .irealb-editor__section-action--danger:hover:not(:disabled) {
-  background: #fff5f5;
+  background: var(--crimson-50, #FDF2F5);
+  border-color: var(--crimson-500);
+  color: var(--crimson-700);
 }
 
 /* Add-section / add-bar trailers (#2365). Dashed outline so they
@@ -155,18 +220,30 @@
 .irealb-editor__add-section,
 .irealb-editor__add-bar {
   align-self: flex-start;
-  background: #f5f7fa;
-  border: 1px dashed #cbd2d9;
+  background: var(--ink-50);
+  border: 1px dashed var(--ink-300);
   border-radius: 4px;
-  padding: 0.4rem 0.7rem;
+  padding: 0.5rem 0.75rem;
   cursor: pointer;
-  font: inherit;
-  color: #1f2933;
+  font: 500 0.8125rem/1 var(--font-jp);
+  color: var(--ink-700);
+  transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .irealb-editor__add-section:hover,
 .irealb-editor__add-bar:hover {
-  background: #e4ebf1;
+  background: var(--ink-100);
+  border-color: var(--ink-500);
+  color: var(--ink-1000);
+}
+
+.irealb-editor__add-section:focus-visible,
+.irealb-editor__add-bar:focus-visible {
+  outline: none;
+  border-style: solid;
+  border-color: var(--crimson-500);
+  box-shadow: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
 }
 
 /* 4 bars per line. Bars are grouped into `.irealb-editor__row`
@@ -178,13 +255,13 @@
 .irealb-editor__bars {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.5rem;
 }
 
 .irealb-editor__row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.25rem;
+  gap: 0.375rem;
 }
 
 /* Bar wrapper holds the bar `<button>` plus the per-bar action
@@ -192,28 +269,43 @@
 .irealb-editor__bar-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.25rem;
 }
 
 .irealb-editor__bar-actions {
   display: flex;
   justify-content: center;
-  gap: 0.15rem;
+  gap: 0.25rem;
 }
 
 .irealb-editor__bar-action {
-  background: #ffffff;
-  border: 1px solid #cbd2d9;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 0.3rem;
+  background: var(--ink-0);
+  border: 1px solid var(--ink-300);
   border-radius: 3px;
-  padding: 0.1rem 0.35rem;
   cursor: pointer;
-  font: inherit;
-  font-size: 0.75rem;
-  color: #52606d;
+  font: 500 0.75rem/1 var(--font-jp);
+  color: var(--ink-600);
+  transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .irealb-editor__bar-action:hover:not(:disabled) {
-  background: #f5f7fa;
+  background: var(--ink-100);
+  border-color: var(--ink-500);
+  color: var(--ink-1000);
+}
+
+.irealb-editor__bar-action:focus-visible {
+  outline: none;
+  border-color: var(--crimson-500);
+  box-shadow: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
 }
 
 .irealb-editor__bar-action:disabled {
@@ -222,12 +314,14 @@
 }
 
 .irealb-editor__bar-action--danger {
-  border-color: #fab4b4;
-  color: #c92a2a;
+  border-color: var(--crimson-300);
+  color: var(--crimson-600);
 }
 
 .irealb-editor__bar-action--danger:hover:not(:disabled) {
-  background: #fff5f5;
+  background: var(--crimson-50, #FDF2F5);
+  border-color: var(--crimson-500);
+  color: var(--crimson-700);
 }
 
 .irealb-editor__bar {
@@ -235,26 +329,33 @@
    * UA stylesheet rather than the editor root. Re-establish the
    * monospace stack and 1rem size explicitly so the cell text
    * matches the pre-#2364 <div> rendering byte-for-byte. */
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-chord);
   font-size: 1rem;
-  border: 1px solid #cbd2d9;
-  background: #f5f7fa;
-  padding: 0.6rem 0.5rem;
-  min-height: 2.5rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  border: 1px solid var(--ink-200);
+  background: var(--ink-50);
+  padding: 0.625rem 0.5rem;
+  min-height: 2.625rem;
   text-align: center;
-  color: #1f2933;
-  border-radius: 3px;
+  color: var(--ink-1000);
+  border-radius: 4px;
   cursor: pointer;
   user-select: none;
+  transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .irealb-editor__bar:hover {
-  background: #e4ebf1;
+  background: var(--ink-100);
+  border-color: var(--ink-300);
 }
 
 .irealb-editor__bar:focus-visible {
-  outline: 2px solid #4c6ef5;
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--crimson-500);
+  box-shadow: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
 }
 
 /* ---------------------------------------------------------------------------
@@ -268,17 +369,18 @@
 .irealb-editor__popover {
   position: absolute;
   z-index: 100;
-  background: #ffffff;
-  border: 1px solid #9aa5b1;
-  border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
-  padding: 0.75rem;
+  background: var(--ink-0);
+  border: 1px solid var(--ink-300);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(10, 10, 11, 0.08), 0 16px 32px rgba(10, 10, 11, 0.12);
+  padding: 0.875rem;
   min-width: 320px;
   max-width: 540px;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  gap: 0.625rem;
+  font-family: var(--font-jp);
+  color: var(--ink-1000);
 }
 
 .irealb-editor__popover-body {
@@ -293,16 +395,18 @@
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  border-top: 1px solid #e4e7eb;
-  padding-top: 0.4rem;
+  border-top: 1px solid var(--ink-200);
+  padding-top: 0.5rem;
 }
 
 .irealb-editor__popover-chords h4 {
   margin: 0;
-  font-size: 0.85rem;
+  font-family: var(--font-latin);
+  font-size: 0.75rem;
+  font-weight: 600;
   text-transform: uppercase;
-  color: #52606d;
-  letter-spacing: 0.04em;
+  color: var(--ink-600);
+  letter-spacing: 0.12em;
 }
 
 .irealb-editor__popover-chordrow {
@@ -313,12 +417,31 @@
 }
 
 .irealb-editor__popover-rowbtn {
-  background: #ffffff;
-  border: 1px solid #cbd2d9;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 28px;
+  background: var(--ink-0);
+  border: 1px solid var(--ink-300);
   border-radius: 4px;
-  padding: 0.35rem 0.55rem;
+  padding: 0 0.55rem;
   cursor: pointer;
-  font: inherit;
+  font: 500 0.8125rem/1 var(--font-jp);
+  color: var(--ink-700);
+  transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.irealb-editor__popover-rowbtn:hover:not(:disabled) {
+  background: var(--ink-100);
+  border-color: var(--ink-500);
+}
+
+.irealb-editor__popover-rowbtn:focus-visible {
+  outline: none;
+  border-color: var(--crimson-500);
+  box-shadow: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
 }
 
 .irealb-editor__popover-rowbtn:disabled {
@@ -328,44 +451,74 @@
 
 .irealb-editor__popover-addrow {
   align-self: flex-start;
-  background: #f5f7fa;
-  border: 1px dashed #cbd2d9;
+  background: var(--ink-50);
+  border: 1px dashed var(--ink-300);
   border-radius: 4px;
-  padding: 0.35rem 0.6rem;
+  padding: 0.4rem 0.625rem;
   cursor: pointer;
-  font: inherit;
-  color: #1f2933;
+  font: 500 0.8125rem/1 var(--font-jp);
+  color: var(--ink-700);
+  transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.irealb-editor__popover-addrow:hover {
+  background: var(--ink-100);
+  border-color: var(--ink-500);
+  color: var(--ink-1000);
 }
 
 .irealb-editor__popover-footer {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
-  border-top: 1px solid #e4e7eb;
-  padding-top: 0.5rem;
+  border-top: 1px solid var(--ink-200);
+  padding-top: 0.625rem;
 }
 
 .irealb-editor__popover-cancel,
 .irealb-editor__popover-save {
-  font: inherit;
-  padding: 0.45rem 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 0.875rem;
   border-radius: 4px;
   cursor: pointer;
+  font: 500 0.8125rem/1 var(--font-jp);
+  transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .irealb-editor__popover-cancel {
-  background: #ffffff;
-  border: 1px solid #cbd2d9;
-  color: #1f2933;
+  background: var(--ink-0);
+  border: 1px solid var(--ink-300);
+  color: var(--ink-1000);
+}
+
+.irealb-editor__popover-cancel:hover {
+  background: var(--ink-100);
+  border-color: var(--ink-500);
+}
+
+.irealb-editor__popover-cancel:focus-visible {
+  outline: none;
+  border-color: var(--crimson-500);
+  box-shadow: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
 }
 
 .irealb-editor__popover-save {
-  background: #4c6ef5;
-  border: 1px solid #4c6ef5;
-  color: #ffffff;
+  background: var(--crimson-500);
+  border: 1px solid var(--crimson-500);
+  color: #FFFFFF;
 }
 
 .irealb-editor__popover-save:hover {
-  background: #3b5bdb;
-  border-color: #3b5bdb;
+  background: var(--crimson-600);
+  border-color: var(--crimson-600);
+}
+
+.irealb-editor__popover-save:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
 }

@@ -1,3 +1,97 @@
+/*
+ * ChordSketch UI — playground / desktop shell styling.
+ *
+ * Mirrors the design tokens defined in `tokens.css` at the repo
+ * root so this package can be consumed without depending on a
+ * sibling path outside the workspace. Keep these values in lockstep
+ * with `tokens.css` whenever it changes (see DESIGN.md §9).
+ */
+
+:root {
+  /* Crimson — the only accent. */
+  --crimson-50: #FDF2F5;
+  --crimson-100: #FBE1E8;
+  --crimson-300: #EC8AA3;
+  --crimson-500: #BD1642;
+  --crimson-600: #A30F37;
+  --crimson-700: #87092C;
+  --crimson-900: #480418;
+  --crimson: var(--crimson-500);
+  --fg-on-crimson: #FFFFFF;
+
+  /* Ink — warm neutrals with a faint red tint. */
+  --ink-0: #FFFFFF;
+  --ink-50: #FAFAF7;
+  --ink-100: #F6F4F7;
+  --ink-200: #E8E6EA;
+  --ink-300: #D4D1D6;
+  --ink-500: #8A8790;
+  --ink-600: #67646D;
+  --ink-700: #44424A;
+  --ink-1000: #0A0A0B;
+
+  --canvas: var(--ink-50);
+  --surface: var(--ink-0);
+  --surface-hover: var(--ink-100);
+  --border: var(--ink-200);
+  --border-strong: var(--ink-300);
+
+  --text-primary: var(--ink-1000);
+  --text-strong: var(--ink-700);
+  --text-secondary: var(--ink-600);
+  --text-tertiary: var(--ink-500);
+
+  --success-surface: #E8F3EC;
+  --success-fg: #1A6B3A;
+  --warning-surface: #FBF1D9;
+  --warning-fg: #8A5A07;
+  --danger-surface: #FBE1E8;
+  --danger-fg: #A30F37;
+  --info-surface: #E6EEF7;
+  --info-fg: #1F4F8A;
+
+  --focus-ring: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
+
+  --font-jp: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-latin: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-chord: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-15: 0.9375rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.25rem;
+  --sp-6: 1.5rem;
+  --sp-8: 2rem;
+
+  --r-1: 2px;
+  --r-2: 4px;
+  --r-3: 8px;
+  --r-full: 9999px;
+
+  --e-1: 0 1px 2px rgba(10, 10, 11, 0.04);
+  --e-2: 0 4px 12px rgba(10, 10, 11, 0.08);
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 0ms;
+    --dur-2: 0ms;
+  }
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -22,25 +116,19 @@
   margin: -1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
 }
 
-:root {
-  --bg: #1a1a2e;
-  --surface: #16213e;
-  --border: #0f3460;
-  --text: #e4e4e4;
-  --accent: #e94560;
-  --accent-dim: #c23152;
-  --editor-bg: #0d1117;
-  --editor-text: #c9d1d9;
-}
-
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: var(--bg);
-  color: var(--text);
+  font-family: var(--font-jp);
+  font-size: var(--fs-16);
+  line-height: 1.6875;
+  background: var(--canvas);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /*
@@ -58,97 +146,184 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--canvas);
+  color: var(--text-primary);
 }
+
+/* ---------- Top navigation ---------- */
 
 header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1.25rem;
+  gap: var(--sp-4);
+  height: 56px;
+  padding: 0 var(--sp-6);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 header h1 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-family: var(--font-jp);
+  font-weight: 700;
+  font-size: var(--fs-16);
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+/*
+ * The crimson "mark" that prefixes the wordmark — matches the
+ * brand mark + wordmark pairing in `ui_kits/web/editor.html`.
+ * Inserted via CSS so the existing `<h1>` (built by `buildDom`)
+ * does not need an extra DOM node.
+ */
+header h1::before {
+  content: "";
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-1);
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><rect width="180" height="180" rx="20" fill="%23BD1642"/><path d="M59 132 L101 56 L114 64 L72 140 Z" fill="white"/><circle cx="58" cy="134" r="6" fill="white"/></svg>');
+  background-size: cover;
+  background-repeat: no-repeat;
+  flex-shrink: 0;
 }
 
 .controls {
   display: flex;
-  gap: 1rem;
+  gap: var(--sp-4);
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .controls label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
-  color: #999;
+  gap: var(--sp-2);
+  font-family: var(--font-latin);
+  font-weight: 600;
+  font-size: var(--fs-12);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
 }
 
 .controls select,
 .controls input[type="number"] {
-  background: var(--editor-bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 0.3rem 0.5rem;
-  font-size: 0.85rem;
+  height: 32px;
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-2);
+  padding: 0 var(--sp-3);
+  font-family: var(--font-jp);
+  font-size: var(--fs-13);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  transition: border-color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out);
+}
+
+.controls select:hover,
+.controls input[type="number"]:hover {
+  border-color: var(--ink-500);
+}
+
+.controls select:focus-visible,
+.controls input[type="number"]:focus-visible {
+  outline: none;
+  border-color: var(--crimson-500);
+  box-shadow: var(--focus-ring);
 }
 
 .controls input[type="number"] {
   width: 4rem;
   text-align: center;
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
 }
 
 .transpose-group {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
-  color: #999;
+  gap: var(--sp-2);
+  font-family: var(--font-latin);
+  font-weight: 600;
+  font-size: var(--fs-12);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
 }
 
 .transpose-group-label {
   /* `aria-hidden` on this node keeps it out of the accessibility
      tree; styling is purely visual. */
-  margin-right: 0.1rem;
+  margin-right: var(--sp-1);
 }
 
 .transpose-group button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  min-width: 32px;
+  padding: 0 var(--sp-3);
   background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 0.25rem 0.55rem;
-  font-size: 0.9rem;
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-2);
+  font-family: var(--font-jp);
+  font-weight: 500;
+  font-size: var(--fs-14);
+  letter-spacing: 0;
+  text-transform: none;
   line-height: 1;
   cursor: pointer;
-  min-width: 1.75rem;
+  transition: background var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
 }
 
 .transpose-group button:hover {
-  background: var(--border);
+  background: var(--surface-hover);
+  border-color: var(--ink-500);
+}
+
+.transpose-group button:active {
+  background: var(--ink-200);
 }
 
 .transpose-group button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--crimson-500);
+  box-shadow: var(--focus-ring);
 }
 
 .transpose-group button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.transpose-group .transpose-step {
+  font-size: var(--fs-16);
+  font-weight: 600;
 }
 
 .transpose-reset {
   /* Slightly wider than the ± steppers because the label is a word. */
   min-width: auto !important;
+  padding: 0 var(--sp-3) !important;
 }
+
+/* ---------- Main split layout ---------- */
 
 main {
   /*
@@ -163,40 +338,65 @@ main {
   flex: 1;
   display: flex;
   min-height: 0;
+  background: var(--canvas);
 }
 
 .pane {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  background: var(--surface);
 }
 
 .editor-pane {
   flex: var(--editor-ratio) 0 0;
+  border-right: 1px solid var(--border);
 }
 
 .output-pane {
   flex: calc(1 - var(--editor-ratio)) 0 0;
+  position: relative;
+  background: var(--surface);
 }
 
 .splitter {
-  flex: 0 0 6px;
+  flex: 0 0 1px;
+  width: 1px;
   background: var(--border);
   cursor: col-resize;
-  touch-action: none; /* Pointer-based drag; disable browser gestures. */
+  touch-action: none;
   user-select: none;
-  transition: background 0.15s ease;
+  position: relative;
+  transition: background var(--dur-1) var(--ease-out);
+}
+
+/*
+ * Widen the hit target without widening the visible line. The
+ * pseudo-element gives the splitter a 11px draggable surface
+ * centred on the 1px hairline so users hit it reliably with a
+ * pointer, while the visual remains a clean rule consistent with
+ * the design system's "lines first, shadows reserved" stance.
+ */
+.splitter::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  right: -5px;
 }
 
 .splitter:hover,
 .splitter.dragging,
 .splitter:focus-visible {
-  background: var(--accent);
+  background: var(--crimson-500);
+  flex-basis: 2px;
+  width: 2px;
 }
 
 .splitter:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /*
@@ -215,50 +415,61 @@ main {
   resize: none;
   border: none;
   outline: none;
-  padding: 1rem;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-  font-size: 0.9rem;
-  line-height: 1.6;
-  background: var(--editor-bg);
-  color: var(--editor-text);
-  tab-size: 4;
+  padding: var(--sp-6) var(--sp-8);
+  font-family: var(--font-mono);
+  font-size: var(--fs-14);
+  line-height: 1.857;
+  background: var(--surface);
+  color: var(--text-primary);
+  tab-size: 2;
+  caret-color: var(--crimson-500);
 }
 
-.output-pane {
-  position: relative;
-  background: #fff;
+#editor:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--crimson-500);
 }
+
+#editor::placeholder {
+  color: var(--text-tertiary);
+}
+
+#editor::selection {
+  background: var(--crimson-100);
+  color: var(--crimson-900);
+}
+
+/* ---------- Output surfaces ---------- */
 
 #preview {
   flex: 1;
   border: none;
   width: 100%;
   height: 100%;
-  background: #fff;
+  background: var(--surface);
 }
 
 /*
  * Focus rings on the three preview surfaces so the `View → Focus
  * Preview` shortcut (#2194) gives keyboard users a visible landing.
- * `outline-offset: -2px` keeps the ring inside the pane edge,
- * matching the splitter's inward focus style above.
+ * `outline-offset: -2px` keeps the ring inside the pane edge.
  */
 #preview:focus-visible,
 #text-output:focus-visible,
 #pdf-pane:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--crimson-500);
   outline-offset: -2px;
 }
 
 #text-output {
   flex: 1;
-  padding: 1rem;
+  padding: var(--sp-6) var(--sp-8);
   overflow: auto;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: #333;
-  background: #fff;
+  font-family: var(--font-mono);
+  font-size: var(--fs-14);
+  line-height: 1.857;
+  color: var(--text-primary);
+  background: var(--surface);
   white-space: pre-wrap;
   word-wrap: break-word;
 }
@@ -269,53 +480,91 @@ main {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  color: #666;
-  font-size: 0.95rem;
+  gap: var(--sp-5);
+  padding: var(--sp-8);
+  color: var(--text-secondary);
+  font-family: var(--font-jp);
+  font-size: var(--fs-15);
+  text-align: center;
+  background: var(--canvas);
 }
 
 #pdf-pane button {
-  padding: 0.6rem 1.5rem;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 var(--sp-5);
+  background: var(--crimson-500);
+  color: var(--fg-on-crimson);
+  border: 1px solid transparent;
+  border-radius: var(--r-2);
+  font-family: var(--font-jp);
+  font-weight: 500;
+  font-size: var(--fs-14);
+  line-height: 1;
   cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out);
 }
 
 #pdf-pane button:hover {
-  background: var(--accent-dim);
+  background: var(--crimson-600);
+}
+
+#pdf-pane button:active {
+  background: var(--crimson-700);
 }
 
 #pdf-pane button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
+
+/* ---------- Error banner ---------- */
 
 .error {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  padding: 0.75rem 1rem;
-  background: #2d1b1b;
-  color: #f87171;
-  font-size: 0.85rem;
-  font-family: monospace;
-  border-bottom: 1px solid #7f1d1d;
+  padding: var(--sp-3) var(--sp-5);
+  background: var(--danger-surface);
+  color: var(--danger-fg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-13);
+  line-height: 1.5;
+  border-bottom: 1px solid var(--crimson-300);
   z-index: 10;
 }
 
+/* ---------- Responsive: single column on narrow viewports ---------- */
+
 /*
- * Responsive: single column on narrow viewports. The `main`
- * descendant selectors (specificity 0,0,2) intentionally beat the
- * desktop `--editor-ratio`-driven rules above (specificity 0,0,1)
- * regardless of source order — the earlier form relied on source
- * order, which is fragile under future refactors (raised during
- * review of PR #2195 as Medium).
+ * The `main` descendant selectors (specificity 0,0,2) intentionally
+ * beat the desktop `--editor-ratio`-driven rules above (specificity
+ * 0,0,1) regardless of source order — the earlier form relied on
+ * source order, which is fragile under future refactors (raised
+ * during review of PR #2195 as Medium).
  */
 @media (max-width: 768px) {
+  header {
+    height: auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+  }
+
+  header h1 {
+    justify-content: flex-start;
+  }
+
+  .controls {
+    justify-content: flex-start;
+    gap: var(--sp-3);
+  }
+
   main {
     flex-direction: column;
   }
@@ -335,5 +584,10 @@ main {
    */
   main .splitter {
     display: none;
+  }
+
+  #editor,
+  #text-output {
+    padding: var(--sp-4);
   }
 }
