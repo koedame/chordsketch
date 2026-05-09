@@ -243,6 +243,22 @@ brand-mark assets stay at the repo root because they are also
 consumed by package READMEs and the VS Code Marketplace
 listing — see `.claude/rules/package-documentation.md`.
 
+The runtime playground at `packages/playground/` consumes this
+design system as both an end-user evaluation surface (try the
+parser / renderer live in a browser) and a developer test surface
+(exercise every wasm export, every render format, every input
+format). Any new component or token that lands here must be
+mirrored to `packages/ui-web/src/style.css`,
+`packages/ui-irealb-editor/src/style.css`, and the `--cs-*` block
+in `packages/react/src/styles.css` — those three are the runtime
+copies that actually paint the playground UI and any
+`@chordsketch/react`-consumer's host. Class names used in
+`design-system/ui_kits/web/editor.html` (`.topnav`, `.toolbar`,
+`.tool-group`, `.segmented`, `.pane`, `.pane-head`, `.status`,
+`.btn` + variants) are the canonical chrome vocabulary; the
+playground re-uses them verbatim so contributors recognise the
+layout in either place.
+
 | File | Contents |
 |---|---|
 | `tokens.css` | Source of truth for every design token |

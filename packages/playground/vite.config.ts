@@ -29,6 +29,17 @@ export default defineConfig({
       // alias so Vite resolves it correctly.
       '@chordsketch/ui-web/style.css': resolve(here, '../ui-web/src/style.css'),
       '@chordsketch/ui-web': resolve(here, '../ui-web/src/index.ts'),
+      // iRealb bar-grid GUI editor. The playground re-adds iRealb
+      // support behind the input-format toggle; see main.tsx
+      // `IrealbPane`. Longer specifier listed first.
+      '@chordsketch/ui-irealb-editor/style.css': resolve(
+        here,
+        '../ui-irealb-editor/src/style.css',
+      ),
+      '@chordsketch/ui-irealb-editor': resolve(
+        here,
+        '../ui-irealb-editor/src/index.ts',
+      ),
       // React component library (#2454). Same alias pattern as
       // ui-web — Vite consumes the TS sources directly. Longer
       // specifier (`/styles.css`) is listed before the bare package
@@ -49,6 +60,7 @@ export default defineConfig({
         here,
         resolve(here, '../npm'),
         resolve(here, '../ui-web'),
+        resolve(here, '../ui-irealb-editor'),
         resolve(here, '../react'),
       ],
     },

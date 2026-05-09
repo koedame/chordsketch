@@ -39,6 +39,20 @@ export interface SourceEditorHandle {
    * controlled inputs hold for `value`.
    */
   setValue(value: string): void;
+  /**
+   * Insert `text` at the current selection (or caret position).
+   * Replaces any non-empty selection. Unlike `setValue`, this
+   * call DOES fire the `onChange` handler — it is a user-edit
+   * shortcut, not a programmatic load. Returns focus to the
+   * editor so the caret lands inside the inserted text and the
+   * user can keep typing.
+   *
+   * If `selectInside` is `true`, the inserted text is left
+   * selected after insertion, which lets the caller chain a
+   * follow-up replacement (e.g. paste a placeholder, then let
+   * the user overwrite it).
+   */
+  insertAtCursor(text: string, selectInside?: boolean): void;
 }
 
 /** Props accepted by {@link SourceEditor}. */
@@ -334,6 +348,27 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
           } finally {
             programmaticLoadRef.current = false;
           }
+        },
+        insertAtCursor(text: string, selectInside = false) {
+          const view = viewRef.current;
+          if (!view) return;
+          // `replaceSelection` collapses every selection range to
+          // an inserted run; if the user has nothing selected the
+          // current caret position is treated as a zero-length
+          // range, so the same call works for "insert at caret"
+          // and "replace selected" without a branch. Intentionally
+          // does NOT flip `programmaticLoadRef` — this is a user
+          // edit and should fire `onChange`.
+          const { from } = view.state.selection.main;
+          view.dispatch(view.state.replaceSelection(text));
+          if (selectInside) {
+            // Re-select the inserted text so a follow-up keystroke
+            // overwrites the placeholder cleanly.
+            view.dispatch({
+              selection: { anchor: from, head: from + text.length },
+            });
+          }
+          view.focus();
         },
       }),
       [],
