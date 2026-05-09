@@ -77,34 +77,46 @@ export interface SourceEditorProps extends Omit<HTMLAttributes<HTMLDivElement>, 
 }
 
 /**
- * Default highlight style — pairs the {@link chordProTagTable}
- * captures with the design system's chord-sheet typography
- * (DESIGN.md §3.2). Colours pull through CSS variables defined in
- * `@chordsketch/react/styles.css` (and the workspace `tokens.css`)
- * with inline fallbacks so the editor renders correctly even if
- * the host has not loaded the stylesheet yet.
+ * Default highlight style — mirrors the `.tok-*` rules in the
+ * design-system reference (`ui_kits/web/editor.html`):
+ *
+ *   `.tok-chord     { color: var(--crimson-500); font-weight: 600; }`
+ *   `.tok-directive { color: var(--text-secondary); }`
+ *   `.tok-bracket   { color: var(--text-tertiary); }`
+ *   `.tok-comment   { color: var(--text-tertiary); font-style: italic; }`
+ *
+ * The chord glyph in the source editor stays in the editor's
+ * monospace stack — the Roboto / 700 / 16 px treatment from
+ * DESIGN.md §3.2 applies to the rendered chord-sheet output, not
+ * to the source pane. Directive values (the text after `:`) are
+ * intentionally unstyled here so they inherit `--cs-text-primary`,
+ * matching the plain "Country Roads" / "John Denver" copy in the
+ * editor.html reference. Colours pull through CSS variables
+ * defined in `@chordsketch/react/styles.css` (and the workspace
+ * `tokens.css`) with inline fallbacks so the editor renders
+ * correctly even if the host has not loaded the stylesheet yet.
+ *
+ * `tok-key` (special-cased value of the `{key: …}` directive) and
+ * `tok-section` (section markers rendered outside `{…}` braces)
+ * from the reference are not yet wired in here; the underlying
+ * `StreamLanguage` does not differentiate those captures and
+ * adding them is grammar work — see the docstring in
+ * `chordpro-language.ts`.
  */
 const designSystemHighlight = HighlightStyle.define([
-  // Chord literals (`[G]`, `[Am7]`) — the only crimson surface
-  // in the editor, matching the renderer's chord typography.
+  // Chord literals (`[G]`, `[Am7]`).
   {
     tag: chordProTagTable.atom,
     color: 'var(--cs-crimson-500, #BD1642)',
-    fontWeight: '700',
-    fontFamily:
-      '"Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
-  },
-  // Directive keys (`title`, `key`, `start_of_verse`).
-  {
-    tag: chordProTagTable.keyword,
-    color: 'var(--cs-info-fg, #1F4F8A)',
     fontWeight: '600',
   },
-  // Directive values (after the colon).
+  // Directive names (`title`, `key`, `start_of_verse`).
   {
-    tag: chordProTagTable.string,
-    color: 'var(--cs-text-strong, #44424A)',
+    tag: chordProTagTable.keyword,
+    color: 'var(--cs-text-secondary, #67646D)',
   },
+  // Directive values (text after the colon). Intentionally
+  // unstyled — the reference treats values as plain copy.
   // Curly / square brackets and the directive colon.
   {
     tag: chordProTagTable.punctuation,
