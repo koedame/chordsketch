@@ -185,23 +185,38 @@ const designSystemTheme = EditorView.theme(
       fontWeight: '600',
     },
     '.cm-activeLine': {
-      backgroundColor: 'var(--cs-surface-hover, #F6F4F7)',
+      // CodeMirror paints `.cm-selectionLayer` at z-index `-2`
+      // — below `.cm-content` and therefore below any opaque
+      // line background. A solid `--cs-surface-hover` here
+      // would hide the selection wash on the caret line. Use a
+      // 4 % ink overlay instead so the active line still reads
+      // as a slight tint and the selection (`#F4B5C5`) shows
+      // through clearly via alpha compositing.
+      backgroundColor: 'rgba(10, 10, 11, 0.04)',
     },
     '.cm-cursor': {
       borderLeftWidth: '2px',
       borderLeftColor: 'var(--cs-crimson-500, #BD1642)',
     },
-    // Selection background: a semi-transparent crimson-500 so the
-    // wash is visible whether the line behind it is the plain
-    // surface or the `--cs-surface-hover` active-line bg. The
-    // earlier value (`--cs-crimson-100`) sat too close to the
-    // active-line tint and made the selection vanish on the
-    // caret line.
+    // Selection background: a solid mid-tone pink chosen so it
+    // is unambiguously distinct from BOTH the plain `--cs-surface`
+    // (#FFFFFF) and the `--cs-surface-hover` (#F6F4F7) active-line
+    // wash. The earlier attempts at this rule cycled through
+    // `--cs-crimson-100` (#FBE1E8 — too close to the active-line
+    // tint) and a `mix-blend-mode: multiply` overlay (works in
+    // theory; flaky in practice across browser stacking
+    // contexts), both of which left selections invisible on the
+    // caret line. The literal hex sits between `--cs-crimson-100`
+    // and `--cs-crimson-300` (#EC8AA3) — the design system does
+    // not ship a `--crimson-200` step, and adding one is out of
+    // scope here, so the colour is inlined with a comment
+    // tagging the intended token gap. If `--crimson-200` ever
+    // lands, swap to `var(--cs-crimson-200, #F4B5C5)`.
     '.cm-selectionBackground, ::selection': {
-      backgroundColor: 'rgba(189, 22, 66, 0.2) !important',
+      backgroundColor: '#F4B5C5 !important',
     },
     '&.cm-focused .cm-selectionBackground': {
-      backgroundColor: 'rgba(189, 22, 66, 0.2) !important',
+      backgroundColor: '#F4B5C5 !important',
     },
     '.cm-matchingBracket': {
       backgroundColor: 'var(--cs-crimson-50, #FDF2F5)',
