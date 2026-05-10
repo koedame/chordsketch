@@ -203,17 +203,18 @@
 
 .chordsketch-sheet__content {
   /* Wrapper for the AST → JSX render path (#2475 / ADR-0017).
-     Mirrors the body-level framing the static HTML renderer
-     used to emit (`body { max-width: 720px; margin: 2em auto;
-     padding: 0 1em }`) but scoped to the wrapper so the rules
-     do not leak to the host body. Hosts can override
-     `max-width` / `padding` to fit a custom layout. */
+     The pre-#2475 HTML render path's `body { max-width: 720px;
+     margin: 2em auto; padding: 0 1em }` made sense when the
+     output was a standalone document, but the React surface
+     embeds the wrapper inside a host-controlled pane that
+     already constrains width. Carry only the typography
+     baseline and padding here — width is the host's call.
+     Hosts can re-add `max-width` if they want a centred
+     reading column. */
   font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
   font-size: 1rem;
   line-height: 1.6875;
   color: var(--cs-ink-1000, #0a0a0b);
-  max-width: 720px;
-  margin: 0 auto;
   padding: 2em 1.5em;
 }
 
