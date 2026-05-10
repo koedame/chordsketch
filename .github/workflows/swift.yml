@@ -142,7 +142,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Download static libraries
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: swift-lib-*
           # Each artifact downloads to its own subdirectory, e.g.:
@@ -151,7 +151,7 @@ jobs:
           # etc.
 
       - name: Download dylib for uniffi-bindgen
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: swift-dylib-aarch64-apple-darwin
           # Downloads libchordsketch_ffi.dylib to CWD
@@ -314,7 +314,7 @@ jobs:
         # actions/download-artifact below places the xcframework zip
         # at the workspace root next to the checked-out tree.
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: xcframework
 
