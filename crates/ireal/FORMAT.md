@@ -125,7 +125,7 @@ checks each token in this priority order:
 | `XyQ` | Empty space — discard. |
 | `Kcl` | "Repeat previous measure" marker bar — sets `Bar::repeat_previous = true` on the new bar. The renderer paints the percent-style 1-bar simile glyph (SMuFL U+E500). |
 | `LZ\|` / `LZ` | Bar separator. |
-| `*X` (`X` = single char) | Section marker. Lower-case `i / v / c / b / o` → `Intro / Verse / Chorus / Bridge / Outro`. Uppercase `A..Z` → `Letter(c)`. Anything else → `Custom(string)`. |
+| `*X` (`X` = single char) | Section marker. Per the iReal Pro open-protocol spec, the app emits exactly six rehearsal-mark tokens: `*A` / `*B` / `*C` / `*D` (jazz-form letter labels), `*i` (Intro), `*V` (Verse). The parser maps `*A..Z` → `Letter(c)`, `*i`/`*I` → `Intro`, `*v`/`*V` → `Verse`, anything else → `Custom(string)`. Earlier revisions also recognised `*c` / `*b` / `*o` as Chorus / Bridge / Outro but those tokens are not emitted by iReal Pro (the app treats them as custom labels) so the named variants were removed. |
 | `<...>` | Comment / text mark. Anchored macro detection (start-of-comment, followed by space/dot/end): `D.C.` → `MusicalSymbol::DaCapo`, `D.S.` → `DalSegno`, `Fine` → `Fine`. The full verbatim text is ALSO saved to `Bar::text_comment` so longer captions like `<D.S. al 2nd ending>` and free-form `<13 measure lead break>` survive the round-trip. A bare-macro comment (`<D.C.>`, `<D.S.>`, `<Fine>`) skips the `text_comment` write since the symbol fully covers the semantics. |
 | `Tnd` | Time signature. Two-digit packed form (`T44` = 4/4, `T34` = 3/4, `T68` = 6/8); three-digit form when numerator is two digits (`T128` = 12/8). |
 | `x` | Repeat previous measure — sets `Bar::repeat_previous = true` on the current bar. |

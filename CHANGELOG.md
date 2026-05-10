@@ -36,6 +36,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     markers attach to the bar in which they appear (was
     previously queued for the next bar, leaking the marker
     onto the wrong bar in `,S,E-7|A7|`-style URL fragments).
+  - Section-label vocabulary reconciled with iReal Pro's own
+    rehearsal-mark set (`A` / `B` / `C` / `D` / `IN` / `V`).
+    Uppercase `*V` now maps to `SectionLabel::Verse` per the
+    spec example (#2432). The `*c` / `*b` / `*o` tokens were
+    never emitted by iReal Pro — `SectionLabel::Chorus`,
+    `Bridge`, and `Outro` variants have been removed; the
+    convert crate now round-trips ChordPro's
+    `start_of_chorus` / `start_of_bridge` directives via
+    `Custom("Chorus")` / `Custom("Bridge")` so the
+    ChordPro-side semantics are preserved without producing
+    out-of-spec `irealb://` tokens (#2450).
 - `JsonValue::Bool` variant — used by the `Bar::repeat_previous`
   and `Bar::no_chord` flags in the JSON debug serializer.
 - `chordTypography` wasm export

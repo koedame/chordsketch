@@ -82,10 +82,7 @@ fn format_section_label(label: &SectionLabel) -> String {
     match label {
         SectionLabel::Letter(c) => c.to_string(),
         SectionLabel::Verse => "V".to_string(),
-        SectionLabel::Chorus => "C".to_string(),
         SectionLabel::Intro => "I".to_string(),
-        SectionLabel::Outro => "O".to_string(),
-        SectionLabel::Bridge => "B".to_string(),
         SectionLabel::Custom(s) => s.clone(),
     }
 }
@@ -249,10 +246,7 @@ mod tests {
     fn named_section_label_variants_each_render() {
         for (variant, expected) in [
             (SectionLabel::Verse, "V"),
-            (SectionLabel::Chorus, "C"),
             (SectionLabel::Intro, "I"),
-            (SectionLabel::Outro, "O"),
-            (SectionLabel::Bridge, "B"),
             (SectionLabel::Custom("Pre".into()), "Pre"),
         ] {
             let mut song = IrealSong::new();

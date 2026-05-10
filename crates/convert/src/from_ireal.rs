@@ -135,14 +135,6 @@ fn push_section_open(song: &mut Song, label: &SectionLabel) {
             song.lines
                 .push(Line::Directive(Directive::name_only("start_of_verse")));
         }
-        SectionLabel::Chorus => {
-            song.lines
-                .push(Line::Directive(Directive::name_only("start_of_chorus")));
-        }
-        SectionLabel::Bridge => {
-            song.lines
-                .push(Line::Directive(Directive::name_only("start_of_bridge")));
-        }
         SectionLabel::Letter(c) => {
             // ChordPro has no environment for jazz-form letter
             // labels (`A` / `B` / `C` / `D`). Surface the label as
@@ -156,13 +148,24 @@ fn push_section_open(song: &mut Song, label: &SectionLabel) {
             song.lines
                 .push(Line::Comment(CommentStyle::Normal, "Intro".to_owned()));
         }
-        SectionLabel::Outro => {
-            song.lines
-                .push(Line::Comment(CommentStyle::Normal, "Outro".to_owned()));
-        }
         SectionLabel::Custom(name) => {
-            song.lines
-                .push(Line::Comment(CommentStyle::Normal, name.clone()));
+            // Per #2450, ChordPro `start_of_chorus` /
+            // `start_of_bridge` round-trip via
+            // `Custom("Chorus")` / `Custom("Bridge")` because
+            // iReal Pro has no Chorus / Bridge rehearsal mark.
+            // Re-emit the matching ChordPro environment when the
+            // custom label name happens to match.
+            match name.as_str() {
+                "Chorus" => song
+                    .lines
+                    .push(Line::Directive(Directive::name_only("start_of_chorus"))),
+                "Bridge" => song
+                    .lines
+                    .push(Line::Directive(Directive::name_only("start_of_bridge"))),
+                _ => song
+                    .lines
+                    .push(Line::Comment(CommentStyle::Normal, name.clone())),
+            }
         }
     }
 }
@@ -172,20 +175,21 @@ fn push_section_close(song: &mut Song, label: &SectionLabel) {
         SectionLabel::Verse => song
             .lines
             .push(Line::Directive(Directive::name_only("end_of_verse"))),
-        SectionLabel::Chorus => song
-            .lines
-            .push(Line::Directive(Directive::name_only("end_of_chorus"))),
-        SectionLabel::Bridge => song
-            .lines
-            .push(Line::Directive(Directive::name_only("end_of_bridge"))),
-        // The non-environment labels (`Letter`, `Intro`, `Outro`,
-        // `Custom`) opened with a `{comment}` and have no close
-        // directive — the section ends implicitly when the next
-        // section opens.
-        SectionLabel::Letter(_)
-        | SectionLabel::Intro
-        | SectionLabel::Outro
-        | SectionLabel::Custom(_) => {}
+        SectionLabel::Custom(name) => match name.as_str() {
+            "Chorus" => song
+                .lines
+                .push(Line::Directive(Directive::name_only("end_of_chorus"))),
+            "Bridge" => song
+                .lines
+                .push(Line::Directive(Directive::name_only("end_of_bridge"))),
+            // Other custom labels opened with a `{comment}` and
+            // have no close directive — the section ends
+            // implicitly when the next section opens.
+            _ => {}
+        },
+        // The non-environment labels (`Letter`, `Intro`) opened
+        // with a `{comment}` and have no close directive.
+        SectionLabel::Letter(_) | SectionLabel::Intro => {}
     }
 }
 
@@ -481,7 +485,7 @@ mod tests {
     #[test]
     fn named_section_labels_emit_environment_directives() {
         let mut s = sample_song();
-        s.sections[0].label = SectionLabel::Chorus;
+        s.sections[0].label = SectionLabel::Custom("Chorus".into());
         let result = convert(&s).unwrap();
         let names: Vec<&str> = result
             .output

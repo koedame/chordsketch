@@ -1020,16 +1020,18 @@ impl ChartParseState {
 }
 
 fn label_for(c: char) -> SectionLabel {
-    // Lower-case named markers come from iReal's "section name"
-    // affordance; upper-case letters are the canonical jazz-form
-    // labels. Match the names first so a future single-letter name
-    // takes precedence over the catch-all `Letter` arm.
+    // Per the iReal Pro open-protocol spec the app emits six
+    // rehearsal-mark tokens: `*A`, `*B`, `*C`, `*D`, `*i`, `*V`.
+    // Match the named tokens first (#2432 — the spec lists `*V`
+    // uppercase, not `*v`; we accept both). All other uppercase
+    // single letters fall through to `Letter(c)`. Anything else
+    // is `Custom(string)` — same escape hatch as before, but the
+    // matched-named-token vocabulary is now restricted to what
+    // the iReal Pro app actually emits (#2450 — `c` / `b` / `o`
+    // were never emitted, the variants have been removed).
     match c {
-        'i' => SectionLabel::Intro,
-        'v' => SectionLabel::Verse,
-        'c' => SectionLabel::Chorus,
-        'b' => SectionLabel::Bridge,
-        'o' => SectionLabel::Outro,
+        'i' | 'I' => SectionLabel::Intro,
+        'v' | 'V' => SectionLabel::Verse,
         'A'..='Z' => SectionLabel::Letter(c),
         other => SectionLabel::Custom(other.to_string()),
     }

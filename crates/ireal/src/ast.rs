@@ -128,27 +128,33 @@ impl Section {
 
 /// A section label.
 ///
-/// Most iReal charts use a single uppercase letter for jazz form
-/// labels (`Letter('A')`); `Custom` is the escape hatch for the long
-/// tail of non-letter labels the iReal app accepts (named verses,
-/// non-Latin script, free-form annotations). The named variants
-/// (`Verse`, `Chorus`, etc.) exist so common cases parse to the same
-/// shape across the conversion crate (#2053 / #2061) without each
-/// site re-comparing strings.
+/// Per the iReal Pro open-protocol spec the app emits exactly six
+/// rehearsal-mark tokens: `*A`, `*B`, `*C`, `*D` (jazz-form letter
+/// labels), `*i` (intro), and `*V` (verse). Letter labels are
+/// modelled by [`SectionLabel::Letter`]; the two named variants
+/// `Intro` and `Verse` exist so the conversion crate (#2053 /
+/// #2061) can deterministically map them to ChordPro's
+/// `{start_of_verse}` / verse-environment directives without each
+/// site re-comparing strings. Anything outside that six-token
+/// vocabulary lands in [`SectionLabel::Custom`].
+///
+/// Earlier revisions also carried `Chorus`, `Bridge`, and `Outro`
+/// variants but those tokens are not emitted by the iReal Pro app
+/// (see `.claude/rules/`-tracked issue #2450). They were removed
+/// to align the type with the spec; consumers that previously held
+/// `SectionLabel::Chorus` etc. now receive `Custom("Chorus")` /
+/// `Custom("Bridge")` from the convert crate (`to_ireal.rs`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SectionLabel {
     /// A single uppercase letter — the canonical jazz-form label.
     Letter(char),
-    /// `Verse`.
+    /// `Verse` — emitted by the iReal Pro app as `*V` (uppercase
+    /// per the spec; the parser also accepts the lowercase `*v`
+    /// for backwards-compatibility with hand-edited URLs).
     Verse,
-    /// `Chorus`.
-    Chorus,
-    /// `Intro`.
+    /// `Intro` — emitted by the iReal Pro app as `*i` (lowercase
+    /// per the spec).
     Intro,
-    /// `Outro`.
-    Outro,
-    /// `Bridge`.
-    Bridge,
     /// Any other label. The contained string is preserved verbatim
     /// and is the canonical round-trip carrier for labels that do
     /// not fit one of the named variants.

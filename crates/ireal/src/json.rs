@@ -167,10 +167,7 @@ impl ToJson for SectionLabel {
                 write_str(out, &s);
             }
             Self::Verse => out.push_str("\"kind\":\"verse\""),
-            Self::Chorus => out.push_str("\"kind\":\"chorus\""),
             Self::Intro => out.push_str("\"kind\":\"intro\""),
-            Self::Outro => out.push_str("\"kind\":\"outro\""),
-            Self::Bridge => out.push_str("\"kind\":\"bridge\""),
             Self::Custom(s) => {
                 out.push_str("\"kind\":\"custom\",\"value\":");
                 write_str(out, s);
@@ -1153,10 +1150,7 @@ impl FromJson for SectionLabel {
                 Ok(Self::Letter(ch))
             }
             "verse" => Ok(Self::Verse),
-            "chorus" => Ok(Self::Chorus),
             "intro" => Ok(Self::Intro),
-            "outro" => Ok(Self::Outro),
-            "bridge" => Ok(Self::Bridge),
             "custom" => {
                 let s = value.get("value")?.as_str()?.to_string();
                 Ok(Self::Custom(s))

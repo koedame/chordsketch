@@ -189,12 +189,20 @@ fn populate_sections(ireal: &mut IrealSong, source: &Song, warnings: &mut Vec<Co
                     current = Some(Section::new(SectionLabel::Verse));
                 }
                 DirectiveKind::StartOfChorus => {
+                    // The iReal Pro app does not have a Chorus
+                    // rehearsal mark — `*c` is treated as a custom
+                    // label by the iReal app itself. Round-trip
+                    // through `Custom("Chorus")` so the ChordPro
+                    // semantics survive without producing an
+                    // out-of-spec `irealb://` token (#2450).
                     push_current(&mut current, &mut sections);
-                    current = Some(Section::new(SectionLabel::Chorus));
+                    current = Some(Section::new(SectionLabel::Custom("Chorus".into())));
                 }
                 DirectiveKind::StartOfBridge => {
+                    // Same treatment as Chorus — iReal has no
+                    // Bridge mark; round-trip via `Custom("Bridge")`.
                     push_current(&mut current, &mut sections);
-                    current = Some(Section::new(SectionLabel::Bridge));
+                    current = Some(Section::new(SectionLabel::Custom("Bridge".into())));
                 }
                 DirectiveKind::EndOfVerse
                 | DirectiveKind::EndOfChorus

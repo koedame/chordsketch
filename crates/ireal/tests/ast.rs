@@ -120,7 +120,7 @@ fn equality_distinguishes_chord_changes() {
 #[test]
 fn section_label_variants_are_distinct() {
     assert_ne!(SectionLabel::Letter('A'), SectionLabel::Verse);
-    assert_ne!(SectionLabel::Verse, SectionLabel::Chorus);
+    assert_ne!(SectionLabel::Verse, SectionLabel::Intro);
     assert_ne!(
         SectionLabel::Custom("Pre-chorus".into()),
         SectionLabel::Custom("Bridge 2".into())
@@ -212,10 +212,7 @@ fn json_round_trip_handles_every_enum_variant() {
     let labels = [
         SectionLabel::Letter('A'),
         SectionLabel::Verse,
-        SectionLabel::Chorus,
         SectionLabel::Intro,
-        SectionLabel::Outro,
-        SectionLabel::Bridge,
         SectionLabel::Custom("Pre-chorus".into()),
     ];
     let symbols = [

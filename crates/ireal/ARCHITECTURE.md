@@ -44,12 +44,16 @@ through this crate's public API.
 
 ### `Section`
 
-- `label: SectionLabel`. The named-variant set (`Verse`, `Chorus`,
-  `Intro`, `Outro`, `Bridge`) covers the strings the conversion
-  crate (#2053) needs to map deterministically to ChordPro
-  `{start_of_chorus}` / `{start_of_verse}` / etc. Letter form
-  (`A`/`B`/`C`/`D`) is the jazz convention. `Custom(String)` is
-  the escape hatch for anything else.
+- `label: SectionLabel`. The named-variant set is restricted to
+  what the iReal Pro app actually emits: `Verse` (`*V` per spec,
+  `*v` accepted for backwards compat) and `Intro` (`*i`). Letter
+  form (`A`/`B`/`C`/`D`) is the jazz convention. `Custom(String)`
+  is the escape hatch for anything else, including the names
+  ChordPro recognises but iReal does not (`Chorus`, `Bridge`) —
+  the convert crate (#2053) round-trips those via
+  `Custom("Chorus")` / `Custom("Bridge")` so the ChordPro
+  semantics survive without producing out-of-spec
+  `irealb://` tokens (#2450).
 
 ### `Bar`
 

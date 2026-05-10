@@ -340,11 +340,11 @@ fn serialize_section_label(out: &mut String, label: &SectionLabel) {
     out.push('*');
     match label {
         SectionLabel::Letter(c) => out.push(*c),
-        SectionLabel::Verse => out.push('v'),
-        SectionLabel::Chorus => out.push('c'),
+        // The iReal Pro spec emits `*V` uppercase for Verse and
+        // `*i` lowercase for Intro (#2432, #2450). Round-trip
+        // through the parser's case-insensitive handling.
+        SectionLabel::Verse => out.push('V'),
         SectionLabel::Intro => out.push('i'),
-        SectionLabel::Outro => out.push('o'),
-        SectionLabel::Bridge => out.push('b'),
         SectionLabel::Custom(s) => {
             // The parser only consumes a single char after `*`,
             // so multi-char custom labels would not round-trip
