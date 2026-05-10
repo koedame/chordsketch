@@ -387,12 +387,22 @@ a {
 .editor.editor--source-only,
 .editor.editor--preview-only {
   grid-template-columns: 1fr;
+  /* Single-pane modes always use a single grid row regardless of
+     viewport width — without this, the @900px media query below
+     forces `grid-template-rows: 1fr 1fr`, leaving the second row
+     empty and the visible pane stuck at half height (#2475
+     follow-up). */
+  grid-template-rows: 1fr;
 }
 
 @media (max-width: 900px) {
   .editor {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr 1fr;
+  }
+  .editor.editor--source-only,
+  .editor.editor--preview-only {
+    grid-template-rows: 1fr;
   }
   .pane.source {
     border-right: 0;

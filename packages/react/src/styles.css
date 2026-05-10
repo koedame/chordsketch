@@ -203,18 +203,23 @@
 
 .chordsketch-sheet__content {
   /* Wrapper for the AST → JSX render path (#2475 / ADR-0017).
-     Hosts can override structural concerns here (e.g. set
-     `max-height` / `overflow-y` for a scrollable preview pane).
-     The rules below paint the body of the rendered sheet — they
-     mirror the inline `<style>` block previously embedded by
-     `chordsketch-render-html`'s full-document output, scoped under
-     `.chordsketch-sheet__content` so the rules do not leak to the
-     host body. */
+     Mirrors the body-level framing the static HTML renderer
+     used to emit (`body { max-width: 720px; margin: 2em auto;
+     padding: 0 1em }`) but scoped to the wrapper so the rules
+     do not leak to the host body. Hosts can override
+     `max-width` / `padding` to fit a custom layout. */
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
+  font-size: 1rem;
+  line-height: 1.6875;
+  color: var(--cs-ink-1000, #0a0a0b);
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2em 1.5em;
 }
 
 /* `.song` is the AST walker's root container. It carries no
    structural styling itself — the children inherit the
-   `chordsketch-sheet`'s typography. */
+   `chordsketch-sheet__content`'s typography. */
 .chordsketch-sheet__content .song {
   /* Reserved for future per-song sizing hooks. */
 }
