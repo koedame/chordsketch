@@ -45,5 +45,13 @@ declare module '@chordsketch/wasm' {
   export function parseIrealb(input: string): string;
   export function serializeIrealb(input: string): string;
   export function chordTypography(chord_json: string): string;
+  // ChordPro parse-to-AST binding (#2475). Returns the parsed
+  // `Song` AST as a JSON string — TS shape declared in
+  // `packages/react/src/chordpro-ast.ts` (`ChordproSong`).
+  export function parseChordpro(input: string): string;
+  export function parseChordproWithOptions(
+    input: string,
+    options: { transpose?: number; config?: string },
+  ): string;
   export default function init(): Promise<void>;
 }

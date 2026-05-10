@@ -4,22 +4,71 @@ import { describe, expect, test, vi } from 'vitest';
 import { ChordSheet } from '../src/index';
 import type { ChordWasmLoader } from '../src/use-chord-render';
 
+// Stub renderer surface — covers BOTH the AST → JSX path
+// (parseChordpro / parseChordproWithOptions) used by
+// `format="html"` post-#2475 and the legacy text path
+// (render_text / render_text_with_options) still used by
+// `format="text"`. See ADR-0017 for the surface split.
 interface StubRenderer {
   default: ReturnType<typeof vi.fn>;
-  render_html: ReturnType<typeof vi.fn>;
+  parseChordpro: ReturnType<typeof vi.fn>;
+  parseChordproWithOptions: ReturnType<typeof vi.fn>;
   render_text: ReturnType<typeof vi.fn>;
-  render_html_with_options: ReturnType<typeof vi.fn>;
   render_text_with_options: ReturnType<typeof vi.fn>;
+}
+
+// Minimal AST shape — one lyrics line carrying the source text
+// inside a single chord-block. Captures enough structure for the
+// JSX walker to emit `.song > .line > .chord-block > .lyrics`,
+// which is what the assertions below key off.
+function astFor(source: string, marker = ''): string {
+  return JSON.stringify({
+    metadata: {
+      title: null,
+      subtitles: [],
+      artists: [],
+      composers: [],
+      lyricists: [],
+      album: null,
+      year: null,
+      key: null,
+      tempo: null,
+      time: null,
+      capo: null,
+      sortTitle: null,
+      sortArtist: null,
+      arrangers: [],
+      copyright: null,
+      duration: null,
+      tags: [],
+      custom: [],
+    },
+    lines: [
+      {
+        kind: 'lyrics',
+        value: {
+          segments: [
+            {
+              chord: null,
+              text: marker ? `${marker}:${source}` : source,
+              spans: [],
+            },
+          ],
+        },
+      },
+    ],
+  });
 }
 
 function makeStub(): StubRenderer {
   return {
     default: vi.fn(async () => undefined),
-    render_html: vi.fn((src: string) => `<article>${src}</article>`),
-    render_text: vi.fn((src: string) => `TEXT:${src}`),
-    render_html_with_options: vi.fn(
-      (src: string, opts) => `<article data-opts=${JSON.stringify(opts)}>${src}</article>`,
+    parseChordpro: vi.fn((src: string) => astFor(src)),
+    parseChordproWithOptions: vi.fn(
+      (src: string, opts: { transpose?: number; config?: string }) =>
+        astFor(src, JSON.stringify(opts)),
     ),
+    render_text: vi.fn((src: string) => `TEXT:${src}`),
     render_text_with_options: vi.fn((src: string) => `TEXT+OPT:${src}`),
   };
 }
@@ -29,7 +78,7 @@ function makeLoader(stub: StubRenderer): ChordWasmLoader {
 }
 
 describe('<ChordSheet>', () => {
-  test('renders HTML output via render_html when no options are set', async () => {
+  test('renders HTML output via parseChordpro when no options are set', async () => {
     const stub = makeStub();
 
     const { container } = render(
@@ -37,50 +86,42 @@ describe('<ChordSheet>', () => {
     );
 
     await waitFor(() => {
-      const sheet = container.querySelector('.chordsketch-sheet');
-      expect(sheet?.innerHTML).toContain('<article>{title: Hi}</article>');
+      const lyrics = container.querySelector('.chordsketch-sheet__content .song .lyrics');
+      expect(lyrics?.textContent).toBe('{title: Hi}');
     });
-    expect(stub.render_html).toHaveBeenCalledWith('{title: Hi}');
-    expect(stub.render_html_with_options).not.toHaveBeenCalled();
+    expect(stub.parseChordpro).toHaveBeenCalledWith('{title: Hi}');
+    expect(stub.parseChordproWithOptions).not.toHaveBeenCalled();
   });
 
-  test('forwards transpose via render_html_with_options', async () => {
+  test('forwards transpose via parseChordproWithOptions', async () => {
     const stub = makeStub();
 
-    render(
-      <ChordSheet
-        source="{title: T}"
-        transpose={2}
-        wasmLoader={makeLoader(stub)}
-      />,
-    );
+    render(<ChordSheet source="{title: T}" transpose={2} wasmLoader={makeLoader(stub)} />);
 
     await waitFor(() =>
-      expect(stub.render_html_with_options).toHaveBeenCalledWith('{title: T}', {
+      expect(stub.parseChordproWithOptions).toHaveBeenCalledWith('{title: T}', {
         transpose: 2,
         config: undefined,
       }),
     );
-    expect(stub.render_html).not.toHaveBeenCalled();
+    expect(stub.parseChordpro).not.toHaveBeenCalled();
   });
 
-  test('forwards config via render_html_with_options', async () => {
+  test('forwards config via parseChordproWithOptions', async () => {
     const stub = makeStub();
 
-    render(
-      <ChordSheet source="{title: T}" config="ukulele" wasmLoader={makeLoader(stub)} />,
-    );
+    render(<ChordSheet source="{title: T}" config="ukulele" wasmLoader={makeLoader(stub)} />);
 
     await waitFor(() =>
-      expect(stub.render_html_with_options).toHaveBeenCalledWith('{title: T}', {
+      expect(stub.parseChordproWithOptions).toHaveBeenCalledWith('{title: T}', {
         transpose: undefined,
         config: 'ukulele',
       }),
     );
     // Symmetric with the transpose test above — a regression
     // where the options branch silently falls back to
-    // `render_html` would otherwise pass this test. #2173.
-    expect(stub.render_html).not.toHaveBeenCalled();
+    // `parseChordpro` would otherwise pass this test. #2173.
+    expect(stub.parseChordpro).not.toHaveBeenCalled();
   });
 
   test('HTML branch keeps stale output when a subsequent render errors', async () => {
@@ -89,33 +130,25 @@ describe('<ChordSheet>', () => {
       <ChordSheet source="one" wasmLoader={makeLoader(stub)} />,
     );
     await waitFor(() => {
-      const wrapper = container.querySelector('.chordsketch-sheet__content');
-      expect(wrapper?.innerHTML).toContain('<article>one</article>');
+      const lyrics = container.querySelector('.chordsketch-sheet__content .song .lyrics');
+      expect(lyrics?.textContent).toBe('one');
     });
 
-    stub.render_html.mockImplementation(() => {
+    stub.parseChordpro.mockImplementation(() => {
       throw new Error('bad');
     });
     rerender(<ChordSheet source="two" wasmLoader={makeLoader(stub)} />);
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('bad'));
-    // Stale HTML from "one" is still rendered alongside the error,
-    // mirroring the text-branch behaviour covered in the sister
-    // test above.
-    const wrapper = container.querySelector('.chordsketch-sheet__content');
-    expect(wrapper?.innerHTML).toContain('<article>one</article>');
+    // Stale tree from "one" is still rendered alongside the error.
+    const lyrics = container.querySelector('.chordsketch-sheet__content .song .lyrics');
+    expect(lyrics?.textContent).toBe('one');
   });
 
   test('format="text" renders into a <pre>', async () => {
     const stub = makeStub();
 
-    render(
-      <ChordSheet
-        source="source-text"
-        format="text"
-        wasmLoader={makeLoader(stub)}
-      />,
-    );
+    render(<ChordSheet source="source-text" format="text" wasmLoader={makeLoader(stub)} />);
 
     await waitFor(() => {
       expect(screen.getByText('TEXT:source-text').tagName).toBe('PRE');
@@ -125,9 +158,7 @@ describe('<ChordSheet>', () => {
 
   test('initial state sets aria-busy="true" while WASM loads', () => {
     const stub = makeStub();
-    const { container } = render(
-      <ChordSheet source="x" wasmLoader={makeLoader(stub)} />,
-    );
+    const { container } = render(<ChordSheet source="x" wasmLoader={makeLoader(stub)} />);
     // Before the effect resolves, aria-busy should be true.
     const sheet = container.querySelector('.chordsketch-sheet');
     expect(sheet?.getAttribute('aria-busy')).toBe('true');
@@ -154,18 +185,16 @@ describe('<ChordSheet>', () => {
     const stub = makeStub();
     releaseLoader(stub);
 
-    await waitFor(() => expect(stub.render_html).toHaveBeenCalled());
+    await waitFor(() => expect(stub.parseChordpro).toHaveBeenCalled());
   });
 
   test('surfaces renderer errors via the default inline alert', async () => {
     const stub = makeStub();
-    stub.render_html.mockImplementation(() => {
+    stub.parseChordpro.mockImplementation(() => {
       throw new Error('parse boom');
     });
 
-    render(
-      <ChordSheet source="broken" wasmLoader={makeLoader(stub)} />,
-    );
+    render(<ChordSheet source="broken" wasmLoader={makeLoader(stub)} />);
 
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toBe('parse boom');
@@ -196,7 +225,12 @@ describe('<ChordSheet>', () => {
     const stub = makeStub();
     // Render once so stale output is preserved, then break the next render.
     const { rerender } = render(
-      <ChordSheet source="first" format="text" wasmLoader={makeLoader(stub)} errorFallback={null} />,
+      <ChordSheet
+        source="first"
+        format="text"
+        wasmLoader={makeLoader(stub)}
+        errorFallback={null}
+      />,
     );
     await waitFor(() => expect(stub.render_text).toHaveBeenCalledWith('first'));
 
@@ -204,16 +238,16 @@ describe('<ChordSheet>', () => {
       throw new Error('ignored');
     });
     rerender(
-      <ChordSheet source="second" format="text" wasmLoader={makeLoader(stub)} errorFallback={null} />,
+      <ChordSheet
+        source="second"
+        format="text"
+        wasmLoader={makeLoader(stub)}
+        errorFallback={null}
+      />,
     );
 
-    // Wait for the failing render to settle (the stub was called
-    // with "second") before asserting that no alert appeared —
-    // asserting before the effect fires would trivially pass for
-    // the wrong reason.
     await waitFor(() => expect(stub.render_text).toHaveBeenCalledWith('second'));
     expect(screen.queryByRole('alert')).toBeNull();
-    // Stale text output stays visible.
     expect(screen.getByText('TEXT:first')).toBeTruthy();
   });
 
@@ -230,18 +264,17 @@ describe('<ChordSheet>', () => {
     rerender(<ChordSheet source="two" format="text" wasmLoader={makeLoader(stub)} />);
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('bad'));
-    // Stale output still rendered alongside the error.
     expect(screen.getByText('TEXT:one')).toBeTruthy();
   });
 
   test('HTML branch renders custom JSX errorFallback alongside the output', async () => {
-    // Regression guard: under `format="html"` the component used
-    // to stringify the default fallback into the HTML branch and
-    // silently drop arbitrary JSX. The post-2042-delta design
-    // renders the errorFallback in a sibling element so any
-    // ReactNode works under both `format` values.
+    // Regression guard: under `format="html"` the post-2475 path
+    // renders errorFallback in a sibling element so arbitrary JSX
+    // works under both `format` values. The AST-walker path makes
+    // this guarantee structural — no string-injection escape
+    // hatch is involved.
     const stub = makeStub();
-    stub.render_html.mockImplementation(() => {
+    stub.parseChordpro.mockImplementation(() => {
       throw new Error('html-boom');
     });
 
@@ -263,10 +296,7 @@ describe('<ChordSheet>', () => {
       expect(node.tagName).toBe('SECTION');
       expect(node.textContent).toBe('Problem: html-boom');
     });
-    // The content wrapper is absent because `output` is null —
-    // every render call threw, so the component takes the
-    // no-output branch and does not mount
-    // `.chordsketch-sheet__content`.
+    // No content wrapper because `ast` stayed null on every parse.
     expect(container.querySelector('.chordsketch-sheet__content')).toBeNull();
   });
 
@@ -274,9 +304,9 @@ describe('<ChordSheet>', () => {
     const stub = makeStub();
     const loader = makeLoader(stub);
     const { rerender } = render(<ChordSheet source="a" wasmLoader={loader} />);
-    await waitFor(() => expect(stub.render_html).toHaveBeenCalledWith('a'));
+    await waitFor(() => expect(stub.parseChordpro).toHaveBeenCalledWith('a'));
     rerender(<ChordSheet source="b" wasmLoader={loader} />);
-    await waitFor(() => expect(stub.render_html).toHaveBeenCalledWith('b'));
+    await waitFor(() => expect(stub.parseChordpro).toHaveBeenCalledWith('b'));
 
     expect(loader).toHaveBeenCalledTimes(1);
     expect(stub.default).toHaveBeenCalledTimes(1);

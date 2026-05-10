@@ -31,6 +31,36 @@ export {
 } from './use-transpose';
 export { useDebounced } from './use-debounced';
 
+// AST → JSX walker (#2475 / ADR-0017). Powers `<ChordSheet>`'s
+// `format="html"` branch — exposed at the package boundary so
+// custom consumers can drive their own React tree off the same
+// AST without the `<ChordSheet>` shell.
+export { renderChordproAst } from './chordpro-jsx';
+export {
+  useChordproAst,
+  type ChordproAstResult,
+  type ChordproParseOptions,
+} from './use-chordpro-ast';
+export type {
+  ChordproAccidental,
+  ChordproChord,
+  ChordproChordDefinition,
+  ChordproChordDetail,
+  ChordproChordQuality,
+  ChordproCommentStyle,
+  ChordproDirective,
+  ChordproDirectiveKind,
+  ChordproImageAttributes,
+  ChordproLine,
+  ChordproLyricsLine,
+  ChordproLyricsSegment,
+  ChordproMetadata,
+  ChordproNote,
+  ChordproSong,
+  ChordproSpanAttributes,
+  ChordproTextSpan,
+} from './chordpro-ast';
+
 // Editor + layout primitives (#2454). The CodeMirror-backed
 // `<SourceEditor>` is heavier than the existing `<ChordEditor>`
 // (textarea) and adds its own dependency tree under

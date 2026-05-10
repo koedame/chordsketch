@@ -841,6 +841,90 @@ export interface ValidationError {
 export function validate(input: string): ValidationError[];
 "#;
 
+// ---- ChordPro parse-to-AST binding -----------------------------
+
+/// Run the ChordPro source → AST JSON pipeline; native helper used
+/// by the wasm wrapper and Rust unit tests. The pipeline:
+///
+///   1. `chordsketch_chordpro::parse_lenient_with_options` —
+///      collects parse warnings non-fatally; the lenient flavour
+///      always returns an AST plus a warnings vector, so the only
+///      `Err` paths are pre-parser preconditions enforced by
+///      `parse_lenient_with_options` itself.
+///   2. Optional transpose, applied AFTER parse so the AST mirrors
+///      the rendering pipeline used by the Rust HTML / PDF / text
+///      renderers.
+///   3. `chordsketch_chordpro::json::ToJson::to_json_string` — the
+///      hand-rolled, zero-dep serialiser added in this PR that the
+///      `@chordsketch/react` AST → JSX walker consumes.
+fn do_parse_chordpro(
+    input: &str,
+    options: Option<&RenderOptions>,
+) -> Result<(String, Vec<String>), String> {
+    use chordsketch_chordpro::json::ToJson;
+
+    let parse_options = chordsketch_chordpro::ParseOptions::default();
+    let parse_result = chordsketch_chordpro::parse_lenient_with_options(input, &parse_options);
+    // The lenient parser exposes recoverable issues as `errors` —
+    // the structural recovery happens inline. Surface them to the
+    // React preview as `warnings` so they ride alongside the AST
+    // without aborting the render.
+    let warnings: Vec<String> = parse_result.errors.iter().map(|w| format!("{w}")).collect();
+
+    let song = parse_result.song;
+
+    // Apply transpose if requested. Mirrors the renderer entry
+    // points which do this same step before rendering — keeps the
+    // React preview's chord labels in sync with the canonical
+    // render path's semantics. `transpose::transpose` returns a
+    // new `Song` rather than mutating in place; pass `0` (the
+    // default) through unchanged so the no-op case skips the
+    // allocation.
+    let song = match options.map(|o| o.transpose).unwrap_or(0) {
+        0 => song,
+        steps => chordsketch_chordpro::transpose::transpose(&song, steps),
+    };
+
+    Ok((song.to_json_string(), warnings))
+}
+
+/// Parse a ChordPro source string into an AST JSON document.
+///
+/// Returns the parsed [`chordsketch_chordpro::ast::Song`] as a
+/// JSON object matching the shape declared in
+/// `packages/react/src/chordpro-ast.ts`. Recoverable parse issues
+/// are surfaced through the lenient parser's warnings channel and
+/// drop on the floor at this entry point; a structured
+/// `withWarnings` variant is tracked as a follow-up and not part
+/// of this PR.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string when the parser cannot start
+/// (e.g., input exceeds the lenient parser's hard preconditions).
+#[must_use = "callers must handle parse errors"]
+#[wasm_bindgen(js_name = parseChordpro)]
+pub fn parse_chordpro(input: &str) -> Result<String, JsValue> {
+    do_parse_chordpro(input, None)
+        .map(|(json, _)| json)
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// Parse a ChordPro source string with optional render options
+/// (transpose, config preset). Same JSON shape as
+/// [`parse_chordpro`]; this entry point mirrors the
+/// `*_with_options` pattern used by the renderer bindings so the
+/// React preview can drive transpose without re-rendering through
+/// the demoted Rust HTML renderer.
+#[must_use = "callers must handle parse errors"]
+#[wasm_bindgen(js_name = parseChordproWithOptions)]
+pub fn parse_chordpro_with_options(input: &str, options: JsValue) -> Result<String, JsValue> {
+    let opts = deserialize_options(options)?;
+    do_parse_chordpro(input, Some(&opts))
+        .map(|(json, _)| json)
+        .map_err(|e| JsValue::from_str(&e))
+}
+
 // ---- iReal Pro conversion bindings (#2067 Phase 1) ----
 
 /// Serializable shape returned by both conversion entry points.
@@ -1573,6 +1657,65 @@ mod tests {
     fn test_serialize_irealb_invalid_json_errors() {
         let result = do_serialize_irealb("{ not real json");
         assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    // ---- ChordPro parse-to-AST binding ------------------------
+
+    #[test]
+    fn test_parse_chordpro_emits_ast_json() {
+        let (json, warnings) =
+            do_parse_chordpro("{title: My Song}\n[Am]Hello [G]world", None).unwrap();
+        assert!(json.starts_with('{'), "expected JSON object, got: {json}");
+        assert!(
+            json.contains("\"metadata\""),
+            "JSON must include metadata, got: {json}"
+        );
+        assert!(
+            json.contains("\"title\":\"My Song\""),
+            "title metadata must round-trip, got: {json}"
+        );
+        assert!(
+            json.contains("\"name\":\"Am\""),
+            "chord names must round-trip, got: {json}"
+        );
+        assert!(warnings.is_empty(), "clean input emits no warnings");
+    }
+
+    #[test]
+    fn test_parse_chordpro_applies_transpose() {
+        let opts = RenderOptions {
+            transpose: 2,
+            config: None,
+        };
+        let (json, _) = do_parse_chordpro("[C]Hello", Some(&opts)).unwrap();
+        // C transposed up 2 semitones lands on D.
+        assert!(
+            json.contains("\"name\":\"D\""),
+            "transpose must rewrite chord names, got: {json}"
+        );
+    }
+
+    #[test]
+    fn test_parse_chordpro_no_transpose_preserves_chord() {
+        let opts = RenderOptions {
+            transpose: 0,
+            config: None,
+        };
+        let (json, _) = do_parse_chordpro("[C]Hello", Some(&opts)).unwrap();
+        assert!(
+            json.contains("\"name\":\"C\""),
+            "transpose=0 must not alter chord names, got: {json}"
+        );
+    }
+
+    #[test]
+    fn test_parse_chordpro_empty_input_returns_empty_song() {
+        let (json, warnings) = do_parse_chordpro("", None).unwrap();
+        assert!(
+            json.contains("\"lines\":[]"),
+            "empty input must yield an empty lines array, got: {json}"
+        );
+        assert!(warnings.is_empty(), "empty input emits no warnings");
     }
 
     #[test]

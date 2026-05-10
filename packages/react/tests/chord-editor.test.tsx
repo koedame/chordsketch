@@ -6,16 +6,43 @@ import { ChordEditor } from '../src/index';
 import type { ChordWasmLoader } from '../src/use-chord-render';
 
 // Reuse the stub shape from the chord-sheet suite — the editor's
-// preview pane is just a `<ChordSheet>` under the hood.
+// preview pane is just a `<ChordSheet>` under the hood. Post-#2475
+// the html branch parses to AST JSON via parseChordpro instead of
+// rendering an HTML string; the text branch is unchanged.
+function emptyAst(marker?: string): string {
+  return JSON.stringify({
+    metadata: {
+      title: marker ?? null,
+      subtitles: [],
+      artists: [],
+      composers: [],
+      lyricists: [],
+      album: null,
+      year: null,
+      key: null,
+      tempo: null,
+      time: null,
+      capo: null,
+      sortTitle: null,
+      sortArtist: null,
+      arrangers: [],
+      copyright: null,
+      duration: null,
+      tags: [],
+      custom: [],
+    },
+    lines: [],
+  });
+}
+
 function makeStub() {
   return {
     default: vi.fn(async () => undefined),
-    render_html: vi.fn((src: string) => `<article>${src}</article>`),
-    render_text: vi.fn((src: string) => `TEXT:${src}`),
-    render_html_with_options: vi.fn(
-      (src: string, opts: { transpose?: number }) =>
-        `<article data-t="${opts.transpose ?? 0}">${src}</article>`,
+    parseChordpro: vi.fn((src: string) => emptyAst(src)),
+    parseChordproWithOptions: vi.fn(
+      (src: string, _opts: { transpose?: number }) => emptyAst(src),
     ),
+    render_text: vi.fn((src: string) => `TEXT:${src}`),
     render_text_with_options: vi.fn(
       (src: string, opts: { transpose?: number }) => `TEXT+${opts.transpose ?? 0}:${src}`,
     ),
@@ -166,10 +193,10 @@ describe('<ChordEditor>', () => {
 
     // Wait for the initial WASM load and empty-input render
     // so the call counter starts from a predictable baseline.
-    // The initial render uses \`render_html_with_options\`
+    // The initial render uses \`parseChordproWithOptions\`
     // because \`transpose\` defaults to 0 (a non-undefined value).
     await waitFor(() =>
-      expect(stub.render_html_with_options).toHaveBeenCalledTimes(1),
+      expect(stub.parseChordproWithOptions).toHaveBeenCalledTimes(1),
     );
 
     fireEvent.change(textarea, { target: { value: 'a' } });
@@ -179,13 +206,13 @@ describe('<ChordEditor>', () => {
     // Within ~50 ms no preview re-render has fired — all three
     // keystrokes are still inside the debounce window.
     await new Promise((r) => setTimeout(r, 50));
-    expect(stub.render_html_with_options).toHaveBeenCalledTimes(1);
+    expect(stub.parseChordproWithOptions).toHaveBeenCalledTimes(1);
 
     // After the window elapses, exactly one additional render
     // fires with the final value.
     await waitFor(
       () => {
-        const calls = stub.render_html_with_options.mock.calls;
+        const calls = stub.parseChordproWithOptions.mock.calls;
         const lastSrc = calls.length > 0 ? calls[calls.length - 1]?.[0] : undefined;
         expect(lastSrc).toBe('abc');
       },
@@ -193,7 +220,7 @@ describe('<ChordEditor>', () => {
     );
     // Still exactly 2 total calls (initial + debounced final),
     // not 4 (one per keystroke) — proves the debounce coalesced.
-    expect(stub.render_html_with_options).toHaveBeenCalledTimes(2);
+    expect(stub.parseChordproWithOptions).toHaveBeenCalledTimes(2);
   });
 
   test('Ctrl+ArrowUp / Ctrl+ArrowDown fire onTransposeChange with clamped values', async () => {
@@ -275,7 +302,7 @@ describe('<ChordEditor>', () => {
     expect(onTransposeChange).not.toHaveBeenCalled();
   });
 
-  test('transpose value is forwarded to the preview via render_html_with_options', async () => {
+  test('transpose value is forwarded to the preview via parseChordproWithOptions', async () => {
     const stub = makeStub();
     render(
       <ChordEditor
@@ -287,7 +314,7 @@ describe('<ChordEditor>', () => {
     );
     await waitFor(
       () =>
-        expect(stub.render_html_with_options).toHaveBeenCalledWith('src', {
+        expect(stub.parseChordproWithOptions).toHaveBeenCalledWith('src', {
           transpose: 3,
           config: undefined,
         }),

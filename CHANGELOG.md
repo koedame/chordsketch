@@ -7,7 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **React surface renders ChordPro AST → JSX directly**
+  ([ADR-0017](docs/adr/0017-react-renders-from-ast.md), #2475).
+  `<ChordSheet format="html">` and `<RendererPreview format="html">`
+  no longer round-trip through `chordsketch-render-html`'s
+  string output and no longer wrap the preview in an
+  `<iframe srcdoc>`. The wasm bundle exposes the parsed `Song`
+  AST via `parseChordpro` / `parseChordproWithOptions`; the new
+  `chordpro-jsx` walker in `@chordsketch/react` emits a React
+  tree matching the Rust HTML renderer's DOM contract
+  (`.song`, `.line`, `.chord-block`, `.chord`, `.lyrics`,
+  `<section class="…">`, `<p class="comment">`, `<h1>`, `<h2>`,
+  `<p class="meta">`). The Rust HTML renderer
+  (`chordsketch-render-html`) stays as the canonical static-HTML
+  emitter for the CLI (`--format html`), FFI bindings, GitHub
+  Action, and the VS Code extension's iframe preview — every
+  surface that does not own a JS / React runtime. Sister-site
+  parity rules (`.claude/rules/renderer-parity.md` and
+  `.claude/rules/fix-propagation.md`) updated to track the
+  React JSX walker as a fourth rendering surface alongside the
+  text / HTML / PDF Rust renderers.
+
 ### Added
+
+- `chordsketch-chordpro::json` — hand-rolled, zero-dep JSON
+  serialiser for the full `Song` AST, mirroring the
+  `chordsketch-ireal::json` pattern (#2055).
+- `parseChordpro` / `parseChordproWithOptions` wasm exports
+  (`@chordsketch/wasm` 0.4.x and later) returning the AST as
+  a JSON string; TS shape declared in
+  `packages/react/src/chordpro-ast.ts`.
+- `useChordproAst(source, options)` hook in `@chordsketch/react`
+  paralleling `useChordRender`, plus the public
+  `renderChordproAst(song)` walker for consumers that need to
+  drive their own React tree off the same AST without the
+  `<ChordSheet>` shell.
 
 - `chordsketch-ireal` URL grammar coverage extended to the full
   iReal Pro chart format used by community charts:
