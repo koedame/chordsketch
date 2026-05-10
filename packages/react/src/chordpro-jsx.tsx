@@ -93,12 +93,19 @@ function isAsciiControl(code: number): boolean {
 // property — not just ASCII whitespace. The JS port has to cover
 // the same set so an `href` like `\u{00A0}javascript:alert(1)`
 // (NBSP-prefixed) reaches the same prefix-check state in both
-// implementations. Covers all 25 codepoints in the Unicode 16.0
+// implementations. Covers every codepoint in the Unicode 16.0
 // `White_Space` property; the 5 ASCII members are picked up by
 // `isAsciiWhitespace` separately so this helper only needs the
-// non-ASCII ones to make the union match.
+// non-ASCII ones plus VT (`\u{000B}`) — the one ASCII codepoint
+// in `White_Space` that Rust's `is_ascii_whitespace` does NOT
+// flag (Rust's `is_ascii_whitespace` is a curated tab / LF / FF
+// / CR / SP set; `char::is_whitespace` is the bigger set used by
+// `trim_start`). Folding VT in here keeps the leading-strip
+// behaviour byte-for-byte identical to Rust on the off chance
+// someone hand-crafts a `\v`-prefixed payload.
 function isUnicodeNonAsciiWhitespace(code: number): boolean {
   return (
+    code === 0x000b || // vertical tab — in `char::is_whitespace`, not in `is_ascii_whitespace`
     code === 0x0085 || // NEL — next line
     code === 0x00a0 || // NBSP — no-break space
     code === 0x1680 || // ogham space mark

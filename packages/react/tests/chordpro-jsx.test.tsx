@@ -217,6 +217,7 @@ describe('renderChordproAst', () => {
     [' vbscript:msgbox(1)'], // LSEP
     ['　data:text/html,<script>x</script>'], // ideographic space
     ['﻿javascript:alert(1)'], // BOM (handled by invisible-format strip)
+    ['javascript:alert(1)'], // VT — in `char::is_whitespace`, not `is_ascii_whitespace`
   ])('blocks Unicode-whitespace-prefixed dangerous URI: %s', (src) => {
     const container = renderImageWithSrc(src);
     expect(container.querySelector('img')).toBeNull();
