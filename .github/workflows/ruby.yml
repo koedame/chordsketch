@@ -359,7 +359,7 @@ jobs:
         # one rubygems/release-gem invokes internally; we use it directly
         # because release-gem assumes a Rake-based release flow and this
         # workflow drives `gem build`/`gem push` explicitly.
-        uses: rubygems/configure-rubygems-credentials@bc6dd217f8a4f919d6835fcfefd470ef821f5c44 # v1.0.0
+        uses: rubygems/configure-rubygems-credentials@762a4b77c3300434bb57c7ce80b20e36231927aa # v2.0.0
 
       - name: Build and push gem
         if: steps.oidc.outputs.available == 'true'
