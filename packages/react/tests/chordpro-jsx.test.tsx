@@ -144,7 +144,7 @@ describe('renderChordproAst', () => {
     expect(container.querySelector('.comment-box')?.textContent).toBe('boxed comment');
   });
 
-  test('blocks dangerous URI schemes in image directives', () => {
+  function renderImageWithSrc(src: string): HTMLElement {
     const { container } = render(
       renderChordproAst({
         metadata: EMPTY_META,
@@ -157,7 +157,7 @@ describe('renderChordproAst', () => {
               kind: {
                 tag: 'image',
                 value: {
-                  src: 'javascript:alert(1)',
+                  src,
                   width: null,
                   height: null,
                   scale: null,
@@ -171,8 +171,180 @@ describe('renderChordproAst', () => {
         ],
       }),
     );
-    // Sanitizer drops the dangerous src — no `<img>` reaches the DOM.
+    return container as HTMLElement;
+  }
+
+  // Sister-site coverage to
+  // `crates/render-html/src/lib.rs::has_dangerous_uri_scheme` —
+  // each entry in the walker's `DANGEROUS_URI_SCHEMES` MUST have
+  // a rejection test (`.claude/rules/sanitizer-security.md`
+  // §"Testing completeness"). Adding a new entry to the Rust
+  // list requires the same here.
+  test.each([
+    ['javascript:alert(1)'],
+    ['vbscript:msgbox(1)'],
+    ['data:text/html,<script>alert(1)</script>'],
+    ['file:///etc/passwd'],
+    ['blob:http://evil.example/abc'],
+    ['mhtml:file://C:/page.mhtml'],
+  ])('blocks dangerous URI scheme: %s', (src) => {
+    const container = renderImageWithSrc(src);
     expect(container.querySelector('img')).toBeNull();
+  });
+
+  // Mixed-case + obfuscation regression guard — the Rust
+  // sanitiser strips ASCII whitespace / control / Unicode
+  // invisible-format chars before the prefix check; the JS port
+  // must too. A regression that drops the obfuscation filter
+  // would otherwise let `JAVA<ZWSP>SCRIPT:` through.
+  test.each([
+    ['JAVASCRIPT:alert(1)'],
+    ['  javascript:alert(1)'],
+    ['java​script:alert(1)'],
+    ['java\tscript:alert(1)'],
+    ['java‮script:alert(1)'],
+  ])('blocks obfuscated dangerous URI: %s', (src) => {
+    const container = renderImageWithSrc(src);
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  test('lets safe URI schemes through (https, relative, fragment)', () => {
+    for (const src of ['https://example.com/cover.png', 'photo.jpg', '#chord-diagrams']) {
+      const container = renderImageWithSrc(src);
+      const img = container.querySelector('img');
+      expect(img).not.toBeNull();
+      expect(img?.getAttribute('src')).toBe(src);
+    }
+  });
+
+  test('renders highlight / inline-comment / styled span variants', () => {
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'lyrics',
+            value: {
+              segments: [
+                {
+                  chord: null,
+                  text: 'sample',
+                  spans: [
+                    { kind: 'highlight', children: [{ kind: 'plain', value: 'h!' }] },
+                    { kind: 'comment', children: [{ kind: 'plain', value: 'cmt' }] },
+                    {
+                      kind: 'span',
+                      attributes: {
+                        fontFamily: 'Courier New',
+                        size: '14pt',
+                        foreground: '#f00',
+                        background: '#ff0',
+                        weight: 'bold',
+                        style: 'italic',
+                      },
+                      children: [{ kind: 'plain', value: 'styled' }],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    );
+    expect(container.querySelector('mark')?.textContent).toBe('h!');
+    // Inline comment renders as `<span class="comment">`, mirroring
+    // `chordsketch-render-html`'s `TextSpan::Comment` arm.
+    const comment = container.querySelector('.lyrics span.comment');
+    expect(comment?.textContent).toBe('cmt');
+    const styled = container.querySelector('.lyrics span[style]') as HTMLElement | null;
+    expect(styled?.textContent).toBe('styled');
+    // jsdom lowercases generic font-family idents (`Serif` →
+    // `serif`), so use a non-generic family that survives the
+    // round-trip.
+    expect(styled?.style.fontFamily).toBe('Courier New');
+    expect(styled?.style.fontWeight).toBe('bold');
+    expect(styled?.style.fontStyle).toBe('italic');
+  });
+
+  test('wraps custom-section directives in `<section class="section-<sanitized>">`', () => {
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'start_of_my custom!section',
+              value: null,
+              kind: { tag: 'startOfSection', value: 'my custom!section' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'lyrics',
+            value: {
+              segments: [{ chord: null, text: 'inside', spans: [] }],
+            },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'end_of_section',
+              value: null,
+              kind: { tag: 'endOfSection', value: 'my custom!section' },
+              selector: null,
+            },
+          },
+        ],
+      }),
+    );
+    // Class prefix `section-` + non-alphanumeric chars (space, `!`)
+    // replaced by `-`. Mirrors `sanitize_css_class` in
+    // `chordsketch-render-html`.
+    const section = container.querySelector('section.section-my-custom-section');
+    expect(section).not.toBeNull();
+    expect(section?.querySelector('.line .lyrics')?.textContent).toBe('inside');
+  });
+
+  test('delegate-section directives wrap content with the documented default label', () => {
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'start_of_abc',
+              value: null,
+              kind: { tag: 'startOfAbc' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'lyrics',
+            value: {
+              segments: [{ chord: null, text: 'C: tune', spans: [] }],
+            },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'end_of_abc',
+              value: null,
+              kind: { tag: 'endOfAbc' },
+              selector: null,
+            },
+          },
+        ],
+      }),
+    );
+    const section = container.querySelector('section.abc');
+    expect(section).not.toBeNull();
+    // Mirrors `chordsketch-render-html`'s `render_section_open("abc", "ABC", …)` —
+    // sister-site parity per `.claude/rules/renderer-parity.md`.
+    expect(section?.querySelector('.section-label')?.textContent).toBe('ABC');
+    expect(section?.querySelector('.line .lyrics')?.textContent).toBe('C: tune');
   });
 
   test('renders empty lines as `.empty-line`', () => {
@@ -215,8 +387,11 @@ describe('renderChordproAst', () => {
       }),
     );
     const lyrics = container.querySelector('.lyrics');
-    expect(lyrics?.querySelector('strong')?.textContent).toBe('Hello ');
-    expect(lyrics?.querySelector('em')?.textContent).toBe('world');
+    // Walker emits `<b>` / `<i>` to mirror
+    // `chordsketch-render-html`'s element choice byte-for-byte
+    // (sister-site parity per `.claude/rules/renderer-parity.md`).
+    expect(lyrics?.querySelector('b')?.textContent).toBe('Hello ');
+    expect(lyrics?.querySelector('i')?.textContent).toBe('world');
   });
 
   test('uses the chord display override when set', () => {

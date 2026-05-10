@@ -4,11 +4,12 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { ChordEditor } from '../src/index';
 import type { ChordWasmLoader } from '../src/use-chord-render';
+import type { ChordproWasmLoader } from '../src/use-chordpro-ast';
 
 // Reuse the stub shape from the chord-sheet suite — the editor's
 // preview pane is just a `<ChordSheet>` under the hood. Post-#2475
-// the html branch parses to AST JSON via parseChordpro instead of
-// rendering an HTML string; the text branch is unchanged.
+// the html branch parses to AST JSON via parseChordproWithWarnings
+// instead of rendering an HTML string; the text branch is unchanged.
 function emptyAst(marker?: string): string {
   return JSON.stringify({
     metadata: {
@@ -38,9 +39,15 @@ function emptyAst(marker?: string): string {
 function makeStub() {
   return {
     default: vi.fn(async () => undefined),
-    parseChordpro: vi.fn((src: string) => emptyAst(src)),
-    parseChordproWithOptions: vi.fn(
-      (src: string, _opts: { transpose?: number }) => emptyAst(src),
+    parseChordproWithWarnings: vi.fn((src: string) => ({
+      ast: emptyAst(src),
+      warnings: [],
+    })),
+    parseChordproWithWarningsAndOptions: vi.fn(
+      (src: string, _opts: { transpose?: number }) => ({
+        ast: emptyAst(src),
+        warnings: [],
+      }),
     ),
     render_text: vi.fn((src: string) => `TEXT:${src}`),
     render_text_with_options: vi.fn(
@@ -53,6 +60,10 @@ function makeLoader(stub: ReturnType<typeof makeStub>): ChordWasmLoader {
   return vi.fn(async () => stub as unknown as Awaited<ReturnType<ChordWasmLoader>>);
 }
 
+function makeAstLoader(stub: ReturnType<typeof makeStub>): ChordproWasmLoader {
+  return vi.fn(async () => stub as unknown as Awaited<ReturnType<ChordproWasmLoader>>);
+}
+
 describe('<ChordEditor>', () => {
   test('uncontrolled mode: renders defaultValue and fires onChange on input', async () => {
     const stub = makeStub();
@@ -62,7 +73,7 @@ describe('<ChordEditor>', () => {
       <ChordEditor
         defaultValue="start"
         onChange={onChange}
-        wasmLoader={makeLoader(stub)}
+        wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={0}
       />,
     );
@@ -85,7 +96,7 @@ describe('<ChordEditor>', () => {
           <ChordEditor
             value={v}
             onChange={setV}
-            wasmLoader={makeLoader(makeStub())}
+            wasmLoader={makeLoader(makeStub())} astWasmLoader={makeAstLoader(makeStub())}
             debounceMs={0}
           />
           <div data-testid="observed">{v}</div>
@@ -107,7 +118,7 @@ describe('<ChordEditor>', () => {
     render(
       <ChordEditor
         defaultValue=""
-        wasmLoader={makeLoader(stub)}
+        wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={0}
       />,
     );
@@ -121,7 +132,7 @@ describe('<ChordEditor>', () => {
       <ChordEditor
         defaultValue=""
         textareaAriaLabel="Lyrics source"
-        wasmLoader={makeLoader(stub)}
+        wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={0}
       />,
     );
@@ -138,7 +149,7 @@ describe('<ChordEditor>', () => {
         <ChordEditor
           value="start"
           onChange={vi.fn()}
-          wasmLoader={makeLoader(stub)}
+          wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
           debounceMs={0}
         />,
       );
@@ -149,7 +160,7 @@ describe('<ChordEditor>', () => {
         <ChordEditor
           defaultValue="next"
           onChange={vi.fn()}
-          wasmLoader={makeLoader(stub)}
+          wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
           debounceMs={0}
         />,
       );
@@ -168,7 +179,7 @@ describe('<ChordEditor>', () => {
       <ChordEditor
         defaultValue="frozen"
         readOnly
-        wasmLoader={makeLoader(makeStub())}
+        wasmLoader={makeLoader(makeStub())} astWasmLoader={makeAstLoader(makeStub())}
         debounceMs={0}
       />,
     );
@@ -183,7 +194,7 @@ describe('<ChordEditor>', () => {
     render(
       <ChordEditor
         defaultValue=""
-        wasmLoader={makeLoader(stub)}
+        wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={120}
       />,
     );
@@ -193,10 +204,10 @@ describe('<ChordEditor>', () => {
 
     // Wait for the initial WASM load and empty-input render
     // so the call counter starts from a predictable baseline.
-    // The initial render uses \`parseChordproWithOptions\`
+    // The initial render uses \`parseChordproWithWarningsAndOptions\`
     // because \`transpose\` defaults to 0 (a non-undefined value).
     await waitFor(() =>
-      expect(stub.parseChordproWithOptions).toHaveBeenCalledTimes(1),
+      expect(stub.parseChordproWithWarningsAndOptions).toHaveBeenCalledTimes(1),
     );
 
     fireEvent.change(textarea, { target: { value: 'a' } });
@@ -206,13 +217,13 @@ describe('<ChordEditor>', () => {
     // Within ~50 ms no preview re-render has fired — all three
     // keystrokes are still inside the debounce window.
     await new Promise((r) => setTimeout(r, 50));
-    expect(stub.parseChordproWithOptions).toHaveBeenCalledTimes(1);
+    expect(stub.parseChordproWithWarningsAndOptions).toHaveBeenCalledTimes(1);
 
     // After the window elapses, exactly one additional render
     // fires with the final value.
     await waitFor(
       () => {
-        const calls = stub.parseChordproWithOptions.mock.calls;
+        const calls = stub.parseChordproWithWarningsAndOptions.mock.calls;
         const lastSrc = calls.length > 0 ? calls[calls.length - 1]?.[0] : undefined;
         expect(lastSrc).toBe('abc');
       },
@@ -220,7 +231,7 @@ describe('<ChordEditor>', () => {
     );
     // Still exactly 2 total calls (initial + debounced final),
     // not 4 (one per keystroke) — proves the debounce coalesced.
-    expect(stub.parseChordproWithOptions).toHaveBeenCalledTimes(2);
+    expect(stub.parseChordproWithWarningsAndOptions).toHaveBeenCalledTimes(2);
   });
 
   test('Ctrl+ArrowUp / Ctrl+ArrowDown fire onTransposeChange with clamped values', async () => {
@@ -234,7 +245,7 @@ describe('<ChordEditor>', () => {
         onTransposeChange={onTransposeChange}
         minTranspose={-5}
         maxTranspose={5}
-        wasmLoader={makeLoader(stub)}
+        wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={0}
       />,
     );
@@ -268,7 +279,7 @@ describe('<ChordEditor>', () => {
         minTranspose={-5}
         maxTranspose={5}
         onTransposeChange={onTransposeChange}
-        wasmLoader={makeLoader(stub)}
+        wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={0}
       />,
     );
@@ -290,7 +301,7 @@ describe('<ChordEditor>', () => {
         minTranspose={-5}
         maxTranspose={5}
         onTransposeChange={onTransposeChange}
-        wasmLoader={makeLoader(stub)}
+        wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={0}
       />,
     );
@@ -302,19 +313,19 @@ describe('<ChordEditor>', () => {
     expect(onTransposeChange).not.toHaveBeenCalled();
   });
 
-  test('transpose value is forwarded to the preview via parseChordproWithOptions', async () => {
+  test('transpose value is forwarded to the preview via parseChordproWithWarningsAndOptions', async () => {
     const stub = makeStub();
     render(
       <ChordEditor
         defaultValue="src"
         transpose={3}
-        wasmLoader={makeLoader(stub)}
+        wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={0}
       />,
     );
     await waitFor(
       () =>
-        expect(stub.parseChordproWithOptions).toHaveBeenCalledWith('src', {
+        expect(stub.parseChordproWithWarningsAndOptions).toHaveBeenCalledWith('src', {
           transpose: 3,
           config: undefined,
         }),
@@ -328,7 +339,7 @@ describe('<ChordEditor>', () => {
       <ChordEditor
         defaultValue="src"
         previewFormat="text"
-        wasmLoader={makeLoader(stub)}
+        wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={0}
       />,
     );

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ChordSheet } from './chord-sheet';
 import type { ChordRenderFormat, ChordWasmLoader } from './use-chord-render';
+import type { ChordproWasmLoader } from './use-chordpro-ast';
 import { useDebounced } from './use-debounced';
 
 // Minimal `process.env.NODE_ENV` typing so we do not pull in
@@ -94,12 +95,21 @@ export interface ChordEditorProps extends Omit<HTMLAttributes<HTMLDivElement>, '
   /** Maximum transpose offset the keyboard shortcuts will emit. Defaults to `11`. */
   maxTranspose?: number;
   /**
-   * Test-only WASM loader override forwarded to `<ChordSheet>`.
-   * Production callers never need to supply this.
+   * Test-only WASM loader override forwarded to `<ChordSheet>`'s
+   * text branch (`format="text"`). Production callers never need
+   * to supply this.
    *
    * @internal
    */
   wasmLoader?: ChordWasmLoader;
+  /**
+   * Test-only WASM loader override forwarded to `<ChordSheet>`'s
+   * AST → JSX branch (`format="html"`, default). Production
+   * callers never need to supply this.
+   *
+   * @internal
+   */
+  astWasmLoader?: ChordproWasmLoader;
 }
 
 /**
@@ -136,6 +146,7 @@ export function ChordEditor({
   minTranspose = -11,
   maxTranspose = 11,
   wasmLoader,
+  astWasmLoader,
   className,
   ...divProps
 }: ChordEditorProps): JSX.Element {
@@ -235,6 +246,7 @@ export function ChordEditor({
           loadingFallback={loadingFallback}
           errorFallback={errorFallback}
           wasmLoader={wasmLoader}
+          astWasmLoader={astWasmLoader}
         />
       </div>
     </div>

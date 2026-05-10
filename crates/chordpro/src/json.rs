@@ -731,4 +731,37 @@ mod tests {
         assert!(json.contains("\"tag\":\"unknown\""));
         assert!(json.contains("\"value\":\"frobnicate\""));
     }
+
+    #[test]
+    fn multibyte_unicode_lyrics_round_trip() {
+        // Regression guard for `.claude/rules/code-style.md` §"Unicode
+        // Safety". The hand-rolled JSON serializer must preserve
+        // multi-byte UTF-8 (CJK, RTL, emoji) verbatim — a regression
+        // that escaped them through `\uXXXX` would still parse, but
+        // a regression that truncated mid-byte would break the
+        // `parseChordpro` → JSX walker pipeline silently.
+        let song = parse("[Am]こんにちは [G]世界").unwrap();
+        let json = song.to_json_string();
+        assert!(
+            json.contains("\"text\":\"こんにちは \""),
+            "CJK lyrics must round-trip verbatim, got: {json}"
+        );
+        assert!(
+            json.contains("\"text\":\"世界\""),
+            "trailing CJK lyric must round-trip, got: {json}"
+        );
+    }
+
+    #[test]
+    fn rtl_and_emoji_lyrics_round_trip() {
+        // Bidi marks and 4-byte emoji codepoints — separate test
+        // because the parser's lyric handling for RTL-bearing
+        // input has bitten us before (#2087-class).
+        let song = parse("[Am]שלום 🎵").unwrap();
+        let json = song.to_json_string();
+        assert!(
+            json.contains("\"text\":\"שלום 🎵\""),
+            "RTL + emoji lyric must round-trip verbatim, got: {json}"
+        );
+    }
 }

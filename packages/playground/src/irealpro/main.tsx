@@ -31,8 +31,15 @@ let cachedVersion: string | null = null;
 void wasmReady.then(() => {
   try {
     cachedVersion = wasmVersion();
-  } catch {
+  } catch (e) {
+    // `wasm-bindgen` panics surface as `JsValue`s and would
+    // otherwise vanish silently — log so a version-string
+    // mismatch shows up in devtools instead of just falling
+    // through to the chrome's `irealb:// v?` fallback.
     cachedVersion = null;
+    if (typeof console !== 'undefined') {
+      console.warn('[chordsketch-playground] wasmVersion() failed', e);
+    }
   }
 });
 
@@ -125,8 +132,20 @@ interface IrealSong {
 // ---------------------------------------------------------------
 
 function tryParse(source: string): IrealSong | null {
+  // Narrow `catch` over the wasm call only — `JSON.parse` and
+  // the rich-extension mapping below run against
+  // parser-trusted output and any failure there is a
+  // chordsketch-side bug, not a user-input error. Logging it
+  // surfaces the mismatch via devtools instead of stranding
+  // the UI on the `Loading…` placeholder forever.
+  let json: string;
   try {
-    const song = JSON.parse(parseIrealb(source)) as IrealSong;
+    json = parseIrealb(source);
+  } catch {
+    return null;
+  }
+  try {
+    const song = JSON.parse(json) as IrealSong;
     // Map the canonical wasm-AST flags onto the rich-extension
     // fields the React chart consumes. The parser owns the
     // structured semantics; this layer just re-shapes them into
@@ -145,7 +164,13 @@ function tryParse(source: string): IrealSong | null {
       }
     }
     return song;
-  } catch {
+  } catch (e) {
+    if (typeof console !== 'undefined') {
+      console.error(
+        '[chordsketch-playground] parseIrealb succeeded but post-processing failed; this is a bug',
+        e,
+      );
+    }
     return null;
   }
 }
@@ -263,8 +288,14 @@ function PlaygroundApp(): JSX.Element {
       setWasmInitDone(true);
       try {
         setVersion(wasmVersion());
-      } catch {
-        /* leave null */
+      } catch (e) {
+        // Same rationale as the module-level `wasmVersion()`
+        // above — log so a regression in the wasm version
+        // surface is at least visible in devtools rather than
+        // disappearing into the chrome's `?` fallback.
+        if (typeof console !== 'undefined') {
+          console.warn('[chordsketch-playground] wasmVersion() failed in effect', e);
+        }
       }
     });
   }, [wasmInitDone]);
@@ -291,8 +322,15 @@ function PlaygroundApp(): JSX.Element {
       await navigator.clipboard.writeText(source);
       setUrlCopied(true);
       setTimeout(() => setUrlCopied(false), 1500);
-    } catch {
-      /* clipboard unavailable — silently no-op */
+    } catch (e) {
+      // Clipboard API is gated on secure context (HTTPS) and
+      // user activation. The UX fallback (no-op) is the right
+      // call here, but log so a debugging maintainer can find
+      // the failure when the button silently does nothing on
+      // an `http://` deployment.
+      if (typeof console !== 'undefined') {
+        console.warn('[chordsketch-playground] clipboard write failed', e);
+      }
     }
   }, [source]);
 

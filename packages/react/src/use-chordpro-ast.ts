@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ChordproSong } from './chordpro-ast';
 
@@ -9,11 +9,11 @@ import type { ChordproSong } from './chordpro-ast';
 // #2475 alongside the AST → JSX cut-over (ADR-0017).
 interface ChordproParser {
   default: () => Promise<unknown>;
-  parseChordpro: (input: string) => string;
-  parseChordproWithOptions: (
+  parseChordproWithWarnings: (input: string) => { ast: string; warnings: string[] };
+  parseChordproWithWarningsAndOptions: (
     input: string,
     options: { transpose?: number; config?: string },
-  ) => string;
+  ) => { ast: string; warnings: string[] };
 }
 
 /** Options accepted by the parse call. */
@@ -43,8 +43,30 @@ export interface ChordproAstResult {
   /**
    * The most recent parse error (WASM init failure, JSON shape
    * mismatch, etc.), or `null` if the last parse succeeded.
+   *
+   * Only fatal failures land here (WASM module load, JSON.parse
+   * of corrupt wasm output, network drop on lazy import).
+   * Recoverable parse defects are surfaced via {@link warnings}
+   * — see `parseChordproWithWarnings` in `@chordsketch/wasm`.
    */
   error: Error | null;
+  /**
+   * Recoverable parse warnings collected from the lenient
+   * parser's error channel — e.g. "unrecognised directive at
+   * line 12" or "unbalanced `{` on chord token". Empty when the
+   * source parsed cleanly. Pre-existing warnings are preserved
+   * across re-renders that fail; consumers can render them
+   * alongside `error` or in a separate `role="status"` block.
+   */
+  warnings: string[];
+  /**
+   * Re-run the parse against the most recent (`source`,
+   * `transpose`, `config`) tuple. Mainly useful when {@link error}
+   * carries a transient WASM-init failure — calling `retry()`
+   * re-imports the module instead of waiting for the next prop
+   * change.
+   */
+  retry: () => void;
 }
 
 /**
@@ -80,6 +102,12 @@ export function useChordproAst(
   const [ast, setAst] = useState<ChordproSong | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  // Bumping `retryNonce` forces the effect to re-fire even when
+  // (`source`, `transpose`, `config`) are unchanged — the hook
+  // surface for consumers that hit a transient WASM-init failure
+  // and want to recover without an input change.
+  const [retryNonce, setRetryNonce] = useState(0);
 
   const parserRef = useRef<ChordproParser | null>(null);
   const loaderRef = useRef(loader);
@@ -94,27 +122,49 @@ export function useChordproAst(
       setLoading(true);
       try {
         if (parserRef.current === null) {
-          const mod = await loaderRef.current();
-          await mod.default();
+          let mod: ChordproParser;
+          try {
+            mod = await loaderRef.current();
+            await mod.default();
+          } catch (initErr) {
+            // WASM init failures (network drop, MIME mismatch,
+            // integrity check) are a different defect class
+            // than parse errors — they can recover on retry,
+            // and they should NOT poison `parserRef`. Log so
+            // the failure is visible in devtools regardless of
+            // whether the consumer renders `error`, then
+            // surface it through the same `error` channel.
+            if (typeof console !== 'undefined') {
+              console.error(
+                '[@chordsketch/react] useChordproAst: failed to load @chordsketch/wasm',
+                initErr,
+              );
+            }
+            throw initErr;
+          }
           parserRef.current = mod;
           if (cancelled) return;
         }
         const parser = parserRef.current;
         const hasOptions = transpose !== undefined || config !== undefined;
-        const json = hasOptions
-          ? parser.parseChordproWithOptions(source, { transpose, config })
-          : parser.parseChordpro(source);
-        const parsed = JSON.parse(json) as ChordproSong;
+        const result = hasOptions
+          ? parser.parseChordproWithWarningsAndOptions(source, { transpose, config })
+          : parser.parseChordproWithWarnings(source);
+        const parsed = JSON.parse(result.ast) as ChordproSong;
         if (cancelled) return;
         setAst(parsed);
+        setWarnings(result.warnings);
         setError(null);
       } catch (e) {
         if (cancelled) return;
         const err = e instanceof Error ? e : new Error(String(e));
         setError(err);
-        // Keep the previous `ast` so half-typed edits do not blank
-        // the preview — consumers render `error` alongside the
-        // stale tree if they want to surface the issue.
+        // Keep the previous `ast` and `warnings` so half-typed
+        // edits do not blank the preview — consumers render
+        // `error` alongside the stale tree if they want to
+        // surface the issue. Init failures keep `parserRef`
+        // null so the next `run()` re-imports the module
+        // (manual retry via `retry()` or an input change).
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -131,7 +181,11 @@ export function useChordproAst(
     // for the identical pattern + rationale (inline loaders would
     // invalidate the effect every render).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, transpose, config]);
+  }, [source, transpose, config, retryNonce]);
 
-  return { ast, loading, error };
+  const retry = useCallback(() => {
+    setRetryNonce((n) => n + 1);
+  }, []);
+
+  return { ast, loading, error, warnings, retry };
 }

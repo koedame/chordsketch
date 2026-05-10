@@ -48,12 +48,28 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
    */
   errorFallback?: ((error: Error) => ReactNode) | null;
   /**
-   * Test-only WASM loader override. Production callers never need
-   * to supply this — the default lazy-loads `@chordsketch/wasm`.
+   * Test-only WASM loader override applied to the
+   * `format="text"` branch (which still uses the wasm
+   * `render_text` string surface). Production callers never
+   * need to supply this — the default lazy-loads
+   * `@chordsketch/wasm`.
    *
    * @internal
    */
   wasmLoader?: ChordWasmLoader;
+  /**
+   * Test-only WASM loader override applied to the
+   * `format="html"` branch (which now drives `parseChordpro`
+   * via the AST → JSX walker per ADR-0017). Distinct from
+   * {@link wasmLoader} because the two branches consume
+   * different parts of the wasm surface — a stub for one is
+   * not generally usable for the other.
+   *
+   * Production callers never need to supply this.
+   *
+   * @internal
+   */
+  astWasmLoader?: ChordproWasmLoader;
 }
 
 function defaultErrorFallback(error: Error): ReactNode {
@@ -97,6 +113,7 @@ export function ChordSheet({
   loadingFallback,
   errorFallback = defaultErrorFallback,
   wasmLoader,
+  astWasmLoader,
   className,
   ...divProps
 }: ChordSheetProps): JSX.Element {
@@ -124,7 +141,7 @@ export function ChordSheet({
       config={config}
       loadingFallback={loadingFallback}
       errorFallback={errorFallback}
-      wasmLoader={wasmLoader as unknown as ChordproWasmLoader | undefined}
+      wasmLoader={astWasmLoader}
       wrapperClass={wrapperClass}
       divProps={divProps}
     />

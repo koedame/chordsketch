@@ -40,39 +40,116 @@ import type {
 
 // ---- Sanitiser helpers --------------------------------------------
 
+// Sister-site list to `crates/render-html/src/lib.rs::has_dangerous_uri_scheme`'s
+// scheme set. Any new entry MUST land in both lists in the same PR
+// per `.claude/rules/sanitizer-security.md` §"Security Asymmetry".
+//
+// - `javascript:` / `vbscript:` — code execution
+// - `data:` — content injection
+// - `file:` / `blob:` — local file access when the HTML is opened
+//   as a local file
+// - `mhtml:` — MIME HTML (IE-era; the static-HTML renderer also
+//   blocks it explicitly even though `is_safe_image_src` would
+//   reject it via its allowlist)
 const DANGEROUS_URI_SCHEMES = [
   'javascript:',
   'vbscript:',
   'data:',
   'file:',
   'blob:',
+  'mhtml:',
 ];
+
+// Zero-width / format / bidi-override codepoints that browsers may
+// render as invisible inside a URI scheme but which an attacker can
+// use to split a blocked scheme name (e.g. `java\u{200B}script:` or
+// `java\u{FEFF}script:`). Stripped before scheme comparison so the
+// JSX-side blocklist matches the static-HTML renderer's filter byte
+// for byte (`is_invisible_format_char` in `crates/render-html/src/lib.rs`).
+function isInvisibleFormatChar(code: number): boolean {
+  return (
+    code === 0x00ad || // soft hyphen
+    code === 0x200b || // zero-width space
+    code === 0x200c || // zero-width non-joiner
+    code === 0x200d || // zero-width joiner
+    code === 0x200e || // left-to-right mark
+    code === 0x200f || // right-to-left mark
+    code === 0x2060 || // word joiner
+    code === 0xfeff || // BOM
+    (code >= 0x202a && code <= 0x202e) || // bidi embedding/override
+    (code >= 0x2066 && code <= 0x2069) // isolate / pop directional
+  );
+}
+
+// Mirrors `String::is_ascii_whitespace` + `is_ascii_control` from Rust.
+function isAsciiWhitespace(code: number): boolean {
+  return code === 0x09 || code === 0x0a || code === 0x0c || code === 0x0d || code === 0x20;
+}
+function isAsciiControl(code: number): boolean {
+  return code < 0x20 || code === 0x7f;
+}
 
 /**
  * Returns true when `href` is safe to embed in an `href` / `src`
- * attribute. Mirrors the blocklist applied by
- * `crates/render-html/src/lib.rs::has_dangerous_uri_scheme`.
+ * attribute.
+ *
+ * Mirrors `has_dangerous_uri_scheme` in
+ * `crates/render-html/src/lib.rs` byte for byte:
+ *
+ *   1. Trim leading whitespace.
+ *   2. Drop every embedded ASCII whitespace, ASCII control, and
+ *      Unicode invisible / format / bidi-override codepoint —
+ *      these are the obfuscations browsers tolerate inside scheme
+ *      names (`java​script:`, `java\tscript:`).
+ *   3. `take(30)` significant chars so a payload padded with
+ *      thousands of invisibles still hits the cap before the
+ *      comparison runs.
+ *   4. Lowercase.
+ *   5. Prefix-check against `DANGEROUS_URI_SCHEMES`.
+ *
+ * Any change here MUST land in the Rust function in the same PR
+ * (sister-site parity per `.claude/rules/fix-propagation.md`).
  */
 function isSafeHref(href: string): boolean {
-  const trimmed = href.trim().toLowerCase();
-  return !DANGEROUS_URI_SCHEMES.some((scheme) => trimmed.startsWith(scheme));
+  const out: string[] = [];
+  let started = false;
+  for (let i = 0; i < href.length && out.length < 30; i++) {
+    const code = href.charCodeAt(i);
+    if (!started) {
+      if (isAsciiWhitespace(code)) continue;
+      started = true;
+    }
+    if (isAsciiWhitespace(code) || isAsciiControl(code) || isInvisibleFormatChar(code)) {
+      continue;
+    }
+    out.push(href[i]!);
+  }
+  const lower = out.join('').toLowerCase();
+  return !DANGEROUS_URI_SCHEMES.some((scheme) => lower.startsWith(scheme));
 }
 
 // ---- Inline span rendering ----------------------------------------
 
 function renderSpan(span: ChordproTextSpan, key: number): ReactNode {
+  // Element choices match `crates/render-html/src/lib.rs::render_spans`
+  // byte for byte (`<b>` / `<i>` / `<mark>` / `<span class="comment">`)
+  // so the existing host-page CSS keyed off those selectors lights
+  // up across both surfaces (sister-site parity per
+  // `.claude/rules/renderer-parity.md`). The `b` / `i` choice over
+  // the more "modern" `strong` / `em` is deliberate — a future
+  // change MUST update both sites in lockstep.
   switch (span.kind) {
     case 'plain':
       return span.value;
     case 'bold':
-      return <strong key={key}>{span.children.map(renderSpan)}</strong>;
+      return <b key={key}>{span.children.map(renderSpan)}</b>;
     case 'italic':
-      return <em key={key}>{span.children.map(renderSpan)}</em>;
+      return <i key={key}>{span.children.map(renderSpan)}</i>;
     case 'highlight':
       return <mark key={key}>{span.children.map(renderSpan)}</mark>;
     case 'comment':
       return (
-        <span key={key} className="inline-comment">
+        <span key={key} className="comment">
           {span.children.map(renderSpan)}
         </span>
       );
@@ -88,6 +165,28 @@ function renderSpan(span: ChordproTextSpan, key: number): ReactNode {
         <span key={key} style={style}>
           {span.children.map(renderSpan)}
         </span>
+      );
+    }
+    default: {
+      // Exhaustiveness guard — if a future Rust-side `TextSpan`
+      // variant ships before the walker is taught to render it,
+      // TypeScript flags the missing arm here at compile time
+      // and the runtime falls back to a tagged placeholder
+      // instead of silently rendering `undefined`. Both halves
+      // matter: TS catches the lockstep regression on the
+      // typechecking sister-site, while the placeholder makes
+      // the missing rendering visible in the running app
+      // instead of disappearing the lyric content.
+      const _exhaustive: never = span;
+      void _exhaustive;
+      const unknownKind = (span as { kind?: string } | null | undefined)?.kind ?? 'unknown';
+      if (typeof console !== 'undefined') {
+        console.warn(
+          `[@chordsketch/react] AST walker has no renderer for TextSpan.kind="${unknownKind}" — placeholder emitted`,
+        );
+      }
+      return (
+        <span key={key} data-chordsketch-unknown-span={unknownKind} aria-hidden="true" />
       );
     }
   }
@@ -199,13 +298,41 @@ const END_TAG_TO_NAME: Partial<Record<ChordproDirectiveKind['tag'], string>> = {
   endOfSvg: 'svg',
 };
 
+// Default labels for sections that the parser leaves
+// label-less. Mirrors the labels emitted by
+// `chordsketch-render-html`'s `render_section_open` call sites
+// for each section family.
 const SECTION_LABEL_DEFAULT: Record<string, string> = {
   chorus: 'Chorus',
   verse: 'Verse',
   bridge: 'Bridge',
   tab: 'Tab',
   grid: 'Grid',
+  abc: 'ABC',
+  ly: 'Lilypond',
+  textblock: 'Textblock',
+  musicxml: 'MusicXML',
 };
+
+/**
+ * CSS-class sanitiser for custom section names — JS port of
+ * `crates/render-html/src/lib.rs::sanitize_css_class`. Replaces
+ * every non-alphanumeric / non-`-_` character with `-`. Used so
+ * `{start_of_my custom section}` lands as
+ * `<section class="section-my-custom-section">` on both
+ * surfaces (sister-site parity).
+ */
+function sanitizeCssClass(s: string): string {
+  let out = '';
+  for (const c of s) {
+    if (/[A-Za-z0-9_-]/.test(c)) {
+      out += c;
+    } else {
+      out += '-';
+    }
+  }
+  return out;
+}
 
 interface SectionState {
   name: string;
@@ -286,31 +413,54 @@ function handleDirective(
   directive: ChordproDirective,
   key: number,
 ): void {
-  const { tag } = directive.kind;
-  // Section open / close.
-  if (tag in SECTION_TAG_TO_NAME) {
+  // Switch on `directive.kind` directly so TypeScript narrows to
+  // the discriminated-union member at every branch. Destructuring
+  // `tag` into a plain `string` would lose the narrowing and
+  // force casts at every payload-bearing branch.
+  const kind = directive.kind;
+
+  // Section open — named (chorus / verse / bridge / tab / grid /
+  // delegate) and custom (`{start_of_<name>}`).
+  if (kind.tag in SECTION_TAG_TO_NAME) {
     // If a previous section was still open, flush it before
     // opening a new one — `<section>` nesting is not part of the
     // ChordPro grammar, so the lenient path is "implicit close".
     flushSection(ctx, key * 1000);
     ctx.section = {
-      name: SECTION_TAG_TO_NAME[tag]!,
+      name: SECTION_TAG_TO_NAME[kind.tag]!,
       label: directive.value ?? null,
       children: [],
     };
     return;
   }
-  if (tag in END_TAG_TO_NAME) {
+  if (kind.tag === 'startOfSection') {
+    flushSection(ctx, key * 1000);
+    ctx.section = {
+      // Custom section name lands as `section-<sanitized_name>`
+      // — matches `chordsketch-render-html`'s
+      // `<section class="section-<sanitized_name>">` contract for
+      // `{start_of_<name>}` directives. Sanitisation is the same
+      // JS port as `sanitize_css_class` above.
+      name: `section-${sanitizeCssClass(kind.value)}`,
+      label: directive.value ?? null,
+      children: [],
+    };
+    return;
+  }
+
+  // Section close — named + custom.
+  if (kind.tag in END_TAG_TO_NAME || kind.tag === 'endOfSection') {
     flushSection(ctx, key);
     return;
   }
+
   // `{chorus}` recall — emit a placeholder block. The Rust
   // renderer materialises the most recent chorus body inline; that
   // recall behaviour requires the renderer to remember the prior
   // chorus's lines, which is tracked as a follow-up. For now, emit
   // the same `chorus-recall` wrapper with just the label so the
   // CSS hook lands.
-  if (tag === 'chorus') {
+  if (kind.tag === 'chorus') {
     pushElement(
       ctx,
       <div key={key} className="chorus-recall">
@@ -319,33 +469,31 @@ function handleDirective(
     );
     return;
   }
-  // Image directive.
-  if (tag === 'image') {
-    const img = renderImage(directive.kind.value, key);
+
+  // Image directive — narrowing on `kind.tag === 'image'` lets
+  // TypeScript see `kind.value` as `ChordproImageAttributes`.
+  if (kind.tag === 'image') {
+    const img = renderImage(kind.value, key);
     if (img) pushElement(ctx, img);
     return;
   }
-  // Page-control directives — no DOM impact in the React preview
-  // (pagination is renderer-specific to PDF).
-  if (
-    tag === 'newPage' ||
-    tag === 'newPhysicalPage' ||
-    tag === 'columnBreak' ||
-    tag === 'columns' ||
-    tag === 'newSong'
-  ) {
-    return;
-  }
+
+  // Page-control / song-boundary directives — no DOM impact on the
+  // React preview (pagination is renderer-specific to PDF; song
+  // boundaries are split-at-parse-time).
   // Font / size / colour directives — these affect the Rust
   // renderer's emitted `<style>` block. The React preview lives
   // inside the consumer's stylesheet and does not read these
   // directives; consumers that need per-song style overrides can
   // walk the AST themselves.
-  // Diagrams toggle / config override / generic meta — consumed by
-  // the renderer's setup phase, no body output.
-  // All metadata-class directives (title, artist, etc.) are
+  // Diagrams toggle / config override / generic meta / chord
+  // definitions — consumed by the renderer's setup phase, no body
+  // output. Metadata-class directives (title, artist, etc.) are
   // surfaced via the `metadata` block, not as inline lines, so
   // ignore them here too.
+  // Unknown directives — fail-soft drop, matching
+  // `chordsketch-render-html`'s behaviour for unknown directive
+  // names (the parser still preserves them in `Metadata.custom`).
 }
 
 function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {

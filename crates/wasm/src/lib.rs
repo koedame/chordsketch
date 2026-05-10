@@ -925,6 +925,62 @@ pub fn parse_chordpro_with_options(input: &str, options: JsValue) -> Result<Stri
         .map_err(|e| JsValue::from_str(&e))
 }
 
+/// Serializable shape returned by [`parse_chordpro_with_warnings`]
+/// and [`parse_chordpro_with_warnings_and_options`].
+///
+/// Mirrors the `ConversionWithWarnings` shape used by the
+/// `convertChordpro*` exports so the React surface can plumb
+/// warnings through a uniform `{ ast, warnings }` channel
+/// regardless of which wasm function it called. `ast` carries the
+/// JSON document produced by [`do_parse_chordpro`]; `warnings` is
+/// the list of recoverable `ParseError` messages the lenient
+/// parser surfaced (each formatted via the `Display` impl).
+#[derive(Debug, Serialize)]
+struct ParseChordproResult {
+    ast: String,
+    warnings: Vec<String>,
+}
+
+/// `parse_chordpro` with the lenient parser's recovered
+/// `ParseError`s plumbed through as `warnings: string[]`.
+///
+/// Closes the silent-failure gap surfaced by the auto-review on
+/// PR #2455 — `parse_chordpro` itself drops the warnings tuple
+/// element on the floor (`.map(|(json, _)| json)`) so the
+/// information is unavailable to the React preview, hiding
+/// recoverable parse issues from the user. This entry point is
+/// the canonical surface for the React hook
+/// (`useChordproAst`); the no-warnings entry points stay around
+/// for callers that genuinely don't care.
+///
+/// # Errors
+///
+/// Same as [`parse_chordpro`] — only hard preconditions fail.
+#[must_use = "callers must handle parse errors"]
+#[wasm_bindgen(js_name = parseChordproWithWarnings)]
+pub fn parse_chordpro_with_warnings(input: &str) -> Result<JsValue, JsValue> {
+    let (ast, warnings) = do_parse_chordpro(input, None).map_err(|e| JsValue::from_str(&e))?;
+    serde_wasm_bindgen::to_value(&ParseChordproResult { ast, warnings })
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Same as [`parse_chordpro_with_warnings`] but threads the
+/// `RenderOptions` payload (transpose / config) so the React
+/// preview can drive transpose without losing the warnings
+/// channel.
+#[must_use = "callers must handle parse errors"]
+#[wasm_bindgen(js_name = parseChordproWithWarningsAndOptions)]
+pub fn parse_chordpro_with_warnings_and_options(
+    input: &str,
+    options: JsValue,
+) -> Result<JsValue, JsValue> {
+    let opts = deserialize_options(options)?;
+    let (ast, warnings) =
+        do_parse_chordpro(input, Some(&opts)).map_err(|e| JsValue::from_str(&e))?;
+    serde_wasm_bindgen::to_value(&ParseChordproResult { ast, warnings })
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
 // ---- iReal Pro conversion bindings (#2067 Phase 1) ----
 
 /// Serializable shape returned by both conversion entry points.
