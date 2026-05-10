@@ -426,6 +426,17 @@ a {
   border-right: 0;
 }
 
+/* In preview-only mode the chord sheet has the whole window's
+   width to itself — centre it on a 720px reading column so it
+   looks like a printed score instead of a left-flushed text
+   block. The split view is wide enough that the column never
+   activates, so this rule is preview-only-mode-scoped to keep
+   the half-pane case unchanged. */
+.editor--preview-only .pane.preview .chordsketch-sheet__content {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
 .pane-head {
   display: flex;
   align-items: center;
