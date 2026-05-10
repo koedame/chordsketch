@@ -43,7 +43,7 @@ chordsketch-ireal = { version = "0.4.0", path = "../ireal" }
 # (resvg 0.45+ requires Rust 1.87, the workspace pins 1.85).
 resvg = { version = "0.43", optional = true }
 tiny-skia = { version = "0.11", optional = true }
-svg2pdf = { version = "0.12", optional = true }
+svg2pdf = { version = "0.13", optional = true }
 
 [features]
 # Enables the `render_png` function. Off by default to keep the
