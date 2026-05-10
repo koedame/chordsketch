@@ -19,7 +19,7 @@ test.describe('playground render-format toggle', () => {
   test('html → text → html keeps the preview rendering and bumps the cache-bust marker', async ({
     page,
   }) => {
-    await page.goto('./');
+    await page.goto('./chordpro/');
     const iframe = page.locator('iframe.chordsketch-preview__frame');
     await expect(iframe).toBeVisible();
 
@@ -52,7 +52,7 @@ test.describe('playground render-format toggle', () => {
   test('repeated html ↔ text toggles produce strictly distinct srcdoc values', async ({
     page,
   }) => {
-    await page.goto('./');
+    await page.goto('./chordpro/');
     const iframe = page.locator('iframe.chordsketch-preview__frame');
     const formatSelect = page.getByLabel('Format');
     await expect(iframe).toBeVisible();

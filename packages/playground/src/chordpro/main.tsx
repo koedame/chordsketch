@@ -22,7 +22,7 @@ import {
 } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
-import './playground.css';
+import '../playground.css';
 
 // ---------------------------------------------------------------
 // WASM bootstrap.
@@ -60,11 +60,152 @@ interface Sample {
   source: string;
 }
 
+// Exhaustive directive showcase — exercises every directive
+// `chordsketch-chordpro` parses today, ordered roughly by category
+// so the rendered output reads top-to-bottom as a guided tour.
+// Categories: metadata, transpose, custom chord, comments, sections
+// (verse / chorus / bridge / tab / grid / custom), chorus recall,
+// font/size/color overrides, page control, image, meta, generic
+// `{start_of_X}` custom environment.
+const KITCHEN_SINK_SOURCE = `# ChordSketch — Kitchen Sink
+# Every directive ChordSketch currently parses, exercised in order.
+# Lines starting with '#' are comments stripped before rendering.
+
+# --- Metadata ---------------------------------------------------
+{title: All Directives Tour}
+{subtitle: A guided tour of every ChordPro directive}
+{subtitle: Second subtitle (multiple allowed)}
+{artist: ChordSketch Demo}
+{composer: J. Composer}
+{lyricist: J. Lyricist}
+{album: Reference Sheet}
+{year: 2026}
+{key: G}
+{time: 4/4}
+{tempo: 120}
+{capo: 2}
+{duration: 3:30}
+{copyright: © 2026 Koedame}
+{tag: demo}
+{tag: reference}
+{meta: arranger Jane Arranger}
+
+# --- Custom chord definition (used below) -----------------------
+{define: Gsus4 base-fret 1 frets 3 3 0 0 1 3}
+{chord: Gsus4}
+
+# --- Comments ---------------------------------------------------
+{comment: Plain comment — italic note above the next line}
+{comment_italic: Italic comment variant}
+{comment_box: Boxed comment for emphasis}
+
+# --- Verse with inline chords -----------------------------------
+{start_of_verse: Verse 1}
+[G]This is a [C/G]verse line, [D]chord [Em]over [C]each [G]word.
+[Gsus4]Custom-defined chord above [G]resolves home.
+{end_of_verse}
+
+# --- Chorus (defined once, recalled below) ----------------------
+{start_of_chorus: Chorus}
+[C]Sing the [G]chorus, [D]every-[Em]one to-[C]gether [G]now.
+{end_of_chorus}
+
+# --- Bridge -----------------------------------------------------
+{start_of_bridge: Bridge}
+[Am]A bridge takes you [F]somewhere [C]new before the [G]return.
+{end_of_bridge}
+
+# --- Verse 2 with directive-as-section-label --------------------
+{start_of_verse: Verse 2}
+[G]Second verse, [C]different words, [D]same chord [G]shape.
+{end_of_verse}
+
+# --- Chorus recall (no body — replays the chorus above) ---------
+{chorus}
+
+# --- Tab (verbatim monospace block) -----------------------------
+{start_of_tab: Solo}
+e|---0---2---3---2---0--------|
+B|---0---0---0---0---0--------|
+G|---0---0---0---0---0--------|
+D|---2---2---0---2---2--------|
+A|---3-----------3---3--------|
+E|----------------------------|
+{end_of_tab}
+
+# --- Grid (chord-grid block) ------------------------------------
+{start_of_grid: Outro Riff}
+| G . . . | C . . . | D . . . | G . . . |
+| Em . . . | C . . . | D . . . | G . . . |
+{end_of_grid}
+
+# --- Custom section (generic start_of_X) ------------------------
+{start_of_intro: Intro}
+[G]Pick [Em]each [C]string [D]gently.
+{end_of_intro}
+
+# --- Transpose directive ----------------------------------------
+{transpose: 0}
+
+# --- Font / size / colour overrides -----------------------------
+{textfont: serif}
+{textsize: 14}
+{textcolour: #1a1a1a}
+{chordfont: monospace}
+{chordsize: 12}
+{chordcolour: #BD1642}
+{titlefont: sans-serif}
+{titlesize: 24}
+{titlecolour: #1a1a1a}
+{chorusfont: serif}
+{chorussize: 13}
+{choruscolour: #555555}
+{footerfont: sans-serif}
+{footersize: 9}
+{footercolour: #777777}
+{headerfont: sans-serif}
+{headersize: 9}
+{headercolour: #777777}
+{labelfont: sans-serif}
+{labelsize: 11}
+{labelcolour: #BD1642}
+{gridfont: monospace}
+{gridsize: 11}
+{gridcolour: #1a1a1a}
+{tabfont: monospace}
+{tabsize: 11}
+{tabcolour: #1a1a1a}
+{tocfont: sans-serif}
+{tocsize: 11}
+{toccolour: #1a1a1a}
+
+# --- Diagrams toggle --------------------------------------------
+{diagrams: true}
+{no_diagrams}
+
+# --- Page / layout control --------------------------------------
+{columns: 2}
+{column_break}
+{new_page}
+{new_physical_page}
+
+# --- Image ------------------------------------------------------
+{image: src="https://raw.githubusercontent.com/koedame/chordsketch/main/assets/logo-128.png" width=64 height=64 title="ChordSketch logo"}
+
+# --- Config override --------------------------------------------
+{+config.settings.titles: left}
+`;
+
 const SAMPLES: ReadonlyArray<Sample> = [
   {
     id: 'amazing-grace',
     label: 'Amazing Grace',
     source: SAMPLE_CHORDPRO,
+  },
+  {
+    id: 'kitchen-sink',
+    label: 'All directives (kitchen sink)',
+    source: KITCHEN_SINK_SOURCE,
   },
   {
     id: 'country-roads',
@@ -121,31 +262,6 @@ const SAMPLES: ReadonlyArray<Sample> = [
 ];
 
 const DEFAULT_SAMPLE = SAMPLES[0]!;
-
-// ---------------------------------------------------------------
-// localStorage persistence.
-// ---------------------------------------------------------------
-
-const STORAGE_KEY_SOURCE = 'chordsketch:playground:chordpro:source';
-
-function loadFromStorage(key: string, fallback: string): string {
-  if (typeof window === 'undefined') return fallback;
-  try {
-    const v = window.localStorage.getItem(key);
-    return v ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function saveToStorage(key: string, value: string): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // QuotaExceeded / disabled storage — ignore.
-  }
-}
 
 // ---------------------------------------------------------------
 // Live source statistics + validation surfaced in the pane-head
@@ -251,9 +367,7 @@ function setCapoInSource(source: string, capo: number): string {
 type View = 'split' | 'source' | 'preview';
 
 function PlaygroundApp(): JSX.Element {
-  const [source, setSource] = useState<string>(() =>
-    loadFromStorage(STORAGE_KEY_SOURCE, DEFAULT_SAMPLE.source),
-  );
+  const [source, setSource] = useState<string>(DEFAULT_SAMPLE.source);
   const [transpose, setTranspose] = useState<number>(0);
   const [view, setView] = useState<View>('split');
   const [sampleId, setSampleId] = useState<string>(DEFAULT_SAMPLE.id);
@@ -261,10 +375,6 @@ function PlaygroundApp(): JSX.Element {
   const [version, setVersion] = useState<string | null>(cachedVersion);
 
   const editorRef = useRef<SourceEditorHandle | null>(null);
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEY_SOURCE, source);
-  }, [source]);
 
   useEffect(() => {
     if (version !== null) return;
@@ -332,9 +442,9 @@ function PlaygroundApp(): JSX.Element {
           ChordSketch
         </a>
         <nav className="crumbs" aria-label="Breadcrumb">
-          <span className="current">Playground</span>
+          <a href="../">Playground</a>
           <span className="sep">›</span>
-          <span>ChordPro</span>
+          <span className="current">ChordPro</span>
         </nav>
         <div className="actions">
           <div className="topnav__view segmented" role="group" aria-label="Pane visibility">

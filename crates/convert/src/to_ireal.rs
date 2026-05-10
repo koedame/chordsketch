@@ -376,6 +376,7 @@ fn parse_chordpro_chord(name: &str) -> IrealChord {
                 root: ChordRoot::natural('C'),
                 quality: ChordQuality::Major,
                 bass: None,
+                alternate: None,
             };
         }
     };
@@ -414,6 +415,7 @@ fn parse_chordpro_chord(name: &str) -> IrealChord {
         root,
         quality,
         bass,
+        alternate: None,
     }
 }
 

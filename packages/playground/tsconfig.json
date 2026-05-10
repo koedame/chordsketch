@@ -16,7 +16,9 @@
       "@chordsketch/ui-web": ["../ui-web/src/index.ts"],
       "@chordsketch/ui-web/style.css": ["../ui-web/src/style.css"],
       "@chordsketch/react": ["../react/src/index.ts"],
-      "@chordsketch/react/styles.css": ["../react/src/styles.css"]
+      "@chordsketch/react/styles.css": ["../react/src/styles.css"],
+      "@chordsketch/ui-irealb-editor": ["../ui-irealb-editor/src/index.ts"],
+      "@chordsketch/ui-irealb-editor/style.css": ["../ui-irealb-editor/src/style.css"]
     }
   },
   "include": [
@@ -26,6 +28,7 @@
     "vitest.config.ts",
     "playwright.config.ts",
     "../ui-web/src",
-    "../react/src"
+    "../react/src",
+    "../ui-irealb-editor/src"
   ]
 }

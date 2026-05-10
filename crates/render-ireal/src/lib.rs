@@ -123,9 +123,9 @@ use chordsketch_ireal::{Accidental, BarChord, IrealSong, KeyMode};
 pub use chord_typography::{ChordTypography, SpanKind, TypographySpan, chord_to_typography};
 pub use layout::{BarCoord, EmptyCell, Layout, compute_layout};
 pub use page::{
-    BAR_ROW_HEIGHT, BARS_PER_ROW, CHORD_FONT_SIZE_BASE, CHORD_FONT_SIZE_SUPERSCRIPT,
-    CHORD_SUPERSCRIPT_DY, GRID_TOP, HEADER_BAND_HEIGHT, MARGIN_X, MARGIN_Y, MAX_BARS,
-    MAX_CHORDS_PER_BAR, MAX_SECTIONS, PAGE_HEIGHT, PAGE_WIDTH,
+    BAR_ROW_HEIGHT, BARS_PER_ROW, CHORD_FONT_SIZE_BASE, CHORD_FONT_SIZE_SUPERSCRIPT, GRID_TOP,
+    HEADER_BAND_HEIGHT, MARGIN_X, MARGIN_Y, MAX_BARS, MAX_CHORDS_PER_BAR, MAX_SECTIONS,
+    PAGE_HEIGHT, PAGE_WIDTH,
 };
 
 /// Caller-supplied render configuration.
@@ -171,47 +171,69 @@ height=\"{PAGE_HEIGHT}\" viewBox=\"0 0 {PAGE_WIDTH} {PAGE_HEIGHT}\">\n"
 }
 
 fn write_page_frame(out: &mut String) {
+    // Pure white page; the engraved chart no longer paints a
+    // black 1px frame around the entire SVG (it competed with the
+    // chart's own barlines and read as "boxed", not "engraved").
     out.push_str(&format!(
         "  <rect x=\"0\" y=\"0\" width=\"{PAGE_WIDTH}\" height=\"{PAGE_HEIGHT}\" \
-fill=\"white\" stroke=\"black\" stroke-width=\"1\"/>\n"
+fill=\"white\"/>\n"
     ));
 }
 
 fn write_header(out: &mut String, song: &IrealSong) {
+    // Three-column header band — italic Source-Serif style label
+    // on the left, centred bold title, italic "Lead Sheet" tag on
+    // the right. Mirrors the chart-card header in
+    // `design-system/ui_kits/web/editor-irealb.html`.
     let header_top = MARGIN_Y;
-    let title_y = header_top + 32;
-    let meta_y = header_top + 60;
-    // Always run the title through `escape_xml`, even on the
-    // hard-coded fallback. Asymmetric sanitisation (one branch
-    // escaped, one branch raw) is the structural defect class
-    // `.claude/rules/sanitizer-security.md` calls out; routing both
-    // branches through the same helper closes the future-localisation
-    // hole even though "Untitled" itself contains no reserved chars.
+    let center_y = header_top + 32;
     let raw_title = if song.title.is_empty() {
         "Untitled"
     } else {
         song.title.as_str()
     };
     let title_text = svg::escape_xml(raw_title);
+    let center_x = PAGE_WIDTH / 2;
+    // Header typography — Source Serif 4 italic for the (style) /
+    // Lead Sheet / composer marks per
+    // `design-system/ui_kits/web/editor-irealb.html`. The host
+    // (playground / desktop / VS Code preview) loads the design-
+    // system fonts via Google Fonts; the SVG falls back through
+    // `serif` for environments that did not preload the family.
+    let serif_stack = "'Source Serif 4', Georgia, serif";
     out.push_str(&format!(
-        "  <text x=\"{MARGIN_X}\" y=\"{title_y}\" font-family=\"sans-serif\" \
-font-size=\"24\" class=\"title\">{title_text}</text>\n"
+        "  <text x=\"{center_x}\" y=\"{center_y}\" font-family=\"{serif_stack}\" \
+font-weight=\"700\" font-size=\"22\" text-anchor=\"middle\" class=\"title\">{title_text}</text>\n"
+    ));
+    let style = song.style.as_deref().unwrap_or("Medium Swing");
+    let style_text = svg::escape_xml(&format!("({style})"));
+    out.push_str(&format!(
+        "  <text x=\"{MARGIN_X}\" y=\"{center_y}\" font-family=\"{serif_stack}\" \
+font-style=\"italic\" font-size=\"13\" class=\"meta\">{style_text}</text>\n"
+    ));
+    let lead_x = PAGE_WIDTH - MARGIN_X;
+    out.push_str(&format!(
+        "  <text x=\"{lead_x}\" y=\"{center_y}\" font-family=\"{serif_stack}\" \
+font-style=\"italic\" font-size=\"13\" text-anchor=\"end\" class=\"lead-sheet\">Lead Sheet</text>\n"
     ));
     if let Some(composer) = song.composer.as_deref() {
         let escaped = svg::escape_xml(composer);
-        let composer_x = PAGE_WIDTH - MARGIN_X;
         out.push_str(&format!(
-            "  <text x=\"{composer_x}\" y=\"{title_y}\" font-family=\"sans-serif\" \
-font-size=\"14\" text-anchor=\"end\" class=\"composer\">{escaped}</text>\n"
+            "  <text x=\"{center_x}\" y=\"{composer_y}\" font-family=\"{serif_stack}\" \
+font-size=\"12\" font-style=\"italic\" text-anchor=\"middle\" class=\"composer\">{escaped}</text>\n",
+            composer_y = center_y + 18,
         ));
     }
-    let meta_left = format_style_and_key(song);
+    // Thin rule separating the header band from the chart body.
+    let rule_y = header_top + page::HEADER_BAND_HEIGHT - 8;
     out.push_str(&format!(
-        "  <text x=\"{MARGIN_X}\" y=\"{meta_y}\" font-family=\"sans-serif\" \
-font-size=\"12\" class=\"meta\">{meta_left}</text>\n"
+        "  <line x1=\"{MARGIN_X}\" y1=\"{rule_y}\" x2=\"{rule_x2}\" y2=\"{rule_y}\" \
+stroke=\"#E8E6EA\" stroke-width=\"1\"/>\n",
+        rule_x2 = PAGE_WIDTH - MARGIN_X,
     ));
 }
 
+#[allow(dead_code)] // retained for future use; the engraved header no longer needs it.
 fn format_style_and_key(song: &IrealSong) -> String {
     // The iReal Pro app renders "Medium Swing" when a chart omits a
     // style tag; the AST stores `Option<String>` so the renderer
@@ -227,6 +249,7 @@ fn format_style_and_key(song: &IrealSong) -> String {
     svg::escape_xml(&combined)
 }
 
+#[allow(dead_code)] // retained for future use; the engraved header no longer needs it.
 fn format_key(song: &IrealSong) -> String {
     let root = song.key_signature.root;
     let note_glyph = note_glyph_or_fallback(root.note);
@@ -265,48 +288,100 @@ fn write_grid(out: &mut String, song: &IrealSong, layout: &Layout) {
         return;
     }
     out.push_str("  <g class=\"bar-grid\">\n");
-    for cell in &layout.bars {
-        out.push_str(&format!(
-            "    <rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" \
-fill=\"none\" stroke=\"black\" stroke-width=\"1\"/>\n",
-            x = cell.x,
-            y = cell.y,
-            w = cell.width,
-            h = cell.height,
-        ));
-        let chords = chords_for_bar(song, cell);
-        write_bar_chord_text(out, cell, chords);
-        // Overlay non-Single barline glyphs for the bar's start
-        // (left edge) and end (right edge). The cell rectangle's
-        // stroke already provides the simple line for `Single`,
-        // so `barlines::*` returns an empty string there.
-        if let Some(bar) = song
+
+    // Group bars by row so we can decide which barline (left/right)
+    // to draw per cell. The layout engine already groups via
+    // `cell.y`; bars sharing a `y` belong to the same chart line.
+    // The right-side barline of a bar that abuts another bar in the
+    // same line is the LEFT side of its right neighbour, so we only
+    // need to emit one barline per boundary.
+
+    // First, paint barlines for filled cells. Each cell contributes
+    // its left barline (single by default, or the kind the bar's
+    // `start` field declares). The rightmost cell in a row also
+    // contributes a right barline at its right edge.
+    for (idx, cell) in layout.bars.iter().enumerate() {
+        let bar = song
             .sections
             .get(cell.section_index)
-            .and_then(|s| s.bars.get(cell.bar_index_in_section))
-        {
-            out.push_str(&barlines::render_left_barline(cell, bar.start));
-            out.push_str(&barlines::render_right_barline(cell, bar.end));
+            .and_then(|s| s.bars.get(cell.bar_index_in_section));
+        let start_kind = bar
+            .map(|b| b.start)
+            .unwrap_or(chordsketch_ireal::BarLine::Single);
+        let end_kind = bar
+            .map(|b| b.end)
+            .unwrap_or(chordsketch_ireal::BarLine::Single);
+        out.push_str(&barlines::render_left_barline(cell, start_kind));
+        // Emit the right barline only when no neighbour will paint
+        // a left barline at the same x. The next filled cell with
+        // the same `y` would do so; otherwise (end of row, end of
+        // section, end of song) the right barline closes the bar.
+        let next_filled_at_same_y = layout
+            .bars
+            .get(idx + 1)
+            .is_some_and(|next| next.y == cell.y && next.x == cell.x + cell.width);
+        if !next_filled_at_same_y {
+            out.push_str(&barlines::render_right_barline(cell, end_kind));
         }
+        let chords = chords_for_bar(song, cell);
+        write_bar_chord_text(out, cell, chords, song.time_signature.numerator);
     }
-    for empty in &layout.trailing_empties {
-        out.push_str(&format!(
-            "    <rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" \
-fill=\"none\" stroke=\"black\" stroke-width=\"1\" class=\"empty\"/>\n",
-            x = empty.x,
-            y = empty.y,
-            w = empty.width,
-            h = empty.height,
-        ));
+
+    // Trailing empties stay invisible — the engraved chart
+    // doesn't paint placeholder barlines past a section's last
+    // real bar. The empties are still tracked so future renderers
+    // (PDF / PNG #2063 / #2064) keep deterministic layout
+    // boundaries; the `for` loop below is preserved as a no-op
+    // to keep the layout-engine contract obvious.
+    for _empty in &layout.trailing_empties {
+        // intentionally empty — see comment above.
     }
-    // Section labels, ending brackets, and music-symbol glyphs all
-    // sit ABOVE the cells in the same band. Paint them last so the
-    // row strokes do not over-draw them; emit music symbols last so
-    // their glyphs sit on top of any overlapping ending bracket.
+    // Time signature on line 1.
+    write_time_signature(out, song, layout);
+    // Section labels (black-filled square with letter), ending
+    // brackets, and music-symbol glyphs all sit ABOVE the cells in
+    // the row's gap area. Paint them last so they layer above the
+    // chord text. Music symbols come last so their glyphs sit on
+    // top of any overlapping ending bracket.
     out.push_str(&markers::render_section_labels(song, layout));
     out.push_str(&markers::render_endings(song, layout));
     out.push_str(&music_symbols::render_music_symbols(song, layout));
     out.push_str("  </g>\n");
+}
+
+/// Stacked numerator/denominator at the very start of line 1, in
+/// the reserved indent area before the first bar's left barline.
+/// Renders only when the AST carries a non-default time signature
+/// or always — iReal Pro charts always show the time signature on
+/// line 1.
+fn write_time_signature(out: &mut String, song: &IrealSong, layout: &Layout) {
+    let Some(first) = layout.bars.first() else {
+        return;
+    };
+    let num = song.time_signature.numerator;
+    let denom = song.time_signature.denominator;
+    // Centre the digits in the indent area immediately to the left
+    // of the first bar's barline, vertically centred against the
+    // bar's chord row.
+    let cx = first.x - 14;
+    let cy = first.y + first.height / 2;
+    let num_y = cy - 4;
+    let denom_y = cy + 14;
+    out.push_str(&format!(
+        "    <text x=\"{cx}\" y=\"{num_y}\" font-family=\"serif\" \
+font-weight=\"700\" font-size=\"16\" text-anchor=\"middle\" class=\"time-sig-num\">{num}</text>\n"
+    ));
+    out.push_str(&format!(
+        "    <line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\" \
+stroke=\"black\" stroke-width=\"1\" class=\"time-sig-rule\"/>\n",
+        x1 = cx - 6,
+        x2 = cx + 6,
+        y = cy + 1,
+    ));
+    out.push_str(&format!(
+        "    <text x=\"{cx}\" y=\"{denom_y}\" font-family=\"serif\" \
+font-weight=\"700\" font-size=\"16\" text-anchor=\"middle\" class=\"time-sig-denom\">{denom}</text>\n"
+    ));
 }
 
 fn chords_for_bar<'a>(song: &'a IrealSong, cell: &BarCoord) -> &'a [BarChord] {
@@ -331,98 +406,166 @@ fn chords_for_bar<'a>(song: &'a IrealSong, cell: &BarCoord) -> &'a [BarChord] {
 /// Beat-aware horizontal placement (one chord per beat slot)
 /// requires bar-cell subdivision and is deferred to a follow-up
 /// of the iReal Pro tracker (#2050).
-fn write_bar_chord_text(out: &mut String, cell: &BarCoord, chords: &[BarChord]) {
+/// Beat-positioned chord typography.
+///
+/// editor-irealb.html lays each bar out as a 4-column metric grid
+/// (one column per beat in 4/4); chords with `position.beat = N`
+/// land in column N. We approximate the same here: a bar's chord
+/// list is mapped onto `time_signature.numerator` equal slots, each
+/// chord's slot derived from its `position.beat` (clamped to the
+/// numerator), and emitted as one `<text>` element per chord with
+/// its own `x` anchor. This produces the metric placement the
+/// reference shows without requiring full grid lines.
+fn write_bar_chord_text(out: &mut String, cell: &BarCoord, chords: &[BarChord], beats_per_bar: u8) {
     if chords.is_empty() {
         return;
     }
-    // Apply the same per-bar truncation the previous flat
-    // formatter did — without it an adversarial AST with
-    // `usize::MAX/2` chords in one bar would OOM the renderer on a
-    // single `<text>` element. The compile-time
-    // `const_assert!(MAX_CHORDS_PER_BAR > 0)` in `page.rs` keeps
-    // `chord_limit` non-zero whenever `chords` is non-empty, so no
-    // additional zero-guard is needed here.
     let chord_limit = chords.len().min(page::MAX_CHORDS_PER_BAR);
-    let text_x = cell.x + cell.width / 2;
-    // Centre the chord text inside the cell. The 0.62 y-fraction
-    // matches iReal Pro's baseline placement (slightly above
-    // mid-cell) so the barline overlay (landed in #2059) sits
-    // beneath without collision.
-    let text_y = cell.y + (cell.height * 62) / 100;
-    out.push_str(&format!(
-        "    <text x=\"{text_x}\" y=\"{text_y}\" font-family=\"serif\" \
-font-size=\"{base}\" text-anchor=\"middle\" class=\"chord\">",
-        base = page::CHORD_FONT_SIZE_BASE,
-    ));
-    // Track whether the previous chord's last span raised the SVG
-    // text cursor off the base baseline (i.e. ended with an
-    // Extension span). SVG `dy` is cumulative within a `<text>`;
-    // without an explicit restore, every subsequent glyph — including
-    // the inter-chord separator and the next chord's root — inherits
-    // the raised position and renders too high.
-    let mut prev_ended_raised = false;
+    let beats = beats_per_bar.max(1) as i32;
+    // Inset the beat columns inside the bar so glyphs don't kiss
+    // the barlines. 6 px on each side keeps the chord ink clear of
+    // the 1 px barline strokes at the bar boundaries.
+    let inner_left = cell.x + 8;
+    let inner_right = cell.x + cell.width - 4;
+    let inner_w = (inner_right - inner_left).max(0);
+    // Chord baseline sits ~62 % of the way down the bar so the
+    // engraved cap-line lands roughly at the bar's centre and the
+    // descender clears the lower barline area.
+    let base_y = cell.y + (cell.height * 62) / 100;
+    // Distribution strategy:
+    //
+    //   * exactly-one-chord bar → place it at the chord's beat,
+    //     defaulting to beat 1 (the leftmost slot).
+    //   * multiple chords at distinct beats → place each at its
+    //     own beat slot.
+    //   * multiple chords sharing a beat (or more chords than
+    //     beats — common for irealb URLs that pack 4 chords into a
+    //     3/4 bar without explicit beat data) → fall back to
+    //     even-spaced index distribution.
+    //
+    // Compact-mode horizontal scale (~70 %) kicks in whenever the
+    // chord count exceeds the beat count so dense bars stay
+    // legible.
+    let unique_beats: std::collections::BTreeSet<i32> = chords
+        .iter()
+        .take(chord_limit)
+        .map(|bc| bc.position.beat.get() as i32)
+        .collect();
+    let by_beat = chord_limit <= beats as usize && unique_beats.len() == chord_limit;
+    let compact = (chord_limit as i32) > beats || !by_beat;
+    let scale_pct: f32 = if compact { 0.7 } else { 1.0 };
     for (i, bc) in chords.iter().take(chord_limit).enumerate() {
-        if i > 0 {
-            // If the previous chord ended with a raised Extension span,
-            // restore the baseline on the separator so the next chord's
-            // root lands at the cell baseline.
-            if prev_ended_raised {
-                let restore_dy = -page::CHORD_SUPERSCRIPT_DY;
-                out.push_str(&format!(
-                    "<tspan font-size=\"{base}\" dy=\"{restore_dy}\">\u{00A0}</tspan>",
-                    base = page::CHORD_FONT_SIZE_BASE,
-                ));
-            } else {
-                out.push_str("<tspan>\u{00A0}</tspan>");
-            }
-        }
+        let slot = if by_beat {
+            let beat = bc.position.beat.get() as i32;
+            ((beat - 1) * inner_w) / beats
+        } else {
+            ((i as i32) * inner_w) / (chord_limit as i32)
+        };
+        let chord_x = inner_left + slot;
+        let transform_attr = if compact {
+            // SVG transforms compose right-to-left around the
+            // origin: pre-translate to the anchor, scale, then
+            // un-translate so the chord stays centred on its slot.
+            format!(
+                " transform=\"translate({chord_x} 0) scale({scale_pct} 1) translate({negx} 0)\"",
+                negx = -chord_x,
+            )
+        } else {
+            String::new()
+        };
+        out.push_str(&format!(
+            "    <text x=\"{chord_x}\" y=\"{base_y}\" font-family=\"Roboto, sans-serif\" \
+font-weight=\"700\" font-size=\"{base}\" class=\"chord\"{transform_attr}>",
+            base = page::CHORD_FONT_SIZE_BASE,
+        ));
         let typography = chord_typography::chord_to_typography(&bc.chord);
-        prev_ended_raised =
-            matches!(typography.spans.last(), Some(s) if s.kind == SpanKind::Extension);
         write_chord_spans(out, &typography);
+        out.push_str("</text>\n");
     }
-    out.push_str("</text>\n");
 }
 
 fn write_chord_spans(out: &mut String, typography: &ChordTypography) {
-    let mut prev_kind: Option<SpanKind> = None;
+    // Cumulative `dy` cursor position. SVG `dy` is relative to the
+    // previous span's baseline, so each transition between baseline
+    // states must emit the inverse of the previous shift before
+    // applying the new one. Tracking the current offset keeps that
+    // accounting honest across Root → Accidental → Extension →
+    // Slash → Bass → Accidental sequences.
+    let mut current_dy: i32 = 0;
+    let acc_dy = page::CHORD_ACCIDENTAL_DY;
+    let qual_dy = page::CHORD_QUALITY_DY;
     for span in &typography.spans {
         let escaped = svg::escape_xml(&span.text);
         match span.kind {
             SpanKind::Root => {
-                out.push_str(&format!("<tspan class=\"chord-root\">{escaped}</tspan>"));
+                let restore = -current_dy;
+                let dy_attr = if restore == 0 {
+                    String::new()
+                } else {
+                    format!(
+                        " font-size=\"{base}\" dy=\"{restore}\"",
+                        base = page::CHORD_FONT_SIZE_BASE
+                    )
+                };
+                out.push_str(&format!(
+                    "<tspan class=\"chord-root\"{dy_attr}>{escaped}</tspan>"
+                ));
+                current_dy = 0;
+            }
+            SpanKind::Accidental => {
+                // Smaller font + raised baseline so the sharp / flat
+                // sits as a superscript next to the root letter.
+                let target = acc_dy;
+                let shift = target - current_dy;
+                out.push_str(&format!(
+                    "<tspan class=\"chord-acc\" font-size=\"{size}\" dy=\"{shift}\">{escaped}</tspan>",
+                    size = page::CHORD_FONT_SIZE_ACCIDENTAL,
+                ));
+                current_dy = target;
             }
             SpanKind::Extension => {
-                // Smaller font + raised baseline. `dy` is relative
-                // to the previous span's baseline, so we only need
-                // to apply the shift once on entry.
+                // Smaller font + slight subscript so the quality
+                // hangs just below the chord baseline, matching
+                // editor-irealb.html's `vertical-align: -0.15em`.
+                let target = qual_dy;
+                let shift = target - current_dy;
                 out.push_str(&format!(
-                    "<tspan class=\"chord-ext\" font-size=\"{size}\" dy=\"{dy}\">{escaped}</tspan>",
+                    "<tspan class=\"chord-ext\" font-size=\"{size}\" dy=\"{shift}\">{escaped}</tspan>",
                     size = page::CHORD_FONT_SIZE_SUPERSCRIPT,
-                    dy = page::CHORD_SUPERSCRIPT_DY,
                 ));
+                current_dy = target;
             }
-            SpanKind::Slash | SpanKind::Bass => {
-                let class = if matches!(span.kind, SpanKind::Slash) {
-                    "chord-slash"
+            SpanKind::Slash => {
+                let restore = -current_dy;
+                let attrs = if restore == 0 {
+                    String::new()
                 } else {
-                    "chord-bass"
+                    format!(
+                        " font-size=\"{base}\" dy=\"{restore}\"",
+                        base = page::CHORD_FONT_SIZE_BASE
+                    )
                 };
-                // If the previous span raised the baseline, return
-                // it to the original via the inverse `dy` shift,
-                // and restore the base font size.
-                if matches!(prev_kind, Some(SpanKind::Extension)) {
-                    let restore_dy = -page::CHORD_SUPERSCRIPT_DY;
-                    out.push_str(&format!(
-                        "<tspan class=\"{class}\" font-size=\"{base}\" dy=\"{restore_dy}\">{escaped}</tspan>",
-                        base = page::CHORD_FONT_SIZE_BASE,
-                    ));
+                out.push_str(&format!(
+                    "<tspan class=\"chord-slash\"{attrs}>{escaped}</tspan>"
+                ));
+                current_dy = 0;
+            }
+            SpanKind::Bass => {
+                let restore = -current_dy;
+                let attrs = if restore == 0 {
+                    String::new()
                 } else {
-                    out.push_str(&format!("<tspan class=\"{class}\">{escaped}</tspan>"));
-                }
+                    format!(
+                        " font-size=\"{base}\" dy=\"{restore}\"",
+                        base = page::CHORD_FONT_SIZE_BASE
+                    )
+                };
+                out.push_str(&format!(
+                    "<tspan class=\"chord-bass\"{attrs}>{escaped}</tspan>"
+                ));
+                current_dy = 0;
             }
         }
-        prev_kind = Some(span.kind);
     }
 }
 

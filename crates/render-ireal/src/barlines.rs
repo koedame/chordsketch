@@ -74,7 +74,10 @@ fn render_barline(cell: &BarCoord, kind: BarLine, side: BarlineSide) -> String {
     let y_top = cell.y;
     let y_bottom = cell.y + cell.height;
     match kind {
-        BarLine::Single => String::new(),
+        // The cell-rect overlay was retired with the engraved-chart
+        // rewrite — `Single` now emits its own thin vertical line
+        // so every bar boundary is drawn by the same path.
+        BarLine::Single => vertical_line(edge_x, y_top, y_bottom, 1, "barline-single"),
         BarLine::Double => double_line(edge_x, side, y_top, y_bottom),
         BarLine::Final => final_line(edge_x, side, y_top, y_bottom),
         BarLine::OpenRepeat => open_repeat(edge_x, side, y_top, y_bottom),
@@ -239,9 +242,18 @@ mod tests {
     }
 
     #[test]
-    fn single_barline_emits_no_overlay() {
-        assert!(render_left_barline(&coord(), BarLine::Single).is_empty());
-        assert!(render_right_barline(&coord(), BarLine::Single).is_empty());
+    fn single_barline_emits_one_thin_line() {
+        // The engraved-chart rewrite (`design-system/ui_kits/web/
+        // editor-irealb.html`) replaced the cell-rectangle stroke
+        // with one barline per bar boundary, so `Single` now emits
+        // its own thin vertical line rather than relying on a
+        // surrounding rect.
+        let svg = render_left_barline(&coord(), BarLine::Single);
+        assert_eq!(svg.matches("<line").count(), 1);
+        assert!(svg.contains("class=\"barline-single\""));
+        let svg = render_right_barline(&coord(), BarLine::Single);
+        assert_eq!(svg.matches("<line").count(), 1);
+        assert!(svg.contains("class=\"barline-single\""));
     }
 
     #[test]

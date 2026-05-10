@@ -29,6 +29,92 @@ body,
   height: 100%;
 }
 
+/* Design-system tokens at :root scope. `@chordsketch/react/styles.css`
+ * scopes the same tokens to its component root classes
+ * (`.chordsketch-playground`, etc.) which doesn't reach the
+ * playground's own chrome. Mirroring them here keeps every selector
+ * — chordpro and irealpro alike — working without sprinkling
+ * `var(--cs-X, #literal)` fallbacks across every rule. Keep this
+ * in lockstep with `design-system/tokens.css`. */
+:root {
+  --cs-crimson-50: #FDF2F5;
+  --cs-crimson-100: #FBE1E8;
+  --cs-crimson-300: #EC8AA3;
+  --cs-crimson-500: #BD1642;
+  --cs-crimson-600: #A30F37;
+  --cs-crimson-700: #87092C;
+  --cs-crimson-900: #480418;
+  --cs-crimson: var(--cs-crimson-500);
+
+  --cs-ink-0: #FFFFFF;
+  --cs-ink-50: #FAFAF7;
+  --cs-ink-100: #F6F4F7;
+  --cs-ink-200: #E8E6EA;
+  --cs-ink-300: #D4D1D6;
+  --cs-ink-500: #8A8790;
+  --cs-ink-600: #67646D;
+  --cs-ink-700: #44424A;
+  --cs-ink-1000: #0A0A0B;
+
+  --cs-canvas: var(--cs-ink-50);
+  --cs-surface: var(--cs-ink-0);
+  --cs-surface-hover: var(--cs-ink-100);
+  --cs-border: var(--cs-ink-200);
+  --cs-border-strong: var(--cs-ink-300);
+  --cs-text-primary: var(--cs-ink-1000);
+  --cs-text-strong: var(--cs-ink-700);
+  --cs-text-secondary: var(--cs-ink-600);
+  --cs-text-tertiary: var(--cs-ink-500);
+
+  --cs-success-fg: #1A6B3A;
+  --cs-warning-fg: #8A5A07;
+  --cs-danger-surface: #FBE1E8;
+  --cs-danger-fg: #A30F37;
+
+  --cs-focus-ring: 0 0 0 2px var(--cs-ink-0), 0 0 0 4px var(--cs-crimson-500);
+
+  --cs-font-jp: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --cs-font-latin: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --cs-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --cs-font-chord: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --cs-font-chart-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --cs-font-music: "Bravura Text", "Noto Music", "Symbola", serif;
+
+  --cs-fs-10: 0.625rem;
+  --cs-fs-12: 0.75rem;
+  --cs-fs-13: 0.8125rem;
+  --cs-fs-14: 0.875rem;
+  --cs-fs-15: 0.9375rem;
+  --cs-fs-16: 1rem;
+  --cs-fs-18: 1.125rem;
+  --cs-fs-24: 1.5rem;
+  --cs-fs-30: 1.875rem;
+  --cs-fs-36: 2.25rem;
+  --cs-fs-48: 3rem;
+
+  --cs-sp-1: 0.25rem;
+  --cs-sp-2: 0.5rem;
+  --cs-sp-3: 0.75rem;
+  --cs-sp-4: 1rem;
+  --cs-sp-5: 1.25rem;
+  --cs-sp-6: 1.5rem;
+  --cs-sp-8: 2rem;
+  --cs-sp-10: 2.5rem;
+  --cs-sp-12: 3rem;
+  --cs-sp-16: 4rem;
+  --cs-sp-20: 5rem;
+
+  --cs-r-1: 4px;
+  --cs-r-2: 6px;
+  --cs-r-3: 8px;
+  --cs-r-4: 12px;
+  --cs-r-full: 999px;
+
+  --cs-dur-1: 120ms;
+  --cs-dur-2: 240ms;
+  --cs-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 body {
   font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
   font-size: 1rem;
@@ -115,10 +201,28 @@ a {
 }
 
 .topnav .actions {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+/* Inline tools (Sample / Layout) sit BEFORE `.actions` and consume the
+   leftover horizontal space, pushing `.actions` to the right edge. */
+.topnav__tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.topnav__tools .tool-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--cs-text-secondary, #67646D);
+}
+.topnav__tools .tool-group .label {
+  font-weight: 500;
 }
 
 /* ----------------------------------------------------------------
@@ -353,6 +457,503 @@ a {
 .pane.preview > .pane-body > .chordsketch-preview {
   flex: 1;
   min-height: 0;
+}
+
+/* ----------------------------------------------------------------
+ * iReal Pro playground primitives
+ *
+ * The iRealPro route mounts a textarea source + an iframe SVG
+ * preview without the React component library, so it needs a few
+ * pane-body fillers that the ChordPro route gets for free from
+ * `<SourceEditor>` and `<RendererPreview>`.
+ * ---------------------------------------------------------------- */
+
+.chordsketch-app__textarea {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  padding: var(--cs-sp-4) var(--cs-sp-6);
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  line-height: 1.6;
+  background: var(--cs-surface);
+  color: var(--cs-text-primary);
+  caret-color: var(--cs-crimson-500);
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.chordsketch-app__textarea:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--cs-crimson-500);
+}
+
+.chordsketch-app__textarea::placeholder {
+  color: var(--cs-text-tertiary);
+}
+
+.chordsketch-app__iframe {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: none;
+  background: var(--cs-surface);
+}
+
+.chordsketch-app__error {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--cs-sp-4) var(--cs-sp-6);
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  line-height: 1.5;
+  background: var(--cs-danger-surface, #FBE1E8);
+  color: var(--cs-danger-fg, #A30F37);
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
+.chordsketch-app__empty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--cs-font-latin);
+  font-size: var(--cs-fs-14);
+  color: var(--cs-text-tertiary);
+  background: var(--cs-canvas);
+}
+
+/* iRealb URL display block beneath the chart. Mirrors the
+ * design-system card styling — same surface / border / radius as
+ * `.chart` so the two read as siblings. */
+.url-card {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-r-3);
+  padding: var(--cs-sp-4) var(--cs-sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-sp-2);
+}
+
+.url-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cs-sp-3);
+}
+
+.url-card__label {
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: var(--cs-fs-12);
+  color: var(--cs-text-tertiary);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.url-card__value {
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  line-height: 1.5;
+  color: var(--cs-text-primary);
+  background: var(--cs-canvas);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-r-2);
+  padding: var(--cs-sp-3);
+  word-break: break-all;
+  white-space: pre-wrap;
+  max-height: 12rem;
+  overflow: auto;
+}
+
+.url-card__textarea {
+  width: 100%;
+  min-height: 8rem;
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  line-height: 1.5;
+  color: var(--cs-text-primary);
+  background: var(--cs-canvas);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-r-2);
+  padding: var(--cs-sp-3);
+  resize: vertical;
+  word-break: break-all;
+}
+.url-card__textarea:focus {
+  outline: 2px solid var(--cs-crimson-500, #BD1642);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.url-card__hint {
+  font-family: var(--cs-font-latin);
+  font-size: var(--cs-fs-12);
+  color: var(--cs-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ----------------------------------------------------------------
+ * iReal Pro playground — editor-irealb.html structure
+ *
+ * The /irealpro/ route follows
+ * `design-system/ui_kits/web/editor-irealb.html` rather than the
+ * ChordPro split-pane layout: topnav · toolbar row · main.page grid
+ * (chart column + 320px inspector) · status footer. The selectors
+ * below mirror that reference 1:1 so updates to the ui_kit can be
+ * ported here mechanically.
+ * ---------------------------------------------------------------- */
+
+.chordsketch-app--irealb {
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Save-state pill in the topnav, between crumbs and actions. */
+.topnav__save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cs-sp-2);
+  margin-left: var(--cs-sp-3);
+  font-family: var(--cs-font-latin);
+  font-weight: 500;
+  font-size: var(--cs-fs-13);
+  color: var(--cs-success-fg, #1A6B3A);
+}
+
+.topnav__save-state .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+/* Toolbar row below topnav. Sticky-feeling but not actually
+ * `position: sticky` — the parent column is short enough that the
+ * row never scrolls out of view on viewport heights we target. */
+.chordsketch-app--irealb > .toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-sp-2);
+  padding: var(--cs-sp-2) var(--cs-sp-6);
+  background: var(--cs-surface);
+  border-bottom: 1px solid var(--cs-border);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.chordsketch-app--irealb .tool-group {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-sp-1);
+  padding: 0 var(--cs-sp-3);
+  border-right: 1px solid var(--cs-border);
+  height: 28px;
+}
+.chordsketch-app--irealb .tool-group:last-of-type { border-right: 0; }
+.chordsketch-app--irealb .tool-group > .label {
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: var(--cs-fs-12);
+  color: var(--cs-text-tertiary);
+  margin-right: var(--cs-sp-2);
+}
+
+.tool-group__readout {
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  color: var(--cs-text-secondary);
+}
+
+.chordsketch-app--irealb .segmented {
+  display: inline-flex;
+  border: 1px solid var(--cs-border-strong);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.chordsketch-app--irealb .segmented a,
+.chordsketch-app--irealb .segmented button {
+  background: var(--cs-surface);
+  border: 0;
+  padding: 0 var(--cs-sp-3);
+  height: 28px;
+  font-family: var(--cs-font-jp);
+  font-weight: 500;
+  font-size: var(--cs-fs-13);
+  color: var(--cs-text-secondary);
+  cursor: pointer;
+  border-right: 1px solid var(--cs-border);
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.chordsketch-app--irealb .segmented a:last-child,
+.chordsketch-app--irealb .segmented button:last-child { border-right: 0; }
+.chordsketch-app--irealb .segmented [aria-pressed='true'],
+.chordsketch-app--irealb .segmented [aria-current='page'] {
+  background: var(--cs-ink-1000);
+  color: var(--cs-ink-0);
+}
+
+/* main.page — chart column + 320px inspector. */
+.chordsketch-app--irealb > .page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--cs-sp-8) var(--cs-sp-6);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--cs-sp-8);
+  align-items: start;
+  background: var(--cs-canvas);
+}
+
+@media (max-width: 1080px) {
+  .chordsketch-app--irealb > .page {
+    grid-template-columns: 1fr;
+  }
+  .chordsketch-app--irealb .inspector { order: 2; }
+}
+
+.page__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-sp-6);
+  min-width: 0;
+}
+
+/* meta-card */
+.meta-card {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: 12px;
+  padding: var(--cs-sp-5) var(--cs-sp-6);
+}
+.meta-card h1 {
+  font-family: var(--cs-font-jp);
+  font-weight: 700;
+  font-size: var(--cs-fs-30);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--cs-sp-1);
+  color: var(--cs-text-primary);
+}
+.meta-card .composer {
+  font-family: var(--cs-font-jp);
+  font-weight: 400;
+  font-size: var(--cs-fs-14);
+  color: var(--cs-text-secondary);
+  margin: 0 0 var(--cs-sp-5);
+}
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--cs-sp-4);
+}
+.meta-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.meta-field label {
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: var(--cs-fs-12);
+  color: var(--cs-text-tertiary);
+}
+.meta-field input,
+.meta-field select {
+  height: 32px;
+  padding: 0 var(--cs-sp-3);
+  border: 1px solid var(--cs-border);
+  border-radius: 6px;
+  background: var(--cs-ink-50);
+  font-family: var(--cs-font-mono);
+  font-weight: 500;
+  font-size: var(--cs-fs-14);
+  color: var(--cs-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.meta-field input:focus,
+.meta-field select:focus {
+  outline: none;
+  border-color: var(--cs-crimson-500);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-focus-ring);
+}
+.meta-field__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--cs-sp-1);
+  min-width: 0;
+}
+.meta-field__row > * { min-width: 0; }
+
+/* chart card containing the rendered iframe */
+.chart-card {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: 12px;
+  padding: var(--cs-sp-3);
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+}
+.chart-card > .chordsketch-app__iframe {
+  flex: 1;
+  min-height: 360px;
+  border: none;
+  width: 100%;
+  border-radius: 8px;
+  background: var(--cs-surface);
+}
+.chart-card > .chordsketch-app__error {
+  margin: 0;
+  padding: var(--cs-sp-4) var(--cs-sp-5);
+}
+
+/* Player-controls strip */
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-sp-6);
+  padding: var(--cs-sp-4) var(--cs-sp-5);
+  background: var(--cs-ink-1000);
+  color: var(--cs-ink-0);
+  border-radius: 12px;
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  font-variant-numeric: tabular-nums;
+}
+.player-controls .play-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--cs-crimson-500);
+  color: #FFFFFF;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.player-controls .play-btn:disabled {
+  background: var(--cs-ink-700);
+  cursor: not-allowed;
+}
+.player-controls .pc-stat {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 56px;
+}
+.player-controls .pc-stat .label {
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: 10px;
+  color: var(--cs-ink-300);
+}
+.player-controls .pc-stat .value {
+  font-weight: 600;
+  color: var(--cs-ink-0);
+}
+.player-controls .pc-stat__key {
+  color: var(--cs-crimson-300) !important;
+}
+
+/* Inspector sidebar */
+.chordsketch-app--irealb .inspector {
+  position: sticky;
+  top: var(--cs-sp-2);
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: 12px;
+  padding: var(--cs-sp-5);
+}
+.chordsketch-app--irealb .inspector header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--cs-sp-4);
+  padding-bottom: var(--cs-sp-3);
+  border-bottom: 1px solid var(--cs-border);
+}
+.chordsketch-app--irealb .inspector header .title {
+  font-family: var(--cs-font-jp);
+  font-weight: 700;
+  font-size: var(--cs-fs-16);
+}
+.chordsketch-app--irealb .inspector header .pos {
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-12);
+  color: var(--cs-text-tertiary);
+}
+.chordsketch-app--irealb .inspector .row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-sp-2);
+  margin-bottom: var(--cs-sp-4);
+}
+.chordsketch-app--irealb .inspector .row > .label {
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: var(--cs-fs-12);
+  color: var(--cs-text-tertiary);
+}
+.inspector__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-sp-2);
+}
+.inspector__nav-readout {
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  color: var(--cs-text-secondary);
+  flex: 1;
+  text-align: center;
+}
+.inspector__chord-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cs-sp-1);
+}
+.inspector__chord-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--cs-sp-1) var(--cs-sp-3);
+  border: 1px solid var(--cs-border-strong);
+  border-radius: 999px;
+  background: var(--cs-surface);
+  font-family: var(--cs-font-chord, var(--cs-font-jp));
+  font-weight: 500;
+  font-size: var(--cs-fs-13);
+  color: var(--cs-text-primary);
+  min-height: 28px;
+}
+.inspector__readout {
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  color: var(--cs-text-primary);
+}
+.inspector__placeholder {
+  font-family: var(--cs-font-latin);
+  font-size: var(--cs-fs-13);
+  color: var(--cs-text-tertiary);
+  margin: 0;
 }
 
 /* ----------------------------------------------------------------

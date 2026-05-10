@@ -206,11 +206,50 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
         Some(r) => r + 1,
         None => 0,
     };
+    // Engraved-chart layout: the last (partial) row of every
+    // section widens its bars so the rightmost barline lands on
+    // the right margin, matching the `repeat(4, 1fr)` grid in
+    // `design-system/ui_kits/web/editor-irealb.html`. Trailing
+    // empties are no longer rendered, so partial rows otherwise
+    // end mid-page with awkward whitespace.
+    rebalance_partial_rows(&mut bars);
     Layout {
         bars,
         trailing_empties,
         total_rows,
         section_row_starts,
+    }
+}
+
+/// Rewrite `bars` so that any row with fewer than [`BARS_PER_ROW`]
+/// cells absorbs the leftover horizontal space evenly. Each row is
+/// detected by `BarCoord::y`; the new cell width is
+/// `inner_width / actual_bar_count` with the rightmost cell taking
+/// the integer-division leftover so `x + width` aligns with
+/// `PAGE_WIDTH - MARGIN_X` exactly.
+fn rebalance_partial_rows(bars: &mut [BarCoord]) {
+    let inner_width = PAGE_WIDTH - 2 * MARGIN_X;
+    let mut start = 0;
+    while start < bars.len() {
+        let row_y = bars[start].y;
+        let mut end = start + 1;
+        while end < bars.len() && bars[end].y == row_y {
+            end += 1;
+        }
+        let count = end - start;
+        if count < BARS_PER_ROW {
+            let base = inner_width / count as i32;
+            let leftover = inner_width - base * count as i32;
+            for (offset, bar) in bars[start..end].iter_mut().enumerate() {
+                bar.x = MARGIN_X + (offset as i32) * base;
+                bar.width = if offset + 1 == count {
+                    base + leftover
+                } else {
+                    base
+                };
+            }
+        }
+        start = end;
     }
 }
 

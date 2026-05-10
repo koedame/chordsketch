@@ -27,7 +27,7 @@ test.describe('playground editor mount', () => {
   test('the ChordPro editor mounts seeded with sample content', async ({
     page,
   }) => {
-    await page.goto('./');
+    await page.goto('./chordpro/');
     const cmEditor = page.locator('.cm-editor');
     await expect(cmEditor).toBeVisible();
     // The default seed is `SAMPLE_CHORDPRO`; an empty doc would

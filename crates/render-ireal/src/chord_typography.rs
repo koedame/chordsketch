@@ -28,18 +28,30 @@ use crate::note_glyph_or_fallback;
 /// font size and baseline shift; see
 /// [`crate::CHORD_FONT_SIZE_BASE`] /
 /// [`crate::CHORD_FONT_SIZE_SUPERSCRIPT`] for the constants.
+///
+/// Engraved-chart layout (`design-system/ui_kits/web/editor-irealb.html`)
+/// renders the root letter at full size on the chord baseline, with
+/// the accidental ABOVE-baseline (superscript) at a slightly
+/// smaller size and the quality BELOW-baseline (subscript) at the
+/// same smaller size. The four span kinds map to those four
+/// metric positions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpanKind {
-    /// Root letter + accidental, base size, on the cell's chord
-    /// baseline.
+    /// Root letter only (no accidental), base size, on the chord
+    /// baseline. The accidental — when present — is split out into
+    /// its own [`SpanKind::Accidental`] span so the renderer can
+    /// raise it at superscript size without affecting the root.
     Root,
-    /// Quality / extension(s), smaller size, raised baseline.
+    /// Sharp / flat that follows a root or bass letter. Smaller
+    /// font + raised baseline.
+    Accidental,
+    /// Quality / extension(s), smaller size, slight subscript.
     Extension,
     /// Forward slash separating bass from the chord; base size, on
     /// the original baseline.
     Slash,
-    /// Bass note + accidental after a slash; base size, on the
-    /// original baseline.
+    /// Bass note (without accidental) after a slash; base size, on
+    /// the original baseline.
     Bass,
 }
 
@@ -76,11 +88,8 @@ pub struct ChordTypography {
 /// the SVG.
 #[must_use]
 pub fn chord_to_typography(chord: &Chord) -> ChordTypography {
-    let mut spans = Vec::with_capacity(4);
-    spans.push(TypographySpan {
-        text: format_root(chord.root),
-        kind: SpanKind::Root,
-    });
+    let mut spans = Vec::with_capacity(5);
+    push_letter_with_accidental(&mut spans, chord.root, SpanKind::Root);
     let ext = quality_extension(&chord.quality);
     if !ext.is_empty() {
         spans.push(TypographySpan {
@@ -93,14 +102,41 @@ pub fn chord_to_typography(chord: &Chord) -> ChordTypography {
             text: "/".to_string(),
             kind: SpanKind::Slash,
         });
-        spans.push(TypographySpan {
-            text: format_root(bass),
-            kind: SpanKind::Bass,
-        });
+        push_letter_with_accidental(&mut spans, bass, SpanKind::Bass);
     }
     ChordTypography { spans }
 }
 
+/// Push the letter portion of a root / bass and (optionally) the
+/// accidental as a separate raised-baseline span. Splitting the
+/// accidental out lets the SVG renderer style it as a superscript
+/// glyph the way `editor-irealb.html` does, instead of treating
+/// the whole "F\u{266F}" string as one root span.
+fn push_letter_with_accidental(
+    spans: &mut Vec<TypographySpan>,
+    root: ChordRoot,
+    letter_kind: SpanKind,
+) {
+    let mut letter = String::with_capacity(1);
+    letter.push(note_glyph_or_fallback(root.note));
+    spans.push(TypographySpan {
+        text: letter,
+        kind: letter_kind,
+    });
+    let acc = match root.accidental {
+        chordsketch_ireal::Accidental::Natural => "",
+        chordsketch_ireal::Accidental::Flat => "\u{266D}",
+        chordsketch_ireal::Accidental::Sharp => "\u{266F}",
+    };
+    if !acc.is_empty() {
+        spans.push(TypographySpan {
+            text: acc.to_string(),
+            kind: SpanKind::Accidental,
+        });
+    }
+}
+
+#[allow(dead_code)] // retained for future use as a debug helper.
 fn format_root(root: ChordRoot) -> String {
     let mut out = String::with_capacity(2);
     out.push(note_glyph_or_fallback(root.note));
@@ -113,20 +149,123 @@ fn format_root(root: ChordRoot) -> String {
 }
 
 fn quality_extension(q: &ChordQuality) -> String {
+    // Glyphs follow `design-system/ui_kits/web/editor-irealb.html`
+    // §"Chord typography" — Greek / Latin Unicode stand-ins (Δ, ø,
+    // −, °, +) so the whole quality reads from the same regular
+    // text font as the digits.
     match q {
         ChordQuality::Major => String::new(),
-        ChordQuality::Minor => "m".to_string(),
-        ChordQuality::Diminished => "dim".to_string(),
-        ChordQuality::Augmented => "aug".to_string(),
-        ChordQuality::Major7 => "maj7".to_string(),
-        ChordQuality::Minor7 => "m7".to_string(),
+        // U+2212 MINUS SIGN — visually heavier than ASCII '-' and
+        // matches the iReal Pro printed convention.
+        ChordQuality::Minor => "\u{2212}".to_string(),
+        ChordQuality::Diminished => "\u{00B0}".to_string(), // °
+        ChordQuality::Augmented => "+".to_string(),
+        ChordQuality::Major7 => "\u{0394}7".to_string(), // Δ7
+        ChordQuality::Minor7 => "\u{2212}7".to_string(), // −7
         ChordQuality::Dominant7 => "7".to_string(),
-        ChordQuality::HalfDiminished => "m7\u{266D}5".to_string(),
-        ChordQuality::Diminished7 => "dim7".to_string(),
+        // U+00F8 LATIN SMALL LETTER O WITH STROKE — used in
+        // half-diminished chord symbols. Followed by `7` as in
+        // editor-irealb.html (`ø7`), not the older `m7♭5`.
+        ChordQuality::HalfDiminished => "\u{00F8}7".to_string(), // ø7
+        ChordQuality::Diminished7 => "\u{00B0}7".to_string(),    // °7
         ChordQuality::Suspended2 => "sus2".to_string(),
         ChordQuality::Suspended4 => "sus4".to_string(),
-        ChordQuality::Custom(s) => s.clone(),
+        // iReal Pro stores tension qualities (`9b7`, `^9`, `h7`,
+        // `7b9#5`, …) in `Custom` because the structured enum
+        // can't model arbitrary tensions. The URL uses ASCII
+        // shorthand for the music symbols; this layer translates
+        // them to the typeset glyphs the chart should render.
+        // Without this step, a chord like `B♭^9` shows as the
+        // literal `B♭^9` instead of `B♭Δ9`.
+        ChordQuality::Custom(s) => translate_url_shorthand(s),
     }
+}
+
+/// Translate iReal Pro's URL-stored quality shorthand into the
+/// typeset glyphs the engraved chart expects.
+///
+/// | URL shorthand | Glyph                       |
+/// |---------------|-----------------------------|
+/// | `^`           | `Δ` (U+0394, major-7 marker) |
+/// | `h`           | `ø` (U+00F8, half-diminished)|
+/// | `o`           | `°` (U+00B0, diminished)     |
+/// | `-`           | `−` (U+2212, minor)          |
+/// | `b`           | `♭` (U+266D, flat)           |
+/// | `#`           | `♯` (U+266F, sharp)          |
+///
+/// Digits (`7`, `9`, `13`, `11`, `5`, …) and `+` / `sus` pass
+/// through unchanged.
+///
+/// When the translated quality contains two or more alteration
+/// runs (e.g. `♭9♯5` after translating `b9#5`), the result is
+/// split into two lines joined by `|` — the iReal Pro engraved
+/// convention is to stack the second alteration vertically below
+/// the first. The downstream renderer (`spansToHtml` in the
+/// playground / `lib.rs::write_grid` in the SVG renderer) treats
+/// `|` as a stacked-quality separator.
+fn translate_url_shorthand(raw: &str) -> String {
+    let translated: String = raw
+        .chars()
+        .map(|c| match c {
+            '^' => '\u{0394}',
+            'h' => '\u{00F8}',
+            'o' => '\u{00B0}',
+            '-' => '\u{2212}',
+            'b' => '\u{266D}',
+            '#' => '\u{266F}',
+            other => other,
+        })
+        .collect();
+    let parts = split_alterations(&translated);
+    if parts.alterations.len() >= 2 {
+        let mut first_line = parts.main;
+        first_line.push_str(&parts.alterations[0]);
+        let rest: String = parts.alterations[1..].concat();
+        format!("{first_line}|{rest}")
+    } else {
+        translated
+    }
+}
+
+struct ExtensionParts {
+    main: String,
+    alterations: Vec<String>,
+}
+
+/// Split a translated extension string into the leading "type"
+/// part (e.g. `7`, `Δ7`, `ø7`, `13`) and trailing alteration runs
+/// (each is a `♭` / `♯` followed by 1–2 digits, e.g. `♭9`, `♯5`).
+fn split_alterations(s: &str) -> ExtensionParts {
+    let chars: Vec<char> = s.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if (c == '\u{266D}' || c == '\u{266F}')
+            && i + 1 < chars.len()
+            && chars[i + 1].is_ascii_digit()
+        {
+            break;
+        }
+        i += 1;
+    }
+    let main: String = chars[..i].iter().collect();
+    let mut alterations = Vec::new();
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '\u{266D}' || c == '\u{266F}' {
+            let mut alt = String::with_capacity(3);
+            alt.push(c);
+            i += 1;
+            while i < chars.len() && chars[i].is_ascii_digit() {
+                alt.push(chars[i]);
+                i += 1;
+            }
+            alterations.push(alt);
+        } else {
+            i += 1;
+        }
+    }
+    ExtensionParts { main, alterations }
 }
 
 #[cfg(test)]
@@ -158,7 +297,7 @@ mod tests {
             span_kinds(&typo.spans),
             vec![SpanKind::Root, SpanKind::Extension]
         );
-        assert_eq!(span_texts(&typo.spans), vec!["A", "m7"]);
+        assert_eq!(span_texts(&typo.spans), vec!["A", "\u{2212}7"]);
     }
 
     #[test]
@@ -171,10 +310,15 @@ mod tests {
             ChordQuality::Dominant7,
         );
         let typo = chord_to_typography(&chord);
+        // Engraved-chart layout splits the root letter and the
+        // accidental into separate spans so the SVG renderer can
+        // raise the accidental at superscript size.
         assert_eq!(typo.spans[0].kind, SpanKind::Root);
-        assert_eq!(typo.spans[0].text, "B\u{266D}");
-        assert_eq!(typo.spans[1].kind, SpanKind::Extension);
-        assert_eq!(typo.spans[1].text, "7");
+        assert_eq!(typo.spans[0].text, "B");
+        assert_eq!(typo.spans[1].kind, SpanKind::Accidental);
+        assert_eq!(typo.spans[1].text, "\u{266D}");
+        assert_eq!(typo.spans[2].kind, SpanKind::Extension);
+        assert_eq!(typo.spans[2].text, "7");
     }
 
     #[test]
@@ -183,6 +327,7 @@ mod tests {
             root: ChordRoot::natural('C'),
             quality: ChordQuality::Major7,
             bass: Some(ChordRoot::natural('G')),
+            alternate: None,
         };
         let typo = chord_to_typography(&chord);
         assert_eq!(
@@ -194,7 +339,7 @@ mod tests {
                 SpanKind::Bass,
             ]
         );
-        assert_eq!(span_texts(&typo.spans), vec!["C", "maj7", "/", "G"]);
+        assert_eq!(span_texts(&typo.spans), vec!["C", "\u{0394}7", "/", "G"]);
     }
 
     #[test]
@@ -203,6 +348,7 @@ mod tests {
             root: ChordRoot::natural('C'),
             quality: ChordQuality::Major,
             bass: Some(ChordRoot::natural('E')),
+            alternate: None,
         };
         let typo = chord_to_typography(&chord);
         assert_eq!(
@@ -245,6 +391,7 @@ mod tests {
                 note: '<',
                 accidental: Accidental::Natural,
             }),
+            alternate: None,
         };
         let typo = chord_to_typography(&chord);
         assert_eq!(typo.spans.last().unwrap().kind, SpanKind::Bass);
@@ -255,7 +402,7 @@ mod tests {
     fn half_diminished_emits_compound_unicode_extension() {
         let chord = Chord::triad(ChordRoot::natural('F'), ChordQuality::HalfDiminished);
         let typo = chord_to_typography(&chord);
-        assert_eq!(typo.spans[1].text, "m7\u{266D}5");
+        assert_eq!(typo.spans[1].text, "\u{00F8}7");
     }
 
     #[test]
@@ -268,7 +415,10 @@ mod tests {
             ChordQuality::Major,
         );
         let typo = chord_to_typography(&chord);
-        assert_eq!(typo.spans[0].text, "F\u{266F}");
+        assert_eq!(typo.spans[0].kind, SpanKind::Root);
+        assert_eq!(typo.spans[0].text, "F");
+        assert_eq!(typo.spans[1].kind, SpanKind::Accidental);
+        assert_eq!(typo.spans[1].text, "\u{266F}");
     }
 
     #[test]
@@ -281,14 +431,14 @@ mod tests {
         // need updating, both of which are visible in code review.
         let cases = [
             (ChordQuality::Major, ""),
-            (ChordQuality::Minor, "m"),
-            (ChordQuality::Diminished, "dim"),
-            (ChordQuality::Augmented, "aug"),
-            (ChordQuality::Major7, "maj7"),
-            (ChordQuality::Minor7, "m7"),
+            (ChordQuality::Minor, "\u{2212}"),
+            (ChordQuality::Diminished, "\u{00B0}"),
+            (ChordQuality::Augmented, "+"),
+            (ChordQuality::Major7, "\u{0394}7"),
+            (ChordQuality::Minor7, "\u{2212}7"),
             (ChordQuality::Dominant7, "7"),
-            (ChordQuality::HalfDiminished, "m7\u{266D}5"),
-            (ChordQuality::Diminished7, "dim7"),
+            (ChordQuality::HalfDiminished, "\u{00F8}7"),
+            (ChordQuality::Diminished7, "\u{00B0}7"),
             (ChordQuality::Suspended2, "sus2"),
             (ChordQuality::Suspended4, "sus4"),
         ];

@@ -10,6 +10,17 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      input: {
+        // Multi-page setup so the deployed site has dedicated routes
+        // per format. Each entry HTML imports its own React entry
+        // module under `src/<route>/main.tsx` and shares the chrome
+        // styles in `src/playground.css`.
+        landing: resolve(here, 'index.html'),
+        chordpro: resolve(here, 'chordpro/index.html'),
+        irealpro: resolve(here, 'irealpro/index.html'),
+      },
+    },
   },
   resolve: {
     alias: {
@@ -35,6 +46,17 @@ export default defineConfig({
       // alias so Vite resolves it correctly.
       '@chordsketch/react/styles.css': resolve(here, '../react/src/styles.css'),
       '@chordsketch/react': resolve(here, '../react/src/index.ts'),
+      // iReal Pro bar-grid editor — used by the /irealpro/ route as
+      // the source pane's editor adapter. Longer specifier first
+      // (Vite alias resolution is first-match).
+      '@chordsketch/ui-irealb-editor/style.css': resolve(
+        here,
+        '../ui-irealb-editor/src/style.css',
+      ),
+      '@chordsketch/ui-irealb-editor': resolve(
+        here,
+        '../ui-irealb-editor/src/index.ts',
+      ),
     },
   },
   server: {
@@ -50,6 +72,7 @@ export default defineConfig({
         resolve(here, '../npm'),
         resolve(here, '../ui-web'),
         resolve(here, '../react'),
+        resolve(here, '../ui-irealb-editor'),
       ],
     },
   },

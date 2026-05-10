@@ -795,6 +795,14 @@ fn render_song_into_doc(
     // every non-End-directive line until the matching End.
     let mut in_notation_block: Option<NotationKind> = None;
 
+    // True while the loop is inside a `{start_of_tab}`, `{start_of_grid}`,
+    // or `{start_of_textblock}` block. Body lines in those sections render
+    // through `render_lyrics` with `verbatim = true` so column alignment
+    // (fret rows, chord-grid bars) is preserved by Courier. The body of
+    // ABC/Lilypond/SVG/MusicXML blocks is suppressed via `in_notation_block`
+    // (#1825), so they don't need the same treatment here.
+    let mut in_verbatim_section = false;
+
     for line in &song.lines {
         // If we are inside a notation block, discard every line until
         // the matching `EndOf…` directive is seen. The section label
@@ -815,7 +823,13 @@ fn render_song_into_doc(
                 if let Some(buf) = chorus_buf.as_mut() {
                     buf.push(line.clone());
                 }
-                render_lyrics(lyrics, transpose_offset, &fmt_state, doc);
+                render_lyrics(
+                    lyrics,
+                    transpose_offset,
+                    &fmt_state,
+                    doc,
+                    in_verbatim_section,
+                );
             }
             Line::Directive(d) if !d.kind.is_metadata() => {
                 if d.kind == DirectiveKind::Diagrams {
@@ -967,6 +981,27 @@ fn render_song_into_doc(
                     DirectiveKind::ColumnBreak => {
                         doc.column_break();
                     }
+                    // Verbatim sections (#1825 covers ABC/Lilypond/SVG/MusicXML
+                    // separately via `in_notation_block`; tab/grid/textblock
+                    // bodies still flow through the lyrics path and need the
+                    // mono-font flag flipped so column alignment survives).
+                    DirectiveKind::StartOfTab
+                    | DirectiveKind::StartOfGrid
+                    | DirectiveKind::StartOfTextblock => {
+                        if let Some(buf) = chorus_buf.as_mut() {
+                            buf.push(line.clone());
+                        }
+                        in_verbatim_section = true;
+                        render_directive(d, show_diagrams, diagram_frets, doc);
+                    }
+                    DirectiveKind::EndOfTab
+                    | DirectiveKind::EndOfGrid
+                    | DirectiveKind::EndOfTextblock => {
+                        if let Some(buf) = chorus_buf.as_mut() {
+                            buf.push(line.clone());
+                        }
+                        in_verbatim_section = false;
+                    }
                     _ => {
                         if let Some(buf) = chorus_buf.as_mut() {
                             buf.push(line.clone());
@@ -1050,17 +1085,27 @@ fn render_lyrics(
     transpose_offset: i8,
     fmt_state: &PdfFormattingState,
     doc: &mut PdfDocument,
+    verbatim: bool,
 ) {
     let has_markup = lyrics.segments.iter().any(|s| s.has_markup());
     let lyrics_size = fmt_state.lyrics_size();
     let chord_size = fmt_state.chord_size();
+    // Verbatim sections (`{start_of_tab}`, `{start_of_grid}`,
+    // `{start_of_textblock}`) carry whitespace-significant content where
+    // column alignment matters; switch to Courier so fret diagrams and
+    // chord-grid bars stay aligned in the rendered PDF.
+    let body_font = if verbatim {
+        Font::Courier
+    } else {
+        Font::Helvetica
+    };
 
     if !lyrics.has_chords() {
         doc.ensure_space(lyrics_size + LINE_GAP);
         if has_markup {
             render_lyrics_spans(lyrics, lyrics_size, doc);
         } else {
-            doc.text(&lyrics.text(), Font::Helvetica, lyrics_size);
+            doc.text(&lyrics.text(), body_font, lyrics_size);
         }
         doc.newline(lyrics_size + LINE_GAP);
         return;
@@ -1822,7 +1867,9 @@ fn render_chorus_recall(
     // Replay the stored chorus body lines.
     for line in chorus_body {
         match line {
-            Line::Lyrics(lyrics) => render_lyrics(lyrics, transpose_offset, fmt_state, doc),
+            Line::Lyrics(lyrics) => {
+                render_lyrics(lyrics, transpose_offset, fmt_state, doc, false);
+            }
             Line::Comment(style, text) => render_comment(*style, text, doc),
             Line::Empty => doc.newline(LINE_GAP * 2.0),
             Line::Directive(d) if !d.kind.is_metadata() => {
@@ -1840,12 +1887,20 @@ fn render_comment(style: CommentStyle, text: &str, doc: &mut PdfDocument) {
     };
     if style == CommentStyle::Boxed {
         let padding = 3.0_f32;
-        let box_h = COMMENT_SIZE + padding * 2.0;
+        // Approximate Helvetica metrics: cap-height ≈ 0.72 em, descent
+        // ≈ 0.21 em. The original implementation placed `rect_y` at
+        // `text_y - COMMENT_SIZE - padding`, which treated the entire em
+        // box as descent below the baseline. The box bottom landed
+        // ~10 pt too low and the box top fell below the cap line, so
+        // characters like `B` and `f` poked above the rectangle.
+        let cap_height = COMMENT_SIZE * 0.72;
+        let descent = COMMENT_SIZE * 0.21;
+        let box_h = cap_height + descent + padding * 2.0;
         doc.ensure_space(box_h + LINE_GAP);
         let x = doc.margin_left();
         let text_y = doc.y();
-        // PDF rect y is bottom-left; text_y is the baseline top.
-        let rect_y = text_y - COMMENT_SIZE - padding;
+        // PDF rect y is bottom-left; text_y is the glyph baseline.
+        let rect_y = text_y - descent - padding;
         let text_w = text_width(text, COMMENT_SIZE);
         let box_w = text_w + padding * 2.0;
         doc.rect_stroke(x, rect_y, box_w, box_h, 0.5);
@@ -2965,7 +3020,7 @@ impl PdfDocument {
             .join(" ");
 
         // Add the CID composite font /F5 when non-Latin-1 glyphs are present.
-        // Object number = 3 + FONTS.len() (first object after the 4 Helvetica fonts).
+        // Object number = 3 + FONTS.len() (first object after the Type1 font block).
         let cid_font_ref = if cid_needed {
             format!(" /F5 {} 0 R", 3 + FONTS.len())
         } else {
@@ -3341,16 +3396,25 @@ enum Font {
     HelveticaBold,
     HelveticaOblique,
     HelveticaBoldOblique,
+    /// Monospace Type1 font used for verbatim sections
+    /// (`{start_of_tab}`, `{start_of_grid}`, `{start_of_textblock}`)
+    /// where column alignment matters.
+    Courier,
 }
 
 impl Font {
     /// Returns the PDF font resource name (must match the page Resources dict).
+    ///
+    /// `/F5` is reserved for the conditionally-emitted Type0 CID font
+    /// (`unicode_face` — NotoSansCJK), so Courier takes `/F6` to avoid
+    /// colliding with it.
     fn pdf_name(self) -> &'static str {
         match self {
             Self::Helvetica => "/F1",
             Self::HelveticaBold => "/F2",
             Self::HelveticaOblique => "/F3",
             Self::HelveticaBoldOblique => "/F4",
+            Self::Courier => "/F6",
         }
     }
 
@@ -3361,16 +3425,20 @@ impl Font {
             Self::HelveticaBold => "Helvetica-Bold",
             Self::HelveticaOblique => "Helvetica-Oblique",
             Self::HelveticaBoldOblique => "Helvetica-BoldOblique",
+            Self::Courier => "Courier",
         }
     }
 }
 
-/// The four fonts used in the output.
-const FONTS: [Font; 4] = [
+/// The Type1 fonts emitted in the output. Courier (index 4) is included
+/// here so it gets its Resources/Font entry alongside the Helvetica
+/// family; the `/F5` slot stays open for the optional Type0 CID font.
+const FONTS: [Font; 5] = [
     Font::Helvetica,
     Font::HelveticaBold,
     Font::HelveticaOblique,
     Font::HelveticaBoldOblique,
+    Font::Courier,
 ];
 
 // ---------------------------------------------------------------------------

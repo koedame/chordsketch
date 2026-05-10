@@ -384,6 +384,9 @@ mod tests {
                     }],
                     ending: None,
                     symbol: None,
+                    repeat_previous: false,
+                    no_chord: false,
+                    text_comment: None,
                 }],
             }],
         }
@@ -495,6 +498,7 @@ mod tests {
                 note: 'G',
                 accidental: Accidental::Sharp,
             }),
+            alternate: None,
         };
         assert_eq!(chord_to_string(&slash), "C/G#");
     }

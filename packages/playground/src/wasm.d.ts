@@ -40,7 +40,10 @@ declare module '@chordsketch/wasm' {
   // declarations are kept so the future re-add does not need to
   // re-author them.
   export function renderIrealSvg(input: string): string;
+  export function renderIrealPng(input: string): Uint8Array;
+  export function renderIrealPdf(input: string): Uint8Array;
   export function parseIrealb(input: string): string;
   export function serializeIrealb(input: string): string;
+  export function chordTypography(chord_json: string): string;
   export default function init(): Promise<void>;
 }

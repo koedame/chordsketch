@@ -224,6 +224,24 @@ fn make_song(body: &str) -> Result<IrealSong, ParseError> {
     // alignment for the same input.
     let parts: Vec<&str> = body.split('=').filter(|s| !s.is_empty()).collect();
 
+    // Two related URL shapes share `make_song`:
+    //
+    // 1. `irealb://` (iReal Pro export) — 7..=9 parts, music is
+    //    `MUSIC_PREFIX` + obfusc50-scrambled chord stream.
+    // 2. `irealbook://` (iRealBook export) — 6 parts, music is
+    //    plain text with no prefix and no scrambling, and the time
+    //    signature lives in field 4 (packed digits like `44` = 4/4
+    //    rather than embedded `T44` in the chord stream).
+    //
+    // Detect (2) by part count + the absence of a `MUSIC_PREFIX`
+    // anywhere in `parts`; everything else routes through the iReal
+    // Pro arms.
+    let is_irealbook_six_field =
+        parts.len() == 6 && !parts.iter().any(|p| p.starts_with(MUSIC_PREFIX));
+    if is_irealbook_six_field {
+        return make_song_irealbook(&parts);
+    }
+
     let (title, composer, style, key, transpose_raw, music_raw, _comp_style, bpm_raw, _repeats) =
         match parts.len() {
             7 => {
@@ -284,7 +302,7 @@ fn make_song(body: &str) -> Result<IrealSong, ParseError> {
             }
             n => {
                 return Err(ParseError::MalformedBody(format!(
-                    "expected 7..=9 parts, got {n}"
+                    "expected 6 parts (irealbook) or 7..=9 parts (irealb), got {n}"
                 )));
             }
         };
@@ -320,6 +338,44 @@ fn make_song(body: &str) -> Result<IrealSong, ParseError> {
         time_signature: chord_chart.time_signature,
         tempo,
         transpose,
+        sections: chord_chart.sections,
+    })
+}
+
+/// `irealbook://` six-field song builder.
+///
+/// Layout: `Title=Composer=Style=Key=TimeSig=Music`. Music is plain
+/// text (no `MUSIC_PREFIX`, no obfusc50). The time signature is a
+/// packed-digit field (`44` → 4/4, `34` → 3/4, `68` → 6/8, `128` →
+/// 12/8) sitting outside the chord stream — re-inject it as the
+/// AST's `time_signature` field instead of as a `T..` directive
+/// embedded in the music. Tempo and transpose default to none / 0.
+fn make_song_irealbook(parts: &[&str]) -> Result<IrealSong, ParseError> {
+    debug_assert_eq!(parts.len(), 6);
+    let (title, composer, style, key_raw, timesig_raw, music_raw) =
+        (parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]);
+    let chord_chart = parse_chord_chart(music_raw)?;
+    let key_signature = parse_key(key_raw);
+    let time_signature = parse_time_signature(timesig_raw)
+        .map(|(ts, _)| ts)
+        .unwrap_or_default();
+    Ok(IrealSong {
+        title: title.trim().to_owned(),
+        composer: nonempty(composer),
+        style: nonempty(style),
+        key_signature,
+        // The chord stream may itself contain a `T..` directive
+        // that overrides the field-level time signature. Prefer the
+        // chord-stream value when it differs from the default,
+        // mirroring the iReal Pro app's behaviour where an inline
+        // `T..` overrides any header default.
+        time_signature: if chord_chart.time_signature != TimeSignature::default() {
+            chord_chart.time_signature
+        } else {
+            time_signature
+        },
+        tempo: None,
+        transpose: 0,
         sections: chord_chart.sections,
     })
 }
@@ -398,6 +454,9 @@ struct ChordChart {
 /// resulting [`Section`] / [`Bar`] tree (whereas pianosnake flattens
 /// to a single measures array).
 fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
+    if std::env::var_os("IREAL_DEBUG_STREAM").is_some() {
+        eprintln!("CHORD STREAM: {input}");
+    }
     let mut state = ChartParseState::new();
     let mut rest = input;
     while let Some(c) = rest.chars().next() {
@@ -413,10 +472,12 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
         }
         if let Some(r) = rest.strip_prefix("Kcl") {
             // "Repeat previous measure and create new measure".
-            // Treat as an empty bar (the SVG renderer paints a `W`
-            // glyph for empty-chord bars; renderers can decide).
+            // Commit the current bar as a repeat-previous-measure
+            // marker bar; the renderer paints a percent-style glyph
+            // in its centre.
             state.finish_bar();
             state.start_new_bar();
+            state.current_bar.repeat_previous = true;
             rest = r;
             continue;
         }
@@ -466,15 +527,19 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
             }
         }
         if let Some(r) = rest.strip_prefix('x') {
-            // "Repeat previous measure" — stays as-is in the
-            // current bar (renderers paint a repeat glyph for the
-            // empty-chord bar after we close it).
+            // "Repeat previous measure" — mark the current bar with
+            // `repeat_previous = true` so the renderer can paint
+            // the percent-style 1-bar simile glyph.
+            state.current_bar.repeat_previous = true;
             rest = r;
             continue;
         }
         if let Some(r) = rest.strip_prefix('r') {
-            // "Repeat previous two measures" — same as `x` for
-            // structural purposes.
+            // "Repeat previous two measures" — structurally encoded
+            // as `repeat_previous` for now (single-bar repeat
+            // glyph). A future extension may distinguish 1-bar from
+            // 2-bar simile via a separate field.
+            state.current_bar.repeat_previous = true;
             rest = r;
             continue;
         }
@@ -484,7 +549,10 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
             continue;
         }
         if let Some(r) = rest.strip_prefix('n') {
-            // "No Chord" — skip; the AST has no NC variant.
+            // "No Chord" — mark the current bar so the renderer can
+            // paint the literal `N.C.` glyph. The bar still consumes
+            // a measure of time but no chord sounds.
+            state.current_bar.no_chord = true;
             rest = r;
             continue;
         }
@@ -565,6 +633,22 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
         // rule applies: `,`, `.`, `:` and the like. Drop one char
         // and continue.
         if matches!(c, ',' | '.' | ':' | ';' | '\u{00a0}') {
+            rest = &rest[c.len_utf8()..];
+            continue;
+        }
+        // `(altchord)` — alternate chord. Iralb encodes alternate
+        // chord choices in parentheses immediately after the
+        // primary chord they modify (e.g. `Em7(E7#9)` reads as
+        // primary `Em7` with alternate `E7#9`). The rendered chart
+        // stacks the alternate as a smaller chord above the
+        // primary.
+        if c == '(' {
+            state.set_in_alternate(true);
+            rest = &rest[c.len_utf8()..];
+            continue;
+        }
+        if c == ')' {
+            state.set_in_alternate(false);
             rest = &rest[c.len_utf8()..];
             continue;
         }
@@ -657,8 +741,10 @@ struct ChartParseState {
     pending_double_open: bool,
     pending_double_close: bool,
     pending_final: bool,
-    pending_ending: Option<Ending>,
-    pending_symbol: Option<MusicalSymbol>,
+    /// `true` between `(` and `)` — the next chord parsed in this
+    /// window attaches as the previous chord's `alternate` rather
+    /// than as a new chord on the bar.
+    in_alternate: bool,
     last_chord: Option<String>,
     time_signature: TimeSignature,
 }
@@ -676,8 +762,21 @@ impl ChartParseState {
         self.pending_section_label = Some(label_for(c));
     }
 
+    fn set_in_alternate(&mut self, on: bool) {
+        self.in_alternate = on;
+    }
+
     fn queue_symbol(&mut self, sym: MusicalSymbol) {
-        self.pending_symbol = Some(sym);
+        // Symbols (`S` segno, `Q` coda, `<D.C.>` / `<D.S.>` /
+        // `<Fine>` macros) label the bar in which the marker
+        // appears. After the most recent `|` / `[` / `{` already
+        // ran `start_new_bar`, `current_bar` IS that bar. Earlier
+        // revisions queued the symbol via `pending_symbol` so the
+        // NEXT `start_new_bar` would consume it onto the next bar
+        // — that pushed `,S,E-7|A7|` onto A7 instead of E-7,
+        // because `S` sits between the bar boundary and the chord
+        // it labels.
+        self.current_bar.symbol = Some(sym);
     }
 
     fn queue_start_repeat(&mut self) {
@@ -701,18 +800,68 @@ impl ChartParseState {
     }
 
     fn queue_ending(&mut self, ending: Ending) {
-        self.pending_ending = Some(ending);
+        // iReal Pro encodes ending markers (`N1`, `N2`) immediately
+        // after a bar boundary (`|`, `}`, `]`), so by the time this
+        // runs, `current_bar` is the freshly-started bar that the
+        // marker labels — set the field directly. Earlier revisions
+        // queued the marker for the NEXT `start_new_bar`, which made
+        // the chord that followed `N1` land on an unlabelled bar
+        // and the next bar boundary commit an empty placeholder
+        // bearing the label.
+        self.current_bar.ending = Some(ending);
     }
 
     fn apply_comment(&mut self, comment: &str) {
         let lower = comment.to_ascii_lowercase();
-        if lower.contains("d.c.") {
+        // Detect the recognised musical-direction macros. The
+        // matched symbol is queued for the *next* bar (consumed by
+        // `start_new_bar`) — that is iReal Pro's convention for
+        // `<D.C.>` / `<D.S.>` / `<Fine>` placement. The full
+        // verbatim text is ALSO saved to `text_comment` so longer
+        // captions like `<D.S. al 2nd ending>` survive the
+        // round-trip; the renderer prefers the descriptive text
+        // when present, and falls back to the canonical symbol
+        // when the bar carries no text.
+        let is_macro = if lower.contains("d.c.") {
             self.queue_symbol(MusicalSymbol::DaCapo);
+            true
         } else if lower.contains("d.s.") {
             self.queue_symbol(MusicalSymbol::DalSegno);
+            true
         } else if lower.contains("fine") {
             self.queue_symbol(MusicalSymbol::Fine);
+            true
+        } else {
+            false
+        };
+        let trimmed = comment.trim();
+        if trimmed.is_empty() {
+            return;
         }
+        // For a bare-macro comment (`<D.C.>`, `<D.S.>`, `<Fine>`)
+        // the canonical symbol fully covers the semantics; saving
+        // the bare text as `text_comment` would round-trip into a
+        // duplicated comment after re-emission. Skip the
+        // text_comment write in that case so:
+        //
+        //   parse(`<D.C.>`)             → bar.symbol = DaCapo
+        //   parse(`<D.C. al coda>`)     → bar.symbol = DaCapo,
+        //                                 text_comment = "D.C. al coda"
+        if is_macro {
+            let collapsed: String = trimmed
+                .chars()
+                .filter(|c| !matches!(c, '.' | ' '))
+                .collect();
+            let collapsed_lower = collapsed.to_ascii_lowercase();
+            if matches!(collapsed_lower.as_str(), "dc" | "ds" | "fine") {
+                return;
+            }
+        }
+        let combined = match self.current_bar.text_comment.take() {
+            Some(prev) => format!("{prev}; {trimmed}"),
+            None => trimmed.to_owned(),
+        };
+        self.current_bar.text_comment = Some(combined);
     }
 
     fn push_chord(&mut self, raw: &str) -> Result<(), ParseError> {
@@ -739,6 +888,16 @@ impl ChartParseState {
             raw.to_owned()
         };
         let chord = parse_chord(&resolved)?;
+        // When inside `(...)` parens, attach the parsed chord as
+        // the previous chord's `alternate` rather than as a new
+        // chord on the bar. Falls back to a regular push if there
+        // is no previous chord (URL malformed — alt without primary).
+        if self.in_alternate {
+            if let Some(prev) = self.current_bar.chords.last_mut() {
+                prev.chord.alternate = Some(Box::new(chord));
+                return Ok(());
+            }
+        }
         // Beat positions are not encoded in the iReal URL format; the
         // renderer distributes chords across beats based on count and
         // time signature. Beat 1 is a structural placeholder here.
@@ -758,23 +917,39 @@ impl ChartParseState {
             self.current_bar.start = BarLine::Double;
             self.pending_double_open = false;
         }
-        if let Some(end) = self.pending_ending.take() {
-            self.current_bar.ending = Some(end);
-        }
-        if let Some(sym) = self.pending_symbol.take() {
-            self.current_bar.symbol = Some(sym);
-        }
     }
 
     fn finish_bar(&mut self) {
-        if self.current_bar.chords.is_empty()
+        let is_empty_placeholder = self.current_bar.chords.is_empty()
             && self.current_bar.ending.is_none()
             && self.current_bar.symbol.is_none()
+            && !self.current_bar.repeat_previous
+            && !self.current_bar.no_chord
+            && self.current_bar.text_comment.is_none()
             && self.current_bar.start == BarLine::Single
-            && self.current_bar.end == BarLine::Single
-        {
-            // Empty placeholder; drop it. iReal's lexer can leave
-            // these between consecutive barlines.
+            && self.current_bar.end == BarLine::Single;
+        if is_empty_placeholder {
+            // The current bar is the empty placeholder iReal's
+            // lexer leaves between consecutive bar boundaries (a
+            // common pattern at song end, e.g. `…G-11XyQKcl  Z`).
+            // Dropping it is the right move BUT first promote any
+            // pending end-barline marker (Double / Final) to the
+            // last committed bar in the current section — those
+            // markers attach to a bar's RIGHT edge, and the
+            // committed bar is the rightmost real bar in the song.
+            if self.pending_final || self.pending_double_close {
+                if let Some(section) = self.current_section.as_mut() {
+                    if let Some(last) = section.bars.last_mut() {
+                        if self.pending_final {
+                            last.end = BarLine::Final;
+                            self.pending_final = false;
+                        } else if self.pending_double_close {
+                            last.end = BarLine::Double;
+                            self.pending_double_close = false;
+                        }
+                    }
+                }
+            }
             return;
         }
         if self.pending_double_close {
@@ -895,6 +1070,7 @@ fn parse_chord(raw: &str) -> Result<Chord, ParseError> {
         root,
         quality,
         bass,
+        alternate: None,
     })
 }
 

@@ -164,12 +164,14 @@ fn serialize_music(song: &IrealSong) -> String {
 
     // Flatten all bars across sections so the serializer can peek
     // the *next* bar regardless of section boundary. This is
-    // load-bearing for round trips: the parser's
-    // `pending_symbol` / `pending_ending` are consumed by
-    // `start_new_bar`, so a symbol on bar N must be queued before
-    // bar N-1's closing barline. Looking ahead within a section
-    // is not enough — symbols and endings can land on the first
-    // bar of a new section too.
+    // load-bearing for round trips: the parser's `pending_symbol`
+    // is consumed by `start_new_bar`, so a symbol on bar N must
+    // be queued before bar N-1's closing barline. Endings, in
+    // contrast, are written by the parser onto `current_bar`
+    // immediately, so they are emitted AFTER the previous bar's
+    // close glyph (see the post-`serialize_bar_close` block below).
+    // Looking ahead within a section is not enough — symbols /
+    // endings can land on the first bar of a new section too.
     struct FlatBar<'a> {
         section_label: Option<&'a SectionLabel>,
         bar: &'a Bar,
@@ -199,22 +201,81 @@ fn serialize_music(song: &IrealSong) -> String {
         }
 
         // Non-Single starts (`[`, `{`, `Z`) emit a token; the
-        // pending symbol / ending must be queued before that
-        // token so that `start_new_bar` (called by the open
-        // glyph) consumes it onto this bar.
+        // ending marker must appear before that token so that the
+        // bar carries it. Symbols are emitted INSIDE the bar's
+        // content area now (after the open glyph), so the parser's
+        // `queue_symbol` lands them on `current_bar` rather than
+        // a phantom previous bar.
         if bar.start != BarLine::Single {
-            if let Some(sym) = bar.symbol {
-                serialize_symbol(&mut chart, sym);
-            }
             if let Some(end) = bar.ending {
                 serialize_ending(&mut chart, end);
             }
         }
+        // A repeat-previous bar collapses to the `Kcl` token. The
+        // parser handles `Kcl` as `finish_bar` + `start_new_bar` +
+        // mark the new bar with `repeat_previous = true`. After the
+        // `Kcl` token, the bar's right-edge barline (`|`, `Z`, `]`,
+        // `}`) still needs to be emitted so that a non-Single end
+        // round-trips. The next-bar symbol lookahead applies to
+        // single-start neighbours just like any other bar.
+        // Helper closure: detect whether a bar's text_comment
+        // already triggers a macro symbol on re-parse, so we can
+        // skip emitting a redundant `<D.C.>` / `<D.S.>` /
+        // `<Fine>` pseudo-comment.
+        let text_carries_macro = |b: &Bar| {
+            b.text_comment
+                .as_deref()
+                .map(|t| {
+                    let l = t.to_ascii_lowercase();
+                    l.contains("d.c.") || l.contains("d.s.") || l.contains("fine")
+                })
+                .unwrap_or(false)
+        };
+
+        if bar.repeat_previous {
+            chart.push_str("Kcl");
+            if !text_carries_macro(bar) {
+                if let Some(sym) = bar.symbol {
+                    serialize_symbol(&mut chart, sym);
+                }
+            }
+            if let Some(text) = &bar.text_comment {
+                chart.push('<');
+                chart.push_str(text);
+                chart.push('>');
+            }
+            serialize_bar_close(&mut chart, bar);
+            if let Some(next) = flat.get(i + 1) {
+                if next.bar.start == BarLine::Single {
+                    if let Some(end) = next.bar.ending {
+                        serialize_ending(&mut chart, end);
+                    }
+                }
+            }
+            continue;
+        }
+
         serialize_bar_open(&mut chart, bar);
 
-        // Bar contents. (Symbol / ending for THIS Single-start
-        // bar were emitted by the *previous* iteration's
-        // closing-barline lookahead.)
+        // Symbol for THIS bar, emitted INSIDE the bar's content
+        // area so the parser's `queue_symbol` (which now sets
+        // `current_bar.symbol` directly) lands it on this bar.
+        // Skip when the bar's own text_comment will carry an
+        // equivalent macro substring on re-parse.
+        if !text_carries_macro(bar) {
+            if let Some(sym) = bar.symbol {
+                serialize_symbol(&mut chart, sym);
+            }
+        }
+
+        if bar.no_chord {
+            // `n` is the iReal Pro "No Chord" marker — paints `N.C.`
+            // in the bar's centre. Emit before any chord content so
+            // the parser's `n`-handler hits before chord parsing.
+            chart.push('n');
+        }
+
+        // Bar contents.
         for (ci, bc) in bar.chords.iter().enumerate() {
             if ci > 0 {
                 chart.push(' ');
@@ -222,22 +283,24 @@ fn serialize_music(song: &IrealSong) -> String {
             serialize_chord(&mut chart, &bc.chord);
         }
 
-        // Lookahead: if the *next* bar has a Single start and
-        // wants a symbol / ending, queue them here (after this
-        // bar's chords, before this bar's close glyph) so the
-        // parser's `start_new_bar` consumes them onto that bar.
+        if let Some(text) = &bar.text_comment {
+            // Free-form text comment renders below the bar's right
+            // barline. The `<...>` form is what the parser's
+            // `apply_comment` consumes.
+            chart.push('<');
+            chart.push_str(text);
+            chart.push('>');
+        }
+
+        serialize_bar_close(&mut chart, bar);
+
         if let Some(next) = flat.get(i + 1) {
             if next.bar.start == BarLine::Single {
-                if let Some(sym) = next.bar.symbol {
-                    serialize_symbol(&mut chart, sym);
-                }
                 if let Some(end) = next.bar.ending {
                     serialize_ending(&mut chart, end);
                 }
             }
         }
-
-        serialize_bar_close(&mut chart, bar);
     }
 
     // The parser strips `MUSIC_PREFIX` after split; the
@@ -331,6 +394,11 @@ fn serialize_chord(out: &mut String, chord: &Chord) {
     if let Some(bass) = chord.bass {
         out.push('/');
         serialize_root(out, bass);
+    }
+    if let Some(alt) = &chord.alternate {
+        out.push('(');
+        serialize_chord(out, alt);
+        out.push(')');
     }
 }
 
@@ -540,6 +608,9 @@ mod tests {
                     }],
                     ending: None,
                     symbol: None,
+                    repeat_previous: false,
+                    no_chord: false,
+                    text_comment: None,
                 }],
             }],
         };
@@ -599,6 +670,9 @@ mod tests {
                 }],
                 ending: None,
                 symbol: None,
+                repeat_previous: false,
+                no_chord: false,
+                text_comment: None,
             }],
         }];
         let url = irealb_serialize(&song);
@@ -636,6 +710,9 @@ mod tests {
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::Fine),
+                    repeat_previous: false,
+                    no_chord: false,
+                    text_comment: None,
                 }],
             }],
             ..Default::default()
@@ -668,6 +745,9 @@ mod tests {
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::DaCapo),
+                    repeat_previous: false,
+                    no_chord: false,
+                    text_comment: None,
                 }],
             }],
             ..Default::default()
@@ -700,6 +780,9 @@ mod tests {
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::DalSegno),
+                    repeat_previous: false,
+                    no_chord: false,
+                    text_comment: None,
                 }],
             }],
             ..Default::default()

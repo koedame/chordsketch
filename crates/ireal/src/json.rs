@@ -199,6 +199,20 @@ impl ToJson for Bar {
             Some(s) => s.to_json(out),
             None => out.push_str("null"),
         }
+        if self.repeat_previous {
+            // Emit only when true; downstream readers tolerate the
+            // missing field as `false` (`get_optional` in
+            // `Bar::from_json_value`). Keeps regular bars one byte
+            // smaller in the wasm JSON payload.
+            out.push_str(",\"repeat_previous\":true");
+        }
+        if self.no_chord {
+            out.push_str(",\"no_chord\":true");
+        }
+        if let Some(text) = &self.text_comment {
+            out.push_str(",\"text_comment\":");
+            write_str(out, text);
+        }
         out.push('}');
     }
 }
@@ -255,6 +269,10 @@ impl ToJson for Chord {
         match &self.bass {
             Some(b) => b.to_json(out),
             None => out.push_str("null"),
+        }
+        if let Some(alt) = &self.alternate {
+            out.push_str(",\"alternate\":");
+            alt.to_json(out);
         }
         out.push('}');
     }
@@ -470,12 +488,15 @@ impl core::fmt::Display for JsonError {
 impl std::error::Error for JsonError {}
 
 /// A parsed JSON value. The variants correspond exactly to what the
-/// [`ToJson`] impls in this module emit; `Bool` and floating-point numbers
-/// are absent on purpose because the AST never serialises them.
+/// [`ToJson`] impls in this module emit; floating-point numbers are
+/// absent on purpose because the AST never serialises them. `Bool`
+/// is emitted only for the `Bar.repeat_previous` flag.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JsonValue {
     /// JSON `null`.
     Null,
+    /// JSON `true` / `false`. Used by `Bar.repeat_previous`.
+    Bool(bool),
     /// A signed integer. The serialiser only emits `i8`, `u8`, and `u16`,
     /// so `i64` covers every value losslessly.
     Integer(i64),
@@ -503,6 +524,13 @@ impl JsonValue {
                 0,
                 format!("expected object for {}", truncate_for_message(key)),
             )),
+        }
+    }
+
+    fn get_optional(&self, key: &str) -> Option<&JsonValue> {
+        match self {
+            Self::Object(fields) => fields.iter().find(|(k, _)| k == key).map(|(_, v)| v),
+            _ => None,
         }
     }
 
@@ -659,6 +687,8 @@ impl<'a> Parser<'a> {
             Some(b'[') => self.parse_array(),
             Some(b'"') => self.parse_string().map(JsonValue::String),
             Some(b'n') => self.parse_null(),
+            Some(b't') => self.parse_bool_literal(b"true", true),
+            Some(b'f') => self.parse_bool_literal(b"false", false),
             Some(b'-' | b'0'..=b'9') => self.parse_integer(),
             Some(b) => Err(JsonError::new(
                 self.pos,
@@ -678,6 +708,22 @@ impl<'a> Parser<'a> {
             Ok(JsonValue::Null)
         } else {
             Err(JsonError::new(start, "expected `null`".to_string()))
+        }
+    }
+
+    fn parse_bool_literal(&mut self, literal: &[u8], value: bool) -> Result<JsonValue, JsonError> {
+        let start = self.pos;
+        if self.bytes.get(start..start + literal.len()) == Some(literal) {
+            self.pos += literal.len();
+            Ok(JsonValue::Bool(value))
+        } else {
+            Err(JsonError::new(
+                start,
+                format!(
+                    "expected `{}`",
+                    std::str::from_utf8(literal).unwrap_or("boolean")
+                ),
+            ))
         }
     }
 
@@ -1144,12 +1190,27 @@ impl FromJson for Bar {
             JsonValue::Null => None,
             other => Some(MusicalSymbol::from_json_value(other)?),
         };
+        let repeat_previous = match value.get_optional("repeat_previous") {
+            Some(JsonValue::Bool(b)) => *b,
+            _ => false,
+        };
+        let no_chord = match value.get_optional("no_chord") {
+            Some(JsonValue::Bool(b)) => *b,
+            _ => false,
+        };
+        let text_comment = match value.get_optional("text_comment") {
+            Some(JsonValue::String(s)) => Some(s.clone()),
+            _ => None,
+        };
         Ok(Self {
             start,
             end,
             chords,
             ending,
             symbol,
+            repeat_previous,
+            no_chord,
+            text_comment,
         })
     }
 }
@@ -1196,10 +1257,15 @@ impl FromJson for Chord {
             JsonValue::Null => None,
             other => Some(ChordRoot::from_json_value(other)?),
         };
+        let alternate = match value.get_optional("alternate") {
+            Some(JsonValue::Null) | None => None,
+            Some(other) => Some(Box::new(Chord::from_json_value(other)?)),
+        };
         Ok(Self {
             root,
             quality,
             bass,
+            alternate,
         })
     }
 }

@@ -1034,6 +1034,81 @@ pub fn serialize_irealb(input: &str) -> Result<String, JsValue> {
     do_serialize_irealb(input).map_err(|e| JsValue::from_str(&e))
 }
 
+/// Decompose an iReal Pro chord (passed as the JSON shape that
+/// [`parse_irealb`] emits inside `BarChord.chord`) into the
+/// engraved typography spans the chart should render.
+///
+/// Output JSON shape — `{ "spans": [{ "kind": "Root" | "Accidental"
+/// | "Extension" | "Slash" | "Bass", "text": "<glyph>" }, …] }`.
+///
+/// The shorthand-to-glyph translation (`^→Δ`, `h→ø`, `o→°`, `-→−`,
+/// `b→♭`, `#→♯`) lives inside
+/// [`chordsketch_render_ireal::chord_typography`] so every
+/// consumer (the SVG renderer, the React playground, future
+/// non-Rust hosts) sees the same result. The wasm export is the
+/// vehicle for hosts that don't link the renderer crate directly.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string when `chord_json` is not
+/// valid AST-shaped JSON.
+fn do_chord_typography(chord_json: &str) -> Result<String, String> {
+    use chordsketch_ireal::json::FromJson;
+    let value = chordsketch_ireal::json::parse_json(chord_json)
+        .map_err(|e| format!("invalid chord JSON: {e}"))?;
+    let chord = chordsketch_ireal::Chord::from_json_value(&value)
+        .map_err(|e| format!("invalid chord shape: {e}"))?;
+    let typography = chordsketch_render_ireal::chord_typography::chord_to_typography(&chord);
+    let mut out = String::with_capacity(64);
+    out.push_str("{\"spans\":[");
+    for (i, span) in typography.spans.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str("{\"kind\":\"");
+        out.push_str(match span.kind {
+            chordsketch_render_ireal::SpanKind::Root => "Root",
+            chordsketch_render_ireal::SpanKind::Accidental => "Accidental",
+            chordsketch_render_ireal::SpanKind::Extension => "Extension",
+            chordsketch_render_ireal::SpanKind::Slash => "Slash",
+            chordsketch_render_ireal::SpanKind::Bass => "Bass",
+        });
+        out.push_str("\",\"text\":");
+        json_escape_into(&span.text, &mut out);
+        out.push('}');
+    }
+    out.push_str("]}");
+    Ok(out)
+}
+
+/// Minimal JSON string escaper for the typography output. Mirrors
+/// the escape semantics used by the iReal serializer's
+/// `write_str` so cross-binding behaviour stays consistent.
+fn json_escape_into(s: &str, out: &mut String) {
+    out.push('"');
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => {
+                out.push_str(&format!("\\u{:04x}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+}
+
+/// Wasm-exposed wrapper around [`do_chord_typography`].
+#[must_use = "callers must handle JSON-shape errors"]
+#[wasm_bindgen(js_name = chordTypography)]
+pub fn chord_typography(chord_json: &str) -> Result<String, JsValue> {
+    do_chord_typography(chord_json).map_err(|e| JsValue::from_str(&e))
+}
+
 /// Run the iReal PNG-rasterise pipeline; native helper used by the
 /// wasm wrapper and by Rust unit tests.
 fn do_render_ireal_png(input: &str) -> Result<Vec<u8>, String> {

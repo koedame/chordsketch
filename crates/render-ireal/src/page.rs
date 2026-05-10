@@ -28,7 +28,27 @@ pub const GRID_TOP: i32 = MARGIN_Y + HEADER_BAND_HEIGHT;
 pub const BARS_PER_ROW: usize = 4;
 
 /// Vertical extent of one bar-grid row.
-pub const BAR_ROW_HEIGHT: i32 = 50;
+///
+/// Sized to fit the engraved chord typography
+/// (`CHORD_FONT_SIZE_BASE = 24` root + 14 superscript) plus the
+/// 32-px inter-line gap pattern from
+/// `design-system/ui_kits/web/editor-irealb.html`.
+pub const BAR_ROW_HEIGHT: i32 = 64;
+
+/// Pixel side of the section-marker square (black filled box with
+/// the section letter in white). Anchored at the top-left of the
+/// section's first bar — see
+/// `design-system/ui_kits/web/editor-irealb.html` §"Section marker".
+pub const SECTION_MARKER_SIZE: i32 = 18;
+
+/// Inter-line vertical gap between rows. Mirrors the 32-px gap in
+/// `editor-irealb.html` so section markers can sit in the gap
+/// without colliding with the previous line's bars.
+pub const ROW_GAP: i32 = 16;
+
+/// Reserved indent at the left of every line. Holds the time
+/// signature (line 1) and section-marker squares ([A], [B], …).
+pub const LINE_LEFT_INDENT: i32 = 28;
 
 /// Maximum bar count the renderer accepts before truncating.
 ///
@@ -48,18 +68,41 @@ pub const BAR_ROW_HEIGHT: i32 = 50;
 pub const MAX_BARS: usize = 4096;
 
 /// Base font size for chord-name typography (root, slash, bass).
-pub const CHORD_FONT_SIZE_BASE: i32 = 14;
+///
+/// Tuned to the engraved chord look in
+/// `design-system/ui_kits/web/editor-irealb.html` — chord roots
+/// dominate the bar visually so each chord reads at a glance.
+pub const CHORD_FONT_SIZE_BASE: i32 = 32;
 
-/// Smaller font size used for raised-baseline extension spans
-/// (e.g. `maj7`, `m7♭5`, `sus4`). Mirrors iReal Pro's superscript
-/// proportion — ≈ 70% of the base size.
-pub const CHORD_FONT_SIZE_SUPERSCRIPT: i32 = 10;
+/// Smaller font size used for the quality / extension span
+/// (`Δ7`, `−7`, `ø7`, `sus4`). Mirrors iReal Pro's quality-glyph
+/// proportion — ≈ 50 % of the base size.
+pub const CHORD_FONT_SIZE_SUPERSCRIPT: i32 = 16;
 
-/// Baseline shift for the extension span — negative is "up" in
-/// SVG coordinates. Approximately a third of the base font size,
-/// matching iReal Pro's visual offset for superscript chord
-/// extensions.
-pub const CHORD_SUPERSCRIPT_DY: i32 = -4;
+/// Font size for the accidental glyph (♯ / ♭) raised next to the
+/// root letter. Slightly larger than the quality so the sharp /
+/// flat reads at superscript size while still being legible.
+pub const CHORD_FONT_SIZE_ACCIDENTAL: i32 = 20;
+
+/// Baseline shift (positive = down in SVG coords) for the quality
+/// span — small subscript so the quality hangs just below the
+/// root's baseline. Matches `editor-irealb.html`'s
+/// `.chord-qual { vertical-align: -0.15em }` (≈ +0.15 em from
+/// baseline in SVG-down convention).
+pub const CHORD_QUALITY_DY: i32 = 5;
+
+/// Baseline shift (negative = up in SVG coords) for the
+/// accidental glyph. Raises the sharp / flat as a superscript next
+/// to the root letter. Matches `editor-irealb.html`'s
+/// `.chord-acc { vertical-align: 0.18em }` flipped for SVG-down.
+pub const CHORD_ACCIDENTAL_DY: i32 = -10;
+
+/// Retained for backward-compat with callers that still read the
+/// old "superscript dy" name; equals `CHORD_QUALITY_DY` because
+/// the engraved-chart rewrite repurposed the quality span as a
+/// subscript while the constant name stayed the same.
+#[deprecated(note = "use CHORD_QUALITY_DY")]
+pub const CHORD_SUPERSCRIPT_DY: i32 = CHORD_QUALITY_DY;
 
 /// Maximum number of sections the renderer lays out before
 /// truncating.

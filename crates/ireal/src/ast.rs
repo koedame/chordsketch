@@ -189,6 +189,25 @@ pub struct Bar {
     /// sites that match on `Option` will need to update — flagged
     /// in `ARCHITECTURE.md`.
     pub symbol: Option<MusicalSymbol>,
+    /// `true` when this bar is iReal Pro's "repeat previous measure"
+    /// marker (URL tokens `Kcl` and `x`). The bar carries no chords
+    /// of its own; the renderer paints a percent-style repeat glyph
+    /// (1-bar simile, U+E500) in the bar's centre. Distinct from an
+    /// empty placeholder bar.
+    pub repeat_previous: bool,
+    /// `true` when this bar is iReal Pro's "no chord" marker (URL
+    /// token `n`). The renderer paints a literal `N.C.` glyph in
+    /// place of a chord — the bar still consumes a measure of time
+    /// but no chord is sounded.
+    pub no_chord: bool,
+    /// Free-form text comment attached to this bar (URL token
+    /// `<...>` excluding the recognised musical-direction macros
+    /// `D.C.` / `D.S.` / `Fine` / variants — those are stored on
+    /// `symbol` instead). The renderer paints the text below the
+    /// bar's right barline as an italic serif caption (e.g. "13
+    /// measure lead break"). Order is preserved; multiple comments
+    /// on one bar concatenate with `; ` separator.
+    pub text_comment: Option<String>,
 }
 
 impl Bar {
@@ -202,6 +221,9 @@ impl Bar {
             chords: Vec::new(),
             ending: None,
             symbol: None,
+            repeat_previous: false,
+            no_chord: false,
+            text_comment: None,
         }
     }
 }
@@ -317,6 +339,10 @@ pub struct Chord {
     pub quality: ChordQuality,
     /// Slash-chord bass note. `None` if the chord has no slash.
     pub bass: Option<ChordRoot>,
+    /// Optional alternate chord (URL `(altchord)` next to the
+    /// primary). Renders as a smaller chord stacked above the
+    /// primary, mirroring iReal Pro's convention.
+    pub alternate: Option<Box<Chord>>,
 }
 
 impl Chord {
@@ -328,6 +354,7 @@ impl Chord {
             root,
             quality,
             bass: None,
+            alternate: None,
         }
     }
 }

@@ -12,14 +12,14 @@
 //! markers stay byte-stable for golden snapshots.
 
 use crate::layout::Layout;
-use crate::page::{BAR_ROW_HEIGHT, GRID_TOP};
+use crate::page::{BAR_ROW_HEIGHT, GRID_TOP, SECTION_MARKER_SIZE};
 use crate::svg;
 use chordsketch_ireal::{IrealSong, SectionLabel};
 
-/// Vertical gap between the top of the bar grid and the section
-/// label baseline. The label sits above the row's `<rect>` stroke
-/// so it never overlaps with the chord text below.
-const SECTION_LABEL_GAP: i32 = 6;
+/// Vertical lift above the row top for the section-marker square.
+/// Anchors the marker so it sits in the gap between the previous
+/// row and this row, matching `editor-irealb.html` §Section marker.
+const SECTION_LABEL_GAP: i32 = SECTION_MARKER_SIZE - 2;
 
 /// Vertical gap between the top of the row and the ending
 /// bracket's horizontal line. Slightly less than
@@ -56,12 +56,23 @@ pub(crate) fn render_section_labels(song: &IrealSong, layout: &Layout) -> String
             continue;
         };
         let row_y = GRID_TOP + (row as i32) * BAR_ROW_HEIGHT;
-        let label_y = row_y - SECTION_LABEL_GAP;
-        let label_x = first_bar.x;
+        // Black-filled square anchored above the first bar's
+        // top-left corner. The white letter centred inside reads
+        // as the section's name (`A`, `B`, `Verse`, etc.).
+        let square_x = first_bar.x - SECTION_MARKER_SIZE / 2;
+        let square_y = row_y - SECTION_LABEL_GAP;
         let label_text = svg::escape_xml(&format_section_label(&section.label));
         out.push_str(&format!(
-            "    <text x=\"{label_x}\" y=\"{label_y}\" font-family=\"sans-serif\" \
-font-size=\"12\" font-weight=\"bold\" class=\"section-label\">{label_text}</text>\n"
+            "    <rect x=\"{square_x}\" y=\"{square_y}\" \
+width=\"{SECTION_MARKER_SIZE}\" height=\"{SECTION_MARKER_SIZE}\" \
+fill=\"black\" class=\"section-marker\"/>\n"
+        ));
+        let text_x = square_x + SECTION_MARKER_SIZE / 2;
+        let text_y = square_y + (SECTION_MARKER_SIZE * 7) / 10;
+        out.push_str(&format!(
+            "    <text x=\"{text_x}\" y=\"{text_y}\" font-family=\"sans-serif\" \
+font-size=\"11\" font-weight=\"700\" fill=\"white\" text-anchor=\"middle\" \
+class=\"section-label\">{label_text}</text>\n"
         ));
     }
     out
