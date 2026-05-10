@@ -47,7 +47,7 @@ pub const SECTION_MARKER_SIZE: i32 = 18;
 pub const ROW_GAP: i32 = 16;
 
 /// Reserved indent at the left of every line. Holds the time
-/// signature (line 1) and section-marker squares ([A], [B], …).
+/// signature (line 1) and section-marker squares (`[A]`, `[B]`, …).
 pub const LINE_LEFT_INDENT: i32 = 28;
 
 /// Maximum bar count the renderer accepts before truncating.

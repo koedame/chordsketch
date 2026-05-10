@@ -60,6 +60,27 @@ jobs:
         run: npm ci
         working-directory: packages/playground
 
+      # Install sibling-package node_modules so tsc (run by
+      # the playground's build) can resolve the transitive
+      # react / codemirror / lezer imports inside the
+      # ../react/src/*.tsx files pulled into the playground's
+      # program via tsconfig paths and include. Each sibling
+      # owns its own lockfile and its own CI typecheck — this
+      # step exists purely to give node-style upward module
+      # resolution a populated packages/<sibling>/node_modules/
+      # to walk into.
+      - name: Install @chordsketch/react dependencies
+        run: npm ci
+        working-directory: packages/react
+
+      - name: Install @chordsketch/ui-web dependencies
+        run: npm ci
+        working-directory: packages/ui-web
+
+      - name: Install @chordsketch/ui-irealb-editor dependencies
+        run: npm ci
+        working-directory: packages/ui-irealb-editor
+
       - name: Build playground
         run: npm run build
         working-directory: packages/playground

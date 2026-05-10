@@ -1102,7 +1102,10 @@ fn json_escape_into(s: &str, out: &mut String) {
     out.push('"');
 }
 
-/// Wasm-exposed wrapper around [`do_chord_typography`].
+/// Wasm-exposed wrapper around the pure-Rust `do_chord_typography`
+/// helper. See [`renderIrealSvg`](render_ireal_svg)'s span-layout
+/// surface for the typography-span vocabulary the JSON output
+/// uses.
 #[must_use = "callers must handle JSON-shape errors"]
 #[wasm_bindgen(js_name = chordTypography)]
 pub fn chord_typography(chord_json: &str) -> Result<String, JsValue> {
