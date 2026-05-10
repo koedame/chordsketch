@@ -705,4 +705,50 @@ mod tests {
             "text_comment must round-trip into a text segment, got {text_concat:?}"
         );
     }
+
+    /// In-memory ChordPro → iReal-AST → ChordPro round-trip
+    /// preserves chorus identity because `from_ireal` matches on
+    /// the `Custom(name)` string and re-emits `start_of_chorus`.
+    /// Locks the spec-aligned design from #2450.
+    #[test]
+    fn custom_chorus_label_emits_chordpro_chorus_directives() {
+        let mut s = sample_song();
+        s.sections[0].label = SectionLabel::Custom("Chorus".into());
+        let result = convert(&s).unwrap();
+        let names: Vec<&str> = result
+            .output
+            .lines
+            .iter()
+            .filter_map(|line| match line {
+                chordsketch_chordpro::ast::Line::Directive(d) => Some(d.name.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            names.contains(&"start_of_chorus"),
+            "expected `start_of_chorus` in {names:?}"
+        );
+        assert!(
+            names.contains(&"end_of_chorus"),
+            "expected `end_of_chorus` in {names:?}"
+        );
+    }
+
+    #[test]
+    fn custom_bridge_label_emits_chordpro_bridge_directives() {
+        let mut s = sample_song();
+        s.sections[0].label = SectionLabel::Custom("Bridge".into());
+        let result = convert(&s).unwrap();
+        let names: Vec<&str> = result
+            .output
+            .lines
+            .iter()
+            .filter_map(|line| match line {
+                chordsketch_chordpro::ast::Line::Directive(d) => Some(d.name.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(names.contains(&"start_of_bridge"));
+        assert!(names.contains(&"end_of_bridge"));
+    }
 }

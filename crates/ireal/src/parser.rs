@@ -1530,4 +1530,58 @@ mod tests {
         assert_eq!(alt.root.note, 'C');
         assert_eq!(alt.bass.map(|b| b.note), Some('G'));
     }
+
+    // ---- Section-label vocabulary (#2432, #2450) ------------------
+
+    #[test]
+    fn section_marker_uppercase_v_maps_to_verse() {
+        // Spec lists `*V` uppercase. Was `Letter('V')` before
+        // #2432.
+        let url = "irealbook://Test=A==Style=C=44=[*VC|D|]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.sections[0].label, SectionLabel::Verse);
+    }
+
+    #[test]
+    fn section_marker_lowercase_v_maps_to_verse() {
+        // Backwards-compat: hand-edited URLs may use `*v`.
+        let url = "irealbook://Test=A==Style=C=44=[*vC|D|]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.sections[0].label, SectionLabel::Verse);
+    }
+
+    #[test]
+    fn section_marker_uppercase_i_maps_to_intro() {
+        let url = "irealbook://Test=A==Style=C=44=[*IC|D|]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.sections[0].label, SectionLabel::Intro);
+    }
+
+    #[test]
+    fn section_marker_lowercase_i_maps_to_intro() {
+        let url = "irealbook://Test=A==Style=C=44=[*iC|D|]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.sections[0].label, SectionLabel::Intro);
+    }
+
+    #[test]
+    fn legacy_lowercase_cbo_section_markers_decay_to_custom() {
+        // `*c` / `*b` / `*o` are NOT emitted by iReal Pro per the
+        // spec (#2450). The parser previously named them
+        // Chorus/Bridge/Outro — that mapping was removed. They now
+        // fall through to `Custom(string)`, the same path any
+        // unrecognised lowercase letter takes. Locks the new
+        // contract so a future revival of the named arms is a
+        // deliberate API decision.
+        for ch in ['c', 'b', 'o'] {
+            let url = format!("irealbook://Test=A==Style=C=44=[*{ch}C|D|]");
+            let song = parse(&url).expect("parse");
+            assert_eq!(
+                song.sections[0].label,
+                SectionLabel::Custom(ch.to_string()),
+                "expected `*{ch}` to decay to Custom(\"{ch}\"), got {:?}",
+                song.sections[0].label,
+            );
+        }
+    }
 }

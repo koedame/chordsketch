@@ -999,4 +999,81 @@ mod tests {
             "explicit Fine symbol must NOT be suppressed by an English-word substring"
         );
     }
+
+    // ---- Section-label round-trip (#2432, #2450) -------------------
+
+    fn single_bar_song(label: SectionLabel) -> IrealSong {
+        IrealSong {
+            title: "T".into(),
+            composer: Some("c".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label,
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                    }],
+                    ..Default::default()
+                }],
+            }],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn verse_label_round_trips_via_url() {
+        // Serializer emits `*V` uppercase per spec; parser accepts
+        // both cases. Round-trip preserves `Verse`.
+        let song = single_bar_song(SectionLabel::Verse);
+        let url = irealb_serialize(&song);
+        assert!(
+            url.contains("%2AV") || url.contains("*V"),
+            "URL must encode `*V` uppercase, got {url}"
+        );
+        let parsed = crate::parse(&url).expect("round trip");
+        assert_eq!(parsed.sections[0].label, SectionLabel::Verse);
+    }
+
+    #[test]
+    fn intro_label_round_trips_via_url() {
+        let song = single_bar_song(SectionLabel::Intro);
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        assert_eq!(parsed.sections[0].label, SectionLabel::Intro);
+    }
+
+    /// `Custom("Chorus")` → URL is lossy: the iReal `*X` token only
+    /// carries one character. Locks the documented behaviour from
+    /// `crates/convert/known-deviations.md` §"URL-cycle lossiness
+    /// for multi-character custom labels" — `Custom("Chorus")`
+    /// truncates to `*C` and re-parses as `Letter('C')`. This test
+    /// asserts the actual behaviour so a silent change to the
+    /// truncation rule is caught.
+    #[test]
+    fn multi_char_custom_label_truncates_to_letter_on_url_round_trip() {
+        let song = single_bar_song(SectionLabel::Custom("Chorus".into()));
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        // First-char-only emission means re-parse sees `*C` →
+        // `Letter('C')`, NOT `Custom("Chorus")`.
+        assert_eq!(parsed.sections[0].label, SectionLabel::Letter('C'));
+    }
+
+    /// Single-char custom labels round-trip cleanly when the char is
+    /// outside the named-variant vocabulary (`v` / `V` / `i` / `I`)
+    /// and outside the uppercase-letter `Letter(c)` range.
+    #[test]
+    fn single_char_lowercase_custom_round_trips_via_url() {
+        let song = single_bar_song(SectionLabel::Custom("x".into()));
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        assert_eq!(
+            parsed.sections[0].label,
+            SectionLabel::Custom("x".into()),
+            "single-char `Custom(\"x\")` must round-trip identity"
+        );
+    }
 }

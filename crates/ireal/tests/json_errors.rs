@@ -478,6 +478,46 @@ fn from_json_chord_alternate_null_round_trips_to_none() {
 }
 
 #[test]
+fn from_json_section_label_removed_kinds_are_rejected() {
+    // `chorus` / `bridge` / `outro` were removed from
+    // `SectionLabel` per #2450 because the iReal Pro app does not
+    // emit them. JSON inputs that still reference these kinds
+    // (e.g. snapshots produced by older parser versions) must
+    // surface as a clear `unknown section label kind` error
+    // rather than silently degrade.
+    use chordsketch_ireal::SectionLabel;
+    for kind in ["chorus", "bridge", "outro"] {
+        let json = format!("{{\"kind\":\"{kind}\"}}");
+        let result = SectionLabel::from_json_str(&json);
+        assert!(
+            result.is_err(),
+            "kind {kind:?} must be rejected after #2450, got {result:?}"
+        );
+    }
+}
+
+#[test]
+fn from_json_section_label_surviving_kinds_decode() {
+    use chordsketch_ireal::SectionLabel;
+    assert_eq!(
+        SectionLabel::from_json_str(r#"{"kind":"verse"}"#).unwrap(),
+        SectionLabel::Verse,
+    );
+    assert_eq!(
+        SectionLabel::from_json_str(r#"{"kind":"intro"}"#).unwrap(),
+        SectionLabel::Intro,
+    );
+    assert_eq!(
+        SectionLabel::from_json_str(r#"{"kind":"letter","value":"A"}"#).unwrap(),
+        SectionLabel::Letter('A'),
+    );
+    assert_eq!(
+        SectionLabel::from_json_str(r#"{"kind":"custom","value":"Chorus"}"#).unwrap(),
+        SectionLabel::Custom("Chorus".into()),
+    );
+}
+
+#[test]
 fn from_json_chord_alternate_present_round_trips() {
     // Nested alternate decodes recursively. One-level nesting
     // (which is what the parser produces from `(altchord)`) is

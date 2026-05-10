@@ -113,10 +113,39 @@ ChordPro environment directives map to iReal section labels:
 | ChordPro | iReal |
 |---|---|
 | `{start_of_verse}` ... `{end_of_verse}` | `SectionLabel::Verse` |
-| `{start_of_chorus}` ... `{end_of_chorus}` | `SectionLabel::Chorus` |
-| `{start_of_bridge}` ... `{end_of_bridge}` | `SectionLabel::Bridge` |
+| `{start_of_chorus}` ... `{end_of_chorus}` | `SectionLabel::Custom("Chorus")` (#2450 — iReal Pro itself does not have a `Chorus` rehearsal mark; the Custom string is preserved at the AST level only) |
+| `{start_of_bridge}` ... `{end_of_bridge}` | `SectionLabel::Custom("Bridge")` (same rationale as Chorus) |
 | (no directive — bare lyrics) | `SectionLabel::Letter('A')` (default; warns with `WarningKind::Approximated`) |
 | `{start_of_tab}` / `{start_of_grid}` / others | dropped silently |
+
+**URL-cycle lossiness for multi-character custom labels.** The iReal
+URL grammar's section marker is `*X` where `X` is a single
+character. `serialize_section_label` for `SectionLabel::Custom(s)`
+emits only `s.chars().next()` — the first character — because the
+parser only consumes one character after `*`. As a consequence:
+
+- ChordPro `{start_of_chorus}` → iReal AST `Custom("Chorus")` —
+  preserved.
+- iReal AST `Custom("Chorus")` → URL — emitted as `*C` (truncated).
+- URL `*C` → iReal AST `Letter('C')` (per `label_for`'s
+  `'A'..='Z' => Letter(c)` arm).
+- iReal AST `Letter('C')` → ChordPro `{comment: Section C}`.
+
+So a ChordPro chart that travels **through the URL** (`ChordPro →
+to_ireal → irealb_serialize → parse → from_ireal → ChordPro`) ends
+up with `{comment: Section C}` rather than `{start_of_chorus}` /
+`{end_of_chorus}`. The in-memory round-trip (`ChordPro → to_ireal
+→ from_ireal → ChordPro`, no URL serialization) preserves the
+chorus / bridge identity because `from_ireal::push_section_open`
+matches on the `Custom(name)` string and re-emits the matching
+ChordPro environment directive.
+
+Callers that need full ChordPro `start_of_chorus` round-trip
+fidelity must either keep the iReal AST in memory (skip the URL
+serialization step) or accept the lossy `{comment: Section C}`
+fallback. The lossiness is structural to the iReal URL grammar
+and not a defect in the serializer; introducing a multi-char
+`*XX` token would diverge from the published spec.
 
 ### Bar grouping
 
