@@ -1616,6 +1616,39 @@ mod tests {
         assert!(result.is_err(), "expected error, got {result:?}");
     }
 
+    // ---- chord_typography wasm export (#2455) ----
+
+    #[test]
+    fn test_chord_typography_returns_root_extension_spans_for_minor7() {
+        let chord_json = r#"{
+            "root":{"note":"C","accidental":"natural"},
+            "quality":{"kind":"minor7"},
+            "bass":null
+        }"#;
+        let json = do_chord_typography(chord_json).expect("typography");
+        // Output is a JSON object with `spans` array — minor7
+        // produces a Root span and an Extension span ("−7").
+        assert!(json.contains("\"kind\":\"Root\""));
+        assert!(json.contains("\"kind\":\"Extension\""));
+    }
+
+    #[test]
+    fn test_chord_typography_rejects_malformed_json() {
+        // Non-JSON input must return a structured error string,
+        // not panic. Wasm callers receive this as a JsValue.
+        let result = do_chord_typography("not json");
+        assert!(result.is_err(), "expected error, got {result:?}");
+    }
+
+    #[test]
+    fn test_chord_typography_handles_missing_required_fields() {
+        // Missing `root` must produce an Err rather than yielding
+        // a default-rooted chord.
+        let chord_json = r#"{"quality":{"kind":"major"},"bass":null}"#;
+        let result = do_chord_typography(chord_json);
+        assert!(result.is_err());
+    }
+
     // ---- pure-Rust cores behind every `*_with_warnings*` wrapper -------
 
     #[test]
