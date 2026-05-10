@@ -123,8 +123,9 @@ const html = render_html_with_options(input, {
 | `renderIrealSvg(input)` | `irealb://` URL | `string` — full SVG document (iReal Pro-style chart) |
 | `renderIrealPng(input)` | `irealb://` URL | `Uint8Array` — encoded PNG (300 DPI default, A4-equivalent canvas) |
 | `renderIrealPdf(input)` | `irealb://` URL | `Uint8Array` — single-page A4 PDF (vector content) |
-| `parseIrealb(input)` | `irealb://` URL | `string` — AST-shaped JSON mirroring `IrealSong` |
+| `parseIrealb(input)` | `irealb://` URL or `irealbook://` URL | `string` — AST-shaped JSON mirroring `IrealSong`. Accepts both the canonical 7..=9-field `irealb://` shape and the iRealBook 6-field `irealbook://` shape (`Title=Composer=Style=Key=TimeSig=Music`). |
 | `serializeIrealb(input)` | AST-shaped JSON | `string` — `irealb://` URL (round-trips with `parseIrealb`) |
+| `chordTypography(chordJson)` | AST-shaped chord JSON (`{root, quality, bass, alternate?}`) | `string` — JSON `{spans: [{kind, text}, ...]}` matching the iReal Pro engraved-chart convention. The renderer emits `Root` + `Accidental` + `Extension` + `Slash` + `Bass` span kinds; URL-stored quality shorthand (`b`/`#`/`^`/`h`/`o`/`-`) translates to typeset glyphs (`♭`/`♯`/`Δ`/`ø`/`°`/`−`); two-or-more-alteration extensions stack vertically via a `\|` separator (`7♭9♯5` → `7♭9\|♯5`). |
 
 `convertChordproToIrealb` is lossy: lyrics, fonts / colours, and
 capo are dropped because iReal has no surface for them. Each

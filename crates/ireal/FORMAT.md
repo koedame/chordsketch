@@ -76,12 +76,16 @@ checking which slot starts with the [`MUSIC_PREFIX`](#music-prefix):
 
 | Part count | Layout |
 |---|---|
+| 6 (no part starts with `MUSIC_PREFIX`) | iRealBook six-field: `Title=Composer=Style=Key=TimeSig=Music`. Music body is plain text (no music prefix, no `obfusc50` scramble); time signature is a packed-digit field (`44`, `34`, `68`, `128`) outside the chord stream. Tempo and transpose default to `None` / `0`. |
 | 7 | `Title=Composer=Style=Key=Music=BPM=Repeats` |
 | 8 (parts[4] starts with prefix) | `Title=Composer=Style=Key=Music=CompStyle=BPM=Repeats` |
 | 8 (parts[5] starts with prefix) | `Title=Composer=Style=Key=Transpose=Music=BPM=Repeats` |
 | 9 | `Title=Composer=Style=Key=Transpose=Music=CompStyle=BPM=Repeats` |
 
-Anything outside `7..=9` parts is `ParseError::MalformedBody`.
+Anything outside `6` (irealbook) or `7..=9` (irealb) parts is
+`ParseError::MalformedBody`. A malformed numeric field in either
+shape (`BPM`, `Transpose`, `TimeSig` for the 6-field path) surfaces
+as `ParseError::InvalidNumericField`.
 
 ### Music prefix
 
@@ -119,24 +123,25 @@ checks each token in this priority order:
 | Token / pattern | Effect |
 |---|---|
 | `XyQ` | Empty space — discard. |
-| `Kcl` | Repeat previous bar; close current and open a new one. |
+| `Kcl` | "Repeat previous measure" marker bar — sets `Bar::repeat_previous = true` on the new bar. The renderer paints the percent-style 1-bar simile glyph (SMuFL U+E500). |
 | `LZ\|` / `LZ` | Bar separator. |
 | `*X` (`X` = single char) | Section marker. Lower-case `i / v / c / b / o` → `Intro / Verse / Chorus / Bridge / Outro`. Uppercase `A..Z` → `Letter(c)`. Anything else → `Custom(string)`. |
-| `<...>` | Comment. Recognised text inside: `D.C.` → `MusicalSymbol::DaCapo`, `D.S.` → `DalSegno`, `Fine` → `Fine`. Any other comment is dropped. |
+| `<...>` | Comment / text mark. Anchored macro detection (start-of-comment, followed by space/dot/end): `D.C.` → `MusicalSymbol::DaCapo`, `D.S.` → `DalSegno`, `Fine` → `Fine`. The full verbatim text is ALSO saved to `Bar::text_comment` so longer captions like `<D.S. al 2nd ending>` and free-form `<13 measure lead break>` survive the round-trip. A bare-macro comment (`<D.C.>`, `<D.S.>`, `<Fine>`) skips the `text_comment` write since the symbol fully covers the semantics. |
 | `Tnd` | Time signature. Two-digit packed form (`T44` = 4/4, `T34` = 3/4, `T68` = 6/8); three-digit form when numerator is two digits (`T128` = 12/8). |
-| `x` | Repeat previous measure (no AST impact at parse time). |
-| `r` | Repeat previous two measures (no AST impact at parse time). |
+| `x` | Repeat previous measure — sets `Bar::repeat_previous = true` on the current bar. |
+| `r` | Repeat previous two measures — currently collapses to the same `Bar::repeat_previous = true` flag as `x` / `Kcl`. A future schema split may distinguish 1-bar from 2-bar simile via a separate field. |
 | `Y+` | Vertical spacer — discard. |
-| `n` | "No chord" placeholder — discard (AST has no `NC` variant). |
+| `n` | "No Chord" — sets `Bar::no_chord = true`. The renderer paints `N.C.` in the bar's centre. |
 | `p` | Pause slash — discard. |
 | `U` | Player ending marker — discard. |
-| `S` | Segno mark on the next bar. |
-| `Q` | Coda mark on the next bar. |
+| `S` | Segno — sets `Bar::symbol = Some(Segno)` on the current bar. |
+| `Q` | Coda — sets `Bar::symbol = Some(Coda)` on the current bar. |
 | `{` / `}` | Open / close repeat — sets `BarLine::OpenRepeat` / `BarLine::CloseRepeat` on the boundary bars. |
 | `\|` | Bar separator. |
 | `[` / `]` | Double bar open / close — sets `BarLine::Double`. |
-| `Nd` (`d` = digit) | N-th ending bracket on the next bar (`N1` = first ending, etc.); rejects digit `0`. |
+| `Nd` (`d` = digit) | N-th ending bracket on the current bar (`N1` = first ending, etc.); rejects digit `0`. |
 | `Z` | Final bar (`BarLine::Final`). |
+| `(...)` | Alternate chord — when the parser is inside a `(...)` block, the next chord token attaches to the previously-pushed chord's `Chord::alternate` field rather than as a new chord on the bar. The renderer stacks the alternate above the primary at a smaller size. |
 | `,` `.` `:` `;` | Punctuation — discard. |
 | `[A-GW][quality]*[/Bass]?` | Chord. `W` is the iReal "invisible slash" — repeats the previous root with this quality. |
 
@@ -196,7 +201,6 @@ expand** them — that is render- or convert-time work:
 The parser **drops** the following that the iReal app
 distinguishes:
 
-- `n` (No Chord): no `NC` variant in the AST.
 - `p` (Pause slash): no AST representation.
 - `U` (Player-only ending): no AST representation.
 - `Y+` (Vertical spacer): no AST representation (visual hint
