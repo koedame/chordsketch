@@ -293,10 +293,12 @@ fn serialize_music(song: &IrealSong) -> String {
         if let Some(text) = &bar.text_comment {
             // Free-form text comment renders below the bar's right
             // barline. The `<...>` form is what the parser's
-            // `apply_comment` consumes.
-            chart.push('<');
-            chart.push_str(text);
-            chart.push('>');
+            // `apply_comment` consumes. Use the `>`-stripping
+            // helper so the regular-bar path inherits the same
+            // round-trip protection as the `repeat_previous`
+            // branch above (sister-site parity per
+            // `.claude/rules/fix-propagation.md`).
+            emit_text_comment(&mut chart, text);
         }
 
         serialize_bar_close(&mut chart, bar);
@@ -874,5 +876,127 @@ mod tests {
         assert_eq!(parsed[1].style, song2.style);
         assert_eq!(parsed[1].tempo, song2.tempo);
         assert_eq!(name.as_deref(), Some("Playlist"));
+    }
+
+    /// Round-trip regression: a `text_comment` containing the
+    /// reserved `>` delimiter must not corrupt the chord stream.
+    /// `emit_text_comment` strips the inner `>` so re-parsing
+    /// captures the rest of the caption rather than truncating at
+    /// the first `>`.
+    #[test]
+    fn text_comment_with_inner_gt_round_trips_on_regular_bar() {
+        let song = IrealSong {
+            title: "GT Regular".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                    }],
+                    text_comment: Some("see > here".into()),
+                    ..Default::default()
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip must succeed");
+        let got = parsed.sections[0].bars[0]
+            .text_comment
+            .as_deref()
+            .unwrap_or("");
+        assert!(
+            !got.contains('>'),
+            "stripped `>` must not survive into parsed comment, got {got:?}"
+        );
+        // The stripped form preserves the rest of the caption.
+        assert_eq!(got, "see  here");
+    }
+
+    /// Sister-site coverage for the `Kcl` (repeat-previous) branch.
+    /// Locks in the existing fix that already routes through
+    /// `emit_text_comment`.
+    #[test]
+    fn text_comment_with_inner_gt_round_trips_on_kcl_bar() {
+        let song = IrealSong {
+            title: "GT Kcl".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![
+                    Bar {
+                        start: BarLine::Double,
+                        end: BarLine::Single,
+                        chords: vec![BarChord {
+                            chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                            position: BeatPosition::on_beat(1).unwrap(),
+                        }],
+                        ..Default::default()
+                    },
+                    Bar {
+                        start: BarLine::Single,
+                        end: BarLine::Final,
+                        repeat_previous: true,
+                        text_comment: Some("rit. > slow".into()),
+                        ..Default::default()
+                    },
+                ],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip must succeed");
+        let got = parsed.sections[0].bars[1]
+            .text_comment
+            .as_deref()
+            .unwrap_or("");
+        assert!(!got.contains('>'));
+    }
+
+    /// A `text_comment` whose body contains "refine" (substring
+    /// match for the old `lower.contains("fine")` bug) must NOT
+    /// suppress an explicit `bar.symbol` on round trip — both
+    /// fields survive.
+    #[test]
+    fn refine_caption_with_explicit_fine_symbol_round_trips_both() {
+        let song = IrealSong {
+            title: "Refine".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                    }],
+                    symbol: Some(MusicalSymbol::Fine),
+                    text_comment: Some("refine the chord".into()),
+                    ..Default::default()
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip must succeed");
+        let bar = &parsed.sections[0].bars[0];
+        assert_eq!(
+            bar.text_comment.as_deref(),
+            Some("refine the chord"),
+            "text_comment must survive verbatim"
+        );
+        assert_eq!(
+            bar.symbol,
+            Some(MusicalSymbol::Fine),
+            "explicit Fine symbol must NOT be suppressed by an English-word substring"
+        );
     }
 }
