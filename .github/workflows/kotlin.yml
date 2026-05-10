@@ -168,7 +168,7 @@ jobs:
             --out-dir packages/kotlin/lib/src/main/kotlin/
 
       - name: Download JNI library (linux-x86-64)
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: jni-linux-x86-64
           path: packages/kotlin/lib/src/main/resources/linux-x86-64/
@@ -284,13 +284,13 @@ jobs:
         run: python3 scripts/check-env-secrets.py --channel maven-central
 
       - name: Download generated Kotlin bindings
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: kotlin-bindings
           path: packages/kotlin/lib/src/main/kotlin/uniffi/
 
       - name: Download all JNI artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: jni-*
           path: packages/kotlin/lib/src/main/resources/
