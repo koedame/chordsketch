@@ -232,10 +232,11 @@
 .bar .text-mark {
   position: absolute;
   left: var(--cs-sp-5);
-  bottom: -22px;
+  bottom: -28px;
   font-family: var(--cs-font-latin);
   font-style: normal;
-  font-size: var(--cs-fs-13);
+  font-size: var(--cs-fs-16);
+  font-weight: 500;
   color: var(--cs-ink-1000);
   white-space: nowrap;
 }

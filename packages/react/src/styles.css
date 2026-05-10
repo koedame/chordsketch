@@ -202,11 +202,126 @@
 }
 
 .chordsketch-sheet__content {
-  /* Wrapper for the renderer's HTML output. Empty by design —
-     the baseline rule reserves the selector so hosts can override
-     it (e.g. set `max-height` / `overflow-y` for a scrollable
-     preview pane, or scope `font-size` to the rendered sheet)
-     without first discovering the class by inspecting the DOM. */
+  /* Wrapper for the AST → JSX render path (#2475 / ADR-0017).
+     Hosts can override structural concerns here (e.g. set
+     `max-height` / `overflow-y` for a scrollable preview pane).
+     The rules below paint the body of the rendered sheet — they
+     mirror the inline `<style>` block previously embedded by
+     `chordsketch-render-html`'s full-document output, scoped under
+     `.chordsketch-sheet__content` so the rules do not leak to the
+     host body. */
+}
+
+/* `.song` is the AST walker's root container. It carries no
+   structural styling itself — the children inherit the
+   `chordsketch-sheet`'s typography. */
+.chordsketch-sheet__content .song {
+  /* Reserved for future per-song sizing hooks. */
+}
+
+/* Title / subtitle / metadata strip. These map to the
+   `chordsketch-render-html` h1 / h2 / `<p class="meta">` rules. */
+.chordsketch-sheet__content h1 {
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, sans-serif);
+  font-weight: 700;
+  font-size: 1.875rem;
+  letter-spacing: -0.02em;
+  color: var(--cs-ink-1000, #0a0a0b);
+  margin: 0 0 0.2em;
+}
+.chordsketch-sheet__content h2 {
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, sans-serif);
+  font-weight: 400;
+  font-size: 1rem;
+  color: var(--cs-ink-600, #67646d);
+  margin: 0;
+}
+.chordsketch-sheet__content .meta {
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  font-size: 0.8125rem;
+  color: var(--cs-ink-600, #67646d);
+  margin: 0 0 1.5em;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Chord-bearing line — flexbox of `.chord-block` columns. */
+.chordsketch-sheet__content .line {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0.1em 0;
+}
+.chordsketch-sheet__content .chord-block {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.chordsketch-sheet__content .chord {
+  font-family: var(--cs-font-chord, "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
+  font-weight: 700;
+  color: var(--cs-crimson-500, #bd1642);
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  min-height: 1em;
+}
+.chordsketch-sheet__content .lyrics {
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
+  font-weight: 400;
+  font-size: 1.125rem;
+  white-space: pre;
+}
+.chordsketch-sheet__content .empty-line {
+  height: 1em;
+}
+
+/* Sections (verse / chorus / bridge / tab / grid / abc / ly / etc.)
+   wrap a body of lines with a small label above. */
+.chordsketch-sheet__content section {
+  margin: 1em 0;
+}
+.chordsketch-sheet__content section > .section-label,
+.chordsketch-sheet__content .chorus-recall > .section-label {
+  font-family: var(--cs-font-latin, "Inter", system-ui, -apple-system, sans-serif);
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--cs-ink-600, #67646d);
+  margin-bottom: 0.5em;
+}
+.chordsketch-sheet__content .chorus-recall {
+  margin: 1em 0;
+}
+
+/* Verbatim / monospace sections (tab / grid / abc / ly / textblock). */
+.chordsketch-sheet__content section.tab .lyrics,
+.chordsketch-sheet__content section.grid .lyrics,
+.chordsketch-sheet__content section.abc .lyrics,
+.chordsketch-sheet__content section.ly .lyrics,
+.chordsketch-sheet__content section.textblock .lyrics {
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  font-size: 0.875rem;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Comments — italic for `{comment}` / `{comment_italic}`, bordered
+   inline-block for `{comment_box}`. */
+.chordsketch-sheet__content .comment {
+  font-family: var(--cs-font-latin, "Inter", system-ui, -apple-system, sans-serif);
+  font-style: italic;
+  color: var(--cs-ink-500, #8a8790);
+  margin: 0.3em 0;
+}
+.chordsketch-sheet__content .comment-box {
+  border: 1px solid var(--cs-border, #d4d1d6);
+  border-radius: 4px;
+  padding: 0.2em 0.5em;
+  display: inline-block;
+  margin: 0.3em 0;
+}
+
+/* Embedded images stay fluid inside the wrapper. */
+.chordsketch-sheet__content img {
+  max-width: 100%;
+  height: auto;
 }
 
 .chordsketch-sheet__error {

@@ -306,7 +306,7 @@ function PlaygroundApp(): JSX.Element {
   return (
     <div className="chordsketch-app chordsketch-app--irealb">
       <header className="topnav">
-        <a className="brand" href="../">
+        <a className="brand" href="https://github.com/koedame/chordsketch">
           <span className="mark" aria-hidden="true" />
           ChordSketch
         </a>
@@ -315,12 +315,8 @@ function PlaygroundApp(): JSX.Element {
           <span className="sep">›</span>
           <span className="current">iReal Pro</span>
         </nav>
-        <span className="topnav__save-state" aria-live="polite">
-          <span className="dot" />
-          {error ? 'Parse error' : 'Live'}
-        </span>
-        <div className="topnav__tools" role="toolbar" aria-label="Editor tools">
-          <div className="tool-group">
+        <div className="actions">
+          <label className="topnav__sample">
             <span className="label">Sample</span>
             <select
               className="chordsketch-app__select"
@@ -334,13 +330,7 @@ function PlaygroundApp(): JSX.Element {
                 </option>
               ))}
             </select>
-          </div>
-          <div className="tool-group">
-            <span className="label">Layout</span>
-            <span className="tool-group__readout">4 bars / line</span>
-          </div>
-        </div>
-        <div className="actions">
+          </label>
           <a
             className="btn btn-ghost btn-sm"
             href="https://github.com/koedame/chordsketch"
