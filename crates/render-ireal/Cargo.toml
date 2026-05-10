@@ -41,7 +41,7 @@ chordsketch-ireal = { version = "0.4.0", path = "../ireal" }
 #
 # Lifting the pin requires raising the workspace MSRV first
 # (resvg 0.45+ requires Rust 1.87, the workspace pins 1.85).
-resvg = { version = "0.43", optional = true }
+resvg = { version = "0.45", optional = true }
 tiny-skia = { version = "0.11", optional = true }
 svg2pdf = { version = "0.13", optional = true }
 
