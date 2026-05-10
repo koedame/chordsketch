@@ -414,3 +414,86 @@ fn full_song_round_trips_through_deserializer() {
     // type to match against.
     let _: JsonError = IrealSong::from_json_str("bogus").unwrap_err();
 }
+
+#[test]
+fn parse_json_rejects_partial_true_literal() {
+    // `tru` (truncated `true`) — no boundary between literal and
+    // EOF, but the partial-match path must still error rather than
+    // silently accepting any prefix.
+    assert!(parse_json("tru").is_err());
+}
+
+#[test]
+fn parse_json_rejects_partial_false_literal() {
+    assert!(parse_json("fals").is_err());
+}
+
+#[test]
+fn parse_json_accepts_bool_literals() {
+    // True / false at the document root must round-trip via
+    // `JsonValue::Bool(_)`.
+    match parse_json("true").expect("parse") {
+        JsonValue::Bool(b) => assert!(b),
+        other => panic!("expected Bool(true), got {other:?}"),
+    }
+    match parse_json("false").expect("parse") {
+        JsonValue::Bool(b) => assert!(!b),
+        other => panic!("expected Bool(false), got {other:?}"),
+    }
+}
+
+#[test]
+fn from_json_bar_without_repeat_previous_defaults_false() {
+    // The serializer omits `repeat_previous` when false; the
+    // deserializer must accept the missing-field shape and
+    // default to `false`. Locks the invariant so a future
+    // tightening (require the field) is a deliberate API break.
+    let json = r#"{"start":"single","end":"single","chords":[],"ending":null,"symbol":null}"#;
+    let bar = Bar::from_json_str(json).expect("parse");
+    assert!(!bar.repeat_previous);
+    assert!(!bar.no_chord);
+    assert!(bar.text_comment.is_none());
+}
+
+#[test]
+fn from_json_chord_alternate_null_round_trips_to_none() {
+    // Explicit `null` and the missing-field shape must both decode
+    // to `Chord::alternate = None`.
+    let with_null = r#"{
+        "root":{"note":"C","accidental":"natural"},
+        "quality":{"kind":"major"},
+        "bass":null,
+        "alternate":null
+    }"#;
+    let without = r#"{
+        "root":{"note":"C","accidental":"natural"},
+        "quality":{"kind":"major"},
+        "bass":null
+    }"#;
+    let a = Chord::from_json_str(with_null).expect("parse explicit null");
+    let b = Chord::from_json_str(without).expect("parse missing");
+    assert!(a.alternate.is_none());
+    assert!(b.alternate.is_none());
+    assert_eq!(a, b);
+}
+
+#[test]
+fn from_json_chord_alternate_present_round_trips() {
+    // Nested alternate decodes recursively. One-level nesting
+    // (which is what the parser produces from `(altchord)`) is
+    // the load-bearing case.
+    let json = r#"{
+        "root":{"note":"E","accidental":"natural"},
+        "quality":{"kind":"minor7"},
+        "bass":null,
+        "alternate":{
+            "root":{"note":"E","accidental":"natural"},
+            "quality":{"kind":"custom","value":"7#9"},
+            "bass":null
+        }
+    }"#;
+    let chord = Chord::from_json_str(json).expect("parse");
+    let alt = chord.alternate.as_ref().expect("alternate present");
+    assert_eq!(alt.root.note, 'E');
+    assert!(matches!(&alt.quality, ChordQuality::Custom(s) if s == "7#9"));
+}

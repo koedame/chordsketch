@@ -1470,4 +1470,62 @@ mod tests {
             other => panic!("expected InvalidNumericField, got {other:?}"),
         }
     }
+
+    #[test]
+    fn irealbook_six_field_inline_t_directive_overrides_field_timesig() {
+        // The 6-field path documents that an inline `T..`
+        // directive in the chord stream overrides the field-level
+        // time signature. Field says 4/4, inline says 3/4 — chord
+        // stream wins.
+        let url = "irealbook://Test=A==Style=C=44=[*AT34C|D|]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.time_signature.numerator, 3);
+        assert_eq!(song.time_signature.denominator, 4);
+    }
+
+    #[test]
+    fn r_token_sets_repeat_previous_flag() {
+        // `r` (repeat previous TWO measures) currently collapses
+        // to the same `repeat_previous = true` flag as `x` / `Kcl`
+        // — locked in until the AST grows a separate 2-bar simile
+        // marker.
+        let url = "irealbook://Test=A==Style=C=44=[*AC| r |D|]";
+        let song = parse(url).expect("parse");
+        assert!(song.sections[0].bars[1].repeat_previous);
+    }
+
+    #[test]
+    fn consecutive_endings_keeps_last() {
+        // `N1N2` on the same bar: `queue_ending` overwrites, so
+        // the second marker wins. This is the documented contract
+        // — a future schema change to track multiple endings on
+        // one bar would need a deliberate API break.
+        let url = "irealbook://Test=A==Style=C=44=[*AN1N2C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.ending.map(|e| e.number()), Some(2));
+    }
+
+    #[test]
+    fn empty_alternate_parens_does_not_corrupt_state() {
+        // `()` between chords is a no-op — the second chord still
+        // pushes as a new primary, not an alternate of the first.
+        let url = "irealbook://Test=A==Style=C=44=[*AC()|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.chords.len(), 1);
+        assert_eq!(bar0.chords[0].chord.root.note, 'C');
+        assert!(bar0.chords[0].chord.alternate.is_none());
+    }
+
+    #[test]
+    fn alternate_chord_with_slash_bass_parses() {
+        // Slash chord inside alt parens — `Em7(C/G)`.
+        let url = "irealbook://Test=A==Style=C=44=[*AE-7(C/G)|D|]";
+        let song = parse(url).expect("parse");
+        let chord = &song.sections[0].bars[0].chords[0].chord;
+        let alt = chord.alternate.as_ref().expect("alternate present");
+        assert_eq!(alt.root.note, 'C');
+        assert_eq!(alt.bass.map(|b| b.note), Some('G'));
+    }
 }

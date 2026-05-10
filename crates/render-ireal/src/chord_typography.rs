@@ -444,4 +444,68 @@ mod tests {
             assert_eq!(actual, expected, "quality {quality:?}");
         }
     }
+
+    // ---- URL-shorthand translation (Custom-quality typography) ----
+
+    fn ext_for_custom(value: &str) -> String {
+        let chord = Chord::triad(ChordRoot::natural('C'), ChordQuality::Custom(value.into()));
+        let typo = chord_to_typography(&chord);
+        // Spans: [Root, Extension] for any non-empty translation.
+        assert_eq!(
+            typo.spans.len(),
+            2,
+            "Custom({value:?}) should yield root+extension"
+        );
+        typo.spans[1].text.clone()
+    }
+
+    #[test]
+    fn translate_url_shorthand_maps_caret_to_delta() {
+        // iReal Pro URL stores `^` for the major-7 marker; the
+        // typography layer renders it as Δ (U+0394).
+        assert_eq!(ext_for_custom("^9"), "\u{0394}9");
+    }
+
+    #[test]
+    fn translate_url_shorthand_maps_h_to_o_slash() {
+        // `h` → ø (U+00F8) for half-diminished.
+        assert_eq!(ext_for_custom("h7"), "\u{00F8}7");
+    }
+
+    #[test]
+    fn translate_url_shorthand_maps_o_to_degree() {
+        // `o` → ° (U+00B0) for diminished.
+        assert_eq!(ext_for_custom("o7"), "\u{00B0}7");
+    }
+
+    #[test]
+    fn translate_url_shorthand_maps_dash_minus_b_sharp() {
+        // `-` → − (U+2212), `b` → ♭ (U+266D), `#` → ♯ (U+266F).
+        assert_eq!(ext_for_custom("-7b5"), "\u{2212}7\u{266D}5");
+        assert_eq!(ext_for_custom("7#5"), "7\u{266F}5");
+    }
+
+    #[test]
+    fn translate_url_shorthand_keeps_single_alteration_inline() {
+        // Single alteration → no `|` line-break separator.
+        let ext = ext_for_custom("7b9");
+        assert!(!ext.contains('|'), "single alteration must stay inline");
+        assert_eq!(ext, "7\u{266D}9");
+    }
+
+    #[test]
+    fn translate_url_shorthand_stacks_two_alterations_with_pipe() {
+        // The canonical playground regression: two alterations
+        // (`b9` + `#5`) split onto two stacked lines via `|`.
+        // Renderer (chart.tsx `spansToHtml`) reads `|` as the
+        // stacked-quality separator.
+        assert_eq!(ext_for_custom("7b9#5"), "7\u{266D}9|\u{266F}5");
+    }
+
+    #[test]
+    fn translate_url_shorthand_stacks_three_alterations_with_pipe() {
+        // Three alterations: first line carries main+alt[0],
+        // second line carries the rest joined together.
+        assert_eq!(ext_for_custom("7b9#5b13"), "7\u{266D}9|\u{266F}5\u{266D}13");
+    }
 }
