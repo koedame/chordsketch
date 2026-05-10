@@ -118,7 +118,7 @@ pub mod pdf;
 pub mod png;
 mod svg;
 
-use chordsketch_ireal::{Accidental, BarChord, IrealSong, KeyMode};
+use chordsketch_ireal::{BarChord, IrealSong};
 
 pub use chord_typography::{ChordTypography, SpanKind, TypographySpan, chord_to_typography};
 pub use layout::{BarCoord, EmptyCell, Layout, compute_layout};
@@ -233,41 +233,9 @@ stroke=\"#E8E6EA\" stroke-width=\"1\"/>\n",
     ));
 }
 
-#[allow(dead_code)] // retained for future use; the engraved header no longer needs it.
-fn format_style_and_key(song: &IrealSong) -> String {
-    // The iReal Pro app renders "Medium Swing" when a chart omits a
-    // style tag; the AST stores `Option<String>` so the renderer
-    // applies that fallback at the display boundary, mirroring the
-    // app's behaviour without putting the default in the AST.
-    let style = song.style.as_deref().unwrap_or("Medium Swing");
-    let key = format_key(song);
-    // `format_key` always returns a non-empty string (mode is
-    // always present), so we unconditionally interpolate both;
-    // the dead empty-key branch was removed to reflect the
-    // structural invariant.
-    let combined = format!("{style} \u{2022} {key}");
-    svg::escape_xml(&combined)
-}
-
-#[allow(dead_code)] // retained for future use; the engraved header no longer needs it.
-fn format_key(song: &IrealSong) -> String {
-    let root = song.key_signature.root;
-    let note_glyph = note_glyph_or_fallback(root.note);
-    let acc = match root.accidental {
-        Accidental::Natural => "",
-        Accidental::Flat => "\u{266D}",
-        Accidental::Sharp => "\u{266F}",
-    };
-    let mode = match song.key_signature.mode {
-        KeyMode::Major => "major",
-        KeyMode::Minor => "minor",
-    };
-    format!("{note_glyph}{acc} {mode}")
-}
-
 /// Returns `note` if it is in the documented `'A'..='G'` uppercase
 /// ASCII range, otherwise `'?'`. Single source of truth for the
-/// out-of-range fallback shared between [`format_key`] and
+/// out-of-range fallback shared with
 /// [`crate::chord_typography::chord_to_typography`]'s root / bass
 /// writers, so a future tightening of the rule (per
 /// `.claude/rules/sanitizer-security.md` "security asymmetry")

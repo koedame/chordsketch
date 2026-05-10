@@ -356,9 +356,17 @@ fn make_song_irealbook(parts: &[&str]) -> Result<IrealSong, ParseError> {
         (parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]);
     let chord_chart = parse_chord_chart(music_raw)?;
     let key_signature = parse_key(key_raw);
+    // The 7-field `irealb://` path errors on malformed numeric
+    // fields (`InvalidNumericField`); the 6-field `irealbook://`
+    // path mirrors that strict parse rather than silently falling
+    // back to 4/4 — a malformed timesig (`9X`, `0`, empty) is
+    // user-supplied data and should surface as an error per
+    // `.claude/rules/code-style.md` "Silent Fallback" and
+    // `fix-propagation.md` (sister-site parity with the 7-field
+    // numeric-field validation).
     let time_signature = parse_time_signature(timesig_raw)
         .map(|(ts, _)| ts)
-        .unwrap_or_default();
+        .ok_or_else(|| ParseError::InvalidNumericField(timesig_raw.to_owned()))?;
     Ok(IrealSong {
         title: title.trim().to_owned(),
         composer: nonempty(composer),
@@ -378,6 +386,25 @@ fn make_song_irealbook(parts: &[&str]) -> Result<IrealSong, ParseError> {
         transpose: 0,
         sections: chord_chart.sections,
     })
+}
+
+/// Returns `true` when a lowercased, trimmed comment text looks
+/// like the iReal Pro macro `prefix` — either the prefix is the
+/// entire string, or the prefix is followed by a space / dot
+/// (e.g. `d.c.` → matches `"d.c."`, `"d.c. al coda"`, but NOT
+/// `"d.c.al"` or `"undefined"`). Used by both the parser's
+/// `apply_comment` and the serializer's macro-suppression
+/// heuristic so the two stay in sync.
+pub(crate) fn matches_macro_prefix(text: &str, prefix: &str) -> bool {
+    if !text.starts_with(prefix) {
+        return false;
+    }
+    match text[prefix.len()..].chars().next() {
+        None => true,
+        Some(' ') => true,
+        Some(c) if c.is_alphanumeric() => false,
+        Some(_) => true,
+    }
 }
 
 fn nonempty(s: &str) -> Option<String> {
@@ -454,9 +481,6 @@ struct ChordChart {
 /// resulting [`Section`] / [`Bar`] tree (whereas pianosnake flattens
 /// to a single measures array).
 fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
-    if std::env::var_os("IREAL_DEBUG_STREAM").is_some() {
-        eprintln!("CHORD STREAM: {input}");
-    }
     let mut state = ChartParseState::new();
     let mut rest = input;
     while let Some(c) = rest.chars().next() {
@@ -812,23 +836,30 @@ impl ChartParseState {
     }
 
     fn apply_comment(&mut self, comment: &str) {
-        let lower = comment.to_ascii_lowercase();
+        let trimmed_lower = comment.trim().to_ascii_lowercase();
         // Detect the recognised musical-direction macros. The
-        // matched symbol is queued for the *next* bar (consumed by
-        // `start_new_bar`) — that is iReal Pro's convention for
-        // `<D.C.>` / `<D.S.>` / `<Fine>` placement. The full
-        // verbatim text is ALSO saved to `text_comment` so longer
-        // captions like `<D.S. al 2nd ending>` survive the
-        // round-trip; the renderer prefers the descriptive text
-        // when present, and falls back to the canonical symbol
-        // when the bar carries no text.
-        let is_macro = if lower.contains("d.c.") {
+        // matched symbol is set directly on `current_bar` (see
+        // `queue_symbol`) — `<D.C.>` / `<D.S.>` / `<Fine>` label
+        // the bar that contains the comment. The full verbatim
+        // text is ALSO saved to `text_comment` so longer captions
+        // like `<D.S. al 2nd ending>` survive the round-trip; the
+        // renderer prefers the descriptive text when present, and
+        // falls back to the canonical symbol when the bar carries
+        // no text.
+        //
+        // Detection anchors at the START of the comment so common
+        // English words that contain the macro substring
+        // (`refine`, `define`, `Configuration`) do NOT trigger.
+        // iReal Pro emits these directives at the head of the
+        // comment by convention; treating them as a substring
+        // match was a false-positive vector.
+        let is_macro = if matches_macro_prefix(&trimmed_lower, "d.c.") {
             self.queue_symbol(MusicalSymbol::DaCapo);
             true
-        } else if lower.contains("d.s.") {
+        } else if matches_macro_prefix(&trimmed_lower, "d.s.") {
             self.queue_symbol(MusicalSymbol::DalSegno);
             true
-        } else if lower.contains("fine") {
+        } else if matches_macro_prefix(&trimmed_lower, "fine") {
             self.queue_symbol(MusicalSymbol::Fine);
             true
         } else {
@@ -1289,5 +1320,154 @@ mod tests {
     fn parse_rejects_oversized_input() {
         let large = "x".repeat(MAX_INPUT_BYTES + 1);
         assert!(matches!(parse(&large), Err(ParseError::InputTooLarge(_))));
+    }
+
+    // ---- Macro-prefix detection (anchored, not substring) ----------
+
+    #[test]
+    fn matches_macro_prefix_handles_dotted_form() {
+        assert!(matches_macro_prefix("d.c.", "d.c."));
+        assert!(matches_macro_prefix("d.c. al coda", "d.c."));
+        assert!(matches_macro_prefix("d.s. al 2nd ending", "d.s."));
+        // Bare macro followed by trailing punctuation.
+        assert!(matches_macro_prefix("fine", "fine"));
+        assert!(matches_macro_prefix("fine.", "fine"));
+    }
+
+    #[test]
+    fn matches_macro_prefix_rejects_english_substrings() {
+        // The regression these tests guard against: a substring
+        // `lower.contains("fine")` happily matched `refine`,
+        // `define`, `D.S. defining`, …, leading to spurious
+        // `MusicalSymbol::Fine` on the bar.
+        assert!(!matches_macro_prefix("refine", "fine"));
+        assert!(!matches_macro_prefix("define", "fine"));
+        assert!(!matches_macro_prefix("undefined", "fine"));
+        assert!(!matches_macro_prefix("13 measure lead break", "fine"));
+        // Dotted-form prefixes inside compound text must not fire.
+        assert!(!matches_macro_prefix("a d.c. directive", "d.c."));
+    }
+
+    // ---- Parser behaviour for the new commit's URL tokens ---------
+
+    #[test]
+    fn alternate_chord_parses_to_alternate_field() {
+        // `Em7(E7#9)` — primary E-7 with alt E7#9.
+        let url = "irealbook://Test=A==Style=C=44=[*AE-7(E7#9)|G7]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.chords.len(), 1);
+        let chord = &bar0.chords[0].chord;
+        assert_eq!(chord.root.note, 'E');
+        assert!(chord.alternate.is_some());
+        let alt = chord.alternate.as_ref().unwrap();
+        assert_eq!(alt.root.note, 'E');
+    }
+
+    #[test]
+    fn alternate_chord_with_no_primary_falls_through_to_regular_push() {
+        // Malformed URL `(C)|D|` — alt parens with no preceding
+        // chord. The current contract is to fall through to a
+        // regular push so the chart still renders SOMETHING. Lock
+        // that contract in a test so a future tightening (errors
+        // out instead) is a deliberate decision.
+        let url = "irealbook://Test=A==Style=C=44=[*A(C)|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.chords.len(), 1);
+        assert_eq!(bar0.chords[0].chord.root.note, 'C');
+        assert!(bar0.chords[0].chord.alternate.is_none());
+    }
+
+    #[test]
+    fn n_token_sets_no_chord_flag() {
+        let url = "irealbook://Test=A==Style=C=44=[*An|C|]";
+        let song = parse(url).expect("parse");
+        assert!(song.sections[0].bars[0].no_chord);
+    }
+
+    #[test]
+    fn x_token_sets_repeat_previous_flag() {
+        let url = "irealbook://Test=A==Style=C=44=[*AC| x |D|]";
+        let song = parse(url).expect("parse");
+        assert!(song.sections[0].bars[1].repeat_previous);
+    }
+
+    #[test]
+    fn text_comment_populates_when_not_a_macro() {
+        // `<13 measure lead break>` is a free-form caption — should
+        // land in `text_comment`, NOT trigger any macro symbol.
+        let url = "irealbook://Test=A==Style=C=44=[*A<13 measure lead break>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.text_comment.as_deref(), Some("13 measure lead break"));
+        assert!(
+            bar0.symbol.is_none(),
+            "non-macro caption must not set symbol"
+        );
+    }
+
+    #[test]
+    fn text_comment_with_dc_macro_sets_both_symbol_and_text() {
+        let url = "irealbook://Test=A==Style=C=44=[*A<D.C. al coda>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.text_comment.as_deref(), Some("D.C. al coda"));
+        assert_eq!(bar0.symbol, Some(MusicalSymbol::DaCapo));
+    }
+
+    #[test]
+    fn bare_macro_skips_text_comment_to_avoid_round_trip_dup() {
+        // `<D.C.>` → symbol set, text_comment NOT set. A subsequent
+        // serialize re-emits `<D.C.>` (covered by symbol), so saving
+        // the text would round-trip into a duplicated entry.
+        let url = "irealbook://Test=A==Style=C=44=[*A<D.C.>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.symbol, Some(MusicalSymbol::DaCapo));
+        assert!(bar0.text_comment.is_none());
+    }
+
+    #[test]
+    fn refine_caption_does_not_trigger_fine_macro() {
+        // Regression: substring match treated `refine` as the Fine
+        // macro. Anchored detection must reject it.
+        let url = "irealbook://Test=A==Style=C=44=[*A<refine the chord>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.text_comment.as_deref(), Some("refine the chord"));
+        assert!(
+            bar0.symbol.is_none(),
+            "`refine` must NOT set MusicalSymbol::Fine"
+        );
+    }
+
+    #[test]
+    fn irealbook_six_field_url_parses_with_explicit_timesig() {
+        // 6-field iRealBook URL: Title=Composer=Style=Key=TimeSig=Music.
+        let url = "irealbook://Spain=Corea Chick=Medium Samba=B-=44=[*AC|D|E|F]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.title, "Spain");
+        assert_eq!(song.composer.as_deref(), Some("Corea Chick"));
+        assert_eq!(song.style.as_deref(), Some("Medium Samba"));
+        assert_eq!(song.time_signature.numerator, 4);
+        assert_eq!(song.time_signature.denominator, 4);
+        // Tempo and transpose default in the 6-field path.
+        assert_eq!(song.tempo, None);
+        assert_eq!(song.transpose, 0);
+    }
+
+    #[test]
+    fn irealbook_six_field_rejects_malformed_timesig() {
+        // Sister-site parity with the 7-field path: a malformed
+        // numeric field surfaces as `InvalidNumericField` rather
+        // than silently falling back to a default.
+        let url = "irealbook://Test=A==Style=C=9X=[*AC|D|]";
+        match parse(url) {
+            Err(ParseError::InvalidNumericField(s)) => {
+                assert_eq!(s, "9X");
+            }
+            other => panic!("expected InvalidNumericField, got {other:?}"),
+        }
     }
 }

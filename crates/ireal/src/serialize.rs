@@ -16,7 +16,7 @@ use crate::ast::{
     Accidental, Bar, BarLine, Chord, ChordQuality, ChordRoot, Ending, IrealSong, KeyMode,
     KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
 };
-use crate::parser::MUSIC_PREFIX;
+use crate::parser::{MUSIC_PREFIX, matches_macro_prefix};
 
 /// Serializes a single song to an `irealb://` URL.
 ///
@@ -222,12 +222,21 @@ fn serialize_music(song: &IrealSong) -> String {
         // already triggers a macro symbol on re-parse, so we can
         // skip emitting a redundant `<D.C.>` / `<D.S.>` /
         // `<Fine>` pseudo-comment.
+        // Mirror `apply_comment`'s anchored macro detection: the
+        // suppression must agree with what the parser would
+        // re-derive on round-trip. A naive substring `contains`
+        // here flagged ordinary words like `refine` / `define`,
+        // dropping a perfectly legitimate `bar.symbol` because the
+        // text_comment happened to share a substring with a
+        // recognised macro.
         let text_carries_macro = |b: &Bar| {
             b.text_comment
                 .as_deref()
                 .map(|t| {
-                    let l = t.to_ascii_lowercase();
-                    l.contains("d.c.") || l.contains("d.s.") || l.contains("fine")
+                    let lower = t.trim().to_ascii_lowercase();
+                    matches_macro_prefix(&lower, "d.c.")
+                        || matches_macro_prefix(&lower, "d.s.")
+                        || matches_macro_prefix(&lower, "fine")
                 })
                 .unwrap_or(false)
         };
@@ -240,9 +249,7 @@ fn serialize_music(song: &IrealSong) -> String {
                 }
             }
             if let Some(text) = &bar.text_comment {
-                chart.push('<');
-                chart.push_str(text);
-                chart.push('>');
+                emit_text_comment(&mut chart, text);
             }
             serialize_bar_close(&mut chart, bar);
             if let Some(next) = flat.get(i + 1) {
@@ -386,6 +393,28 @@ fn serialize_symbol(out: &mut String, symbol: MusicalSymbol) {
         MusicalSymbol::DalSegno => out.push_str("<D.S.>"),
         MusicalSymbol::Fine => out.push_str("<Fine>"),
     }
+}
+
+/// Emit a `<...>` comment, stripping the `>` delimiter character
+/// from the body. The iReal Pro chord stream uses `<` / `>` as
+/// the comment-block delimiters and the parser's `find('>')`
+/// would terminate prematurely on the first inner `>`,
+/// truncating the round-trip. `<` is safe inside the body — the
+/// parser captures up to the FIRST closing `>`, so a leading `<`
+/// stays inside the comment text. The replacement is intentional
+/// rather than rejecting outright: callers that constructed an
+/// AST manually (per the public-field contract in `ast.rs`)
+/// shouldn't have their chart silently fail to serialize, but
+/// they will lose any `>` characters they typed.
+fn emit_text_comment(out: &mut String, text: &str) {
+    out.push('<');
+    for ch in text.chars() {
+        if ch == '>' {
+            continue;
+        }
+        out.push(ch);
+    }
+    out.push('>');
 }
 
 fn serialize_chord(out: &mut String, chord: &Chord) {

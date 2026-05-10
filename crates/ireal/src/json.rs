@@ -490,12 +490,14 @@ impl std::error::Error for JsonError {}
 /// A parsed JSON value. The variants correspond exactly to what the
 /// [`ToJson`] impls in this module emit; floating-point numbers are
 /// absent on purpose because the AST never serialises them. `Bool`
-/// is emitted only for the `Bar.repeat_previous` flag.
+/// is emitted only for the `Bar.repeat_previous` and `Bar.no_chord`
+/// flags.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JsonValue {
     /// JSON `null`.
     Null,
-    /// JSON `true` / `false`. Used by `Bar.repeat_previous`.
+    /// JSON `true` / `false`. Used by `Bar.repeat_previous` and
+    /// `Bar.no_chord`.
     Bool(bool),
     /// A signed integer. The serialiser only emits `i8`, `u8`, and `u16`,
     /// so `i64` covers every value losslessly.

@@ -136,18 +136,6 @@ fn push_letter_with_accidental(
     }
 }
 
-#[allow(dead_code)] // retained for future use as a debug helper.
-fn format_root(root: ChordRoot) -> String {
-    let mut out = String::with_capacity(2);
-    out.push(note_glyph_or_fallback(root.note));
-    out.push_str(match root.accidental {
-        chordsketch_ireal::Accidental::Natural => "",
-        chordsketch_ireal::Accidental::Flat => "\u{266D}",
-        chordsketch_ireal::Accidental::Sharp => "\u{266F}",
-    });
-    out
-}
-
 fn quality_extension(q: &ChordQuality) -> String {
     // Glyphs follow `design-system/ui_kits/web/editor-irealb.html`
     // §"Chord typography" — Greek / Latin Unicode stand-ins (Δ, ø,
