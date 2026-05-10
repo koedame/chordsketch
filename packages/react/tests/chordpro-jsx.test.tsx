@@ -200,10 +200,24 @@ describe('renderChordproAst', () => {
   test.each([
     ['JAVASCRIPT:alert(1)'],
     ['  javascript:alert(1)'],
-    ['java​script:alert(1)'],
+    ['java​script:alert(1)'], // ZWSP between java and script
     ['java\tscript:alert(1)'],
-    ['java‮script:alert(1)'],
+    ['java‮script:alert(1)'], // RLO override
   ])('blocks obfuscated dangerous URI: %s', (src) => {
+    const container = renderImageWithSrc(src);
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  // Unicode-whitespace prefix bypass — `str::trim_start` on the
+  // Rust side strips the full `White_Space` property, not just
+  // ASCII. A regression in the JS port that only `.trim()`-ed or
+  // only stripped ASCII whitespace would let these through.
+  test.each([
+    [' javascript:alert(1)'], // NBSP
+    [' vbscript:msgbox(1)'], // LSEP
+    ['　data:text/html,<script>x</script>'], // ideographic space
+    ['﻿javascript:alert(1)'], // BOM (handled by invisible-format strip)
+  ])('blocks Unicode-whitespace-prefixed dangerous URI: %s', (src) => {
     const container = renderImageWithSrc(src);
     expect(container.querySelector('img')).toBeNull();
   });

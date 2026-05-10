@@ -89,6 +89,28 @@ function isAsciiControl(code: number): boolean {
   return code < 0x20 || code === 0x7f;
 }
 
+// Rust's `str::trim_start` strips the full Unicode `White_Space`
+// property — not just ASCII whitespace. The JS port has to cover
+// the same set so an `href` like `\u{00A0}javascript:alert(1)`
+// (NBSP-prefixed) reaches the same prefix-check state in both
+// implementations. Covers all 25 codepoints in the Unicode 16.0
+// `White_Space` property; the 5 ASCII members are picked up by
+// `isAsciiWhitespace` separately so this helper only needs the
+// non-ASCII ones to make the union match.
+function isUnicodeNonAsciiWhitespace(code: number): boolean {
+  return (
+    code === 0x0085 || // NEL — next line
+    code === 0x00a0 || // NBSP — no-break space
+    code === 0x1680 || // ogham space mark
+    (code >= 0x2000 && code <= 0x200a) || // en-quad … hair space
+    code === 0x2028 || // line separator
+    code === 0x2029 || // paragraph separator
+    code === 0x202f || // narrow no-break space
+    code === 0x205f || // medium mathematical space
+    code === 0x3000 // ideographic space
+  );
+}
+
 /**
  * Returns true when `href` is safe to embed in an `href` / `src`
  * attribute.
@@ -96,7 +118,8 @@ function isAsciiControl(code: number): boolean {
  * Mirrors `has_dangerous_uri_scheme` in
  * `crates/render-html/src/lib.rs` byte for byte:
  *
- *   1. Trim leading whitespace.
+ *   1. Trim leading whitespace (full Unicode `White_Space` set,
+ *      matching `str::trim_start`).
  *   2. Drop every embedded ASCII whitespace, ASCII control, and
  *      Unicode invisible / format / bidi-override codepoint —
  *      these are the obfuscations browsers tolerate inside scheme
@@ -107,22 +130,29 @@ function isAsciiControl(code: number): boolean {
  *   4. Lowercase.
  *   5. Prefix-check against `DANGEROUS_URI_SCHEMES`.
  *
+ * Iterates with the string iterator (`for (const c of href)`) so
+ * supplementary-plane codepoints count as one position against
+ * the `take(30)` cap — `for (let i = 0; i < href.length; i++)`
+ * would split astral codepoints into two UTF-16 code units and
+ * diverge from Rust's `chars()` semantics on emoji-padded inputs.
+ *
  * Any change here MUST land in the Rust function in the same PR
  * (sister-site parity per `.claude/rules/fix-propagation.md`).
  */
 function isSafeHref(href: string): boolean {
   const out: string[] = [];
   let started = false;
-  for (let i = 0; i < href.length && out.length < 30; i++) {
-    const code = href.charCodeAt(i);
+  for (const ch of href) {
+    if (out.length >= 30) break;
+    const code = ch.codePointAt(0)!;
     if (!started) {
-      if (isAsciiWhitespace(code)) continue;
+      if (isAsciiWhitespace(code) || isUnicodeNonAsciiWhitespace(code)) continue;
       started = true;
     }
     if (isAsciiWhitespace(code) || isAsciiControl(code) || isInvisibleFormatChar(code)) {
       continue;
     }
-    out.push(href[i]!);
+    out.push(ch);
   }
   const lower = out.join('').toLowerCase();
   return !DANGEROUS_URI_SCHEMES.some((scheme) => lower.startsWith(scheme));
