@@ -285,6 +285,89 @@ describe('renderChordproAst', () => {
     expect(section?.querySelector('.line .lyrics')?.textContent).toBe('In the chorus');
   });
 
+  test('{chorus} recall replays the most-recent chorus body', () => {
+    // Mirrors `chordsketch-render-html`'s `{chorus}` directive
+    // behaviour: a bodyless `{chorus}` emits a
+    // `<div class="chorus-recall">` containing a label + a fresh
+    // copy of the previously declared chorus's children. The
+    // walker tracks `lastChorusBody` per song so multiple
+    // recalls on the same song reuse the same source.
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          // First, declare the chorus
+          {
+            kind: 'directive',
+            value: {
+              name: 'start_of_chorus',
+              value: 'Chorus',
+              kind: { tag: 'startOfChorus' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'lyrics',
+            value: {
+              segments: [{ chord: null, text: 'chorus body line', spans: [] }],
+            },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'end_of_chorus',
+              value: null,
+              kind: { tag: 'endOfChorus' },
+              selector: null,
+            },
+          },
+          // Then a bodyless recall
+          {
+            kind: 'directive',
+            value: {
+              name: 'chorus',
+              value: null,
+              kind: { tag: 'chorus' },
+              selector: null,
+            },
+          },
+        ],
+      }),
+    );
+    const recall = container.querySelector('.chorus-recall');
+    expect(recall).not.toBeNull();
+    expect(recall?.querySelector('.section-label')?.textContent).toBe('Chorus');
+    // The replayed body should land inside the recall wrapper as
+    // a `.line` containing the chorus body's text.
+    expect(recall?.querySelector('.line .lyrics')?.textContent).toBe('chorus body line');
+  });
+
+  test('{chorus} recall with no prior chorus emits a label-only placeholder', () => {
+    // Edge case — a `{chorus}` directive that appears before any
+    // chorus has been declared. The walker has nothing to replay
+    // and falls back to the label-only form.
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'chorus',
+              value: 'Refrain',
+              kind: { tag: 'chorus' },
+              selector: null,
+            },
+          },
+        ],
+      }),
+    );
+    const recall = container.querySelector('.chorus-recall');
+    expect(recall).not.toBeNull();
+    expect(recall?.querySelector('.section-label')?.textContent).toBe('Refrain');
+    expect(recall?.querySelector('.line')).toBeNull();
+  });
+
   test('renders comment lines with the right classes', () => {
     const { container } = render(
       renderChordproAst({

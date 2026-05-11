@@ -24,6 +24,7 @@
 // `DANGEROUS_URI_SCHEMES` here in the same PR per
 // `.claude/rules/sanitizer-security.md` §"Security Asymmetry".
 
+import { Fragment } from 'react';
 import type { CSSProperties, JSX, ReactNode } from 'react';
 import type {
   ChordproChord,
@@ -489,6 +490,21 @@ interface WalkContext {
    * the section closes.
    */
   out: JSX.Element[];
+  /**
+   * Buffered body of the most recently closed chorus section,
+   * captured so `{chorus}` recall directives can replay the
+   * chorus inline. Mirrors `chordsketch-render-html`'s
+   * "remember-last-chorus" state machine. `null` until the
+   * first `{start_of_chorus}` / `{end_of_chorus}` pair has been
+   * walked.
+   */
+  lastChorusBody: JSX.Element[] | null;
+  /**
+   * Display label of the last chorus, so a `{chorus}` recall
+   * with no override label can reuse it instead of defaulting to
+   * the generic "Chorus".
+   */
+  lastChorusLabel: string | null;
 }
 
 function flushSection(ctx: WalkContext, key: number): void {
@@ -506,6 +522,14 @@ function flushSection(ctx: WalkContext, key: number): void {
       {children}
     </section>,
   );
+  // Capture the chorus body for `{chorus}` recall replay. Other
+  // section families (verse / bridge / tab / grid / delegate)
+  // don't have a recall directive in ChordPro, so only the
+  // chorus family is buffered.
+  if (name === 'chorus') {
+    ctx.lastChorusBody = children;
+    ctx.lastChorusLabel = labelText ?? null;
+  }
   ctx.section = null;
 }
 
@@ -563,17 +587,28 @@ function handleDirective(
     return;
   }
 
-  // `{chorus}` recall — emit a placeholder block. The Rust
-  // renderer materialises the most recent chorus body inline; that
-  // recall behaviour requires the renderer to remember the prior
-  // chorus's lines, which is tracked as a follow-up. For now, emit
-  // the same `chorus-recall` wrapper with just the label so the
-  // CSS hook lands.
+  // `{chorus}` recall — replay the most-recently-closed chorus's
+  // body inline. Matches `chordsketch-render-html`'s recall
+  // behaviour: a `{chorus}` directive with no body emits a
+  // `<div class="chorus-recall">` containing a label + a fresh
+  // copy of the buffered chorus children. Until a chorus has
+  // been declared the recall has nothing to replay; emit just
+  // the label so the CSS hook still lands.
   if (kind.tag === 'chorus') {
+    const labelText = directive.value ?? ctx.lastChorusLabel ?? 'Chorus';
+    const replay = ctx.lastChorusBody;
     pushElement(
       ctx,
       <div key={key} className="chorus-recall">
-        <div className="section-label">{directive.value ?? 'Chorus'}</div>
+        <div className="section-label">{labelText}</div>
+        {replay
+          ? // Children are re-keyed under a `recall-` namespace so
+            // a single song with multiple `{chorus}` recalls does
+            // not produce duplicate keys on the same level.
+            replay.map((child, i) => (
+              <Fragment key={`recall-${i}`}>{child}</Fragment>
+            ))
+          : null}
       </div>,
     );
     return;
@@ -639,7 +674,12 @@ export function renderChordproAst(
   song: ChordproSong,
   options: RenderChordproAstOptions = {},
 ): JSX.Element {
-  const ctx: WalkContext = { section: null, out: [] };
+  const ctx: WalkContext = {
+    section: null,
+    out: [],
+    lastChorusBody: null,
+    lastChorusLabel: null,
+  };
   // Emit header first so metadata lands above the body even when
   // the source has metadata directives interleaved with lines.
   for (const headerNode of renderHeader(song.metadata, options)) {
