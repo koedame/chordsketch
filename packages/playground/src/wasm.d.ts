@@ -53,5 +53,17 @@ declare module '@chordsketch/wasm' {
     input: string,
     options: { transpose?: number; config?: string },
   ): string;
+  // `*WithWarnings` variants surface the lenient parser's recovered
+  // `ParseError` messages alongside the AST so the React preview can
+  // render them (round-1 fix for PR #2455). Match the
+  // `ParseChordproResult` shape defined in
+  // `crates/wasm/src/lib.rs`.
+  export function parseChordproWithWarnings(
+    input: string,
+  ): { ast: string; warnings: string[] };
+  export function parseChordproWithWarningsAndOptions(
+    input: string,
+    options: { transpose?: number; config?: string },
+  ): { ast: string; warnings: string[] };
   export default function init(): Promise<void>;
 }
