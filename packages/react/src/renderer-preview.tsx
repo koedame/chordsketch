@@ -2,6 +2,7 @@ import type { HTMLAttributes, ReactNode } from 'react';
 
 import { ChordSheet } from './chord-sheet';
 import { PdfExport } from './pdf-export';
+import type { ChordDiagramInstrument } from './use-chord-diagram';
 import { type ChordRenderFormat, type ChordWasmLoader } from './use-chord-render';
 
 /** Preview format selectable in {@link RendererPreview}. */
@@ -26,6 +27,16 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
   format: PreviewFormat;
   /** Filename used for the PDF download. Defaults to `"chordsketch-output.pdf"`. */
   pdfFilename?: string;
+  /**
+   * Opt-in: render the auto-injected chord-diagrams grid at the end
+   * of the song for the given instrument. The grid is then gated by
+   * the song's `{diagrams: on/off}` / `{no_diagrams}` directives.
+   * Omit (the default) to suppress the grid regardless of the
+   * directive — the React surface intentionally keeps this
+   * consumer-driven rather than auto-emitting like the Rust HTML
+   * renderer does.
+   */
+  chordDiagramsInstrument?: ChordDiagramInstrument;
   /** Optional content rendered while the wasm runtime is initialising. */
   loadingFallback?: ReactNode;
   /**
@@ -71,6 +82,7 @@ export function RendererPreview({
   config,
   format,
   pdfFilename = 'chordsketch-output.pdf',
+  chordDiagramsInstrument,
   loadingFallback,
   errorFallback,
   wasmLoader,
@@ -105,6 +117,7 @@ export function RendererPreview({
       format={format}
       transpose={transpose}
       config={config}
+      chordDiagramsInstrument={chordDiagramsInstrument}
       loadingFallback={loadingFallback}
       errorFallback={errorFallback}
       wasmLoader={wasmLoader}

@@ -61,69 +61,161 @@ interface Sample {
 }
 
 // Exhaustive directive showcase — exercises every directive
-// `chordsketch-chordpro` parses today, ordered roughly by category
-// so the rendered output reads top-to-bottom as a guided tour.
-// Categories: metadata, transpose, custom chord, comments, sections
-// (verse / chorus / bridge / tab / grid / custom), chorus recall,
-// font/size/color overrides, page control, image, meta, generic
-// `{start_of_X}` custom environment.
-const KITCHEN_SINK_SOURCE = `# ChordSketch — Kitchen Sink
-# Every directive ChordSketch currently parses, exercised in order.
-# Lines starting with '#' are comments stripped before rendering.
+// `chordsketch-chordpro` parses today, ordered so each position-
+// dependent block precedes the content it actually affects.
+// Inline `#` comments in the source double as cardinality /
+// scope notes for every directive (see legend at the top of
+// `KITCHEN_SINK_SOURCE`).
+//
+// Spec deviation tracker (see end-of-tour note in the sample):
+//  - {key} / {tempo} are spec-wise position-dependent ("each
+//    specification applies from where it was specified"). Today
+//    `chordsketch-chordpro` stores last-wins in Metadata and the
+//    renderers drop mid-song re-declarations, so a mid-song
+//    `{key: Am}` only changes the header.
+//  - {start_of_grid} bodies render verbatim in monospace today.
+//    Spec defines bar / repeat / volta / strum tokens (|, ||,
+//    |. |: :| :|: |1 :|2, %, %%, S<...>, ., ~, /) that this
+//    renderer does not yet structure.
+const KITCHEN_SINK_SOURCE = `# ChordSketch — All Directives Tour
+#
+# Every directive ChordSketch currently parses. Each category header
+# below states the cardinality + scope of the directives in that
+# group; outliers get an extra one-line note above them.
+#
+# Legend (source: https://www.chordpro.org/chordpro/chordpro-directives/):
+#   [1x]  at most one effective value per song (multiple = last wins)
+#   [Nx]  multiple values accumulate
+#   [Glb] position-independent — collected into song-level metadata
+#   [Pos] position-dependent — applies forward until reset / end
+#
+# Source-level '#' comments (this kind) are only recognised when
+# '#' is the FIRST character on a line — mid-line '#' is literal.
 
-# --- Metadata ---------------------------------------------------
+# === Metadata, once-per-song [1x] [Glb] ==========================
 {title: All Directives Tour}
+{album: Reference Sheet}
+{year: 2026}
+{capo: 2}
+{duration: 3:30}
+{copyright: © 2026 Koedame}
+
+# === Metadata, accumulating [Nx] [Glb] ===========================
 {subtitle: A guided tour of every ChordPro directive}
 {subtitle: Second subtitle (multiple allowed)}
 {artist: ChordSketch Demo}
 {composer: J. Composer}
 {lyricist: J. Lyricist}
-{album: Reference Sheet}
-{year: 2026}
+{tag: demo}
+{tag: reference}
+# {meta: K V} is a generic [Nx] key/value pair.
+{meta: arranger Jane Arranger}
+
+# === Metadata, spec [Nx] [Pos] / ChordSketch [Glb] last-wins =====
+# Per spec, {key}/{tempo}/{time} apply forward from where placed.
+# ChordSketch stores them in song-level Metadata today, so mid-song
+# re-declarations only change the header strip — they don't re-
+# transpose or re-flow downstream chords. See note at end of file.
 {key: G}
 {time: 4/4}
 {tempo: 120}
-{capo: 2}
-{duration: 3:30}
-{copyright: © 2026 Koedame}
-{tag: demo}
-{tag: reference}
-{meta: arranger Jane Arranger}
 
-# --- Custom chord definition (used below) -----------------------
+# === Config override [Nx] [Glb] ==================================
+# {+config.<path>: value} overrides a Config preset key inline.
+# Applied at song level regardless of where placed.
+{+config.settings.titles: left}
+
+# === Custom chord definition [Nx] [Pos] ==========================
+# {define}: introduces a chord (becomes available from this point).
+# {chord}: references a chord for the diagram grid below.
 {define: Gsus4 base-fret 1 frets 3 3 0 0 1 3}
 {chord: Gsus4}
 
-# --- Comments ---------------------------------------------------
+# === Diagrams toggle [Nx] [Pos] ==================================
+# Enabled here so the verses below have their chord diagrams shown.
+# {no_diagrams} or {diagrams: off} would suppress further down.
+{diagrams: true}
+
+# === Font / size / colour overrides [Nx] [Pos] ===================
+# Placed BEFORE the rendered content so the overrides actually take
+# effect on the verses / chorus / labels below.
+# Targets:  text* | chord* | title* | chorus* | label*
+#           tab*  | grid*  | toc*   | footer* | header*
+#    (* = font / size / colour — three suffixes per target.)
+{titlecolour: #BD1642}
+{titlesize: 26}
+{titlefont: sans-serif}
+{chordcolour: #BD1642}
+{chordsize: 14}
+{chordfont: monospace}
+{labelcolour: #BD1642}
+{labelsize: 12}
+{labelfont: sans-serif}
+{textcolour: #1a1a1a}
+{textsize: 16}
+{textfont: serif}
+{choruscolour: #1a1a1a}
+{chorussize: 15}
+{chorusfont: serif}
+# Tab / grid / toc / footer / header families take the same tri-
+# suffix shape — included so each parser arm is exercised.
+{tabcolour: #1a1a1a}
+{tabsize: 12}
+{tabfont: monospace}
+{gridcolour: #1a1a1a}
+{gridsize: 12}
+{gridfont: monospace}
+{toccolour: #1a1a1a}
+{tocsize: 11}
+{tocfont: sans-serif}
+{footercolour: #777777}
+{footersize: 9}
+{footerfont: sans-serif}
+{headercolour: #777777}
+{headersize: 9}
+{headerfont: sans-serif}
+
+# === Comments [Nx] [Pos] =========================================
+# Three rendered comment flavours — italic by default, an explicit
+# italic alias, and a boxed variant. Render in document flow.
 {comment: Plain comment — italic note above the next line}
 {comment_italic: Italic comment variant}
 {comment_box: Boxed comment for emphasis}
 
-# --- Verse with inline chords -----------------------------------
+# === Sections [Nx] [Pos] =========================================
+# start_of_X / end_of_X pairs delimit a named block. The optional
+# value after ':' is the label rendered above the block.
 {start_of_verse: Verse 1}
 [G]This is a [C/G]verse line, [D]chord [Em]over [C]each [G]word.
 [Gsus4]Custom-defined chord above [G]resolves home.
 {end_of_verse}
 
-# --- Chorus (defined once, recalled below) ----------------------
 {start_of_chorus: Chorus}
 [C]Sing the [G]chorus, [D]every-[Em]one to-[C]gether [G]now.
 {end_of_chorus}
 
-# --- Bridge -----------------------------------------------------
 {start_of_bridge: Bridge}
 [Am]A bridge takes you [F]somewhere [C]new before the [G]return.
 {end_of_bridge}
 
-# --- Verse 2 with directive-as-section-label --------------------
-{start_of_verse: Verse 2}
+# === Transpose [Nx] [Pos] ========================================
+# Shifts EVERY subsequent chord by N semitones until the next
+# {transpose}. Verse 2 below should render +2 (G->A, C->D, D->E).
+{transpose: 2}
+
+{start_of_verse: Verse 2 (transposed +2)}
 [G]Second verse, [C]different words, [D]same chord [G]shape.
 {end_of_verse}
 
-# --- Chorus recall (no body — replays the chorus above) ---------
+# Reset before the body-less {chorus} so the recall renders un-
+# transposed (it would otherwise inherit the +2 shift above).
+{transpose: 0}
+
+# === Chorus recall (body-less {chorus}) [Nx] [Pos] ===============
+# Replays the body of the most-recently-defined chorus.
 {chorus}
 
-# --- Tab (verbatim monospace block) -----------------------------
+# === Tab (verbatim monospace block) [Nx] [Pos] ===================
 {start_of_tab: Solo}
 e|---0---2---3---2---0--------|
 B|---0---0---0---0---0--------|
@@ -133,67 +225,63 @@ A|---3-----------3---3--------|
 E|----------------------------|
 {end_of_tab}
 
-# --- Grid (chord-grid block) ------------------------------------
-{start_of_grid: Outro Riff}
-| G . . . | C . . . | D . . . | G . . . |
-| Em . . . | C . . . | D . . . | G . . . |
+# === Grid (chord-grid block) [Nx] [Pos] ==========================
+# Per spec (https://www.chordpro.org/chordpro/directives-env_grid/)
+# grids hold space-separated bar + cell tokens. The renderer
+# currently emits the body verbatim in monospace — bar / repeat /
+# volta semantics are not yet structured (tracked separately).
+# Token reference:
+#   |    bar         ||   double bar    |.   end / final bar
+#   |:   start repeat :|  stop repeat   :|:  combined repeat
+#   |1 :|2            volta (1st / 2nd ending)
+#   .    empty cell   ~   multi-chord cell separator
+#   /    must-be-played-here
+#   %    repeat prev bar   %%  repeat prev two bars
+#   S<…> strum line  (d u  d+ u+  ux dx  da ua  x …)
+{start_of_grid: Outro Riff (with repeats + ending)}
+|: G  .  .  . | C  .  .  . | D  .  .  . | G  .  .  . :|
+|1 Em .  .  . | C  .  .  . :| |2 Am .  .  . | G  .  .  . |.
 {end_of_grid}
 
-# --- Custom section (generic start_of_X) ------------------------
+# === Custom section [Nx] [Pos] ===================================
+# {start_of_X} with any name → generic environment (section-X).
 {start_of_intro: Intro}
 [G]Pick [Em]each [C]string [D]gently.
 {end_of_intro}
 
-# --- Transpose directive ----------------------------------------
-{transpose: 0}
-
-# --- Font / size / colour overrides -----------------------------
-{textfont: serif}
-{textsize: 14}
-{textcolour: #1a1a1a}
-{chordfont: monospace}
-{chordsize: 12}
-{chordcolour: #BD1642}
-{titlefont: sans-serif}
-{titlesize: 24}
-{titlecolour: #1a1a1a}
-{chorusfont: serif}
-{chorussize: 13}
-{choruscolour: #555555}
-{footerfont: sans-serif}
-{footersize: 9}
-{footercolour: #777777}
-{headerfont: sans-serif}
-{headersize: 9}
-{headercolour: #777777}
-{labelfont: sans-serif}
-{labelsize: 11}
-{labelcolour: #BD1642}
-{gridfont: monospace}
-{gridsize: 11}
-{gridcolour: #1a1a1a}
-{tabfont: monospace}
-{tabsize: 11}
-{tabcolour: #1a1a1a}
-{tocfont: sans-serif}
-{tocsize: 11}
-{toccolour: #1a1a1a}
-
-# --- Diagrams toggle --------------------------------------------
-{diagrams: true}
-{no_diagrams}
-
-# --- Page / layout control --------------------------------------
+# === Page / layout control =======================================
+# Affect paged output (most visible in PDF; in HTML, {columns}
+# maps to CSS column-count, breaks become spacer elements).
+# {columns}: [1x] [Pos]  — sets multi-column flow.
 {columns: 2}
-{column_break}
-{new_page}
-{new_physical_page}
 
-# --- Image ------------------------------------------------------
+{start_of_verse: Column A}
+[G]Left column [C]content before [D]the column [G]break.
+{end_of_verse}
+
+# {column_break}, {new_page}, {new_physical_page}: [Nx] [Pos]
+# (positioned breaks; no value).
+{column_break}
+
+{start_of_verse: Column B}
+[G]Right column [C]content after [D]the column [G]break.
+{end_of_verse}
+
+{new_page}
+
+# === Image [Nx] [Pos] ============================================
+# Rendered inline at this location in document flow.
 {image: src="https://raw.githubusercontent.com/koedame/chordsketch/main/assets/logo-128.png" width=64 height=64 title="ChordSketch logo"}
 
-# --- Config override --------------------------------------------
-{+config.settings.titles: left}
+{new_physical_page}
+
+# === End of tour =================================================
+# Where ChordSketch deviates from spec today:
+#  * {key} / {tempo} / {time} are stored last-wins in Metadata.
+#    Mid-song re-declarations do not retrigger transpose or
+#    re-render the header strip past the first value.
+#  * {start_of_grid} body is verbatim text; bar / repeat / volta
+#    tokens listed above are not yet parsed into a structured grid.
 `;
 
 const SAMPLES: ReadonlyArray<Sample> = [
@@ -709,7 +797,12 @@ function PlaygroundApp(): JSX.Element {
               </div>
             </div>
             <div className="pane-body">
-              <RendererPreview source={source} transpose={transpose} format="html" />
+              <RendererPreview
+                source={source}
+                transpose={transpose}
+                format="html"
+                chordDiagramsInstrument="guitar"
+              />
             </div>
           </section>
         )}
