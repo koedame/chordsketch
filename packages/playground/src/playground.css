@@ -1221,3 +1221,23 @@ a {
   color: var(--cs-text-tertiary, #8A8790);
   cursor: not-allowed;
 }
+
+/* Ghost-styled select used by the editor's insert toolbar.
+   Matches the visual weight of the `.btn-ghost .btn-sm` siblings
+   (`+ Chord`) so the row reads as a single action group — the
+   user clicks the picker, picks an option, and the snippet is
+   inserted. The `--cs-font-latin` switch mirrors the same
+   change applied to `.btn` (see playground.css §"Buttons /
+   actions") — Latin glyphs sit at the geometric centre of the
+   28px box while Noto Sans JP would push them ~1px down. */
+.chordsketch-app__select.insert-picker {
+  background: transparent;
+  border-color: transparent;
+  color: var(--cs-text-secondary, #67646D);
+  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+}
+.chordsketch-app__select.insert-picker:hover:not(:disabled) {
+  background: var(--cs-ink-100, #F6F4F7);
+  border-color: transparent;
+  color: var(--cs-text-primary, #0A0A0B);
+}

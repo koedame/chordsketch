@@ -533,48 +533,58 @@ function PlaygroundApp(): JSX.Element {
                   </svg>
                   Chord
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => insert('{title: }')}
+                <select
+                  className="chordsketch-app__select insert-picker"
+                  aria-label="Insert ChordPro directive"
+                  value=""
+                  onChange={(e) => {
+                    const snippet = e.currentTarget.value;
+                    e.currentTarget.value = '';
+                    if (snippet) insert(snippet);
+                  }}
                 >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    aria-hidden="true"
-                    focusable="false"
-                  >
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  Directive
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() =>
-                    insert('\n{start_of_verse}\n\n{end_of_verse}\n', false)
-                  }
+                  <option value="" disabled>
+                    + Directive
+                  </option>
+                  <option value="{title: }">title</option>
+                  <option value="{subtitle: }">subtitle</option>
+                  <option value="{artist: }">artist</option>
+                  <option value="{composer: }">composer</option>
+                  <option value="{key: }">key</option>
+                  <option value="{tempo: }">tempo</option>
+                  <option value="{time: }">time</option>
+                  <option value="{capo: }">capo</option>
+                  <option value="{comment: }">comment</option>
+                  <option value="{comment_italic: }">comment_italic</option>
+                  <option value="{comment_box: }">comment_box</option>
+                  <option value="{define: }">define</option>
+                  <option value="{image: }">image</option>
+                </select>
+                <select
+                  className="chordsketch-app__select insert-picker"
+                  aria-label="Insert ChordPro section"
+                  value=""
+                  onChange={(e) => {
+                    const snippet = e.currentTarget.value;
+                    e.currentTarget.value = '';
+                    if (snippet) insert(snippet, false);
+                  }}
                 >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    aria-hidden="true"
-                    focusable="false"
-                  >
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  Section
-                </button>
+                  <option value="" disabled>
+                    + Section
+                  </option>
+                  <option value={'\n{start_of_verse}\n\n{end_of_verse}\n'}>
+                    verse
+                  </option>
+                  <option value={'\n{start_of_chorus}\n\n{end_of_chorus}\n'}>
+                    chorus
+                  </option>
+                  <option value={'\n{start_of_bridge}\n\n{end_of_bridge}\n'}>
+                    bridge
+                  </option>
+                  <option value={'\n{start_of_tab}\n\n{end_of_tab}\n'}>tab</option>
+                  <option value={'\n{start_of_grid}\n\n{end_of_grid}\n'}>grid</option>
+                </select>
               </div>
             </div>
             <div className="pane-body">
