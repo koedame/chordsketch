@@ -744,4 +744,435 @@ describe('renderChordproAst', () => {
     );
     expect(container.querySelector('.chord')?.textContent).toBe('A−');
   });
+
+  // ---- Group D: font / size / colour directives ------------------------
+  //
+  // The walker mirrors `chordsketch-render-html`'s `FormattingState`
+  // state machine — a `{textfont}` / `{chordsize}` / etc. directive
+  // mutates the running style, and every line emitted afterwards
+  // picks up an inline style on the matching element. Sister-site
+  // parity per `.claude/rules/renderer-parity.md` and
+  // `.claude/rules/fix-propagation.md`.
+
+  test('{textfont} / {textsize} / {textcolour} apply to lyric .lyrics spans', () => {
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'textfont',
+              value: 'Courier New',
+              kind: { tag: 'textFont' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'textsize',
+              value: '14',
+              kind: { tag: 'textSize' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'textcolour',
+              value: 'red',
+              kind: { tag: 'textColour' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'lyrics',
+            value: {
+              segments: [{ chord: null, text: 'styled', spans: [] }],
+            },
+          },
+        ],
+      }),
+    );
+    const lyrics = container.querySelector('.lyrics') as HTMLElement | null;
+    expect(lyrics).not.toBeNull();
+    expect(lyrics?.style.fontFamily).toBe('Courier New');
+    // Bare numeric values clamp into the [0.5, 200] band and emit
+    // as point sizes — matches the Rust renderer's
+    // `sanitize_css_value` + bare-number fallback.
+    expect(lyrics?.style.fontSize).toBe('14pt');
+    expect(lyrics?.style.color).toBe('red');
+  });
+
+  test('{chordfont} / {chordsize} / {chordcolour} apply to .chord spans', () => {
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'chordfont',
+              value: 'Courier New',
+              kind: { tag: 'chordFont' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'chordcolour',
+              value: 'blue',
+              kind: { tag: 'chordColour' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'lyrics',
+            value: {
+              segments: [
+                {
+                  chord: { name: 'G', detail: null, display: null },
+                  text: 'hi',
+                  spans: [],
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    );
+    const chord = container.querySelector('.chord') as HTMLElement | null;
+    expect(chord).not.toBeNull();
+    expect(chord?.style.fontFamily).toBe('Courier New');
+    expect(chord?.style.color).toBe('blue');
+  });
+
+  test('{titlefont} / {titlesize} / {titlecolour} apply to the <h1> title', () => {
+    const { container } = render(
+      renderChordproAst({
+        metadata: { ...EMPTY_META, title: 'Styled Song' },
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'titlefont',
+              value: 'Courier New',
+              kind: { tag: 'titleFont' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'titlesize',
+              value: '32',
+              kind: { tag: 'titleSize' },
+              selector: null,
+            },
+          },
+        ],
+      }),
+    );
+    const h1 = container.querySelector('h1') as HTMLElement | null;
+    expect(h1).not.toBeNull();
+    expect(h1?.textContent).toBe('Styled Song');
+    expect(h1?.style.fontFamily).toBe('Courier New');
+    expect(h1?.style.fontSize).toBe('32pt');
+  });
+
+  test('title style is pinned at file start — post-lyrics directives do not affect <h1>', () => {
+    // `computeHeaderFormattingState` only consumes directives that
+    // appear BEFORE the first lyric / section / comment line. This
+    // mirrors the Rust renderer's emit order — the header lands
+    // first, before any in-body directive has had a chance to fire.
+    const { container } = render(
+      renderChordproAst({
+        metadata: { ...EMPTY_META, title: 'Song' },
+        lines: [
+          {
+            kind: 'lyrics',
+            value: { segments: [{ chord: null, text: 'lyric', spans: [] }] },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'titlecolour',
+              value: 'red',
+              kind: { tag: 'titleColour' },
+              selector: null,
+            },
+          },
+        ],
+      }),
+    );
+    const h1 = container.querySelector('h1') as HTMLElement | null;
+    expect(h1?.style.color).toBe('');
+  });
+
+  test('{labelfont} / {labelcolour} apply to .section-label inside <section>', () => {
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'labelcolour',
+              value: 'green',
+              kind: { tag: 'labelColour' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'start_of_verse',
+              value: 'Verse',
+              kind: { tag: 'startOfVerse' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'lyrics',
+            value: { segments: [{ chord: null, text: 'v', spans: [] }] },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'end_of_verse',
+              value: null,
+              kind: { tag: 'endOfVerse' },
+              selector: null,
+            },
+          },
+        ],
+      }),
+    );
+    const label = container.querySelector('section.verse .section-label') as HTMLElement | null;
+    expect(label).not.toBeNull();
+    expect(label?.style.color).toBe('green');
+  });
+
+  test('{choruscolour} applies to the chorus <section> wrapper', () => {
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'choruscolour',
+              value: 'orange',
+              kind: { tag: 'chorusColour' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'start_of_chorus',
+              value: null,
+              kind: { tag: 'startOfChorus' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'lyrics',
+            value: { segments: [{ chord: null, text: 'c', spans: [] }] },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'end_of_chorus',
+              value: null,
+              kind: { tag: 'endOfChorus' },
+              selector: null,
+            },
+          },
+        ],
+      }),
+    );
+    const section = container.querySelector('section.chorus') as HTMLElement | null;
+    expect(section).not.toBeNull();
+    expect(section?.style.color).toBe('orange');
+  });
+
+  test('{tabfont} applies to lyrics inside section.tab; .grid mirrors {gridfont}', () => {
+    // Inside a `section.tab`, the body picks up the `.tab`
+    // element style (not `.text`). Same shape for `section.grid` /
+    // `.grid`. Mirrors `chordsketch-render-html`'s per-section
+    // style override.
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'tabfont',
+              value: 'Courier New',
+              kind: { tag: 'tabFont' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'start_of_tab',
+              value: null,
+              kind: { tag: 'startOfTab' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'lyrics',
+            value: { segments: [{ chord: null, text: 'tabbed', spans: [] }] },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'end_of_tab',
+              value: null,
+              kind: { tag: 'endOfTab' },
+              selector: null,
+            },
+          },
+        ],
+      }),
+    );
+    const lyrics = container.querySelector('section.tab .lyrics') as HTMLElement | null;
+    expect(lyrics).not.toBeNull();
+    expect(lyrics?.style.fontFamily).toBe('Courier New');
+  });
+
+  test('in-chorus formatting directives are scoped — restored on {end_of_chorus}', () => {
+    // The walker captures `ctx.fmt` on `{start_of_chorus}` and
+    // restores on `{end_of_chorus}` so in-chorus style overrides
+    // don't leak into subsequent verses. Sister-site parity with
+    // the Rust renderer's save/restore.
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'start_of_chorus',
+              value: null,
+              kind: { tag: 'startOfChorus' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'textcolour',
+              value: 'red',
+              kind: { tag: 'textColour' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'lyrics',
+            value: { segments: [{ chord: null, text: 'inside', spans: [] }] },
+          },
+          {
+            kind: 'directive',
+            value: {
+              name: 'end_of_chorus',
+              value: null,
+              kind: { tag: 'endOfChorus' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'lyrics',
+            value: { segments: [{ chord: null, text: 'after', spans: [] }] },
+          },
+        ],
+      }),
+    );
+    const inside = container.querySelector(
+      'section.chorus .lyrics',
+    ) as HTMLElement | null;
+    expect(inside?.style.color).toBe('red');
+    // The trailing lyric line lives outside the section — pick it
+    // up from the top-level `.song` body, not from the chorus
+    // section.
+    const after = container.querySelectorAll(
+      '.song > .line .lyrics',
+    )[0] as HTMLElement | undefined;
+    expect(after).toBeDefined();
+    expect(after?.textContent).toBe('after');
+    expect(after?.style.color).toBe('');
+  });
+
+  test('font-size directive value clamps into the [0.5, 200] band', () => {
+    // `clampSize` mirrors the Rust renderer's clamp — 99999 falls
+    // back to 200, -42 to 0.5. Both end up as point sizes via the
+    // bare-numeric path in `elementStyleToCss`.
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'textsize',
+              value: '99999',
+              kind: { tag: 'textSize' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'lyrics',
+            value: { segments: [{ chord: null, text: 'huge', spans: [] }] },
+          },
+        ],
+      }),
+    );
+    const lyrics = container.querySelector('.lyrics') as HTMLElement | null;
+    expect(lyrics?.style.fontSize).toBe('200pt');
+  });
+
+  test('CSS-value sanitiser drops unsafe characters from directive payloads', () => {
+    // Sister-site to `sanitize_css_value` in the Rust renderer —
+    // a payload like `red;background:url(x)` must NOT smuggle the
+    // `;` or `(` through to the inline style. Anything outside
+    // `[A-Za-z0-9# . - <space> , % +]` is stripped.
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'textcolour',
+              value: 'red;background:url(x)',
+              kind: { tag: 'textColour' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'lyrics',
+            value: { segments: [{ chord: null, text: 'x', spans: [] }] },
+          },
+        ],
+      }),
+    );
+    const lyrics = container.querySelector('.lyrics') as HTMLElement | null;
+    // After sanitisation `;`, `:`, `(`, `)` are dropped — the
+    // surviving payload contains only safe characters. The
+    // browser may or may not accept it as a colour, but the
+    // sanitiser's job is to keep the inline-style string syntax
+    // intact; what we assert here is that the dangerous tokens
+    // never reach the DOM.
+    const color = lyrics?.style.color ?? '';
+    expect(color).not.toContain(';');
+    expect(color).not.toContain(':');
+    expect(color).not.toContain('(');
+    expect(color).not.toContain(')');
+  });
 });

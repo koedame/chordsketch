@@ -248,7 +248,16 @@ function renderChord(chord: ChordproChord): string {
 
 // ---- Lyrics line ---------------------------------------------------
 
-function renderLyricsLine(line: ChordproLyricsLine, key: number): JSX.Element {
+function renderLyricsLine(
+  line: ChordproLyricsLine,
+  key: number,
+  fmt: FormattingState,
+  /** Override style applied to `.lyrics` when the line sits
+   * inside a `section.tab` / `section.grid` — those families
+   * use the `tab` / `grid` element styles for body content
+   * instead of `text`. */
+  lyricsOverride: CSSProperties | null = null,
+): JSX.Element {
   // If ANY segment on this line carries a chord, every other
   // segment needs a chord-row placeholder so the lyric baselines
   // stay aligned. A genuinely empty `<span class="chord"/>`
@@ -262,18 +271,24 @@ function renderLyricsLine(line: ChordproLyricsLine, key: number): JSX.Element {
   // assistive tech does not announce it as "space". See
   // ADR-0017 for the broader sister-site parity contract.
   const lineHasChords = line.segments.some((s) => s.chord !== null);
+  const chordStyle = elementStyleToCss(fmt.chord);
+  const textStyle = lyricsOverride ?? elementStyleToCss(fmt.text);
   return (
     <div key={key} className="line">
       {line.segments.map((segment, i) => (
         <span key={i} className="chord-block">
           {segment.chord ? (
-            <span className="chord">{renderChord(segment.chord)}</span>
+            <span className="chord" style={chordStyle ?? undefined}>
+              {renderChord(segment.chord)}
+            </span>
           ) : lineHasChords ? (
-            <span className="chord" aria-hidden="true">
+            <span className="chord" aria-hidden="true" style={chordStyle ?? undefined}>
               {' '}
             </span>
           ) : null}
-          <span className="lyrics">{renderSegmentText(segment)}</span>
+          <span className="lyrics" style={textStyle ?? undefined}>
+            {renderSegmentText(segment)}
+          </span>
         </span>
       ))}
     </div>
@@ -286,23 +301,30 @@ function renderComment(
   style: 'normal' | 'italic' | 'boxed',
   text: string,
   key: number,
+  fmt: FormattingState,
 ): JSX.Element {
+  // Comments pick up the running `.text` style — they sit in the
+  // body flow alongside lyric lines, so a `{textfont: ...}` /
+  // `{textsize: ...}` directive should affect them in lockstep
+  // with the surrounding lyrics. Mirror of the Rust renderer's
+  // comment-body style attribution.
+  const textStyle = elementStyleToCss(fmt.text);
   if (style === 'boxed') {
     return (
-      <div key={key} className="comment-box">
+      <div key={key} className="comment-box" style={textStyle ?? undefined}>
         {text}
       </div>
     );
   }
   if (style === 'italic') {
     return (
-      <p key={key} className="comment">
+      <p key={key} className="comment" style={textStyle ?? undefined}>
         <em>{text}</em>
       </p>
     );
   }
   return (
-    <p key={key} className="comment">
+    <p key={key} className="comment" style={textStyle ?? undefined}>
       {text}
     </p>
   );
@@ -471,6 +493,166 @@ function collectChordNames(song: ChordproSong): string[] {
   return out;
 }
 
+// Font-size clamping range, mirroring `MIN_FONT_SIZE` and
+// `MAX_FONT_SIZE` in `crates/render-html/src/lib.rs` and the PDF
+// renderer's matching constants. Out-of-range `{textsize: …}` etc.
+// values clamp to this band so a degenerate input (e.g.
+// `textsize: 99999`) does not blow up the layout.
+const MIN_FONT_SIZE = 0.5;
+const MAX_FONT_SIZE = 200;
+
+// CSS-value sanitiser. Mirror of
+// `crates/render-html/src/lib.rs::sanitize_css_value` —
+// alphanumerics + `# . - <space> , % +` survive; everything else
+// is dropped. Stops directive payloads from injecting `;`, `}`,
+// or url(...) escapes into the inline style we emit.
+function sanitizeCssValue(s: string): string {
+  let out = '';
+  for (const c of s) {
+    if (/[A-Za-z0-9]/.test(c) || c === '#' || c === '.' || c === '-' ||
+        c === ' ' || c === ',' || c === '%' || c === '+') {
+      out += c;
+    }
+  }
+  return out;
+}
+
+/** Per-element formatting state for the walker — mirrors
+ * `chordsketch-render-html::ElementStyle`. `null` fields fall
+ * back to the host's CSS. */
+interface ElementStyle {
+  font: string | null;
+  size: string | null;
+  colour: string | null;
+}
+
+function emptyElementStyle(): ElementStyle {
+  return { font: null, size: null, colour: null };
+}
+
+/** Convert an `ElementStyle` to a `React.CSSProperties` object,
+ * sanitising values along the way and treating bare-numeric size
+ * values as point sizes (matching the Rust renderer). Returns
+ * `null` when no style has been set — callers can skip the
+ * `style={…}` prop in that case. */
+function elementStyleToCss(style: ElementStyle): CSSProperties | null {
+  const css: CSSProperties = {};
+  if (style.font) css.fontFamily = sanitizeCssValue(style.font);
+  if (style.size) {
+    const safe = sanitizeCssValue(style.size);
+    if (/^\d+$/.test(safe)) {
+      css.fontSize = `${safe}pt`;
+    } else if (safe.length > 0) {
+      css.fontSize = safe;
+    }
+  }
+  if (style.colour) css.color = sanitizeCssValue(style.colour);
+  return Object.keys(css).length > 0 ? css : null;
+}
+
+/** Snapshot of all element styles tracked by the walker. Each
+ * `{Xfont,Xsize,Xcolour}` directive updates the matching field;
+ * downstream emitted elements pick up the corresponding inline
+ * style. `Header`/`Footer`/`Toc` directives are intentionally
+ * absent — they are PDF-only concerns. */
+interface FormattingState {
+  text: ElementStyle;
+  chord: ElementStyle;
+  tab: ElementStyle;
+  title: ElementStyle;
+  chorus: ElementStyle;
+  label: ElementStyle;
+  grid: ElementStyle;
+}
+
+function emptyFormattingState(): FormattingState {
+  return {
+    text: emptyElementStyle(),
+    chord: emptyElementStyle(),
+    tab: emptyElementStyle(),
+    title: emptyElementStyle(),
+    chorus: emptyElementStyle(),
+    label: emptyElementStyle(),
+    grid: emptyElementStyle(),
+  };
+}
+
+function cloneFormattingState(s: FormattingState): FormattingState {
+  return {
+    text: { ...s.text },
+    chord: { ...s.chord },
+    tab: { ...s.tab },
+    title: { ...s.title },
+    chorus: { ...s.chorus },
+    label: { ...s.label },
+    grid: { ...s.grid },
+  };
+}
+
+/** Clamp a numeric font-size directive payload to the
+ * `[MIN_FONT_SIZE, MAX_FONT_SIZE]` band. Non-numeric values
+ * pass through unchanged. */
+function clampSize(raw: string | null): string | null {
+  if (raw === null) return null;
+  const n = parseFloat(raw);
+  if (Number.isNaN(n)) return raw;
+  const clamped = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, n));
+  return String(clamped);
+}
+
+/** Apply a `{Xfont}`/`{Xsize}`/`{Xcolour}` directive to the
+ * walker's running `FormattingState`. Unrecognised tags are
+ * no-ops (the body of `handleDirective` already filters by
+ * `tag`). */
+function applyFormattingDirective(
+  state: FormattingState,
+  tag: ChordproDirectiveKind['tag'],
+  rawValue: string | null,
+): void {
+  switch (tag) {
+    case 'textFont': state.text.font = rawValue; break;
+    case 'textSize': state.text.size = clampSize(rawValue); break;
+    case 'textColour': state.text.colour = rawValue; break;
+    case 'chordFont': state.chord.font = rawValue; break;
+    case 'chordSize': state.chord.size = clampSize(rawValue); break;
+    case 'chordColour': state.chord.colour = rawValue; break;
+    case 'tabFont': state.tab.font = rawValue; break;
+    case 'tabSize': state.tab.size = clampSize(rawValue); break;
+    case 'tabColour': state.tab.colour = rawValue; break;
+    case 'titleFont': state.title.font = rawValue; break;
+    case 'titleSize': state.title.size = clampSize(rawValue); break;
+    case 'titleColour': state.title.colour = rawValue; break;
+    case 'chorusFont': state.chorus.font = rawValue; break;
+    case 'chorusSize': state.chorus.size = clampSize(rawValue); break;
+    case 'chorusColour': state.chorus.colour = rawValue; break;
+    case 'labelFont': state.label.font = rawValue; break;
+    case 'labelSize': state.label.size = clampSize(rawValue); break;
+    case 'labelColour': state.label.colour = rawValue; break;
+    case 'gridFont': state.grid.font = rawValue; break;
+    case 'gridSize': state.grid.size = clampSize(rawValue); break;
+    case 'gridColour': state.grid.colour = rawValue; break;
+    // Header / footer / toc directives are PDF-only — silently
+    // skip on the React surface.
+    default: break;
+  }
+}
+
+/** Pre-walk the AST to compute the formatting state at the
+ * *start* of the song body — for `renderHeader`, which fires
+ * before line-walking begins. Title-related directives that
+ * appear before the first lyric / section line take effect on
+ * the header; anything after that point shows up after the
+ * header is emitted, so the headline keeps the pre-body state. */
+function computeHeaderFormattingState(song: ChordproSong): FormattingState {
+  const state = emptyFormattingState();
+  for (const line of song.lines) {
+    if (line.kind === 'lyrics') break;
+    if (line.kind !== 'directive') continue;
+    applyFormattingDirective(state, line.value.kind.tag, line.value.value);
+  }
+  return state;
+}
+
 // Resolve `{diagrams: on/off}` / `{no_diagrams}` directives to a
 // boolean. Default = true (chord diagrams visible) unless the
 // AST explicitly turns them off.
@@ -496,10 +678,16 @@ function resolveDiagramsVisible(song: ChordproSong): boolean {
 function renderHeader(
   metadata: ChordproMetadata,
   options: RenderChordproAstOptions,
+  fmt: FormattingState,
 ): JSX.Element[] {
   const out: JSX.Element[] = [];
+  const titleStyle = elementStyleToCss(fmt.title);
   if (metadata.title) {
-    out.push(<h1 key="title">{metadata.title}</h1>);
+    out.push(
+      <h1 key="title" style={titleStyle ?? undefined}>
+        {metadata.title}
+      </h1>,
+    );
   }
   if (metadata.subtitles.length > 0) {
     out.push(<h2 key="subtitle">{metadata.subtitles.join(' · ')}</h2>);
@@ -566,6 +754,21 @@ interface WalkContext {
   /** When non-null, lines are pushed into this section's children. */
   section: SectionState | null;
   /**
+   * Running font/size/colour state — updated by `{Xfont}` /
+   * `{Xsize}` / `{Xcolour}` directives, picked up by every line
+   * emitted afterwards. Mirrors `chordsketch-render-html`'s
+   * `FormattingState` so the same state-machine semantics apply
+   * (in-chorus directives are scoped via the save/restore
+   * pattern below).
+   */
+  fmt: FormattingState;
+  /**
+   * Saved formatting state captured on `{start_of_chorus}` so
+   * in-chorus directives don't leak out — restored on
+   * `{end_of_chorus}`. Matches the Rust renderer's behaviour.
+   */
+  savedFmt: FormattingState | null;
+  /**
    * Output buffer for top-level (non-section) elements. The walker
    * appends a finished section's `<section>` into this buffer when
    * the section closes.
@@ -592,13 +795,19 @@ function flushSection(ctx: WalkContext, key: number): void {
   if (!ctx.section) return;
   const { name, label, children } = ctx.section;
   const labelText = label ?? SECTION_LABEL_DEFAULT[name];
+  const labelStyle = elementStyleToCss(ctx.fmt.label);
   const labelNode = labelText ? (
-    <div key="label" className="section-label">
+    <div key="label" className="section-label" style={labelStyle ?? undefined}>
       {labelText}
     </div>
   ) : null;
+  // The chorus section as a whole picks up the `chorus` element
+  // style. Other section families don't have a dedicated style
+  // entry in `FormattingState` — they inherit `.text` via their
+  // lyric lines.
+  const sectionStyle = name === 'chorus' ? elementStyleToCss(ctx.fmt.chorus) : null;
   ctx.out.push(
-    <section key={key} className={name}>
+    <section key={key} className={name} style={sectionStyle ?? undefined}>
       {labelNode}
       {children}
     </section>,
@@ -622,6 +831,24 @@ function pushElement(ctx: WalkContext, element: JSX.Element): void {
   }
 }
 
+// Set of directive tags that mutate the running `FormattingState`
+// — used by `handleDirective` to dispatch to
+// `applyFormattingDirective` without re-listing the 21 cases.
+// The set covers element styles handled by the React surface;
+// header / footer / toc are PDF-only and silently drop through
+// `applyFormattingDirective`'s `default` arm.
+const FORMATTING_TAGS: ReadonlySet<ChordproDirectiveKind['tag']> = new Set<
+  ChordproDirectiveKind['tag']
+>([
+  'textFont', 'textSize', 'textColour',
+  'chordFont', 'chordSize', 'chordColour',
+  'tabFont', 'tabSize', 'tabColour',
+  'titleFont', 'titleSize', 'titleColour',
+  'chorusFont', 'chorusSize', 'chorusColour',
+  'labelFont', 'labelSize', 'labelColour',
+  'gridFont', 'gridSize', 'gridColour',
+]);
+
 function handleDirective(
   ctx: WalkContext,
   directive: ChordproDirective,
@@ -633,6 +860,16 @@ function handleDirective(
   // force casts at every payload-bearing branch.
   const kind = directive.kind;
 
+  // Font / size / colour directive — mutate the walker's running
+  // `FormattingState` so subsequent lines / sections pick up the
+  // new style. No DOM emit on its own; the next emitted element
+  // reads from `ctx.fmt`. Mirrors
+  // `chordsketch-render-html::FormattingState::apply`.
+  if (FORMATTING_TAGS.has(kind.tag)) {
+    applyFormattingDirective(ctx.fmt, kind.tag, directive.value);
+    return;
+  }
+
   // Section open — named (chorus / verse / bridge / tab / grid /
   // delegate) and custom (`{start_of_<name>}`).
   if (kind.tag in SECTION_TAG_TO_NAME) {
@@ -640,6 +877,15 @@ function handleDirective(
     // opening a new one — `<section>` nesting is not part of the
     // ChordPro grammar, so the lenient path is "implicit close".
     flushSection(ctx, key * 1000);
+    // On `{start_of_chorus}`, save the current formatting state so
+    // any in-chorus `{Xfont}` / `{Xsize}` / `{Xcolour}` directives
+    // don't leak out when the chorus closes. Matches the Rust
+    // renderer's save / restore semantics. Other section families
+    // do not establish a formatting scope — their directives
+    // affect the rest of the song.
+    if (kind.tag === 'startOfChorus') {
+      ctx.savedFmt = cloneFormattingState(ctx.fmt);
+    }
     ctx.section = {
       name: SECTION_TAG_TO_NAME[kind.tag]!,
       label: directive.value ?? null,
@@ -664,6 +910,15 @@ function handleDirective(
 
   // Section close — named + custom.
   if (kind.tag in END_TAG_TO_NAME || kind.tag === 'endOfSection') {
+    // Restore the pre-chorus formatting state captured on
+    // `{start_of_chorus}` so in-chorus styles don't leak out. A
+    // mismatched `{end_of_chorus}` (no matching `{start_of_chorus}`)
+    // falls through with `savedFmt === null`, leaving the running
+    // state untouched — same as the Rust renderer.
+    if (kind.tag === 'endOfChorus' && ctx.savedFmt !== null) {
+      ctx.fmt = ctx.savedFmt;
+      ctx.savedFmt = null;
+    }
     flushSection(ctx, key);
     return;
   }
@@ -723,11 +978,22 @@ function handleDirective(
 
 function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {
   switch (line.kind) {
-    case 'lyrics':
-      pushElement(ctx, renderLyricsLine(line.value, key));
+    case 'lyrics': {
+      // Inside a `section.tab` / `section.grid`, the body picks up
+      // the `tab` / `grid` element style instead of the running
+      // `.text` style — mirrors `chordsketch-render-html`'s
+      // per-section style override.
+      let lyricsOverride: CSSProperties | null = null;
+      if (ctx.section?.name === 'tab') {
+        lyricsOverride = elementStyleToCss(ctx.fmt.tab);
+      } else if (ctx.section?.name === 'grid') {
+        lyricsOverride = elementStyleToCss(ctx.fmt.grid);
+      }
+      pushElement(ctx, renderLyricsLine(line.value, key, ctx.fmt, lyricsOverride));
       return;
+    }
     case 'comment':
-      pushElement(ctx, renderComment(line.style, line.text, key));
+      pushElement(ctx, renderComment(line.style, line.text, key, ctx.fmt));
       return;
     case 'empty':
       pushElement(ctx, <div key={key} className="empty-line" />);
@@ -760,10 +1026,17 @@ export function renderChordproAst(
     out: [],
     lastChorusBody: null,
     lastChorusLabel: null,
+    fmt: emptyFormattingState(),
+    savedFmt: null,
   };
   // Emit header first so metadata lands above the body even when
   // the source has metadata directives interleaved with lines.
-  for (const headerNode of renderHeader(song.metadata, options)) {
+  // Header uses a pre-walked formatting snapshot — only
+  // directives that appear BEFORE the first lyric / section line
+  // affect the header title (matches the Rust renderer's
+  // behaviour where the title styling is fixed at file start).
+  const headerFmt = computeHeaderFormattingState(song);
+  for (const headerNode of renderHeader(song.metadata, options, headerFmt)) {
     ctx.out.push(headerNode);
   }
   song.lines.forEach((line, i) => renderLine(ctx, line, i + 1));
