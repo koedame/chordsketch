@@ -538,7 +538,20 @@ function PlaygroundApp(): JSX.Element {
                   className="btn btn-ghost btn-sm"
                   onClick={() => insert('{title: }')}
                 >
-                  {'{directive}'}
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Directive
                 </button>
                 <button
                   type="button"
@@ -547,6 +560,19 @@ function PlaygroundApp(): JSX.Element {
                     insert('\n{start_of_verse}\n\n{end_of_verse}\n', false)
                   }
                 >
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
                   Section
                 </button>
               </div>
