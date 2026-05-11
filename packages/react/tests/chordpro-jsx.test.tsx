@@ -105,6 +105,77 @@ describe('renderChordproAst', () => {
     expect(container.querySelectorAll('.line .chord-block .chord').length).toBe(0);
   });
 
+  test('emits a chord-diagrams grid when the option is set, suppressing on {no_diagrams}', () => {
+    // Diagrams visible by default
+    const visible = render(
+      renderChordproAst(
+        {
+          metadata: EMPTY_META,
+          lines: [
+            {
+              kind: 'lyrics',
+              value: {
+                segments: [
+                  {
+                    chord: { name: 'Am', detail: null, display: null },
+                    text: 'hi',
+                    spans: [],
+                  },
+                  {
+                    chord: { name: 'G', detail: null, display: null },
+                    text: 'world',
+                    spans: [],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        { chordDiagrams: { instrument: 'guitar' } },
+      ),
+    );
+    const grid = visible.container.querySelector('.chord-diagrams .chord-diagrams-grid');
+    expect(grid).not.toBeNull();
+    // One `<div class="chord-diagram-container">` per unique
+    // chord name in source order — Am then G.
+    const cells = grid?.querySelectorAll('.chord-diagram-container');
+    expect(cells?.length).toBe(2);
+
+    // {no_diagrams} suppresses the grid even when the option is set
+    const suppressed = render(
+      renderChordproAst(
+        {
+          metadata: EMPTY_META,
+          lines: [
+            {
+              kind: 'directive',
+              value: {
+                name: 'no_diagrams',
+                value: null,
+                kind: { tag: 'noDiagrams' },
+                selector: null,
+              },
+            },
+            {
+              kind: 'lyrics',
+              value: {
+                segments: [
+                  {
+                    chord: { name: 'Am', detail: null, display: null },
+                    text: 'hi',
+                    spans: [],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        { chordDiagrams: { instrument: 'guitar' } },
+      ),
+    );
+    expect(suppressed.container.querySelector('.chord-diagrams')).toBeNull();
+  });
+
   test('renders a chord+lyric pair as `.chord-block`', () => {
     const { container } = render(
       renderChordproAst({

@@ -26,6 +26,8 @@
 
 import { Fragment } from 'react';
 import type { CSSProperties, JSX, ReactNode } from 'react';
+
+import { ChordDiagram } from './chord-diagram';
 import type {
   ChordproChord,
   ChordproDirective,
@@ -38,6 +40,7 @@ import type {
   ChordproSong,
   ChordproTextSpan,
 } from './chordpro-ast';
+import type { ChordDiagramInstrument } from './use-chord-diagram';
 
 // ---- Sanitiser helpers --------------------------------------------
 
@@ -410,6 +413,84 @@ export interface RenderChordproAstOptions {
    * glance. Pass `null` to fall back to the single-key form.
    */
   transposedKey?: string | null;
+  /**
+   * Append a chord-diagram grid at the end of the song body
+   * showing each unique chord used in the lyrics + each chord
+   * declared via `{define}`. Mirrors the
+   * `<section class="chord-diagrams">` block
+   * `chordsketch-render-html` emits.
+   *
+   * Visibility honours `{diagrams: on/off}` / `{no_diagrams}`
+   * directives in the AST: explicit `off` / `no_diagrams`
+   * suppress the grid, explicit `on` (or no directive) shows
+   * it. Pass `null` / omit to skip the grid entirely
+   * (callers who don't want it never opt in).
+   */
+  chordDiagrams?: {
+    /** Instrument family forwarded to `<ChordDiagram>`. */
+    instrument?: ChordDiagramInstrument;
+  } | null;
+}
+
+// Collect unique chord names used in lyrics, plus any chord
+// names declared via `{define}` / `{chord}`. Mirrors
+// `chordsketch-render-html`'s `chord_names` accumulator —
+// preserving order of first appearance so the diagram grid
+// reads top-to-bottom in source order.
+function collectChordNames(song: ChordproSong): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (name: string | undefined): void => {
+    if (!name) return;
+    if (seen.has(name)) return;
+    seen.add(name);
+    out.push(name);
+  };
+  for (const line of song.lines) {
+    if (line.kind === 'lyrics') {
+      for (const seg of line.value.segments) {
+        if (seg.chord) add(seg.chord.display ?? seg.chord.name);
+      }
+    } else if (line.kind === 'directive') {
+      const kind = line.value.kind;
+      // `{define}` / `{chord}` values lead with the chord name —
+      // pluck it so the grid lists explicitly-defined chords
+      // even when they don't appear in the lyrics.
+      if ((kind.tag === 'define' || kind.tag === 'chordDirective') && line.value.value) {
+        const firstWord = line.value.value.trim().split(/\s+/)[0];
+        if (firstWord) {
+          // Strip the R6.100.0 transposable `[name]` bracket form.
+          const unwrapped = firstWord.startsWith('[') && firstWord.endsWith(']')
+            ? firstWord.slice(1, -1)
+            : firstWord;
+          add(unwrapped);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// Resolve `{diagrams: on/off}` / `{no_diagrams}` directives to a
+// boolean. Default = true (chord diagrams visible) unless the
+// AST explicitly turns them off.
+function resolveDiagramsVisible(song: ChordproSong): boolean {
+  let visible = true;
+  for (const line of song.lines) {
+    if (line.kind !== 'directive') continue;
+    const kind = line.value.kind;
+    if (kind.tag === 'noDiagrams') {
+      visible = false;
+    } else if (kind.tag === 'diagrams') {
+      const value = (line.value.value ?? '').trim().toLowerCase();
+      // `{diagrams}` with no value defaults to `on`. Treat any
+      // non-empty value matching `off` / `false` / `0` / `no` as
+      // a disable; everything else (`on`, `true`, `1`, missing)
+      // re-enables the grid.
+      visible = !(value === 'off' || value === 'false' || value === '0' || value === 'no');
+    }
+  }
+  return visible;
 }
 
 function renderHeader(
@@ -689,5 +770,31 @@ export function renderChordproAst(
   // Final close: if the song ends inside an open section, flush
   // it so the user sees their lines instead of dropping them.
   flushSection(ctx, song.lines.length + 1);
+
+  // Chord-diagrams section. Mirrors
+  // `chordsketch-render-html`'s `<section class="chord-diagrams">`
+  // emit, but each diagram is a `<ChordDiagram>` component
+  // (which calls `chord_diagram_svg` from `@chordsketch/wasm`
+  // internally) so the React surface gets per-cell loading /
+  // error / not-found states for free.
+  if (options.chordDiagrams && resolveDiagramsVisible(song)) {
+    const names = collectChordNames(song);
+    if (names.length > 0) {
+      const instrument = options.chordDiagrams.instrument ?? 'guitar';
+      ctx.out.push(
+        <section key="chord-diagrams" className="chord-diagrams">
+          <div className="section-label">Chord Diagrams</div>
+          <div className="chord-diagrams-grid">
+            {names.map((name) => (
+              <div key={name} className="chord-diagram-container">
+                <ChordDiagram chord={name} instrument={instrument} />
+              </div>
+            ))}
+          </div>
+        </section>,
+      );
+    }
+  }
+
   return <div className="song">{ctx.out}</div>;
 }

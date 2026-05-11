@@ -1,6 +1,7 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 
 import { renderChordproAst } from './chordpro-jsx';
+import type { ChordDiagramInstrument } from './use-chord-diagram';
 import {
   type ChordRenderFormat,
   type ChordRenderOptions,
@@ -18,6 +19,17 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
   source: string;
   /** Semitone transposition offset forwarded to the renderer. */
   transpose?: number;
+  /**
+   * Append a chord-diagrams grid at the end of the rendered
+   * song. When set, every unique chord in the lyrics + every
+   * chord declared via `{define}` gets a fretboard / keyboard
+   * diagram via the in-built voicing database. Honours
+   * `{diagrams: off}` / `{no_diagrams}` directives in the
+   * source. Pass `'guitar'` / `'ukulele'` / `'piano'` etc.;
+   * defaults to `'guitar'` when the option is set without a
+   * specific instrument. Only consumed by `format="html"`.
+   */
+  chordDiagramsInstrument?: ChordDiagramInstrument;
   /**
    * Configuration preset name (e.g. `"guitar"`, `"ukulele"`) or an
    * inline RRJSON configuration string.
@@ -114,6 +126,7 @@ export function ChordSheet({
   errorFallback = defaultErrorFallback,
   wasmLoader,
   astWasmLoader,
+  chordDiagramsInstrument,
   className,
   ...divProps
 }: ChordSheetProps): JSX.Element {
@@ -142,6 +155,7 @@ export function ChordSheet({
       loadingFallback={loadingFallback}
       errorFallback={errorFallback}
       wasmLoader={astWasmLoader}
+      chordDiagramsInstrument={chordDiagramsInstrument}
       wrapperClass={wrapperClass}
       divProps={divProps}
     />
@@ -196,9 +210,13 @@ function ChordSheetAstBranch({
   loadingFallback,
   errorFallback,
   wasmLoader,
+  chordDiagramsInstrument,
   wrapperClass,
   divProps,
-}: BranchProps & { wasmLoader: ChordproWasmLoader | undefined }): JSX.Element {
+}: BranchProps & {
+  wasmLoader: ChordproWasmLoader | undefined;
+  chordDiagramsInstrument: ChordDiagramInstrument | undefined;
+}): JSX.Element {
   const { ast, loading, error, transposedKey } = useChordproAst(
     source,
     { transpose, config },
@@ -225,7 +243,12 @@ function ChordSheetAstBranch({
     <div {...divProps} className={wrapperClass} aria-busy={loading || undefined}>
       {errorNode}
       <div className="chordsketch-sheet__content">
-        {renderChordproAst(ast, { transposedKey })}
+        {renderChordproAst(ast, {
+          transposedKey,
+          chordDiagrams: chordDiagramsInstrument
+            ? { instrument: chordDiagramsInstrument }
+            : null,
+        })}
       </div>
     </div>
   );
