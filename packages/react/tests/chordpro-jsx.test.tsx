@@ -178,6 +178,56 @@ describe('renderChordproAst', () => {
     expect(b.container.querySelector('.meta')?.textContent).toBe('Key G');
   });
 
+  test('extended metadata lands in the meta strip in attribution → parameters → tags order', () => {
+    // Mirrors the ChordPro spec's conceptual grouping —
+    // attribution (people / album / year) first, then musical
+    // parameters (key / tempo / time / capo / duration), then
+    // tags as their own row.
+    const { container } = render(
+      renderChordproAst({
+        metadata: {
+          ...EMPTY_META,
+          title: 'Tour',
+          artists: ['Demo'],
+          composers: ['JC'],
+          lyricists: ['JL'],
+          arrangers: ['JA'],
+          album: 'Reference',
+          year: '2026',
+          key: 'G',
+          capo: '2',
+          tempo: '120',
+          time: '4/4',
+          duration: '3:30',
+          copyright: '© 2026',
+          tags: ['demo', 'reference'],
+        },
+        lines: [],
+      }),
+    );
+    const meta = container.querySelector('.meta:not(.meta--tags)');
+    const txt = meta?.textContent ?? '';
+    expect(txt).toContain('Demo');
+    expect(txt).toContain('Music JC');
+    expect(txt).toContain('Lyrics JL');
+    expect(txt).toContain('Arrangement JA');
+    expect(txt).toContain('Reference');
+    expect(txt).toContain('2026');
+    expect(txt).toContain('Key G');
+    expect(txt).toContain('Capo 2');
+    expect(txt).toContain('120 BPM');
+    expect(txt).toContain('4/4');
+    expect(txt).toContain('3:30');
+    expect(txt).toContain('© 2026');
+    // Tags live on a separate row as pill chips.
+    const tagRow = container.querySelector('.meta--tags');
+    expect(tagRow).not.toBeNull();
+    const tags = tagRow?.querySelectorAll('.tag');
+    expect(tags?.length).toBe(2);
+    expect(tags?.[0]?.textContent).toBe('demo');
+    expect(tags?.[1]?.textContent).toBe('reference');
+  });
+
   test('renders the metadata header', () => {
     const { container } = render(
       renderChordproAst({

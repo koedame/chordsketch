@@ -250,6 +250,27 @@
   font-feature-settings: "tnum" 1;
 }
 
+/* Tag row — separate from the main meta strip because `{tag}`
+   is a categorisation signal, not a song attribute. Tags render
+   as pill-shaped chips so they read as a distinct group at a
+   glance. */
+.chordsketch-sheet__content .meta--tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375em;
+  margin-top: -1em;
+  margin-bottom: 1.5em;
+}
+.chordsketch-sheet__content .meta--tags .tag {
+  display: inline-block;
+  padding: 0.125em 0.5em;
+  border: 1px solid var(--cs-border, #d4d1d6);
+  border-radius: 999px;
+  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+  font-size: 0.75rem;
+  color: var(--cs-ink-700, #67646d);
+}
+
 /* Chord-bearing line — flexbox of `.chord-block` columns. */
 .chordsketch-sheet__content .line {
   display: flex;

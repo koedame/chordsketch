@@ -422,12 +422,24 @@ function renderHeader(
   if (metadata.subtitles.length > 0) {
     out.push(<h2 key="subtitle">{metadata.subtitles.join(' · ')}</h2>);
   }
-  // Mirror the metadata strip emitted by
-  // `chordsketch-render-html`'s metadata-header path: artist · key · capo · BPM · time.
+  // Metadata strip — extended attribution + musical parameters.
   // When the song is transposed, the key entry expands to
-  // "Original Key X · Play Key Y" so the user sees both.
+  // "Original Key X · Play Key Y" so the user sees both keys
+  // at a glance.
+  //
+  // Order: attribution (people / where it came from) first,
+  // then musical parameters (key / tempo / time / capo), then
+  // tags. The attribution / parameters split mirrors the
+  // conceptual grouping in the ChordPro spec — first you say
+  // "who / what / when", then "how to play it", then "tags".
   const metaParts: string[] = [];
   if (metadata.artists.length > 0) metaParts.push(metadata.artists.join(', '));
+  if (metadata.composers.length > 0) metaParts.push(`Music ${metadata.composers.join(', ')}`);
+  if (metadata.lyricists.length > 0) metaParts.push(`Lyrics ${metadata.lyricists.join(', ')}`);
+  if (metadata.arrangers.length > 0)
+    metaParts.push(`Arrangement ${metadata.arrangers.join(', ')}`);
+  if (metadata.album) metaParts.push(metadata.album);
+  if (metadata.year) metaParts.push(metadata.year);
   if (metadata.key) {
     if (options.transposedKey && options.transposedKey !== metadata.key) {
       metaParts.push(`Original Key ${metadata.key}`);
@@ -439,10 +451,27 @@ function renderHeader(
   if (metadata.capo) metaParts.push(`Capo ${metadata.capo}`);
   if (metadata.tempo) metaParts.push(`${metadata.tempo} BPM`);
   if (metadata.time) metaParts.push(metadata.time);
+  if (metadata.duration) metaParts.push(metadata.duration);
+  if (metadata.copyright) metaParts.push(metadata.copyright);
   if (metaParts.length > 0) {
     out.push(
       <p key="meta" className="meta">
         {metaParts.join(' · ')}
+      </p>,
+    );
+  }
+  // Tags get their own row — `{tag}` is a categorization
+  // signal (genre / mood / capo-style) rather than a song
+  // attribute, so visually separating it from the main meta
+  // strip keeps the eye-flow clean.
+  if (metadata.tags.length > 0) {
+    out.push(
+      <p key="tags" className="meta meta--tags">
+        {metadata.tags.map((tag, i) => (
+          <span key={i} className="tag">
+            {tag}
+          </span>
+        ))}
       </p>,
     );
   }
