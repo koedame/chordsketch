@@ -36,6 +36,75 @@ describe('renderChordproAst', () => {
     expect(song?.children.length).toBe(0);
   });
 
+  test('reserves the chord row on chord-less segments so lyric baselines align', () => {
+    // Regression guard for the baseline-misalignment surfaced in
+    // PR #2455. When ANY segment on a `.line` carries a chord,
+    // chord-less segments must emit a non-empty `.chord`
+    // placeholder so the inline-flex `.chord-block` column
+    // reserves the chord row. Without the placeholder the
+    // chordless segment's `.lyrics` floats up by one row and
+    // lines up with the CHORD row of its neighbours.
+    // Sister-site to `chordsketch-render-html`'s `render_lyrics_line`
+    // (#2142).
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'lyrics',
+            value: {
+              segments: [
+                { chord: null, text: 'no chord here ', spans: [] },
+                {
+                  chord: { name: 'G', detail: null, display: null },
+                  text: 'finally',
+                  spans: [],
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    );
+    const blocks = container.querySelectorAll('.line .chord-block');
+    expect(blocks.length).toBe(2);
+    // First (chordless) block: `.chord` placeholder present + aria-hidden
+    const placeholder = blocks[0]?.querySelector('.chord');
+    expect(placeholder).not.toBeNull();
+    expect(placeholder?.getAttribute('aria-hidden')).toBe('true');
+    // NBSP (U+00A0) inside — guarantees a line box even when CSS
+    // `min-height: 1em` would otherwise be ignored on empty spans.
+    expect(placeholder?.textContent).toBe(' ');
+    // Second block: real chord text, no aria-hidden
+    const realChord = blocks[1]?.querySelector('.chord');
+    expect(realChord?.textContent).toBe('G');
+    expect(realChord?.getAttribute('aria-hidden')).toBeNull();
+  });
+
+  test('skips the chord placeholder on chord-less lines', () => {
+    // Inverse of the test above — when NO segment on the line
+    // has a chord, the placeholder is wasteful (no alignment to
+    // protect) and the chord row should disappear entirely so
+    // lyric-only lines render flush.
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'lyrics',
+            value: {
+              segments: [
+                { chord: null, text: 'plain text only ', spans: [] },
+                { chord: null, text: 'no chords here', spans: [] },
+              ],
+            },
+          },
+        ],
+      }),
+    );
+    expect(container.querySelectorAll('.line .chord-block .chord').length).toBe(0);
+  });
+
   test('renders a chord+lyric pair as `.chord-block`', () => {
     const { container } = render(
       renderChordproAst({

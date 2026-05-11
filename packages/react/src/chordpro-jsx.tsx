@@ -245,13 +245,30 @@ function renderChord(chord: ChordproChord): string {
 // ---- Lyrics line ---------------------------------------------------
 
 function renderLyricsLine(line: ChordproLyricsLine, key: number): JSX.Element {
+  // If ANY segment on this line carries a chord, every other
+  // segment needs a chord-row placeholder so the lyric baselines
+  // stay aligned. A genuinely empty `<span class="chord"/>`
+  // produces no line box in most browsers — `min-height: 1em`
+  // does not reserve the row on its own — so chordless segments
+  // float up by one row and the lyric on those segments lines up
+  // with the CHORD row of its neighbours instead of the LYRIC
+  // row. Emit a ` ` NBSP placeholder (matching
+  // `chordsketch-render-html`'s sister-site logic in
+  // `render_lyrics_line`, #2142) and mark it `aria-hidden` so
+  // assistive tech does not announce it as "space". See
+  // ADR-0017 for the broader sister-site parity contract.
+  const lineHasChords = line.segments.some((s) => s.chord !== null);
   return (
     <div key={key} className="line">
       {line.segments.map((segment, i) => (
         <span key={i} className="chord-block">
-          {segment.chord && (
+          {segment.chord ? (
             <span className="chord">{renderChord(segment.chord)}</span>
-          )}
+          ) : lineHasChords ? (
+            <span className="chord" aria-hidden="true">
+              {' '}
+            </span>
+          ) : null}
           <span className="lyrics">{renderSegmentText(segment)}</span>
         </span>
       ))}
