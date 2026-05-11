@@ -42,11 +42,13 @@ function makeStub() {
     parseChordproWithWarnings: vi.fn((src: string) => ({
       ast: emptyAst(src),
       warnings: [],
+      transposedKey: undefined,
     })),
     parseChordproWithWarningsAndOptions: vi.fn(
       (src: string, _opts: { transpose?: number }) => ({
         ast: emptyAst(src),
         warnings: [],
+        transposedKey: undefined,
       }),
     ),
     render_text: vi.fn((src: string) => `TEXT:${src}`),

@@ -55,15 +55,24 @@ declare module '@chordsketch/wasm' {
   ): string;
   // `*WithWarnings` variants surface the lenient parser's recovered
   // `ParseError` messages alongside the AST so the React preview can
-  // render them (round-1 fix for PR #2455). Match the
+  // render them (round-1 fix for PR #2455). Also carry the
+  // `transposedKey` field — present only when `transpose !== 0` AND
+  // the source's `{key}` directive value parses as a chord — so the
+  // walker can render "Original Key X · Play Key Y". Match the
   // `ParseChordproResult` shape defined in
   // `crates/wasm/src/lib.rs`.
-  export function parseChordproWithWarnings(
-    input: string,
-  ): { ast: string; warnings: string[] };
+  export function parseChordproWithWarnings(input: string): {
+    ast: string;
+    warnings: string[];
+    transposedKey?: string;
+  };
   export function parseChordproWithWarningsAndOptions(
     input: string,
     options: { transpose?: number; config?: string },
-  ): { ast: string; warnings: string[] };
+  ): {
+    ast: string;
+    warnings: string[];
+    transposedKey?: string;
+  };
   export default function init(): Promise<void>;
 }

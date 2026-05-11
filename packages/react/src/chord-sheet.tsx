@@ -199,7 +199,11 @@ function ChordSheetAstBranch({
   wrapperClass,
   divProps,
 }: BranchProps & { wasmLoader: ChordproWasmLoader | undefined }): JSX.Element {
-  const { ast, loading, error } = useChordproAst(source, { transpose, config }, wasmLoader);
+  const { ast, loading, error, transposedKey } = useChordproAst(
+    source,
+    { transpose, config },
+    wasmLoader,
+  );
   const errorNode = error !== null && errorFallback !== null ? errorFallback(error) : null;
 
   if (ast === null) {
@@ -214,11 +218,15 @@ function ChordSheetAstBranch({
   // AST walker emits a `<div class="song">` root matching the
   // `chordsketch-render-html` DOM contract so existing CSS keeps
   // working unchanged. Pure React reconciliation owns the tree
-  // — no innerHTML escape hatch on this surface.
+  // — no innerHTML escape hatch on this surface. The
+  // `transposedKey` plumbed through from `parseChordproWithWarnings*`
+  // drives the "Original Key X · Play Key Y" header path.
   return (
     <div {...divProps} className={wrapperClass} aria-busy={loading || undefined}>
       {errorNode}
-      <div className="chordsketch-sheet__content">{renderChordproAst(ast)}</div>
+      <div className="chordsketch-sheet__content">
+        {renderChordproAst(ast, { transposedKey })}
+      </div>
     </div>
   );
 }

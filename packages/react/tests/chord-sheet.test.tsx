@@ -66,11 +66,13 @@ function makeStub(): StubRenderer {
     parseChordproWithWarnings: vi.fn((src: string) => ({
       ast: astFor(src),
       warnings: [],
+      transposedKey: undefined,
     })),
     parseChordproWithWarningsAndOptions: vi.fn(
       (src: string, opts: { transpose?: number; config?: string }) => ({
         ast: astFor(src, JSON.stringify(opts)),
         warnings: [],
+        transposedKey: undefined,
       }),
     ),
     render_text: vi.fn((src: string) => `TEXT:${src}`),

@@ -860,7 +860,7 @@ export function validate(input: string): ValidationError[];
 fn do_parse_chordpro(
     input: &str,
     options: Option<&RenderOptions>,
-) -> Result<(String, Vec<String>), String> {
+) -> Result<(String, Vec<String>, Option<String>), String> {
     use chordsketch_chordpro::json::ToJson;
 
     let parse_options = chordsketch_chordpro::ParseOptions::default();
@@ -872,6 +872,32 @@ fn do_parse_chordpro(
     let warnings: Vec<String> = parse_result.errors.iter().map(|w| format!("{w}")).collect();
 
     let song = parse_result.song;
+    let transpose_steps = options.map(|o| o.transpose).unwrap_or(0);
+
+    // Compute the transposed `{key}` directive string for the
+    // React preview's "Original Key X · Play Key Y" header.
+    // `transpose::transpose` only touches `lines` and clones
+    // metadata as-is, so the original key string stays on the
+    // emitted AST. Emit the transposed counterpart through the
+    // separate `transposed_key` field below so the JSX walker
+    // does not have to re-do the music-theory inside JS (per
+    // `.claude/rules/playground-is-a-sample.md`'s spirit — the
+    // library owns the maths).
+    let transposed_key = if transpose_steps != 0 {
+        song.metadata.key.as_deref().and_then(|key_str| {
+            let chord = chordsketch_chordpro::ast::Chord::new(key_str);
+            // `Chord::new` returns `detail == None` for strings
+            // it could not parse (e.g. `{key: C dorian}`). Skip
+            // when so — the walker falls back to showing the
+            // original key only.
+            chord.detail.as_ref()?;
+            let transposed =
+                chordsketch_chordpro::transpose::transpose_chord(&chord, transpose_steps);
+            Some(transposed.name)
+        })
+    } else {
+        None
+    };
 
     // Apply transpose if requested. Mirrors the renderer entry
     // points which do this same step before rendering — keeps the
@@ -880,12 +906,12 @@ fn do_parse_chordpro(
     // new `Song` rather than mutating in place; pass `0` (the
     // default) through unchanged so the no-op case skips the
     // allocation.
-    let song = match options.map(|o| o.transpose).unwrap_or(0) {
+    let song = match transpose_steps {
         0 => song,
         steps => chordsketch_chordpro::transpose::transpose(&song, steps),
     };
 
-    Ok((song.to_json_string(), warnings))
+    Ok((song.to_json_string(), warnings, transposed_key))
 }
 
 /// Parse a ChordPro source string into an AST JSON document.
@@ -906,7 +932,7 @@ fn do_parse_chordpro(
 #[wasm_bindgen(js_name = parseChordpro)]
 pub fn parse_chordpro(input: &str) -> Result<String, JsValue> {
     do_parse_chordpro(input, None)
-        .map(|(json, _)| json)
+        .map(|(json, _, _)| json)
         .map_err(|e| JsValue::from_str(&e))
 }
 
@@ -921,7 +947,7 @@ pub fn parse_chordpro(input: &str) -> Result<String, JsValue> {
 pub fn parse_chordpro_with_options(input: &str, options: JsValue) -> Result<String, JsValue> {
     let opts = deserialize_options(options)?;
     do_parse_chordpro(input, Some(&opts))
-        .map(|(json, _)| json)
+        .map(|(json, _, _)| json)
         .map_err(|e| JsValue::from_str(&e))
 }
 
@@ -939,6 +965,14 @@ pub fn parse_chordpro_with_options(input: &str, options: JsValue) -> Result<Stri
 struct ParseChordproResult {
     ast: String,
     warnings: Vec<String>,
+    /// Transposed `{key}` directive value, present only when
+    /// `transpose != 0` AND the source carried a `{key}` directive
+    /// whose value parses as a chord (`Chord::detail.is_some()`).
+    /// `null` otherwise — the React surface should fall back to
+    /// rendering only the original key string in that case. See
+    /// `do_parse_chordpro` for the source-of-truth computation.
+    #[serde(rename = "transposedKey", skip_serializing_if = "Option::is_none")]
+    transposed_key: Option<String>,
 }
 
 /// `parse_chordpro` with the lenient parser's recovered
@@ -959,9 +993,14 @@ struct ParseChordproResult {
 #[must_use = "callers must handle parse errors"]
 #[wasm_bindgen(js_name = parseChordproWithWarnings)]
 pub fn parse_chordpro_with_warnings(input: &str) -> Result<JsValue, JsValue> {
-    let (ast, warnings) = do_parse_chordpro(input, None).map_err(|e| JsValue::from_str(&e))?;
-    serde_wasm_bindgen::to_value(&ParseChordproResult { ast, warnings })
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    let (ast, warnings, transposed_key) =
+        do_parse_chordpro(input, None).map_err(|e| JsValue::from_str(&e))?;
+    serde_wasm_bindgen::to_value(&ParseChordproResult {
+        ast,
+        warnings,
+        transposed_key,
+    })
+    .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Same as [`parse_chordpro_with_warnings`] but threads the
@@ -975,10 +1014,14 @@ pub fn parse_chordpro_with_warnings_and_options(
     options: JsValue,
 ) -> Result<JsValue, JsValue> {
     let opts = deserialize_options(options)?;
-    let (ast, warnings) =
+    let (ast, warnings, transposed_key) =
         do_parse_chordpro(input, Some(&opts)).map_err(|e| JsValue::from_str(&e))?;
-    serde_wasm_bindgen::to_value(&ParseChordproResult { ast, warnings })
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_wasm_bindgen::to_value(&ParseChordproResult {
+        ast,
+        warnings,
+        transposed_key,
+    })
+    .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 // ---- iReal Pro conversion bindings (#2067 Phase 1) ----
@@ -1719,7 +1762,7 @@ mod tests {
 
     #[test]
     fn test_parse_chordpro_emits_ast_json() {
-        let (json, warnings) =
+        let (json, warnings, _transposed_key) =
             do_parse_chordpro("{title: My Song}\n[Am]Hello [G]world", None).unwrap();
         assert!(json.starts_with('{'), "expected JSON object, got: {json}");
         assert!(
@@ -1743,7 +1786,7 @@ mod tests {
             transpose: 2,
             config: None,
         };
-        let (json, _) = do_parse_chordpro("[C]Hello", Some(&opts)).unwrap();
+        let (json, _, _transposed_key) = do_parse_chordpro("[C]Hello", Some(&opts)).unwrap();
         // C transposed up 2 semitones lands on D.
         assert!(
             json.contains("\"name\":\"D\""),
@@ -1757,7 +1800,7 @@ mod tests {
             transpose: 0,
             config: None,
         };
-        let (json, _) = do_parse_chordpro("[C]Hello", Some(&opts)).unwrap();
+        let (json, _, _transposed_key) = do_parse_chordpro("[C]Hello", Some(&opts)).unwrap();
         assert!(
             json.contains("\"name\":\"C\""),
             "transpose=0 must not alter chord names, got: {json}"
@@ -1766,12 +1809,70 @@ mod tests {
 
     #[test]
     fn test_parse_chordpro_empty_input_returns_empty_song() {
-        let (json, warnings) = do_parse_chordpro("", None).unwrap();
+        let (json, warnings, _transposed_key) = do_parse_chordpro("", None).unwrap();
         assert!(
             json.contains("\"lines\":[]"),
             "empty input must yield an empty lines array, got: {json}"
         );
         assert!(warnings.is_empty(), "empty input emits no warnings");
+    }
+
+    #[test]
+    fn test_parse_chordpro_transposed_key_emitted_on_nonzero_transpose() {
+        // Drives the React preview's "Original Key X · Play Key Y"
+        // header. Original key stays on the AST (metadata.clone()
+        // path); the third tuple element carries the transposed
+        // counterpart.
+        let opts = RenderOptions {
+            transpose: 2,
+            config: None,
+        };
+        let (json, _warnings, transposed_key) =
+            do_parse_chordpro("{key: G}\n[G]Hello", Some(&opts)).unwrap();
+        assert!(
+            json.contains("\"key\":\"G\""),
+            "original key stays on the AST, got: {json}"
+        );
+        assert_eq!(
+            transposed_key.as_deref(),
+            Some("A"),
+            "transpose +2 from G should land on A"
+        );
+    }
+
+    #[test]
+    fn test_parse_chordpro_transposed_key_null_when_transpose_zero() {
+        let opts = RenderOptions {
+            transpose: 0,
+            config: None,
+        };
+        let (_json, _warnings, transposed_key) =
+            do_parse_chordpro("{key: G}\n[G]Hello", Some(&opts)).unwrap();
+        assert!(
+            transposed_key.is_none(),
+            "transpose=0 must not emit a transposed_key (avoids a redundant duplicate)"
+        );
+    }
+
+    #[test]
+    fn test_parse_chordpro_transposed_key_null_when_key_unparseable() {
+        // The chord parser is permissive on extensions (e.g.
+        // `C dorian` parses as root=C + extension="dorian" + the
+        // transpose lands on `D dorian`), but it bails out on
+        // strings that don't lead with a note letter. The walker
+        // falls back to showing only the original key string in
+        // that case; the wasm surface signals the fallback by
+        // leaving `transposed_key` as `None`.
+        let opts = RenderOptions {
+            transpose: 2,
+            config: None,
+        };
+        let (_json, _warnings, transposed_key) =
+            do_parse_chordpro("{key: ???}", Some(&opts)).unwrap();
+        assert!(
+            transposed_key.is_none(),
+            "unparseable key must surface as `None` so the React surface can fall back, got: {transposed_key:?}"
+        );
     }
 
     #[test]

@@ -9,11 +9,19 @@ import type { ChordproSong } from './chordpro-ast';
 // #2475 alongside the AST → JSX cut-over (ADR-0017).
 interface ChordproParser {
   default: () => Promise<unknown>;
-  parseChordproWithWarnings: (input: string) => { ast: string; warnings: string[] };
+  parseChordproWithWarnings: (input: string) => {
+    ast: string;
+    warnings: string[];
+    transposedKey?: string;
+  };
   parseChordproWithWarningsAndOptions: (
     input: string,
     options: { transpose?: number; config?: string },
-  ) => { ast: string; warnings: string[] };
+  ) => {
+    ast: string;
+    warnings: string[];
+    transposedKey?: string;
+  };
 }
 
 /** Options accepted by the parse call. */
@@ -67,6 +75,15 @@ export interface ChordproAstResult {
    * change.
    */
   retry: () => void;
+  /**
+   * Transposed `{key}` directive value when `transpose !== 0`
+   * AND the source carried a `{key}` directive whose value
+   * parses as a chord. `null` otherwise — the walker falls back
+   * to showing only the AST's original `metadata.key` in that
+   * case. Mirrors the `transposedKey` field on the wasm
+   * `ParseChordproResult` shape.
+   */
+  transposedKey: string | null;
 }
 
 /**
@@ -103,6 +120,7 @@ export function useChordproAst(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [transposedKey, setTransposedKey] = useState<string | null>(null);
   // Bumping `retryNonce` forces the effect to re-fire even when
   // (`source`, `transpose`, `config`) are unchanged — the hook
   // surface for consumers that hit a transient WASM-init failure
@@ -154,6 +172,7 @@ export function useChordproAst(
         if (cancelled) return;
         setAst(parsed);
         setWarnings(result.warnings);
+        setTransposedKey(result.transposedKey ?? null);
         setError(null);
       } catch (e) {
         if (cancelled) return;
@@ -187,5 +206,5 @@ export function useChordproAst(
     setRetryNonce((n) => n + 1);
   }, []);
 
-  return { ast, loading, error, warnings, retry };
+  return { ast, loading, error, warnings, retry, transposedKey };
 }

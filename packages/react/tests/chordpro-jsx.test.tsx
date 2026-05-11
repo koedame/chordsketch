@@ -138,6 +138,46 @@ describe('renderChordproAst', () => {
     expect(blocks[1]?.querySelector('.lyrics')?.textContent).toBe('world');
   });
 
+  test('renders "Original Key · Play Key" when transposedKey is supplied', () => {
+    const { container } = render(
+      renderChordproAst(
+        {
+          metadata: {
+            ...EMPTY_META,
+            title: 'My Song',
+            key: 'G',
+          },
+          lines: [],
+        },
+        { transposedKey: 'A' },
+      ),
+    );
+    const meta = container.querySelector('.meta');
+    expect(meta?.textContent).toContain('Original Key G');
+    expect(meta?.textContent).toContain('Play Key A');
+    expect(meta?.textContent).not.toMatch(/Key G(?! ·)/);
+  });
+
+  test('falls back to "Key X" when transposedKey is null or equal to the original', () => {
+    // null → single-key form
+    const a = render(
+      renderChordproAst(
+        { metadata: { ...EMPTY_META, key: 'G' }, lines: [] },
+        { transposedKey: null },
+      ),
+    );
+    expect(a.container.querySelector('.meta')?.textContent).toBe('Key G');
+    // equal-to-original → single-key form (avoids the visually
+    // confusing "Original Key G · Play Key G" tautology)
+    const b = render(
+      renderChordproAst(
+        { metadata: { ...EMPTY_META, key: 'G' }, lines: [] },
+        { transposedKey: 'G' },
+      ),
+    );
+    expect(b.container.querySelector('.meta')?.textContent).toBe('Key G');
+  });
+
   test('renders the metadata header', () => {
     const { container } = render(
       renderChordproAst({

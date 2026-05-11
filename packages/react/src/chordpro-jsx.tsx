@@ -397,7 +397,24 @@ interface SectionState {
 
 // ---- Header rendering ----------------------------------------------
 
-function renderHeader(metadata: ChordproMetadata): JSX.Element[] {
+/** Optional render hints the walker accepts from its caller. */
+export interface RenderChordproAstOptions {
+  /**
+   * Transposed key string when the song has been transposed
+   * (computed library-side by `parseChordproWithWarnings*` and
+   * returned via `useChordproAst`'s `transposedKey`). When
+   * present alongside `metadata.key`, the metadata strip shows
+   * "Original Key X · Play Key Y" instead of "Key X" so the
+   * user sees both the source and the now-playing key at a
+   * glance. Pass `null` to fall back to the single-key form.
+   */
+  transposedKey?: string | null;
+}
+
+function renderHeader(
+  metadata: ChordproMetadata,
+  options: RenderChordproAstOptions,
+): JSX.Element[] {
   const out: JSX.Element[] = [];
   if (metadata.title) {
     out.push(<h1 key="title">{metadata.title}</h1>);
@@ -407,9 +424,18 @@ function renderHeader(metadata: ChordproMetadata): JSX.Element[] {
   }
   // Mirror the metadata strip emitted by
   // `chordsketch-render-html`'s metadata-header path: artist · key · capo · BPM · time.
+  // When the song is transposed, the key entry expands to
+  // "Original Key X · Play Key Y" so the user sees both.
   const metaParts: string[] = [];
   if (metadata.artists.length > 0) metaParts.push(metadata.artists.join(', '));
-  if (metadata.key) metaParts.push(`Key ${metadata.key}`);
+  if (metadata.key) {
+    if (options.transposedKey && options.transposedKey !== metadata.key) {
+      metaParts.push(`Original Key ${metadata.key}`);
+      metaParts.push(`Play Key ${options.transposedKey}`);
+    } else {
+      metaParts.push(`Key ${metadata.key}`);
+    }
+  }
   if (metadata.capo) metaParts.push(`Capo ${metadata.capo}`);
   if (metadata.tempo) metaParts.push(`${metadata.tempo} BPM`);
   if (metadata.time) metaParts.push(metadata.time);
@@ -572,12 +598,22 @@ function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {
  * `<div class="song">` to match `chordsketch-render-html`'s
  * top-level container so existing CSS (and any consumer
  * stylesheet keyed on `.song`) lights up unchanged.
+ *
+ * @param song    Parsed AST returned by
+ *                `@chordsketch/wasm::parseChordpro*`.
+ * @param options Optional render hints — currently just the
+ *                transposed key string so the metadata strip can
+ *                show "Original Key X · Play Key Y". Pass `{}`
+ *                (or omit) to keep the legacy single-key form.
  */
-export function renderChordproAst(song: ChordproSong): JSX.Element {
+export function renderChordproAst(
+  song: ChordproSong,
+  options: RenderChordproAstOptions = {},
+): JSX.Element {
   const ctx: WalkContext = { section: null, out: [] };
   // Emit header first so metadata lands above the body even when
   // the source has metadata directives interleaved with lines.
-  for (const headerNode of renderHeader(song.metadata)) {
+  for (const headerNode of renderHeader(song.metadata, options)) {
     ctx.out.push(headerNode);
   }
   song.lines.forEach((line, i) => renderLine(ctx, line, i + 1));
