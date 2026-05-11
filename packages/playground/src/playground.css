@@ -237,7 +237,14 @@ a {
   padding: 0 1rem;
   border-radius: 4px;
   border: 1px solid transparent;
-  font: 500 0.875rem/1 var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  /* Latin-priority font stack — button labels are English /
+     symbols, and `--cs-font-jp` (Noto Sans JP) has a larger
+     vertical line-box than `--cs-font-latin` (Inter), which
+     shifted Latin glyphs visually downward inside a fixed-height
+     `.btn` even though `align-items: center` + `line-height: 1`
+     should have nominally centred them. Latin stack restores the
+     baseline. */
+  font: 500 0.875rem/1 var(--cs-font-latin, "Inter", system-ui, sans-serif);
   cursor: pointer;
   transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
     border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
