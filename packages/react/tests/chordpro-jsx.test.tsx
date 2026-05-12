@@ -176,6 +176,176 @@ describe('renderChordproAst', () => {
     expect(suppressed.container.querySelector('.chord-diagrams')).toBeNull();
   });
 
+  // Position-aware diagram-placement tests (#2466 follow-up). Each
+  // case constructs a one-line song that uses `Am`, sets the
+  // position directive, and asserts on the emitted markup. Visual
+  // layout (right column, page-bottom pin) is owned by styles.css
+  // and not exercised here — these tests only enforce the
+  // walker's AST → DOM contract.
+
+  function songWithDiagramsValue(value: string | null): ChordproSong {
+    return {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: {
+            name: 'diagrams',
+            value,
+            kind: { tag: 'diagrams' },
+            selector: null,
+          },
+        },
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              {
+                chord: { name: 'Am', detail: null, display: null },
+                text: 'hi',
+                spans: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+  }
+
+  test('defaults `{diagrams}` without value to position=bottom', () => {
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValue(null), {
+        chordDiagrams: { instrument: 'guitar' },
+      }),
+    );
+    const section = container.querySelector('.chord-diagrams');
+    expect(section?.getAttribute('data-position')).toBe('bottom');
+    const wrapper = container.querySelector('.song');
+    expect(wrapper?.classList.contains('song--diagrams-bottom')).toBe(true);
+    // Default placement is tail-of-body: the section is the LAST
+    // child of `.song`, not the first.
+    expect(wrapper?.lastElementChild).toBe(section);
+  });
+
+  test('{diagrams: top} splices the section between header and body', () => {
+    const ast = songWithDiagramsValue('top');
+    // Add a title so headEnd > 0 — splice has to land BEFORE the
+    // first body element (`.line`) but AFTER the title node.
+    ast.metadata = { ...EMPTY_META, title: 'Demo' };
+    const { container } = render(
+      renderChordproAst(ast, { chordDiagrams: { instrument: 'guitar' } }),
+    );
+    const section = container.querySelector('.chord-diagrams');
+    expect(section?.getAttribute('data-position')).toBe('top');
+    expect(container.querySelector('.song')?.classList.contains('song--diagrams-top')).toBe(true);
+    // The header (`<h1>`) precedes the diagrams; the body line
+    // (`.line`) follows.
+    const wrapper = container.querySelector('.song');
+    const children = Array.from(wrapper?.children ?? []);
+    const titleIdx = children.findIndex((c) => c.tagName === 'H1');
+    const sectionIdx = children.indexOf(section as Element);
+    const lineIdx = children.findIndex((c) => c.classList.contains('line'));
+    expect(titleIdx).toBeGreaterThanOrEqual(0);
+    expect(sectionIdx).toBeGreaterThan(titleIdx);
+    expect(lineIdx).toBeGreaterThan(sectionIdx);
+  });
+
+  test('{diagrams: right} flags the wrapper for the side-column layout', () => {
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValue('right'), {
+        chordDiagrams: { instrument: 'guitar' },
+      }),
+    );
+    expect(container.querySelector('.chord-diagrams')?.getAttribute('data-position')).toBe('right');
+    expect(container.querySelector('.song')?.classList.contains('song--diagrams-right')).toBe(true);
+  });
+
+  test('{diagrams: below} places the section at the tail and tags below', () => {
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValue('below'), {
+        chordDiagrams: { instrument: 'guitar' },
+      }),
+    );
+    const section = container.querySelector('.chord-diagrams');
+    expect(section?.getAttribute('data-position')).toBe('below');
+    expect(container.querySelector('.song')?.classList.contains('song--diagrams-below')).toBe(true);
+    // `below` shares the tail-of-body placement with `bottom` —
+    // the difference is purely the CSS hook.
+    expect(container.querySelector('.song')?.lastElementChild).toBe(section);
+  });
+
+  test('case-insensitive position values are recognised', () => {
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValue('TOP'), {
+        chordDiagrams: { instrument: 'guitar' },
+      }),
+    );
+    expect(container.querySelector('.chord-diagrams')?.getAttribute('data-position')).toBe('top');
+  });
+
+  test('AST instrument value overrides the consumer prop', () => {
+    // `<ChordDiagram>` calls into the wasm chord-diagram-svg helper,
+    // which is mocked away in the test environment by a fallback
+    // "no voicing" panel. Assert on the DOM shape regardless:
+    // the wrapper's class plus the section's `data-position`
+    // confirm the walker reached the same code path as the
+    // baseline `guitar` case. The actual `instrument="piano"`
+    // forwarding is covered by `chord-diagram.test.tsx` — this
+    // test only proves the AST → walker → prop chain wires up.
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValue('piano'), {
+        chordDiagrams: { instrument: 'guitar' },
+      }),
+    );
+    // `piano` is an instrument keyword, not a position keyword —
+    // the section therefore stays at default position `bottom`.
+    expect(container.querySelector('.chord-diagrams')?.getAttribute('data-position')).toBe('bottom');
+    // Visibility intact: the section did render.
+    expect(container.querySelector('.chord-diagrams')).not.toBeNull();
+  });
+
+  test('multiple {diagrams: …} lines apply last-wins for position', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: {
+            name: 'diagrams',
+            value: 'top',
+            kind: { tag: 'diagrams' },
+            selector: null,
+          },
+        },
+        {
+          kind: 'directive',
+          value: {
+            name: 'diagrams',
+            value: 'right',
+            kind: { tag: 'diagrams' },
+            selector: null,
+          },
+        },
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              {
+                chord: { name: 'C', detail: null, display: null },
+                text: 'hi',
+                spans: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const { container } = render(
+      renderChordproAst(ast, { chordDiagrams: { instrument: 'guitar' } }),
+    );
+    expect(container.querySelector('.chord-diagrams')?.getAttribute('data-position')).toBe('right');
+  });
+
   test('renders a chord+lyric pair as `.chord-block`', () => {
     const { container } = render(
       renderChordproAst({

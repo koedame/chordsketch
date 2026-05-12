@@ -351,6 +351,94 @@
   height: auto;
 }
 
+/* Chord-diagrams section — emitted by the AST walker as
+   `<section class="chord-diagrams" data-position="…">` and gated by
+   the consumer's `chordDiagrams` prop. The four `data-position`
+   values mirror the ChordPro spec (see
+   https://www.chordpro.org/chordpro/directives-diagrams/):
+
+     `bottom` (default) — pinned at the end of the document; in the
+                          PDF reference implementation this is a
+                          page-bottom margin block, on the Web the
+                          natural analogue is `margin-top: auto`.
+     `top`              — between the title strip and the song
+                          body (positioned by the walker's
+                          `ctx.out.splice(headEnd, 0, section)`).
+     `right`            — side column to the right of the body; the
+                          `.song--diagrams-right` wrapper modifier
+                          flips `.song` to a two-column grid.
+     `below`            — natural flow after the last lyric line
+                          (no special positioning; sits where the
+                          walker pushed it).
+
+   The wrapper class `song--diagrams-<position>` on `.song` is the
+   modifier the consumer's CSS can hook into for layout shifts
+   that need to reach the wrapper itself (notably `right`). */
+.chordsketch-sheet__content .chord-diagrams {
+  margin-top: 1.5rem;
+}
+.chordsketch-sheet__content .chord-diagrams-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.chordsketch-sheet__content .chord-diagram-container {
+  /* Reserved for per-cell sizing — kept as a hook so consumers
+     can target individual diagrams without depending on the SVG
+     internals. */
+}
+
+/* `bottom`: push the diagram block toward the bottom of the
+   wrapper so a tall preview pane mimics the PDF page-bottom
+   placement. Uses flex parent below to make the margin-top:auto
+   take effect. */
+.chordsketch-sheet__content .song--diagrams-bottom {
+  display: flex;
+  flex-direction: column;
+}
+.chordsketch-sheet__content .song--diagrams-bottom .chord-diagrams[data-position='bottom'] {
+  margin-top: auto;
+}
+
+/* `top`: the walker already spliced the section between header and
+   body, so layout just needs to ensure it visually separates from
+   what follows. */
+.chordsketch-sheet__content .chord-diagrams[data-position='top'] {
+  margin-top: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+/* `right`: two-column grid with the diagrams pinned to the right.
+   Falls back to a stacked layout under 720 px so narrow preview
+   panes do not crush the body to a sliver. */
+.chordsketch-sheet__content .song--diagrams-right {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 1.5rem;
+  align-items: start;
+}
+.chordsketch-sheet__content .song--diagrams-right .chord-diagrams[data-position='right'] {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  margin-top: 0;
+  min-width: 12rem;
+  max-width: 16rem;
+}
+@media (max-width: 720px) {
+  .chordsketch-sheet__content .song--diagrams-right {
+    display: block;
+  }
+  .chordsketch-sheet__content .song--diagrams-right .chord-diagrams[data-position='right'] {
+    margin-top: 1.5rem;
+    max-width: none;
+  }
+}
+
+/* `below`: no special wrapper layout; the section sits naturally
+   at the tail of the document flow (mirrors the PDF "in-flow
+   chord box below the last verse" output of the reference
+   implementation). */
+
 .chordsketch-sheet__error {
   padding: 0.5rem 0.75rem;
   border: 1px solid currentColor;

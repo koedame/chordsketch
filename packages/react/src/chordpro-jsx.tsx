@@ -436,22 +436,60 @@ export interface RenderChordproAstOptions {
    */
   transposedKey?: string | null;
   /**
-   * Append a chord-diagram grid at the end of the song body
-   * showing each unique chord used in the lyrics + each chord
-   * declared via `{define}`. Mirrors the
+   * Append a chord-diagram grid showing each unique chord used in
+   * the lyrics + each chord declared via `{define}`. Mirrors the
    * `<section class="chord-diagrams">` block
    * `chordsketch-render-html` emits.
    *
-   * Visibility honours `{diagrams: on/off}` / `{no_diagrams}`
-   * directives in the AST: explicit `off` / `no_diagrams`
-   * suppress the grid, explicit `on` (or no directive) shows
-   * it. Pass `null` / omit to skip the grid entirely
-   * (callers who don't want it never opt in).
+   * The directive's value is interpreted per the ChordPro spec
+   * (https://www.chordpro.org/chordpro/directives-diagrams/):
+   *
+   * - **Visibility**: `{diagrams: off}` and `{no_diagrams}`
+   *   suppress the grid; any other value (including no value)
+   *   re-enables it. Defaults to on per the spec.
+   * - **Position**: `bottom` (default), `top`, `right`, `below`
+   *   are read off the directive value and forwarded to the
+   *   emitted `<section>` as `data-position`. The walker places
+   *   `top` at the head of `<div class="song">`; the other three
+   *   stay at the tail (CSS in `styles.css` distinguishes
+   *   `bottom` vs `below` vs `right` visually).
+   * - **Instrument**: `guitar`, `ukulele` / `uke`, `piano` /
+   *   `keys` / `keyboard` override the `instrument` field below
+   *   for the remainder of the song (mirrors
+   *   `chordsketch_chordpro::resolve_diagrams_instrument`).
+   *
+   * Pass `null` / omit to skip the grid entirely regardless of
+   * directive (callers who don't want it never opt in).
    */
   chordDiagrams?: {
-    /** Instrument family forwarded to `<ChordDiagram>`. */
+    /**
+     * Instrument family forwarded to `<ChordDiagram>`. AST values
+     * (`{diagrams: piano}` etc.) override this on a song-by-song
+     * basis.
+     */
     instrument?: ChordDiagramInstrument;
   } | null;
+}
+
+/**
+ * Position values the `{diagrams: …}` directive recognises per the
+ * ChordPro spec. Forwarded onto the emitted `<section>` as the
+ * `data-position` attribute so host CSS can lay the grid out.
+ */
+export type DiagramsPosition = 'bottom' | 'top' | 'right' | 'below';
+
+/**
+ * Result of walking every `{diagrams: …}` / `{no_diagrams}` line in
+ * source order and resolving the final visibility / position /
+ * instrument the diagram grid should use. Position-dependent values
+ * follow last-wins semantics (the spec text says "applies forward
+ * until reset", and a single section is emitted at song end with
+ * the last value that won).
+ */
+interface DiagramsState {
+  visible: boolean;
+  position: DiagramsPosition;
+  instrument?: ChordDiagramInstrument;
 }
 
 // Collect unique chord names used in lyrics, plus any chord
@@ -653,26 +691,92 @@ function computeHeaderFormattingState(song: ChordproSong): FormattingState {
   return state;
 }
 
-// Resolve `{diagrams: on/off}` / `{no_diagrams}` directives to a
-// boolean. Default = true (chord diagrams visible) unless the
-// AST explicitly turns them off.
-function resolveDiagramsVisible(song: ChordproSong): boolean {
-  let visible = true;
+// Sets of recognised `{diagrams: <ctl>}` arguments. Pulled out as
+// module-level constants so the parser arms and the test suite can
+// share a single source of truth.
+const DIAGRAMS_OFF_VALUES = new Set(['off', 'false', '0', 'no']);
+const DIAGRAMS_POSITIONS = new Set<DiagramsPosition>([
+  'bottom',
+  'top',
+  'right',
+  'below',
+]);
+
+// Translate AST-stored instrument shorthand to the canonical
+// `ChordDiagramInstrument` value. Mirrors the equivalent map in
+// `chordsketch_chordpro::resolve_diagrams_instrument` so a
+// `{diagrams: piano}` line behaves identically in Rust and React
+// surfaces (per `.claude/rules/renderer-parity.md` §Sanitizer /
+// AST-arm parity). Returns `undefined` for values that are NOT
+// instrument names — the caller falls back to the consumer's
+// `chordDiagramsInstrument` prop.
+function diagramsValueAsInstrument(
+  raw: string,
+): ChordDiagramInstrument | undefined {
+  switch (raw) {
+    case 'guitar':
+      return 'guitar';
+    case 'ukulele':
+    case 'uke':
+      return 'ukulele';
+    case 'piano':
+    case 'keyboard':
+    case 'keys':
+      return 'piano';
+    default:
+      return undefined;
+  }
+}
+
+// Resolve every `{diagrams: …}` / `{no_diagrams}` directive in
+// source order into the final state the diagram grid renders with.
+// Defaults: visible = true (ChordPro spec — diagrams enabled by
+// default), position = 'bottom' (spec default), instrument =
+// undefined (caller falls back to `chordDiagrams.instrument`).
+//
+// Each directive overrides the running state last-wins; positional
+// and instrument values stack independently (a `{diagrams: top}`
+// followed by `{diagrams: piano}` keeps both — position `top`,
+// instrument `piano`).
+function resolveDiagramsState(song: ChordproSong): DiagramsState {
+  const state: DiagramsState = { visible: true, position: 'bottom' };
   for (const line of song.lines) {
     if (line.kind !== 'directive') continue;
     const kind = line.value.kind;
     if (kind.tag === 'noDiagrams') {
-      visible = false;
-    } else if (kind.tag === 'diagrams') {
-      const value = (line.value.value ?? '').trim().toLowerCase();
-      // `{diagrams}` with no value defaults to `on`. Treat any
-      // non-empty value matching `off` / `false` / `0` / `no` as
-      // a disable; everything else (`on`, `true`, `1`, missing)
-      // re-enables the grid.
-      visible = !(value === 'off' || value === 'false' || value === '0' || value === 'no');
+      state.visible = false;
+      continue;
     }
+    if (kind.tag !== 'diagrams') continue;
+    const value = (line.value.value ?? '').trim().toLowerCase();
+    if (value === '') {
+      // Bare `{diagrams}` — spec says this is the same as `on`.
+      state.visible = true;
+      continue;
+    }
+    if (DIAGRAMS_OFF_VALUES.has(value)) {
+      state.visible = false;
+      continue;
+    }
+    // Anything that isn't an explicit "off" enables visibility per
+    // spec — including position keywords (`is_true("bottom")` is
+    // truthy in the Perl reference implementation, see
+    // `lib/ChordPro/Song.pm::dir_diagrams`).
+    state.visible = true;
+    if (DIAGRAMS_POSITIONS.has(value as DiagramsPosition)) {
+      state.position = value as DiagramsPosition;
+      continue;
+    }
+    const instr = diagramsValueAsInstrument(value);
+    if (instr) {
+      state.instrument = instr;
+      continue;
+    }
+    // Unknown value: treat as bare `on` (visibility already set
+    // above). Avoids regressing existing samples whose value
+    // happens to be e.g. `true`.
   }
-  return visible;
+  return state;
 }
 
 function renderHeader(
@@ -1039,6 +1143,13 @@ export function renderChordproAst(
   for (const headerNode of renderHeader(song.metadata, options, headerFmt)) {
     ctx.out.push(headerNode);
   }
+  // Snapshot the head-of-song boundary BEFORE walking the body, so
+  // a `{diagrams: top}` resolved further down can splice its
+  // <section> in after the header but before the first body element.
+  // `renderHeader` writes title / subtitle / meta strip into ctx.out
+  // before this point, so ctx.out.length is exactly the count of
+  // header nodes when the body walk begins.
+  const headEnd = ctx.out.length;
   song.lines.forEach((line, i) => renderLine(ctx, line, i + 1));
   // Final close: if the song ends inside an open section, flush
   // it so the user sees their lines instead of dropping them.
@@ -1050,12 +1161,30 @@ export function renderChordproAst(
   // (which calls `chord_diagram_svg` from `@chordsketch/wasm`
   // internally) so the React surface gets per-cell loading /
   // error / not-found states for free.
-  if (options.chordDiagrams && resolveDiagramsVisible(song)) {
+  //
+  // The state is resolved once over the entire song (visibility +
+  // position + instrument), then a single `<section>` is emitted
+  // at the position-appropriate boundary. Per spec, all four
+  // position keywords (`bottom` default, `top`, `right`, `below`)
+  // are recognised; the React walker maps them to the
+  // `data-position` attribute and to either head- or tail-of-body
+  // insertion. Concrete visual layout (column-on-the-right for
+  // `right`, etc.) lives in `styles.css`.
+  // `resolveDiagramsState` walks the lines once; capture it here so
+  // the song-class modifier below shares the same state object
+  // without re-walking.
+  const diagramsState = options.chordDiagrams ? resolveDiagramsState(song) : null;
+  if (diagramsState?.visible && options.chordDiagrams) {
     const names = collectChordNames(song);
     if (names.length > 0) {
-      const instrument = options.chordDiagrams.instrument ?? 'guitar';
-      ctx.out.push(
-        <section key="chord-diagrams" className="chord-diagrams">
+      const instrument =
+        diagramsState.instrument ?? options.chordDiagrams.instrument ?? 'guitar';
+      const section = (
+        <section
+          key="chord-diagrams"
+          className="chord-diagrams"
+          data-position={diagramsState.position}
+        >
           <div className="section-label">Chord Diagrams</div>
           <div className="chord-diagrams-grid">
             {names.map((name) => (
@@ -1064,10 +1193,35 @@ export function renderChordproAst(
               </div>
             ))}
           </div>
-        </section>,
+        </section>
       );
+      if (diagramsState.position === 'top') {
+        // Splice between the header (title / subtitle / meta
+        // strip) and the song body. Per spec, `top` puts diagrams
+        // in the page-top region; on the Web there is no
+        // page-margin concept, so "between header and body" is
+        // the natural analogue.
+        ctx.out.splice(headEnd, 0, section);
+      } else {
+        // `bottom` (default), `below`, `right` all sit at the
+        // tail. `data-position` (on the section) + the
+        // `song--diagrams-<position>` modifier (on the wrapper)
+        // let the consumer's CSS distinguish them — `right`
+        // becomes a side column, `below` flows naturally after
+        // the last lyric line, `bottom` pins to the bottom of
+        // the document.
+        ctx.out.push(section);
+      }
     }
   }
 
-  return <div className="song">{ctx.out}</div>;
+  // Position-aware wrapper class. The modifier lets CSS reach the
+  // wrapper itself (e.g. `right` needs `display: grid` on `.song`
+  // to put the diagram column beside the body) without inspecting
+  // a child element.
+  const songClass =
+    diagramsState?.visible
+      ? `song song--diagrams-${diagramsState.position}`
+      : 'song';
+  return <div className={songClass}>{ctx.out}</div>;
 }
