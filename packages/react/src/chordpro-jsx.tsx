@@ -1174,6 +1174,12 @@ export function renderChordproAst(
   // the song-class modifier below shares the same state object
   // without re-walking.
   const diagramsState = options.chordDiagrams ? resolveDiagramsState(song) : null;
+  // `right` requires a different DOM shape (two-column flex with
+  // the body wrapped in a single flow container) so the diagram
+  // column sits beside the body without forcing the body's line
+  // rows to stretch to the section's full height. Track that
+  // here so the rendering branch downstream can wrap the body.
+  let rightSection: ReactNode = null;
   if (diagramsState?.visible && options.chordDiagrams) {
     const names = collectChordNames(song);
     if (names.length > 0) {
@@ -1202,26 +1208,49 @@ export function renderChordproAst(
         // page-margin concept, so "between header and body" is
         // the natural analogue.
         ctx.out.splice(headEnd, 0, section);
+      } else if (diagramsState.position === 'right') {
+        // Hold the section out of the linear body — the wrapper
+        // construction below will place it next to a flex sibling
+        // that holds the body content. Keeping the section out of
+        // `ctx.out` (rather than appending and then trying to
+        // reshape via CSS Grid) avoids the row-stretching trap
+        // where the section's tall height inflates the row the
+        // first body element lives in.
+        rightSection = section;
       } else {
-        // `bottom` (default), `below`, `right` all sit at the
-        // tail. `data-position` (on the section) + the
+        // `bottom` (default) and `below` sit at the tail of the
+        // body flow. `data-position` (on the section) +
         // `song--diagrams-<position>` modifier (on the wrapper)
-        // let the consumer's CSS distinguish them — `right`
-        // becomes a side column, `below` flows naturally after
-        // the last lyric line, `bottom` pins to the bottom of
-        // the document.
+        // let the consumer's CSS distinguish them — `below`
+        // flows naturally after the last lyric line, `bottom`
+        // pins to the bottom of the document.
         ctx.out.push(section);
       }
     }
   }
 
   // Position-aware wrapper class. The modifier lets CSS reach the
-  // wrapper itself (e.g. `right` needs `display: grid` on `.song`
-  // to put the diagram column beside the body) without inspecting
-  // a child element.
-  const songClass =
-    diagramsState?.visible
-      ? `song song--diagrams-${diagramsState.position}`
-      : 'song';
+  // wrapper itself — `right` flips `.song` to a row-flex with the
+  // body wrapped in `.song__body` (see below); the other
+  // modifiers (`top` / `bottom` / `below`) only need the section
+  // to carry `data-position` and the wrapper class.
+  const songClass = diagramsState?.visible
+    ? `song song--diagrams-${diagramsState.position}`
+    : 'song';
+
+  if (rightSection !== null) {
+    // Right-column layout. `.song__body` is a single flex item
+    // wrapping the entire body flow (header + lines + sections),
+    // and `.chord-diagrams[data-position='right']` is the
+    // sibling pinned to the right. The body element retains
+    // normal block flow internally, so chord-line rows do not
+    // get stretched by the diagrams column's intrinsic height.
+    return (
+      <div className={songClass}>
+        <div className="song__body">{ctx.out}</div>
+        {rightSection}
+      </div>
+    );
+  }
   return <div className={songClass}>{ctx.out}</div>;
 }

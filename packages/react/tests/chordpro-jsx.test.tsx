@@ -260,6 +260,32 @@ describe('renderChordproAst', () => {
     expect(container.querySelector('.song')?.classList.contains('song--diagrams-right')).toBe(true);
   });
 
+  test('{diagrams: right} wraps the body flow in `.song__body` so flex layout works', () => {
+    // Regression guard for the side-column gap surfaced in #2466
+    // follow-up review: when the section sat as a sibling of every
+    // body line inside a CSS-Grid `.song`, the section's intrinsic
+    // height inflated row 1 and pushed all `.line` rows beneath
+    // it. The fix wraps the body in a single flex item so the
+    // section sits beside the entire body flow, not above it.
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValue('right'), {
+        chordDiagrams: { instrument: 'guitar' },
+      }),
+    );
+    const wrapper = container.querySelector('.song');
+    expect(wrapper).not.toBeNull();
+    // Two direct children: the body flow + the diagram section.
+    const directChildren = Array.from(wrapper?.children ?? []);
+    expect(directChildren).toHaveLength(2);
+    expect(directChildren[0]?.className).toBe('song__body');
+    expect(directChildren[1]?.classList.contains('chord-diagrams')).toBe(true);
+    // The body line lives inside `.song__body`, NOT as a direct
+    // child of `.song`.
+    const bodyLine = wrapper?.querySelector('.song__body > .line');
+    expect(bodyLine).not.toBeNull();
+    expect(wrapper?.querySelector(':scope > .line')).toBeNull();
+  });
+
   test('{diagrams: below} places the section at the tail and tags below', () => {
     const { container } = render(
       renderChordproAst(songWithDiagramsValue('below'), {

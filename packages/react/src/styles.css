@@ -408,29 +408,37 @@
   margin-bottom: 1.25rem;
 }
 
-/* `right`: two-column grid with the diagrams pinned to the right.
-   Falls back to a stacked layout under 720 px so narrow preview
-   panes do not crush the body to a sliver. */
+/* `right`: two-column flex layout with the body wrapped in
+   `.song__body` (left, flex-grow) and the diagrams section
+   pinned to the right (fixed-ish width column).
+
+   The walker emits this shape only when `{diagrams: right}` is
+   active; other positions keep the flat `.song > h1 + ... +
+   section` structure. Falls back to a stacked layout under
+   720 px so narrow preview panes do not crush the body. */
 .chordsketch-sheet__content .song--diagrams-right {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: 1.5rem;
-  align-items: start;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+.chordsketch-sheet__content .song__body {
+  flex: 1 1 0;
+  min-width: 0;
 }
 .chordsketch-sheet__content .song--diagrams-right .chord-diagrams[data-position='right'] {
-  grid-column: 2;
-  grid-row: 1 / -1;
-  margin-top: 0;
+  flex: 0 0 auto;
   min-width: 12rem;
   max-width: 16rem;
+  margin-top: 0;
 }
 @media (max-width: 720px) {
   .chordsketch-sheet__content .song--diagrams-right {
-    display: block;
+    flex-direction: column;
   }
   .chordsketch-sheet__content .song--diagrams-right .chord-diagrams[data-position='right'] {
-    margin-top: 1.5rem;
     max-width: none;
+    margin-top: 1.5rem;
   }
 }
 
