@@ -71,10 +71,23 @@ categories = ["parser-implementations", "text-processing"]
 #                      typically -20-30% on the wasm binary alone.
 #   codegen-units    — single-unit codegen lets LTO see everything;
 #     = 1              required to get the full LTO benefit.
-#   strip = "symbols" — drops debug + linker symbols. Stack traces on
-#                       wasm are still derivable via wasm-bindgen's
-#                       name section (preserved separately by
-#                       wasm-bindgen-cli when present).
+#   strip = "debuginfo" — drops DWARF debug info from cdylib
+#                       outputs. Initially set this to "symbols"
+#                       in #2466, which strips the symbol table as
+#                       well — fine for ELF binaries that are
+#                       not dynamically linked, but it broke the
+#                       Python FFI wheel (`crates/ffi`) on Linux:
+#                       maturin's `manylinux2014` build layered
+#                       its own auditwheel-style stripping on top
+#                       and the combination dropped the symbol
+#                       table entries that UniFFI's Python wrapper
+#                       imports (`ChordSketchError` et al.). The
+#                       "debuginfo" setting keeps `.dynsym` intact
+#                       so `dlopen` / `ctypes.CDLL` lookups still
+#                       resolve while still trimming the bulk of
+#                       the DWARF tables. Wasm output is unaffected
+#                       either way (wasm uses its own export
+#                       section, not the ELF symbol table).
 #   panic            — kept at "unwind" (cargo default) so the
 #                       wasm `console_error_panic_hook` and the
 #                       CLI's `Result`-returning paths still see
@@ -85,4 +98,4 @@ categories = ["parser-implementations", "text-processing"]
 opt-level = "z"
 lto = "fat"
 codegen-units = 1
-strip = "symbols"
+strip = "debuginfo"
