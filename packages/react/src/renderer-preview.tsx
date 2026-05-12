@@ -45,6 +45,10 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
    * Only consumed by `format="html"`.
    */
   activeSourceLine?: number;
+  /** See {@link ChordSheetProps.caretColumn}. */
+  caretColumn?: number;
+  /** See {@link ChordSheetProps.caretLineLength}. */
+  caretLineLength?: number;
   /** Optional content rendered while the wasm runtime is initialising. */
   loadingFallback?: ReactNode;
   /**
@@ -92,6 +96,8 @@ export function RendererPreview({
   pdfFilename = 'chordsketch-output.pdf',
   chordDiagramsInstrument,
   activeSourceLine,
+  caretColumn,
+  caretLineLength,
   loadingFallback,
   errorFallback,
   wasmLoader,
@@ -128,6 +134,8 @@ export function RendererPreview({
       config={config}
       chordDiagramsInstrument={chordDiagramsInstrument}
       activeSourceLine={activeSourceLine}
+      caretColumn={caretColumn}
+      caretLineLength={caretLineLength}
       loadingFallback={loadingFallback}
       errorFallback={errorFallback}
       wasmLoader={wasmLoader}

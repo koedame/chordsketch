@@ -289,6 +289,46 @@
 .chordsketch-sheet__content .line--active {
   background-color: var(--cs-active-line-bg, rgba(189, 22, 66, 0.06));
   border-radius: 2px;
+  /* Anchor for the caret-marker overlay below — without
+     `position: relative` the marker's `left` percentage would be
+     relative to the nearest positioned ancestor, which is usually
+     the document root and produces meaningless placement. */
+  position: relative;
+}
+
+/* Preview-side caret marker. Approximates the source caret
+   position (column / line length) inside the active element with a
+   thin vertical bar. Mapping is intentionally linear so the
+   feature works without per-character AST positions — the
+   rendered DOM width and the source-column count are NOT
+   one-to-one for `[chord]lyric` markup, so the marker is a
+   navigation aid, not a sub-character cursor. Animation matches
+   the standard browser-caret blink so the affordance reads as
+   "this is where your editor caret is". */
+.chordsketch-sheet__content .caret-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: var(--cs-active-line-accent, #BD1642);
+  pointer-events: none;
+  animation: chordsketch-caret-blink 1.06s steps(2, jump-none) infinite;
+  border-radius: 1px;
+}
+@keyframes chordsketch-caret-blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  50.01%, 100% {
+    opacity: 0;
+  }
+}
+/* `prefers-reduced-motion` hides the blink so the caret renders
+   as a steady bar — same affordance, no animation. */
+@media (prefers-reduced-motion: reduce) {
+  .chordsketch-sheet__content .caret-marker {
+    animation: none;
+  }
 }
 
 /* Chord-bearing line — flexbox of `.chord-block` columns. */

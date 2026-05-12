@@ -671,6 +671,88 @@ describe('renderChordproAst', () => {
     expect(container.querySelector('h1')?.classList.contains('line--active')).toBe(false);
   });
 
+  // Caret-marker overlay: when activeSourceLine is paired with
+  // caretColumn + caretLineLength, the walker injects a
+  // <span class="caret-marker"> child positioned by the ratio.
+  test('caretColumn + caretLineLength inject a caret-marker into the active element', () => {
+    const { container } = render(
+      renderChordproAst(
+        {
+          metadata: EMPTY_META,
+          lines: [
+            {
+              kind: 'lyrics',
+              value: {
+                segments: [
+                  {
+                    chord: { name: 'C', detail: null, display: null },
+                    text: 'hello world',
+                    spans: [],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        { activeSourceLine: 1, caretColumn: 5, caretLineLength: 10 },
+      ),
+    );
+    const marker = container.querySelector('.line--active .caret-marker');
+    expect(marker).not.toBeNull();
+    // 5 / 10 = 50% — the marker should land at the midpoint.
+    expect((marker as HTMLElement).style.left).toBe('50%');
+    expect(marker?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  test('caret-marker omitted when caretColumn / caretLineLength are absent', () => {
+    const { container } = render(
+      renderChordproAst(
+        {
+          metadata: EMPTY_META,
+          lines: [
+            {
+              kind: 'lyrics',
+              value: {
+                segments: [
+                  {
+                    chord: { name: 'C', detail: null, display: null },
+                    text: 'hi',
+                    spans: [],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        { activeSourceLine: 1 },
+      ),
+    );
+    expect(container.querySelector('.caret-marker')).toBeNull();
+  });
+
+  test('caret-marker ratio clamps to 0..1 on overrun', () => {
+    const { container } = render(
+      renderChordproAst(
+        {
+          metadata: EMPTY_META,
+          lines: [
+            {
+              kind: 'lyrics',
+              value: {
+                segments: [
+                  { chord: null, text: 'ab', spans: [] },
+                ],
+              },
+            },
+          ],
+        },
+        { activeSourceLine: 1, caretColumn: 999, caretLineLength: 2 },
+      ),
+    );
+    const marker = container.querySelector('.caret-marker');
+    expect((marker as HTMLElement).style.left).toBe('100%');
+  });
+
   test('activeSourceLine on title directive highlights the h1 itself', () => {
     const ast: ChordproSong = {
       metadata: { ...EMPTY_META, title: 'Hello' },

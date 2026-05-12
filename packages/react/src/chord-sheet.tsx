@@ -43,6 +43,16 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
    */
   activeSourceLine?: number;
   /**
+   * 0-indexed caret column inside the active source line. Paired
+   * with `caretLineLength`, drives the preview-side
+   * `<span class="caret-marker">` overlay positioned by
+   * `column / lineLength`. Omit either to fall back to plain
+   * line-level highlighting.
+   */
+  caretColumn?: number;
+  /** Total character length of the active source line. */
+  caretLineLength?: number;
+  /**
    * Configuration preset name (e.g. `"guitar"`, `"ukulele"`) or an
    * inline RRJSON configuration string.
    */
@@ -140,6 +150,8 @@ export function ChordSheet({
   astWasmLoader,
   chordDiagramsInstrument,
   activeSourceLine,
+  caretColumn,
+  caretLineLength,
   className,
   ...divProps
 }: ChordSheetProps): JSX.Element {
@@ -170,6 +182,8 @@ export function ChordSheet({
       wasmLoader={astWasmLoader}
       chordDiagramsInstrument={chordDiagramsInstrument}
       activeSourceLine={activeSourceLine}
+      caretColumn={caretColumn}
+      caretLineLength={caretLineLength}
       wrapperClass={wrapperClass}
       divProps={divProps}
     />
@@ -226,12 +240,16 @@ function ChordSheetAstBranch({
   wasmLoader,
   chordDiagramsInstrument,
   activeSourceLine,
+  caretColumn,
+  caretLineLength,
   wrapperClass,
   divProps,
 }: BranchProps & {
   wasmLoader: ChordproWasmLoader | undefined;
   chordDiagramsInstrument: ChordDiagramInstrument | undefined;
   activeSourceLine: number | undefined;
+  caretColumn: number | undefined;
+  caretLineLength: number | undefined;
 }): JSX.Element {
   const { ast, loading, error, transposedKey } = useChordproAst(
     source,
@@ -265,6 +283,8 @@ function ChordSheetAstBranch({
             ? { instrument: chordDiagramsInstrument }
             : null,
           activeSourceLine,
+          caretColumn,
+          caretLineLength,
         })}
       </div>
     </div>

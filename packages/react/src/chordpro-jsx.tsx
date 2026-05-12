@@ -504,6 +504,22 @@ export interface RenderChordproAstOptions {
    * metadata is required on the AST itself.
    */
   activeSourceLine?: number;
+  /**
+   * Optional caret column + line length info paired with
+   * `activeSourceLine`. When both are present, the walker drops a
+   * thin `<span class="caret-marker">` into the active element at
+   * `left: <column / lineLength * 100>%` so the preview shows
+   * approximately where the editor caret is, not just which line.
+   *
+   * Mapping is intentionally approximate: ChordPro source uses
+   * `[chord]lyric` notation whose rendered width does NOT line up
+   * one-to-one with source columns. The linear approximation is
+   * the cheapest visual feedback that still helps readers locate
+   * themselves within a long line. Omit either field to fall back
+   * to line-only highlighting.
+   */
+  caretColumn?: number;
+  caretLineLength?: number;
 }
 
 /**
@@ -1141,6 +1157,14 @@ interface WalkContext {
    * disables the marker.
    */
   activeSourceLine?: number;
+  /**
+   * Approximate caret column ratio (0..1) the walker uses to drop
+   * a `<span class="caret-marker">` inside the active element.
+   * `undefined` skips the marker. Pre-computed from
+   * `caretColumn / max(caretLineLength, 1)` so the walker doesn't
+   * need to clamp on the hot path.
+   */
+  caretRatio?: number;
 }
 
 function flushSection(ctx: WalkContext, key: number): void {
@@ -1208,18 +1232,41 @@ function pushElement(
   //     when the line matches `ctx.activeSourceLine`. The class is
   //     additive — pre-existing classes (`line`, `comment`,
   //     `comment-box`, etc.) survive.
+  //   - a `<span class="caret-marker">` child positioned via
+  //     `left: <caretRatio * 100>%` when the line is active AND a
+  //     caret ratio is set. Lets the preview show "where in the
+  //     line" the editor caret is, not just which line.
   let decorated = element;
   if (sourceLine !== undefined && isValidElement(element)) {
-    const props = element.props as { className?: string; [key: string]: unknown };
+    const props = element.props as {
+      className?: string;
+      children?: ReactNode;
+      [key: string]: unknown;
+    };
     const isActive =
       ctx.activeSourceLine !== undefined && ctx.activeSourceLine === sourceLine;
     const nextClass = isActive
       ? `${props.className ? `${props.className} ` : ''}line--active`
       : props.className;
-    decorated = cloneElement(element, {
-      'data-source-line': sourceLine,
-      ...(nextClass !== undefined ? { className: nextClass } : {}),
-    } as Partial<typeof props>);
+    const shouldInjectMarker = isActive && ctx.caretRatio !== undefined;
+    decorated = cloneElement(
+      element,
+      {
+        'data-source-line': sourceLine,
+        ...(nextClass !== undefined ? { className: nextClass } : {}),
+      } as Partial<typeof props>,
+      ...(shouldInjectMarker
+        ? [
+            <span
+              key="__caret-marker"
+              className="caret-marker"
+              aria-hidden="true"
+              style={{ left: `${(ctx.caretRatio ?? 0) * 100}%` }}
+            />,
+            props.children as ReactNode,
+          ]
+        : []),
+    );
   }
   if (ctx.section) {
     ctx.section.children.push(decorated);
@@ -1437,6 +1484,17 @@ export function renderChordproAst(
     fmt: emptyFormattingState(),
     savedFmt: null,
     activeSourceLine: options.activeSourceLine,
+    caretRatio:
+      options.caretColumn !== undefined && options.caretLineLength !== undefined
+        ? // Clamp to 0..1 so a column that overruns the reported
+          // line length (e.g. caret at end-of-line trailing
+          // whitespace stripped by the AST) doesn't push the
+          // marker past the right edge.
+          Math.min(
+            1,
+            Math.max(0, options.caretColumn / Math.max(1, options.caretLineLength)),
+          )
+        : undefined,
   };
   // Emit header first so metadata lands above the body even when
   // the source has metadata directives interleaved with lines.

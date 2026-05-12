@@ -89,6 +89,19 @@ export interface SourceEditorProps extends Omit<HTMLAttributes<HTMLDivElement>, 
    * can be threaded through unchanged.
    */
   onCaretLineChange?: (line: number) => void;
+  /**
+   * Fires whenever the caret position changes — including intra-line
+   * moves that `onCaretLineChange` skips. The payload carries the
+   * 1-indexed `line`, the 0-indexed `column` (characters from the
+   * line start to the caret head), and `lineLength` (total characters
+   * in the current line). Use this for fine-grained UI (e.g. a
+   * preview-side caret marker positioned via `column / lineLength`).
+   *
+   * The handler fires on every `selectionSet || docChanged` update,
+   * not gated by line change — consumers should debounce if their
+   * downstream cost is heavy.
+   */
+  onCaretChange?: (caret: { line: number; column: number; lineLength: number }) => void;
   /** Placeholder rendered while the editor is empty. */
   placeholder?: string;
   /**
@@ -281,6 +294,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
       defaultValue = '',
       onChange,
       onCaretLineChange,
+      onCaretChange,
       placeholder,
       noLineNumbers,
       noLineWrapping,
@@ -293,6 +307,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
     const viewRef = useRef<EditorView | null>(null);
     const onChangeRef = useRef(onChange);
     const onCaretLineChangeRef = useRef(onCaretLineChange);
+    const onCaretChangeRef = useRef(onCaretChange);
     // Last line we reported so the listener stays idempotent — it
     // fires once per cross-line move and never on intra-line edits.
     const lastReportedLineRef = useRef<number | null>(null);
@@ -307,6 +322,9 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
     useEffect(() => {
       onCaretLineChangeRef.current = onCaretLineChange;
     }, [onCaretLineChange]);
+    useEffect(() => {
+      onCaretChangeRef.current = onCaretChange;
+    }, [onCaretChange]);
 
     // Mount the EditorView once; tear it down on unmount. Subsequent
     // prop changes flow through the synchronisation effect below.
@@ -319,18 +337,29 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
           const next = update.state.doc.toString();
           onChangeRef.current?.(next);
         }
-        // Caret-line tracking. Fires on selection changes (arrow
-        // keys / click / drag) AND on doc changes (typing reflows
-        // the caret implicitly). Idempotent against intra-line
-        // moves — the ref guard skips re-firing for the same line
-        // value, so consumers don't have to debounce.
-        if (
-          (update.selectionSet || update.docChanged) &&
-          onCaretLineChangeRef.current
-        ) {
+        // Caret tracking. Fires on selection changes (arrow keys /
+        // click / drag) AND on doc changes (typing reflows the caret
+        // implicitly).
+        if (update.selectionSet || update.docChanged) {
           const head = update.state.selection.main.head;
-          const line = update.state.doc.lineAt(head).number;
-          if (lastReportedLineRef.current !== line) {
+          const lineInfo = update.state.doc.lineAt(head);
+          const line = lineInfo.number;
+          // Fine-grained caret update — fires on every move including
+          // intra-line (consumers can use this for a caret marker in
+          // the preview).
+          if (onCaretChangeRef.current) {
+            onCaretChangeRef.current({
+              line,
+              column: head - lineInfo.from,
+              lineLength: lineInfo.length,
+            });
+          }
+          // Line-only update — idempotent across intra-line moves so
+          // legacy consumers don't re-render unnecessarily.
+          if (
+            onCaretLineChangeRef.current &&
+            lastReportedLineRef.current !== line
+          ) {
             lastReportedLineRef.current = line;
             onCaretLineChangeRef.current(line);
           }
