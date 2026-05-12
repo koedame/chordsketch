@@ -179,11 +179,17 @@ const KITCHEN_SINK_SOURCE = `# ChordSketch — All Directives Tour
 {headerfont: sans-serif}
 
 # === Comments [Nx] [Pos] =========================================
-# Three rendered comment flavours — italic by default, an explicit
-# italic alias, and a boxed variant. Render in document flow.
+# Four rendered comment flavours per ChordPro spec
+# (https://www.chordpro.org/chordpro/directives-comment/):
+#   {comment} / {c}          — normal (italic by default styling)
+#   {comment_italic} / {ci}  — explicit italic alias
+#   {comment_box} / {cb}     — boxed variant
+#   {highlight}              — stronger visual emphasis (yellow
+#                              background / bold weight)
 {comment: Plain comment — italic note above the next line}
 {comment_italic: Italic comment variant}
 {comment_box: Boxed comment for emphasis}
+{highlight: Highlighted comment — strongest emphasis}
 
 # === Sections [Nx] [Pos] =========================================
 # start_of_X / end_of_X pairs delimit a named block. The optional
@@ -277,6 +283,14 @@ E|----------------------------|
 {image: src="https://raw.githubusercontent.com/koedame/chordsketch/main/assets/logo-128.png" width=64 height=64 title="ChordSketch logo"}
 
 {new_physical_page}
+
+# === Legacy: {pagetype} ==========================================
+# Page-size directive accepts 'a4' or 'letter'. The official
+# ChordPro reference implementation flags this as "Not
+# implemented — use the configuration files instead" — ChordSketch
+# follows the same policy: parsed for round-trip fidelity but
+# every renderer treats it as a no-op.
+{pagetype: a4}
 
 # === End of tour =================================================
 # Where ChordSketch deviates from spec today:

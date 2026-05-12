@@ -213,6 +213,7 @@ impl ToJson for CommentStyle {
             CommentStyle::Normal => "\"normal\"",
             CommentStyle::Italic => "\"italic\"",
             CommentStyle::Boxed => "\"boxed\"",
+            CommentStyle::Highlight => "\"highlight\"",
         };
         out.push_str(s);
     }
@@ -502,6 +503,7 @@ impl ToJson for DirectiveKind {
             DirectiveKind::Comment => out.push_str("\"tag\":\"comment\""),
             DirectiveKind::CommentItalic => out.push_str("\"tag\":\"commentItalic\""),
             DirectiveKind::CommentBox => out.push_str("\"tag\":\"commentBox\""),
+            DirectiveKind::Highlight => out.push_str("\"tag\":\"highlight\""),
 
             // -- Sections ------------------------------------------------
             DirectiveKind::StartOfChorus => out.push_str("\"tag\":\"startOfChorus\""),
@@ -534,6 +536,7 @@ impl ToJson for DirectiveKind {
             DirectiveKind::NewPhysicalPage => out.push_str("\"tag\":\"newPhysicalPage\""),
             DirectiveKind::ColumnBreak => out.push_str("\"tag\":\"columnBreak\""),
             DirectiveKind::Columns => out.push_str("\"tag\":\"columns\""),
+            DirectiveKind::Pagetype => out.push_str("\"tag\":\"pagetype\""),
 
             // -- Extended fonts ------------------------------------------
             DirectiveKind::TitleFont => out.push_str("\"tag\":\"titleFont\""),

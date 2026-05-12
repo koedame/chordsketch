@@ -2105,6 +2105,19 @@ fn render_comment(style: CommentStyle, text: &str, html: &mut String) {
         CommentStyle::Boxed => {
             let _ = writeln!(html, "<div class=\"comment-box\">{}</div>", escape(text));
         }
+        CommentStyle::Highlight => {
+            // `{highlight}` is the spec's stronger sibling of `{comment}`
+            // — `chordsketch-render-html` emits a separate `comment--highlight`
+            // class so consumer stylesheets can paint it distinctly (bold
+            // weight, yellow background, etc.) without forking the
+            // base `.comment` styles. Falls back to plain text when the
+            // stylesheet does not provide a rule.
+            let _ = writeln!(
+                html,
+                "<p class=\"comment comment--highlight\">{}</p>",
+                escape(text)
+            );
+        }
     }
 }
 
@@ -2456,6 +2469,18 @@ mod tests {
     fn test_render_comment_box() {
         let html = render("{comment_box: Important}");
         assert!(html.contains("<div class=\"comment-box\">Important</div>"));
+    }
+
+    #[test]
+    fn test_render_comment_highlight() {
+        // `{highlight}` per spec is an "alternative to comment" with
+        // stronger visual emphasis. Sister to the text renderer's
+        // `<<...>>` delimiter and the PDF renderer's bold variant.
+        let html = render("{highlight: Watch out}");
+        assert!(
+            html.contains("<p class=\"comment comment--highlight\">Watch out</p>"),
+            "got: {html}"
+        );
     }
 
     #[test]

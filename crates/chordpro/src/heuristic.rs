@@ -881,6 +881,7 @@ pub fn song_to_chordpro(song: &Song) -> String {
                     CommentStyle::Normal => out.push_str(&format!("{{comment: {t}}}\n")),
                     CommentStyle::Italic => out.push_str(&format!("{{comment_italic: {t}}}\n")),
                     CommentStyle::Boxed => out.push_str(&format!("{{comment_box: {t}}}\n")),
+                    CommentStyle::Highlight => out.push_str(&format!("{{highlight: {t}}}\n")),
                 }
             }
             Line::Directive(dir) => {

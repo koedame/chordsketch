@@ -344,6 +344,19 @@
   display: inline-block;
   margin: 0.3em 0;
 }
+/* `{highlight}` — spec sibling of `{comment}` with stronger visual
+   emphasis. Yellow-marker styling matches the HTML `<mark>` idiom
+   readers already recognise as "important text". Sister to the Rust
+   HTML renderer's `comment--highlight` class. */
+.chordsketch-sheet__content .comment.comment--highlight {
+  background-color: var(--cs-highlight-bg, #fff3a3);
+  color: var(--cs-ink-900, #1a1718);
+  font-style: normal;
+  font-weight: 600;
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+  display: inline-block;
+}
 
 /* Embedded images stay fluid inside the wrapper. */
 .chordsketch-sheet__content img {

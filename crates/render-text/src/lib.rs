@@ -646,14 +646,22 @@ fn render_section_header(label: &str, value: &Option<String>, output: &mut Vec<S
 
 /// Render a comment with its style marker.
 ///
-/// - Normal comments: `(comment text)`
-/// - Italic comments: `(*comment text*)`
-/// - Boxed comments:  `[comment text]`
+/// - Normal comments:    `(comment text)`
+/// - Italic comments:    `(*comment text*)`
+/// - Boxed comments:     `[comment text]`
+/// - Highlight comments: `<<comment text>>`
+///
+/// `{highlight}` shares its text payload with `{comment}` per spec but
+/// renders with a distinct delimiter so the text-pipeline output is
+/// still able to round-trip the original directive choice. Sister-site
+/// to the HTML renderer's `comment--highlight` class and the PDF
+/// renderer's bold-weight variant.
 fn render_comment(style: CommentStyle, text: &str, output: &mut Vec<String>) {
     match style {
         CommentStyle::Normal => output.push(format!("({text})")),
         CommentStyle::Italic => output.push(format!("(*{text}*)")),
         CommentStyle::Boxed => output.push(format!("[{text}]")),
+        CommentStyle::Highlight => output.push(format!("<<{text}>>")),
     }
 }
 
@@ -739,6 +747,17 @@ mod tests {
         let input = "{comment_box: Important}";
         let output = render(input);
         assert_eq!(output, "[Important]\n");
+    }
+
+    #[test]
+    fn test_render_comment_highlight() {
+        // `{highlight}` is spec's stronger sibling of `{comment}` —
+        // distinct delimiter so round-trips can recover the directive
+        // choice. Sister to the HTML renderer's `comment--highlight`
+        // class and the PDF renderer's bold variant.
+        let input = "{highlight: Watch out}";
+        let output = render(input);
+        assert_eq!(output, "<<Watch out>>\n");
     }
 
     #[test]

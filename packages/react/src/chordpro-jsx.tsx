@@ -298,7 +298,7 @@ function renderLyricsLine(
 // ---- Comment line --------------------------------------------------
 
 function renderComment(
-  style: 'normal' | 'italic' | 'boxed',
+  style: 'normal' | 'italic' | 'boxed' | 'highlight',
   text: string,
   key: number,
   fmt: FormattingState,
@@ -320,6 +320,22 @@ function renderComment(
     return (
       <p key={key} className="comment" style={textStyle ?? undefined}>
         <em>{text}</em>
+      </p>
+    );
+  }
+  if (style === 'highlight') {
+    // `{highlight}` is the spec's stronger sibling of `{comment}` —
+    // emit a `.comment.comment--highlight` so consumer stylesheets
+    // can paint it distinctly (bold weight + yellow background,
+    // etc.) without forking the base `.comment` rules. Sister-site
+    // to the HTML renderer's `comment--highlight` class.
+    return (
+      <p
+        key={key}
+        className="comment comment--highlight"
+        style={textStyle ?? undefined}
+      >
+        {text}
       </p>
     );
   }

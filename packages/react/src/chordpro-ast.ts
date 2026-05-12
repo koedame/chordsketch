@@ -48,7 +48,7 @@ export type ChordproLine =
   | { kind: 'comment'; style: ChordproCommentStyle; text: string }
   | { kind: 'empty' };
 
-export type ChordproCommentStyle = 'normal' | 'italic' | 'boxed';
+export type ChordproCommentStyle = 'normal' | 'italic' | 'boxed' | 'highlight';
 
 // ---- Lyrics --------------------------------------------------------
 
@@ -177,6 +177,7 @@ export type ChordproDirectiveKind =
   | { tag: 'comment' }
   | { tag: 'commentItalic' }
   | { tag: 'commentBox' }
+  | { tag: 'highlight' }
   // Sections
   | { tag: 'startOfChorus' }
   | { tag: 'endOfChorus' }
@@ -205,6 +206,7 @@ export type ChordproDirectiveKind =
   | { tag: 'newPhysicalPage' }
   | { tag: 'columnBreak' }
   | { tag: 'columns' }
+  | { tag: 'pagetype' }
   // Extended fonts
   | { tag: 'titleFont' }
   | { tag: 'titleSize' }

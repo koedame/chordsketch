@@ -643,14 +643,27 @@ describe('renderChordproAst', () => {
           { kind: 'comment', style: 'normal', text: 'plain comment' },
           { kind: 'comment', style: 'italic', text: 'italic comment' },
           { kind: 'comment', style: 'boxed', text: 'boxed comment' },
+          { kind: 'comment', style: 'highlight', text: 'highlight comment' },
         ],
       }),
     );
+    // `.comment` selector covers normal, italic, and highlight (boxed
+    // uses `<div class="comment-box">` instead).
     const comments = container.querySelectorAll('p.comment');
-    expect(comments.length).toBe(2);
+    expect(comments.length).toBe(3);
     expect(comments[0]?.textContent).toBe('plain comment');
     expect(comments[1]?.querySelector('em')?.textContent).toBe('italic comment');
     expect(container.querySelector('.comment-box')?.textContent).toBe('boxed comment');
+    // `{highlight}` is the spec sibling of `{comment}` — same `<p>`
+    // shape but with a `comment--highlight` modifier so consumer
+    // stylesheets paint it distinctly.
+    const highlight = container.querySelector('p.comment--highlight');
+    expect(highlight).not.toBeNull();
+    expect(highlight?.textContent).toBe('highlight comment');
+    // Make sure it doesn't carry the italic wrapper or the boxed
+    // class — visually it should be its own treatment.
+    expect(highlight?.querySelector('em')).toBeNull();
+    expect(highlight?.classList.contains('comment-box')).toBe(false);
   });
 
   function renderImageWithSrc(src: string): HTMLElement {

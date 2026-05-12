@@ -1884,6 +1884,11 @@ fn render_comment(style: CommentStyle, text: &str, doc: &mut PdfDocument) {
     let font = match style {
         CommentStyle::Normal => Font::Helvetica,
         CommentStyle::Italic | CommentStyle::Boxed => Font::HelveticaOblique,
+        // `{highlight}` is rendered in bold to give it the spec-described
+        // stronger visual emphasis without dragging in a separate font.
+        // Sister-site to `chordsketch-render-html`'s
+        // `comment--highlight` class.
+        CommentStyle::Highlight => Font::HelveticaBold,
     };
     if style == CommentStyle::Boxed {
         let padding = 3.0_f32;

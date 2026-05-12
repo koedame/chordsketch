@@ -648,6 +648,7 @@ impl Parser {
                 DirectiveKind::Comment => CommentStyle::Normal,
                 DirectiveKind::CommentItalic => CommentStyle::Italic,
                 DirectiveKind::CommentBox => CommentStyle::Boxed,
+                DirectiveKind::Highlight => CommentStyle::Highlight,
                 _ => CommentStyle::Normal,
             };
             let text = value.unwrap_or_default();
