@@ -37,6 +37,14 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
    * renderer does.
    */
   chordDiagramsInstrument?: ChordDiagramInstrument;
+  /**
+   * 1-indexed source line that should be highlighted in the
+   * rendered preview. Forwarded to {@link ChordSheet}'s
+   * `activeSourceLine` prop. Pair with `<SourceEditor>`'s
+   * `onCaretLineChange` callback for editor↔preview caret sync.
+   * Only consumed by `format="html"`.
+   */
+  activeSourceLine?: number;
   /** Optional content rendered while the wasm runtime is initialising. */
   loadingFallback?: ReactNode;
   /**
@@ -83,6 +91,7 @@ export function RendererPreview({
   format,
   pdfFilename = 'chordsketch-output.pdf',
   chordDiagramsInstrument,
+  activeSourceLine,
   loadingFallback,
   errorFallback,
   wasmLoader,
@@ -118,6 +127,7 @@ export function RendererPreview({
       transpose={transpose}
       config={config}
       chordDiagramsInstrument={chordDiagramsInstrument}
+      activeSourceLine={activeSourceLine}
       loadingFallback={loadingFallback}
       errorFallback={errorFallback}
       wasmLoader={wasmLoader}

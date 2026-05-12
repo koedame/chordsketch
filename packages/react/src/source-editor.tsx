@@ -74,6 +74,21 @@ export interface SourceEditorProps extends Omit<HTMLAttributes<HTMLDivElement>, 
    * NOT fire this handler.
    */
   onChange?: (value: string) => void;
+  /**
+   * Fires whenever the caret moves to a different line (selection or
+   * arrow keys, click, typing-induced reflow, etc.). The argument is
+   * the 1-indexed line number that the caret head sits on. Same line
+   * → no fire; cross-line edits / cursor moves fire once.
+   *
+   * Pair with `<ChordSheet activeSourceLine>` /
+   * `<RendererPreview activeSourceLine>` to keep the rendered
+   * preview's highlighted line in sync with the editor caret. The
+   * 1-indexed convention matches both the AST walker
+   * (`renderChordproAst`'s `activeSourceLine` option) and
+   * CodeMirror's own `state.doc.lineAt(...).number`, so the value
+   * can be threaded through unchanged.
+   */
+  onCaretLineChange?: (line: number) => void;
   /** Placeholder rendered while the editor is empty. */
   placeholder?: string;
   /**
@@ -265,6 +280,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
       value,
       defaultValue = '',
       onChange,
+      onCaretLineChange,
       placeholder,
       noLineNumbers,
       noLineWrapping,
@@ -276,6 +292,10 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
     const onChangeRef = useRef(onChange);
+    const onCaretLineChangeRef = useRef(onCaretLineChange);
+    // Last line we reported so the listener stays idempotent — it
+    // fires once per cross-line move and never on intra-line edits.
+    const lastReportedLineRef = useRef<number | null>(null);
     const programmaticLoadRef = useRef(false);
 
     // Keep the handler stable across renders so the update
@@ -284,6 +304,9 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
     useEffect(() => {
       onChangeRef.current = onChange;
     }, [onChange]);
+    useEffect(() => {
+      onCaretLineChangeRef.current = onCaretLineChange;
+    }, [onCaretLineChange]);
 
     // Mount the EditorView once; tear it down on unmount. Subsequent
     // prop changes flow through the synchronisation effect below.
@@ -292,10 +315,26 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
       if (!container) return;
 
       const updateListener = EditorView.updateListener.of((update) => {
-        if (!update.docChanged) return;
-        if (programmaticLoadRef.current) return;
-        const next = update.state.doc.toString();
-        onChangeRef.current?.(next);
+        if (update.docChanged && !programmaticLoadRef.current) {
+          const next = update.state.doc.toString();
+          onChangeRef.current?.(next);
+        }
+        // Caret-line tracking. Fires on selection changes (arrow
+        // keys / click / drag) AND on doc changes (typing reflows
+        // the caret implicitly). Idempotent against intra-line
+        // moves — the ref guard skips re-firing for the same line
+        // value, so consumers don't have to debounce.
+        if (
+          (update.selectionSet || update.docChanged) &&
+          onCaretLineChangeRef.current
+        ) {
+          const head = update.state.selection.main.head;
+          const line = update.state.doc.lineAt(head).number;
+          if (lastReportedLineRef.current !== line) {
+            lastReportedLineRef.current = line;
+            onCaretLineChangeRef.current(line);
+          }
+        }
       });
 
       const extensions = [

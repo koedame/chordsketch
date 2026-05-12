@@ -271,6 +271,34 @@
   color: var(--cs-ink-700, #67646d);
 }
 
+/* Editor↔preview active-line marker. Any element carrying
+   `data-source-line` is the rendered output of the corresponding
+   1-indexed ChordPro source line; the AST walker adds the
+   `line--active` modifier to the element matching the editor's
+   caret position, so consumers can paint a subtle background
+   without needing the `data-source-line` value itself. The
+   selector targets every element class the walker emits
+   (`.line`, `.comment`, `.comment-box`, `.empty-line`, headers
+   inside sections, etc.) by qualifying only on the modifier
+   class.
+
+   Background — a hair of the active-line accent used inside the
+   CodeMirror gutter so the two stay visually paired, even though
+   the two surfaces own their own theming. Border-left adds a
+   discreet leading bar that survives on dark themes too. */
+.chordsketch-sheet__content .line--active {
+  background-color: var(--cs-active-line-bg, rgba(189, 22, 66, 0.06));
+  border-left: 3px solid var(--cs-active-line-accent, #BD1642);
+  /* `padding-left` offsets the border so text doesn't shift left
+     for inactive lines. The matching `padding-left` on non-active
+     `.line` would push every line 3px right unconditionally; do
+     this only on the active element so layout stays unchanged
+     when nothing is highlighted. */
+  margin-left: -3px;
+  padding-left: 8px;
+  border-radius: 2px;
+}
+
 /* Chord-bearing line — flexbox of `.chord-block` columns. */
 .chordsketch-sheet__content .line {
   display: flex;

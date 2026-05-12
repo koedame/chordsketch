@@ -372,6 +372,143 @@ describe('renderChordproAst', () => {
     expect(container.querySelector('.chord-diagrams')?.getAttribute('data-position')).toBe('right');
   });
 
+  // Editor↔preview active-line sync (#2466 follow-up). The walker
+  // tags every body element with `data-source-line` = the line's
+  // 1-indexed position in the AST's `lines` array, and additionally
+  // applies a `line--active` modifier when the line number matches
+  // `options.activeSourceLine`.
+  test('tags every body element with data-source-line', () => {
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          { kind: 'comment', style: 'normal', text: 'first' },
+          {
+            kind: 'lyrics',
+            value: {
+              segments: [
+                {
+                  chord: { name: 'C', detail: null, display: null },
+                  text: 'hello',
+                  spans: [],
+                },
+              ],
+            },
+          },
+          { kind: 'empty' },
+        ],
+      }),
+    );
+    const lines = container.querySelectorAll('[data-source-line]');
+    expect(lines.length).toBe(3);
+    expect(lines[0]?.getAttribute('data-source-line')).toBe('1');
+    expect(lines[1]?.getAttribute('data-source-line')).toBe('2');
+    expect(lines[2]?.getAttribute('data-source-line')).toBe('3');
+    // Without activeSourceLine, no element gets the `line--active`
+    // modifier — the attribute alone is the inert "mapping" payload.
+    expect(container.querySelectorAll('.line--active').length).toBe(0);
+  });
+
+  test('applies .line--active to the line matching activeSourceLine', () => {
+    const { container } = render(
+      renderChordproAst(
+        {
+          metadata: EMPTY_META,
+          lines: [
+            { kind: 'comment', style: 'normal', text: 'first' },
+            {
+              kind: 'lyrics',
+              value: {
+                segments: [
+                  {
+                    chord: { name: 'C', detail: null, display: null },
+                    text: 'hello',
+                    spans: [],
+                  },
+                ],
+              },
+            },
+            { kind: 'empty' },
+          ],
+        },
+        { activeSourceLine: 2 },
+      ),
+    );
+    const active = container.querySelector('.line--active');
+    expect(active).not.toBeNull();
+    // The active element is line 2 — the lyrics row, NOT the
+    // comment above or the empty line below.
+    expect(active?.getAttribute('data-source-line')).toBe('2');
+    expect(active?.classList.contains('line')).toBe(true);
+    // Only one active element at a time.
+    expect(container.querySelectorAll('.line--active').length).toBe(1);
+  });
+
+  test('activeSourceLine pointing at a comment line activates that comment', () => {
+    const { container } = render(
+      renderChordproAst(
+        {
+          metadata: EMPTY_META,
+          lines: [
+            { kind: 'comment', style: 'highlight', text: 'on me' },
+            {
+              kind: 'lyrics',
+              value: {
+                segments: [
+                  {
+                    chord: { name: 'C', detail: null, display: null },
+                    text: 'hi',
+                    spans: [],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        { activeSourceLine: 1 },
+      ),
+    );
+    const active = container.querySelector('.line--active');
+    expect(active).not.toBeNull();
+    // Highlight is rendered as `<p class="comment comment--highlight">` —
+    // the modifier must coexist with the existing class list.
+    expect(active?.classList.contains('comment')).toBe(true);
+    expect(active?.classList.contains('comment--highlight')).toBe(true);
+    expect(active?.getAttribute('data-source-line')).toBe('1');
+  });
+
+  test('activeSourceLine out of range produces no active marker', () => {
+    const { container } = render(
+      renderChordproAst(
+        {
+          metadata: EMPTY_META,
+          lines: [
+            {
+              kind: 'lyrics',
+              value: {
+                segments: [
+                  {
+                    chord: { name: 'C', detail: null, display: null },
+                    text: 'hi',
+                    spans: [],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        { activeSourceLine: 9999 },
+      ),
+    );
+    // No line matches the bogus value — fall through to "nothing
+    // highlighted". The tagging attribute is still emitted on the
+    // one line that exists.
+    expect(container.querySelectorAll('.line--active').length).toBe(0);
+    expect(container.querySelector('[data-source-line]')?.getAttribute('data-source-line')).toBe(
+      '1',
+    );
+  });
+
   test('renders a chord+lyric pair as `.chord-block`', () => {
     const { container } = render(
       renderChordproAst({

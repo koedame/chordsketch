@@ -24,7 +24,7 @@
 // `DANGEROUS_URI_SCHEMES` here in the same PR per
 // `.claude/rules/sanitizer-security.md` §"Security Asymmetry".
 
-import { Fragment } from 'react';
+import { Fragment, cloneElement, isValidElement } from 'react';
 import type { CSSProperties, JSX, ReactNode } from 'react';
 
 import { ChordDiagram } from './chord-diagram';
@@ -485,6 +485,23 @@ export interface RenderChordproAstOptions {
      */
     instrument?: ChordDiagramInstrument;
   } | null;
+  /**
+   * 1-indexed source line that the consumer's editor caret is
+   * currently on. The walker tags every body element it emits with
+   * a `data-source-line="<n>"` attribute (the `n` is the line's
+   * 1-indexed position in the original ChordPro source), and the
+   * line whose number matches `activeSourceLine` additionally
+   * picks up a `line--active` class on its root element.
+   *
+   * Pair with the `SourceEditor`'s `onCaretLineChange` callback to
+   * wire up bidirectional caret tracking. Omit to disable the
+   * tagging entirely (the walker skips both the attribute and the
+   * class). The AST's `lines: ChordproLine[]` array is in
+   * source-line order, so the walker just passes the array index
+   * + 1 through as the attribute value — no separate location
+   * metadata is required on the AST itself.
+   */
+  activeSourceLine?: number;
 }
 
 /**
@@ -909,6 +926,13 @@ interface WalkContext {
    * the generic "Chorus".
    */
   lastChorusLabel: string | null;
+  /**
+   * 1-indexed source line whose corresponding rendered element
+   * should pick up the `line--active` modifier (see
+   * `RenderChordproAstOptions.activeSourceLine`). `undefined`
+   * disables the marker.
+   */
+  activeSourceLine?: number;
 }
 
 function flushSection(ctx: WalkContext, key: number): void {
@@ -943,11 +967,37 @@ function flushSection(ctx: WalkContext, key: number): void {
   ctx.section = null;
 }
 
-function pushElement(ctx: WalkContext, element: JSX.Element): void {
+function pushElement(
+  ctx: WalkContext,
+  element: JSX.Element,
+  sourceLine?: number,
+): void {
+  // When a 1-indexed source-line marker is provided, decorate the
+  // root element of the line with:
+  //   - a `data-source-line="<n>"` attribute so consumers can map
+  //     DOM nodes back to source positions (used by the
+  //     editor↔preview caret sync in the playground).
+  //   - a `line--active` class on the element's existing `className`
+  //     when the line matches `ctx.activeSourceLine`. The class is
+  //     additive — pre-existing classes (`line`, `comment`,
+  //     `comment-box`, etc.) survive.
+  let decorated = element;
+  if (sourceLine !== undefined && isValidElement(element)) {
+    const props = element.props as { className?: string; [key: string]: unknown };
+    const isActive =
+      ctx.activeSourceLine !== undefined && ctx.activeSourceLine === sourceLine;
+    const nextClass = isActive
+      ? `${props.className ? `${props.className} ` : ''}line--active`
+      : props.className;
+    decorated = cloneElement(element, {
+      'data-source-line': sourceLine,
+      ...(nextClass !== undefined ? { className: nextClass } : {}),
+    } as Partial<typeof props>);
+  }
   if (ctx.section) {
-    ctx.section.children.push(element);
+    ctx.section.children.push(decorated);
   } else {
-    ctx.out.push(element);
+    ctx.out.push(decorated);
   }
 }
 
@@ -1097,6 +1147,11 @@ function handleDirective(
 }
 
 function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {
+  // `key` doubles as the 1-indexed source-line number — the AST's
+  // `lines: ChordproLine[]` array is in source order, so the
+  // walker's natural `index + 1` is the line number consumers can
+  // use to map preview elements back to editor positions.
+  const sourceLine = key;
   switch (line.kind) {
     case 'lyrics': {
       // Inside a `section.tab` / `section.grid`, the body picks up
@@ -1109,14 +1164,18 @@ function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {
       } else if (ctx.section?.name === 'grid') {
         lyricsOverride = elementStyleToCss(ctx.fmt.grid);
       }
-      pushElement(ctx, renderLyricsLine(line.value, key, ctx.fmt, lyricsOverride));
+      pushElement(
+        ctx,
+        renderLyricsLine(line.value, key, ctx.fmt, lyricsOverride),
+        sourceLine,
+      );
       return;
     }
     case 'comment':
-      pushElement(ctx, renderComment(line.style, line.text, key, ctx.fmt));
+      pushElement(ctx, renderComment(line.style, line.text, key, ctx.fmt), sourceLine);
       return;
     case 'empty':
-      pushElement(ctx, <div key={key} className="empty-line" />);
+      pushElement(ctx, <div key={key} className="empty-line" />, sourceLine);
       return;
     case 'directive':
       handleDirective(ctx, line.value, key);
@@ -1148,6 +1207,7 @@ export function renderChordproAst(
     lastChorusLabel: null,
     fmt: emptyFormattingState(),
     savedFmt: null,
+    activeSourceLine: options.activeSourceLine,
   };
   // Emit header first so metadata lands above the body even when
   // the source has metadata directives interleaved with lines.

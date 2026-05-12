@@ -31,6 +31,18 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
    */
   chordDiagramsInstrument?: ChordDiagramInstrument;
   /**
+   * 1-indexed source line that should be highlighted in the
+   * rendered preview. Forwarded to the AST walker
+   * (`renderChordproAst`'s `activeSourceLine` option), which tags
+   * every body element with `data-source-line` and applies a
+   * `line--active` modifier to the matching element. Pair with
+   * `<SourceEditor>`'s `onCaretLineChange` callback to keep the
+   * preview's highlighted line in sync with the editor caret.
+   * Only consumed by `format="html"` — the text branch passes
+   * through unchanged.
+   */
+  activeSourceLine?: number;
+  /**
    * Configuration preset name (e.g. `"guitar"`, `"ukulele"`) or an
    * inline RRJSON configuration string.
    */
@@ -127,6 +139,7 @@ export function ChordSheet({
   wasmLoader,
   astWasmLoader,
   chordDiagramsInstrument,
+  activeSourceLine,
   className,
   ...divProps
 }: ChordSheetProps): JSX.Element {
@@ -156,6 +169,7 @@ export function ChordSheet({
       errorFallback={errorFallback}
       wasmLoader={astWasmLoader}
       chordDiagramsInstrument={chordDiagramsInstrument}
+      activeSourceLine={activeSourceLine}
       wrapperClass={wrapperClass}
       divProps={divProps}
     />
@@ -211,11 +225,13 @@ function ChordSheetAstBranch({
   errorFallback,
   wasmLoader,
   chordDiagramsInstrument,
+  activeSourceLine,
   wrapperClass,
   divProps,
 }: BranchProps & {
   wasmLoader: ChordproWasmLoader | undefined;
   chordDiagramsInstrument: ChordDiagramInstrument | undefined;
+  activeSourceLine: number | undefined;
 }): JSX.Element {
   const { ast, loading, error, transposedKey } = useChordproAst(
     source,
@@ -248,6 +264,7 @@ function ChordSheetAstBranch({
           chordDiagrams: chordDiagramsInstrument
             ? { instrument: chordDiagramsInstrument }
             : null,
+          activeSourceLine,
         })}
       </div>
     </div>

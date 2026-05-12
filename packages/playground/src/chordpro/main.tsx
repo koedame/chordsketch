@@ -533,6 +533,11 @@ type View = 'split' | 'source' | 'preview';
 
 function PlaygroundApp(): JSX.Element {
   const [source, setSource] = useState<string>(DEFAULT_SAMPLE.source);
+  // 1-indexed line of the editor caret. Used to drive the
+  // `<RendererPreview activeSourceLine>` highlight so the rendered
+  // preview tracks the user's caret position in the source. `null`
+  // when the editor hasn't been focused yet (no highlight).
+  const [activeSourceLine, setActiveSourceLine] = useState<number | null>(null);
   const [transpose, setTranspose] = useState<number>(0);
   const [view, setView] = useState<View>('split');
   const [sampleId, setSampleId] = useState<string>(DEFAULT_SAMPLE.id);
@@ -757,6 +762,7 @@ function PlaygroundApp(): JSX.Element {
                 ref={editorRef}
                 value={source}
                 onChange={handleSourceChange}
+                onCaretLineChange={setActiveSourceLine}
                 placeholder="Paste your ChordPro here…"
               />
             </div>
@@ -879,6 +885,7 @@ function PlaygroundApp(): JSX.Element {
                 transpose={transpose}
                 format="html"
                 chordDiagramsInstrument="guitar"
+                activeSourceLine={activeSourceLine ?? undefined}
               />
             </div>
           </section>
