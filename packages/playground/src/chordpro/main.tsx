@@ -236,17 +236,46 @@ E|----------------------------|
 
 # === Grid (chord-grid block) [Nx] [Pos] ==========================
 # Per spec (https://www.chordpro.org/chordpro/directives-env_grid/)
-# grids hold space-separated bar + cell tokens. The renderer
-# currently emits the body verbatim in monospace — bar / repeat /
-# volta semantics are not yet structured (tracked separately).
-# Token reference:
-#   |    bar         ||   double bar    |.   end / final bar
-#   |:   start repeat :|  stop repeat   :|:  combined repeat
-#   |1 :|2            volta (1st / 2nd ending)
-#   .    empty cell   ~   multi-chord cell separator
-#   /    must-be-played-here
-#   %    repeat prev bar   %%  repeat prev two bars
-#   S<…> strum line  (d u  d+ u+  ux dx  da ua  x …)
+# a grid is a rectangular jazz-style chart — chords only, no
+# lyrics. The body holds space-separated tokens; everything before
+# the first bar line on a row goes to the left margin, everything
+# after the last bar line goes to the right margin.
+#
+# Header forms:
+#   {start_of_grid}                       -- inherit prev shape, default 1+4x4+1
+#   {start_of_grid shape="cells"}         -- e.g. shape="16"
+#   {start_of_grid shape="measures x beats"}  -- e.g. shape="4x4"
+#   {start_of_grid shape="left+cells+right"}  -- margin cells, e.g. "1+4x4+1"
+#   {start_of_grid label="Intro"}         -- left-margin label
+#   {start_of_grid: <text>}               -- legacy: parsed as shape; the
+#                                            Perl reference falls back to
+#                                            using <text> as the label when
+#                                            it does not match the shape
+#                                            regex. ChordSketch follows the
+#                                            same fallback below.
+#
+# Bar line tokens:
+#   |    single bar       ||  double bar       |.  end / final bar
+#   |:   start repeat     :|  stop repeat      :|:  stop+start repeat
+#   |1 :|2 :|2>           volta (1st / 2nd ending; colon optional;
+#                         the > aligns the volta under the previous
+#                         line's volta)
+# Cell tokens:
+#   <chord>  chord in this cell      .   empty cell placeholder
+#   /        must-be-played here     ~   multi-chord cell separator
+#   %        repeat previous measure (rest of measure must be blank)
+#   %%       repeat previous two measures
+# Strums (jazz-strum notation):
+#   row beginning with capital S after the first bar symbol switches
+#   to strum mode; pseudo-chords u/d/u+/d+/ux/dx/ua/da/us/ds (plus
+#   'x' for muted) draw arrow glyphs instead of chord names.
+#
+# Implementation note: ChordSketch currently renders the grid body
+# verbatim in monospace — none of the bar / repeat / volta / strum
+# tokens are structurally parsed yet, so what you write below is
+# what you see. The example follows the conventional jazz idiom
+# "play four bars, on first pass take the 1st ending and repeat;
+# on second pass take the 2nd ending to close".
 {start_of_grid: Outro Riff (with repeats + ending)}
 |: G  .  .  . | C  .  .  . | D  .  .  . | G  .  .  . |
 |1 Em .  .  . | C  .  .  . :| |2 Am .  .  . | G  .  .  . |.
