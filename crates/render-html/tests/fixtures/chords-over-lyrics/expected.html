@@ -9,14 +9,16 @@ h1 { font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif; font-wei
 h2 { font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif; font-weight: 400; font-size: 1rem; color: #67646D; margin-top: 0; }
 .meta { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.8125rem; color: #67646D; margin: 0 0 1.5em; font-feature-settings: "tnum" 1; }
 .line { display: flex; flex-wrap: wrap; margin: 0.1em 0; }
-.chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
-.chord { font-family: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 1rem; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
+.chord-block { ruby-position: over; }
+.chord-block rt.chord, .chord { font-family: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 0.85em; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
 .lyrics { font-family: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-weight: 400; font-size: 1.125rem; white-space: pre; }
 .empty-line { height: 1em; }
 section { margin: 1em 0; }
-section > .section-label, .chorus-recall > .section-label { font-family: "Inter", system-ui, -apple-system, sans-serif; font-weight: 600; font-size: 0.75rem; color: #67646D; margin-bottom: 0.5em; }
+section > .section-label, .chorus-recall > .section-label { font-family: "Inter", system-ui, -apple-system, sans-serif; font-weight: 600; font-size: 0.75rem; color: #67646D; margin: 0 0 0.5em; line-height: 1.4; }
 .comment { font-family: "Inter", system-ui, -apple-system, sans-serif; font-style: italic; color: #8A8790; margin: 0.3em 0; }
-.comment-box { border: 1px solid #D4D1D6; border-radius: 4px; padding: 0.2em 0.5em; display: inline-block; margin: 0.3em 0; }
+.comment-box { border: 1px solid #D4D1D6; border-radius: 4px; padding: 0.2em 0.5em; display: block; width: fit-content; margin: 0.3em 0; }
+.comment.comment--highlight { background-color: #FFF3A3; color: #1A1718; font-style: normal; font-weight: 600; padding: 0.15em 0.4em; border-radius: 3px; display: block; width: fit-content; }
+.comment.comment--highlight mark { background: none; color: inherit; }
 section.tab .lyrics, section.grid .lyrics, section.abc .lyrics, section.ly .lyrics, section.textblock .lyrics { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.875rem; font-feature-settings: "tnum" 1; }
 .chorus-recall { margin: 1em 0; }
 img { max-width: 100%; height: auto; }
@@ -26,9 +28,9 @@ img { max-width: 100%; height: auto; }
 </style>
 </head>
 <body>
-<div class="song">
-<div class="line"><span class="chord-block"><span class="chord">Am</span><span class="lyrics">Hello </span></span><span class="chord-block"><span class="chord">G</span><span class="lyrics">world</span></span></div>
-<div class="line"><span class="chord-block"><span class="chord">C</span><span class="lyrics">Just text </span></span><span class="chord-block"><span class="chord">D7</span><span class="lyrics">here </span></span><span class="chord-block"><span class="chord">Em</span><span class="lyrics">now</span></span></div>
-</div>
+<article class="song">
+<div class="line"><ruby class="chord-block"><span class="lyrics">Hello </span><rt class="chord">Am</rt></ruby><ruby class="chord-block"><span class="lyrics">world</span><rt class="chord">G</rt></ruby></div>
+<div class="line"><ruby class="chord-block"><span class="lyrics">Just text </span><rt class="chord">C</rt></ruby><ruby class="chord-block"><span class="lyrics">here </span><rt class="chord">D7</rt></ruby><ruby class="chord-block"><span class="lyrics">now</span><rt class="chord">Em</rt></ruby></div>
+</article>
 </body>
 </html>

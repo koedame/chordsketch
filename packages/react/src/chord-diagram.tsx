@@ -134,6 +134,12 @@ export function ChordDiagram({
     <div
       {...divProps}
       className={wrapperClass}
+      // Expose the diagram as a labelled image to assistive tech
+      // (without this, the inline SVG's accessible name is the
+      // empty string and the chord identity is invisible to
+      // screen readers).
+      role="img"
+      aria-label={`${chord} chord diagram (${instrument})`}
       // The SVG is produced by our own Rust renderer
       // (`chord_diagram::render_svg` / `render_keyboard_svg`),
       // which emits a fixed, hand-written template — nothing in

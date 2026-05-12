@@ -1567,11 +1567,15 @@ mod tests {
         assert!(!body.contains("<!DOCTYPE"));
         assert!(!body.contains("<html"));
         assert!(!body.contains("</html>"));
-        assert!(!body.contains("<head"));
+        // `<head>` (the document-envelope element). The body now
+        // legitimately contains `<header>` (added by the
+        // semantic-HTML refactor in this PR), which would match a
+        // naked `<head` prefix check.
+        assert!(!body.contains("<head>"));
         assert!(!body.contains("<style"));
         assert!(!body.contains("<title>"));
         // The song markup itself must still be present.
-        assert!(body.contains("<div class=\"song\">"));
+        assert!(body.contains("<article class=\"song\">"));
     }
 
     #[test]

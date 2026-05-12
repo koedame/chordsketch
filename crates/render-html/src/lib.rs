@@ -234,7 +234,13 @@ fn render_song_body_into(
         chordsketch_chordpro::transpose::combine_transpose(cli_transpose, song_transpose_delta);
     let mut transpose_offset: i8 = combined_transpose;
     let mut fmt_state = FormattingState::default();
-    html.push_str("<div class=\"song\">\n");
+    // `<article>` is the semantic root for a self-contained song —
+    // a single ChordPro document is a "composition complete in
+    // itself" per the HTML5 article definition. Carries the
+    // existing `.song` class so consumer CSS keyed on `.song`
+    // keeps hitting. Sister-site to the React JSX walker's
+    // `<article class="song">` wrapper.
+    html.push_str("<article class=\"song\">\n");
 
     validate_capo(&song.metadata, warnings);
     validate_strict_key(&song.metadata, config, warnings);
@@ -575,7 +581,7 @@ fn render_song_body_into(
                 if let Some(buf) = chorus_buf.as_mut() {
                     buf.push(line.clone());
                 }
-                html.push_str("<div class=\"empty-line\"></div>\n");
+                html.push_str("<div class=\"empty-line\" aria-hidden=\"true\"></div>\n");
             }
         }
     }
@@ -606,15 +612,15 @@ fn render_song_body_into(
                 })
                 .collect();
             if !voicings.is_empty() {
-                html.push_str("<section class=\"chord-diagrams\">\n");
-                html.push_str("<div class=\"section-label\">Chord Diagrams</div>\n");
+                html.push_str("<section class=\"chord-diagrams\" aria-labelledby=\"cs-chord-diagrams-label\">\n");
+                html.push_str("<h3 id=\"cs-chord-diagrams-label\" class=\"section-label\">Chord Diagrams</h3>\n");
                 html.push_str("<div class=\"chord-diagrams-grid\">\n");
                 for voicing in &voicings {
-                    html.push_str("<div class=\"chord-diagram-container\">");
+                    html.push_str("<figure class=\"chord-diagram-container\">");
                     html.push_str(&chordsketch_chordpro::chord_diagram::render_keyboard_svg(
                         voicing,
                     ));
-                    html.push_str("</div>\n");
+                    html.push_str("</figure>\n");
                 }
                 html.push_str("</div>\n");
                 html.push_str("</section>\n");
@@ -629,13 +635,13 @@ fn render_song_body_into(
                 })
                 .collect();
             if !diagrams.is_empty() {
-                html.push_str("<section class=\"chord-diagrams\">\n");
-                html.push_str("<div class=\"section-label\">Chord Diagrams</div>\n");
+                html.push_str("<section class=\"chord-diagrams\" aria-labelledby=\"cs-chord-diagrams-label\">\n");
+                html.push_str("<h3 id=\"cs-chord-diagrams-label\" class=\"section-label\">Chord Diagrams</h3>\n");
                 html.push_str("<div class=\"chord-diagrams-grid\">\n");
                 for diagram in &diagrams {
-                    html.push_str("<div class=\"chord-diagram-container\">");
+                    html.push_str("<figure class=\"chord-diagram-container\">");
                     html.push_str(&chordsketch_chordpro::chord_diagram::render_svg(diagram));
-                    html.push_str("</div>\n");
+                    html.push_str("</figure>\n");
                 }
                 html.push_str("</div>\n");
                 html.push_str("</section>\n");
@@ -643,7 +649,10 @@ fn render_song_body_into(
         }
     }
 
-    html.push_str("</div>\n");
+    // Close the song's outer `<article class="song">` opened at
+    // the top of this function (semantic-HTML refactor — sister
+    // to the React JSX walker's `<article>` wrapper).
+    html.push_str("</article>\n");
 }
 
 /// Render multiple [`Song`]s into a single HTML5 document.
@@ -938,14 +947,16 @@ h1 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-w
 h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-weight: 400; font-size: 1rem; color: #67646D; margin-top: 0; }
 .meta { font-family: \"JetBrains Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace; font-size: 0.8125rem; color: #67646D; margin: 0 0 1.5em; font-feature-settings: \"tnum\" 1; }
 .line { display: flex; flex-wrap: __LINE_FLEX_WRAP__; margin: 0.1em 0; }
-.chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
-.chord { font-family: \"Roboto\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 1rem; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
+.chord-block { ruby-position: over; }
+.chord-block rt.chord, .chord { font-family: \"Roboto\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 0.85em; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
 .lyrics { font-family: \"Noto Sans JP\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 400; font-size: 1.125rem; white-space: pre; }
 .empty-line { height: 1em; }
 section { margin: 1em 0; }
-section > .section-label, .chorus-recall > .section-label { font-family: \"Inter\", system-ui, -apple-system, sans-serif; font-weight: 600; font-size: 0.75rem; color: #67646D; margin-bottom: 0.5em; }
+section > .section-label, .chorus-recall > .section-label { font-family: \"Inter\", system-ui, -apple-system, sans-serif; font-weight: 600; font-size: 0.75rem; color: #67646D; margin: 0 0 0.5em; line-height: 1.4; }
 .comment { font-family: \"Inter\", system-ui, -apple-system, sans-serif; font-style: italic; color: #8A8790; margin: 0.3em 0; }
-.comment-box { border: 1px solid #D4D1D6; border-radius: 4px; padding: 0.2em 0.5em; display: inline-block; margin: 0.3em 0; }
+.comment-box { border: 1px solid #D4D1D6; border-radius: 4px; padding: 0.2em 0.5em; display: block; width: fit-content; margin: 0.3em 0; }
+.comment.comment--highlight { background-color: #FFF3A3; color: #1A1718; font-style: normal; font-weight: 600; padding: 0.15em 0.4em; border-radius: 3px; display: block; width: fit-content; }
+.comment.comment--highlight mark { background: none; color: inherit; }
 section.tab .lyrics, section.grid .lyrics, section.abc .lyrics, section.ly .lyrics, section.textblock .lyrics { font-family: \"JetBrains Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace; font-size: 0.875rem; font-feature-settings: \"tnum\" 1; }
 .chorus-recall { margin: 1em 0; }
 img { max-width: 100%; height: auto; }
@@ -975,11 +986,15 @@ img { max-width: 100%; height: auto; }
 /// artist / key / capo / tempo / time fields are populated, so a
 /// minimal `{title: T}`-only document still renders just an `<h1>`.
 fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut String) {
+    // Build the header contents first so we know whether to emit
+    // the wrapping `<header>` at all — an empty AST with no
+    // metadata should not produce an empty header landmark.
+    let mut inner = String::new();
     if let Some(title) = &metadata.title {
-        let _ = writeln!(html, "<h1>{}</h1>", escape(title));
+        let _ = writeln!(inner, "<h1>{}</h1>", escape(title));
     }
     for subtitle in &metadata.subtitles {
-        let _ = writeln!(html, "<h2>{}</h2>", escape(subtitle));
+        let _ = writeln!(inner, "<h2>{}</h2>", escape(subtitle));
     }
 
     // Build the meta strip in document order: artist → key → capo
@@ -1003,7 +1018,17 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut St
         parts.push(escape(time));
     }
     if !parts.is_empty() {
-        let _ = writeln!(html, "<p class=\"meta\">{}</p>", parts.join(" · "));
+        let _ = writeln!(inner, "<p class=\"meta\">{}</p>", parts.join(" · "));
+    }
+
+    // Wrap title + subtitle + meta strip in a `<header class="song-header">`
+    // so the song's introductory matter registers as an HTML
+    // landmark. Sister-site to the React JSX walker's `<header>`
+    // wrapper.
+    if !inner.is_empty() {
+        html.push_str("<header class=\"song-header\">\n");
+        html.push_str(&inner);
+        html.push_str("</header>\n");
     }
 }
 
@@ -1013,9 +1038,15 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut St
 
 /// Render a lyrics line with chord-over-lyrics layout.
 ///
-/// Each chord+text pair is wrapped in a `<span class="chord-block">` with
-/// the chord in `<span class="chord">` and the text in `<span class="lyrics">`.
-/// Formatting directives (font, size, color) are applied via inline CSS.
+/// Each chord+text pair is emitted as an HTML5 `<ruby class="chord-block">`:
+///   - `<span class="lyrics">…</span>` is the ruby base (sung text).
+///   - `<rt class="chord">…</rt>` is the ruby annotation (chord).
+/// Assistive tech announces the pair as "lyric (chord)" the same
+/// way it handles Japanese furigana, conveying the ChordPro
+/// semantic that chords are *annotations on top of* the lyrics
+/// rather than a separate data lane. Sister-site to the React
+/// JSX walker's `<ruby>` shape. Formatting directives (font,
+/// size, color) are applied via inline CSS as before.
 fn render_lyrics(
     lyrics_line: &LyricsLine,
     transpose_offset: i8,
@@ -1025,47 +1056,10 @@ fn render_lyrics(
     html.push_str("<div class=\"line\">");
 
     for segment in &lyrics_line.segments {
-        html.push_str("<span class=\"chord-block\">");
+        html.push_str("<ruby class=\"chord-block\">");
 
-        if let Some(chord) = &segment.chord {
-            let display_name = if transpose_offset != 0 {
-                let transposed = transpose_chord(chord, transpose_offset);
-                transposed.display_name().to_string()
-            } else {
-                chord.display_name().to_string()
-            };
-            let chord_css = fmt_state.chord.to_css();
-            if chord_css.is_empty() {
-                let _ = write!(
-                    html,
-                    "<span class=\"chord\">{}</span>",
-                    escape(&display_name)
-                );
-            } else {
-                let _ = write!(
-                    html,
-                    "<span class=\"chord\" style=\"{}\">{}</span>",
-                    escape(&chord_css),
-                    escape(&display_name)
-                );
-            }
-        } else if lyrics_line.has_chords() {
-            // Emit a U+00A0 (NBSP) inside the chord placeholder so
-            // the inline-flex `.chord-block` column reserves a full
-            // chord-row-height line box. A genuinely empty
-            // `<span class="chord"></span>` produces no line box in
-            // most browsers, so `min-height: 1em` on `.chord` does
-            // not reliably reserve the row — chord-less segments
-            // float up by one row and misalign with chord-bearing
-            // segments on the same `.line`. The NBSP forces a line
-            // box on structural merits; `min-height` stays as
-            // defense-in-depth. `aria-hidden` prevents assistive
-            // tech from announcing the placeholder as "space" — the
-            // chord row is semantic (chord names), so a purely
-            // presentational NBSP should stay silent. See #2142.
-            html.push_str("<span class=\"chord\" aria-hidden=\"true\">\u{00A0}</span>");
-        }
-
+        // Ruby base (lyric) first — HTML5 spec requires base
+        // content before the `<rt>` annotation.
         let text_css = fmt_state.text.to_css();
         if text_css.is_empty() {
             html.push_str("<span class=\"lyrics\">");
@@ -1082,7 +1076,35 @@ fn render_lyrics(
             html.push_str(&escape(&segment.text));
         }
         html.push_str("</span>");
-        html.push_str("</span>");
+
+        // Ruby annotation (chord) — `<rt>`. Placeholder annotation
+        // for chord-less segments on a chord-bearing line keeps
+        // the vertical rhythm aligned (see prior #2142 comment),
+        // marked `aria-hidden` so screen readers don't announce a
+        // stray "space" annotation.
+        if let Some(chord) = &segment.chord {
+            let display_name = if transpose_offset != 0 {
+                let transposed = transpose_chord(chord, transpose_offset);
+                transposed.display_name().to_string()
+            } else {
+                chord.display_name().to_string()
+            };
+            let chord_css = fmt_state.chord.to_css();
+            if chord_css.is_empty() {
+                let _ = write!(html, "<rt class=\"chord\">{}</rt>", escape(&display_name));
+            } else {
+                let _ = write!(
+                    html,
+                    "<rt class=\"chord\" style=\"{}\">{}</rt>",
+                    escape(&chord_css),
+                    escape(&display_name)
+                );
+            }
+        } else if lyrics_line.has_chords() {
+            html.push_str("<rt class=\"chord\" aria-hidden=\"true\">\u{00A0}</rt>");
+        }
+
+        html.push_str("</ruby>");
     }
 
     html.push_str("</div>\n");
@@ -1800,11 +1822,11 @@ fn render_directive_inner(
                             keys: keys_u8,
                             root_key: root,
                         };
-                        html.push_str("<div class=\"chord-diagram-container\">");
+                        html.push_str("<figure class=\"chord-diagram-container\">");
                         html.push_str(&chordsketch_chordpro::chord_diagram::render_keyboard_svg(
                             &voicing,
                         ));
-                        html.push_str("</div>\n");
+                        html.push_str("</figure>\n");
                     }
                 } else if let Some(ref raw) = def.raw {
                     // Fretted defines: render the standard fret-grid SVG.
@@ -1816,9 +1838,9 @@ fn render_directive_inner(
                         )
                     {
                         diagram.display_name = def.display.clone();
-                        html.push_str("<div class=\"chord-diagram-container\">");
+                        html.push_str("<figure class=\"chord-diagram-container\">");
                         html.push_str(&chordsketch_chordpro::chord_diagram::render_svg(&diagram));
-                        html.push_str("</div>\n");
+                        html.push_str("</figure>\n");
                     }
                 }
             }
@@ -2038,6 +2060,16 @@ fn render_image(attrs: &chordsketch_chordpro::ast::ImageAttributes, html: &mut S
 }
 
 /// Open a `<section>` with a class and optional label.
+///
+/// The label is emitted as an `<h3 class="section-label">` so
+/// screen readers recognise it as the section's heading (HTML5
+/// implicitly names a sectioning element by its first descendant
+/// heading). Sister-site to the React JSX walker's `<h3>` /
+/// `aria-labelledby` pair. The Rust renderer skips the explicit
+/// `aria-labelledby` because the renderer does not currently
+/// thread per-section unique IDs (a separate enhancement) — the
+/// implicit "first heading is the accessible name" rule still
+/// applies.
 fn render_section_open(class: &str, label: &str, value: &Option<String>, html: &mut String) {
     let safe_class = sanitize_css_class(class);
     let _ = writeln!(html, "<section class=\"{safe_class}\">");
@@ -2045,7 +2077,7 @@ fn render_section_open(class: &str, label: &str, value: &Option<String>, html: &
         Some(v) if !v.is_empty() => format!("{label}: {}", escape(v)),
         _ => label.to_string(),
     };
-    let _ = writeln!(html, "<div class=\"section-label\">{display_label}</div>");
+    let _ = writeln!(html, "<h3 class=\"section-label\">{display_label}</h3>");
 }
 
 /// Render a `{chorus}` recall directive as HTML.
@@ -2067,7 +2099,7 @@ fn render_chorus_recall(
         Some(v) if !v.is_empty() => format!("Chorus: {}", escape(v)),
         _ => "Chorus".to_string(),
     };
-    let _ = writeln!(html, "<div class=\"section-label\">{display_label}</div>");
+    let _ = writeln!(html, "<h3 class=\"section-label\">{display_label}</div>");
     // Use a local copy of fmt_state so in-chorus formatting directives
     // (e.g. {size}, {bold}) are applied during recall without mutating
     // the caller's state.
@@ -2076,7 +2108,7 @@ fn render_chorus_recall(
         match line {
             Line::Lyrics(lyrics) => render_lyrics(lyrics, transpose_offset, &local_fmt, html),
             Line::Comment(style, text) => render_comment(*style, text, html),
-            Line::Empty => html.push_str("<div class=\"empty-line\"></div>\n"),
+            Line::Empty => html.push_str("<div class=\"empty-line\" aria-hidden=\"true\"></div>\n"),
             Line::Directive(d) if d.kind.is_font_size_color() => {
                 local_fmt.apply(&d.kind, &d.value);
             }
@@ -2110,11 +2142,12 @@ fn render_comment(style: CommentStyle, text: &str, html: &mut String) {
             // — `chordsketch-render-html` emits a separate `comment--highlight`
             // class so consumer stylesheets can paint it distinctly (bold
             // weight, yellow background, etc.) without forking the
-            // base `.comment` styles. Falls back to plain text when the
-            // stylesheet does not provide a rule.
+            // base `.comment` styles. The text sits inside a `<mark>`
+            // so HTML5's "marked text" semantic carries through to
+            // assistive tech. Sister-site to the React JSX walker.
             let _ = writeln!(
                 html,
-                "<p class=\"comment comment--highlight\">{}</p>",
+                "<p class=\"comment comment--highlight\"><mark>{}</mark></p>",
                 escape(text)
             );
         }
@@ -2260,13 +2293,17 @@ mod tests {
         assert!(!body.contains("<!DOCTYPE"));
         assert!(!body.contains("<html"));
         assert!(!body.contains("</html>"));
-        assert!(!body.contains("<head"));
+        // `<head>` (the document-envelope element), not `<head`
+        // — the body now legitimately contains `<header>` for
+        // the song-header landmark, which would match a naked
+        // `<head` prefix check.
+        assert!(!body.contains("<head>"));
         assert!(!body.contains("<style"));
         assert!(!body.contains("<title>"));
         // The body must still contain the song wrapper and metadata
         // blocks that the full-document renderer produces inside
         // `<body>` — that's the contract consumers depend on.
-        assert!(body.contains("<div class=\"song\">"));
+        assert!(body.contains("<article class=\"song\">"));
         assert!(body.contains("<h1>Sample</h1>"));
         // The `chord-block` flex layout is what positions chords above
         // lyrics; body-only consumers will provide the CSS via
@@ -2425,9 +2462,9 @@ mod tests {
     fn test_render_lyrics_with_chords() {
         let html = render("[Am]Hello [G]world");
         assert!(html.contains("chord-block"));
-        assert!(html.contains("<span class=\"chord\">Am</span>"));
+        assert!(html.contains("<rt class=\"chord\">Am</rt>"));
         assert!(html.contains("<span class=\"lyrics\">Hello </span>"));
-        assert!(html.contains("<span class=\"chord\">G</span>"));
+        assert!(html.contains("<rt class=\"chord\">G</rt>"));
     }
 
     #[test]
@@ -2476,9 +2513,13 @@ mod tests {
         // `{highlight}` per spec is an "alternative to comment" with
         // stronger visual emphasis. Sister to the text renderer's
         // `<<...>>` delimiter and the PDF renderer's bold variant.
+        // Wrapping `<mark>` carries the HTML5 "marked text"
+        // semantic — see the semantic-HTML refactor in this PR.
         let html = render("{highlight: Watch out}");
         assert!(
-            html.contains("<p class=\"comment comment--highlight\">Watch out</p>"),
+            html.contains(
+                "<p class=\"comment comment--highlight\"><mark>Watch out</mark></p>"
+            ),
             "got: {html}"
         );
     }
@@ -2522,7 +2563,7 @@ mod tests {
         // genuinely empty span caused.
         assert!(
             html.contains(
-                "<span class=\"chord\" aria-hidden=\"true\">\u{00A0}</span><span class=\"lyrics\">Hello </span>"
+                "<span class=\"lyrics\">Hello </span><rt class=\"chord\" aria-hidden=\"true\">\u{00A0}</rt>"
             )
         );
     }
@@ -2538,13 +2579,13 @@ mod tests {
         // placeholder, not a bare empty span.
         assert!(
             html.contains(
-                "<span class=\"chord\" aria-hidden=\"true\">\u{00A0}</span><span class=\"lyrics\">Was </span>"
+                "<span class=\"lyrics\">Was </span><rt class=\"chord\" aria-hidden=\"true\">\u{00A0}</rt>"
             ),
             "expected NBSP-bearing chord placeholder for \"Was \" segment, got: {html}"
         );
         // The chord-bearing segments still carry their chord text.
-        assert!(html.contains("<span class=\"chord\">G</span>"));
-        assert!(html.contains("<span class=\"chord\">D</span>"));
+        assert!(html.contains("<rt class=\"chord\">G</rt>"));
+        assert!(html.contains("<rt class=\"chord\">D</rt>"));
     }
 
     #[test]
@@ -2684,10 +2725,10 @@ mod transpose_tests {
         let song = chordsketch_chordpro::parse(input).unwrap();
         let html = render_song(&song);
         // G+2=A, C+2=D
-        assert!(html.contains("<span class=\"chord\">A</span>"));
-        assert!(html.contains("<span class=\"chord\">D</span>"));
-        assert!(!html.contains("<span class=\"chord\">G</span>"));
-        assert!(!html.contains("<span class=\"chord\">C</span>"));
+        assert!(html.contains("<rt class=\"chord\">A</rt>"));
+        assert!(html.contains("<rt class=\"chord\">D</rt>"));
+        assert!(!html.contains("<rt class=\"chord\">G</rt>"));
+        assert!(!html.contains("<rt class=\"chord\">C</rt>"));
     }
 
     #[test]
@@ -2696,8 +2737,8 @@ mod transpose_tests {
         let song = chordsketch_chordpro::parse(input).unwrap();
         let html = render_song(&song);
         // First G transposed +2 = A, second G at 0 = G
-        assert!(html.contains("<span class=\"chord\">A</span>"));
-        assert!(html.contains("<span class=\"chord\">G</span>"));
+        assert!(html.contains("<rt class=\"chord\">A</rt>"));
+        assert!(html.contains("<rt class=\"chord\">G</rt>"));
     }
 
     #[test]
@@ -2706,7 +2747,7 @@ mod transpose_tests {
         let song = chordsketch_chordpro::parse(input).unwrap();
         let html = render_song_with_transpose(&song, 3, &Config::defaults());
         // 2 + 3 = 5, C+5=F
-        assert!(html.contains("<span class=\"chord\">F</span>"));
+        assert!(html.contains("<rt class=\"chord\">F</rt>"));
     }
 
     #[test]
@@ -2716,7 +2757,7 @@ mod transpose_tests {
         let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
-            result.output.contains("<span class=\"chord\">G</span>"),
+            result.output.contains("<rt class=\"chord\">G</rt>"),
             "chord should be untransposed"
         );
         assert!(
@@ -2733,7 +2774,7 @@ mod transpose_tests {
         let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
-            result.output.contains("<span class=\"chord\">G</span>"),
+            result.output.contains("<rt class=\"chord\">G</rt>"),
             "chord should be untransposed"
         );
         assert!(
@@ -2752,7 +2793,7 @@ mod transpose_tests {
         let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
-            result.output.contains("<span class=\"chord\">G</span>"),
+            result.output.contains("<rt class=\"chord\">G</rt>"),
             "chord should be untransposed"
         );
         assert!(
@@ -2805,12 +2846,12 @@ mod transpose_tests {
         let html = render("{start_of_chorus}\n[G]La la\n{end_of_chorus}\n{transpose: 2}\n{chorus}");
         // Original chorus has chord "G"
         assert!(
-            html.contains("<span class=\"chord\">G</span>"),
+            html.contains("<rt class=\"chord\">G</rt>"),
             "original chorus should have G"
         );
         // Recalled chorus should have transposed chord "A"
         assert!(
-            html.contains("<span class=\"chord\">A</span>"),
+            html.contains("<rt class=\"chord\">A</rt>"),
             "recalled chorus should have transposed chord A, got:\n{html}"
         );
     }
@@ -2929,7 +2970,7 @@ mod transpose_tests {
     fn test_render_markup_with_chord() {
         let html = render("[Am]Hello <b>bold</b> world");
         assert!(html.contains("<b>bold</b>"));
-        assert!(html.contains("<span class=\"chord\">Am</span>"));
+        assert!(html.contains("<rt class=\"chord\">Am</rt>"));
     }
 
     #[test]
@@ -4348,7 +4389,7 @@ mod delegate_tests {
         // Separator between songs
         assert!(html.contains("<hr class=\"song-separator\">"));
         // Each song in its own div.song
-        assert_eq!(html.matches("<div class=\"song\">").count(), 2);
+        assert_eq!(html.matches("<article class=\"song\">").count(), 2);
         // Single HTML document wrapper
         assert_eq!(html.matches("<!DOCTYPE html>").count(), 1);
         assert_eq!(html.matches("</html>").count(), 1);
@@ -4359,10 +4400,38 @@ mod delegate_tests {
         // The scale parameter must be sanitized as a CSS value to prevent
         // injection of arbitrary CSS properties via parentheses and semicolons.
         let html = render("{image: src=photo.jpg scale=0.5); position: fixed; z-index: 9999}");
-        assert!(!html.contains("position"));
-        assert!(!html.contains("z-index"));
-        // Dangerous characters should be stripped by sanitize_css_value
-        assert!(!html.contains("position: fixed"));
+        // Inspect the inline `style="..."` attribute on the image
+        // element, not the document as a whole — the embedded
+        // stylesheet uses `ruby-position` for the chord-block
+        // layout (added in the semantic-HTML refactor) which is
+        // unrelated to the injection vector this test guards.
+        let img_style = extract_img_style(&html);
+        assert!(!img_style.contains("position"), "got style: {img_style}");
+        assert!(!img_style.contains("z-index"), "got style: {img_style}");
+        assert!(!img_style.contains("position: fixed"), "got style: {img_style}");
+    }
+
+    /// Pull the first `style="..."` attribute of the rendered `<img>`
+    /// element out of the document HTML so injection-vector tests can
+    /// scope their assertions to the attribute they actually
+    /// protect.
+    fn extract_img_style(html: &str) -> String {
+        let needle = "<img ";
+        let img_start = html.find(needle).expect("rendered html should contain an <img>");
+        let after_img = &html[img_start..];
+        let img_end = after_img.find('>').expect("<img> must close");
+        let img_tag = &after_img[..=img_end];
+        let style_marker = "style=\"";
+        match img_tag.find(style_marker) {
+            None => String::new(),
+            Some(s) => {
+                let after_open = &img_tag[s + style_marker.len()..];
+                let end = after_open
+                    .find('"')
+                    .expect("style attribute must have a closing quote");
+                after_open[..end].to_string()
+            }
+        }
     }
 
     #[test]

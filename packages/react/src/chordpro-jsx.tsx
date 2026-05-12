@@ -276,20 +276,34 @@ function renderLyricsLine(
   return (
     <div key={key} className="line">
       {line.segments.map((segment, i) => (
-        <span key={i} className="chord-block">
-          {segment.chord ? (
-            <span className="chord" style={chordStyle ?? undefined}>
-              {renderChord(segment.chord)}
-            </span>
-          ) : lineHasChords ? (
-            <span className="chord" aria-hidden="true" style={chordStyle ?? undefined}>
-              {' '}
-            </span>
-          ) : null}
+        // HTML5 `<ruby>` — `<span class="lyrics">` is the ruby
+        // base (the sung text), `<rt class="chord">` is the ruby
+        // annotation (the chord). Screen readers announce the
+        // pair as "lyric (chord)" the same way they handle
+        // Japanese furigana, conveying the ChordPro semantic
+        // that chords are *annotations on top of* the lyrics
+        // rather than a separate data lane. CSS leaves
+        // `display: ruby` on the wrapper and uses the existing
+        // `.chord-block` / `.chord` / `.lyrics` selectors for
+        // typography only.
+        <ruby key={i} className="chord-block">
           <span className="lyrics" style={textStyle ?? undefined}>
             {renderSegmentText(segment)}
           </span>
-        </span>
+          {segment.chord ? (
+            <rt className="chord" style={chordStyle ?? undefined}>
+              {renderChord(segment.chord)}
+            </rt>
+          ) : lineHasChords ? (
+            <rt
+              className="chord"
+              aria-hidden="true"
+              style={chordStyle ?? undefined}
+            >
+              {' '}
+            </rt>
+          ) : null}
+        </ruby>
       ))}
     </div>
   );
@@ -328,14 +342,17 @@ function renderComment(
     // emit a `.comment.comment--highlight` so consumer stylesheets
     // can paint it distinctly (bold weight + yellow background,
     // etc.) without forking the base `.comment` rules. Sister-site
-    // to the HTML renderer's `comment--highlight` class.
+    // to the HTML renderer's `comment--highlight` class. The text
+    // sits inside a `<mark>` so the HTML5 highlight semantics
+    // (relevant text marked for reader attention) are conveyed to
+    // assistive tech.
     return (
       <p
         key={key}
         className="comment comment--highlight"
         style={textStyle ?? undefined}
       >
-        {text}
+        <mark>{text}</mark>
       </p>
     );
   }
@@ -1172,10 +1189,20 @@ function flushSection(ctx: WalkContext, key: number): void {
   const { name, label, children, startLine } = ctx.section;
   const labelText = label ?? SECTION_LABEL_DEFAULT[name];
   const labelStyle = elementStyleToCss(ctx.fmt.label);
+  // Each section gets a stable `id` derived from its start line so
+  // the `<section>` can `aria-labelledby` the heading. Without the
+  // heading being inside the section, screen readers wouldn't pick
+  // up the section name; with `aria-labelledby` they announce it.
+  const labelId = labelText ? `cs-section-${startLine}` : undefined;
   const labelNode = labelText ? (
-    <div key="label" className="section-label" style={labelStyle ?? undefined}>
+    <h3
+      key="label"
+      id={labelId}
+      className="section-label"
+      style={labelStyle ?? undefined}
+    >
       {labelText}
-    </div>
+    </h3>
   ) : null;
   // The chorus section as a whole picks up the `chorus` element
   // style. Other section families don't have a dedicated style
@@ -1202,6 +1229,7 @@ function flushSection(ctx: WalkContext, key: number): void {
       className={sectionClassName}
       style={sectionStyle ?? undefined}
       data-source-line={startLine}
+      aria-labelledby={labelId}
     >
       {labelNode}
       {children}
@@ -1382,7 +1410,7 @@ function handleDirective(
     pushElement(
       ctx,
       <div key={key} className="chorus-recall">
-        <div className="section-label">{labelText}</div>
+        <h3 className="section-label">{labelText}</h3>
         {replay
           ? // Children are re-keyed under a `recall-` namespace so
             // a single song with multiple `{chorus}` recalls does
@@ -1451,7 +1479,13 @@ function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {
       pushElement(ctx, renderComment(line.style, line.text, key, ctx.fmt), sourceLine);
       return;
     case 'empty':
-      pushElement(ctx, <div key={key} className="empty-line" />, sourceLine);
+      // Empty lines are visual spacing; hide them from assistive
+      // tech so screen readers don't announce a blank pause.
+      pushElement(
+        ctx,
+        <div key={key} className="empty-line" aria-hidden="true" />,
+        sourceLine,
+      );
       return;
     case 'directive':
       handleDirective(ctx, line.value, key);
@@ -1507,15 +1541,26 @@ export function renderChordproAst(
   // the header renderer can map per-value spans back to the editor
   // caret position (#2466 active-line follow-up).
   const metadataLines = collectMetadataLines(song);
-  for (const headerNode of renderHeader(song.metadata, options, headerFmt, metadataLines)) {
-    ctx.out.push(headerNode);
+  const headerNodes = renderHeader(song.metadata, options, headerFmt, metadataLines);
+  // Wrap title + subtitle + meta strip + tags in a single
+  // `<header>` so the song's header content registers as a
+  // landmark for screen readers. Skip the wrapper entirely
+  // when there's nothing to emit (empty AST) to avoid an empty
+  // `<header>` element in the output.
+  if (headerNodes.length > 0) {
+    ctx.out.push(
+      <header key="song-header" className="song-header">
+        {headerNodes}
+      </header>,
+    );
   }
   // Snapshot the head-of-song boundary BEFORE walking the body, so
   // a `{diagrams: top}` resolved further down can splice its
   // <section> in after the header but before the first body element.
-  // `renderHeader` writes title / subtitle / meta strip into ctx.out
-  // before this point, so ctx.out.length is exactly the count of
-  // header nodes when the body walk begins.
+  // `renderHeader` writes title / subtitle / meta strip into a
+  // wrapping `<header>` element above, so ctx.out.length is exactly
+  // the count of header wrappers (0 or 1) when the body walk
+  // begins.
   const headEnd = ctx.out.length;
   song.lines.forEach((line, i) => renderLine(ctx, line, i + 1));
   // Final close: if the song ends inside an open section, flush
@@ -1552,18 +1597,29 @@ export function renderChordproAst(
     if (names.length > 0) {
       const instrument =
         diagramsState.instrument ?? options.chordDiagrams.instrument ?? 'guitar';
+      const diagramsLabelId = 'cs-chord-diagrams-label';
       const section = (
         <section
           key="chord-diagrams"
           className="chord-diagrams"
           data-position={diagramsState.position}
+          aria-labelledby={diagramsLabelId}
         >
-          <div className="section-label">Chord Diagrams</div>
+          <h3 id={diagramsLabelId} className="section-label">
+            Chord Diagrams
+          </h3>
           <div className="chord-diagrams-grid">
             {names.map((name) => (
-              <div key={name} className="chord-diagram-container">
+              // Each diagram is a self-contained figure — the
+              // rendered SVG includes the chord name as a label
+              // glyph so a separate `<figcaption>` would visually
+              // duplicate it. `<ChordDiagram>` itself sets
+              // `role="img"` + `aria-label` on its wrapper
+              // (see chord-diagram.tsx) so the figure exposes
+              // an accessible name to screen readers.
+              <figure key={name} className="chord-diagram-container">
                 <ChordDiagram chord={name} instrument={instrument} />
-              </div>
+              </figure>
             ))}
           </div>
         </section>
@@ -1613,11 +1669,16 @@ export function renderChordproAst(
     // normal block flow internally, so chord-line rows do not
     // get stretched by the diagrams column's intrinsic height.
     return (
-      <div className={songClass}>
+      <article className={songClass}>
         <div className="song__body">{ctx.out}</div>
         {rightSection}
-      </div>
+      </article>
     );
   }
-  return <div className={songClass}>{ctx.out}</div>;
+  // `<article>` is the semantic root for a self-contained song —
+  // a single ChordPro document is a "composition complete in
+  // itself", which is the HTML5 article definition. Carries the
+  // existing `.song` class so consumer CSS keyed on `.song`
+  // still hits.
+  return <article className={songClass}>{ctx.out}</article>;
 }

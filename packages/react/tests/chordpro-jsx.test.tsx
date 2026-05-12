@@ -238,15 +238,18 @@ describe('renderChordproAst', () => {
     const section = container.querySelector('.chord-diagrams');
     expect(section?.getAttribute('data-position')).toBe('top');
     expect(container.querySelector('.song')?.classList.contains('song--diagrams-top')).toBe(true);
-    // The header (`<h1>`) precedes the diagrams; the body line
-    // (`.line`) follows.
+    // `.song > <header>` precedes the diagrams; the body line
+    // (`.line`) follows. The header now wraps title / subtitle /
+    // meta — query for the `<header>` rather than the `<h1>` so
+    // the test is robust to that wrapper landing in the song
+    // tree (see semantic-HTML refactor in this PR).
     const wrapper = container.querySelector('.song');
     const children = Array.from(wrapper?.children ?? []);
-    const titleIdx = children.findIndex((c) => c.tagName === 'H1');
+    const headerIdx = children.findIndex((c) => c.tagName === 'HEADER');
     const sectionIdx = children.indexOf(section as Element);
     const lineIdx = children.findIndex((c) => c.classList.contains('line'));
-    expect(titleIdx).toBeGreaterThanOrEqual(0);
-    expect(sectionIdx).toBeGreaterThan(titleIdx);
+    expect(headerIdx).toBeGreaterThanOrEqual(0);
+    expect(sectionIdx).toBeGreaterThan(headerIdx);
     expect(lineIdx).toBeGreaterThan(sectionIdx);
   });
 

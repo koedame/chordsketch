@@ -331,17 +331,28 @@
   }
 }
 
-/* Chord-bearing line — flexbox of `.chord-block` columns. */
+/* Chord-bearing line — a row of `.chord-block` ruby annotations.
+   Each `<ruby class="chord-block">` lays out as:
+       <span class="lyrics">…</span><rt class="chord">…</rt>
+   where the browser's default ruby layout places the chord above
+   the lyric. `display: ruby` is the browser default for `<ruby>`;
+   we don't override it (the prior implementation used
+   `inline-flex; flex-direction: column-reverse` because the
+   markup was two stacked `<span>`s — with the ruby switch, the
+   stack falls out of the HTML semantic for free). */
 .chordsketch-sheet__content .line {
   display: flex;
   flex-wrap: wrap;
   margin: 0.1em 0;
 }
 .chordsketch-sheet__content .chord-block {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
+  /* Browser default for `<ruby>` is `display: ruby` — keep that
+     so chord-as-annotation sits above lyric-as-base. The
+     prior `inline-flex; column-reverse` rule was a workaround
+     for the all-`<span>` markup that ruby replaces. */
+  ruby-position: over;
 }
+.chordsketch-sheet__content .chord-block rt.chord,
 .chordsketch-sheet__content .chord {
   font-family: var(--cs-font-chord, "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
   font-weight: 700;
@@ -350,6 +361,10 @@
   letter-spacing: 0.01em;
   line-height: 1;
   min-height: 1em;
+  /* Ruby annotations default to ~50% font-size in user-agent
+     stylesheets; lock the size explicitly so the chord glyphs
+     stay legible at the same scale as the lyric. */
+  font-size: 0.85em;
 }
 .chordsketch-sheet__content .lyrics {
   font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
@@ -366,13 +381,21 @@
 .chordsketch-sheet__content section {
   margin: 1em 0;
 }
+/* Section labels are now `<h3>` so screen readers see them as
+   the heading of the enclosing `<section>` (and `aria-labelledby`
+   wires the heading to its section). The default browser
+   heading style would shout the label at body-text size; reset
+   the heading defaults to keep the visual treatment as a small
+   muted label, matching the pre-refactor look. */
 .chordsketch-sheet__content section > .section-label,
 .chordsketch-sheet__content .chorus-recall > .section-label {
   font-family: var(--cs-font-latin, "Inter", system-ui, -apple-system, sans-serif);
   font-weight: 600;
   font-size: 0.75rem;
   color: var(--cs-ink-600, #67646d);
-  margin-bottom: 0.5em;
+  margin: 0 0 0.5em;
+  /* Override `<h3>`'s default `display: block; margin-block-*`. */
+  line-height: 1.4;
 }
 .chordsketch-sheet__content .chorus-recall {
   margin: 1em 0;
@@ -412,9 +435,12 @@
   margin: 0.3em 0;
 }
 /* `{highlight}` — spec sibling of `{comment}` with stronger visual
-   emphasis. Yellow-marker styling matches the HTML `<mark>` idiom
-   readers already recognise as "important text". Sister to the Rust
-   HTML renderer's `comment--highlight` class. */
+   emphasis. The text now sits inside a `<mark>` element so the
+   HTML5 "marked text" semantic carries through. The yellow-marker
+   styling lives on the wrapper `<p>` (not the `<mark>` itself,
+   whose user-agent default background would clash with the
+   wrapper's). Sister to the Rust HTML renderer's
+   `comment--highlight` class. */
 .chordsketch-sheet__content .comment.comment--highlight {
   background-color: var(--cs-highlight-bg, #fff3a3);
   color: var(--cs-ink-900, #1a1718);
@@ -424,6 +450,12 @@
   border-radius: 3px;
   display: block;
   width: fit-content;
+}
+/* Drop the user-agent default `<mark>` styling — the wrapper
+   already paints the highlight. */
+.chordsketch-sheet__content .comment.comment--highlight mark {
+  background: none;
+  color: inherit;
 }
 
 /* Embedded images stay fluid inside the wrapper. */
@@ -464,9 +496,10 @@
   gap: 0.75rem;
 }
 .chordsketch-sheet__content .chord-diagram-container {
-  /* Reserved for per-cell sizing — kept as a hook so consumers
-     can target individual diagrams without depending on the SVG
-     internals. */
+  /* `<figure>` element wrapping each diagram. Reset the default
+     `margin: 1em` that user agents apply to figures so the grid
+     gap controls spacing instead. */
+  margin: 0;
 }
 
 /* `bottom`: push the diagram block toward the bottom of the
