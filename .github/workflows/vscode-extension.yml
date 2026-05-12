@@ -80,8 +80,17 @@ jobs:
           shared-key: vscode-extension-wasm-pack
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build @chordsketch/wasm from source (web + node builds)
+      - name: Build @chordsketch/wasm (lean) from source
         run: node packages/npm/scripts/build.mjs
+
+      # The extension's esbuild script copies the wasm binary out of
+      # `packages/npm-export/` (#2466) because `convertToPdf` calls
+      # `render_pdf` from the heavy bundle. Without this build the
+      # extension's `npm run build` esbuild step fails to resolve
+      # `@chordsketch/wasm` against the local path it was aliased
+      # to.
+      - name: Build @chordsketch/wasm-export (heavy) from source
+        run: node packages/npm-export/scripts/build.mjs
 
       - name: Install dependencies
         run: npm ci
@@ -227,8 +236,17 @@ jobs:
           shared-key: vscode-extension-wasm-pack
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build @chordsketch/wasm from source (web + node builds)
+      - name: Build @chordsketch/wasm (lean) from source
         run: node packages/npm/scripts/build.mjs
+
+      # The extension's esbuild script copies the wasm binary out of
+      # `packages/npm-export/` (#2466) because `convertToPdf` calls
+      # `render_pdf` from the heavy bundle. Without this build the
+      # extension's `npm run build` esbuild step fails to resolve
+      # `@chordsketch/wasm` against the local path it was aliased
+      # to.
+      - name: Build @chordsketch/wasm-export (heavy) from source
+        run: node packages/npm-export/scripts/build.mjs
 
       - name: Install dependencies
         run: npm ci
