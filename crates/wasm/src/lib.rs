@@ -138,6 +138,11 @@ fn do_render_string(
 ///
 /// See [`do_render_string`] for the note on console-routed warnings and
 /// the lenient parser always producing at least one song.
+///
+/// Only the PDF / PNG renderers consume the byte path; both are
+/// behind `cfg(feature = "png-pdf")` so this helper is gated to
+/// match (#2466).
+#[cfg(feature = "png-pdf")]
 fn do_render_bytes(
     input: &str,
     config: &chordsketch_chordpro::config::Config,
@@ -188,7 +193,9 @@ fn render_string_inner(
 
 /// Resolve config and dispatch a bytes-returning render call.
 ///
-/// See [`render_string_inner`].
+/// See [`render_string_inner`]. Gated by `png-pdf` — only the PDF
+/// renderer surface uses this helper (#2466).
+#[cfg(feature = "png-pdf")]
 fn render_bytes_inner(
     input: &str,
     opts: RenderOptions,
@@ -249,6 +256,13 @@ pub fn render_text(input: &str) -> Result<String, JsValue> {
 /// the `*_with_options` variant — this function itself never errors
 /// because the lenient parser always produces at least one song and
 /// the default config never fails to resolve.
+///
+/// Only available when the `png-pdf` feature is enabled — i.e. in
+/// the `@chordsketch/wasm-export` bundle (#2466). The lean
+/// `@chordsketch/wasm` bundle omits this entry to keep the heavy
+/// `chordsketch-render-pdf` transitive deps out of the playground
+/// load path.
+#[cfg(feature = "png-pdf")]
 #[must_use = "callers must handle render errors"]
 #[wasm_bindgen]
 pub fn render_pdf(input: &str) -> Result<Vec<u8>, JsValue> {
@@ -305,9 +319,13 @@ pub fn render_text_with_options(input: &str, options: JsValue) -> Result<String,
 ///
 /// Returns the PDF as a `Uint8Array`.
 ///
+/// Only available with the `png-pdf` feature
+/// (`@chordsketch/wasm-export`, #2466).
+///
 /// # Errors
 ///
 /// Returns a `JsValue` error string on parse failure or invalid options.
+#[cfg(feature = "png-pdf")]
 #[must_use = "callers must handle render errors"]
 #[wasm_bindgen]
 pub fn render_pdf_with_options(input: &str, options: JsValue) -> Result<Vec<u8>, JsValue> {
@@ -460,6 +478,10 @@ fn render_string_with_warnings_inner(
 
 /// Pure-Rust core for the bytes-returning `*_with_warnings` family.
 /// See [`render_string_with_warnings_core`] for the rationale.
+///
+/// Gated by `png-pdf` — only the PDF surface consumes the byte
+/// `*_with_warnings` shape (#2466).
+#[cfg(feature = "png-pdf")]
 fn render_bytes_with_warnings_core(
     input: &str,
     opts: &RenderOptions,
@@ -488,7 +510,7 @@ fn render_bytes_with_warnings_core(
 /// output; on native tests we fall back to the serde serialization
 /// (which is dead-code unless a test deliberately exercises this
 /// shell — `wasm-pack test --node` covers the `Uint8Array` path).
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(feature = "png-pdf", target_arch = "wasm32"))]
 fn render_bytes_with_warnings_inner(
     input: &str,
     opts: RenderOptions,
@@ -509,7 +531,7 @@ fn render_bytes_with_warnings_inner(
     Ok(obj.into())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "png-pdf", not(target_arch = "wasm32")))]
 fn render_bytes_with_warnings_inner(
     input: &str,
     opts: RenderOptions,
@@ -582,6 +604,9 @@ pub fn render_text_with_warnings(input: &str) -> Result<JsValue, JsValue> {
 /// # Errors
 ///
 /// Returns a `JsValue` error string on parse failure.
+// `renderPdfWithWarnings` is gated by `png-pdf` —
+// only present in the `@chordsketch/wasm-export` build (#2466).
+#[cfg(feature = "png-pdf")]
 #[must_use = "callers must handle render errors"]
 #[wasm_bindgen(js_name = renderPdfWithWarnings)]
 pub fn render_pdf_with_warnings(input: &str) -> Result<JsValue, JsValue> {
@@ -643,6 +668,9 @@ pub fn render_text_with_warnings_and_options(
 /// # Errors
 ///
 /// Returns a `JsValue` error string on parse failure or invalid options.
+// `renderPdfWithWarningsAndOptions` is gated by `png-pdf` —
+// only present in the `@chordsketch/wasm-export` build (#2466).
+#[cfg(feature = "png-pdf")]
 #[must_use = "callers must handle render errors"]
 #[wasm_bindgen(js_name = renderPdfWithWarningsAndOptions)]
 pub fn render_pdf_with_warnings_and_options(
@@ -1297,6 +1325,11 @@ pub fn chord_typography(chord_json: &str) -> Result<String, JsValue> {
 
 /// Run the iReal PNG-rasterise pipeline; native helper used by the
 /// wasm wrapper and by Rust unit tests.
+///
+/// Gated by `png-pdf` because the resvg / tiny-skia / usvg /
+/// fontdb / harfrust transitive surface is the dominant size cost
+/// of the heavy wasm bundle (#2466).
+#[cfg(feature = "png-pdf")]
 fn do_render_ireal_png(input: &str) -> Result<Vec<u8>, String> {
     let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
     chordsketch_render_ireal::png::render_png(
@@ -1308,6 +1341,10 @@ fn do_render_ireal_png(input: &str) -> Result<Vec<u8>, String> {
 
 /// Run the iReal PDF-render pipeline; native helper used by the
 /// wasm wrapper and by Rust unit tests.
+///
+/// Gated by `png-pdf` because svg2pdf pulls the same resvg / usvg
+/// graph plus its own writer surface (#2466).
+#[cfg(feature = "png-pdf")]
 fn do_render_ireal_pdf(input: &str) -> Result<Vec<u8>, String> {
     let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
     chordsketch_render_ireal::pdf::render_pdf(
@@ -1325,11 +1362,15 @@ fn do_render_ireal_pdf(input: &str) -> Result<Vec<u8>, String> {
 /// `PngOptions` (300 DPI, A4-equivalent canvas). Returned as a
 /// `Uint8Array` of the encoded PNG bytes.
 ///
+/// Only available with the `png-pdf` feature
+/// (`@chordsketch/wasm-export`, #2466).
+///
 /// # Errors
 ///
 /// Returns a `JsValue` error string when the URL is not a valid
 /// `irealb://` payload, or when the underlying rasteriser fails
 /// (e.g. internal SVG parse error).
+#[cfg(feature = "png-pdf")]
 #[must_use = "callers must handle render errors"]
 #[wasm_bindgen(js_name = renderIrealPng)]
 pub fn render_ireal_png(input: &str) -> Result<Vec<u8>, JsValue> {
@@ -1343,10 +1384,14 @@ pub fn render_ireal_png(input: &str) -> Result<Vec<u8>, JsValue> {
 /// `chordsketch_render_ireal::pdf::render_pdf` with default
 /// `PdfOptions`. Returned as a `Uint8Array` of the PDF byte stream.
 ///
+/// Only available with the `png-pdf` feature
+/// (`@chordsketch/wasm-export`, #2466).
+///
 /// # Errors
 ///
 /// Returns a `JsValue` error string when the URL is not a valid
 /// `irealb://` payload, or when the underlying converter fails.
+#[cfg(feature = "png-pdf")]
 #[must_use = "callers must handle render errors"]
 #[wasm_bindgen(js_name = renderIrealPdf)]
 pub fn render_ireal_pdf(input: &str) -> Result<Vec<u8>, JsValue> {
@@ -1366,6 +1411,13 @@ const RENDER_IREAL_SVG_TS: &'static str = r#"
 export function renderIrealSvg(input: string): string;
 "#;
 
+// The `renderIrealPng` / `renderIrealPdf` TypeScript declarations
+// only appear in the heavy bundle (`@chordsketch/wasm-export`)
+// per #2466 — they reference exports that are themselves gated
+// by `cfg(feature = "png-pdf")` above, so emitting the TS shape
+// from the lean build would publish a typed API that does not
+// exist at runtime.
+#[cfg(feature = "png-pdf")]
 #[wasm_bindgen(typescript_custom_section)]
 const RENDER_IREAL_PNG_PDF_TS: &'static str = r#"
 /**
@@ -1489,6 +1541,7 @@ mod tests {
         assert!(text.contains("Test"));
     }
 
+    #[cfg(feature = "png-pdf")]
     #[test]
     fn test_render_pdf_returns_bytes() {
         let result = render_pdf(MINIMAL_INPUT);
@@ -1636,6 +1689,18 @@ mod tests {
         );
         assert!(html.output.contains("<html"));
         assert!(html.warnings.is_empty());
+    }
+
+    // Sibling of the text/html happy-path test above — split out so
+    // the text/html coverage is not lost when the lean
+    // (`@chordsketch/wasm`) build runs `cargo test
+    // --no-default-features` (#2466). chordsketch-render-pdf only
+    // links in when `png-pdf` is enabled.
+    #[cfg(feature = "png-pdf")]
+    #[test]
+    fn test_with_warnings_pdf_renderer_returns_pdf_bytes_on_clean_input() {
+        let parse = chordsketch_chordpro::parse_multi_lenient(MINIMAL_INPUT);
+        let songs: Vec<_> = parse.results.into_iter().map(|r| r.song).collect();
         let pdf = chordsketch_render_pdf::render_songs_with_warnings(
             &songs,
             0,
@@ -1886,7 +1951,12 @@ mod tests {
     }
 
     // ---- iReal Pro PNG / PDF render (#2067 Phase 2c) ----
+    // All four tests are gated by `png-pdf` — the `do_render_ireal_*`
+    // helpers and their `chordsketch_render_ireal::png` / `::pdf`
+    // module imports are themselves gated, so disabling the feature
+    // removes them from the compilation unit entirely (#2466).
 
+    #[cfg(feature = "png-pdf")]
     #[test]
     fn test_render_ireal_png_emits_png_bytes() {
         let bytes = do_render_ireal_png(TINY_IREAL_URL).unwrap();
@@ -1897,12 +1967,14 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "png-pdf")]
     #[test]
     fn test_render_ireal_png_invalid_url_errors() {
         let result = do_render_ireal_png("not a url");
         assert!(result.is_err(), "expected error, got {result:?}");
     }
 
+    #[cfg(feature = "png-pdf")]
     #[test]
     fn test_render_ireal_pdf_emits_pdf_bytes() {
         let bytes = do_render_ireal_pdf(TINY_IREAL_URL).unwrap();
@@ -1913,6 +1985,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "png-pdf")]
     #[test]
     fn test_render_ireal_pdf_invalid_url_errors() {
         let result = do_render_ireal_pdf("not a url");
@@ -2056,6 +2129,7 @@ mod tests {
         assert!(output.contains("Test"));
     }
 
+    #[cfg(feature = "png-pdf")]
     #[test]
     fn test_render_bytes_with_warnings_core_emits_pdf_signature() {
         let (bytes, warnings) = render_bytes_with_warnings_core(
@@ -2068,6 +2142,7 @@ mod tests {
         assert!(warnings.is_empty());
     }
 
+    #[cfg(feature = "png-pdf")]
     #[test]
     fn test_render_bytes_with_warnings_core_propagates_config_error() {
         let opts = RenderOptions {
@@ -2106,6 +2181,7 @@ mod tests {
         assert_ne!(zero, shifted, "transpose=2 must alter rendered text");
     }
 
+    #[cfg(feature = "png-pdf")]
     #[test]
     fn test_render_bytes_inner_threads_transpose() {
         let zero = render_bytes_inner(
@@ -2224,6 +2300,7 @@ mod wasm_tests {
 
     /// `render_pdf_with_options` returns a `Uint8Array` (mapped from
     /// `Vec<u8>` by wasm-bindgen). Verify the magic header.
+    #[cfg(feature = "png-pdf")]
     #[wasm_bindgen_test]
     fn render_pdf_with_options_undefined_returns_pdf() {
         let result = render_pdf_with_options(MINIMAL_INPUT, JsValue::UNDEFINED).unwrap();
@@ -2308,6 +2385,7 @@ mod wasm_tests {
 
     /// PDF variant: confirm the magic header is preserved when routed
     /// through the options-aware `*_with_warnings` path.
+    #[cfg(feature = "png-pdf")]
     #[wasm_bindgen_test]
     fn render_pdf_with_warnings_and_options_returns_pdf_bytes() {
         let v = render_pdf_with_warnings_and_options(MINIMAL_INPUT, JsValue::UNDEFINED).unwrap();
@@ -2391,6 +2469,7 @@ mod wasm_tests {
     /// plain array — the `cfg(not(target_arch = "wasm32"))` serde
     /// fallback would produce a plain array, which the wasm test host
     /// MUST NOT hit).
+    #[cfg(feature = "png-pdf")]
     #[wasm_bindgen_test]
     fn render_pdf_with_warnings_returns_uint8array_output() {
         let v = render_pdf_with_warnings(MINIMAL_INPUT).unwrap();
@@ -2474,6 +2553,7 @@ mod wasm_tests {
         assert!(result.contains("Test"));
     }
 
+    #[cfg(feature = "png-pdf")]
     #[wasm_bindgen_test]
     fn render_pdf_bare_js_boundary() {
         let bytes = render_pdf(MINIMAL_INPUT).unwrap();

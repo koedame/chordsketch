@@ -41,8 +41,10 @@ export interface PdfExportProps
   /**
    * Test-only WASM loader override. Consumers never need to
    * supply this — the production default lazy-loads
-   * `@chordsketch/wasm`. Hidden behind `@internal` so it does not
-   * surface in the public API docs.
+   * `@chordsketch/wasm-export` (the heavy bundle that owns the
+   * PDF / PNG renderer surface; see use-pdf-export.ts). Hidden
+   * behind `@internal` so it does not surface in the public API
+   * docs.
    *
    * @internal
    */
@@ -50,7 +52,7 @@ export interface PdfExportProps
 }
 
 /**
- * Button that renders `source` to PDF via `@chordsketch/wasm` and
+ * Button that renders `source` to PDF via `@chordsketch/wasm-export` and
  * triggers a browser download on click. While the render is in
  * flight the button is set `disabled` and `aria-busy="true"` so
  * assistive tech surfaces the loading state.

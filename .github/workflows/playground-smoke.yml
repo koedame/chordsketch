@@ -67,9 +67,20 @@ jobs:
           cache: 'npm'
           cache-dependency-path: packages/playground/package-lock.json
 
-      - name: Build @chordsketch/wasm
+      - name: Build @chordsketch/wasm (lean)
         run: npm run build
         working-directory: packages/npm
+
+      # `@chordsketch/wasm-export` carries the heavy (PDF / PNG)
+      # renderer surface split out from `@chordsketch/wasm` per
+      # #2466. The playground aliases it to this directory's `web/`
+      # output, so the build must run before the playground build
+      # / smoke test — otherwise the dynamic `import(
+      # '@chordsketch/wasm-export')` in `<PdfExport>` would 404
+      # against an unbuilt artifact.
+      - name: Build @chordsketch/wasm-export (heavy)
+        run: npm run build
+        working-directory: packages/npm-export
 
       - name: Install playground dependencies
         run: npm ci

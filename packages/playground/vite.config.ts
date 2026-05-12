@@ -31,6 +31,15 @@ export default defineConfig({
       // before #1061 was filed). Importing under the published name lets
       // future layout changes only touch the alias here. See #1057.
       '@chordsketch/wasm': resolve(here, '../npm/web/chordsketch_wasm.js'),
+      // Heavy companion to `@chordsketch/wasm`: ships PDF / PNG
+      // renderer surface (#2466). Aliased to the local
+      // `packages/npm-export/` build so the playground can drive
+      // `<PdfExport>` without depending on an npm-published copy.
+      // The PDF / PNG bundle is only loaded when a user actually
+      // clicks "Download PDF" — the dynamic `import('@chordsketch/
+      // wasm-export')` inside `use-pdf-export.ts` produces a
+      // separate chunk so the initial playground load stays light.
+      '@chordsketch/wasm-export': resolve(here, '../npm-export/web/chordsketch_wasm.js'),
       // Shared editor + preview UI extracted in #2073. Same alias
       // pattern as the wasm package: ui-web is a sibling workspace
       // package that ships only TypeScript sources, so Vite consumes
@@ -70,6 +79,7 @@ export default defineConfig({
       allow: [
         here,
         resolve(here, '../npm'),
+        resolve(here, '../npm-export'),
         resolve(here, '../ui-web'),
         resolve(here, '../react'),
         resolve(here, '../ui-irealb-editor'),

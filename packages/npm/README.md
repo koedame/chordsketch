@@ -35,7 +35,6 @@ conditional `exports` to pick the right one for the runtime:
 import init, {
   render_html,
   render_text,
-  render_pdf,
   validate,
   version,
 } from '@chordsketch/wasm';
@@ -51,7 +50,6 @@ const chordpro = `{title: Amazing Grace}
 const errors = validate(chordpro); // [] if valid
 const html = render_html(chordpro);
 const text = render_text(chordpro);
-const pdfBytes = render_pdf(chordpro); // Uint8Array
 console.log(version());
 ```
 
@@ -63,7 +61,6 @@ console.log(version());
 import {
   render_html,
   render_text,
-  render_pdf,
   validate,
   version,
 } from '@chordsketch/wasm';
@@ -76,8 +73,23 @@ const chordpro = `{title: Amazing Grace}
 const errors = validate(chordpro); // [] if valid
 const html = render_html(chordpro);
 const text = render_text(chordpro);
-const pdfBytes = render_pdf(chordpro); // Uint8Array
 console.log(version());
+```
+
+### PDF / PNG export (separate package)
+
+PDF (`render_pdf`) and iReal Pro PNG / PDF (`renderIrealPng` /
+`renderIrealPdf`) live in the sister package
+[`@chordsketch/wasm-export`](https://www.npmjs.com/package/@chordsketch/wasm-export).
+It bundles the same lean API plus the resvg / svg2pdf / fontdb
+transitive dependency tree required for rasterisation and PDF
+emission, so it weighs ~25× more than this package (~10 MB raw vs
+~400 KB). Install it on the side and dynamic-import it only when
+the user actually triggers an export:
+
+```js
+const { render_pdf } = await import('@chordsketch/wasm-export');
+const pdfBytes = render_pdf(chordpro); // Uint8Array
 ```
 
 ### Rendering with options (both runtimes)
@@ -104,7 +116,8 @@ const html = render_html_with_options(input, {
 |----------|-------|--------|
 | `render_html(input)` | ChordPro string | HTML string |
 | `render_text(input)` | ChordPro string | Plain text string |
-| `render_pdf(input)` | ChordPro string | `Uint8Array` (PDF bytes) |
+
+For `render_pdf` (ChordPro → PDF) use `@chordsketch/wasm-export`.
 
 ### Rendering with options
 
@@ -112,7 +125,8 @@ const html = render_html_with_options(input, {
 |----------|-------|--------|
 | `render_html_with_options(input, options)` | ChordPro string + options | HTML string |
 | `render_text_with_options(input, options)` | ChordPro string + options | Plain text string |
-| `render_pdf_with_options(input, options)` | ChordPro string + options | `Uint8Array` (PDF bytes) |
+
+For `render_pdf_with_options` use `@chordsketch/wasm-export`.
 
 ### iReal Pro conversion
 
@@ -121,9 +135,8 @@ const html = render_html_with_options(input, {
 | `convertChordproToIrealb(input)` | ChordPro source | `{ output: string, warnings: string[] }` — `output` is an `irealb://` URL |
 | `convertIrealbToChordproText(input)` | `irealb://` URL | `{ output: string, warnings: string[] }` — `output` is rendered ChordPro text |
 | `renderIrealSvg(input)` | `irealb://` URL | `string` — full SVG document (iReal Pro-style chart) |
-| `renderIrealPng(input)` | `irealb://` URL | `Uint8Array` — encoded PNG (300 DPI default, A4-equivalent canvas) |
-| `renderIrealPdf(input)` | `irealb://` URL | `Uint8Array` — single-page A4 PDF (vector content) |
 | `parseIrealb(input)` | `irealb://` URL or `irealbook://` URL | `string` — AST-shaped JSON mirroring `IrealSong`. Accepts both the canonical 7..=9-field `irealb://` shape and the iRealBook 6-field `irealbook://` shape (`Title=Composer=Style=Key=TimeSig=Music`). |
+| (iReal PNG / PDF rendering moved to `@chordsketch/wasm-export`) | | |
 | `serializeIrealb(input)` | AST-shaped JSON | `string` — `irealb://` URL (round-trips with `parseIrealb`) |
 | `chordTypography(chordJson)` | AST-shaped chord JSON (`{root, quality, bass, alternate?}`) | `string` — JSON `{spans: [{kind, text}, ...]}` matching the iReal Pro engraved-chart convention. The renderer emits `Root` + `Accidental` + `Extension` + `Slash` + `Bass` span kinds; URL-stored quality shorthand (`b`/`#`/`^`/`h`/`o`/`-`) translates to typeset glyphs (`♭`/`♯`/`Δ`/`ø`/`°`/`−`); two-or-more-alteration extensions stack vertically via a `\|` separator (`7♭9♯5` → `7♭9\|♯5`). |
 

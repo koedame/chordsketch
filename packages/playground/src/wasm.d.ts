@@ -1,7 +1,25 @@
+// Ambient type declarations for the two WASM packages the
+// playground consumes (#2466 split):
+//
+//   - `@chordsketch/wasm`        — lean bundle (~400 KB raw / ~175
+//                                   KB gzipped). Parse + transpose
+//                                   + text / HTML / SVG / iReal
+//                                   chord-typography. No PDF / PNG
+//                                   renderer surface.
+//   - `@chordsketch/wasm-export` — heavy bundle (~10 MB raw / ~6.4
+//                                   MB gzipped). Adds renderPdf /
+//                                   renderIrealPng / renderIrealPdf
+//                                   plus everything from the lean
+//                                   bundle. Loaded only when the
+//                                   user triggers a PDF export.
+//
+// The playground aliases both names to the local builds via
+// vite.config.ts so the typings here describe what's actually
+// reachable at runtime, not what npm install would resolve to.
+
 declare module '@chordsketch/wasm' {
   export function render_html(input: string): string;
   export function render_text(input: string): string;
-  export function render_pdf(input: string): Uint8Array;
   export function render_html_with_options(
     input: string,
     options: { transpose?: number; config?: string },
@@ -10,10 +28,6 @@ declare module '@chordsketch/wasm' {
     input: string,
     options: { transpose?: number; config?: string },
   ): string;
-  export function render_pdf_with_options(
-    input: string,
-    options: { transpose?: number; config?: string },
-  ): Uint8Array;
   export function render_html_body(input: string): string;
   export function render_html_body_with_options(
     input: string,
@@ -40,8 +54,6 @@ declare module '@chordsketch/wasm' {
   // declarations are kept so the future re-add does not need to
   // re-author them.
   export function renderIrealSvg(input: string): string;
-  export function renderIrealPng(input: string): Uint8Array;
-  export function renderIrealPdf(input: string): Uint8Array;
   export function parseIrealb(input: string): string;
   export function serializeIrealb(input: string): string;
   export function chordTypography(chord_json: string): string;
@@ -76,3 +88,12 @@ declare module '@chordsketch/wasm' {
   };
   export default function init(): Promise<void>;
 }
+
+// NOTE: `@chordsketch/wasm-export` is intentionally NOT declared
+// here. It is only consumed by `@chordsketch/react`'s
+// `use-pdf-export.ts` via a dynamic `import()` cast to a
+// structural shape — the cast preserves the type contract without
+// pulling the heavy bundle into tsc's resolution graph. Declaring
+// it here would invalidate the `@ts-expect-error` directive in
+// the react package source (which the playground typechecks
+// because the alias points at `../react/src/index.ts`).

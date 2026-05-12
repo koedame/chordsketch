@@ -1,17 +1,24 @@
 import { useCallback, useRef, useState } from 'react';
 
-// The `@chordsketch/wasm` surface is loaded lazily (browser build
-// requires `await init()` before the first render call). Importing
-// via a dynamic `import()` keeps the React bundle free of the WASM
-// glue code until a consumer actually triggers an export.
+// The PDF / PNG renderer surface lives in the SEPARATE
+// `@chordsketch/wasm-export` package (~10 MB raw / ~6.4 MB
+// gzipped), not the lean `@chordsketch/wasm` (~400 KB raw / ~175
+// KB gzipped) used by `<ChordSheet>` / `<RendererPreview format=
+// "html"|"text">` for the parser + text/html/svg surface. The
+// split exists because the resvg / tiny-skia / svg2pdf / fontdb /
+// harfrust transitive deps required for PDF / PNG output dominate
+// the wasm binary weight (#2466). Loading via a dynamic `import()`
+// keeps the React bundle free of the heavy WASM glue until a
+// consumer actually triggers an export.
 //
 // The narrow type declared here is deliberately structural rather
-// than a direct re-export from `@chordsketch/wasm` — typing it with
-// the real module shape would pull the WASM package into the
-// library's build graph, which defeats the lazy-loading point. The
-// shape is pinned to the subset that `exportPdf` actually touches
-// (`default`, `render_pdf`, `render_pdf_with_options`) so the
-// contract with the WASM API is still explicit at the boundary.
+// than a direct re-export from `@chordsketch/wasm-export` — typing
+// it with the real module shape would pull the WASM package into
+// the library's build graph, which defeats the lazy-loading point.
+// The shape is pinned to the subset that `exportPdf` actually
+// touches (`default`, `render_pdf`, `render_pdf_with_options`) so
+// the contract with the WASM API is still explicit at the
+// boundary.
 interface PdfRenderer {
   default: () => Promise<unknown>;
   render_pdf: (input: string) => Uint8Array;
@@ -71,16 +78,27 @@ export interface UsePdfExportResult {
 /**
  * Injected renderer factory, for tests. Production callers never
  * need to supply this — the default points at
- * `@chordsketch/wasm`. Tests pass a hand-rolled stub that returns
- * a deterministic byte string without loading a real WASM binary.
+ * `@chordsketch/wasm-export`. Tests pass a hand-rolled stub that
+ * returns a deterministic byte string without loading a real WASM
+ * binary.
  *
  * @internal
  */
 export type WasmLoader = () => Promise<PdfRenderer>;
 
+// `@chordsketch/wasm-export` is declared in package.json as an
+// OPTIONAL peer dependency — consumers who use `<PdfExport>`
+// install it themselves; consumers who only use `<ChordSheet>`
+// don't pay the ~6 MB download. This means tsc may not be able to
+// resolve the module at build time (e.g., when the react package
+// is typechecked in CI before wasm-export is published / linked).
+// `@ts-expect-error` silences the resolution error while the
+// structural `Promise<PdfRenderer>` cast preserves the type-check
+// at the use site.
 const defaultLoader: WasmLoader = () =>
+  // @ts-expect-error optional peer dep; see `peerDependenciesMeta` in package.json
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  import('@chordsketch/wasm') as Promise<PdfRenderer>;
+  import('@chordsketch/wasm-export') as Promise<PdfRenderer>;
 
 /**
  * React hook that produces a `Promise<void>`-returning `exportPdf`
@@ -97,18 +115,19 @@ const defaultLoader: WasmLoader = () =>
  *
  * Each mounted hook owns its own renderer cache — two
  * `usePdfExport()` consumers in the same app will each call
- * `import('@chordsketch/wasm')` on first use. Dynamic ESM imports
- * and `@chordsketch/wasm`'s own `init()` both dedupe internally,
+ * `import('@chordsketch/wasm-export')` on first use. Dynamic ESM
+ * imports and the package's own `init()` both dedupe internally,
  * so this is a measurement-level concern (one extra
  * microtask-scoped dynamic import resolution), not a correctness
  * concern. Apps that want a single shared renderer can hoist the
  * hook into a context provider.
  *
- * @param loader Optional WASM loader — pass a stub in tests. Do not
- *   supply one in production; the default loads `@chordsketch/wasm`
- *   lazily. The loader does not have to be stable across renders —
- *   the hook reads the latest reference via a ref so inline
- *   loaders do not invalidate `exportPdf`'s identity.
+ * @param loader Optional WASM loader — pass a stub in tests. Do
+ *   not supply one in production; the default loads
+ *   `@chordsketch/wasm-export` lazily. The loader does not have
+ *   to be stable across renders — the hook reads the latest
+ *   reference via a ref so inline loaders do not invalidate
+ *   `exportPdf`'s identity.
  */
 export function usePdfExport(loader: WasmLoader = defaultLoader): UsePdfExportResult {
   const [loading, setLoading] = useState(false);
@@ -143,14 +162,16 @@ export function usePdfExport(loader: WasmLoader = defaultLoader): UsePdfExportRe
       try {
         if (rendererPromiseRef.current === null) {
           // `init()` is a no-op on the Node.js build of
-          // `@chordsketch/wasm` (the module auto-loads in Node) and
-          // required on the browser build. Calling it
+          // `@chordsketch/wasm-export` (the module auto-loads in
+          // Node) and required on the browser build. Calling it
           // unconditionally keeps the hook runtime-agnostic. The
           // Node build still exports `default` as a no-op init
-          // stub — see `packages/npm/node/chordsketch_wasm.js`.
-          // If a future `@chordsketch/wasm` refactor drops that
-          // export, this call will throw on Node and the hook will
-          // surface the error via `error` state on first use.
+          // stub — see
+          // `packages/npm-export/node/chordsketch_wasm.js`.
+          // If a future `@chordsketch/wasm-export` refactor drops
+          // that export, this call will throw on Node and the
+          // hook will surface the error via `error` state on
+          // first use.
           rendererPromiseRef.current = (async () => {
             const mod = await loaderRef.current();
             await mod.default();
