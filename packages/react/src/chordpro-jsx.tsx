@@ -276,34 +276,35 @@ function renderLyricsLine(
   return (
     <div key={key} className="line">
       {line.segments.map((segment, i) => (
-        // HTML5 `<ruby>` — `<span class="lyrics">` is the ruby
-        // base (the sung text), `<rt class="chord">` is the ruby
-        // annotation (the chord). Screen readers announce the
-        // pair as "lyric (chord)" the same way they handle
-        // Japanese furigana, conveying the ChordPro semantic
-        // that chords are *annotations on top of* the lyrics
-        // rather than a separate data lane. CSS leaves
-        // `display: ruby` on the wrapper and uses the existing
-        // `.chord-block` / `.chord` / `.lyrics` selectors for
-        // typography only.
-        <ruby key={i} className="chord-block">
-          <span className="lyrics" style={textStyle ?? undefined}>
-            {renderSegmentText(segment)}
-          </span>
+        // chord-over-lyric layout is a *visual* arrangement
+        // of two parallel data lanes — the chord row is a
+        // performance instruction (what to play) and the lyric
+        // row is the text being sung. That's structurally
+        // different from a ruby annotation (which exists to
+        // *pronounce* the base text), so the markup stays a
+        // pair of `<span>`s in a `<span class="chord-block">`
+        // wrapper. CSS positions the chord above the lyric via
+        // `inline-flex; flex-direction: column-reverse` so the
+        // chord-row baseline is reserved before the lyric is
+        // measured.
+        <span key={i} className="chord-block">
           {segment.chord ? (
-            <rt className="chord" style={chordStyle ?? undefined}>
+            <span className="chord" style={chordStyle ?? undefined}>
               {renderChord(segment.chord)}
-            </rt>
+            </span>
           ) : lineHasChords ? (
-            <rt
+            <span
               className="chord"
               aria-hidden="true"
               style={chordStyle ?? undefined}
             >
               {' '}
-            </rt>
+            </span>
           ) : null}
-        </ruby>
+          <span className="lyrics" style={textStyle ?? undefined}>
+            {renderSegmentText(segment)}
+          </span>
+        </span>
       ))}
     </div>
   );

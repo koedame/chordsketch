@@ -947,8 +947,8 @@ h1 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-w
 h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-weight: 400; font-size: 1rem; color: #67646D; margin-top: 0; }
 .meta { font-family: \"JetBrains Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace; font-size: 0.8125rem; color: #67646D; margin: 0 0 1.5em; font-feature-settings: \"tnum\" 1; }
 .line { display: flex; flex-wrap: __LINE_FLEX_WRAP__; margin: 0.1em 0; }
-.chord-block { ruby-position: over; }
-.chord-block rt.chord, .chord { font-family: \"Roboto\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 0.85em; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
+.chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
+.chord { font-family: \"Roboto\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 1rem; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
 .lyrics { font-family: \"Noto Sans JP\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 400; font-size: 1.125rem; white-space: pre; }
 .empty-line { height: 1em; }
 section { margin: 1em 0; }
@@ -1038,15 +1038,18 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut St
 
 /// Render a lyrics line with chord-over-lyrics layout.
 ///
-/// Each chord+text pair is emitted as an HTML5 `<ruby class="chord-block">`:
-///   - `<span class="lyrics">…</span>` is the ruby base (sung text).
-///   - `<rt class="chord">…</rt>` is the ruby annotation (chord).
-/// Assistive tech announces the pair as "lyric (chord)" the same
-/// way it handles Japanese furigana, conveying the ChordPro
-/// semantic that chords are *annotations on top of* the lyrics
-/// rather than a separate data lane. Sister-site to the React
-/// JSX walker's `<ruby>` shape. Formatting directives (font,
-/// size, color) are applied via inline CSS as before.
+/// Each chord+text pair is wrapped in a `<span class="chord-block">` with
+/// the chord in `<span class="chord">` and the text in `<span class="lyrics">`.
+///
+/// chord-over-lyric is a visual arrangement of two parallel
+/// data lanes — chord names are performance instructions, lyric
+/// text is the words being sung. That is structurally different
+/// from a ruby annotation (which exists to *pronounce* the base
+/// text), so the markup stays a pair of `<span>`s rather than
+/// `<ruby>` / `<rt>`. CSS positions the chord above the lyric
+/// via `inline-flex; flex-direction: column-reverse`.
+/// Formatting directives (font, size, color) are applied via
+/// inline CSS as before.
 fn render_lyrics(
     lyrics_line: &LyricsLine,
     transpose_offset: i8,
@@ -1056,10 +1059,41 @@ fn render_lyrics(
     html.push_str("<div class=\"line\">");
 
     for segment in &lyrics_line.segments {
-        html.push_str("<ruby class=\"chord-block\">");
+        html.push_str("<span class=\"chord-block\">");
 
-        // Ruby base (lyric) first — HTML5 spec requires base
-        // content before the `<rt>` annotation.
+        if let Some(chord) = &segment.chord {
+            let display_name = if transpose_offset != 0 {
+                let transposed = transpose_chord(chord, transpose_offset);
+                transposed.display_name().to_string()
+            } else {
+                chord.display_name().to_string()
+            };
+            let chord_css = fmt_state.chord.to_css();
+            if chord_css.is_empty() {
+                let _ = write!(
+                    html,
+                    "<span class=\"chord\">{}</span>",
+                    escape(&display_name)
+                );
+            } else {
+                let _ = write!(
+                    html,
+                    "<span class=\"chord\" style=\"{}\">{}</span>",
+                    escape(&chord_css),
+                    escape(&display_name)
+                );
+            }
+        } else if lyrics_line.has_chords() {
+            // U+00A0 (NBSP) inside the chord placeholder so the
+            // inline-flex `.chord-block` column reserves a full
+            // chord-row-height line box (see #2142). `aria-hidden`
+            // prevents assistive tech from announcing the
+            // placeholder as "space" — the chord row carries
+            // performance information, and a presentational NBSP
+            // should stay silent.
+            html.push_str("<span class=\"chord\" aria-hidden=\"true\">\u{00A0}</span>");
+        }
+
         let text_css = fmt_state.text.to_css();
         if text_css.is_empty() {
             html.push_str("<span class=\"lyrics\">");
@@ -1077,34 +1111,7 @@ fn render_lyrics(
         }
         html.push_str("</span>");
 
-        // Ruby annotation (chord) — `<rt>`. Placeholder annotation
-        // for chord-less segments on a chord-bearing line keeps
-        // the vertical rhythm aligned (see prior #2142 comment),
-        // marked `aria-hidden` so screen readers don't announce a
-        // stray "space" annotation.
-        if let Some(chord) = &segment.chord {
-            let display_name = if transpose_offset != 0 {
-                let transposed = transpose_chord(chord, transpose_offset);
-                transposed.display_name().to_string()
-            } else {
-                chord.display_name().to_string()
-            };
-            let chord_css = fmt_state.chord.to_css();
-            if chord_css.is_empty() {
-                let _ = write!(html, "<rt class=\"chord\">{}</rt>", escape(&display_name));
-            } else {
-                let _ = write!(
-                    html,
-                    "<rt class=\"chord\" style=\"{}\">{}</rt>",
-                    escape(&chord_css),
-                    escape(&display_name)
-                );
-            }
-        } else if lyrics_line.has_chords() {
-            html.push_str("<rt class=\"chord\" aria-hidden=\"true\">\u{00A0}</rt>");
-        }
-
-        html.push_str("</ruby>");
+        html.push_str("</span>");
     }
 
     html.push_str("</div>\n");
@@ -2462,9 +2469,9 @@ mod tests {
     fn test_render_lyrics_with_chords() {
         let html = render("[Am]Hello [G]world");
         assert!(html.contains("chord-block"));
-        assert!(html.contains("<rt class=\"chord\">Am</rt>"));
+        assert!(html.contains("<span class=\"chord\">Am</span>"));
         assert!(html.contains("<span class=\"lyrics\">Hello </span>"));
-        assert!(html.contains("<rt class=\"chord\">G</rt>"));
+        assert!(html.contains("<span class=\"chord\">G</span>"));
     }
 
     #[test]
@@ -2563,7 +2570,7 @@ mod tests {
         // genuinely empty span caused.
         assert!(
             html.contains(
-                "<span class=\"lyrics\">Hello </span><rt class=\"chord\" aria-hidden=\"true\">\u{00A0}</rt>"
+                "<span class=\"chord\" aria-hidden=\"true\">\u{00A0}</span><span class=\"lyrics\">Hello </span>"
             )
         );
     }
@@ -2579,13 +2586,13 @@ mod tests {
         // placeholder, not a bare empty span.
         assert!(
             html.contains(
-                "<span class=\"lyrics\">Was </span><rt class=\"chord\" aria-hidden=\"true\">\u{00A0}</rt>"
+                "<span class=\"chord\" aria-hidden=\"true\">\u{00A0}</span><span class=\"lyrics\">Was </span>"
             ),
             "expected NBSP-bearing chord placeholder for \"Was \" segment, got: {html}"
         );
         // The chord-bearing segments still carry their chord text.
-        assert!(html.contains("<rt class=\"chord\">G</rt>"));
-        assert!(html.contains("<rt class=\"chord\">D</rt>"));
+        assert!(html.contains("<span class=\"chord\">G</span>"));
+        assert!(html.contains("<span class=\"chord\">D</span>"));
     }
 
     #[test]
@@ -2725,10 +2732,10 @@ mod transpose_tests {
         let song = chordsketch_chordpro::parse(input).unwrap();
         let html = render_song(&song);
         // G+2=A, C+2=D
-        assert!(html.contains("<rt class=\"chord\">A</rt>"));
-        assert!(html.contains("<rt class=\"chord\">D</rt>"));
-        assert!(!html.contains("<rt class=\"chord\">G</rt>"));
-        assert!(!html.contains("<rt class=\"chord\">C</rt>"));
+        assert!(html.contains("<span class=\"chord\">A</span>"));
+        assert!(html.contains("<span class=\"chord\">D</span>"));
+        assert!(!html.contains("<span class=\"chord\">G</span>"));
+        assert!(!html.contains("<span class=\"chord\">C</span>"));
     }
 
     #[test]
@@ -2737,8 +2744,8 @@ mod transpose_tests {
         let song = chordsketch_chordpro::parse(input).unwrap();
         let html = render_song(&song);
         // First G transposed +2 = A, second G at 0 = G
-        assert!(html.contains("<rt class=\"chord\">A</rt>"));
-        assert!(html.contains("<rt class=\"chord\">G</rt>"));
+        assert!(html.contains("<span class=\"chord\">A</span>"));
+        assert!(html.contains("<span class=\"chord\">G</span>"));
     }
 
     #[test]
@@ -2747,7 +2754,7 @@ mod transpose_tests {
         let song = chordsketch_chordpro::parse(input).unwrap();
         let html = render_song_with_transpose(&song, 3, &Config::defaults());
         // 2 + 3 = 5, C+5=F
-        assert!(html.contains("<rt class=\"chord\">F</rt>"));
+        assert!(html.contains("<span class=\"chord\">F</span>"));
     }
 
     #[test]
@@ -2757,7 +2764,7 @@ mod transpose_tests {
         let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
-            result.output.contains("<rt class=\"chord\">G</rt>"),
+            result.output.contains("<span class=\"chord\">G</span>"),
             "chord should be untransposed"
         );
         assert!(
@@ -2774,7 +2781,7 @@ mod transpose_tests {
         let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
-            result.output.contains("<rt class=\"chord\">G</rt>"),
+            result.output.contains("<span class=\"chord\">G</span>"),
             "chord should be untransposed"
         );
         assert!(
@@ -2793,7 +2800,7 @@ mod transpose_tests {
         let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
-            result.output.contains("<rt class=\"chord\">G</rt>"),
+            result.output.contains("<span class=\"chord\">G</span>"),
             "chord should be untransposed"
         );
         assert!(
@@ -2846,12 +2853,12 @@ mod transpose_tests {
         let html = render("{start_of_chorus}\n[G]La la\n{end_of_chorus}\n{transpose: 2}\n{chorus}");
         // Original chorus has chord "G"
         assert!(
-            html.contains("<rt class=\"chord\">G</rt>"),
+            html.contains("<span class=\"chord\">G</span>"),
             "original chorus should have G"
         );
         // Recalled chorus should have transposed chord "A"
         assert!(
-            html.contains("<rt class=\"chord\">A</rt>"),
+            html.contains("<span class=\"chord\">A</span>"),
             "recalled chorus should have transposed chord A, got:\n{html}"
         );
     }
@@ -2970,7 +2977,7 @@ mod transpose_tests {
     fn test_render_markup_with_chord() {
         let html = render("[Am]Hello <b>bold</b> world");
         assert!(html.contains("<b>bold</b>"));
-        assert!(html.contains("<rt class=\"chord\">Am</rt>"));
+        assert!(html.contains("<span class=\"chord\">Am</span>"));
     }
 
     #[test]

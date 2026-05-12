@@ -9,8 +9,8 @@ h1 { font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif; font-wei
 h2 { font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif; font-weight: 400; font-size: 1rem; color: #67646D; margin-top: 0; }
 .meta { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.8125rem; color: #67646D; margin: 0 0 1.5em; font-feature-settings: "tnum" 1; }
 .line { display: flex; flex-wrap: wrap; margin: 0.1em 0; }
-.chord-block { ruby-position: over; }
-.chord-block rt.chord, .chord { font-family: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 0.85em; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
+.chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
+.chord { font-family: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 1rem; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
 .lyrics { font-family: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-weight: 400; font-size: 1.125rem; white-space: pre; }
 .empty-line { height: 1em; }
 section { margin: 1em 0; }
@@ -29,8 +29,8 @@ img { max-width: 100%; height: auto; }
 </head>
 <body>
 <article class="song">
-<div class="line"><ruby class="chord-block"><span class="lyrics">こんにちは </span><rt class="chord">Am</rt></ruby><ruby class="chord-block"><span class="lyrics">世界</span><rt class="chord">G</rt></ruby></div>
-<div class="line"><ruby class="chord-block"><span class="lyrics">café </span><rt class="chord">Em</rt></ruby><ruby class="chord-block"><span class="lyrics">résumé</span><rt class="chord">D</rt></ruby></div>
+<div class="line"><span class="chord-block"><span class="chord">Am</span><span class="lyrics">こんにちは </span></span><span class="chord-block"><span class="chord">G</span><span class="lyrics">世界</span></span></div>
+<div class="line"><span class="chord-block"><span class="chord">Em</span><span class="lyrics">café </span></span><span class="chord-block"><span class="chord">D</span><span class="lyrics">résumé</span></span></div>
 </article>
 </body>
 </html>

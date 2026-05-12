@@ -331,28 +331,23 @@
   }
 }
 
-/* Chord-bearing line — a row of `.chord-block` ruby annotations.
-   Each `<ruby class="chord-block">` lays out as:
-       <span class="lyrics">…</span><rt class="chord">…</rt>
-   where the browser's default ruby layout places the chord above
-   the lyric. `display: ruby` is the browser default for `<ruby>`;
-   we don't override it (the prior implementation used
-   `inline-flex; flex-direction: column-reverse` because the
-   markup was two stacked `<span>`s — with the ruby switch, the
-   stack falls out of the HTML semantic for free). */
+/* Chord-bearing line — a row of `.chord-block` columns. Each
+   block stacks a chord glyph above the lyric segment it
+   annotates. The chord-block uses inline-flex with
+   `column-reverse` so the chord renders above the lyric without
+   reversing the DOM order — keeping chord-then-lyric in source
+   matches the Rust HTML renderer and lets screen readers
+   announce them in the natural reading order. */
 .chordsketch-sheet__content .line {
   display: flex;
   flex-wrap: wrap;
   margin: 0.1em 0;
 }
 .chordsketch-sheet__content .chord-block {
-  /* Browser default for `<ruby>` is `display: ruby` — keep that
-     so chord-as-annotation sits above lyric-as-base. The
-     prior `inline-flex; column-reverse` rule was a workaround
-     for the all-`<span>` markup that ruby replaces. */
-  ruby-position: over;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
-.chordsketch-sheet__content .chord-block rt.chord,
 .chordsketch-sheet__content .chord {
   font-family: var(--cs-font-chord, "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
   font-weight: 700;
@@ -361,10 +356,6 @@
   letter-spacing: 0.01em;
   line-height: 1;
   min-height: 1em;
-  /* Ruby annotations default to ~50% font-size in user-agent
-     stylesheets; lock the size explicitly so the chord glyphs
-     stay legible at the same scale as the lyric. */
-  font-size: 0.85em;
 }
 .chordsketch-sheet__content .lyrics {
   font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);

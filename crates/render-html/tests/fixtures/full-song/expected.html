@@ -9,8 +9,8 @@ h1 { font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif; font-wei
 h2 { font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif; font-weight: 400; font-size: 1rem; color: #67646D; margin-top: 0; }
 .meta { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.8125rem; color: #67646D; margin: 0 0 1.5em; font-feature-settings: "tnum" 1; }
 .line { display: flex; flex-wrap: wrap; margin: 0.1em 0; }
-.chord-block { ruby-position: over; }
-.chord-block rt.chord, .chord { font-family: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 0.85em; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
+.chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
+.chord { font-family: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 1rem; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
 .lyrics { font-family: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-weight: 400; font-size: 1.125rem; white-space: pre; }
 .empty-line { height: 1em; }
 section { margin: 1em 0; }
@@ -37,19 +37,19 @@ img { max-width: 100%; height: auto; }
 <div class="empty-line" aria-hidden="true"></div>
 <section class="verse">
 <h3 class="section-label">Verse: Verse 1</h3>
-<div class="line"><ruby class="chord-block"><span class="lyrics">Amazing </span><rt class="chord">G</rt></ruby><ruby class="chord-block"><span class="lyrics">grace, how </span><rt class="chord">G7</rt></ruby><ruby class="chord-block"><span class="lyrics">sweet the </span><rt class="chord">C</rt></ruby><ruby class="chord-block"><span class="lyrics">sound</span><rt class="chord">G</rt></ruby></div>
-<div class="line"><ruby class="chord-block"><span class="lyrics">That saved a </span><rt class="chord">G</rt></ruby><ruby class="chord-block"><span class="lyrics">wretch like </span><rt class="chord">Em</rt></ruby><ruby class="chord-block"><span class="lyrics">me</span><rt class="chord">D</rt></ruby></div>
+<div class="line"><span class="chord-block"><span class="chord">G</span><span class="lyrics">Amazing </span></span><span class="chord-block"><span class="chord">G7</span><span class="lyrics">grace, how </span></span><span class="chord-block"><span class="chord">C</span><span class="lyrics">sweet the </span></span><span class="chord-block"><span class="chord">G</span><span class="lyrics">sound</span></span></div>
+<div class="line"><span class="chord-block"><span class="chord">G</span><span class="lyrics">That saved a </span></span><span class="chord-block"><span class="chord">Em</span><span class="lyrics">wretch like </span></span><span class="chord-block"><span class="chord">D</span><span class="lyrics">me</span></span></div>
 </section>
 <div class="empty-line" aria-hidden="true"></div>
 <section class="verse">
 <h3 class="section-label">Verse: Verse 2</h3>
-<div class="line"><ruby class="chord-block"><span class="lyrics">I once was </span><rt class="chord">G</rt></ruby><ruby class="chord-block"><span class="lyrics">lost, but </span><rt class="chord">G7</rt></ruby><ruby class="chord-block"><span class="lyrics">now am </span><rt class="chord">C</rt></ruby><ruby class="chord-block"><span class="lyrics">found</span><rt class="chord">G</rt></ruby></div>
-<div class="line"><ruby class="chord-block"><span class="lyrics">Was blind, but </span><rt class="chord">G</rt></ruby><ruby class="chord-block"><span class="lyrics">now I </span><rt class="chord">Em</rt></ruby><ruby class="chord-block"><span class="lyrics">see</span><rt class="chord">D</rt></ruby></div>
+<div class="line"><span class="chord-block"><span class="chord">G</span><span class="lyrics">I once was </span></span><span class="chord-block"><span class="chord">G7</span><span class="lyrics">lost, but </span></span><span class="chord-block"><span class="chord">C</span><span class="lyrics">now am </span></span><span class="chord-block"><span class="chord">G</span><span class="lyrics">found</span></span></div>
+<div class="line"><span class="chord-block"><span class="chord">G</span><span class="lyrics">Was blind, but </span></span><span class="chord-block"><span class="chord">Em</span><span class="lyrics">now I </span></span><span class="chord-block"><span class="chord">D</span><span class="lyrics">see</span></span></div>
 </section>
 <div class="empty-line" aria-hidden="true"></div>
 <section class="chorus">
 <h3 class="section-label">Chorus</h3>
-<div class="line"><ruby class="chord-block"><span class="lyrics">How </span><rt class="chord">G</rt></ruby><ruby class="chord-block"><span class="lyrics">sweet the </span><rt class="chord">C</rt></ruby><ruby class="chord-block"><span class="lyrics">sound</span><rt class="chord">G</rt></ruby></div>
+<div class="line"><span class="chord-block"><span class="chord">G</span><span class="lyrics">How </span></span><span class="chord-block"><span class="chord">C</span><span class="lyrics">sweet the </span></span><span class="chord-block"><span class="chord">G</span><span class="lyrics">sound</span></span></div>
 </section>
 <div class="empty-line" aria-hidden="true"></div>
 <p class="comment">Repeat chorus</p>
