@@ -337,11 +337,18 @@
   color: var(--cs-ink-500, #8a8790);
   margin: 0.3em 0;
 }
+/* Comment-family directives are line-level per spec — each comment
+   occupies its own line. `display: block` keeps that guarantee, and
+   `width: fit-content` lets the decorative box / background hug the
+   actual text (an earlier revision used `display: inline-block` which
+   let two adjacent comments — e.g. `{comment_box}` followed by
+   `{highlight}` — sit on the same row). */
 .chordsketch-sheet__content .comment-box {
   border: 1px solid var(--cs-border, #d4d1d6);
   border-radius: 4px;
   padding: 0.2em 0.5em;
-  display: inline-block;
+  display: block;
+  width: fit-content;
   margin: 0.3em 0;
 }
 /* `{highlight}` — spec sibling of `{comment}` with stronger visual
@@ -355,7 +362,8 @@
   font-weight: 600;
   padding: 0.15em 0.4em;
   border-radius: 3px;
-  display: inline-block;
+  display: block;
+  width: fit-content;
 }
 
 /* Embedded images stay fluid inside the wrapper. */
