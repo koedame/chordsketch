@@ -431,6 +431,28 @@
   min-width: 12rem;
   max-width: 16rem;
   margin-top: 0;
+  /* Sticky scroll-follow: the diagram column keeps tracking the
+     viewport while the user reads down the lyrics. `top: 1rem`
+     leaves a small breathing-room gap below whatever sticky
+     header the host page provides (the playground's nav bar is
+     `position: static` so the offset reads as "top of viewport").
+     `align-self: flex-start` is essential — flex children default
+     to `align-self: stretch`, which forces the item to match the
+     container's full height. A stretched item is taller than the
+     viewport in a tall song, so the sticky offset never has
+     anything to anchor against (the item is already at its final
+     position from the start). Pinning to flex-start lets the
+     section keep its intrinsic height, which sticky then offsets
+     against. */
+  align-self: flex-start;
+  position: sticky;
+  top: 1rem;
+  /* `max-height` caps the column to one viewport so a very tall
+     diagram block (many unique chords) does not extend past the
+     visible region and break sticky. The inner grid scrolls
+     independently when content exceeds the cap. */
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
 }
 @media (max-width: 720px) {
   .chordsketch-sheet__content .song--diagrams-right {
@@ -439,6 +461,12 @@
   .chordsketch-sheet__content .song--diagrams-right .chord-diagrams[data-position='right'] {
     max-width: none;
     margin-top: 1.5rem;
+    /* Stacked layout — sticky reads as "no column to follow",
+       so drop the sticky positioning entirely along with the
+       viewport-height cap. */
+    position: static;
+    max-height: none;
+    overflow: visible;
   }
 }
 
