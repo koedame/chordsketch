@@ -509,6 +509,191 @@ describe('renderChordproAst', () => {
     );
   });
 
+  // Section-wide active highlight: the `start_of_*` / `end_of_*`
+  // directives apply `line--active` to the entire `<section>`, not
+  // just one row, so the user editing the open or close tag sees
+  // the full section as the contextual highlight.
+  test('activeSourceLine on a start_of_verse directive highlights the whole section', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: {
+            name: 'start_of_verse',
+            value: 'Verse 1',
+            kind: { tag: 'startOfVerse' },
+            selector: null,
+          },
+        },
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              { chord: { name: 'C', detail: null, display: null }, text: 'a', spans: [] },
+            ],
+          },
+        },
+        {
+          kind: 'directive',
+          value: {
+            name: 'end_of_verse',
+            value: null,
+            kind: { tag: 'endOfVerse' },
+            selector: null,
+          },
+        },
+      ],
+    };
+    // Caret on line 1 — the start_of_verse directive.
+    const { container } = render(
+      renderChordproAst(ast, { activeSourceLine: 1 }),
+    );
+    const section = container.querySelector('section.verse');
+    expect(section).not.toBeNull();
+    expect(section?.classList.contains('line--active')).toBe(true);
+    expect(section?.getAttribute('data-source-line')).toBe('1');
+    // Inner lyric line is NOT separately marked active — only the
+    // wrapper picks up the modifier when the caret is on the start
+    // / end directive. (Click into the body would activate the row.)
+    const innerLine = section?.querySelector('.line');
+    expect(innerLine?.classList.contains('line--active')).toBe(false);
+  });
+
+  test('activeSourceLine on end_of_verse highlights the same section', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: {
+            name: 'start_of_verse',
+            value: null,
+            kind: { tag: 'startOfVerse' },
+            selector: null,
+          },
+        },
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              { chord: { name: 'C', detail: null, display: null }, text: 'a', spans: [] },
+            ],
+          },
+        },
+        {
+          kind: 'directive',
+          value: {
+            name: 'end_of_verse',
+            value: null,
+            kind: { tag: 'endOfVerse' },
+            selector: null,
+          },
+        },
+      ],
+    };
+    // Line 3 is the end_of_verse — the section closes on flushSection,
+    // which receives line 3 as the `key` argument.
+    const { container } = render(
+      renderChordproAst(ast, { activeSourceLine: 3 }),
+    );
+    const section = container.querySelector('section.verse');
+    expect(section?.classList.contains('line--active')).toBe(true);
+    // start_of_verse line attribute is preserved on the wrapper —
+    // navigation back to the source still resolves via the start
+    // line, not the end line.
+    expect(section?.getAttribute('data-source-line')).toBe('1');
+  });
+
+  // Metadata header highlight: caret on a `{tempo: 80}` directive
+  // marks the "80 BPM" span in the meta strip as active, leaving
+  // every other metadata cell unstyled.
+  test('activeSourceLine on tempo directive highlights the BPM span', () => {
+    const ast: ChordproSong = {
+      metadata: {
+        ...EMPTY_META,
+        title: 'Test',
+        artists: ['Demo'],
+        tempo: '80',
+        key: 'G',
+      },
+      lines: [
+        {
+          kind: 'directive',
+          value: {
+            name: 'title',
+            value: 'Test',
+            kind: { tag: 'title' },
+            selector: null,
+          },
+        },
+        {
+          kind: 'directive',
+          value: {
+            name: 'artist',
+            value: 'Demo',
+            kind: { tag: 'artist' },
+            selector: null,
+          },
+        },
+        {
+          kind: 'directive',
+          value: {
+            name: 'key',
+            value: 'G',
+            kind: { tag: 'key' },
+            selector: null,
+          },
+        },
+        {
+          kind: 'directive',
+          value: {
+            name: 'tempo',
+            value: '80',
+            kind: { tag: 'tempo' },
+            selector: null,
+          },
+        },
+      ],
+    };
+    // Caret on line 4 — the tempo directive.
+    const { container } = render(
+      renderChordproAst(ast, { activeSourceLine: 4 }),
+    );
+    // The header is composed of <h1> + <p class="meta"> with
+    // individual <span data-source-line> children. The active
+    // one carries `line--active`; no other span should.
+    const activeSpans = container.querySelectorAll('.meta .line--active');
+    expect(activeSpans.length).toBe(1);
+    expect(activeSpans[0]?.textContent).toBe('80 BPM');
+    expect(activeSpans[0]?.getAttribute('data-source-line')).toBe('4');
+    // h1.title is on a different line — not active.
+    expect(container.querySelector('h1')?.classList.contains('line--active')).toBe(false);
+  });
+
+  test('activeSourceLine on title directive highlights the h1 itself', () => {
+    const ast: ChordproSong = {
+      metadata: { ...EMPTY_META, title: 'Hello' },
+      lines: [
+        {
+          kind: 'directive',
+          value: {
+            name: 'title',
+            value: 'Hello',
+            kind: { tag: 'title' },
+            selector: null,
+          },
+        },
+      ],
+    };
+    const { container } = render(
+      renderChordproAst(ast, { activeSourceLine: 1 }),
+    );
+    const h1 = container.querySelector('h1');
+    expect(h1?.classList.contains('line--active')).toBe(true);
+    expect(h1?.getAttribute('data-source-line')).toBe('1');
+  });
+
   test('renders a chord+lyric pair as `.chord-block`', () => {
     const { container } = render(
       renderChordproAst({

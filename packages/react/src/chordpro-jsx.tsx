@@ -435,6 +435,8 @@ interface SectionState {
   /** Optional override label from the section-start directive's `value`. */
   label: string | null;
   children: JSX.Element[];
+  /** 1-indexed source line of the `start_of_*` directive. */
+  startLine: number;
 }
 
 // ---- Header rendering ----------------------------------------------
@@ -812,58 +814,256 @@ function resolveDiagramsState(song: ChordproSong): DiagramsState {
   return state;
 }
 
+/**
+ * Source-line index for every metadata directive in the song.
+ * Single-value directives store one number; multi-value (subtitle /
+ * artist / composer / lyricist / arranger / tag) store an array
+ * positionally aligned with the corresponding `metadata.*[]` array
+ * — `metadata.subtitles[0]` was emitted by the directive on
+ * `subtitleLines[0]`, etc.
+ */
+interface MetadataLines {
+  title?: number;
+  subtitles: number[];
+  artists: number[];
+  composers: number[];
+  lyricists: number[];
+  arrangers: number[];
+  album?: number;
+  year?: number;
+  key?: number;
+  tempo?: number;
+  time?: number;
+  capo?: number;
+  duration?: number;
+  copyright?: number;
+  tags: number[];
+}
+
+/**
+ * Walk `song.lines` once and capture the 1-indexed source line of
+ * each metadata directive. The walker treats `Meta(key, value)`
+ * forms (`{meta: artist Jane}`) the same as the dedicated kinds
+ * (`{artist: Jane}`), so the caret-on-meta highlight works
+ * regardless of which directive syntax the user typed.
+ */
+function collectMetadataLines(song: ChordproSong): MetadataLines {
+  const out: MetadataLines = {
+    subtitles: [],
+    artists: [],
+    composers: [],
+    lyricists: [],
+    arrangers: [],
+    tags: [],
+  };
+  song.lines.forEach((line, i) => {
+    if (line.kind !== 'directive') return;
+    const sourceLine = i + 1;
+    const kind = line.value.kind;
+    switch (kind.tag) {
+      case 'title':
+        out.title = sourceLine;
+        return;
+      case 'subtitle':
+        out.subtitles.push(sourceLine);
+        return;
+      case 'artist':
+        out.artists.push(sourceLine);
+        return;
+      case 'composer':
+        out.composers.push(sourceLine);
+        return;
+      case 'lyricist':
+        out.lyricists.push(sourceLine);
+        return;
+      case 'arranger':
+        out.arrangers.push(sourceLine);
+        return;
+      case 'album':
+        out.album = sourceLine;
+        return;
+      case 'year':
+        out.year = sourceLine;
+        return;
+      case 'key':
+        out.key = sourceLine;
+        return;
+      case 'tempo':
+        out.tempo = sourceLine;
+        return;
+      case 'time':
+        out.time = sourceLine;
+        return;
+      case 'capo':
+        out.capo = sourceLine;
+        return;
+      case 'duration':
+        out.duration = sourceLine;
+        return;
+      case 'copyright':
+        out.copyright = sourceLine;
+        return;
+      case 'tag':
+        out.tags.push(sourceLine);
+        return;
+      // `{meta: <key> <value>}` — the parser routes recognised
+      // meta keys onto the dedicated metadata fields and stores
+      // the directive as `Meta(<key>)`. We don't have the parsed
+      // key here without an extra round-trip through the value,
+      // so this branch is a no-op; the dedicated-kind branches
+      // above already cover the common case. A future enhancement
+      // could split `Meta(<key>)` and attribute the line to the
+      // corresponding parts.
+      default:
+        return;
+    }
+  });
+  return out;
+}
+
+/**
+ * Build a `<span>` for a single metadata value, decorated with the
+ * source line attribute + `line--active` modifier when the caret
+ * is on that line. Returns the value text alone when no source
+ * line is provided (e.g. transposedKey, which has no directive of
+ * its own).
+ */
+function metaSpan(
+  key: string,
+  text: string,
+  sourceLine: number | undefined,
+  activeSourceLine: number | undefined,
+): JSX.Element {
+  const isActive = sourceLine !== undefined && sourceLine === activeSourceLine;
+  return (
+    <span
+      key={key}
+      className={isActive ? 'line--active' : undefined}
+      data-source-line={sourceLine}
+    >
+      {text}
+    </span>
+  );
+}
+
 function renderHeader(
   metadata: ChordproMetadata,
   options: RenderChordproAstOptions,
   fmt: FormattingState,
+  metaLines: MetadataLines,
 ): JSX.Element[] {
   const out: JSX.Element[] = [];
   const titleStyle = elementStyleToCss(fmt.title);
+  const active = options.activeSourceLine;
   if (metadata.title) {
+    const isActive = metaLines.title !== undefined && metaLines.title === active;
     out.push(
-      <h1 key="title" style={titleStyle ?? undefined}>
+      <h1
+        key="title"
+        style={titleStyle ?? undefined}
+        className={isActive ? 'line--active' : undefined}
+        data-source-line={metaLines.title}
+      >
         {metadata.title}
       </h1>,
     );
   }
   if (metadata.subtitles.length > 0) {
-    out.push(<h2 key="subtitle">{metadata.subtitles.join(' · ')}</h2>);
+    // Each subtitle gets its own `<span>` so the caret-on-subtitle
+    // highlight matches only the one being edited. Spans are
+    // joined by " · " text nodes.
+    const subtitleNodes: JSX.Element[] = [];
+    metadata.subtitles.forEach((sub, i) => {
+      if (i > 0) {
+        subtitleNodes.push(
+          <Fragment key={`sep-${i}`}> · </Fragment>,
+        );
+      }
+      subtitleNodes.push(
+        metaSpan(`sub-${i}`, sub, metaLines.subtitles[i], active),
+      );
+    });
+    out.push(<h2 key="subtitle">{subtitleNodes}</h2>);
   }
   // Metadata strip — extended attribution + musical parameters.
-  // When the song is transposed, the key entry expands to
-  // "Original Key X · Play Key Y" so the user sees both keys
-  // at a glance.
-  //
-  // Order: attribution (people / where it came from) first,
-  // then musical parameters (key / tempo / time / capo), then
-  // tags. The attribution / parameters split mirrors the
-  // conceptual grouping in the ChordPro spec — first you say
-  // "who / what / when", then "how to play it", then "tags".
-  const metaParts: string[] = [];
-  if (metadata.artists.length > 0) metaParts.push(metadata.artists.join(', '));
-  if (metadata.composers.length > 0) metaParts.push(`Music ${metadata.composers.join(', ')}`);
-  if (metadata.lyricists.length > 0) metaParts.push(`Lyrics ${metadata.lyricists.join(', ')}`);
-  if (metadata.arrangers.length > 0)
-    metaParts.push(`Arrangement ${metadata.arrangers.join(', ')}`);
-  if (metadata.album) metaParts.push(metadata.album);
-  if (metadata.year) metaParts.push(metadata.year);
+  // Each individual value (artist, key, tempo, etc.) lives in its
+  // own `<span data-source-line>` so the editor-caret highlight
+  // pinpoints exactly the value being edited. Multi-value fields
+  // (artists, composers, lyricists, arrangers) iterate their
+  // entries and emit one span each, joined by ", ".
+  const metaParts: JSX.Element[] = [];
+  const pushPart = (node: JSX.Element): void => {
+    if (metaParts.length > 0) {
+      metaParts.push(
+        <Fragment key={`sep-${metaParts.length}`}> · </Fragment>,
+      );
+    }
+    metaParts.push(node);
+  };
+  function multiValueFragment(
+    prefix: string,
+    values: string[],
+    sources: number[],
+    baseKey: string,
+  ): JSX.Element {
+    // Group the prefix + comma-separated values into one
+    // <Fragment> so the prefix text and the spans share a
+    // single meta entry (they get a single ` · ` separator
+    // around them). The prefix has no source line of its own —
+    // only the inner spans carry data-source-line + active
+    // modifier.
+    return (
+      <Fragment key={baseKey}>
+        {prefix ? `${prefix} ` : ''}
+        {values.map((v, i) => (
+          <Fragment key={i}>
+            {i > 0 ? ', ' : ''}
+            {metaSpan(`${baseKey}-${i}`, v, sources[i], active)}
+          </Fragment>
+        ))}
+      </Fragment>
+    );
+  }
+  if (metadata.artists.length > 0) {
+    pushPart(multiValueFragment('', metadata.artists, metaLines.artists, 'artist'));
+  }
+  if (metadata.composers.length > 0) {
+    pushPart(multiValueFragment('Music', metadata.composers, metaLines.composers, 'composer'));
+  }
+  if (metadata.lyricists.length > 0) {
+    pushPart(multiValueFragment('Lyrics', metadata.lyricists, metaLines.lyricists, 'lyricist'));
+  }
+  if (metadata.arrangers.length > 0) {
+    pushPart(
+      multiValueFragment('Arrangement', metadata.arrangers, metaLines.arrangers, 'arranger'),
+    );
+  }
+  if (metadata.album) pushPart(metaSpan('album', metadata.album, metaLines.album, active));
+  if (metadata.year) pushPart(metaSpan('year', metadata.year, metaLines.year, active));
   if (metadata.key) {
     if (options.transposedKey && options.transposedKey !== metadata.key) {
-      metaParts.push(`Original Key ${metadata.key}`);
-      metaParts.push(`Play Key ${options.transposedKey}`);
+      pushPart(
+        metaSpan('keyOrig', `Original Key ${metadata.key}`, metaLines.key, active),
+      );
+      // Transposed key has no directive of its own — it's derived
+      // by the wasm boundary. Emit without data-source-line.
+      pushPart(metaSpan('keyPlay', `Play Key ${options.transposedKey}`, undefined, active));
     } else {
-      metaParts.push(`Key ${metadata.key}`);
+      pushPart(metaSpan('key', `Key ${metadata.key}`, metaLines.key, active));
     }
   }
-  if (metadata.capo) metaParts.push(`Capo ${metadata.capo}`);
-  if (metadata.tempo) metaParts.push(`${metadata.tempo} BPM`);
-  if (metadata.time) metaParts.push(metadata.time);
-  if (metadata.duration) metaParts.push(metadata.duration);
-  if (metadata.copyright) metaParts.push(metadata.copyright);
+  if (metadata.capo) pushPart(metaSpan('capo', `Capo ${metadata.capo}`, metaLines.capo, active));
+  if (metadata.tempo)
+    pushPart(metaSpan('tempo', `${metadata.tempo} BPM`, metaLines.tempo, active));
+  if (metadata.time) pushPart(metaSpan('time', metadata.time, metaLines.time, active));
+  if (metadata.duration)
+    pushPart(metaSpan('duration', metadata.duration, metaLines.duration, active));
+  if (metadata.copyright)
+    pushPart(metaSpan('copyright', metadata.copyright, metaLines.copyright, active));
   if (metaParts.length > 0) {
     out.push(
       <p key="meta" className="meta">
-        {metaParts.join(' · ')}
+        {metaParts}
       </p>,
     );
   }
@@ -874,11 +1074,19 @@ function renderHeader(
   if (metadata.tags.length > 0) {
     out.push(
       <p key="tags" className="meta meta--tags">
-        {metadata.tags.map((tag, i) => (
-          <span key={i} className="tag">
-            {tag}
-          </span>
-        ))}
+        {metadata.tags.map((tag, i) => {
+          const sourceLine = metaLines.tags[i];
+          const isActive = sourceLine !== undefined && sourceLine === active;
+          return (
+            <span
+              key={i}
+              className={isActive ? 'tag line--active' : 'tag'}
+              data-source-line={sourceLine}
+            >
+              {tag}
+            </span>
+          );
+        })}
       </p>,
     );
   }
@@ -937,7 +1145,7 @@ interface WalkContext {
 
 function flushSection(ctx: WalkContext, key: number): void {
   if (!ctx.section) return;
-  const { name, label, children } = ctx.section;
+  const { name, label, children, startLine } = ctx.section;
   const labelText = label ?? SECTION_LABEL_DEFAULT[name];
   const labelStyle = elementStyleToCss(ctx.fmt.label);
   const labelNode = labelText ? (
@@ -950,8 +1158,27 @@ function flushSection(ctx: WalkContext, key: number): void {
   // entry in `FormattingState` — they inherit `.text` via their
   // lyric lines.
   const sectionStyle = name === 'chorus' ? elementStyleToCss(ctx.fmt.chorus) : null;
+  // Whole-section highlight: when the caret sits on the
+  // `start_of_*` directive that opened this section OR on the
+  // `end_of_*` directive that closes it (key = endLine here,
+  // since flushSection is invoked from `handleDirective` on the
+  // end directive), tag the wrapper `<section>` with both
+  // `line--active` and the start-line's `data-source-line`. The
+  // child lines retain their own per-line `data-source-line`
+  // attributes — clicking inside the section body still
+  // highlights only that lyric row, as before.
+  const endLine = key;
+  const sectionActive =
+    ctx.activeSourceLine !== undefined &&
+    (ctx.activeSourceLine === startLine || ctx.activeSourceLine === endLine);
+  const sectionClassName = sectionActive ? `${name} line--active` : name;
   ctx.out.push(
-    <section key={key} className={name} style={sectionStyle ?? undefined}>
+    <section
+      key={key}
+      className={sectionClassName}
+      style={sectionStyle ?? undefined}
+      data-source-line={startLine}
+    >
       {labelNode}
       {children}
     </section>,
@@ -1060,6 +1287,7 @@ function handleDirective(
       name: SECTION_TAG_TO_NAME[kind.tag]!,
       label: directive.value ?? null,
       children: [],
+      startLine: key,
     };
     return;
   }
@@ -1074,6 +1302,7 @@ function handleDirective(
       name: `section-${sanitizeCssClass(kind.value)}`,
       label: directive.value ?? null,
       children: [],
+      startLine: key,
     };
     return;
   }
@@ -1216,7 +1445,11 @@ export function renderChordproAst(
   // affect the header title (matches the Rust renderer's
   // behaviour where the title styling is fixed at file start).
   const headerFmt = computeHeaderFormattingState(song);
-  for (const headerNode of renderHeader(song.metadata, options, headerFmt)) {
+  // Collect 1-indexed source lines for each metadata directive so
+  // the header renderer can map per-value spans back to the editor
+  // caret position (#2466 active-line follow-up).
+  const metadataLines = collectMetadataLines(song);
+  for (const headerNode of renderHeader(song.metadata, options, headerFmt, metadataLines)) {
     ctx.out.push(headerNode);
   }
   // Snapshot the head-of-song boundary BEFORE walking the body, so
