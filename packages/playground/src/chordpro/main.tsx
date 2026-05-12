@@ -132,9 +132,12 @@ const KITCHEN_SINK_SOURCE = `# ChordSketch — All Directives Tour
 {chord: Gsus4}
 
 # === Diagrams toggle [Nx] [Pos] ==================================
-# Enabled here so the verses below have their chord diagrams shown.
-# {no_diagrams} or {diagrams: off} would suppress further down.
-{diagrams: true}
+# Per ChordPro spec the chord-diagrams grid is ON by default
+# (https://www.chordpro.org/chordpro/directives-diagrams/).
+# Suppressed here so the auto-injected grid does not crowd the
+# preview pane; flip to {diagrams: on} (or delete this line) to
+# see the grid restored. {no_diagrams} is an equivalent alias.
+{diagrams: off}
 
 # === Font / size / colour overrides [Nx] [Pos] ===================
 # Placed BEFORE the rendered content so the overrides actually take
@@ -284,21 +287,49 @@ E|----------------------------|
 #    tokens listed above are not yet parsed into a structured grid.
 `;
 
+// `{diagrams: off}` line every non-empty sample is prefixed with.
+// Per the ChordPro spec the directive defaults to on
+// (https://www.chordpro.org/chordpro/directives-diagrams/):
+//   "Diagrams printing is enabled by default, and diagrams are
+//    printed on the bottom of the first page."
+// Setting it explicitly off at the top of each sample keeps the
+// playground preview free of the auto-injected chord-diagrams
+// grid by default. Individual users who want to see the grid can
+// delete this line in the editor — the React surface respects
+// the directive position-by-position via `resolveDiagramsVisible`.
+//
+// Kitchen Sink owns its own `{diagrams: off}` placement inside
+// the "Diagrams toggle" section so the directive's role in the
+// directive tour is still readable; this constant is only
+// prepended to samples that do not already declare the directive
+// themselves.
+const DIAGRAMS_OFF_HEADER = '{diagrams: off}\n';
+
+function withDiagramsOff(source: string): string {
+  // The directive is position-dependent — placing it at line 1
+  // suppresses the grid for the whole song. Idempotent against
+  // samples that already include `{diagrams: off}` further down.
+  return DIAGRAMS_OFF_HEADER + source;
+}
+
 const SAMPLES: ReadonlyArray<Sample> = [
   {
     id: 'amazing-grace',
     label: 'Amazing Grace',
-    source: SAMPLE_CHORDPRO,
+    source: withDiagramsOff(SAMPLE_CHORDPRO),
   },
   {
     id: 'kitchen-sink',
     label: 'All directives (kitchen sink)',
+    // Kitchen Sink declares `{diagrams: off}` inside its own
+    // Diagrams-toggle section (see KITCHEN_SINK_SOURCE) — no
+    // additional prefix needed.
     source: KITCHEN_SINK_SOURCE,
   },
   {
     id: 'country-roads',
     label: 'Country Roads',
-    source: `{title: Country Roads}
+    source: withDiagramsOff(`{title: Country Roads}
 {artist: John Denver}
 {key: G}
 {capo: 0}
@@ -319,12 +350,12 @@ const SAMPLES: ReadonlyArray<Sample> = [
 [G]Mountain mama, [D]take me home
 [C]Country [G]roads
 {end_of_chorus}
-`,
+`),
   },
   {
     id: 'unicode',
     label: 'Unicode (日本語)',
-    source: `{title: 桜の歌}
+    source: withDiagramsOff(`{title: 桜の歌}
 {subtitle: 春の調べ}
 {key: D}
 {tempo: 92}
@@ -333,18 +364,21 @@ const SAMPLES: ReadonlyArray<Sample> = [
 [D]さくら [A]さくら、[Bm]春の[F#m]空
 [G]霞か[D]雲か、[A]匂い[D]ぞ出ずる
 {end_of_verse}
-`,
+`),
   },
   {
     id: 'minimal',
     label: 'Minimal',
-    source: `{title: Minimal}
+    source: withDiagramsOff(`{title: Minimal}
 [C]Just a [G]plain line.
-`,
+`),
   },
   {
     id: 'empty',
     label: 'Empty',
+    // Intentionally empty — there is no song to suppress diagrams
+    // for, and the directive prefix would itself become the first
+    // line of an otherwise blank document.
     source: '',
   },
 ];
