@@ -248,7 +248,7 @@ E|----------------------------|
 #   %    repeat prev bar   %%  repeat prev two bars
 #   S<…> strum line  (d u  d+ u+  ux dx  da ua  x …)
 {start_of_grid: Outro Riff (with repeats + ending)}
-|: G  .  .  . | C  .  .  . | D  .  .  . | G  .  .  . :|
+|: G  .  .  . | C  .  .  . | D  .  .  . | G  .  .  . |
 |1 Em .  .  . | C  .  .  . :| |2 Am .  .  . | G  .  .  . |.
 {end_of_grid}
 
