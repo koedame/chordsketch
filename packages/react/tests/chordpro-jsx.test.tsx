@@ -1068,13 +1068,26 @@ describe('renderChordproAst', () => {
     );
     const markers = Array.from(container.querySelectorAll('.meta-inline'));
     expect(markers).toHaveLength(3);
-    // Order matches source order.
+    // Order matches source order. Each marker carries its
+    // music-notation glyph next to the textual label + value;
+    // assertions target the structural pieces (label / value
+    // spans) rather than the concatenated `textContent` so the
+    // glyph's own labels (stacked digits, aria text) don't leak
+    // into the equality check.
     expect(markers[0]?.classList.contains('meta-inline--key')).toBe(true);
-    expect(markers[0]?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Key: D');
+    expect(markers[0]?.querySelector('.music-glyph--key')).not.toBeNull();
+    expect(markers[0]?.querySelector('.meta-inline__label')?.textContent).toBe('Key:');
+    expect(markers[0]?.querySelector('.meta-inline__value')?.textContent).toBe('D');
+
     expect(markers[1]?.classList.contains('meta-inline--tempo')).toBe(true);
-    expect(markers[1]?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Tempo: 140 BPM');
+    expect(markers[1]?.querySelector('.music-glyph--metronome')).not.toBeNull();
+    expect(markers[1]?.querySelector('.meta-inline__label')?.textContent).toBe('Tempo:');
+    expect(markers[1]?.querySelector('.meta-inline__value')?.textContent).toBe('140 BPM');
+
     expect(markers[2]?.classList.contains('meta-inline--time')).toBe(true);
-    expect(markers[2]?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Time: 6/8');
+    expect(markers[2]?.querySelector('.music-glyph--time')).not.toBeNull();
+    expect(markers[2]?.querySelector('.meta-inline__label')?.textContent).toBe('Time:');
+    expect(markers[2]?.querySelector('.meta-inline__value')?.textContent).toBe('6/8');
   });
 
   test('drops the inline meta marker when the directive value is empty', () => {

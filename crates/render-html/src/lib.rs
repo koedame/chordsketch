@@ -21,6 +21,8 @@
 
 use std::fmt::Write;
 
+mod music_glyphs;
+
 use chordsketch_chordpro::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
 use chordsketch_chordpro::canonical_chord_name;
 use chordsketch_chordpro::config::Config;
@@ -348,17 +350,40 @@ fn render_song_body_into(
                         .map(str::trim)
                         .filter(|v| !v.is_empty())
                     {
-                        let marker = match directive.kind {
-                            DirectiveKind::Key => Some(("key", "Key", value.to_string())),
-                            DirectiveKind::Tempo => {
-                                Some(("tempo", "Tempo", format!("{value} BPM")))
-                            }
-                            DirectiveKind::Time => Some(("time", "Time", value.to_string())),
+                        // Each marker carries a music-notation glyph
+                        // next to the textual label / value. The
+                        // glyphs (key signature, animated metronome,
+                        // stacked time-signature digits) mirror the
+                        // React JSX walker's `<KeySignatureGlyph> /
+                        // <MetronomeGlyph> / <TimeSignatureGlyph>`
+                        // output per `.claude/rules/renderer-
+                        // parity.md` §"Sanitizer Parity (React JSX
+                        // surface)".
+                        let marker: Option<(&str, &str, String, String)> = match directive.kind {
+                            DirectiveKind::Key => Some((
+                                "key",
+                                "Key",
+                                value.to_string(),
+                                music_glyphs::key_signature_svg(value),
+                            )),
+                            DirectiveKind::Tempo => Some((
+                                "tempo",
+                                "Tempo",
+                                format!("{value} BPM"),
+                                music_glyphs::metronome_svg(value),
+                            )),
+                            DirectiveKind::Time => Some((
+                                "time",
+                                "Time",
+                                value.to_string(),
+                                music_glyphs::time_signature_html(value),
+                            )),
                             _ => None,
                         };
-                        if let Some((slug, label, body)) = marker {
+                        if let Some((slug, label, body, glyph_html)) = marker {
                             html.push_str(&format!(
                                 "<p class=\"meta-inline meta-inline--{slug}\">\
+                                 {glyph_html}\
                                  <span class=\"meta-inline__label\">{label}:</span> \
                                  <span class=\"meta-inline__value\">{}</span></p>\n",
                                 escape(&body)
@@ -989,6 +1014,12 @@ h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-w
 .meta-inline { display: inline-flex; align-items: center; gap: 0.35em; margin: 0.4em 0; padding: 0.15em 0.55em; border-radius: 3px; background-color: #FAF7F8; font-family: \"JetBrains Mono\", ui-monospace, monospace; font-size: 0.8125rem; color: #2A262E; line-height: 1.5; font-feature-settings: \"tnum\" 1; }
 .meta-inline__label { color: #67646D; font-weight: 500; }
 .meta-inline__value { color: #1A1718; font-weight: 600; }
+.music-glyph { display: inline-block; flex-shrink: 0; vertical-align: middle; color: #1A1718; }
+.music-glyph--time { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; font-family: \"Source Serif Pro\", serif; font-weight: 700; font-size: 1.1em; letter-spacing: 0; }
+.music-glyph--time__num, .music-glyph--time__den { display: block; line-height: 0.9; font-feature-settings: \"tnum\" 1; }
+.music-glyph--metronome__pendulum { transform-origin: 9px 3px; animation: cs-metronome-swing var(--cs-metronome-period, 1s) ease-in-out infinite alternate; }
+@keyframes cs-metronome-swing { from { transform: rotate(-18deg); } to { transform: rotate(18deg); } }
+@media (prefers-reduced-motion: reduce) { .music-glyph--metronome__pendulum { animation: none; transform: rotate(0deg); } }
 .line { display: flex; flex-wrap: __LINE_FLEX_WRAP__; margin: 0.1em 0; }
 .chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
 .chord { font-family: \"Roboto\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 1rem; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
@@ -2260,7 +2291,7 @@ fn render_chorus_recall(
         Some(v) if !v.is_empty() => format!("Chorus: {}", escape(v)),
         _ => "Chorus".to_string(),
     };
-    let _ = writeln!(html, "<h3 class=\"section-label\">{display_label}</div>");
+    let _ = writeln!(html, "<h3 class=\"section-label\">{display_label}</h3>");
     // Use a local copy of fmt_state so in-chorus formatting directives
     // (e.g. {size}, {bold}) are applied during recall without mutating
     // the caller's state.
@@ -3456,13 +3487,25 @@ Verse text\n\
     #[test]
     fn test_inline_meta_marker_for_key() {
         let html = render("[G]first\n{key: D}\n[D]second");
+        // The marker carries a `<svg class="music-glyph music-glyph--key">`
+        // before the label / value pair — assert the structural pieces
+        // rather than a single-string `contains` so the SVG body (which
+        // has many tunable numbers) doesn't make the test brittle.
         assert!(
-            html.contains(
-                "<p class=\"meta-inline meta-inline--key\">\
-                 <span class=\"meta-inline__label\">Key:</span> \
-                 <span class=\"meta-inline__value\">D</span></p>"
-            ),
-            "expected inline key marker; got: {html}"
+            html.contains("meta-inline meta-inline--key"),
+            "expected key marker class; got: {html}"
+        );
+        assert!(
+            html.contains("music-glyph music-glyph--key"),
+            "expected key-signature glyph SVG; got: {html}"
+        );
+        assert!(
+            html.contains("<span class=\"meta-inline__label\">Key:</span>"),
+            "expected label span; got: {html}"
+        );
+        assert!(
+            html.contains("<span class=\"meta-inline__value\">D</span>"),
+            "expected value span; got: {html}"
         );
     }
 
@@ -3472,6 +3515,15 @@ Verse text\n\
         assert!(
             html.contains("meta-inline--tempo"),
             "expected inline tempo marker class; got: {html}"
+        );
+        assert!(
+            html.contains("music-glyph music-glyph--metronome"),
+            "expected metronome glyph SVG; got: {html}"
+        );
+        // 140 BPM → 60/140 * 2 = 0.857s.
+        assert!(
+            html.contains("--cs-metronome-period:0.857s"),
+            "expected animation period derived from BPM; got: {html}"
         );
         assert!(
             html.contains("140 BPM"),
@@ -3486,9 +3538,19 @@ Verse text\n\
             html.contains("meta-inline--time"),
             "expected inline time marker class; got: {html}"
         );
+        // Stacked time-signature glyph (numerator on top, denominator
+        // below) — sister-site to React's `<TimeSignatureGlyph>`.
+        assert!(
+            html.contains("music-glyph--time__num\" aria-hidden=\"true\">6</span>"),
+            "expected stacked numerator '6'; got: {html}"
+        );
+        assert!(
+            html.contains("music-glyph--time__den\" aria-hidden=\"true\">8</span>"),
+            "expected stacked denominator '8'; got: {html}"
+        );
         assert!(
             html.contains("<span class=\"meta-inline__value\">6/8</span>"),
-            "expected '6/8' value span; got: {html}"
+            "expected fallback '6/8' value span; got: {html}"
         );
     }
 

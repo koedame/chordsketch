@@ -273,14 +273,25 @@
 .bar.ending { position: relative; }
 .bar > .ending-bracket {
   position: absolute;
-  left: 0;
+  /* The absolute-positioning containing block here is `.bar`'s
+     PADDING edge, but the bar's left barline is drawn as
+     `border-left: 1.5px solid` (line 66) — i.e. *outside* the
+     padding edge. Naively using `left: 0` would line the bracket's
+     own `border-left` up with the padding edge, one barline-width
+     to the right of the bar's visible left barline.
+     Compensate by the bar's border-left width so the bracket's
+     left tail stacks directly on top of the bar's left barline
+     (standard music-notation volta tail alignment). The matching
+     adjustment to `width` keeps the right edge at the same 75% of
+     the bar's padding box. */
+  left: -1.5px;
   /* iReal Pro convention: the ending bracket is roughly 3/4 of the
      starting bar's width, not the full bar — it labels the *start*
      of the ending and trails off, rather than spanning the whole
-     measure. The bracket's left tail anchors at the bar's left
-     barline (`left: 0`); the right edge stops at 75% so the
-     remaining 25% of the bar is unbracketed. */
-  width: 75%;
+     measure. The right edge stops at 75% (of the bar's padding
+     box, plus the 1.5px we shifted left of the padding edge) so
+     the remaining 25% is unbracketed. */
+  width: calc(75% + 1.5px);
   top: -22px;
   height: 18px;
   border-top: 1.5px solid var(--cs-ink-1000);

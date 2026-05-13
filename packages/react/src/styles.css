@@ -342,6 +342,67 @@
   font-weight: 600;
 }
 
+/* Music-notation glyph slot inside a `.meta-inline` marker —
+   key signature, metronome, or stacked time signature. The
+   glyph sits to the left of the label / value pair and
+   inherits the marker's text color so accidentals / pendulum
+   strokes stay legible on tinted backgrounds. */
+.chordsketch-sheet__content .meta-inline__glyph {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
+  color: var(--cs-ink-900, #1a1718);
+}
+
+/* Stacked time-signature numerator / denominator typography.
+   Reads like a real music-notation time signature (e.g. `4`
+   over `4`) without drawing a staff. */
+.chordsketch-sheet__content .music-glyph--time {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-family: var(--cs-font-serif, 'Source Serif Pro', serif);
+  font-weight: 700;
+  font-size: 1.1em;
+  letter-spacing: 0;
+}
+.chordsketch-sheet__content .music-glyph--time__num,
+.chordsketch-sheet__content .music-glyph--time__den {
+  display: block;
+  /* Tight stacking — the digits sit immediately above / below
+     each other like an engraved time signature. */
+  line-height: 0.9;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Metronome pendulum animation. The CSS custom property
+   `--cs-metronome-period` is set inline by `<MetronomeGlyph>`
+   from the BPM, so the swing rate matches the directive. */
+.chordsketch-sheet__content .music-glyph--metronome__pendulum {
+  /* Pivot at the metronome's top tick (viewBox x=9, y=3). */
+  transform-origin: 9px 3px;
+  animation: cs-metronome-swing var(--cs-metronome-period, 1s) ease-in-out infinite alternate;
+}
+@keyframes cs-metronome-swing {
+  /* Start tilted left, end tilted right — the `alternate`
+     animation-direction reverses on the return leg so the
+     bead traces a back-and-forth swing. */
+  from {
+    transform: rotate(-18deg);
+  }
+  to {
+    transform: rotate(18deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chordsketch-sheet__content .music-glyph--metronome__pendulum {
+    animation: none;
+    transform: rotate(0deg);
+  }
+}
+
 /* Tag row — separate from the main meta strip because `{tag}`
    is a categorisation signal, not a song attribute. Tags render
    as pill-shaped chips so they read as a distinct group at a

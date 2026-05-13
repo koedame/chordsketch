@@ -1,0 +1,199 @@
+import { describe, expect, test } from 'vitest';
+import { render } from '@testing-library/react';
+
+import {
+  KeySignatureGlyph,
+  MetronomeGlyph,
+  TimeSignatureGlyph,
+  keySignatureFor,
+  relativeMajor,
+} from '../src/music-glyphs';
+
+describe('keySignatureFor', () => {
+  // Key signature lookups against the Wikipedia "Key signature"
+  // table — these are the canonical western-notation values.
+  test.each([
+    // major
+    ['C', 0, 'natural'],
+    ['G', 1, 'sharp'],
+    ['D', 2, 'sharp'],
+    ['A', 3, 'sharp'],
+    ['E', 4, 'sharp'],
+    ['B', 5, 'sharp'],
+    ['F#', 6, 'sharp'],
+    ['C#', 7, 'sharp'],
+    ['F', 1, 'flat'],
+    ['Bb', 2, 'flat'],
+    ['Eb', 3, 'flat'],
+    ['Ab', 4, 'flat'],
+    ['Db', 5, 'flat'],
+    ['Gb', 6, 'flat'],
+    ['Cb', 7, 'flat'],
+  ])('%s maps to %d %s', (input, count, type) => {
+    const sig = keySignatureFor(input);
+    expect(sig).not.toBeNull();
+    expect(sig?.count).toBe(count);
+    expect(sig?.type).toBe(type);
+  });
+
+  // Minor keys map to relative major (count + type unchanged).
+  test.each([
+    ['Am', 0, 'natural'],
+    ['Em', 1, 'sharp'],
+    ['Bm', 2, 'sharp'],
+    ['F#m', 3, 'sharp'],
+    ['Dm', 1, 'flat'],
+    ['Gm', 2, 'flat'],
+    ['Cm', 3, 'flat'],
+  ])('minor key %s maps to %d %s (relative major)', (input, count, type) => {
+    const sig = keySignatureFor(input);
+    expect(sig).not.toBeNull();
+    expect(sig?.count).toBe(count);
+    expect(sig?.type).toBe(type);
+  });
+
+  test('accepts unicode ♯ / ♭ accidentals and lowercase trailing m', () => {
+    expect(keySignatureFor('F♯')?.count).toBe(6);
+    expect(keySignatureFor('B♭')?.count).toBe(2);
+    expect(keySignatureFor('e MIN')?.count).toBe(1); // case-insensitive `min` suffix
+  });
+
+  test('returns null for unparseable input', () => {
+    expect(keySignatureFor('')).toBeNull();
+    expect(keySignatureFor('not a key')).toBeNull();
+    expect(keySignatureFor('H')).toBeNull(); // German "B" — out of scope
+  });
+});
+
+// `relativeMajor` is no longer used by `keySignatureFor` (which
+// now consults explicit major and minor tables) but is still
+// exported for callers that need the chromatic transpose. Its
+// flat-vs-sharp spelling preference is conservative: it returns
+// a flat spelling only when the input itself was flat-spelled.
+// The previous "Cm should map to Eb" expectation was a
+// `keySignatureFor` requirement, not a `relativeMajor` invariant
+// — that lookup is now table-driven.
+describe('relativeMajor', () => {
+  test('Em → G', () => expect(relativeMajor('E', '')).toBe('G'));
+  test('Dm → F', () => expect(relativeMajor('D', '')).toBe('F'));
+  test('F#m → A', () => expect(relativeMajor('F', '#')).toBe('A'));
+  test('Bbm → Db (flat-preferring on flat-spelled input)', () =>
+    expect(relativeMajor('B', 'b')).toBe('Db'));
+});
+
+describe('<KeySignatureGlyph>', () => {
+  test('renders 5 staff lines + treble clef + N accidentals for sharps', () => {
+    const { container } = render(<KeySignatureGlyph keyName="A" />);
+    const svg = container.querySelector('svg.music-glyph--key');
+    expect(svg).not.toBeNull();
+    // 5 horizontal staff lines.
+    expect(svg?.querySelectorAll('line[y1][y2]').length).toBeGreaterThanOrEqual(5);
+    // Each sharp glyph renders as a `<g>` group with 4 inner lines.
+    const sharpGroups = svg?.querySelectorAll('g');
+    expect(sharpGroups?.length).toBe(3); // 3 sharps for A major + clef? No, clef is path
+  });
+
+  test('renders flats for flat keys', () => {
+    const { container } = render(<KeySignatureGlyph keyName="Eb" />);
+    const svg = container.querySelector('svg.music-glyph--key');
+    expect(svg).not.toBeNull();
+    // 3 flats for Eb major — each is a `<g>` group.
+    expect(svg?.querySelectorAll('g').length).toBe(3);
+  });
+
+  test('renders just the staff + clef for C major (no accidentals)', () => {
+    const { container } = render(<KeySignatureGlyph keyName="C" />);
+    const svg = container.querySelector('svg.music-glyph--key');
+    expect(svg).not.toBeNull();
+    expect(svg?.querySelectorAll('g').length).toBe(0);
+  });
+
+  test('aria-label spells out the key + accidental count for screen readers', () => {
+    const { container } = render(<KeySignatureGlyph keyName="A" />);
+    expect(container.querySelector('svg')?.getAttribute('aria-label')).toBe(
+      'Key A (3 sharps)',
+    );
+    const cMajor = render(<KeySignatureGlyph keyName="C" />);
+    expect(cMajor.container.querySelector('svg')?.getAttribute('aria-label')).toBe(
+      'Key C (no accidentals)',
+    );
+  });
+
+  test('falls back to a label for an unrecognised key', () => {
+    const { container } = render(<KeySignatureGlyph keyName="H" />);
+    expect(container.querySelector('svg')?.getAttribute('aria-label')).toBe('Key H');
+  });
+});
+
+describe('<MetronomeGlyph>', () => {
+  test('writes the BPM-derived period into a CSS custom property', () => {
+    const { container } = render(<MetronomeGlyph bpm={120} />);
+    const svg = container.querySelector('svg.music-glyph--metronome') as SVGSVGElement | null;
+    expect(svg).not.toBeNull();
+    // 120 BPM → 2 beats / 1.0 s per full swing.
+    expect(svg?.style.getPropertyValue('--cs-metronome-period')).toBe('1.000s');
+  });
+
+  test('60 BPM → 2 s per full swing', () => {
+    const { container } = render(<MetronomeGlyph bpm={60} />);
+    const svg = container.querySelector('svg') as SVGSVGElement | null;
+    expect(svg?.style.getPropertyValue('--cs-metronome-period')).toBe('2.000s');
+  });
+
+  test('clamps absurd BPM values into a sane animation period', () => {
+    const fast = render(<MetronomeGlyph bpm={99999} />);
+    const slow = render(<MetronomeGlyph bpm={0.001} />);
+    // Both should map to a finite, in-range period.
+    const fastP = parseFloat(
+      (fast.container.querySelector('svg') as SVGSVGElement | null)?.style.getPropertyValue(
+        '--cs-metronome-period',
+      ) ?? '',
+    );
+    const slowP = parseFloat(
+      (slow.container.querySelector('svg') as SVGSVGElement | null)?.style.getPropertyValue(
+        '--cs-metronome-period',
+      ) ?? '',
+    );
+    expect(fastP).toBeGreaterThanOrEqual(0.1);
+    expect(slowP).toBeLessThanOrEqual(10);
+  });
+
+  test('falls back to 60 BPM for non-finite input', () => {
+    const { container } = render(<MetronomeGlyph bpm={NaN} />);
+    const svg = container.querySelector('svg') as SVGSVGElement | null;
+    expect(svg?.style.getPropertyValue('--cs-metronome-period')).toBe('2.000s');
+  });
+
+  test('aria-label exposes the BPM value', () => {
+    const { container } = render(<MetronomeGlyph bpm={120} />);
+    expect(container.querySelector('svg')?.getAttribute('aria-label')).toBe(
+      'Metronome at 120 BPM',
+    );
+  });
+});
+
+describe('<TimeSignatureGlyph>', () => {
+  test('renders 4/4 as stacked numerator + denominator spans', () => {
+    const { container } = render(<TimeSignatureGlyph value="4/4" />);
+    const glyph = container.querySelector('.music-glyph--time');
+    expect(glyph).not.toBeNull();
+    expect(glyph?.querySelector('.music-glyph--time__num')?.textContent).toBe('4');
+    expect(glyph?.querySelector('.music-glyph--time__den')?.textContent).toBe('4');
+    expect(glyph?.getAttribute('aria-label')).toBe('Time signature 4 over 4');
+  });
+
+  test('renders 6/8 correctly', () => {
+    const { container } = render(<TimeSignatureGlyph value="6/8" />);
+    expect(container.querySelector('.music-glyph--time__num')?.textContent).toBe('6');
+    expect(container.querySelector('.music-glyph--time__den')?.textContent).toBe('8');
+  });
+
+  test('falls back to plain text for non-fraction input ("C", "common", blank)', () => {
+    for (const v of ['C', 'common', '']) {
+      const { container } = render(<TimeSignatureGlyph value={v} />);
+      // No stacked numerator/denominator spans.
+      expect(container.querySelector('.music-glyph--time__num')).toBeNull();
+      expect(container.querySelector('.music-glyph--time__den')).toBeNull();
+    }
+  });
+});

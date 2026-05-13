@@ -309,8 +309,16 @@ a { color: inherit; text-decoration: none; }
 .bar.ending { position: relative; }
 .bar > .ending-bracket {
   position: absolute;
-  left: 0;
-  right: 0;
+  /* Absolute-positioning reference is `.bar`'s padding edge, but
+     the bar's left barline (`border-left: 1.5px` on `.bar`) is
+     OUTSIDE the padding edge. Compensate by the barline width so
+     the bracket's own left tail stacks on top of the bar's left
+     barline — standard music-notation volta-tail alignment.
+     `right: -1.5px` mirrors the offset on the right edge for
+     1st-ending close (the bracket's right border-right tail then
+     also aligns with whatever right-side barline the bar carries). */
+  left: -1.5px;
+  right: -1.5px;
   top: -22px;
   height: 18px;
   border-top: 1.5px solid var(--ink-1000);
