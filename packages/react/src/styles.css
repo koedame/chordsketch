@@ -324,8 +324,8 @@
   align-items: center;
   gap: 0.35em;
   margin: 0.4em 0;
-  padding: 0.1em 0.55em;
-  border-left: 3px solid var(--cs-accent, #bd1642);
+  padding: 0.15em 0.55em;
+  border-radius: 3px;
   background-color: var(--cs-accent-tint, #faf7f8);
   font-family: var(--cs-font-mono, 'JetBrains Mono', ui-monospace, monospace);
   font-size: 0.8125rem;

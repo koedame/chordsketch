@@ -192,6 +192,26 @@ those artifacts are produced.
 | Toast      | `--ink-1000` base / success / danger / warning, action button uses inherited foreground + underline (no color shift) so contrast holds on every variant |
 | Progress   | 6px bar / spinner / skeleton |
 
+### 6.1 Prohibited treatments
+
+- **Left accent borders are banned.** Highlighted blocks, callouts,
+  active-line indicators, inline metadata markers, comment boxes, etc.
+  MUST NOT use `border-left: Npx solid …` as a visual accent. The
+  pattern adds heavy vertical clutter that fights the chord-sheet
+  rhythm and clashes with the editorial / professional voice of the
+  product. Use a tinted background (`--accent-tint`,
+  `--background-active`), a subtle outline, or weight / color
+  contrast instead. Symmetric borders (`border: 1px solid …`) and
+  background fills are fine; the rule is specifically about the
+  single-side accent stripe.
+
+  **Carve-out for music notation.** Structural musical glyphs that
+  happen to render via `border-left` are NOT prohibited — iReal Pro
+  chart **measure barlines** (`.bar { border-left: 1.5px solid … }`),
+  repeat-sign barlines, and similar staff-notation elements ARE
+  notation, not decoration. The rule fires when the left edge is
+  used as a visual emphasis stripe on a generic content block.
+
 ---
 
 ## 7. Voice & Tone
