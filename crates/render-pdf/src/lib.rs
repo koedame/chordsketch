@@ -18,7 +18,7 @@ use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::inline_markup::TextSpan;
 use chordsketch_chordpro::notation::NotationKind;
 use chordsketch_chordpro::render_result::{
-    RenderResult, push_warning, validate_capo, validate_strict_key,
+    RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
 use chordsketch_chordpro::transpose::transpose_chord;
@@ -744,6 +744,7 @@ fn render_song_into_doc(
     );
 
     validate_capo(&song.metadata, warnings);
+    validate_multiple_capo(song, warnings);
     validate_strict_key(&song.metadata, config, warnings);
 
     // Title

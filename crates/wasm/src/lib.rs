@@ -804,9 +804,8 @@ pub fn chord_diagram_svg_with_defines(
     let defines_vec: Vec<(String, String)> = if defines.is_undefined() || defines.is_null() {
         Vec::new()
     } else {
-        serde_wasm_bindgen::from_value(defines).map_err(|e| {
-            JsValue::from_str(&format!("invalid defines argument: {e}"))
-        })?
+        serde_wasm_bindgen::from_value(defines)
+            .map_err(|e| JsValue::from_str(&format!("invalid defines argument: {e}")))?
     };
     do_chord_diagram_svg(chord, instrument, &defines_vec)
 }

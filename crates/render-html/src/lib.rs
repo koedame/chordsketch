@@ -27,7 +27,7 @@ use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::escape::escape_xml as escape;
 use chordsketch_chordpro::inline_markup::{SpanAttributes, TextSpan};
 use chordsketch_chordpro::render_result::{
-    RenderResult, push_warning, validate_capo, validate_strict_key,
+    RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
 use chordsketch_chordpro::transpose::transpose_chord;
@@ -243,6 +243,7 @@ fn render_song_body_into(
     html.push_str("<article class=\"song\">\n");
 
     validate_capo(&song.metadata, warnings);
+    validate_multiple_capo(song, warnings);
     validate_strict_key(&song.metadata, config, warnings);
     render_metadata(&song.metadata, html);
 
@@ -1075,7 +1076,11 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut St
             escape(time)
         ));
     }
-    if let Some(duration) = metadata.duration.as_deref().filter(|s| !s.trim().is_empty()) {
+    if let Some(duration) = metadata
+        .duration
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+    {
         chips.push(format!(
             "<span class=\"meta__chip\">{}</span>",
             escape(duration)
@@ -1097,7 +1102,11 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut St
     if let Some(year) = metadata.year.as_deref().filter(|s| !s.trim().is_empty()) {
         supplementary.push(escape(year));
     }
-    if let Some(copyright) = metadata.copyright.as_deref().filter(|s| !s.trim().is_empty()) {
+    if let Some(copyright) = metadata
+        .copyright
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+    {
         supplementary.push(escape(copyright));
     }
     if !supplementary.is_empty() {
@@ -2611,9 +2620,7 @@ mod tests {
         // semantic — see the semantic-HTML refactor in this PR.
         let html = render("{highlight: Watch out}");
         assert!(
-            html.contains(
-                "<p class=\"comment comment--highlight\"><mark>Watch out</mark></p>"
-            ),
+            html.contains("<p class=\"comment comment--highlight\"><mark>Watch out</mark></p>"),
             "got: {html}"
         );
     }
@@ -4502,7 +4509,10 @@ mod delegate_tests {
         let img_style = extract_img_style(&html);
         assert!(!img_style.contains("position"), "got style: {img_style}");
         assert!(!img_style.contains("z-index"), "got style: {img_style}");
-        assert!(!img_style.contains("position: fixed"), "got style: {img_style}");
+        assert!(
+            !img_style.contains("position: fixed"),
+            "got style: {img_style}"
+        );
     }
 
     /// Pull the first `style="..."` attribute of the rendered `<img>`
@@ -4511,7 +4521,9 @@ mod delegate_tests {
     /// protect.
     fn extract_img_style(html: &str) -> String {
         let needle = "<img ";
-        let img_start = html.find(needle).expect("rendered html should contain an <img>");
+        let img_start = html
+            .find(needle)
+            .expect("rendered html should contain an <img>");
         let after_img = &html[img_start..];
         let img_end = after_img.find('>').expect("<img> must close");
         let img_tag = &after_img[..=img_end];

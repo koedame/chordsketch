@@ -7,7 +7,7 @@ use chordsketch_chordpro::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, S
 use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::notation::NotationKind;
 use chordsketch_chordpro::render_result::{
-    RenderResult, push_warning, validate_capo, validate_strict_key,
+    RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
 use chordsketch_chordpro::transpose::transpose_chord;
@@ -129,6 +129,7 @@ fn render_song_impl(
     let mut auto_diagrams_instrument: Option<String> = None;
 
     validate_capo(&song.metadata, warnings);
+    validate_multiple_capo(song, warnings);
     validate_strict_key(&song.metadata, _config, warnings);
     render_metadata(&song.metadata, &mut output);
 
