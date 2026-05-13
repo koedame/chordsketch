@@ -207,11 +207,21 @@ export function KeySignatureGlyph({
   // SVG coordinate system: width grows with the accidental count
   // so a 7-sharp key (`C#`) doesn't clip; height fits a 5-line
   // staff with breathing room above/below.
+  //
+  // Layout: clef occupies x=1..12, accidentals start at x=14
+  // with 4-unit spacing, plus a 3-unit tail so the staff lines
+  // extend just past the last accidental. The previous 5-unit
+  // spacing + 28 base width left ~19 user units of empty staff
+  // on the right for a 1-sharp key — visibly wasteful — so the
+  // chip strip looked horizontally bloated.
   const accidentalCount = sig?.count ?? 0;
-  const baseW = 28;
-  // Each accidental advances ~5 user units to the right of the
-  // clef.
-  const w = baseW + accidentalCount * 5;
+  const accidentalStart = 14;
+  const accidentalSpacing = 4;
+  const tailRight = 3;
+  const w =
+    accidentalCount > 0
+      ? Math.max(18, accidentalStart + (accidentalCount - 1) * accidentalSpacing + tailRight)
+      : 18;
   const h = 24;
   const order = sig?.type === 'flat' ? FLAT_ORDER : SHARP_ORDER;
   // Top staff line at y=4, line spacing 3, so lines are at 4,7,10,13,16.
@@ -261,7 +271,7 @@ export function KeySignatureGlyph({
       {/* Accidentals */}
       {sig != null && sig.type !== 'natural'
         ? order.slice(0, sig.count).map((acc, i) => {
-            const cx = 14 + i * 5;
+            const cx = accidentalStart + i * accidentalSpacing;
             const cy = top + acc.y * lineGap;
             return sig.type === 'sharp' ? (
               <SharpGlyph key={`s${i}`} cx={cx} cy={cy} />
@@ -375,126 +385,35 @@ export function TimeSignatureGlyph({
     safeBpm != null && beats != null
       ? Math.max(0.3, Math.min(30, numInt * (60 / safeBpm)))
       : null;
-  const showConductor = beats != null && period != null;
-  const classes = [
-    'music-glyph',
-    'music-glyph--time',
-    showConductor ? `music-glyph--time--conduct-${beats}` : null,
-    className,
-  ]
-    .filter(Boolean)
-    .join(' ');
-  const composedStyle: CSSProperties =
-    period != null
-      ? {
-          ...(style ?? {}),
-          ['--cs-time-period' as string]: `${period.toFixed(3)}s`,
-        }
-      : style ?? {};
+  // The conductor-pattern dot animation was retired per
+  // playground feedback — it competed with the music-notation
+  // typography of the digits without adding actionable
+  // information. The glyph is now just the stacked num / bar /
+  // den; `bpm` remains in the API for future positional use
+  // but no animation is emitted today.
+  void beats;
+  void period;
+  const classes = ['music-glyph', 'music-glyph--time', className].filter(Boolean).join(' ');
   return (
     <span
       className={classes}
-      style={composedStyle}
+      style={style}
       role="img"
       aria-label={`Time signature ${numerator} over ${denominator}`}
     >
-      <span className="music-glyph--time__digits" aria-hidden="true">
-        <span className="music-glyph--time__num">{numerator}</span>
-        {/* Visual fraction bar between numerator and denominator.
-            Real engraved time signatures don't include a bar — we
-            add one anyway so the stacked digits read
-            unambiguously as a "N over M" at the small icon size. */}
-        <span className="music-glyph--time__bar" />
-        <span className="music-glyph--time__den">{denominator}</span>
+      <span className="music-glyph--time__num" aria-hidden="true">
+        {numerator}
       </span>
-      {/* Conductor dot — a small bead that traces the
-          conductor's wrist pattern (down → left → right → up
-          for 4/4 etc.) inside its own SVG box, ticking once per
-          beat at the active BPM. Replaces the previous
-          "bob the whole icon" treatment so the static time-
-          signature digits stay legible while the motion is
-          isolated to the dot. The animation is gated on
-          `prefers-reduced-motion: reduce` via the conductor
-          modifier class. */}
-      {showConductor ? (
-        <svg
-          className="music-glyph--time__conductor"
-          viewBox="0 0 22 22"
-          width={22}
-          height={22}
-          aria-hidden="true"
-        >
-          {/* Faint path-trace lines, so the eye picks up the
-              pattern even when the dot is momentarily near
-              center. Each `<line>` is the segment between two
-              successive ictuses for the chosen beat count. */}
-          {conductorPathLines(beats)}
-          <circle
-            className="music-glyph--time__dot"
-            cx={11}
-            cy={4}
-            r={1.8}
-          />
-        </svg>
-      ) : null}
+      {/* Visual fraction bar between numerator and denominator —
+          real engraved time signatures don't include a bar, but
+          we add one so the stacked digits read unambiguously as
+          a "N over M" at the small icon size. */}
+      <span className="music-glyph--time__bar" aria-hidden="true" />
+      <span className="music-glyph--time__den" aria-hidden="true">
+        {denominator}
+      </span>
     </span>
   );
-}
-
-/**
- * Faint dotted-line segments tracing the conductor pattern for
- * the given beat count, so the eye can pick up the gesture even
- * when the moving dot is near the center.
- */
-function conductorPathLines(beats: 2 | 3 | 4 | 6): JSX.Element[] {
-  // Coordinates here match the keyframe targets in
-  // `styles.css` (start at top-center, each beat ictus at a
-  // pattern position around it). Keep the two in lockstep.
-  const TOP: [number, number] = [11, 4];
-  const BOTTOM: [number, number] = [11, 18];
-  const LEFT: [number, number] = [4, 11];
-  const RIGHT: [number, number] = [18, 11];
-  const points: ReadonlyArray<readonly [number, number]> = (() => {
-    switch (beats) {
-      case 2:
-        return [TOP, BOTTOM, TOP];
-      case 3:
-        return [TOP, BOTTOM, RIGHT, TOP];
-      case 4:
-        return [TOP, BOTTOM, LEFT, RIGHT, TOP];
-      case 6:
-        // 6-beat pattern (1 down, 2 lower-left, 3 left, 4
-        // right, 5 upper-right, 6 up) — simplified.
-        return [
-          TOP,
-          BOTTOM,
-          [5, 15],
-          LEFT,
-          RIGHT,
-          [17, 7],
-          TOP,
-        ] as ReadonlyArray<readonly [number, number]>;
-    }
-  })();
-  const out: JSX.Element[] = [];
-  for (let i = 0; i < points.length - 1; i++) {
-    const [x1, y1] = points[i]!;
-    const [x2, y2] = points[i + 1]!;
-    out.push(
-      <line
-        key={`p${i}`}
-        x1={x1}
-        y1={y1}
-        x2={x2}
-        y2={y2}
-        stroke="currentColor"
-        strokeWidth={0.4}
-        strokeDasharray="0.6 0.8"
-        opacity={0.35}
-      />,
-    );
-  }
-  return out;
 }
 
 // ---- Attribution role icons ------------------------------------
@@ -510,7 +429,7 @@ export function RoleIcon({
   kind,
   className,
 }: {
-  kind: 'artist' | 'composer' | 'lyricist' | 'tag';
+  kind: 'artist' | 'composer' | 'lyricist' | 'tag' | 'album';
   className?: string;
 }): JSX.Element {
   const classes = ['role-icon', `role-icon--${kind}`, className].filter(Boolean).join(' ');
@@ -570,7 +489,10 @@ export function RoleIcon({
         </svg>
       );
     case 'lyricist':
-      // Pen / pencil — slanted body with a triangular tip.
+      // Pencil — long thin body (hex barrel approximation), with
+      // a triangular graphite tip at the bottom-left and a small
+      // metal ferrule + eraser at the top-right. Reads as
+      // "pencil" rather than the earlier knife-like silhouette.
       return (
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -580,35 +502,90 @@ export function RoleIcon({
           className={classes}
           aria-hidden="true"
         >
+          {/* Barrel — slanted rectangle from upper-right to lower-left */}
           <path
-            d="M 3 13 L 5 11 L 11 5 L 13 7 L 7 13 Z"
+            d="M 12 2 L 14 4 L 6 12 L 4 10 Z"
             fill="none"
             stroke="currentColor"
             strokeWidth={1.2}
             strokeLinejoin="round"
           />
+          {/* Graphite tip — small filled triangle past the barrel */}
+          <path
+            d="M 4 10 L 6 12 L 3 13 Z"
+            fill="currentColor"
+            stroke="currentColor"
+            strokeWidth={1}
+            strokeLinejoin="round"
+          />
+          {/* Ferrule / eraser band — short line across the top end */}
           <line
             x1={11}
-            y1={5}
+            y1={3}
             x2={13}
-            y2={3}
+            y2={5}
             stroke="currentColor"
-            strokeWidth={1.2}
-            strokeLinecap="round"
-          />
-          <line
-            x1={3}
-            y1={13}
-            x2={2.5}
-            y2={13.5}
-            stroke="currentColor"
-            strokeWidth={1.2}
+            strokeWidth={1.4}
             strokeLinecap="round"
           />
         </svg>
       );
     case 'tag':
-      // Tag / label — pointed-end pentagon with a hole near the tip.
+      // Hash / number sign — the cleanest visual cue for "tag"
+      // in modern typography. Two horizontal + two vertical
+      // lines, slightly slanted so it reads as a `#` glyph
+      // without depending on a specific font's hash shape.
+      return (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 16 16"
+          width={12}
+          height={12}
+          className={classes}
+          aria-hidden="true"
+        >
+          <line
+            x1={3}
+            y1={6}
+            x2={14}
+            y2={6}
+            stroke="currentColor"
+            strokeWidth={1.4}
+            strokeLinecap="round"
+          />
+          <line
+            x1={2}
+            y1={10}
+            x2={13}
+            y2={10}
+            stroke="currentColor"
+            strokeWidth={1.4}
+            strokeLinecap="round"
+          />
+          <line
+            x1={7}
+            y1={3}
+            x2={5}
+            y2={13}
+            stroke="currentColor"
+            strokeWidth={1.4}
+            strokeLinecap="round"
+          />
+          <line
+            x1={11}
+            y1={3}
+            x2={9}
+            y2={13}
+            stroke="currentColor"
+            strokeWidth={1.4}
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case 'album':
+      // Vinyl / CD record — outer disc + concentric grooves +
+      // centre spindle hole. Reads as "this is a recording"
+      // for the supplementary `{album}` field.
       return (
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -618,14 +595,17 @@ export function RoleIcon({
           className={classes}
           aria-hidden="true"
         >
-          <path
-            d="M 2 6 L 7 2 L 14 2 L 14 9 L 9 14 Z"
+          <circle
+            cx={8}
+            cy={8}
+            r={6.5}
             fill="none"
             stroke="currentColor"
             strokeWidth={1.2}
-            strokeLinejoin="round"
           />
-          <circle cx={11.5} cy={4.5} r={1} fill="currentColor" />
+          <circle cx={8} cy={8} r={4} fill="none" stroke="currentColor" strokeWidth={0.7} />
+          <circle cx={8} cy={8} r={2.5} fill="none" stroke="currentColor" strokeWidth={0.7} />
+          <circle cx={8} cy={8} r={1} fill="currentColor" />
         </svg>
       );
   }

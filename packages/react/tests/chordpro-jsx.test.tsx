@@ -991,12 +991,56 @@ describe('renderChordproAst', () => {
     // Two equal-width bar cells (one per bar in the source).
     const bars = gridLine?.querySelectorAll('.grid-bar') ?? [];
     expect(bars.length).toBe(2);
-    // Chord names live inside the bar cells.
+    // Source `|: G  .  .  . | C  .  .  . :|` → each bar has 4
+    // beat slots (1 chord + 3 continuations) with the chord
+    // anchored in slot 1.
+    expect(bars[0]?.getAttribute('data-beats')).toBe('4');
+    expect(bars[1]?.getAttribute('data-beats')).toBe('4');
     expect(bars[0]?.querySelector('.grid-chord')?.textContent).toBe('G');
     expect(bars[1]?.querySelector('.grid-chord')?.textContent).toBe('C');
-    // Continuation dots from the source are dropped — beat
-    // alignment is handled by the bar cell's flex layout.
+    // No standalone `.grid-continuation` elements survive — beat
+    // slots carry the continuation by being empty.
     expect(gridLine?.querySelectorAll('.grid-continuation').length).toBe(0);
+  });
+
+  test('grid bar with multiple chords places each on its own beat slot', () => {
+    // `| G . C . |` → 4 slots, G in slot 1, C in slot 3.
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: {
+            name: 'start_of_grid',
+            value: null,
+            kind: { tag: 'startOfGrid' },
+            selector: null,
+          },
+        },
+        {
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '| G . C . |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: {
+            name: 'end_of_grid',
+            value: null,
+            kind: { tag: 'endOfGrid' },
+            selector: null,
+          },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    const bar = container.querySelector('.grid-bar');
+    expect(bar?.getAttribute('data-beats')).toBe('4');
+    const slots = bar?.querySelectorAll('.grid-beat') ?? [];
+    expect(slots.length).toBe(4);
+    expect(slots[0]?.querySelector('.grid-chord')?.textContent).toBe('G');
+    expect(slots[1]?.querySelector('.grid-chord')).toBeNull();
+    expect(slots[2]?.querySelector('.grid-chord')?.textContent).toBe('C');
+    expect(slots[3]?.querySelector('.grid-chord')).toBeNull();
   });
 
   test('grid bars survive a volta + final barline source', () => {
@@ -1200,9 +1244,9 @@ describe('renderChordproAst', () => {
     const secondaryAttribution = container.querySelector(
       '.meta--attribution-secondary',
     );
-    expect(secondaryAttribution?.textContent).toContain('Music JC');
+    expect(secondaryAttribution?.textContent).toContain('Composer JC');
     expect(secondaryAttribution?.textContent).toContain('Lyrics JL');
-    expect(secondaryAttribution?.textContent).toContain('Arr. JA');
+    expect(secondaryAttribution?.textContent).toContain('Arranger JA');
     // Tier 2 — chips. `{key}` / `{tempo}` / `{time}` are now
     // surfaced inline (positional `.meta-inline` markers), so
     // only `{capo}` and `{duration}` remain in the chip row.

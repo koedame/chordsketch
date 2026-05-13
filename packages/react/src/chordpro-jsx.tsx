@@ -405,11 +405,13 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
 
   // Group the flat token stream into a structured row of
   // alternating barlines and bar cells. Continuation dots (`.`)
-  // and inter-token whitespace are dropped — they exist in the
-  // source to align beats within a bar but don't carry any
-  // information once we lay each bar out as an equal-width
-  // flex cell.
-  type Bar = { kind: 'bar'; chords: string[]; noChord: boolean };
+  // and inter-token whitespace are dropped from the meaning of
+  // the bar — but their COUNT is preserved as beat slots, so a
+  // bar like `G  .  .  .` becomes a 4-beat cell with the G in
+  // the first slot and the next three slots empty (continuing
+  // the chord). This gives the bar a correct iReal Pro-style
+  // beat division regardless of how many chords fall inside.
+  type Bar = { kind: 'bar'; beats: Array<string | null>; noChord: boolean };
   type Marker =
     | { kind: 'repeat-start' }
     | { kind: 'repeat-end' }
@@ -420,8 +422,12 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
   type Cell = Bar | Marker;
   const cells: Cell[] = [];
   let current: Bar | null = null;
+  const ensureBar = (): Bar => {
+    if (!current) current = { kind: 'bar', beats: [], noChord: false };
+    return current;
+  };
   const flush = () => {
-    if (current && (current.chords.length > 0 || current.noChord)) {
+    if (current && (current.beats.length > 0 || current.noChord)) {
       cells.push(current);
     }
     current = null;
@@ -429,16 +435,19 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
   for (const tok of tokens) {
     switch (tok.kind) {
       case 'space':
-      case 'continuation':
-        // No content; ignore.
+        // No content; ignore — whitespace is presentation only.
         break;
       case 'chord':
-        if (!current) current = { kind: 'bar', chords: [], noChord: false };
-        current.chords.push(tok.name);
+        ensureBar().beats.push(tok.name);
+        break;
+      case 'continuation':
+        // A `.` beat keeps the previous chord ringing — emit a
+        // null slot so the bar layout still allocates space for
+        // this beat.
+        ensureBar().beats.push(null);
         break;
       case 'no-chord':
-        if (!current) current = { kind: 'bar', chords: [], noChord: false };
-        current.noChord = true;
+        ensureBar().noChord = true;
         break;
       case 'repeat-start':
       case 'repeat-end':
@@ -518,18 +527,30 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
     <div key={key} className="grid-line">
       {cells.map((cell, idx) => {
         if (cell.kind === 'bar') {
+          // Each bar lays out one beat slot per source token
+          // (`chord` or `.`). The bar width is split equally
+          // between slots so a `G . C .` bar puts G under
+          // beat 1 and C under beat 3 — matching standard
+          // chord-chart engraving where the chord prints over
+          // the beat it starts on. A pure `G . . .` bar
+          // anchors G in slot 1 and leaves the rest empty
+          // (the chord continues to ring).
+          const beats = cell.beats.length > 0 ? cell.beats : [null];
           return (
-            <span key={idx} className="grid-bar">
+            <span key={idx} className="grid-bar" data-beats={beats.length}>
               {cell.noChord ? (
                 <span className="grid-no-chord" aria-label="no chord">
                   N.C.
                 </span>
-              ) : null}
-              {cell.chords.map((c, ci) => (
-                <span key={ci} className="grid-chord">
-                  {unicodeAccidentals(c)}
-                </span>
-              ))}
+              ) : (
+                beats.map((b, bi) => (
+                  <span key={bi} className="grid-beat">
+                    {b != null ? (
+                      <span className="grid-chord">{unicodeAccidentals(b)}</span>
+                    ) : null}
+                  </span>
+                ))
+              )}
             </span>
           );
         }
@@ -1492,7 +1513,7 @@ function renderHeader(
   if (metadata.artists.length > 0) {
     out.push(
       <p key="meta-attribution-primary" className="meta meta--attribution">
-        {buildMultiValueRow('by', metadata.artists, metaLines.artists, 'artist', 'artist')}
+        {buildMultiValueRow('', metadata.artists, metaLines.artists, 'artist', 'artist')}
       </p>,
     );
   }
@@ -1508,7 +1529,7 @@ function renderHeader(
   if (metadata.composers.length > 0) {
     pushAttribution(
       buildMultiValueRow(
-        'Music',
+        'Composer',
         metadata.composers,
         metaLines.composers,
         'composer',
@@ -1534,7 +1555,7 @@ function renderHeader(
     // overcrowd this small attribution row.
     pushAttribution(
       buildMultiValueRow(
-        'Arr.',
+        'Arranger',
         metadata.arrangers,
         metaLines.arrangers,
         'arranger',
@@ -1616,7 +1637,22 @@ function renderHeader(
     }
     supplementary.push(node);
   };
-  if (metadata.album) pushSupp(metaSpan('album', metadata.album, metaLines.album, active));
+  if (metadata.album) {
+    // `{album}` gets a record/CD icon + "Album:" label so the
+    // supplementary row reads as a labelled attribute rather
+    // than a bare title. Year and copyright stay unlabelled —
+    // their visual form (a 4-digit year, a `©` glyph) carries
+    // the role on its own.
+    pushSupp(
+      <Fragment key="album">
+        <RoleIcon kind="album" className="meta__role-icon" />
+        <span className="meta__label" aria-hidden="true">
+          Album:{' '}
+        </span>
+        {metaSpan('album', metadata.album, metaLines.album, active)}
+      </Fragment>,
+    );
+  }
   if (metadata.year) pushSupp(metaSpan('year', metadata.year, metaLines.year, active));
   if (metadata.copyright)
     pushSupp(metaSpan('copyright', metadata.copyright, metaLines.copyright, active));

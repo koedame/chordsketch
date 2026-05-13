@@ -348,17 +348,13 @@ pub fn metronome_svg(bpm_raw: &str) -> String {
 }
 
 /// Emit a stacked numerator / fraction-bar / denominator
-/// `<span>` group for a `{time}` directive value. When `bpm`
-/// is provided AND the numerator is one of the supported
-/// conductor patterns (2 / 3 / 4 / 6), the root span carries a
-/// `music-glyph--time--conduct-N` modifier class plus a
-/// `--cs-time-period` CSS custom property so the stylesheet's
-/// `@keyframes cs-conductor-N` rule animates the glyph in time
-/// with the active tempo. Falls back to plain text when the
-/// input is not a recognisable `<num>/<den>` form (e.g. `"C"`,
-/// `"common"`, blank).
+/// `<span>` group for a `{time}` directive value. The
+/// conductor-pattern animation that used to live on this glyph
+/// was retired per playground feedback — the digits read
+/// cleanly on their own, and the moving dot competed with the
+/// surrounding meta-strip typography.
 #[must_use]
-pub fn time_signature_html(value: &str, bpm: Option<f32>) -> String {
+pub fn time_signature_html(value: &str) -> String {
     let trimmed = value.trim();
     let parts: Vec<&str> = trimmed.split('/').collect();
     if parts.len() != 2 {
@@ -380,26 +376,13 @@ pub fn time_signature_html(value: &str, bpm: Option<f32>) -> String {
         );
     }
     let aria = format!("Time signature {num} over {den}");
-    let num_int: u32 = num.parse().unwrap_or(0);
-    let (conduct_class, period_style) = match (matches!(num_int, 2 | 3 | 4 | 6), bpm) {
-        (true, Some(bp)) if bp.is_finite() && bp > 0.0 => {
-            let period = ((num_int as f32) * (60.0 / bp)).clamp(0.3, 30.0);
-            (
-                format!(" music-glyph--time--conduct-{num_int}"),
-                format!(" style=\"--cs-time-period:{period:.3}s\""),
-            )
-        }
-        _ => (String::new(), String::new()),
-    };
     format!(
-        "<span class=\"music-glyph music-glyph--time{conduct}\"{period} \
+        "<span class=\"music-glyph music-glyph--time\" \
          role=\"img\" aria-label=\"{aria}\">\
          <span class=\"music-glyph--time__num\" aria-hidden=\"true\">{num}</span>\
          <span class=\"music-glyph--time__bar\" aria-hidden=\"true\"></span>\
          <span class=\"music-glyph--time__den\" aria-hidden=\"true\">{den}</span>\
          </span>",
-        conduct = conduct_class,
-        period = period_style,
         aria = chordsketch_chordpro::escape::escape_xml(&aria),
         num = chordsketch_chordpro::escape::escape_xml(num),
         den = chordsketch_chordpro::escape::escape_xml(den),
@@ -537,7 +520,7 @@ mod tests {
 
     #[test]
     fn time_signature_html_stacks_digits() {
-        let html = time_signature_html("4/4", None);
+        let html = time_signature_html("4/4");
         assert!(html.contains("music-glyph--time__num\" aria-hidden=\"true\">4</span>"));
         assert!(html.contains("music-glyph--time__bar\""));
         assert!(html.contains("music-glyph--time__den\" aria-hidden=\"true\">4</span>"));
@@ -546,37 +529,17 @@ mod tests {
 
     #[test]
     fn time_signature_html_falls_back_for_non_fraction() {
-        let html = time_signature_html("C", None);
+        let html = time_signature_html("C");
         assert!(html.contains("music-glyph--time\">C</span>"));
         assert!(!html.contains("music-glyph--time__num"));
     }
 
     #[test]
-    fn time_signature_html_no_bpm_means_static_glyph() {
-        // Without a BPM context the glyph must NOT carry a
-        // conductor class or animation period — it renders
-        // statically until a `{tempo}` has set the active BPM.
-        let html = time_signature_html("4/4", None);
+    fn time_signature_html_carries_no_conductor_markup() {
+        // The conductor-pattern animation was retired — the time-
+        // signature glyph is now just the stacked digits + bar.
+        let html = time_signature_html("4/4");
         assert!(!html.contains("music-glyph--time--conduct-"));
         assert!(!html.contains("--cs-time-period"));
-    }
-
-    #[test]
-    fn time_signature_html_with_bpm_emits_conductor_period() {
-        let html = time_signature_html("4/4", Some(120.0));
-        // 4 beats * (60/120) = 2.000s per measure.
-        assert!(html.contains("music-glyph--time--conduct-4"));
-        assert!(html.contains("--cs-time-period:2.000s"));
-    }
-
-    #[test]
-    fn time_signature_html_picks_conductor_pattern_per_numerator() {
-        let three = time_signature_html("3/4", Some(120.0));
-        assert!(three.contains("music-glyph--time--conduct-3"));
-        let six = time_signature_html("6/8", Some(120.0));
-        assert!(six.contains("music-glyph--time--conduct-6"));
-        // 5/4 is not in {2, 3, 4, 6} — static fallback.
-        let five = time_signature_html("5/4", Some(120.0));
-        assert!(!five.contains("music-glyph--time--conduct-"));
     }
 }
