@@ -341,6 +341,14 @@
   color: var(--cs-ink-900, #1a1718);
   font-weight: 600;
 }
+/* Italian tempo marking shown next to the BPM ("Allegro" etc.) —
+   smaller and a touch muted so the numeric BPM stays the lead
+   element of the chip. */
+.chordsketch-sheet__content .meta-inline__marking {
+  color: var(--cs-ink-500, #67646d);
+  font-weight: 400;
+  font-style: italic;
+}
 
 /* Paired Written / Sounding display for `{key}` markers when
    transpose is active. The two key groups sit side by side
@@ -542,6 +550,106 @@
     animation: none;
     transform: rotate(0deg);
   }
+}
+
+/* Grid section — iReal Pro-style bar grid.
+   Each `{start_of_grid}` body line tokenises into bars and
+   barlines; the layout is a flex row with structured glyphs for
+   repeat / volta / final markers. Chord cells use the chord
+   font, continuation dots are muted. */
+.chordsketch-sheet__content .grid-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15em 0.35em;
+  margin: 0.2em 0;
+  font-family: var(--cs-font-chord, var(--cs-font-serif, 'Source Serif Pro', serif));
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: var(--cs-ink-900, #1a1718);
+}
+.chordsketch-sheet__content .grid-chord {
+  color: var(--cs-accent, #bd1642);
+  min-width: 1.5em;
+  text-align: center;
+}
+.chordsketch-sheet__content .grid-continuation {
+  color: var(--cs-ink-400, #a8a4ad);
+  font-weight: 400;
+  min-width: 1em;
+  text-align: center;
+}
+.chordsketch-sheet__content .grid-no-chord {
+  color: var(--cs-ink-500, #67646d);
+  font-style: italic;
+  font-weight: 500;
+}
+.chordsketch-sheet__content .grid-space {
+  width: 0.2em;
+  display: inline-block;
+}
+
+/* Barlines — single, double, repeat, final. The two
+   `__line` spans inside `repeat-start` / `repeat-end` / `final`
+   render the conventional double-line glyph; `__dots` adds the
+   two repeat dots. */
+.chordsketch-sheet__content .grid-barline {
+  display: inline-flex;
+  align-items: stretch;
+  align-self: stretch;
+  gap: 1.5px;
+  margin: 0 0.15em;
+}
+.chordsketch-sheet__content .grid-barline:not([class*='--']) {
+  width: 1.5px;
+  background-color: var(--cs-ink-900, #1a1718);
+  min-height: 1.2em;
+}
+.chordsketch-sheet__content .grid-barline__line {
+  display: inline-block;
+  width: 1.5px;
+  background-color: var(--cs-ink-900, #1a1718);
+  min-height: 1.2em;
+}
+.chordsketch-sheet__content .grid-barline__line--thick {
+  width: 3.5px;
+}
+.chordsketch-sheet__content .grid-barline__dots {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.18em;
+  padding: 0 1.5px;
+}
+.chordsketch-sheet__content .grid-barline__dots > span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background-color: var(--cs-ink-900, #1a1718);
+  display: inline-block;
+}
+
+/* 1st / 2nd ending bracket — small superscript number sits above
+   the barline so the ending is labelled like in real music
+   notation. */
+.chordsketch-sheet__content .grid-volta {
+  display: inline-flex;
+  align-items: stretch;
+  margin: 0 0.15em;
+  position: relative;
+}
+.chordsketch-sheet__content .grid-volta .grid-barline__line {
+  background-color: var(--cs-ink-900, #1a1718);
+}
+.chordsketch-sheet__content .grid-volta__bracket {
+  display: inline-block;
+  margin-left: 0.2em;
+  font-size: 0.7em;
+  font-weight: 600;
+  color: var(--cs-ink-900, #1a1718);
+  align-self: flex-start;
+  line-height: 1;
 }
 
 /* Tag row — separate from the main meta strip because `{tag}`

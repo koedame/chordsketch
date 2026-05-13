@@ -18,6 +18,7 @@ h2 { font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif; font-wei
 .meta-inline { display: inline-flex; align-items: center; gap: 0.35em; margin: 0.4em 0; padding: 0.15em 0.55em; border-radius: 3px; background-color: #FAF7F8; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.8125rem; color: #2A262E; line-height: 1.5; font-feature-settings: "tnum" 1; }
 .meta-inline__label { color: #67646D; font-weight: 500; }
 .meta-inline__value { color: #1A1718; font-weight: 600; }
+.meta-inline__marking { color: #67646D; font-weight: 400; font-style: italic; }
 .music-glyph { display: inline-block; flex-shrink: 0; vertical-align: middle; color: #1A1718; }
 .music-glyph--time { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; font-family: "Source Serif Pro", serif; font-weight: 700; font-size: 1.1em; letter-spacing: 0; }
 .music-glyph--time__num, .music-glyph--time__den { display: block; line-height: 0.9; font-feature-settings: "tnum" 1; }
@@ -65,6 +66,8 @@ img { max-width: 100%; height: auto; }
 <figure class="chord-diagram-container"><svg xmlns="http://www.w3.org/2000/svg" width="120" height="160" viewBox="0 0 120 160" class="chord-diagram">
 <text x="60" y="15" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold">Am</text>
 <line x1="20" y1="30" x2="100" y2="30" stroke="black" stroke-width="3"/>
+<circle cx="60" cy="80" r="2.2" fill="#D4D1D6" class="position-marker"/>
+<circle cx="60" cy="120" r="2.2" fill="#D4D1D6" class="position-marker"/>
 <line x1="20" y1="30" x2="20" y2="130" stroke="black" stroke-width="1"/>
 <line x1="36" y1="30" x2="36" y2="130" stroke="black" stroke-width="1"/>
 <line x1="52" y1="30" x2="52" y2="130" stroke="black" stroke-width="1"/>
@@ -87,6 +90,8 @@ img { max-width: 100%; height: auto; }
 <figure class="chord-diagram-container"><svg xmlns="http://www.w3.org/2000/svg" width="120" height="160" viewBox="0 0 120 160" class="chord-diagram">
 <text x="60" y="15" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold">G</text>
 <line x1="20" y1="30" x2="100" y2="30" stroke="black" stroke-width="3"/>
+<circle cx="60" cy="80" r="2.2" fill="#D4D1D6" class="position-marker"/>
+<circle cx="60" cy="120" r="2.2" fill="#D4D1D6" class="position-marker"/>
 <line x1="20" y1="30" x2="20" y2="130" stroke="black" stroke-width="1"/>
 <line x1="36" y1="30" x2="36" y2="130" stroke="black" stroke-width="1"/>
 <line x1="52" y1="30" x2="52" y2="130" stroke="black" stroke-width="1"/>

@@ -459,11 +459,24 @@ fn render_song_body_into(
                                 // marker's meaning on its own — drop
                                 // the textual "Tempo:" label and keep
                                 // only the BPM value (sister-site to
-                                // the React JSX walker).
+                                // the React JSX walker). When the
+                                // BPM matches an Italian tempo
+                                // marking, append it in parens.
+                                let marking = value
+                                    .trim()
+                                    .parse::<f32>()
+                                    .ok()
+                                    .and_then(music_glyphs::tempo_marking_for)
+                                    .map(|m| {
+                                        format!(
+                                            " <span class=\"meta-inline__marking\">({m})</span>"
+                                        )
+                                    })
+                                    .unwrap_or_default();
                                 html.push_str(&format!(
                                     "<p class=\"meta-inline meta-inline--tempo\">\
                                      {glyph}\
-                                     <span class=\"meta-inline__value\">{val} BPM</span></p>\n",
+                                     <span class=\"meta-inline__value\">{val} BPM{marking}</span></p>\n",
                                     glyph = music_glyphs::metronome_svg(value),
                                     val = escape(value),
                                 ));
@@ -1103,6 +1116,7 @@ h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-w
 .meta-inline { display: inline-flex; align-items: center; gap: 0.35em; margin: 0.4em 0; padding: 0.15em 0.55em; border-radius: 3px; background-color: #FAF7F8; font-family: \"JetBrains Mono\", ui-monospace, monospace; font-size: 0.8125rem; color: #2A262E; line-height: 1.5; font-feature-settings: \"tnum\" 1; }
 .meta-inline__label { color: #67646D; font-weight: 500; }
 .meta-inline__value { color: #1A1718; font-weight: 600; }
+.meta-inline__marking { color: #67646D; font-weight: 400; font-style: italic; }
 .music-glyph { display: inline-block; flex-shrink: 0; vertical-align: middle; color: #1A1718; }
 .music-glyph--time { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; font-family: \"Source Serif Pro\", serif; font-weight: 700; font-size: 1.1em; letter-spacing: 0; }
 .music-glyph--time__num, .music-glyph--time__den { display: block; line-height: 0.9; font-feature-settings: \"tnum\" 1; }

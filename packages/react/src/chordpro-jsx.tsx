@@ -28,7 +28,12 @@ import { Fragment, cloneElement, isValidElement } from 'react';
 import type { CSSProperties, JSX, ReactNode } from 'react';
 
 import { ChordDiagram } from './chord-diagram';
-import { KeySignatureGlyph, MetronomeGlyph, TimeSignatureGlyph } from './music-glyphs';
+import {
+  KeySignatureGlyph,
+  MetronomeGlyph,
+  TimeSignatureGlyph,
+  tempoMarkingFor,
+} from './music-glyphs';
 import type {
   ChordproChord,
   ChordproDirective,
@@ -277,6 +282,200 @@ export function unicodeAccidentals(name: string): string {
 
 function renderChord(chord: ChordproChord): string {
   return unicodeAccidentals(chord.display ?? chord.name);
+}
+
+// ---- Grid line tokeniser ------------------------------------------
+
+type GridToken =
+  | { kind: 'repeat-start' } // `|:`
+  | { kind: 'repeat-end' } // `:|`
+  | { kind: 'double' } // `||`
+  | { kind: 'final' } // `|.`
+  | { kind: 'volta'; ending: number } // `|1`, `|2`
+  | { kind: 'barline' } // bare `|`
+  | { kind: 'chord'; name: string }
+  | { kind: 'continuation' } // `.`
+  | { kind: 'no-chord' } // `n` (rare, but iRealPro convention)
+  | { kind: 'space' };
+
+/**
+ * Tokenise a ChordPro grid line into structured pieces the
+ * walker can lay out as iReal Pro-style bars. Handles the
+ * standard markers (`|:` / `:|` / `||` / `|.` / `|1` / `|2`)
+ * and dot-continuation beats. Anything else that survives the
+ * regex falls through as a `chord` token whose name string
+ * carries whatever raw characters were there (so unrecognised
+ * tokens still render visibly instead of disappearing).
+ */
+export function tokenizeGridLine(input: string): GridToken[] {
+  const out: GridToken[] = [];
+  let i = 0;
+  while (i < input.length) {
+    const ch = input[i]!;
+    if (ch === ' ' || ch === '\t') {
+      // Coalesce whitespace runs into one "space" token — the
+      // CSS handles the visual gap, we don't need N adjacent
+      // spaces in the DOM.
+      while (i < input.length && (input[i] === ' ' || input[i] === '\t')) i++;
+      out.push({ kind: 'space' });
+      continue;
+    }
+    if (ch === '|') {
+      const next = input[i + 1];
+      if (next === ':') {
+        out.push({ kind: 'repeat-start' });
+        i += 2;
+        continue;
+      }
+      if (next === '.') {
+        out.push({ kind: 'final' });
+        i += 2;
+        continue;
+      }
+      if (next === '|') {
+        out.push({ kind: 'double' });
+        i += 2;
+        continue;
+      }
+      if (next != null && /[1-9]/.test(next)) {
+        out.push({ kind: 'volta', ending: Number.parseInt(next, 10) });
+        i += 2;
+        continue;
+      }
+      out.push({ kind: 'barline' });
+      i += 1;
+      continue;
+    }
+    if (ch === ':' && input[i + 1] === '|') {
+      out.push({ kind: 'repeat-end' });
+      i += 2;
+      continue;
+    }
+    if (ch === '.') {
+      out.push({ kind: 'continuation' });
+      i += 1;
+      continue;
+    }
+    if (ch === 'n' && (i + 1 >= input.length || /[\s|]/.test(input[i + 1]!))) {
+      out.push({ kind: 'no-chord' });
+      i += 1;
+      continue;
+    }
+    // Read a chord token — any contiguous run of non-whitespace
+    // non-bar / non-colon characters. Chord brackets `[X]` are
+    // unwrapped: the parser produces a chord-bearing lyrics
+    // segment, but for grid lines we get the raw text, so let
+    // `[`...`]` survive as a chord name and trim the brackets
+    // ourselves.
+    let j = i;
+    while (j < input.length && !/[\s|:]/.test(input[j]!)) j++;
+    let raw = input.slice(i, j);
+    if (raw.startsWith('[') && raw.endsWith(']')) {
+      raw = raw.slice(1, -1);
+    }
+    if (raw.length > 0) {
+      out.push({ kind: 'chord', name: raw });
+    }
+    i = j;
+  }
+  return out;
+}
+
+/**
+ * Render a `{start_of_grid}` body line as a structured row of
+ * bars + barlines + chord cells. Sister-site to the Rust HTML
+ * renderer — the markup matches what `crates/render-html`'s
+ * grid-line emitter produces so both surfaces pick up the same
+ * `.grid-*` CSS rules.
+ */
+function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
+  // Reconstruct the raw source text from the AST. Chord segments
+  // re-acquire their `[name]` brackets so the tokeniser can
+  // recognise them; pure-text segments pass through verbatim.
+  const raw = line.segments
+    .map((s) => {
+      if (s.chord) {
+        return `[${unicodeAccidentals(renderChord(s.chord))}]${s.text}`;
+      }
+      return s.text;
+    })
+    .join('');
+  const tokens = tokenizeGridLine(raw);
+  return (
+    <div key={key} className="grid-line">
+      {tokens.map((tok, idx) => {
+        switch (tok.kind) {
+          case 'repeat-start':
+            return (
+              <span key={idx} className="grid-barline grid-barline--repeat-start" aria-label="repeat start">
+                <span className="grid-barline__line" />
+                <span className="grid-barline__line" />
+                <span className="grid-barline__dots">
+                  <span />
+                  <span />
+                </span>
+              </span>
+            );
+          case 'repeat-end':
+            return (
+              <span key={idx} className="grid-barline grid-barline--repeat-end" aria-label="repeat end">
+                <span className="grid-barline__dots">
+                  <span />
+                  <span />
+                </span>
+                <span className="grid-barline__line" />
+                <span className="grid-barline__line" />
+              </span>
+            );
+          case 'double':
+            return (
+              <span key={idx} className="grid-barline grid-barline--double" aria-hidden="true">
+                <span className="grid-barline__line" />
+                <span className="grid-barline__line" />
+              </span>
+            );
+          case 'final':
+            return (
+              <span key={idx} className="grid-barline grid-barline--final" aria-label="final barline">
+                <span className="grid-barline__line" />
+                <span className="grid-barline__line grid-barline__line--thick" />
+              </span>
+            );
+          case 'volta':
+            return (
+              <span key={idx} className="grid-volta" aria-label={`${tok.ending} ending`}>
+                <span className="grid-barline__line" />
+                <span className="grid-volta__bracket">{tok.ending}.</span>
+              </span>
+            );
+          case 'barline':
+            return <span key={idx} className="grid-barline" aria-hidden="true" />;
+          case 'continuation':
+            return (
+              <span key={idx} className="grid-continuation" aria-label="continue previous chord">
+                ·
+              </span>
+            );
+          case 'no-chord':
+            return (
+              <span key={idx} className="grid-no-chord" aria-label="no chord">
+                N.C.
+              </span>
+            );
+          case 'space':
+            return <span key={idx} className="grid-space" aria-hidden="true" />;
+          case 'chord':
+            return (
+              <span key={idx} className="grid-chord">
+                {unicodeAccidentals(tok.name)}
+              </span>
+            );
+          default:
+            return null;
+        }
+      })}
+    </div>
+  );
 }
 
 /**
@@ -1780,11 +1979,12 @@ function handleDirective(
     // When transposition is active AND this `{key}` directive
     // matches the song-primary key (the one the host's
     // `transposedKey` was computed against), render a paired
-    // "Written / Sounding" display so the player can see both
-    // the notated key and the concert-pitch key. Terms match
-    // Perl ChordPro's internal `key_print` / `key_sound`
-    // distinction; "Written" / "Sounding" reads correctly for
-    // both classical-music readers and guitarists with a capo.
+    // "Original / Playing" display so the player can see both
+    // the source-authored key and the resulting capo / transposed
+    // key. "Original" / "Playing" reads more naturally for
+    // guitar-style chord sheets than the technically correct
+    // "Written" / "Sounding" pair (the latter trips up readers
+    // who haven't internalised the music-theory distinction).
     //
     // Mid-song `{key}` changes (and any `{key}` whose value
     // doesn't match the primary) fall through to the single
@@ -1799,7 +1999,7 @@ function handleDirective(
         <p key={key} className="meta-inline meta-inline--key meta-inline--key-pair">
           <span className="meta-inline__group">
             <KeySignatureGlyph keyName={keyName} className="meta-inline__glyph" />
-            <span className="meta-inline__label">Written:</span>{' '}
+            <span className="meta-inline__label">Original:</span>{' '}
             <span className="meta-inline__value">{unicodeAccidentals(keyName)}</span>
           </span>
           <span className="meta-inline__separator" aria-hidden="true">
@@ -1807,7 +2007,7 @@ function handleDirective(
           </span>
           <span className="meta-inline__group">
             <KeySignatureGlyph keyName={ctx.soundingKey} className="meta-inline__glyph" />
-            <span className="meta-inline__label">Sounding:</span>{' '}
+            <span className="meta-inline__label">Playing:</span>{' '}
             <span className="meta-inline__value">
               {unicodeAccidentals(ctx.soundingKey)}
             </span>
@@ -1841,10 +2041,18 @@ function handleDirective(
       // The metronome glyph carries the meaning of the marker
       // on its own — "Tempo:" duplicates the icon's signal and
       // crowds the chip, so we drop the textual label and keep
-      // only the BPM value.
+      // only the BPM value. When the BPM matches a conventional
+      // Italian tempo marking (Allegro, Andante, …) we append
+      // it in parens so the reader sees both numeric and
+      // descriptive tempos at a glance.
       <p key={key} className="meta-inline meta-inline--tempo">
         <MetronomeGlyph bpm={safeBpm} className="meta-inline__glyph" />
-        <span className="meta-inline__value">{bpmRaw} BPM</span>
+        <span className="meta-inline__value">
+          {bpmRaw} BPM
+          {tempoMarkingFor(safeBpm) != null ? (
+            <span className="meta-inline__marking">{` (${tempoMarkingFor(safeBpm)})`}</span>
+          ) : null}
+        </span>
       </p>,
     );
     return;
@@ -1891,15 +2099,29 @@ function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {
   const sourceLine = key;
   switch (line.kind) {
     case 'lyrics': {
-      // Inside a `section.tab` / `section.grid`, the body picks up
-      // the `tab` / `grid` element style instead of the running
-      // `.text` style — mirrors `chordsketch-render-html`'s
-      // per-section style override.
+      // Inside `{start_of_grid}` we replace the plain lyrics row
+      // with an iReal Pro-style structured grid: bars separated
+      // by vertical barlines, repeat / volta / final markers
+      // rendered as glyphs, chord names typeset, beat dots
+      // (`.`) shown as muted continuation marks.
+      if (ctx.section?.name === 'grid') {
+        const gridLine = renderGridLine(line.value, key);
+        const gridRatio =
+          ctx.activeSourceLine === sourceLine &&
+          ctx.caretColumn !== undefined &&
+          ctx.caretLineLength !== undefined
+            ? Math.min(1, Math.max(0, ctx.caretColumn / Math.max(1, ctx.caretLineLength)))
+            : undefined;
+        pushElement(ctx, gridLine, sourceLine, gridRatio);
+        return;
+      }
+      // Inside a `section.tab`, the body picks up the `tab`
+      // element style instead of the running `.text` style —
+      // mirrors `chordsketch-render-html`'s per-section style
+      // override.
       let lyricsOverride: CSSProperties | null = null;
       if (ctx.section?.name === 'tab') {
         lyricsOverride = elementStyleToCss(ctx.fmt.tab);
-      } else if (ctx.section?.name === 'grid') {
-        lyricsOverride = elementStyleToCss(ctx.fmt.grid);
       }
       // Compute the per-line caret-marker ratio so the marker
       // lands on the rendered position rather than the raw source

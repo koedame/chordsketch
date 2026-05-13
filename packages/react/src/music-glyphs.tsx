@@ -497,6 +497,31 @@ function conductorPathLines(beats: 2 | 3 | 4 | 6): JSX.Element[] {
   return out;
 }
 
+// ---- Tempo-marking lookup --------------------------------------
+
+/**
+ * Italian tempo-marking name for a BPM value. Boundaries follow
+ * the conventional ranges (Grave < 40, Largo 40-59, Larghetto
+ * 60-65, Adagio 66-75, Andante 76-107, Moderato 108-119,
+ * Allegro 120-167, Vivace 168-176, Presto 177-199, Prestissimo
+ * ≥ 200). Returns `null` for non-finite / non-positive input.
+ *
+ * Sister-site to `crates/render-html/src/music_glyphs.rs::tempo_marking_for`.
+ */
+export function tempoMarkingFor(bpm: number): string | null {
+  if (!Number.isFinite(bpm) || bpm <= 0) return null;
+  if (bpm < 40) return 'Grave';
+  if (bpm < 60) return 'Largo';
+  if (bpm < 66) return 'Larghetto';
+  if (bpm < 76) return 'Adagio';
+  if (bpm < 108) return 'Andante';
+  if (bpm < 120) return 'Moderato';
+  if (bpm < 168) return 'Allegro';
+  if (bpm < 177) return 'Vivace';
+  if (bpm < 200) return 'Presto';
+  return 'Prestissimo';
+}
+
 // ---- Metronome glyph --------------------------------------------
 
 /**

@@ -942,6 +942,57 @@ describe('renderChordproAst', () => {
     expect(bChips[0]?.textContent).toBe('Key G');
   });
 
+  // `{start_of_grid}` body lines render through the structured
+  // grid layout (bars + barlines + chord cells) instead of as
+  // plain monospace text.
+  test('grid-section lyrics line renders structured iReal-style bars', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: {
+            name: 'start_of_grid',
+            value: 'Outro',
+            kind: { tag: 'startOfGrid' },
+            selector: null,
+          },
+        },
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              { chord: null, text: '|: G  .  .  . | C  .  .  . :|', spans: [] },
+            ],
+          },
+        },
+        {
+          kind: 'directive',
+          value: {
+            name: 'end_of_grid',
+            value: null,
+            kind: { tag: 'endOfGrid' },
+            selector: null,
+          },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    const gridLine = container.querySelector('.grid-line');
+    expect(gridLine).not.toBeNull();
+    // Repeat-start at the beginning.
+    expect(gridLine?.querySelector('.grid-barline--repeat-start')).not.toBeNull();
+    // Repeat-end at the end.
+    expect(gridLine?.querySelector('.grid-barline--repeat-end')).not.toBeNull();
+    // Chord cells.
+    const chords = Array.from(gridLine?.querySelectorAll('.grid-chord') ?? []).map(
+      (c) => c.textContent,
+    );
+    expect(chords).toEqual(['G', 'C']);
+    // Continuation dots — six dots across the two bars.
+    expect(gridLine?.querySelectorAll('.grid-continuation').length).toBe(6);
+  });
+
   // Chord names and key values are typeset with proper Unicode
   // musical accidentals (`♭` / `♯`) so a `{key: Bb}` reads as
   // "B♭" and a chord `[Bb]` shows as "B♭" in the chord row.
@@ -982,7 +1033,7 @@ describe('renderChordproAst', () => {
   // directive matches the song-primary key, the marker shows
   // both the written (notated) and sounding (concert) key with
   // their respective key-signature glyphs.
-  test('inline {key} marker shows Written + Sounding when transpose is active', () => {
+  test('inline {key} marker shows Original + Playing when transpose is active', () => {
     const ast: ChordproSong = {
       metadata: { ...EMPTY_META, key: 'G', keys: ['G'] },
       lines: [
@@ -998,11 +1049,11 @@ describe('renderChordproAst', () => {
     const groups = marker?.querySelectorAll('.meta-inline__group');
     expect(groups?.length).toBe(2);
     // Written half = original.
-    expect(groups?.[0]?.querySelector('.meta-inline__label')?.textContent).toBe('Written:');
+    expect(groups?.[0]?.querySelector('.meta-inline__label')?.textContent).toBe('Original:');
     expect(groups?.[0]?.querySelector('.meta-inline__value')?.textContent).toBe('G');
     expect(groups?.[0]?.querySelector('.music-glyph--key')).not.toBeNull();
     // Sounding half = transposed.
-    expect(groups?.[1]?.querySelector('.meta-inline__label')?.textContent).toBe('Sounding:');
+    expect(groups?.[1]?.querySelector('.meta-inline__label')?.textContent).toBe('Playing:');
     expect(groups?.[1]?.querySelector('.meta-inline__value')?.textContent).toBe('A');
     expect(groups?.[1]?.querySelector('.music-glyph--key')).not.toBeNull();
   });
@@ -1270,9 +1321,16 @@ describe('renderChordproAst', () => {
     expect(markers[1]?.classList.contains('meta-inline--tempo')).toBe(true);
     expect(markers[1]?.querySelector('.music-glyph--metronome')).not.toBeNull();
     // The "Tempo:" textual label was removed — the metronome glyph
-    // carries the signal on its own. Only the BPM value remains.
+    // carries the signal on its own. The value carries both the
+    // numeric BPM and the conventional Italian marking in parens
+    // (140 BPM ≈ Allegro).
     expect(markers[1]?.querySelector('.meta-inline__label')).toBeNull();
-    expect(markers[1]?.querySelector('.meta-inline__value')?.textContent).toBe('140 BPM');
+    expect(markers[1]?.querySelector('.meta-inline__value')?.textContent).toBe(
+      '140 BPM (Allegro)',
+    );
+    expect(markers[1]?.querySelector('.meta-inline__marking')?.textContent?.trim()).toBe(
+      '(Allegro)',
+    );
 
     expect(markers[2]?.classList.contains('meta-inline--time')).toBe(true);
     expect(markers[2]?.querySelector('.music-glyph--time')).not.toBeNull();

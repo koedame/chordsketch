@@ -7,6 +7,7 @@ import {
   TimeSignatureGlyph,
   keySignatureFor,
   relativeMajor,
+  tempoMarkingFor,
 } from '../src/music-glyphs';
 
 describe('keySignatureFor', () => {
@@ -73,6 +74,31 @@ describe('keySignatureFor', () => {
 // The previous "Cm should map to Eb" expectation was a
 // `keySignatureFor` requirement, not a `relativeMajor` invariant
 // — that lookup is now table-driven.
+describe('tempoMarkingFor', () => {
+  test.each([
+    [30, 'Grave'],
+    [50, 'Largo'],
+    [62, 'Larghetto'],
+    [70, 'Adagio'],
+    [90, 'Andante'],
+    [110, 'Moderato'],
+    [120, 'Allegro'],
+    [140, 'Allegro'],
+    [170, 'Vivace'],
+    [180, 'Presto'],
+    [220, 'Prestissimo'],
+  ])('%d BPM → %s', (bpm, marking) => {
+    expect(tempoMarkingFor(bpm)).toBe(marking);
+  });
+
+  test('rejects non-finite / non-positive BPM', () => {
+    expect(tempoMarkingFor(0)).toBeNull();
+    expect(tempoMarkingFor(-10)).toBeNull();
+    expect(tempoMarkingFor(NaN)).toBeNull();
+    expect(tempoMarkingFor(Infinity)).toBeNull();
+  });
+});
+
 describe('relativeMajor', () => {
   test('Em → G', () => expect(relativeMajor('E', '')).toBe('G'));
   test('Dm → F', () => expect(relativeMajor('D', '')).toBe('F'));

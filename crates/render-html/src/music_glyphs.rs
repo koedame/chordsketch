@@ -262,6 +262,43 @@ fn write_flat(s: &mut String, cx: f32, cy: f32) {
     );
 }
 
+/// Italian tempo-marking name for a BPM value. Sister-site to
+/// `packages/react/src/music-glyphs.tsx::tempoMarkingFor`.
+#[must_use]
+pub fn tempo_marking_for(bpm: f32) -> Option<&'static str> {
+    if !bpm.is_finite() || bpm <= 0.0 {
+        return None;
+    }
+    if bpm < 40.0 {
+        return Some("Grave");
+    }
+    if bpm < 60.0 {
+        return Some("Largo");
+    }
+    if bpm < 66.0 {
+        return Some("Larghetto");
+    }
+    if bpm < 76.0 {
+        return Some("Adagio");
+    }
+    if bpm < 108.0 {
+        return Some("Andante");
+    }
+    if bpm < 120.0 {
+        return Some("Moderato");
+    }
+    if bpm < 168.0 {
+        return Some("Allegro");
+    }
+    if bpm < 177.0 {
+        return Some("Vivace");
+    }
+    if bpm < 200.0 {
+        return Some("Presto");
+    }
+    Some("Prestissimo")
+}
+
 /// Emit an inline SVG mini metronome glyph with the pendulum
 /// animation duration derived from `bpm`. The `--cs-metronome-
 /// period` CSS custom property is set on the root `<svg>` so
@@ -428,6 +465,24 @@ mod tests {
     fn key_signature_svg_natural_emits_no_accidentals() {
         let svg = key_signature_svg("C");
         assert!(!svg.contains("<g "));
+    }
+
+    #[test]
+    fn tempo_marking_table() {
+        assert_eq!(tempo_marking_for(30.0), Some("Grave"));
+        assert_eq!(tempo_marking_for(50.0), Some("Largo"));
+        assert_eq!(tempo_marking_for(62.0), Some("Larghetto"));
+        assert_eq!(tempo_marking_for(70.0), Some("Adagio"));
+        assert_eq!(tempo_marking_for(90.0), Some("Andante"));
+        assert_eq!(tempo_marking_for(110.0), Some("Moderato"));
+        assert_eq!(tempo_marking_for(120.0), Some("Allegro"));
+        assert_eq!(tempo_marking_for(140.0), Some("Allegro"));
+        assert_eq!(tempo_marking_for(170.0), Some("Vivace"));
+        assert_eq!(tempo_marking_for(180.0), Some("Presto"));
+        assert_eq!(tempo_marking_for(220.0), Some("Prestissimo"));
+        assert_eq!(tempo_marking_for(0.0), None);
+        assert_eq!(tempo_marking_for(-1.0), None);
+        assert_eq!(tempo_marking_for(f32::NAN), None);
     }
 
     #[test]
