@@ -358,15 +358,19 @@ export function TimeSignatureGlyph({
 // ---- Metronome glyph --------------------------------------------
 
 /**
- * A mini metronome icon with a pendulum that swings at the actual
- * `bpm` rate. The animation is gated on
- * `@media (prefers-reduced-motion: reduce)` so users who opt out of
- * motion see a static icon.
+ * A mini Wittner-style metronome icon: a triangular body with an
+ * inverted-pendulum rod that pivots near the BASE (like a real
+ * mechanical metronome, not a hanging-pendulum clock). The rod
+ * sweeps wiper-style with the weight bead near the top, ticking
+ * once at each extreme = 2 ticks per full cycle = 2 beats per
+ * cycle. With `animation-direction: alternate` and an
+ * `animation-duration` of `60 / bpm` seconds (one half-cycle),
+ * the rod arrives at the opposite extreme every `60/bpm`
+ * seconds — exactly one beat at the requested BPM.
  *
- * The pendulum's full left → right → left period equals
- * `2 * (60 / bpm)` seconds (two beats per period); CSS reads the
- * BPM from a custom property so the animation duration scales
- * with the directive value without runtime JS.
+ * The animation is gated on
+ * `@media (prefers-reduced-motion: reduce)` so users who opt out
+ * of motion see a static icon.
  */
 export function MetronomeGlyph({
   bpm,
@@ -379,17 +383,29 @@ export function MetronomeGlyph({
   style?: CSSProperties;
 }): JSX.Element {
   const safeBpm = Number.isFinite(bpm) && bpm > 0 ? bpm : 60;
-  // Period (seconds) for one full left→right→left swing = two
-  // beats. Clamp to a sane range so a typo'd "{tempo: 99999}"
-  // doesn't strobe.
-  const period = Math.max(0.1, Math.min(10, (60 / safeBpm) * 2));
+  // Half-cycle duration in seconds — the time the rod takes to
+  // travel from one extreme to the other. With
+  // `animation-direction: alternate` this is the
+  // `animation-duration`. The full back-and-forth cycle is
+  // `2 * period` seconds. Two ticks per cycle ⇒ one tick every
+  // `period` seconds ⇒ exactly `bpm` ticks per minute.
+  // Clamp to a sane range so a typo'd `{tempo: 99999}` doesn't
+  // strobe and `{tempo: 0.001}` doesn't freeze.
+  const period = Math.max(0.05, Math.min(5, 60 / safeBpm));
   const cssVars: CSSProperties = {
     ...(style ?? {}),
-    // CSS custom property the keyframes consume. `as any` because
-    // CSSProperties does not type custom properties.
+    // CSS custom property the keyframes consume. The cast keeps
+    // CSSProperties happy (custom properties are not in its type).
     ['--cs-metronome-period' as string]: `${period.toFixed(3)}s`,
   };
 
+  // The SVG models a mechanical (Wittner-style) metronome: the
+  // rod is an INVERTED pendulum mounted on a pivot near the base
+  // of the triangular body, with the weight near the top of the
+  // rod. The pivot sits at (9, 19); the rod extends UPWARD
+  // through the body's tip (y=5) and beyond (y=2) so the upper
+  // portion of the rod and the weight bead are clearly visible
+  // sweeping across the top of the icon.
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -401,37 +417,32 @@ export function MetronomeGlyph({
       role="img"
       aria-label={`Metronome at ${safeBpm} BPM`}
     >
-      {/* Triangular body */}
+      {/* Triangular body — narrow top, wide base. */}
       <path
-        d="M 3 21 L 15 21 L 12.5 3 L 5.5 3 Z"
+        d="M 3 21 L 15 21 L 12.5 5 L 5.5 5 Z"
         fill="none"
         stroke="currentColor"
         strokeWidth={0.9}
         strokeLinejoin="round"
       />
-      {/* Top tick (pivot anchor) */}
-      <line
-        x1={9}
-        y1={3}
-        x2={9}
-        y2={1}
-        stroke="currentColor"
-        strokeWidth={0.7}
-        strokeLinecap="round"
-      />
-      {/* Pendulum arm — origin at (9, 3), animated via CSS */}
+      {/* Static pivot dot at the base of the rod. */}
+      <circle cx={9} cy={19} r={0.7} fill="currentColor" />
+      {/* Inverted-pendulum rod — `transform-origin: 9px 19px`
+          is set in the stylesheet so the rotation pivots at the
+          base. */}
       <g className="music-glyph--metronome__pendulum">
         <line
           x1={9}
-          y1={3}
+          y1={19}
           x2={9}
-          y2={17}
+          y2={2}
           stroke="currentColor"
           strokeWidth={0.9}
           strokeLinecap="round"
         />
-        {/* Weight bead near the pendulum bottom */}
-        <circle cx={9} cy={9} r={1.1} fill="currentColor" />
+        {/* Weight bead near the TOP of the rod (a real
+            metronome's adjustable slider). */}
+        <circle cx={9} cy={6} r={1.1} fill="currentColor" />
       </g>
     </svg>
   );

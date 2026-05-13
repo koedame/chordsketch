@@ -126,24 +126,29 @@ describe('<KeySignatureGlyph>', () => {
 });
 
 describe('<MetronomeGlyph>', () => {
-  test('writes the BPM-derived period into a CSS custom property', () => {
+  // The CSS animation runs with `animation-direction: alternate`,
+  // so `--cs-metronome-period` is the half-cycle duration (one
+  // extreme-to-extreme sweep). Two ticks per full back-and-forth
+  // ⇒ one tick every `period` seconds ⇒ exactly `bpm` ticks per
+  // minute. A regression that flips the formula back to
+  // `60/bpm * 2` would double the period and tick at half speed.
+  test('writes the BPM-derived half-cycle period into a CSS custom property', () => {
     const { container } = render(<MetronomeGlyph bpm={120} />);
     const svg = container.querySelector('svg.music-glyph--metronome') as SVGSVGElement | null;
     expect(svg).not.toBeNull();
-    // 120 BPM → 2 beats / 1.0 s per full swing.
-    expect(svg?.style.getPropertyValue('--cs-metronome-period')).toBe('1.000s');
+    // 120 BPM → half-cycle = 60/120 = 0.500s.
+    expect(svg?.style.getPropertyValue('--cs-metronome-period')).toBe('0.500s');
   });
 
-  test('60 BPM → 2 s per full swing', () => {
+  test('60 BPM → 1 s half-cycle (canonical Largo rate)', () => {
     const { container } = render(<MetronomeGlyph bpm={60} />);
     const svg = container.querySelector('svg') as SVGSVGElement | null;
-    expect(svg?.style.getPropertyValue('--cs-metronome-period')).toBe('2.000s');
+    expect(svg?.style.getPropertyValue('--cs-metronome-period')).toBe('1.000s');
   });
 
   test('clamps absurd BPM values into a sane animation period', () => {
     const fast = render(<MetronomeGlyph bpm={99999} />);
     const slow = render(<MetronomeGlyph bpm={0.001} />);
-    // Both should map to a finite, in-range period.
     const fastP = parseFloat(
       (fast.container.querySelector('svg') as SVGSVGElement | null)?.style.getPropertyValue(
         '--cs-metronome-period',
@@ -154,14 +159,27 @@ describe('<MetronomeGlyph>', () => {
         '--cs-metronome-period',
       ) ?? '',
     );
-    expect(fastP).toBeGreaterThanOrEqual(0.1);
-    expect(slowP).toBeLessThanOrEqual(10);
+    // Clamp range is now [0.05, 5] seconds.
+    expect(fastP).toBeGreaterThanOrEqual(0.05);
+    expect(slowP).toBeLessThanOrEqual(5);
   });
 
   test('falls back to 60 BPM for non-finite input', () => {
     const { container } = render(<MetronomeGlyph bpm={NaN} />);
     const svg = container.querySelector('svg') as SVGSVGElement | null;
-    expect(svg?.style.getPropertyValue('--cs-metronome-period')).toBe('2.000s');
+    expect(svg?.style.getPropertyValue('--cs-metronome-period')).toBe('1.000s');
+  });
+
+  test('models an inverted pendulum: pivot at the base, rod extending up', () => {
+    const { container } = render(<MetronomeGlyph bpm={120} />);
+    const svg = container.querySelector('svg') as SVGSVGElement | null;
+    // Static pivot dot at (9, 19).
+    const pivot = svg?.querySelector('circle[cx="9"][cy="19"]');
+    expect(pivot).not.toBeNull();
+    // Rod inside the pendulum group goes from (9, 19) up to (9, 2).
+    const rod = svg?.querySelector('.music-glyph--metronome__pendulum line');
+    expect(rod?.getAttribute('y1')).toBe('19');
+    expect(rod?.getAttribute('y2')).toBe('2');
   });
 
   test('aria-label exposes the BPM value', () => {

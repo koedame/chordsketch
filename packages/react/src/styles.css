@@ -379,21 +379,37 @@
 
 /* Metronome pendulum animation. The CSS custom property
    `--cs-metronome-period` is set inline by `<MetronomeGlyph>`
-   from the BPM, so the swing rate matches the directive. */
+   from the BPM, so the swing rate matches the directive
+   exactly. `animation-direction: alternate` means the
+   `animation-duration` is the time for one half-cycle
+   (extreme-to-extreme), so the duration value is `60 / bpm`
+   seconds — one beat per half-cycle, two beats per full
+   back-and-forth, which matches a real metronome ticking once
+   at each extreme. */
 .chordsketch-sheet__content .music-glyph--metronome__pendulum {
-  /* Pivot at the metronome's top tick (viewBox x=9, y=3). */
-  transform-origin: 9px 3px;
-  animation: cs-metronome-swing var(--cs-metronome-period, 1s) ease-in-out infinite alternate;
+  /* Pivot at the base of the rod (viewBox x=9, y=19) — inverted
+     pendulum, wiper-style sweep, distinct from a hanging-clock
+     pendulum's top-pivot. */
+  transform-origin: 9px 19px;
+  /* `cubic-bezier(0.42, 0, 0.58, 1)` is a stronger ease-in-out
+     than the default named keyword — the bob accelerates harder
+     through center and lingers longer at each extreme, which
+     reads more like a mechanical Wittner metronome's
+     audible "tock... tock... tock" rhythm than a smooth
+     sinusoidal swing. */
+  animation: cs-metronome-swing var(--cs-metronome-period, 1s) cubic-bezier(0.42, 0, 0.58, 1) infinite alternate;
 }
 @keyframes cs-metronome-swing {
   /* Start tilted left, end tilted right — the `alternate`
      animation-direction reverses on the return leg so the
-     bead traces a back-and-forth swing. */
+     bead traces a back-and-forth swing. The ±28° amplitude is
+     wider than the previous 18° to make the sweep clearly
+     visible at the 18×22-px icon size. */
   from {
-    transform: rotate(-18deg);
+    transform: rotate(-28deg);
   }
   to {
-    transform: rotate(18deg);
+    transform: rotate(28deg);
   }
 }
 @media (prefers-reduced-motion: reduce) {

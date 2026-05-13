@@ -267,6 +267,12 @@ fn write_flat(s: &mut String, cx: f32, cy: f32) {
 /// period` CSS custom property is set on the root `<svg>` so
 /// the stylesheet's `@keyframes cs-metronome-swing` rule (in
 /// the embedded `<style>` block) reads it without runtime JS.
+///
+/// Geometry: the rod is modelled as an INVERTED pendulum mounted
+/// on a pivot at `(9, 19)` near the base of the triangular body,
+/// with the weight bead near the top of the rod — a real
+/// mechanical Wittner metronome, not a hanging-clock pendulum.
+/// The pivot point is fixed; the rod sweeps wiper-style.
 #[must_use]
 pub fn metronome_svg(bpm_raw: &str) -> String {
     let bpm: f32 = bpm_raw.trim().parse::<f32>().unwrap_or(60.0);
@@ -275,9 +281,13 @@ pub fn metronome_svg(bpm_raw: &str) -> String {
     } else {
         60.0
     };
-    // Period (seconds) for one full left→right→left swing =
-    // two beats. Clamp to a sane range.
-    let period = ((60.0 / safe_bpm) * 2.0).clamp(0.1, 10.0);
+    // Half-cycle duration in seconds (extreme to extreme). With
+    // `animation-direction: alternate`, this is the
+    // `animation-duration`; a full back-and-forth is `2 * period`.
+    // Two ticks per full cycle ⇒ one tick every `period` seconds
+    // ⇒ exactly `bpm` ticks per minute, matching a real
+    // metronome's audible rhythm.
+    let period = (60.0 / safe_bpm).clamp(0.05, 5.0);
 
     let aria = format!("Metronome at {} BPM", bpm_raw.trim());
     let mut s = String::with_capacity(512);
@@ -286,14 +296,13 @@ pub fn metronome_svg(bpm_raw: &str) -> String {
         "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 18 22\" \
          width=\"18\" height=\"22\" class=\"music-glyph music-glyph--metronome\" \
          style=\"--cs-metronome-period:{:.3}s\" role=\"img\" aria-label=\"{}\">\
-         <path d=\"M 3 21 L 15 21 L 12.5 3 L 5.5 3 Z\" fill=\"none\" \
+         <path d=\"M 3 21 L 15 21 L 12.5 5 L 5.5 5 Z\" fill=\"none\" \
          stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linejoin=\"round\"/>\
-         <line x1=\"9\" y1=\"3\" x2=\"9\" y2=\"1\" stroke=\"currentColor\" \
-         stroke-width=\"0.7\" stroke-linecap=\"round\"/>\
+         <circle cx=\"9\" cy=\"19\" r=\"0.7\" fill=\"currentColor\"/>\
          <g class=\"music-glyph--metronome__pendulum\">\
-         <line x1=\"9\" y1=\"3\" x2=\"9\" y2=\"17\" stroke=\"currentColor\" \
+         <line x1=\"9\" y1=\"19\" x2=\"9\" y2=\"2\" stroke=\"currentColor\" \
          stroke-width=\"0.9\" stroke-linecap=\"round\"/>\
-         <circle cx=\"9\" cy=\"9\" r=\"1.1\" fill=\"currentColor\"/>\
+         <circle cx=\"9\" cy=\"6\" r=\"1.1\" fill=\"currentColor\"/>\
          </g></svg>",
         period,
         chordsketch_chordpro::escape::escape_xml(&aria),
@@ -403,23 +412,51 @@ mod tests {
     #[test]
     fn metronome_svg_writes_period_from_bpm() {
         let svg = metronome_svg("120");
-        // 120 BPM → 60/120 * 2 = 1.000s.
-        assert!(svg.contains("--cs-metronome-period:1.000s"));
+        // 120 BPM → half-cycle = 60/120 = 0.500s; full cycle (with
+        // `animation-direction: alternate`) = 1.0s = 2 beats.
+        assert!(
+            svg.contains("--cs-metronome-period:0.500s"),
+            "expected 0.500s half-cycle at 120 BPM; got: {svg}"
+        );
         assert!(svg.contains("music-glyph--metronome__pendulum"));
+    }
+
+    #[test]
+    fn metronome_svg_period_at_60_bpm() {
+        // 60 BPM → half-cycle = 1.000s ⇒ exactly one tick per second
+        // (the canonical "Largo" rate).
+        let svg = metronome_svg("60");
+        assert!(svg.contains("--cs-metronome-period:1.000s"));
     }
 
     #[test]
     fn metronome_svg_clamps_extreme_bpm() {
         let svg = metronome_svg("99999");
-        // Clamped to >= 0.1 s.
-        assert!(svg.contains("--cs-metronome-period:0.100s"));
+        // Clamped to >= 0.05 s.
+        assert!(svg.contains("--cs-metronome-period:0.050s"));
+    }
+
+    #[test]
+    fn metronome_svg_inverted_pendulum_pivot() {
+        // Pivot dot (static) sits at (9, 19); the swept rod's lower
+        // endpoint coincides with the pivot. A regression that flips
+        // back to top-pivot would emit `y1="3"` for the rod.
+        let svg = metronome_svg("120");
+        assert!(
+            svg.contains("<circle cx=\"9\" cy=\"19\" r=\"0.7\""),
+            "expected static pivot circle at (9, 19); got: {svg}"
+        );
+        assert!(
+            svg.contains("<line x1=\"9\" y1=\"19\" x2=\"9\" y2=\"2\""),
+            "rod must extend upward from base pivot; got: {svg}"
+        );
     }
 
     #[test]
     fn metronome_svg_fallbacks_for_non_numeric() {
         let svg = metronome_svg("nonsense");
-        // Falls back to 60 BPM → 2.000s.
-        assert!(svg.contains("--cs-metronome-period:2.000s"));
+        // Falls back to 60 BPM → 1.000s half-cycle.
+        assert!(svg.contains("--cs-metronome-period:1.000s"));
     }
 
     #[test]
