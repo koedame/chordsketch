@@ -942,6 +942,30 @@ describe('renderChordproAst', () => {
     expect(bChips[0]?.textContent).toBe('Key G');
   });
 
+  // Attribution rows ship with role icons so the eye can pick out
+  // "performer / composer / lyricist / tag" without parsing the
+  // textual labels.
+  test('header attribution rows carry role icons', () => {
+    const ast: ChordproSong = {
+      metadata: {
+        ...EMPTY_META,
+        title: 'Demo',
+        artists: ['ChordSketch'],
+        composers: ['J. Composer'],
+        lyricists: ['J. Lyricist'],
+        tags: ['demo'],
+      },
+      lines: [],
+    };
+    const { container } = render(renderChordproAst(ast));
+    expect(container.querySelector('.role-icon--artist')).not.toBeNull();
+    expect(container.querySelector('.role-icon--composer')).not.toBeNull();
+    expect(container.querySelector('.role-icon--lyricist')).not.toBeNull();
+    expect(container.querySelector('.role-icon--tag')).not.toBeNull();
+    // Each tag chip ships its own icon (one per tag).
+    expect(container.querySelectorAll('.meta--tags .role-icon--tag').length).toBe(1);
+  });
+
   // `{start_of_grid}` body lines render through the structured
   // grid layout (bars + barlines + chord cells) instead of as
   // plain monospace text.
@@ -984,13 +1008,69 @@ describe('renderChordproAst', () => {
     expect(gridLine?.querySelector('.grid-barline--repeat-start')).not.toBeNull();
     // Repeat-end at the end.
     expect(gridLine?.querySelector('.grid-barline--repeat-end')).not.toBeNull();
-    // Chord cells.
+    // Two equal-width bar cells (one per bar in the source).
+    const bars = gridLine?.querySelectorAll('.grid-bar') ?? [];
+    expect(bars.length).toBe(2);
+    // Chord names live inside the bar cells.
+    expect(bars[0]?.querySelector('.grid-chord')?.textContent).toBe('G');
+    expect(bars[1]?.querySelector('.grid-chord')?.textContent).toBe('C');
+    // Continuation dots from the source are dropped — beat
+    // alignment is handled by the bar cell's flex layout.
+    expect(gridLine?.querySelectorAll('.grid-continuation').length).toBe(0);
+  });
+
+  test('grid bars survive a volta + final barline source', () => {
+    // `|: G | C | D | G | |1 Em | C :| |2 Am | G |.`
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: {
+            name: 'start_of_grid',
+            value: null,
+            kind: { tag: 'startOfGrid' },
+            selector: null,
+          },
+        },
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              {
+                chord: null,
+                text: '|: G | C | D | G | |1 Em | C :| |2 Am | G |.',
+                spans: [],
+              },
+            ],
+          },
+        },
+        {
+          kind: 'directive',
+          value: {
+            name: 'end_of_grid',
+            value: null,
+            kind: { tag: 'endOfGrid' },
+            selector: null,
+          },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    const gridLine = container.querySelector('.grid-line');
+    expect(gridLine).not.toBeNull();
+    // Volta marker + final barline.
+    expect(gridLine?.querySelectorAll('.grid-volta').length).toBe(2);
+    expect(gridLine?.querySelector('.grid-barline--final')).not.toBeNull();
+    // 8 bars (each chord lands in its own bar cell).
+    expect(gridLine?.querySelectorAll('.grid-bar').length).toBe(8);
+    // Chord names appear in order, all normalised to Unicode
+    // accidentals (none of these have flats/sharps so the test
+    // just checks the chord-name sequence).
     const chords = Array.from(gridLine?.querySelectorAll('.grid-chord') ?? []).map(
       (c) => c.textContent,
     );
-    expect(chords).toEqual(['G', 'C']);
-    // Continuation dots — six dots across the two bars.
-    expect(gridLine?.querySelectorAll('.grid-continuation').length).toBe(6);
+    expect(chords).toEqual(['G', 'C', 'D', 'G', 'Em', 'C', 'Am', 'G']);
   });
 
   // Chord names and key values are typeset with proper Unicode

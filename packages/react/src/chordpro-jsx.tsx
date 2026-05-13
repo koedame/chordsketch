@@ -31,6 +31,7 @@ import { ChordDiagram } from './chord-diagram';
 import {
   KeySignatureGlyph,
   MetronomeGlyph,
+  RoleIcon,
   TimeSignatureGlyph,
   tempoMarkingFor,
 } from './music-glyphs';
@@ -401,78 +402,138 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
     })
     .join('');
   const tokens = tokenizeGridLine(raw);
+
+  // Group the flat token stream into a structured row of
+  // alternating barlines and bar cells. Continuation dots (`.`)
+  // and inter-token whitespace are dropped — they exist in the
+  // source to align beats within a bar but don't carry any
+  // information once we lay each bar out as an equal-width
+  // flex cell.
+  type Bar = { kind: 'bar'; chords: string[]; noChord: boolean };
+  type Marker =
+    | { kind: 'repeat-start' }
+    | { kind: 'repeat-end' }
+    | { kind: 'double' }
+    | { kind: 'final' }
+    | { kind: 'volta'; ending: number }
+    | { kind: 'barline' };
+  type Cell = Bar | Marker;
+  const cells: Cell[] = [];
+  let current: Bar | null = null;
+  const flush = () => {
+    if (current && (current.chords.length > 0 || current.noChord)) {
+      cells.push(current);
+    }
+    current = null;
+  };
+  for (const tok of tokens) {
+    switch (tok.kind) {
+      case 'space':
+      case 'continuation':
+        // No content; ignore.
+        break;
+      case 'chord':
+        if (!current) current = { kind: 'bar', chords: [], noChord: false };
+        current.chords.push(tok.name);
+        break;
+      case 'no-chord':
+        if (!current) current = { kind: 'bar', chords: [], noChord: false };
+        current.noChord = true;
+        break;
+      case 'repeat-start':
+      case 'repeat-end':
+      case 'double':
+      case 'final':
+      case 'volta':
+      case 'barline':
+        flush();
+        cells.push(tok);
+        break;
+    }
+  }
+  flush();
+
+  const renderMarker = (m: Marker, idx: number): JSX.Element => {
+    switch (m.kind) {
+      case 'repeat-start':
+        return (
+          <span
+            key={idx}
+            className="grid-barline grid-barline--repeat-start"
+            aria-label="repeat start"
+          >
+            <span className="grid-barline__line grid-barline__line--thick" />
+            <span className="grid-barline__line" />
+            <span className="grid-barline__dots">
+              <span />
+              <span />
+            </span>
+          </span>
+        );
+      case 'repeat-end':
+        return (
+          <span
+            key={idx}
+            className="grid-barline grid-barline--repeat-end"
+            aria-label="repeat end"
+          >
+            <span className="grid-barline__dots">
+              <span />
+              <span />
+            </span>
+            <span className="grid-barline__line" />
+            <span className="grid-barline__line grid-barline__line--thick" />
+          </span>
+        );
+      case 'double':
+        return (
+          <span key={idx} className="grid-barline grid-barline--double" aria-hidden="true">
+            <span className="grid-barline__line" />
+            <span className="grid-barline__line" />
+          </span>
+        );
+      case 'final':
+        return (
+          <span key={idx} className="grid-barline grid-barline--final" aria-label="final barline">
+            <span className="grid-barline__line" />
+            <span className="grid-barline__line grid-barline__line--thick" />
+          </span>
+        );
+      case 'volta':
+        return (
+          <span key={idx} className="grid-volta" aria-label={`${m.ending} ending`}>
+            <span className="grid-volta__bracket">
+              <span className="grid-volta__cap" />
+              <span className="grid-volta__label">{m.ending}.</span>
+            </span>
+            <span className="grid-barline__line" />
+          </span>
+        );
+      case 'barline':
+        return <span key={idx} className="grid-barline" aria-hidden="true" />;
+    }
+  };
+
   return (
     <div key={key} className="grid-line">
-      {tokens.map((tok, idx) => {
-        switch (tok.kind) {
-          case 'repeat-start':
-            return (
-              <span key={idx} className="grid-barline grid-barline--repeat-start" aria-label="repeat start">
-                <span className="grid-barline__line" />
-                <span className="grid-barline__line" />
-                <span className="grid-barline__dots">
-                  <span />
-                  <span />
+      {cells.map((cell, idx) => {
+        if (cell.kind === 'bar') {
+          return (
+            <span key={idx} className="grid-bar">
+              {cell.noChord ? (
+                <span className="grid-no-chord" aria-label="no chord">
+                  N.C.
                 </span>
-              </span>
-            );
-          case 'repeat-end':
-            return (
-              <span key={idx} className="grid-barline grid-barline--repeat-end" aria-label="repeat end">
-                <span className="grid-barline__dots">
-                  <span />
-                  <span />
+              ) : null}
+              {cell.chords.map((c, ci) => (
+                <span key={ci} className="grid-chord">
+                  {unicodeAccidentals(c)}
                 </span>
-                <span className="grid-barline__line" />
-                <span className="grid-barline__line" />
-              </span>
-            );
-          case 'double':
-            return (
-              <span key={idx} className="grid-barline grid-barline--double" aria-hidden="true">
-                <span className="grid-barline__line" />
-                <span className="grid-barline__line" />
-              </span>
-            );
-          case 'final':
-            return (
-              <span key={idx} className="grid-barline grid-barline--final" aria-label="final barline">
-                <span className="grid-barline__line" />
-                <span className="grid-barline__line grid-barline__line--thick" />
-              </span>
-            );
-          case 'volta':
-            return (
-              <span key={idx} className="grid-volta" aria-label={`${tok.ending} ending`}>
-                <span className="grid-barline__line" />
-                <span className="grid-volta__bracket">{tok.ending}.</span>
-              </span>
-            );
-          case 'barline':
-            return <span key={idx} className="grid-barline" aria-hidden="true" />;
-          case 'continuation':
-            return (
-              <span key={idx} className="grid-continuation" aria-label="continue previous chord">
-                ·
-              </span>
-            );
-          case 'no-chord':
-            return (
-              <span key={idx} className="grid-no-chord" aria-label="no chord">
-                N.C.
-              </span>
-            );
-          case 'space':
-            return <span key={idx} className="grid-space" aria-hidden="true" />;
-          case 'chord':
-            return (
-              <span key={idx} className="grid-chord">
-                {unicodeAccidentals(tok.name)}
-              </span>
-            );
-          default:
-            return null;
+              ))}
+            </span>
+          );
         }
+        return renderMarker(cell, idx);
       })}
     </div>
   );
@@ -1402,9 +1463,16 @@ function renderHeader(
     values: string[],
     sources: number[],
     baseKey: string,
+    /**
+     * Role icon shown to the left of the row. Omit when the
+     * directive has no meaningful icon (e.g. `Arr.` reuses
+     * `composer` since arrangers are also "the music side").
+     */
+    iconKind?: 'artist' | 'composer' | 'lyricist',
   ): JSX.Element {
     return (
       <Fragment key={baseKey}>
+        {iconKind ? <RoleIcon kind={iconKind} className="meta__role-icon" /> : null}
         {label && (
           <span className="meta__label" aria-hidden="true">
             {label}{' '}
@@ -1424,7 +1492,7 @@ function renderHeader(
   if (metadata.artists.length > 0) {
     out.push(
       <p key="meta-attribution-primary" className="meta meta--attribution">
-        {buildMultiValueRow('by', metadata.artists, metaLines.artists, 'artist')}
+        {buildMultiValueRow('by', metadata.artists, metaLines.artists, 'artist', 'artist')}
       </p>,
     );
   }
@@ -1439,17 +1507,39 @@ function renderHeader(
   };
   if (metadata.composers.length > 0) {
     pushAttribution(
-      buildMultiValueRow('Music', metadata.composers, metaLines.composers, 'composer'),
+      buildMultiValueRow(
+        'Music',
+        metadata.composers,
+        metaLines.composers,
+        'composer',
+        'composer',
+      ),
     );
   }
   if (metadata.lyricists.length > 0) {
     pushAttribution(
-      buildMultiValueRow('Lyrics', metadata.lyricists, metaLines.lyricists, 'lyricist'),
+      buildMultiValueRow(
+        'Lyrics',
+        metadata.lyricists,
+        metaLines.lyricists,
+        'lyricist',
+        'lyricist',
+      ),
     );
   }
   if (metadata.arrangers.length > 0) {
+    // Arrangers share the composer-side icon — they're the
+    // "music arrangement" role, distinct from "lyrics" or
+    // "performer", and giving them their own glyph would
+    // overcrowd this small attribution row.
     pushAttribution(
-      buildMultiValueRow('Arr.', metadata.arrangers, metaLines.arrangers, 'arranger'),
+      buildMultiValueRow(
+        'Arr.',
+        metadata.arrangers,
+        metaLines.arrangers,
+        'arranger',
+        'composer',
+      ),
     );
   }
   if (attributionSecondary.length > 0) {
@@ -1586,6 +1676,7 @@ function renderHeader(
               className={isActive ? 'tag line--active' : 'tag'}
               data-source-line={sourceLine}
             >
+              <RoleIcon kind="tag" className="tag__icon" />
               {tag}
             </span>
           );

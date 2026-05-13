@@ -497,6 +497,140 @@ function conductorPathLines(beats: 2 | 3 | 4 | 6): JSX.Element[] {
   return out;
 }
 
+// ---- Attribution role icons ------------------------------------
+
+/**
+ * Tiny inline SVG icons used next to the header attribution
+ * lines so the role each name plays (artist / composer /
+ * lyricist / tag) is visible at a glance. Hand-coded simplified
+ * shapes — at 1em they read as "mic / note / pen / tag" without
+ * needing an icon font.
+ */
+export function RoleIcon({
+  kind,
+  className,
+}: {
+  kind: 'artist' | 'composer' | 'lyricist' | 'tag';
+  className?: string;
+}): JSX.Element {
+  const classes = ['role-icon', `role-icon--${kind}`, className].filter(Boolean).join(' ');
+  switch (kind) {
+    case 'artist':
+      // Microphone — capsule head + small stand.
+      return (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 16 16"
+          width={14}
+          height={14}
+          className={classes}
+          aria-hidden="true"
+        >
+          <rect
+            x={6}
+            y={2}
+            width={4}
+            height={8}
+            rx={2}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.2}
+          />
+          <path
+            d="M 4 8 C 4 11, 6 12, 8 12 C 10 12, 12 11, 12 8"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.2}
+            strokeLinecap="round"
+          />
+          <line x1={8} y1={12} x2={8} y2={15} stroke="currentColor" strokeWidth={1.2} />
+          <line x1={5.5} y1={15} x2={10.5} y2={15} stroke="currentColor" strokeWidth={1.2} />
+        </svg>
+      );
+    case 'composer':
+      // Eighth note (♪) — stem with a beam flag and a filled head.
+      return (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 16 16"
+          width={14}
+          height={14}
+          className={classes}
+          aria-hidden="true"
+        >
+          <line x1={9} y1={3} x2={9} y2={12} stroke="currentColor" strokeWidth={1.4} />
+          <path
+            d="M 9 3 C 11 4, 13 5, 12 8"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.4}
+            strokeLinecap="round"
+          />
+          <ellipse cx={6.5} cy={12} rx={3} ry={2.2} fill="currentColor" />
+        </svg>
+      );
+    case 'lyricist':
+      // Pen / pencil — slanted body with a triangular tip.
+      return (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 16 16"
+          width={14}
+          height={14}
+          className={classes}
+          aria-hidden="true"
+        >
+          <path
+            d="M 3 13 L 5 11 L 11 5 L 13 7 L 7 13 Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.2}
+            strokeLinejoin="round"
+          />
+          <line
+            x1={11}
+            y1={5}
+            x2={13}
+            y2={3}
+            stroke="currentColor"
+            strokeWidth={1.2}
+            strokeLinecap="round"
+          />
+          <line
+            x1={3}
+            y1={13}
+            x2={2.5}
+            y2={13.5}
+            stroke="currentColor"
+            strokeWidth={1.2}
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case 'tag':
+      // Tag / label — pointed-end pentagon with a hole near the tip.
+      return (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 16 16"
+          width={14}
+          height={14}
+          className={classes}
+          aria-hidden="true"
+        >
+          <path
+            d="M 2 6 L 7 2 L 14 2 L 14 9 L 9 14 Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.2}
+            strokeLinejoin="round"
+          />
+          <circle cx={11.5} cy={4.5} r={1} fill="currentColor" />
+        </svg>
+      );
+  }
+}
+
 // ---- Tempo-marking lookup --------------------------------------
 
 /**

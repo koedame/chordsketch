@@ -552,32 +552,60 @@
   }
 }
 
+/* Attribution role icons — small SVGs inline with the
+   "by Artist" / "Music X" / "Lyrics Y" / tag rows. Inherit the
+   text colour so they pick up the surrounding tier's tone. */
+.chordsketch-sheet__content .role-icon {
+  display: inline-block;
+  vertical-align: -0.15em;
+  margin-right: 0.3em;
+  color: var(--cs-ink-500, #67646d);
+  flex-shrink: 0;
+}
+.chordsketch-sheet__content .meta__role-icon {
+  margin-right: 0.25em;
+}
+.chordsketch-sheet__content .tag__icon {
+  margin-right: 0.2em;
+  color: currentColor;
+}
+
 /* Grid section — iReal Pro-style bar grid.
-   Each `{start_of_grid}` body line tokenises into bars and
-   barlines; the layout is a flex row with structured glyphs for
-   repeat / volta / final markers. Chord cells use the chord
-   font, continuation dots are muted. */
+   Each `{start_of_grid}` body line lays out a flex row of
+   alternating barlines (fixed-width) and bar cells
+   (`flex: 1` → equal width). Continuation dots from the source
+   are dropped — beat alignment within a bar is handled by the
+   bar cell's own flex distribution.
+   `.grid-line` opens its own row context so the bars don't
+   inherit the lyric `display: flex; flex-wrap: wrap` from the
+   parent. */
 .chordsketch-sheet__content .grid-line {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.15em 0.35em;
-  margin: 0.2em 0;
+  align-items: stretch;
+  margin: 0.35em 0;
+  min-height: 2.4em;
   font-family: var(--cs-font-chord, var(--cs-font-serif, 'Source Serif Pro', serif));
   font-weight: 600;
   font-size: 1rem;
   line-height: 1.4;
   color: var(--cs-ink-900, #1a1718);
 }
+
+/* Bar cell — `flex: 1` so every bar in the row is the same
+   visual width. Chord names inside are distributed evenly with
+   `space-around` so a bar with 1 chord centres the chord, a
+   bar with 2 splits the space, etc. */
+.chordsketch-sheet__content .grid-bar {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0.2em 0.5em;
+  min-width: 3em;
+  gap: 0.3em;
+}
 .chordsketch-sheet__content .grid-chord {
   color: var(--cs-accent, #bd1642);
-  min-width: 1.5em;
-  text-align: center;
-}
-.chordsketch-sheet__content .grid-continuation {
-  color: var(--cs-ink-400, #a8a4ad);
-  font-weight: 400;
-  min-width: 1em;
   text-align: center;
 }
 .chordsketch-sheet__content .grid-no-chord {
@@ -585,32 +613,24 @@
   font-style: italic;
   font-weight: 500;
 }
-.chordsketch-sheet__content .grid-space {
-  width: 0.2em;
-  display: inline-block;
-}
 
-/* Barlines — single, double, repeat, final. The two
-   `__line` spans inside `repeat-start` / `repeat-end` / `final`
-   render the conventional double-line glyph; `__dots` adds the
-   two repeat dots. */
+/* Barlines — single, double, repeat, final. Each one is a
+   fixed-width inline-flex separator between two bar cells. */
 .chordsketch-sheet__content .grid-barline {
   display: inline-flex;
   align-items: stretch;
   align-self: stretch;
   gap: 1.5px;
-  margin: 0 0.15em;
+  flex-shrink: 0;
 }
 .chordsketch-sheet__content .grid-barline:not([class*='--']) {
   width: 1.5px;
   background-color: var(--cs-ink-900, #1a1718);
-  min-height: 1.2em;
 }
 .chordsketch-sheet__content .grid-barline__line {
   display: inline-block;
   width: 1.5px;
   background-color: var(--cs-ink-900, #1a1718);
-  min-height: 1.2em;
 }
 .chordsketch-sheet__content .grid-barline__line--thick {
   width: 3.5px;
@@ -620,7 +640,7 @@
   flex-direction: column;
   justify-content: center;
   gap: 0.18em;
-  padding: 0 1.5px;
+  padding: 0 2.5px;
 }
 .chordsketch-sheet__content .grid-barline__dots > span {
   width: 3px;
@@ -630,26 +650,40 @@
   display: inline-block;
 }
 
-/* 1st / 2nd ending bracket — small superscript number sits above
-   the barline so the ending is labelled like in real music
-   notation. */
+/* 1st / 2nd ending bracket — the bracket sits on top of the
+   barline, with a tiny number label tucked above. */
 .chordsketch-sheet__content .grid-volta {
   display: inline-flex;
   align-items: stretch;
-  margin: 0 0.15em;
+  flex-shrink: 0;
   position: relative;
 }
 .chordsketch-sheet__content .grid-volta .grid-barline__line {
   background-color: var(--cs-ink-900, #1a1718);
 }
 .chordsketch-sheet__content .grid-volta__bracket {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  position: absolute;
+  top: -0.1em;
+  left: 0;
+}
+.chordsketch-sheet__content .grid-volta__cap {
+  display: block;
+  width: 1.5em;
+  height: 1.5px;
+  background-color: var(--cs-ink-900, #1a1718);
+}
+.chordsketch-sheet__content .grid-volta__label {
   display: inline-block;
-  margin-left: 0.2em;
+  margin-left: 0.15em;
   font-size: 0.7em;
   font-weight: 600;
   color: var(--cs-ink-900, #1a1718);
-  align-self: flex-start;
   line-height: 1;
+  padding-top: 0.1em;
 }
 
 /* Tag row — separate from the main meta strip because `{tag}`
