@@ -206,6 +206,61 @@ describe('<TimeSignatureGlyph>', () => {
     expect(container.querySelector('.music-glyph--time__den')?.textContent).toBe('8');
   });
 
+  test('renders a horizontal fraction bar between numerator and denominator', () => {
+    const { container } = render(<TimeSignatureGlyph value="3/4" />);
+    expect(container.querySelector('.music-glyph--time__bar')).not.toBeNull();
+  });
+
+  // Conductor's wrist animation is opt-in via the `bpm` prop —
+  // omitting BPM leaves the glyph static so it never animates on
+  // a song that has no tempo declared.
+  test('renders statically (no conductor class, no period) when bpm is unset', () => {
+    const { container } = render(<TimeSignatureGlyph value="4/4" />);
+    const glyph = container.querySelector('.music-glyph--time') as HTMLElement | null;
+    expect(glyph).not.toBeNull();
+    expect(
+      Array.from(glyph?.classList ?? []).some((c) => c.startsWith('music-glyph--time--conduct-')),
+    ).toBe(false);
+    expect(glyph?.style.getPropertyValue('--cs-time-period')).toBe('');
+  });
+
+  test('writes conductor-N class + period from numerator * (60/bpm)', () => {
+    const { container } = render(<TimeSignatureGlyph value="4/4" bpm={120} />);
+    const glyph = container.querySelector('.music-glyph--time') as HTMLElement | null;
+    expect(glyph?.classList.contains('music-glyph--time--conduct-4')).toBe(true);
+    // 4 beats * (60/120) = 2.000s per measure.
+    expect(glyph?.style.getPropertyValue('--cs-time-period')).toBe('2.000s');
+  });
+
+  test('3/4 at 90 BPM → conduct-3 with 2.000s cycle', () => {
+    const { container } = render(<TimeSignatureGlyph value="3/4" bpm={90} />);
+    const glyph = container.querySelector('.music-glyph--time') as HTMLElement | null;
+    expect(glyph?.classList.contains('music-glyph--time--conduct-3')).toBe(true);
+    // 3 * 60/90 = 2.000s.
+    expect(glyph?.style.getPropertyValue('--cs-time-period')).toBe('2.000s');
+  });
+
+  test('6/8 picks the 6-beat conductor pattern', () => {
+    const { container } = render(<TimeSignatureGlyph value="6/8" bpm={120} />);
+    const glyph = container.querySelector('.music-glyph--time') as HTMLElement | null;
+    expect(glyph?.classList.contains('music-glyph--time--conduct-6')).toBe(true);
+  });
+
+  test('5/4 (unsupported numerator) renders statically without a conductor class', () => {
+    const { container } = render(<TimeSignatureGlyph value="5/4" bpm={120} />);
+    const glyph = container.querySelector('.music-glyph--time') as HTMLElement | null;
+    expect(
+      Array.from(glyph?.classList ?? []).some((c) => c.startsWith('music-glyph--time--conduct-')),
+    ).toBe(false);
+  });
+
+  test('clamps the conductor period for absurd BPM', () => {
+    const { container } = render(<TimeSignatureGlyph value="4/4" bpm={99999} />);
+    const glyph = container.querySelector('.music-glyph--time') as HTMLElement | null;
+    const period = parseFloat(glyph?.style.getPropertyValue('--cs-time-period') ?? '');
+    expect(period).toBeGreaterThanOrEqual(0.3);
+  });
+
   test('falls back to plain text for non-fraction input ("C", "common", blank)', () => {
     for (const v of ['C', 'common', '']) {
       const { container } = render(<TimeSignatureGlyph value={v} />);

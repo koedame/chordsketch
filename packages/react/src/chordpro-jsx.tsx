@@ -729,6 +729,28 @@ interface FormattingState {
   grid: ElementStyle;
 }
 
+/**
+ * Pick an initial BPM for the walker from the song's
+ * `{tempo}` metadata. Tries the plural `tempos` Vec (last-wins
+ * for multi-value `[Nx] [Pos]` parity) before falling back to
+ * the singular `tempo` view, mirroring how the chip strip
+ * resolves the header tempo. Returns `null` when the song
+ * declares no tempo so the time-signature glyph renders
+ * statically.
+ */
+function parseInitialBpm(
+  tempos: readonly string[] | undefined,
+  tempo: string | null | undefined,
+): number | null {
+  const candidates = tempos && tempos.length > 0 ? tempos : tempo ? [tempo] : [];
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    const v = candidates[i]!;
+    const parsed = Number.parseInt(v, 10);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return null;
+}
+
 function emptyFormattingState(): FormattingState {
   return {
     text: emptyElementStyle(),
@@ -1348,6 +1370,14 @@ interface WalkContext {
    * need to clamp on the hot path.
    */
   caretRatio?: number;
+  /**
+   * BPM in effect at the current walker position — updated by every
+   * `{tempo}` directive encountered, seeded from
+   * `Metadata.tempo` (last-wins header value) so a song with a
+   * single header tempo still drives the time-signature
+   * conductor animation. `null` when no tempo has been declared.
+   */
+  activeBpm: number | null;
 }
 
 function flushSection(ctx: WalkContext, key: number): void {
@@ -1630,13 +1660,17 @@ function handleDirective(
   if (kind.tag === 'tempo' && directive.value && directive.value.trim().length > 0) {
     const bpmRaw = directive.value.trim();
     const bpm = Number.parseInt(bpmRaw, 10);
+    const safeBpm = Number.isFinite(bpm) && bpm > 0 ? bpm : 60;
+    // Update the walker's active BPM so any *downstream* `{time}`
+    // marker (and any `<TimeSignatureGlyph>` it emits) animates
+    // at the new tempo. Spec-wise `{tempo}` is `[Pos]`, so this
+    // matches the directive's positional semantics — see the
+    // Phase B notes in #2454.
+    ctx.activeBpm = safeBpm;
     pushElement(
       ctx,
       <p key={key} className="meta-inline meta-inline--tempo">
-        <MetronomeGlyph
-          bpm={Number.isFinite(bpm) ? bpm : 60}
-          className="meta-inline__glyph"
-        />
+        <MetronomeGlyph bpm={safeBpm} className="meta-inline__glyph" />
         <span className="meta-inline__label">Tempo:</span>{' '}
         <span className="meta-inline__value">{bpmRaw} BPM</span>
       </p>,
@@ -1648,9 +1682,12 @@ function handleDirective(
     pushElement(
       ctx,
       <p key={key} className="meta-inline meta-inline--time">
-        <TimeSignatureGlyph value={timeValue} className="meta-inline__glyph" />
         <span className="meta-inline__label">Time:</span>{' '}
-        <span className="meta-inline__value">{timeValue}</span>
+        <TimeSignatureGlyph
+          value={timeValue}
+          bpm={ctx.activeBpm}
+          className="meta-inline__glyph"
+        />
       </p>,
     );
     return;
@@ -1753,6 +1790,12 @@ export function renderChordproAst(
             Math.max(0, options.caretColumn / Math.max(1, options.caretLineLength)),
           )
         : undefined,
+    // Seed from the header-strip tempo so a song with `{tempo: 120}`
+    // up top drives every downstream time-signature glyph at
+    // 120 BPM, even if no positional `{tempo}` follows. Picks the
+    // *last* declared header tempo to match how the chip strip
+    // displays multi-value tempos (Phase A of #2454).
+    activeBpm: parseInitialBpm(song.metadata.tempos, song.metadata.tempo),
   };
   // Emit header first so metadata lands above the body even when
   // the source has metadata directives interleaved with lines.

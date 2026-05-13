@@ -21,6 +21,16 @@ h2 { font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif; font-wei
 .music-glyph { display: inline-block; flex-shrink: 0; vertical-align: middle; color: #1A1718; }
 .music-glyph--time { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; font-family: "Source Serif Pro", serif; font-weight: 700; font-size: 1.1em; letter-spacing: 0; }
 .music-glyph--time__num, .music-glyph--time__den { display: block; line-height: 0.9; font-feature-settings: "tnum" 1; }
+.music-glyph--time__bar { display: block; width: 0.9em; height: 1.5px; margin: 0.05em 0; background-color: currentColor; border-radius: 1px; }
+.music-glyph--time--conduct-2 { animation: cs-conductor-2 var(--cs-time-period, 2s) ease-in-out infinite; }
+.music-glyph--time--conduct-3 { animation: cs-conductor-3 var(--cs-time-period, 3s) ease-in-out infinite; }
+.music-glyph--time--conduct-4 { animation: cs-conductor-4 var(--cs-time-period, 4s) ease-in-out infinite; }
+.music-glyph--time--conduct-6 { animation: cs-conductor-6 var(--cs-time-period, 6s) ease-in-out infinite; }
+@keyframes cs-conductor-2 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(0,1.5px); } }
+@keyframes cs-conductor-3 { 0%,100% { transform: translate(0,0); } 33% { transform: translate(0,1.5px); } 66% { transform: translate(1.5px,0); } }
+@keyframes cs-conductor-4 { 0%,100% { transform: translate(0,0); } 25% { transform: translate(0,1.5px); } 50% { transform: translate(-1.5px,0); } 75% { transform: translate(1.5px,0); } }
+@keyframes cs-conductor-6 { 0%,100% { transform: translate(0,0); } 16% { transform: translate(0,1.5px); } 33% { transform: translate(-1.2px,0.8px); } 50% { transform: translate(-0.8px,0); } 66% { transform: translate(0.8px,0); } 83% { transform: translate(1.2px,-0.8px); } }
+@media (prefers-reduced-motion: reduce) { .music-glyph--time--conduct-2, .music-glyph--time--conduct-3, .music-glyph--time--conduct-4, .music-glyph--time--conduct-6 { animation: none; transform: translate(0,0); } }
 .music-glyph--metronome__pendulum { transform-origin: 9px 19px; animation: cs-metronome-swing var(--cs-metronome-period, 1s) cubic-bezier(0.42, 0, 0.58, 1) infinite alternate; }
 @keyframes cs-metronome-swing { from { transform: rotate(-28deg); } to { transform: rotate(28deg); } }
 @media (prefers-reduced-motion: reduce) { .music-glyph--metronome__pendulum { animation: none; transform: rotate(0deg); } }

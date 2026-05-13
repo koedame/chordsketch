@@ -356,7 +356,12 @@
 
 /* Stacked time-signature numerator / denominator typography.
    Reads like a real music-notation time signature (e.g. `4`
-   over `4`) without drawing a staff. */
+   over `4`) with an explicit thin horizontal divider between
+   the digits so the stack reads unambiguously at the small icon
+   size. The conductor-pattern animation (gated on the
+   `.music-glyph--time--conduct-N` modifier) drives a subtle
+   wrist gesture that ticks once per beat at the active BPM —
+   see the `@keyframes cs-conductor-*` rules below. */
 .chordsketch-sheet__content .music-glyph--time {
   display: inline-flex;
   flex-direction: column;
@@ -375,6 +380,75 @@
      each other like an engraved time signature. */
   line-height: 0.9;
   font-feature-settings: 'tnum' 1;
+}
+.chordsketch-sheet__content .music-glyph--time__bar {
+  display: block;
+  width: 0.9em;
+  height: 1.5px;
+  margin: 0.05em 0;
+  background-color: currentColor;
+  border-radius: 1px;
+}
+
+/* Conductor's wrist gesture — the time-signature glyph traces
+   the conventional simple-pattern path (down for beat 1, then
+   left / right / up depending on the meter), looping at the
+   active tempo. The `--cs-time-period` custom property carries
+   one full measure's duration in seconds, set inline by
+   `<TimeSignatureGlyph bpm={...}>`. Movement is intentionally
+   small (~1.5 px) so it reads as a subtle "live" indicator
+   rather than a distracting motion — and the `ease-in-out`
+   between waypoints approximates the baton's natural
+   acceleration / ictus / deceleration between beats. */
+.chordsketch-sheet__content .music-glyph--time--conduct-2 {
+  animation: cs-conductor-2 var(--cs-time-period, 2s) ease-in-out infinite;
+}
+.chordsketch-sheet__content .music-glyph--time--conduct-3 {
+  animation: cs-conductor-3 var(--cs-time-period, 3s) ease-in-out infinite;
+}
+.chordsketch-sheet__content .music-glyph--time--conduct-4 {
+  animation: cs-conductor-4 var(--cs-time-period, 4s) ease-in-out infinite;
+}
+.chordsketch-sheet__content .music-glyph--time--conduct-6 {
+  animation: cs-conductor-6 var(--cs-time-period, 6s) ease-in-out infinite;
+}
+/* 2-beat pattern: down (beat 1), up (beat 2). */
+@keyframes cs-conductor-2 {
+  0%, 100% { transform: translate(0, 0); }
+  50%      { transform: translate(0, 1.5px); }
+}
+/* 3-beat pattern: down, right, up. */
+@keyframes cs-conductor-3 {
+  0%, 100% { transform: translate(0, 0); }
+  33%      { transform: translate(0, 1.5px); }
+  66%      { transform: translate(1.5px, 0); }
+}
+/* 4-beat pattern: down, left, right, up — the classic
+   conductor's cross. */
+@keyframes cs-conductor-4 {
+  0%, 100% { transform: translate(0, 0); }
+  25%      { transform: translate(0, 1.5px); }
+  50%      { transform: translate(-1.5px, 0); }
+  75%      { transform: translate(1.5px, 0); }
+}
+/* 6-beat pattern: down / down-out, left, down-mid, right, up-out,
+   up (compound triple, but each beat visualised distinctly). */
+@keyframes cs-conductor-6 {
+  0%, 100% { transform: translate(0, 0); }
+  16%      { transform: translate(0, 1.5px); }
+  33%      { transform: translate(-1.2px, 0.8px); }
+  50%      { transform: translate(-0.8px, 0); }
+  66%      { transform: translate(0.8px, 0); }
+  83%      { transform: translate(1.2px, -0.8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chordsketch-sheet__content .music-glyph--time--conduct-2,
+  .chordsketch-sheet__content .music-glyph--time--conduct-3,
+  .chordsketch-sheet__content .music-glyph--time--conduct-4,
+  .chordsketch-sheet__content .music-glyph--time--conduct-6 {
+    animation: none;
+    transform: translate(0, 0);
+  }
 }
 
 /* Metronome pendulum animation. The CSS custom property

@@ -286,6 +286,20 @@ fn render_song_body_into(
         .map(str::to_ascii_lowercase)
         .unwrap_or_else(|| "guitar".to_string());
     let mut auto_diagrams_instrument: Option<String> = None;
+    // Active BPM for the conductor-pattern animation on
+    // `{time}` inline markers. Seeded from the header tempo
+    // (last value of `metadata.tempos`, falling back to
+    // `metadata.tempo`) and updated whenever the body walks
+    // through a positional `{tempo}` directive — matches
+    // `.claude/rules/renderer-parity.md`-mandated sister-site
+    // behaviour with the React JSX walker's `ctx.activeBpm`.
+    let mut active_bpm: Option<f32> = song
+        .metadata
+        .tempos
+        .last()
+        .or(song.metadata.tempo.as_ref())
+        .and_then(|s| s.trim().parse::<f32>().ok())
+        .filter(|n| n.is_finite() && *n > 0.0);
     // Canonical chord names (sharp form) that were actually rendered inline via
     // {define} while show_diagrams was true.  Used to exclude them from the
     // auto-inject grid and avoid duplicates.
@@ -350,6 +364,21 @@ fn render_song_body_into(
                         .map(str::trim)
                         .filter(|v| !v.is_empty())
                     {
+                        // Walk-time tempo tracking: update
+                        // `active_bpm` *before* emitting the marker
+                        // so any downstream `{time}` marker animates
+                        // at the new tempo. The chip strip already
+                        // covers the song-global header value
+                        // (`Phase A` of #2454); this update gives
+                        // mid-song `{tempo}` changes positional
+                        // effect on the conductor animation.
+                        if directive.kind == DirectiveKind::Tempo {
+                            if let Ok(bp) = value.parse::<f32>() {
+                                if bp.is_finite() && bp > 0.0 {
+                                    active_bpm = Some(bp);
+                                }
+                            }
+                        }
                         // Each marker carries a music-notation glyph
                         // next to the textual label / value. The
                         // glyphs (key signature, animated metronome,
@@ -358,36 +387,41 @@ fn render_song_body_into(
                         // <MetronomeGlyph> / <TimeSignatureGlyph>`
                         // output per `.claude/rules/renderer-
                         // parity.md` §"Sanitizer Parity (React JSX
-                        // surface)".
-                        let marker: Option<(&str, &str, String, String)> = match directive.kind {
-                            DirectiveKind::Key => Some((
-                                "key",
-                                "Key",
-                                value.to_string(),
-                                music_glyphs::key_signature_svg(value),
-                            )),
-                            DirectiveKind::Tempo => Some((
-                                "tempo",
-                                "Tempo",
-                                format!("{value} BPM"),
-                                music_glyphs::metronome_svg(value),
-                            )),
-                            DirectiveKind::Time => Some((
-                                "time",
-                                "Time",
-                                value.to_string(),
-                                music_glyphs::time_signature_html(value),
-                            )),
-                            _ => None,
-                        };
-                        if let Some((slug, label, body, glyph_html)) = marker {
-                            html.push_str(&format!(
-                                "<p class=\"meta-inline meta-inline--{slug}\">\
-                                 {glyph_html}\
-                                 <span class=\"meta-inline__label\">{label}:</span> \
-                                 <span class=\"meta-inline__value\">{}</span></p>\n",
-                                escape(&body)
-                            ));
+                        // surface)". The `{time}` arm intentionally
+                        // omits the textual `meta-inline__value`
+                        // because the stacked-digit glyph IS the
+                        // value display — sister-site to the React
+                        // walker.
+                        match directive.kind {
+                            DirectiveKind::Key => {
+                                html.push_str(&format!(
+                                    "<p class=\"meta-inline meta-inline--key\">\
+                                     {glyph}\
+                                     <span class=\"meta-inline__label\">Key:</span> \
+                                     <span class=\"meta-inline__value\">{val}</span></p>\n",
+                                    glyph = music_glyphs::key_signature_svg(value),
+                                    val = escape(value),
+                                ));
+                            }
+                            DirectiveKind::Tempo => {
+                                html.push_str(&format!(
+                                    "<p class=\"meta-inline meta-inline--tempo\">\
+                                     {glyph}\
+                                     <span class=\"meta-inline__label\">Tempo:</span> \
+                                     <span class=\"meta-inline__value\">{val} BPM</span></p>\n",
+                                    glyph = music_glyphs::metronome_svg(value),
+                                    val = escape(value),
+                                ));
+                            }
+                            DirectiveKind::Time => {
+                                html.push_str(&format!(
+                                    "<p class=\"meta-inline meta-inline--time\">\
+                                     <span class=\"meta-inline__label\">Time:</span> \
+                                     {glyph}</p>\n",
+                                    glyph = music_glyphs::time_signature_html(value, active_bpm),
+                                ));
+                            }
+                            _ => {}
                         }
                     }
                     continue;
@@ -1017,6 +1051,16 @@ h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-w
 .music-glyph { display: inline-block; flex-shrink: 0; vertical-align: middle; color: #1A1718; }
 .music-glyph--time { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; font-family: \"Source Serif Pro\", serif; font-weight: 700; font-size: 1.1em; letter-spacing: 0; }
 .music-glyph--time__num, .music-glyph--time__den { display: block; line-height: 0.9; font-feature-settings: \"tnum\" 1; }
+.music-glyph--time__bar { display: block; width: 0.9em; height: 1.5px; margin: 0.05em 0; background-color: currentColor; border-radius: 1px; }
+.music-glyph--time--conduct-2 { animation: cs-conductor-2 var(--cs-time-period, 2s) ease-in-out infinite; }
+.music-glyph--time--conduct-3 { animation: cs-conductor-3 var(--cs-time-period, 3s) ease-in-out infinite; }
+.music-glyph--time--conduct-4 { animation: cs-conductor-4 var(--cs-time-period, 4s) ease-in-out infinite; }
+.music-glyph--time--conduct-6 { animation: cs-conductor-6 var(--cs-time-period, 6s) ease-in-out infinite; }
+@keyframes cs-conductor-2 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(0,1.5px); } }
+@keyframes cs-conductor-3 { 0%,100% { transform: translate(0,0); } 33% { transform: translate(0,1.5px); } 66% { transform: translate(1.5px,0); } }
+@keyframes cs-conductor-4 { 0%,100% { transform: translate(0,0); } 25% { transform: translate(0,1.5px); } 50% { transform: translate(-1.5px,0); } 75% { transform: translate(1.5px,0); } }
+@keyframes cs-conductor-6 { 0%,100% { transform: translate(0,0); } 16% { transform: translate(0,1.5px); } 33% { transform: translate(-1.2px,0.8px); } 50% { transform: translate(-0.8px,0); } 66% { transform: translate(0.8px,0); } 83% { transform: translate(1.2px,-0.8px); } }
+@media (prefers-reduced-motion: reduce) { .music-glyph--time--conduct-2, .music-glyph--time--conduct-3, .music-glyph--time--conduct-4, .music-glyph--time--conduct-6 { animation: none; transform: translate(0,0); } }
 .music-glyph--metronome__pendulum { transform-origin: 9px 19px; animation: cs-metronome-swing var(--cs-metronome-period, 1s) cubic-bezier(0.42, 0, 0.58, 1) infinite alternate; }
 @keyframes cs-metronome-swing { from { transform: rotate(-28deg); } to { transform: rotate(28deg); } }
 @media (prefers-reduced-motion: reduce) { .music-glyph--metronome__pendulum { animation: none; transform: rotate(0deg); } }
@@ -3535,25 +3579,78 @@ Verse text\n\
 
     #[test]
     fn test_inline_meta_marker_for_time() {
-        let html = render("[G]a\n{time: 6/8}\n[D]b");
+        let html = render("{tempo: 120}\n[G]a\n{time: 6/8}\n[D]b");
         assert!(
             html.contains("meta-inline--time"),
             "expected inline time marker class; got: {html}"
         );
-        // Stacked time-signature glyph (numerator on top, denominator
-        // below) — sister-site to React's `<TimeSignatureGlyph>`.
+        // Stacked time-signature glyph (numerator on top, fraction
+        // bar, denominator on bottom) — sister-site to React's
+        // `<TimeSignatureGlyph>`.
         assert!(
             html.contains("music-glyph--time__num\" aria-hidden=\"true\">6</span>"),
             "expected stacked numerator '6'; got: {html}"
         );
         assert!(
+            html.contains("music-glyph--time__bar\""),
+            "expected fraction bar between digits; got: {html}"
+        );
+        assert!(
             html.contains("music-glyph--time__den\" aria-hidden=\"true\">8</span>"),
             "expected stacked denominator '8'; got: {html}"
         );
+        // Conductor pattern is selected by the numerator and the
+        // walker's active BPM (set by the preceding `{tempo:
+        // 120}` line). The icon IS the value display, so the
+        // textual `meta-inline__value` is intentionally absent.
         assert!(
-            html.contains("<span class=\"meta-inline__value\">6/8</span>"),
-            "expected fallback '6/8' value span; got: {html}"
+            html.contains("music-glyph--time--conduct-6"),
+            "expected 6-beat conductor class; got: {html}"
         );
+        assert!(
+            !html.contains("<span class=\"meta-inline__value\">6/8</span>"),
+            "redundant text value should not be emitted alongside the icon; got: {html}"
+        );
+    }
+
+    #[test]
+    fn test_inline_time_marker_no_conductor_without_tempo() {
+        // Without a preceding `{tempo}` (and no header tempo), the
+        // time marker's root `<span>` should not carry a conductor
+        // class. The embedded stylesheet's `.music-glyph--time--
+        // conduct-N` rule definitions still appear by design — we
+        // assert against the applied class on the marker DOM, not
+        // the CSS rule string.
+        let html = render("[G]a\n{time: 4/4}\n[D]b");
+        // The time-marker span's class attribute is the only place
+        // the conduct modifier should show up. Build the marker
+        // substring and check it.
+        let marker_idx = html
+            .find("class=\"music-glyph music-glyph--time\"")
+            .or_else(|| html.find("class=\"music-glyph music-glyph--time "));
+        assert!(
+            marker_idx.is_some(),
+            "expected unanimated time-marker span; got: {html}"
+        );
+        // The marker has no `style=` attribute carrying the period.
+        let after_marker = &html[marker_idx.unwrap()..];
+        let style_end = after_marker.find('>').unwrap_or(0);
+        assert!(
+            !after_marker[..style_end].contains("--cs-time-period"),
+            "must not carry period style without an active BPM; got: {}",
+            &after_marker[..style_end],
+        );
+    }
+
+    #[test]
+    fn test_inline_time_marker_uses_header_tempo() {
+        // Header `{tempo: 90}` seeds the walker's active BPM so
+        // a downstream `{time}` marker animates even if no
+        // positional `{tempo}` appears before it.
+        let html = render("{tempo: 90}\n[G]a\n{time: 3/4}\n[D]b");
+        // 3 beats * (60 / 90) = 2.000s.
+        assert!(html.contains("music-glyph--time--conduct-3"));
+        assert!(html.contains("--cs-time-period:2.000s"));
     }
 
     /// Empty value → no marker (avoids confusing empty brackets).

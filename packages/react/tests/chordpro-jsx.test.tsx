@@ -1087,7 +1087,13 @@ describe('renderChordproAst', () => {
     expect(markers[2]?.classList.contains('meta-inline--time')).toBe(true);
     expect(markers[2]?.querySelector('.music-glyph--time')).not.toBeNull();
     expect(markers[2]?.querySelector('.meta-inline__label')?.textContent).toBe('Time:');
-    expect(markers[2]?.querySelector('.meta-inline__value')?.textContent).toBe('6/8');
+    // The time-signature marker uses the icon as its value — the
+    // stacked 6 / 8 glyph IS the "6/8" display, so no redundant
+    // textual `meta-inline__value` is emitted alongside.
+    expect(markers[2]?.querySelector('.meta-inline__value')).toBeNull();
+    // Numerator / denominator both reachable via the glyph DOM.
+    expect(markers[2]?.querySelector('.music-glyph--time__num')?.textContent).toBe('6');
+    expect(markers[2]?.querySelector('.music-glyph--time__den')?.textContent).toBe('8');
   });
 
   test('drops the inline meta marker when the directive value is empty', () => {
