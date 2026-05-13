@@ -153,10 +153,16 @@ impl ToJson for Metadata {
         write_opt_str(out, &self.year);
         out.push_str(",\"key\":");
         write_opt_str(out, &self.key);
+        out.push_str(",\"keys\":");
+        write_str_array(out, &self.keys);
         out.push_str(",\"tempo\":");
         write_opt_str(out, &self.tempo);
+        out.push_str(",\"tempos\":");
+        write_str_array(out, &self.tempos);
         out.push_str(",\"time\":");
         write_opt_str(out, &self.time);
+        out.push_str(",\"times\":");
+        write_str_array(out, &self.times);
         out.push_str(",\"capo\":");
         write_opt_str(out, &self.capo);
         out.push_str(",\"sortTitle\":");

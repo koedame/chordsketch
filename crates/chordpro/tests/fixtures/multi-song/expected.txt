@@ -15,8 +15,14 @@ Song {
         key: Some(
             "C",
         ),
+        keys: [
+            "G",
+            "C",
+        ],
         tempo: None,
+        tempos: [],
         time: None,
+        times: [],
         capo: None,
         sort_title: None,
         sort_artist: None,

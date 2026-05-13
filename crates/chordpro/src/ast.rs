@@ -274,12 +274,36 @@ pub struct Metadata {
     pub album: Option<String>,
     /// Year or date, from `{year}`.
     pub year: Option<String>,
-    /// Musical key, from `{key}`.
+    /// Musical key, from `{key}`. Holds the *last* declared key —
+    /// retained alongside [`keys`](Self::keys) so single-key callers
+    /// keep working unchanged. The spec defines `{key}` as
+    /// `[Nx] [Pos]` (multiple specifications, each applies forward),
+    /// so [`keys`](Self::keys) is the authoritative list — this
+    /// field is a convenience view onto its tail.
     pub key: Option<String>,
-    /// Tempo indication, from `{tempo}`.
+    /// Every `{key}` value declared in the song, in source order.
+    /// ChordPro spec §`{key}`: "Multiple key specifications are
+    /// possible, each specification is assumed to apply from where
+    /// it was specified." Renderers join this list with `"; "` in
+    /// the header to mirror Perl's `metadata.separator` default
+    /// (`lib/ChordPro/Song.pm::dir_meta` accumulator).
+    pub keys: Vec<String>,
+    /// Tempo indication, from `{tempo}`. Last-value view — see
+    /// [`tempos`](Self::tempos) for the full ordered list.
     pub tempo: Option<String>,
-    /// Time signature, from `{time}`.
+    /// Every `{tempo}` value declared in the song, in source order.
+    /// ChordPro spec §`{tempo}`: "Multiple specifications are
+    /// possible, each specification applies from where it appears
+    /// in the song."
+    pub tempos: Vec<String>,
+    /// Time signature, from `{time}`. Last-value view — see
+    /// [`times`](Self::times) for the full ordered list.
     pub time: Option<String>,
+    /// Every `{time}` value declared in the song, in source order.
+    /// ChordPro spec §`{time}`: "Multiple signatures are possible,
+    /// each specification is assumed to apply from where it was
+    /// specified."
+    pub times: Vec<String>,
     /// Capo position, from `{capo}`.
     pub capo: Option<String>,
     /// Sortable title, from `{sorttitle}`.

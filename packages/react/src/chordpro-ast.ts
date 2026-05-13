@@ -25,9 +25,23 @@ export interface ChordproMetadata {
   lyricists: string[];
   album: string | null;
   year: string | null;
+  /**
+   * Last declared `{key}` value — kept for convenience. The full
+   * ordered list is in {@link keys}; the ChordPro spec defines
+   * `{key}` as `[Nx] [Pos]`, so renderers join `keys` with `"; "` in
+   * the header.
+   */
   key: string | null;
+  /** Every `{key}` value declared in the song, in source order. */
+  keys: string[];
+  /** Last `{tempo}` value — see {@link tempos} for the full list. */
   tempo: string | null;
+  /** Every `{tempo}` declared in the song, in source order. */
+  tempos: string[];
+  /** Last `{time}` value — see {@link times} for the full list. */
   time: string | null;
+  /** Every `{time}` declared in the song, in source order. */
+  times: string[];
   capo: string | null;
   sortTitle: string | null;
   sortArtist: string | null;

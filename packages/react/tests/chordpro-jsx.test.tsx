@@ -16,8 +16,11 @@ const EMPTY_META: ChordproSong['metadata'] = {
   album: null,
   year: null,
   key: null,
+  keys: [],
   tempo: null,
+  tempos: [],
   time: null,
+  times: [],
   capo: null,
   sortTitle: null,
   sortArtist: null,
@@ -618,7 +621,9 @@ describe('renderChordproAst', () => {
         title: 'Test',
         artists: ['Demo'],
         tempo: '80',
+        tempos: ['80'],
         key: 'G',
+        keys: ['G'],
       },
       lines: [
         {
@@ -823,6 +828,7 @@ describe('renderChordproAst', () => {
             ...EMPTY_META,
             title: 'My Song',
             key: 'G',
+            keys: ['G'],
           },
           lines: [],
         },
@@ -840,7 +846,7 @@ describe('renderChordproAst', () => {
   test('falls back to a single "Key X" chip when transposedKey is null or equal to the original', () => {
     const a = render(
       renderChordproAst(
-        { metadata: { ...EMPTY_META, key: 'G' }, lines: [] },
+        { metadata: { ...EMPTY_META, key: 'G', keys: ['G'] }, lines: [] },
         { transposedKey: null },
       ),
     );
@@ -851,7 +857,7 @@ describe('renderChordproAst', () => {
     // confusing "Original Key G → G" tautology)
     const b = render(
       renderChordproAst(
-        { metadata: { ...EMPTY_META, key: 'G' }, lines: [] },
+        { metadata: { ...EMPTY_META, key: 'G', keys: ['G'] }, lines: [] },
         { transposedKey: 'G' },
       ),
     );
@@ -880,9 +886,12 @@ describe('renderChordproAst', () => {
           album: 'Reference',
           year: '2026',
           key: 'G',
+          keys: ['G'],
           capo: '2',
           tempo: '120',
+          tempos: ['120'],
           time: '4/4',
+          times: ['4/4'],
           duration: '3:30',
           copyright: '© 2026',
           tags: ['demo', 'reference'],
@@ -930,6 +939,7 @@ describe('renderChordproAst', () => {
           subtitles: ['A subtitle'],
           artists: ['Artist'],
           key: 'G',
+          keys: ['G'],
           capo: '2',
         },
         lines: [],
@@ -944,6 +954,83 @@ describe('renderChordproAst', () => {
       container.querySelectorAll('.meta--params .meta__chip'),
     ).map((c) => c.textContent);
     expect(chipTexts).toEqual(['Key G', 'Capo 2']);
+  });
+
+  // Spec parity: `{key}` / `{tempo}` / `{time}` are `[Nx] [Pos]`
+  // per chordpro.org. Perl ChordPro joins accumulated values with
+  // `metadata.separator` (default `"; "`) in the header.
+  // Sister-site to `crates/render-html/src/lib.rs::render_metadata`.
+  test('joins multiple {key} / {tempo} / {time} values with "; " in header chips', () => {
+    const { container } = render(
+      renderChordproAst({
+        metadata: {
+          ...EMPTY_META,
+          title: 'Multi-meter song',
+          key: 'D', // last-wins compat field
+          keys: ['G', 'D'],
+          tempo: '140',
+          tempos: ['120', '140'],
+          time: '6/8',
+          times: ['4/4', '6/8'],
+        },
+        lines: [],
+      }),
+    );
+    const chipTexts = Array.from(
+      container.querySelectorAll('.meta--params .meta__chip'),
+    ).map((c) => c.textContent);
+    expect(chipTexts).toContain('Key G; D');
+    expect(chipTexts).toContain('120; 140 BPM');
+    expect(chipTexts).toContain('4/4; 6/8');
+  });
+
+  test('caret on any {key} declaration lights the joined key chip', () => {
+    const ast: ChordproSong = {
+      metadata: {
+        ...EMPTY_META,
+        title: 'Two-key song',
+        key: 'D',
+        keys: ['G', 'D'],
+      },
+      lines: [
+        // line 1: title
+        {
+          kind: 'directive',
+          value: { name: 'title', value: 'Two-key song', kind: { tag: 'title' }, selector: null },
+        },
+        // line 2: first {key}
+        {
+          kind: 'directive',
+          value: { name: 'key', value: 'G', kind: { tag: 'key' }, selector: null },
+        },
+        // line 3: a body line
+        { kind: 'lyrics', value: { segments: [{ chord: null, text: 'verse', spans: [] }] } },
+        // line 4: second {key}
+        {
+          kind: 'directive',
+          value: { name: 'key', value: 'D', kind: { tag: 'key' }, selector: null },
+        },
+      ],
+    };
+    // caret on the SECOND `{key}` (line 4) — chip should light
+    const b = render(renderChordproAst(ast, { activeSourceLine: 4 }));
+    expect(
+      b.container
+        .querySelector('.meta--params .meta__chip.line--active')
+        ?.textContent,
+    ).toBe('Key G; D');
+    // caret on the FIRST `{key}` (line 2) — chip should also light
+    const a = render(renderChordproAst(ast, { activeSourceLine: 2 }));
+    expect(
+      a.container
+        .querySelector('.meta--params .meta__chip.line--active')
+        ?.textContent,
+    ).toBe('Key G; D');
+    // caret elsewhere — chip is unlit
+    const c = render(renderChordproAst(ast, { activeSourceLine: 3 }));
+    expect(
+      c.container.querySelector('.meta--params .meta__chip.line--active'),
+    ).toBeNull();
   });
 
   test('wraps section directives in a `<section>` with the section-label', () => {

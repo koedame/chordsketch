@@ -334,12 +334,15 @@ impl Parser {
                 metadata.year = Some(value);
             }
             DirectiveKind::Key => {
+                Self::push_if_under_cap(&mut metadata.keys, value.clone());
                 metadata.key = Some(value);
             }
             DirectiveKind::Tempo => {
+                Self::push_if_under_cap(&mut metadata.tempos, value.clone());
                 metadata.tempo = Some(value);
             }
             DirectiveKind::Time => {
+                Self::push_if_under_cap(&mut metadata.times, value.clone());
                 metadata.time = Some(value);
             }
             DirectiveKind::Capo => {
@@ -371,9 +374,18 @@ impl Parser {
                 "lyricist" => Self::push_if_under_cap(&mut metadata.lyricists, value),
                 "album" => metadata.album = Some(value),
                 "year" => metadata.year = Some(value),
-                "key" => metadata.key = Some(value),
-                "tempo" => metadata.tempo = Some(value),
-                "time" => metadata.time = Some(value),
+                "key" => {
+                    Self::push_if_under_cap(&mut metadata.keys, value.clone());
+                    metadata.key = Some(value);
+                }
+                "tempo" => {
+                    Self::push_if_under_cap(&mut metadata.tempos, value.clone());
+                    metadata.tempo = Some(value);
+                }
+                "time" => {
+                    Self::push_if_under_cap(&mut metadata.times, value.clone());
+                    metadata.time = Some(value);
+                }
                 "capo" => metadata.capo = Some(value),
                 "sorttitle" => metadata.sort_title = Some(value),
                 "sortartist" => metadata.sort_artist = Some(value),
@@ -2080,6 +2092,45 @@ mod tests {
     fn metadata_capo_populated() {
         let song = parse("{capo: 2}").unwrap();
         assert_eq!(song.metadata.capo.as_deref(), Some("2"));
+    }
+
+    /// Spec: `{key}` is `[Nx] [Pos]` — multiple declarations
+    /// accumulate. The plural `keys` Vec is the authoritative list;
+    /// the singular `key` field keeps the last-wins value for
+    /// backward-compat callers.
+    #[test]
+    fn metadata_keys_accumulate_multi_value() {
+        let song = parse("{key: G}\n[G]hi\n{key: D}\n[D]ho").unwrap();
+        assert_eq!(song.metadata.keys, vec!["G".to_string(), "D".to_string()]);
+        assert_eq!(song.metadata.key.as_deref(), Some("D"));
+    }
+
+    #[test]
+    fn metadata_tempos_accumulate_multi_value() {
+        let song = parse("{tempo: 120}\n[G]a\n{tempo: 140}\n[D]b").unwrap();
+        assert_eq!(
+            song.metadata.tempos,
+            vec!["120".to_string(), "140".to_string()]
+        );
+        assert_eq!(song.metadata.tempo.as_deref(), Some("140"));
+    }
+
+    #[test]
+    fn metadata_times_accumulate_multi_value() {
+        let song = parse("{time: 4/4}\n[G]a\n{time: 6/8}\n[D]b").unwrap();
+        assert_eq!(
+            song.metadata.times,
+            vec!["4/4".to_string(), "6/8".to_string()]
+        );
+        assert_eq!(song.metadata.time.as_deref(), Some("6/8"));
+    }
+
+    /// `{meta: <key> <value>}` long-form must populate the same
+    /// plural Vec as the dedicated directives.
+    #[test]
+    fn metadata_keys_accumulate_via_meta_long_form() {
+        let song = parse("{meta: key G}\n{meta: key D}").unwrap();
+        assert_eq!(song.metadata.keys, vec!["G".to_string(), "D".to_string()]);
     }
 
     #[test]

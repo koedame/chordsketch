@@ -902,9 +902,14 @@ interface MetadataLines {
   arrangers: number[];
   album?: number;
   year?: number;
-  key?: number;
-  tempo?: number;
-  time?: number;
+  /**
+   * `{key}` / `{tempo}` / `{time}` are spec'd as `[Nx] [Pos]`, so
+   * each holds *every* source line of the directive — caret on any
+   * one of them lights the header chip.
+   */
+  key: number[];
+  tempo: number[];
+  time: number[];
   capo?: number;
   duration?: number;
   copyright?: number;
@@ -925,6 +930,9 @@ function collectMetadataLines(song: ChordproSong): MetadataLines {
     composers: [],
     lyricists: [],
     arrangers: [],
+    key: [],
+    tempo: [],
+    time: [],
     tags: [],
   };
   song.lines.forEach((line, i) => {
@@ -957,13 +965,13 @@ function collectMetadataLines(song: ChordproSong): MetadataLines {
         out.year = sourceLine;
         return;
       case 'key':
-        out.key = sourceLine;
+        out.key.push(sourceLine);
         return;
       case 'tempo':
-        out.tempo = sourceLine;
+        out.tempo.push(sourceLine);
         return;
       case 'time':
-        out.time = sourceLine;
+        out.time.push(sourceLine);
         return;
       case 'capo':
         out.capo = sourceLine;
@@ -1135,35 +1143,78 @@ function renderHeader(
   }
 
   // Tier 2 — musical params (chips)
+  // `sourceLine` accepts either a single line number (single-value
+  // metadata like `{capo}`) or an array of lines (multi-value
+  // `[Nx]` metadata like `{key}` / `{tempo}` / `{time}`). When the
+  // caret sits on any one of the recorded lines the chip lights
+  // up, so a song with multiple `{key}` declarations highlights
+  // its key chip regardless of which `{key}` line the caret is on.
   function chipSpan(
     keyName: string,
     text: string,
-    sourceLine: number | undefined,
+    sourceLine: number | readonly number[] | undefined,
   ): JSX.Element {
-    const isActive = sourceLine !== undefined && sourceLine === active;
+    let activeLine: number | undefined;
+    let isActive = false;
+    if (Array.isArray(sourceLine)) {
+      isActive = sourceLine.some((l) => l === active);
+      // `data-source-line` is single-valued; pick the first match
+      // when active so caret-tracking tools can resolve back to a
+      // declaration, otherwise the first declaration as a stable
+      // anchor.
+      activeLine = sourceLine.find((l) => l === active) ?? sourceLine[0];
+    } else if (typeof sourceLine === 'number') {
+      isActive = sourceLine === active;
+      activeLine = sourceLine;
+    }
     return (
       <span
         key={keyName}
         className={isActive ? 'meta__chip line--active' : 'meta__chip'}
-        data-source-line={sourceLine}
+        data-source-line={activeLine}
       >
         {text}
       </span>
     );
   }
+  // `{key}` / `{tempo}` / `{time}` are spec'd as `[Nx] [Pos]` —
+  // multiple specifications are possible, each applies forward
+  // from where it appears. Perl ChordPro joins the accumulated
+  // list with `metadata.separator` (default `"; "`) in the header
+  // (`lib/ChordPro/Song.pm::dir_meta`). Sister-site to
+  // `crates/render-html/src/lib.rs::render_metadata` — both
+  // surfaces emit a single chip per directive containing every
+  // declared value joined by `"; "` so multi-key / multi-tempo
+  // songs surface every value instead of just the last-wins one.
+  const joinMeta = (values: readonly string[] | undefined): string | null => {
+    if (!values || values.length === 0) return null;
+    const cleaned = values.map((v) => v.trim()).filter((v) => v.length > 0);
+    return cleaned.length === 0 ? null : cleaned.join('; ');
+  };
+  const keysJoined = joinMeta(metadata.keys);
+  const tempoJoined = joinMeta(metadata.tempos);
+  const timeJoined = joinMeta(metadata.times);
+
   const paramChips: JSX.Element[] = [];
-  if (metadata.key) {
-    if (options.transposedKey && options.transposedKey !== metadata.key) {
-      paramChips.push(chipSpan('keyOrig', `Key ${metadata.key}`, metaLines.key));
+  if (keysJoined) {
+    // Transpose UI shows the `original → played` arrow only for
+    // the simple single-key case; with multiple `{key}` directives
+    // there is no single "the original key" to put before the
+    // arrow, so fall back to the joined-list chip.
+    if (
+      options.transposedKey &&
+      metadata.keys.length === 1 &&
+      options.transposedKey !== keysJoined
+    ) {
+      paramChips.push(chipSpan('keyOrig', `Key ${keysJoined}`, metaLines.key));
       paramChips.push(chipSpan('keyPlay', `→ ${options.transposedKey}`, undefined));
     } else {
-      paramChips.push(chipSpan('key', `Key ${metadata.key}`, metaLines.key));
+      paramChips.push(chipSpan('key', `Key ${keysJoined}`, metaLines.key));
     }
   }
   if (metadata.capo) paramChips.push(chipSpan('capo', `Capo ${metadata.capo}`, metaLines.capo));
-  if (metadata.tempo)
-    paramChips.push(chipSpan('tempo', `${metadata.tempo} BPM`, metaLines.tempo));
-  if (metadata.time) paramChips.push(chipSpan('time', metadata.time, metaLines.time));
+  if (tempoJoined) paramChips.push(chipSpan('tempo', `${tempoJoined} BPM`, metaLines.tempo));
+  if (timeJoined) paramChips.push(chipSpan('time', timeJoined, metaLines.time));
   if (metadata.duration)
     paramChips.push(chipSpan('duration', metadata.duration, metaLines.duration));
   if (paramChips.length > 0) {

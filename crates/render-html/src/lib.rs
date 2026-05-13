@@ -1051,11 +1051,34 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut St
     }
 
     // Tier 2 — musical params (chips).
+    //
+    // `{key}` / `{tempo}` / `{time}` are spec'd as `[Nx] [Pos]`
+    // (multiple specifications, each applies forward from its
+    // position in the song — see ChordPro spec §`{key}` /
+    // §`{tempo}` / §`{time}`). Perl ChordPro accumulates these into
+    // an array per directive and emits them joined by
+    // `metadata.separator` (`"; "` by default,
+    // `lib/ChordPro/Song.pm::dir_meta`). Mirror that behaviour so
+    // multi-key / multi-tempo songs surface every value in the
+    // header chip instead of just the last-wins one.
+    fn join_meta(values: &[String]) -> Option<String> {
+        let cleaned: Vec<&str> = values
+            .iter()
+            .map(|v| v.trim())
+            .filter(|v| !v.is_empty())
+            .collect();
+        if cleaned.is_empty() {
+            None
+        } else {
+            Some(cleaned.join("; "))
+        }
+    }
+
     let mut chips: Vec<String> = Vec::new();
-    if let Some(key) = metadata.key.as_deref().filter(|s| !s.trim().is_empty()) {
+    if let Some(key_joined) = join_meta(&metadata.keys) {
         chips.push(format!(
             "<span class=\"meta__chip\">Key {}</span>",
-            escape(key)
+            escape(&key_joined)
         ));
     }
     if let Some(capo) = metadata.capo.as_deref().filter(|s| !s.trim().is_empty()) {
@@ -1064,16 +1087,16 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut St
             escape(capo)
         ));
     }
-    if let Some(tempo) = metadata.tempo.as_deref().filter(|s| !s.trim().is_empty()) {
+    if let Some(tempo_joined) = join_meta(&metadata.tempos) {
         chips.push(format!(
             "<span class=\"meta__chip\">{} BPM</span>",
-            escape(tempo)
+            escape(&tempo_joined)
         ));
     }
-    if let Some(time) = metadata.time.as_deref().filter(|s| !s.trim().is_empty()) {
+    if let Some(time_joined) = join_meta(&metadata.times) {
         chips.push(format!(
             "<span class=\"meta__chip\">{}</span>",
-            escape(time)
+            escape(&time_joined)
         ));
     }
     if let Some(duration) = metadata
@@ -3352,6 +3375,55 @@ Verse text\n\
             !result.warnings.iter().any(|w| w.contains("capo")),
             "valid {{capo: 5}} should not warn; got {:?}",
             result.warnings
+        );
+    }
+
+    // -- multi-value [Nx] [Pos] metadata in header chips ------------------
+
+    /// Spec: `{key}` / `{tempo}` / `{time}` are `[Nx] [Pos]`. Perl
+    /// ChordPro joins accumulated values with
+    /// `metadata.separator` (default `"; "`) in the header
+    /// (`lib/ChordPro/Song.pm::dir_meta`). The HTML chip MUST
+    /// surface every declared value, not just the last-wins one.
+    #[test]
+    fn test_multi_value_keys_join_in_chip() {
+        let html = render("{key: G}\n{key: D}\n[D]hi");
+        assert!(
+            html.contains("<span class=\"meta__chip\">Key G; D</span>"),
+            "expected joined key chip; got: {html}"
+        );
+    }
+
+    #[test]
+    fn test_multi_value_tempos_join_in_chip() {
+        let html = render("{tempo: 120}\n{tempo: 140}\n[G]a");
+        assert!(
+            html.contains("<span class=\"meta__chip\">120; 140 BPM</span>"),
+            "expected joined tempo chip; got: {html}"
+        );
+    }
+
+    #[test]
+    fn test_multi_value_times_join_in_chip() {
+        let html = render("{time: 4/4}\n{time: 6/8}\n[G]a");
+        assert!(
+            html.contains("<span class=\"meta__chip\">4/4; 6/8</span>"),
+            "expected joined time chip; got: {html}"
+        );
+    }
+
+    /// Single-value behaviour stays byte-identical to the
+    /// pre-multi-value chip so existing songs render unchanged.
+    #[test]
+    fn test_single_value_key_chip_unchanged() {
+        let html = render("{key: G}");
+        assert!(
+            html.contains("<span class=\"meta__chip\">Key G</span>"),
+            "single-value key chip must not gain a separator; got: {html}"
+        );
+        assert!(
+            !html.contains("Key G;"),
+            "single-value key must not include trailing separator: {html}"
         );
     }
 
