@@ -23,6 +23,57 @@ use std::fmt::Write;
 
 mod music_glyphs;
 
+/// Replace ASCII accidentals (`b` / `#`) on note letters with
+/// the proper Unicode musical symbols (`♭` U+266D / `♯`
+/// U+266F). Applied to chord names and key values before they
+/// reach the HTML so the typography reads as engraved music
+/// rather than typewriter text. Only `[A-G]b` and `[A-G]#`
+/// sequences are converted — chord-quality letters (`m`,
+/// `dim`, `sus`, etc.) survive unchanged.
+fn unicode_accidentals(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i];
+        // ASCII fast path — accidental replacement only fires on
+        // ASCII note letters and the ASCII `b` / `#`, so any non-
+        // ASCII codepoint is passed straight through.
+        if matches!(c, b'A'..=b'G') && i + 1 < bytes.len() {
+            let next = bytes[i + 1];
+            if next == b'b' {
+                out.push(c as char);
+                out.push('\u{266D}');
+                i += 2;
+                continue;
+            }
+            if next == b'#' {
+                out.push(c as char);
+                out.push('\u{266F}');
+                i += 2;
+                continue;
+            }
+        }
+        // Walk one full UTF-8 character to keep multi-byte
+        // codepoints intact.
+        let len = if c < 0x80 {
+            1
+        } else if c < 0xC0 {
+            1 // continuation byte fallback (shouldn't happen at a char boundary)
+        } else if c < 0xE0 {
+            2
+        } else if c < 0xF0 {
+            3
+        } else {
+            4
+        };
+        let end = (i + len).min(bytes.len());
+        out.push_str(&s[i..end]);
+        i = end;
+    }
+    out
+}
+
 use chordsketch_chordpro::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
 use chordsketch_chordpro::canonical_chord_name;
 use chordsketch_chordpro::config::Config;
@@ -400,7 +451,7 @@ fn render_song_body_into(
                                      <span class=\"meta-inline__label\">Key:</span> \
                                      <span class=\"meta-inline__value\">{val}</span></p>\n",
                                     glyph = music_glyphs::key_signature_svg(value),
-                                    val = escape(value),
+                                    val = escape(&unicode_accidentals(value)),
                                 ));
                             }
                             DirectiveKind::Tempo => {
@@ -1186,9 +1237,14 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut St
 
     let mut chips: Vec<String> = Vec::new();
     if let Some(key_joined) = join_meta(&metadata.keys) {
+        // Typeset accidentals as `♭` / `♯` — sister-site to
+        // React's `unicodeAccidentals`. Applied at the chip
+        // formatting layer (not at parse time) so the underlying
+        // `metadata.keys` Vec keeps its ASCII representation for
+        // downstream consumers.
         chips.push(format!(
             "<span class=\"meta__chip\">Key {}</span>",
-            escape(&key_joined)
+            escape(&unicode_accidentals(&key_joined))
         ));
     }
     if let Some(capo) = metadata.capo.as_deref().filter(|s| !s.trim().is_empty()) {
@@ -1291,12 +1347,18 @@ fn render_lyrics(
         html.push_str("<span class=\"chord-block\">");
 
         if let Some(chord) = &segment.chord {
-            let display_name = if transpose_offset != 0 {
+            let raw_display = if transpose_offset != 0 {
                 let transposed = transpose_chord(chord, transpose_offset);
                 transposed.display_name().to_string()
             } else {
                 chord.display_name().to_string()
             };
+            // Typeset `Bb` as `B♭` and `F#` as `F♯` — matches the
+            // React JSX walker's `unicodeAccidentals` so the same
+            // chord renders identically in the static HTML and the
+            // live React preview. Sister-site to
+            // `packages/react/src/chordpro-jsx.tsx`.
+            let display_name = unicode_accidentals(&raw_display);
             let chord_css = fmt_state.chord.to_css();
             if chord_css.is_empty() {
                 let _ = write!(
@@ -2506,6 +2568,60 @@ mod sanitize_tag_attrs_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unicode_accidentals_basic() {
+        assert_eq!(unicode_accidentals("Bb"), "B\u{266D}");
+        assert_eq!(unicode_accidentals("Eb7"), "E\u{266D}7");
+        assert_eq!(unicode_accidentals("F#m"), "F\u{266F}m");
+        // Slash chord — both halves convert.
+        assert_eq!(unicode_accidentals("Bb/Eb"), "B\u{266D}/E\u{266D}");
+        // Non-accidental letters survive untouched.
+        assert_eq!(unicode_accidentals("Am"), "Am");
+        assert_eq!(unicode_accidentals("Cdim"), "Cdim");
+        assert_eq!(unicode_accidentals("Cmaj7"), "Cmaj7");
+        // Quality letters that look like roots ("Bb" inside "Bbm7")
+        // still convert because the leading letter is a root.
+        assert_eq!(unicode_accidentals("Bbm7"), "B\u{266D}m7");
+    }
+
+    #[test]
+    fn unicode_accidentals_leaves_non_root_letters_alone() {
+        // A `b` that doesn't follow a note letter survives — common
+        // case is plain English text shouldn't get mangled.
+        assert_eq!(unicode_accidentals("Verse"), "Verse");
+        assert_eq!(unicode_accidentals("amber"), "amber");
+        // Multi-byte UTF-8 (a Japanese chord-name comment) survives
+        // intact.
+        assert_eq!(unicode_accidentals("中文"), "中文");
+    }
+
+    #[test]
+    fn test_chord_block_uses_unicode_accidentals() {
+        let html = render("[Bb]hi");
+        assert!(
+            html.contains("<span class=\"chord\">B\u{266D}</span>"),
+            "expected `B♭` in chord block, got: {html}"
+        );
+    }
+
+    #[test]
+    fn test_key_chip_uses_unicode_accidentals() {
+        let html = render("{key: Bb}");
+        assert!(
+            html.contains("<span class=\"meta__chip\">Key B\u{266D}</span>"),
+            "expected `Key B♭` chip, got: {html}"
+        );
+    }
+
+    #[test]
+    fn test_inline_key_marker_uses_unicode_accidentals() {
+        let html = render("[G]a\n{key: Eb}\n[Eb]b");
+        assert!(
+            html.contains("<span class=\"meta-inline__value\">E\u{266D}</span>"),
+            "expected `E♭` in inline key value, got: {html}"
+        );
+    }
 
     #[test]
     fn test_render_empty() {

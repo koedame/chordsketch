@@ -682,7 +682,11 @@ describe('renderChordproAst', () => {
   // Caret-marker overlay: when activeSourceLine is paired with
   // caretColumn + caretLineLength, the walker injects a
   // <span class="caret-marker"> child positioned by the ratio.
-  test('caretColumn + caretLineLength inject a caret-marker into the active element', () => {
+  //
+  // For a chord-LESS lyrics line the rendered column == the
+  // source column, so the marker lands at the naive
+  // `column / lineLength` ratio.
+  test('caret-marker on chord-less lyrics uses the source-column ratio', () => {
     const { container } = render(
       renderChordproAst(
         {
@@ -691,13 +695,11 @@ describe('renderChordproAst', () => {
             {
               kind: 'lyrics',
               value: {
-                segments: [
-                  {
-                    chord: { name: 'C', detail: null, display: null },
-                    text: 'hello world',
-                    spans: [],
-                  },
-                ],
+                // 10-char chord-less lyrics text — for chord-less
+                // lines the lyrics length equals the source line
+                // length the editor reports, so `lyricsCaretRatio`
+                // and the naive `column / lineLength` agree.
+                segments: [{ chord: null, text: 'hello-text', spans: [] }],
               },
             },
           ],
@@ -710,6 +712,80 @@ describe('renderChordproAst', () => {
     // 5 / 10 = 50% — the marker should land at the midpoint.
     expect((marker as HTMLElement).style.left).toBe('50%');
     expect(marker?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  // Chord-bearing lyrics line — source columns inside `[chord]`
+  // brackets do NOT advance the rendered position, so the
+  // marker is remapped through `lyricsCaretRatio`. The old
+  // linear `column / lineLength` ratio would have placed the
+  // marker far to the right of where the editor caret sits.
+  test('caret-marker on chord-bearing lyrics line skips [chord] bracket source columns', () => {
+    // Source: `[Am]Hello World` — 15 chars total (4 bracket + 11 text).
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              {
+                chord: { name: 'Am', detail: null, display: null },
+                text: 'Hello World',
+                spans: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    // Caret inside the chord bracket (source col 2, between "A" and
+    // "m") snaps to the start of the segment's lyrics (col 0 → 0%).
+    let r = render(
+      renderChordproAst(ast, {
+        activeSourceLine: 1,
+        caretColumn: 2,
+        caretLineLength: 15,
+      }),
+    );
+    let marker = r.container.querySelector('.line--active .caret-marker') as HTMLElement | null;
+    expect(marker?.style.left).toBe('0%');
+
+    // Caret just past the chord bracket (source col 4 = start of "H")
+    // also maps to lyrics col 0 / 11 = 0%.
+    r = render(
+      renderChordproAst(ast, {
+        activeSourceLine: 1,
+        caretColumn: 4,
+        caretLineLength: 15,
+      }),
+    );
+    marker = r.container.querySelector('.line--active .caret-marker') as HTMLElement | null;
+    expect(marker?.style.left).toBe('0%');
+
+    // Caret inside the lyrics (source col 9 = between "Hello" and
+    // " World") = lyrics col 5 of 11 = 5/11 ≈ 45.45%.
+    r = render(
+      renderChordproAst(ast, {
+        activeSourceLine: 1,
+        caretColumn: 9,
+        caretLineLength: 15,
+      }),
+    );
+    marker = r.container.querySelector('.line--active .caret-marker') as HTMLElement | null;
+    // Use a substring check so the test isn't sensitive to JS
+    // floating-point precision in the percent value.
+    expect(marker?.style.left.startsWith('45.45')).toBe(true);
+
+    // Caret at end of source (col 15) = lyrics col 11 of 11 = 100%.
+    r = render(
+      renderChordproAst(ast, {
+        activeSourceLine: 1,
+        caretColumn: 15,
+        caretLineLength: 15,
+      }),
+    );
+    marker = r.container.querySelector('.line--active .caret-marker') as HTMLElement | null;
+    expect(marker?.style.left).toBe('100%');
   });
 
   test('caret-marker omitted when caretColumn / caretLineLength are absent', () => {
@@ -864,6 +940,42 @@ describe('renderChordproAst', () => {
     const bChips = b.container.querySelectorAll('.meta--params .meta__chip');
     expect(bChips.length).toBe(1);
     expect(bChips[0]?.textContent).toBe('Key G');
+  });
+
+  // Chord names and key values are typeset with proper Unicode
+  // musical accidentals (`♭` / `♯`) so a `{key: Bb}` reads as
+  // "B♭" and a chord `[Bb]` shows as "B♭" in the chord row.
+  test('chord and key displays use ♭ / ♯ Unicode accidentals', () => {
+    const ast: ChordproSong = {
+      metadata: { ...EMPTY_META, key: 'Bb', keys: ['Bb'] },
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'key', value: 'Bb', kind: { tag: 'key' }, selector: null },
+        },
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              { chord: { name: 'Bb', detail: null, display: null }, text: 'flat ', spans: [] },
+              { chord: { name: 'F#m7', detail: null, display: null }, text: 'sharp', spans: [] },
+            ],
+          },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    // Header chip should show `Key B♭`, not `Key Bb`.
+    const chip = Array.from(container.querySelectorAll('.meta--params .meta__chip')).find((el) =>
+      el.textContent?.includes('Key'),
+    );
+    expect(chip?.textContent).toBe('Key B♭');
+    // Inline {key} marker value reads `B♭`, not `Bb`.
+    const inlineValue = container.querySelector('.meta-inline--key .meta-inline__value');
+    expect(inlineValue?.textContent).toBe('B♭');
+    // Chord-block chords show `B♭` and `F♯m7`.
+    const chords = Array.from(container.querySelectorAll('.chord')).map((el) => el.textContent);
+    expect(chords).toEqual(['B♭', 'F♯m7']);
   });
 
   // Inline `{key}` marker — when transpose is active AND the

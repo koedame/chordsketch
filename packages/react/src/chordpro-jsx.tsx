@@ -262,8 +262,85 @@ function renderSegmentText(segment: ChordproLyricsSegment): ReactNode {
 
 // ---- Chord rendering ----------------------------------------------
 
+/**
+ * Replace ASCII accidentals (`b` / `#`) on note letters with
+ * the proper Unicode musical symbols (`♭` U+266D / `♯` U+266F).
+ * Applied to chord names and key values before they're rendered
+ * so the typography reads as engraved music rather than
+ * typewriter text. Only `[A-G]b` and `[A-G]#` are touched —
+ * chord-quality letters (`m`, `dim`, `sus`, etc.) survive
+ * unchanged.
+ */
+export function unicodeAccidentals(name: string): string {
+  return name.replace(/([A-G])b/g, '$1♭').replace(/([A-G])#/g, '$1♯');
+}
+
 function renderChord(chord: ChordproChord): string {
-  return chord.display ?? chord.name;
+  return unicodeAccidentals(chord.display ?? chord.name);
+}
+
+/**
+ * Caret-marker positioning for a lyrics line. Source-column /
+ * source-length is a poor proxy for the rendered position on a
+ * chord-bearing lyrics line — `[Am]Hello` is 8 source characters
+ * but renders as just "Hello" (5 visible characters) with "Am"
+ * floating in the chord row above. A naive `column / length`
+ * places the caret several characters to the RIGHT of where the
+ * editor actually sits.
+ *
+ * Walk the segments and remap the source column to its
+ * "lyrics column" (counting only characters that survive into
+ * the rendered lyrics row). Returns a 0..1 ratio of
+ * `lyrics_column / total_lyrics_length`. Falls back to the
+ * naive source-column ratio when the line has no chords (in
+ * which case the two are equivalent anyway).
+ */
+function lyricsCaretRatio(
+  line: ChordproLyricsLine,
+  caretColumn: number,
+  caretLineLength: number,
+): number {
+  // Total rendered-lyrics character count.
+  let totalLyrics = 0;
+  for (const seg of line.segments) totalLyrics += seg.text.length;
+  if (totalLyrics === 0) {
+    // Chord-only line (no lyrics text at all). Fall back to the
+    // raw source ratio so the marker isn't pinned to the left.
+    return Math.min(1, Math.max(0, caretColumn / Math.max(1, caretLineLength)));
+  }
+  // Reconstruct each segment's source span by simulating the
+  // `[chord]text` source layout the parser consumed. The AST
+  // doesn't record per-segment source offsets, so we compute
+  // them assuming the canonical chord-bracket form
+  // (`[name]text`). This holds for the editor's source text
+  // (which is what the caret column refers to).
+  let sourcePos = 0;
+  let lyricsCount = 0;
+  for (const seg of line.segments) {
+    if (seg.chord) {
+      const chordSourceLen = (seg.chord.name?.length ?? 0) + 2; // `[` + name + `]`
+      const chordStart = sourcePos;
+      const chordEnd = sourcePos + chordSourceLen;
+      if (caretColumn >= chordStart && caretColumn < chordEnd) {
+        // Caret sits inside the chord bracket — visually it
+        // belongs at the lyrics column where the chord sits, i.e.
+        // the START of this segment's text in the lyrics row.
+        return totalLyrics === 0 ? 0 : lyricsCount / totalLyrics;
+      }
+      sourcePos = chordEnd;
+    }
+    const textStart = sourcePos;
+    const textEnd = sourcePos + seg.text.length;
+    if (caretColumn >= textStart && caretColumn <= textEnd) {
+      const within = caretColumn - textStart;
+      return (lyricsCount + within) / totalLyrics;
+    }
+    sourcePos = textEnd;
+    lyricsCount += seg.text.length;
+  }
+  // Caret is past the last segment (trailing whitespace / line
+  // end) — pin to the rightmost lyrics column.
+  return 1;
 }
 
 // ---- Lyrics line ---------------------------------------------------
@@ -1233,7 +1310,11 @@ function renderHeader(
     const cleaned = values.map((v) => v.trim()).filter((v) => v.length > 0);
     return cleaned.length === 0 ? null : cleaned.join('; ');
   };
-  const keysJoined = joinMeta(metadata.keys);
+  // Key names go through `unicodeAccidentals` so `Bb` reads as
+  // `B♭` etc. — matches the typography of engraved music and
+  // the `unicodeAccidentals(...)` chord display in
+  // `renderChord`.
+  const keysJoined = joinMeta(metadata.keys?.map(unicodeAccidentals));
   const tempoJoined = joinMeta(metadata.tempos);
   const timeJoined = joinMeta(metadata.times);
 
@@ -1249,7 +1330,9 @@ function renderHeader(
       options.transposedKey !== keysJoined
     ) {
       paramChips.push(chipSpan('keyOrig', `Key ${keysJoined}`, metaLines.key));
-      paramChips.push(chipSpan('keyPlay', `→ ${options.transposedKey}`, undefined));
+      paramChips.push(
+        chipSpan('keyPlay', `→ ${unicodeAccidentals(options.transposedKey)}`, undefined),
+      );
     } else {
       paramChips.push(chipSpan('key', `Key ${keysJoined}`, metaLines.key));
     }
@@ -1367,9 +1450,23 @@ interface WalkContext {
    * a `<span class="caret-marker">` inside the active element.
    * `undefined` skips the marker. Pre-computed from
    * `caretColumn / max(caretLineLength, 1)` so the walker doesn't
-   * need to clamp on the hot path.
+   * need to clamp on the hot path. Used as the default for line
+   * kinds that don't supply a more accurate per-line ratio (see
+   * `lyricsCaretRatio` for the lyrics-line override that
+   * compensates for `[chord]` brackets not occupying rendered
+   * space).
    */
   caretRatio?: number;
+  /**
+   * Raw caret column reported by the editor (0-indexed,
+   * SOURCE characters). Kept alongside `caretRatio` so
+   * per-line overrides (currently lyrics lines) can recompute a
+   * line-specific ratio instead of using the linear source-
+   * column fallback.
+   */
+  caretColumn?: number;
+  /** Raw line length (SOURCE characters) for the same purpose. */
+  caretLineLength?: number;
   /**
    * BPM in effect at the current walker position — updated by every
    * `{tempo}` directive encountered, seeded from
@@ -1465,6 +1562,15 @@ function pushElement(
   ctx: WalkContext,
   element: JSX.Element,
   sourceLine?: number,
+  /**
+   * Per-line override for the caret marker's `left:` ratio.
+   * Lyrics-line renderers pass a value computed by
+   * `lyricsCaretRatio` (which maps source columns through
+   * `[chord]` brackets to their rendered position); other line
+   * kinds omit it and inherit the linear source-column fallback
+   * stored on `ctx.caretRatio`.
+   */
+  caretRatioOverride?: number,
 ): void {
   // When a 1-indexed source-line marker is provided, decorate the
   // root element of the line with:
@@ -1491,7 +1597,12 @@ function pushElement(
     const nextClass = isActive
       ? `${props.className ? `${props.className} ` : ''}line--active`
       : props.className;
-    const shouldInjectMarker = isActive && ctx.caretRatio !== undefined;
+    // Prefer the per-line ratio passed by the caller (e.g.
+    // `lyricsCaretRatio` for a chord-bearing lyrics line) over the
+    // walker-default `ctx.caretRatio` so the marker lands at the
+    // rendered position, not the raw source column.
+    const effectiveRatio = caretRatioOverride ?? ctx.caretRatio;
+    const shouldInjectMarker = isActive && effectiveRatio !== undefined;
     decorated = cloneElement(
       element,
       {
@@ -1504,7 +1615,7 @@ function pushElement(
               key="__caret-marker"
               className="caret-marker"
               aria-hidden="true"
-              style={{ left: `${(ctx.caretRatio ?? 0) * 100}%` }}
+              style={{ left: `${(effectiveRatio ?? 0) * 100}%` }}
             />,
             props.children as ReactNode,
           ]
@@ -1689,7 +1800,7 @@ function handleDirective(
           <span className="meta-inline__group">
             <KeySignatureGlyph keyName={keyName} className="meta-inline__glyph" />
             <span className="meta-inline__label">Written:</span>{' '}
-            <span className="meta-inline__value">{keyName}</span>
+            <span className="meta-inline__value">{unicodeAccidentals(keyName)}</span>
           </span>
           <span className="meta-inline__separator" aria-hidden="true">
             →
@@ -1697,7 +1808,9 @@ function handleDirective(
           <span className="meta-inline__group">
             <KeySignatureGlyph keyName={ctx.soundingKey} className="meta-inline__glyph" />
             <span className="meta-inline__label">Sounding:</span>{' '}
-            <span className="meta-inline__value">{ctx.soundingKey}</span>
+            <span className="meta-inline__value">
+              {unicodeAccidentals(ctx.soundingKey)}
+            </span>
           </span>
         </p>,
       );
@@ -1708,7 +1821,7 @@ function handleDirective(
       <p key={key} className="meta-inline meta-inline--key">
         <KeySignatureGlyph keyName={keyName} className="meta-inline__glyph" />
         <span className="meta-inline__label">Key:</span>{' '}
-        <span className="meta-inline__value">{keyName}</span>
+        <span className="meta-inline__value">{unicodeAccidentals(keyName)}</span>
       </p>,
     );
     return;
@@ -1785,10 +1898,23 @@ function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {
       } else if (ctx.section?.name === 'grid') {
         lyricsOverride = elementStyleToCss(ctx.fmt.grid);
       }
+      // Compute the per-line caret-marker ratio so the marker
+      // lands on the rendered position rather than the raw source
+      // column — a chord-bearing line like `[Am]Hello` has 8
+      // source chars but only 5 lyrics chars, and the default
+      // linear ratio drifts the marker right by ~30% on every
+      // chord bracket.
+      const lyricsRatio =
+        ctx.activeSourceLine === sourceLine &&
+        ctx.caretColumn !== undefined &&
+        ctx.caretLineLength !== undefined
+          ? lyricsCaretRatio(line.value, ctx.caretColumn, ctx.caretLineLength)
+          : undefined;
       pushElement(
         ctx,
         renderLyricsLine(line.value, key, ctx.fmt, lyricsOverride),
         sourceLine,
+        lyricsRatio,
       );
       return;
     }
@@ -1846,6 +1972,8 @@ export function renderChordproAst(
             Math.max(0, options.caretColumn / Math.max(1, options.caretLineLength)),
           )
         : undefined,
+    caretColumn: options.caretColumn,
+    caretLineLength: options.caretLineLength,
     // Seed from the header-strip tempo so a song with `{tempo: 120}`
     // up top drives every downstream time-signature glyph at
     // 120 BPM, even if no positional `{tempo}` follows. Picks the
