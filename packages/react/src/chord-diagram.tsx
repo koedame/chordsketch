@@ -13,6 +13,17 @@ export interface ChordDiagramProps extends Omit<HTMLAttributes<HTMLDivElement>, 
   /** Instrument family. Defaults to `"guitar"`. */
   instrument?: ChordDiagramInstrument;
   /**
+   * Optional list of song-level `{define: <name> <raw>}` voicings
+   * to consult before falling back to the built-in voicing
+   * database. Each entry is a `[chord_name, raw]` tuple — the raw
+   * string carries the directive body (e.g. `"base-fret 1 frets
+   * 3 3 0 0 1 3"`). Mirrors `chordsketch_chordpro::voicings::lookup_diagram`'s
+   * "song-level defines take priority" rule so user-defined
+   * chords show up here exactly like the Rust HTML renderer's
+   * `<section class="chord-diagrams">` block.
+   */
+  defines?: ReadonlyArray<readonly [string, string]>;
+  /**
    * Optional node shown while the WASM module loads. Defaults to
    * a minimal `role="status"` placeholder.
    */
@@ -88,6 +99,7 @@ function defaultLoadingFallback(): ReactNode {
 export function ChordDiagram({
   chord,
   instrument = 'guitar',
+  defines,
   loadingFallback,
   notFoundFallback = defaultNotFoundFallback,
   errorFallback = defaultErrorFallback,
@@ -95,7 +107,7 @@ export function ChordDiagram({
   className,
   ...divProps
 }: ChordDiagramProps): JSX.Element {
-  const { svg, loading, error } = useChordDiagram(chord, instrument, wasmLoader);
+  const { svg, loading, error } = useChordDiagram(chord, instrument, wasmLoader, defines);
 
   const wrapperClass = ['chordsketch-diagram', className].filter(Boolean).join(' ');
 

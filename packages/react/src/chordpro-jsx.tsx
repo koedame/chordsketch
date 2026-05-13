@@ -600,6 +600,38 @@ function collectChordNames(song: ChordproSong): string[] {
   return out;
 }
 
+/**
+ * Pull every `{define: <name> <raw>}` directive into a list of
+ * `[name, raw]` tuples the wasm `chordDiagramSvgWithDefines`
+ * boundary can consume. Mirrors the Rust-side
+ * `Song::fretted_defines()` accessor — the rest of the value
+ * (`base-fret 1 frets …`) is the diagram spec, the first word
+ * is the chord name.
+ */
+function collectDefines(song: ChordproSong): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  for (const line of song.lines) {
+    if (line.kind !== 'directive') continue;
+    if (line.value.kind.tag !== 'define') continue;
+    const value = line.value.value;
+    if (!value) continue;
+    const trimmed = value.trim();
+    const spaceIdx = trimmed.indexOf(' ');
+    if (spaceIdx === -1) continue; // no body → cannot render a diagram
+    const rawName = trimmed.substring(0, spaceIdx);
+    const raw = trimmed.substring(spaceIdx + 1).trim();
+    // Strip the R6.100.0 transposable `[name]` bracket form so
+    // the wasm lookup matches the chord names in
+    // `collectChordNames` above.
+    const name =
+      rawName.startsWith('[') && rawName.endsWith(']')
+        ? rawName.slice(1, -1)
+        : rawName;
+    out.push([name, raw]);
+  }
+  return out;
+}
+
 // Font-size clamping range, mirroring `MIN_FONT_SIZE` and
 // `MAX_FONT_SIZE` in `crates/render-html/src/lib.rs` and the PDF
 // renderer's matching constants. Out-of-range `{textsize: …}` etc.
@@ -1655,6 +1687,10 @@ export function renderChordproAst(
     if (names.length > 0) {
       const instrument =
         diagramsState.instrument ?? options.chordDiagrams.instrument ?? 'guitar';
+      // Collect every `{define}` in the song so user-defined
+      // voicings reach the wasm `lookup_diagram` call. Mirrors
+      // the Rust HTML renderer's `song.fretted_defines()` path.
+      const defines = collectDefines(song);
       const diagramsLabelId = 'cs-chord-diagrams-label';
       const section = (
         <section
@@ -1676,7 +1712,11 @@ export function renderChordproAst(
               // (see chord-diagram.tsx) so the figure exposes
               // an accessible name to screen readers.
               <figure key={name} className="chord-diagram-container">
-                <ChordDiagram chord={name} instrument={instrument} />
+                <ChordDiagram
+                  chord={name}
+                  instrument={instrument}
+                  defines={defines}
+                />
               </figure>
             ))}
           </div>

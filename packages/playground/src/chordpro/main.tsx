@@ -134,10 +134,11 @@ const KITCHEN_SINK_SOURCE = `# ChordSketch — All Directives Tour
 # === Diagrams toggle [Nx] [Pos] ==================================
 # Per ChordPro spec the chord-diagrams grid is ON by default
 # (https://www.chordpro.org/chordpro/directives-diagrams/).
-# Suppressed here so the auto-injected grid does not crowd the
-# preview pane; flip to {diagrams: on} (or delete this line) to
-# see the grid restored. {no_diagrams} is an equivalent alias.
-{diagrams: off}
+# Kept ON here so the {define: Gsus4 ...} + {chord: Gsus4}
+# directives above produce a visible diagram in the auto-injected
+# grid at the end of the song. Flip to {diagrams: off} (or use
+# {no_diagrams}) to suppress.
+{diagrams: on}
 
 # === Font / size / colour overrides [Nx] [Pos] ===================
 # Placed BEFORE the rendered content so the overrides actually take

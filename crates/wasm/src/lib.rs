@@ -766,11 +766,76 @@ pub fn version() -> String {
 #[must_use = "callers must handle the unknown-instrument error"]
 #[wasm_bindgen]
 pub fn chord_diagram_svg(chord: &str, instrument: &str) -> Result<Option<String>, JsValue> {
+    do_chord_diagram_svg(chord, instrument, &[])
+}
+
+/// Variant of [`chord_diagram_svg`] that consults song-level
+/// `{define}` directives before falling back to the built-in
+/// voicing database.
+///
+/// `defines` is a JS array of `[name, raw]` tuples, where `name`
+/// is the chord identifier (`"Gsus4"`) and `raw` is the
+/// space-separated property body the directive carries
+/// (`"base-fret 1 frets 3 3 0 0 1 3"`). The React JSX walker
+/// emits each `{define: <name> <raw>}` directive into this shape
+/// so user-defined chord voicings show up under
+/// `<ChordDiagram>` exactly the way they do in the Rust HTML
+/// renderer's `<section class="chord-diagrams">` block.
+///
+/// Mirrors `chordsketch_chordpro::voicings::lookup_diagram`'s
+/// "song-level defines take priority" rule. Sister-site to the
+/// Rust HTML renderer's `lookup_diagram` call inside
+/// `render-html`'s chord-diagrams emission.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string when:
+///   * `instrument` is not one of `"guitar"` / `"ukulele"` /
+///     `"piano"` (or their aliases).
+///   * `defines` is not a deserialisable `[[string, string], …]`
+///     array.
+#[must_use = "callers must handle the unknown-instrument error"]
+#[wasm_bindgen(js_name = chordDiagramSvgWithDefines)]
+pub fn chord_diagram_svg_with_defines(
+    chord: &str,
+    instrument: &str,
+    defines: JsValue,
+) -> Result<Option<String>, JsValue> {
+    let defines_vec: Vec<(String, String)> = if defines.is_undefined() || defines.is_null() {
+        Vec::new()
+    } else {
+        serde_wasm_bindgen::from_value(defines).map_err(|e| {
+            JsValue::from_str(&format!("invalid defines argument: {e}"))
+        })?
+    };
+    do_chord_diagram_svg(chord, instrument, &defines_vec)
+}
+
+fn do_chord_diagram_svg(
+    chord: &str,
+    instrument: &str,
+    defines: &[(String, String)],
+) -> Result<Option<String>, JsValue> {
     use chordsketch_chordpro::chord_diagram::{render_keyboard_svg, render_svg};
     use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
 
     match instrument.to_ascii_lowercase().as_str() {
         "piano" | "keyboard" | "keys" => {
+            // `lookup_keyboard_voicing` takes its defines as
+            // `&[(String, Vec<i32>)]` (keys form), not the
+            // fretted `&[(String, String)]` form. Bridging
+            // between the two requires re-parsing each raw
+            // string via `ChordDefinition::parse_value` and
+            // promoting `keys` entries into the Vec<i32> shape.
+            // The Rust HTML renderer does that work inside
+            // `render-html`'s keyboard branch — replicating it
+            // here would mean a sister-site helper in
+            // `chordsketch-chordpro`. Tracked as a follow-up;
+            // for now the wasm boundary passes an empty defines
+            // slice for keyboards (same behaviour as before
+            // this commit), and only the fretted branch
+            // benefits from the new API.
+            let _ = defines;
             Ok(lookup_keyboard_voicing(chord, &[]).map(|v| render_keyboard_svg(&v)))
         }
         "guitar" | "ukulele" | "uke" => {
@@ -779,7 +844,7 @@ pub fn chord_diagram_svg(chord: &str, instrument: &str) -> Result<Option<String>
             // when no `{chordfrets}` directive is set) so diagrams
             // produced by `<ChordDiagram>` visually match the
             // sheet output from `<ChordSheet>` for the same chord.
-            Ok(lookup_diagram(chord, &[], instrument, 5).map(|d| render_svg(&d)))
+            Ok(lookup_diagram(chord, defines, instrument, 5).map(|d| render_svg(&d)))
         }
         other => Err(JsValue::from_str(&format!(
             "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
