@@ -23,57 +23,6 @@ use std::fmt::Write;
 
 mod music_glyphs;
 
-/// Replace ASCII accidentals (`b` / `#`) on note letters with
-/// the proper Unicode musical symbols (`♭` U+266D / `♯`
-/// U+266F). Applied to chord names and key values before they
-/// reach the HTML so the typography reads as engraved music
-/// rather than typewriter text. Only `[A-G]b` and `[A-G]#`
-/// sequences are converted — chord-quality letters (`m`,
-/// `dim`, `sus`, etc.) survive unchanged.
-fn unicode_accidentals(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out = String::with_capacity(s.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        let c = bytes[i];
-        // ASCII fast path — accidental replacement only fires on
-        // ASCII note letters and the ASCII `b` / `#`, so any non-
-        // ASCII codepoint is passed straight through.
-        if matches!(c, b'A'..=b'G') && i + 1 < bytes.len() {
-            let next = bytes[i + 1];
-            if next == b'b' {
-                out.push(c as char);
-                out.push('\u{266D}');
-                i += 2;
-                continue;
-            }
-            if next == b'#' {
-                out.push(c as char);
-                out.push('\u{266F}');
-                i += 2;
-                continue;
-            }
-        }
-        // Walk one full UTF-8 character to keep multi-byte
-        // codepoints intact.
-        let len = if c < 0x80 {
-            1
-        } else if c < 0xC0 {
-            1 // continuation byte fallback (shouldn't happen at a char boundary)
-        } else if c < 0xE0 {
-            2
-        } else if c < 0xF0 {
-            3
-        } else {
-            4
-        };
-        let end = (i + len).min(bytes.len());
-        out.push_str(&s[i..end]);
-        i = end;
-    }
-    out
-}
-
 use chordsketch_chordpro::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
 use chordsketch_chordpro::canonical_chord_name;
 use chordsketch_chordpro::config::Config;
@@ -83,7 +32,8 @@ use chordsketch_chordpro::render_result::{
     RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
-use chordsketch_chordpro::transpose::transpose_chord;
+use chordsketch_chordpro::transpose::{transpose_chord_with_style, transposed_key_prefers_flat};
+use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
 
 /// Maximum number of chorus recall directives allowed per song.
 /// Prevents output amplification from malicious inputs with many `{chorus}` lines.
@@ -387,7 +337,8 @@ fn render_song_body_into(
                     if let Some(buf) = chorus_buf.as_mut() {
                         buf.push(line.clone());
                     }
-                    render_lyrics(lyrics_line, transpose_offset, &fmt_state, html);
+                    let prefer_flat = transposed_key_prefers_flat(&song.metadata, transpose_offset);
+                    render_lyrics(lyrics_line, transpose_offset, prefer_flat, &fmt_state, html);
                 }
             }
             Line::Directive(directive) => {
@@ -446,7 +397,7 @@ fn render_song_body_into(
                                     .trim()
                                     .parse::<f32>()
                                     .ok()
-                                    .and_then(music_glyphs::tempo_marking_for)
+                                    .and_then(tempo_marking_for)
                                     .map(|m| {
                                         format!(
                                             " <span class=\"meta-inline__marking\">({m})</span>"
@@ -549,10 +500,13 @@ fn render_song_body_into(
                     }
                     DirectiveKind::Chorus => {
                         if chorus_recall_count < MAX_CHORUS_RECALLS {
+                            let prefer_flat =
+                                transposed_key_prefers_flat(&song.metadata, transpose_offset);
                             render_chorus_recall(
                                 &directive.value,
                                 &chorus_body,
                                 transpose_offset,
+                                prefer_flat,
                                 &fmt_state,
                                 show_diagrams,
                                 diagram_frets,
@@ -1157,13 +1111,24 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut St
 
     // The meta strip is split into three visual tiers (sister-site
     // to the React JSX walker):
-    //   * `.meta--attribution`   — who made the song. Two lines:
-    //       primary "by Artist", secondary "Music X · Lyrics Y ·
-    //       Arr. Z".
+    //   * `.meta--attribution`   — who made the song. Primary
+    //       "Artist", secondary "Composer X · Lyrics Y ·
+    //       Arranger Z".
     //   * `.meta--params`        — musical parameters as chip
-    //       badges (Key / Capo / BPM / Time / Duration).
-    //   * `.meta--supplementary` — album / year / copyright at a
-    //       smaller, muted weight.
+    //       badges (Capo / Duration only — `{key}` / `{tempo}`
+    //       / `{time}` are surfaced inline at their source
+    //       positions, not in the chip strip).
+    //   * `.meta--supplementary` — album / year / copyright at
+    //       a smaller, muted weight.
+    //
+    // Role icons (mic / eighth-note / pencil / hash / album)
+    // are intentionally React-only: the static-HTML renderer is
+    // designed for embedding in third-party consumer stylesheets
+    // and shouldn't impose SVG glyph choices on them. The React
+    // JSX walker is free to render richer chrome since it ships
+    // alongside `@chordsketch/react`'s own `styles.css`. Sister-
+    // site asymmetry documented per `.claude/rules/renderer-
+    // parity.md` §Required practices.
 
     // Tier 1 — attribution.
     if !metadata.artists.is_empty() {
@@ -1292,9 +1257,16 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut St
 /// via `inline-flex; flex-direction: column-reverse`.
 /// Formatting directives (font, size, color) are applied via
 /// inline CSS as before.
+// `prefer_flat` is the song-wide flat/sharp spelling preference
+// computed at the call site from
+// `transposed_key_prefers_flat(&song.metadata, transpose_offset)`.
+// Passing it here keeps every chord's re-spelling consistent
+// with the song's transposed key signature — no mixed `D#` /
+// `Ab` in an Eb-major song.
 fn render_lyrics(
     lyrics_line: &LyricsLine,
     transpose_offset: i8,
+    prefer_flat: bool,
     fmt_state: &FormattingState,
     html: &mut String,
 ) {
@@ -1305,7 +1277,7 @@ fn render_lyrics(
 
         if let Some(chord) = &segment.chord {
             let raw_display = if transpose_offset != 0 {
-                let transposed = transpose_chord(chord, transpose_offset);
+                let transposed = transpose_chord_with_style(chord, transpose_offset, prefer_flat);
                 transposed.display_name().to_string()
             } else {
                 chord.display_name().to_string()
@@ -2344,6 +2316,7 @@ fn render_chorus_recall(
     value: &Option<String>,
     chorus_body: &[Line],
     transpose_offset: i8,
+    prefer_flat: bool,
     fmt_state: &FormattingState,
     show_diagrams: bool,
     diagram_frets: usize,
@@ -2361,7 +2334,9 @@ fn render_chorus_recall(
     let mut local_fmt = fmt_state.clone();
     for line in chorus_body {
         match line {
-            Line::Lyrics(lyrics) => render_lyrics(lyrics, transpose_offset, &local_fmt, html),
+            Line::Lyrics(lyrics) => {
+                render_lyrics(lyrics, transpose_offset, prefer_flat, &local_fmt, html)
+            }
             Line::Comment(style, text) => render_comment(*style, text, html),
             Line::Empty => html.push_str("<div class=\"empty-line\" aria-hidden=\"true\"></div>\n"),
             Line::Directive(d) if d.kind.is_font_size_color() => {
@@ -2526,31 +2501,30 @@ mod sanitize_tag_attrs_tests {
 mod tests {
     use super::*;
 
-    #[test]
-    fn unicode_accidentals_basic() {
-        assert_eq!(unicode_accidentals("Bb"), "B\u{266D}");
-        assert_eq!(unicode_accidentals("Eb7"), "E\u{266D}7");
-        assert_eq!(unicode_accidentals("F#m"), "F\u{266F}m");
-        // Slash chord — both halves convert.
-        assert_eq!(unicode_accidentals("Bb/Eb"), "B\u{266D}/E\u{266D}");
-        // Non-accidental letters survive untouched.
-        assert_eq!(unicode_accidentals("Am"), "Am");
-        assert_eq!(unicode_accidentals("Cdim"), "Cdim");
-        assert_eq!(unicode_accidentals("Cmaj7"), "Cmaj7");
-        // Quality letters that look like roots ("Bb" inside "Bbm7")
-        // still convert because the leading letter is a root.
-        assert_eq!(unicode_accidentals("Bbm7"), "B\u{266D}m7");
-    }
+    // `unicode_accidentals_*` tests moved to
+    // `chordsketch_chordpro::typography::tests` together with
+    // the helper itself.
 
     #[test]
-    fn unicode_accidentals_leaves_non_root_letters_alone() {
-        // A `b` that doesn't follow a note letter survives — common
-        // case is plain English text shouldn't get mangled.
-        assert_eq!(unicode_accidentals("Verse"), "Verse");
-        assert_eq!(unicode_accidentals("amber"), "amber");
-        // Multi-byte UTF-8 (a Japanese chord-name comment) survives
-        // intact.
-        assert_eq!(unicode_accidentals("中文"), "中文");
+    fn test_transposed_chord_uses_canonical_spelling_per_target_key() {
+        // C +3 → Eb (flat side). A `D#`/`Eb` chord transposed
+        // should appear with the flat spelling, NOT `D#`. This
+        // is the High finding from the parallel review: legacy
+        // `transpose_chord` per-chord style preservation would
+        // emit `F#` (since source `D#` is sharp-style), but
+        // song-wide canonical spelling gives `Gb`.
+        let song = chordsketch_chordpro::parse("{key: C}\n[D#]hi").unwrap();
+        let result = render_song_with_warnings(&song, 3, &Config::defaults());
+        assert!(
+            result.output.contains(">G\u{266D}<"),
+            "expected `Gb` (flat-side spelling) in transposed Eb song; got: {}",
+            result.output
+        );
+        assert!(
+            !result.output.contains(">F\u{266F}<"),
+            "must not emit sharp-side spelling for a flat-side song; got: {}",
+            result.output
+        );
     }
 
     #[test]

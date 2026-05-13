@@ -576,7 +576,7 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
  * naive source-column ratio when the line has no chords (in
  * which case the two are equivalent anyway).
  */
-function lyricsCaretRatio(
+export function lyricsCaretRatio(
   line: ChordproLyricsLine,
   caretColumn: number,
   caretLineLength: number,
@@ -1085,28 +1085,6 @@ interface FormattingState {
   chorus: ElementStyle;
   label: ElementStyle;
   grid: ElementStyle;
-}
-
-/**
- * Pick an initial BPM for the walker from the song's
- * `{tempo}` metadata. Tries the plural `tempos` Vec (last-wins
- * for multi-value `[Nx] [Pos]` parity) before falling back to
- * the singular `tempo` view, mirroring how the chip strip
- * resolves the header tempo. Returns `null` when the song
- * declares no tempo so the time-signature glyph renders
- * statically.
- */
-function parseInitialBpm(
-  tempos: readonly string[] | undefined,
-  tempo: string | null | undefined,
-): number | null {
-  const candidates = tempos && tempos.length > 0 ? tempos : tempo ? [tempo] : [];
-  for (let i = candidates.length - 1; i >= 0; i--) {
-    const v = candidates[i]!;
-    const parsed = Number.parseInt(v, 10);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return null;
 }
 
 function emptyFormattingState(): FormattingState {
@@ -1761,14 +1739,6 @@ interface WalkContext {
   /** Raw line length (SOURCE characters) for the same purpose. */
   caretLineLength?: number;
   /**
-   * BPM in effect at the current walker position — updated by every
-   * `{tempo}` directive encountered, seeded from
-   * `Metadata.tempo` (last-wins header value) so a song with a
-   * single header tempo still drives the time-signature
-   * conductor animation. `null` when no tempo has been declared.
-   */
-  activeBpm: number | null;
-  /**
    * The song's PRIMARY `{key}` value (last-wins `metadata.key`),
    * cached here so the body's `{key}` inline marker can detect
    * whether a given `{key}` directive is the song-primary one
@@ -2126,12 +2096,6 @@ function handleDirective(
     const bpmRaw = directive.value.trim();
     const bpm = Number.parseInt(bpmRaw, 10);
     const safeBpm = Number.isFinite(bpm) && bpm > 0 ? bpm : 60;
-    // Update the walker's active BPM so any *downstream* `{time}`
-    // marker (and any `<TimeSignatureGlyph>` it emits) animates
-    // at the new tempo. Spec-wise `{tempo}` is `[Pos]`, so this
-    // matches the directive's positional semantics — see the
-    // Phase B notes in #2454.
-    ctx.activeBpm = safeBpm;
     pushElement(
       ctx,
       // The metronome glyph carries the meaning of the marker
@@ -2160,11 +2124,7 @@ function handleDirective(
       ctx,
       <p key={key} className="meta-inline meta-inline--time">
         <span className="meta-inline__label">Time:</span>{' '}
-        <TimeSignatureGlyph
-          value={timeValue}
-          bpm={ctx.activeBpm}
-          className="meta-inline__glyph"
-        />
+        <TimeSignatureGlyph value={timeValue} className="meta-inline__glyph" />
       </p>,
       key, // source-line for `line--active` decoration
     );
@@ -2297,12 +2257,6 @@ export function renderChordproAst(
         : undefined,
     caretColumn: options.caretColumn,
     caretLineLength: options.caretLineLength,
-    // Seed from the header-strip tempo so a song with `{tempo: 120}`
-    // up top drives every downstream time-signature glyph at
-    // 120 BPM, even if no positional `{tempo}` follows. Picks the
-    // *last* declared header tempo to match how the chip strip
-    // displays multi-value tempos (Phase A of #2454).
-    activeBpm: parseInitialBpm(song.metadata.tempos, song.metadata.tempo),
     primaryKey: song.metadata.key,
     // `transposedKey` is the host-computed sounding key for the
     // song-primary written key. Only treat it as a real

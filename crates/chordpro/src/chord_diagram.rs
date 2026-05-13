@@ -844,6 +844,19 @@ mod tests {
     }
 
     #[test]
+    fn position_marker_frets_table_lookup() {
+        // Guitar (6 strings) — standard western inlay layout.
+        assert_eq!(position_marker_frets(6), &[3, 5, 7, 9, 12, 15, 17, 19, 21]);
+        // Ukulele (4 strings) — simpler inlay set.
+        assert_eq!(position_marker_frets(4), &[3, 5, 7, 10, 12, 15]);
+        // Non-standard string counts get no inlays.
+        assert!(position_marker_frets(5).is_empty());
+        assert!(position_marker_frets(7).is_empty());
+        assert!(position_marker_frets(12).is_empty());
+        assert!(position_marker_frets(0).is_empty());
+    }
+
+    #[test]
     fn test_render_svg_guitar_has_position_markers_for_visible_inlay_frets() {
         // A standard nut-position chord (base_fret=1, 5 visible
         // frets) shows the fret-3 and fret-5 inlay dots.

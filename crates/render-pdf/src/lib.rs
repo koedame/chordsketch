@@ -21,7 +21,8 @@ use chordsketch_chordpro::render_result::{
     RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
-use chordsketch_chordpro::transpose::transpose_chord;
+use chordsketch_chordpro::transpose::{transpose_chord_with_style, transposed_key_prefers_flat};
+use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
 
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
@@ -824,9 +825,11 @@ fn render_song_into_doc(
                 if let Some(buf) = chorus_buf.as_mut() {
                     buf.push(line.clone());
                 }
+                let prefer_flat = transposed_key_prefers_flat(&song.metadata, transpose_offset);
                 render_lyrics(
                     lyrics,
                     transpose_offset,
+                    prefer_flat,
                     &fmt_state,
                     doc,
                     in_verbatim_section,
@@ -846,9 +849,25 @@ fn render_song_into_doc(
                     ) =>
             {
                 if let Some(value) = d.value.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+                    // Sister-site comment: the HTML / React surfaces
+                    // drop the `Tempo:` text label because the
+                    // metronome glyph carries the signal — PDF
+                    // doesn't render the glyph, so the label is
+                    // intentionally retained here. Same for
+                    // `Key:` / `Time:`.
                     let line = match d.kind {
-                        DirectiveKind::Key => format!("Key: {value}"),
-                        DirectiveKind::Tempo => format!("Tempo: {value} BPM"),
+                        DirectiveKind::Key => format!("Key: {}", unicode_accidentals(value)),
+                        DirectiveKind::Tempo => {
+                            // Append the Italian tempo marking when
+                            // the BPM matches a conventional band.
+                            let marking = value
+                                .parse::<f32>()
+                                .ok()
+                                .and_then(tempo_marking_for)
+                                .map(|m| format!(" ({m})"))
+                                .unwrap_or_default();
+                            format!("Tempo: {value} BPM{marking}")
+                        }
                         DirectiveKind::Time => format!("Time: {value}"),
                         _ => unreachable!(),
                     };
@@ -951,10 +970,13 @@ fn render_song_into_doc(
                     }
                     DirectiveKind::Chorus => {
                         if chorus_recall_count < MAX_CHORUS_RECALLS {
+                            let prefer_flat =
+                                transposed_key_prefers_flat(&song.metadata, transpose_offset);
                             render_chorus_recall(
                                 &d.value,
                                 &chorus_body,
                                 transpose_offset,
+                                prefer_flat,
                                 &fmt_state,
                                 show_diagrams,
                                 diagram_frets,
@@ -1108,6 +1130,7 @@ pub fn try_render(input: &str) -> Result<Vec<u8>, chordsketch_chordpro::ParseErr
 fn render_lyrics(
     lyrics: &LyricsLine,
     transpose_offset: i8,
+    prefer_flat: bool,
     fmt_state: &PdfFormattingState,
     doc: &mut PdfDocument,
     verbatim: bool,
@@ -1147,7 +1170,7 @@ fn render_lyrics(
         // rendering and width measurement to avoid duplicate transposition.
         let chord_display: Option<String> = seg.chord.as_ref().map(|c| {
             if transpose_offset != 0 {
-                transpose_chord(c, transpose_offset)
+                transpose_chord_with_style(c, transpose_offset, prefer_flat)
                     .display_name()
                     .to_string()
             } else {
@@ -1876,6 +1899,7 @@ fn render_chorus_recall(
     value: &Option<String>,
     chorus_body: &[Line],
     transpose_offset: i8,
+    prefer_flat: bool,
     fmt_state: &PdfFormattingState,
     show_diagrams: bool,
     diagram_frets: usize,
@@ -1893,7 +1917,7 @@ fn render_chorus_recall(
     for line in chorus_body {
         match line {
             Line::Lyrics(lyrics) => {
-                render_lyrics(lyrics, transpose_offset, fmt_state, doc, false);
+                render_lyrics(lyrics, transpose_offset, prefer_flat, fmt_state, doc, false);
             }
             Line::Comment(style, text) => render_comment(*style, text, doc),
             Line::Empty => doc.newline(LINE_GAP * 2.0),

@@ -326,39 +326,12 @@ function FlatGlyph({ cx, cy }: { cx: number; cy: number }): JSX.Element {
  * `<num>/<den>` form (e.g. `"C"` for common time, `"none"`,
  * blank).
  */
-/**
- * Beat pattern for a conductor's wrist gesture. Maps a time-
- * signature numerator to the simple-pattern count the icon
- * should animate. Returns `null` for numerators outside the
- * 2/3/4/6 set so callers can render a static glyph.
- */
-function conductorBeatsFor(numerator: number): 2 | 3 | 4 | 6 | null {
-  // 6/8 is canonically conducted in 2; we model it as 6 here
-  // because the icon's animation is visual flavour rather than a
-  // teaching tool, and seeing six small movements per measure
-  // reads more clearly than two when the user has explicitly
-  // written 6 in the numerator. Same idea for 12/8 / 9/8 —
-  // use the numerator directly when it's in our supported set.
-  if (numerator === 2 || numerator === 3 || numerator === 4 || numerator === 6) return numerator;
-  return null;
-}
-
 export function TimeSignatureGlyph({
   value,
-  bpm,
   className,
   style,
 }: {
   value: string;
-  /**
-   * Current beats-per-minute used to size the conductor's wrist
-   * animation. One full conductor cycle = `numerator * (60 /
-   * bpm)` seconds (the duration of one measure). `null` /
-   * undefined disables the animation (the glyph renders
-   * statically), which is also what `prefers-reduced-motion:
-   * reduce` triggers via CSS.
-   */
-  bpm?: number | null;
   className?: string;
   style?: CSSProperties;
 }): JSX.Element {
@@ -375,24 +348,6 @@ export function TimeSignatureGlyph({
       </span>
     );
   }
-  const numInt = Number.parseInt(numerator, 10);
-  const beats = conductorBeatsFor(numInt);
-  const safeBpm = typeof bpm === 'number' && Number.isFinite(bpm) && bpm > 0 ? bpm : null;
-  // One full conductor cycle = the duration of one measure =
-  // `numerator * (60 / bpm)` seconds, clamped to a sane range so
-  // a typo'd `{tempo: 99999}` doesn't strobe the glyph.
-  const period =
-    safeBpm != null && beats != null
-      ? Math.max(0.3, Math.min(30, numInt * (60 / safeBpm)))
-      : null;
-  // The conductor-pattern dot animation was retired per
-  // playground feedback — it competed with the music-notation
-  // typography of the digits without adding actionable
-  // information. The glyph is now just the stacked num / bar /
-  // den; `bpm` remains in the API for future positional use
-  // but no animation is emitted today.
-  void beats;
-  void period;
   const classes = ['music-glyph', 'music-glyph--time', className].filter(Boolean).join(' ');
   return (
     <span

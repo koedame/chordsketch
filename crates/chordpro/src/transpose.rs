@@ -7,9 +7,7 @@
 //! Chords whose notation could not be parsed structurally (i.e., `detail` is
 //! `None`) are left unchanged — only their raw `name` is preserved.
 
-use crate::ast::{
-    Chord, ChordDefinition, Directive, DirectiveKind, Line, LyricsLine, LyricsSegment, Song,
-};
+use crate::ast::{Chord, ChordDefinition, Directive, DirectiveKind, Line, LyricsSegment, Song};
 use crate::chord::{Accidental, ChordDetail, ChordQuality, Note};
 
 /// The chromatic scale using sharps for enharmonic equivalents.
@@ -84,15 +82,21 @@ fn transposed_note(semitone: u8, prefer_flat: bool) -> (Note, Option<Accidental>
 ///
 /// Used after transposition to pick the conventional name
 /// (e.g. `A#` → `Bb`, `D#` → `Eb`, `G#` → `Ab`) rather than the
-/// raw sharp/flat spelling carried over from the source. Pop
-/// and folk chord-sheet authors expect flat spellings for these
-/// pitches; classical music sometimes prefers the sharp form
-/// but the flat is the more common standard.
+/// raw sharp/flat spelling carried over from the source. The
+/// table is opinionated and ALWAYS prefers flats for ambiguous
+/// black-key pitches (positions 1, 3, 6, 8, 10) — pop and folk
+/// chord-sheet authors expect flat spellings (`Db`, `Eb`, `Gb`,
+/// `Ab`, `Bb`); classical music sometimes prefers the sharp
+/// form but the flat side is the more common pop standard. If
+/// you need to preserve the source's sharp spelling for an
+/// F#-major song that doesn't transpose, special-case it
+/// upstream — `transpose(song, 0)` already short-circuits to
+/// preserve the authored key.
 ///
-/// Returns `(note, accidental)` for the canonical major-key
-/// spelling. Minor keys reuse the same root pitch spelling
-/// (`Em`, `Ebm`, …) — the relative-major key signature governs
-/// which side of the circle of fifths the pitch sits on.
+/// Returns `(note, accidental)` for the canonical major-root
+/// spelling. Whether the surrounding key is major or minor is
+/// the caller's responsibility — [`key_prefers_flat`] takes the
+/// `is_minor` flag to pick the flat / sharp side.
 #[must_use]
 pub fn canonical_key_spelling(semitone: u8) -> (Note, Option<Accidental>) {
     match semitone % 12 {
@@ -274,6 +278,16 @@ pub fn transpose_detail_with_style(
 /// ```
 #[must_use]
 pub fn transpose(song: &Song, semitones: i8) -> Song {
+    // A zero shift is a no-op — preserve the source's chord
+    // spellings byte-for-byte instead of re-spelling through
+    // the canonical table. Callers (notably the wasm parser at
+    // `transpose_steps != 0`) already guard against this case,
+    // but the public `transpose()` entry must round-trip
+    // correctly so `{key: F#}` with no shift doesn't get
+    // rewritten to `Gb`.
+    if semitones == 0 {
+        return song.clone();
+    }
     // Pick a song-wide flat/sharp preference based on the
     // TRANSPOSED key (= the key signature the player reads
     // after the transpose is applied). Every chord gets
@@ -370,7 +384,21 @@ fn canonical_key_string(detail: &ChordDetail) -> String {
 /// Decide whether the song's transposed key is on the flat side
 /// of the circle of fifths. Used by [`transpose`] to pick a
 /// single spelling preference for the whole song.
-fn transposed_key_prefers_flat(metadata: &crate::ast::Metadata, semitones: i8) -> bool {
+/// Public wrapper: decide whether chords in `metadata`'s song
+/// should be re-spelled with flats after transposing by
+/// `semitones`. Renderers call this once at the top of their
+/// entry point so every per-chord call to
+/// [`transpose_chord_with_style`] picks the same side of the
+/// circle of fifths — keeping chord lines internally consistent
+/// (no mixed `D#` / `Ab`) when the song lands on a flat-side
+/// key like `Eb`.
+///
+/// Returns `false` for unparseable / missing keys, so songs
+/// without a `{key}` fall back to sharp-side (matches the
+/// per-chord legacy [`transpose_chord`] behaviour for that
+/// case).
+#[must_use]
+pub fn transposed_key_prefers_flat(metadata: &crate::ast::Metadata, semitones: i8) -> bool {
     let Some(key_str) = metadata.key.as_deref() else {
         return false;
     };
@@ -424,31 +452,7 @@ fn transpose_lyrics_with_style(
 /// `{define: [A]}` shifted by 2 becomes `{define: [B]}`. Bracket form
 /// disallows other attributes (see [`ChordDefinition::parse_value`]), so
 /// the rewrite is just `[<new_name>]`.
-#[allow(dead_code)] // legacy helper kept for the public `transpose_chord` API path.
-fn transpose_transposable_define(directive: &Directive, semitones: i8) -> Option<Directive> {
-    if !matches!(
-        directive.kind,
-        DirectiveKind::Define | DirectiveKind::ChordDirective
-    ) {
-        return None;
-    }
-    let value = directive.value.as_deref()?;
-    let def = ChordDefinition::parse_value(value);
-    if !def.transposable {
-        return None;
-    }
-    let chord = Chord::new(&def.name);
-    let transposed = transpose_chord(&chord, semitones);
-    let new_value = format!("[{}]", transposed.name);
-    Some(Directive {
-        name: directive.name.clone(),
-        value: Some(new_value),
-        kind: directive.kind.clone(),
-        selector: directive.selector.clone(),
-    })
-}
-
-/// Like [`transpose_transposable_define`] but routes through
+/// Routes through
 /// [`transpose_chord_with_style`] so the song-wide flat/sharp
 /// preference is applied to defined chord names too.
 fn transpose_transposable_define_with_style(
@@ -487,22 +491,6 @@ pub fn combine_transpose(file_offset: i8, cli_offset: i8) -> (i8, bool) {
     let exact = file_offset as i16 + cli_offset as i16;
     let saturated = exact < i8::MIN as i16 || exact > i8::MAX as i16;
     (file_offset.saturating_add(cli_offset), saturated)
-}
-
-/// Transpose all chords in a lyrics line.
-#[allow(dead_code)] // legacy helper kept for the public `transpose_chord` API path.
-fn transpose_lyrics(lyrics_line: &LyricsLine, semitones: i8) -> LyricsLine {
-    LyricsLine {
-        segments: lyrics_line
-            .segments
-            .iter()
-            .map(|seg| LyricsSegment {
-                spans: seg.spans.clone(),
-                chord: seg.chord.as_ref().map(|c| transpose_chord(c, semitones)),
-                text: seg.text.clone(),
-            })
-            .collect(),
-    }
 }
 
 // ===========================================================================
@@ -676,6 +664,110 @@ mod tests {
     // does not re-spell it. Consumers that want the canonical
     // transposed spelling call `canonical_transposed_key`
     // directly for each entry.
+
+    // --- non-C-rooted source keys ---
+
+    #[test]
+    fn canonical_transposed_key_from_flat_source_keys() {
+        // Eb +2 → F (no accidental either way; F is canonical).
+        assert_eq!(
+            canonical_transposed_key(Some("Eb"), 2).as_deref(),
+            Some("F")
+        );
+        // F +1 → Gb (flat-side; F is already flat-side).
+        assert_eq!(
+            canonical_transposed_key(Some("F"), 1).as_deref(),
+            Some("Gb")
+        );
+        // Bb +2 → C (sharp-side, but C has no accidental).
+        assert_eq!(
+            canonical_transposed_key(Some("Bb"), 2).as_deref(),
+            Some("C")
+        );
+    }
+
+    #[test]
+    fn canonical_transposed_key_from_sharp_source_keys() {
+        // F# +1 → G (canonical, plain).
+        assert_eq!(
+            canonical_transposed_key(Some("F#"), 1).as_deref(),
+            Some("G")
+        );
+        // G +6 → Db (canonical for pitch 1).
+        assert_eq!(
+            canonical_transposed_key(Some("G"), 6).as_deref(),
+            Some("Db")
+        );
+    }
+
+    #[test]
+    fn canonical_transposed_key_for_minor_keys() {
+        // Em +3 → Gm (relative-major was G; +3 → Bb → relative
+        // minor Gm). Function should preserve the `m` suffix.
+        assert_eq!(
+            canonical_transposed_key(Some("Em"), 3).as_deref(),
+            Some("Gm")
+        );
+        // Am +1 → Bbm.
+        assert_eq!(
+            canonical_transposed_key(Some("Am"), 1).as_deref(),
+            Some("Bbm")
+        );
+        // F#m +1 → Gm.
+        assert_eq!(
+            canonical_transposed_key(Some("F#m"), 1).as_deref(),
+            Some("Gm")
+        );
+    }
+
+    #[test]
+    fn transpose_song_from_eb_keeps_flat_side_chord_spellings() {
+        // Eb-major source transposed +2 lands on F (1 flat → still
+        // a flat-side key per `key_prefers_flat(F, None, false)`).
+        // A C# chord in the source (semitone 1) becomes D# at
+        // +2 in sharp spelling or Eb in flat spelling. Because
+        // F is flat-side, the canonical spelling is Eb.
+        let song = parse_song("{key: Eb}\n[C#]hi");
+        let transposed = transpose(&song, 2);
+        let chord_name = transposed
+            .lines
+            .iter()
+            .find_map(|line| {
+                if let Line::Lyrics(l) = line {
+                    l.segments
+                        .iter()
+                        .find_map(|s| s.chord.as_ref().map(|c| c.name.clone()))
+                } else {
+                    None
+                }
+            })
+            .expect("expected a chord");
+        assert_eq!(chord_name, "Eb");
+    }
+
+    #[test]
+    fn transpose_zero_is_noop_round_trip() {
+        // Spelling preservation for zero shift — `{key: F#}` MUST
+        // stay `F#`, not get re-spelled to `Gb`. Source-side
+        // sharp accidentals on `[F#]` and `[C#]` are preserved.
+        let song = parse_song("{key: F#}\n[F#]hi\n[C#]ho");
+        let transposed = transpose(&song, 0);
+        assert_eq!(transposed.metadata.key.as_deref(), Some("F#"));
+        let chord_names: Vec<String> = transposed
+            .lines
+            .iter()
+            .filter_map(|line| {
+                if let Line::Lyrics(l) = line {
+                    l.segments
+                        .iter()
+                        .find_map(|s| s.chord.as_ref().map(|c| c.name.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(chord_names, vec!["F#", "C#"]);
+    }
 
     // --- note_to_semitone ---
 

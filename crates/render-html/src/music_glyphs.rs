@@ -262,43 +262,6 @@ fn write_flat(s: &mut String, cx: f32, cy: f32) {
     );
 }
 
-/// Italian tempo-marking name for a BPM value. Sister-site to
-/// `packages/react/src/music-glyphs.tsx::tempoMarkingFor`.
-#[must_use]
-pub fn tempo_marking_for(bpm: f32) -> Option<&'static str> {
-    if !bpm.is_finite() || bpm <= 0.0 {
-        return None;
-    }
-    if bpm < 40.0 {
-        return Some("Grave");
-    }
-    if bpm < 60.0 {
-        return Some("Largo");
-    }
-    if bpm < 66.0 {
-        return Some("Larghetto");
-    }
-    if bpm < 76.0 {
-        return Some("Adagio");
-    }
-    if bpm < 108.0 {
-        return Some("Andante");
-    }
-    if bpm < 120.0 {
-        return Some("Moderato");
-    }
-    if bpm < 168.0 {
-        return Some("Allegro");
-    }
-    if bpm < 177.0 {
-        return Some("Vivace");
-    }
-    if bpm < 200.0 {
-        return Some("Presto");
-    }
-    Some("Prestissimo")
-}
-
 /// Emit an inline SVG mini metronome glyph with the pendulum
 /// animation duration derived from `bpm`. The `--cs-metronome-
 /// period` CSS custom property is set on the root `<svg>` so
@@ -326,7 +289,22 @@ pub fn metronome_svg(bpm_raw: &str) -> String {
     // metronome's audible rhythm.
     let period = (60.0 / safe_bpm).clamp(0.05, 5.0);
 
-    let aria = format!("Metronome at {} BPM", bpm_raw.trim());
+    // Use the validated numeric BPM in the accessible name —
+    // not the raw `bpm_raw` string — so a `{tempo: <script>}`
+    // payload doesn't reach screen readers (the surrounding
+    // `escape_xml` already neutralises XSS, but the read-out
+    // text should still be the clamped numeric value). Falls
+    // back to "unknown" when the source value can't be parsed.
+    let aria = if bpm_raw
+        .trim()
+        .parse::<f32>()
+        .ok()
+        .map_or(false, f32::is_finite)
+    {
+        format!("Metronome at {} BPM", bpm_raw.trim())
+    } else {
+        "Metronome (BPM unknown)".to_string()
+    };
     let mut s = String::with_capacity(512);
     let _ = write!(
         s,
@@ -450,23 +428,9 @@ mod tests {
         assert!(!svg.contains("<g "));
     }
 
-    #[test]
-    fn tempo_marking_table() {
-        assert_eq!(tempo_marking_for(30.0), Some("Grave"));
-        assert_eq!(tempo_marking_for(50.0), Some("Largo"));
-        assert_eq!(tempo_marking_for(62.0), Some("Larghetto"));
-        assert_eq!(tempo_marking_for(70.0), Some("Adagio"));
-        assert_eq!(tempo_marking_for(90.0), Some("Andante"));
-        assert_eq!(tempo_marking_for(110.0), Some("Moderato"));
-        assert_eq!(tempo_marking_for(120.0), Some("Allegro"));
-        assert_eq!(tempo_marking_for(140.0), Some("Allegro"));
-        assert_eq!(tempo_marking_for(170.0), Some("Vivace"));
-        assert_eq!(tempo_marking_for(180.0), Some("Presto"));
-        assert_eq!(tempo_marking_for(220.0), Some("Prestissimo"));
-        assert_eq!(tempo_marking_for(0.0), None);
-        assert_eq!(tempo_marking_for(-1.0), None);
-        assert_eq!(tempo_marking_for(f32::NAN), None);
-    }
+    // `tempo_marking_table` moved to
+    // `chordsketch_chordpro::typography::tests` together with
+    // the helper itself.
 
     #[test]
     fn metronome_svg_writes_period_from_bpm() {

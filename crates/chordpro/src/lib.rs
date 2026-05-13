@@ -21,6 +21,7 @@ pub mod rrjson;
 pub mod selector;
 pub mod token;
 pub mod transpose;
+pub mod typography;
 pub mod voicings;
 
 // Re-export key types for convenience.

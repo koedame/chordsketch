@@ -10,7 +10,8 @@ use chordsketch_chordpro::render_result::{
     RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
-use chordsketch_chordpro::transpose::transpose_chord;
+use chordsketch_chordpro::transpose::{transpose_chord_with_style, transposed_key_prefers_flat};
+use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
 use unicode_width::UnicodeWidthStr;
 
 /// Maximum number of chorus recall directives allowed per song.
@@ -150,7 +151,8 @@ fn render_song_impl(
                 if let Some(buf) = chorus_buf.as_mut() {
                     buf.push(line.clone());
                 }
-                render_lyrics(lyrics_line, transpose_offset, &mut output);
+                let prefer_flat = transposed_key_prefers_flat(&song.metadata, transpose_offset);
+                render_lyrics(lyrics_line, transpose_offset, prefer_flat, &mut output);
             }
             Line::Directive(directive) => {
                 // Metadata directives are already rendered via song.metadata;
@@ -172,10 +174,22 @@ fn render_song_impl(
                     {
                         match directive.kind {
                             DirectiveKind::Key => {
-                                output.push(format!("[Key: {value}]"));
+                                // Typeset `Bb` / `F#` with Unicode
+                                // accidentals — sister-site to the
+                                // React JSX walker + Rust HTML renderer.
+                                output.push(format!("[Key: {}]", unicode_accidentals(value)));
                             }
                             DirectiveKind::Tempo => {
-                                output.push(format!("[Tempo: {value} BPM]"));
+                                // Append the Italian tempo marking
+                                // (`Allegro`, `Andante`, …) when the
+                                // BPM matches a conventional band.
+                                let marking = value
+                                    .parse::<f32>()
+                                    .ok()
+                                    .and_then(tempo_marking_for)
+                                    .map(|m| format!(" ({m})"))
+                                    .unwrap_or_default();
+                                output.push(format!("[Tempo: {value} BPM{marking}]"));
                             }
                             DirectiveKind::Time => {
                                 output.push(format!("[Time: {value}]"));
@@ -268,10 +282,13 @@ fn render_song_impl(
                     }
                     DirectiveKind::Chorus => {
                         if chorus_recall_count < MAX_CHORUS_RECALLS {
+                            let prefer_flat =
+                                transposed_key_prefers_flat(&song.metadata, transpose_offset);
                             render_chorus_recall(
                                 &directive.value,
                                 &chorus_body,
                                 transpose_offset,
+                                prefer_flat,
                                 &mut output,
                                 warnings,
                             );
@@ -499,7 +516,12 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, output: &mut 
 ///
 /// Alignment is based on Unicode display width (`UnicodeWidthStr::width()`),
 /// which correctly handles full-width CJK characters and other wide glyphs.
-fn render_lyrics(lyrics_line: &LyricsLine, transpose_offset: i8, output: &mut Vec<String>) {
+fn render_lyrics(
+    lyrics_line: &LyricsLine,
+    transpose_offset: i8,
+    prefer_flat: bool,
+    output: &mut Vec<String>,
+) {
     if !lyrics_line.has_chords() {
         output.push(lyrics_line.text());
         return;
@@ -512,7 +534,7 @@ fn render_lyrics(lyrics_line: &LyricsLine, transpose_offset: i8, output: &mut Ve
         let transposed;
         let chord_name = if transpose_offset != 0 {
             if let Some(chord) = &segment.chord {
-                transposed = transpose_chord(chord, transpose_offset);
+                transposed = transpose_chord_with_style(chord, transpose_offset, prefer_flat);
                 transposed.display_name()
             } else {
                 ""
@@ -643,13 +665,14 @@ fn render_chorus_recall(
     value: &Option<String>,
     chorus_body: &[Line],
     transpose_offset: i8,
+    prefer_flat: bool,
     output: &mut Vec<String>,
     warnings: &mut Vec<String>,
 ) {
     render_section_header("Chorus", value, output);
     for line in chorus_body {
         match line {
-            Line::Lyrics(lyrics) => render_lyrics(lyrics, transpose_offset, output),
+            Line::Lyrics(lyrics) => render_lyrics(lyrics, transpose_offset, prefer_flat, output),
             Line::Comment(style, text) => render_comment(*style, text, output),
             Line::Empty => output.push(String::new()),
             Line::Directive(d) if !d.kind.is_metadata() => {
@@ -795,6 +818,31 @@ mod tests {
         assert_eq!(output, "Line one\n\nLine two\n");
     }
 
+    /// Regression for the parallel-review High finding: render
+    /// surfaces must apply song-wide canonical chord spelling
+    /// (sister-site to the wasm path's `transpose(song, …)`),
+    /// not the legacy per-chord style preservation. C +3 → Eb
+    /// (flat side); a source-side `D#` chord becomes `Gb`.
+    #[test]
+    fn test_transposed_chord_uses_canonical_spelling() {
+        let song = chordsketch_chordpro::parse("{key: C}\n[D#]hi").unwrap();
+        let result =
+            render_song_with_warnings(&song, 3, &chordsketch_chordpro::config::Config::defaults());
+        // The flat-side spelling Gb should appear; the
+        // sharp-side F# should NOT (the source spelled D# but
+        // the song lands in Eb-major, so flats are canonical).
+        assert!(
+            result.output.contains("G\u{266D}") || result.output.contains("Gb"),
+            "expected flat-side `Gb` chord; got: {}",
+            result.output
+        );
+        assert!(
+            !result.output.contains("F#"),
+            "must not emit sharp-side `F#` for a flat-side song; got: {}",
+            result.output
+        );
+    }
+
     #[test]
     fn test_render_metadata_not_duplicated() {
         // Header-only metadata (`{artist}`) is still suppressed from
@@ -818,8 +866,8 @@ mod tests {
         let input = "[G]first\n{tempo: 120}\n[C]middle\n{time: 6/8}\n[D]end";
         let output = render(input);
         assert!(
-            output.contains("[Tempo: 120 BPM]"),
-            "expected inline tempo marker; got:\n{output}"
+            output.contains("[Tempo: 120 BPM (Allegro)]"),
+            "expected inline tempo marker with Italian marking; got:\n{output}"
         );
         assert!(
             output.contains("[Time: 6/8]"),
