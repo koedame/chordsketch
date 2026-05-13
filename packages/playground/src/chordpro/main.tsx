@@ -310,7 +310,7 @@ E|----------------------------|
 
 # === Image [Nx] [Pos] ============================================
 # Rendered inline at this location in document flow.
-{image: src="https://raw.githubusercontent.com/koedame/chordsketch/main/assets/logo-128.png" width=64 height=64 title="ChordSketch logo"}
+{image: src="https://raw.githubusercontent.com/koedame/chordsketch/refs/heads/main/assets/logo.svg" width=64 height=64 title="ChordSketch logo"}
 
 {new_physical_page}
 

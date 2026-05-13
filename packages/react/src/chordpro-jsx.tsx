@@ -370,16 +370,21 @@ function renderImage(attrs: ChordproImageAttributes, key: number): JSX.Element |
   if (!attrs.src || !isSafeHref(attrs.src)) {
     return null;
   }
-  const style: CSSProperties = {};
-  if (attrs.width) style.width = attrs.width;
-  if (attrs.height) style.height = attrs.height;
+  // Emit `width` / `height` as HTML attributes — sister-site to
+  // `crates/render-html/src/lib.rs::render_image`, which writes
+  // `width="64" height="64"` on the `<img>` tag. The previous
+  // inline-style path passed unit-less numeric strings to React's
+  // `style.width`, which the browser dropped as invalid CSS — so
+  // `{image: ... width=64 height=64}` rendered at the asset's
+  // natural size instead of the requested box.
   return (
     <img
       key={key}
       src={attrs.src}
       alt={attrs.title ?? ''}
       title={attrs.title ?? undefined}
-      style={Object.keys(style).length > 0 ? style : undefined}
+      width={attrs.width ?? undefined}
+      height={attrs.height ?? undefined}
     />
   );
 }

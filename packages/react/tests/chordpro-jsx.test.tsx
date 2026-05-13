@@ -1186,6 +1186,54 @@ describe('renderChordproAst', () => {
     }
   });
 
+  // Sister-site to `crates/render-html/src/lib.rs::render_image`,
+  // which writes `width="64" height="64"` as HTML attributes. The
+  // walker MUST do the same — passing unit-less numeric strings to
+  // React's `style.width` produces invalid CSS the browser drops,
+  // so the rendered image ignored the requested box.
+  test('width/height land on the <img> as HTML attributes', () => {
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'image',
+              value: null,
+              kind: {
+                tag: 'image',
+                value: {
+                  src: 'https://example.com/logo.svg',
+                  width: '64',
+                  height: '64',
+                  scale: null,
+                  title: 'Logo',
+                  anchor: null,
+                },
+              },
+              selector: null,
+            },
+          },
+        ],
+      }),
+    );
+    const img = container.querySelector('img');
+    expect(img).not.toBeNull();
+    expect(img?.getAttribute('width')).toBe('64');
+    expect(img?.getAttribute('height')).toBe('64');
+    // Inline style must NOT be set — the previous path that set
+    // `style.width="64"` (no unit) silently broke sizing.
+    expect(img?.getAttribute('style')).toBeNull();
+  });
+
+  test('omits width/height attributes when not provided', () => {
+    const container = renderImageWithSrc('https://example.com/cover.png');
+    const img = container.querySelector('img');
+    expect(img?.hasAttribute('width')).toBe(false);
+    expect(img?.hasAttribute('height')).toBe(false);
+  });
+
   test('renders highlight / inline-comment / styled span variants', () => {
     const { container } = render(
       renderChordproAst({
