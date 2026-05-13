@@ -1585,50 +1585,17 @@ function renderHeader(
       </span>
     );
   }
-  // `{key}` / `{tempo}` / `{time}` are spec'd as `[Nx] [Pos]` —
-  // multiple specifications are possible, each applies forward
-  // from where it appears. Perl ChordPro joins the accumulated
-  // list with `metadata.separator` (default `"; "`) in the header
-  // (`lib/ChordPro/Song.pm::dir_meta`). Sister-site to
-  // `crates/render-html/src/lib.rs::render_metadata` — both
-  // surfaces emit a single chip per directive containing every
-  // declared value joined by `"; "` so multi-key / multi-tempo
-  // songs surface every value instead of just the last-wins one.
-  const joinMeta = (values: readonly string[] | undefined): string | null => {
-    if (!values || values.length === 0) return null;
-    const cleaned = values.map((v) => v.trim()).filter((v) => v.length > 0);
-    return cleaned.length === 0 ? null : cleaned.join('; ');
-  };
-  // Key names go through `unicodeAccidentals` so `Bb` reads as
-  // `B♭` etc. — matches the typography of engraved music and
-  // the `unicodeAccidentals(...)` chord display in
-  // `renderChord`.
-  const keysJoined = joinMeta(metadata.keys?.map(unicodeAccidentals));
-  const tempoJoined = joinMeta(metadata.tempos);
-  const timeJoined = joinMeta(metadata.times);
-
+  // `{key}` / `{tempo}` / `{time}` are now surfaced inline at
+  // each directive's source position via the `.meta-inline`
+  // markers (key signature glyph, animated metronome, time
+  // signature with conductor dot), so duplicating them in the
+  // header chip strip is pure redundancy. The chip row keeps
+  // ONLY the values that have no positional marker — `{capo}`
+  // (modelled as a song-global, with a "Multiple capo settings"
+  // warning when declared more than once) and `{duration}`
+  // (purely informational, no inline representation).
   const paramChips: JSX.Element[] = [];
-  if (keysJoined) {
-    // Transpose UI shows the `original → played` arrow only for
-    // the simple single-key case; with multiple `{key}` directives
-    // there is no single "the original key" to put before the
-    // arrow, so fall back to the joined-list chip.
-    if (
-      options.transposedKey &&
-      metadata.keys.length === 1 &&
-      options.transposedKey !== keysJoined
-    ) {
-      paramChips.push(chipSpan('keyOrig', `Key ${keysJoined}`, metaLines.key));
-      paramChips.push(
-        chipSpan('keyPlay', `→ ${unicodeAccidentals(options.transposedKey)}`, undefined),
-      );
-    } else {
-      paramChips.push(chipSpan('key', `Key ${keysJoined}`, metaLines.key));
-    }
-  }
   if (metadata.capo) paramChips.push(chipSpan('capo', `Capo ${metadata.capo}`, metaLines.capo));
-  if (tempoJoined) paramChips.push(chipSpan('tempo', `${tempoJoined} BPM`, metaLines.tempo));
-  if (timeJoined) paramChips.push(chipSpan('time', timeJoined, metaLines.time));
   if (metadata.duration)
     paramChips.push(chipSpan('duration', metadata.duration, metaLines.duration));
   if (paramChips.length > 0) {
@@ -2104,6 +2071,7 @@ function handleDirective(
             </span>
           </span>
         </p>,
+        key, // source-line for `line--active` decoration
       );
       return;
     }
@@ -2114,6 +2082,7 @@ function handleDirective(
         <span className="meta-inline__label">Key:</span>{' '}
         <span className="meta-inline__value">{unicodeAccidentals(keyName)}</span>
       </p>,
+      key, // source-line for `line--active` decoration
     );
     return;
   }
@@ -2145,6 +2114,7 @@ function handleDirective(
           ) : null}
         </span>
       </p>,
+      key, // source-line for `line--active` decoration
     );
     return;
   }
@@ -2160,6 +2130,7 @@ function handleDirective(
           className="meta-inline__glyph"
         />
       </p>,
+      key, // source-line for `line--active` decoration
     );
     return;
   }

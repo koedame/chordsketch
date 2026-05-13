@@ -668,13 +668,14 @@ describe('renderChordproAst', () => {
     const { container } = render(
       renderChordproAst(ast, { activeSourceLine: 4 }),
     );
-    // The header is composed of <h1> + <p class="meta"> with
-    // individual <span data-source-line> children. The active
-    // one carries `line--active`; no other span should.
-    const activeSpans = container.querySelectorAll('.meta .line--active');
-    expect(activeSpans.length).toBe(1);
-    expect(activeSpans[0]?.textContent).toBe('80 BPM');
-    expect(activeSpans[0]?.getAttribute('data-source-line')).toBe('4');
+    // The tempo value is no longer in the header chip strip —
+    // it surfaces as a positional inline marker
+    // (`<p class="meta-inline meta-inline--tempo">`). When
+    // `activeSourceLine` matches that directive's line, the
+    // marker itself picks up `line--active`.
+    const activeMarker = container.querySelector('.meta-inline--tempo.line--active');
+    expect(activeMarker).not.toBeNull();
+    expect(activeMarker?.getAttribute('data-source-line')).toBe('4');
     // h1.title is on a different line — not active.
     expect(container.querySelector('h1')?.classList.contains('line--active')).toBe(false);
   });
@@ -893,53 +894,32 @@ describe('renderChordproAst', () => {
     expect(blocks[1]?.querySelector('.lyrics')?.textContent).toBe('world');
   });
 
-  test('renders "Key X → Y" in a chip pair when transposedKey is supplied', () => {
-    // The header is split into tiers — the transposed-key pair
-    // lives in the `.meta--params` chip row, not in a "Original
-    // Key X · Play Key Y" sentence.
-    const { container } = render(
-      renderChordproAst(
+  // `{key}` no longer surfaces in the header chip strip — every
+  // declaration is shown inline at the directive's source
+  // position via `<KeySignatureGlyph>` + the
+  // `meta-inline--key` / `--key-pair` markers. The header
+  // strip keeps only the metadata values that have no
+  // positional inline display: `{capo}` and `{duration}`.
+  test('key value is omitted from the header chip strip', () => {
+    const ast: ChordproSong = {
+      metadata: { ...EMPTY_META, title: 'My Song', key: 'G', keys: ['G'] },
+      lines: [
         {
-          metadata: {
-            ...EMPTY_META,
-            title: 'My Song',
-            key: 'G',
-            keys: ['G'],
-          },
-          lines: [],
+          kind: 'directive',
+          value: { name: 'key', value: 'G', kind: { tag: 'key' }, selector: null },
         },
-        { transposedKey: 'A' },
-      ),
-    );
-    const params = container.querySelector('.meta--params');
-    expect(params).not.toBeNull();
-    const chips = params?.querySelectorAll('.meta__chip');
-    // Two chips: "Key G" original + "→ A" transposed.
-    expect(chips?.[0]?.textContent).toBe('Key G');
-    expect(chips?.[1]?.textContent?.replace(/\s/g, '')).toBe('→A');
-  });
-
-  test('falls back to a single "Key X" chip when transposedKey is null or equal to the original', () => {
-    const a = render(
-      renderChordproAst(
-        { metadata: { ...EMPTY_META, key: 'G', keys: ['G'] }, lines: [] },
-        { transposedKey: null },
-      ),
-    );
-    const aChips = a.container.querySelectorAll('.meta--params .meta__chip');
-    expect(aChips.length).toBe(1);
-    expect(aChips[0]?.textContent).toBe('Key G');
-    // equal-to-original → single-key form (avoids the visually
-    // confusing "Original Key G → G" tautology)
-    const b = render(
-      renderChordproAst(
-        { metadata: { ...EMPTY_META, key: 'G', keys: ['G'] }, lines: [] },
-        { transposedKey: 'G' },
-      ),
-    );
-    const bChips = b.container.querySelectorAll('.meta--params .meta__chip');
-    expect(bChips.length).toBe(1);
-    expect(bChips[0]?.textContent).toBe('Key G');
+      ],
+    };
+    for (const opts of [{}, { transposedKey: 'A' }, { transposedKey: null }, { transposedKey: 'G' }]) {
+      const { container } = render(renderChordproAst(ast, opts));
+      const params = container.querySelector('.meta--params');
+      const chipText = Array.from(params?.querySelectorAll('.meta__chip') ?? [])
+        .map((c) => c.textContent)
+        .join('|');
+      expect(chipText).not.toContain('Key');
+      // The inline marker is still present.
+      expect(container.querySelector('.meta-inline--key')).not.toBeNull();
+    }
   });
 
   // Attribution rows ship with role icons so the eye can pick out
@@ -1096,12 +1076,8 @@ describe('renderChordproAst', () => {
       ],
     };
     const { container } = render(renderChordproAst(ast));
-    // Header chip should show `Key B♭`, not `Key Bb`.
-    const chip = Array.from(container.querySelectorAll('.meta--params .meta__chip')).find((el) =>
-      el.textContent?.includes('Key'),
-    );
-    expect(chip?.textContent).toBe('Key B♭');
-    // Inline {key} marker value reads `B♭`, not `Bb`.
+    // Inline `{key}` marker carries the value (the header chip
+    // for `{key}` was retired in favour of the inline marker).
     const inlineValue = container.querySelector('.meta-inline--key .meta-inline__value');
     expect(inlineValue?.textContent).toBe('B♭');
     // Chord-block chords show `B♭` and `F♯m7`.
@@ -1227,14 +1203,12 @@ describe('renderChordproAst', () => {
     expect(secondaryAttribution?.textContent).toContain('Music JC');
     expect(secondaryAttribution?.textContent).toContain('Lyrics JL');
     expect(secondaryAttribution?.textContent).toContain('Arr. JA');
-    // Tier 2 — chips.
+    // Tier 2 — chips. `{key}` / `{tempo}` / `{time}` are now
+    // surfaced inline (positional `.meta-inline` markers), so
+    // only `{capo}` and `{duration}` remain in the chip row.
     const chips = container.querySelectorAll('.meta--params .meta__chip');
     const chipTexts = Array.from(chips).map((c) => c.textContent);
-    expect(chipTexts).toContain('Key G');
-    expect(chipTexts).toContain('Capo 2');
-    expect(chipTexts).toContain('120 BPM');
-    expect(chipTexts).toContain('4/4');
-    expect(chipTexts).toContain('3:30');
+    expect(chipTexts).toEqual(['Capo 2', '3:30']);
     // Tier 3 — supplementary.
     const supp = container.querySelector('.meta--supplementary');
     expect(supp?.textContent).toContain('Reference');
@@ -1266,31 +1240,35 @@ describe('renderChordproAst', () => {
     );
     expect(container.querySelector('h1')?.textContent).toBe('My Song');
     expect(container.querySelector('h2')?.textContent).toBe('A subtitle');
-    // Attribution row lives in `.meta--attribution`, params in
-    // `.meta--params` as chips.
+    // Attribution row lives in `.meta--attribution`; the
+    // `.meta--params` row keeps only chips for metadata that
+    // doesn't have a positional inline marker (Capo / Duration).
+    // `{key}` is surfaced inline at its source position.
     expect(container.querySelector('.meta--attribution')?.textContent).toContain('Artist');
     const chipTexts = Array.from(
       container.querySelectorAll('.meta--params .meta__chip'),
     ).map((c) => c.textContent);
-    expect(chipTexts).toEqual(['Key G', 'Capo 2']);
+    expect(chipTexts).toEqual(['Capo 2']);
   });
 
-  // Spec parity: `{key}` / `{tempo}` / `{time}` are `[Nx] [Pos]`
-  // per chordpro.org. Perl ChordPro joins accumulated values with
-  // `metadata.separator` (default `"; "`) in the header.
-  // Sister-site to `crates/render-html/src/lib.rs::render_metadata`.
-  test('joins multiple {key} / {tempo} / {time} values with "; " in header chips', () => {
+  // Multi-value `{key}` / `{tempo}` / `{time}` are no longer
+  // shown in the header chip strip — each declaration surfaces
+  // at its source position via the `.meta-inline` marker.
+  // Capo / Duration (no inline marker) stay in the chip row.
+  test('multi-value {key} / {tempo} / {time} produce no header chips', () => {
     const { container } = render(
       renderChordproAst({
         metadata: {
           ...EMPTY_META,
           title: 'Multi-meter song',
-          key: 'D', // last-wins compat field
+          key: 'D',
           keys: ['G', 'D'],
           tempo: '140',
           tempos: ['120', '140'],
           time: '6/8',
           times: ['4/4', '6/8'],
+          capo: '2',
+          duration: '3:30',
         },
         lines: [],
       }),
@@ -1298,59 +1276,14 @@ describe('renderChordproAst', () => {
     const chipTexts = Array.from(
       container.querySelectorAll('.meta--params .meta__chip'),
     ).map((c) => c.textContent);
-    expect(chipTexts).toContain('Key G; D');
-    expect(chipTexts).toContain('120; 140 BPM');
-    expect(chipTexts).toContain('4/4; 6/8');
+    // Only the no-inline-marker metadata (Capo, Duration) shows.
+    expect(chipTexts).toEqual(['Capo 2', '3:30']);
   });
 
-  test('caret on any {key} declaration lights the joined key chip', () => {
-    const ast: ChordproSong = {
-      metadata: {
-        ...EMPTY_META,
-        title: 'Two-key song',
-        key: 'D',
-        keys: ['G', 'D'],
-      },
-      lines: [
-        // line 1: title
-        {
-          kind: 'directive',
-          value: { name: 'title', value: 'Two-key song', kind: { tag: 'title' }, selector: null },
-        },
-        // line 2: first {key}
-        {
-          kind: 'directive',
-          value: { name: 'key', value: 'G', kind: { tag: 'key' }, selector: null },
-        },
-        // line 3: a body line
-        { kind: 'lyrics', value: { segments: [{ chord: null, text: 'verse', spans: [] }] } },
-        // line 4: second {key}
-        {
-          kind: 'directive',
-          value: { name: 'key', value: 'D', kind: { tag: 'key' }, selector: null },
-        },
-      ],
-    };
-    // caret on the SECOND `{key}` (line 4) — chip should light
-    const b = render(renderChordproAst(ast, { activeSourceLine: 4 }));
-    expect(
-      b.container
-        .querySelector('.meta--params .meta__chip.line--active')
-        ?.textContent,
-    ).toBe('Key G; D');
-    // caret on the FIRST `{key}` (line 2) — chip should also light
-    const a = render(renderChordproAst(ast, { activeSourceLine: 2 }));
-    expect(
-      a.container
-        .querySelector('.meta--params .meta__chip.line--active')
-        ?.textContent,
-    ).toBe('Key G; D');
-    // caret elsewhere — chip is unlit
-    const c = render(renderChordproAst(ast, { activeSourceLine: 3 }));
-    expect(
-      c.container.querySelector('.meta--params .meta__chip.line--active'),
-    ).toBeNull();
-  });
+  // (Test removed: the joined key chip no longer exists — each
+  // `{key}` declaration surfaces as its own positional inline
+  // marker, and the marker's caret-highlight is covered by
+  // other tests in this file.)
 
   // Phase B of #2454 — every `{key}` / `{tempo}` / `{time}`
   // declaration is rendered as a positional inline marker so a

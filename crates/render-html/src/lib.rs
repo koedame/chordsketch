@@ -1235,52 +1235,20 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut St
     // (multiple specifications, each applies forward from its
     // position in the song — see ChordPro spec §`{key}` /
     // §`{tempo}` / §`{time}`). Perl ChordPro accumulates these into
-    // an array per directive and emits them joined by
-    // `metadata.separator` (`"; "` by default,
-    // `lib/ChordPro/Song.pm::dir_meta`). Mirror that behaviour so
-    // multi-key / multi-tempo songs surface every value in the
-    // header chip instead of just the last-wins one.
-    fn join_meta(values: &[String]) -> Option<String> {
-        let cleaned: Vec<&str> = values
-            .iter()
-            .map(|v| v.trim())
-            .filter(|v| !v.is_empty())
-            .collect();
-        if cleaned.is_empty() {
-            None
-        } else {
-            Some(cleaned.join("; "))
-        }
-    }
-
+    // `{key}` / `{tempo}` / `{time}` are now surfaced inline at
+    // each directive's source position via the `.meta-inline`
+    // markers (key-signature glyph, animated metronome, time
+    // signature + conductor dot), so duplicating them in the
+    // header chip strip is pure redundancy. The chip row keeps
+    // only the values that have no positional marker: `{capo}`
+    // (modelled as a song-global) and `{duration}` (purely
+    // informational). Sister-site to the React JSX walker's
+    // `renderHeader`.
     let mut chips: Vec<String> = Vec::new();
-    if let Some(key_joined) = join_meta(&metadata.keys) {
-        // Typeset accidentals as `♭` / `♯` — sister-site to
-        // React's `unicodeAccidentals`. Applied at the chip
-        // formatting layer (not at parse time) so the underlying
-        // `metadata.keys` Vec keeps its ASCII representation for
-        // downstream consumers.
-        chips.push(format!(
-            "<span class=\"meta__chip\">Key {}</span>",
-            escape(&unicode_accidentals(&key_joined))
-        ));
-    }
     if let Some(capo) = metadata.capo.as_deref().filter(|s| !s.trim().is_empty()) {
         chips.push(format!(
             "<span class=\"meta__chip\">Capo {}</span>",
             escape(capo)
-        ));
-    }
-    if let Some(tempo_joined) = join_meta(&metadata.tempos) {
-        chips.push(format!(
-            "<span class=\"meta__chip\">{} BPM</span>",
-            escape(&tempo_joined)
-        ));
-    }
-    if let Some(time_joined) = join_meta(&metadata.times) {
-        chips.push(format!(
-            "<span class=\"meta__chip\">{}</span>",
-            escape(&time_joined)
         ));
     }
     if let Some(duration) = metadata
@@ -2624,11 +2592,14 @@ mod tests {
     }
 
     #[test]
-    fn test_key_chip_uses_unicode_accidentals() {
+    fn test_inline_key_marker_uses_unicode_accidentals_for_flat_key() {
+        // The chip strip no longer carries `{key}` — it's surfaced
+        // inline at the directive's source position. Verify the
+        // inline marker uses the ♭ unicode accidental.
         let html = render("{key: Bb}");
         assert!(
-            html.contains("<span class=\"meta__chip\">Key B\u{266D}</span>"),
-            "expected `Key B♭` chip, got: {html}"
+            html.contains("<span class=\"meta-inline__value\">B\u{266D}</span>"),
+            "expected `B♭` in inline key value, got: {html}"
         );
     }
 
@@ -3625,35 +3596,44 @@ Verse text\n\
     // -- multi-value [Nx] [Pos] metadata in header chips ------------------
 
     /// Spec: `{key}` / `{tempo}` / `{time}` are `[Nx] [Pos]`. Perl
-    /// ChordPro joins accumulated values with
-    /// `metadata.separator` (default `"; "`) in the header
-    /// (`lib/ChordPro/Song.pm::dir_meta`). The HTML chip MUST
-    /// surface every declared value, not just the last-wins one.
+    /// `{key}` / `{tempo}` / `{time}` are now surfaced inline at
+    /// each directive's source position via the `.meta-inline`
+    /// markers. The chip strip no longer carries them — only
+    /// `{capo}` and `{duration}` (the two metadata values
+    /// without a positional inline display) remain in the
+    /// header. Sister-site to the React JSX walker's
+    /// `renderHeader`.
     #[test]
-    fn test_multi_value_keys_join_in_chip() {
+    fn test_multi_value_keys_do_not_appear_in_chip_strip() {
         let html = render("{key: G}\n{key: D}\n[D]hi");
         assert!(
-            html.contains("<span class=\"meta__chip\">Key G; D</span>"),
-            "expected joined key chip; got: {html}"
+            !html.contains("class=\"meta__chip\">Key"),
+            "Key chip should be omitted from header (positional inline marker covers it); got: {html}"
         );
+        // The inline body marker still surfaces the value.
+        assert!(html.contains("meta-inline--key"));
     }
 
     #[test]
-    fn test_multi_value_tempos_join_in_chip() {
+    fn test_multi_value_tempos_do_not_appear_in_chip_strip() {
         let html = render("{tempo: 120}\n{tempo: 140}\n[G]a");
         assert!(
-            html.contains("<span class=\"meta__chip\">120; 140 BPM</span>"),
-            "expected joined tempo chip; got: {html}"
+            !html.contains("BPM</span>") || !html.contains("class=\"meta__chip\""),
+            "BPM chip should be omitted; got: {html}"
         );
+        assert!(html.contains("meta-inline--tempo"));
     }
 
     #[test]
-    fn test_multi_value_times_join_in_chip() {
+    fn test_multi_value_times_do_not_appear_in_chip_strip() {
         let html = render("{time: 4/4}\n{time: 6/8}\n[G]a");
+        // Time signature should NOT appear as a header chip.
         assert!(
-            html.contains("<span class=\"meta__chip\">4/4; 6/8</span>"),
-            "expected joined time chip; got: {html}"
+            !html.contains("<span class=\"meta__chip\">4/4"),
+            "Time chip should be omitted; got: {html}"
         );
+        // The inline body marker still surfaces it.
+        assert!(html.contains("meta-inline--time"));
     }
 
     /// Phase B of #2454: `{key}` / `{tempo}` / `{time}` are
@@ -3797,19 +3777,19 @@ Verse text\n\
         );
     }
 
-    /// Single-value behaviour stays byte-identical to the
-    /// pre-multi-value chip so existing songs render unchanged.
+    /// Key chip is intentionally absent from the header — the
+    /// inline body marker (`<p class="meta-inline meta-inline--
+    /// key">`) is the canonical positional display.
     #[test]
-    fn test_single_value_key_chip_unchanged() {
+    fn test_single_value_key_emits_no_chip() {
         let html = render("{key: G}");
         assert!(
-            html.contains("<span class=\"meta__chip\">Key G</span>"),
-            "single-value key chip must not gain a separator; got: {html}"
+            !html.contains("<span class=\"meta__chip\">Key G</span>"),
+            "Key chip should be omitted from header; got: {html}"
         );
-        assert!(
-            !html.contains("Key G;"),
-            "single-value key must not include trailing separator: {html}"
-        );
+        // The inline marker IS present.
+        assert!(html.contains("meta-inline--key"));
+        assert!(html.contains("<span class=\"meta-inline__value\">G</span>"));
     }
 
     // -- settings.strict missing-{key} warning (R6.100.0, #2291) ----------
