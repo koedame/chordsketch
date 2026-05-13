@@ -333,6 +333,38 @@ fn render_song_body_into(
             }
             Line::Directive(directive) => {
                 if directive.kind.is_metadata() {
+                    // ChordPro spec: `{key}` / `{tempo}` / `{time}` are
+                    // `[Nx] [Pos]` — every declaration applies forward
+                    // from its position. Render a small inline marker
+                    // at the directive's position so a reader can see
+                    // where mid-song key / tempo / meter changes
+                    // happen (Phase B of #2454). The header chip
+                    // already lists every value joined by `"; "`
+                    // (Phase A); the body marker is what makes the
+                    // *position* part of `[Pos]` visible.
+                    if let Some(value) = directive
+                        .value
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|v| !v.is_empty())
+                    {
+                        let marker = match directive.kind {
+                            DirectiveKind::Key => Some(("key", "Key", value.to_string())),
+                            DirectiveKind::Tempo => {
+                                Some(("tempo", "Tempo", format!("{value} BPM")))
+                            }
+                            DirectiveKind::Time => Some(("time", "Time", value.to_string())),
+                            _ => None,
+                        };
+                        if let Some((slug, label, body)) = marker {
+                            html.push_str(&format!(
+                                "<p class=\"meta-inline meta-inline--{slug}\">\
+                                 <span class=\"meta-inline__label\">{label}:</span> \
+                                 <span class=\"meta-inline__value\">{}</span></p>\n",
+                                escape(&body)
+                            ));
+                        }
+                    }
                     continue;
                 }
                 if directive.kind == DirectiveKind::Diagrams {
@@ -954,6 +986,9 @@ h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-w
 .meta--params { display: flex; flex-wrap: wrap; gap: 0.4em; margin: 0.2em 0 0.8em; }
 .meta__chip { display: inline-block; padding: 0.15em 0.6em; border: 1px solid #D4D1D6; border-radius: 4px; background-color: #FAFAFA; color: #2A262E; font-family: \"JetBrains Mono\", ui-monospace, monospace; font-size: 0.8125rem; font-weight: 500; line-height: 1.4; font-feature-settings: \"tnum\" 1; }
 .meta--supplementary { font-size: 0.75rem; color: #A8A4AD; margin-bottom: 0.4em; }
+.meta-inline { display: inline-flex; align-items: center; gap: 0.35em; margin: 0.4em 0; padding: 0.1em 0.55em; border-left: 3px solid #BD1642; background-color: #FAF7F8; font-family: \"JetBrains Mono\", ui-monospace, monospace; font-size: 0.8125rem; color: #2A262E; line-height: 1.5; font-feature-settings: \"tnum\" 1; }
+.meta-inline__label { color: #67646D; font-weight: 500; }
+.meta-inline__value { color: #1A1718; font-weight: 600; }
 .line { display: flex; flex-wrap: __LINE_FLEX_WRAP__; margin: 0.1em 0; }
 .chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
 .chord { font-family: \"Roboto\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 1rem; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
@@ -3409,6 +3444,61 @@ Verse text\n\
         assert!(
             html.contains("<span class=\"meta__chip\">4/4; 6/8</span>"),
             "expected joined time chip; got: {html}"
+        );
+    }
+
+    /// Phase B of #2454: `{key}` / `{tempo}` / `{time}` are
+    /// `[Nx] [Pos]` per ChordPro spec. Every declaration must
+    /// surface as a positional marker in the body, so a reader
+    /// can see *where* mid-song key / tempo / meter changes
+    /// happen. Sister-site to the text / PDF renderers and the
+    /// React JSX walker (`renderer-parity.md`).
+    #[test]
+    fn test_inline_meta_marker_for_key() {
+        let html = render("[G]first\n{key: D}\n[D]second");
+        assert!(
+            html.contains(
+                "<p class=\"meta-inline meta-inline--key\">\
+                 <span class=\"meta-inline__label\">Key:</span> \
+                 <span class=\"meta-inline__value\">D</span></p>"
+            ),
+            "expected inline key marker; got: {html}"
+        );
+    }
+
+    #[test]
+    fn test_inline_meta_marker_for_tempo() {
+        let html = render("[G]a\n{tempo: 140}\n[C]b");
+        assert!(
+            html.contains("meta-inline--tempo"),
+            "expected inline tempo marker class; got: {html}"
+        );
+        assert!(
+            html.contains("140 BPM"),
+            "expected '140 BPM' in inline marker; got: {html}"
+        );
+    }
+
+    #[test]
+    fn test_inline_meta_marker_for_time() {
+        let html = render("[G]a\n{time: 6/8}\n[D]b");
+        assert!(
+            html.contains("meta-inline--time"),
+            "expected inline time marker class; got: {html}"
+        );
+        assert!(
+            html.contains("<span class=\"meta-inline__value\">6/8</span>"),
+            "expected '6/8' value span; got: {html}"
+        );
+    }
+
+    /// Empty value → no marker (avoids confusing empty brackets).
+    #[test]
+    fn test_inline_meta_marker_skipped_for_empty_value() {
+        let html = render("[G]a\n{key:}\n[D]b");
+        assert!(
+            !html.contains("meta-inline--key"),
+            "empty {{key}} must not produce a marker; got: {html}"
         );
     }
 

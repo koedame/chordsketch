@@ -1033,6 +1033,69 @@ describe('renderChordproAst', () => {
     ).toBeNull();
   });
 
+  // Phase B of #2454 — every `{key}` / `{tempo}` / `{time}`
+  // declaration is rendered as a positional inline marker so a
+  // reader can see *where* mid-song meta changes happen. Sister-
+  // site to `crates/render-html/src/lib.rs::render_song_body_into`.
+  test('renders inline meta markers at the source position of {key} / {tempo} / {time}', () => {
+    const { container } = render(
+      renderChordproAst({
+        metadata: {
+          ...EMPTY_META,
+          keys: ['D'],
+          tempos: ['140'],
+          times: ['6/8'],
+        },
+        lines: [
+          { kind: 'lyrics', value: { segments: [{ chord: null, text: 'before', spans: [] }] } },
+          {
+            kind: 'directive',
+            value: { name: 'key', value: 'D', kind: { tag: 'key' }, selector: null },
+          },
+          { kind: 'lyrics', value: { segments: [{ chord: null, text: 'mid-1', spans: [] }] } },
+          {
+            kind: 'directive',
+            value: { name: 'tempo', value: '140', kind: { tag: 'tempo' }, selector: null },
+          },
+          { kind: 'lyrics', value: { segments: [{ chord: null, text: 'mid-2', spans: [] }] } },
+          {
+            kind: 'directive',
+            value: { name: 'time', value: '6/8', kind: { tag: 'time' }, selector: null },
+          },
+          { kind: 'lyrics', value: { segments: [{ chord: null, text: 'after', spans: [] }] } },
+        ],
+      }),
+    );
+    const markers = Array.from(container.querySelectorAll('.meta-inline'));
+    expect(markers).toHaveLength(3);
+    // Order matches source order.
+    expect(markers[0]?.classList.contains('meta-inline--key')).toBe(true);
+    expect(markers[0]?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Key: D');
+    expect(markers[1]?.classList.contains('meta-inline--tempo')).toBe(true);
+    expect(markers[1]?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Tempo: 140 BPM');
+    expect(markers[2]?.classList.contains('meta-inline--time')).toBe(true);
+    expect(markers[2]?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Time: 6/8');
+  });
+
+  test('drops the inline meta marker when the directive value is empty', () => {
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: { name: 'key', value: '', kind: { tag: 'key' }, selector: null },
+          },
+          {
+            kind: 'directive',
+            value: { name: 'key', value: '   ', kind: { tag: 'key' }, selector: null },
+          },
+        ],
+      }),
+    );
+    expect(container.querySelector('.meta-inline')).toBeNull();
+  });
+
   test('wraps section directives in a `<section>` with the section-label', () => {
     const { container } = render(
       renderChordproAst({

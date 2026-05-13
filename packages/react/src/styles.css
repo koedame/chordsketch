@@ -311,6 +311,37 @@
   margin-bottom: 0.4em;
 }
 
+/* Inline `[Pos]` metadata marker — `{key}` / `{tempo}` / `{time}`
+   directives that appear inside the body (rather than only in
+   the header) render here. ChordPro marks them as `[Nx] [Pos]`
+   so each declaration applies forward from its position; this
+   block makes the position visible so a reader can see *where*
+   a mid-song key / tempo / meter change happens. Sister-site
+   to `crates/render-html/src/lib.rs`'s embedded
+   `.meta-inline` rule. */
+.chordsketch-sheet__content .meta-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  margin: 0.4em 0;
+  padding: 0.1em 0.55em;
+  border-left: 3px solid var(--cs-accent, #bd1642);
+  background-color: var(--cs-accent-tint, #faf7f8);
+  font-family: var(--cs-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 0.8125rem;
+  color: var(--cs-ink-700, #2a262e);
+  line-height: 1.5;
+  font-feature-settings: 'tnum' 1;
+}
+.chordsketch-sheet__content .meta-inline__label {
+  color: var(--cs-ink-500, #67646d);
+  font-weight: 500;
+}
+.chordsketch-sheet__content .meta-inline__value {
+  color: var(--cs-ink-900, #1a1718);
+  font-weight: 600;
+}
+
 /* Tag row — separate from the main meta strip because `{tag}`
    is a categorisation signal, not a song attribute. Tags render
    as pill-shaped chips so they read as a distinct group at a

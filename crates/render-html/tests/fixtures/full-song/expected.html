@@ -15,6 +15,9 @@ h2 { font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif; font-wei
 .meta--params { display: flex; flex-wrap: wrap; gap: 0.4em; margin: 0.2em 0 0.8em; }
 .meta__chip { display: inline-block; padding: 0.15em 0.6em; border: 1px solid #D4D1D6; border-radius: 4px; background-color: #FAFAFA; color: #2A262E; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.8125rem; font-weight: 500; line-height: 1.4; font-feature-settings: "tnum" 1; }
 .meta--supplementary { font-size: 0.75rem; color: #A8A4AD; margin-bottom: 0.4em; }
+.meta-inline { display: inline-flex; align-items: center; gap: 0.35em; margin: 0.4em 0; padding: 0.1em 0.55em; border-left: 3px solid #BD1642; background-color: #FAF7F8; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.8125rem; color: #2A262E; line-height: 1.5; font-feature-settings: "tnum" 1; }
+.meta-inline__label { color: #67646D; font-weight: 500; }
+.meta-inline__value { color: #1A1718; font-weight: 600; }
 .line { display: flex; flex-wrap: wrap; margin: 0.1em 0; }
 .chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
 .chord { font-family: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 1rem; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
@@ -42,6 +45,7 @@ img { max-width: 100%; height: auto; }
 <p class="meta meta--attribution"><span class="meta__label" aria-hidden="true">by </span>John Newton</p>
 <p class="meta meta--params"><span class="meta__chip">Key G</span></p>
 </header>
+<p class="meta-inline meta-inline--key"><span class="meta-inline__label">Key:</span> <span class="meta-inline__value">G</span></p>
 <div class="empty-line" aria-hidden="true"></div>
 <section class="verse">
 <h3 class="section-label">Verse: Verse 1</h3>

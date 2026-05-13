@@ -154,8 +154,35 @@ fn render_song_impl(
             }
             Line::Directive(directive) => {
                 // Metadata directives are already rendered via song.metadata;
-                // skip them in the body to avoid duplicate output.
+                // skip them in the body to avoid duplicate output —
+                // except `{key}` / `{tempo}` / `{time}`, which are
+                // `[Nx] [Pos]` per spec (`chordpro.org/directives-
+                // key/`, `…tempo/`, `…time/`): every declaration
+                // applies forward from its position. Emit a positional
+                // marker so a reader can see *where* mid-song meta
+                // changes happen (Phase B of #2454; sister-site to
+                // `crates/render-html/src/lib.rs::render_song_body_into`
+                // and `packages/react/src/chordpro-jsx.tsx`).
                 if directive.kind.is_metadata() {
+                    if let Some(value) = directive
+                        .value
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|v| !v.is_empty())
+                    {
+                        match directive.kind {
+                            DirectiveKind::Key => {
+                                output.push(format!("[Key: {value}]"));
+                            }
+                            DirectiveKind::Tempo => {
+                                output.push(format!("[Tempo: {value} BPM]"));
+                            }
+                            DirectiveKind::Time => {
+                                output.push(format!("[Time: {value}]"));
+                            }
+                            _ => {}
+                        }
+                    }
                     continue;
                 }
                 // #1971: handle notation block openers. Route the
@@ -770,10 +797,49 @@ mod tests {
 
     #[test]
     fn test_render_metadata_not_duplicated() {
-        // Metadata directives like {artist} should NOT appear in body text
+        // Header-only metadata (`{artist}`) is still suppressed from
+        // the body — only `{title}` / `{subtitle}` make it into the
+        // text-render header today (see `render_metadata`). `{key}`
+        // / `{tempo}` / `{time}` are now surfaced *inline* at their
+        // source position because the ChordPro spec marks them as
+        // `[Nx] [Pos]` — every declaration applies forward from
+        // where it appears. Phase B of #2454.
         let input = "{title: Test}\n{artist: Someone}\n{key: G}\nLyrics here";
         let output = render(input);
-        assert_eq!(output, "Test\nLyrics here\n");
+        assert_eq!(output, "Test\n[Key: G]\nLyrics here\n");
+    }
+
+    /// Inline marker for every `[Pos]` metadata directive — sister-site
+    /// to the React JSX walker (`packages/react/src/chordpro-jsx.tsx`)
+    /// and the Rust HTML renderer (`crates/render-html/src/lib.rs`)
+    /// per `.claude/rules/renderer-parity.md`.
+    #[test]
+    fn test_inline_meta_markers_at_position() {
+        let input = "[G]first\n{tempo: 120}\n[C]middle\n{time: 6/8}\n[D]end";
+        let output = render(input);
+        assert!(
+            output.contains("[Tempo: 120 BPM]"),
+            "expected inline tempo marker; got:\n{output}"
+        );
+        assert!(
+            output.contains("[Time: 6/8]"),
+            "expected inline time marker; got:\n{output}"
+        );
+        // Markers appear in source order, not collapsed.
+        let tempo_idx = output.find("[Tempo:").unwrap();
+        let time_idx = output.find("[Time:").unwrap();
+        assert!(tempo_idx < time_idx, "markers must follow source order");
+    }
+
+    /// Empty / whitespace-only values silently drop the marker
+    /// instead of emitting a confusing "[Key: ]" empty bracket.
+    #[test]
+    fn test_inline_meta_marker_skipped_for_empty_value() {
+        let output = render("{key:}\n[G]hi");
+        assert!(
+            !output.contains("[Key:"),
+            "empty {{key}} must not produce a marker; got:\n{output}"
+        );
     }
 
     #[test]

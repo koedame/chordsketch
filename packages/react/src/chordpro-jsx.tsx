@@ -1578,6 +1578,38 @@ function handleDirective(
     return;
   }
 
+  // `{key}` / `{tempo}` / `{time}` are spec'd as `[Nx] [Pos]` —
+  // every declaration applies forward from its position in the
+  // song. Phase B of #2454 renders a small inline marker at the
+  // directive's source position so a reader can see *where*
+  // mid-song key / tempo / meter changes happen. The header chip
+  // (Phase A) shows the joined list of every value; this marker
+  // is what makes the *position* aspect visible. Sister-site to
+  // `crates/render-html/src/lib.rs::render_song_body_into` (Rust
+  // emits the matching `<p class="meta-inline …">` shape).
+  const inlineMeta: { slug: string; label: string; body: string } | null = (() => {
+    if (kind.tag === 'key' && directive.value && directive.value.trim().length > 0) {
+      return { slug: 'key', label: 'Key', body: directive.value.trim() };
+    }
+    if (kind.tag === 'tempo' && directive.value && directive.value.trim().length > 0) {
+      return { slug: 'tempo', label: 'Tempo', body: `${directive.value.trim()} BPM` };
+    }
+    if (kind.tag === 'time' && directive.value && directive.value.trim().length > 0) {
+      return { slug: 'time', label: 'Time', body: directive.value.trim() };
+    }
+    return null;
+  })();
+  if (inlineMeta) {
+    pushElement(
+      ctx,
+      <p key={key} className={`meta-inline meta-inline--${inlineMeta.slug}`}>
+        <span className="meta-inline__label">{inlineMeta.label}:</span>{' '}
+        <span className="meta-inline__value">{inlineMeta.body}</span>
+      </p>,
+    );
+    return;
+  }
+
   // Page-control / song-boundary directives — no DOM impact on the
   // React preview (pagination is renderer-specific to PDF; song
   // boundaries are split-at-parse-time).

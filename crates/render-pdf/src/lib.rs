@@ -832,6 +832,30 @@ fn render_song_into_doc(
                     in_verbatim_section,
                 );
             }
+            // ChordPro spec: `{key}` / `{tempo}` / `{time}` are
+            // `[Nx] [Pos]`; render a small italic line at the
+            // directive's position so the *position* aspect is
+            // visible (Phase B of #2454, sister-site to
+            // `crates/render-html/src/lib.rs` and
+            // `crates/render-text/src/lib.rs`).
+            Line::Directive(d)
+                if d.kind.is_metadata()
+                    && matches!(
+                        d.kind,
+                        DirectiveKind::Key | DirectiveKind::Tempo | DirectiveKind::Time
+                    ) =>
+            {
+                if let Some(value) = d.value.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+                    let line = match d.kind {
+                        DirectiveKind::Key => format!("Key: {value}"),
+                        DirectiveKind::Tempo => format!("Tempo: {value} BPM"),
+                        DirectiveKind::Time => format!("Time: {value}"),
+                        _ => unreachable!(),
+                    };
+                    doc.text(&line, Font::HelveticaOblique, COMMENT_SIZE);
+                    doc.newline(COMMENT_SIZE + LINE_GAP);
+                }
+            }
             Line::Directive(d) if !d.kind.is_metadata() => {
                 if d.kind == DirectiveKind::Diagrams {
                     auto_diagrams_instrument =
