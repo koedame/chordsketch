@@ -945,7 +945,14 @@ const CSS_TEMPLATE: &str = "\
 body { font-family: \"Noto Sans JP\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-size: 1rem; line-height: 1.6875; color: #0A0A0B; max-width: 720px; margin: 2em auto; padding: 0 1em; }
 h1 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-weight: 700; font-size: 1.875rem; letter-spacing: -0.02em; color: #0A0A0B; margin-bottom: 0.2em; }
 h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-weight: 400; font-size: 1rem; color: #67646D; margin-top: 0; }
-.meta { font-family: \"JetBrains Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace; font-size: 0.8125rem; color: #67646D; margin: 0 0 1.5em; font-feature-settings: \"tnum\" 1; }
+.meta { font-family: \"JetBrains Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace; font-size: 0.8125rem; color: #67646D; margin: 0 0 0.4em; font-feature-settings: \"tnum\" 1; }
+.song-header > .meta:last-of-type { margin-bottom: 1.5em; }
+.meta--attribution { font-family: \"Inter\", system-ui, sans-serif; font-size: 1rem; color: #4A4750; margin: 0.1em 0; }
+.meta--attribution-secondary { font-size: 0.8125rem; color: #8A8790; margin-bottom: 0.8em; }
+.meta__label { color: #8A8790; font-weight: 400; }
+.meta--params { display: flex; flex-wrap: wrap; gap: 0.4em; margin: 0.2em 0 0.8em; }
+.meta__chip { display: inline-block; padding: 0.15em 0.6em; border: 1px solid #D4D1D6; border-radius: 4px; background-color: #FAFAFA; color: #2A262E; font-family: \"JetBrains Mono\", ui-monospace, monospace; font-size: 0.8125rem; font-weight: 500; line-height: 1.4; font-feature-settings: \"tnum\" 1; }
+.meta--supplementary { font-size: 0.75rem; color: #A8A4AD; margin-bottom: 0.4em; }
 .line { display: flex; flex-wrap: __LINE_FLEX_WRAP__; margin: 0.1em 0; }
 .chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
 .chord { font-family: \"Roboto\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 1rem; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
@@ -997,28 +1004,108 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut St
         let _ = writeln!(inner, "<h2>{}</h2>", escape(subtitle));
     }
 
-    // Build the meta strip in document order: artist → key → capo
-    // → tempo → time. Each segment is escaped before insertion;
-    // segments that are absent (or empty after trimming) are
-    // skipped so we never emit a stray separator.
-    let mut parts: Vec<String> = Vec::new();
+    // The meta strip is split into three visual tiers (sister-site
+    // to the React JSX walker):
+    //   * `.meta--attribution`   — who made the song. Two lines:
+    //       primary "by Artist", secondary "Music X · Lyrics Y ·
+    //       Arr. Z".
+    //   * `.meta--params`        — musical parameters as chip
+    //       badges (Key / Capo / BPM / Time / Duration).
+    //   * `.meta--supplementary` — album / year / copyright at a
+    //       smaller, muted weight.
+
+    // Tier 1 — attribution.
     if !metadata.artists.is_empty() {
-        parts.push(escape(&metadata.artists.join(", ")));
+        let _ = writeln!(
+            inner,
+            "<p class=\"meta meta--attribution\"><span class=\"meta__label\" aria-hidden=\"true\">by </span>{}</p>",
+            escape(&metadata.artists.join(", "))
+        );
     }
+    let mut attribution_secondary: Vec<String> = Vec::new();
+    if !metadata.composers.is_empty() {
+        attribution_secondary.push(format!(
+            "<span class=\"meta__label\" aria-hidden=\"true\">Music </span>{}",
+            escape(&metadata.composers.join(", "))
+        ));
+    }
+    if !metadata.lyricists.is_empty() {
+        attribution_secondary.push(format!(
+            "<span class=\"meta__label\" aria-hidden=\"true\">Lyrics </span>{}",
+            escape(&metadata.lyricists.join(", "))
+        ));
+    }
+    if !metadata.arrangers.is_empty() {
+        attribution_secondary.push(format!(
+            "<span class=\"meta__label\" aria-hidden=\"true\">Arr. </span>{}",
+            escape(&metadata.arrangers.join(", "))
+        ));
+    }
+    if !attribution_secondary.is_empty() {
+        let _ = writeln!(
+            inner,
+            "<p class=\"meta meta--attribution meta--attribution-secondary\">{}</p>",
+            attribution_secondary.join(" · ")
+        );
+    }
+
+    // Tier 2 — musical params (chips).
+    let mut chips: Vec<String> = Vec::new();
     if let Some(key) = metadata.key.as_deref().filter(|s| !s.trim().is_empty()) {
-        parts.push(format!("Key {}", escape(key)));
+        chips.push(format!(
+            "<span class=\"meta__chip\">Key {}</span>",
+            escape(key)
+        ));
     }
     if let Some(capo) = metadata.capo.as_deref().filter(|s| !s.trim().is_empty()) {
-        parts.push(format!("Capo {}", escape(capo)));
+        chips.push(format!(
+            "<span class=\"meta__chip\">Capo {}</span>",
+            escape(capo)
+        ));
     }
     if let Some(tempo) = metadata.tempo.as_deref().filter(|s| !s.trim().is_empty()) {
-        parts.push(format!("BPM {}", escape(tempo)));
+        chips.push(format!(
+            "<span class=\"meta__chip\">{} BPM</span>",
+            escape(tempo)
+        ));
     }
     if let Some(time) = metadata.time.as_deref().filter(|s| !s.trim().is_empty()) {
-        parts.push(escape(time));
+        chips.push(format!(
+            "<span class=\"meta__chip\">{}</span>",
+            escape(time)
+        ));
     }
-    if !parts.is_empty() {
-        let _ = writeln!(inner, "<p class=\"meta\">{}</p>", parts.join(" · "));
+    if let Some(duration) = metadata.duration.as_deref().filter(|s| !s.trim().is_empty()) {
+        chips.push(format!(
+            "<span class=\"meta__chip\">{}</span>",
+            escape(duration)
+        ));
+    }
+    if !chips.is_empty() {
+        let _ = writeln!(
+            inner,
+            "<p class=\"meta meta--params\">{}</p>",
+            chips.join("")
+        );
+    }
+
+    // Tier 3 — supplementary.
+    let mut supplementary: Vec<String> = Vec::new();
+    if let Some(album) = metadata.album.as_deref().filter(|s| !s.trim().is_empty()) {
+        supplementary.push(escape(album));
+    }
+    if let Some(year) = metadata.year.as_deref().filter(|s| !s.trim().is_empty()) {
+        supplementary.push(escape(year));
+    }
+    if let Some(copyright) = metadata.copyright.as_deref().filter(|s| !s.trim().is_empty()) {
+        supplementary.push(escape(copyright));
+    }
+    if !supplementary.is_empty() {
+        let _ = writeln!(
+            inner,
+            "<p class=\"meta meta--supplementary\">{}</p>",
+            supplementary.join(" · ")
+        );
     }
 
     // Wrap title + subtitle + meta strip in a `<header class="song-header">`

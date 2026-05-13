@@ -812,7 +812,10 @@ describe('renderChordproAst', () => {
     expect(blocks[1]?.querySelector('.lyrics')?.textContent).toBe('world');
   });
 
-  test('renders "Original Key · Play Key" when transposedKey is supplied', () => {
+  test('renders "Key X → Y" in a chip pair when transposedKey is supplied', () => {
+    // The header is split into tiers — the transposed-key pair
+    // lives in the `.meta--params` chip row, not in a "Original
+    // Key X · Play Key Y" sentence.
     const { container } = render(
       renderChordproAst(
         {
@@ -826,37 +829,45 @@ describe('renderChordproAst', () => {
         { transposedKey: 'A' },
       ),
     );
-    const meta = container.querySelector('.meta');
-    expect(meta?.textContent).toContain('Original Key G');
-    expect(meta?.textContent).toContain('Play Key A');
-    expect(meta?.textContent).not.toMatch(/Key G(?! ·)/);
+    const params = container.querySelector('.meta--params');
+    expect(params).not.toBeNull();
+    const chips = params?.querySelectorAll('.meta__chip');
+    // Two chips: "Key G" original + "→ A" transposed.
+    expect(chips?.[0]?.textContent).toBe('Key G');
+    expect(chips?.[1]?.textContent?.replace(/\s/g, '')).toBe('→A');
   });
 
-  test('falls back to "Key X" when transposedKey is null or equal to the original', () => {
-    // null → single-key form
+  test('falls back to a single "Key X" chip when transposedKey is null or equal to the original', () => {
     const a = render(
       renderChordproAst(
         { metadata: { ...EMPTY_META, key: 'G' }, lines: [] },
         { transposedKey: null },
       ),
     );
-    expect(a.container.querySelector('.meta')?.textContent).toBe('Key G');
+    const aChips = a.container.querySelectorAll('.meta--params .meta__chip');
+    expect(aChips.length).toBe(1);
+    expect(aChips[0]?.textContent).toBe('Key G');
     // equal-to-original → single-key form (avoids the visually
-    // confusing "Original Key G · Play Key G" tautology)
+    // confusing "Original Key G → G" tautology)
     const b = render(
       renderChordproAst(
         { metadata: { ...EMPTY_META, key: 'G' }, lines: [] },
         { transposedKey: 'G' },
       ),
     );
-    expect(b.container.querySelector('.meta')?.textContent).toBe('Key G');
+    const bChips = b.container.querySelectorAll('.meta--params .meta__chip');
+    expect(bChips.length).toBe(1);
+    expect(bChips[0]?.textContent).toBe('Key G');
   });
 
-  test('extended metadata lands in the meta strip in attribution → parameters → tags order', () => {
-    // Mirrors the ChordPro spec's conceptual grouping —
-    // attribution (people / album / year) first, then musical
-    // parameters (key / tempo / time / capo / duration), then
-    // tags as their own row.
+  test('extended metadata lands in tiered rows: attribution / params / supplementary / tags', () => {
+    // Mirrors the ChordPro spec's conceptual grouping. Each tier
+    // is its own `<p>` so the visual hierarchy is robust to CSS
+    // changes:
+    //   Tier 1: attribution (artists primary, composers/lyricists/arrangers secondary)
+    //   Tier 2: musical params (Key / Capo / BPM / Time / Duration chips)
+    //   Tier 3: supplementary (album / year / copyright)
+    //   Tier 4: tags (separate row with pill chips)
     const { container } = render(
       renderChordproAst({
         metadata: {
@@ -879,21 +890,29 @@ describe('renderChordproAst', () => {
         lines: [],
       }),
     );
-    const meta = container.querySelector('.meta:not(.meta--tags)');
-    const txt = meta?.textContent ?? '';
-    expect(txt).toContain('Demo');
-    expect(txt).toContain('Music JC');
-    expect(txt).toContain('Lyrics JL');
-    expect(txt).toContain('Arrangement JA');
-    expect(txt).toContain('Reference');
-    expect(txt).toContain('2026');
-    expect(txt).toContain('Key G');
-    expect(txt).toContain('Capo 2');
-    expect(txt).toContain('120 BPM');
-    expect(txt).toContain('4/4');
-    expect(txt).toContain('3:30');
-    expect(txt).toContain('© 2026');
-    // Tags live on a separate row as pill chips.
+    // Tier 1 — attribution.
+    const attribution = container.querySelector('.meta--attribution');
+    expect(attribution?.textContent).toContain('Demo');
+    const secondaryAttribution = container.querySelector(
+      '.meta--attribution-secondary',
+    );
+    expect(secondaryAttribution?.textContent).toContain('Music JC');
+    expect(secondaryAttribution?.textContent).toContain('Lyrics JL');
+    expect(secondaryAttribution?.textContent).toContain('Arr. JA');
+    // Tier 2 — chips.
+    const chips = container.querySelectorAll('.meta--params .meta__chip');
+    const chipTexts = Array.from(chips).map((c) => c.textContent);
+    expect(chipTexts).toContain('Key G');
+    expect(chipTexts).toContain('Capo 2');
+    expect(chipTexts).toContain('120 BPM');
+    expect(chipTexts).toContain('4/4');
+    expect(chipTexts).toContain('3:30');
+    // Tier 3 — supplementary.
+    const supp = container.querySelector('.meta--supplementary');
+    expect(supp?.textContent).toContain('Reference');
+    expect(supp?.textContent).toContain('2026');
+    expect(supp?.textContent).toContain('© 2026');
+    // Tier 4 — tags.
     const tagRow = container.querySelector('.meta--tags');
     expect(tagRow).not.toBeNull();
     const tags = tagRow?.querySelectorAll('.tag');
@@ -902,7 +921,7 @@ describe('renderChordproAst', () => {
     expect(tags?.[1]?.textContent).toBe('reference');
   });
 
-  test('renders the metadata header', () => {
+  test('renders the metadata header in tiered rows', () => {
     const { container } = render(
       renderChordproAst({
         metadata: {
@@ -918,7 +937,13 @@ describe('renderChordproAst', () => {
     );
     expect(container.querySelector('h1')?.textContent).toBe('My Song');
     expect(container.querySelector('h2')?.textContent).toBe('A subtitle');
-    expect(container.querySelector('.meta')?.textContent).toBe('Artist · Key G · Capo 2');
+    // Attribution row lives in `.meta--attribution`, params in
+    // `.meta--params` as chips.
+    expect(container.querySelector('.meta--attribution')?.textContent).toContain('Artist');
+    const chipTexts = Array.from(
+      container.querySelectorAll('.meta--params .meta__chip'),
+    ).map((c) => c.textContent);
+    expect(chipTexts).toEqual(['Key G', 'Capo 2']);
   });
 
   test('wraps section directives in a `<section>` with the section-label', () => {

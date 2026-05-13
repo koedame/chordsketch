@@ -1019,36 +1019,34 @@ function renderHeader(
     });
     out.push(<h2 key="subtitle">{subtitleNodes}</h2>);
   }
-  // Metadata strip — extended attribution + musical parameters.
-  // Each individual value (artist, key, tempo, etc.) lives in its
-  // own `<span data-source-line>` so the editor-caret highlight
-  // pinpoints exactly the value being edited. Multi-value fields
-  // (artists, composers, lyricists, arrangers) iterate their
-  // entries and emit one span each, joined by ", ".
-  const metaParts: JSX.Element[] = [];
-  const pushPart = (node: JSX.Element): void => {
-    if (metaParts.length > 0) {
-      metaParts.push(
-        <Fragment key={`sep-${metaParts.length}`}> · </Fragment>,
-      );
-    }
-    metaParts.push(node);
-  };
-  function multiValueFragment(
-    prefix: string,
+  // Metadata strip — split into three visual tiers so the eye
+  // can scan the header without parsing 16 dot-separated cells:
+  //   * `.meta--attribution`  — who made the song. Two lines:
+  //       "by Artist" on its own, then "Music X · Lyrics Y ·
+  //       Arr. Z" below at the same weight.
+  //   * `.meta--params`       — what to play. Chip-shaped Key /
+  //       Capo / BPM / Time / Duration tags so the values you
+  //       glance at before performing are visually distinct.
+  //   * `.meta--supplementary` — where it came from. Album /
+  //       Year / Copyright at a smaller, muted weight beneath
+  //       everything else.
+  // Each individual value still lives in its own
+  // `<span data-source-line>` so the editor-caret highlight
+  // pinpoints exactly the value being edited.
+
+  function buildMultiValueRow(
+    label: string,
     values: string[],
     sources: number[],
     baseKey: string,
   ): JSX.Element {
-    // Group the prefix + comma-separated values into one
-    // <Fragment> so the prefix text and the spans share a
-    // single meta entry (they get a single ` · ` separator
-    // around them). The prefix has no source line of its own —
-    // only the inner spans carry data-source-line + active
-    // modifier.
     return (
       <Fragment key={baseKey}>
-        {prefix ? `${prefix} ` : ''}
+        {label && (
+          <span className="meta__label" aria-hidden="true">
+            {label}{' '}
+          </span>
+        )}
         {values.map((v, i) => (
           <Fragment key={i}>
             {i > 0 ? ', ' : ''}
@@ -1058,46 +1056,105 @@ function renderHeader(
       </Fragment>
     );
   }
+
+  // Tier 1 — attribution (artists primary, others on a 2nd line)
   if (metadata.artists.length > 0) {
-    pushPart(multiValueFragment('', metadata.artists, metaLines.artists, 'artist'));
-  }
-  if (metadata.composers.length > 0) {
-    pushPart(multiValueFragment('Music', metadata.composers, metaLines.composers, 'composer'));
-  }
-  if (metadata.lyricists.length > 0) {
-    pushPart(multiValueFragment('Lyrics', metadata.lyricists, metaLines.lyricists, 'lyricist'));
-  }
-  if (metadata.arrangers.length > 0) {
-    pushPart(
-      multiValueFragment('Arrangement', metadata.arrangers, metaLines.arrangers, 'arranger'),
+    out.push(
+      <p key="meta-attribution-primary" className="meta meta--attribution">
+        {buildMultiValueRow('by', metadata.artists, metaLines.artists, 'artist')}
+      </p>,
     );
   }
-  if (metadata.album) pushPart(metaSpan('album', metadata.album, metaLines.album, active));
-  if (metadata.year) pushPart(metaSpan('year', metadata.year, metaLines.year, active));
+  const attributionSecondary: JSX.Element[] = [];
+  const pushAttribution = (node: JSX.Element): void => {
+    if (attributionSecondary.length > 0) {
+      attributionSecondary.push(
+        <Fragment key={`asep-${attributionSecondary.length}`}> · </Fragment>,
+      );
+    }
+    attributionSecondary.push(node);
+  };
+  if (metadata.composers.length > 0) {
+    pushAttribution(
+      buildMultiValueRow('Music', metadata.composers, metaLines.composers, 'composer'),
+    );
+  }
+  if (metadata.lyricists.length > 0) {
+    pushAttribution(
+      buildMultiValueRow('Lyrics', metadata.lyricists, metaLines.lyricists, 'lyricist'),
+    );
+  }
+  if (metadata.arrangers.length > 0) {
+    pushAttribution(
+      buildMultiValueRow('Arr.', metadata.arrangers, metaLines.arrangers, 'arranger'),
+    );
+  }
+  if (attributionSecondary.length > 0) {
+    out.push(
+      <p key="meta-attribution-secondary" className="meta meta--attribution meta--attribution-secondary">
+        {attributionSecondary}
+      </p>,
+    );
+  }
+
+  // Tier 2 — musical params (chips)
+  function chipSpan(
+    keyName: string,
+    text: string,
+    sourceLine: number | undefined,
+  ): JSX.Element {
+    const isActive = sourceLine !== undefined && sourceLine === active;
+    return (
+      <span
+        key={keyName}
+        className={isActive ? 'meta__chip line--active' : 'meta__chip'}
+        data-source-line={sourceLine}
+      >
+        {text}
+      </span>
+    );
+  }
+  const paramChips: JSX.Element[] = [];
   if (metadata.key) {
     if (options.transposedKey && options.transposedKey !== metadata.key) {
-      pushPart(
-        metaSpan('keyOrig', `Original Key ${metadata.key}`, metaLines.key, active),
-      );
-      // Transposed key has no directive of its own — it's derived
-      // by the wasm boundary. Emit without data-source-line.
-      pushPart(metaSpan('keyPlay', `Play Key ${options.transposedKey}`, undefined, active));
+      paramChips.push(chipSpan('keyOrig', `Key ${metadata.key}`, metaLines.key));
+      paramChips.push(chipSpan('keyPlay', `→ ${options.transposedKey}`, undefined));
     } else {
-      pushPart(metaSpan('key', `Key ${metadata.key}`, metaLines.key, active));
+      paramChips.push(chipSpan('key', `Key ${metadata.key}`, metaLines.key));
     }
   }
-  if (metadata.capo) pushPart(metaSpan('capo', `Capo ${metadata.capo}`, metaLines.capo, active));
+  if (metadata.capo) paramChips.push(chipSpan('capo', `Capo ${metadata.capo}`, metaLines.capo));
   if (metadata.tempo)
-    pushPart(metaSpan('tempo', `${metadata.tempo} BPM`, metaLines.tempo, active));
-  if (metadata.time) pushPart(metaSpan('time', metadata.time, metaLines.time, active));
+    paramChips.push(chipSpan('tempo', `${metadata.tempo} BPM`, metaLines.tempo));
+  if (metadata.time) paramChips.push(chipSpan('time', metadata.time, metaLines.time));
   if (metadata.duration)
-    pushPart(metaSpan('duration', metadata.duration, metaLines.duration, active));
-  if (metadata.copyright)
-    pushPart(metaSpan('copyright', metadata.copyright, metaLines.copyright, active));
-  if (metaParts.length > 0) {
+    paramChips.push(chipSpan('duration', metadata.duration, metaLines.duration));
+  if (paramChips.length > 0) {
     out.push(
-      <p key="meta" className="meta">
-        {metaParts}
+      <p key="meta-params" className="meta meta--params">
+        {paramChips}
+      </p>,
+    );
+  }
+
+  // Tier 3 — supplementary (album / year / copyright)
+  const supplementary: JSX.Element[] = [];
+  const pushSupp = (node: JSX.Element): void => {
+    if (supplementary.length > 0) {
+      supplementary.push(
+        <Fragment key={`ssep-${supplementary.length}`}> · </Fragment>,
+      );
+    }
+    supplementary.push(node);
+  };
+  if (metadata.album) pushSupp(metaSpan('album', metadata.album, metaLines.album, active));
+  if (metadata.year) pushSupp(metaSpan('year', metadata.year, metaLines.year, active));
+  if (metadata.copyright)
+    pushSupp(metaSpan('copyright', metadata.copyright, metaLines.copyright, active));
+  if (supplementary.length > 0) {
+    out.push(
+      <p key="meta-supplementary" className="meta meta--supplementary">
+        {supplementary}
       </p>,
     );
   }
