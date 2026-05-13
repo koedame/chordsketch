@@ -976,17 +976,17 @@ fn do_parse_chordpro(
     // `.claude/rules/playground-is-a-sample.md`'s spirit — the
     // library owns the maths).
     let transposed_key = if transpose_steps != 0 {
-        song.metadata.key.as_deref().and_then(|key_str| {
-            let chord = chordsketch_chordpro::ast::Chord::new(key_str);
-            // `Chord::new` returns `detail == None` for strings
-            // it could not parse (e.g. `{key: C dorian}`). Skip
-            // when so — the walker falls back to showing the
-            // original key only.
-            chord.detail.as_ref()?;
-            let transposed =
-                chordsketch_chordpro::transpose::transpose_chord(&chord, transpose_steps);
-            Some(transposed.name)
-        })
+        // Canonical-spelling lookup: e.g. C +1 → Db (not C#),
+        // C +10 → Bb (not A#). Matches `transpose(song, …)`'s
+        // chord-line spelling so the header chip and the lyric
+        // chord row agree on which side of the circle of fifths
+        // the song landed on. Returns `None` for unparseable
+        // keys (e.g. `{key: C dorian}`) — the walker falls back
+        // to showing the original key only in that case.
+        chordsketch_chordpro::transpose::canonical_transposed_key(
+            song.metadata.key.as_deref(),
+            transpose_steps,
+        )
     } else {
         None
     };

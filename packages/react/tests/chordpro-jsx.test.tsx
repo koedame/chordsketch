@@ -1269,7 +1269,9 @@ describe('renderChordproAst', () => {
 
     expect(markers[1]?.classList.contains('meta-inline--tempo')).toBe(true);
     expect(markers[1]?.querySelector('.music-glyph--metronome')).not.toBeNull();
-    expect(markers[1]?.querySelector('.meta-inline__label')?.textContent).toBe('Tempo:');
+    // The "Tempo:" textual label was removed — the metronome glyph
+    // carries the signal on its own. Only the BPM value remains.
+    expect(markers[1]?.querySelector('.meta-inline__label')).toBeNull();
     expect(markers[1]?.querySelector('.meta-inline__value')?.textContent).toBe('140 BPM');
 
     expect(markers[2]?.classList.contains('meta-inline--time')).toBe(true);

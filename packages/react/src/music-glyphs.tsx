@@ -375,10 +375,11 @@ export function TimeSignatureGlyph({
     safeBpm != null && beats != null
       ? Math.max(0.3, Math.min(30, numInt * (60 / safeBpm)))
       : null;
+  const showConductor = beats != null && period != null;
   const classes = [
     'music-glyph',
     'music-glyph--time',
-    beats != null && period != null ? `music-glyph--time--conduct-${beats}` : null,
+    showConductor ? `music-glyph--time--conduct-${beats}` : null,
     className,
   ]
     .filter(Boolean)
@@ -397,19 +398,103 @@ export function TimeSignatureGlyph({
       role="img"
       aria-label={`Time signature ${numerator} over ${denominator}`}
     >
-      <span className="music-glyph--time__num" aria-hidden="true">
-        {numerator}
+      <span className="music-glyph--time__digits" aria-hidden="true">
+        <span className="music-glyph--time__num">{numerator}</span>
+        {/* Visual fraction bar between numerator and denominator.
+            Real engraved time signatures don't include a bar — we
+            add one anyway so the stacked digits read
+            unambiguously as a "N over M" at the small icon size. */}
+        <span className="music-glyph--time__bar" />
+        <span className="music-glyph--time__den">{denominator}</span>
       </span>
-      {/* Visual fraction bar between numerator and denominator.
-          Real engraved time signatures don't include a bar — we
-          add one anyway so the stacked digits read unambiguously
-          as a "N over M" at the small icon size. */}
-      <span className="music-glyph--time__bar" aria-hidden="true" />
-      <span className="music-glyph--time__den" aria-hidden="true">
-        {denominator}
-      </span>
+      {/* Conductor dot — a small bead that traces the
+          conductor's wrist pattern (down → left → right → up
+          for 4/4 etc.) inside its own SVG box, ticking once per
+          beat at the active BPM. Replaces the previous
+          "bob the whole icon" treatment so the static time-
+          signature digits stay legible while the motion is
+          isolated to the dot. The animation is gated on
+          `prefers-reduced-motion: reduce` via the conductor
+          modifier class. */}
+      {showConductor ? (
+        <svg
+          className="music-glyph--time__conductor"
+          viewBox="0 0 22 22"
+          width={22}
+          height={22}
+          aria-hidden="true"
+        >
+          {/* Faint path-trace lines, so the eye picks up the
+              pattern even when the dot is momentarily near
+              center. Each `<line>` is the segment between two
+              successive ictuses for the chosen beat count. */}
+          {conductorPathLines(beats)}
+          <circle
+            className="music-glyph--time__dot"
+            cx={11}
+            cy={4}
+            r={1.8}
+          />
+        </svg>
+      ) : null}
     </span>
   );
+}
+
+/**
+ * Faint dotted-line segments tracing the conductor pattern for
+ * the given beat count, so the eye can pick up the gesture even
+ * when the moving dot is near the center.
+ */
+function conductorPathLines(beats: 2 | 3 | 4 | 6): JSX.Element[] {
+  // Coordinates here match the keyframe targets in
+  // `styles.css` (start at top-center, each beat ictus at a
+  // pattern position around it). Keep the two in lockstep.
+  const TOP: [number, number] = [11, 4];
+  const BOTTOM: [number, number] = [11, 18];
+  const LEFT: [number, number] = [4, 11];
+  const RIGHT: [number, number] = [18, 11];
+  const points: ReadonlyArray<readonly [number, number]> = (() => {
+    switch (beats) {
+      case 2:
+        return [TOP, BOTTOM, TOP];
+      case 3:
+        return [TOP, BOTTOM, RIGHT, TOP];
+      case 4:
+        return [TOP, BOTTOM, LEFT, RIGHT, TOP];
+      case 6:
+        // 6-beat pattern (1 down, 2 lower-left, 3 left, 4
+        // right, 5 upper-right, 6 up) — simplified.
+        return [
+          TOP,
+          BOTTOM,
+          [5, 15],
+          LEFT,
+          RIGHT,
+          [17, 7],
+          TOP,
+        ] as ReadonlyArray<readonly [number, number]>;
+    }
+  })();
+  const out: JSX.Element[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const [x1, y1] = points[i]!;
+    const [x2, y2] = points[i + 1]!;
+    out.push(
+      <line
+        key={`p${i}`}
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke="currentColor"
+        strokeWidth={0.4}
+        strokeDasharray="0.6 0.8"
+        opacity={0.35}
+      />,
+    );
+  }
+  return out;
 }
 
 // ---- Metronome glyph --------------------------------------------

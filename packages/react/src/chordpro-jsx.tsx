@@ -1838,9 +1838,12 @@ function handleDirective(
     ctx.activeBpm = safeBpm;
     pushElement(
       ctx,
+      // The metronome glyph carries the meaning of the marker
+      // on its own — "Tempo:" duplicates the icon's signal and
+      // crowds the chip, so we drop the textual label and keep
+      // only the BPM value.
       <p key={key} className="meta-inline meta-inline--tempo">
         <MetronomeGlyph bpm={safeBpm} className="meta-inline__glyph" />
-        <span className="meta-inline__label">Tempo:</span>{' '}
         <span className="meta-inline__value">{bpmRaw} BPM</span>
       </p>,
     );

@@ -380,9 +380,12 @@
    see the `@keyframes cs-conductor-*` rules below. */
 .chordsketch-sheet__content .music-glyph--time {
   display: inline-flex;
-  flex-direction: column;
+  /* When the conductor SVG is present the glyph becomes a row
+     (digits on the left, conductor dot SVG on the right). The
+     stacked-digits column lives inside the
+     `.music-glyph--time__digits` child wrapper. */
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
   line-height: 1;
   font-family: var(--cs-font-serif, 'Source Serif Pro', serif);
   font-weight: 700;
@@ -406,65 +409,97 @@
   border-radius: 1px;
 }
 
-/* Conductor's wrist gesture — the time-signature glyph traces
-   the conventional simple-pattern path (down for beat 1, then
-   left / right / up depending on the meter), looping at the
-   active tempo. The `--cs-time-period` custom property carries
-   one full measure's duration in seconds, set inline by
-   `<TimeSignatureGlyph bpm={...}>`. Movement is intentionally
-   small (~1.5 px) so it reads as a subtle "live" indicator
-   rather than a distracting motion — and the `ease-in-out`
-   between waypoints approximates the baton's natural
-   acceleration / ictus / deceleration between beats. */
-.chordsketch-sheet__content .music-glyph--time--conduct-2 {
-  animation: cs-conductor-2 var(--cs-time-period, 2s) ease-in-out infinite;
+/* Conductor's wrist gesture — a small bead inside the time-
+   signature glyph's auxiliary SVG traces the conventional
+   simple-pattern (down for beat 1, then left / right / up
+   depending on the meter) at the active tempo. The
+   `--cs-time-period` custom property carries one full measure
+   duration in seconds, set inline by
+   `<TimeSignatureGlyph bpm={...}>`. The keyframe targets match
+   the coordinates `conductorPathLines` in `music-glyphs.tsx`
+   draws as faint dashed segments inside the SVG, so the dotted
+   trace and the moving bead stay aligned.
+
+   `cubic-bezier(0.42, 0, 0.58, 1)` (stronger than the named
+   `ease-in-out`) accentuates the ictus at each waypoint — the
+   bead snaps onto each beat position and then sits there
+   briefly before the next motion, reading more like a baton's
+   tick than a continuous orbit. */
+.chordsketch-sheet__content .music-glyph--time {
+  /* When the conductor dot is present the glyph becomes a
+     row-flex container: stacked digits on the left, conductor
+     SVG box on the right. */
 }
-.chordsketch-sheet__content .music-glyph--time--conduct-3 {
-  animation: cs-conductor-3 var(--cs-time-period, 3s) ease-in-out infinite;
+.chordsketch-sheet__content .music-glyph--time--conduct-2 .music-glyph--time__dot,
+.chordsketch-sheet__content .music-glyph--time--conduct-3 .music-glyph--time__dot,
+.chordsketch-sheet__content .music-glyph--time--conduct-4 .music-glyph--time__dot,
+.chordsketch-sheet__content .music-glyph--time--conduct-6 .music-glyph--time__dot {
+  fill: var(--cs-accent, #bd1642);
 }
-.chordsketch-sheet__content .music-glyph--time--conduct-4 {
-  animation: cs-conductor-4 var(--cs-time-period, 4s) ease-in-out infinite;
+.chordsketch-sheet__content .music-glyph--time--conduct-2 .music-glyph--time__dot {
+  animation: cs-conductor-dot-2 var(--cs-time-period, 2s) cubic-bezier(0.42, 0, 0.58, 1)
+    infinite;
 }
-.chordsketch-sheet__content .music-glyph--time--conduct-6 {
-  animation: cs-conductor-6 var(--cs-time-period, 6s) ease-in-out infinite;
+.chordsketch-sheet__content .music-glyph--time--conduct-3 .music-glyph--time__dot {
+  animation: cs-conductor-dot-3 var(--cs-time-period, 3s) cubic-bezier(0.42, 0, 0.58, 1)
+    infinite;
 }
-/* 2-beat pattern: down (beat 1), up (beat 2). */
-@keyframes cs-conductor-2 {
-  0%, 100% { transform: translate(0, 0); }
-  50%      { transform: translate(0, 1.5px); }
+.chordsketch-sheet__content .music-glyph--time--conduct-4 .music-glyph--time__dot {
+  animation: cs-conductor-dot-4 var(--cs-time-period, 4s) cubic-bezier(0.42, 0, 0.58, 1)
+    infinite;
 }
-/* 3-beat pattern: down, right, up. */
-@keyframes cs-conductor-3 {
-  0%, 100% { transform: translate(0, 0); }
-  33%      { transform: translate(0, 1.5px); }
-  66%      { transform: translate(1.5px, 0); }
+.chordsketch-sheet__content .music-glyph--time--conduct-6 .music-glyph--time__dot {
+  animation: cs-conductor-dot-6 var(--cs-time-period, 6s) cubic-bezier(0.42, 0, 0.58, 1)
+    infinite;
 }
-/* 4-beat pattern: down, left, right, up — the classic
-   conductor's cross. */
-@keyframes cs-conductor-4 {
-  0%, 100% { transform: translate(0, 0); }
-  25%      { transform: translate(0, 1.5px); }
-  50%      { transform: translate(-1.5px, 0); }
-  75%      { transform: translate(1.5px, 0); }
+/* The dot starts (cx, cy) = (11, 4) — top-center. Each
+   waypoint translates to a `(beat-x - 11, beat-y - 4)` offset
+   so the bead lands exactly on the dashed trace. */
+@keyframes cs-conductor-dot-2 {
+  0%, 100% { transform: translate(0, 0); }            /* top */
+  50%      { transform: translate(0, 14px); }         /* down (beat 1) */
 }
-/* 6-beat pattern: down / down-out, left, down-mid, right, up-out,
-   up (compound triple, but each beat visualised distinctly). */
-@keyframes cs-conductor-6 {
-  0%, 100% { transform: translate(0, 0); }
-  16%      { transform: translate(0, 1.5px); }
-  33%      { transform: translate(-1.2px, 0.8px); }
-  50%      { transform: translate(-0.8px, 0); }
-  66%      { transform: translate(0.8px, 0); }
-  83%      { transform: translate(1.2px, -0.8px); }
+@keyframes cs-conductor-dot-3 {
+  0%, 100% { transform: translate(0, 0); }            /* top */
+  33%      { transform: translate(0, 14px); }         /* down (beat 1) */
+  66%      { transform: translate(7px, 7px); }        /* right (beat 2) */
+}
+@keyframes cs-conductor-dot-4 {
+  0%, 100% { transform: translate(0, 0); }            /* top */
+  25%      { transform: translate(0, 14px); }         /* down (beat 1) */
+  50%      { transform: translate(-7px, 7px); }       /* left (beat 2) */
+  75%      { transform: translate(7px, 7px); }        /* right (beat 3) */
+}
+@keyframes cs-conductor-dot-6 {
+  0%, 100% { transform: translate(0, 0); }            /* top */
+  16%      { transform: translate(0, 14px); }         /* down (beat 1) */
+  33%      { transform: translate(-6px, 11px); }      /* lower-left (beat 2) */
+  50%      { transform: translate(-7px, 7px); }       /* left (beat 3) */
+  66%      { transform: translate(7px, 7px); }        /* right (beat 4) */
+  83%      { transform: translate(6px, 3px); }        /* upper-right (beat 5) */
 }
 @media (prefers-reduced-motion: reduce) {
-  .chordsketch-sheet__content .music-glyph--time--conduct-2,
-  .chordsketch-sheet__content .music-glyph--time--conduct-3,
-  .chordsketch-sheet__content .music-glyph--time--conduct-4,
-  .chordsketch-sheet__content .music-glyph--time--conduct-6 {
+  .chordsketch-sheet__content .music-glyph--time--conduct-2 .music-glyph--time__dot,
+  .chordsketch-sheet__content .music-glyph--time--conduct-3 .music-glyph--time__dot,
+  .chordsketch-sheet__content .music-glyph--time--conduct-4 .music-glyph--time__dot,
+  .chordsketch-sheet__content .music-glyph--time--conduct-6 .music-glyph--time__dot {
     animation: none;
     transform: translate(0, 0);
   }
+}
+
+/* Layout: when a conductor SVG is present, lay it out next to
+   the stacked digits as a row. */
+.chordsketch-sheet__content .music-glyph--time__digits {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.chordsketch-sheet__content .music-glyph--time__conductor {
+  margin-left: 0.4em;
+  color: var(--cs-ink-500, #67646d);
 }
 
 /* Metronome pendulum animation. The CSS custom property

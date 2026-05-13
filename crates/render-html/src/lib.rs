@@ -455,10 +455,14 @@ fn render_song_body_into(
                                 ));
                             }
                             DirectiveKind::Tempo => {
+                                // The metronome glyph signals the
+                                // marker's meaning on its own — drop
+                                // the textual "Tempo:" label and keep
+                                // only the BPM value (sister-site to
+                                // the React JSX walker).
                                 html.push_str(&format!(
                                     "<p class=\"meta-inline meta-inline--tempo\">\
                                      {glyph}\
-                                     <span class=\"meta-inline__label\">Tempo:</span> \
                                      <span class=\"meta-inline__value\">{val} BPM</span></p>\n",
                                     glyph = music_glyphs::metronome_svg(value),
                                     val = escape(value),
