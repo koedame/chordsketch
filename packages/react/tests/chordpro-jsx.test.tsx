@@ -866,6 +866,82 @@ describe('renderChordproAst', () => {
     expect(bChips[0]?.textContent).toBe('Key G');
   });
 
+  // Inline `{key}` marker — when transpose is active AND the
+  // directive matches the song-primary key, the marker shows
+  // both the written (notated) and sounding (concert) key with
+  // their respective key-signature glyphs.
+  test('inline {key} marker shows Written + Sounding when transpose is active', () => {
+    const ast: ChordproSong = {
+      metadata: { ...EMPTY_META, key: 'G', keys: ['G'] },
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'key', value: 'G', kind: { tag: 'key' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast, { transposedKey: 'A' }));
+    const marker = container.querySelector('.meta-inline--key-pair');
+    expect(marker).not.toBeNull();
+    const groups = marker?.querySelectorAll('.meta-inline__group');
+    expect(groups?.length).toBe(2);
+    // Written half = original.
+    expect(groups?.[0]?.querySelector('.meta-inline__label')?.textContent).toBe('Written:');
+    expect(groups?.[0]?.querySelector('.meta-inline__value')?.textContent).toBe('G');
+    expect(groups?.[0]?.querySelector('.music-glyph--key')).not.toBeNull();
+    // Sounding half = transposed.
+    expect(groups?.[1]?.querySelector('.meta-inline__label')?.textContent).toBe('Sounding:');
+    expect(groups?.[1]?.querySelector('.meta-inline__value')?.textContent).toBe('A');
+    expect(groups?.[1]?.querySelector('.music-glyph--key')).not.toBeNull();
+  });
+
+  test('inline {key} marker stays single when transpose is null or matches written key', () => {
+    const ast: ChordproSong = {
+      metadata: { ...EMPTY_META, key: 'G', keys: ['G'] },
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'key', value: 'G', kind: { tag: 'key' }, selector: null },
+        },
+      ],
+    };
+    for (const opts of [{ transposedKey: null }, { transposedKey: 'G' }, {}]) {
+      const { container } = render(renderChordproAst(ast, opts));
+      expect(container.querySelector('.meta-inline--key-pair')).toBeNull();
+      // Single marker has just one label, "Key:".
+      expect(container.querySelector('.meta-inline--key .meta-inline__label')?.textContent).toBe(
+        'Key:',
+      );
+    }
+  });
+
+  test('mid-song {key} that does not match the primary key stays single even under transpose', () => {
+    // Host's `transposedKey` is computed against the primary key
+    // (last `metadata.key`); applying it to an unrelated mid-song
+    // `{key}` would be incorrect, so those markers fall through to
+    // the single chip.
+    const ast: ChordproSong = {
+      metadata: { ...EMPTY_META, key: 'D', keys: ['G', 'D'] },
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'key', value: 'G', kind: { tag: 'key' }, selector: null },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'key', value: 'D', kind: { tag: 'key' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast, { transposedKey: 'E' }));
+    const markers = container.querySelectorAll('.meta-inline--key');
+    expect(markers).toHaveLength(2);
+    // First `{key: G}` — not the primary, so single chip.
+    expect(markers[0]?.classList.contains('meta-inline--key-pair')).toBe(false);
+    // Second `{key: D}` — primary, gets the Written + Sounding pair.
+    expect(markers[1]?.classList.contains('meta-inline--key-pair')).toBe(true);
+  });
+
   test('extended metadata lands in tiered rows: attribution / params / supplementary / tags', () => {
     // Mirrors the ChordPro spec's conceptual grouping. Each tier
     // is its own `<p>` so the visual hierarchy is robust to CSS

@@ -342,6 +342,22 @@
   font-weight: 600;
 }
 
+/* Paired Written / Sounding display for `{key}` markers when
+   transpose is active. The two key groups sit side by side
+   with a small directional separator between them. */
+.chordsketch-sheet__content .meta-inline--key-pair {
+  gap: 0.6em;
+}
+.chordsketch-sheet__content .meta-inline__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+}
+.chordsketch-sheet__content .meta-inline__separator {
+  color: var(--cs-ink-400, #a8a4ad);
+  font-weight: 500;
+}
+
 /* Music-notation glyph slot inside a `.meta-inline` marker —
    key signature, metronome, or stacked time signature. The
    glyph sits to the left of the label / value pair and

@@ -1378,6 +1378,25 @@ interface WalkContext {
    * conductor animation. `null` when no tempo has been declared.
    */
   activeBpm: number | null;
+  /**
+   * The song's PRIMARY `{key}` value (last-wins `metadata.key`),
+   * cached here so the body's `{key}` inline marker can detect
+   * whether a given `{key}` directive is the song-primary one
+   * and therefore the target of the host's `transposedKey`
+   * option. Pre-computed to avoid passing `song.metadata`
+   * through the body-line walker. `null` when no key is set.
+   */
+  primaryKey: string | null;
+  /**
+   * Sounding key (concert pitch) after the host's
+   * `RenderChordproAstOptions.transposedKey` was applied to the
+   * primary written key. When set AND different from
+   * `primaryKey`, the body's `{key}` inline marker emits a
+   * paired "Written / Sounding" display matching the Perl
+   * `key_print` / `key_sound` distinction. `null` when no
+   * transposition is active or it lands on the same key.
+   */
+  soundingKey: string | null;
 }
 
 function flushSection(ctx: WalkContext, key: number): void {
@@ -1647,6 +1666,43 @@ function handleDirective(
   // the metronome).
   if (kind.tag === 'key' && directive.value && directive.value.trim().length > 0) {
     const keyName = directive.value.trim();
+    // When transposition is active AND this `{key}` directive
+    // matches the song-primary key (the one the host's
+    // `transposedKey` was computed against), render a paired
+    // "Written / Sounding" display so the player can see both
+    // the notated key and the concert-pitch key. Terms match
+    // Perl ChordPro's internal `key_print` / `key_sound`
+    // distinction; "Written" / "Sounding" reads correctly for
+    // both classical-music readers and guitarists with a capo.
+    //
+    // Mid-song `{key}` changes (and any `{key}` whose value
+    // doesn't match the primary) fall through to the single
+    // chip — the host's `transposedKey` only knows the primary
+    // key's transposition, so applying it blindly to a
+    // different `{key}` would be incorrect.
+    const showSounding =
+      ctx.soundingKey != null && ctx.primaryKey != null && keyName === ctx.primaryKey;
+    if (showSounding && ctx.soundingKey != null) {
+      pushElement(
+        ctx,
+        <p key={key} className="meta-inline meta-inline--key meta-inline--key-pair">
+          <span className="meta-inline__group">
+            <KeySignatureGlyph keyName={keyName} className="meta-inline__glyph" />
+            <span className="meta-inline__label">Written:</span>{' '}
+            <span className="meta-inline__value">{keyName}</span>
+          </span>
+          <span className="meta-inline__separator" aria-hidden="true">
+            →
+          </span>
+          <span className="meta-inline__group">
+            <KeySignatureGlyph keyName={ctx.soundingKey} className="meta-inline__glyph" />
+            <span className="meta-inline__label">Sounding:</span>{' '}
+            <span className="meta-inline__value">{ctx.soundingKey}</span>
+          </span>
+        </p>,
+      );
+      return;
+    }
     pushElement(
       ctx,
       <p key={key} className="meta-inline meta-inline--key">
@@ -1796,6 +1852,16 @@ export function renderChordproAst(
     // *last* declared header tempo to match how the chip strip
     // displays multi-value tempos (Phase A of #2454).
     activeBpm: parseInitialBpm(song.metadata.tempos, song.metadata.tempo),
+    primaryKey: song.metadata.key,
+    // `transposedKey` is the host-computed sounding key for the
+    // song-primary written key. Only treat it as a real
+    // sounding-key value when it actually differs from the
+    // primary; otherwise downstream code can skip the dual
+    // display.
+    soundingKey:
+      options.transposedKey && options.transposedKey !== song.metadata.key
+        ? options.transposedKey
+        : null,
   };
   // Emit header first so metadata lands above the body even when
   // the source has metadata directives interleaved with lines.
