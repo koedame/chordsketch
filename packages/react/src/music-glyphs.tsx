@@ -583,9 +583,10 @@ export function RoleIcon({
         </svg>
       );
     case 'album':
-      // Vinyl / CD record — outer disc + concentric grooves +
-      // centre spindle hole. Reads as "this is a recording"
-      // for the supplementary `{album}` field.
+      // LP album cover — square sleeve with a disc peeking out
+      // to the right (the record half-pulled from the sleeve).
+      // Reads as "album release" more specifically than a bare
+      // disc, which also implies "single track / recording".
       return (
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -595,17 +596,29 @@ export function RoleIcon({
           className={classes}
           aria-hidden="true"
         >
-          <circle
-            cx={8}
-            cy={8}
-            r={6.5}
+          {/* Sleeve — square with slightly rounded corners */}
+          <rect
+            x={2}
+            y={3}
+            width={9}
+            height={10}
+            rx={0.8}
             fill="none"
             stroke="currentColor"
             strokeWidth={1.2}
           />
-          <circle cx={8} cy={8} r={4} fill="none" stroke="currentColor" strokeWidth={0.7} />
-          <circle cx={8} cy={8} r={2.5} fill="none" stroke="currentColor" strokeWidth={0.7} />
-          <circle cx={8} cy={8} r={1} fill="currentColor" />
+          {/* Disc — circle protruding from the right edge of the
+              sleeve, with a small centre spindle to disambiguate
+              from a generic circle. */}
+          <circle
+            cx={11}
+            cy={8}
+            r={3}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.2}
+          />
+          <circle cx={11} cy={8} r={0.8} fill="currentColor" />
         </svg>
       );
   }
