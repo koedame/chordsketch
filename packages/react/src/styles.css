@@ -796,38 +796,48 @@
      whitespace from default `<span>` line-height inheritance. */
   display: inline-block;
 }
-/* Drop-target highlight shown while a chord is being dragged.
-   Two-layer affordance:
-
-   1. **Whole-chord-block frame** (`.chord-block--drop-target`).
-      A dashed crimson outline encloses the chord row PLUS the
-      entire lyric row of the targeted segment. Because the
-      user almost always drags a chord horizontally (their
-      pointer is in the chord row), the block-wide outline
-      stays visible without having to look down at the lyric
-      row.
-   2. **Per-character inner highlight** (`.lyric-char--drop-
-      target`). A subtler tint + dashed underline on the
-      specific character the chord will land above, so the
-      user still sees precise character-level placement.
-
-   `outline` (not `border`) keeps the segment's intrinsic
-   width and the character's baseline unchanged: no reflow as
-   the drop target moves. */
-.chordsketch-sheet__content .chord-block--drop-target {
-  outline: 1px dashed var(--cs-crimson-500, #bd1642);
-  outline-offset: 2px;
-  border-radius: 3px;
-  background-color: rgba(189, 22, 66, 0.04);
-}
+/* Drop-target highlight shown while a chord is being dragged
+   over a specific lyric character. A narrow (single-character-
+   wide) dashed crimson rectangle that encloses the target
+   character at the bottom AND extends UPWARD through the chord
+   row above it.
+   - The character itself gets `outline` (not `border`) so its
+     intrinsic width stays unchanged: no reflow as the drop
+     target moves between characters.
+   - A `::before` pseudo-element draws the upper extension —
+     same dashed style, same horizontal extent (anchored to the
+     char so it stays 1-char-wide), height tall enough to fully
+     cover the chord row. The pseudo drops its bottom border so
+     the two shapes meet at the char's top edge and read as one
+     tall enclosure. */
 .chordsketch-sheet__content .lyric-char--drop-target {
-  /* Inset background tint + dashed bottom line — picks out the
-     specific char inside the larger block-wide frame without
-     adding a second nested rectangle that would clutter the
-     view. */
-  background-color: rgba(189, 22, 66, 0.14);
-  border-bottom: 1px dashed var(--cs-crimson-500, #bd1642);
-  border-radius: 1px;
+  position: relative;
+  outline: 1px dashed var(--cs-crimson-500, #bd1642);
+  outline-offset: 1px;
+  border-radius: 2px;
+  background-color: rgba(189, 22, 66, 0.08);
+}
+.chordsketch-sheet__content .lyric-char--drop-target::before {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  /* Sides match the char's outline (1px outline + 1px offset =
+     2px) so the two boxes line up vertically. */
+  left: -2px;
+  right: -2px;
+  /* Sit immediately above the char's outline and extend up to
+     cover the chord row. The chord-block layout is `flex-
+     direction: column` with chord on top and lyrics on bottom;
+     the chord row is sized by `.chord { font-size: 1rem;
+     line-height: 1; min-height: 1em }` = ~16px. `1.4em` against
+     the lyric font (1.125rem = 18px) ≈ 25px, comfortably
+     covering the chord row plus a small margin. */
+  bottom: calc(100% + 1px);
+  height: 1.4em;
+  border: 1px dashed var(--cs-crimson-500, #bd1642);
+  border-bottom: 0;
+  border-radius: 2px 2px 0 0;
+  background-color: rgba(189, 22, 66, 0.08);
 }
 /* End-of-segment drop-target sentinel: a zero-width span shown
    after the last lyric character when the drop offset is past

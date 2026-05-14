@@ -933,19 +933,18 @@ describe('renderChordproAst', () => {
     };
     // dragover on the lyrics span (bubbles to `.line`)
     fireEvent.dragOver(targetLyrics, { dataTransfer: dt, clientX: 100, clientY: 50 });
-    // Whole-chord-block frame appears around the targeted
-    // segment so the user dragging in the chord row can see
-    // their drop target without looking at the lyric row.
-    expect(blocks[1].classList.contains('chord-block--drop-target')).toBe(true);
-    expect(blocks[0].classList.contains('chord-block--drop-target')).toBe(false);
-    // Per-character inner highlight pinpoints the specific
-    // lyric char the chord will land above.
+    // Single-character drop highlight on the targeted lyric
+    // char. The CSS `::before` pseudo extends the highlight
+    // upward through the chord row so the user dragging in the
+    // chord row can still see it — that's CSS-only behaviour
+    // and not asserted here (jsdom doesn't render pseudos);
+    // the JS contract is that exactly one `.lyric-char` gets
+    // the `--drop-target` class.
     let highlighted = container.querySelectorAll('.lyric-char--drop-target');
     expect(highlighted.length).toBe(1);
     expect(highlighted[0].closest('.chord-block')).toBe(blocks[1]);
-    // drop clears both layers of the highlight and fires the callback
+    // drop clears the highlight and fires the callback
     fireEvent.drop(targetLyrics, { dataTransfer: dt, clientX: 100, clientY: 50 });
-    expect(blocks[1].classList.contains('chord-block--drop-target')).toBe(false);
     highlighted = container.querySelectorAll('.lyric-char--drop-target');
     expect(highlighted.length).toBe(0);
     expect(repo).toHaveBeenCalledTimes(1);
