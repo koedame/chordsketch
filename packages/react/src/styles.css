@@ -760,6 +760,34 @@
 .chordsketch-sheet__content .chord[draggable='true']:active {
   cursor: grabbing;
 }
+
+/* Drop indicator shown while a chord is being dragged over the
+   line. A thin vertical bar pointing at the exact lyric
+   character the chord would land on. Rendered inside the
+   `.lyrics` span (`position: relative`) but stretched UPWARD
+   via negative `top` so it spans the chord row too — the user
+   sees the indicator whether the pointer is in the upper row
+   or the lower row. Crimson to differentiate from the
+   blinking caret marker (which is the editor caret position,
+   not a drop preview).
+
+   `pointer-events: none` keeps the indicator from intercepting
+   the drag — otherwise it would steal `dragover` events from
+   the lyrics span underneath. */
+.chordsketch-sheet__content .drop-indicator {
+  position: absolute;
+  top: -1.1em;
+  bottom: 0;
+  width: 2px;
+  background-color: var(--cs-crimson-500, #bd1642);
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 1;
+  /* Subtle ring so the bar reads on top of both the chord
+     row's red text and the lyrics row's neutral text without
+     disappearing into either. */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
 .chordsketch-sheet__content .lyrics {
   font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
   font-weight: 400;

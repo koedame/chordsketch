@@ -24,7 +24,7 @@
 // `DANGEROUS_URI_SCHEMES` here in the same PR per
 // `.claude/rules/sanitizer-security.md` §"Security Asymmetry".
 
-import { Fragment, cloneElement, isValidElement } from 'react';
+import { Fragment, cloneElement, isValidElement, useMemo, useState } from 'react';
 import type { CSSProperties, DragEvent as ReactDragEvent, JSX, ReactNode } from 'react';
 
 import { ChordDiagram } from './chord-diagram';
@@ -730,40 +730,109 @@ function renderLyricsLine(
    * use the `tab` / `grid` element styles for body content
    * instead of `text`. */
   lyricsOverride: CSSProperties | null = null,
-  /** Caret placement for the in-preview marker. When this
-   * resolves to `chord` or `lyrics`, the marker is injected
-   * inside the matching `.chord` / `.lyrics` sub-element so it
-   * sits on the right row (upper vs lower). `line` (or `null`)
-   * leaves the marker to the caller — `pushElement` handles
-   * line-level placement for chord-less lines via
-   * `caretRatioOverride`. */
+  /** Caret placement for the in-preview marker. */
   caret: CaretPlacement | null = null,
-  /** Chord drag-and-drop context. When non-null, `.chord` spans
-   * with a real chord become drag sources and `.lyrics` spans
-   * become drop targets that fire `onChordReposition`. The
-   * `sourceLine` field is the 1-indexed source line of this
-   * lyrics line — needed to populate the drop event with
-   * absolute coordinates. */
+  /** Chord drag-and-drop context. */
   reposition: {
     sourceLine: number;
     onChordReposition: (event: ChordRepositionEvent) => void;
   } | null = null,
 ): JSX.Element {
-  // If ANY segment on this line carries a chord, every other
-  // segment needs a chord-row placeholder so the lyric baselines
-  // stay aligned. A genuinely empty `<span class="chord"/>`
-  // produces no line box in most browsers — `min-height: 1em`
-  // does not reserve the row on its own — so chordless segments
-  // float up by one row and the lyric on those segments lines up
-  // with the CHORD row of its neighbours instead of the LYRIC
-  // row. Emit a ` ` NBSP placeholder (matching
-  // `chordsketch-render-html`'s sister-site logic in
-  // `render_lyrics_line`, #2142) and mark it `aria-hidden` so
-  // assistive tech does not announce it as "space". See
-  // ADR-0017 for the broader sister-site parity contract.
+  return (
+    <LyricsLine
+      key={key}
+      line={line}
+      fmt={fmt}
+      lyricsOverride={lyricsOverride}
+      caret={caret}
+      reposition={reposition}
+      className="line"
+    />
+  );
+}
+
+interface LyricsLineProps {
+  line: ChordproLyricsLine;
+  fmt: FormattingState;
+  lyricsOverride: CSSProperties | null;
+  caret: CaretPlacement | null;
+  reposition: {
+    sourceLine: number;
+    onChordReposition: (event: ChordRepositionEvent) => void;
+  } | null;
+  /** Class name applied to the root `.line` div. `pushElement`
+   * threads `line line--active` here when the line matches
+   * `activeSourceLine`; otherwise the caller passes `"line"`. */
+  className?: string;
+  /** 1-indexed source line decoration applied to the root `.line`
+   * div by `pushElement` for the editor↔preview caret-sync wire. */
+  'data-source-line'?: number;
+}
+
+interface DropTarget {
+  segmentIdx: number;
+  charOffset: number;
+}
+
+/**
+ * Stateful body of a chord-bearing or chord-less lyrics line.
+ * Promoted from a plain function builder to a real component so
+ * it can hold the drag-over drop-indicator state — without
+ * that state every dragover would have to re-render the whole
+ * walker tree.
+ *
+ * The `.line` root is the drop target (not individual `.lyrics`
+ * spans) so dropping ANYWHERE on the line — chord row, lyric
+ * row, or the visual gap between segments — works. The drop
+ * coordinate is computed by walking from `event.target` up to
+ * the nearest `.chord-block` ancestor, locating its `.lyrics`
+ * sibling, and mapping the pointer X to a character offset
+ * inside that lyric text via the standard caret-from-point
+ * APIs. So a drop on the chord row "Am" lands on the lyric
+ * character DIRECTLY BELOW "Am" — what the eye expects.
+ *
+ * While a drag is active, a `<span class="drop-indicator">` is
+ * rendered inside the matching `.lyrics` so the user sees
+ * precisely which lyric character the chord will land on.
+ */
+function LyricsLine({
+  line,
+  fmt,
+  lyricsOverride,
+  caret,
+  reposition,
+  className,
+  'data-source-line': dataSourceLine,
+}: LyricsLineProps): JSX.Element {
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  // Pre-walk segments to record per-chord source columns and
+  // per-segment lyrics-offset starts. Memoised so dragover-driven
+  // re-renders don't re-walk on every event.
+  const segmentLayout = useMemo(() => {
+    const layout: Array<{
+      chordSourceColumn: number;
+      chordBracketLength: number;
+      lyricsOffsetStart: number;
+    }> = [];
+    let srcCol = 0;
+    let lyricsCount = 0;
+    for (const seg of line.segments) {
+      const bracketLen = seg.chord ? (seg.chord.name?.length ?? 0) + 2 : 0;
+      layout.push({
+        chordSourceColumn: srcCol,
+        chordBracketLength: bracketLen,
+        lyricsOffsetStart: lyricsCount,
+      });
+      srcCol += bracketLen + seg.text.length;
+      lyricsCount += seg.text.length;
+    }
+    return layout;
+  }, [line.segments]);
+
   const lineHasChords = line.segments.some((s) => s.chord !== null);
   const chordStyle = elementStyleToCss(fmt.chord);
   const textStyle = lyricsOverride ?? elementStyleToCss(fmt.text);
+
   // Caret marker injection — chord row vs lyrics row. The
   // marker uses `position: absolute` and relies on the parent
   // `.chord` / `.lyrics` being `position: relative` (set in
@@ -776,34 +845,77 @@ function renderLyricsLine(
       style={{ left: `${ratio * 100}%` }}
     />
   );
-  // Pre-walk segments so each one knows where its `[chord]`
-  // bracket sits in source columns and where its text starts
-  // in the rendered-lyrics character space. Both tallies
-  // power drag-and-drop coordinate translation: the drag
-  // origin uses the source column, and the drop target maps
-  // the pointer character offset to a destination lyrics
-  // offset.
-  const segmentLayout: Array<{
-    chordSourceColumn: number;
-    chordBracketLength: number;
-    lyricsOffsetStart: number;
-  }> = [];
-  {
-    let srcCol = 0;
-    let lyricsCount = 0;
-    for (const seg of line.segments) {
-      const bracketLen = seg.chord ? (seg.chord.name?.length ?? 0) + 2 : 0;
-      segmentLayout.push({
-        chordSourceColumn: srcCol,
-        chordBracketLength: bracketLen,
-        lyricsOffsetStart: lyricsCount,
-      });
-      srcCol += bracketLen + seg.text.length;
-      lyricsCount += seg.text.length;
-    }
-  }
+
+  // Line-level drop handlers. Attached to the `.line` root so a
+  // drop on EITHER row (chord or lyrics) of EITHER segment lands
+  // on the correct character. Without this consolidation,
+  // dropping on the chord-row `.chord` span would be a no-op
+  // and the user would have to aim at the narrow `.lyrics` row.
+  const handleLineDragOver = reposition
+    ? (event: ReactDragEvent<HTMLDivElement>) => {
+        if (!event.dataTransfer.types.includes(CHORD_DRAG_MIME)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = event.altKey ? 'copy' : 'move';
+        const target = findDropTargetInLine(event, line.segments);
+        if (target) setDropTarget(target);
+      }
+    : undefined;
+
+  const handleLineDragLeave = reposition
+    ? (event: ReactDragEvent<HTMLDivElement>) => {
+        // Only clear when leaving the whole line. Crossing into a
+        // descendant fires dragleave on the parent with
+        // `relatedTarget` set to the descendant; the indicator
+        // should stay visible in that case.
+        const next = event.relatedTarget as Node | null;
+        if (next && event.currentTarget.contains(next)) return;
+        setDropTarget(null);
+      }
+    : undefined;
+
+  const handleLineDrop = reposition
+    ? (event: ReactDragEvent<HTMLDivElement>) => {
+        const raw = event.dataTransfer.getData(CHORD_DRAG_MIME);
+        if (!raw) return;
+        let payload: ChordDragPayload;
+        try {
+          payload = JSON.parse(raw) as ChordDragPayload;
+        } catch {
+          setDropTarget(null);
+          return;
+        }
+        event.preventDefault();
+        const target = findDropTargetInLine(event, line.segments);
+        setDropTarget(null);
+        if (!target) return;
+        const segLayout = segmentLayout[target.segmentIdx];
+        reposition.onChordReposition({
+          fromLine: payload.fromLine,
+          fromColumn: payload.fromColumn,
+          fromLength: payload.fromLength,
+          toLine: reposition.sourceLine,
+          toLyricsOffset: segLayout.lyricsOffsetStart + target.charOffset,
+          chord: payload.chord,
+          copy: event.altKey,
+        });
+      }
+    : undefined;
+
+  // Line-level caret marker for chord-less lines (`caret.row ===
+  // 'line'`). For chord-bearing lines this branch is unused —
+  // the marker is embedded inside the matching `.chord` /
+  // `.lyrics` sub-element below.
+  const lineMarker =
+    caret && caret.row === 'line' ? renderMarker(caret.lineRatio) : null;
   return (
-    <div key={key} className="line">
+    <div
+      className={className ?? 'line'}
+      data-source-line={dataSourceLine}
+      onDragOver={handleLineDragOver}
+      onDragLeave={handleLineDragLeave}
+      onDrop={handleLineDrop}
+    >
+      {lineMarker}
       {line.segments.map((segment, i) => {
         const chordMarker =
           caret && caret.row === 'chord' && caret.segmentIdx === i
@@ -823,26 +935,25 @@ function renderLyricsLine(
                 reposition.sourceLine,
               )
             : null;
-        const lyricsDropProps = reposition
-          ? buildLyricsDropProps(
-              reposition.onChordReposition,
-              reposition.sourceLine,
-              segLayout.lyricsOffsetStart,
-              segment.text.length,
-            )
-          : null;
+        // Drop indicator: a thin vertical bar showing the exact
+        // lyric character the chord will land on. Rendered
+        // inside the `.lyrics` span (which is `position:
+        // relative`) but stretched UPWARD with negative `top`
+        // so it spans the chord row above too — making it visible
+        // even when the user is dragging across the chord row.
+        const dropIndicator =
+          dropTarget && dropTarget.segmentIdx === i ? (
+            <span
+              className="drop-indicator"
+              aria-hidden="true"
+              style={{
+                left: `${
+                  (dropTarget.charOffset / Math.max(1, segment.text.length)) * 100
+                }%`,
+              }}
+            />
+          ) : null;
         return (
-          // chord-over-lyric layout is a *visual* arrangement
-          // of two parallel data lanes — the chord row is a
-          // performance instruction (what to play) and the lyric
-          // row is the text being sung. That's structurally
-          // different from a ruby annotation (which exists to
-          // *pronounce* the base text), so the markup stays a
-          // pair of `<span>`s in a `<span class="chord-block">`
-          // wrapper. CSS positions the chord above the lyric via
-          // `inline-flex; flex-direction: column-reverse` so the
-          // chord-row baseline is reserved before the lyric is
-          // measured.
           <span key={i} className="chord-block">
             {segment.chord ? (
               <span
@@ -863,12 +974,9 @@ function renderLyricsLine(
                 {' '}
               </span>
             ) : null}
-            <span
-              className="lyrics"
-              style={textStyle ?? undefined}
-              {...(lyricsDropProps ?? {})}
-            >
+            <span className="lyrics" style={textStyle ?? undefined}>
               {lyricsMarker}
+              {dropIndicator}
               {renderSegmentText(segment)}
             </span>
           </span>
@@ -876,6 +984,45 @@ function renderLyricsLine(
       })}
     </div>
   );
+}
+
+/**
+ * From a dragover/drop event, locate which chord-block segment
+ * the pointer is over and the character offset (in lyric
+ * coordinates) within that segment. Walks up from
+ * `event.target` to find the nearest `.chord-block`, then uses
+ * the chord-block's `.lyrics` rect — NOT the `.chord` rect — to
+ * map the pointer X to a character offset. So a drop on the
+ * chord row resolves to the lyric character vertically below
+ * it. Returns `null` when no chord-block ancestor is found
+ * (the pointer is in the gap between blocks or has left the
+ * line).
+ */
+function findDropTargetInLine(
+  event: ReactDragEvent<HTMLDivElement>,
+  segments: ChordproLyricsSegment[],
+): DropTarget | null {
+  let el = event.target as HTMLElement | null;
+  while (el && !el.classList?.contains('chord-block')) {
+    if (el === event.currentTarget) return null;
+    el = el.parentElement;
+  }
+  if (!el || !el.parentElement) return null;
+  const blocks = Array.from(el.parentElement.children).filter((c) =>
+    (c as HTMLElement).classList?.contains('chord-block'),
+  );
+  const segmentIdx = blocks.indexOf(el);
+  if (segmentIdx < 0 || segmentIdx >= segments.length) return null;
+  const lyricsEl = el.querySelector(':scope > .lyrics') as HTMLElement | null;
+  if (!lyricsEl) return null;
+  const segmentTextLength = segments[segmentIdx].text.length;
+  const charOffset = pointerToLyricCharOffset(
+    lyricsEl,
+    event.clientX,
+    event.clientY,
+    segmentTextLength,
+  );
+  return { segmentIdx, charOffset };
 }
 
 /**
@@ -2586,24 +2733,15 @@ function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {
         ctx.caretLineLength !== undefined
           ? caretPlacement(line.value, ctx.caretColumn, ctx.caretLineLength)
           : null;
-      // Decide what to pass to `pushElement`:
-      // - `chord` / `lyrics` placement → pass `null` so the
-      //   line-level marker is suppressed (the marker is
-      //   already embedded inside the matching `.chord` /
-      //   `.lyrics` sub-element by `renderLyricsLine`).
-      // - `line` placement (chord-less line) → pass the
-      //   horizontal ratio so `pushElement` injects the marker
-      //   on the `.line` element.
-      // - no placement (caret not on this line) → `undefined`,
-      //   inheriting the walker default of "no marker".
-      let lineLevelRatio: number | null | undefined;
-      if (placement === null) {
-        lineLevelRatio = undefined;
-      } else if (placement.row === 'line') {
-        lineLevelRatio = placement.lineRatio;
-      } else {
-        lineLevelRatio = null;
-      }
+      // `LyricsLine` now renders every caret-marker variant
+      // internally (chord row / lyrics row / line row), so
+      // `pushElement` must NOT inject a line-level marker on
+      // top of the one inside the component. `null` is the
+      // sentinel that says "marker is already placed, leave the
+      // element alone". `pushElement` still applies the
+      // `line--active` className and `data-source-line` attr
+      // via `cloneElement` — the component forwards those onto
+      // its root `.line` div.
       const repositionCtx = ctx.onChordReposition
         ? { sourceLine, onChordReposition: ctx.onChordReposition }
         : null;
@@ -2618,7 +2756,7 @@ function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {
           repositionCtx,
         ),
         sourceLine,
-        lineLevelRatio,
+        null,
       );
       return;
     }

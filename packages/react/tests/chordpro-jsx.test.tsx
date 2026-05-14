@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { renderChordproAst } from '../src/chordpro-jsx';
@@ -860,10 +860,145 @@ describe('renderChordproAst', () => {
     );
     const chord = container.querySelector('.chord') as HTMLElement | null;
     expect(chord?.getAttribute('draggable')).toBe('true');
-    // Placeholder (chord-less segment on chord-bearing line) is
-    // aria-hidden and NOT draggable.
-    // No-op for this test — single-segment line has no
-    // placeholder — kept as a comment to anchor the rule.
+  });
+
+  // Drop indicator: while a chord is being dragged over the
+  // line, a `<span class="drop-indicator">` should appear inside
+  // the lyrics span the pointer is over. The indicator vanishes
+  // on drop/dragleave.
+  test('drop indicator appears on dragover, disappears on drop', () => {
+    const repo = vi.fn();
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              {
+                chord: { name: 'Am', detail: null, display: null },
+                text: 'Hello',
+                spans: [],
+              },
+              {
+                chord: { name: 'G', detail: null, display: null },
+                text: 'World',
+                spans: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const { container } = render(
+      renderChordproAst(ast, { onChordReposition: repo }),
+    );
+    const line = container.querySelector('.line') as HTMLElement;
+    const blocks = container.querySelectorAll('.chord-block');
+    const targetLyrics = blocks[1].querySelector('.lyrics') as HTMLElement;
+    // Build a DataTransfer mock with our custom mime — testing-
+    // library's fireEvent passes the event data through to React.
+    // jsdom doesn't implement the `DataTransfer` constructor, so
+    // hand-roll the minimal surface React's drag handlers read:
+    // `types`, `getData`, plus `dropEffect` / `effectAllowed`
+    // setters (which we don't observe).
+    const dtStore = new Map<string, string>();
+    dtStore.set(
+      'application/x-chordsketch-chord',
+      JSON.stringify({ fromLine: 1, fromColumn: 0, fromLength: 4, chord: 'Am' }),
+    );
+    const dt = {
+      types: [...dtStore.keys()],
+      getData: (k: string) => dtStore.get(k) ?? '',
+      setData: (k: string, v: string) => dtStore.set(k, v),
+      dropEffect: 'none' as DataTransfer['dropEffect'],
+      effectAllowed: 'all' as DataTransfer['effectAllowed'],
+    };
+    // dragover on the lyrics span (bubbles to `.line`)
+    fireEvent.dragOver(targetLyrics, { dataTransfer: dt, clientX: 100, clientY: 50 });
+    // Indicator should be inside the 2nd block's `.lyrics`
+    let indicators = container.querySelectorAll('.drop-indicator');
+    expect(indicators.length).toBe(1);
+    expect(indicators[0].closest('.chord-block')).toBe(blocks[1]);
+    // drop dismisses the indicator and fires the callback
+    fireEvent.drop(targetLyrics, { dataTransfer: dt, clientX: 100, clientY: 50 });
+    indicators = container.querySelectorAll('.drop-indicator');
+    expect(indicators.length).toBe(0);
+    expect(repo).toHaveBeenCalledTimes(1);
+    // `copy` is derived from `event.altKey`; jsdom's synthetic
+    // drop event leaves it `undefined` (not `false`). Both values
+    // mean "move semantics" — assert truthiness instead of exact
+    // equality.
+    expect(repo.mock.calls[0][0]).toMatchObject({
+      fromLine: 1,
+      fromColumn: 0,
+      fromLength: 4,
+      toLine: 1,
+      chord: 'Am',
+    });
+    expect(repo.mock.calls[0][0].copy).toBeFalsy();
+  });
+
+  // Dropping on the CHORD row (not just the lyrics row) must
+  // also work — the user expects to be able to drop the dragged
+  // chord on top of another chord's row. The drop coordinate is
+  // computed from the pointer's X position mapped against the
+  // chord-block's `.lyrics` (the chord row and lyrics row sit at
+  // the same X, just different Y).
+  test('drop on chord row maps to the underlying lyrics character', () => {
+    const repo = vi.fn();
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              {
+                chord: { name: 'Am', detail: null, display: null },
+                text: 'Hello',
+                spans: [],
+              },
+              {
+                chord: { name: 'G', detail: null, display: null },
+                text: 'World',
+                spans: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const { container } = render(
+      renderChordproAst(ast, { onChordReposition: repo }),
+    );
+    const blocks = container.querySelectorAll('.chord-block');
+    const targetChord = blocks[1].querySelector('.chord') as HTMLElement;
+    // jsdom doesn't implement the `DataTransfer` constructor, so
+    // hand-roll the minimal surface React's drag handlers read:
+    // `types`, `getData`, plus `dropEffect` / `effectAllowed`
+    // setters (which we don't observe).
+    const dtStore = new Map<string, string>();
+    dtStore.set(
+      'application/x-chordsketch-chord',
+      JSON.stringify({ fromLine: 1, fromColumn: 0, fromLength: 4, chord: 'Am' }),
+    );
+    const dt = {
+      types: [...dtStore.keys()],
+      getData: (k: string) => dtStore.get(k) ?? '',
+      setData: (k: string, v: string) => dtStore.set(k, v),
+      dropEffect: 'none' as DataTransfer['dropEffect'],
+      effectAllowed: 'all' as DataTransfer['effectAllowed'],
+    };
+    fireEvent.dragOver(targetChord, { dataTransfer: dt, clientX: 100, clientY: 5 });
+    // Indicator should still appear inside the matching lyrics
+    // span — the chord-row hit walks down to the .lyrics of the
+    // same chord-block.
+    const indicator = container.querySelector('.drop-indicator');
+    expect(indicator).not.toBeNull();
+    expect(indicator?.closest('.chord-block')).toBe(blocks[1]);
+    fireEvent.drop(targetChord, { dataTransfer: dt, clientX: 100, clientY: 5 });
+    expect(repo).toHaveBeenCalledTimes(1);
   });
 
   // Multi-segment chord-bearing line — the marker must land in
