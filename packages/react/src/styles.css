@@ -796,24 +796,43 @@
      whitespace from default `<span>` line-height inheritance. */
   display: inline-block;
 }
-/* Drop-target highlight shown while a chord is being dragged
-   over a specific lyric character. A dashed crimson outline
-   around the targeted character makes it unambiguous WHICH
-   character the chord will land above — far more legible than
-   the previous thin vertical bar. `outline` rather than
-   `border` keeps the character's intrinsic width and baseline
-   unchanged: no reflow as the drop target moves. */
-.chordsketch-sheet__content .lyric-char--drop-target {
+/* Drop-target highlight shown while a chord is being dragged.
+   Two-layer affordance:
+
+   1. **Whole-chord-block frame** (`.chord-block--drop-target`).
+      A dashed crimson outline encloses the chord row PLUS the
+      entire lyric row of the targeted segment. Because the
+      user almost always drags a chord horizontally (their
+      pointer is in the chord row), the block-wide outline
+      stays visible without having to look down at the lyric
+      row.
+   2. **Per-character inner highlight** (`.lyric-char--drop-
+      target`). A subtler tint + dashed underline on the
+      specific character the chord will land above, so the
+      user still sees precise character-level placement.
+
+   `outline` (not `border`) keeps the segment's intrinsic
+   width and the character's baseline unchanged: no reflow as
+   the drop target moves. */
+.chordsketch-sheet__content .chord-block--drop-target {
   outline: 1px dashed var(--cs-crimson-500, #bd1642);
-  outline-offset: 1px;
-  border-radius: 2px;
-  background-color: rgba(189, 22, 66, 0.06);
+  outline-offset: 2px;
+  border-radius: 3px;
+  background-color: rgba(189, 22, 66, 0.04);
+}
+.chordsketch-sheet__content .lyric-char--drop-target {
+  /* Inset background tint + dashed bottom line — picks out the
+     specific char inside the larger block-wide frame without
+     adding a second nested rectangle that would clutter the
+     view. */
+  background-color: rgba(189, 22, 66, 0.14);
+  border-bottom: 1px dashed var(--cs-crimson-500, #bd1642);
+  border-radius: 1px;
 }
 /* End-of-segment drop-target sentinel: a zero-width span shown
    after the last lyric character when the drop offset is past
-   the segment's text. Width is sourced from `outline-offset`
-   alone so the dashed box renders as a thin vertical sliver
-   rather than disappearing. */
+   the segment's text. Width comes from `min-width` so the
+   highlight stays visible. */
 .chordsketch-sheet__content .lyric-char--drop-target-end {
   display: inline-block;
   min-width: 0.4em;

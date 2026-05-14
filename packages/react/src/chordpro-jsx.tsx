@@ -1056,8 +1056,12 @@ function LyricsLine({
           dropTarget && dropTarget.segmentIdx === i
             ? dropTarget.charOffset
             : null;
+        const blockClass =
+          dropCharOffset !== null
+            ? 'chord-block chord-block--drop-target'
+            : 'chord-block';
         return (
-          <span key={i} className="chord-block">
+          <span key={i} className={blockClass}>
             {segment.chord ? (
               <span
                 className="chord"
