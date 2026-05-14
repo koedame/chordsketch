@@ -812,32 +812,37 @@
      tall enclosure. */
 .chordsketch-sheet__content .lyric-char--drop-target {
   position: relative;
-  outline: 1px dashed var(--cs-crimson-500, #bd1642);
-  outline-offset: 1px;
-  border-radius: 2px;
-  background-color: rgba(189, 22, 66, 0.08);
+  /* Wide outline-offset so the dashed frame breathes around
+     the character — for narrow glyphs (i, l, t, ., etc.) a
+     tight offset gave a box only ~7px wide, indistinguishable
+     from a caret marker. 4px on each side guarantees the
+     frame is always visibly wider than the caret bar even on
+     the narrowest character. */
+  outline: 1.5px dashed var(--cs-crimson-500, #bd1642);
+  outline-offset: 4px;
+  border-radius: 3px;
+  background-color: rgba(189, 22, 66, 0.1);
 }
 .chordsketch-sheet__content .lyric-char--drop-target::before {
   content: '';
   position: absolute;
   pointer-events: none;
-  /* Sides match the char's outline (1px outline + 1px offset =
-     2px) so the two boxes line up vertically. */
-  left: -2px;
-  right: -2px;
+  /* Match the wider outline-offset on the char below
+     (1.5px outline + 4px offset = 5.5px on each side). */
+  left: -5px;
+  right: -5px;
   /* Sit immediately above the char's outline and extend up to
      cover the chord row. The chord-block layout is `flex-
-     direction: column` with chord on top and lyrics on bottom;
-     the chord row is sized by `.chord { font-size: 1rem;
-     line-height: 1; min-height: 1em }` = ~16px. `1.4em` against
-     the lyric font (1.125rem = 18px) ≈ 25px, comfortably
-     covering the chord row plus a small margin. */
-  bottom: calc(100% + 1px);
-  height: 1.4em;
-  border: 1px dashed var(--cs-crimson-500, #bd1642);
+     direction: column` with chord on top and lyrics on bottom.
+     `1.8em` against the lyric font (1.125rem = 18px) ≈ 32px,
+     enough to fully cover the chord row's ~30px line box plus
+     a small margin. */
+  bottom: calc(100% + 4px);
+  height: 1.8em;
+  border: 1.5px dashed var(--cs-crimson-500, #bd1642);
   border-bottom: 0;
-  border-radius: 2px 2px 0 0;
-  background-color: rgba(189, 22, 66, 0.08);
+  border-radius: 3px 3px 0 0;
+  background-color: rgba(189, 22, 66, 0.1);
 }
 /* End-of-segment drop-target sentinel: a zero-width span shown
    after the last lyric character when the drop offset is past
