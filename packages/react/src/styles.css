@@ -812,37 +812,36 @@
      tall enclosure. */
 .chordsketch-sheet__content .lyric-char--drop-target {
   position: relative;
-  /* Wide outline-offset so the dashed frame breathes around
-     the character — for narrow glyphs (i, l, t, ., etc.) a
-     tight offset gave a box only ~7px wide, indistinguishable
-     from a caret marker. 4px on each side guarantees the
-     frame is always visibly wider than the caret bar even on
-     the narrowest character. */
-  outline: 1.5px dashed var(--cs-crimson-500, #bd1642);
-  outline-offset: 4px;
+  /* Solid background tint is the only highlight — the
+     contrast against the surrounding crimson-on-cream text is
+     strong enough that adding a dashed frame on top reads as
+     decoration noise. `padding` on the inline-block char adds
+     visible breathing room around narrow glyphs without
+     reflowing neighbours (negative margins absorb the padding
+     out of the inline flow). */
+  padding: 1px 3px;
+  margin: 0 -3px;
   border-radius: 3px;
-  background-color: rgba(189, 22, 66, 0.1);
+  background-color: rgba(189, 22, 66, 0.18);
 }
 .chordsketch-sheet__content .lyric-char--drop-target::before {
   content: '';
   position: absolute;
   pointer-events: none;
-  /* Match the wider outline-offset on the char below
-     (1.5px outline + 4px offset = 5.5px on each side). */
-  left: -5px;
-  right: -5px;
-  /* Sit immediately above the char's outline and extend up to
-     cover the chord row. The chord-block layout is `flex-
-     direction: column` with chord on top and lyrics on bottom.
-     `1.8em` against the lyric font (1.125rem = 18px) ≈ 32px,
-     enough to fully cover the chord row's ~30px line box plus
-     a small margin. */
-  bottom: calc(100% + 4px);
+  /* Mirror the char's padding-inflated horizontal extent. */
+  left: 0;
+  right: 0;
+  /* Sit immediately above the char and extend up through the
+     chord row. The chord-block layout is `flex-direction:
+     column` with chord on top and lyrics on bottom. `1.8em`
+     against the lyric font (1.125rem ≈ 18px) ≈ 32px, enough
+     to fully cover the chord row's ~30px line box plus a
+     small margin so the tint reads as a continuous vertical
+     column from the chord row through the lyric character. */
+  bottom: 100%;
   height: 1.8em;
-  border: 1.5px dashed var(--cs-crimson-500, #bd1642);
-  border-bottom: 0;
   border-radius: 3px 3px 0 0;
-  background-color: rgba(189, 22, 66, 0.1);
+  background-color: rgba(189, 22, 66, 0.18);
 }
 /* End-of-segment drop-target sentinel: a zero-width span shown
    after the last lyric character when the drop offset is past
