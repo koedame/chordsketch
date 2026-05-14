@@ -149,6 +149,18 @@ describe('<KeySignatureGlyph>', () => {
     const { container } = render(<KeySignatureGlyph keyName="H" />);
     expect(container.querySelector('svg')?.getAttribute('aria-label')).toBe('Key H');
   });
+
+  // Sharps sit above the top staff line at y≈1.4 and the clef
+  // tail descends to y≈20.9. The viewBox MUST start at y=1 (not
+  // y=0) so the visible content range is symmetric about the
+  // viewBox center — otherwise the staff drifts visually high
+  // inside a `.meta-inline` chip whose flex `align-items: center`
+  // centers the SVG bounding box.
+  test('viewBox y origin starts at 1, height 20 — content visually centered', () => {
+    const { container } = render(<KeySignatureGlyph keyName="G" />);
+    const svg = container.querySelector('svg.music-glyph--key');
+    expect(svg?.getAttribute('viewBox')).toBe('0 1 18 20');
+  });
 });
 
 describe('<MetronomeGlyph>', () => {
@@ -206,6 +218,19 @@ describe('<MetronomeGlyph>', () => {
     const rod = svg?.querySelector('.music-glyph--metronome__pendulum line');
     expect(rod?.getAttribute('y1')).toBe('19');
     expect(rod?.getAttribute('y2')).toBe('7');
+  });
+
+  // The triangular body occupies y=5..21 in user units and the
+  // pendulum hardware fits inside that range. The viewBox MUST
+  // be vertically tight around those bounds (`viewBox="0 4 18
+  // 18"`) so the visual content center coincides with the SVG
+  // bounding-box center — otherwise `align-items: center` on a
+  // `.meta-inline` chip centers the empty viewBox padding rather
+  // than the metronome itself, drifting the icon below the text.
+  test('viewBox is vertically tight around the visible metronome body', () => {
+    const { container } = render(<MetronomeGlyph bpm={120} />);
+    const svg = container.querySelector('svg.music-glyph--metronome');
+    expect(svg?.getAttribute('viewBox')).toBe('0 4 18 18');
   });
 
   test('aria-label exposes the BPM value', () => {

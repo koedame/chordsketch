@@ -149,9 +149,30 @@ pub fn key_signature_for(key: &str) -> Option<(usize, KeySigType)> {
 pub fn key_signature_svg(key: &str) -> String {
     let sig = key_signature_for(key);
     let accidental_count = sig.map(|(c, _)| c).unwrap_or(0);
-    let base_w: f32 = 28.0;
-    let w: f32 = base_w + (accidental_count as f32) * 5.0;
-    let h: f32 = 24.0;
+    // Compact layout (sister-site to
+    // `packages/react/src/music-glyphs.tsx`): the clef occupies
+    // x=1..12, accidentals start at x=14 with 4-unit spacing plus
+    // a 3-unit tail. The previous 5-unit spacing + base-width 28
+    // left ~19 user units of empty staff on the right of a
+    // 1-sharp key, which made the chip strip horizontally
+    // bloated.
+    let accidental_start: f32 = 14.0;
+    let accidental_spacing: f32 = 4.0;
+    let tail_right: f32 = 3.0;
+    let w: f32 = if accidental_count > 0 {
+        let calc =
+            accidental_start + ((accidental_count as f32 - 1.0) * accidental_spacing) + tail_right;
+        if calc < 18.0 { 18.0 } else { calc }
+    } else {
+        18.0
+    };
+    // Visual content (sharps above the staff at y≈1.4, clef tail
+    // at y≈20.9) is centered around y≈11. Trim the viewBox to
+    // span y=1..21 so `align-items: center` on the `.meta-inline`
+    // chip lines the staff up visually with the text rather than
+    // with the SVG's empty viewBox padding.
+    let vb_top: f32 = 1.0;
+    let h: f32 = 20.0;
     let top: f32 = 4.0;
     let line_gap: f32 = 3.0;
     let aria = match sig {
@@ -168,9 +189,10 @@ pub fn key_signature_svg(key: &str) -> String {
     let mut s = String::with_capacity(512);
     let _ = write!(
         s,
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {w} {h}\" \
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 {vb_top} {w} {h}\" \
          width=\"{w}\" height=\"{h}\" class=\"music-glyph music-glyph--key\" \
          role=\"img\" aria-label=\"{aria}\">",
+        vb_top = vb_top,
         w = w,
         h = h,
         aria = chordsketch_chordpro::escape::escape_xml(&aria),
@@ -202,7 +224,7 @@ pub fn key_signature_svg(key: &str) -> String {
                 FLAT_ORDER
             };
             for (i, &(_, y_step)) in order.iter().take(count).enumerate() {
-                let cx = 14.0 + (i as f32) * 5.0;
+                let cx = accidental_start + (i as f32) * accidental_spacing;
                 let cy = top + y_step * line_gap;
                 if sig_type == KeySigType::Sharp {
                     write_sharp(&mut s, cx, cy);
@@ -308,8 +330,8 @@ pub fn metronome_svg(bpm_raw: &str) -> String {
     let mut s = String::with_capacity(512);
     let _ = write!(
         s,
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 18 22\" \
-         width=\"18\" height=\"22\" class=\"music-glyph music-glyph--metronome\" \
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 4 18 18\" \
+         width=\"18\" height=\"18\" class=\"music-glyph music-glyph--metronome\" \
          style=\"--cs-metronome-period:{:.3}s\" role=\"img\" aria-label=\"{}\">\
          <path d=\"M 3 21 L 15 21 L 12.5 5 L 5.5 5 Z\" fill=\"none\" \
          stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linejoin=\"round\"/>\

@@ -222,7 +222,15 @@ export function KeySignatureGlyph({
     accidentalCount > 0
       ? Math.max(18, accidentalStart + (accidentalCount - 1) * accidentalSpacing + tailRight)
       : 18;
-  const h = 24;
+  // Visual content extends from y≈1.4 (top of an accidental above
+  // the staff) to y≈20.9 (bottom of the clef path, including the
+  // stroke cap). Trimming the viewBox to those bounds keeps the
+  // visual center of the staff coincident with the SVG bounding-
+  // box center, so `align-items: center` inside `.meta-inline`
+  // matches what the eye sees rather than what the underlying
+  // viewBox padding implies.
+  const vbTop = 1;
+  const h = 20;
   const order = sig?.type === 'flat' ? FLAT_ORDER : SHARP_ORDER;
   // Top staff line at y=4, line spacing 3, so lines are at 4,7,10,13,16.
   const top = 4;
@@ -231,7 +239,7 @@ export function KeySignatureGlyph({
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox={`0 0 ${w} ${h}`}
+      viewBox={`0 ${vbTop} ${w} ${h}`}
       width={w}
       height={h}
       className={['music-glyph', 'music-glyph--key', className].filter(Boolean).join(' ')}
@@ -655,12 +663,19 @@ export function MetronomeGlyph({
   // through the body's tip (y=5) and beyond (y=2) so the upper
   // portion of the rod and the weight bead are clearly visible
   // sweeping across the top of the icon.
+  // Visual content sits between y≈4.6 (top of triangular body
+  // including its stroke cap) and y≈21.4 (base + stroke cap),
+  // centered at y=13. Trim the viewBox to span y=4..22 so the
+  // visual center coincides with the viewBox center — otherwise
+  // the default `0 0 18 22` leaves 4 units of empty space at the
+  // top and the icon visually drifts below the text inside the
+  // `.meta-inline` chip.
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 18 22"
+      viewBox="0 4 18 18"
       width={18}
-      height={22}
+      height={18}
       className={['music-glyph', 'music-glyph--metronome', className].filter(Boolean).join(' ')}
       style={cssVars}
       role="img"

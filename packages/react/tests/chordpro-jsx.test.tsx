@@ -861,6 +861,49 @@ describe('renderChordproAst', () => {
     expect(h1?.getAttribute('data-source-line')).toBe('1');
   });
 
+  // `{key}` / `{tempo}` / `{time}` render as narrow `.meta-inline`
+  // chips whose visual width has no relationship to the source
+  // line's character count. A `caret-marker` positioned at
+  // `left: ratio%` inside the chip lands somewhere meaningless —
+  // typically pinned to the chip's right edge for any caret
+  // column past the chip's narrow span. The walker must skip the
+  // in-chip marker; the `line--active` background highlight
+  // alone is the affordance for "caret is on this directive".
+  test('inline meta-chip skips the in-chip caret-marker but keeps line--active', () => {
+    const cases: Array<{ name: 'key' | 'tempo' | 'time'; value: string; selector: 'meta-inline--key' | 'meta-inline--tempo' | 'meta-inline--time' }> = [
+      { name: 'key', value: 'G', selector: 'meta-inline--key' },
+      { name: 'tempo', value: '80', selector: 'meta-inline--tempo' },
+      { name: 'time', value: '4/4', selector: 'meta-inline--time' },
+    ];
+    for (const c of cases) {
+      const ast: ChordproSong = {
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: c.name,
+              value: c.value,
+              kind: { tag: c.name },
+              selector: null,
+            },
+          },
+        ],
+      };
+      const { container } = render(
+        renderChordproAst(ast, {
+          activeSourceLine: 1,
+          caretColumn: 10,
+          caretLineLength: 10,
+        }),
+      );
+      const chip = container.querySelector(`.${c.selector}`);
+      expect(chip).not.toBeNull();
+      expect(chip?.classList.contains('line--active')).toBe(true);
+      expect(chip?.querySelector('.caret-marker')).toBeNull();
+    }
+  });
+
   test('renders a chord+lyric pair as `.chord-block`', () => {
     const { container } = render(
       renderChordproAst({

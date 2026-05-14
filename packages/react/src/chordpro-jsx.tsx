@@ -1865,7 +1865,21 @@ function pushElement(
     // walker-default `ctx.caretRatio` so the marker lands at the
     // rendered position, not the raw source column.
     const effectiveRatio = caretRatioOverride ?? ctx.caretRatio;
-    const shouldInjectMarker = isActive && effectiveRatio !== undefined;
+    // Skip the in-element caret marker for narrow inline chips
+    // (`{key}` / `{tempo}` / `{time}` `.meta-inline` markers).
+    // Their visual width has no relationship to the source line's
+    // character count, so a `left: ratio%` positioned inside the
+    // chip lands somewhere meaningless — typically pinned to the
+    // chip's right edge for any caret column past the chip's
+    // narrow span. The `line--active` background highlight on the
+    // chip itself is enough to signal which line the editor caret
+    // is on; the in-element marker is reserved for full-width
+    // elements (lyrics rows, comments, grid bars) where chip-
+    // relative positioning IS meaningful.
+    const classStr = typeof props.className === 'string' ? props.className : '';
+    const isInlineChip = /\bmeta-inline\b/.test(classStr);
+    const shouldInjectMarker =
+      isActive && effectiveRatio !== undefined && !isInlineChip;
     decorated = cloneElement(
       element,
       {
