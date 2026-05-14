@@ -825,8 +825,12 @@
      neighbours — drag jitter is eliminated.
      The 3px tint extension on each side widens the visible
      column for narrow glyphs (`i`, `l`, `t`, `.`) so they
-     read as a column rather than a caret-sized stripe. */
-  border-radius: 3px;
+     read as a column rather than a caret-sized stripe.
+     Top corners are FLAT so the lyric-row tint meets the
+     `::before` upper extension's flat bottom edge seamlessly;
+     otherwise the two rounded boundaries leave a visible
+     pinch between the chord row and the lyric row. */
+  border-radius: 0 0 3px 3px;
   background-color: rgba(189, 22, 66, 0.18);
   box-shadow:
     -3px 0 0 0 rgba(189, 22, 66, 0.18),
