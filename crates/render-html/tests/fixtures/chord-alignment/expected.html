@@ -23,8 +23,8 @@ h2 { font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif; font-wei
 .music-glyph--time { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; font-family: "Source Serif Pro", serif; font-weight: 700; font-size: 1.1em; letter-spacing: 0; }
 .music-glyph--time__num, .music-glyph--time__den { display: block; line-height: 0.9; font-feature-settings: "tnum" 1; }
 .music-glyph--time__bar { display: block; width: 0.9em; height: 1.5px; margin: 0.05em 0; background-color: currentColor; border-radius: 1px; }
-.music-glyph--metronome__pendulum { transform-origin: 9px 19px; animation: cs-metronome-swing var(--cs-metronome-period, 1s) cubic-bezier(0.42, 0, 0.58, 1) infinite alternate; }
-@keyframes cs-metronome-swing { from { transform: rotate(-28deg); } to { transform: rotate(28deg); } }
+.music-glyph--metronome__pendulum { transform-origin: 9px 19px; animation: cs-metronome-swing var(--cs-metronome-period, 1s) cubic-bezier(0.7, 0, 0.3, 1) infinite alternate; }
+@keyframes cs-metronome-swing { 0%, 12% { transform: rotate(-28deg); } 88%, 100% { transform: rotate(28deg); } }
 @media (prefers-reduced-motion: reduce) { .music-glyph--metronome__pendulum { animation: none; transform: rotate(0deg); } }
 .line { display: flex; flex-wrap: wrap; margin: 0.1em 0; }
 .chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }

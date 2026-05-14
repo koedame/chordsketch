@@ -434,24 +434,30 @@
      pendulum, wiper-style sweep, distinct from a hanging-clock
      pendulum's top-pivot. */
   transform-origin: 9px 19px;
-  /* `cubic-bezier(0.42, 0, 0.58, 1)` is a stronger ease-in-out
-     than the default named keyword — the bob accelerates harder
-     through center and lingers longer at each extreme, which
-     reads more like a mechanical Wittner metronome's
-     audible "tock... tock... tock" rhythm than a smooth
-     sinusoidal swing. */
-  animation: cs-metronome-swing var(--cs-metronome-period, 1s) cubic-bezier(0.42, 0, 0.58, 1) infinite alternate;
+  /* Aggressive ease-in-out (`cubic-bezier(0.7, 0, 0.3, 1)`) +
+     explicit dwell at each extreme via the 0/12% and 88/100%
+     keyframe stops below. The bob holds at each side for ~12%
+     of the half-cycle, snaps quickly through center, holds
+     again at the opposite extreme — matching a mechanical
+     Wittner metronome's audible "tock … tock … tock" rhythm
+     where the click happens AT the extreme, not in the middle
+     of a smooth sinusoidal swing. */
+  animation: cs-metronome-swing var(--cs-metronome-period, 1s) cubic-bezier(0.7, 0, 0.3, 1)
+    infinite alternate;
 }
 @keyframes cs-metronome-swing {
-  /* Start tilted left, end tilted right — the `alternate`
-     animation-direction reverses on the return leg so the
-     bead traces a back-and-forth swing. The ±28° amplitude is
-     wider than the previous 18° to make the sweep clearly
-     visible at the 18×22-px icon size. */
-  from {
+  /* Dwell at the left extreme for the first 12% of the
+     half-cycle, snap to the right extreme by 88%, dwell there
+     for the remaining 12%. With `animation-direction:
+     alternate` the keyframe plays in reverse on the return
+     leg, so each extreme actually carries a ~24% total dwell
+     (12% on the way in + 12% on the way out). */
+  0%,
+  12% {
     transform: rotate(-28deg);
   }
-  to {
+  88%,
+  100% {
     transform: rotate(28deg);
   }
 }
