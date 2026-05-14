@@ -684,14 +684,18 @@ export function MetronomeGlyph({
           x1={9}
           y1={19}
           x2={9}
-          y2={2}
+          y2={5}
           stroke="currentColor"
           strokeWidth={0.9}
           strokeLinecap="round"
         />
-        {/* Weight bead near the TOP of the rod (a real
-            metronome's adjustable slider). */}
-        <circle cx={9} cy={6} r={1.1} fill="currentColor" />
+        {/* Weight bead in the upper third of the rod (a real
+            metronome's adjustable slider). Placed at y=8 so the
+            bead stays INSIDE the triangular body during the
+            ±28° swing — at this radius the horizontal arc
+            (≈5.2 user units) fits inside the body's interior
+            half-width at the corresponding height. */}
+        <circle cx={9} cy={8} r={1.1} fill="currentColor" />
       </g>
     </svg>
   );
