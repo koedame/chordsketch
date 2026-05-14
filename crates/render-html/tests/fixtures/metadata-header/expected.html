@@ -15,10 +15,13 @@ h2 { font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif; font-wei
 .meta--params { display: flex; flex-wrap: wrap; gap: 0.4em; margin: 0.2em 0 0.8em; }
 .meta__chip { display: inline-block; padding: 0.15em 0.6em; border: 1px solid #D4D1D6; border-radius: 4px; background-color: #FAFAFA; color: #2A262E; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.8125rem; font-weight: 500; line-height: 1.4; font-feature-settings: "tnum" 1; }
 .meta--supplementary { font-size: 0.75rem; color: #A8A4AD; margin-bottom: 0.4em; }
-.meta-inline { display: inline-flex; align-items: center; gap: 0.35em; margin: 0.4em 0; padding: 0.15em 0.55em; border-radius: 3px; background-color: #FAF7F8; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.8125rem; color: #2A262E; line-height: 1.5; font-feature-settings: "tnum" 1; }
-.meta-inline__label { color: #67646D; font-weight: 500; }
-.meta-inline__value { color: #1A1718; font-weight: 600; }
-.meta-inline__marking { color: #67646D; font-weight: 400; font-style: italic; }
+.meta-inline { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0.15em 0.3em 0.15em 0; padding: 0 0.5rem; min-height: 1.6rem; border-radius: 2px; background-color: #F6F4F7; border: 1px solid #E8E6EA; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.75rem; color: #44424A; line-height: 1.2; letter-spacing: 0.02em; font-feature-settings: "tnum" 1; vertical-align: middle; }
+.meta-inline__label { color: #8A8790; font-weight: 500; }
+.meta-inline__value { color: #0A0A0B; font-weight: 600; }
+.meta-inline__marking { color: #8A8790; font-weight: 400; font-style: italic; }
+.meta-inline .music-glyph { display: inline-flex; align-items: center; flex-shrink: 0; color: #0A0A0B; height: 1.1em; }
+.meta-inline svg.music-glyph { height: 1.1em; width: auto; display: block; }
+.meta-inline span.music-glyph--time { height: 1.4em; font-size: 0.85em; }
 .music-glyph { display: inline-block; flex-shrink: 0; vertical-align: middle; color: #1A1718; }
 .music-glyph--time { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; font-family: "Source Serif Pro", serif; font-weight: 700; font-size: 1.1em; letter-spacing: 0; }
 .music-glyph--time__num, .music-glyph--time__den { display: block; line-height: 0.9; font-feature-settings: "tnum" 1; }
@@ -53,7 +56,7 @@ img { max-width: 100%; height: auto; }
 <p class="meta meta--attribution"><span class="meta__label" aria-hidden="true">by </span>John Newton</p>
 <p class="meta meta--params"><span class="meta__chip">Capo 2</span></p>
 </header>
-<p class="meta-inline meta-inline--key"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 33 24" width="33" height="24" class="music-glyph music-glyph--key" role="img" aria-label="Key G (1 sharp)"><line x1="1" x2="32" y1="4" y2="4" stroke="currentColor" stroke-width="0.6"/><line x1="1" x2="32" y1="7" y2="7" stroke="currentColor" stroke-width="0.6"/><line x1="1" x2="32" y1="10" y2="10" stroke="currentColor" stroke-width="0.6"/><line x1="1" x2="32" y1="13" y2="13" stroke="currentColor" stroke-width="0.6"/><line x1="1" x2="32" y1="16" y2="16" stroke="currentColor" stroke-width="0.6"/><path d="M9 19 C 9 21, 5.5 21, 5.5 18.5 C 5.5 16, 9 16, 9 14 C 9 11, 4.5 9, 4.5 7 C 4.5 4, 8.5 2.5, 9.5 5 C 10.5 8, 6 9.5, 6 13 C 6 16, 10 16, 10 13.5" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><g stroke="currentColor" stroke-width="0.55" stroke-linecap="round"><line x1="12.9" y1="1.8" x2="12.9" y2="6.6"/><line x1="15.1" y1="1.4" x2="15.1" y2="6.2"/><line x1="12.599999" y1="3.2" x2="15.400001" y2="2.6"/><line x1="12.599999" y1="5.4" x2="15.400001" y2="4.8"/></g></svg><span class="meta-inline__label">Key:</span> <span class="meta-inline__value">G</span></p>
+<span class="meta-inline meta-inline--key"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 33 24" width="33" height="24" class="music-glyph music-glyph--key" role="img" aria-label="Key G (1 sharp)"><line x1="1" x2="32" y1="4" y2="4" stroke="currentColor" stroke-width="0.6"/><line x1="1" x2="32" y1="7" y2="7" stroke="currentColor" stroke-width="0.6"/><line x1="1" x2="32" y1="10" y2="10" stroke="currentColor" stroke-width="0.6"/><line x1="1" x2="32" y1="13" y2="13" stroke="currentColor" stroke-width="0.6"/><line x1="1" x2="32" y1="16" y2="16" stroke="currentColor" stroke-width="0.6"/><path d="M9 19 C 9 21, 5.5 21, 5.5 18.5 C 5.5 16, 9 16, 9 14 C 9 11, 4.5 9, 4.5 7 C 4.5 4, 8.5 2.5, 9.5 5 C 10.5 8, 6 9.5, 6 13 C 6 16, 10 16, 10 13.5" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><g stroke="currentColor" stroke-width="0.55" stroke-linecap="round"><line x1="12.9" y1="1.8" x2="12.9" y2="6.6"/><line x1="15.1" y1="1.4" x2="15.1" y2="6.2"/><line x1="12.599999" y1="3.2" x2="15.400001" y2="2.6"/><line x1="12.599999" y1="5.4" x2="15.400001" y2="4.8"/></g></svg><span class="meta-inline__label">Key:</span> <span class="meta-inline__value">G</span></span>
 <div class="empty-line" aria-hidden="true"></div>
 <div class="line"><span class="chord-block"><span class="chord">G</span><span class="lyrics">Amazing grace</span></span></div>
 </article>

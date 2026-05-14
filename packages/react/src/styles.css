@@ -319,26 +319,43 @@
    a mid-song key / tempo / meter change happens. Sister-site
    to `crates/render-html/src/lib.rs`'s embedded
    `.meta-inline` rule. */
+/* Inline `[Pos]` metadata markers — laid out as tag-style
+   chips that flow inline so consecutive `{key}` / `{tempo}` /
+   `{time}` directives sit on the same row instead of taking a
+   full line each.
+   The chip shape mirrors the design-system `.badge` (see
+   `design-system/preview/components-badges.html`): a small
+   inline-flex pill with `--sp-1` gap, `--sp-2` horizontal
+   padding, `--r-1` radius, monospace typography, and a uniform
+   target height so the three marker variants line up
+   horizontally without size drift. Icons inside the chip are
+   capped at 1.1em tall via `.meta-inline__glyph` so they don't
+   stretch the chip vertically when the SVG has its own
+   intrinsic dimensions. */
 .chordsketch-sheet__content .meta-inline {
   display: inline-flex;
   align-items: center;
-  gap: 0.35em;
-  margin: 0.4em 0;
-  padding: 0.15em 0.55em;
-  border-radius: 3px;
-  background-color: var(--cs-accent-tint, #faf7f8);
+  gap: var(--cs-sp-1, 0.25rem);
+  margin: 0.15em 0.3em 0.15em 0;
+  padding: 0 var(--cs-sp-2, 0.5rem);
+  min-height: 1.6rem;
+  border-radius: var(--cs-r-1, 2px);
+  background-color: var(--cs-ink-100, #f6f4f7);
+  border: 1px solid var(--cs-border, #e8e6ea);
   font-family: var(--cs-font-mono, 'JetBrains Mono', ui-monospace, monospace);
-  font-size: 0.8125rem;
-  color: var(--cs-ink-700, #2a262e);
-  line-height: 1.5;
+  font-size: var(--cs-fs-12, 0.75rem);
+  color: var(--cs-ink-700, #44424a);
+  line-height: 1.2;
+  letter-spacing: 0.02em;
   font-feature-settings: 'tnum' 1;
+  vertical-align: middle;
 }
 .chordsketch-sheet__content .meta-inline__label {
-  color: var(--cs-ink-500, #67646d);
+  color: var(--cs-ink-500, #8a8790);
   font-weight: 500;
 }
 .chordsketch-sheet__content .meta-inline__value {
-  color: var(--cs-ink-900, #1a1718);
+  color: var(--cs-ink-1000, #0a0a0b);
   font-weight: 600;
 }
 /* Italian tempo marking shown next to the BPM ("Allegro" etc.) —
@@ -369,13 +386,32 @@
 /* Music-notation glyph slot inside a `.meta-inline` marker —
    key signature, metronome, or stacked time signature. The
    glyph sits to the left of the label / value pair and
-   inherits the marker's text color so accidentals / pendulum
-   strokes stay legible on tinted backgrounds. */
+   inherits the marker's text color.
+   Constrain height to 1.1em so all three glyph types
+   (key-signature staff, metronome SVG, stacked time-signature
+   digits) render at the same visual height inside the chip —
+   the SVG `width`/`height` attributes set by the React
+   components are overridden by these rules so the chip stays
+   the same shape regardless of which marker variant landed
+   inside it. */
 .chordsketch-sheet__content .meta-inline__glyph {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
-  vertical-align: middle;
-  color: var(--cs-ink-900, #1a1718);
+  color: var(--cs-ink-1000, #0a0a0b);
+  height: 1.1em;
+}
+.chordsketch-sheet__content .meta-inline__glyph svg {
+  height: 100%;
+  width: auto;
+  display: block;
+}
+/* Time-signature glyph is a span of stacked digits, not an
+   SVG — give it a matching height so the chip line-height
+   matches the SVG variants. */
+.chordsketch-sheet__content span.meta-inline__glyph.music-glyph--time {
+  height: 1.4em;
+  font-size: 0.85em;
 }
 
 /* Stacked time-signature numerator / denominator typography.

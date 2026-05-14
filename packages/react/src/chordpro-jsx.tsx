@@ -2060,7 +2060,7 @@ function handleDirective(
     if (showSounding && ctx.soundingKey != null) {
       pushElement(
         ctx,
-        <p key={key} className="meta-inline meta-inline--key meta-inline--key-pair">
+        <span key={key} className="meta-inline meta-inline--key meta-inline--key-pair">
           <span className="meta-inline__group">
             <KeySignatureGlyph keyName={keyName} className="meta-inline__glyph" />
             <span className="meta-inline__label">Original:</span>{' '}
@@ -2076,18 +2076,18 @@ function handleDirective(
               {unicodeAccidentals(ctx.soundingKey)}
             </span>
           </span>
-        </p>,
+        </span>,
         key, // source-line for `line--active` decoration
       );
       return;
     }
     pushElement(
       ctx,
-      <p key={key} className="meta-inline meta-inline--key">
+      <span key={key} className="meta-inline meta-inline--key">
         <KeySignatureGlyph keyName={keyName} className="meta-inline__glyph" />
         <span className="meta-inline__label">Key:</span>{' '}
         <span className="meta-inline__value">{unicodeAccidentals(keyName)}</span>
-      </p>,
+      </span>,
       key, // source-line for `line--active` decoration
     );
     return;
@@ -2105,7 +2105,7 @@ function handleDirective(
       // Italian tempo marking (Allegro, Andante, …) we append
       // it in parens so the reader sees both numeric and
       // descriptive tempos at a glance.
-      <p key={key} className="meta-inline meta-inline--tempo">
+      <span key={key} className="meta-inline meta-inline--tempo">
         <MetronomeGlyph bpm={safeBpm} className="meta-inline__glyph" />
         <span className="meta-inline__value">
           {bpmRaw} BPM
@@ -2113,7 +2113,7 @@ function handleDirective(
             <span className="meta-inline__marking">{` (${tempoMarkingFor(safeBpm)})`}</span>
           ) : null}
         </span>
-      </p>,
+      </span>,
       key, // source-line for `line--active` decoration
     );
     return;
@@ -2122,10 +2122,10 @@ function handleDirective(
     const timeValue = directive.value.trim();
     pushElement(
       ctx,
-      <p key={key} className="meta-inline meta-inline--time">
+      <span key={key} className="meta-inline meta-inline--time">
         <span className="meta-inline__label">Time:</span>{' '}
         <TimeSignatureGlyph value={timeValue} className="meta-inline__glyph" />
-      </p>,
+      </span>,
       key, // source-line for `line--active` decoration
     );
     return;
