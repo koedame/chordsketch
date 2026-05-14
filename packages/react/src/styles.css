@@ -810,7 +810,18 @@
      cover the chord row. The pseudo drops its bottom border so
      the two shapes meet at the char's top edge and read as one
      tall enclosure. */
-.chordsketch-sheet__content .lyric-char--drop-target {
+.chordsketch-sheet__content .lyric-char--drop-target,
+/* DEBUG: pin the drop-target style to a deterministic
+   character (3rd lyric char of the first chord-block on the
+   first lyric line) so it can be inspected via browser
+   DevTools without an active drag. Remove this selector once
+   the styling is finalised. */
+.chordsketch-sheet__content
+  section
+  .line:not(.empty-line)
+  .chord-block:first-child
+  .lyrics
+  .lyric-char:nth-of-type(3) {
   position: relative;
   /* Solid background tint is the only highlight — the
      contrast against the surrounding crimson-on-cream text is
@@ -832,7 +843,14 @@
     -3px 0 0 0 rgba(189, 22, 66, 0.18),
     3px 0 0 0 rgba(189, 22, 66, 0.18);
 }
-.chordsketch-sheet__content .lyric-char--drop-target::before {
+.chordsketch-sheet__content .lyric-char--drop-target::before,
+/* DEBUG: same deterministic-character pin as above. */
+.chordsketch-sheet__content
+  section
+  .line:not(.empty-line)
+  .chord-block:first-child
+  .lyrics
+  .lyric-char:nth-of-type(3)::before {
   content: '';
   position: absolute;
   pointer-events: none;
