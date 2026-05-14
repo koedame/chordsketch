@@ -1241,6 +1241,38 @@ function pointerToLyricCharOffset(
   clientY: number,
   segmentTextLength: number,
 ): number {
+  // Per-character rendering wraps each lyric char in its own
+  // `.lyric-char` span (so each char is a distinct text node).
+  // Walking `.lyric-char` siblings and picking the one whose
+  // horizontal extent contains the pointer is the most direct
+  // way to resolve a drop offset — `caretPositionFromPoint`
+  // returns an offset RELATIVE TO whichever single-char text
+  // node it lands on (so it's always 0 or 1) and not the full
+  // segment offset we need.
+  const charSpans = Array.from(
+    target.querySelectorAll(':scope > .lyric-char'),
+  ) as HTMLElement[];
+  if (charSpans.length > 0) {
+    for (let i = 0; i < charSpans.length; i++) {
+      const r = charSpans[i].getBoundingClientRect();
+      // If pointer is past the right edge of this char, keep
+      // walking; the next char (or end-of-segment) is the
+      // target.
+      if (clientX > r.right) continue;
+      // Pointer is at or before this char's right edge. Decide
+      // which side of the char it lies on: < midpoint → before
+      // this char (offset i); ≥ midpoint → after this char
+      // (offset i+1).
+      const mid = r.left + r.width / 2;
+      return clientX < mid ? i : i + 1;
+    }
+    // Past all chars: pointer is at the far right of the
+    // segment.
+    return Math.min(segmentTextLength, charSpans.length);
+  }
+  // Fallback for legacy callers / segments rendered without
+  // per-char wrapping (structured-span lyrics). Use the caret-
+  // from-point APIs first, then a width-proportional ratio.
   const docAny = document as Document & {
     caretPositionFromPoint?: (
       x: number,
