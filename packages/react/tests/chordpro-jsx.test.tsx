@@ -715,13 +715,16 @@ describe('renderChordproAst', () => {
     expect(marker?.getAttribute('aria-hidden')).toBe('true');
   });
 
-  // Chord-bearing lyrics line — source columns inside `[chord]`
-  // brackets do NOT advance the rendered position, so the
-  // marker is remapped through `lyricsCaretRatio`. The old
-  // linear `column / lineLength` ratio would have placed the
-  // marker far to the right of where the editor caret sits.
-  test('caret-marker on chord-bearing lyrics line skips [chord] bracket source columns', () => {
-    // Source: `[Am]Hello World` — 15 chars total (4 bracket + 11 text).
+  // Chord-bearing lyrics line — the caret marker lives in the
+  // upper `.chord` row when the editor caret sits inside the
+  // `[chord]` source bracket, and in the lower `.lyrics` row
+  // when the caret sits in the lyric text. This is what a
+  // singer / transcriber expects when looking at the preview;
+  // collapsing both rows into a single line-level horizontal
+  // bar (the previous behaviour) lost the upper-vs-lower
+  // distinction.
+  test('chord-bearing line places caret on upper chord row vs lower lyrics row', () => {
+    // Source: `[Am]Hello World` — 15 chars (4 bracket + 11 text).
     const ast: ChordproSong = {
       metadata: EMPTY_META,
       lines: [
@@ -739,8 +742,8 @@ describe('renderChordproAst', () => {
         },
       ],
     };
-    // Caret inside the chord bracket (source col 2, between "A" and
-    // "m") snaps to the start of the segment's lyrics (col 0 → 0%).
+    // Caret at source col 2 (inside the `[Am]` bracket between
+    // "A" and "m") → chord row, 50% across the rendered "Am".
     let r = render(
       renderChordproAst(ast, {
         activeSourceLine: 1,
@@ -748,11 +751,19 @@ describe('renderChordproAst', () => {
         caretLineLength: 15,
       }),
     );
-    let marker = r.container.querySelector('.line--active .caret-marker') as HTMLElement | null;
-    expect(marker?.style.left).toBe('0%');
+    let chordMarker = r.container.querySelector(
+      '.chord-block .chord .caret-marker',
+    ) as HTMLElement | null;
+    let lyricsMarker = r.container.querySelector(
+      '.chord-block .lyrics .caret-marker',
+    ) as HTMLElement | null;
+    expect(chordMarker?.style.left).toBe('50%');
+    expect(lyricsMarker).toBeNull();
+    // No line-level duplicate.
+    expect(r.container.querySelectorAll('.caret-marker').length).toBe(1);
 
-    // Caret just past the chord bracket (source col 4 = start of "H")
-    // also maps to lyrics col 0 / 11 = 0%.
+    // Caret just past the chord bracket (source col 4 = start of
+    // "H") → lyrics row, 0%.
     r = render(
       renderChordproAst(ast, {
         activeSourceLine: 1,
@@ -760,11 +771,17 @@ describe('renderChordproAst', () => {
         caretLineLength: 15,
       }),
     );
-    marker = r.container.querySelector('.line--active .caret-marker') as HTMLElement | null;
-    expect(marker?.style.left).toBe('0%');
+    chordMarker = r.container.querySelector(
+      '.chord-block .chord .caret-marker',
+    ) as HTMLElement | null;
+    lyricsMarker = r.container.querySelector(
+      '.chord-block .lyrics .caret-marker',
+    ) as HTMLElement | null;
+    expect(chordMarker).toBeNull();
+    expect(lyricsMarker?.style.left).toBe('0%');
 
-    // Caret inside the lyrics (source col 9 = between "Hello" and
-    // " World") = lyrics col 5 of 11 = 5/11 ≈ 45.45%.
+    // Caret inside the lyrics (source col 9 = between "Hello"
+    // and " World") → lyrics row, 5/11 ≈ 45.45%.
     r = render(
       renderChordproAst(ast, {
         activeSourceLine: 1,
@@ -772,12 +789,13 @@ describe('renderChordproAst', () => {
         caretLineLength: 15,
       }),
     );
-    marker = r.container.querySelector('.line--active .caret-marker') as HTMLElement | null;
-    // Use a substring check so the test isn't sensitive to JS
-    // floating-point precision in the percent value.
-    expect(marker?.style.left.startsWith('45.45')).toBe(true);
+    lyricsMarker = r.container.querySelector(
+      '.chord-block .lyrics .caret-marker',
+    ) as HTMLElement | null;
+    // Substring check — avoid float-precision sensitivity.
+    expect(lyricsMarker?.style.left.startsWith('45.45')).toBe(true);
 
-    // Caret at end of source (col 15) = lyrics col 11 of 11 = 100%.
+    // Caret at end of source (col 15) → lyrics row, 100%.
     r = render(
       renderChordproAst(ast, {
         activeSourceLine: 1,
@@ -785,8 +803,60 @@ describe('renderChordproAst', () => {
         caretLineLength: 15,
       }),
     );
-    marker = r.container.querySelector('.line--active .caret-marker') as HTMLElement | null;
-    expect(marker?.style.left).toBe('100%');
+    lyricsMarker = r.container.querySelector(
+      '.chord-block .lyrics .caret-marker',
+    ) as HTMLElement | null;
+    expect(lyricsMarker?.style.left).toBe('100%');
+  });
+
+  // Multi-segment chord-bearing line — the marker must land in
+  // the right segment's row, not just somewhere on the line.
+  test('multi-segment line: caret picks the matching segment', () => {
+    // Source: `[Am]Hello [G]world` — 18 chars total.
+    // segments[0]: chord="Am" (cols 0..3), text="Hello " (cols 4..9)
+    // segments[1]: chord="G"  (cols 10..12), text="world" (cols 13..17)
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              {
+                chord: { name: 'Am', detail: null, display: null },
+                text: 'Hello ',
+                spans: [],
+              },
+              {
+                chord: { name: 'G', detail: null, display: null },
+                text: 'world',
+                spans: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    // Caret at col 11 — inside the `[G]` bracket of segment 1
+    // (cols 10..12). Should land in segment 1's chord row.
+    const r = render(
+      renderChordproAst(ast, {
+        activeSourceLine: 1,
+        caretColumn: 11,
+        caretLineLength: 18,
+      }),
+    );
+    const blocks = r.container.querySelectorAll('.chord-block');
+    expect(blocks.length).toBe(2);
+    expect(blocks[0].querySelector('.caret-marker')).toBeNull();
+    const seg1ChordMarker = blocks[1].querySelector(
+      '.chord .caret-marker',
+    ) as HTMLElement | null;
+    expect(seg1ChordMarker).not.toBeNull();
+    // Caret col 11, chord bracket "[G]" spans cols 10..12, name
+    // length 1, inside-bracket position = 11 - 10 - 1 = 0,
+    // ratio = 0/1 = 0%.
+    expect(seg1ChordMarker?.style.left).toBe('0%');
   });
 
   test('caret-marker omitted when caretColumn / caretLineLength are absent', () => {

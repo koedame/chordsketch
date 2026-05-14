@@ -741,12 +741,22 @@
   letter-spacing: 0.01em;
   line-height: 1;
   min-height: 1em;
+  /* Positioning context for the chord-row caret marker — the
+     `<span class="caret-marker">` uses `position: absolute` and
+     resolves its `left: X%` against this span, so a caret in the
+     `[Am]` source bracket lands across the rendered "Am" chord
+     width rather than the whole line. */
+  position: relative;
 }
 .chordsketch-sheet__content .lyrics {
   font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
   font-weight: 400;
   font-size: 1.125rem;
   white-space: pre;
+  /* Sister-side of `.chord` — anchor for the lyrics-row caret
+     marker so a caret on a lyric character lands across the
+     rendered lyric width (not pinned to the whole line). */
+  position: relative;
 }
 .chordsketch-sheet__content .empty-line {
   height: 1em;

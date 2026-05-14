@@ -624,6 +624,100 @@ export function lyricsCaretRatio(
   return 1;
 }
 
+/**
+ * Two-lane caret placement for a chord-bearing lyrics line. A
+ * chord-bearing line renders as two stacked rows per segment:
+ * the upper `.chord` row (e.g. "Am") and the lower `.lyrics`
+ * row (e.g. "Hello"). The editor caret sits in one or the other
+ * depending on whether it's inside the source `[chord]` bracket
+ * or in the lyric text — collapsing both rows into a single
+ * horizontal ratio (as `lyricsCaretRatio` does) loses that
+ * upper-vs-lower distinction, which is the information a singer
+ * or transcriber actually wants to see in the preview.
+ *
+ * Returns one of:
+ * - `{ row: 'chord', segmentIdx, withinRatio }` — caret inside
+ *   `[Am]`; marker goes on the chord row of segment `segmentIdx`
+ *   at `withinRatio` across the chord text width.
+ * - `{ row: 'lyrics', segmentIdx, withinRatio }` — caret on lyric
+ *   text; marker goes on the lyrics row of that segment.
+ * - `{ row: 'line', lineRatio }` — chord-less line; the
+ *   underlying `.chord-block` has no chord row, so the marker
+ *   falls back to a single line-level horizontal position.
+ *   `lineRatio` is the raw source-column / line-length ratio.
+ */
+export type CaretPlacement =
+  | { row: 'chord'; segmentIdx: number; withinRatio: number }
+  | { row: 'lyrics'; segmentIdx: number; withinRatio: number }
+  | { row: 'line'; lineRatio: number };
+
+/**
+ * Walk a lyrics line's segments and decide where the in-preview
+ * caret marker should land — chord row, lyrics row, or
+ * fallback-line. See `CaretPlacement` for the shape of the
+ * answer.
+ *
+ * Source-column mapping mirrors `lyricsCaretRatio`: each chord
+ * bracket occupies `[name].length + 2` source columns; the lyric
+ * text follows immediately. Caret columns that fall past the
+ * last segment pin to the right edge of the last lyric row (or
+ * the chord row for chord-only lines).
+ */
+export function caretPlacement(
+  line: ChordproLyricsLine,
+  caretColumn: number,
+  caretLineLength: number,
+): CaretPlacement {
+  const lineHasChords = line.segments.some((s) => s.chord !== null);
+  if (!lineHasChords) {
+    return {
+      row: 'line',
+      lineRatio: Math.min(1, Math.max(0, caretColumn / Math.max(1, caretLineLength))),
+    };
+  }
+  let sourcePos = 0;
+  for (let i = 0; i < line.segments.length; i++) {
+    const seg = line.segments[i];
+    if (seg.chord) {
+      const nameLen = seg.chord.name?.length ?? 0;
+      const chordSourceLen = nameLen + 2; // `[` + name + `]`
+      const chordStart = sourcePos;
+      const chordEnd = sourcePos + chordSourceLen;
+      if (caretColumn >= chordStart && caretColumn < chordEnd) {
+        // Position the marker across the rendered chord-name text
+        // (not the source bracket). Caret on `[` lands at the
+        // chord's left edge; on `]` lands at its right edge;
+        // anywhere inside maps linearly.
+        const insideBracket = Math.max(0, Math.min(nameLen, caretColumn - chordStart - 1));
+        return {
+          row: 'chord',
+          segmentIdx: i,
+          withinRatio: nameLen === 0 ? 0 : insideBracket / nameLen,
+        };
+      }
+      sourcePos = chordEnd;
+    }
+    const textStart = sourcePos;
+    const textEnd = sourcePos + seg.text.length;
+    if (caretColumn >= textStart && caretColumn <= textEnd) {
+      const within = caretColumn - textStart;
+      const len = Math.max(1, seg.text.length);
+      return { row: 'lyrics', segmentIdx: i, withinRatio: within / len };
+    }
+    sourcePos = textEnd;
+  }
+  // Past the last segment (trailing whitespace / line end).
+  // Pin to the rightmost row of the last segment — prefer
+  // lyrics row when present, fall back to chord row for chord-
+  // only segments.
+  const lastIdx = line.segments.length - 1;
+  const lastSeg = line.segments[lastIdx];
+  if (lastSeg && lastSeg.text.length === 0 && lastSeg.chord) {
+    return { row: 'chord', segmentIdx: lastIdx, withinRatio: 1 };
+  }
+  return { row: 'lyrics', segmentIdx: lastIdx, withinRatio: 1 };
+}
+
 // ---- Lyrics line ---------------------------------------------------
 
 function renderLyricsLine(
@@ -635,6 +729,14 @@ function renderLyricsLine(
    * use the `tab` / `grid` element styles for body content
    * instead of `text`. */
   lyricsOverride: CSSProperties | null = null,
+  /** Caret placement for the in-preview marker. When this
+   * resolves to `chord` or `lyrics`, the marker is injected
+   * inside the matching `.chord` / `.lyrics` sub-element so it
+   * sits on the right row (upper vs lower). `line` (or `null`)
+   * leaves the marker to the caller — `pushElement` handles
+   * line-level placement for chord-less lines via
+   * `caretRatioOverride`. */
+  caret: CaretPlacement | null = null,
 ): JSX.Element {
   // If ANY segment on this line carries a chord, every other
   // segment needs a chord-row placeholder so the lyric baselines
@@ -651,39 +753,64 @@ function renderLyricsLine(
   const lineHasChords = line.segments.some((s) => s.chord !== null);
   const chordStyle = elementStyleToCss(fmt.chord);
   const textStyle = lyricsOverride ?? elementStyleToCss(fmt.text);
+  // Caret marker injection — chord row vs lyrics row. The
+  // marker uses `position: absolute` and relies on the parent
+  // `.chord` / `.lyrics` being `position: relative` (set in
+  // `styles.css`).
+  const renderMarker = (ratio: number): JSX.Element => (
+    <span
+      key="__caret-marker"
+      className="caret-marker"
+      aria-hidden="true"
+      style={{ left: `${ratio * 100}%` }}
+    />
+  );
   return (
     <div key={key} className="line">
-      {line.segments.map((segment, i) => (
-        // chord-over-lyric layout is a *visual* arrangement
-        // of two parallel data lanes — the chord row is a
-        // performance instruction (what to play) and the lyric
-        // row is the text being sung. That's structurally
-        // different from a ruby annotation (which exists to
-        // *pronounce* the base text), so the markup stays a
-        // pair of `<span>`s in a `<span class="chord-block">`
-        // wrapper. CSS positions the chord above the lyric via
-        // `inline-flex; flex-direction: column-reverse` so the
-        // chord-row baseline is reserved before the lyric is
-        // measured.
-        <span key={i} className="chord-block">
-          {segment.chord ? (
-            <span className="chord" style={chordStyle ?? undefined}>
-              {renderChord(segment.chord)}
+      {line.segments.map((segment, i) => {
+        const chordMarker =
+          caret && caret.row === 'chord' && caret.segmentIdx === i
+            ? renderMarker(caret.withinRatio)
+            : null;
+        const lyricsMarker =
+          caret && caret.row === 'lyrics' && caret.segmentIdx === i
+            ? renderMarker(caret.withinRatio)
+            : null;
+        return (
+          // chord-over-lyric layout is a *visual* arrangement
+          // of two parallel data lanes — the chord row is a
+          // performance instruction (what to play) and the lyric
+          // row is the text being sung. That's structurally
+          // different from a ruby annotation (which exists to
+          // *pronounce* the base text), so the markup stays a
+          // pair of `<span>`s in a `<span class="chord-block">`
+          // wrapper. CSS positions the chord above the lyric via
+          // `inline-flex; flex-direction: column-reverse` so the
+          // chord-row baseline is reserved before the lyric is
+          // measured.
+          <span key={i} className="chord-block">
+            {segment.chord ? (
+              <span className="chord" style={chordStyle ?? undefined}>
+                {chordMarker}
+                {renderChord(segment.chord)}
+              </span>
+            ) : lineHasChords ? (
+              <span
+                className="chord"
+                aria-hidden="true"
+                style={chordStyle ?? undefined}
+              >
+                {chordMarker}
+                {' '}
+              </span>
+            ) : null}
+            <span className="lyrics" style={textStyle ?? undefined}>
+              {lyricsMarker}
+              {renderSegmentText(segment)}
             </span>
-          ) : lineHasChords ? (
-            <span
-              className="chord"
-              aria-hidden="true"
-              style={chordStyle ?? undefined}
-            >
-              {' '}
-            </span>
-          ) : null}
-          <span className="lyrics" style={textStyle ?? undefined}>
-            {renderSegmentText(segment)}
           </span>
-        </span>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -1826,14 +1953,20 @@ function pushElement(
   element: JSX.Element,
   sourceLine?: number,
   /**
-   * Per-line override for the caret marker's `left:` ratio.
-   * Lyrics-line renderers pass a value computed by
-   * `lyricsCaretRatio` (which maps source columns through
-   * `[chord]` brackets to their rendered position); other line
-   * kinds omit it and inherit the linear source-column fallback
-   * stored on `ctx.caretRatio`.
+   * Per-line override for the caret marker's `left:` ratio:
+   * - `undefined` — no override; inherit the linear
+   *   source-column fallback stored on `ctx.caretRatio`.
+   * - `0..1` — explicit horizontal ratio on the line element.
+   * - `null` — explicitly suppress the line-level marker. Used
+   *   when the marker has already been embedded inside a
+   *   sub-element (e.g. a chord-bearing lyrics line where the
+   *   marker is placed inside the matching `.chord` or
+   *   `.lyrics` row by `renderLyricsLine`). Without this
+   *   sentinel, `pushElement` would fall through to
+   *   `ctx.caretRatio` and inject a duplicate line-level
+   *   marker on top of the per-row one.
    */
-  caretRatioOverride?: number,
+  caretRatioOverride?: number | null,
 ): void {
   // When a 1-indexed source-line marker is provided, decorate the
   // root element of the line with:
@@ -1860,11 +1993,17 @@ function pushElement(
     const nextClass = isActive
       ? `${props.className ? `${props.className} ` : ''}line--active`
       : props.className;
-    // Prefer the per-line ratio passed by the caller (e.g.
-    // `lyricsCaretRatio` for a chord-bearing lyrics line) over the
-    // walker-default `ctx.caretRatio` so the marker lands at the
-    // rendered position, not the raw source column.
-    const effectiveRatio = caretRatioOverride ?? ctx.caretRatio;
+    // Resolve the marker's horizontal ratio:
+    // - explicit `null` from the caller suppresses the marker
+    //   (sub-element already owns it — chord-bearing lyrics
+    //   line);
+    // - explicit number overrides the walker default;
+    // - `undefined` falls through to `ctx.caretRatio`.
+    const effectiveRatio =
+      caretRatioOverride === null
+        ? undefined
+        : caretRatioOverride ?? ctx.caretRatio;
+    const markerSuppressed = caretRatioOverride === null;
     // Skip the in-element caret marker for narrow inline chips
     // (`{key}` / `{tempo}` / `{time}` `.meta-inline` markers).
     // Their visual width has no relationship to the source line's
@@ -1879,7 +2018,7 @@ function pushElement(
     const classStr = typeof props.className === 'string' ? props.className : '';
     const isInlineChip = /\bmeta-inline\b/.test(classStr);
     const shouldInjectMarker =
-      isActive && effectiveRatio !== undefined && !isInlineChip;
+      isActive && effectiveRatio !== undefined && !isInlineChip && !markerSuppressed;
     decorated = cloneElement(
       element,
       {
@@ -2195,23 +2334,46 @@ function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {
       if (ctx.section?.name === 'tab') {
         lyricsOverride = elementStyleToCss(ctx.fmt.tab);
       }
-      // Compute the per-line caret-marker ratio so the marker
-      // lands on the rendered position rather than the raw source
-      // column — a chord-bearing line like `[Am]Hello` has 8
-      // source chars but only 5 lyrics chars, and the default
-      // linear ratio drifts the marker right by ~30% on every
-      // chord bracket.
-      const lyricsRatio =
+      // Compute the per-line caret placement. A chord-bearing
+      // line renders as two stacked rows per segment (`.chord`
+      // above `.lyrics`); the editor caret belongs to exactly
+      // one of those rows depending on whether it sits inside a
+      // `[chord]` bracket or in the lyric text. `caretPlacement`
+      // disambiguates and returns either a per-row placement
+      // (`row: 'chord'|'lyrics'`) — embedded inside the matching
+      // `.chord-block` sub-element by `renderLyricsLine` — or
+      // `row: 'line'` for chord-less lines, where the line-level
+      // marker is injected by `pushElement` via the
+      // `caretRatioOverride` parameter.
+      const placement =
         ctx.activeSourceLine === sourceLine &&
         ctx.caretColumn !== undefined &&
         ctx.caretLineLength !== undefined
-          ? lyricsCaretRatio(line.value, ctx.caretColumn, ctx.caretLineLength)
-          : undefined;
+          ? caretPlacement(line.value, ctx.caretColumn, ctx.caretLineLength)
+          : null;
+      // Decide what to pass to `pushElement`:
+      // - `chord` / `lyrics` placement → pass `null` so the
+      //   line-level marker is suppressed (the marker is
+      //   already embedded inside the matching `.chord` /
+      //   `.lyrics` sub-element by `renderLyricsLine`).
+      // - `line` placement (chord-less line) → pass the
+      //   horizontal ratio so `pushElement` injects the marker
+      //   on the `.line` element.
+      // - no placement (caret not on this line) → `undefined`,
+      //   inheriting the walker default of "no marker".
+      let lineLevelRatio: number | null | undefined;
+      if (placement === null) {
+        lineLevelRatio = undefined;
+      } else if (placement.row === 'line') {
+        lineLevelRatio = placement.lineRatio;
+      } else {
+        lineLevelRatio = null;
+      }
       pushElement(
         ctx,
-        renderLyricsLine(line.value, key, ctx.fmt, lyricsOverride),
+        renderLyricsLine(line.value, key, ctx.fmt, lyricsOverride, placement),
         sourceLine,
-        lyricsRatio,
+        lineLevelRatio,
       );
       return;
     }
