@@ -1053,11 +1053,11 @@ h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-w
 .meta-inline__marking { color: #8A8790; font-weight: 400; font-style: italic; }
 .meta-inline .music-glyph { display: inline-flex; align-items: center; flex-shrink: 0; color: #0A0A0B; height: 1.1em; }
 .meta-inline svg.music-glyph { height: 1.1em; width: auto; display: block; }
-.meta-inline span.music-glyph--time { height: 1.4em; font-size: 0.85em; }
+.meta-inline span.music-glyph--time { font-size: 0.85em; }
 .music-glyph { display: inline-block; flex-shrink: 0; vertical-align: middle; color: #1A1718; }
 .music-glyph--time { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; font-family: \"Source Serif Pro\", serif; font-weight: 700; font-size: 1.1em; letter-spacing: 0; }
 .music-glyph--time__num, .music-glyph--time__den { display: block; line-height: 0.9; font-feature-settings: \"tnum\" 1; }
-.music-glyph--time__bar { display: block; width: 0.9em; height: 1.5px; margin: 0.05em 0; background-color: currentColor; border-radius: 1px; }
+.music-glyph--time__bar { display: block; width: 0.9em; height: 1.5px; margin: 0.05em 0; background-color: currentColor; border-radius: 1px; flex-shrink: 0; }
 .music-glyph--metronome__pendulum { transform-origin: 9px 19px; animation: cs-metronome-swing var(--cs-metronome-period, 1s) cubic-bezier(0.55, 0, 0.45, 1) infinite alternate; }
 @keyframes cs-metronome-swing { from { transform: rotate(-28deg); } to { transform: rotate(28deg); } }
 @media (prefers-reduced-motion: reduce) { .music-glyph--metronome__pendulum { animation: none; transform: rotate(0deg); } }

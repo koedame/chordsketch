@@ -407,10 +407,15 @@
   display: block;
 }
 /* Time-signature glyph is a span of stacked digits, not an
-   SVG — give it a matching height so the chip line-height
-   matches the SVG variants. */
+   SVG. The chip's `align-items: center` centers it vertically,
+   so we don't need to force a height — letting it size to its
+   natural content (numerator + bar + denominator) keeps the
+   1.5px fraction bar from being flex-shrunk to 0px and
+   restores the visible divider between the two digits.
+   `font-size: 0.85em` keeps the stacked digits compact so
+   they line up with the SVG glyphs' visual size inside the
+   chip. */
 .chordsketch-sheet__content span.meta-inline__glyph.music-glyph--time {
-  height: 1.4em;
   font-size: 0.85em;
 }
 
@@ -448,6 +453,12 @@
   margin: 0.05em 0;
   background-color: currentColor;
   border-radius: 1px;
+  /* Defence in depth: inside a constrained flex column parent
+     (e.g. the `.meta-inline` chip), without an explicit
+     `flex-shrink: 0` the 1.5px bar gets squashed to 0px to
+     make the digits fit — and the fraction divider
+     disappears. */
+  flex-shrink: 0;
 }
 
 /* Time signature glyph — stacked numerator over denominator
