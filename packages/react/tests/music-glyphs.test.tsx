@@ -205,7 +205,7 @@ describe('<MetronomeGlyph>', () => {
     // Rod inside the pendulum group goes from (9, 19) up to (9, 2).
     const rod = svg?.querySelector('.music-glyph--metronome__pendulum line');
     expect(rod?.getAttribute('y1')).toBe('19');
-    expect(rod?.getAttribute('y2')).toBe('5');
+    expect(rod?.getAttribute('y2')).toBe('7');
   });
 
   test('aria-label exposes the BPM value', () => {

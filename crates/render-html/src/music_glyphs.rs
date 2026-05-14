@@ -315,9 +315,9 @@ pub fn metronome_svg(bpm_raw: &str) -> String {
          stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linejoin=\"round\"/>\
          <circle cx=\"9\" cy=\"19\" r=\"0.7\" fill=\"currentColor\"/>\
          <g class=\"music-glyph--metronome__pendulum\">\
-         <line x1=\"9\" y1=\"19\" x2=\"9\" y2=\"5\" stroke=\"currentColor\" \
+         <line x1=\"9\" y1=\"19\" x2=\"9\" y2=\"7\" stroke=\"currentColor\" \
          stroke-width=\"0.9\" stroke-linecap=\"round\"/>\
-         <circle cx=\"9\" cy=\"8\" r=\"1.1\" fill=\"currentColor\"/>\
+         <circle cx=\"9\" cy=\"9\" r=\"1.1\" fill=\"currentColor\"/>\
          </g></svg>",
         period,
         chordsketch_chordpro::escape::escape_xml(&aria),
@@ -470,7 +470,7 @@ mod tests {
             "expected static pivot circle at (9, 19); got: {svg}"
         );
         assert!(
-            svg.contains("<line x1=\"9\" y1=\"19\" x2=\"9\" y2=\"5\""),
+            svg.contains("<line x1=\"9\" y1=\"19\" x2=\"9\" y2=\"7\""),
             "rod must extend upward from base pivot; got: {svg}"
         );
     }
