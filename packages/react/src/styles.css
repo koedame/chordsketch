@@ -857,15 +857,13 @@
   /* Mirror the box-shadow's horizontal spread. */
   left: -3px;
   right: -3px;
-  /* Sit immediately above the char and extend up through the
-     chord row. The chord-block layout is `flex-direction:
-     column` with chord on top and lyrics on bottom. `1.8em`
-     against the lyric font (1.125rem ≈ 18px) ≈ 32px, enough
-     to fully cover the chord row's ~30px line box plus a
-     small margin so the tint reads as a continuous vertical
-     column from the chord row through the lyric character. */
+  /* Sit immediately above the char and extend up to the chord
+     row. `1em` against the lyric font (1.125rem ≈ 18px) ≈
+     18px, matching the chord row's text height (1rem = 16px)
+     with a touch of margin. Taller values overshot into the
+     line above and read as a slab. */
   bottom: 100%;
-  height: 1.8em;
+  height: 1em;
   border-radius: 3px 3px 0 0;
   background-color: rgba(189, 22, 66, 0.18);
 }
