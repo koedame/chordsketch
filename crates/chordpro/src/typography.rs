@@ -14,9 +14,19 @@
 ///
 /// Applied to chord names and key values before they're rendered
 /// so the typography reads as engraved music rather than
-/// typewriter text. Only `[A-G]b` and `[A-G]#` sequences are
-/// converted — chord-quality letters (`m`, `dim`, `sus`, etc.)
-/// survive unchanged.
+/// typewriter text. Two cases are converted:
+///
+/// 1. **Root accidentals.** `[A-G]b` → `[A-G]♭`,
+///    `[A-G]#` → `[A-G]♯`. Handles flat-side and sharp-side
+///    keys like `Bb`, `Eb`, `F#`.
+/// 2. **Extension accidentals.** `b<digit>` → `♭<digit>`,
+///    `#<digit>` → `♯<digit>`. Handles chord-quality
+///    alterations like `b9`, `#11`, `b13` inside parens or
+///    immediately after a degree marker (e.g. `Gb7(b9)`,
+///    `Cmaj7#11`, `D7b13`).
+///
+/// Chord-quality letters (`m`, `dim`, `sus`, etc.) survive
+/// unchanged because they don't match either pattern.
 ///
 /// Sister-site to `unicodeAccidentals` in
 /// `packages/react/src/chordpro-jsx.tsx`. The two functions
@@ -30,9 +40,9 @@ pub fn unicode_accidentals(s: &str) -> String {
     let mut i = 0;
     while i < bytes.len() {
         let c = bytes[i];
-        // ASCII fast path — accidental replacement only fires
-        // on ASCII note letters and the ASCII `b` / `#`, so any
-        // non-ASCII codepoint is passed straight through.
+        // Root accidental: `[A-G]b` or `[A-G]#`. Fires on ASCII
+        // uppercase note letters followed by the ASCII `b` or
+        // `#`.
         if c.is_ascii_uppercase() && (b'A'..=b'G').contains(&c) && i + 1 < bytes.len() {
             let next = bytes[i + 1];
             if next == b'b' {
@@ -48,12 +58,25 @@ pub fn unicode_accidentals(s: &str) -> String {
                 continue;
             }
         }
+        // Extension accidental: `b<digit>` or `#<digit>` where
+        // the `b`/`#` is NOT preceded by a note letter (those
+        // were caught by the rule above). `b9`, `#11`, `b13`,
+        // etc.
+        if (c == b'b' || c == b'#') && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
+            let prev_is_note =
+                i > 0 && (b'A'..=b'G').contains(&bytes[i - 1]) && bytes[i - 1].is_ascii_uppercase();
+            if !prev_is_note {
+                out.push(if c == b'b' { '\u{266D}' } else { '\u{266F}' });
+                i += 1;
+                continue;
+            }
+        }
         // Walk one full UTF-8 character to keep multi-byte
         // codepoints intact. We can index into `s` safely here
         // because `i` is always at a char boundary: the ASCII
-        // branch above advances by 2 (both bytes ASCII) or we
-        // fall through and advance by the UTF-8 lead-byte's
-        // declared length.
+        // branches above advance by 1 or 2 (all bytes ASCII)
+        // or we fall through and advance by the UTF-8
+        // lead-byte's declared length.
         let len = utf8_char_len(c);
         let end = (i + len).min(bytes.len());
         out.push_str(&s[i..end]);
@@ -152,6 +175,29 @@ mod tests {
         assert_eq!(unicode_accidentals("Verse"), "Verse");
         // Multi-byte UTF-8 (a Japanese comment) survives intact.
         assert_eq!(unicode_accidentals("中文"), "中文");
+    }
+
+    #[test]
+    fn unicode_accidentals_extension_alterations() {
+        // `b<digit>` / `#<digit>` inside chord quality strings
+        // and parentheses turn into proper musical flats/sharps.
+        assert_eq!(unicode_accidentals("Gb7(b9)"), "G\u{266D}7(\u{266D}9)");
+        assert_eq!(unicode_accidentals("Cmaj7#11"), "Cmaj7\u{266F}11");
+        assert_eq!(unicode_accidentals("D7b13"), "D7\u{266D}13");
+        // Multi-digit extension.
+        assert_eq!(unicode_accidentals("C7b13"), "C7\u{266D}13");
+        // Stacked alterations inside parens.
+        assert_eq!(
+            unicode_accidentals("G7(b9,#11)"),
+            "G7(\u{266D}9,\u{266F}11)",
+        );
+        // A `b`/`#` NOT followed by a digit stays as the
+        // chord-quality letter (e.g. `m` after `b` of `Bbm7`
+        // already converted at the root step).
+        assert_eq!(unicode_accidentals("Cm7"), "Cm7");
+        // A `b` followed by a letter (like the `m` in `Bbm7`)
+        // does not match the extension rule.
+        assert_eq!(unicode_accidentals("Bbm7"), "B\u{266D}m7");
     }
 
     #[test]

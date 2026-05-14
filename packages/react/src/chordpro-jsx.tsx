@@ -349,16 +349,38 @@ function renderLyricsTextWithChars(
 // ---- Chord rendering ----------------------------------------------
 
 /**
- * Replace ASCII accidentals (`b` / `#`) on note letters with
- * the proper Unicode musical symbols (`♭` U+266D / `♯` U+266F).
- * Applied to chord names and key values before they're rendered
- * so the typography reads as engraved music rather than
- * typewriter text. Only `[A-G]b` and `[A-G]#` are touched —
- * chord-quality letters (`m`, `dim`, `sus`, etc.) survive
- * unchanged.
+ * Replace ASCII accidentals (`b` / `#`) on note letters and
+ * chord-quality digits with the proper Unicode musical symbols
+ * (`♭` U+266D / `♯` U+266F). Two cases are converted:
+ *
+ * 1. **Root accidentals** — `[A-G]b` / `[A-G]#` for flat-side
+ *    and sharp-side keys (`Bb`, `Eb`, `F#`, …).
+ * 2. **Extension accidentals** — `b<digit>` / `#<digit>` for
+ *    chord-quality alterations (`b9`, `#11`, `b13`, …),
+ *    typically inside parens like `Gb7(b9)` or after a degree
+ *    marker like `Cmaj7#11`.
+ *
+ * Chord-quality letters (`m`, `dim`, `sus`, etc.) and lyrics
+ * survive unchanged because they don't match either pattern.
+ *
+ * Sister-site to `unicode_accidentals` in
+ * `crates/chordpro/src/typography.rs`. The two functions MUST
+ * produce byte-for-byte identical output for every input — the
+ * React JSX walker and every Rust renderer pick up the same
+ * typography this way.
  */
 export function unicodeAccidentals(name: string): string {
-  return name.replace(/([A-G])b/g, '$1♭').replace(/([A-G])#/g, '$1♯');
+  return name
+    .replace(/([A-G])b/g, '$1♭')
+    .replace(/([A-G])#/g, '$1♯')
+    // After the root pass, any remaining ASCII `b` / `#` that
+    // sits IMMEDIATELY before a digit is a quality-alteration
+    // marker. Negative lookbehind on `[A-G]` is unnecessary —
+    // the root pass already consumed those pairs and replaced
+    // the `b`/`#` with their unicode forms, so they can no
+    // longer match this regex.
+    .replace(/b(?=\d)/g, '♭')
+    .replace(/#(?=\d)/g, '♯');
 }
 
 function renderChord(chord: ChordproChord): string {

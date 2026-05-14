@@ -21,6 +21,7 @@ import {
 
 describe('unicodeAccidentals', () => {
   test.each([
+    // Root accidentals.
     ['Bb', 'B♭'],
     ['Eb7', 'E♭7'],
     ['F#m', 'F♯m'],
@@ -30,6 +31,17 @@ describe('unicodeAccidentals', () => {
     ['Am', 'Am'],
     ['Cdim', 'Cdim'],
     ['Cmaj7', 'Cmaj7'],
+    // Extension accidentals (`b<digit>` / `#<digit>`) inside
+    // chord-quality strings turn into proper musical flats /
+    // sharps. Sister-site to `unicode_accidentals_extension_
+    // alterations` in `crates/chordpro/src/typography.rs`.
+    ['Gb7(b9)', 'G♭7(♭9)'],
+    ['Cmaj7#11', 'Cmaj7♯11'],
+    ['D7b13', 'D7♭13'],
+    ['G7(b9,#11)', 'G7(♭9,♯11)'],
+    // `b`/`#` not followed by a digit stays as-is (chord-
+    // quality letter / non-alteration glyph).
+    ['Cm7', 'Cm7'],
   ])('%s → %s', (input, expected) => {
     expect(unicodeAccidentals(input)).toBe(expected);
   });

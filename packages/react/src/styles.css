@@ -815,22 +815,30 @@
   /* Solid background tint is the only highlight — the
      contrast against the surrounding crimson-on-cream text is
      strong enough that adding a dashed frame on top reads as
-     decoration noise. `padding` on the inline-block char adds
-     visible breathing room around narrow glyphs without
-     reflowing neighbours (negative margins absorb the padding
-     out of the inline flow). */
-  padding: 1px 3px;
-  margin: 0 -3px;
+     decoration noise.
+     IMPORTANT: NO `padding` here. Padding on the inline-block
+     character would change its box dimensions and reflow the
+     entire lyric line vertically whenever the drop target
+     moved between characters. Horizontal breathing room is
+     produced by `box-shadow` (a spread, not a layout box)
+     which paints outside the element without displacing
+     neighbours — drag jitter is eliminated.
+     The 3px tint extension on each side widens the visible
+     column for narrow glyphs (`i`, `l`, `t`, `.`) so they
+     read as a column rather than a caret-sized stripe. */
   border-radius: 3px;
   background-color: rgba(189, 22, 66, 0.18);
+  box-shadow:
+    -3px 0 0 0 rgba(189, 22, 66, 0.18),
+    3px 0 0 0 rgba(189, 22, 66, 0.18);
 }
 .chordsketch-sheet__content .lyric-char--drop-target::before {
   content: '';
   position: absolute;
   pointer-events: none;
-  /* Mirror the char's padding-inflated horizontal extent. */
-  left: 0;
-  right: 0;
+  /* Mirror the box-shadow's horizontal spread. */
+  left: -3px;
+  right: -3px;
   /* Sit immediately above the char and extend up through the
      chord row. The chord-block layout is `flex-direction:
      column` with chord on top and lyrics on bottom. `1.8em`
