@@ -3045,6 +3045,7 @@ export function renderChordproAst(
   // rows to stretch to the section's full height. Track that
   // here so the rendering branch downstream can wrap the body.
   let rightSection: ReactNode = null;
+  let bottomSection: ReactNode = null;
   if (diagramsState?.visible && options.chordDiagrams) {
     const names = collectChordNames(song);
     if (names.length > 0) {
@@ -3101,13 +3102,21 @@ export function renderChordproAst(
         // where the section's tall height inflates the row the
         // first body element lives in.
         rightSection = section;
+      } else if (diagramsState!.position === 'bottom') {
+        // `bottom`: pinned to the bottom of the preview pane
+        // (mimics PDF page-bottom layout). Tracked separately
+        // from the body flow so the wrapper logic below can
+        // make `.song__body` a single flex item alongside the
+        // pinned diagrams section. Pushing into `ctx.out`
+        // would mix body and diagrams in the same column and
+        // defeat the bottom pin.
+        bottomSection = section;
       } else {
-        // `bottom` (default) and `below` sit at the tail of the
-        // body flow. `data-position` (on the section) +
-        // `song--diagrams-<position>` modifier (on the wrapper)
-        // let the consumer's CSS distinguish them — `below`
-        // flows naturally after the last lyric line, `bottom`
-        // pins to the bottom of the document.
+        // `below`: natural block flow after the last lyric
+        // line. `data-position="below"` on the section + the
+        // `song--diagrams-below` modifier on the wrapper let
+        // CSS distinguish it from `bottom` without separate
+        // layout requirements.
         ctx.out.push(section);
       }
     }
@@ -3133,6 +3142,26 @@ export function renderChordproAst(
       <article className={songClass}>
         <div className="song__body">{ctx.out}</div>
         {rightSection}
+      </article>
+    );
+  }
+  if (bottomSection !== null) {
+    // `bottom` diagrams: `.song--diagrams-bottom` declares
+    // `display: flex; flex-direction: column` so a
+    // `margin-top: auto` on the diagrams section pushes it to
+    // the bottom of a tall preview pane. Without the wrapper
+    // every body element (lines, sections, meta-inline chips)
+    // would become an independent flex column item — each
+    // taking a full row of the article — and consecutive
+    // `{key}` / `{tempo}` / `{time}` chips that should flow
+    // inline would stack vertically instead. Wrap the body so
+    // the flex columnification only touches two children: the
+    // body wrapper + the diagrams section. Inside the wrapper,
+    // chips flow inline normally.
+    return (
+      <article className={songClass}>
+        <div className="song__body">{ctx.out}</div>
+        {bottomSection}
       </article>
     );
   }
