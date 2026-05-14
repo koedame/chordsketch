@@ -742,6 +742,24 @@ describe('renderChordproAst', () => {
         },
       ],
     };
+    // For an inline caret marker inside `.lyrics`, the marker
+    // sits BETWEEN `.lyric-char` spans. "Caret offset N" means
+    // exactly N `.lyric-char` spans precede the marker. The
+    // helper makes that count explicit so the tests read as
+    // "between character 0 and 1" instead of opaque CSS%
+    // arithmetic.
+    const lyricCharsBeforeCaret = (root: ParentNode): number => {
+      const marker = root.querySelector('.chord-block .lyrics > .caret-marker');
+      if (!marker) return -1;
+      let count = 0;
+      let sib = marker.previousElementSibling;
+      while (sib) {
+        if (sib.classList.contains('lyric-char')) count++;
+        sib = sib.previousElementSibling;
+      }
+      return count;
+    };
+
     // Caret at source col 2 (inside the `[Am]` bracket between
     // "A" and "m") → chord row, 50% across the rendered "Am".
     let r = render(
@@ -763,7 +781,8 @@ describe('renderChordproAst', () => {
     expect(r.container.querySelectorAll('.caret-marker').length).toBe(1);
 
     // Caret just past the chord bracket (source col 4 = start of
-    // "H") → lyrics row, 0%.
+    // "H") → lyrics row, BEFORE the first lyric char (0 chars
+    // precede the caret marker).
     r = render(
       renderChordproAst(ast, {
         activeSourceLine: 1,
@@ -778,10 +797,12 @@ describe('renderChordproAst', () => {
       '.chord-block .lyrics .caret-marker',
     ) as HTMLElement | null;
     expect(chordMarker).toBeNull();
-    expect(lyricsMarker?.style.left).toBe('0%');
+    expect(lyricsMarker).not.toBeNull();
+    expect(lyricCharsBeforeCaret(r.container)).toBe(0);
 
     // Caret inside the lyrics (source col 9 = between "Hello"
-    // and " World") → lyrics row, 5/11 ≈ 45.45%.
+    // and " World") → lyrics row, between char 4 ("o") and 5
+    // (" ") — i.e. 5 lyric chars precede the marker.
     r = render(
       renderChordproAst(ast, {
         activeSourceLine: 1,
@@ -789,13 +810,11 @@ describe('renderChordproAst', () => {
         caretLineLength: 15,
       }),
     );
-    lyricsMarker = r.container.querySelector(
-      '.chord-block .lyrics .caret-marker',
-    ) as HTMLElement | null;
-    // Substring check — avoid float-precision sensitivity.
-    expect(lyricsMarker?.style.left.startsWith('45.45')).toBe(true);
+    expect(lyricCharsBeforeCaret(r.container)).toBe(5);
 
-    // Caret at end of source (col 15) → lyrics row, 100%.
+    // Caret at end of source (col 15) → lyrics row, AFTER all
+    // 11 chars in "Hello World" (so 11 lyric chars precede the
+    // marker).
     r = render(
       renderChordproAst(ast, {
         activeSourceLine: 1,
@@ -803,10 +822,7 @@ describe('renderChordproAst', () => {
         caretLineLength: 15,
       }),
     );
-    lyricsMarker = r.container.querySelector(
-      '.chord-block .lyrics .caret-marker',
-    ) as HTMLElement | null;
-    expect(lyricsMarker?.style.left).toBe('100%');
+    expect(lyricCharsBeforeCaret(r.container)).toBe(11);
   });
 
   // Drag-to-reposition wiring — when `onChordReposition` is
@@ -862,11 +878,12 @@ describe('renderChordproAst', () => {
     expect(chord?.getAttribute('draggable')).toBe('true');
   });
 
-  // Drop indicator: while a chord is being dragged over the
-  // line, a `<span class="drop-indicator">` should appear inside
-  // the lyrics span the pointer is over. The indicator vanishes
-  // on drop/dragleave.
-  test('drop indicator appears on dragover, disappears on drop', () => {
+  // Drop indicator: while a chord is being dragged over a
+  // specific lyric character, that character's `.lyric-char`
+  // span picks up `lyric-char--drop-target` (dashed crimson
+  // outline) so the user sees WHICH character the chord will
+  // land above. The highlight clears on drop / dragleave.
+  test('drop indicator outlines the targeted lyric character', () => {
     const repo = vi.fn();
     const ast: ChordproSong = {
       metadata: EMPTY_META,
@@ -916,14 +933,16 @@ describe('renderChordproAst', () => {
     };
     // dragover on the lyrics span (bubbles to `.line`)
     fireEvent.dragOver(targetLyrics, { dataTransfer: dt, clientX: 100, clientY: 50 });
-    // Indicator should be inside the 2nd block's `.lyrics`
-    let indicators = container.querySelectorAll('.drop-indicator');
-    expect(indicators.length).toBe(1);
-    expect(indicators[0].closest('.chord-block')).toBe(blocks[1]);
-    // drop dismisses the indicator and fires the callback
+    // The drop-target highlight should land on a `.lyric-char`
+    // inside the 2nd block's `.lyrics` (jsdom returns offset 0
+    // for `caretRangeFromPoint`, which still picks SOME char).
+    let highlighted = container.querySelectorAll('.lyric-char--drop-target');
+    expect(highlighted.length).toBe(1);
+    expect(highlighted[0].closest('.chord-block')).toBe(blocks[1]);
+    // drop clears the highlight and fires the callback
     fireEvent.drop(targetLyrics, { dataTransfer: dt, clientX: 100, clientY: 50 });
-    indicators = container.querySelectorAll('.drop-indicator');
-    expect(indicators.length).toBe(0);
+    highlighted = container.querySelectorAll('.lyric-char--drop-target');
+    expect(highlighted.length).toBe(0);
     expect(repo).toHaveBeenCalledTimes(1);
     // `copy` is derived from `event.altKey`; jsdom's synthetic
     // drop event leaves it `undefined` (not `false`). Both values
@@ -991,12 +1010,12 @@ describe('renderChordproAst', () => {
       effectAllowed: 'all' as DataTransfer['effectAllowed'],
     };
     fireEvent.dragOver(targetChord, { dataTransfer: dt, clientX: 100, clientY: 5 });
-    // Indicator should still appear inside the matching lyrics
-    // span — the chord-row hit walks down to the .lyrics of the
-    // same chord-block.
-    const indicator = container.querySelector('.drop-indicator');
-    expect(indicator).not.toBeNull();
-    expect(indicator?.closest('.chord-block')).toBe(blocks[1]);
+    // The drop-target highlight should still land in the
+    // matching lyrics span — the chord-row hit walks down to the
+    // `.lyrics` of the same chord-block.
+    const highlighted = container.querySelector('.lyric-char--drop-target');
+    expect(highlighted).not.toBeNull();
+    expect(highlighted?.closest('.chord-block')).toBe(blocks[1]);
     fireEvent.drop(targetChord, { dataTransfer: dt, clientX: 100, clientY: 5 });
     expect(repo).toHaveBeenCalledTimes(1);
   });

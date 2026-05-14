@@ -681,24 +681,51 @@
   position: relative;
 }
 
-/* Preview-side caret marker. Approximates the source caret
-   position (column / line length) inside the active element with a
-   thin vertical bar. Mapping is intentionally linear so the
-   feature works without per-character AST positions — the
-   rendered DOM width and the source-column count are NOT
-   one-to-one for `[chord]lyric` markup, so the marker is a
-   navigation aid, not a sub-character cursor. Animation matches
-   the standard browser-caret blink so the affordance reads as
-   "this is where your editor caret is". */
+/* Preview-side caret marker.
+ *
+ * Two placement modes:
+ *
+ * - **Inline (lyrics row).** Inside a `.lyrics` span the marker
+ *   sits in normal flow BETWEEN `.lyric-char` spans, rendered
+ *   as a 2px-wide inline-block. The character-boundary
+ *   positioning is precise — no proportional-font drift onto a
+ *   glyph.
+ * - **Absolute (chord row, chord-less line).** Inside a
+ *   positioned ancestor (`.chord` or `.line.line--active`) the
+ *   marker is absolutely positioned by `left: X%`. Chord names
+ *   are short and the X% approximation is visually fine.
+ *
+ * Both modes share the same blink + crimson colour so the
+ * caret reads consistently. */
 .chordsketch-sheet__content .caret-marker {
-  position: absolute;
-  top: 0;
-  bottom: 0;
   width: 2px;
   background-color: var(--cs-active-line-accent, #BD1642);
   pointer-events: none;
   animation: chordsketch-caret-blink 1.06s steps(2, jump-none) infinite;
   border-radius: 1px;
+}
+/* Inline-flow placement inside a `.lyrics` row. The marker is a
+   zero-margin inline-block that aligns to the surrounding
+   text-line baseline, sitting in the natural gap between
+   character spans. */
+.chordsketch-sheet__content .lyrics > .caret-marker {
+  display: inline-block;
+  vertical-align: text-bottom;
+  height: 1em;
+  /* Negative margin keeps the caret from displacing surrounding
+     characters: it takes up 2px of inline width but absorbs that
+     width back so the rendered lyric line measures the same as
+     without the caret. */
+  margin: 0 -1px;
+}
+/* Absolute placement for the chord row + chord-less line
+   variants (caret is a direct child of a `position: relative`
+   ancestor). */
+.chordsketch-sheet__content .chord > .caret-marker,
+.chordsketch-sheet__content .line--active > .caret-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
 }
 @keyframes chordsketch-caret-blink {
   0%, 50% {
@@ -761,32 +788,35 @@
   cursor: grabbing;
 }
 
-/* Drop indicator shown while a chord is being dragged over the
-   line. A thin vertical bar pointing at the exact lyric
-   character the chord would land on. Rendered inside the
-   `.lyrics` span (`position: relative`) but stretched UPWARD
-   via negative `top` so it spans the chord row too — the user
-   sees the indicator whether the pointer is in the upper row
-   or the lower row. Crimson to differentiate from the
-   blinking caret marker (which is the editor caret position,
-   not a drop preview).
-
-   `pointer-events: none` keeps the indicator from intercepting
-   the drag — otherwise it would steal `dragover` events from
-   the lyrics span underneath. */
-.chordsketch-sheet__content .drop-indicator {
-  position: absolute;
-  top: -1.1em;
-  bottom: 0;
-  width: 2px;
-  background-color: var(--cs-crimson-500, #bd1642);
-  border-radius: 1px;
-  pointer-events: none;
-  z-index: 1;
-  /* Subtle ring so the bar reads on top of both the chord
-     row's red text and the lyrics row's neutral text without
-     disappearing into either. */
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+/* Per-character span inside a `.lyrics` row. Plain wrapper so
+   the renderer can highlight a single character with a drop-
+   target outline; styling otherwise inherits from `.lyrics`. */
+.chordsketch-sheet__content .lyric-char {
+  /* Tight to its glyph so adjacent chars don't have visible
+     whitespace from default `<span>` line-height inheritance. */
+  display: inline-block;
+}
+/* Drop-target highlight shown while a chord is being dragged
+   over a specific lyric character. A dashed crimson outline
+   around the targeted character makes it unambiguous WHICH
+   character the chord will land above — far more legible than
+   the previous thin vertical bar. `outline` rather than
+   `border` keeps the character's intrinsic width and baseline
+   unchanged: no reflow as the drop target moves. */
+.chordsketch-sheet__content .lyric-char--drop-target {
+  outline: 1px dashed var(--cs-crimson-500, #bd1642);
+  outline-offset: 1px;
+  border-radius: 2px;
+  background-color: rgba(189, 22, 66, 0.06);
+}
+/* End-of-segment drop-target sentinel: a zero-width span shown
+   after the last lyric character when the drop offset is past
+   the segment's text. Width is sourced from `outline-offset`
+   alone so the dashed box renders as a thin vertical sliver
+   rather than disappearing. */
+.chordsketch-sheet__content .lyric-char--drop-target-end {
+  display: inline-block;
+  min-width: 0.4em;
 }
 .chordsketch-sheet__content .lyrics {
   font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);

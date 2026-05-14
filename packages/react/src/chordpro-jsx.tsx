@@ -267,6 +267,85 @@ function renderSegmentText(segment: ChordproLyricsSegment): ReactNode {
   return segment.text;
 }
 
+/**
+ * Render a lyric segment as a sequence of per-character spans
+ * with optional caret and drop-target highlights.
+ *
+ * Per-character spans give two things the previous single-text-
+ * node rendering could not:
+ *
+ * 1. **Precise caret placement.** The caret marker is rendered
+ *    as a sibling between character spans at the given
+ *    `caretCharOffset`. Inline flow positions it EXACTLY on a
+ *    character boundary, regardless of proportional-font width
+ *    variation — the previous `left: X%` approximation drifted
+ *    onto a glyph for offsets near the line center.
+ * 2. **Per-character drop highlight.** When the user drags a
+ *    chord over a specific character, that character span picks
+ *    up `lyric-char--drop-target` and its dashed crimson outline
+ *    makes it unambiguous which character the chord will land
+ *    above. Far more legible than a thin vertical bar at an
+ *    approximate position.
+ *
+ * Segments that carry structured `{textfont}` spans
+ * (`segment.spans.length > 0`) fall back to the simple span
+ * renderer — those segments are a vanishingly small fraction of
+ * real-world lyrics lines and don't need the affordance.
+ */
+function renderLyricsTextWithChars(
+  segment: ChordproLyricsSegment,
+  caretCharOffset: number | null,
+  dropCharOffset: number | null,
+): ReactNode {
+  if (segment.spans.length > 0) {
+    return segment.spans.map(renderSpan);
+  }
+  // Unicode-aware split so combining marks and surrogate pairs
+  // stay grouped with their base character.
+  const chars = Array.from(segment.text);
+  const renderCaret = (key: string): JSX.Element => (
+    <span key={key} className="caret-marker" aria-hidden="true" />
+  );
+  // Drop-target "after the last char" indicator: a zero-width
+  // span with the same dashed outline pinned to the right edge.
+  // Without this an offset past the segment end would not
+  // highlight anything, leaving the user wondering where their
+  // chord will land.
+  const renderDropEnd = (): JSX.Element => (
+    <span
+      key="__drop-end"
+      className="lyric-char lyric-char--drop-target lyric-char--drop-target-end"
+      aria-hidden="true"
+    >
+      {'​'}
+    </span>
+  );
+  const out: ReactNode[] = [];
+  for (let i = 0; i < chars.length; i++) {
+    if (caretCharOffset === i) {
+      out.push(renderCaret(`__caret-${i}`));
+    }
+    const isDropTarget = dropCharOffset === i;
+    out.push(
+      <span
+        key={i}
+        className={
+          isDropTarget ? 'lyric-char lyric-char--drop-target' : 'lyric-char'
+        }
+      >
+        {chars[i]}
+      </span>,
+    );
+  }
+  if (caretCharOffset === chars.length) {
+    out.push(renderCaret('__caret-end'));
+  }
+  if (dropCharOffset !== null && dropCharOffset >= chars.length) {
+    out.push(renderDropEnd());
+  }
+  return out;
+}
+
 // ---- Chord rendering ----------------------------------------------
 
 /**
@@ -640,8 +719,11 @@ export function lyricsCaretRatio(
  * - `{ row: 'chord', segmentIdx, withinRatio }` — caret inside
  *   `[Am]`; marker goes on the chord row of segment `segmentIdx`
  *   at `withinRatio` across the chord text width.
- * - `{ row: 'lyrics', segmentIdx, withinRatio }` — caret on lyric
- *   text; marker goes on the lyrics row of that segment.
+ * - `{ row: 'lyrics', segmentIdx, charOffset, segmentLength }` —
+ *   caret on lyric text; the marker is inserted BETWEEN the
+ *   `(charOffset-1)`-th and `charOffset`-th character spans so
+ *   it sits exactly on a character boundary (no proportional-
+ *   font drift onto a glyph).
  * - `{ row: 'line', lineRatio }` — chord-less line; the
  *   underlying `.chord-block` has no chord row, so the marker
  *   falls back to a single line-level horizontal position.
@@ -649,7 +731,21 @@ export function lyricsCaretRatio(
  */
 export type CaretPlacement =
   | { row: 'chord'; segmentIdx: number; withinRatio: number }
-  | { row: 'lyrics'; segmentIdx: number; withinRatio: number }
+  | {
+      row: 'lyrics';
+      segmentIdx: number;
+      /**
+       * 0-indexed character offset within the segment's lyric
+       * text. `0` = before the first character, `text.length` =
+       * after the last character. Used to position the caret
+       * BETWEEN character spans precisely — the previous
+       * `withinRatio` approximation drifted into the middle of
+       * a character under proportional fonts.
+       */
+      charOffset: number;
+      /** Segment's lyric text length. */
+      segmentLength: number;
+    }
   | { row: 'line'; lineRatio: number };
 
 /**
@@ -702,8 +798,12 @@ export function caretPlacement(
     const textEnd = sourcePos + seg.text.length;
     if (caretColumn >= textStart && caretColumn <= textEnd) {
       const within = caretColumn - textStart;
-      const len = Math.max(1, seg.text.length);
-      return { row: 'lyrics', segmentIdx: i, withinRatio: within / len };
+      return {
+        row: 'lyrics',
+        segmentIdx: i,
+        charOffset: within,
+        segmentLength: seg.text.length,
+      };
     }
     sourcePos = textEnd;
   }
@@ -716,7 +816,12 @@ export function caretPlacement(
   if (lastSeg && lastSeg.text.length === 0 && lastSeg.chord) {
     return { row: 'chord', segmentIdx: lastIdx, withinRatio: 1 };
   }
-  return { row: 'lyrics', segmentIdx: lastIdx, withinRatio: 1 };
+  return {
+    row: 'lyrics',
+    segmentIdx: lastIdx,
+    charOffset: lastSeg?.text.length ?? 0,
+    segmentLength: lastSeg?.text.length ?? 0,
+  };
 }
 
 // ---- Lyrics line ---------------------------------------------------
@@ -921,10 +1026,6 @@ function LyricsLine({
           caret && caret.row === 'chord' && caret.segmentIdx === i
             ? renderMarker(caret.withinRatio)
             : null;
-        const lyricsMarker =
-          caret && caret.row === 'lyrics' && caret.segmentIdx === i
-            ? renderMarker(caret.withinRatio)
-            : null;
         const segLayout = segmentLayout[i];
         const chordDragProps =
           reposition && segment.chord
@@ -935,24 +1036,26 @@ function LyricsLine({
                 reposition.sourceLine,
               )
             : null;
-        // Drop indicator: a thin vertical bar showing the exact
-        // lyric character the chord will land on. Rendered
-        // inside the `.lyrics` span (which is `position:
-        // relative`) but stretched UPWARD with negative `top`
-        // so it spans the chord row above too — making it visible
-        // even when the user is dragging across the chord row.
-        const dropIndicator =
-          dropTarget && dropTarget.segmentIdx === i ? (
-            <span
-              className="drop-indicator"
-              aria-hidden="true"
-              style={{
-                left: `${
-                  (dropTarget.charOffset / Math.max(1, segment.text.length)) * 100
-                }%`,
-              }}
-            />
-          ) : null;
+        // Per-segment lyrics-row caret offset (0-indexed
+        // character) when the caret lands inside this segment.
+        // Inline char-span placement (in `renderLyricsTextWithChars`)
+        // uses this to drop the marker BETWEEN characters
+        // exactly, rather than at a `left: X%` approximation
+        // that drifts onto a glyph under proportional fonts.
+        const caretCharOffset =
+          caret && caret.row === 'lyrics' && caret.segmentIdx === i
+            ? caret.charOffset
+            : null;
+        // Per-segment drop-target character offset when the
+        // user is dragging another chord over this segment.
+        // Outlines the targeted character span in a dashed
+        // crimson border so the user sees WHICH character
+        // the chord will land above, instead of a thin
+        // vertical bar at an approximate position.
+        const dropCharOffset =
+          dropTarget && dropTarget.segmentIdx === i
+            ? dropTarget.charOffset
+            : null;
         return (
           <span key={i} className="chord-block">
             {segment.chord ? (
@@ -975,9 +1078,7 @@ function LyricsLine({
               </span>
             ) : null}
             <span className="lyrics" style={textStyle ?? undefined}>
-              {lyricsMarker}
-              {dropIndicator}
-              {renderSegmentText(segment)}
+              {renderLyricsTextWithChars(segment, caretCharOffset, dropCharOffset)}
             </span>
           </span>
         );
