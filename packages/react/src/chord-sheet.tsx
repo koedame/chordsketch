@@ -1,6 +1,7 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 
 import { renderChordproAst } from './chordpro-jsx';
+import type { ChordRepositionEvent } from './chord-source-edit';
 import type { ChordDiagramInstrument } from './use-chord-diagram';
 import {
   type ChordRenderFormat,
@@ -52,6 +53,26 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
   caretColumn?: number;
   /** Total character length of the active source line. */
   caretLineLength?: number;
+  /**
+   * Optional callback enabling drag-and-drop chord
+   * repositioning in the preview. When set, each rendered
+   * `.chord` becomes a drag source and each `.lyrics` row a
+   * drop target; on drop, this callback receives source-
+   * coordinate info about the move (origin line/column,
+   * destination line + lyrics character offset) and the user's
+   * Alt-modifier state (`copy: true` for copy, `false` for
+   * move).
+   *
+   * The consumer is responsible for mutating the editor source
+   * — typically by feeding the event into
+   * `applyChordReposition` (also exported from this package)
+   * and pushing the result back through whatever surface owns
+   * the source string. Omit to disable drag-and-drop.
+   *
+   * Only consumed by `format="html"`; the text branch passes
+   * through unchanged.
+   */
+  onChordReposition?: (event: ChordRepositionEvent) => void;
   /**
    * Configuration preset name (e.g. `"guitar"`, `"ukulele"`) or an
    * inline RRJSON configuration string.
@@ -152,6 +173,7 @@ export function ChordSheet({
   activeSourceLine,
   caretColumn,
   caretLineLength,
+  onChordReposition,
   className,
   ...divProps
 }: ChordSheetProps): JSX.Element {
@@ -184,6 +206,7 @@ export function ChordSheet({
       activeSourceLine={activeSourceLine}
       caretColumn={caretColumn}
       caretLineLength={caretLineLength}
+      onChordReposition={onChordReposition}
       wrapperClass={wrapperClass}
       divProps={divProps}
     />
@@ -242,6 +265,7 @@ function ChordSheetAstBranch({
   activeSourceLine,
   caretColumn,
   caretLineLength,
+  onChordReposition,
   wrapperClass,
   divProps,
 }: BranchProps & {
@@ -250,6 +274,7 @@ function ChordSheetAstBranch({
   activeSourceLine: number | undefined;
   caretColumn: number | undefined;
   caretLineLength: number | undefined;
+  onChordReposition: ((event: ChordRepositionEvent) => void) | undefined;
 }): JSX.Element {
   const { ast, loading, error, transposedKey } = useChordproAst(
     source,
@@ -285,6 +310,7 @@ function ChordSheetAstBranch({
           activeSourceLine,
           caretColumn,
           caretLineLength,
+          onChordReposition,
         })}
       </div>
     </div>

@@ -76,6 +76,18 @@ export {
 } from './renderer-preview';
 export { Playground, type PlaygroundProps } from './playground';
 
+// Drag-to-reposition chord helpers. `<ChordSheet>` /
+// `renderChordproAst`'s `onChordReposition` callback emits
+// `ChordRepositionEvent` values; consumers feed them through
+// `applyChordReposition` together with the current ChordPro
+// source to compute the updated source text.
+export {
+  applyChordReposition,
+  lyricsOffsetToSourceColumn,
+  type ChordRepositionEvent,
+  type ChordRepositionResult,
+} from './chord-source-edit';
+
 /**
  * The running version of `@chordsketch/react`. Returns the string
  * declared in this package's `package.json` so consumers can verify

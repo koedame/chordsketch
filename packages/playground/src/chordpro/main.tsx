@@ -18,6 +18,8 @@ import {
   PdfExport,
   RendererPreview,
   SourceEditor,
+  applyChordReposition,
+  type ChordRepositionEvent,
   type SourceEditorHandle,
 } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
@@ -606,6 +608,33 @@ function PlaygroundApp(): JSX.Element {
     editorRef.current?.insertAtCursor(text, selectInside);
   }, []);
 
+  // Drag-and-drop chord reposition: turn the AST-coordinate
+  // event emitted by `<RendererPreview>`'s preview into a
+  // ChordPro source mutation, push it through `setSource` so
+  // React's controlled value re-syncs the editor, and restore
+  // the editor caret to the natural "I just dropped here" spot.
+  // Functional `setSource` is required because the drop event
+  // can fire while the user is still typing — capturing
+  // `source` in the closure would risk stale-source edits.
+  const handleChordReposition = useCallback((event: ChordRepositionEvent) => {
+    setSource((current) => {
+      try {
+        const { text, caretOffset } = applyChordReposition(current, event);
+        // Defer the caret move to a microtask so it lands AFTER
+        // the controlled-value sync effect has fed the new doc
+        // back into CodeMirror — otherwise the caret would be
+        // clamped against the pre-mutation doc length and
+        // snap to a meaningless position.
+        queueMicrotask(() => editorRef.current?.setCaret(caretOffset));
+        return text;
+      } catch {
+        // Out-of-range coordinates land here. Leave the source
+        // unchanged rather than corrupting it.
+        return current;
+      }
+    });
+  }, []);
+
   return (
     <div className="chordsketch-app">
       <header className="topnav">
@@ -890,6 +919,7 @@ function PlaygroundApp(): JSX.Element {
                 activeSourceLine={caret?.line}
                 caretColumn={caret?.column}
                 caretLineLength={caret?.lineLength}
+                onChordReposition={handleChordReposition}
               />
             </div>
           </section>

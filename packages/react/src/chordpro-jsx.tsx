@@ -25,7 +25,7 @@
 // `.claude/rules/sanitizer-security.md` §"Security Asymmetry".
 
 import { Fragment, cloneElement, isValidElement } from 'react';
-import type { CSSProperties, JSX, ReactNode } from 'react';
+import type { CSSProperties, DragEvent as ReactDragEvent, JSX, ReactNode } from 'react';
 
 import { ChordDiagram } from './chord-diagram';
 import {
@@ -48,6 +48,7 @@ import type {
   ChordproTextSpan,
 } from './chordpro-ast';
 import type { ChordDiagramInstrument } from './use-chord-diagram';
+import type { ChordRepositionEvent } from './chord-source-edit';
 
 // ---- Sanitiser helpers --------------------------------------------
 
@@ -737,6 +738,16 @@ function renderLyricsLine(
    * line-level placement for chord-less lines via
    * `caretRatioOverride`. */
   caret: CaretPlacement | null = null,
+  /** Chord drag-and-drop context. When non-null, `.chord` spans
+   * with a real chord become drag sources and `.lyrics` spans
+   * become drop targets that fire `onChordReposition`. The
+   * `sourceLine` field is the 1-indexed source line of this
+   * lyrics line — needed to populate the drop event with
+   * absolute coordinates. */
+  reposition: {
+    sourceLine: number;
+    onChordReposition: (event: ChordRepositionEvent) => void;
+  } | null = null,
 ): JSX.Element {
   // If ANY segment on this line carries a chord, every other
   // segment needs a chord-row placeholder so the lyric baselines
@@ -765,6 +776,32 @@ function renderLyricsLine(
       style={{ left: `${ratio * 100}%` }}
     />
   );
+  // Pre-walk segments so each one knows where its `[chord]`
+  // bracket sits in source columns and where its text starts
+  // in the rendered-lyrics character space. Both tallies
+  // power drag-and-drop coordinate translation: the drag
+  // origin uses the source column, and the drop target maps
+  // the pointer character offset to a destination lyrics
+  // offset.
+  const segmentLayout: Array<{
+    chordSourceColumn: number;
+    chordBracketLength: number;
+    lyricsOffsetStart: number;
+  }> = [];
+  {
+    let srcCol = 0;
+    let lyricsCount = 0;
+    for (const seg of line.segments) {
+      const bracketLen = seg.chord ? (seg.chord.name?.length ?? 0) + 2 : 0;
+      segmentLayout.push({
+        chordSourceColumn: srcCol,
+        chordBracketLength: bracketLen,
+        lyricsOffsetStart: lyricsCount,
+      });
+      srcCol += bracketLen + seg.text.length;
+      lyricsCount += seg.text.length;
+    }
+  }
   return (
     <div key={key} className="line">
       {line.segments.map((segment, i) => {
@@ -776,6 +813,24 @@ function renderLyricsLine(
           caret && caret.row === 'lyrics' && caret.segmentIdx === i
             ? renderMarker(caret.withinRatio)
             : null;
+        const segLayout = segmentLayout[i];
+        const chordDragProps =
+          reposition && segment.chord
+            ? buildChordDragProps(
+                segment.chord,
+                segLayout.chordSourceColumn,
+                segLayout.chordBracketLength,
+                reposition.sourceLine,
+              )
+            : null;
+        const lyricsDropProps = reposition
+          ? buildLyricsDropProps(
+              reposition.onChordReposition,
+              reposition.sourceLine,
+              segLayout.lyricsOffsetStart,
+              segment.text.length,
+            )
+          : null;
         return (
           // chord-over-lyric layout is a *visual* arrangement
           // of two parallel data lanes — the chord row is a
@@ -790,7 +845,11 @@ function renderLyricsLine(
           // measured.
           <span key={i} className="chord-block">
             {segment.chord ? (
-              <span className="chord" style={chordStyle ?? undefined}>
+              <span
+                className="chord"
+                style={chordStyle ?? undefined}
+                {...(chordDragProps ?? {})}
+              >
                 {chordMarker}
                 {renderChord(segment.chord)}
               </span>
@@ -804,7 +863,11 @@ function renderLyricsLine(
                 {' '}
               </span>
             ) : null}
-            <span className="lyrics" style={textStyle ?? undefined}>
+            <span
+              className="lyrics"
+              style={textStyle ?? undefined}
+              {...(lyricsDropProps ?? {})}
+            >
               {lyricsMarker}
               {renderSegmentText(segment)}
             </span>
@@ -813,6 +876,149 @@ function renderLyricsLine(
       })}
     </div>
   );
+}
+
+/**
+ * Build the `draggable` / `onDragStart` props for a `.chord`
+ * span. Sets `dataTransfer` with a custom JSON payload
+ * describing the chord's source location and the chord name so
+ * the drop handler can reconstruct a full
+ * `ChordRepositionEvent`. `effectAllowed = 'copyMove'` lets the
+ * user's Alt-modifier at drop time select between move and
+ * copy semantics.
+ */
+function buildChordDragProps(
+  chord: ChordproChord,
+  sourceColumn: number,
+  bracketLength: number,
+  sourceLine: number,
+): {
+  draggable: true;
+  onDragStart: (event: ReactDragEvent<HTMLSpanElement>) => void;
+} {
+  const payload: ChordDragPayload = {
+    fromLine: sourceLine,
+    fromColumn: sourceColumn,
+    fromLength: bracketLength,
+    chord: chord.name ?? '',
+  };
+  return {
+    draggable: true,
+    onDragStart: (event) => {
+      event.dataTransfer.setData(CHORD_DRAG_MIME, JSON.stringify(payload));
+      event.dataTransfer.effectAllowed = 'copyMove';
+    },
+  };
+}
+
+/**
+ * Build the `onDragOver` / `onDrop` props for a `.lyrics` span.
+ * `onDragOver` gates drops to our own chord drags (no OS-file
+ * drags / cross-tab text drags) and reflects the Alt-modifier
+ * in the cursor; `onDrop` reads the dragged payload, maps the
+ * pointer position to a character offset inside the segment's
+ * text, and fires `onChordReposition` with absolute
+ * coordinates.
+ */
+function buildLyricsDropProps(
+  onChordReposition: (event: ChordRepositionEvent) => void,
+  destinationLine: number,
+  lyricsOffsetStart: number,
+  segmentTextLength: number,
+): {
+  onDragOver: (event: ReactDragEvent<HTMLSpanElement>) => void;
+  onDrop: (event: ReactDragEvent<HTMLSpanElement>) => void;
+} {
+  return {
+    onDragOver: (event) => {
+      if (!event.dataTransfer.types.includes(CHORD_DRAG_MIME)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = event.altKey ? 'copy' : 'move';
+    },
+    onDrop: (event) => {
+      const raw = event.dataTransfer.getData(CHORD_DRAG_MIME);
+      if (!raw) return;
+      let payload: ChordDragPayload;
+      try {
+        payload = JSON.parse(raw) as ChordDragPayload;
+      } catch {
+        return;
+      }
+      event.preventDefault();
+      const target = event.currentTarget;
+      const charOffset = pointerToLyricCharOffset(
+        target,
+        event.clientX,
+        event.clientY,
+        segmentTextLength,
+      );
+      onChordReposition({
+        fromLine: payload.fromLine,
+        fromColumn: payload.fromColumn,
+        fromLength: payload.fromLength,
+        toLine: destinationLine,
+        toLyricsOffset: lyricsOffsetStart + charOffset,
+        chord: payload.chord,
+        copy: event.altKey,
+      });
+    },
+  };
+}
+
+/** Custom mime type for the chord drag payload — disambiguates
+ * our drags from OS file drags and from `text/plain` payloads
+ * that other tabs might emit. Kept private to the package. */
+const CHORD_DRAG_MIME = 'application/x-chordsketch-chord';
+
+interface ChordDragPayload {
+  fromLine: number;
+  fromColumn: number;
+  fromLength: number;
+  chord: string;
+}
+
+/**
+ * Resolve a clientX/Y pointer into a character offset within
+ * the `<span class="lyrics">` element's text. Uses
+ * `caretPositionFromPoint` (Firefox) / `caretRangeFromPoint`
+ * (WebKit / Chromium) with a graceful fallback to a
+ * width-proportional offset when neither is available. The
+ * result is clamped to `[0, segmentTextLength]` so a drop past
+ * the segment's visible edge maps to "right after the last
+ * character" instead of overshooting into the next segment.
+ */
+function pointerToLyricCharOffset(
+  target: HTMLElement,
+  clientX: number,
+  clientY: number,
+  segmentTextLength: number,
+): number {
+  const docAny = document as Document & {
+    caretPositionFromPoint?: (
+      x: number,
+      y: number,
+    ) => { offsetNode: Node; offset: number } | null;
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+  };
+  let nodeOffset: number | null = null;
+  if (typeof docAny.caretPositionFromPoint === 'function') {
+    const pos = docAny.caretPositionFromPoint(clientX, clientY);
+    if (pos && target.contains(pos.offsetNode)) nodeOffset = pos.offset;
+  } else if (typeof docAny.caretRangeFromPoint === 'function') {
+    const range = docAny.caretRangeFromPoint(clientX, clientY);
+    if (range && target.contains(range.startContainer)) {
+      nodeOffset = range.startOffset;
+    }
+  }
+  if (nodeOffset === null) {
+    const rect = target.getBoundingClientRect();
+    const ratio =
+      rect.width > 0
+        ? Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+        : 0;
+    nodeOffset = Math.round(ratio * segmentTextLength);
+  }
+  return Math.max(0, Math.min(segmentTextLength, nodeOffset));
 }
 
 // ---- Comment line --------------------------------------------------
@@ -1048,6 +1254,27 @@ export interface RenderChordproAstOptions {
    */
   caretColumn?: number;
   caretLineLength?: number;
+  /**
+   * Optional callback enabling chord drag-and-drop
+   * repositioning. When set, every `.chord` span that carries a
+   * real chord becomes a drag source, and every `.lyrics` span
+   * becomes a drop target. On drop the walker computes
+   * source-coordinate information about the move (from-line +
+   * column of the original `[chord]`, target-line + lyrics
+   * character offset where the chord should land) and invokes
+   * this callback so the consumer can mutate the editor source.
+   *
+   * Pair with {@link applyChordReposition} (re-exported from
+   * `@chordsketch/react/chord-source-edit`) to compute the new
+   * source string from a `ChordRepositionEvent`. The default
+   * gesture is "move"; users holding Alt/Option get "copy"
+   * semantics (the `copy` field on the event reflects this).
+   *
+   * Omit (or pass `undefined`) to disable drag-and-drop —
+   * `.chord` elements stay non-draggable and `.lyrics`
+   * elements take no drop handlers.
+   */
+  onChordReposition?: (event: ChordRepositionEvent) => void;
 }
 
 /**
@@ -1884,6 +2111,14 @@ interface WalkContext {
    * transposition is active or it lands on the same key.
    */
   soundingKey: string | null;
+  /**
+   * Chord drag-and-drop callback (see
+   * `RenderChordproAstOptions.onChordReposition`). When
+   * `undefined`, the walker emits inert `.chord` / `.lyrics`
+   * elements; when set, `.chord` becomes draggable and
+   * `.lyrics` becomes a drop target.
+   */
+  onChordReposition?: (event: ChordRepositionEvent) => void;
 }
 
 function flushSection(ctx: WalkContext, key: number): void {
@@ -2369,9 +2604,19 @@ function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {
       } else {
         lineLevelRatio = null;
       }
+      const repositionCtx = ctx.onChordReposition
+        ? { sourceLine, onChordReposition: ctx.onChordReposition }
+        : null;
       pushElement(
         ctx,
-        renderLyricsLine(line.value, key, ctx.fmt, lyricsOverride, placement),
+        renderLyricsLine(
+          line.value,
+          key,
+          ctx.fmt,
+          lyricsOverride,
+          placement,
+          repositionCtx,
+        ),
         sourceLine,
         lineLevelRatio,
       );
@@ -2443,6 +2688,7 @@ export function renderChordproAst(
       options.transposedKey && options.transposedKey !== song.metadata.key
         ? options.transposedKey
         : null,
+    onChordReposition: options.onChordReposition,
   };
   // Emit header first so metadata lands above the body even when
   // the source has metadata directives interleaved with lines.

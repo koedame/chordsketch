@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 
 import { renderChordproAst } from '../src/chordpro-jsx';
 import type { ChordproSong } from '../src/chordpro-ast';
@@ -807,6 +807,63 @@ describe('renderChordproAst', () => {
       '.chord-block .lyrics .caret-marker',
     ) as HTMLElement | null;
     expect(lyricsMarker?.style.left).toBe('100%');
+  });
+
+  // Drag-to-reposition wiring — when `onChordReposition` is
+  // passed, `.chord` spans become draggable and `.lyrics` spans
+  // become drop targets. Without the option, both stay inert.
+  test('chord drag/drop affordances are off by default', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              {
+                chord: { name: 'Am', detail: null, display: null },
+                text: 'Hello',
+                spans: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast, {}));
+    const chord = container.querySelector('.chord');
+    // No `onChordReposition` → not draggable.
+    expect(chord?.getAttribute('draggable')).toBeNull();
+  });
+
+  test('passing onChordReposition turns chord spans into drag sources', () => {
+    const repo = vi.fn();
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              {
+                chord: { name: 'Am', detail: null, display: null },
+                text: 'Hello',
+                spans: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const { container } = render(
+      renderChordproAst(ast, { onChordReposition: repo }),
+    );
+    const chord = container.querySelector('.chord') as HTMLElement | null;
+    expect(chord?.getAttribute('draggable')).toBe('true');
+    // Placeholder (chord-less segment on chord-bearing line) is
+    // aria-hidden and NOT draggable.
+    // No-op for this test — single-segment line has no
+    // placeholder — kept as a comment to anchor the rule.
   });
 
   // Multi-segment chord-bearing line — the marker must land in

@@ -53,6 +53,15 @@ export interface SourceEditorHandle {
    * the user overwrite it).
    */
   insertAtCursor(text: string, selectInside?: boolean): void;
+  /**
+   * Set the caret to a specific 0-indexed character offset in
+   * the document. Clamped to `[0, doc.length]`. Bypasses
+   * `onChange` (selection-only update fires `onCaretChange` but
+   * not `onChange`). Used by editor↔preview integrations that
+   * need to restore the caret position after a programmatic
+   * source mutation (e.g. drag-and-drop chord reposition).
+   */
+  setCaret(offset: number): void;
 }
 
 /** Props accepted by {@link SourceEditor}. */
@@ -465,6 +474,12 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
             });
           }
           view.focus();
+        },
+        setCaret(offset: number) {
+          const view = viewRef.current;
+          if (!view) return;
+          const clamped = Math.max(0, Math.min(view.state.doc.length, offset));
+          view.dispatch({ selection: { anchor: clamped } });
         },
       }),
       [],

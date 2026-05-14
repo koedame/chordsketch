@@ -748,6 +748,18 @@
      width rather than the whole line. */
   position: relative;
 }
+/* Drag affordance for the drag-to-reposition feature. Only the
+   real chord spans become draggable (placeholder/aria-hidden
+   chord-row spaces do not), so this rule is scoped to the
+   draggable attribute rather than the `.chord` class wholesale.
+   `grab` flips to `grabbing` while a drag is active. */
+.chordsketch-sheet__content .chord[draggable='true'] {
+  cursor: grab;
+  user-select: none;
+}
+.chordsketch-sheet__content .chord[draggable='true']:active {
+  cursor: grabbing;
+}
 .chordsketch-sheet__content .lyrics {
   font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
   font-weight: 400;

@@ -2,6 +2,7 @@ import type { HTMLAttributes, ReactNode } from 'react';
 
 import { ChordSheet } from './chord-sheet';
 import { PdfExport } from './pdf-export';
+import type { ChordRepositionEvent } from './chord-source-edit';
 import type { ChordDiagramInstrument } from './use-chord-diagram';
 import { type ChordRenderFormat, type ChordWasmLoader } from './use-chord-render';
 
@@ -49,6 +50,12 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
   caretColumn?: number;
   /** See {@link ChordSheetProps.caretLineLength}. */
   caretLineLength?: number;
+  /**
+   * Optional drag-and-drop chord reposition callback. Forwarded
+   * to {@link ChordSheet}; see `ChordSheetProps.onChordReposition`
+   * for semantics. Only consumed by `format="html"`.
+   */
+  onChordReposition?: (event: ChordRepositionEvent) => void;
   /** Optional content rendered while the wasm runtime is initialising. */
   loadingFallback?: ReactNode;
   /**
@@ -98,6 +105,7 @@ export function RendererPreview({
   activeSourceLine,
   caretColumn,
   caretLineLength,
+  onChordReposition,
   loadingFallback,
   errorFallback,
   wasmLoader,
@@ -136,6 +144,7 @@ export function RendererPreview({
       activeSourceLine={activeSourceLine}
       caretColumn={caretColumn}
       caretLineLength={caretLineLength}
+      onChordReposition={onChordReposition}
       loadingFallback={loadingFallback}
       errorFallback={errorFallback}
       wasmLoader={wasmLoader}
