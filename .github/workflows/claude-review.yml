@@ -62,7 +62,12 @@ jobs:
             // Limit auto-review iterations to prevent infinite loops.
             // claude[bot] fix commits are NOT skipped — they get delta-reviewed.
             // MAX_ITERATIONS is the safety cap.
-            const MAX_ITERATIONS = 3;
+            // MUST stay in lockstep with `.claude/rules/pr-workflow.md` step 7
+            // (currently 10) and every cross-reference enumerated in #2471 —
+            // a drift here silently caps review iterations before the
+            // documented threshold, exactly the failure mode #2471 was
+            // designed to remove.
+            const MAX_ITERATIONS = 10;
             const autoReviewCount = comments.filter(c =>
               c.body.startsWith('<!-- claude-auto-review:')
             ).length;

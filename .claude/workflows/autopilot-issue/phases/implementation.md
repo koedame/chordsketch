@@ -45,6 +45,10 @@ slug=$(printf '%s' "<selected_issue.title>" \
 branch="issue-${N}-${slug}"
 repo_top=$(git rev-parse --show-toplevel)
 worktree_path="${repo_top}/../chordsketch-wt/${branch}"
+# preconditions already ran `git fetch origin main --tags` and
+# fast-forwarded local main to origin/main; re-fetching here is
+# defense-in-depth in case the orchestrator's resume path skipped
+# preconditions, and is cheap when the refs are already current.
 git fetch origin
 git worktree add "$worktree_path" -b "${branch}" origin/main
 ```

@@ -130,7 +130,7 @@ a conditional carve-out for AI-assistant merges (see step 5 below and
    (High first, Nit last), CI re-runs, delta review iterates. Review bots do NOT
    create follow-up issues for findings; the in-PR fix is the only path.
 4. **Convergence** — loop iterates until the delta review surfaces zero findings
-   (or the 3-iteration safety cap in `.claude/rules/pr-workflow.md` fires).
+   (or the 10-iteration safety cap in `.claude/rules/pr-workflow.md` fires).
 5. **Ready for merge** — when the review converges, Claude posts a
    "Ready for merge" comment. A human inspects the **full check rollup** (not
    just the required checks listed in branch protection), verifies there are no
