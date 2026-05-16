@@ -221,11 +221,20 @@ workflow's `README.md` should list the dependency under a "Required
 plugins" section so a contributor on a fresh machine knows what to
 install.
 
-The shipped `autopilot-issue` workflow does NOT depend on any external
-plugins — it uses only the built-in `Explore`, `Plan`, and
-`general-purpose` `subagent_type` values. New workflows should default
-to the same posture; reach for plugin sub-agents only when a capability
-the built-ins lack is load-bearing for the phase.
+The shipped `autopilot-issue` workflow depends on the
+`pr-review-toolkit` plugin for its `pr-review` phase
+(`code-reviewer`, `silent-failure-hunter`, `pr-test-analyzer`,
+`comment-analyzer`, `type-design-analyzer`). Its `preconditions`
+phase verifies the plugin is installed via `claude plugins list` and
+HALTs if it is not, and its `README.md` lists the dependency under a
+"Required plugins" section. Every other phase
+(`issue-selection`, `implementation`) uses only the built-in
+`Explore`, `Plan`, and `general-purpose` `subagent_type` values. New
+workflows should default to the built-in-only posture; reach for
+plugin sub-agents only when a capability the built-ins lack is
+load-bearing for the phase, and add the matching `preconditions`
+check + `README.md` entry in the same PR that introduces the
+dependency.
 
 ## State-directory side channels
 

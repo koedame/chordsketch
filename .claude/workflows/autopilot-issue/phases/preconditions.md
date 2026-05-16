@@ -70,6 +70,22 @@ Run each check; record the result. Stop at the first failure and HALT.
    If the list is non-empty, HALT with
    `halt_reason: "another open PR by current user against main: #<N> (<branch>)"`.
 
+7. **Plugin availability** per
+   [`.claude/rules/workflow-discipline.md`](../../../rules/workflow-discipline.md)
+   §"Required external dependencies". The `pr-review` phase depends
+   on the `pr-review-toolkit` plugin for its specialist review
+   sub-agents (`code-reviewer`, `silent-failure-hunter`,
+   `pr-test-analyzer`, `comment-analyzer`, `type-design-analyzer`).
+   Verify it is installed:
+   ```bash
+   claude plugins list
+   ```
+   If `pr-review-toolkit` does not appear in the output, HALT with
+   `halt_reason: "pr-review-toolkit plugin is not installed; run 'claude plugins install pr-review-toolkit' and retry"`.
+   The check runs in this phase rather than in `pr-review` so a
+   missing plugin fails fast — before the workflow touches any
+   remote state — instead of mid-review after a PR has been opened.
+
 ## Output
 
 Write `context.json` with **exactly** this shape (preserve any keys
@@ -107,6 +123,7 @@ Write the matching identifier to `<state-dir>/current-phase.txt`.
 - Working tree is dirty.
 - Another open PR by the current user against `main` exists.
 - Repository identity check fails (running from a worktree).
+- `pr-review-toolkit` plugin is not installed.
 
 ## Notes
 
