@@ -97,35 +97,91 @@ will see CI failures and decide whether to fix or HALT.
 
 ### 4. Review fan-out
 
-Run the following review surfaces in parallel where possible (multiple
-Agent tool uses in a single message) and aggregate the findings into a
-single severity-ordered list (High → Medium → Low → Nit):
+Run the following review surfaces in parallel — issue all Agent tool
+uses and the `Skill` invocations in a single message — and aggregate
+the findings into a single severity-ordered list
+(High → Medium → Low → Nit):
 
-- A `general-purpose` sub-agent performing a code review against the PR diff.
-- A `general-purpose` sub-agent performing a silent-failure / error-handling audit against the PR diff.
-- A cross-check pass against every file in `.claude/rules/` — does the
-  diff or PR body violate any rule?
+- `Skill` invocation of `review` (the project's `/review` slash
+  command). REQUIRED — covers the project-specific review checklist.
+- `Skill` invocation of `security-review` (the project's
+  `/security-review` slash command). REQUIRED — covers the
+  sanitizer / asymmetry / blocklist completeness rules in
+  `.claude/rules/sanitizer-security.md`.
+- Agent invocation `subagent_type: "pr-review-toolkit:code-reviewer"`
+  against the PR diff — adherence to project guidelines and CLAUDE.md
+  style. Specify the diff scope explicitly (`gh pr diff <PR>` or the
+  branch range).
+- Agent invocation
+  `subagent_type: "pr-review-toolkit:silent-failure-hunter"` —
+  silent failures, inadequate error handling, fallbacks that hide
+  bugs.
+- Agent invocation
+  `subagent_type: "pr-review-toolkit:pr-test-analyzer"` — test
+  coverage of the new functionality and edge cases.
+- Agent invocation
+  `subagent_type: "pr-review-toolkit:comment-analyzer"` — accuracy of
+  added or modified comments versus the code they describe.
+- Agent invocation
+  `subagent_type: "pr-review-toolkit:type-design-analyzer"` — only
+  when the PR introduces or refactors a public type (struct / enum /
+  trait surface). Skip otherwise to avoid noise.
+- Agent invocation `subagent_type: "general-purpose"` performing a
+  cross-check against every file in `.claude/rules/` — does the diff
+  or PR body violate any rule? The specialists above do not own this
+  surface, so the generic agent stays in the fan-out for it.
 - Collect existing inline review comments via `gh`'s brace form (no
-  hard-coded owner/repo):
+  hard-coded owner/repo) and feed them into the aggregation:
   ```bash
   gh api 'repos/{owner}/{repo}/pulls/<PR>/comments'
+  gh api 'repos/{owner}/{repo}/issues/<PR>/comments'
   ```
-- If `/review` and `/security-review` are available as Skill
-  invocations in this session, run those too.
+
+If `Skill` resolution fails for `review` or `security-review` in this
+session (the skill is not registered, or the tool errors), HALT with
+`halt_reason: "required review skill <name> unavailable in this
+session"`. Do NOT silently proceed without those two surfaces — the
+security-review path in particular is load-bearing for the
+`sanitizer-security.md` invariants.
 
 ### 5. Resolve loop
 
+**Every finding is resolved in this PR, regardless of severity, and
+regardless of whether the finding falls inside the original issue's
+scope.** This restates
+[`.claude/rules/pr-workflow.md`](../../../rules/pr-workflow.md)
+step 4 ("All findings, every severity, resolved in-PR") and step 5
+("No follow-up issues for review findings") inline so the phase
+prompt is self-contained:
+
+- A finding that lives outside the original issue's scope is still
+  fixed in this PR — quality takes precedence over scope locality.
+- Do NOT call `gh issue create` from this phase to defer a finding.
+- The PR body's `## Deferred` section is for pre-existing defects in
+  unrelated crates linked to an existing tracker, not for review
+  findings against the current diff.
+
 For each finding, in High → Nit order:
 
-1. Push a fix commit that addresses the root cause (no `#[allow(...)]`
-   on legitimate warnings, no `unwrap_or_default` to hide missing
-   values, etc.). Each fix follows the same English-only / rule-bound
-   discipline as the original implementation.
+1. Push a fix commit that addresses the **root cause** per
+   [`.claude/rules/root-cause-fixes.md`](../../../rules/root-cause-fixes.md)
+   (no `#[allow(...)]` on legitimate warnings, no
+   `unwrap_or_default` to hide missing values, no test edits to mask
+   a regression, no timeout bumps to mask intermittency). Each fix
+   follows the same English-only / rule-bound discipline as the
+   original implementation. If a finding cannot be addressed at the
+   root level within this PR (e.g. it requires an ADR or
+   cross-team coordination), HALT with a `halt_reason` naming the
+   specific blocker — do NOT push a symptomatic patch.
 2. After each push, wait for CI (bounded `timeout`, same as step 3),
-   then run a **delta review** that only examines the new commits.
-   Findings from the original code that were not flagged previously
-   are considered accepted; do not revive them.
-3. Iterate until the delta review returns zero findings.
+   then run the **same parallel fan-out as step 4** but scoped to the
+   new commits only (delta review). Findings from the original code
+   that were not flagged previously are considered accepted; do not
+   revive them.
+3. Iterate until the delta review returns zero findings across every
+   surface in the fan-out (skills + specialist agents + rules
+   cross-check + inline comments). "Zero findings" is the
+   convergence criterion, not "no blocking findings".
 
 Hard cap: 3 review iterations per
 [`.claude/rules/pr-workflow.md`](../../../rules/pr-workflow.md) step 7.
@@ -201,6 +257,8 @@ Set the next phase (write to `<state-dir>/current-phase.txt`):
 - Review iteration cap (3) is hit with findings outstanding.
 - A finding requires human judgement (e.g. ADR needed, scope
   exceeded).
+- `Skill` resolution for `review` or `security-review` fails — the
+  fan-out's two required surfaces are non-optional.
 - A forbidden action would be required to complete the PR.
 
 ## Notes
