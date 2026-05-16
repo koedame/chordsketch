@@ -13,9 +13,9 @@ Usage:
     python3 scripts/validate-workflow.py --workflows-dir <path> ...
 
 Exit codes:
-    0 — all checks passed
-    1 — one or more checks failed (details on stderr)
-    2 — argument or file-not-found error
+    0 - all checks passed
+    1 - one or more checks failed (details on stderr)
+    2 - argument or file-not-found error
 """
 from __future__ import annotations
 
@@ -27,13 +27,25 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
+# Workflow- and phase-name regex. Kept in sync with run-workflow.sh's
+# $NAME_REGEX and .claude/rules/workflow-discipline.md §"Naming".
 NAME_PATTERN = re.compile(r"^[a-z0-9-]+$")
 REQUIRED_TOP_LEVEL_KEYS = ("entryPhase", "phases", "terminalPhases")
+# Reserved identifiers — phase names AND workflow names. `HALT` is the
+# orchestrator's error/abort terminal; treating it as reserved across both
+# scopes prevents ambiguity at workflow-name parse time.
 RESERVED_PHASE_NAMES = frozenset({"HALT"})
-# `HALT` is the orchestrator-reserved error/abort exit; every workflow must
-# declare it as a terminal phase so the orchestrator can distinguish a clean
-# exit from a halt.
+# Every workflow must declare HALT in terminalPhases so the orchestrator
+# can distinguish a clean exit from a halt.
 REQUIRED_TERMINALS = frozenset({"HALT"})
+
+# Defense-in-depth caps. validate-workflow.py reads committed files, so the
+# attacker model is bounded — but code-style.md §"Resource Limits" says
+# "Never accept unbounded input sizes without a documented limit", and the
+# alternative (OOMing on a 1 GB phase markdown a contributor accidentally
+# checks in) is easy to avoid.
+MAX_WORKFLOW_JSON_BYTES = 256 * 1024  # 256 KiB
+MAX_PHASE_MARKDOWN_BYTES = 1024 * 1024  # 1 MiB
 
 
 @dataclass
@@ -52,6 +64,37 @@ class ValidationResult:
         return not self.errors
 
 
+def _read_text_capped(path: Path, max_bytes: int) -> str:
+    """Read a text file, refusing to load more than `max_bytes`.
+
+    Documented size cap per code-style.md §"Resource Limits".
+    """
+    size = path.stat().st_size
+    if size > max_bytes:
+        raise ValueError(
+            f"file too large: {path} is {size} bytes (limit {max_bytes})"
+        )
+    return path.read_text(encoding="utf-8")
+
+
+def _resolves_inside(candidate: Path, root: Path) -> bool:
+    """True iff `candidate` resolves to a path under `root`.
+
+    Used to reject `"file": "../../../../etc/passwd"` in workflow.json.
+    Symlink-aware: both sides are resolved before comparison.
+    """
+    try:
+        candidate_resolved = candidate.resolve(strict=False)
+        root_resolved = root.resolve(strict=False)
+    except OSError:
+        return False
+    try:
+        candidate_resolved.relative_to(root_resolved)
+        return True
+    except ValueError:
+        return False
+
+
 def validate_workflow(workflow_dir: Path) -> ValidationResult:
     """Run every check against a single workflow directory.
 
@@ -65,6 +108,10 @@ def validate_workflow(workflow_dir: Path) -> ValidationResult:
         result.errors.append(
             f"workflow directory name {name!r} does not match {NAME_PATTERN.pattern}"
         )
+    if name in RESERVED_PHASE_NAMES:
+        result.errors.append(
+            f"workflow directory name {name!r} is a reserved identifier"
+        )
 
     workflow_json_path = workflow_dir / "workflow.json"
     if not workflow_json_path.is_file():
@@ -72,7 +119,13 @@ def validate_workflow(workflow_dir: Path) -> ValidationResult:
         return result
 
     try:
-        data = json.loads(workflow_json_path.read_text(encoding="utf-8"))
+        raw = _read_text_capped(workflow_json_path, MAX_WORKFLOW_JSON_BYTES)
+    except ValueError as exc:
+        result.errors.append(str(exc))
+        return result
+
+    try:
+        data = json.loads(raw)
     except json.JSONDecodeError as exc:
         result.errors.append(f"workflow.json is not valid JSON: {exc}")
         return result
@@ -136,12 +189,25 @@ def validate_workflow(workflow_dir: Path) -> ValidationResult:
             )
         else:
             phase_path = workflow_dir / rel_file
-            if not phase_path.is_file():
+            # Reject `"file": "../../etc/passwd"` — committed JSON should
+            # never reference anything outside its own workflow directory.
+            if not _resolves_inside(phase_path, workflow_dir):
+                result.errors.append(
+                    f"phase {phase_name!r}: file {rel_file!r} resolves outside workflow directory"
+                )
+            elif not phase_path.is_file():
                 result.errors.append(
                     f"phase {phase_name!r}: file {rel_file!r} not found at {phase_path}"
                 )
             else:
-                result.warnings.extend(_audit_phase_markdown(phase_name, phase_path))
+                try:
+                    md_text = _read_text_capped(phase_path, MAX_PHASE_MARKDOWN_BYTES)
+                except ValueError as exc:
+                    result.errors.append(str(exc))
+                else:
+                    result.warnings.extend(
+                        _audit_phase_markdown(phase_name, phase_path, md_text)
+                    )
 
         next_list = phase_def.get("next")
         if next_list is None:
@@ -170,26 +236,26 @@ def validate_workflow(workflow_dir: Path) -> ValidationResult:
     return result
 
 
-def _audit_phase_markdown(phase_name: str, path: Path) -> list[str]:
+def _audit_phase_markdown(phase_name: str, path: Path, text: str) -> list[str]:
     """Soft-check the phase markdown for the documented sections.
 
     Returns warnings only — phase files do not have a strict structural
     schema, and the orchestrator appends a generic Required final actions
     block at invocation time. We surface advisories that help phase
-    authors avoid common omissions.
+    authors avoid common omissions; tighter checks (e.g. AST-level Markdown
+    parsing) would require an external dependency the validator avoids.
     """
     warnings: list[str] = []
-    text = path.read_text(encoding="utf-8")
-    # Section heading: `## Output` (any case) on its own line. Substring
-    # checks confuse "Output" the section with "no output yet" the prose.
-    if not re.search(r"(?im)^\s*#{1,6}\s*output\b", text):
+    # Section heading: `## Output` (any case) on its own line, level ≥ 2.
+    # Level-1 headings are the phase title; we don't want to confuse those
+    # with the Output section.
+    if not re.search(r"(?im)^\s*#{2,6}\s*output\b", text):
         warnings.append(
-            f"phase {phase_name!r}: file {path.name} has no 'Output' section "
-            "(see workflow-discipline.md §'Phase file contract')"
+            f"phase {phase_name!r}: file {path.name} has no level-2+ 'Output' "
+            "section heading (see workflow-discipline.md §'Phase file contract')"
         )
-    # HALT is a reserved orchestrator keyword and is conventionally written
-    # in uppercase; lowercase 'halt' appears in incidental prose ("don't halt
-    # the build") and is not a reliable signal.
+    # Require an uppercase HALT reference; lowercase 'halt' shows up in
+    # incidental prose ("don't halt the build") and is not reliable signal.
     if "HALT" not in text:
         warnings.append(
             f"phase {phase_name!r}: file {path.name} does not mention HALT "
@@ -215,7 +281,10 @@ def _print_result(result: ValidationResult, stream) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
+    description = None
+    if __doc__ and __doc__.strip():
+        description = __doc__.splitlines()[0]
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
         "workflow",
         nargs="?",

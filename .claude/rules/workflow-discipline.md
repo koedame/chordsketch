@@ -105,6 +105,47 @@ The orchestrator does not enforce this; it is a discipline matter.
 Violating it puts the maintainer's `main` checkout at risk under
 `--dangerously-skip-permissions`.
 
+## Forbidden phase actions
+
+Workflows run with `claude --dangerously-skip-permissions`. The CLI
+imposes no per-tool prompts, so the rule layer is the only thing
+stopping a phase from doing damage that would normally require
+maintainer intervention. The following actions are NEVER allowed
+inside a phase prompt; if the workflow needs one, the human performs
+it after the workflow's `ready-for-merge` (or equivalent) terminal:
+
+- `gh pr merge` (in any form, including `--auto`/`--squash`/`--merge`).
+  Bot-driven merge is gated by ADR-0013's four-clause check, which
+  requires per-session permission the workflow does not assume.
+- `git push --force` or `git push --force-with-lease` to `main` or any
+  protected branch. `--force-with-lease` to a feature branch the
+  workflow itself created is permitted only inside the resolve-loop
+  of a `pr-review`-equivalent phase.
+- `git push origin main` (or any direct push to the default branch).
+- `cargo publish` / `npm publish` / `gem push` / `mvn deploy` / any
+  registry-publication command. Releases are ADR-0008-/ADR-0009-gated.
+- `gh release create`, `gh release edit`, `gh release delete`.
+- `gh secret set`, `gh secret remove`, or any other write to repository
+  secrets / Actions variables.
+- `rm -rf` (and equivalents like `find … -delete`) outside the
+  workflow's own `worktree_path` and `.claude/workflow-state/<name>/`
+  scratch areas.
+- Touching `.git/config`, `.git/hooks/`, or any global git config under
+  `~/.gitconfig`.
+- Disabling pre-commit hooks via `--no-verify` or comparable flags
+  while committing a phase's output.
+
+Phase authors MUST enumerate phase-specific HALT conditions when an
+issue body or upstream context would require one of these actions to
+complete the work, rather than silently performing a different action.
+
+Auditing: every committed phase markdown should `grep` clean for these
+commands. The auto-review path described in `pr-workflow.md` checks
+this on each PR; `scripts/validate-workflow.py` does not parse phase
+bodies for forbidden patterns today (deliberate — phase prose may
+legitimately *describe* a forbidden command in a "do not run this"
+context), so the burden falls on review.
+
 ## context.json schema evolution
 
 `context.json` is a workflow-scoped key-value store. Treat its shape as
@@ -142,15 +183,53 @@ maintainers cross-check by reading the phase file's Output section.
 - Every value in any `phases.<X>.next` array MUST appear either as a
   key in `phases` or as an entry in `terminalPhases`.
 - Every key in `phases` MUST have a `file` whose path resolves to an
-  existing `phases/*.md`.
+  existing `phases/*.md` AND stays inside the workflow's own directory
+  (no `../` path traversal).
 - `terminalPhases` MUST include `HALT`.
+- Workflow names and phase names match `^[a-z0-9-]+$`. `HALT` is
+  reserved as a phase-and-workflow name; do not use it for either.
 - The orchestrator does not currently enforce `next` adherence at
   runtime (Claude could write any string to `current-phase.txt`); it
   enforces only "phase exists or is terminal." Treat `next` as the
   contract a phase author promises to honour.
 
-`scripts/validate-workflow.py` checks every item in this section; run
-it before opening a PR that adds or modifies a workflow.
+`scripts/validate-workflow.py` checks every item in this section
+statically; the orchestrator re-validates `workflow.json`'s required
+top-level keys at every iteration so mid-run corruption surfaces with
+a clear error. Run the validator before opening a PR that adds or
+modifies a workflow.
+
+## Required external dependencies
+
+The orchestrator hard-requires the following binaries and refuses to
+start without them. Phase authors do not need to re-check these in
+preconditions; the orchestrator's failure is loud enough.
+
+- `claude` CLI
+- `jq`
+- `flock` (util-linux on Linux; `brew install flock` on macOS)
+- `timeout` (GNU coreutils) or `gtimeout` (`brew install coreutils` on
+  macOS)
+- `git`
+
+Plugin-provided sub-agents (e.g. `feature-dev:*`, `pr-review-toolkit:*`)
+that a phase invokes are NOT enforced by the orchestrator. If a workflow
+depends on such plugins, its `preconditions` phase MUST verify they are
+installed via `claude plugins list` and HALT if any are missing. The
+workflow's `README.md` should list the dependency under a "Required
+plugins" section so a contributor on a fresh machine knows what to
+install.
+
+## State-directory side channels
+
+`.claude/workflow-state/<name>/` is reserved for the orchestrator and
+the canonical state files (`context.json`, `current-phase.txt`, `logs/`,
+`lock`, transient `prompt.*` files). Phase prompts MUST NOT write
+additional files into the state directory beyond what is documented
+here; persistent inter-phase state belongs in `context.json` so the
+schema-evolution rules above apply. Scratch files belong inside the
+worktree the phase created (which is gitignored by chordsketch's
+top-level `.gitignore`) or under `$TMPDIR`.
 
 ## Logging and observability
 

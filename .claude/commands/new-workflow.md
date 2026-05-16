@@ -26,8 +26,11 @@ into real phase content per
 2. `.claude/workflows/<name>/` does NOT already exist. If it does,
    abort with `workflow '<name>' already exists at <path>`. Do not
    overwrite or merge.
-3. `<name>` does not collide with a built-in or reserved keyword:
-   `HALT`, `done`, `cancel`. Reject if matched.
+3. `<name>` does not collide with the reserved identifier `HALT`
+   (see `.claude/rules/workflow-discipline.md` §"Naming"). Reject if
+   matched. The validator's `RESERVED_PHASE_NAMES` is the single
+   source of truth — the skill and the validator MUST agree on the
+   reserved set.
 
 ## Steps
 

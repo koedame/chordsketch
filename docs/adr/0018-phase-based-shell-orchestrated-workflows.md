@@ -113,8 +113,9 @@ tooling is `cargo`, `python3 scripts/*.py`, and `gh`. A Bash
 orchestrator that consumes the same `claude` CLI the maintainer uses
 interactively keeps the runtime story simple. There is no separate
 language toolchain to install, no service to deploy. The orchestrator
-is 250 lines of POSIX-ish Bash and can be read end-to-end in five
-minutes.
+is a few hundred lines of bash — short enough to be read end-to-end
+in one sitting and to be audited line-by-line for the foot-guns that
+`--dangerously-skip-permissions` makes load-bearing.
 
 **Claude Code primitives stay native.** Because each phase runs as a
 real `claude` invocation in the real repo, every `.claude/rules/` file,
@@ -127,8 +128,8 @@ top-level namespace; phase names only need to be unique inside a
 workflow. State directories mirror the same structure. Two workflows
 can run concurrently (different state directories, different locks);
 two instances of the *same* workflow cannot (the `flock` blocks).
-This scales to the planned multi-workflow future (adding new workflows
-incrementally) without a global registry.
+This scales to the project's planned multi-workflow future (adding new
+workflows incrementally) without a global registry.
 
 ## Consequences
 
@@ -205,10 +206,12 @@ incrementally) without a global registry.
 
 **Watch signals that warrant revisiting this ADR:**
 
-- Orchestrator code grows past ~400 lines or accumulates retry /
-  branching / parallel-phase logic.
-- Number of declared workflows exceeds ~4, OR a workflow's `next`
-  graph stops being acyclic without acrobatics.
+- The orchestrator accumulates retry / branching / parallel-phase
+  logic beyond what `workflow.json` can express as a static graph,
+  i.e. when a new workflow's existence forces a refactor of
+  `run-workflow.sh` itself.
+- A workflow's `next` graph stops being acyclic without acrobatics, or
+  the runtime needs to fan multiple phases out concurrently.
 - A phase needs to run outside the maintainer's workstation (e.g.
   triggered by an external event), which would force migration to a
   hosted runner.

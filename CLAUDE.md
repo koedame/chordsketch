@@ -38,6 +38,8 @@ under `.claude/workflow-state/<name>/` (git-ignored).
 | `.claude/rules/workflow-discipline.md` | Phase-author rules (HALT discipline, schema evolution, naming) |
 | `.claude/commands/new-workflow.md` | Scaffold skill: `/new-workflow <name>` creates the skeleton |
 | `scripts/validate-workflow.py` | Static check of `workflow.json` integrity |
+| `scripts/test_validate_workflow.py` | Unit tests for `validate-workflow.py` |
+| `scripts/test_run_workflow.py` | End-to-end smoke test for the orchestrator (stubs `claude`, `flock`, `timeout`) |
 
 Architectural rationale: [ADR-0018](docs/adr/0018-phase-based-shell-orchestrated-workflows.md).
 Production workflow: `autopilot-issue` (pick an unchidev-authored
