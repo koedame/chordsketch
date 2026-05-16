@@ -75,10 +75,15 @@ interface Sample {
 //    `chordsketch-chordpro` stores last-wins in Metadata and the
 //    renderers drop mid-song re-declarations, so a mid-song
 //    `{key: Am}` only changes the header.
-//  - {start_of_grid} bodies render verbatim in monospace today.
-//    Spec defines bar / repeat / volta / strum tokens (|, ||,
-//    |. |: :| :|: |1 :|2, %, %%, S<...>, ., ~, /) that this
-//    renderer does not yet structure.
+//  - {start_of_grid} bodies are now structurally parsed in the
+//    React HTML preview + the Rust HTML renderer: bar/repeat/
+//    volta markers (|, ||, |., |:, :|, :|:, |1, |2), measure
+//    repeats (%, %%), beat continuation (.), cell-internal
+//    multi-chord (~), strum rows (S<...>), row labels, and
+//    trailing comments all map to dedicated CSS classes. The
+//    text and PDF surfaces continue to render the grid body
+//    verbatim in monospace because fixed-column ASCII alignment
+//    is the natural representation for those targets.
 const KITCHEN_SINK_SOURCE = `# ChordSketch — All Directives Tour
 #
 # Every directive ChordSketch currently parses. Each category header
@@ -273,15 +278,40 @@ E|----------------------------|
 #   to strum mode; pseudo-chords u/d/u+/d+/ux/dx/ua/da/us/ds (plus
 #   'x' for muted) draw arrow glyphs instead of chord names.
 #
-# Implementation note: ChordSketch currently renders the grid body
-# verbatim in monospace — none of the bar / repeat / volta / strum
-# tokens are structurally parsed yet, so what you write below is
-# what you see. The example follows the conventional jazz idiom
-# "play four bars, on first pass take the 1st ending and repeat;
-# on second pass take the 2nd ending to close".
+# Implementation note: ChordSketch's React HTML preview (and the
+# Rust HTML renderer) now structurally parses every bar / repeat /
+# volta / percent / multi-chord / strum / label / trailing-comment
+# token below. The text + PDF surfaces still render the body
+# verbatim in monospace.
+#
+# (1) Repeat + volta example — "play four bars, on first pass take
+# the 1st ending and repeat; on second pass take the 2nd ending."
 {start_of_grid: Outro Riff (with repeats + ending)}
 |: G  .  .  . | C  .  .  . | D  .  .  . | G  .  .  . |
 |1 Em .  .  . | C  .  .  . :| |2 Am .  .  . | G  .  .  . |.
+{end_of_grid}
+
+# (2) Full-syntax example — exercises shape="L+MxB+R", row labels
+# (A / Coda), measure-repeat markers (% / %%), the combined
+# repeat-end+start glyph (:|:), and a trailing comment after the
+# row's final barline.
+{start_of_grid shape="1+4x2+4"}
+A    || G7 . | %  . | %% . | .  . |
+     | C7 . | %  . || G7 . | %  . ||
+     |: C7 . | %  . :|: G7 . | %  . :| repeat 4 times
+Coda | D7 . | Eb7  | D7   | G7 . | %  . |.
+{end_of_grid}
+
+# (3) Strum-row example — a leading \`s\` cell after the first
+# barline marks the row as a strum-pattern row; cells then
+# encode down (d/dn), up (u/up), accented (d+/u+), arpeggiated
+# (da/ua), and \`~\`-prefixed anticipations. Multi-chord cells
+# (C~A) put two chords in one beat slot.
+{start_of_grid shape="0+2x4+4"}
+| C ~A . . | C ~A . . |
+|s dn~up dn~up ~up dn~up | dn~up dn~up ~up dn~up |
+| D . . . | % . . . |
+|s d+~u+ ~up d+~u+ ~up | d+~u+ ~up d+~u+ ~ux |
 {end_of_grid}
 
 # === Custom section [Nx] [Pos] ===================================
