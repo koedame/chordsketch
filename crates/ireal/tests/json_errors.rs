@@ -587,3 +587,70 @@ fn bar_system_break_space_out_of_range_is_rejected() {
         "error message must mention the field and the range violation, got {msg:?}"
     );
 }
+
+// ---- ChordSize::Small JSON round-trip (#2433) --------------------------
+
+/// `BarChord` with `ChordSize::Small` must emit `"size":"small"` and
+/// round-trip back through `from_json_value`. Covers:
+/// - the conditional `if self.size != ChordSize::Default` branch in
+///   `BarChord::to_json` (normally `Default` is not emitted),
+/// - the `ChordSize::Small` arm in `ChordSize::to_json`,
+/// - the `Some(v) => ChordSize::from_json_value(v)?` arm in
+///   `BarChord::from_json_value`.
+#[test]
+fn bar_chord_small_size_serialises_and_round_trips_through_json() {
+    let bc = BarChord {
+        chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Minor7),
+        position: BeatPosition::on_beat(1).unwrap(),
+        size: ChordSize::Small,
+    };
+    let json = bc.to_json_string();
+    // The field must be present when non-default.
+    assert!(
+        json.contains("\"size\":\"small\""),
+        "size must appear as \"small\" when ChordSize::Small, got {json:?}"
+    );
+    // Default-size chords must NOT emit the field (snapshot-byte-stability).
+    let default_bc = BarChord {
+        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+        position: BeatPosition::on_beat(1).unwrap(),
+        size: ChordSize::Default,
+    };
+    let default_json = default_bc.to_json_string();
+    assert!(
+        !default_json.contains("\"size\""),
+        "Default-size chord must NOT emit size field, got {default_json:?}"
+    );
+    // Round-trip: deserialise back and check equality.
+    let parsed = BarChord::from_json_str(&json).expect("deserialise");
+    assert_eq!(parsed.size, ChordSize::Small);
+    assert_eq!(parsed, bc);
+}
+
+/// Explicit `"size":"default"` must deserialise to `ChordSize::Default`.
+/// Covers the `"default"` arm of `ChordSize::from_json_value` (distinct
+/// from the missing-field path, which goes through `None` in
+/// `BarChord::from_json_value`).
+#[test]
+fn chord_size_explicit_default_decodes_to_default() {
+    let value = parse_json(r#""default""#).unwrap();
+    let size = ChordSize::from_json_value(&value).expect("decode");
+    assert_eq!(size, ChordSize::Default);
+}
+
+/// Unknown chord-size string must surface a `JsonError`.
+/// Covers the `other => Err(...)` arm in `ChordSize::from_json_value`.
+#[test]
+fn from_json_rejects_unknown_chord_size() {
+    let value = parse_json(r#""jumbo""#).unwrap();
+    let result = ChordSize::from_json_value(&value);
+    assert!(
+        result.is_err(),
+        "unknown chord size must be rejected, got {result:?}"
+    );
+    let msg = result.unwrap_err().message;
+    assert!(
+        msg.contains("chord size") || msg.contains("jumbo"),
+        "error must mention the offending value; got {msg:?}"
+    );
+}

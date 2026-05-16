@@ -1812,4 +1812,82 @@ mod tests {
             );
         }
     }
+
+    // ---- Chord-size markers `s` / `l` (#2433) ---------------------
+
+    #[test]
+    fn s_token_stamps_small_size_on_subsequent_chords() {
+        // `s` before a chord root sets `ChordSize::Small` on that
+        // chord. All chords after `s` until the next `l` are Small.
+        let url = "irealbook://Test=A==Style=C=44=[*AsC|D|]";
+        let song = parse(url).expect("parse");
+        let bars = &song.sections[0].bars;
+        assert_eq!(
+            bars[0].chords[0].size,
+            ChordSize::Small,
+            "chord C after `s` must be Small"
+        );
+        assert_eq!(
+            bars[1].chords[0].size,
+            ChordSize::Small,
+            "chord D in next bar must also be Small (state persists)"
+        );
+    }
+
+    #[test]
+    fn l_token_restores_default_size() {
+        // `s` sets Small; `l` restores Default. Chords after `l`
+        // are back to Default.
+        let url = "irealbook://Test=A==Style=C=44=[*AsC|lD|E|]";
+        let song = parse(url).expect("parse");
+        let bars = &song.sections[0].bars;
+        assert_eq!(bars[0].chords[0].size, ChordSize::Small, "C after `s`");
+        assert_eq!(bars[1].chords[0].size, ChordSize::Default, "D after `l`");
+        assert_eq!(bars[2].chords[0].size, ChordSize::Default, "E also Default");
+    }
+
+    #[test]
+    fn chord_size_state_persists_across_bar_boundaries() {
+        // The spec says "all the following chord symbols will be
+        // narrower until an `l` symbol is encountered". There is no
+        // bar-boundary reset — the flag persists.
+        let url = "irealbook://Test=A==Style=C=44=[*AsC|D|E|lF]";
+        let song = parse(url).expect("parse");
+        let bars = &song.sections[0].bars;
+        assert_eq!(bars[0].chords[0].size, ChordSize::Small, "C");
+        assert_eq!(bars[1].chords[0].size, ChordSize::Small, "D");
+        assert_eq!(bars[2].chords[0].size, ChordSize::Small, "E");
+        assert_eq!(bars[3].chords[0].size, ChordSize::Default, "F after `l`");
+    }
+
+    #[test]
+    fn chord_size_state_persists_across_section_boundaries() {
+        // Sections are also transparent to the size state — no reset
+        // at the `*X` section-start marker.
+        let url = "irealbook://Test=A==Style=C=44=[*AsC|D][*BE|lF]";
+        let song = parse(url).expect("parse");
+        let sec_a = &song.sections[0];
+        let sec_b = &song.sections[1];
+        assert_eq!(sec_a.bars[0].chords[0].size, ChordSize::Small, "C in A");
+        assert_eq!(sec_a.bars[1].chords[0].size, ChordSize::Small, "D in A");
+        // The `s` from section A must still be active at the start of B.
+        assert_eq!(sec_b.bars[0].chords[0].size, ChordSize::Small, "E in B");
+        assert_eq!(
+            sec_b.bars[1].chords[0].size,
+            ChordSize::Default,
+            "F after `l`"
+        );
+    }
+
+    #[test]
+    fn s_token_does_not_consume_following_chord_letter() {
+        // `s` is a one-character marker; it must NOT swallow the chord
+        // that immediately follows it.
+        let url = "irealbook://Test=A==Style=C=44=[*AsG7|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.chords.len(), 1);
+        assert_eq!(bar0.chords[0].chord.root.note, 'G');
+        assert_eq!(bar0.chords[0].size, ChordSize::Small);
+    }
 }
