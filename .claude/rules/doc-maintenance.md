@@ -25,7 +25,9 @@ much higher than fixing it in the originating PR.
 | New crate added to workspace | `CLAUDE.md` Architecture table |
 | New rule or convention agreed upon | `.claude/rules/` — add new file |
 | Build commands or CI pipeline changed | `CLAUDE.md` Build Commands |
-| New workflow or process introduced | `.claude/rules/` — add new file |
+| New process or convention introduced | `.claude/rules/` — add new file |
+| New phase-based workflow added under `.claude/workflows/<name>/` | `CLAUDE.md` Workflows section (mention the new workflow); the workflow's own `README.md`; verify the phase contract follows [`workflow-discipline.md`](workflow-discipline.md) |
+| Existing workflow's phase contract changes (new context.json field, new HALT condition, new terminal phase) | The workflow's `README.md`; the affected `phases/*.md` Output section. Schema evolution must follow [`workflow-discipline.md`](workflow-discipline.md) §"context.json schema evolution" (additive only) |
 | Existing rule no longer applies | Remove or update the relevant `.claude/rules/` file |
 | Dependency policy changed | `CLAUDE.md` Dependency Policy section |
 | Public API contract changes | Doc comment on the affected function/struct |

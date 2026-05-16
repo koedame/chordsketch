@@ -1,0 +1,24 @@
+{
+  "name": "autopilot-issue",
+  "description": "Single-iteration autonomous issue handler. Pick one open issue authored by unchidev that Claude Code can autonomously implement, do the work in a worktree, run local validation, and (unless dry_run) push, open a PR, and drive review to convergence up to the Ready-for-merge gate.",
+  "entryPhase": "preconditions",
+  "phases": {
+    "preconditions": {
+      "file": "phases/preconditions.md",
+      "next": ["issue-selection", "HALT"]
+    },
+    "issue-selection": {
+      "file": "phases/issue-selection.md",
+      "next": ["implementation", "no-candidate", "HALT"]
+    },
+    "implementation": {
+      "file": "phases/implementation.md",
+      "next": ["pr-review", "dry-run-exit", "HALT"]
+    },
+    "pr-review": {
+      "file": "phases/pr-review.md",
+      "next": ["ready-for-merge", "HALT"]
+    }
+  },
+  "terminalPhases": ["ready-for-merge", "no-candidate", "dry-run-exit", "HALT"]
+}

@@ -49,6 +49,13 @@ apps/desktop/src-tauri/gen/
 # Tools
 .serena/
 
+# Claude Code workflow state.
+# Local-only orchestrator state (current phase, context, per-phase logs)
+# produced by scripts/run-workflow.sh. The workflow *definitions* under
+# .claude/workflows/ are committed; the runtime state under
+# .claude/workflow-state/ is not. See .claude/workflows/README.md.
+.claude/workflow-state/
+
 # Playwright MCP server scratch dir
 # Created at the repo root when the Playwright MCP server captures
 # page snapshots (`page-*.yml`) or console logs (`console-*.log`)
