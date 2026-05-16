@@ -26,8 +26,8 @@
 //! C0 control chars).
 
 use crate::ast::{
-    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, Ending,
-    IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
+    Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
 };
 
 /// Anything that knows how to write itself as JSON into a `String`
@@ -253,7 +253,26 @@ impl ToJson for BarChord {
         self.chord.to_json(out);
         out.push_str(",\"position\":");
         self.position.to_json(out);
+        // Additive field: omit when the chord uses the default
+        // size so existing golden snapshots stay byte-stable. The
+        // matching FromJson defaults a missing field to
+        // `ChordSize::Default`, so the omit/restore round trip
+        // preserves equality.
+        if self.size != ChordSize::Default {
+            out.push_str(",\"size\":");
+            self.size.to_json(out);
+        }
         out.push('}');
+    }
+}
+
+impl ToJson for ChordSize {
+    fn to_json(&self, out: &mut String) {
+        let s = match self {
+            Self::Default => "default",
+            Self::Small => "small",
+        };
+        write_str(out, s);
     }
 }
 
@@ -1259,7 +1278,28 @@ impl FromJson for BarChord {
     fn from_json_value(value: &JsonValue) -> Result<Self, JsonError> {
         let chord = Chord::from_json_value(value.get("chord")?)?;
         let position = BeatPosition::from_json_value(value.get("position")?)?;
-        Ok(Self { chord, position })
+        let size = match value.get_optional("size") {
+            Some(v) => ChordSize::from_json_value(v)?,
+            None => ChordSize::Default,
+        };
+        Ok(Self {
+            chord,
+            position,
+            size,
+        })
+    }
+}
+
+impl FromJson for ChordSize {
+    fn from_json_value(value: &JsonValue) -> Result<Self, JsonError> {
+        match value.as_str()? {
+            "default" => Ok(Self::Default),
+            "small" => Ok(Self::Small),
+            other => Err(JsonError::new(
+                0,
+                format!("unknown chord size {}", truncate_for_message(other)),
+            )),
+        }
     }
 }
 

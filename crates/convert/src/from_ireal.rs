@@ -409,6 +409,7 @@ mod tests {
                     chords: vec![BarChord {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Minor7),
                         position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
                     }],
                     ending: None,
                     symbol: None,
@@ -585,6 +586,7 @@ mod tests {
                             alternate: None,
                         },
                         position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
                     }],
                     ..Bar::default()
                 },
@@ -636,6 +638,7 @@ mod tests {
                         })),
                     },
                     position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
                 }],
                 ..Bar::default()
             }],
@@ -684,6 +687,7 @@ mod tests {
                         alternate: None,
                     },
                     position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
                 }],
                 text_comment: Some("Vamp till cue".into()),
                 ..Bar::default()
@@ -769,6 +773,7 @@ mod tests {
                 chords: vec![BarChord {
                     chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                     position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
                 }],
                 symbol: Some(MusicalSymbol::Fermata),
                 ..Bar::default()

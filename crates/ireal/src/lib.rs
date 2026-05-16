@@ -30,8 +30,8 @@ pub mod serialize;
 // `chordsketch_ireal::ast::IrealSong`. Mirrors the re-export style
 // `chordsketch-chordpro` uses for its frequently-typed names.
 pub use ast::{
-    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, Ending,
-    IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
+    Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
 };
 pub use json::{FromJson, JsonError, JsonValue, ToJson, parse_json};
 pub use parser::{ParseError, parse, parse_collection};

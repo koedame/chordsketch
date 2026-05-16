@@ -308,6 +308,37 @@ pub struct BarChord {
     pub chord: Chord,
     /// Where in the bar the chord lands.
     pub position: BeatPosition,
+    /// Display size for this chord.
+    ///
+    /// iReal Pro's [Custom Chord Chart Protocol](https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol)
+    /// lets an author insert a lowercase `s` in the chord
+    /// progression to make subsequent chords narrower (useful when
+    /// packing many chords into one measure); a lowercase `l`
+    /// restores the default size. The parser tracks the active
+    /// "current size" across bars and stamps it on each emitted
+    /// chord, so the renderer can paint Small chords at a reduced
+    /// font / width without losing per-chord granularity.
+    pub size: ChordSize,
+}
+
+/// Per-chord display size, controlled by the iReal Pro `s` / `l`
+/// markers.
+///
+/// The marker semantics are stateful: an `s` in the chord stream
+/// switches all subsequent chords to [`ChordSize::Small`], and an
+/// `l` switches back to [`ChordSize::Default`]. The state persists
+/// across bar boundaries until the next marker, matching the spec's
+/// "all the following chord symbols will be narrower until an `l`
+/// symbol is encountered" wording.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ChordSize {
+    /// Normal-sized chord. The renderer uses
+    /// [`crate`]-level chord font-size constants unmodified.
+    #[default]
+    Default,
+    /// Narrower chord. The renderer scales chord glyphs down so
+    /// dense bars (multiple chords per measure) stay legible.
+    Small,
 }
 
 /// Position inside a bar, expressed as `beat` (1-indexed, 1 ..= the
