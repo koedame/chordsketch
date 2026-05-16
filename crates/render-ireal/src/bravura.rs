@@ -10,13 +10,13 @@
 //! # Why path-baked instead of `@font-face`
 //!
 //! See [ADR-0014](../../../docs/adr/0014-bravura-glyphs-as-svg-paths.md)
-//! for the full rationale; in short: the two SMuFL glyphs the iReal
-//! renderer needs (segno U+E047, coda U+E048) compress to ~1.6 KB of
-//! raw `<path>` data when extracted as outlines, vs. ~4.3 KB for a
-//! WOFF2 subset of the same two codepoints. Path-baked also dodges the
-//! `usvg::fontdb` registration that an `@font-face` / font-binary path
-//! would require for the PNG and PDF renderers, keeping the
-//! transitive-dep surface unchanged.
+//! for the full rationale; in short: the three SMuFL glyphs the iReal
+//! renderer needs (segno U+E047, coda U+E048, fermataAbove U+E4C0)
+//! compress to ~2 KB of raw `<path>` data when extracted as outlines,
+//! vs. ~5 KB for a WOFF2 subset of the same codepoints. Path-baked
+//! also dodges the `usvg::fontdb` registration that an `@font-face` /
+//! font-binary path would require for the PNG and PDF renderers,
+//! keeping the transitive-dep surface unchanged.
 //!
 //! # Coordinate system
 //!
@@ -63,6 +63,22 @@ pub(crate) const SEGNO_PATH_D: &str = "M135 665C141 665 148 663 151 652L153 645C
 /// [`SEGNO_PATH_D`].
 pub(crate) const CODA_PATH_D: &str = "M937 400H818C808 588 668 739 506 752V881C506 894 495 898 482 898C469 898 458 894 458 881V752C296 739 157 589 146 400H14C0 400 -4 389 -4 376C-4 363 0 352 14 352H146C157 165 296 13 458 0V-140C458 -154 469 -158 482 -158C495 -158 506 -154 506 -140V0C668 13 808 165 818 352H937C951 352 955 363 955 376C955 389 951 400 937 400ZM653 400H506V696C646 684 653 562 653 400ZM458 696V400H316C316 562 316 684 458 696ZM316 352H458V48C329 63 317 198 316 352ZM506 48V352H653C650 199 631 63 506 48Z";
 
+/// Bounding-box horizontal center, in font units, for U+E4C0
+/// FERMATA ABOVE. The bbox X span is `(3, 605)` so the midpoint
+/// is `304` exactly — integer-typed for the same reason `SEGNO_FONT_CX`
+/// is: half-unit precision is only needed when the midpoint is
+/// non-integer.
+pub(crate) const FERMATA_FONT_CX: i32 = 304;
+/// Bounding-box vertical center, in font units, for U+E4C0
+/// FERMATA ABOVE. The bbox Y span is `(-3, 329)` so the midpoint
+/// is `163` exactly.
+pub(crate) const FERMATA_FONT_CY: i32 = 163;
+
+/// SVG path data for U+E4C0 FERMATA ABOVE (the regular fermata
+/// arc-and-dot used over single-bar holds), same provenance as
+/// [`SEGNO_PATH_D`].
+pub(crate) const FERMATA_PATH_D: &str = "M302 221C515 221 558 63 568 25C569 22 569 19 570 18C577 4 581 -3 591 -3C600 -3 605 1 605 11C605 14 605 17 604 21C542 327 333 329 304 329C272 329 65 327 4 21C3 17 3 13 3 10C3 0 8 -3 16 -3C25 -3 30 4 36 18C37 19 38 23 39 27C51 68 96 221 302 221ZM358 52C358 81 333 106 303 106C274 106 249 81 249 52C249 22 274 -3 303 -3C333 -3 358 22 358 52Z";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -76,6 +92,7 @@ mod tests {
     fn glyph_paths_start_with_absolute_moveto() {
         assert!(SEGNO_PATH_D.starts_with('M'), "{SEGNO_PATH_D:.40}…");
         assert!(CODA_PATH_D.starts_with('M'), "{CODA_PATH_D:.40}…");
+        assert!(FERMATA_PATH_D.starts_with('M'), "{FERMATA_PATH_D:.40}…");
     }
 
     /// The path strings are pure ASCII — `extract-bravura-paths.py`
@@ -88,6 +105,7 @@ mod tests {
     fn glyph_paths_are_ascii() {
         assert!(SEGNO_PATH_D.is_ascii());
         assert!(CODA_PATH_D.is_ascii());
+        assert!(FERMATA_PATH_D.is_ascii());
     }
 
     /// The SMuFL Bravura `head.unitsPerEm` is 1000. A regression that
@@ -115,5 +133,9 @@ mod tests {
         // representable in `f32`, so equality is safe.
         assert_eq!(CODA_FONT_CX, 475.5);
         assert_eq!(CODA_FONT_CY, 370);
+        // Fermata bbox (3, -3, 605, 329) → midpoint (304, 163),
+        // both exact integers.
+        assert_eq!(FERMATA_FONT_CX, 304);
+        assert_eq!(FERMATA_FONT_CY, 163);
     }
 }

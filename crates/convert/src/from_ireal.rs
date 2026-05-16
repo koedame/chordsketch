@@ -313,6 +313,7 @@ fn symbol_label(symbol: MusicalSymbol) -> &'static str {
         MusicalSymbol::DaCapo => "D.C.",
         MusicalSymbol::DalSegno => "D.S.",
         MusicalSymbol::Fine => "Fine",
+        MusicalSymbol::Fermata => "Fermata",
     }
 }
 
@@ -751,5 +752,48 @@ mod tests {
             .collect();
         assert!(names.contains(&"start_of_bridge"));
         assert!(names.contains(&"end_of_bridge"));
+    }
+
+    #[test]
+    fn fermata_symbol_emits_fermata_label_in_lyrics() {
+        // Exercises `symbol_label(MusicalSymbol::Fermata)` → "Fermata".
+        // ChordPro has no native fermata directive; the converter
+        // emits "(Fermata) " as an inline text segment on the
+        // chord/lyrics line, matching the pattern for Segno, Coda, etc.
+        use chordsketch_chordpro::ast::Line;
+        let mut s = IrealSong::new();
+        s.title = "Fermata Test".into();
+        s.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars: vec![Bar {
+                chords: vec![BarChord {
+                    chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                    position: BeatPosition::on_beat(1).unwrap(),
+                }],
+                symbol: Some(MusicalSymbol::Fermata),
+                ..Bar::default()
+            }],
+        });
+        let result = convert(&s).unwrap();
+        let lyrics_text: String = result
+            .output
+            .lines
+            .iter()
+            .filter_map(|l| match l {
+                Line::Lyrics(lyrics) => Some(
+                    lyrics
+                        .segments
+                        .iter()
+                        .map(|seg| seg.text.as_str())
+                        .collect(),
+                ),
+                _ => None,
+            })
+            .collect::<Vec<String>>()
+            .concat();
+        assert!(
+            lyrics_text.contains("(Fermata)"),
+            "Fermata symbol must surface as `(Fermata)` in lyrics text, got {lyrics_text:?}"
+        );
     }
 }

@@ -61,6 +61,7 @@ UPSTREAM_URL = (
 GLYPHS = [
     ("SEGNO", 0xE047),
     ("CODA", 0xE048),
+    ("FERMATA", 0xE4C0),
 ]
 
 

@@ -73,6 +73,7 @@ const SYMBOL_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'da_capo', label: 'D.C.' },
   { value: 'dal_segno', label: 'D.S.' },
   { value: 'fine', label: 'Fine' },
+  { value: 'fermata', label: 'Fermata 𝄐' },
 ];
 
 const ACCIDENTAL_OPTIONS: ReadonlyArray<{ value: Accidental; label: string }> = [

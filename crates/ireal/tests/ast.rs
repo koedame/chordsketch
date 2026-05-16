@@ -221,6 +221,7 @@ fn json_round_trip_handles_every_enum_variant() {
         MusicalSymbol::DaCapo,
         MusicalSymbol::DalSegno,
         MusicalSymbol::Fine,
+        MusicalSymbol::Fermata,
     ];
     let barlines = [
         BarLine::Single,
@@ -300,6 +301,8 @@ fn musical_symbol_variants_are_distinct() {
     assert_ne!(MusicalSymbol::Segno, MusicalSymbol::Coda);
     assert_ne!(MusicalSymbol::DaCapo, MusicalSymbol::DalSegno);
     assert_eq!(MusicalSymbol::Fine, MusicalSymbol::Fine);
+    assert_ne!(MusicalSymbol::Fermata, MusicalSymbol::Fine);
+    assert_ne!(MusicalSymbol::Fermata, MusicalSymbol::Segno);
 }
 
 #[test]
