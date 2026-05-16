@@ -77,6 +77,64 @@ Validating constructors: `TimeSignature::new`, `Ending::new`,
 mutation bypasses these checks — see the module-level "Public-field
 mutation contract" comment in `ast.rs`.
 
+## Scope
+
+This crate currently parses the **iReal Pro export format** —
+the obfuscated `irealb://` URL produced by the iReal Pro app
+(7..=9 `=`-separated fields, music body prefixed with the
+`1r34LbKcu7` sentinel and `obfusc50`-scrambled) — together with
+the 6-field `irealbook://` plain-text variant
+(`Title=Composer=Style=Key=TimeSig=Music`). Both inputs serialize
+back through `irealb_serialize` / `irealbook_serialize`.
+
+Open-protocol plain-text **serialization** to the form documented
+at
+[`irealpro.com/ireal-pro-custom-chord-chart-protocol`](https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol)
+is tracked under [#2425](https://github.com/koedame/chordsketch/issues/2425).
+Several player-recognised tokens documented in the iReal Pro Help
+Center are also absent from the AST today; they are tracked
+alongside #2425 under the open-protocol-spec compliance umbrella
+[#2423](https://github.com/koedame/chordsketch/issues/2423).
+
+Token coverage as of the latest release:
+
+### Supported tokens
+
+| Token / shape | AST surface |
+|---|---|
+| `irealb://` 7..=9-field obfuscated export | `parse` / `parse_collection` |
+| `irealbook://` 6-field plain-text (`Title=Composer=Style=Key=TimeSig=Music`) | `parse` / `parse_collection` ([#2424](https://github.com/koedame/chordsketch/issues/2424)) |
+| `(altchord)` parenthesised alternate chord | `Chord::alternate` ([#2428](https://github.com/koedame/chordsketch/issues/2428)) |
+| `n` No-Chord | `Bar::no_chord` ([#2429](https://github.com/koedame/chordsketch/issues/2429)) |
+| `Kcl` / `x` / `r` simile (collapsed to a single flag) | `Bar::repeat_previous` ([#2430](https://github.com/koedame/chordsketch/issues/2430)) |
+| `<text>` staff-text caption (verbatim preservation) | `Bar::text_comment` |
+| `Y` / `YY` / `YYY` between-system vertical-space hint | `Bar::system_break_space` ([#2434](https://github.com/koedame/chordsketch/issues/2434)) |
+| `S` Segno, `Q` Coda, `f` Fermata | `MusicalSymbol::{Segno, Coda, Fermata}` ([#2431](https://github.com/koedame/chordsketch/issues/2431)) |
+| `<D.C.>` / `<D.S.>` / `<Fine>` macro prefixes (collapsed) | `MusicalSymbol::{DaCapo, DalSegno, Fine}` |
+| `*A`..`*D` / `*i` / `*v` / `*V` section labels | `SectionLabel::{Letter, Intro, Verse}` ([#2432](https://github.com/koedame/chordsketch/issues/2432)) |
+| `N1` / `N2` / `N3` ending brackets (numbers ≥ 1) | `Bar::ending` |
+
+### Unsupported tokens
+
+| Token / shape | Sub-issue |
+|---|---|
+| Open-protocol `irealbook://` plain-text **serializer** | [#2425](https://github.com/koedame/chordsketch/issues/2425) |
+| Full staff-text content (custom text, vertical position, repeat count override) | [#2426](https://github.com/koedame/chordsketch/issues/2426) |
+| 11 D.C. / D.S. macro variants (`<D.C. al Coda>`, `<D.S. al Fine>`, etc.) collapse to single variants | [#2427](https://github.com/koedame/chordsketch/issues/2427) |
+| Chord-size markers `s` (small) / `l` (large) | [#2433](https://github.com/koedame/chordsketch/issues/2433) |
+| Pause-slash `p` (repeat preceding chord) | [#2435](https://github.com/koedame/chordsketch/issues/2435) |
+| `N0` no-text ending | [#2436](https://github.com/koedame/chordsketch/issues/2436) |
+| `Break` drum-silence staff-text token | [#2448](https://github.com/koedame/chordsketch/issues/2448) |
+| Compound time-signature additive groupings (`2+3`, `3+4`, `3+2+2`) | [#2449](https://github.com/koedame/chordsketch/issues/2449) |
+| Section-label vocabulary reconciliation (drop phantom `Chorus` / `Bridge` / `Outro`) | [#2450](https://github.com/koedame/chordsketch/issues/2450) |
+| `END` song-terminator symbol distinct from Fermata | [#2451](https://github.com/koedame/chordsketch/issues/2451) |
+
+Umbrella [#2423](https://github.com/koedame/chordsketch/issues/2423)
+holds the canonical audit; this table is a release-time snapshot.
+When a sub-issue lands, move its row from Unsupported to
+Supported in the same PR — `.claude/rules/release-doc-sync.md`
+catches drift at release-cut time.
+
 ## File extension convention
 
 The upstream iReal Pro app does not register a file extension —
