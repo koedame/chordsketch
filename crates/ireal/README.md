@@ -59,12 +59,12 @@ assert_eq!(parsed, song);
 | Item | Signature | Notes |
 |---|---|---|
 | `IrealSong` | struct with `title`, `composer`, `style`, `key_signature`, `time_signature`, `tempo`, `transpose`, `sections` | Root AST node. `IrealSong::new()` builds an empty `C major` 4/4 chart. |
-| `Section`, `SectionLabel` | struct + 7-variant enum (`Letter(c)`, `Verse`, `Chorus`, `Intro`, `Outro`, `Bridge`, `Custom(s)`) | Labelled block of bars. |
+| `Section`, `SectionLabel` | struct + 4-variant enum (`Letter(c)`, `Verse`, `Intro`, `Custom(s)`) | Labelled block of bars. |
 | `Bar`, `BarLine`, `Ending` | struct + 5-variant enum + `NonZeroU8` newtype | One measure with opening / closing barline, chords, ending number, optional `MusicalSymbol`. |
 | `BarChord`, `BeatPosition` | structs | Chord placed at a beat position inside a bar. |
 | `Chord`, `ChordRoot`, `ChordQuality`, `Accidental` | structs + enums | Root, quality (12 named + `Custom`), optional bass note, accidental. |
 | `KeySignature`, `KeyMode`, `TimeSignature` | structs + enum | Key (C major default) and time signature (4/4 default). |
-| `MusicalSymbol` | enum (`Segno`, `Coda`, `DaCapo`, `DalSegno`, `Fine`) | Bar-attached navigation symbols. |
+| `MusicalSymbol` | enum (`Segno`, `Coda`, `DaCapo`, `DalSegno`, `Fine`, `Fermata`) | Bar-attached navigation symbols. |
 | `ToJson` | `fn to_json(&self, &mut String)` and `fn to_json_string(&self) -> String` | Hand-rolled, byte-stable, compact JSON. |
 | `FromJson` | `fn from_json_str(&str) -> Result<Self, JsonError>` and `fn from_json_value(&JsonValue) -> Result<Self, JsonError>` | Round-trip-only deserializer; accepts only the subset `ToJson` emits. |
 | `parse_json` | `fn parse_json(&str) -> Result<JsonValue, JsonError>` | Free function for the underlying JSON value tree. |
@@ -126,7 +126,7 @@ Token coverage as of the latest release:
 | `N0` no-text ending | [#2436](https://github.com/koedame/chordsketch/issues/2436) |
 | `Break` drum-silence staff-text token | [#2448](https://github.com/koedame/chordsketch/issues/2448) |
 | Compound time-signature additive groupings (`2+3`, `3+4`, `3+2+2`) | [#2449](https://github.com/koedame/chordsketch/issues/2449) |
-| Section-label vocabulary reconciliation (drop phantom `Chorus` / `Bridge` / `Outro`) | [#2450](https://github.com/koedame/chordsketch/issues/2450) |
+| Section-label reconciliation: `Chorus`/`Bridge`/`Outro` already removed from AST; convert-crate `SectionLabel::Custom` usage not yet cleaned up | [#2450](https://github.com/koedame/chordsketch/issues/2450) |
 | `END` song-terminator symbol distinct from Fermata | [#2451](https://github.com/koedame/chordsketch/issues/2451) |
 
 Umbrella [#2423](https://github.com/koedame/chordsketch/issues/2423)
