@@ -13,8 +13,8 @@
 //! of features the parser preserves vs drops.
 
 use crate::ast::{
-    Accidental, Bar, BarLine, Chord, ChordQuality, ChordRoot, Ending, IrealSong, KeyMode,
-    KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
+    Accidental, Bar, BarLine, Chord, ChordQuality, ChordRoot, ChordSize, Ending, IrealSong,
+    KeyMode, KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
 };
 use crate::parser::{MUSIC_PREFIX, matches_macro_prefix};
 
@@ -161,6 +161,14 @@ fn serialize_key(k: KeySignature) -> String {
 fn serialize_music(song: &IrealSong) -> String {
     let mut chart = String::new();
     serialize_time_signature(&mut chart, song.time_signature);
+    // Running chord-size state. Mirrors the parser's
+    // `ChartParseState::current_chord_size`: a chord whose size
+    // differs from the running state emits an `s` / `l` marker
+    // immediately before the chord and updates the running state.
+    // Persists across bar boundaries so the spec's "all following
+    // chord symbols will be narrower until `l`" semantics survive
+    // round-trip without re-emitting a marker on every chord.
+    let mut current_size = ChordSize::Default;
 
     // Flatten all bars across sections so the serializer can peek
     // the *next* bar regardless of section boundary. This is
@@ -312,6 +320,19 @@ fn serialize_music(song: &IrealSong) -> String {
         for (ci, bc) in bar.chords.iter().enumerate() {
             if ci > 0 {
                 chart.push(' ');
+            }
+            if bc.size != current_size {
+                // Emit the size-mode transition marker immediately
+                // before the chord. Inside a bar the space separator
+                // above guarantees the marker can never be absorbed
+                // into the previous chord's quality string; at bar
+                // boundaries the right-edge barline glyph provides
+                // the same isolation.
+                chart.push(match bc.size {
+                    ChordSize::Small => 's',
+                    ChordSize::Default => 'l',
+                });
+                current_size = bc.size;
             }
             serialize_chord(&mut chart, &bc.chord);
         }
@@ -663,6 +684,7 @@ mod tests {
                     chords: vec![BarChord {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Minor7),
                         position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
                     }],
                     ending: None,
                     symbol: None,
@@ -726,6 +748,7 @@ mod tests {
                 chords: vec![BarChord {
                     chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                     position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
                 }],
                 ending: None,
                 symbol: None,
@@ -767,6 +790,7 @@ mod tests {
                     chords: vec![BarChord {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                         position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::Fine),
@@ -803,6 +827,7 @@ mod tests {
                     chords: vec![BarChord {
                         chord: Chord::triad(ChordRoot::natural('G'), ChordQuality::Dominant7),
                         position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::DaCapo),
@@ -839,6 +864,7 @@ mod tests {
                     chords: vec![BarChord {
                         chord: Chord::triad(ChordRoot::natural('F'), ChordQuality::Major),
                         position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::DalSegno),
@@ -877,6 +903,7 @@ mod tests {
                     chords: vec![BarChord {
                         chord: Chord::triad(ChordRoot::natural('G'), ChordQuality::Dominant7),
                         position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::Fermata),
@@ -967,6 +994,7 @@ mod tests {
                     chords: vec![BarChord {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                         position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
                     }],
                     text_comment: Some("see > here".into()),
                     ..Default::default()
@@ -1006,6 +1034,7 @@ mod tests {
                         chords: vec![BarChord {
                             chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                             position: BeatPosition::on_beat(1).unwrap(),
+                            size: ChordSize::Default,
                         }],
                         ..Default::default()
                     },
@@ -1047,6 +1076,7 @@ mod tests {
                     chords: vec![BarChord {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                         position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
                     }],
                     symbol: Some(MusicalSymbol::Fine),
                     text_comment: Some("refine the chord".into()),
@@ -1085,6 +1115,7 @@ mod tests {
                     chords: vec![BarChord {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                         position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
                     }],
                     ..Default::default()
                 }],
@@ -1151,6 +1182,7 @@ mod tests {
                         chords: vec![BarChord {
                             chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                             position: BeatPosition::on_beat(1).unwrap(),
+                            size: ChordSize::Default,
                         }],
                         ..Default::default()
                     },
@@ -1160,6 +1192,7 @@ mod tests {
                         chords: vec![BarChord {
                             chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Major),
                             position: BeatPosition::on_beat(1).unwrap(),
+                            size: ChordSize::Default,
                         }],
                         system_break_space: 2,
                         ..Default::default()
@@ -1198,6 +1231,7 @@ mod tests {
                         chords: vec![BarChord {
                             chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                             position: BeatPosition::on_beat(1).unwrap(),
+                            size: ChordSize::Default,
                         }],
                         ..Default::default()
                     },
@@ -1207,6 +1241,7 @@ mod tests {
                         chords: vec![BarChord {
                             chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Major),
                             position: BeatPosition::on_beat(1).unwrap(),
+                            size: ChordSize::Default,
                         }],
                         system_break_space: 2,
                         ..Default::default()
@@ -1249,6 +1284,7 @@ mod tests {
                         chords: vec![BarChord {
                             chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                             position: BeatPosition::on_beat(1).unwrap(),
+                            size: ChordSize::Default,
                         }],
                         ..Default::default()
                     },
@@ -1295,6 +1331,7 @@ mod tests {
                     chords: vec![BarChord {
                         chord: Chord::triad(ChordRoot::natural('F'), ChordQuality::Major),
                         position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
                     }],
                     system_break_space: 1,
                     ..Default::default()

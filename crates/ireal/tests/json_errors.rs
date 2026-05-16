@@ -11,8 +11,9 @@
 //! `JsonValue::as_str`'s Err arm.
 
 use chordsketch_ireal::{
-    Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, Ending, FromJson,
-    IrealSong, JsonError, JsonValue, MusicalSymbol, Section, SectionLabel, ToJson, parse_json,
+    Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize, Ending,
+    FromJson, IrealSong, JsonError, JsonValue, MusicalSymbol, Section, SectionLabel, ToJson,
+    parse_json,
 };
 
 fn minimal_song_json_with(field: &str, value: &str) -> String {
@@ -383,6 +384,7 @@ fn full_song_round_trips_through_deserializer() {
         chords: vec![BarChord {
             chord,
             position: BeatPosition::on_beat(1).unwrap(),
+            size: ChordSize::Default,
         }],
         ending: None,
         symbol: None,

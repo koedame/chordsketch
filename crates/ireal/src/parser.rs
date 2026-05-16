@@ -55,8 +55,8 @@
 //!   them.
 
 use crate::ast::{
-    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, Ending,
-    IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
+    Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
 };
 use std::fmt;
 
@@ -645,6 +645,30 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
             rest = r;
             continue;
         }
+        if let Some(r) = rest.strip_prefix('s') {
+            // Chord-size marker — `s` switches every subsequent
+            // chord to `ChordSize::Small`. Placed before the
+            // chord-root check so a top-level `s` (between chord
+            // boundaries, where this branch is reached) acts as a
+            // size modifier, not as a malformed chord. `s` INSIDE
+            // a chord token (e.g. `Csus4`) never reaches this
+            // branch — `consume_chord_token` slurps the whole
+            // chord including the `s` quality character before
+            // control returns to the dispatcher.
+            state.set_chord_size(ChordSize::Small);
+            rest = r;
+            continue;
+        }
+        if let Some(r) = rest.strip_prefix('l') {
+            // Chord-size marker — `l` restores the default chord
+            // size. Like `s` above, this only matches at top level
+            // (between chord boundaries); a trailing `l` inside a
+            // chord-quality string would have been consumed by
+            // `consume_chord_token`.
+            state.set_chord_size(ChordSize::Default);
+            rest = r;
+            continue;
+        }
         if let Some(r) = rest.strip_prefix('{') {
             state.finish_bar();
             state.queue_start_repeat();
@@ -816,6 +840,12 @@ struct ChartParseState {
     in_alternate: bool,
     last_chord: Option<String>,
     time_signature: TimeSignature,
+    /// Display size applied to every subsequently-emitted chord
+    /// until the next `s` / `l` marker. Persists across bar
+    /// boundaries — the spec's "all the following chord symbols
+    /// will be narrower until an `l` symbol is encountered" wording
+    /// is parser-wide, not bar-scoped.
+    current_chord_size: ChordSize,
 }
 
 impl ChartParseState {
@@ -866,6 +896,10 @@ impl ChartParseState {
 
     fn queue_final(&mut self) {
         self.pending_final = true;
+    }
+
+    fn set_chord_size(&mut self, size: ChordSize) {
+        self.current_chord_size = size;
     }
 
     fn add_system_break_space(&mut self, count: u8) {
@@ -987,7 +1021,12 @@ impl ChartParseState {
         // time signature. Beat 1 is a structural placeholder here.
         // See #2057 (render-ireal) for beat-distribution logic.
         let position = BeatPosition::on_beat(1).expect("beat 1 is always a valid NonZeroU8");
-        self.current_bar.chords.push(BarChord { chord, position });
+        let size = self.current_chord_size;
+        self.current_bar.chords.push(BarChord {
+            chord,
+            position,
+            size,
+        });
         Ok(())
     }
 

@@ -12,8 +12,8 @@
 //! and re-run without the env var to confirm parity.
 
 use chordsketch_ireal::{
-    Bar, BarChord, BeatPosition, Chord, ChordQuality, ChordRoot, IrealSong, KeyMode, KeySignature,
-    Section, SectionLabel,
+    Bar, BarChord, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize, IrealSong, KeyMode,
+    KeySignature, Section, SectionLabel,
 };
 use chordsketch_render_ireal::{RenderOptions, render_svg};
 
@@ -23,6 +23,7 @@ fn bar_with_chord(note: char, quality: ChordQuality) -> Bar {
         chords: vec![BarChord {
             chord,
             position: BeatPosition::on_beat(1).unwrap(),
+            size: ChordSize::Default,
         }],
         ..Bar::new()
     }
@@ -34,10 +35,12 @@ fn bar_with_two_chords(c1: (char, ChordQuality), c2: (char, ChordQuality)) -> Ba
             BarChord {
                 chord: Chord::triad(ChordRoot::natural(c1.0), c1.1),
                 position: BeatPosition::on_beat(1).unwrap(),
+                size: ChordSize::Default,
             },
             BarChord {
                 chord: Chord::triad(ChordRoot::natural(c2.0), c2.1),
                 position: BeatPosition::on_beat(3).unwrap(),
+                size: ChordSize::Default,
             },
         ],
         ..Bar::new()
@@ -292,6 +295,7 @@ fn marked_bar(start: BarLine, end: BarLine, note: char, q: ChordQuality) -> Bar 
         chords: vec![BarChord {
             chord: Chord::triad(ChordRoot::natural(note), q),
             position: BeatPosition::on_beat(1).unwrap(),
+            size: ChordSize::Default,
         }],
         ..Bar::new()
     }
@@ -304,6 +308,7 @@ fn ending_bar(n: u8, note: char, q: ChordQuality) -> Bar {
         chords: vec![BarChord {
             chord: Chord::triad(ChordRoot::natural(note), q),
             position: BeatPosition::on_beat(1).unwrap(),
+            size: ChordSize::Default,
         }],
         ..Bar::new()
     }
@@ -360,6 +365,7 @@ fn endings_demo() -> IrealSong {
                 chords: vec![BarChord {
                     chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major7),
                     position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
                 }],
                 ..Bar::new()
             },
@@ -391,6 +397,7 @@ fn section_markers_demo() -> IrealSong {
             chords: vec![BarChord {
                 chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major7),
                 position: BeatPosition::on_beat(1).unwrap(),
+                size: ChordSize::Default,
             }],
             ..Bar::new()
         }
@@ -470,6 +477,7 @@ fn symbol_bar(symbol: MusicalSymbol, note: char, q: ChordQuality) -> Bar {
         chords: vec![BarChord {
             chord: Chord::triad(ChordRoot::natural(note), q),
             position: BeatPosition::on_beat(1).unwrap(),
+            size: ChordSize::Default,
         }],
         ..Bar::new()
     }
