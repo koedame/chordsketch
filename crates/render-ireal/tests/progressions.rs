@@ -534,3 +534,47 @@ fn render_fine_demo() {
         &music_symbol_demo(MusicalSymbol::Fine, "Fine Demo"),
     );
 }
+
+// ---------------------------------------------------------------------------
+// Fixture: vertical-space hint Y / YY / YYY at row boundaries
+//
+// 13 bars across one section. The first row (bars 0..=3) carries no hint
+// — baseline placement. Row 2 starts at bar 4 with `Y` (small gap),
+// row 3 starts at bar 8 with `YY` (medium gap), row 4 starts at bar 12
+// with `YYY` (large gap). The cumulative `break_offset_y` shifts each
+// row downward by the per-row hint plus every earlier hint, locking in
+// the layout engine's accumulator behaviour for the renderer-facing
+// snapshot. Trailing empties on row 4 also inherit the offset.
+// ---------------------------------------------------------------------------
+
+fn vertical_space_demo() -> IrealSong {
+    let mut song = IrealSong::new();
+    song.title = "Vertical Space Demo".into();
+    song.style = Some("Medium Swing".into());
+    let mut bars: Vec<Bar> = (0..13)
+        .map(|i| {
+            // Cycle through C / F / G / C7 so each bar is visually
+            // distinct in the golden snapshot.
+            let (note, q) = match i % 4 {
+                0 => ('C', ChordQuality::Major7),
+                1 => ('F', ChordQuality::Major7),
+                2 => ('G', ChordQuality::Dominant7),
+                _ => ('C', ChordQuality::Dominant7),
+            };
+            bar_with_chord(note, q)
+        })
+        .collect();
+    bars[4].system_break_space = 1; // start of row 2 — small gap
+    bars[8].system_break_space = 2; // start of row 3 — medium gap
+    bars[12].system_break_space = 3; // start of row 4 — large gap
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars,
+    });
+    song
+}
+
+#[test]
+fn render_vertical_space_demo() {
+    check_golden("vertical_space_demo", &vertical_space_demo());
+}

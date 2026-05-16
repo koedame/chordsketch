@@ -50,6 +50,14 @@ pub const ROW_GAP: i32 = 16;
 /// signature (line 1) and section-marker squares (`[A]`, `[B]`, …).
 pub const LINE_LEFT_INDENT: i32 = 28;
 
+/// Vertical padding (in SVG user units) added above a row per
+/// level of `Bar::system_break_space` carried by the row's first
+/// bar. Matches the iReal Pro spec's `Y` / `YY` / `YYY` tokens
+/// (small / medium / large between-system gap); each `Y` adds
+/// this many user-units of extra space above the row, multiplied
+/// by the count (so `YYY` → 3 × this value).
+pub const VERTICAL_BREAK_PER_LEVEL: i32 = 4;
+
 /// Maximum bar count the renderer accepts before truncating.
 ///
 /// Mirrors the bounds-check pattern used by `chordsketch-chordpro`
@@ -143,6 +151,12 @@ const _: () = assert!(MAX_SECTIONS > 0);
 const _: () = {
     let max_rows = MAX_BARS.div_ceil(BARS_PER_ROW);
     // Conservatively check that `row_y = GRID_TOP + row * BAR_ROW_HEIGHT`
-    // stays within `i32` for every row up to the cap.
-    assert!(max_rows < (i32::MAX as usize) / (BAR_ROW_HEIGHT as usize));
+    // plus the maximum possible system-break offset stays within
+    // `i32` for every row up to the cap. The break offset cap per
+    // row is `3 * VERTICAL_BREAK_PER_LEVEL`; with one such bump
+    // per row that is `3 * max_rows * VERTICAL_BREAK_PER_LEVEL`
+    // total.
+    let break_budget = 3 * (VERTICAL_BREAK_PER_LEVEL as usize);
+    let per_row = (BAR_ROW_HEIGHT as usize) + break_budget;
+    assert!(max_rows < (i32::MAX as usize) / per_row);
 };

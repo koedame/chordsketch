@@ -214,6 +214,20 @@ pub struct Bar {
     /// measure lead break"). Order is preserved; multiple comments
     /// on one bar concatenate with `; ` separator.
     pub text_comment: Option<String>,
+    /// Vertical-space hint (URL tokens `Y` / `YY` / `YYY` at the
+    /// start of a system) preserved as an integer count in
+    /// `0..=3`. `0` means "no extra space" (default); `1` / `2` /
+    /// `3` ask the renderer to add proportional vertical padding
+    /// above the row this bar belongs to so the engraved chart can
+    /// reproduce the source's between-system spacing.
+    ///
+    /// The parser counts consecutive `Y` characters between bar
+    /// boundaries (clamping at `3` to match the spec) and stamps
+    /// the count on the next bar that begins. Whether that bar
+    /// actually lands at a row start is a render-time concern; the
+    /// AST records the hint verbatim so the source `Y+` token
+    /// round-trips through serialise → parse without loss.
+    pub system_break_space: u8,
 }
 
 impl Bar {
@@ -230,6 +244,7 @@ impl Bar {
             repeat_previous: false,
             no_chord: false,
             text_comment: None,
+            system_break_space: 0,
         }
     }
 }

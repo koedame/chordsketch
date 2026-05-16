@@ -165,7 +165,7 @@ checks each token in this priority order:
 | `Tnd` | Time signature. Two-digit packed form (`T44` = 4/4, `T34` = 3/4, `T68` = 6/8); three-digit form when numerator is two digits (`T128` = 12/8). |
 | `x` | Repeat previous measure — sets `Bar::repeat_previous = true` on the current bar. |
 | `r` | Repeat previous two measures — currently collapses to the same `Bar::repeat_previous = true` flag as `x` / `Kcl`. A future schema split may distinguish 1-bar from 2-bar simile via a separate field. |
-| `Y+` | Vertical spacer — discard. |
+| `Y+` | Vertical space hint at the start of a system. Counts consecutive `Y` characters and stamps the count on the bar currently being assembled as `Bar::system_break_space` (clamped to `0..=3` per the spec's `Y` / `YY` / `YYY` shorthand for small / medium / large between-system gap). The renderer applies `VERTICAL_BREAK_PER_LEVEL` SVG units of extra padding above every row whose first bar carries a non-zero hint. |
 | `n` | "No Chord" — sets `Bar::no_chord = true`. The renderer paints `N.C.` in the bar's centre. |
 | `p` | Pause slash — discard. |
 | `U` | Player ending marker — discard. |
@@ -238,8 +238,6 @@ distinguishes:
 
 - `p` (Pause slash): no AST representation.
 - `U` (Player-only ending): no AST representation.
-- `Y+` (Vertical spacer): no AST representation (visual hint
-  only).
 - `f` (Fermata): the spec lists this alongside `S` (Segno) and
   `Q` (Coda) as a rehearsal-mark / bar-attached symbol. The
   parser has no `f` branch in the music-token loop: the
