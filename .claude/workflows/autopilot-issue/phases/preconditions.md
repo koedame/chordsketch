@@ -72,20 +72,26 @@ Run each check; record the result. Stop at the first failure and HALT.
    origin_main=$(git rev-parse origin/main)
    if [[ "$local_main" != "$origin_main" ]]; then
      # Local main is behind or has diverged. Fast-forward if behind;
-     # HALT if diverged (the maintainer may have local commits that
-     # need to land in their own PR first).
+     # HALT (via the declarative path below) if diverged — the
+     # maintainer may have local commits that need to land in their
+     # own PR first, and silent auto-rebase here would mask that
+     # signal.
      if git merge-base --is-ancestor "$local_main" "$origin_main"; then
        git merge --ff-only origin/main
-     else
-       # halt_reason rendered verbatim on the orchestrator terminal.
-       printf 'local main (%s) has diverged from origin/main (%s); rebase or reset manually before retrying' \
-         "$local_main" "$origin_main"
-       exit 1  # HALT path; see "Required final actions" footer
      fi
    fi
    ```
    If `git fetch origin main --tags` itself exits non-zero, HALT with
    `halt_reason: "git fetch origin failed; check network / SSH auth"`.
+   If `local_main != origin_main` AND
+   `git merge-base --is-ancestor "$local_main" "$origin_main"` is
+   false (i.e. local main has diverged, not just fallen behind), HALT
+   with
+   `halt_reason: "local main has diverged from origin/main; rebase or reset manually before retrying"`.
+   Persistence of `halt_reason` into `context.json` and `HALT` into
+   `current-phase.txt` is handled by the orchestrator's "Required
+   final actions" footer — every HALT path in this phase follows the
+   same declarative pattern, not an inline `exit 1`.
 
 7. **One-PR-at-a-time gate** per
    [`.claude/rules/one-pr-at-a-time.md`](../../../rules/one-pr-at-a-time.md).
