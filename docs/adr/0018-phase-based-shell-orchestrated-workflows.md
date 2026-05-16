@@ -127,8 +127,8 @@ top-level namespace; phase names only need to be unique inside a
 workflow. State directories mirror the same structure. Two workflows
 can run concurrently (different state directories, different locks);
 two instances of the *same* workflow cannot (the `flock` blocks).
-This scales to the planned "今後いろんなワークフローを足していく" use
-case without a global registry.
+This scales to the planned multi-workflow future (adding new workflows
+incrementally) without a global registry.
 
 ## Consequences
 
