@@ -21,6 +21,28 @@ cargo fmt --check    # Check formatting (CI enforced)
 cargo fmt            # Auto-format code
 ```
 
+## Workflows
+
+Long-running autonomous tasks live under `.claude/workflows/<name>/` and
+run via `scripts/run-workflow.sh <name>`. Each workflow is a graph of
+phases; each phase is a Markdown prompt executed as a separate
+`claude -p` invocation. State passes between phases through a JSON file
+under `.claude/workflow-state/<name>/` (git-ignored).
+
+| File | Purpose |
+|---|---|
+| `scripts/run-workflow.sh` | Generic orchestrator. `./scripts/run-workflow.sh <name>` |
+| `.claude/workflows/README.md` | Layout contract; how to add a workflow |
+| `.claude/workflows/<name>/workflow.json` | Phase graph (entry, phases, terminals) |
+| `.claude/workflows/<name>/phases/*.md` | Individual phase prompts |
+| `.claude/rules/workflow-discipline.md` | Phase-author rules (HALT discipline, schema evolution, naming) |
+| `.claude/commands/new-workflow.md` | Scaffold skill: `/new-workflow <name>` creates the skeleton |
+| `scripts/validate-workflow.py` | Static check of `workflow.json` integrity |
+
+Architectural rationale: [ADR-0018](docs/adr/0018-phase-based-shell-orchestrated-workflows.md).
+Production workflow: `autopilot-issue` (pick an unchidev-authored
+issue, implement, drive review to convergence, stop at Ready-for-merge).
+
 ## Architecture
 
 This is a Cargo workspace with the following crates:
