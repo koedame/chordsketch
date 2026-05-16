@@ -59,12 +59,12 @@ assert_eq!(parsed, song);
 | Item | Signature | Notes |
 |---|---|---|
 | `IrealSong` | struct with `title`, `composer`, `style`, `key_signature`, `time_signature`, `tempo`, `transpose`, `sections` | Root AST node. `IrealSong::new()` builds an empty `C major` 4/4 chart. |
-| `Section`, `SectionLabel` | struct + 7-variant enum (`Letter(c)`, `Verse`, `Chorus`, `Intro`, `Outro`, `Bridge`, `Custom(s)`) | Labelled block of bars. |
+| `Section`, `SectionLabel` | struct + 4-variant enum (`Letter(c)`, `Verse`, `Intro`, `Custom(s)`) | Labelled block of bars. |
 | `Bar`, `BarLine`, `Ending` | struct + 5-variant enum + `NonZeroU8` newtype | One measure with opening / closing barline, chords, ending number, optional `MusicalSymbol`. |
 | `BarChord`, `BeatPosition` | structs | Chord placed at a beat position inside a bar. |
 | `Chord`, `ChordRoot`, `ChordQuality`, `Accidental` | structs + enums | Root, quality (12 named + `Custom`), optional bass note, accidental. |
 | `KeySignature`, `KeyMode`, `TimeSignature` | structs + enum | Key (C major default) and time signature (4/4 default). |
-| `MusicalSymbol` | enum (`Segno`, `Coda`, `DaCapo`, `DalSegno`, `Fine`) | Bar-attached navigation symbols. |
+| `MusicalSymbol` | enum (`Segno`, `Coda`, `DaCapo`, `DalSegno`, `Fine`, `Fermata`) | Bar-attached navigation symbols. |
 | `ToJson` | `fn to_json(&self, &mut String)` and `fn to_json_string(&self) -> String` | Hand-rolled, byte-stable, compact JSON. |
 | `FromJson` | `fn from_json_str(&str) -> Result<Self, JsonError>` and `fn from_json_value(&JsonValue) -> Result<Self, JsonError>` | Round-trip-only deserializer; accepts only the subset `ToJson` emits. |
 | `parse_json` | `fn parse_json(&str) -> Result<JsonValue, JsonError>` | Free function for the underlying JSON value tree. |
@@ -76,6 +76,64 @@ Validating constructors: `TimeSignature::new`, `Ending::new`,
 `BeatPosition::on_beat` all return `Option`. Direct field
 mutation bypasses these checks — see the module-level "Public-field
 mutation contract" comment in `ast.rs`.
+
+## Scope
+
+This crate currently parses the **iReal Pro export format** —
+the obfuscated `irealb://` URL produced by the iReal Pro app
+(7..=9 `=`-separated fields, music body prefixed with the
+`1r34LbKcu7` sentinel and `obfusc50`-scrambled) — together with
+the 6-field `irealbook://` plain-text variant
+(`Title=Composer=Style=Key=TimeSig=Music`). Both inputs serialize
+back through `irealb_serialize` / `irealbook_serialize`.
+
+Open-protocol plain-text **serialization** to the form documented
+at
+[`irealpro.com/ireal-pro-custom-chord-chart-protocol`](https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol)
+is tracked under [#2425](https://github.com/koedame/chordsketch/issues/2425).
+Several player-recognised tokens documented in the iReal Pro Help
+Center are also absent from the AST today; they are tracked
+alongside #2425 under the open-protocol-spec compliance umbrella
+[#2423](https://github.com/koedame/chordsketch/issues/2423).
+
+Token coverage as of the latest release:
+
+### Supported tokens
+
+| Token / shape | AST surface |
+|---|---|
+| `irealb://` 7..=9-field obfuscated export | `parse` / `parse_collection` |
+| `irealbook://` 6-field plain-text (`Title=Composer=Style=Key=TimeSig=Music`) | `parse` / `parse_collection` ([#2424](https://github.com/koedame/chordsketch/issues/2424)) |
+| `(altchord)` parenthesised alternate chord | `Chord::alternate` ([#2428](https://github.com/koedame/chordsketch/issues/2428)) |
+| `n` No-Chord | `Bar::no_chord` ([#2429](https://github.com/koedame/chordsketch/issues/2429)) |
+| `Kcl` / `x` / `r` simile (collapsed to a single flag) | `Bar::repeat_previous` ([#2430](https://github.com/koedame/chordsketch/issues/2430)) |
+| `<text>` staff-text caption (verbatim preservation) | `Bar::text_comment` |
+| `Y` / `YY` / `YYY` between-system vertical-space hint | `Bar::system_break_space` ([#2434](https://github.com/koedame/chordsketch/issues/2434)) |
+| `S` Segno, `Q` Coda, `f` Fermata | `MusicalSymbol::{Segno, Coda, Fermata}` ([#2431](https://github.com/koedame/chordsketch/issues/2431)) |
+| `<D.C.>` / `<D.S.>` / `<Fine>` macro prefixes (collapsed) | `MusicalSymbol::{DaCapo, DalSegno, Fine}` |
+| `*A`..`*D` / `*i` / `*v` / `*V` section labels | `SectionLabel::{Letter, Intro, Verse}` ([#2432](https://github.com/koedame/chordsketch/issues/2432)) |
+| `N1` / `N2` / `N3` ending brackets (numbers ≥ 1) | `Bar::ending` |
+
+### Unsupported tokens
+
+| Token / shape | Sub-issue |
+|---|---|
+| Open-protocol `irealbook://` plain-text **serializer** | [#2425](https://github.com/koedame/chordsketch/issues/2425) |
+| Full staff-text content (custom text, vertical position, repeat count override) | [#2426](https://github.com/koedame/chordsketch/issues/2426) |
+| 11 D.C. / D.S. macro variants (`<D.C. al Coda>`, `<D.S. al Fine>`, etc.) collapse to single variants | [#2427](https://github.com/koedame/chordsketch/issues/2427) |
+| Chord-size markers `s` (small) / `l` (large) | [#2433](https://github.com/koedame/chordsketch/issues/2433) |
+| Pause-slash `p` (repeat preceding chord) | [#2435](https://github.com/koedame/chordsketch/issues/2435) |
+| `N0` no-text ending | [#2436](https://github.com/koedame/chordsketch/issues/2436) |
+| `Break` drum-silence staff-text token | [#2448](https://github.com/koedame/chordsketch/issues/2448) |
+| Compound time-signature additive groupings (`2+3`, `3+4`, `3+2+2`) | [#2449](https://github.com/koedame/chordsketch/issues/2449) |
+| Section-label reconciliation: `Chorus`/`Bridge`/`Outro` already removed from AST; convert-crate `SectionLabel::Custom` usage not yet cleaned up | [#2450](https://github.com/koedame/chordsketch/issues/2450) |
+| `END` song-terminator symbol distinct from Fermata | [#2451](https://github.com/koedame/chordsketch/issues/2451) |
+
+Umbrella [#2423](https://github.com/koedame/chordsketch/issues/2423)
+holds the canonical audit; this table is a release-time snapshot.
+When a sub-issue lands, move its row from Unsupported to
+Supported in the same PR — `.claude/rules/release-doc-sync.md`
+catches drift at release-cut time.
 
 ## File extension convention
 
