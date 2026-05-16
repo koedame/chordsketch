@@ -17,6 +17,7 @@ contacting any real Claude API.
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import re
@@ -482,7 +483,6 @@ class OrchestratorSmokeTests(unittest.TestCase):
             state_dir.mkdir(parents=True, exist_ok=True)
             lock_file = state_dir / "lock"
             lock_file.touch()
-            import fcntl
             holder = open(lock_file, "w")
             try:
                 fcntl.flock(holder.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
