@@ -243,6 +243,17 @@ fn serialize_music(song: &IrealSong) -> String {
 
         if bar.repeat_previous {
             chart.push_str("Kcl");
+            // Vertical-space hint sits AFTER the `Kcl` token so the
+            // parser's `Y`-counting branch stamps `system_break_space`
+            // on the bar that `Kcl` just opened, not on the preceding
+            // empty-placeholder bar (which the parser drops, losing the
+            // hint). Clamped to 3 to mirror the parser's saturating cap.
+            if bar.system_break_space > 0 {
+                let count = bar.system_break_space.min(3);
+                for _ in 0..count {
+                    chart.push('Y');
+                }
+            }
             if !text_carries_macro(bar) {
                 if let Some(sym) = bar.symbol {
                     serialize_symbol(&mut chart, sym);
@@ -263,6 +274,21 @@ fn serialize_music(song: &IrealSong) -> String {
         }
 
         serialize_bar_open(&mut chart, bar);
+
+        // Vertical-space hint sits AFTER the bar-open glyph (`[`, `{`,
+        // or nothing for Single) so the parser's `Y`-counting branch
+        // stamps `system_break_space` on the bar that `serialize_bar_open`
+        // just started, not on the preceding empty-placeholder bar (which
+        // the parser drops, losing the hint). Clamped to 3 to mirror the
+        // parser's saturating cap; values past the cap are absorbed
+        // silently (matches the parser's behaviour for AST-constructed
+        // values past the documented range).
+        if bar.system_break_space > 0 {
+            let count = bar.system_break_space.min(3);
+            for _ in 0..count {
+                chart.push('Y');
+            }
+        }
 
         // Symbol for THIS bar, emitted INSIDE the bar's content
         // area so the parser's `queue_symbol` (which now sets
@@ -642,6 +668,7 @@ mod tests {
                     repeat_previous: false,
                     no_chord: false,
                     text_comment: None,
+                    system_break_space: 0,
                 }],
             }],
         };
@@ -704,6 +731,7 @@ mod tests {
                 repeat_previous: false,
                 no_chord: false,
                 text_comment: None,
+                system_break_space: 0,
             }],
         }];
         let url = irealb_serialize(&song);
@@ -744,6 +772,7 @@ mod tests {
                     repeat_previous: false,
                     no_chord: false,
                     text_comment: None,
+                    system_break_space: 0,
                 }],
             }],
             ..Default::default()
@@ -779,6 +808,7 @@ mod tests {
                     repeat_previous: false,
                     no_chord: false,
                     text_comment: None,
+                    system_break_space: 0,
                 }],
             }],
             ..Default::default()
@@ -814,6 +844,7 @@ mod tests {
                     repeat_previous: false,
                     no_chord: false,
                     text_comment: None,
+                    system_break_space: 0,
                 }],
             }],
             ..Default::default()
@@ -1060,6 +1091,191 @@ mod tests {
         // First-char-only emission means re-parse sees `*C` →
         // `Letter('C')`, NOT `Custom("Chorus")`.
         assert_eq!(parsed.sections[0].label, SectionLabel::Letter('C'));
+    }
+
+    // ---- Vertical-space hint round-trip ----------------------------
+
+    #[test]
+    fn system_break_space_round_trips_via_url() {
+        // A bar with `system_break_space = 2` must serialise into a
+        // `YY` token that the parser re-counts to `2` on the way back.
+        let song = IrealSong {
+            title: "Vertical Space".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![
+                    Bar {
+                        start: BarLine::Double,
+                        end: BarLine::Single,
+                        chords: vec![BarChord {
+                            chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                            position: BeatPosition::on_beat(1).unwrap(),
+                        }],
+                        ..Default::default()
+                    },
+                    Bar {
+                        start: BarLine::Single,
+                        end: BarLine::Final,
+                        chords: vec![BarChord {
+                            chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Major),
+                            position: BeatPosition::on_beat(1).unwrap(),
+                        }],
+                        system_break_space: 2,
+                        ..Default::default()
+                    },
+                ],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        let bar1 = &parsed.sections[0].bars[1];
+        assert_eq!(
+            bar1.system_break_space, 2,
+            "system_break_space must survive serialise → parse"
+        );
+        // Chord on the labelled bar must also survive.
+        assert_eq!(bar1.chords[0].chord.root.note, 'D');
+    }
+
+    /// A `Double`-start bar with `system_break_space = 2` must survive
+    /// the serialise → parse round-trip. The Y tokens must appear AFTER
+    /// the `[` bar-open glyph; if emitted before it, the parser drops
+    /// the hint on the empty-placeholder bar and the field becomes 0.
+    #[test]
+    fn system_break_space_on_double_start_bar_round_trips() {
+        let song = IrealSong {
+            title: "Y Double".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![
+                    Bar {
+                        start: BarLine::Double,
+                        end: BarLine::Single,
+                        chords: vec![BarChord {
+                            chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                            position: BeatPosition::on_beat(1).unwrap(),
+                        }],
+                        ..Default::default()
+                    },
+                    Bar {
+                        start: BarLine::Double,
+                        end: BarLine::Final,
+                        chords: vec![BarChord {
+                            chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Major),
+                            position: BeatPosition::on_beat(1).unwrap(),
+                        }],
+                        system_break_space: 2,
+                        ..Default::default()
+                    },
+                ],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        let bar1 = parsed
+            .sections
+            .iter()
+            .flat_map(|s| s.bars.iter())
+            .find(|b| {
+                b.start == BarLine::Double && b.chords.iter().any(|c| c.chord.root.note == 'D')
+            })
+            .expect("double-start D bar must survive");
+        assert_eq!(
+            bar1.system_break_space, 2,
+            "system_break_space must survive on a Double-start bar"
+        );
+    }
+
+    /// A `repeat_previous` bar with `system_break_space = 1` must
+    /// survive serialise → parse. Y must appear AFTER `Kcl`; if
+    /// emitted before it, the hint is lost on the empty-placeholder bar.
+    #[test]
+    fn system_break_space_on_repeat_previous_bar_round_trips() {
+        let song = IrealSong {
+            title: "Y Kcl".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![
+                    Bar {
+                        start: BarLine::Double,
+                        end: BarLine::Single,
+                        chords: vec![BarChord {
+                            chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                            position: BeatPosition::on_beat(1).unwrap(),
+                        }],
+                        ..Default::default()
+                    },
+                    Bar {
+                        start: BarLine::Single,
+                        end: BarLine::Final,
+                        repeat_previous: true,
+                        system_break_space: 1,
+                        ..Default::default()
+                    },
+                ],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        let repeat_bar = parsed
+            .sections
+            .iter()
+            .flat_map(|s| s.bars.iter())
+            .find(|b| b.repeat_previous)
+            .expect("repeat_previous bar must survive");
+        assert_eq!(
+            repeat_bar.system_break_space, 1,
+            "system_break_space must survive on a repeat_previous bar"
+        );
+    }
+
+    /// An `OpenRepeat`-start bar takes the same `finish_bar +
+    /// start_new_bar` path as `Double` at the `{` glyph. The hint
+    /// must therefore land on the new bar, not the dropped empty
+    /// placeholder.
+    #[test]
+    fn system_break_space_on_open_repeat_start_bar_round_trips() {
+        let song = IrealSong {
+            title: "Y Open Repeat".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::OpenRepeat,
+                    end: BarLine::CloseRepeat,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('F'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                    }],
+                    system_break_space: 1,
+                    ..Default::default()
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        let bar0 = parsed
+            .sections
+            .iter()
+            .flat_map(|s| s.bars.iter())
+            .find(|b| b.start == BarLine::OpenRepeat)
+            .expect("open-repeat bar must survive");
+        assert_eq!(
+            bar0.system_break_space, 1,
+            "system_break_space must survive on an OpenRepeat-start bar"
+        );
+        assert_eq!(bar0.chords[0].chord.root.note, 'F');
     }
 
     /// Single-char custom labels round-trip cleanly when the char is
