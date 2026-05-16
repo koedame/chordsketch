@@ -56,10 +56,13 @@ Arguments:
 
 Flags:
   --resume                Continue from the saved current-phase.txt instead
-                          of resetting to the workflow's entryPhase.
+                          of resetting to the workflow's entryPhase. Takes
+                          precedence over --force when both are set: a
+                          present current-phase.txt always resumes.
   --force                 Permit a fresh start that overwrites a non-empty
                           existing context.json. Without this flag, the
                           orchestrator refuses to clobber in-flight state.
+                          Ignored if --resume is also set.
   --max-iters N           Hard cap on phase transitions (positive integer;
                           default 50). Guards against runaway loops.
   --per-phase-timeout S   Wall-clock cap per phase invocation, in seconds

@@ -212,13 +212,20 @@ preconditions; the orchestrator's failure is loud enough.
   macOS)
 - `git`
 
-Plugin-provided sub-agents (e.g. `feature-dev:*`, `pr-review-toolkit:*`)
-that a phase invokes are NOT enforced by the orchestrator. If a workflow
+Plugin-provided sub-agents (e.g. `feature-dev:*`, `pr-review-toolkit:*`
+when installed via the official Claude Code plugin marketplace) that a
+phase invokes are NOT enforced by the orchestrator. If a workflow
 depends on such plugins, its `preconditions` phase MUST verify they are
 installed via `claude plugins list` and HALT if any are missing. The
 workflow's `README.md` should list the dependency under a "Required
 plugins" section so a contributor on a fresh machine knows what to
 install.
+
+The shipped `autopilot-issue` workflow does NOT depend on any external
+plugins — it uses only the built-in `Explore`, `Plan`, and
+`general-purpose` `subagent_type` values. New workflows should default
+to the same posture; reach for plugin sub-agents only when a capability
+the built-ins lack is load-bearing for the phase.
 
 ## State-directory side channels
 
