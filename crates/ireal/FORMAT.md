@@ -1,15 +1,23 @@
 # `irealb://` URL format
 
-Reverse-engineered notes on the iReal Pro export URL format. There
-is no published spec; this document reflects what the
-`chordsketch-ireal` parser (`src/parser.rs`) implements, derived
-from the open-source [`pianosnake/ireal-reader`][1] JavaScript
-parser and the [`ironss/accompaniser`][2] de-obfuscation routine
-it cites. The grammar here covers the subset the parser handles —
-features that the iReal app supports but our parser folds into
-`ChordQuality::Custom` (or simply skips) are listed under
-"Out of scope" at the bottom.
+Notes on the iReal Pro export URL formats. The open-protocol
+`irealbook://` plain-text shape is publicly specified by iReal Pro
+in the [iReal Pro Custom Chord Chart Protocol][spec] and on the
+companion [developer docs page][devdocs]; the chord-chart grammar
+documented below follows that spec. The obfuscated `irealb://`
+export — the `MUSIC_PREFIX` magic and the `obfusc50` unscramble that
+wrap the same chord-chart body — is **not** covered by the published
+spec and remains a reverse-engineered format. For that half we
+follow the open-source [`pianosnake/ireal-reader`][1] JavaScript
+parser and the [`ironss/accompaniser`][2] de-obfuscation routine it
+cites. This document reflects what the `chordsketch-ireal` parser
+(`src/parser.rs`) implements; the grammar here covers the subset
+the parser handles — features that the iReal app supports but our
+parser folds into `ChordQuality::Custom` (or simply skips) are
+listed under "Out of scope" at the bottom.
 
+[spec]: https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol
+[devdocs]: https://www.irealpro.com/developer-docs
 [1]: https://github.com/pianosnake/ireal-reader
 [2]: https://github.com/ironss/accompaniser
 

@@ -8,15 +8,21 @@ of those tickets.
 
 ## Reference data model
 
-The iReal Pro chart format has no published spec. The closest
-public artefact is the [`daumling/ireal-renderer`][1] JS project,
-which the AC for #2055 explicitly nominates as the reference. We
-ported the **data model** (what fields a chart carries, how chords
-sit inside bars, how repeats and endings nest) and intentionally
-did **not** port the JS rendering code — rendering lives in
-`chordsketch-render-ireal` (#2058) and binds to the data model
-through this crate's public API.
+The open-protocol `irealbook://` URL form is publicly specified by
+iReal Pro in the [iReal Pro Custom Chord Chart Protocol][spec] and
+on the companion [developer docs page][devdocs]. The obfuscated
+`irealb://` export is not covered by that spec and remains a
+reverse-engineered format. For the *AST shape* — what fields a
+chart carries, how chords sit inside bars, how repeats and endings
+nest — the closest public artefact is the
+[`daumling/ireal-renderer`][1] JS project, which the AC for #2055
+explicitly nominates as the reference. We ported that data model
+and intentionally did **not** port the JS rendering code —
+rendering lives in `chordsketch-render-ireal` (#2058) and binds to
+the data model through this crate's public API.
 
+[spec]: https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol
+[devdocs]: https://www.irealpro.com/developer-docs
 [1]: https://github.com/daumling/ireal-renderer
 
 ## Field-level rationale
