@@ -210,6 +210,13 @@ impl ToJson for Bar {
             out.push_str(",\"text_comment\":");
             write_str(out, text);
         }
+        if self.system_break_space > 0 {
+            // Emit only when non-zero so default bars stay byte-
+            // stable in the JSON snapshot. Mirrors the
+            // `repeat_previous` / `no_chord` pattern above.
+            out.push_str(",\"system_break_space\":");
+            write_u8(out, self.system_break_space);
+        }
         out.push('}');
     }
 }
@@ -1198,6 +1205,19 @@ impl FromJson for Bar {
             Some(JsonValue::String(s)) => Some(s.clone()),
             _ => None,
         };
+        let system_break_space = match value.get_optional("system_break_space") {
+            Some(other) => {
+                let n = extract_u8(other)?;
+                if n > 3 {
+                    return Err(JsonError::new(
+                        0,
+                        format!("system_break_space {n} out of range [0, 3]"),
+                    ));
+                }
+                n
+            }
+            None => 0,
+        };
         Ok(Self {
             start,
             end,
@@ -1207,6 +1227,7 @@ impl FromJson for Bar {
             repeat_previous,
             no_chord,
             text_comment,
+            system_break_space,
         })
     }
 }

@@ -241,6 +241,20 @@ fn serialize_music(song: &IrealSong) -> String {
                 .unwrap_or(false)
         };
 
+        // Vertical-space hint (`Y` / `YY` / `YYY`) sits before the
+        // bar's open glyph so the parser's `Y`-counting branch hits
+        // before the bar boundary. Clamped to 3 to mirror the
+        // parser's spec-bound saturating cap; values past the cap
+        // are absorbed silently rather than promoted to a wider
+        // gap (matches the parser's behaviour for AST-constructed
+        // values past the documented range).
+        if bar.system_break_space > 0 {
+            let count = bar.system_break_space.min(3);
+            for _ in 0..count {
+                chart.push('Y');
+            }
+        }
+
         if bar.repeat_previous {
             chart.push_str("Kcl");
             if !text_carries_macro(bar) {
@@ -642,6 +656,7 @@ mod tests {
                     repeat_previous: false,
                     no_chord: false,
                     text_comment: None,
+                    system_break_space: 0,
                 }],
             }],
         };
@@ -704,6 +719,7 @@ mod tests {
                 repeat_previous: false,
                 no_chord: false,
                 text_comment: None,
+                system_break_space: 0,
             }],
         }];
         let url = irealb_serialize(&song);
@@ -744,6 +760,7 @@ mod tests {
                     repeat_previous: false,
                     no_chord: false,
                     text_comment: None,
+                    system_break_space: 0,
                 }],
             }],
             ..Default::default()
@@ -779,6 +796,7 @@ mod tests {
                     repeat_previous: false,
                     no_chord: false,
                     text_comment: None,
+                    system_break_space: 0,
                 }],
             }],
             ..Default::default()
@@ -814,6 +832,7 @@ mod tests {
                     repeat_previous: false,
                     no_chord: false,
                     text_comment: None,
+                    system_break_space: 0,
                 }],
             }],
             ..Default::default()
@@ -1060,6 +1079,53 @@ mod tests {
         // First-char-only emission means re-parse sees `*C` →
         // `Letter('C')`, NOT `Custom("Chorus")`.
         assert_eq!(parsed.sections[0].label, SectionLabel::Letter('C'));
+    }
+
+    // ---- Vertical-space hint round-trip (#2434) --------------------
+
+    #[test]
+    fn system_break_space_round_trips_via_url() {
+        // A bar with `system_break_space = 2` must serialise into a
+        // `YY` token that the parser re-counts to `2` on the way back.
+        let song = IrealSong {
+            title: "Vertical Space".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![
+                    Bar {
+                        start: BarLine::Double,
+                        end: BarLine::Single,
+                        chords: vec![BarChord {
+                            chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                            position: BeatPosition::on_beat(1).unwrap(),
+                        }],
+                        ..Default::default()
+                    },
+                    Bar {
+                        start: BarLine::Single,
+                        end: BarLine::Final,
+                        chords: vec![BarChord {
+                            chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Major),
+                            position: BeatPosition::on_beat(1).unwrap(),
+                        }],
+                        system_break_space: 2,
+                        ..Default::default()
+                    },
+                ],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        let bar1 = &parsed.sections[0].bars[1];
+        assert_eq!(
+            bar1.system_break_space, 2,
+            "system_break_space must survive serialise → parse"
+        );
+        // Chord on the labelled bar must also survive.
+        assert_eq!(bar1.chords[0].chord.root.note, 'D');
     }
 
     /// Single-char custom labels round-trip cleanly when the char is

@@ -389,6 +389,7 @@ fn full_song_round_trips_through_deserializer() {
         repeat_previous: false,
         no_chord: false,
         text_comment: None,
+        system_break_space: 0,
     };
     let mut song = IrealSong::new();
     song.title = "T".to_string();

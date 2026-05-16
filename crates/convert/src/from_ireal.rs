@@ -414,6 +414,7 @@ mod tests {
                     repeat_previous: false,
                     no_chord: false,
                     text_comment: None,
+                    system_break_space: 0,
                 }],
             }],
         }

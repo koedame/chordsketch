@@ -587,9 +587,23 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
             rest = r;
             continue;
         }
-        if let Some(r) = rest.strip_prefix('Y') {
-            // Vertical spacer, no AST impact.
-            rest = r;
+        if rest.starts_with('Y') {
+            // Vertical spacer — count consecutive `Y` characters
+            // (the iReal Pro spec defines `Y` / `YY` / `YYY` as a
+            // small / medium / large between-system gap) and stamp
+            // the count on the bar currently being assembled. By
+            // the structure of the parse loop, that bar is the one
+            // that follows the most recent bar boundary, which is
+            // exactly the bar the Y run is intended to label. The
+            // count is clamped at `3` because the spec only defines
+            // up to three Ys; surplus Ys past the cap are absorbed
+            // silently rather than promoted to a wider gap.
+            let mut count: u8 = 0;
+            while let Some(r) = rest.strip_prefix('Y') {
+                count = count.saturating_add(1);
+                rest = r;
+            }
+            state.add_system_break_space(count);
             continue;
         }
         if let Some(r) = rest.strip_prefix('n') {
@@ -843,6 +857,14 @@ impl ChartParseState {
         self.pending_final = true;
     }
 
+    fn add_system_break_space(&mut self, count: u8) {
+        // Saturating-add against the spec cap (`3`). Re-running `Y`
+        // tokens within the same bar context accumulates toward the
+        // cap; once at the cap, extra Ys are absorbed silently.
+        let new_count = self.current_bar.system_break_space.saturating_add(count);
+        self.current_bar.system_break_space = new_count.min(3);
+    }
+
     fn queue_ending(&mut self, ending: Ending) {
         // iReal Pro encodes ending markers (`N1`, `N2`) immediately
         // after a bar boundary (`|`, `}`, `]`), so by the time this
@@ -979,6 +1001,11 @@ impl ChartParseState {
             && self.current_bar.text_comment.is_none()
             && self.current_bar.start == BarLine::Single
             && self.current_bar.end == BarLine::Single;
+        // `system_break_space` is deliberately excluded from this
+        // check: a bar carrying only a vertical-space hint has no
+        // content to space against, so dropping it (and the
+        // orphaned hint) matches the "Y between bars" intent of
+        // the spec.
         if is_empty_placeholder {
             // The current bar is the empty placeholder iReal's
             // lexer leaves between consecutive bar boundaries (a
@@ -1582,6 +1609,76 @@ mod tests {
         let url = "irealbook://Test=A==Style=C=44=[*iC|D|]";
         let song = parse(url).expect("parse");
         assert_eq!(song.sections[0].label, SectionLabel::Intro);
+    }
+
+    // ---- Vertical-space hint Y / YY / YYY (#2434) -----------------
+
+    #[test]
+    fn single_y_sets_system_break_space_one() {
+        // `Y` immediately before a bar's chord content stamps
+        // `system_break_space = 1` on that bar.
+        let url = "irealbook://Test=A==Style=C=44=[*AC|YD|E|F]";
+        let song = parse(url).expect("parse");
+        let bars = &song.sections[0].bars;
+        assert_eq!(bars[0].system_break_space, 0, "first bar carries no Y");
+        assert_eq!(
+            bars[1].system_break_space, 1,
+            "bar after `Y` carries system_break_space=1"
+        );
+        // The chord on the labelled bar must survive.
+        assert_eq!(bars[1].chords.len(), 1);
+        assert_eq!(bars[1].chords[0].chord.root.note, 'D');
+    }
+
+    #[test]
+    fn double_y_sets_system_break_space_two() {
+        let url = "irealbook://Test=A==Style=C=44=[*AC|YYD|E|F]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.sections[0].bars[1].system_break_space, 2);
+    }
+
+    #[test]
+    fn triple_y_sets_system_break_space_three() {
+        let url = "irealbook://Test=A==Style=C=44=[*AC|YYYD|E|F]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.sections[0].bars[1].system_break_space, 3);
+    }
+
+    #[test]
+    fn excess_y_clamps_to_three() {
+        // The spec only defines `Y` / `YY` / `YYY`; longer runs
+        // clamp at 3 rather than promoting to a wider gap.
+        let url = "irealbook://Test=A==Style=C=44=[*AC|YYYYYYD|E|F]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.sections[0].bars[1].system_break_space, 3);
+    }
+
+    #[test]
+    fn trailing_y_without_subsequent_bar_is_dropped() {
+        // A `Y` run at the end of the chord stream has no bar to
+        // label; the parser drops the empty placeholder rather
+        // than leaving an orphaned hint bar in the AST.
+        let url = "irealbook://Test=A==Style=C=44=[*AC|D|E|FYY]";
+        let song = parse(url).expect("parse");
+        // The bar with chord F must be preserved (its barline
+        // close `]` finalises it before the trailing Ys are read).
+        let last_bar = song
+            .sections
+            .iter()
+            .flat_map(|s| s.bars.iter())
+            .last()
+            .expect("at least one bar");
+        assert_eq!(last_bar.chords[0].chord.root.note, 'F');
+        // No bar in the song carries an orphan system_break_space
+        // pointing at content that doesn't exist.
+        for (i, bar) in song.sections[0].bars.iter().enumerate() {
+            if bar.chords.is_empty() {
+                assert_eq!(
+                    bar.system_break_space, 0,
+                    "bar {i} has no chords; system_break_space must be 0"
+                );
+            }
+        }
     }
 
     #[test]

@@ -23,6 +23,7 @@ use chordsketch_ireal::IrealSong;
 
 use crate::page::{
     BAR_ROW_HEIGHT, BARS_PER_ROW, GRID_TOP, MARGIN_X, MAX_BARS, MAX_SECTIONS, PAGE_WIDTH,
+    VERTICAL_BREAK_PER_LEVEL,
 };
 
 /// Page coordinates of a single bar cell.
@@ -125,6 +126,13 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
     // when an empty trailing section bumps `row` past the last
     // visible content.
     let mut last_visible_row: Option<usize> = None;
+    // Accumulated vertical padding (in SVG user units) injected by
+    // `Bar::system_break_space` hints on row-starting bars. Bumped
+    // before placing the first bar of a row whose hint is > 0; the
+    // increase shifts that row and every subsequent row downward by
+    // the same amount. Each `Y` level contributes
+    // `VERTICAL_BREAK_PER_LEVEL` units.
+    let mut break_offset_y: i32 = 0;
     // Clamp the section iterator to `MAX_SECTIONS` so an
     // adversarially-large `Vec<Section>` cannot dominate
     // `section_row_starts` allocation. The cap mirrors the
@@ -134,7 +142,9 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
         // row's left margin, emit empty trailers to fill the rest
         // of the current row so the visible grid stays a clean
         // rectangle. The trailers carry the same width treatment
-        // as a real bar's last cell.
+        // as a real bar's last cell. The trailers inherit the
+        // current `break_offset_y` so they align vertically with
+        // the row's filled cells.
         if col > 0 {
             fill_trailing_empties(
                 &mut trailing_empties,
@@ -142,6 +152,7 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
                 col,
                 base_cell_width,
                 last_cell_width,
+                break_offset_y,
             );
             last_visible_row = Some(row);
             row += 1;
@@ -155,7 +166,7 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
             // still records the intended row for label placement.
             continue;
         }
-        for (bar_idx, _bar) in section.bars.iter().enumerate() {
+        for (bar_idx, bar) in section.bars.iter().enumerate() {
             if bars.len() >= MAX_BARS {
                 break;
             }
@@ -163,13 +174,26 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
                 row += 1;
                 col = 0;
             }
+            // When this bar starts a new row, consume its
+            // `system_break_space` hint by bumping the running
+            // break offset BEFORE computing y. The hint is clamped
+            // to `3` per spec; bumping at row start (col == 0) is
+            // what makes the renderer reproduce the source's
+            // between-system gap. A hint on a bar that does NOT
+            // start a row is preserved in the AST but has no
+            // visible effect — the layout grid is the source of
+            // truth for "row start", not the parser.
+            if col == 0 && bar.system_break_space > 0 {
+                let levels = i32::from(bar.system_break_space.min(3));
+                break_offset_y = break_offset_y.saturating_add(levels * VERTICAL_BREAK_PER_LEVEL);
+            }
             let cell_width = if col == BARS_PER_ROW - 1 {
                 last_cell_width
             } else {
                 base_cell_width
             };
             let x = MARGIN_X + (col as i32) * base_cell_width;
-            let y = row_y(row);
+            let y = row_y(row).saturating_add(break_offset_y);
             bars.push(BarCoord {
                 x,
                 y,
@@ -191,7 +215,8 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
         }
     }
     // Fill trailers for the very last partial row (no following
-    // section to trigger the wrap above).
+    // section to trigger the wrap above). Inherit the last
+    // `break_offset_y` so the trailers align with the row.
     if col > 0 {
         fill_trailing_empties(
             &mut trailing_empties,
@@ -199,6 +224,7 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
             col,
             base_cell_width,
             last_cell_width,
+            break_offset_y,
         );
         last_visible_row = Some(row);
     }
@@ -259,8 +285,9 @@ fn fill_trailing_empties(
     start_col: usize,
     base_cell_width: i32,
     last_cell_width: i32,
+    break_offset_y: i32,
 ) {
-    let y = row_y(row);
+    let y = row_y(row).saturating_add(break_offset_y);
     for col in start_col..BARS_PER_ROW {
         let cell_width = if col == BARS_PER_ROW - 1 {
             last_cell_width
@@ -493,6 +520,98 @@ mod tests {
             layout.section_row_starts[1] >= layout.total_rows,
             "trailing empty section's row pointer should sit past total_rows"
         );
+    }
+
+    // ---- Vertical-space hint layout (#2434) -----------------------
+
+    #[test]
+    fn system_break_space_on_row_start_shifts_row_down() {
+        // 5 bars across a single section: first row [bar0..bar3],
+        // second row [bar4] with system_break_space = 2. The
+        // second-row bar must sit `2 * VERTICAL_BREAK_PER_LEVEL`
+        // user units below where it would have without the hint.
+        use crate::page::VERTICAL_BREAK_PER_LEVEL;
+        let mut song = IrealSong::new();
+        let mut bars: Vec<Bar> = (0..5).map(|_| Bar::new()).collect();
+        bars[4].system_break_space = 2;
+        song.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars,
+        });
+        let layout = compute_layout(&song);
+        // Bar 0 sits on row 0 — no offset (it's the first row
+        // overall; hint on bar 0 would shift the entire chart, but
+        // bar 0 has no hint here).
+        assert_eq!(layout.bars[0].y, GRID_TOP);
+        // Bar 4 starts row 1 and carries hint=2; its y is
+        // GRID_TOP + BAR_ROW_HEIGHT + 2 * VERTICAL_BREAK_PER_LEVEL.
+        assert_eq!(
+            layout.bars[4].y,
+            GRID_TOP + BAR_ROW_HEIGHT + 2 * VERTICAL_BREAK_PER_LEVEL,
+        );
+    }
+
+    #[test]
+    fn system_break_space_on_non_row_start_has_no_visible_effect() {
+        // 4 bars, all on row 0. Bar 2 carries system_break_space = 2
+        // but does NOT start a row, so it should have no effect on
+        // any bar's y coordinate.
+        let mut song = IrealSong::new();
+        let mut bars: Vec<Bar> = (0..4).map(|_| Bar::new()).collect();
+        bars[2].system_break_space = 2;
+        song.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars,
+        });
+        let layout = compute_layout(&song);
+        for bar in &layout.bars {
+            assert_eq!(
+                bar.y, GRID_TOP,
+                "no bar should shift when the hint is on a non-row-start bar",
+            );
+        }
+    }
+
+    #[test]
+    fn system_break_space_accumulates_across_rows() {
+        // 9 bars over 3 rows. First bar of row 1 carries hint=1;
+        // first bar of row 2 carries hint=2. Rows 1 and 2 both
+        // shift, with row 2 shifting by (1 + 2) levels.
+        use crate::page::VERTICAL_BREAK_PER_LEVEL;
+        let mut song = IrealSong::new();
+        let mut bars: Vec<Bar> = (0..9).map(|_| Bar::new()).collect();
+        bars[4].system_break_space = 1; // row 1 first bar
+        bars[8].system_break_space = 2; // row 2 first bar
+        song.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars,
+        });
+        let layout = compute_layout(&song);
+        assert_eq!(layout.bars[0].y, GRID_TOP);
+        assert_eq!(
+            layout.bars[4].y,
+            GRID_TOP + BAR_ROW_HEIGHT + VERTICAL_BREAK_PER_LEVEL,
+        );
+        assert_eq!(
+            layout.bars[8].y,
+            GRID_TOP + 2 * BAR_ROW_HEIGHT + 3 * VERTICAL_BREAK_PER_LEVEL,
+        );
+    }
+
+    #[test]
+    fn system_break_space_at_song_start_shifts_first_row() {
+        // Bar 0 starts row 0 and carries hint=3. The first row's
+        // y shifts down by 3 * VERTICAL_BREAK_PER_LEVEL.
+        use crate::page::VERTICAL_BREAK_PER_LEVEL;
+        let mut song = IrealSong::new();
+        let mut bars: Vec<Bar> = (0..2).map(|_| Bar::new()).collect();
+        bars[0].system_break_space = 3;
+        song.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars,
+        });
+        let layout = compute_layout(&song);
+        assert_eq!(layout.bars[0].y, GRID_TOP + 3 * VERTICAL_BREAK_PER_LEVEL,);
     }
 
     #[test]
