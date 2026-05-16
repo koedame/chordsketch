@@ -153,7 +153,58 @@ through this crate's public API.
 ## Deferred AST scope
 
 Items the iReal app supports but the AST does **not** model yet,
-along with where they should land when implemented:
+along with where they should land when implemented.
+
+### Open-protocol scope
+
+The parser accepts the iReal Pro **export** family — the
+obfuscated `irealb://` URL (7..=9 fields, `MUSIC_PREFIX` +
+`obfusc50` scramble) and the 6-field plain-text `irealbook://`
+variant (`Title=Composer=Style=Key=TimeSig=Music`, #2424) — and
+the serializer emits both. The official open-protocol plain-text
+**serializer** (#2425) and several player-recognised tokens
+documented in the iReal Pro Help Center remain absent from the
+AST.
+
+Tracked under umbrella #2423:
+
+- **#2425** — serialize iReal AST to open-protocol `irealbook://`
+  plain-text (GAP-2). The parser side (GAP-1, #2424) is in for
+  the 6-field shape; the 5-field open-protocol input becomes a
+  no-op rather than a re-derivation once the serializer lands.
+- **#2426** — preserve full staff-text content (custom text,
+  vertical position, repeat-count override). Today
+  [`Bar::text_comment`](src/ast.rs) keeps the raw caption but
+  strips structural metadata such as `<*XYtext>` positioning and
+  `<8x>` repeat-count overrides.
+- **#2427** — distinguish the 11 D.C. / D.S. macro variants
+  (`<D.C. al Coda>`, `<D.S. al Fine>`, `<D.C. al 1st End.>`, …)
+  in `MusicalSymbol`. Today they collapse to
+  `MusicalSymbol::{DaCapo, DalSegno}` with the longer caption
+  preserved verbatim in `Bar::text_comment`.
+- **#2433** — chord-size markers `s` (small) / `l` (large).
+- **#2435** — pause-slash `p` (repeat preceding chord).
+- **#2436** — `N0` no-text ending. Today `Ending` wraps
+  `NonZeroU8` so the zero case is unrepresentable; landing #2436
+  is the design call for switching the field type vs. adding a
+  discriminator.
+- **#2448** — `Break` drum-silence staff-text token recognition.
+- **#2449** — compound time-signature additive groupings
+  (`2+3`, `3+4`, `3+2+2`).
+- **#2450** — section-label vocabulary reconciliation (drop
+  phantom `Chorus` / `Bridge` / `Outro` aliases that iReal Pro
+  does not emit; the convert crate keeps them via
+  `SectionLabel::Custom`).
+- **#2451** — `END` song-terminator symbol distinct from
+  Fermata.
+
+The per-token mirror in [`README.md`](README.md#scope) is the
+user-facing audit; this subsection is the AST-side counterpart
+for crate maintainers. Keep the two in sync — when a sub-issue
+lands, update both in the same PR per
+[`.claude/rules/release-doc-sync.md`](../../.claude/rules/release-doc-sync.md).
+
+### Other deferred items
 
 - **Mid-chart time changes.** A chart can switch from `4/4` to
   `3/4` mid-form. Modelling this requires either per-section
