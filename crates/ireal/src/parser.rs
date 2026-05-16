@@ -1611,7 +1611,7 @@ mod tests {
         assert_eq!(song.sections[0].label, SectionLabel::Intro);
     }
 
-    // ---- Vertical-space hint Y / YY / YYY (#2434) -----------------
+    // ---- Vertical-space hint Y / YY / YYY -------------------------
 
     #[test]
     fn single_y_sets_system_break_space_one() {

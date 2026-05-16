@@ -211,11 +211,17 @@ impl ToJson for Bar {
             write_str(out, text);
         }
         if self.system_break_space > 0 {
-            // Emit only when non-zero so default bars stay byte-
-            // stable in the JSON snapshot. Mirrors the
-            // `repeat_previous` / `no_chord` pattern above.
+            // Clamp on emit so AST → JSON → AST round-trips even
+            // when an AST literal carries an out-of-range value;
+            // without this, `Bar::from_json` rejects > 3 and the
+            // round-trip fails asymmetrically vs. the URL serializer
+            // (which already clamps).
+            debug_assert!(
+                self.system_break_space <= 3,
+                "Bar::system_break_space must be in 0..=3"
+            );
             out.push_str(",\"system_break_space\":");
-            write_u8(out, self.system_break_space);
+            write_u8(out, self.system_break_space.min(3));
         }
         out.push('}');
     }

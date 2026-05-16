@@ -536,7 +536,7 @@ fn render_fine_demo() {
 }
 
 // ---------------------------------------------------------------------------
-// Fixture: vertical-space hint Y / YY / YYY at row boundaries (#2434)
+// Fixture: vertical-space hint Y / YY / YYY at row boundaries
 //
 // 13 bars across one section. The first row (bars 0..=3) carries no hint
 // — baseline placement. Row 2 starts at bar 4 with `Y` (small gap),

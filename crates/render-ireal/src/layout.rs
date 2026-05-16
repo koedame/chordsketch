@@ -176,14 +176,15 @@ pub fn compute_layout(song: &IrealSong) -> Layout {
             }
             // When this bar starts a new row, consume its
             // `system_break_space` hint by bumping the running
-            // break offset BEFORE computing y. The hint is clamped
-            // to `3` per spec; bumping at row start (col == 0) is
-            // what makes the renderer reproduce the source's
-            // between-system gap. A hint on a bar that does NOT
-            // start a row is preserved in the AST but has no
-            // visible effect — the layout grid is the source of
-            // truth for "row start", not the parser.
+            // break offset BEFORE computing y. The layout grid is
+            // the source of truth for "row start", not the parser:
+            // a hint on a bar that does NOT start a row is preserved
+            // in the AST but has no visible effect.
             if col == 0 && bar.system_break_space > 0 {
+                debug_assert!(
+                    bar.system_break_space <= 3,
+                    "Bar::system_break_space must be in 0..=3"
+                );
                 let levels = i32::from(bar.system_break_space.min(3));
                 break_offset_y = break_offset_y.saturating_add(levels * VERTICAL_BREAK_PER_LEVEL);
             }
@@ -522,7 +523,7 @@ mod tests {
         );
     }
 
-    // ---- Vertical-space hint layout (#2434) -----------------------
+    // ---- Vertical-space hint layout -------------------------------
 
     #[test]
     fn system_break_space_on_row_start_shifts_row_down() {

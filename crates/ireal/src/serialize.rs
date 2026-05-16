@@ -1093,7 +1093,7 @@ mod tests {
         assert_eq!(parsed.sections[0].label, SectionLabel::Letter('C'));
     }
 
-    // ---- Vertical-space hint round-trip (#2434) --------------------
+    // ---- Vertical-space hint round-trip ----------------------------
 
     #[test]
     fn system_break_space_round_trips_via_url() {
@@ -1236,6 +1236,46 @@ mod tests {
             repeat_bar.system_break_space, 1,
             "system_break_space must survive on a repeat_previous bar"
         );
+    }
+
+    /// An `OpenRepeat`-start bar takes the same `finish_bar +
+    /// start_new_bar` path as `Double` at the `{` glyph. The hint
+    /// must therefore land on the new bar, not the dropped empty
+    /// placeholder.
+    #[test]
+    fn system_break_space_on_open_repeat_start_bar_round_trips() {
+        let song = IrealSong {
+            title: "Y Open Repeat".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::OpenRepeat,
+                    end: BarLine::CloseRepeat,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('F'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                    }],
+                    system_break_space: 1,
+                    ..Default::default()
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        let bar0 = parsed
+            .sections
+            .iter()
+            .flat_map(|s| s.bars.iter())
+            .find(|b| b.start == BarLine::OpenRepeat)
+            .expect("open-repeat bar must survive");
+        assert_eq!(
+            bar0.system_break_space, 1,
+            "system_break_space must survive on an OpenRepeat-start bar"
+        );
+        assert_eq!(bar0.chords[0].chord.root.note, 'F');
     }
 
     /// Single-char custom labels round-trip cleanly when the char is
