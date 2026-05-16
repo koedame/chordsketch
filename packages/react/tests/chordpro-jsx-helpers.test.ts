@@ -52,14 +52,14 @@ describe('unicodeAccidentals', () => {
 });
 
 describe('tokenizeGridLine', () => {
-  test('splits a simple bar into chord tokens and a barline', () => {
+  test('splits a simple bar into cell tokens and a barline', () => {
     const tokens = tokenizeGridLine('| G  .  .  . |');
     // Filter spaces for readability — they collapse into one
     // `space` token per whitespace run.
     const nonSpace = tokens.filter((t) => t.kind !== 'space');
     expect(nonSpace).toEqual([
       { kind: 'barline' },
-      { kind: 'chord', name: 'G' },
+      { kind: 'cell', names: ['G'] },
       { kind: 'continuation' },
       { kind: 'continuation' },
       { kind: 'continuation' },
@@ -70,7 +70,13 @@ describe('tokenizeGridLine', () => {
   test('recognises repeat-start and repeat-end markers', () => {
     const tokens = tokenizeGridLine('|: G :|');
     const kinds = tokens.filter((t) => t.kind !== 'space').map((t) => t.kind);
-    expect(kinds).toEqual(['repeat-start', 'chord', 'repeat-end']);
+    expect(kinds).toEqual(['repeat-start', 'cell', 'repeat-end']);
+  });
+
+  test('recognises combined `:|:` repeat-both marker', () => {
+    const tokens = tokenizeGridLine('| G :|: C |');
+    const kinds = tokens.filter((t) => t.kind !== 'space').map((t) => t.kind);
+    expect(kinds).toEqual(['barline', 'cell', 'repeat-both', 'cell', 'barline']);
   });
 
   test('recognises volta endings', () => {
@@ -92,10 +98,37 @@ describe('tokenizeGridLine', () => {
 
   test('unwraps bracketed chord names like `[Am]`', () => {
     const tokens = tokenizeGridLine('| [Am] [C] |');
-    const chords = tokens.filter((t) => t.kind === 'chord');
-    expect(chords).toEqual([
-      { kind: 'chord', name: 'Am' },
-      { kind: 'chord', name: 'C' },
+    const cells = tokens.filter((t) => t.kind === 'cell');
+    expect(cells).toEqual([
+      { kind: 'cell', names: ['Am'] },
+      { kind: 'cell', names: ['C'] },
+    ]);
+  });
+
+  test('recognises standalone `%` (single-bar) and `%%` (two-bar) repeat cells', () => {
+    const tokens = tokenizeGridLine('| % . | %% . |');
+    const kinds = tokens.filter((t) => t.kind !== 'space').map((t) => t.kind);
+    expect(kinds).toEqual([
+      'barline',
+      'percent1',
+      'continuation',
+      'barline',
+      'percent2',
+      'continuation',
+      'barline',
+    ]);
+  });
+
+  test('splits cell-internal `~` into multi-chord names', () => {
+    const tokens = tokenizeGridLine('| C~G ~A |');
+    const cells = tokens.filter((t) => t.kind === 'cell');
+    // First cell: `C~G` → ['C', 'G'] (two chords sharing a beat).
+    // Second cell: `~A` → ['', 'A'] (leading-tilde anticipation form;
+    // empty string preserved so renderer can decide whether to show
+    // the tick).
+    expect(cells).toEqual([
+      { kind: 'cell', names: ['C', 'G'] },
+      { kind: 'cell', names: ['', 'A'] },
     ]);
   });
 
@@ -111,8 +144,8 @@ describe('tokenizeGridLine', () => {
     // swallow. The `n`-no-chord rule fires only when the next
     // char is whitespace / bar.
     const tokens = tokenizeGridLine('| nb13 |');
-    const chord = tokens.find((t) => t.kind === 'chord');
-    expect(chord).toEqual({ kind: 'chord', name: 'nb13' });
+    const chord = tokens.find((t) => t.kind === 'cell');
+    expect(chord).toEqual({ kind: 'cell', names: ['nb13'] });
   });
 });
 

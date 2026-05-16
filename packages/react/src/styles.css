@@ -647,6 +647,122 @@
   padding-top: 0.1em;
 }
 
+/* Row label (`A`, `Coda`, etc.) — a left-side tag for jazz
+   lead-sheet style annotation. Not in the ChordPro spec but a
+   widely used dialect convention; render as a muted bold cap. */
+.chordsketch-sheet__content .grid-row__label {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding-right: 0.6em;
+  font-weight: 700;
+  color: var(--cs-ink-700, #44424a);
+  text-transform: uppercase;
+  font-size: 0.85em;
+  letter-spacing: 0.04em;
+  min-width: 2em;
+}
+/* Trailing comment (`repeat 4 times`, etc.) — a right-side
+   annotation column. Italicised + smaller so it reads as a
+   performance instruction, not a chord. */
+.chordsketch-sheet__content .grid-row__comment {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding-left: 0.6em;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 0.85em;
+  color: var(--cs-ink-600, #67646d);
+}
+
+/* Combined repeat-end + repeat-start barline (`:|:`). Renders
+   as the standard double-thick-line glyph with dots on BOTH
+   sides — visually one combined bar marker. */
+.chordsketch-sheet__content .grid-barline--repeat-both {
+  /* Inherits the base `.grid-barline` flex shape; the two
+     thick lines + flanking dot groups are children. */
+}
+
+/* Measure-repeat markers. `%` repeats the previous measure,
+   `%%` repeats the previous two — they replace a chord cell
+   in a bar. Render as a centred glyph (a slash-and-dots
+   typesetting trick reads as engraved music notation, but a
+   simple `%` / `%%` glyph also works at this resolution). */
+.chordsketch-sheet__content .grid-percent {
+  font-weight: 700;
+  font-size: 0.9em;
+  color: var(--cs-ink-700, #44424a);
+}
+.chordsketch-sheet__content .grid-beat--percent1,
+.chordsketch-sheet__content .grid-beat--percent2 {
+  justify-content: center;
+}
+
+/* Multi-chord cell separator — a thin tilde between two chord
+   names that share a beat slot (`C~G`). The `~` is `aria-
+   hidden` so screen readers don't read it out; visually it
+   sits between two `.grid-chord` spans. */
+.chordsketch-sheet__content .grid-chord__sep {
+  display: inline-block;
+  margin: 0 0.15em;
+  color: var(--cs-ink-500, #8a8790);
+  font-weight: 400;
+  font-size: 0.85em;
+}
+.chordsketch-sheet__content .grid-beat--multi {
+  gap: 0;
+}
+
+/* Strum row — a row of pattern markers (`↑`, `↓`, `↑+`, `↓+`,
+   etc.) below the chord row. Smaller, muted, monospace so the
+   reader perceives it as performance instruction rather than
+   chord content. */
+.chordsketch-sheet__content .grid-line--strum {
+  margin-top: -0.4em;
+  min-height: 1.6em;
+  font-size: 0.85em;
+  color: var(--cs-ink-600, #67646d);
+}
+.chordsketch-sheet__content .grid-strum {
+  font-weight: 600;
+}
+.chordsketch-sheet__content .grid-strum__glyph {
+  font-family: var(--cs-font-mono, ui-monospace, monospace);
+}
+.chordsketch-sheet__content .grid-strum--up {
+  color: var(--cs-crimson-500, #bd1642);
+}
+.chordsketch-sheet__content .grid-strum--down {
+  color: var(--cs-ink-900, #1a1718);
+}
+.chordsketch-sheet__content .grid-strum--up-accent,
+.chordsketch-sheet__content .grid-strum--down-accent {
+  font-weight: 700;
+}
+.chordsketch-sheet__content .grid-strum--anticipated {
+  font-style: italic;
+}
+.chordsketch-sheet__content .grid-strum--custom {
+  color: var(--cs-ink-600, #67646d);
+  font-style: italic;
+}
+
+/* Screen-reader-only utility for strum-row `aria-label` text.
+   The visual glyph is too compact to spell out the source
+   token, so the SR-only span carries the full raw text. */
+.chordsketch-sheet__content .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Tag row — separate from the main meta strip because `{tag}`
    is a categorisation signal, not a song attribute. Tags render
    as pill-shaped chips so they read as a distinct group at a

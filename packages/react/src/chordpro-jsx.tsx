@@ -392,23 +392,37 @@ function renderChord(chord: ChordproChord): string {
 type GridToken =
   | { kind: 'repeat-start' } // `|:`
   | { kind: 'repeat-end' } // `:|`
+  | { kind: 'repeat-both' } // `:|:` (combined repeat end + start)
   | { kind: 'double' } // `||`
   | { kind: 'final' } // `|.`
   | { kind: 'volta'; ending: number } // `|1`, `|2`
   | { kind: 'barline' } // bare `|`
-  | { kind: 'chord'; name: string }
+  | { kind: 'cell'; names: string[] } // chord cell (may contain `~`-separated multi-chord)
+  | { kind: 'percent1' } // `%` — repeat previous measure
+  | { kind: 'percent2' } // `%%` — repeat previous two measures
   | { kind: 'continuation' } // `.`
   | { kind: 'no-chord' } // `n` (rare, but iRealPro convention)
   | { kind: 'space' };
 
 /**
  * Tokenise a ChordPro grid line into structured pieces the
- * walker can lay out as iReal Pro-style bars. Handles the
- * standard markers (`|:` / `:|` / `||` / `|.` / `|1` / `|2`)
- * and dot-continuation beats. Anything else that survives the
- * regex falls through as a `chord` token whose name string
- * carries whatever raw characters were there (so unrecognised
- * tokens still render visibly instead of disappearing).
+ * walker can lay out as iReal Pro-style bars. Handles every
+ * spec-defined barline marker (`|:` / `:|` / `:|:` / `||` /
+ * `|.` / `|1` / `|2`), beat continuation (`.`), and the
+ * spec-defined measure-repeat cells `%` (repeat previous
+ * measure) and `%%` (repeat previous two measures).
+ *
+ * Cells (chord names + strum tokens + custom dialect tokens)
+ * are emitted as `{ kind: 'cell', names: [...] }`; the names
+ * array carries the `~`-separated parts so a `C~G` cell
+ * yields `names: ['C', 'G']`. The renderer decides chord-vs-
+ * strum rendering by inspecting the row's first cell
+ * (a leading `s` / `S` marks a strum row).
+ *
+ * Anything else that survives falls through as a single-name
+ * cell carrying the raw text — unrecognised dialect tokens
+ * (`~ux`, `d+`, etc.) still render visibly without crashing
+ * the tokeniser.
  */
 export function tokenizeGridLine(input: string): GridToken[] {
   const out: GridToken[] = [];
@@ -450,8 +464,32 @@ export function tokenizeGridLine(input: string): GridToken[] {
       continue;
     }
     if (ch === ':' && input[i + 1] === '|') {
+      // `:|:` is the combined end-of-repeat + start-of-repeat
+      // marker (a single visual glyph in standard notation).
+      // Must be checked BEFORE the bare `:|` arm so the
+      // trailing `:` is consumed in the same token.
+      if (input[i + 2] === ':') {
+        out.push({ kind: 'repeat-both' });
+        i += 3;
+        continue;
+      }
       out.push({ kind: 'repeat-end' });
       i += 2;
+      continue;
+    }
+    // Standalone `%` / `%%` measure-repeat markers. Spec-
+    // defined: `%` repeats the previous measure, `%%` repeats
+    // the previous two measures. They occupy a cell slot in
+    // their own right, so they parse here ahead of the
+    // generic cell-text path.
+    if (ch === '%') {
+      if (input[i + 1] === '%') {
+        out.push({ kind: 'percent2' });
+        i += 2;
+        continue;
+      }
+      out.push({ kind: 'percent1' });
+      i += 1;
       continue;
     }
     if (ch === '.') {
@@ -464,7 +502,7 @@ export function tokenizeGridLine(input: string): GridToken[] {
       i += 1;
       continue;
     }
-    // Read a chord token — any contiguous run of non-whitespace
+    // Read a cell token — any contiguous run of non-whitespace
     // non-bar / non-colon characters. Chord brackets `[X]` are
     // unwrapped: the parser produces a chord-bearing lyrics
     // segment, but for grid lines we get the raw text, so let
@@ -477,7 +515,14 @@ export function tokenizeGridLine(input: string): GridToken[] {
       raw = raw.slice(1, -1);
     }
     if (raw.length > 0) {
-      out.push({ kind: 'chord', name: raw });
+      // Split on `~` to surface the spec's cell-internal
+      // multi-chord separator. `C~G` → ['C', 'G']. Bare
+      // tokens with no `~` produce a single-element array.
+      // Empty parts (from a leading or trailing `~`) are
+      // preserved as empty strings — the renderer can decide
+      // how to display them (typically an anticipation tick).
+      const names = raw.split('~');
+      out.push({ kind: 'cell', names });
     }
     i = j;
   }
@@ -505,18 +550,81 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
     .join('');
   const tokens = tokenizeGridLine(raw);
 
-  // Group the flat token stream into a structured row of
-  // alternating barlines and bar cells. Continuation dots (`.`)
-  // and inter-token whitespace are dropped from the meaning of
-  // the bar — but their COUNT is preserved as beat slots, so a
-  // bar like `G  .  .  .` becomes a 4-beat cell with the G in
-  // the first slot and the next three slots empty (continuing
-  // the chord). This gives the bar a correct iReal Pro-style
-  // beat division regardless of how many chords fall inside.
-  type Bar = { kind: 'bar'; beats: Array<string | null>; noChord: boolean };
+  // Split the flat token stream into three buckets:
+  //
+  // 1. `labelTokens` — content BEFORE the first barline. These
+  //    are dialect "row labels" (e.g. `A`, `Coda`) commonly
+  //    seen at the start of a grid row in jazz lead-sheet
+  //    style. Not formally in the ChordPro spec but widely
+  //    used; rendered as a left-side label cell.
+  // 2. `bodyTokens` — the actual bar/cell stream between the
+  //    first and last barlines.
+  // 3. `commentTokens` — content AFTER the last barline. These
+  //    are dialect "trailing comments" (e.g. `repeat 4 times`)
+  //    that annotate the row's musical meaning. Rendered as a
+  //    right-side comment cell.
+  const BARLINE_KINDS: Array<GridToken['kind']> = [
+    'barline',
+    'repeat-start',
+    'repeat-end',
+    'repeat-both',
+    'double',
+    'final',
+    'volta',
+  ];
+  const firstBar = tokens.findIndex((t) => BARLINE_KINDS.includes(t.kind));
+  const lastBar = (() => {
+    for (let i = tokens.length - 1; i >= 0; i--) {
+      if (BARLINE_KINDS.includes(tokens[i]!.kind)) return i;
+    }
+    return -1;
+  })();
+  const labelTokens = firstBar > 0 ? tokens.slice(0, firstBar) : [];
+  const bodyTokens =
+    firstBar >= 0 && lastBar >= firstBar ? tokens.slice(firstBar, lastBar + 1) : tokens;
+  const commentTokens = lastBar >= 0 && lastBar < tokens.length - 1
+    ? tokens.slice(lastBar + 1)
+    : [];
+
+  // Strum row detection: a `s` / `S` cell IMMEDIATELY after the
+  // opening barline marks the row as a strum-pattern row (per
+  // the ChordPro spec's strum-row convention). Detect by
+  // scanning bodyTokens — skip the leading barline + any space,
+  // then check if the next cell's first name is `s` / `S`.
+  let isStrumRow = false;
+  let strumMarkerIndex = -1;
+  for (let i = 0; i < bodyTokens.length; i++) {
+    const t = bodyTokens[i]!;
+    if (BARLINE_KINDS.includes(t.kind)) continue;
+    if (t.kind === 'space') continue;
+    if (t.kind === 'cell' && t.names.length === 1 && /^[sS]$/.test(t.names[0]!)) {
+      isStrumRow = true;
+      strumMarkerIndex = i;
+    }
+    break;
+  }
+
+  // Drop the `s` strum-row marker from the body stream — it's
+  // not a musical cell, just a row-type marker.
+  const renderableBody = isStrumRow
+    ? bodyTokens.filter((_, i) => i !== strumMarkerIndex)
+    : bodyTokens;
+
+  // Group the body stream into bars + barlines. Each cell-bearing
+  // token (cell / percent1 / percent2 / continuation / no-chord)
+  // contributes a beat slot to the current bar; barline tokens
+  // flush the current bar and emit a marker.
+  type BeatSlot =
+    | { kind: 'chord'; names: string[] }
+    | { kind: 'strum'; raw: string }
+    | { kind: 'continuation' }
+    | { kind: 'percent1' }
+    | { kind: 'percent2' };
+  type Bar = { kind: 'bar'; beats: BeatSlot[]; noChord: boolean };
   type Marker =
     | { kind: 'repeat-start' }
     | { kind: 'repeat-end' }
+    | { kind: 'repeat-both' }
     | { kind: 'double' }
     | { kind: 'final' }
     | { kind: 'volta'; ending: number }
@@ -534,25 +642,36 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
     }
     current = null;
   };
-  for (const tok of tokens) {
+  for (const tok of renderableBody) {
     switch (tok.kind) {
       case 'space':
         // No content; ignore — whitespace is presentation only.
         break;
-      case 'chord':
-        ensureBar().beats.push(tok.name);
+      case 'cell':
+        if (isStrumRow) {
+          ensureBar().beats.push({ kind: 'strum', raw: tok.names.join('~') });
+        } else {
+          ensureBar().beats.push({ kind: 'chord', names: tok.names });
+        }
+        break;
+      case 'percent1':
+        ensureBar().beats.push({ kind: 'percent1' });
+        break;
+      case 'percent2':
+        ensureBar().beats.push({ kind: 'percent2' });
         break;
       case 'continuation':
         // A `.` beat keeps the previous chord ringing — emit a
-        // null slot so the bar layout still allocates space for
-        // this beat.
-        ensureBar().beats.push(null);
+        // continuation slot so the bar layout still allocates
+        // space for this beat.
+        ensureBar().beats.push({ kind: 'continuation' });
         break;
       case 'no-chord':
         ensureBar().noChord = true;
         break;
       case 'repeat-start':
       case 'repeat-end':
+      case 'repeat-both':
       case 'double':
       case 'final':
       case 'volta':
@@ -596,6 +715,28 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
             <span className="grid-barline__line grid-barline__line--thick" />
           </span>
         );
+      case 'repeat-both':
+        // Combined end + start: dots on both sides of a
+        // thick-line pair. Reads as a single glyph in
+        // standard music notation.
+        return (
+          <span
+            key={idx}
+            className="grid-barline grid-barline--repeat-both"
+            aria-label="repeat end and start"
+          >
+            <span className="grid-barline__dots">
+              <span />
+              <span />
+            </span>
+            <span className="grid-barline__line grid-barline__line--thick" />
+            <span className="grid-barline__line grid-barline__line--thick" />
+            <span className="grid-barline__dots">
+              <span />
+              <span />
+            </span>
+          </span>
+        );
       case 'double':
         return (
           <span key={idx} className="grid-barline grid-barline--double" aria-hidden="true">
@@ -625,19 +766,98 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
     }
   };
 
+  // Render the contents of a single beat slot (chord-row or
+  // strum-row variant) inside a `.grid-beat` cell.
+  const renderBeat = (slot: BeatSlot, idx: number): JSX.Element => {
+    switch (slot.kind) {
+      case 'chord':
+        if (slot.names.length === 1) {
+          return (
+            <span key={idx} className="grid-beat">
+              <span className="grid-chord">{unicodeAccidentals(slot.names[0]!)}</span>
+            </span>
+          );
+        }
+        // Multi-chord cell (`C~G` etc.): chords separated by a
+        // thin glyph so the reader still sees them as one
+        // beat-slot worth of harmonic content.
+        return (
+          <span key={idx} className="grid-beat grid-beat--multi">
+            {slot.names.map((name, ni) => (
+              <Fragment key={ni}>
+                {ni > 0 ? (
+                  <span className="grid-chord__sep" aria-hidden="true">
+                    ~
+                  </span>
+                ) : null}
+                <span className="grid-chord">
+                  {name.length > 0 ? unicodeAccidentals(name) : ''}
+                </span>
+              </Fragment>
+            ))}
+          </span>
+        );
+      case 'strum':
+        return (
+          <span key={idx} className={`grid-beat grid-strum ${strumClassFor(slot.raw)}`}>
+            <span className="grid-strum__glyph" aria-hidden="true">
+              {strumGlyphFor(slot.raw)}
+            </span>
+            <span className="sr-only">{slot.raw}</span>
+          </span>
+        );
+      case 'continuation':
+        return <span key={idx} className="grid-beat" />;
+      case 'percent1':
+        return (
+          <span key={idx} className="grid-beat grid-beat--percent1" aria-label="repeat previous bar">
+            <span className="grid-percent" aria-hidden="true">%</span>
+          </span>
+        );
+      case 'percent2':
+        return (
+          <span key={idx} className="grid-beat grid-beat--percent2" aria-label="repeat previous two bars">
+            <span className="grid-percent" aria-hidden="true">%%</span>
+          </span>
+        );
+    }
+  };
+
+  // Render row label / trailing comment text (whitespace stripped,
+  // tokens rejoined with single spaces). The label / comment
+  // bucket can contain stray spaces, dots, cells — preserve them
+  // joined as text.
+  const renderLabel = (toks: GridToken[]): string =>
+    toks
+      .map((t) => {
+        if (t.kind === 'space') return ' ';
+        if (t.kind === 'cell') return t.names.join('~');
+        if (t.kind === 'continuation') return '.';
+        if (t.kind === 'percent1') return '%';
+        if (t.kind === 'percent2') return '%%';
+        return '';
+      })
+      .join('')
+      .trim();
+  const labelText = renderLabel(labelTokens);
+  const commentText = renderLabel(commentTokens);
+
   return (
-    <div key={key} className="grid-line">
+    <div key={key} className={isStrumRow ? 'grid-line grid-line--strum' : 'grid-line'}>
+      {labelText.length > 0 ? (
+        <span className="grid-row__label">{labelText}</span>
+      ) : null}
       {cells.map((cell, idx) => {
         if (cell.kind === 'bar') {
           // Each bar lays out one beat slot per source token
-          // (`chord` or `.`). The bar width is split equally
+          // (`cell` or `.`). The bar width is split equally
           // between slots so a `G . C .` bar puts G under
           // beat 1 and C under beat 3 — matching standard
           // chord-chart engraving where the chord prints over
           // the beat it starts on. A pure `G . . .` bar
           // anchors G in slot 1 and leaves the rest empty
           // (the chord continues to ring).
-          const beats = cell.beats.length > 0 ? cell.beats : [null];
+          const beats = cell.beats.length > 0 ? cell.beats : [{ kind: 'continuation' as const }];
           return (
             <span key={idx} className="grid-bar" data-beats={beats.length}>
               {cell.noChord ? (
@@ -645,21 +865,66 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
                   N.C.
                 </span>
               ) : (
-                beats.map((b, bi) => (
-                  <span key={bi} className="grid-beat">
-                    {b != null ? (
-                      <span className="grid-chord">{unicodeAccidentals(b)}</span>
-                    ) : null}
-                  </span>
-                ))
+                beats.map((b, bi) => renderBeat(b, bi))
               )}
             </span>
           );
         }
         return renderMarker(cell, idx);
       })}
+      {commentText.length > 0 ? (
+        <span className="grid-row__comment">{commentText}</span>
+      ) : null}
     </div>
   );
+}
+
+/**
+ * Map a strum token to a CSS class suffix. Spec-defined tokens
+ * (`up`/`u`, `dn`/`d`, `u+`, `d+`, `ua`, `da`) map directly;
+ * tilde-prefixed and dialect variants (`~dn`, `dn~up`, `~ux`,
+ * `d+~u+`) inherit a `--custom` class that the renderer styles
+ * as a free-form token. Always returns at least
+ * `grid-strum--token`.
+ */
+function strumClassFor(raw: string): string {
+  // Strip a leading `~` (anticipation prefix) for class-naming
+  // purposes; keep the modifier as a separate class.
+  const anticipated = raw.startsWith('~');
+  const stripped = anticipated ? raw.slice(1) : raw;
+  const base = (() => {
+    if (/^(up|u)$/i.test(stripped)) return 'grid-strum--up';
+    if (/^(dn|d)$/i.test(stripped)) return 'grid-strum--down';
+    if (/^u\+$/i.test(stripped)) return 'grid-strum--up-accent';
+    if (/^d\+$/i.test(stripped)) return 'grid-strum--down-accent';
+    if (/^ua$/i.test(stripped)) return 'grid-strum--up-arpeggio';
+    if (/^da$/i.test(stripped)) return 'grid-strum--down-arpeggio';
+    return 'grid-strum--custom';
+  })();
+  return anticipated ? `${base} grid-strum--anticipated` : base;
+}
+
+/**
+ * Visual glyph for a strum token. Returns a short arrow / mark
+ * sequence the renderer drops into a `.grid-strum__glyph` span.
+ * Spec-defined tokens get the conventional arrow glyphs; tilde-
+ * prefixed and dialect-only tokens fall back to the raw text
+ * (with `~` rendered as a leading tilde so the reader sees the
+ * source intent).
+ */
+function strumGlyphFor(raw: string): string {
+  const anticipated = raw.startsWith('~');
+  const stripped = anticipated ? raw.slice(1) : raw;
+  const ant = anticipated ? '~' : '';
+  if (/^(up|u)$/i.test(stripped)) return `${ant}↑`;
+  if (/^(dn|d)$/i.test(stripped)) return `${ant}↓`;
+  if (/^u\+$/i.test(stripped)) return `${ant}↑+`;
+  if (/^d\+$/i.test(stripped)) return `${ant}↓+`;
+  if (/^ua$/i.test(stripped)) return `${ant}↑·`;
+  if (/^da$/i.test(stripped)) return `${ant}↓·`;
+  // Dialect variants (`dn~up`, `~ux`, `d+~u+`, etc.) — pass
+  // through verbatim so the reader still sees the source intent.
+  return raw;
 }
 
 /**
@@ -1473,6 +1738,62 @@ interface SectionState {
   children: JSX.Element[];
   /** 1-indexed source line of the `start_of_*` directive. */
   startLine: number;
+  /**
+   * For `{start_of_grid shape="L+MxB+R"}` sections, the parsed
+   * shape (margin-left cells + measures × beats + margin-right
+   * cells). `null` for non-grid sections or grids without a
+   * shape attribute. Per the ChordPro spec the default when
+   * omitted is `1+4x4+1`.
+   */
+  gridShape: GridShape | null;
+}
+
+/**
+ * Parsed `shape="L+MxB+R"` attribute on `{start_of_grid}`.
+ *
+ * - `marginLeft` / `marginRight` — cells before / after the
+ *   musical content (typically used for the label column and
+ *   trailing-comment column).
+ * - `measures` × `beats` — body grid dimensions (number of
+ *   measures per row × beats per measure).
+ *
+ * Per the ChordPro spec the default when no shape is given is
+ * `1+4x4+1`. Returned by {@link parseGridShape} so renderers
+ * can lay out cell columns consistently.
+ */
+export interface GridShape {
+  marginLeft: number;
+  measures: number;
+  beats: number;
+  marginRight: number;
+}
+
+/**
+ * Parse a `shape="L+MxB+R"` attribute string into a structured
+ * `GridShape`. Accepts both the bare value (`L+MxB+R`) and the
+ * attribute form with surrounding `shape="..."` syntax. Falls
+ * back to the spec default `1+4x4+1` on parse failure.
+ */
+export function parseGridShape(raw: string): GridShape {
+  const DEFAULT: GridShape = { marginLeft: 1, measures: 4, beats: 4, marginRight: 1 };
+  // Extract the value inside `shape="..."` if the attribute
+  // form was passed; otherwise consume the raw token as-is.
+  const inner = (() => {
+    const m = raw.match(/shape\s*=\s*"([^"]*)"/i);
+    if (m) return m[1]!;
+    const m2 = raw.match(/shape\s*=\s*([^\s]+)/i);
+    if (m2) return m2[1]!;
+    return raw.trim();
+  })();
+  // Match `L+MxB+R`.
+  const m = inner.match(/^\s*(\d+)\s*\+\s*(\d+)\s*[x*]\s*(\d+)\s*\+\s*(\d+)\s*$/i);
+  if (!m) return DEFAULT;
+  return {
+    marginLeft: Number.parseInt(m[1]!, 10),
+    measures: Number.parseInt(m[2]!, 10),
+    beats: Number.parseInt(m[3]!, 10),
+    marginRight: Number.parseInt(m[4]!, 10),
+  };
 }
 
 // ---- Header rendering ----------------------------------------------
@@ -2637,11 +2958,19 @@ function handleDirective(
     if (kind.tag === 'startOfChorus') {
       ctx.savedFmt = cloneFormattingState(ctx.fmt);
     }
+    // For grid sections the directive's `value` carries an
+    // attribute payload (`shape="..."`) — NOT a human-readable
+    // label. Suppress it so the section heading defaults to
+    // the generic "Grid" instead of rendering the raw shape
+    // string. The shape is parsed separately and stored on
+    // the section via `gridShape` below.
+    const isGrid = kind.tag === 'startOfGrid';
     ctx.section = {
       name: SECTION_TAG_TO_NAME[kind.tag]!,
-      label: directive.value ?? null,
+      label: isGrid ? null : directive.value ?? null,
       children: [],
       startLine: key,
+      gridShape: isGrid ? parseGridShape(directive.value ?? '') : null,
     };
     return;
   }
@@ -2657,6 +2986,7 @@ function handleDirective(
       label: directive.value ?? null,
       children: [],
       startLine: key,
+      gridShape: null,
     };
     return;
   }

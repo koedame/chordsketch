@@ -646,8 +646,49 @@ impl Parser {
         }
 
         // Trim whitespace from name and value.
-        let name = name.trim().to_string();
-        let value = value.map(|v| v.trim().to_string());
+        let raw_name = name.trim().to_string();
+        let mut value = value.map(|v| v.trim().to_string());
+
+        // Inline attribute form (`{start_of_grid shape="..."}`).
+        // The ChordPro spec lets directives carry attributes via
+        // whitespace separation when no `:` is present —
+        // `{start_of_grid shape="L+MxB+R"}` is the documented
+        // grid-shape syntax, and `{image src="..." width=64}` is
+        // sometimes written without the colon too.
+        //
+        // Splitting at the first whitespace recovers the
+        // attribute portion as the directive's `value`, but only
+        // when the prefix is a SPECIFIC named directive (e.g.
+        // `start_of_grid`). Custom-section directives
+        // (`start_of_foo bar` → `StartOfSection("foo bar")`)
+        // intentionally keep the whitespace in the name so
+        // legacy tests asserting "section-foo-bar" still pass.
+        let name = match raw_name.find(|c: char| c.is_whitespace()) {
+            Some(idx) => {
+                let prefix = &raw_name[..idx];
+                let attrs = raw_name[idx..].trim().to_string();
+                let (prefix_kind, _) = DirectiveKind::resolve_with_selector(prefix);
+                let is_attribute_bearing = !matches!(
+                    prefix_kind,
+                    DirectiveKind::Unknown(_)
+                        | DirectiveKind::StartOfSection(_)
+                        | DirectiveKind::EndOfSection(_)
+                );
+                if is_attribute_bearing && !attrs.is_empty() {
+                    // Only fold inline attrs into the value when
+                    // the caller didn't supply an explicit
+                    // `:`-prefixed value (that path stays
+                    // authoritative).
+                    if value.is_none() {
+                        value = Some(attrs);
+                    }
+                    prefix.to_string()
+                } else {
+                    raw_name
+                }
+            }
+            None => raw_name,
+        };
 
         // Classify the directive, detecting any selector suffix.
         let (kind, selector) = DirectiveKind::resolve_with_selector(&name);
