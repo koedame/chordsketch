@@ -255,6 +255,11 @@ fn render_song_body_into(
     // Buffer for collecting SVG section content. Content is sanitized as a
     // single string on EndOfSvg to prevent multi-line tag splitting bypasses.
     let mut svg_buf: Option<String> = None;
+    // Tracks whether the body cursor is currently inside a
+    // `{start_of_grid}` section. Grid body lines render via
+    // the structured tokeniser (`chordsketch_chordpro::grid`)
+    // instead of the generic chord-over-lyrics path.
+    let mut in_grid = false;
     // Delegate tool availability: Some(true) = force enable, Some(false) = force
     // disable, None = auto-detect on first encounter. The auto-detect value is
     // lazily resolved (via `get_or_insert_with`) so that subprocess checks only
@@ -333,6 +338,11 @@ fn render_song_body_into(
                     let raw = lyrics_line.text();
                     buf.push_str(&raw);
                     buf.push('\n');
+                } else if in_grid {
+                    if let Some(buf) = chorus_buf.as_mut() {
+                        buf.push(line.clone());
+                    }
+                    render_grid_line(&lyrics_line.text(), html);
                 } else {
                     if let Some(buf) = chorus_buf.as_mut() {
                         buf.push(line.clone());
@@ -644,6 +654,34 @@ fn render_song_body_into(
                             html.push('\n');
                             html.push_str("</div>\n");
                         }
+                    }
+                    DirectiveKind::StartOfGrid => {
+                        if let Some(buf) = chorus_buf.as_mut() {
+                            buf.push(line.clone());
+                        }
+                        // `directive.value` may be either a
+                        // human-readable label (`{start_of_grid:
+                        // Intro}`) or an attribute payload
+                        // (`{start_of_grid shape="..."}`).
+                        // Suppress the attribute form (anything
+                        // containing `=`) so the section
+                        // heading reads "Grid" instead of the
+                        // raw attribute string; otherwise pass
+                        // the value through as a label.
+                        let label_value = directive
+                            .value
+                            .as_ref()
+                            .filter(|v| !v.contains('='))
+                            .cloned();
+                        render_section_open("grid", "Grid", &label_value, html);
+                        in_grid = true;
+                    }
+                    DirectiveKind::EndOfGrid => {
+                        if let Some(buf) = chorus_buf.as_mut() {
+                            buf.push(line.clone());
+                        }
+                        html.push_str("</section>\n");
+                        in_grid = false;
                     }
                     _ => {
                         if let Some(buf) = chorus_buf.as_mut() {
@@ -1078,6 +1116,37 @@ img { max-width: 100%; height: auto; }
 .chord-diagrams-grid { display: flex; flex-wrap: wrap; gap: 0.5em; margin: 0.5em 0; }
 .chord-diagram-container { display: inline-block; vertical-align: top; }
 .chord-diagram { display: block; }
+.grid-line { display: flex; align-items: stretch; margin: 0.35em 0; min-height: 2.4em; font-family: \"Roboto\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 600; font-size: 1rem; line-height: 1.4; color: #1A1718; }
+.grid-bar { flex: 1 1 0; display: flex; align-items: center; padding: 0.2em 0.4em; min-width: 3em; }
+.grid-beat { flex: 1 1 0; display: flex; align-items: center; justify-content: flex-start; min-width: 0; }
+.grid-chord { color: #BD1642; }
+.grid-no-chord { color: #67646D; font-style: italic; font-weight: 500; }
+.grid-barline { display: inline-flex; align-items: stretch; align-self: stretch; gap: 1.5px; flex-shrink: 0; }
+.grid-barline:not([class*='--']) { width: 1.5px; background-color: #1A1718; }
+.grid-barline__line { display: inline-block; width: 1.5px; background-color: #1A1718; }
+.grid-barline__line--thick { width: 3.5px; }
+.grid-barline__dots { display: inline-flex; flex-direction: column; justify-content: center; gap: 0.18em; padding: 0 2.5px; }
+.grid-barline__dots > span { width: 3px; height: 3px; border-radius: 50%; background-color: #1A1718; display: inline-block; }
+.grid-volta { position: relative; display: inline-flex; align-items: stretch; flex-shrink: 0; }
+.grid-volta .grid-barline__line { background-color: #1A1718; }
+.grid-volta__bracket { position: absolute; top: -0.1em; left: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; }
+.grid-volta__cap { display: block; width: 1.5em; height: 1.5px; background-color: #1A1718; }
+.grid-volta__label { display: inline-block; margin-left: 0.15em; font-size: 0.7em; font-weight: 600; color: #1A1718; line-height: 1; padding-top: 0.1em; }
+.grid-row__label { display: inline-flex; align-items: center; flex-shrink: 0; padding-right: 0.6em; font-weight: 700; color: #44424A; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.04em; min-width: 2em; }
+.grid-row__comment { display: inline-flex; align-items: center; flex-shrink: 0; padding-left: 0.6em; font-style: italic; font-weight: 500; font-size: 0.85em; color: #67646D; }
+.grid-percent { font-weight: 700; font-size: 0.9em; color: #44424A; }
+.grid-beat--percent1, .grid-beat--percent2 { justify-content: center; }
+.grid-chord__sep { display: inline-block; margin: 0 0.15em; color: #8A8790; font-weight: 400; font-size: 0.85em; }
+.grid-beat--multi { gap: 0; }
+.grid-line--strum { margin-top: -0.4em; min-height: 1.6em; font-size: 0.85em; color: #67646D; }
+.grid-strum { font-weight: 600; }
+.grid-strum__glyph { font-family: \"JetBrains Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace; }
+.grid-strum--up { color: #BD1642; }
+.grid-strum--down { color: #1A1718; }
+.grid-strum--up-accent, .grid-strum--down-accent { font-weight: 700; }
+.grid-strum--anticipated { font-style: italic; }
+.grid-strum--custom { color: #67646D; font-style: italic; }
+.sr-only { position: absolute; clip: rect(0,0,0,0); width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; white-space: nowrap; border: 0; }
 ";
 
 // ---------------------------------------------------------------------------
@@ -1992,7 +2061,20 @@ fn render_directive_inner(
             render_section_open("tab", "Tab", &directive.value, html);
         }
         DirectiveKind::StartOfGrid => {
-            render_section_open("grid", "Grid", &directive.value, html);
+            // Suppress attribute-payload values (`shape="..."`)
+            // from the section heading; pass through plain
+            // labels (`{start_of_grid: Intro}`) unchanged. The
+            // body loop's outer match intercepts this case to
+            // set `in_grid` and skip this fallback; we still
+            // emit the open tag here for callers that route a
+            // `StartOfGrid` directive through this helper
+            // without a body context (e.g. chorus replay).
+            let label_value = directive
+                .value
+                .as_ref()
+                .filter(|v| !v.contains('='))
+                .cloned();
+            render_section_open("grid", "Grid", &label_value, html);
         }
         DirectiveKind::StartOfAbc => {
             render_section_open("abc", "ABC", &directive.value, html);
@@ -2308,6 +2390,299 @@ fn render_section_open(class: &str, label: &str, value: &Option<String>, html: &
         _ => label.to_string(),
     };
     let _ = writeln!(html, "<h3 class=\"section-label\">{display_label}</h3>");
+}
+
+/// Render a single body line inside a `{start_of_grid}` section
+/// as structured grid markup. Sister-site to
+/// `renderGridLine` in `packages/react/src/chordpro-jsx.tsx`;
+/// the two surfaces emit equivalent DOM shapes so the
+/// `.grid-*` CSS picks them up identically.
+fn render_grid_line(raw: &str, html: &mut String) {
+    use chordsketch_chordpro::grid::{
+        classify_grid_row, GridBarline, GridRowKind, GridToken,
+    };
+    use chordsketch_chordpro::typography::unicode_accidentals;
+
+    let row = classify_grid_row(raw);
+    let row_class = if matches!(row.kind, GridRowKind::Strum) {
+        "grid-line grid-line--strum"
+    } else {
+        "grid-line"
+    };
+    let _ = write!(html, "<div class=\"{row_class}\">");
+
+    if let Some(ref label) = row.label {
+        let _ = write!(
+            html,
+            "<span class=\"grid-row__label\">{}</span>",
+            escape(label)
+        );
+    }
+
+    // Group body tokens into bars + barlines, like the React
+    // walker. Beat slots are collected until a barline flushes
+    // them as one `.grid-bar`.
+    enum BeatSlot {
+        Chord(Vec<String>),
+        Strum(String),
+        Continuation,
+        Percent1,
+        Percent2,
+    }
+    enum Cell {
+        Bar { beats: Vec<BeatSlot>, no_chord: bool },
+        Barline(GridBarline),
+        Volta(u8),
+    }
+    let mut cells: Vec<Cell> = Vec::new();
+    let mut current: Option<(Vec<BeatSlot>, bool)> = None;
+    let flush = |current: &mut Option<(Vec<BeatSlot>, bool)>, cells: &mut Vec<Cell>| {
+        if let Some((beats, no_chord)) = current.take() {
+            if !beats.is_empty() || no_chord {
+                cells.push(Cell::Bar { beats, no_chord });
+            }
+        }
+    };
+    let strum_row = matches!(row.kind, GridRowKind::Strum);
+    for tok in &row.body {
+        match tok {
+            GridToken::Space => {}
+            GridToken::Cell(names) => {
+                let entry = current.get_or_insert_with(|| (Vec::new(), false));
+                if strum_row {
+                    entry.0.push(BeatSlot::Strum(names.join("~")));
+                } else {
+                    entry.0.push(BeatSlot::Chord(names.clone()));
+                }
+            }
+            GridToken::Percent1 => {
+                current.get_or_insert_with(|| (Vec::new(), false)).0.push(BeatSlot::Percent1);
+            }
+            GridToken::Percent2 => {
+                current.get_or_insert_with(|| (Vec::new(), false)).0.push(BeatSlot::Percent2);
+            }
+            GridToken::Continuation => {
+                current.get_or_insert_with(|| (Vec::new(), false)).0.push(BeatSlot::Continuation);
+            }
+            GridToken::NoChord => {
+                let entry = current.get_or_insert_with(|| (Vec::new(), false));
+                entry.1 = true;
+            }
+            GridToken::Barline(b) => {
+                flush(&mut current, &mut cells);
+                cells.push(Cell::Barline(*b));
+            }
+            GridToken::Volta(n) => {
+                flush(&mut current, &mut cells);
+                cells.push(Cell::Volta(*n));
+            }
+        }
+    }
+    flush(&mut current, &mut cells);
+
+    for cell in &cells {
+        match cell {
+            Cell::Bar { beats, no_chord } => {
+                let slots: &[BeatSlot] = if beats.is_empty() {
+                    &[BeatSlot::Continuation]
+                } else {
+                    beats
+                };
+                let _ = write!(
+                    html,
+                    "<span class=\"grid-bar\" data-beats=\"{}\">",
+                    slots.len()
+                );
+                if *no_chord {
+                    html.push_str(
+                        "<span class=\"grid-no-chord\" aria-label=\"no chord\">N.C.</span>",
+                    );
+                } else {
+                    for slot in slots {
+                        match slot {
+                            BeatSlot::Chord(names) => {
+                                if names.len() == 1 {
+                                    let _ = write!(
+                                        html,
+                                        "<span class=\"grid-beat\"><span class=\"grid-chord\">{}</span></span>",
+                                        escape(&unicode_accidentals(&names[0]))
+                                    );
+                                } else {
+                                    html.push_str(
+                                        "<span class=\"grid-beat grid-beat--multi\">",
+                                    );
+                                    for (i, name) in names.iter().enumerate() {
+                                        if i > 0 {
+                                            html.push_str(
+                                                "<span class=\"grid-chord__sep\" aria-hidden=\"true\">~</span>",
+                                            );
+                                        }
+                                        let _ = write!(
+                                            html,
+                                            "<span class=\"grid-chord\">{}</span>",
+                                            escape(&unicode_accidentals(name))
+                                        );
+                                    }
+                                    html.push_str("</span>");
+                                }
+                            }
+                            BeatSlot::Strum(raw) => {
+                                let (class, glyph) = strum_class_and_glyph(raw);
+                                let _ = write!(
+                                    html,
+                                    "<span class=\"grid-beat grid-strum {}\">\
+                                     <span class=\"grid-strum__glyph\" aria-hidden=\"true\">{}</span>\
+                                     <span class=\"sr-only\">{}</span>\
+                                     </span>",
+                                    class,
+                                    escape(&glyph),
+                                    escape(raw),
+                                );
+                            }
+                            BeatSlot::Continuation => {
+                                html.push_str("<span class=\"grid-beat\"></span>");
+                            }
+                            BeatSlot::Percent1 => {
+                                html.push_str(
+                                    "<span class=\"grid-beat grid-beat--percent1\" \
+                                     aria-label=\"repeat previous bar\">\
+                                     <span class=\"grid-percent\" aria-hidden=\"true\">%</span>\
+                                     </span>",
+                                );
+                            }
+                            BeatSlot::Percent2 => {
+                                html.push_str(
+                                    "<span class=\"grid-beat grid-beat--percent2\" \
+                                     aria-label=\"repeat previous two bars\">\
+                                     <span class=\"grid-percent\" aria-hidden=\"true\">%%</span>\
+                                     </span>",
+                                );
+                            }
+                        }
+                    }
+                }
+                html.push_str("</span>");
+            }
+            Cell::Barline(b) => match b {
+                GridBarline::Single => {
+                    html.push_str("<span class=\"grid-barline\" aria-hidden=\"true\"></span>");
+                }
+                GridBarline::Double => {
+                    html.push_str(
+                        "<span class=\"grid-barline grid-barline--double\" aria-hidden=\"true\">\
+                         <span class=\"grid-barline__line\"></span>\
+                         <span class=\"grid-barline__line\"></span>\
+                         </span>",
+                    );
+                }
+                GridBarline::Final => {
+                    html.push_str(
+                        "<span class=\"grid-barline grid-barline--final\" aria-label=\"final barline\">\
+                         <span class=\"grid-barline__line\"></span>\
+                         <span class=\"grid-barline__line grid-barline__line--thick\"></span>\
+                         </span>",
+                    );
+                }
+                GridBarline::RepeatStart => {
+                    html.push_str(
+                        "<span class=\"grid-barline grid-barline--repeat-start\" aria-label=\"repeat start\">\
+                         <span class=\"grid-barline__line grid-barline__line--thick\"></span>\
+                         <span class=\"grid-barline__line\"></span>\
+                         <span class=\"grid-barline__dots\"><span></span><span></span></span>\
+                         </span>",
+                    );
+                }
+                GridBarline::RepeatEnd => {
+                    html.push_str(
+                        "<span class=\"grid-barline grid-barline--repeat-end\" aria-label=\"repeat end\">\
+                         <span class=\"grid-barline__dots\"><span></span><span></span></span>\
+                         <span class=\"grid-barline__line\"></span>\
+                         <span class=\"grid-barline__line grid-barline__line--thick\"></span>\
+                         </span>",
+                    );
+                }
+                GridBarline::RepeatBoth => {
+                    html.push_str(
+                        "<span class=\"grid-barline grid-barline--repeat-both\" aria-label=\"repeat end and start\">\
+                         <span class=\"grid-barline__dots\"><span></span><span></span></span>\
+                         <span class=\"grid-barline__line grid-barline__line--thick\"></span>\
+                         <span class=\"grid-barline__line grid-barline__line--thick\"></span>\
+                         <span class=\"grid-barline__dots\"><span></span><span></span></span>\
+                         </span>",
+                    );
+                }
+            },
+            Cell::Volta(n) => {
+                let _ = write!(
+                    html,
+                    "<span class=\"grid-volta\" aria-label=\"{n} ending\">\
+                     <span class=\"grid-volta__bracket\">\
+                     <span class=\"grid-volta__cap\"></span>\
+                     <span class=\"grid-volta__label\">{n}.</span>\
+                     </span>\
+                     <span class=\"grid-barline__line\"></span>\
+                     </span>",
+                );
+            }
+        }
+    }
+
+    if let Some(ref comment) = row.trailing_comment {
+        let _ = write!(
+            html,
+            "<span class=\"grid-row__comment\">{}</span>",
+            escape(comment)
+        );
+    }
+
+    html.push_str("</div>\n");
+}
+
+/// Map a strum-pattern token to (css-class-suffix, glyph)
+/// pair. Sister-site to `strumClassFor` + `strumGlyphFor` in
+/// `packages/react/src/chordpro-jsx.tsx` — must produce the
+/// same class names so the shared `.grid-strum--*` rules in
+/// the embedded stylesheet apply identically.
+fn strum_class_and_glyph(raw: &str) -> (String, String) {
+    let anticipated = raw.starts_with('~');
+    let stripped = if anticipated { &raw[1..] } else { raw };
+    let lower = stripped.to_ascii_lowercase();
+    let (base, glyph): (&str, String) = match lower.as_str() {
+        "up" | "u" => (
+            "grid-strum--up",
+            if anticipated { "~↑" } else { "↑" }.to_string(),
+        ),
+        "dn" | "d" => (
+            "grid-strum--down",
+            if anticipated { "~↓" } else { "↓" }.to_string(),
+        ),
+        "u+" => (
+            "grid-strum--up-accent",
+            if anticipated { "~↑+" } else { "↑+" }.to_string(),
+        ),
+        "d+" => (
+            "grid-strum--down-accent",
+            if anticipated { "~↓+" } else { "↓+" }.to_string(),
+        ),
+        "ua" => (
+            "grid-strum--up-arpeggio",
+            if anticipated { "~↑·" } else { "↑·" }.to_string(),
+        ),
+        "da" => (
+            "grid-strum--down-arpeggio",
+            if anticipated { "~↓·" } else { "↓·" }.to_string(),
+        ),
+        // Dialect tokens (`dn~up`, `~ux`, `d+~u+`) — pass the
+        // raw text through verbatim so the reader still sees
+        // the source intent.
+        _ => ("grid-strum--custom", raw.to_string()),
+    };
+    let class = if anticipated {
+        format!("{base} grid-strum--anticipated")
+    } else {
+        base.to_string()
+    };
+    (class, glyph)
 }
 
 /// Render a `{chorus}` recall directive as HTML.
