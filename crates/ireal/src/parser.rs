@@ -10,7 +10,7 @@
 //!
 //! iReal Pro publishes the [Custom Chord Chart Protocol][spec]
 //! (the chord-chart token grammar — `*X` rehearsal marks, barlines,
-//! repeats, `n` no-chord, `Y/YY/YYY` vertical spacers, etc.) and a
+//! repeats, `n` no-chord, `Y+` vertical spacers, etc.) and a
 //! companion [developer docs page][devdocs] (overview of the
 //! `irealb://` and `irealbook://` URL prefixes used to embed
 //! charts). The chord-chart grammar this parser accepts is a

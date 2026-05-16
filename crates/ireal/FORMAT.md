@@ -241,13 +241,19 @@ distinguishes:
 - `Y+` (Vertical spacer): no AST representation (visual hint
   only).
 - `f` (Fermata): the spec lists this alongside `S` (Segno) and
-  `Q` (Coda) as a rehearsal-mark / bar-attached symbol; the
-  parser falls through `f` to the chord-detection path and may
-  consume it as part of a chord-quality token rather than
-  recording it as a `MusicalSymbol`. Adding the AST variant and
-  parser branch is a separate concern and is not blocking; until
-  it lands, the spec's `f` token is a known gap relative to the
-  published grammar.
+  `Q` (Coda) as a rehearsal-mark / bar-attached symbol. The
+  parser has no `f` branch in the music-token loop: the
+  chord-detection path is gated on `A..=G | W` (so lowercase `f`
+  cannot start a chord), and `consume_chord_token`'s
+  quality-continuation allowlist does not include `f` (so a
+  trailing `f` after a chord root terminates the chord token
+  rather than being absorbed into it). With no rule matching, `f`
+  takes the same generic "drop one char" fall-through as
+  unrecognised punctuation — the path noted at the bottom of the
+  chord-chart token grammar table above. Adding a `MusicalSymbol`
+  variant and the matching parser branch is a separate concern
+  and is not blocking; until it lands, the spec's `f` token is a
+  known gap relative to the published grammar.
 - `*X*` closing-`*` sentinel: each `*X` greedily becomes a
   section marker, so `*m*X` parses as **two** sections (`m`
   followed by `X`). This mirrors pianosnake's behaviour — the
