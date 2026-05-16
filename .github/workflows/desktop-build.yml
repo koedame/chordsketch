@@ -31,6 +31,7 @@ on:
     paths:
       - "apps/desktop/**"
       - "packages/npm/**"
+      - "packages/npm-export/**"
       - "packages/tree-sitter-chordpro/**"
       - "packages/ui-web/**"
       # Only the three crates `chordsketch-desktop` depends on —
@@ -56,6 +57,7 @@ on:
     paths:
       - "apps/desktop/**"
       - "packages/npm/**"
+      - "packages/npm-export/**"
       - "packages/tree-sitter-chordpro/**"
       - "packages/ui-web/**"
       # Only the three crates `chordsketch-desktop` depends on —

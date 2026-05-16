@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Build script for @chordsketch/wasm.
+// Build script for @chordsketch/wasm (LEAN build).
 //
 // Produces the dual-package layout consumed by package.json `exports`:
 //   - web/  : wasm-pack --target web    → ESM (with await init())
@@ -8,6 +8,20 @@
 // Each sub-directory carries its own package.json declaring the
 // module type so Node resolves them correctly even though the root
 // package.json declares "type": "module".
+//
+// Build profile (#2466):
+//   --release: cargo release profile (size-tuned at workspace level,
+//              see top-level Cargo.toml [profile.release]).
+//   --no-default-features: drops the `png-pdf` Cargo feature on
+//              `chordsketch-wasm`, which gates `chordsketch-render-pdf`,
+//              `chordsketch-render-ireal/png`, and
+//              `chordsketch-render-ireal/pdf` plus every wasm export
+//              that depends on them. The heavy renderer surface
+//              (resvg / tiny-skia / svg2pdf / usvg / fontdb /
+//              harfrust) is published separately via
+//              `@chordsketch/wasm-export` so the playground / the
+//              `<ChordSheet format="html">` path can load only the
+//              parser + lightweight renderers.
 //
 // Run with: `npm run build` (from packages/npm/).
 //
@@ -36,6 +50,11 @@ function run(cmd, args) {
 }
 
 function buildTarget(target, outDir) {
+  // wasm-pack 0.14.0 has a fragile argument parser: putting
+  // `--no-default-features` between `--release` and `--target`
+  // makes it consume the next token as `--target`'s value
+  // incorrectly. Pass cargo-forwarding flags after the path via
+  // the `--` separator so they reach `cargo build` unambiguously.
   run("wasm-pack", [
     "build",
     CRATE_DIR,
@@ -44,6 +63,8 @@ function buildTarget(target, outDir) {
     target,
     "--out-dir",
     outDir,
+    "--",
+    "--no-default-features",
   ]);
 }
 
@@ -63,4 +84,4 @@ buildTarget("nodejs", nodeDir);
 writeSubPackageJson(webDir, "module");
 writeSubPackageJson(nodeDir, "commonjs");
 
-console.log("@chordsketch/wasm build complete.");
+console.log("@chordsketch/wasm (lean) build complete.");

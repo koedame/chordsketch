@@ -16,7 +16,7 @@ use crate::ast::{
     Accidental, Bar, BarLine, Chord, ChordQuality, ChordRoot, Ending, IrealSong, KeyMode,
     KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
 };
-use crate::parser::MUSIC_PREFIX;
+use crate::parser::{MUSIC_PREFIX, matches_macro_prefix};
 
 /// Serializes a single song to an `irealb://` URL.
 ///
@@ -164,12 +164,14 @@ fn serialize_music(song: &IrealSong) -> String {
 
     // Flatten all bars across sections so the serializer can peek
     // the *next* bar regardless of section boundary. This is
-    // load-bearing for round trips: the parser's
-    // `pending_symbol` / `pending_ending` are consumed by
-    // `start_new_bar`, so a symbol on bar N must be queued before
-    // bar N-1's closing barline. Looking ahead within a section
-    // is not enough — symbols and endings can land on the first
-    // bar of a new section too.
+    // load-bearing for round trips: the parser's `pending_symbol`
+    // is consumed by `start_new_bar`, so a symbol on bar N must
+    // be queued before bar N-1's closing barline. Endings, in
+    // contrast, are written by the parser onto `current_bar`
+    // immediately, so they are emitted AFTER the previous bar's
+    // close glyph (see the post-`serialize_bar_close` block below).
+    // Looking ahead within a section is not enough — symbols /
+    // endings can land on the first bar of a new section too.
     struct FlatBar<'a> {
         section_label: Option<&'a SectionLabel>,
         bar: &'a Bar,
@@ -199,22 +201,88 @@ fn serialize_music(song: &IrealSong) -> String {
         }
 
         // Non-Single starts (`[`, `{`, `Z`) emit a token; the
-        // pending symbol / ending must be queued before that
-        // token so that `start_new_bar` (called by the open
-        // glyph) consumes it onto this bar.
+        // ending marker must appear before that token so that the
+        // bar carries it. Symbols are emitted INSIDE the bar's
+        // content area now (after the open glyph), so the parser's
+        // `queue_symbol` lands them on `current_bar` rather than
+        // a phantom previous bar.
         if bar.start != BarLine::Single {
-            if let Some(sym) = bar.symbol {
-                serialize_symbol(&mut chart, sym);
-            }
             if let Some(end) = bar.ending {
                 serialize_ending(&mut chart, end);
             }
         }
+        // A repeat-previous bar collapses to the `Kcl` token. The
+        // parser handles `Kcl` as `finish_bar` + `start_new_bar` +
+        // mark the new bar with `repeat_previous = true`. After the
+        // `Kcl` token, the bar's right-edge barline (`|`, `Z`, `]`,
+        // `}`) still needs to be emitted so that a non-Single end
+        // round-trips. The next-bar symbol lookahead applies to
+        // single-start neighbours just like any other bar.
+        // Helper closure: detect whether a bar's text_comment
+        // already triggers a macro symbol on re-parse, so we can
+        // skip emitting a redundant `<D.C.>` / `<D.S.>` /
+        // `<Fine>` pseudo-comment.
+        // Mirror `apply_comment`'s anchored macro detection: the
+        // suppression must agree with what the parser would
+        // re-derive on round-trip. A naive substring `contains`
+        // here flagged ordinary words like `refine` / `define`,
+        // dropping a perfectly legitimate `bar.symbol` because the
+        // text_comment happened to share a substring with a
+        // recognised macro.
+        let text_carries_macro = |b: &Bar| {
+            b.text_comment
+                .as_deref()
+                .map(|t| {
+                    let lower = t.trim().to_ascii_lowercase();
+                    matches_macro_prefix(&lower, "d.c.")
+                        || matches_macro_prefix(&lower, "d.s.")
+                        || matches_macro_prefix(&lower, "fine")
+                })
+                .unwrap_or(false)
+        };
+
+        if bar.repeat_previous {
+            chart.push_str("Kcl");
+            if !text_carries_macro(bar) {
+                if let Some(sym) = bar.symbol {
+                    serialize_symbol(&mut chart, sym);
+                }
+            }
+            if let Some(text) = &bar.text_comment {
+                emit_text_comment(&mut chart, text);
+            }
+            serialize_bar_close(&mut chart, bar);
+            if let Some(next) = flat.get(i + 1) {
+                if next.bar.start == BarLine::Single {
+                    if let Some(end) = next.bar.ending {
+                        serialize_ending(&mut chart, end);
+                    }
+                }
+            }
+            continue;
+        }
+
         serialize_bar_open(&mut chart, bar);
 
-        // Bar contents. (Symbol / ending for THIS Single-start
-        // bar were emitted by the *previous* iteration's
-        // closing-barline lookahead.)
+        // Symbol for THIS bar, emitted INSIDE the bar's content
+        // area so the parser's `queue_symbol` (which now sets
+        // `current_bar.symbol` directly) lands it on this bar.
+        // Skip when the bar's own text_comment will carry an
+        // equivalent macro substring on re-parse.
+        if !text_carries_macro(bar) {
+            if let Some(sym) = bar.symbol {
+                serialize_symbol(&mut chart, sym);
+            }
+        }
+
+        if bar.no_chord {
+            // `n` is the iReal Pro "No Chord" marker — paints `N.C.`
+            // in the bar's centre. Emit before any chord content so
+            // the parser's `n`-handler hits before chord parsing.
+            chart.push('n');
+        }
+
+        // Bar contents.
         for (ci, bc) in bar.chords.iter().enumerate() {
             if ci > 0 {
                 chart.push(' ');
@@ -222,22 +290,26 @@ fn serialize_music(song: &IrealSong) -> String {
             serialize_chord(&mut chart, &bc.chord);
         }
 
-        // Lookahead: if the *next* bar has a Single start and
-        // wants a symbol / ending, queue them here (after this
-        // bar's chords, before this bar's close glyph) so the
-        // parser's `start_new_bar` consumes them onto that bar.
+        if let Some(text) = &bar.text_comment {
+            // Free-form text comment renders below the bar's right
+            // barline. The `<...>` form is what the parser's
+            // `apply_comment` consumes. Use the `>`-stripping
+            // helper so the regular-bar path inherits the same
+            // round-trip protection as the `repeat_previous`
+            // branch above (sister-site parity per
+            // `.claude/rules/fix-propagation.md`).
+            emit_text_comment(&mut chart, text);
+        }
+
+        serialize_bar_close(&mut chart, bar);
+
         if let Some(next) = flat.get(i + 1) {
             if next.bar.start == BarLine::Single {
-                if let Some(sym) = next.bar.symbol {
-                    serialize_symbol(&mut chart, sym);
-                }
                 if let Some(end) = next.bar.ending {
                     serialize_ending(&mut chart, end);
                 }
             }
         }
-
-        serialize_bar_close(&mut chart, bar);
     }
 
     // The parser strips `MUSIC_PREFIX` after split; the
@@ -268,11 +340,11 @@ fn serialize_section_label(out: &mut String, label: &SectionLabel) {
     out.push('*');
     match label {
         SectionLabel::Letter(c) => out.push(*c),
-        SectionLabel::Verse => out.push('v'),
-        SectionLabel::Chorus => out.push('c'),
+        // The iReal Pro spec emits `*V` uppercase for Verse and
+        // `*i` lowercase for Intro (#2432, #2450). Round-trip
+        // through the parser's case-insensitive handling.
+        SectionLabel::Verse => out.push('V'),
         SectionLabel::Intro => out.push('i'),
-        SectionLabel::Outro => out.push('o'),
-        SectionLabel::Bridge => out.push('b'),
         SectionLabel::Custom(s) => {
             // The parser only consumes a single char after `*`,
             // so multi-char custom labels would not round-trip
@@ -325,12 +397,39 @@ fn serialize_symbol(out: &mut String, symbol: MusicalSymbol) {
     }
 }
 
+/// Emit a `<...>` comment, stripping the `>` delimiter character
+/// from the body. The iReal Pro chord stream uses `<` / `>` as
+/// the comment-block delimiters and the parser's `find('>')`
+/// would terminate prematurely on the first inner `>`,
+/// truncating the round-trip. `<` is safe inside the body — the
+/// parser captures up to the FIRST closing `>`, so a leading `<`
+/// stays inside the comment text. The replacement is intentional
+/// rather than rejecting outright: callers that constructed an
+/// AST manually (per the public-field contract in `ast.rs`)
+/// shouldn't have their chart silently fail to serialize, but
+/// they will lose any `>` characters they typed.
+fn emit_text_comment(out: &mut String, text: &str) {
+    out.push('<');
+    for ch in text.chars() {
+        if ch == '>' {
+            continue;
+        }
+        out.push(ch);
+    }
+    out.push('>');
+}
+
 fn serialize_chord(out: &mut String, chord: &Chord) {
     serialize_root(out, chord.root);
     serialize_quality(out, &chord.quality);
     if let Some(bass) = chord.bass {
         out.push('/');
         serialize_root(out, bass);
+    }
+    if let Some(alt) = &chord.alternate {
+        out.push('(');
+        serialize_chord(out, alt);
+        out.push(')');
     }
 }
 
@@ -540,6 +639,9 @@ mod tests {
                     }],
                     ending: None,
                     symbol: None,
+                    repeat_previous: false,
+                    no_chord: false,
+                    text_comment: None,
                 }],
             }],
         };
@@ -599,6 +701,9 @@ mod tests {
                 }],
                 ending: None,
                 symbol: None,
+                repeat_previous: false,
+                no_chord: false,
+                text_comment: None,
             }],
         }];
         let url = irealb_serialize(&song);
@@ -636,6 +741,9 @@ mod tests {
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::Fine),
+                    repeat_previous: false,
+                    no_chord: false,
+                    text_comment: None,
                 }],
             }],
             ..Default::default()
@@ -668,6 +776,9 @@ mod tests {
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::DaCapo),
+                    repeat_previous: false,
+                    no_chord: false,
+                    text_comment: None,
                 }],
             }],
             ..Default::default()
@@ -700,6 +811,9 @@ mod tests {
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::DalSegno),
+                    repeat_previous: false,
+                    no_chord: false,
+                    text_comment: None,
                 }],
             }],
             ..Default::default()
@@ -762,5 +876,204 @@ mod tests {
         assert_eq!(parsed[1].style, song2.style);
         assert_eq!(parsed[1].tempo, song2.tempo);
         assert_eq!(name.as_deref(), Some("Playlist"));
+    }
+
+    /// Round-trip regression: a `text_comment` containing the
+    /// reserved `>` delimiter must not corrupt the chord stream.
+    /// `emit_text_comment` strips the inner `>` so re-parsing
+    /// captures the rest of the caption rather than truncating at
+    /// the first `>`.
+    #[test]
+    fn text_comment_with_inner_gt_round_trips_on_regular_bar() {
+        let song = IrealSong {
+            title: "GT Regular".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                    }],
+                    text_comment: Some("see > here".into()),
+                    ..Default::default()
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip must succeed");
+        let got = parsed.sections[0].bars[0]
+            .text_comment
+            .as_deref()
+            .unwrap_or("");
+        assert!(
+            !got.contains('>'),
+            "stripped `>` must not survive into parsed comment, got {got:?}"
+        );
+        // The stripped form preserves the rest of the caption.
+        assert_eq!(got, "see  here");
+    }
+
+    /// Sister-site coverage for the `Kcl` (repeat-previous) branch.
+    /// Locks in the existing fix that already routes through
+    /// `emit_text_comment`.
+    #[test]
+    fn text_comment_with_inner_gt_round_trips_on_kcl_bar() {
+        let song = IrealSong {
+            title: "GT Kcl".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![
+                    Bar {
+                        start: BarLine::Double,
+                        end: BarLine::Single,
+                        chords: vec![BarChord {
+                            chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                            position: BeatPosition::on_beat(1).unwrap(),
+                        }],
+                        ..Default::default()
+                    },
+                    Bar {
+                        start: BarLine::Single,
+                        end: BarLine::Final,
+                        repeat_previous: true,
+                        text_comment: Some("rit. > slow".into()),
+                        ..Default::default()
+                    },
+                ],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip must succeed");
+        let got = parsed.sections[0].bars[1]
+            .text_comment
+            .as_deref()
+            .unwrap_or("");
+        assert!(!got.contains('>'));
+    }
+
+    /// A `text_comment` whose body contains "refine" (substring
+    /// match for the old `lower.contains("fine")` bug) must NOT
+    /// suppress an explicit `bar.symbol` on round trip — both
+    /// fields survive.
+    #[test]
+    fn refine_caption_with_explicit_fine_symbol_round_trips_both() {
+        let song = IrealSong {
+            title: "Refine".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                    }],
+                    symbol: Some(MusicalSymbol::Fine),
+                    text_comment: Some("refine the chord".into()),
+                    ..Default::default()
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip must succeed");
+        let bar = &parsed.sections[0].bars[0];
+        assert_eq!(
+            bar.text_comment.as_deref(),
+            Some("refine the chord"),
+            "text_comment must survive verbatim"
+        );
+        assert_eq!(
+            bar.symbol,
+            Some(MusicalSymbol::Fine),
+            "explicit Fine symbol must NOT be suppressed by an English-word substring"
+        );
+    }
+
+    // ---- Section-label round-trip (#2432, #2450) -------------------
+
+    fn single_bar_song(label: SectionLabel) -> IrealSong {
+        IrealSong {
+            title: "T".into(),
+            composer: Some("c".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label,
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                    }],
+                    ..Default::default()
+                }],
+            }],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn verse_label_round_trips_via_url() {
+        // Serializer emits `*V` uppercase per spec; parser accepts
+        // both cases. Round-trip preserves `Verse`.
+        let song = single_bar_song(SectionLabel::Verse);
+        let url = irealb_serialize(&song);
+        assert!(
+            url.contains("%2AV") || url.contains("*V"),
+            "URL must encode `*V` uppercase, got {url}"
+        );
+        let parsed = crate::parse(&url).expect("round trip");
+        assert_eq!(parsed.sections[0].label, SectionLabel::Verse);
+    }
+
+    #[test]
+    fn intro_label_round_trips_via_url() {
+        let song = single_bar_song(SectionLabel::Intro);
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        assert_eq!(parsed.sections[0].label, SectionLabel::Intro);
+    }
+
+    /// `Custom("Chorus")` → URL is lossy: the iReal `*X` token only
+    /// carries one character. Locks the documented behaviour from
+    /// `crates/convert/known-deviations.md` §"URL-cycle lossiness
+    /// for multi-character custom labels" — `Custom("Chorus")`
+    /// truncates to `*C` and re-parses as `Letter('C')`. This test
+    /// asserts the actual behaviour so a silent change to the
+    /// truncation rule is caught.
+    #[test]
+    fn multi_char_custom_label_truncates_to_letter_on_url_round_trip() {
+        let song = single_bar_song(SectionLabel::Custom("Chorus".into()));
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        // First-char-only emission means re-parse sees `*C` →
+        // `Letter('C')`, NOT `Custom("Chorus")`.
+        assert_eq!(parsed.sections[0].label, SectionLabel::Letter('C'));
+    }
+
+    /// Single-char custom labels round-trip cleanly when the char is
+    /// outside the named-variant vocabulary (`v` / `V` / `i` / `I`)
+    /// and outside the uppercase-letter `Letter(c)` range.
+    #[test]
+    fn single_char_lowercase_custom_round_trips_via_url() {
+        let song = single_bar_song(SectionLabel::Custom("x".into()));
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        assert_eq!(
+            parsed.sections[0].label,
+            SectionLabel::Custom("x".into()),
+            "single-char `Custom(\"x\")` must round-trip identity"
+        );
     }
 }

@@ -334,12 +334,15 @@ impl Parser {
                 metadata.year = Some(value);
             }
             DirectiveKind::Key => {
+                Self::push_if_under_cap(&mut metadata.keys, value.clone());
                 metadata.key = Some(value);
             }
             DirectiveKind::Tempo => {
+                Self::push_if_under_cap(&mut metadata.tempos, value.clone());
                 metadata.tempo = Some(value);
             }
             DirectiveKind::Time => {
+                Self::push_if_under_cap(&mut metadata.times, value.clone());
                 metadata.time = Some(value);
             }
             DirectiveKind::Capo => {
@@ -371,9 +374,18 @@ impl Parser {
                 "lyricist" => Self::push_if_under_cap(&mut metadata.lyricists, value),
                 "album" => metadata.album = Some(value),
                 "year" => metadata.year = Some(value),
-                "key" => metadata.key = Some(value),
-                "tempo" => metadata.tempo = Some(value),
-                "time" => metadata.time = Some(value),
+                "key" => {
+                    Self::push_if_under_cap(&mut metadata.keys, value.clone());
+                    metadata.key = Some(value);
+                }
+                "tempo" => {
+                    Self::push_if_under_cap(&mut metadata.tempos, value.clone());
+                    metadata.tempo = Some(value);
+                }
+                "time" => {
+                    Self::push_if_under_cap(&mut metadata.times, value.clone());
+                    metadata.time = Some(value);
+                }
                 "capo" => metadata.capo = Some(value),
                 "sorttitle" => metadata.sort_title = Some(value),
                 "sortartist" => metadata.sort_artist = Some(value),
@@ -634,8 +646,49 @@ impl Parser {
         }
 
         // Trim whitespace from name and value.
-        let name = name.trim().to_string();
-        let value = value.map(|v| v.trim().to_string());
+        let raw_name = name.trim().to_string();
+        let mut value = value.map(|v| v.trim().to_string());
+
+        // Inline attribute form (`{start_of_grid shape="..."}`).
+        // The ChordPro spec lets directives carry attributes via
+        // whitespace separation when no `:` is present —
+        // `{start_of_grid shape="L+MxB+R"}` is the documented
+        // grid-shape syntax, and `{image src="..." width=64}` is
+        // sometimes written without the colon too.
+        //
+        // Splitting at the first whitespace recovers the
+        // attribute portion as the directive's `value`, but only
+        // when the prefix is a SPECIFIC named directive (e.g.
+        // `start_of_grid`). Custom-section directives
+        // (`start_of_foo bar` → `StartOfSection("foo bar")`)
+        // intentionally keep the whitespace in the name so
+        // legacy tests asserting "section-foo-bar" still pass.
+        let name = match raw_name.find(|c: char| c.is_whitespace()) {
+            Some(idx) => {
+                let prefix = &raw_name[..idx];
+                let attrs = raw_name[idx..].trim().to_string();
+                let (prefix_kind, _) = DirectiveKind::resolve_with_selector(prefix);
+                let is_attribute_bearing = !matches!(
+                    prefix_kind,
+                    DirectiveKind::Unknown(_)
+                        | DirectiveKind::StartOfSection(_)
+                        | DirectiveKind::EndOfSection(_)
+                );
+                if is_attribute_bearing && !attrs.is_empty() {
+                    // Only fold inline attrs into the value when
+                    // the caller didn't supply an explicit
+                    // `:`-prefixed value (that path stays
+                    // authoritative).
+                    if value.is_none() {
+                        value = Some(attrs);
+                    }
+                    prefix.to_string()
+                } else {
+                    raw_name
+                }
+            }
+            None => raw_name,
+        };
 
         // Classify the directive, detecting any selector suffix.
         let (kind, selector) = DirectiveKind::resolve_with_selector(&name);
@@ -648,6 +701,7 @@ impl Parser {
                 DirectiveKind::Comment => CommentStyle::Normal,
                 DirectiveKind::CommentItalic => CommentStyle::Italic,
                 DirectiveKind::CommentBox => CommentStyle::Boxed,
+                DirectiveKind::Highlight => CommentStyle::Highlight,
                 _ => CommentStyle::Normal,
             };
             let text = value.unwrap_or_default();
@@ -2081,6 +2135,45 @@ mod tests {
         assert_eq!(song.metadata.capo.as_deref(), Some("2"));
     }
 
+    /// Spec: `{key}` is `[Nx] [Pos]` — multiple declarations
+    /// accumulate. The plural `keys` Vec is the authoritative list;
+    /// the singular `key` field keeps the last-wins value for
+    /// backward-compat callers.
+    #[test]
+    fn metadata_keys_accumulate_multi_value() {
+        let song = parse("{key: G}\n[G]hi\n{key: D}\n[D]ho").unwrap();
+        assert_eq!(song.metadata.keys, vec!["G".to_string(), "D".to_string()]);
+        assert_eq!(song.metadata.key.as_deref(), Some("D"));
+    }
+
+    #[test]
+    fn metadata_tempos_accumulate_multi_value() {
+        let song = parse("{tempo: 120}\n[G]a\n{tempo: 140}\n[D]b").unwrap();
+        assert_eq!(
+            song.metadata.tempos,
+            vec!["120".to_string(), "140".to_string()]
+        );
+        assert_eq!(song.metadata.tempo.as_deref(), Some("140"));
+    }
+
+    #[test]
+    fn metadata_times_accumulate_multi_value() {
+        let song = parse("{time: 4/4}\n[G]a\n{time: 6/8}\n[D]b").unwrap();
+        assert_eq!(
+            song.metadata.times,
+            vec!["4/4".to_string(), "6/8".to_string()]
+        );
+        assert_eq!(song.metadata.time.as_deref(), Some("6/8"));
+    }
+
+    /// `{meta: <key> <value>}` long-form must populate the same
+    /// plural Vec as the dedicated directives.
+    #[test]
+    fn metadata_keys_accumulate_via_meta_long_form() {
+        let song = parse("{meta: key G}\n{meta: key D}").unwrap();
+        assert_eq!(song.metadata.keys, vec!["G".to_string(), "D".to_string()]);
+    }
+
     #[test]
     fn metadata_case_insensitive() {
         let song = parse("{TITLE: Upper Case}").unwrap();
@@ -2735,6 +2828,69 @@ mod tests {
             assert_eq!(l.segments[0].chord.as_ref().unwrap().name, "Am");
         } else {
             panic!("expected lyrics line with chord after grid section");
+        }
+    }
+
+    #[test]
+    fn grid_inline_attribute_form_extracts_shape() {
+        // `{start_of_grid shape="1+4x2+4"}` should resolve to
+        // the StartOfGrid kind (NOT a custom-section), with the
+        // attribute payload preserved in `value` for the
+        // renderer to consume.
+        let song = parse(r#"{start_of_grid shape="1+4x2+4"}\n| Am . |\n{end_of_grid}"#)
+            .unwrap_or_else(|e| panic!("parse failed: {e:?}"));
+        if let Line::Directive(ref d) = song.lines[0] {
+            assert_eq!(d.kind, DirectiveKind::StartOfGrid);
+            assert_eq!(d.name, "start_of_grid");
+            assert_eq!(d.value.as_deref(), Some(r#"shape="1+4x2+4""#));
+        } else {
+            panic!("expected start_of_grid directive");
+        }
+    }
+
+    #[test]
+    fn grid_inline_label_and_shape_attributes() {
+        // Both attributes ride along in `value`; the renderers
+        // pull them out with `extract_grid_label` / `GridShape::parse`.
+        let song =
+            parse(r#"{start_of_grid shape="4x4" label="Intro"}\n| G . |\n{end_of_grid}"#).unwrap();
+        if let Line::Directive(ref d) = song.lines[0] {
+            assert_eq!(d.kind, DirectiveKind::StartOfGrid);
+            assert!(d.value.as_deref().unwrap().contains(r#"label="Intro""#));
+        } else {
+            panic!("expected start_of_grid directive");
+        }
+    }
+
+    #[test]
+    fn custom_section_with_space_preserves_whole_name() {
+        // `{start_of_foo bar}` is a custom section "foo bar"
+        // (per the legacy contract) — the inline-attribute
+        // split MUST NOT fire because the prefix `start_of_foo`
+        // resolves to `StartOfSection("foo")`, which is
+        // excluded from the split eligibility list.
+        let song = parse("{start_of_foo bar}\ntext\n{end_of_foo bar}").unwrap();
+        if let Line::Directive(ref d) = song.lines[0] {
+            assert_eq!(d.kind, DirectiveKind::StartOfSection("foo bar".to_string()));
+            assert_eq!(d.value, None);
+        } else {
+            panic!("expected StartOfSection");
+        }
+    }
+
+    #[test]
+    fn explicit_colon_value_wins_over_inline_attrs() {
+        // If the directive has a `:`-prefixed value, that value
+        // is authoritative; inline attrs after the directive name
+        // are folded into the name itself (not duplicated into
+        // value). Spec edge case.
+        let song = parse(r#"{start_of_grid shape="4x4": Verse}\n| G |\n{end_of_grid}"#).unwrap();
+        if let Line::Directive(ref d) = song.lines[0] {
+            assert_eq!(d.kind, DirectiveKind::StartOfGrid);
+            // The explicit `:`-prefixed value `Verse` should win.
+            assert_eq!(d.value.as_deref(), Some("Verse"));
+        } else {
+            panic!("expected start_of_grid directive");
         }
     }
 

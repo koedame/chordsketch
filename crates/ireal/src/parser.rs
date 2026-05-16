@@ -224,6 +224,24 @@ fn make_song(body: &str) -> Result<IrealSong, ParseError> {
     // alignment for the same input.
     let parts: Vec<&str> = body.split('=').filter(|s| !s.is_empty()).collect();
 
+    // Two related URL shapes share `make_song`:
+    //
+    // 1. `irealb://` (iReal Pro export) — 7..=9 parts, music is
+    //    `MUSIC_PREFIX` + obfusc50-scrambled chord stream.
+    // 2. `irealbook://` (iRealBook export) — 6 parts, music is
+    //    plain text with no prefix and no scrambling, and the time
+    //    signature lives in field 4 (packed digits like `44` = 4/4
+    //    rather than embedded `T44` in the chord stream).
+    //
+    // Detect (2) by part count + the absence of a `MUSIC_PREFIX`
+    // anywhere in `parts`; everything else routes through the iReal
+    // Pro arms.
+    let is_irealbook_six_field =
+        parts.len() == 6 && !parts.iter().any(|p| p.starts_with(MUSIC_PREFIX));
+    if is_irealbook_six_field {
+        return make_song_irealbook(&parts);
+    }
+
     let (title, composer, style, key, transpose_raw, music_raw, _comp_style, bpm_raw, _repeats) =
         match parts.len() {
             7 => {
@@ -284,7 +302,7 @@ fn make_song(body: &str) -> Result<IrealSong, ParseError> {
             }
             n => {
                 return Err(ParseError::MalformedBody(format!(
-                    "expected 7..=9 parts, got {n}"
+                    "expected 6 parts (irealbook) or 7..=9 parts (irealb), got {n}"
                 )));
             }
         };
@@ -322,6 +340,71 @@ fn make_song(body: &str) -> Result<IrealSong, ParseError> {
         transpose,
         sections: chord_chart.sections,
     })
+}
+
+/// `irealbook://` six-field song builder.
+///
+/// Layout: `Title=Composer=Style=Key=TimeSig=Music`. Music is plain
+/// text (no `MUSIC_PREFIX`, no obfusc50). The time signature is a
+/// packed-digit field (`44` → 4/4, `34` → 3/4, `68` → 6/8, `128` →
+/// 12/8) sitting outside the chord stream — re-inject it as the
+/// AST's `time_signature` field instead of as a `T..` directive
+/// embedded in the music. Tempo and transpose default to none / 0.
+fn make_song_irealbook(parts: &[&str]) -> Result<IrealSong, ParseError> {
+    debug_assert_eq!(parts.len(), 6);
+    let (title, composer, style, key_raw, timesig_raw, music_raw) =
+        (parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]);
+    let chord_chart = parse_chord_chart(music_raw)?;
+    let key_signature = parse_key(key_raw);
+    // The 7-field `irealb://` path errors on malformed numeric
+    // fields (`InvalidNumericField`); the 6-field `irealbook://`
+    // path mirrors that strict parse rather than silently falling
+    // back to 4/4 — a malformed timesig (`9X`, `0`, empty) is
+    // user-supplied data and should surface as an error per
+    // `.claude/rules/code-style.md` "Silent Fallback" and
+    // `fix-propagation.md` (sister-site parity with the 7-field
+    // numeric-field validation).
+    let time_signature = parse_time_signature(timesig_raw)
+        .map(|(ts, _)| ts)
+        .ok_or_else(|| ParseError::InvalidNumericField(timesig_raw.to_owned()))?;
+    Ok(IrealSong {
+        title: title.trim().to_owned(),
+        composer: nonempty(composer),
+        style: nonempty(style),
+        key_signature,
+        // The chord stream may itself contain a `T..` directive
+        // that overrides the field-level time signature. Prefer the
+        // chord-stream value when it differs from the default,
+        // mirroring the iReal Pro app's behaviour where an inline
+        // `T..` overrides any header default.
+        time_signature: if chord_chart.time_signature != TimeSignature::default() {
+            chord_chart.time_signature
+        } else {
+            time_signature
+        },
+        tempo: None,
+        transpose: 0,
+        sections: chord_chart.sections,
+    })
+}
+
+/// Returns `true` when a lowercased, trimmed comment text looks
+/// like the iReal Pro macro `prefix` — either the prefix is the
+/// entire string, or the prefix is followed by a space / dot
+/// (e.g. `d.c.` → matches `"d.c."`, `"d.c. al coda"`, but NOT
+/// `"d.c.al"` or `"undefined"`). Used by both the parser's
+/// `apply_comment` and the serializer's macro-suppression
+/// heuristic so the two stay in sync.
+pub(crate) fn matches_macro_prefix(text: &str, prefix: &str) -> bool {
+    if !text.starts_with(prefix) {
+        return false;
+    }
+    match text[prefix.len()..].chars().next() {
+        None => true,
+        Some(' ') => true,
+        Some(c) if c.is_alphanumeric() => false,
+        Some(_) => true,
+    }
 }
 
 fn nonempty(s: &str) -> Option<String> {
@@ -413,10 +496,12 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
         }
         if let Some(r) = rest.strip_prefix("Kcl") {
             // "Repeat previous measure and create new measure".
-            // Treat as an empty bar (the SVG renderer paints a `W`
-            // glyph for empty-chord bars; renderers can decide).
+            // Commit the current bar as a repeat-previous-measure
+            // marker bar; the renderer paints a percent-style glyph
+            // in its centre.
             state.finish_bar();
             state.start_new_bar();
+            state.current_bar.repeat_previous = true;
             rest = r;
             continue;
         }
@@ -466,15 +551,19 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
             }
         }
         if let Some(r) = rest.strip_prefix('x') {
-            // "Repeat previous measure" — stays as-is in the
-            // current bar (renderers paint a repeat glyph for the
-            // empty-chord bar after we close it).
+            // "Repeat previous measure" — mark the current bar with
+            // `repeat_previous = true` so the renderer can paint
+            // the percent-style 1-bar simile glyph.
+            state.current_bar.repeat_previous = true;
             rest = r;
             continue;
         }
         if let Some(r) = rest.strip_prefix('r') {
-            // "Repeat previous two measures" — same as `x` for
-            // structural purposes.
+            // "Repeat previous two measures" — structurally encoded
+            // as `repeat_previous` for now (single-bar repeat
+            // glyph). A future extension may distinguish 1-bar from
+            // 2-bar simile via a separate field.
+            state.current_bar.repeat_previous = true;
             rest = r;
             continue;
         }
@@ -484,7 +573,10 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
             continue;
         }
         if let Some(r) = rest.strip_prefix('n') {
-            // "No Chord" — skip; the AST has no NC variant.
+            // "No Chord" — mark the current bar so the renderer can
+            // paint the literal `N.C.` glyph. The bar still consumes
+            // a measure of time but no chord sounds.
+            state.current_bar.no_chord = true;
             rest = r;
             continue;
         }
@@ -565,6 +657,22 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
         // rule applies: `,`, `.`, `:` and the like. Drop one char
         // and continue.
         if matches!(c, ',' | '.' | ':' | ';' | '\u{00a0}') {
+            rest = &rest[c.len_utf8()..];
+            continue;
+        }
+        // `(altchord)` — alternate chord. Iralb encodes alternate
+        // chord choices in parentheses immediately after the
+        // primary chord they modify (e.g. `Em7(E7#9)` reads as
+        // primary `Em7` with alternate `E7#9`). The rendered chart
+        // stacks the alternate as a smaller chord above the
+        // primary.
+        if c == '(' {
+            state.set_in_alternate(true);
+            rest = &rest[c.len_utf8()..];
+            continue;
+        }
+        if c == ')' {
+            state.set_in_alternate(false);
             rest = &rest[c.len_utf8()..];
             continue;
         }
@@ -657,8 +765,10 @@ struct ChartParseState {
     pending_double_open: bool,
     pending_double_close: bool,
     pending_final: bool,
-    pending_ending: Option<Ending>,
-    pending_symbol: Option<MusicalSymbol>,
+    /// `true` between `(` and `)` — the next chord parsed in this
+    /// window attaches as the previous chord's `alternate` rather
+    /// than as a new chord on the bar.
+    in_alternate: bool,
     last_chord: Option<String>,
     time_signature: TimeSignature,
 }
@@ -676,8 +786,21 @@ impl ChartParseState {
         self.pending_section_label = Some(label_for(c));
     }
 
+    fn set_in_alternate(&mut self, on: bool) {
+        self.in_alternate = on;
+    }
+
     fn queue_symbol(&mut self, sym: MusicalSymbol) {
-        self.pending_symbol = Some(sym);
+        // Symbols (`S` segno, `Q` coda, `<D.C.>` / `<D.S.>` /
+        // `<Fine>` macros) label the bar in which the marker
+        // appears. After the most recent `|` / `[` / `{` already
+        // ran `start_new_bar`, `current_bar` IS that bar. Earlier
+        // revisions queued the symbol via `pending_symbol` so the
+        // NEXT `start_new_bar` would consume it onto the next bar
+        // — that pushed `,S,E-7|A7|` onto A7 instead of E-7,
+        // because `S` sits between the bar boundary and the chord
+        // it labels.
+        self.current_bar.symbol = Some(sym);
     }
 
     fn queue_start_repeat(&mut self) {
@@ -701,18 +824,75 @@ impl ChartParseState {
     }
 
     fn queue_ending(&mut self, ending: Ending) {
-        self.pending_ending = Some(ending);
+        // iReal Pro encodes ending markers (`N1`, `N2`) immediately
+        // after a bar boundary (`|`, `}`, `]`), so by the time this
+        // runs, `current_bar` is the freshly-started bar that the
+        // marker labels — set the field directly. Earlier revisions
+        // queued the marker for the NEXT `start_new_bar`, which made
+        // the chord that followed `N1` land on an unlabelled bar
+        // and the next bar boundary commit an empty placeholder
+        // bearing the label.
+        self.current_bar.ending = Some(ending);
     }
 
     fn apply_comment(&mut self, comment: &str) {
-        let lower = comment.to_ascii_lowercase();
-        if lower.contains("d.c.") {
+        let trimmed_lower = comment.trim().to_ascii_lowercase();
+        // Detect the recognised musical-direction macros. The
+        // matched symbol is set directly on `current_bar` (see
+        // `queue_symbol`) — `<D.C.>` / `<D.S.>` / `<Fine>` label
+        // the bar that contains the comment. The full verbatim
+        // text is ALSO saved to `text_comment` so longer captions
+        // like `<D.S. al 2nd ending>` survive the round-trip; the
+        // renderer prefers the descriptive text when present, and
+        // falls back to the canonical symbol when the bar carries
+        // no text.
+        //
+        // Detection anchors at the START of the comment so common
+        // English words that contain the macro substring
+        // (`refine`, `define`, `Configuration`) do NOT trigger.
+        // iReal Pro emits these directives at the head of the
+        // comment by convention; treating them as a substring
+        // match was a false-positive vector.
+        let is_macro = if matches_macro_prefix(&trimmed_lower, "d.c.") {
             self.queue_symbol(MusicalSymbol::DaCapo);
-        } else if lower.contains("d.s.") {
+            true
+        } else if matches_macro_prefix(&trimmed_lower, "d.s.") {
             self.queue_symbol(MusicalSymbol::DalSegno);
-        } else if lower.contains("fine") {
+            true
+        } else if matches_macro_prefix(&trimmed_lower, "fine") {
             self.queue_symbol(MusicalSymbol::Fine);
+            true
+        } else {
+            false
+        };
+        let trimmed = comment.trim();
+        if trimmed.is_empty() {
+            return;
         }
+        // For a bare-macro comment (`<D.C.>`, `<D.S.>`, `<Fine>`)
+        // the canonical symbol fully covers the semantics; saving
+        // the bare text as `text_comment` would round-trip into a
+        // duplicated comment after re-emission. Skip the
+        // text_comment write in that case so:
+        //
+        //   parse(`<D.C.>`)             → bar.symbol = DaCapo
+        //   parse(`<D.C. al coda>`)     → bar.symbol = DaCapo,
+        //                                 text_comment = "D.C. al coda"
+        if is_macro {
+            let collapsed: String = trimmed
+                .chars()
+                .filter(|c| !matches!(c, '.' | ' '))
+                .collect();
+            let collapsed_lower = collapsed.to_ascii_lowercase();
+            if matches!(collapsed_lower.as_str(), "dc" | "ds" | "fine") {
+                return;
+            }
+        }
+        let combined = match self.current_bar.text_comment.take() {
+            Some(prev) => format!("{prev}; {trimmed}"),
+            None => trimmed.to_owned(),
+        };
+        self.current_bar.text_comment = Some(combined);
     }
 
     fn push_chord(&mut self, raw: &str) -> Result<(), ParseError> {
@@ -739,6 +919,16 @@ impl ChartParseState {
             raw.to_owned()
         };
         let chord = parse_chord(&resolved)?;
+        // When inside `(...)` parens, attach the parsed chord as
+        // the previous chord's `alternate` rather than as a new
+        // chord on the bar. Falls back to a regular push if there
+        // is no previous chord (URL malformed — alt without primary).
+        if self.in_alternate {
+            if let Some(prev) = self.current_bar.chords.last_mut() {
+                prev.chord.alternate = Some(Box::new(chord));
+                return Ok(());
+            }
+        }
         // Beat positions are not encoded in the iReal URL format; the
         // renderer distributes chords across beats based on count and
         // time signature. Beat 1 is a structural placeholder here.
@@ -758,23 +948,39 @@ impl ChartParseState {
             self.current_bar.start = BarLine::Double;
             self.pending_double_open = false;
         }
-        if let Some(end) = self.pending_ending.take() {
-            self.current_bar.ending = Some(end);
-        }
-        if let Some(sym) = self.pending_symbol.take() {
-            self.current_bar.symbol = Some(sym);
-        }
     }
 
     fn finish_bar(&mut self) {
-        if self.current_bar.chords.is_empty()
+        let is_empty_placeholder = self.current_bar.chords.is_empty()
             && self.current_bar.ending.is_none()
             && self.current_bar.symbol.is_none()
+            && !self.current_bar.repeat_previous
+            && !self.current_bar.no_chord
+            && self.current_bar.text_comment.is_none()
             && self.current_bar.start == BarLine::Single
-            && self.current_bar.end == BarLine::Single
-        {
-            // Empty placeholder; drop it. iReal's lexer can leave
-            // these between consecutive barlines.
+            && self.current_bar.end == BarLine::Single;
+        if is_empty_placeholder {
+            // The current bar is the empty placeholder iReal's
+            // lexer leaves between consecutive bar boundaries (a
+            // common pattern at song end, e.g. `…G-11XyQKcl  Z`).
+            // Dropping it is the right move BUT first promote any
+            // pending end-barline marker (Double / Final) to the
+            // last committed bar in the current section — those
+            // markers attach to a bar's RIGHT edge, and the
+            // committed bar is the rightmost real bar in the song.
+            if self.pending_final || self.pending_double_close {
+                if let Some(section) = self.current_section.as_mut() {
+                    if let Some(last) = section.bars.last_mut() {
+                        if self.pending_final {
+                            last.end = BarLine::Final;
+                            self.pending_final = false;
+                        } else if self.pending_double_close {
+                            last.end = BarLine::Double;
+                            self.pending_double_close = false;
+                        }
+                    }
+                }
+            }
             return;
         }
         if self.pending_double_close {
@@ -814,16 +1020,18 @@ impl ChartParseState {
 }
 
 fn label_for(c: char) -> SectionLabel {
-    // Lower-case named markers come from iReal's "section name"
-    // affordance; upper-case letters are the canonical jazz-form
-    // labels. Match the names first so a future single-letter name
-    // takes precedence over the catch-all `Letter` arm.
+    // Per the iReal Pro open-protocol spec the app emits six
+    // rehearsal-mark tokens: `*A`, `*B`, `*C`, `*D`, `*i`, `*V`.
+    // Match the named tokens first (#2432 — the spec lists `*V`
+    // uppercase, not `*v`; we accept both). All other uppercase
+    // single letters fall through to `Letter(c)`. Anything else
+    // is `Custom(string)` — same escape hatch as before, but the
+    // matched-named-token vocabulary is now restricted to what
+    // the iReal Pro app actually emits (#2450 — `c` / `b` / `o`
+    // were never emitted, the variants have been removed).
     match c {
-        'i' => SectionLabel::Intro,
-        'v' => SectionLabel::Verse,
-        'c' => SectionLabel::Chorus,
-        'b' => SectionLabel::Bridge,
-        'o' => SectionLabel::Outro,
+        'i' | 'I' => SectionLabel::Intro,
+        'v' | 'V' => SectionLabel::Verse,
         'A'..='Z' => SectionLabel::Letter(c),
         other => SectionLabel::Custom(other.to_string()),
     }
@@ -895,6 +1103,7 @@ fn parse_chord(raw: &str) -> Result<Chord, ParseError> {
         root,
         quality,
         bass,
+        alternate: None,
     })
 }
 
@@ -1113,5 +1322,266 @@ mod tests {
     fn parse_rejects_oversized_input() {
         let large = "x".repeat(MAX_INPUT_BYTES + 1);
         assert!(matches!(parse(&large), Err(ParseError::InputTooLarge(_))));
+    }
+
+    // ---- Macro-prefix detection (anchored, not substring) ----------
+
+    #[test]
+    fn matches_macro_prefix_handles_dotted_form() {
+        assert!(matches_macro_prefix("d.c.", "d.c."));
+        assert!(matches_macro_prefix("d.c. al coda", "d.c."));
+        assert!(matches_macro_prefix("d.s. al 2nd ending", "d.s."));
+        // Bare macro followed by trailing punctuation.
+        assert!(matches_macro_prefix("fine", "fine"));
+        assert!(matches_macro_prefix("fine.", "fine"));
+    }
+
+    #[test]
+    fn matches_macro_prefix_rejects_english_substrings() {
+        // The regression these tests guard against: a substring
+        // `lower.contains("fine")` happily matched `refine`,
+        // `define`, `D.S. defining`, …, leading to spurious
+        // `MusicalSymbol::Fine` on the bar.
+        assert!(!matches_macro_prefix("refine", "fine"));
+        assert!(!matches_macro_prefix("define", "fine"));
+        assert!(!matches_macro_prefix("undefined", "fine"));
+        assert!(!matches_macro_prefix("13 measure lead break", "fine"));
+        // Dotted-form prefixes inside compound text must not fire.
+        assert!(!matches_macro_prefix("a d.c. directive", "d.c."));
+    }
+
+    // ---- Parser behaviour for the new commit's URL tokens ---------
+
+    #[test]
+    fn alternate_chord_parses_to_alternate_field() {
+        // `Em7(E7#9)` — primary E-7 with alt E7#9.
+        let url = "irealbook://Test=A==Style=C=44=[*AE-7(E7#9)|G7]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.chords.len(), 1);
+        let chord = &bar0.chords[0].chord;
+        assert_eq!(chord.root.note, 'E');
+        assert!(chord.alternate.is_some());
+        let alt = chord.alternate.as_ref().unwrap();
+        assert_eq!(alt.root.note, 'E');
+    }
+
+    #[test]
+    fn alternate_chord_with_no_primary_falls_through_to_regular_push() {
+        // Malformed URL `(C)|D|` — alt parens with no preceding
+        // chord. The current contract is to fall through to a
+        // regular push so the chart still renders SOMETHING. Lock
+        // that contract in a test so a future tightening (errors
+        // out instead) is a deliberate decision.
+        let url = "irealbook://Test=A==Style=C=44=[*A(C)|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.chords.len(), 1);
+        assert_eq!(bar0.chords[0].chord.root.note, 'C');
+        assert!(bar0.chords[0].chord.alternate.is_none());
+    }
+
+    #[test]
+    fn n_token_sets_no_chord_flag() {
+        let url = "irealbook://Test=A==Style=C=44=[*An|C|]";
+        let song = parse(url).expect("parse");
+        assert!(song.sections[0].bars[0].no_chord);
+    }
+
+    #[test]
+    fn x_token_sets_repeat_previous_flag() {
+        let url = "irealbook://Test=A==Style=C=44=[*AC| x |D|]";
+        let song = parse(url).expect("parse");
+        assert!(song.sections[0].bars[1].repeat_previous);
+    }
+
+    #[test]
+    fn text_comment_populates_when_not_a_macro() {
+        // `<13 measure lead break>` is a free-form caption — should
+        // land in `text_comment`, NOT trigger any macro symbol.
+        let url = "irealbook://Test=A==Style=C=44=[*A<13 measure lead break>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.text_comment.as_deref(), Some("13 measure lead break"));
+        assert!(
+            bar0.symbol.is_none(),
+            "non-macro caption must not set symbol"
+        );
+    }
+
+    #[test]
+    fn text_comment_with_dc_macro_sets_both_symbol_and_text() {
+        let url = "irealbook://Test=A==Style=C=44=[*A<D.C. al coda>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.text_comment.as_deref(), Some("D.C. al coda"));
+        assert_eq!(bar0.symbol, Some(MusicalSymbol::DaCapo));
+    }
+
+    #[test]
+    fn bare_macro_skips_text_comment_to_avoid_round_trip_dup() {
+        // `<D.C.>` → symbol set, text_comment NOT set. A subsequent
+        // serialize re-emits `<D.C.>` (covered by symbol), so saving
+        // the text would round-trip into a duplicated entry.
+        let url = "irealbook://Test=A==Style=C=44=[*A<D.C.>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.symbol, Some(MusicalSymbol::DaCapo));
+        assert!(bar0.text_comment.is_none());
+    }
+
+    #[test]
+    fn refine_caption_does_not_trigger_fine_macro() {
+        // Regression: substring match treated `refine` as the Fine
+        // macro. Anchored detection must reject it.
+        let url = "irealbook://Test=A==Style=C=44=[*A<refine the chord>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.text_comment.as_deref(), Some("refine the chord"));
+        assert!(
+            bar0.symbol.is_none(),
+            "`refine` must NOT set MusicalSymbol::Fine"
+        );
+    }
+
+    #[test]
+    fn irealbook_six_field_url_parses_with_explicit_timesig() {
+        // 6-field iRealBook URL: Title=Composer=Style=Key=TimeSig=Music.
+        let url = "irealbook://Spain=Corea Chick=Medium Samba=B-=44=[*AC|D|E|F]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.title, "Spain");
+        assert_eq!(song.composer.as_deref(), Some("Corea Chick"));
+        assert_eq!(song.style.as_deref(), Some("Medium Samba"));
+        assert_eq!(song.time_signature.numerator, 4);
+        assert_eq!(song.time_signature.denominator, 4);
+        // Tempo and transpose default in the 6-field path.
+        assert_eq!(song.tempo, None);
+        assert_eq!(song.transpose, 0);
+    }
+
+    #[test]
+    fn irealbook_six_field_rejects_malformed_timesig() {
+        // Sister-site parity with the 7-field path: a malformed
+        // numeric field surfaces as `InvalidNumericField` rather
+        // than silently falling back to a default.
+        let url = "irealbook://Test=A==Style=C=9X=[*AC|D|]";
+        match parse(url) {
+            Err(ParseError::InvalidNumericField(s)) => {
+                assert_eq!(s, "9X");
+            }
+            other => panic!("expected InvalidNumericField, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn irealbook_six_field_inline_t_directive_overrides_field_timesig() {
+        // The 6-field path documents that an inline `T..`
+        // directive in the chord stream overrides the field-level
+        // time signature. Field says 4/4, inline says 3/4 — chord
+        // stream wins.
+        let url = "irealbook://Test=A==Style=C=44=[*AT34C|D|]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.time_signature.numerator, 3);
+        assert_eq!(song.time_signature.denominator, 4);
+    }
+
+    #[test]
+    fn r_token_sets_repeat_previous_flag() {
+        // `r` (repeat previous TWO measures) currently collapses
+        // to the same `repeat_previous = true` flag as `x` / `Kcl`
+        // — locked in until the AST grows a separate 2-bar simile
+        // marker.
+        let url = "irealbook://Test=A==Style=C=44=[*AC| r |D|]";
+        let song = parse(url).expect("parse");
+        assert!(song.sections[0].bars[1].repeat_previous);
+    }
+
+    #[test]
+    fn consecutive_endings_keeps_last() {
+        // `N1N2` on the same bar: `queue_ending` overwrites, so
+        // the second marker wins. This is the documented contract
+        // — a future schema change to track multiple endings on
+        // one bar would need a deliberate API break.
+        let url = "irealbook://Test=A==Style=C=44=[*AN1N2C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.ending.map(|e| e.number()), Some(2));
+    }
+
+    #[test]
+    fn empty_alternate_parens_does_not_corrupt_state() {
+        // `()` between chords is a no-op — the second chord still
+        // pushes as a new primary, not an alternate of the first.
+        let url = "irealbook://Test=A==Style=C=44=[*AC()|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.chords.len(), 1);
+        assert_eq!(bar0.chords[0].chord.root.note, 'C');
+        assert!(bar0.chords[0].chord.alternate.is_none());
+    }
+
+    #[test]
+    fn alternate_chord_with_slash_bass_parses() {
+        // Slash chord inside alt parens — `Em7(C/G)`.
+        let url = "irealbook://Test=A==Style=C=44=[*AE-7(C/G)|D|]";
+        let song = parse(url).expect("parse");
+        let chord = &song.sections[0].bars[0].chords[0].chord;
+        let alt = chord.alternate.as_ref().expect("alternate present");
+        assert_eq!(alt.root.note, 'C');
+        assert_eq!(alt.bass.map(|b| b.note), Some('G'));
+    }
+
+    // ---- Section-label vocabulary (#2432, #2450) ------------------
+
+    #[test]
+    fn section_marker_uppercase_v_maps_to_verse() {
+        // Spec lists `*V` uppercase. Was `Letter('V')` before
+        // #2432.
+        let url = "irealbook://Test=A==Style=C=44=[*VC|D|]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.sections[0].label, SectionLabel::Verse);
+    }
+
+    #[test]
+    fn section_marker_lowercase_v_maps_to_verse() {
+        // Backwards-compat: hand-edited URLs may use `*v`.
+        let url = "irealbook://Test=A==Style=C=44=[*vC|D|]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.sections[0].label, SectionLabel::Verse);
+    }
+
+    #[test]
+    fn section_marker_uppercase_i_maps_to_intro() {
+        let url = "irealbook://Test=A==Style=C=44=[*IC|D|]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.sections[0].label, SectionLabel::Intro);
+    }
+
+    #[test]
+    fn section_marker_lowercase_i_maps_to_intro() {
+        let url = "irealbook://Test=A==Style=C=44=[*iC|D|]";
+        let song = parse(url).expect("parse");
+        assert_eq!(song.sections[0].label, SectionLabel::Intro);
+    }
+
+    #[test]
+    fn legacy_lowercase_cbo_section_markers_decay_to_custom() {
+        // `*c` / `*b` / `*o` are NOT emitted by iReal Pro per the
+        // spec (#2450). The parser previously named them
+        // Chorus/Bridge/Outro — that mapping was removed. They now
+        // fall through to `Custom(string)`, the same path any
+        // unrecognised lowercase letter takes. Locks the new
+        // contract so a future revival of the named arms is a
+        // deliberate API decision.
+        for ch in ['c', 'b', 'o'] {
+            let url = format!("irealbook://Test=A==Style=C=44=[*{ch}C|D|]");
+            let song = parse(&url).expect("parse");
+            assert_eq!(
+                song.sections[0].label,
+                SectionLabel::Custom(ch.to_string()),
+                "expected `*{ch}` to decay to Custom(\"{ch}\"), got {:?}",
+                song.sections[0].label,
+            );
+        }
     }
 }

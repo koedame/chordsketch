@@ -64,6 +64,9 @@ fn build_basic_song() -> IrealSong {
         chords: vec![bar_chord],
         ending: None,
         symbol: Some(MusicalSymbol::Segno),
+        repeat_previous: false,
+        no_chord: false,
+        text_comment: None,
     };
     IrealSong {
         title: "Autumn Leaves".into(),

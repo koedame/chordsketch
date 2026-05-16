@@ -17,6 +17,21 @@ interface DiagramRenderer {
    * aliases).
    */
   chord_diagram_svg: (chord: string, instrument: string) => string | null | undefined;
+  /**
+   * Same as `chord_diagram_svg` but consults song-level
+   * `{define}` directives first. `defines` is an array of
+   * `[name, raw]` tuples (e.g.
+   * `[["Gsus4", "base-fret 1 frets 3 3 0 0 1 3"]]`) extracted
+   * from the AST. Mirrors `chordsketch_chordpro::voicings::lookup_diagram`'s
+   * "song-level defines take priority" rule so user-defined
+   * voicings render in `<ChordDiagram>` exactly like the Rust
+   * HTML renderer's `<section class="chord-diagrams">` block.
+   */
+  chordDiagramSvgWithDefines?: (
+    chord: string,
+    instrument: string,
+    defines: Array<[string, string]>,
+  ) => string | null | undefined;
 }
 
 /** Supported instrument families for chord diagram lookup. */
@@ -54,14 +69,27 @@ export interface ChordDiagramResult {
  */
 export type ChordDiagramWasmLoader = () => Promise<DiagramRenderer>;
 
+// Two-step cast through `unknown` — the wasm module's TS types,
+// when resolved against the `chordsketch-wasm` JS bundle (which is
+// what host bundlers see), do not formally include
+// `chord_diagram_svg`'s typed signature even though the export is
+// present at runtime. The `DiagramRenderer` shape models the
+// runtime contract; consumers that pass their own loader are
+// expected to satisfy it directly.
 const defaultLoader: ChordDiagramWasmLoader = () =>
-  import('@chordsketch/wasm') as Promise<DiagramRenderer>;
+  import('@chordsketch/wasm') as unknown as Promise<DiagramRenderer>;
 
 /**
  * Look up an SVG chord diagram for `(chord, instrument)` via
  * `@chordsketch/wasm`. The WASM module is loaded lazily and
  * cached per hook instance. Results are keyed against the
  * argument tuple so a re-render with the same inputs is a no-op.
+ *
+ * `defines` is an optional list of `[chordName, raw]` tuples
+ * extracted from the song's `{define: …}` directives — pass them
+ * in to make `<ChordDiagram>` honour user-defined voicings
+ * the same way the Rust HTML renderer does. Omitting the
+ * argument keeps the built-in-voicings-only behaviour.
  *
  * ```ts
  * const { svg, loading, error } = useChordDiagram('Am', 'guitar');
@@ -71,6 +99,7 @@ export function useChordDiagram(
   chord: string,
   instrument: ChordDiagramInstrument,
   loader: ChordDiagramWasmLoader = defaultLoader,
+  defines?: ReadonlyArray<readonly [string, string]>,
 ): ChordDiagramResult {
   const [svg, setSvg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,6 +108,12 @@ export function useChordDiagram(
   const rendererRef = useRef<DiagramRenderer | null>(null);
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
+
+  // `defines` is the per-call list of user-defined voicings.
+  // Serialise it to a stable key so the effect doesn't re-fire on
+  // every render when callers pass a fresh array reference with
+  // the same contents.
+  const definesKey = defines ? JSON.stringify(defines) : '';
 
   useEffect(() => {
     let cancelled = false;
@@ -92,7 +127,19 @@ export function useChordDiagram(
           if (cancelled) return;
           rendererRef.current = mod;
         }
-        const result = rendererRef.current.chord_diagram_svg(chord, instrument);
+        const renderer = rendererRef.current;
+        // Prefer the defines-aware export when the host wasm
+        // bundle ships it. Older bundles (pre-#2466 follow-up)
+        // only expose `chord_diagram_svg`, so fall back to that
+        // path — user-defined voicings won't be honoured there,
+        // but at least the built-in lookup still works.
+        const result = renderer.chordDiagramSvgWithDefines
+          ? renderer.chordDiagramSvgWithDefines(
+              chord,
+              instrument,
+              defines ? defines.map(([n, r]) => [n, r]) : [],
+            )
+          : renderer.chord_diagram_svg(chord, instrument);
         if (cancelled) return;
         setSvg(result ?? null);
         setError(null);
@@ -119,7 +166,7 @@ export function useChordDiagram(
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chord, instrument]);
+  }, [chord, instrument, definesKey]);
 
   return { svg, loading, error };
 }

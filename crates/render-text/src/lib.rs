@@ -7,10 +7,11 @@ use chordsketch_chordpro::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, S
 use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::notation::NotationKind;
 use chordsketch_chordpro::render_result::{
-    RenderResult, push_warning, validate_capo, validate_strict_key,
+    RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
-use chordsketch_chordpro::transpose::transpose_chord;
+use chordsketch_chordpro::transpose::{transpose_chord_with_style, transposed_key_prefers_flat};
+use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
 use unicode_width::UnicodeWidthStr;
 
 /// Maximum number of chorus recall directives allowed per song.
@@ -129,6 +130,7 @@ fn render_song_impl(
     let mut auto_diagrams_instrument: Option<String> = None;
 
     validate_capo(&song.metadata, warnings);
+    validate_multiple_capo(song, warnings);
     validate_strict_key(&song.metadata, _config, warnings);
     render_metadata(&song.metadata, &mut output);
 
@@ -149,12 +151,52 @@ fn render_song_impl(
                 if let Some(buf) = chorus_buf.as_mut() {
                     buf.push(line.clone());
                 }
-                render_lyrics(lyrics_line, transpose_offset, &mut output);
+                let prefer_flat = transposed_key_prefers_flat(&song.metadata, transpose_offset);
+                render_lyrics(lyrics_line, transpose_offset, prefer_flat, &mut output);
             }
             Line::Directive(directive) => {
                 // Metadata directives are already rendered via song.metadata;
-                // skip them in the body to avoid duplicate output.
+                // skip them in the body to avoid duplicate output —
+                // except `{key}` / `{tempo}` / `{time}`, which are
+                // `[Nx] [Pos]` per spec (`chordpro.org/directives-
+                // key/`, `…tempo/`, `…time/`): every declaration
+                // applies forward from its position. Emit a positional
+                // marker so a reader can see *where* mid-song meta
+                // changes happen (Phase B of #2454; sister-site to
+                // `crates/render-html/src/lib.rs::render_song_body_into`
+                // and `packages/react/src/chordpro-jsx.tsx`).
                 if directive.kind.is_metadata() {
+                    if let Some(value) = directive
+                        .value
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|v| !v.is_empty())
+                    {
+                        match directive.kind {
+                            DirectiveKind::Key => {
+                                // Typeset `Bb` / `F#` with Unicode
+                                // accidentals — sister-site to the
+                                // React JSX walker + Rust HTML renderer.
+                                output.push(format!("[Key: {}]", unicode_accidentals(value)));
+                            }
+                            DirectiveKind::Tempo => {
+                                // Append the Italian tempo marking
+                                // (`Allegro`, `Andante`, …) when the
+                                // BPM matches a conventional band.
+                                let marking = value
+                                    .parse::<f32>()
+                                    .ok()
+                                    .and_then(tempo_marking_for)
+                                    .map(|m| format!(" ({m})"))
+                                    .unwrap_or_default();
+                                output.push(format!("[Tempo: {value} BPM{marking}]"));
+                            }
+                            DirectiveKind::Time => {
+                                output.push(format!("[Time: {value}]"));
+                            }
+                            _ => {}
+                        }
+                    }
                     continue;
                 }
                 // #1971: handle notation block openers. Route the
@@ -240,10 +282,13 @@ fn render_song_impl(
                     }
                     DirectiveKind::Chorus => {
                         if chorus_recall_count < MAX_CHORUS_RECALLS {
+                            let prefer_flat =
+                                transposed_key_prefers_flat(&song.metadata, transpose_offset);
                             render_chorus_recall(
                                 &directive.value,
                                 &chorus_body,
                                 transpose_offset,
+                                prefer_flat,
                                 &mut output,
                                 warnings,
                             );
@@ -471,7 +516,12 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, output: &mut 
 ///
 /// Alignment is based on Unicode display width (`UnicodeWidthStr::width()`),
 /// which correctly handles full-width CJK characters and other wide glyphs.
-fn render_lyrics(lyrics_line: &LyricsLine, transpose_offset: i8, output: &mut Vec<String>) {
+fn render_lyrics(
+    lyrics_line: &LyricsLine,
+    transpose_offset: i8,
+    prefer_flat: bool,
+    output: &mut Vec<String>,
+) {
     if !lyrics_line.has_chords() {
         output.push(lyrics_line.text());
         return;
@@ -484,7 +534,7 @@ fn render_lyrics(lyrics_line: &LyricsLine, transpose_offset: i8, output: &mut Ve
         let transposed;
         let chord_name = if transpose_offset != 0 {
             if let Some(chord) = &segment.chord {
-                transposed = transpose_chord(chord, transpose_offset);
+                transposed = transpose_chord_with_style(chord, transpose_offset, prefer_flat);
                 transposed.display_name()
             } else {
                 ""
@@ -558,7 +608,24 @@ fn render_directive(
             render_section_header("Tab", &directive.value, output);
         }
         DirectiveKind::StartOfGrid => {
-            render_section_header("Grid", &directive.value, output);
+            // `directive.value` may carry an attribute payload
+            // (`{start_of_grid shape="..." label="Intro"}`) or a
+            // legacy colon-form label (`{start_of_grid: Intro}`).
+            // Prefer the structured `label="..."` attribute when
+            // present, fall back to the colon-form value when it
+            // doesn't contain `=`, otherwise suppress entirely so
+            // the header reads `[Grid]` (not the raw attribute
+            // string). Sister-site to the HTML and PDF renderers.
+            let label_value = directive.value.as_ref().and_then(|v| {
+                if let Some(label) = chordsketch_chordpro::grid::extract_grid_label(v) {
+                    Some(label)
+                } else if !v.contains('=') {
+                    Some(v.clone())
+                } else {
+                    None
+                }
+            });
+            render_section_header("Grid", &label_value, output);
         }
         // Notation block openers (ABC / Lilypond / MusicXML / SVG) are
         // handled in the main render loop's notation-block skip window
@@ -615,13 +682,14 @@ fn render_chorus_recall(
     value: &Option<String>,
     chorus_body: &[Line],
     transpose_offset: i8,
+    prefer_flat: bool,
     output: &mut Vec<String>,
     warnings: &mut Vec<String>,
 ) {
     render_section_header("Chorus", value, output);
     for line in chorus_body {
         match line {
-            Line::Lyrics(lyrics) => render_lyrics(lyrics, transpose_offset, output),
+            Line::Lyrics(lyrics) => render_lyrics(lyrics, transpose_offset, prefer_flat, output),
             Line::Comment(style, text) => render_comment(*style, text, output),
             Line::Empty => output.push(String::new()),
             Line::Directive(d) if !d.kind.is_metadata() => {
@@ -646,14 +714,22 @@ fn render_section_header(label: &str, value: &Option<String>, output: &mut Vec<S
 
 /// Render a comment with its style marker.
 ///
-/// - Normal comments: `(comment text)`
-/// - Italic comments: `(*comment text*)`
-/// - Boxed comments:  `[comment text]`
+/// - Normal comments:    `(comment text)`
+/// - Italic comments:    `(*comment text*)`
+/// - Boxed comments:     `[comment text]`
+/// - Highlight comments: `<<comment text>>`
+///
+/// `{highlight}` shares its text payload with `{comment}` per spec but
+/// renders with a distinct delimiter so the text-pipeline output is
+/// still able to round-trip the original directive choice. Sister-site
+/// to the HTML renderer's `comment--highlight` class and the PDF
+/// renderer's bold-weight variant.
 fn render_comment(style: CommentStyle, text: &str, output: &mut Vec<String>) {
     match style {
         CommentStyle::Normal => output.push(format!("({text})")),
         CommentStyle::Italic => output.push(format!("(*{text}*)")),
         CommentStyle::Boxed => output.push(format!("[{text}]")),
+        CommentStyle::Highlight => output.push(format!("<<{text}>>")),
     }
 }
 
@@ -742,18 +818,93 @@ mod tests {
     }
 
     #[test]
+    fn test_render_comment_highlight() {
+        // `{highlight}` is spec's stronger sibling of `{comment}` —
+        // distinct delimiter so round-trips can recover the directive
+        // choice. Sister to the HTML renderer's `comment--highlight`
+        // class and the PDF renderer's bold variant.
+        let input = "{highlight: Watch out}";
+        let output = render(input);
+        assert_eq!(output, "<<Watch out>>\n");
+    }
+
+    #[test]
     fn test_render_empty_lines_preserved() {
         let input = "Line one\n\nLine two";
         let output = render(input);
         assert_eq!(output, "Line one\n\nLine two\n");
     }
 
+    /// Regression for the parallel-review High finding: render
+    /// surfaces must apply song-wide canonical chord spelling
+    /// (sister-site to the wasm path's `transpose(song, …)`),
+    /// not the legacy per-chord style preservation. C +3 → Eb
+    /// (flat side); a source-side `D#` chord becomes `Gb`.
+    #[test]
+    fn test_transposed_chord_uses_canonical_spelling() {
+        let song = chordsketch_chordpro::parse("{key: C}\n[D#]hi").unwrap();
+        let result =
+            render_song_with_warnings(&song, 3, &chordsketch_chordpro::config::Config::defaults());
+        // The flat-side spelling Gb should appear; the
+        // sharp-side F# should NOT (the source spelled D# but
+        // the song lands in Eb-major, so flats are canonical).
+        assert!(
+            result.output.contains("G\u{266D}") || result.output.contains("Gb"),
+            "expected flat-side `Gb` chord; got: {}",
+            result.output
+        );
+        assert!(
+            !result.output.contains("F#"),
+            "must not emit sharp-side `F#` for a flat-side song; got: {}",
+            result.output
+        );
+    }
+
     #[test]
     fn test_render_metadata_not_duplicated() {
-        // Metadata directives like {artist} should NOT appear in body text
+        // Header-only metadata (`{artist}`) is still suppressed from
+        // the body — only `{title}` / `{subtitle}` make it into the
+        // text-render header today (see `render_metadata`). `{key}`
+        // / `{tempo}` / `{time}` are now surfaced *inline* at their
+        // source position because the ChordPro spec marks them as
+        // `[Nx] [Pos]` — every declaration applies forward from
+        // where it appears. Phase B of #2454.
         let input = "{title: Test}\n{artist: Someone}\n{key: G}\nLyrics here";
         let output = render(input);
-        assert_eq!(output, "Test\nLyrics here\n");
+        assert_eq!(output, "Test\n[Key: G]\nLyrics here\n");
+    }
+
+    /// Inline marker for every `[Pos]` metadata directive — sister-site
+    /// to the React JSX walker (`packages/react/src/chordpro-jsx.tsx`)
+    /// and the Rust HTML renderer (`crates/render-html/src/lib.rs`)
+    /// per `.claude/rules/renderer-parity.md`.
+    #[test]
+    fn test_inline_meta_markers_at_position() {
+        let input = "[G]first\n{tempo: 120}\n[C]middle\n{time: 6/8}\n[D]end";
+        let output = render(input);
+        assert!(
+            output.contains("[Tempo: 120 BPM (Allegro)]"),
+            "expected inline tempo marker with Italian marking; got:\n{output}"
+        );
+        assert!(
+            output.contains("[Time: 6/8]"),
+            "expected inline time marker; got:\n{output}"
+        );
+        // Markers appear in source order, not collapsed.
+        let tempo_idx = output.find("[Tempo:").unwrap();
+        let time_idx = output.find("[Time:").unwrap();
+        assert!(tempo_idx < time_idx, "markers must follow source order");
+    }
+
+    /// Empty / whitespace-only values silently drop the marker
+    /// instead of emitting a confusing "[Key: ]" empty bracket.
+    #[test]
+    fn test_inline_meta_marker_skipped_for_empty_value() {
+        let output = render("{key:}\n[G]hi");
+        assert!(
+            !output.contains("[Key:"),
+            "empty {{key}} must not produce a marker; got:\n{output}"
+        );
     }
 
     #[test]

@@ -274,12 +274,36 @@ pub struct Metadata {
     pub album: Option<String>,
     /// Year or date, from `{year}`.
     pub year: Option<String>,
-    /// Musical key, from `{key}`.
+    /// Musical key, from `{key}`. Holds the *last* declared key —
+    /// retained alongside [`keys`](Self::keys) so single-key callers
+    /// keep working unchanged. The spec defines `{key}` as
+    /// `[Nx] [Pos]` (multiple specifications, each applies forward),
+    /// so [`keys`](Self::keys) is the authoritative list — this
+    /// field is a convenience view onto its tail.
     pub key: Option<String>,
-    /// Tempo indication, from `{tempo}`.
+    /// Every `{key}` value declared in the song, in source order.
+    /// ChordPro spec §`{key}`: "Multiple key specifications are
+    /// possible, each specification is assumed to apply from where
+    /// it was specified." Renderers join this list with `"; "` in
+    /// the header to mirror Perl's `metadata.separator` default
+    /// (`lib/ChordPro/Song.pm::dir_meta` accumulator).
+    pub keys: Vec<String>,
+    /// Tempo indication, from `{tempo}`. Last-value view — see
+    /// [`tempos`](Self::tempos) for the full ordered list.
     pub tempo: Option<String>,
-    /// Time signature, from `{time}`.
+    /// Every `{tempo}` value declared in the song, in source order.
+    /// ChordPro spec §`{tempo}`: "Multiple specifications are
+    /// possible, each specification applies from where it appears
+    /// in the song."
+    pub tempos: Vec<String>,
+    /// Time signature, from `{time}`. Last-value view — see
+    /// [`times`](Self::times) for the full ordered list.
     pub time: Option<String>,
+    /// Every `{time}` value declared in the song, in source order.
+    /// ChordPro spec §`{time}`: "Multiple signatures are possible,
+    /// each specification is assumed to apply from where it was
+    /// specified."
+    pub times: Vec<String>,
     /// Capo position, from `{capo}`.
     pub capo: Option<String>,
     /// Sortable title, from `{sorttitle}`.
@@ -396,12 +420,16 @@ pub enum Line {
 
 /// The visual style of a comment, determined by the directive that produced it.
 ///
-/// ChordPro supports three comment directives, each with a different rendering
-/// intent:
+/// ChordPro supports four comment-family directives, each with a different
+/// rendering intent:
 ///
 /// - `{comment}` / `{c}` — normal comment (typically highlighted or boxed)
 /// - `{comment_italic}` / `{ci}` — italic comment
 /// - `{comment_box}` / `{cb}` — boxed comment
+/// - `{highlight}` — alternate to `{comment}` per
+///   <https://www.chordpro.org/chordpro/directives-comment/>; renderers
+///   typically emphasise more strongly than `Normal` (yellow background,
+///   bold weight, etc.).
 ///
 /// File-level `#` comments use [`CommentStyle::Normal`] as a default.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -412,6 +440,11 @@ pub enum CommentStyle {
     Italic,
     /// A boxed comment, from `{comment_box}` / `{cb}`.
     Boxed,
+    /// A highlighted comment, from `{highlight}`. Per spec this is an
+    /// "alternative to comment", semantically the same line of text but
+    /// with stronger visual emphasis. Renderers map it to a distinct CSS
+    /// class / PDF style so the consumer can tell the two apart.
+    Highlight,
 }
 
 // ---------------------------------------------------------------------------
@@ -1052,6 +1085,13 @@ pub enum DirectiveKind {
     CommentItalic,
     /// `{comment_box}` / `{cb}` — a boxed comment.
     CommentBox,
+    /// `{highlight}` — an alternative to `{comment}` per
+    /// <https://www.chordpro.org/chordpro/directives-comment/>. Same
+    /// line-of-text payload as the other comment-family directives;
+    /// renderers map it to a stronger visual treatment than `Comment`
+    /// (yellow background, bold weight, etc.) so the consumer can tell
+    /// the two apart.
+    Highlight,
 
     // -- Environment (section) directives -----------------------------------
     /// `{start_of_chorus}` / `{soc}` — begins a chorus section.
@@ -1110,6 +1150,19 @@ pub enum DirectiveKind {
     ColumnBreak,
     /// `{columns}` / `{col}` — sets the number of columns.
     Columns,
+    /// `{pagetype}` — legacy ChordPro page-size directive.
+    ///
+    /// Recognised values are `a4` and `letter`. The official ChordPro
+    /// reference implementation marks this directive as
+    /// **"Not implemented. Use the configuration files instead."**
+    /// (see <https://www.chordpro.org/chordpro/directives-pagetype_legacy/>).
+    /// ChordSketch follows the same policy: the directive is parsed
+    /// so the value survives round-trips and is visible to consumers
+    /// that inspect the AST, but every renderer treats it as a no-op
+    /// — page size is controlled through the renderer's configuration
+    /// path. Future implementation would amount to mapping the value
+    /// onto `chordsketch_render_pdf`'s page-size setting.
+    Pagetype,
 
     // -- Extended font, size, and color directives --------------------------
     /// `{titlefont}` — sets the font for song titles.
@@ -1268,10 +1321,14 @@ impl DirectiveKind {
             // Song boundary
             "new_song" | "ns" => Self::NewSong,
 
-            // Formatting (comments)
+            // Formatting (comments). `{highlight}` is a comment-family
+            // directive per https://www.chordpro.org/chordpro/directives-comment/
+            // ("an alternative to comment") — same line-of-text payload, just
+            // a different visual treatment.
             "comment" | "c" => Self::Comment,
             "comment_italic" | "ci" => Self::CommentItalic,
             "comment_box" | "cb" => Self::CommentBox,
+            "highlight" => Self::Highlight,
 
             // Environment (sections)
             "start_of_chorus" | "soc" => Self::StartOfChorus,
@@ -1316,6 +1373,11 @@ impl DirectiveKind {
             "new_physical_page" | "npp" => Self::NewPhysicalPage,
             "column_break" | "colb" => Self::ColumnBreak,
             "columns" | "col" => Self::Columns,
+            // Legacy page-size directive — recognised so it survives
+            // round-trips even though renderers currently no-op it
+            // (matches the official Perl reference's "Not implemented"
+            // stance).
+            "pagetype" => Self::Pagetype,
 
             // Font, size, and color
             "titlefont" => Self::TitleFont,
@@ -1457,6 +1519,7 @@ impl DirectiveKind {
             Self::Comment => "comment",
             Self::CommentItalic => "comment_italic",
             Self::CommentBox => "comment_box",
+            Self::Highlight => "highlight",
             Self::StartOfChorus => "start_of_chorus",
             Self::EndOfChorus => "end_of_chorus",
             Self::StartOfVerse => "start_of_verse",
@@ -1513,6 +1576,7 @@ impl DirectiveKind {
             Self::NewPhysicalPage => "new_physical_page",
             Self::ColumnBreak => "column_break",
             Self::Columns => "columns",
+            Self::Pagetype => "pagetype",
             Self::Define => "define",
             Self::ChordDirective => "chord",
             Self::Diagrams => "diagrams",
@@ -1569,9 +1633,17 @@ impl DirectiveKind {
     }
 
     /// Returns `true` if this is a comment/formatting directive.
+    ///
+    /// `{highlight}` counts as a comment-family member per spec
+    /// (<https://www.chordpro.org/chordpro/directives-comment/>) — it
+    /// shares the line-of-text payload with `{comment}` /
+    /// `{comment_italic}` / `{comment_box}` and is parsed the same way.
     #[must_use]
     pub fn is_comment(&self) -> bool {
-        matches!(self, Self::Comment | Self::CommentItalic | Self::CommentBox)
+        matches!(
+            self,
+            Self::Comment | Self::CommentItalic | Self::CommentBox | Self::Highlight
+        )
     }
 
     /// Returns `true` if this is a font, size, or color formatting directive.
@@ -2100,6 +2172,30 @@ mod tests {
             DirectiveKind::CommentBox
         );
         assert_eq!(DirectiveKind::from_name("cb"), DirectiveKind::CommentBox);
+        // `{highlight}` is the spec's comment-family sibling without a
+        // short alias.
+        assert_eq!(
+            DirectiveKind::from_name("highlight"),
+            DirectiveKind::Highlight
+        );
+        assert!(DirectiveKind::Highlight.is_comment());
+    }
+
+    #[test]
+    fn directive_kind_from_name_pagetype() {
+        // Legacy page-size directive — recognised so it survives
+        // round-trips even though renderers no-op it (per the official
+        // "Not implemented" stance at
+        // https://www.chordpro.org/chordpro/directives-pagetype_legacy/).
+        assert_eq!(
+            DirectiveKind::from_name("pagetype"),
+            DirectiveKind::Pagetype
+        );
+        assert_eq!(DirectiveKind::Pagetype.canonical_name(), "pagetype");
+        // Not a comment, not metadata, not an environment.
+        assert!(!DirectiveKind::Pagetype.is_comment());
+        assert!(!DirectiveKind::Pagetype.is_metadata());
+        assert!(!DirectiveKind::Pagetype.is_environment());
     }
 
     #[test]

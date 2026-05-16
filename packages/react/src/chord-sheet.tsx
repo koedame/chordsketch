@@ -1,11 +1,18 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 
+import { renderChordproAst } from './chordpro-jsx';
+import type { ChordRepositionEvent } from './chord-source-edit';
+import type { ChordDiagramInstrument } from './use-chord-diagram';
 import {
   type ChordRenderFormat,
   type ChordRenderOptions,
   type ChordWasmLoader,
   useChordRender,
 } from './use-chord-render';
+import {
+  type ChordproWasmLoader,
+  useChordproAst,
+} from './use-chordpro-ast';
 
 /** Props accepted by {@link ChordSheet}. */
 export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
@@ -13,6 +20,59 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
   source: string;
   /** Semitone transposition offset forwarded to the renderer. */
   transpose?: number;
+  /**
+   * Append a chord-diagrams grid at the end of the rendered
+   * song. When set, every unique chord in the lyrics + every
+   * chord declared via `{define}` gets a fretboard / keyboard
+   * diagram via the in-built voicing database. Honours
+   * `{diagrams: off}` / `{no_diagrams}` directives in the
+   * source. Pass `'guitar'` / `'ukulele'` / `'piano'` etc.;
+   * defaults to `'guitar'` when the option is set without a
+   * specific instrument. Only consumed by `format="html"`.
+   */
+  chordDiagramsInstrument?: ChordDiagramInstrument;
+  /**
+   * 1-indexed source line that should be highlighted in the
+   * rendered preview. Forwarded to the AST walker
+   * (`renderChordproAst`'s `activeSourceLine` option), which tags
+   * every body element with `data-source-line` and applies a
+   * `line--active` modifier to the matching element. Pair with
+   * `<SourceEditor>`'s `onCaretLineChange` callback to keep the
+   * preview's highlighted line in sync with the editor caret.
+   * Only consumed by `format="html"` — the text branch passes
+   * through unchanged.
+   */
+  activeSourceLine?: number;
+  /**
+   * 0-indexed caret column inside the active source line. Paired
+   * with `caretLineLength`, drives the preview-side
+   * `<span class="caret-marker">` overlay positioned by
+   * `column / lineLength`. Omit either to fall back to plain
+   * line-level highlighting.
+   */
+  caretColumn?: number;
+  /** Total character length of the active source line. */
+  caretLineLength?: number;
+  /**
+   * Optional callback enabling drag-and-drop chord
+   * repositioning in the preview. When set, each rendered
+   * `.chord` becomes a drag source and each `.lyrics` row a
+   * drop target; on drop, this callback receives source-
+   * coordinate info about the move (origin line/column,
+   * destination line + lyrics character offset) and the user's
+   * Alt-modifier state (`copy: true` for copy, `false` for
+   * move).
+   *
+   * The consumer is responsible for mutating the editor source
+   * — typically by feeding the event into
+   * `applyChordReposition` (also exported from this package)
+   * and pushing the result back through whatever surface owns
+   * the source string. Omit to disable drag-and-drop.
+   *
+   * Only consumed by `format="html"`; the text branch passes
+   * through unchanged.
+   */
+  onChordReposition?: (event: ChordRepositionEvent) => void;
   /**
    * Configuration preset name (e.g. `"guitar"`, `"ukulele"`) or an
    * inline RRJSON configuration string.
@@ -43,12 +103,28 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
    */
   errorFallback?: ((error: Error) => ReactNode) | null;
   /**
-   * Test-only WASM loader override. Production callers never need
-   * to supply this — the default lazy-loads `@chordsketch/wasm`.
+   * Test-only WASM loader override applied to the
+   * `format="text"` branch (which still uses the wasm
+   * `render_text` string surface). Production callers never
+   * need to supply this — the default lazy-loads
+   * `@chordsketch/wasm`.
    *
    * @internal
    */
   wasmLoader?: ChordWasmLoader;
+  /**
+   * Test-only WASM loader override applied to the
+   * `format="html"` branch (which now drives `parseChordpro`
+   * via the AST → JSX walker per ADR-0017). Distinct from
+   * {@link wasmLoader} because the two branches consume
+   * different parts of the wasm surface — a stub for one is
+   * not generally usable for the other.
+   *
+   * Production callers never need to supply this.
+   *
+   * @internal
+   */
+  astWasmLoader?: ChordproWasmLoader;
 }
 
 function defaultErrorFallback(error: Error): ReactNode {
@@ -69,6 +145,15 @@ function defaultErrorFallback(error: Error): ReactNode {
  * <ChordSheet source={chordproSource} transpose={0} />
  * ```
  *
+ * Render path (per ADR-0017):
+ * - `format="html"` parses with `parseChordpro` and renders the
+ *   AST directly via the chordpro-jsx walker — pure React DOM,
+ *   no HTML-string injection, no `<style>` block on the React
+ *   surface.
+ * - `format="text"` retains the wasm `render_text` path because
+ *   ChordPro's text rendering is column-aligned plain output the
+ *   AST walker would have to re-derive.
+ *
  * Error handling: parse or render errors surface via the
  * `errorFallback` prop (default: inline `role="alert"`); the
  * component does not throw. The previous successful output stays
@@ -83,20 +168,75 @@ export function ChordSheet({
   loadingFallback,
   errorFallback = defaultErrorFallback,
   wasmLoader,
+  astWasmLoader,
+  chordDiagramsInstrument,
+  activeSourceLine,
+  caretColumn,
+  caretLineLength,
+  onChordReposition,
   className,
   ...divProps
 }: ChordSheetProps): JSX.Element {
-  const renderOptions: ChordRenderOptions = { transpose, config };
-  const { output, loading, error } = useChordRender(source, format, renderOptions, wasmLoader);
-
   const wrapperClass = ['chordsketch-sheet', className].filter(Boolean).join(' ');
+
+  if (format === 'text') {
+    return (
+      <ChordSheetTextBranch
+        source={source}
+        transpose={transpose}
+        config={config}
+        loadingFallback={loadingFallback}
+        errorFallback={errorFallback}
+        wasmLoader={wasmLoader}
+        wrapperClass={wrapperClass}
+        divProps={divProps}
+      />
+    );
+  }
+
+  return (
+    <ChordSheetAstBranch
+      source={source}
+      transpose={transpose}
+      config={config}
+      loadingFallback={loadingFallback}
+      errorFallback={errorFallback}
+      wasmLoader={astWasmLoader}
+      chordDiagramsInstrument={chordDiagramsInstrument}
+      activeSourceLine={activeSourceLine}
+      caretColumn={caretColumn}
+      caretLineLength={caretLineLength}
+      onChordReposition={onChordReposition}
+      wrapperClass={wrapperClass}
+      divProps={divProps}
+    />
+  );
+}
+
+interface BranchProps {
+  source: string;
+  transpose: number | undefined;
+  config: string | undefined;
+  loadingFallback: ReactNode | undefined;
+  errorFallback: ((error: Error) => ReactNode) | null;
+  wrapperClass: string;
+  divProps: Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'className'>;
+}
+
+function ChordSheetTextBranch({
+  source,
+  transpose,
+  config,
+  loadingFallback,
+  errorFallback,
+  wasmLoader,
+  wrapperClass,
+  divProps,
+}: BranchProps & { wasmLoader: ChordWasmLoader | undefined }): JSX.Element {
+  const renderOptions: ChordRenderOptions = { transpose, config };
+  const { output, loading, error } = useChordRender(source, 'text', renderOptions, wasmLoader);
   const errorNode = error !== null && errorFallback !== null ? errorFallback(error) : null;
 
-  // Nothing rendered yet AND still loading — show the loading
-  // fallback if one was supplied. `loadingFallback === undefined`
-  // (the default) falls through to an empty wrapper so consumers
-  // that pass no fallback do not see a layout shift when loading
-  // eventually resolves.
   if (output === null) {
     return (
       <div {...divProps} className={wrapperClass} aria-busy={loading || undefined}>
@@ -106,43 +246,73 @@ export function ChordSheet({
     );
   }
 
-  if (format === 'text') {
-    // Plain text lands inside a `<pre>` — no HTML parsing, no
-    // sanitiser needed, preserves the renderer's column alignment.
+  return (
+    <div {...divProps} className={wrapperClass} aria-busy={loading || undefined}>
+      {errorNode}
+      <pre className="chordsketch-sheet__text">{output}</pre>
+    </div>
+  );
+}
+
+function ChordSheetAstBranch({
+  source,
+  transpose,
+  config,
+  loadingFallback,
+  errorFallback,
+  wasmLoader,
+  chordDiagramsInstrument,
+  activeSourceLine,
+  caretColumn,
+  caretLineLength,
+  onChordReposition,
+  wrapperClass,
+  divProps,
+}: BranchProps & {
+  wasmLoader: ChordproWasmLoader | undefined;
+  chordDiagramsInstrument: ChordDiagramInstrument | undefined;
+  activeSourceLine: number | undefined;
+  caretColumn: number | undefined;
+  caretLineLength: number | undefined;
+  onChordReposition: ((event: ChordRepositionEvent) => void) | undefined;
+}): JSX.Element {
+  const { ast, loading, error, transposedKey } = useChordproAst(
+    source,
+    { transpose, config },
+    wasmLoader,
+  );
+  const errorNode = error !== null && errorFallback !== null ? errorFallback(error) : null;
+
+  if (ast === null) {
     return (
       <div {...divProps} className={wrapperClass} aria-busy={loading || undefined}>
         {errorNode}
-        <pre className="chordsketch-sheet__text">{output}</pre>
+        {loading && loadingFallback !== undefined ? loadingFallback : null}
       </div>
     );
   }
 
-  // HTML output is produced by `chordsketch-render-html`, which
-  // escapes all user-supplied ChordPro tokens (titles, lyrics,
-  // chord names, attributes, inline markup, custom section labels)
-  // via `escape_xml` before emitting markup. For typical
-  // first-party ChordPro content the output is therefore safe to
-  // inject via `dangerouslySetInnerHTML`. Delegate sections
-  // (`{start_of_abc}`, `{start_of_ly}`, `{start_of_musicxml}`,
-  // `{start_of_textblock}`) are the documented exception — their
-  // bodies are passed through raw per `chordsketch-render-html`'s
-  // module-level security note. Hosts that accept untrusted
-  // ChordPro SHOULD combine this component with a Content Security
-  // Policy that restricts inline scripts and external resource
-  // loads, or switch to `format="text"` (zero-HTML preview).
-  //
-  // The error node (if any) lives in a sibling element rather than
-  // being stringified into the HTML branch, so a consumer-supplied
-  // JSX `errorFallback` renders identically under both `format`
-  // values.
+  // AST walker emits a `<div class="song">` root matching the
+  // `chordsketch-render-html` DOM contract so existing CSS keeps
+  // working unchanged. Pure React reconciliation owns the tree
+  // — no innerHTML escape hatch on this surface. The
+  // `transposedKey` plumbed through from `parseChordproWithWarnings*`
+  // drives the "Original Key X · Play Key Y" header path.
   return (
     <div {...divProps} className={wrapperClass} aria-busy={loading || undefined}>
       {errorNode}
-      <div
-        className="chordsketch-sheet__content"
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: output }}
-      />
+      <div className="chordsketch-sheet__content">
+        {renderChordproAst(ast, {
+          transposedKey,
+          chordDiagrams: chordDiagramsInstrument
+            ? { instrument: chordDiagramsInstrument }
+            : null,
+          activeSourceLine,
+          caretColumn,
+          caretLineLength,
+          onChordReposition,
+        })}
+      </div>
     </div>
   );
 }

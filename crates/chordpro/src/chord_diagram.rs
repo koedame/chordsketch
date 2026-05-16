@@ -252,6 +252,24 @@ const TOP_MARGIN: f32 = 30.0;
 const LEFT_MARGIN: f32 = 20.0;
 const DOT_RADIUS: f32 = 5.0;
 const OPEN_RADIUS: f32 = 4.0;
+/// Faint inlay-marker dot radius. Smaller and lighter than the
+/// finger-position dots so it sits behind the chord shape
+/// without competing for attention.
+const POSITION_DOT_RADIUS: f32 = 2.2;
+
+/// Fretboard position-marker frets for the given instrument
+/// (number of strings). Western guitar (6 strings) has inlays
+/// at 3, 5, 7, 9, 12, 15, 17, 19, 21. Ukulele (4 strings) has
+/// inlays at 3, 5, 7, 10, 12, 15. Other string counts get no
+/// inlays — chord diagrams for non-standard instruments stay
+/// clean.
+fn position_marker_frets(strings: usize) -> &'static [u8] {
+    match strings {
+        6 => &[3, 5, 7, 9, 12, 15, 17, 19, 21],
+        4 => &[3, 5, 7, 10, 12, 15],
+        _ => &[],
+    }
+}
 
 /// Render a chord diagram as an inline SVG string.
 #[must_use]
@@ -283,7 +301,11 @@ pub fn render_svg(data: &DiagramData) -> String {
         crate::escape::escape_xml(data.title())
     ));
 
-    // Nut or base-fret indicator
+    // Nut or base-fret indicator. When the diagram starts above
+    // fret 1 we label it with just the fret number (no "fr"
+    // suffix) — the position marker dots below already imply
+    // "this is fret N on a real fretboard", so the bare integer
+    // is enough.
     let nut_y = TOP_MARGIN;
     if data.base_fret == 1 {
         svg.push_str(&format!(
@@ -294,11 +316,56 @@ pub fn render_svg(data: &DiagramData) -> String {
     } else {
         svg.push_str(&format!(
             "<text x=\"{}\" y=\"{}\" text-anchor=\"end\" \
-             font-family=\"sans-serif\" font-size=\"10\">{}fr</text>\n",
+             font-family=\"sans-serif\" font-size=\"10\">{}</text>\n",
             LEFT_MARGIN - 4.0,
             nut_y + CELL_H / 2.0 + 3.0,
             data.base_fret
         ));
+    }
+
+    // Fretboard position-marker inlays (faint dots between the
+    // strings, at the conventional fingerboard inlay frets).
+    // Drawn BEFORE the strings + finger dots so the inlays sit
+    // behind the visible chord diagram. The chosen frets follow
+    // standard western guitar / ukulele inlay layouts (3, 5, 7,
+    // 9, 12, 15, 17, 19, 21 for guitar; 3, 5, 7, 10, 12, 15 for
+    // ukulele). The octave fret (12) gets a double dot on both
+    // instruments to match real fretboard markers.
+    let position_frets = position_marker_frets(num_strings);
+    let center_x = LEFT_MARGIN + grid_w / 2.0;
+    for &marker_fret in position_frets {
+        // `marker_fret` is the absolute fret number on the real
+        // fretboard. Convert to a row within the diagram by
+        // subtracting `base_fret` (the topmost visible fret) and
+        // adding 1 — so an Am chord at fret 1 shows the dot at
+        // visible row 3 / 5 / 7 etc., while a barre chord with
+        // base_fret = 5 shows the same absolute fret 7 inlay at
+        // visible row 3.
+        if (marker_fret as i32) < data.base_fret as i32 {
+            continue;
+        }
+        let row = (marker_fret as i32) - (data.base_fret as i32) + 1;
+        if row < 1 || row > num_frets as i32 {
+            continue;
+        }
+        let y = nut_y + (row as f32 - 0.5) * CELL_H;
+        if marker_fret == 12 {
+            // Octave: double dot. Place on either side of the
+            // diagram's horizontal centre.
+            svg.push_str(&format!(
+                "<circle cx=\"{cx1}\" cy=\"{y}\" r=\"{POSITION_DOT_RADIUS}\" \
+                 fill=\"#D4D1D6\" class=\"position-marker\"/>\n\
+                 <circle cx=\"{cx2}\" cy=\"{y}\" r=\"{POSITION_DOT_RADIUS}\" \
+                 fill=\"#D4D1D6\" class=\"position-marker\"/>\n",
+                cx1 = center_x - CELL_W * 0.55,
+                cx2 = center_x + CELL_W * 0.55,
+            ));
+        } else {
+            svg.push_str(&format!(
+                "<circle cx=\"{center_x}\" cy=\"{y}\" r=\"{POSITION_DOT_RADIUS}\" \
+                 fill=\"#D4D1D6\" class=\"position-marker\"/>\n"
+            ));
+        }
     }
 
     // Vertical lines (strings)
@@ -770,7 +837,111 @@ mod tests {
             fingers: vec![],
         };
         let svg = render_svg(&data);
-        assert!(svg.contains("7fr"));
+        // Bare fret-number label (no `fr` suffix) for diagrams
+        // that start above fret 1.
+        assert!(svg.contains(">7</text>"));
+        assert!(!svg.contains("7fr"));
+    }
+
+    #[test]
+    fn position_marker_frets_table_lookup() {
+        // Guitar (6 strings) — standard western inlay layout.
+        assert_eq!(position_marker_frets(6), &[3, 5, 7, 9, 12, 15, 17, 19, 21]);
+        // Ukulele (4 strings) — simpler inlay set.
+        assert_eq!(position_marker_frets(4), &[3, 5, 7, 10, 12, 15]);
+        // Non-standard string counts get no inlays.
+        assert!(position_marker_frets(5).is_empty());
+        assert!(position_marker_frets(7).is_empty());
+        assert!(position_marker_frets(12).is_empty());
+        assert!(position_marker_frets(0).is_empty());
+    }
+
+    #[test]
+    fn test_render_svg_guitar_has_position_markers_for_visible_inlay_frets() {
+        // A standard nut-position chord (base_fret=1, 5 visible
+        // frets) shows the fret-3 and fret-5 inlay dots.
+        let data = DiagramData {
+            name: "C".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 3, 2, 0, 1, 0],
+            fingers: vec![],
+        };
+        let svg = render_svg(&data);
+        assert!(
+            svg.contains("class=\"position-marker\""),
+            "expected at least one position-marker dot; got: {svg}"
+        );
+        // No double dot at the nut-position window (fret 12 is
+        // out of range).
+        let count = svg.matches("class=\"position-marker\"").count();
+        // Inlay frets in [1..=5] = 3 and 5 → 2 markers.
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_render_svg_guitar_position_markers_offset_by_base_fret() {
+        // A barre chord at fret 7 with 5 visible frets sees frets
+        // 7, 8, 9, 10, 11 — inlays at 7 and 9.
+        let data = DiagramData {
+            name: "Bm".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 7,
+            frets: vec![1, 1, 1, 1, 1, 1],
+            fingers: vec![],
+        };
+        let svg = render_svg(&data);
+        let count = svg.matches("class=\"position-marker\"").count();
+        assert_eq!(
+            count, 2,
+            "expected fret-7 and fret-9 inlays; got svg: {svg}"
+        );
+    }
+
+    #[test]
+    fn test_render_svg_guitar_double_dot_at_octave_fret_12() {
+        // A diagram that includes fret 12 should show TWO
+        // position-marker dots on that row (double inlay).
+        let data = DiagramData {
+            name: "C".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 9, // visible frets 9..=13 include 12
+            frets: vec![-1, -1, -1, -1, -1, -1],
+            fingers: vec![],
+        };
+        let svg = render_svg(&data);
+        let count = svg.matches("class=\"position-marker\"").count();
+        // Inlay frets 9 and 12 are visible. 9 = single dot,
+        // 12 = double dot → total 3 dots.
+        assert_eq!(
+            count, 3,
+            "expected 1 single + 2 (double at 12); got svg: {svg}"
+        );
+    }
+
+    #[test]
+    fn test_render_svg_ukulele_position_markers() {
+        // Ukulele uses 4 strings — inlay frets are 3, 5, 7, 10,
+        // 12, 15. Different from guitar.
+        let data = DiagramData {
+            name: "C".to_string(),
+            display_name: None,
+            strings: 4,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![0, 0, 0, 3],
+            fingers: vec![],
+        };
+        let svg = render_svg(&data);
+        let count = svg.matches("class=\"position-marker\"").count();
+        // Inlay frets in [1..=5] for ukulele = 3 and 5 → 2 markers.
+        assert_eq!(count, 2);
     }
 
     #[test]
@@ -1069,7 +1240,10 @@ mod tests {
         let data = DiagramData::from_raw("X", "base-fret 1000 frets 1 2 3 4 5 6", 6).unwrap();
         assert_eq!(data.base_fret, 24);
         let svg = render_svg(&data);
-        assert!(svg.contains("24fr"));
+        // The base-fret label dropped the `fr` suffix — bare
+        // integer only.
+        assert!(svg.contains(">24</text>"));
+        assert!(!svg.contains("24fr"));
     }
 
     #[test]

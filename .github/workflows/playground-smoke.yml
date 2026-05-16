@@ -67,13 +67,44 @@ jobs:
           cache: 'npm'
           cache-dependency-path: packages/playground/package-lock.json
 
-      - name: Build @chordsketch/wasm
+      - name: Build @chordsketch/wasm (lean)
         run: npm run build
         working-directory: packages/npm
+
+      # `@chordsketch/wasm-export` carries the heavy (PDF / PNG)
+      # renderer surface split out from `@chordsketch/wasm` per
+      # #2466. The playground aliases it to this directory's `web/`
+      # output, so the build must run before the playground build
+      # / smoke test — otherwise the dynamic `import(
+      # '@chordsketch/wasm-export')` in `<PdfExport>` would 404
+      # against an unbuilt artifact.
+      - name: Build @chordsketch/wasm-export (heavy)
+        run: npm run build
+        working-directory: packages/npm-export
 
       - name: Install playground dependencies
         run: npm ci
         working-directory: packages/playground
+
+      # Install sibling-package node_modules so tsc (run by
+      # `npm run build`) can resolve the transitive react /
+      # codemirror / lezer imports inside ../react/src/*.tsx
+      # files when they are pulled into the playground's program
+      # via tsconfig paths / include. Each sibling owns its own
+      # lockfile and its own CI typecheck — installing here is
+      # purely about giving node-style upward module resolution
+      # a populated packages/<sibling>/node_modules/ to walk into.
+      - name: Install @chordsketch/react dependencies
+        run: npm ci
+        working-directory: packages/react
+
+      - name: Install @chordsketch/ui-web dependencies
+        run: npm ci
+        working-directory: packages/ui-web
+
+      - name: Install @chordsketch/ui-irealb-editor dependencies
+        run: npm ci
+        working-directory: packages/ui-irealb-editor
 
       - name: Build playground (production bundle the smoke serves)
         run: npm run build

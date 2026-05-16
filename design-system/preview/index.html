@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Components — ChordSketch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="../tokens.css">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875; color: var(--text-primary); background: var(--canvas); -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+.container { max-width: 960px; margin: 0 auto; padding: var(--sp-16) var(--sp-6); }
+.eyebrow { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); margin: 0 0 var(--sp-3); }
+h1 { font-family: var(--font-display); font-weight: 900; font-size: var(--fs-60); line-height: 1.05; letter-spacing: -0.03em; margin: 0 0 var(--sp-3); }
+.deck { color: var(--text-secondary); margin: 0 0 var(--sp-12); max-width: 56ch; font-size: var(--fs-18); }
+.list { list-style: none; padding: 0; margin: 0; counter-reset: idx; }
+.list li { counter-increment: idx; }
+.list a { display: grid; grid-template-columns: 36px 1fr auto; gap: var(--sp-4); padding: var(--sp-5) 0; border-top: 1px solid var(--border); align-items: baseline; transition: background var(--dur-1) var(--ease-out); }
+.list a:hover { background: var(--ink-100); margin: 0 calc(var(--sp-4) * -1); padding-left: var(--sp-4); padding-right: var(--sp-4); border-radius: var(--r-2); }
+.list a::before { content: counter(idx, decimal-leading-zero); font-family: var(--font-mono); font-size: var(--fs-13); color: var(--text-tertiary); }
+.list .name { font-family: var(--font-jp); font-weight: 600; font-size: var(--fs-18); }
+.list .meta { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-secondary); }
+.back { font-family: var(--font-latin); font-size: var(--fs-12); font-weight: 600; letter-spacing: 0; color: var(--text-secondary); }
+.back:hover { color: var(--text-primary); }
+</style>
+</head>
+<body>
+<main class="container">
+  <a href="../design-system.html" class="back">← Design System</a>
+  <p class="eyebrow" style="margin-top: var(--sp-8);">ChordSketch · Components</p>
+  <h1>Components.</h1>
+  <p class="deck">Single-component previews. Each page exercises the variants and states declared in <code style="font-family: var(--font-mono);">DESIGN.md §6</code>, against tokens from <code style="font-family: var(--font-mono);">tokens.css</code>.</p>
+
+  <ol class="list">
+    <li><a href="components-buttons.html"><span class="name">Buttons</span><span class="meta">primary · secondary · ghost · danger</span></a></li>
+    <li><a href="components-forms.html"><span class="name">Forms</span><span class="meta">input · select · textarea · segmented · check · radio</span></a></li>
+    <li><a href="components-cards.html"><span class="name">Cards</span><span class="meta">song · setlist · featured</span></a></li>
+    <li><a href="components-badges.html"><span class="name">Badges</span><span class="meta">status · key · genre</span></a></li>
+    <li><a href="components-avatars.html"><span class="name">Avatars</span><span class="meta">24 · 28 · 36 · 48 · stacked</span></a></li>
+    <li><a href="components-navigation.html"><span class="name">Navigation</span><span class="meta">top nav · tabs · breadcrumbs</span></a></li>
+    <li><a href="components-modal.html"><span class="name">Modal</span><span class="meta">e3 · 12px radius · ink-50 footer</span></a></li>
+    <li><a href="components-table.html"><span class="name">Table</span><span class="meta">eyebrow header · tabular-nums</span></a></li>
+    <li><a href="components-toast.html"><span class="name">Toast</span><span class="meta">ink-1000 · success · danger</span></a></li>
+    <li><a href="components-progress.html"><span class="name">Progress</span><span class="meta">bar · spinner · skeleton</span></a></li>
+  </ol>
+</main>
+</body>
+</html>

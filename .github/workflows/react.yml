@@ -40,11 +40,36 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+      # The React package's tsconfig paths map for the wasm bundle
+      # points at the in-tree build under `packages/npm/web/` so
+      # tsc can see the new parseChordpro / parseChordproWithOptions
+      # exports the AST -> JSX walker depends on (#2475 /
+      # ADR-0017). The published @chordsketch/wasm@0.3.x on npm
+      # does not yet ship those exports, so the in-tree build
+      # must produce `packages/npm/web/chordsketch_wasm.d.ts`
+      # before tsc runs.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: react-wasm32-unknown-unknown
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install wasm-pack
+        uses: ./.github/actions/install-wasm-pack
+
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: packages/react/package-lock.json
+
+      - name: Build in-tree wasm bundle
+        run: npm run build
+        working-directory: packages/npm
 
       - name: Install dependencies
         run: npm ci

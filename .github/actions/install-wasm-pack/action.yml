@@ -20,10 +20,18 @@ runs:
   using: "composite"
   steps:
     - name: Install wasm-pack
-      uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2
+      # SHA pinned to v2 (tag tip as of 2026-05-12). The previous
+      # pin (055f5df) shipped a wasm-pack manifest pointing at
+      # `drager/wasm-pack`, which became unreachable when the
+      # upstream repo was renamed/removed — every CI cell that
+      # tried to fetch the v0.14.0 tarball 404'd. The v2 tip
+      # manifest now points at `wasm-bindgen/wasm-pack` (the
+      # canonical home for the v0.14.0 release assets), so the
+      # macOS / Linux / Windows installers resolve again.
+      uses: taiki-e/install-action@c070f87102a1c75b3183910f391c1cb887fe13c8 # v2
       with:
         # The fallback is the canonical repo-wide version. Keep it
         # in sync with the release cadence of the upstream
-        # `rustwasm/wasm-pack` crate; bump by editing this single
-        # line.
+        # `wasm-bindgen/wasm-pack` crate; bump by editing this
+        # single line.
         tool: wasm-pack@${{ inputs.version || '0.14.0' }}

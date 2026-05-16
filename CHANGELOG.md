@@ -7,6 +7,141 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **React surface renders ChordPro AST → JSX directly**
+  ([ADR-0017](docs/adr/0017-react-renders-from-ast.md), #2475).
+  `<ChordSheet format="html">` and `<RendererPreview format="html">`
+  no longer round-trip through `chordsketch-render-html`'s
+  string output and no longer wrap the preview in an
+  `<iframe srcdoc>`. The wasm bundle exposes the parsed `Song`
+  AST via `parseChordpro` / `parseChordproWithOptions`; the new
+  `chordpro-jsx` walker in `@chordsketch/react` emits a React
+  tree matching the Rust HTML renderer's DOM contract
+  (`.song`, `.line`, `.chord-block`, `.chord`, `.lyrics`,
+  `<section class="…">`, `<p class="comment">`, `<h1>`, `<h2>`,
+  `<p class="meta">`). The Rust HTML renderer
+  (`chordsketch-render-html`) stays as the canonical static-HTML
+  emitter for the CLI (`--format html`), FFI bindings, GitHub
+  Action, and the VS Code extension's iframe preview — every
+  surface that does not own a JS / React runtime. Sister-site
+  parity rules (`.claude/rules/renderer-parity.md` and
+  `.claude/rules/fix-propagation.md`) updated to track the
+  React JSX walker as a fourth rendering surface alongside the
+  text / HTML / PDF Rust renderers.
+
+### Added
+
+- `chordsketch-chordpro::json` — hand-rolled, zero-dep JSON
+  serialiser for the full `Song` AST, mirroring the
+  `chordsketch-ireal::json` pattern (#2055).
+- `parseChordpro` / `parseChordproWithOptions` wasm exports
+  (`@chordsketch/wasm` 0.4.x and later) returning the AST as
+  a JSON string; TS shape declared in
+  `packages/react/src/chordpro-ast.ts`.
+- `useChordproAst(source, options)` hook in `@chordsketch/react`
+  paralleling `useChordRender`, plus the public
+  `renderChordproAst(song)` walker for consumers that need to
+  drive their own React tree off the same AST without the
+  `<ChordSheet>` shell.
+
+- `chordsketch-ireal` URL grammar coverage extended to the full
+  iReal Pro chart format used by community charts:
+  - `(altchord)` parens — substitution chords stack above the
+    primary in the renderer (`Chord::alternate`).
+  - `n` (No Chord) — `Bar::no_chord` flag drives the `N.C.`
+    glyph in the renderer.
+  - `Kcl` / `x` / `r` (repeat-previous-measure simile) —
+    `Bar::repeat_previous` flag drives the percent-style 1-bar
+    simile glyph (SMuFL U+E500).
+  - `<text>` free-form captions (`<13 measure lead break>`,
+    `<D.S. al 2nd ending>`) — preserved verbatim on
+    `Bar::text_comment`. Anchored macro detection on `D.C.` /
+    `D.S.` / `Fine` prefixes (start-of-comment, followed by
+    space/dot/end) replaces a substring match that mis-fired
+    on common English words like `refine` / `define`.
+  - `irealbook://` 6-field URL shape
+    (`Title=Composer=Style=Key=TimeSig=Music`) joins the
+    canonical 7..=9-field `irealb://` shape. The 6-field path's
+    numeric `TimeSig` is strictly validated and surfaces
+    `ParseError::InvalidNumericField` on malformed input
+    (sister-site parity with the 7-field BPM / Transpose
+    validation per `.claude/rules/code-style.md` "Silent
+    Fallback").
+  - `S` (Segno), `Q` (Coda), `<D.C.>` / `<D.S.>` / `<Fine>`
+    markers attach to the bar in which they appear (was
+    previously queued for the next bar, leaking the marker
+    onto the wrong bar in `,S,E-7|A7|`-style URL fragments).
+  - Section-label vocabulary reconciled with iReal Pro's own
+    rehearsal-mark set (`A` / `B` / `C` / `D` / `IN` / `V`).
+    Uppercase `*V` now maps to `SectionLabel::Verse` per the
+    spec example (#2432). The `*c` / `*b` / `*o` tokens were
+    never emitted by iReal Pro — `SectionLabel::Chorus`,
+    `Bridge`, and `Outro` variants have been removed; the
+    convert crate now round-trips ChordPro's
+    `start_of_chorus` / `start_of_bridge` directives via
+    `Custom("Chorus")` / `Custom("Bridge")` so the
+    ChordPro-side semantics are preserved without producing
+    out-of-spec `irealb://` tokens (#2450).
+- `JsonValue::Bool` variant — used by the `Bar::repeat_previous`
+  and `Bar::no_chord` flags in the JSON debug serializer.
+- `chordTypography` wasm export
+  (`#[wasm_bindgen(js_name = chordTypography)]`) — exposes the
+  same span layout the SVG renderer uses so React / Svelte /
+  external consumers can drive consistent chord-name glyph
+  layout without re-rendering the SVG.
+- `chord_typography` URL-shorthand translation (`b`→♭, `^`→Δ,
+  `h`→ø, `o`→°, `-`→−, `#`→♯) and two-or-more-alteration
+  vertical stacking (`7♭9♯5` renders as `7♭9 / ♯5` via a
+  `|`-separated payload the renderer reads as a stacked
+  quality block).
+- `convert::from_ireal` propagates the new AST fields into the
+  ChordPro output: `no_chord` → `N.C.` text segment,
+  `repeat_previous` → previous-chord replay (or `LossyDrop`
+  warning when there is none), `text_comment` → parenthesised
+  inline text, `chord.alternate` → parenthesised alternate
+  chord after the primary.
+- `.claude/rules/playground-is-a-sample.md` — establishes the
+  rule that the playground at `packages/playground/` is a
+  thin sample consumer of the chordsketch libraries; gaps in
+  chart output are fixed in the libraries, not the playground.
+
+### Changed
+
+- iReal Pro playground (`packages/playground/`) rewritten as a
+  minimal sample consumer:
+  - Editable `irealb://` URL textarea on top, chart preview
+    below; metadata form, bar inspector, Format / Insert /
+    Export tool-groups and player-controls all removed.
+  - Sample selector + Layout readout consolidated into the
+    topnav header alongside the breadcrumb.
+  - Three real samples (Autumn Leaves / Spain / Moon River)
+    replace the previous editor-irealb mock data.
+  - Chart layout: section markers centred above the left
+    barline (raised when the bar also carries an ending
+    bracket); ending brackets are 75 % cell width with both
+    sides open; double-end glyph suppressed when followed by
+    a double-start so section boundaries paint a single
+    double barline; chord-line wrap continues across section
+    boundaries (4-bars-per-row); root accidental lifted to
+    cap-line superscript with daylight from the root letter;
+    alternate chord rendered above the primary at ~50 %
+    optical size in the inter-row whitespace.
+  - Breadcrumb `Playground` is now a link on both the
+    iRealPro and ChordPro sub-pages.
+- `crates/render-ireal/src/lib.rs::write_header` SVG
+  `font-family` attribute serialised with single-quoted inner
+  font names (`'Source Serif 4', Georgia, serif`) instead of
+  the inner `\"…\"` form that broke svg2pdf / resvg downstream.
+- `crates/ireal/src/parser.rs::queue_ending` and
+  `queue_symbol` set the field directly on `current_bar`
+  (was queued for the NEXT bar via a pending field). Mirrors
+  iReal Pro's convention where `N1` / `S` / `Q` /
+  `<D.C.>` / `<D.S.>` / `<Fine>` label the bar that contains
+  them. The pending-symbol-and-ending model produced phantom
+  trailing bars at section ends and shifted markers off by
+  one bar.
+
 ### Fixed
 
 - `scripts/check-release-channels.py`: the `ghcr`, `docker-hub`,

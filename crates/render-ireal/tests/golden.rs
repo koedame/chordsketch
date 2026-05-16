@@ -34,6 +34,9 @@ fn build_basic_song() -> IrealSong {
         chords: vec![bar_chord],
         ending: None,
         symbol: Some(MusicalSymbol::Segno),
+        repeat_previous: false,
+        no_chord: false,
+        text_comment: None,
     };
     IrealSong {
         title: "Autumn Leaves".into(),
@@ -93,18 +96,18 @@ fn empty_song_renders_well_formed_svg_with_no_grid() {
 
 #[test]
 fn header_uses_default_text_when_metadata_is_missing() {
-    // Title falls back to "Untitled"; style and key fall back
-    // to the default "Medium Swing" + "C major".
+    // Title falls back to "Untitled"; style falls back to
+    // "(Medium Swing)" italic label. The engraved-chart header
+    // (`design-system/ui_kits/web/editor-irealb.html`) no longer
+    // surfaces the key — that lives in the playground's meta-card
+    // form. The composer text element is omitted entirely when
+    // the AST has no composer value.
     let song = IrealSong::new();
     let svg = render_svg(&song, &RenderOptions::default());
     assert!(svg.contains(">Untitled<"), "expected Untitled fallback");
     assert!(
-        svg.contains("Medium Swing"),
+        svg.contains("(Medium Swing)"),
         "expected default style placeholder: {svg}"
-    );
-    assert!(
-        svg.contains("C major"),
-        "expected default key placeholder: {svg}"
     );
     assert!(
         !svg.contains("class=\"composer\""),
@@ -131,23 +134,50 @@ fn xml_reserved_chars_in_title_are_escaped() {
 
 #[test]
 fn flat_key_emits_unicode_flat_glyph() {
-    // The key formatter renders the flat sign as U+266D, which
-    // passes through `escape_xml` unchanged because flats are not
-    // XML-reserved.
+    // The engraved-chart header dropped the key text from the
+    // SVG (the playground's meta-card edits it instead), but a
+    // chord with a flat root must still render the U+266D glyph
+    // in the chord-root span. Add a B♭ chord and assert the
+    // glyph reaches the SVG unescaped.
     let mut song = IrealSong::new();
-    song.key_signature.root = ChordRoot {
-        note: 'B',
-        accidental: Accidental::Flat,
-    };
+    let chord = Chord::triad(
+        ChordRoot {
+            note: 'B',
+            accidental: Accidental::Flat,
+        },
+        ChordQuality::Major,
+    );
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![Bar {
+            chords: vec![BarChord {
+                chord,
+                position: BeatPosition::on_beat(1).unwrap(),
+            }],
+            ..Bar::new()
+        }],
+    });
     let svg = render_svg(&song, &RenderOptions::default());
-    assert!(svg.contains("B\u{266D} major"), "missing flat glyph: {svg}");
+    // Engraved-chart layout splits root + accidental: "B" lives
+    // in the chord-root span, "♭" in the chord-acc span.
+    assert!(
+        svg.contains("class=\"chord-root\">B</tspan>"),
+        "missing root span: {svg}"
+    );
+    assert!(
+        svg.contains("class=\"chord-acc\""),
+        "missing acc span: {svg}"
+    );
+    assert!(svg.contains('\u{266D}'), "missing flat glyph: {svg}");
 }
 
 #[test]
-fn multi_row_bar_grid_emits_one_row_per_four_bars() {
-    // 9 bars round up to 3 rows (4 + 4 + 1, with the last row's
-    // trailing 3 cells still drawn empty per the documented
-    // "fixed 4-cell grid" contract).
+fn multi_row_bar_grid_emits_one_barline_per_bar() {
+    // 9 bars round up to 3 rows (4 + 4 + 1). The engraved chart
+    // emits one left barline per bar plus one right barline at
+    // the end of each row (3 rows × 1 right barline = 3) — total
+    // 9 + 3 = 12 single barlines. Trailing empties are not drawn
+    // (no cell rectangles in the engraved style).
     let mut song = IrealSong::new();
     let mut bars = Vec::with_capacity(9);
     for _ in 0..9 {
@@ -158,48 +188,48 @@ fn multi_row_bar_grid_emits_one_row_per_four_bars() {
         bars,
     });
     let svg = render_svg(&song, &RenderOptions::default());
-    let cell_count = svg.matches("<rect").count();
-    // 1 page frame + 12 grid cells (3 rows × 4 cells) = 13.
+    let single_barline_count = svg.matches("class=\"barline-single\"").count();
     assert_eq!(
-        cell_count, 13,
-        "expected 13 <rect> elements (1 frame + 12 cells), got {cell_count}: {svg}"
+        single_barline_count, 12,
+        "expected 12 barlines (9 bars + 3 row-end), got {single_barline_count}: {svg}"
     );
 }
 
 #[test]
 fn grid_aligns_to_right_margin() {
-    // The right edge of the rightmost cell must hit exactly
-    // `PAGE_WIDTH - MARGIN_X` (515 with the current constants),
-    // not 3px short of it. Integer-division remainder is absorbed
-    // into the last cell's width.
-    use chordsketch_render_ireal::{MARGIN_X, PAGE_WIDTH};
+    // The rightmost barline of a fully-populated row must sit
+    // exactly at `PAGE_WIDTH - MARGIN_X`. Use BARS_PER_ROW bars so
+    // the row is full — partial rows end at the last bar's right
+    // barline (intentional in the engraved chart; trailing empties
+    // are no longer drawn).
+    use chordsketch_render_ireal::{BARS_PER_ROW, MARGIN_X, PAGE_WIDTH};
     let mut song = IrealSong::new();
+    let bars = (0..BARS_PER_ROW).map(|_| Bar::new()).collect();
     song.sections.push(Section {
         label: SectionLabel::Letter('A'),
-        bars: vec![Bar::new()],
+        bars,
     });
     let svg = render_svg(&song, &RenderOptions::default());
-    // The last cell of the first (and only) row appears as the
-    // last `<rect ... fill="none"` in the output (`fill="white"`
-    // is the page frame). Pull its `x` and `width` and check that
-    // x + width == PAGE_WIDTH - MARGIN_X.
-    let needle = "fill=\"none\"";
-    let last_rect = svg
+    // Every barline appears as `<line x1="X" y1="..." x2="X" ...
+    // class="barline-single"/>`. Collect every `x1` value of a
+    // single barline and verify the maximum equals the right
+    // margin — that is the "rightmost barline" of the only row.
+    let needle = "class=\"barline-single\"";
+    let max_x = svg
         .rmatch_indices(needle)
         .map(|(idx, _)| &svg[..idx])
-        .next()
-        .and_then(|prefix| prefix.rfind("<rect"))
-        .map(|start| &svg[start..])
-        .expect("at least one cell rect");
-    let last_open = last_rect.find('>').expect("rect tag closes");
-    let header = &last_rect[..=last_open];
-    let x: i32 = parse_attr(header, "x");
-    let width: i32 = parse_attr(header, "width");
+        .filter_map(|prefix| prefix.rfind("<line").map(|start| &svg[start..]))
+        .map(|line| {
+            let close = line.find('>').expect("line tag closes");
+            parse_attr(&line[..=close], "x1")
+        })
+        .max()
+        .expect("at least one barline");
     assert_eq!(
-        x + width,
+        max_x,
         PAGE_WIDTH - MARGIN_X,
-        "rightmost cell ends at {} but expected {}: {header}",
-        x + width,
+        "rightmost barline at {} but expected {}",
+        max_x,
         PAGE_WIDTH - MARGIN_X
     );
 }
@@ -222,9 +252,9 @@ fn parse_attr(tag: &str, name: &str) -> i32 {
 #[test]
 fn render_clamps_bar_count_to_max_bars() {
     // An adversarial AST with > MAX_BARS bars must not allocate
-    // an unbounded number of `<rect>` elements; surplus bars are
-    // silently truncated. This keeps the renderer's memory cost
-    // bounded and the y-coordinate arithmetic safe.
+    // an unbounded number of barlines; surplus bars are silently
+    // truncated. This keeps the renderer's memory cost bounded
+    // and the y-coordinate arithmetic safe.
     use chordsketch_render_ireal::{BARS_PER_ROW, MAX_BARS};
     let mut song = IrealSong::new();
     let bar_count = MAX_BARS + 100;
@@ -237,13 +267,14 @@ fn render_clamps_bar_count_to_max_bars() {
         bars,
     });
     let svg = render_svg(&song, &RenderOptions::default());
-    let rect_count = svg.matches("<rect").count();
-    // Expected: 1 frame + (MAX_BARS / BARS_PER_ROW) rows × BARS_PER_ROW cells.
+    // Expected: MAX_BARS left barlines + (MAX_BARS / BARS_PER_ROW)
+    // row-end right barlines.
     let expected_rows = MAX_BARS.div_ceil(BARS_PER_ROW);
-    let expected_rect = 1 + expected_rows * BARS_PER_ROW;
+    let expected_lines = MAX_BARS + expected_rows;
+    let actual = svg.matches("class=\"barline-single\"").count();
     assert_eq!(
-        rect_count, expected_rect,
-        "expected {expected_rect} rects (1 frame + clamped grid), got {rect_count}"
+        actual, expected_lines,
+        "expected {expected_lines} barlines (MAX_BARS + row-ends), got {actual}"
     );
 }
 
@@ -255,17 +286,30 @@ fn out_of_range_chord_root_falls_back_to_question_mark() {
     // output rather than nonsense.
     use chordsketch_ireal::{Accidental, ChordRoot};
     let mut song = IrealSong::new();
-    song.key_signature.root = ChordRoot {
-        note: 'X',
-        accidental: Accidental::Natural,
-    };
+    let chord = Chord::triad(
+        ChordRoot {
+            note: 'X',
+            accidental: Accidental::Natural,
+        },
+        ChordQuality::Major,
+    );
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![Bar {
+            chords: vec![BarChord {
+                chord,
+                position: BeatPosition::on_beat(1).unwrap(),
+            }],
+            ..Bar::new()
+        }],
+    });
     let svg = render_svg(&song, &RenderOptions::default());
     assert!(
-        svg.contains("? major"),
-        "expected `? major` fallback for out-of-range note: {svg}"
+        svg.contains("class=\"chord-root\">?</tspan>"),
+        "expected `?` fallback for out-of-range note: {svg}"
     );
     assert!(
-        !svg.contains("X major"),
+        !svg.contains("class=\"chord-root\">X</tspan>"),
         "out-of-range note must not flow into the SVG: {svg}"
     );
 }
@@ -291,18 +335,37 @@ fn xml_illegal_control_chars_are_stripped_from_title() {
 
 #[test]
 fn sharp_key_emits_unicode_sharp_glyph() {
-    // The key formatter renders the sharp sign as U+266F, which passes
-    // through `escape_xml` unchanged because sharps are not XML-reserved.
+    // Sharp glyph (U+266F) reaches the SVG via the chord-root span;
+    // sharp signs are not XML-reserved so they pass through
+    // `escape_xml` unchanged.
     let mut song = IrealSong::new();
-    song.key_signature.root = ChordRoot {
-        note: 'F',
-        accidental: Accidental::Sharp,
-    };
+    let chord = Chord::triad(
+        ChordRoot {
+            note: 'F',
+            accidental: Accidental::Sharp,
+        },
+        ChordQuality::Major,
+    );
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![Bar {
+            chords: vec![BarChord {
+                chord,
+                position: BeatPosition::on_beat(1).unwrap(),
+            }],
+            ..Bar::new()
+        }],
+    });
     let svg = render_svg(&song, &RenderOptions::default());
     assert!(
-        svg.contains("F\u{266F} major"),
-        "missing sharp glyph: {svg}"
+        svg.contains("class=\"chord-root\">F</tspan>"),
+        "missing root span: {svg}"
     );
+    assert!(
+        svg.contains("class=\"chord-acc\""),
+        "missing acc span: {svg}"
+    );
+    assert!(svg.contains('\u{266F}'), "missing sharp glyph: {svg}");
 }
 
 #[test]
@@ -317,6 +380,7 @@ fn slash_chord_renders_with_chord_slash_and_chord_bass_classes() {
                 root: ChordRoot::natural('C'),
                 quality: ChordQuality::Major7,
                 bass: Some(ChordRoot::natural('G')),
+                alternate: None,
             },
             position: BeatPosition::on_beat(1).unwrap(),
         }],
@@ -344,11 +408,12 @@ fn slash_chord_renders_with_chord_slash_and_chord_bass_classes() {
         svg.contains("class=\"chord-bass\""),
         "expected bass span: {svg}"
     );
-    // The slash and bass spans must reset font-size + apply the
-    // inverse `dy` so the baseline returns to the cell centre
-    // after the raised extension.
+    // The slash span must reset font-size + apply an inverse
+    // `dy` so the baseline returns to the chord baseline after
+    // the subscript-positioned quality. The shift equals the
+    // negation of `CHORD_QUALITY_DY` (currently +5 → -5).
     assert!(
-        svg.contains("dy=\"4\""),
+        svg.contains("class=\"chord-slash\" font-size=\"32\" dy=\"-5\""),
         "expected baseline restore on slash span: {svg}"
     );
 }
@@ -364,6 +429,7 @@ fn slash_chord_without_quality_uses_unshifted_slash_span() {
                 root: ChordRoot::natural('C'),
                 quality: ChordQuality::Major,
                 bass: Some(ChordRoot::natural('E')),
+                alternate: None,
             },
             position: BeatPosition::on_beat(1).unwrap(),
         }],
@@ -384,15 +450,14 @@ fn slash_chord_without_quality_uses_unshifted_slash_span() {
 }
 
 #[test]
-fn multi_chord_bar_restores_baseline_between_chords() {
-    // When the first chord in a split bar has an Extension span (e.g.
-    // Minor7), the SVG `dy` cursor is raised after it. Without an
-    // explicit restore on the inter-chord separator, every subsequent
-    // chord's root renders at the wrong (raised) baseline.
-    //
-    // This test verifies that the separator `<tspan>` carries the
-    // inverse `dy` and base `font-size` so the second chord's root
-    // lands on the cell baseline.
+fn multi_chord_bar_emits_one_text_per_chord() {
+    // Engraved chart layout (`design-system/ui_kits/web/
+    // editor-irealb.html`) positions each chord at its own beat
+    // column inside the bar, so multi-chord bars render as one
+    // `<text>` per chord rather than a single space-separated
+    // line. Verify both chords appear with their own root spans
+    // (the engraved layout does not need an inter-chord baseline-
+    // restore separator).
     let bar = Bar {
         chords: vec![
             BarChord {
@@ -412,14 +477,10 @@ fn multi_chord_bar_restores_baseline_between_chords() {
         bars: vec![bar],
     });
     let svg = render_svg(&song, &RenderOptions::default());
-    // The separator between the two chords must restore the baseline:
-    // font-size restored to base and dy=+4 (inverse of the -4 raise).
     assert!(
-        svg.contains("font-size=\"14\" dy=\"4\""),
-        "separator must carry baseline restore: {svg}"
+        svg.contains("<tspan class=\"chord-root\">A</tspan>"),
+        "first chord root must appear: {svg}"
     );
-    // The second chord's root must follow the restored separator —
-    // confirm D root and its extension both appear.
     assert!(
         svg.contains("<tspan class=\"chord-root\">D</tspan>"),
         "second chord root must appear: {svg}"

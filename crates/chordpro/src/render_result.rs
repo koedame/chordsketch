@@ -5,7 +5,7 @@
 //! `chordsketch-render-pdf`. Consolidating the helpers here eliminates
 //! three maintenance points for the same logic (issue #1874).
 
-use crate::ast::{CapoValidation, Metadata};
+use crate::ast::{CapoValidation, DirectiveKind, Line, Metadata, Song};
 use crate::config::Config;
 
 /// Maximum number of warnings any renderer accumulates for a single
@@ -56,6 +56,51 @@ pub fn validate_capo(metadata: &Metadata, warnings: &mut Vec<String>) {
                 warnings,
                 format!("{{capo}} value {raw:?} is not a valid integer; ignored"),
             );
+        }
+    }
+}
+
+/// Walk the song and push a warning when more than one `{capo}` directive
+/// is present, mirroring Perl ChordPro's behaviour
+/// (`lib/ChordPro/Song.pm::dir_capo`: `do_warn("Multiple capo settings may
+/// yield surprising results.")`).
+///
+/// `{capo}` is modelled as a song-global last-wins value in the AST
+/// (`Metadata.capo: Option<String>`), matching Perl's `$capo` scalar —
+/// the spec does not define positional capo semantics. This helper exists
+/// so users who do try to write multiple `{capo}` directives get the same
+/// surprised-results warning Perl emits, regardless of which renderer
+/// produced the output.
+///
+/// Counts unselectored `Capo` directives (the same ones
+/// `Parser::populate_metadata` writes into `Metadata.capo`) so the warning
+/// fires exactly when the AST contains a state we cannot faithfully
+/// reproduce in a single capo slot.
+pub fn validate_multiple_capo(song: &Song, warnings: &mut Vec<String>) {
+    let mut count = 0usize;
+    for line in &song.lines {
+        if let Line::Directive(directive) = line {
+            if directive.selector.is_some() {
+                continue;
+            }
+            if directive.value.is_none() {
+                continue;
+            }
+            let is_capo = match directive.kind {
+                DirectiveKind::Capo => true,
+                DirectiveKind::Meta(ref key) => key.eq_ignore_ascii_case("capo"),
+                _ => false,
+            };
+            if is_capo {
+                count += 1;
+                if count >= 2 {
+                    push_warning(
+                        warnings,
+                        "Multiple capo settings may yield surprising results.",
+                    );
+                    return;
+                }
+            }
         }
     }
 }
@@ -253,5 +298,57 @@ mod tests {
         };
         validate_strict_key(&md, &config_with_strict(true), &mut v);
         assert!(v.is_empty());
+    }
+
+    // -- validate_multiple_capo (Perl parity) ------------------------------
+
+    fn parse_song(input: &str) -> crate::ast::Song {
+        crate::parser::parse(input).expect("parse failed")
+    }
+
+    #[test]
+    fn test_validate_multiple_capo_zero_capos_emits_nothing() {
+        let mut v = Vec::<String>::new();
+        let song = parse_song("{title: T}\n[Am]Hello");
+        validate_multiple_capo(&song, &mut v);
+        assert!(v.is_empty());
+    }
+
+    #[test]
+    fn test_validate_multiple_capo_single_capo_emits_nothing() {
+        let mut v = Vec::<String>::new();
+        let song = parse_song("{capo: 2}\n[Am]Hello");
+        validate_multiple_capo(&song, &mut v);
+        assert!(v.is_empty());
+    }
+
+    #[test]
+    fn test_validate_multiple_capo_two_capos_warns_once() {
+        let mut v = Vec::<String>::new();
+        let song = parse_song("{capo: 2}\n[Am]Hello\n{capo: 4}\n[C]World");
+        validate_multiple_capo(&song, &mut v);
+        assert_eq!(v.len(), 1, "expected exactly one warning");
+        assert!(
+            v[0].contains("Multiple capo settings"),
+            "unexpected message: {:?}",
+            v[0]
+        );
+    }
+
+    #[test]
+    fn test_validate_multiple_capo_three_capos_still_warns_once() {
+        let mut v = Vec::<String>::new();
+        let song = parse_song("{capo: 1}\n{capo: 2}\n{capo: 3}");
+        validate_multiple_capo(&song, &mut v);
+        assert_eq!(v.len(), 1);
+    }
+
+    #[test]
+    fn test_validate_multiple_capo_meta_form_counts() {
+        // `{meta: capo X}` is the long form Perl accepts equivalently.
+        let mut v = Vec::<String>::new();
+        let song = parse_song("{capo: 2}\n{meta: capo 4}");
+        validate_multiple_capo(&song, &mut v);
+        assert_eq!(v.len(), 1);
     }
 }

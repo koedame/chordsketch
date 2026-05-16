@@ -21,16 +21,19 @@
 
 use std::fmt::Write;
 
+mod music_glyphs;
+
 use chordsketch_chordpro::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
 use chordsketch_chordpro::canonical_chord_name;
 use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::escape::escape_xml as escape;
 use chordsketch_chordpro::inline_markup::{SpanAttributes, TextSpan};
 use chordsketch_chordpro::render_result::{
-    RenderResult, push_warning, validate_capo, validate_strict_key,
+    RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
-use chordsketch_chordpro::transpose::transpose_chord;
+use chordsketch_chordpro::transpose::{transpose_chord_with_style, transposed_key_prefers_flat};
+use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
 
 /// Maximum number of chorus recall directives allowed per song.
 /// Prevents output amplification from malicious inputs with many `{chorus}` lines.
@@ -234,9 +237,16 @@ fn render_song_body_into(
         chordsketch_chordpro::transpose::combine_transpose(cli_transpose, song_transpose_delta);
     let mut transpose_offset: i8 = combined_transpose;
     let mut fmt_state = FormattingState::default();
-    html.push_str("<div class=\"song\">\n");
+    // `<article>` is the semantic root for a self-contained song —
+    // a single ChordPro document is a "composition complete in
+    // itself" per the HTML5 article definition. Carries the
+    // existing `.song` class so consumer CSS keyed on `.song`
+    // keeps hitting. Sister-site to the React JSX walker's
+    // `<article class="song">` wrapper.
+    html.push_str("<article class=\"song\">\n");
 
     validate_capo(&song.metadata, warnings);
+    validate_multiple_capo(song, warnings);
     validate_strict_key(&song.metadata, config, warnings);
     render_metadata(&song.metadata, html);
 
@@ -245,6 +255,11 @@ fn render_song_body_into(
     // Buffer for collecting SVG section content. Content is sanitized as a
     // single string on EndOfSvg to prevent multi-line tag splitting bypasses.
     let mut svg_buf: Option<String> = None;
+    // Tracks whether the body cursor is currently inside a
+    // `{start_of_grid}` section. Grid body lines render via
+    // the structured tokeniser (`chordsketch_chordpro::grid`)
+    // instead of the generic chord-over-lyrics path.
+    let mut in_grid = false;
     // Delegate tool availability: Some(true) = force enable, Some(false) = force
     // disable, None = auto-detect on first encounter. The auto-detect value is
     // lazily resolved (via `get_or_insert_with`) so that subprocess checks only
@@ -277,6 +292,12 @@ fn render_song_body_into(
         .map(str::to_ascii_lowercase)
         .unwrap_or_else(|| "guitar".to_string());
     let mut auto_diagrams_instrument: Option<String> = None;
+    // (Walker-time `active_bpm` tracking was retired together
+    // with the conductor-pattern animation on the time-signature
+    // glyph. If we ever need it again — e.g. for a different
+    // BPM-driven visual treatment — restore the
+    // `metadata.tempos.last()` seed + `{tempo}` arm update
+    // from git history.)
     // Canonical chord names (sharp form) that were actually rendered inline via
     // {define} while show_diagrams was true.  Used to exclude them from the
     // auto-inject grid and avoid duplicates.
@@ -317,15 +338,101 @@ fn render_song_body_into(
                     let raw = lyrics_line.text();
                     buf.push_str(&raw);
                     buf.push('\n');
+                } else if in_grid {
+                    if let Some(buf) = chorus_buf.as_mut() {
+                        buf.push(line.clone());
+                    }
+                    render_grid_line(&lyrics_line.text(), html);
                 } else {
                     if let Some(buf) = chorus_buf.as_mut() {
                         buf.push(line.clone());
                     }
-                    render_lyrics(lyrics_line, transpose_offset, &fmt_state, html);
+                    let prefer_flat = transposed_key_prefers_flat(&song.metadata, transpose_offset);
+                    render_lyrics(lyrics_line, transpose_offset, prefer_flat, &fmt_state, html);
                 }
             }
             Line::Directive(directive) => {
                 if directive.kind.is_metadata() {
+                    // ChordPro spec: `{key}` / `{tempo}` / `{time}` are
+                    // `[Nx] [Pos]` — every declaration applies forward
+                    // from its position. Render a small inline marker
+                    // at the directive's position so a reader can see
+                    // where mid-song key / tempo / meter changes
+                    // happen (Phase B of #2454). The header chip
+                    // already lists every value joined by `"; "`
+                    // (Phase A); the body marker is what makes the
+                    // *position* part of `[Pos]` visible.
+                    if let Some(value) = directive
+                        .value
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|v| !v.is_empty())
+                    {
+                        // (`active_bpm` tracking removed together
+                        // with the conductor-pattern animation on
+                        // the time-signature glyph.)
+                        // Each marker carries a music-notation glyph
+                        // next to the textual label / value. The
+                        // glyphs (key signature, animated metronome,
+                        // stacked time-signature digits) mirror the
+                        // React JSX walker's `<KeySignatureGlyph> /
+                        // <MetronomeGlyph> / <TimeSignatureGlyph>`
+                        // output per `.claude/rules/renderer-
+                        // parity.md` §"Sanitizer Parity (React JSX
+                        // surface)". The `{time}` arm intentionally
+                        // omits the textual `meta-inline__value`
+                        // because the stacked-digit glyph IS the
+                        // value display — sister-site to the React
+                        // walker.
+                        match directive.kind {
+                            DirectiveKind::Key => {
+                                html.push_str(&format!(
+                                    "<span class=\"meta-inline meta-inline--key\">\
+                                     {glyph}\
+                                     <span class=\"meta-inline__label\">Key:</span> \
+                                     <span class=\"meta-inline__value\">{val}</span></span>\n",
+                                    glyph = music_glyphs::key_signature_svg(value),
+                                    val = escape(&unicode_accidentals(value)),
+                                ));
+                            }
+                            DirectiveKind::Tempo => {
+                                // The metronome glyph signals the
+                                // marker's meaning on its own — drop
+                                // the textual "Tempo:" label and keep
+                                // only the BPM value (sister-site to
+                                // the React JSX walker). When the
+                                // BPM matches an Italian tempo
+                                // marking, append it in parens.
+                                let marking = value
+                                    .trim()
+                                    .parse::<f32>()
+                                    .ok()
+                                    .and_then(tempo_marking_for)
+                                    .map(|m| {
+                                        format!(
+                                            " <span class=\"meta-inline__marking\">({m})</span>"
+                                        )
+                                    })
+                                    .unwrap_or_default();
+                                html.push_str(&format!(
+                                    "<span class=\"meta-inline meta-inline--tempo\">\
+                                     {glyph}\
+                                     <span class=\"meta-inline__value\">{val} BPM{marking}</span></span>\n",
+                                    glyph = music_glyphs::metronome_svg(value),
+                                    val = escape(value),
+                                ));
+                            }
+                            DirectiveKind::Time => {
+                                html.push_str(&format!(
+                                    "<span class=\"meta-inline meta-inline--time\">\
+                                     <span class=\"meta-inline__label\">Time:</span> \
+                                     {glyph}</span>\n",
+                                    glyph = music_glyphs::time_signature_html(value),
+                                ));
+                            }
+                            _ => {}
+                        }
+                    }
                     continue;
                 }
                 if directive.kind == DirectiveKind::Diagrams {
@@ -403,13 +510,18 @@ fn render_song_body_into(
                     }
                     DirectiveKind::Chorus => {
                         if chorus_recall_count < MAX_CHORUS_RECALLS {
+                            let prefer_flat =
+                                transposed_key_prefers_flat(&song.metadata, transpose_offset);
                             render_chorus_recall(
                                 &directive.value,
-                                &chorus_body,
-                                transpose_offset,
-                                &fmt_state,
-                                show_diagrams,
-                                diagram_frets,
+                                &ChorusRecallCtx {
+                                    chorus_body: &chorus_body,
+                                    transpose_offset,
+                                    prefer_flat,
+                                    fmt_state: &fmt_state,
+                                    show_diagrams,
+                                    diagram_frets,
+                                },
                                 html,
                             );
                             chorus_recall_count += 1;
@@ -545,6 +657,45 @@ fn render_song_body_into(
                             html.push_str("</div>\n");
                         }
                     }
+                    DirectiveKind::StartOfGrid => {
+                        if let Some(buf) = chorus_buf.as_mut() {
+                            buf.push(line.clone());
+                        }
+                        // `directive.value` may be:
+                        // - a human-readable label via the
+                        //   colon form (`{start_of_grid: Intro}`),
+                        // - an attribute payload via the inline
+                        //   form (`{start_of_grid shape="..."}`)
+                        //   which MAY include a `label="..."`
+                        //   attribute to be surfaced as the
+                        //   heading.
+                        // Try the structured `label="..."` first,
+                        // then fall back to the colon-form value
+                        // when it doesn't contain `=` (legacy
+                        // human label). When the value contains
+                        // `=` but no `label="..."` (e.g. just
+                        // `shape="..."`), suppress it entirely
+                        // so the heading reads "Grid" instead of
+                        // the raw attribute string.
+                        let label_value = directive.value.as_ref().and_then(|v| {
+                            if let Some(label) = chordsketch_chordpro::grid::extract_grid_label(v) {
+                                Some(label)
+                            } else if !v.contains('=') {
+                                Some(v.clone())
+                            } else {
+                                None
+                            }
+                        });
+                        render_section_open("grid", "Grid", &label_value, html);
+                        in_grid = true;
+                    }
+                    DirectiveKind::EndOfGrid => {
+                        if let Some(buf) = chorus_buf.as_mut() {
+                            buf.push(line.clone());
+                        }
+                        html.push_str("</section>\n");
+                        in_grid = false;
+                    }
                     _ => {
                         if let Some(buf) = chorus_buf.as_mut() {
                             buf.push(line.clone());
@@ -575,7 +726,7 @@ fn render_song_body_into(
                 if let Some(buf) = chorus_buf.as_mut() {
                     buf.push(line.clone());
                 }
-                html.push_str("<div class=\"empty-line\"></div>\n");
+                html.push_str("<div class=\"empty-line\" aria-hidden=\"true\"></div>\n");
             }
         }
     }
@@ -606,15 +757,15 @@ fn render_song_body_into(
                 })
                 .collect();
             if !voicings.is_empty() {
-                html.push_str("<section class=\"chord-diagrams\">\n");
-                html.push_str("<div class=\"section-label\">Chord Diagrams</div>\n");
+                html.push_str("<section class=\"chord-diagrams\" aria-labelledby=\"cs-chord-diagrams-label\">\n");
+                html.push_str("<h3 id=\"cs-chord-diagrams-label\" class=\"section-label\">Chord Diagrams</h3>\n");
                 html.push_str("<div class=\"chord-diagrams-grid\">\n");
                 for voicing in &voicings {
-                    html.push_str("<div class=\"chord-diagram-container\">");
+                    html.push_str("<figure class=\"chord-diagram-container\">");
                     html.push_str(&chordsketch_chordpro::chord_diagram::render_keyboard_svg(
                         voicing,
                     ));
-                    html.push_str("</div>\n");
+                    html.push_str("</figure>\n");
                 }
                 html.push_str("</div>\n");
                 html.push_str("</section>\n");
@@ -629,13 +780,13 @@ fn render_song_body_into(
                 })
                 .collect();
             if !diagrams.is_empty() {
-                html.push_str("<section class=\"chord-diagrams\">\n");
-                html.push_str("<div class=\"section-label\">Chord Diagrams</div>\n");
+                html.push_str("<section class=\"chord-diagrams\" aria-labelledby=\"cs-chord-diagrams-label\">\n");
+                html.push_str("<h3 id=\"cs-chord-diagrams-label\" class=\"section-label\">Chord Diagrams</h3>\n");
                 html.push_str("<div class=\"chord-diagrams-grid\">\n");
                 for diagram in &diagrams {
-                    html.push_str("<div class=\"chord-diagram-container\">");
+                    html.push_str("<figure class=\"chord-diagram-container\">");
                     html.push_str(&chordsketch_chordpro::chord_diagram::render_svg(diagram));
-                    html.push_str("</div>\n");
+                    html.push_str("</figure>\n");
                 }
                 html.push_str("</div>\n");
                 html.push_str("</section>\n");
@@ -643,7 +794,10 @@ fn render_song_body_into(
         }
     }
 
-    html.push_str("</div>\n");
+    // Close the song's outer `<article class="song">` opened at
+    // the top of this function (semantic-HTML refactor — sister
+    // to the React JSX walker's `<article>` wrapper).
+    html.push_str("</article>\n");
 }
 
 /// Render multiple [`Song`]s into a single HTML5 document.
@@ -915,25 +1069,109 @@ pub fn render(input: &str) -> String {
 /// at render time by [`css_for_wraplines`] based on `settings.wraplines`.
 /// The substitution targets the sentinel rather than the literal value so
 /// `.chord-diagrams-grid`'s own `flex-wrap: wrap` is unaffected.
+// Design tokens from `design-system/tokens.css` at the workspace
+// root (see `design-system/DESIGN.md` §2 / §3). The font stacks
+// fall back to system-ui so the
+// document is readable when the design fonts are not installed; a
+// host that loads Noto Sans JP / Inter / JetBrains Mono / Roboto
+// (e.g. the playground or the desktop WebView) gets the full
+// design language. Class names are stable (`.chord-block`,
+// `.chord`, `.lyrics`, `.line`, `.section-label`,
+// `.chord-diagrams-grid`) so external consumers' overrides keep
+// working.
+//
+// Two prefixes are pinned by unit tests in this crate
+// (`test_render_html_css_returns_canonical_block`,
+// `test_wraplines_*`):
+//   - `.line { display: flex; flex-wrap: __LINE_FLEX_WRAP__; ...`
+//   - `.chord-diagrams-grid { display: flex; flex-wrap: wrap; ...`
+// Do not alter the prefix bytes of those two rules.
+//
+// Sister-site styling note: the React surface ships a richer
+// stylesheet at `packages/react/src/styles.css` that consumes
+// design-system tokens via CSS custom properties
+// (`var(--cs-font-chord, …)`). This static-HTML stylesheet
+// cannot inherit those tokens at consumer time — the rendered
+// HTML is meant to display correctly in browsers / readers
+// that haven't loaded any consumer stylesheet at all — so
+// every font / color / size is materialised as a literal
+// value here. When the design-system tokens change, BOTH
+// stylesheets need updating; the differences are
+// representational, not behavioural.
 const CSS_TEMPLATE: &str = "\
-body { font-family: serif; max-width: 800px; margin: 2em auto; padding: 0 1em; }
-h1 { margin-bottom: 0.2em; }
-h2 { margin-top: 0; font-weight: normal; color: #555; }
+body { font-family: \"Noto Sans JP\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-size: 1rem; line-height: 1.6875; color: #0A0A0B; max-width: 720px; margin: 2em auto; padding: 0 1em; }
+h1 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-weight: 700; font-size: 1.875rem; letter-spacing: -0.02em; color: #0A0A0B; margin-bottom: 0.2em; }
+h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-weight: 400; font-size: 1rem; color: #67646D; margin-top: 0; }
+.meta { font-family: \"JetBrains Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace; font-size: 0.8125rem; color: #67646D; margin: 0 0 0.4em; font-feature-settings: \"tnum\" 1; }
+.song-header > .meta:last-of-type { margin-bottom: 1.5em; }
+.meta--attribution { font-family: \"Inter\", system-ui, sans-serif; font-size: 1rem; color: #4A4750; margin: 0.1em 0; }
+.meta--attribution-secondary { font-size: 0.8125rem; color: #8A8790; margin-bottom: 0.8em; }
+.meta__label { color: #8A8790; font-weight: 400; }
+.meta--params { display: flex; flex-wrap: wrap; gap: 0.4em; margin: 0.2em 0 0.8em; }
+.meta__chip { display: inline-block; padding: 0.15em 0.6em; border: 1px solid #D4D1D6; border-radius: 4px; background-color: #FAFAFA; color: #2A262E; font-family: \"JetBrains Mono\", ui-monospace, monospace; font-size: 0.8125rem; font-weight: 500; line-height: 1.4; font-feature-settings: \"tnum\" 1; }
+.meta--supplementary { font-size: 0.75rem; color: #A8A4AD; margin-bottom: 0.4em; }
+.meta-inline { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0.15em 0.3em 0.15em 0; padding: 0 0.5rem; min-height: 1.6rem; border-radius: 2px; background-color: #F6F4F7; border: 1px solid #E8E6EA; font-family: \"JetBrains Mono\", ui-monospace, monospace; font-size: 0.75rem; color: #44424A; line-height: 1.2; letter-spacing: 0.02em; font-feature-settings: \"tnum\" 1; vertical-align: middle; }
+.meta-inline__label { color: #8A8790; font-weight: 500; }
+.meta-inline__value { color: #0A0A0B; font-weight: 600; }
+.meta-inline__marking { color: #8A8790; font-weight: 400; font-style: italic; }
+.meta-inline .music-glyph { display: inline-flex; align-items: center; flex-shrink: 0; color: #0A0A0B; height: 1.1em; }
+.meta-inline svg.music-glyph { height: 1.1em; width: auto; display: block; }
+.meta-inline span.music-glyph--time { font-size: 0.85em; }
+.music-glyph { display: inline-block; flex-shrink: 0; vertical-align: middle; color: #1A1718; }
+.music-glyph--time { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; font-family: \"Source Serif Pro\", serif; font-weight: 700; font-size: 1.1em; letter-spacing: 0; }
+.music-glyph--time__num, .music-glyph--time__den { display: block; line-height: 0.9; font-feature-settings: \"tnum\" 1; }
+.music-glyph--time__bar { display: block; width: 0.9em; height: 1.5px; margin: 0.05em 0; background-color: currentColor; border-radius: 1px; flex-shrink: 0; }
+.music-glyph--metronome__pendulum { transform-origin: 9px 19px; animation: cs-metronome-swing var(--cs-metronome-period, 1s) cubic-bezier(0.55, 0, 0.45, 1) infinite alternate; }
+@keyframes cs-metronome-swing { from { transform: rotate(-28deg); } to { transform: rotate(28deg); } }
+@media (prefers-reduced-motion: reduce) { .music-glyph--metronome__pendulum { animation: none; transform: rotate(0deg); } }
 .line { display: flex; flex-wrap: __LINE_FLEX_WRAP__; margin: 0.1em 0; }
 .chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
-.chord { font-weight: bold; color: #b00; font-size: 0.9em; min-height: 1.2em; }
-.lyrics { white-space: pre; }
+.chord { font-family: \"Roboto\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 700; color: #BD1642; font-size: 1rem; letter-spacing: 0.01em; line-height: 1; min-height: 1em; }
+.lyrics { font-family: \"Noto Sans JP\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 400; font-size: 1.125rem; white-space: pre; }
 .empty-line { height: 1em; }
 section { margin: 1em 0; }
-section > .section-label { font-weight: bold; font-style: italic; margin-bottom: 0.3em; }
-.comment { font-style: italic; color: #666; margin: 0.3em 0; }
-.comment-box { border: 1px solid #999; padding: 0.2em 0.5em; display: inline-block; margin: 0.3em 0; }
+section > .section-label, .chorus-recall > .section-label { font-family: \"Inter\", system-ui, -apple-system, sans-serif; font-weight: 600; font-size: 0.75rem; color: #67646D; margin: 0 0 0.5em; line-height: 1.4; }
+.comment { font-family: \"Inter\", system-ui, -apple-system, sans-serif; font-style: italic; color: #8A8790; margin: 0.3em 0; }
+.comment-box { border: 1px solid #D4D1D6; border-radius: 4px; padding: 0.2em 0.5em; display: block; width: fit-content; margin: 0.3em 0; }
+.comment.comment--highlight { background-color: #FFF3A3; color: #1A1718; font-style: normal; font-weight: 600; padding: 0.15em 0.4em; border-radius: 3px; display: block; width: fit-content; }
+.comment.comment--highlight mark { background: none; color: inherit; }
+section.tab .lyrics, section.grid .lyrics, section.abc .lyrics, section.ly .lyrics, section.textblock .lyrics { font-family: \"JetBrains Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace; font-size: 0.875rem; font-feature-settings: \"tnum\" 1; }
 .chorus-recall { margin: 1em 0; }
-.chorus-recall > .section-label { font-weight: bold; font-style: italic; margin-bottom: 0.3em; }
 img { max-width: 100%; height: auto; }
 .chord-diagrams-grid { display: flex; flex-wrap: wrap; gap: 0.5em; margin: 0.5em 0; }
 .chord-diagram-container { display: inline-block; vertical-align: top; }
 .chord-diagram { display: block; }
+.grid-line { display: flex; align-items: stretch; margin: 0.35em 0; min-height: 2.4em; font-family: \"Roboto\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-weight: 600; font-size: 1rem; line-height: 1.4; color: #1A1718; }
+.grid-bar { flex: 1 1 0; display: flex; align-items: center; padding: 0.2em 0.4em; min-width: 3em; }
+.grid-beat { flex: 1 1 0; display: flex; align-items: center; justify-content: flex-start; min-width: 0; }
+.grid-chord { color: #BD1642; }
+.grid-no-chord { color: #67646D; font-style: italic; font-weight: 500; }
+.grid-barline { display: inline-flex; align-items: stretch; align-self: stretch; gap: 1.5px; flex-shrink: 0; }
+.grid-barline:not([class*='--']) { width: 1.5px; background-color: #1A1718; }
+.grid-barline__line { display: inline-block; width: 1.5px; background-color: #1A1718; }
+.grid-barline__line--thick { width: 3.5px; }
+.grid-barline__dots { display: inline-flex; flex-direction: column; justify-content: center; gap: 0.18em; padding: 0 2.5px; }
+.grid-barline__dots > span { width: 3px; height: 3px; border-radius: 50%; background-color: #1A1718; display: inline-block; }
+.grid-volta { position: relative; display: inline-flex; align-items: stretch; flex-shrink: 0; }
+.grid-volta .grid-barline__line { background-color: #1A1718; }
+.grid-volta__bracket { position: absolute; top: -0.1em; left: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; }
+.grid-volta__cap { display: block; width: 1.5em; height: 1.5px; background-color: #1A1718; }
+.grid-volta__label { display: inline-block; margin-left: 0.15em; font-size: 0.7em; font-weight: 600; color: #1A1718; line-height: 1; padding-top: 0.1em; }
+.grid-row__label { display: inline-flex; align-items: center; flex-shrink: 0; padding-right: 0.6em; font-weight: 700; color: #44424A; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.04em; min-width: 2em; }
+.grid-row__comment { display: inline-flex; align-items: center; flex-shrink: 0; padding-left: 0.6em; font-style: italic; font-weight: 500; font-size: 0.85em; color: #67646D; }
+.grid-percent { font-weight: 700; font-size: 0.9em; color: #44424A; }
+.grid-beat--percent1, .grid-beat--percent2 { justify-content: center; }
+.grid-chord__sep { display: inline-block; margin: 0 0.15em; color: #8A8790; font-weight: 400; font-size: 0.85em; }
+.grid-beat--multi { gap: 0; }
+.grid-line--strum { margin-top: -0.4em; min-height: 1.6em; font-size: 0.85em; color: #67646D; }
+.grid-strum { font-weight: 600; }
+.grid-strum__glyph { font-family: \"JetBrains Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace; }
+.grid-strum--up { color: #BD1642; }
+.grid-strum--down { color: #1A1718; }
+.grid-strum--up-accent, .grid-strum--down-accent { font-weight: 700; }
+.grid-strum--anticipated { font-style: italic; }
+.grid-strum--custom { color: #67646D; font-style: italic; }
+.sr-only { position: absolute; clip: rect(0,0,0,0); width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; white-space: nowrap; border: 0; }
 ";
 
 // ---------------------------------------------------------------------------
@@ -944,13 +1182,157 @@ img { max-width: 100%; height: auto; }
 // Metadata
 // ---------------------------------------------------------------------------
 
-/// Render song metadata (title, subtitle) as HTML header elements.
+/// Render song metadata as HTML header elements.
+///
+/// Layout matches the design-system reference at
+/// `design-system/ui_kits/web/editor.html`:
+///
+///   <h1>{title}</h1>
+///   <h2>{subtitle}</h2>          (one per `{subtitle}` directive)
+///   <p class="meta">Artist · Key G · Capo N · BPM T · 4/4</p>
+///
+/// The meta strip is suppressed entirely when none of the
+/// artist / key / capo / tempo / time fields are populated, so a
+/// minimal `{title: T}`-only document still renders just an `<h1>`.
 fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut String) {
+    // Build the header contents first so we know whether to emit
+    // the wrapping `<header>` at all — an empty AST with no
+    // metadata should not produce an empty header landmark.
+    let mut inner = String::new();
     if let Some(title) = &metadata.title {
-        let _ = writeln!(html, "<h1>{}</h1>", escape(title));
+        let _ = writeln!(inner, "<h1>{}</h1>", escape(title));
     }
     for subtitle in &metadata.subtitles {
-        let _ = writeln!(html, "<h2>{}</h2>", escape(subtitle));
+        let _ = writeln!(inner, "<h2>{}</h2>", escape(subtitle));
+    }
+
+    // The meta strip is split into three visual tiers (sister-site
+    // to the React JSX walker):
+    //   * `.meta--attribution`   — who made the song. Primary
+    //       "Artist", secondary "Composer X · Lyrics Y ·
+    //       Arranger Z".
+    //   * `.meta--params`        — musical parameters as chip
+    //       badges (Capo / Duration only — `{key}` / `{tempo}`
+    //       / `{time}` are surfaced inline at their source
+    //       positions, not in the chip strip).
+    //   * `.meta--supplementary` — album / year / copyright at
+    //       a smaller, muted weight.
+    //
+    // Role icons (mic / eighth-note / pencil / hash / album)
+    // are intentionally React-only: the static-HTML renderer is
+    // designed for embedding in third-party consumer stylesheets
+    // and shouldn't impose SVG glyph choices on them. The React
+    // JSX walker is free to render richer chrome since it ships
+    // alongside `@chordsketch/react`'s own `styles.css`. Sister-
+    // site asymmetry documented per `.claude/rules/renderer-
+    // parity.md` §Required practices.
+
+    // Tier 1 — attribution.
+    if !metadata.artists.is_empty() {
+        let _ = writeln!(
+            inner,
+            "<p class=\"meta meta--attribution\"><span class=\"meta__label\" aria-hidden=\"true\">by </span>{}</p>",
+            escape(&metadata.artists.join(", "))
+        );
+    }
+    let mut attribution_secondary: Vec<String> = Vec::new();
+    if !metadata.composers.is_empty() {
+        attribution_secondary.push(format!(
+            "<span class=\"meta__label\" aria-hidden=\"true\">Music </span>{}",
+            escape(&metadata.composers.join(", "))
+        ));
+    }
+    if !metadata.lyricists.is_empty() {
+        attribution_secondary.push(format!(
+            "<span class=\"meta__label\" aria-hidden=\"true\">Lyrics </span>{}",
+            escape(&metadata.lyricists.join(", "))
+        ));
+    }
+    if !metadata.arrangers.is_empty() {
+        attribution_secondary.push(format!(
+            "<span class=\"meta__label\" aria-hidden=\"true\">Arr. </span>{}",
+            escape(&metadata.arrangers.join(", "))
+        ));
+    }
+    if !attribution_secondary.is_empty() {
+        let _ = writeln!(
+            inner,
+            "<p class=\"meta meta--attribution meta--attribution-secondary\">{}</p>",
+            attribution_secondary.join(" · ")
+        );
+    }
+
+    // Tier 2 — musical params (chips).
+    //
+    // `{key}` / `{tempo}` / `{time}` are spec'd as `[Nx] [Pos]`
+    // (multiple specifications, each applies forward from its
+    // position in the song — see ChordPro spec §`{key}` /
+    // §`{tempo}` / §`{time}`). Perl ChordPro accumulates these into
+    // `{key}` / `{tempo}` / `{time}` are now surfaced inline at
+    // each directive's source position via the `.meta-inline`
+    // markers (key-signature glyph, animated metronome, time
+    // signature + conductor dot), so duplicating them in the
+    // header chip strip is pure redundancy. The chip row keeps
+    // only the values that have no positional marker: `{capo}`
+    // (modelled as a song-global) and `{duration}` (purely
+    // informational). Sister-site to the React JSX walker's
+    // `renderHeader`.
+    let mut chips: Vec<String> = Vec::new();
+    if let Some(capo) = metadata.capo.as_deref().filter(|s| !s.trim().is_empty()) {
+        chips.push(format!(
+            "<span class=\"meta__chip\">Capo {}</span>",
+            escape(capo)
+        ));
+    }
+    if let Some(duration) = metadata
+        .duration
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+    {
+        chips.push(format!(
+            "<span class=\"meta__chip\">{}</span>",
+            escape(duration)
+        ));
+    }
+    if !chips.is_empty() {
+        let _ = writeln!(
+            inner,
+            "<p class=\"meta meta--params\">{}</p>",
+            chips.join("")
+        );
+    }
+
+    // Tier 3 — supplementary.
+    let mut supplementary: Vec<String> = Vec::new();
+    if let Some(album) = metadata.album.as_deref().filter(|s| !s.trim().is_empty()) {
+        supplementary.push(escape(album));
+    }
+    if let Some(year) = metadata.year.as_deref().filter(|s| !s.trim().is_empty()) {
+        supplementary.push(escape(year));
+    }
+    if let Some(copyright) = metadata
+        .copyright
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+    {
+        supplementary.push(escape(copyright));
+    }
+    if !supplementary.is_empty() {
+        let _ = writeln!(
+            inner,
+            "<p class=\"meta meta--supplementary\">{}</p>",
+            supplementary.join(" · ")
+        );
+    }
+
+    // Wrap title + subtitle + meta strip in a `<header class="song-header">`
+    // so the song's introductory matter registers as an HTML
+    // landmark. Sister-site to the React JSX walker's `<header>`
+    // wrapper.
+    if !inner.is_empty() {
+        html.push_str("<header class=\"song-header\">\n");
+        html.push_str(&inner);
+        html.push_str("</header>\n");
     }
 }
 
@@ -962,10 +1344,26 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut St
 ///
 /// Each chord+text pair is wrapped in a `<span class="chord-block">` with
 /// the chord in `<span class="chord">` and the text in `<span class="lyrics">`.
-/// Formatting directives (font, size, color) are applied via inline CSS.
+///
+/// chord-over-lyric is a visual arrangement of two parallel
+/// data lanes — chord names are performance instructions, lyric
+/// text is the words being sung. That is structurally different
+/// from a ruby annotation (which exists to *pronounce* the base
+/// text), so the markup stays a pair of `<span>`s rather than
+/// `<ruby>` / `<rt>`. CSS positions the chord above the lyric
+/// via `inline-flex; flex-direction: column-reverse`.
+/// Formatting directives (font, size, color) are applied via
+/// inline CSS as before.
+// `prefer_flat` is the song-wide flat/sharp spelling preference
+// computed at the call site from
+// `transposed_key_prefers_flat(&song.metadata, transpose_offset)`.
+// Passing it here keeps every chord's re-spelling consistent
+// with the song's transposed key signature — no mixed `D#` /
+// `Ab` in an Eb-major song.
 fn render_lyrics(
     lyrics_line: &LyricsLine,
     transpose_offset: i8,
+    prefer_flat: bool,
     fmt_state: &FormattingState,
     html: &mut String,
 ) {
@@ -975,12 +1373,18 @@ fn render_lyrics(
         html.push_str("<span class=\"chord-block\">");
 
         if let Some(chord) = &segment.chord {
-            let display_name = if transpose_offset != 0 {
-                let transposed = transpose_chord(chord, transpose_offset);
+            let raw_display = if transpose_offset != 0 {
+                let transposed = transpose_chord_with_style(chord, transpose_offset, prefer_flat);
                 transposed.display_name().to_string()
             } else {
                 chord.display_name().to_string()
             };
+            // Typeset `Bb` as `B♭` and `F#` as `F♯` — matches the
+            // React JSX walker's `unicodeAccidentals` so the same
+            // chord renders identically in the static HTML and the
+            // live React preview. Sister-site to
+            // `packages/react/src/chordpro-jsx.tsx`.
+            let display_name = unicode_accidentals(&raw_display);
             let chord_css = fmt_state.chord.to_css();
             if chord_css.is_empty() {
                 let _ = write!(
@@ -997,19 +1401,13 @@ fn render_lyrics(
                 );
             }
         } else if lyrics_line.has_chords() {
-            // Emit a U+00A0 (NBSP) inside the chord placeholder so
-            // the inline-flex `.chord-block` column reserves a full
-            // chord-row-height line box. A genuinely empty
-            // `<span class="chord"></span>` produces no line box in
-            // most browsers, so `min-height: 1.2em` on `.chord` does
-            // not reliably reserve the row — chord-less segments
-            // float up by one row and misalign with chord-bearing
-            // segments on the same `.line`. The NBSP forces a line
-            // box on structural merits; `min-height` stays as
-            // defense-in-depth. `aria-hidden` prevents assistive
-            // tech from announcing the placeholder as "space" — the
-            // chord row is semantic (chord names), so a purely
-            // presentational NBSP should stay silent. See #2142.
+            // U+00A0 (NBSP) inside the chord placeholder so the
+            // inline-flex `.chord-block` column reserves a full
+            // chord-row-height line box (see #2142). `aria-hidden`
+            // prevents assistive tech from announcing the
+            // placeholder as "space" — the chord row carries
+            // performance information, and a presentational NBSP
+            // should stay silent.
             html.push_str("<span class=\"chord\" aria-hidden=\"true\">\u{00A0}</span>");
         }
 
@@ -1029,6 +1427,7 @@ fn render_lyrics(
             html.push_str(&escape(&segment.text));
         }
         html.push_str("</span>");
+
         html.push_str("</span>");
     }
 
@@ -1687,7 +2086,21 @@ fn render_directive_inner(
             render_section_open("tab", "Tab", &directive.value, html);
         }
         DirectiveKind::StartOfGrid => {
-            render_section_open("grid", "Grid", &directive.value, html);
+            // See the outer body-loop arm for the full
+            // selection logic. This fallback exists for
+            // callers (e.g. chorus replay) that route
+            // `StartOfGrid` through this helper without the
+            // surrounding body context.
+            let label_value = directive.value.as_ref().and_then(|v| {
+                if let Some(label) = chordsketch_chordpro::grid::extract_grid_label(v) {
+                    Some(label)
+                } else if !v.contains('=') {
+                    Some(v.clone())
+                } else {
+                    None
+                }
+            });
+            render_section_open("grid", "Grid", &label_value, html);
         }
         DirectiveKind::StartOfAbc => {
             render_section_open("abc", "ABC", &directive.value, html);
@@ -1747,11 +2160,11 @@ fn render_directive_inner(
                             keys: keys_u8,
                             root_key: root,
                         };
-                        html.push_str("<div class=\"chord-diagram-container\">");
+                        html.push_str("<figure class=\"chord-diagram-container\">");
                         html.push_str(&chordsketch_chordpro::chord_diagram::render_keyboard_svg(
                             &voicing,
                         ));
-                        html.push_str("</div>\n");
+                        html.push_str("</figure>\n");
                     }
                 } else if let Some(ref raw) = def.raw {
                     // Fretted defines: render the standard fret-grid SVG.
@@ -1763,9 +2176,9 @@ fn render_directive_inner(
                         )
                     {
                         diagram.display_name = def.display.clone();
-                        html.push_str("<div class=\"chord-diagram-container\">");
+                        html.push_str("<figure class=\"chord-diagram-container\">");
                         html.push_str(&chordsketch_chordpro::chord_diagram::render_svg(&diagram));
-                        html.push_str("</div>\n");
+                        html.push_str("</figure>\n");
                     }
                 }
             }
@@ -1985,6 +2398,16 @@ fn render_image(attrs: &chordsketch_chordpro::ast::ImageAttributes, html: &mut S
 }
 
 /// Open a `<section>` with a class and optional label.
+///
+/// The label is emitted as an `<h3 class="section-label">` so
+/// screen readers recognise it as the section's heading (HTML5
+/// implicitly names a sectioning element by its first descendant
+/// heading). Sister-site to the React JSX walker's `<h3>` /
+/// `aria-labelledby` pair. The Rust renderer skips the explicit
+/// `aria-labelledby` because the renderer does not currently
+/// thread per-section unique IDs (a separate enhancement) — the
+/// implicit "first heading is the accessible name" rule still
+/// applies.
 fn render_section_open(class: &str, label: &str, value: &Option<String>, html: &mut String) {
     let safe_class = sanitize_css_class(class);
     let _ = writeln!(html, "<section class=\"{safe_class}\">");
@@ -1992,7 +2415,308 @@ fn render_section_open(class: &str, label: &str, value: &Option<String>, html: &
         Some(v) if !v.is_empty() => format!("{label}: {}", escape(v)),
         _ => label.to_string(),
     };
-    let _ = writeln!(html, "<div class=\"section-label\">{display_label}</div>");
+    let _ = writeln!(html, "<h3 class=\"section-label\">{display_label}</h3>");
+}
+
+/// Render a single body line inside a `{start_of_grid}` section
+/// as structured grid markup. Sister-site to
+/// `renderGridLine` in `packages/react/src/chordpro-jsx.tsx`;
+/// the two surfaces emit equivalent DOM shapes so the
+/// `.grid-*` CSS picks them up identically.
+fn render_grid_line(raw: &str, html: &mut String) {
+    use chordsketch_chordpro::grid::{GridBarline, GridRowKind, GridToken, classify_grid_row};
+    use chordsketch_chordpro::typography::unicode_accidentals;
+
+    let row = classify_grid_row(raw);
+    let row_class = if matches!(row.kind, GridRowKind::Strum) {
+        "grid-line grid-line--strum"
+    } else {
+        "grid-line"
+    };
+    let _ = write!(html, "<div class=\"{row_class}\">");
+
+    if let Some(ref label) = row.label {
+        let _ = write!(
+            html,
+            "<span class=\"grid-row__label\">{}</span>",
+            escape(label)
+        );
+    }
+
+    // Group body tokens into bars + barlines, like the React
+    // walker. Beat slots are collected until a barline flushes
+    // them as one `.grid-bar`.
+    enum BeatSlot {
+        Chord(Vec<String>),
+        Strum(String),
+        Continuation,
+        Percent1,
+        Percent2,
+    }
+    enum Cell {
+        Bar {
+            beats: Vec<BeatSlot>,
+            no_chord: bool,
+        },
+        Barline(GridBarline),
+        Volta(u8),
+    }
+    let mut cells: Vec<Cell> = Vec::new();
+    let mut current: Option<(Vec<BeatSlot>, bool)> = None;
+    let flush = |current: &mut Option<(Vec<BeatSlot>, bool)>, cells: &mut Vec<Cell>| {
+        if let Some((beats, no_chord)) = current.take() {
+            if !beats.is_empty() || no_chord {
+                cells.push(Cell::Bar { beats, no_chord });
+            }
+        }
+    };
+    let strum_row = matches!(row.kind, GridRowKind::Strum);
+    for tok in &row.body {
+        match tok {
+            GridToken::Space => {}
+            GridToken::Cell(names) => {
+                let entry = current.get_or_insert_with(|| (Vec::new(), false));
+                if strum_row {
+                    entry.0.push(BeatSlot::Strum(names.join("~")));
+                } else {
+                    entry.0.push(BeatSlot::Chord(names.clone()));
+                }
+            }
+            GridToken::Percent1 => {
+                current
+                    .get_or_insert_with(|| (Vec::new(), false))
+                    .0
+                    .push(BeatSlot::Percent1);
+            }
+            GridToken::Percent2 => {
+                current
+                    .get_or_insert_with(|| (Vec::new(), false))
+                    .0
+                    .push(BeatSlot::Percent2);
+            }
+            GridToken::Continuation => {
+                current
+                    .get_or_insert_with(|| (Vec::new(), false))
+                    .0
+                    .push(BeatSlot::Continuation);
+            }
+            GridToken::NoChord => {
+                let entry = current.get_or_insert_with(|| (Vec::new(), false));
+                entry.1 = true;
+            }
+            GridToken::Barline(b) => {
+                flush(&mut current, &mut cells);
+                cells.push(Cell::Barline(*b));
+            }
+            GridToken::Volta(n) => {
+                flush(&mut current, &mut cells);
+                cells.push(Cell::Volta(*n));
+            }
+        }
+    }
+    flush(&mut current, &mut cells);
+
+    for cell in &cells {
+        match cell {
+            Cell::Bar { beats, no_chord } => {
+                let slots: &[BeatSlot] = if beats.is_empty() {
+                    &[BeatSlot::Continuation]
+                } else {
+                    beats
+                };
+                let _ = write!(
+                    html,
+                    "<span class=\"grid-bar\" data-beats=\"{}\">",
+                    slots.len()
+                );
+                if *no_chord {
+                    html.push_str(
+                        "<span class=\"grid-no-chord\" aria-label=\"no chord\">N.C.</span>",
+                    );
+                } else {
+                    for slot in slots {
+                        match slot {
+                            BeatSlot::Chord(names) => {
+                                if names.len() == 1 {
+                                    let _ = write!(
+                                        html,
+                                        "<span class=\"grid-beat\"><span class=\"grid-chord\">{}</span></span>",
+                                        escape(&unicode_accidentals(&names[0]))
+                                    );
+                                } else {
+                                    html.push_str("<span class=\"grid-beat grid-beat--multi\">");
+                                    for (i, name) in names.iter().enumerate() {
+                                        if i > 0 {
+                                            html.push_str(
+                                                "<span class=\"grid-chord__sep\" aria-hidden=\"true\">~</span>",
+                                            );
+                                        }
+                                        let _ = write!(
+                                            html,
+                                            "<span class=\"grid-chord\">{}</span>",
+                                            escape(&unicode_accidentals(name))
+                                        );
+                                    }
+                                    html.push_str("</span>");
+                                }
+                            }
+                            BeatSlot::Strum(raw) => {
+                                let (class, glyph) = strum_class_and_glyph(raw);
+                                let _ = write!(
+                                    html,
+                                    "<span class=\"grid-beat grid-strum {}\">\
+                                     <span class=\"grid-strum__glyph\" aria-hidden=\"true\">{}</span>\
+                                     <span class=\"sr-only\">{}</span>\
+                                     </span>",
+                                    class,
+                                    escape(&glyph),
+                                    escape(raw),
+                                );
+                            }
+                            BeatSlot::Continuation => {
+                                html.push_str("<span class=\"grid-beat\"></span>");
+                            }
+                            BeatSlot::Percent1 => {
+                                html.push_str(
+                                    "<span class=\"grid-beat grid-beat--percent1\" \
+                                     aria-label=\"repeat previous bar\">\
+                                     <span class=\"grid-percent\" aria-hidden=\"true\">%</span>\
+                                     </span>",
+                                );
+                            }
+                            BeatSlot::Percent2 => {
+                                html.push_str(
+                                    "<span class=\"grid-beat grid-beat--percent2\" \
+                                     aria-label=\"repeat previous two bars\">\
+                                     <span class=\"grid-percent\" aria-hidden=\"true\">%%</span>\
+                                     </span>",
+                                );
+                            }
+                        }
+                    }
+                }
+                html.push_str("</span>");
+            }
+            Cell::Barline(b) => match b {
+                GridBarline::Single => {
+                    html.push_str("<span class=\"grid-barline\" aria-hidden=\"true\"></span>");
+                }
+                GridBarline::Double => {
+                    html.push_str(
+                        "<span class=\"grid-barline grid-barline--double\" aria-hidden=\"true\">\
+                         <span class=\"grid-barline__line\"></span>\
+                         <span class=\"grid-barline__line\"></span>\
+                         </span>",
+                    );
+                }
+                GridBarline::Final => {
+                    html.push_str(
+                        "<span class=\"grid-barline grid-barline--final\" aria-label=\"final barline\">\
+                         <span class=\"grid-barline__line\"></span>\
+                         <span class=\"grid-barline__line grid-barline__line--thick\"></span>\
+                         </span>",
+                    );
+                }
+                GridBarline::RepeatStart => {
+                    html.push_str(
+                        "<span class=\"grid-barline grid-barline--repeat-start\" aria-label=\"repeat start\">\
+                         <span class=\"grid-barline__line grid-barline__line--thick\"></span>\
+                         <span class=\"grid-barline__line\"></span>\
+                         <span class=\"grid-barline__dots\"><span></span><span></span></span>\
+                         </span>",
+                    );
+                }
+                GridBarline::RepeatEnd => {
+                    html.push_str(
+                        "<span class=\"grid-barline grid-barline--repeat-end\" aria-label=\"repeat end\">\
+                         <span class=\"grid-barline__dots\"><span></span><span></span></span>\
+                         <span class=\"grid-barline__line\"></span>\
+                         <span class=\"grid-barline__line grid-barline__line--thick\"></span>\
+                         </span>",
+                    );
+                }
+                GridBarline::RepeatBoth => {
+                    html.push_str(
+                        "<span class=\"grid-barline grid-barline--repeat-both\" aria-label=\"repeat end and start\">\
+                         <span class=\"grid-barline__dots\"><span></span><span></span></span>\
+                         <span class=\"grid-barline__line grid-barline__line--thick\"></span>\
+                         <span class=\"grid-barline__line grid-barline__line--thick\"></span>\
+                         <span class=\"grid-barline__dots\"><span></span><span></span></span>\
+                         </span>",
+                    );
+                }
+            },
+            Cell::Volta(n) => {
+                let _ = write!(
+                    html,
+                    "<span class=\"grid-volta\" aria-label=\"{n} ending\">\
+                     <span class=\"grid-volta__bracket\">\
+                     <span class=\"grid-volta__cap\"></span>\
+                     <span class=\"grid-volta__label\">{n}.</span>\
+                     </span>\
+                     <span class=\"grid-barline__line\"></span>\
+                     </span>",
+                );
+            }
+        }
+    }
+
+    if let Some(ref comment) = row.trailing_comment {
+        let _ = write!(
+            html,
+            "<span class=\"grid-row__comment\">{}</span>",
+            escape(comment)
+        );
+    }
+
+    html.push_str("</div>\n");
+}
+
+/// Map a strum-pattern token to (css-class-suffix, glyph)
+/// pair. Sister-site to `strumClassFor` + `strumGlyphFor` in
+/// `packages/react/src/chordpro-jsx.tsx` — must produce the
+/// same class names so the shared `.grid-strum--*` rules in
+/// the embedded stylesheet apply identically.
+fn strum_class_and_glyph(raw: &str) -> (String, String) {
+    let anticipated = raw.starts_with('~');
+    let stripped = if anticipated { &raw[1..] } else { raw };
+    let lower = stripped.to_ascii_lowercase();
+    let (base, glyph): (&str, String) = match lower.as_str() {
+        "up" | "u" => (
+            "grid-strum--up",
+            if anticipated { "~↑" } else { "↑" }.to_string(),
+        ),
+        "dn" | "d" => (
+            "grid-strum--down",
+            if anticipated { "~↓" } else { "↓" }.to_string(),
+        ),
+        "u+" => (
+            "grid-strum--up-accent",
+            if anticipated { "~↑+" } else { "↑+" }.to_string(),
+        ),
+        "d+" => (
+            "grid-strum--down-accent",
+            if anticipated { "~↓+" } else { "↓+" }.to_string(),
+        ),
+        "ua" => (
+            "grid-strum--up-arpeggio",
+            if anticipated { "~↑·" } else { "↑·" }.to_string(),
+        ),
+        "da" => (
+            "grid-strum--down-arpeggio",
+            if anticipated { "~↓·" } else { "↓·" }.to_string(),
+        ),
+        // Dialect tokens (`dn~up`, `~ux`, `d+~u+`) — pass the
+        // raw text through verbatim so the reader still sees
+        // the source intent.
+        _ => ("grid-strum--custom", raw.to_string()),
+    };
+    let class = if anticipated {
+        format!("{base} grid-strum--anticipated")
+    } else {
+        base.to_string()
+    };
+    (class, glyph)
 }
 
 /// Render a `{chorus}` recall directive as HTML.
@@ -2000,30 +2724,47 @@ fn render_section_open(class: &str, label: &str, value: &Option<String>, html: &
 /// Re-renders the stored chorus AST lines with the current transpose offset,
 /// so chords are transposed correctly even if `{transpose}` changed after
 /// the chorus was defined.
-fn render_chorus_recall(
-    value: &Option<String>,
-    chorus_body: &[Line],
+/// Per-call rendering context for `render_chorus_recall`.
+///
+/// The previous flat-arg form exceeded clippy's
+/// `too_many_arguments` threshold (8/7). Bundling the
+/// rendering knobs into one struct keeps each call site
+/// readable AND lets clippy 1.95 see only two parameters
+/// (the recall payload + the rendering context) without
+/// resorting to a per-call `#[allow]`.
+struct ChorusRecallCtx<'a> {
+    chorus_body: &'a [Line],
     transpose_offset: i8,
-    fmt_state: &FormattingState,
+    prefer_flat: bool,
+    fmt_state: &'a FormattingState,
     show_diagrams: bool,
     diagram_frets: usize,
-    html: &mut String,
-) {
+}
+
+fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, html: &mut String) {
+    let chorus_body = ctx.chorus_body;
+    let transpose_offset = ctx.transpose_offset;
+    let prefer_flat = ctx.prefer_flat;
+    let fmt_state = ctx.fmt_state;
+    let show_diagrams = ctx.show_diagrams;
+    let diagram_frets = ctx.diagram_frets;
     html.push_str("<div class=\"chorus-recall\">\n");
     let display_label = match value {
         Some(v) if !v.is_empty() => format!("Chorus: {}", escape(v)),
         _ => "Chorus".to_string(),
     };
-    let _ = writeln!(html, "<div class=\"section-label\">{display_label}</div>");
+    let _ = writeln!(html, "<h3 class=\"section-label\">{display_label}</h3>");
     // Use a local copy of fmt_state so in-chorus formatting directives
     // (e.g. {size}, {bold}) are applied during recall without mutating
     // the caller's state.
     let mut local_fmt = fmt_state.clone();
     for line in chorus_body {
         match line {
-            Line::Lyrics(lyrics) => render_lyrics(lyrics, transpose_offset, &local_fmt, html),
+            Line::Lyrics(lyrics) => {
+                render_lyrics(lyrics, transpose_offset, prefer_flat, &local_fmt, html)
+            }
             Line::Comment(style, text) => render_comment(*style, text, html),
-            Line::Empty => html.push_str("<div class=\"empty-line\"></div>\n"),
+            Line::Empty => html.push_str("<div class=\"empty-line\" aria-hidden=\"true\"></div>\n"),
             Line::Directive(d) if d.kind.is_font_size_color() => {
                 local_fmt.apply(&d.kind, &d.value);
             }
@@ -2051,6 +2792,20 @@ fn render_comment(style: CommentStyle, text: &str, html: &mut String) {
         }
         CommentStyle::Boxed => {
             let _ = writeln!(html, "<div class=\"comment-box\">{}</div>", escape(text));
+        }
+        CommentStyle::Highlight => {
+            // `{highlight}` is the spec's stronger sibling of `{comment}`
+            // — `chordsketch-render-html` emits a separate `comment--highlight`
+            // class so consumer stylesheets can paint it distinctly (bold
+            // weight, yellow background, etc.) without forking the
+            // base `.comment` styles. The text sits inside a `<mark>`
+            // so HTML5's "marked text" semantic carries through to
+            // assistive tech. Sister-site to the React JSX walker.
+            let _ = writeln!(
+                html,
+                "<p class=\"comment comment--highlight\"><mark>{}</mark></p>",
+                escape(text)
+            );
         }
     }
 }
@@ -2172,6 +2927,62 @@ mod sanitize_tag_attrs_tests {
 mod tests {
     use super::*;
 
+    // `unicode_accidentals_*` tests moved to
+    // `chordsketch_chordpro::typography::tests` together with
+    // the helper itself.
+
+    #[test]
+    fn test_transposed_chord_uses_canonical_spelling_per_target_key() {
+        // C +3 → Eb (flat side). A `D#`/`Eb` chord transposed
+        // should appear with the flat spelling, NOT `D#`. This
+        // is the High finding from the parallel review: legacy
+        // `transpose_chord` per-chord style preservation would
+        // emit `F#` (since source `D#` is sharp-style), but
+        // song-wide canonical spelling gives `Gb`.
+        let song = chordsketch_chordpro::parse("{key: C}\n[D#]hi").unwrap();
+        let result = render_song_with_warnings(&song, 3, &Config::defaults());
+        assert!(
+            result.output.contains(">G\u{266D}<"),
+            "expected `Gb` (flat-side spelling) in transposed Eb song; got: {}",
+            result.output
+        );
+        assert!(
+            !result.output.contains(">F\u{266F}<"),
+            "must not emit sharp-side spelling for a flat-side song; got: {}",
+            result.output
+        );
+    }
+
+    #[test]
+    fn test_chord_block_uses_unicode_accidentals() {
+        let html = render("[Bb]hi");
+        assert!(
+            html.contains("<span class=\"chord\">B\u{266D}</span>"),
+            "expected `B♭` in chord block, got: {html}"
+        );
+    }
+
+    #[test]
+    fn test_inline_key_marker_uses_unicode_accidentals_for_flat_key() {
+        // The chip strip no longer carries `{key}` — it's surfaced
+        // inline at the directive's source position. Verify the
+        // inline marker uses the ♭ unicode accidental.
+        let html = render("{key: Bb}");
+        assert!(
+            html.contains("<span class=\"meta-inline__value\">B\u{266D}</span>"),
+            "expected `B♭` in inline key value, got: {html}"
+        );
+    }
+
+    #[test]
+    fn test_inline_key_marker_uses_unicode_accidentals() {
+        let html = render("[G]a\n{key: Eb}\n[Eb]b");
+        assert!(
+            html.contains("<span class=\"meta-inline__value\">E\u{266D}</span>"),
+            "expected `E♭` in inline key value, got: {html}"
+        );
+    }
+
     #[test]
     fn test_render_empty() {
         let song = chordsketch_chordpro::parse("").unwrap();
@@ -2194,13 +3005,17 @@ mod tests {
         assert!(!body.contains("<!DOCTYPE"));
         assert!(!body.contains("<html"));
         assert!(!body.contains("</html>"));
-        assert!(!body.contains("<head"));
+        // `<head>` (the document-envelope element), not `<head`
+        // — the body now legitimately contains `<header>` for
+        // the song-header landmark, which would match a naked
+        // `<head` prefix check.
+        assert!(!body.contains("<head>"));
         assert!(!body.contains("<style"));
         assert!(!body.contains("<title>"));
         // The body must still contain the song wrapper and metadata
         // blocks that the full-document renderer produces inside
         // `<body>` — that's the contract consumers depend on.
-        assert!(body.contains("<div class=\"song\">"));
+        assert!(body.contains("<article class=\"song\">"));
         assert!(body.contains("<h1>Sample</h1>"));
         // The `chord-block` flex layout is what positions chords above
         // lyrics; body-only consumers will provide the CSS via
@@ -2403,6 +3218,20 @@ mod tests {
     fn test_render_comment_box() {
         let html = render("{comment_box: Important}");
         assert!(html.contains("<div class=\"comment-box\">Important</div>"));
+    }
+
+    #[test]
+    fn test_render_comment_highlight() {
+        // `{highlight}` per spec is an "alternative to comment" with
+        // stronger visual emphasis. Sister to the text renderer's
+        // `<<...>>` delimiter and the PDF renderer's bold variant.
+        // Wrapping `<mark>` carries the HTML5 "marked text"
+        // semantic — see the semantic-HTML refactor in this PR.
+        let html = render("{highlight: Watch out}");
+        assert!(
+            html.contains("<p class=\"comment comment--highlight\"><mark>Watch out</mark></p>"),
+            "got: {html}"
+        );
     }
 
     #[test]
@@ -3133,6 +3962,168 @@ Verse text\n\
             "valid {{capo: 5}} should not warn; got {:?}",
             result.warnings
         );
+    }
+
+    // -- multi-value [Nx] [Pos] metadata in header chips ------------------
+
+    /// Spec: `{key}` / `{tempo}` / `{time}` are `[Nx] [Pos]`. Perl
+    /// `{key}` / `{tempo}` / `{time}` are now surfaced inline at
+    /// each directive's source position via the `.meta-inline`
+    /// markers. The chip strip no longer carries them — only
+    /// `{capo}` and `{duration}` (the two metadata values
+    /// without a positional inline display) remain in the
+    /// header. Sister-site to the React JSX walker's
+    /// `renderHeader`.
+    #[test]
+    fn test_multi_value_keys_do_not_appear_in_chip_strip() {
+        let html = render("{key: G}\n{key: D}\n[D]hi");
+        assert!(
+            !html.contains("class=\"meta__chip\">Key"),
+            "Key chip should be omitted from header (positional inline marker covers it); got: {html}"
+        );
+        // The inline body marker still surfaces the value.
+        assert!(html.contains("meta-inline--key"));
+    }
+
+    #[test]
+    fn test_multi_value_tempos_do_not_appear_in_chip_strip() {
+        let html = render("{tempo: 120}\n{tempo: 140}\n[G]a");
+        assert!(
+            !html.contains("BPM</span>") || !html.contains("class=\"meta__chip\""),
+            "BPM chip should be omitted; got: {html}"
+        );
+        assert!(html.contains("meta-inline--tempo"));
+    }
+
+    #[test]
+    fn test_multi_value_times_do_not_appear_in_chip_strip() {
+        let html = render("{time: 4/4}\n{time: 6/8}\n[G]a");
+        // Time signature should NOT appear as a header chip.
+        assert!(
+            !html.contains("<span class=\"meta__chip\">4/4"),
+            "Time chip should be omitted; got: {html}"
+        );
+        // The inline body marker still surfaces it.
+        assert!(html.contains("meta-inline--time"));
+    }
+
+    /// Phase B of #2454: `{key}` / `{tempo}` / `{time}` are
+    /// `[Nx] [Pos]` per ChordPro spec. Every declaration must
+    /// surface as a positional marker in the body, so a reader
+    /// can see *where* mid-song key / tempo / meter changes
+    /// happen. Sister-site to the text / PDF renderers and the
+    /// React JSX walker (`renderer-parity.md`).
+    #[test]
+    fn test_inline_meta_marker_for_key() {
+        let html = render("[G]first\n{key: D}\n[D]second");
+        // The marker carries a `<svg class="music-glyph music-glyph--key">`
+        // before the label / value pair — assert the structural pieces
+        // rather than a single-string `contains` so the SVG body (which
+        // has many tunable numbers) doesn't make the test brittle.
+        assert!(
+            html.contains("meta-inline meta-inline--key"),
+            "expected key marker class; got: {html}"
+        );
+        assert!(
+            html.contains("music-glyph music-glyph--key"),
+            "expected key-signature glyph SVG; got: {html}"
+        );
+        assert!(
+            html.contains("<span class=\"meta-inline__label\">Key:</span>"),
+            "expected label span; got: {html}"
+        );
+        assert!(
+            html.contains("<span class=\"meta-inline__value\">D</span>"),
+            "expected value span; got: {html}"
+        );
+    }
+
+    #[test]
+    fn test_inline_meta_marker_for_tempo() {
+        let html = render("[G]a\n{tempo: 140}\n[C]b");
+        assert!(
+            html.contains("meta-inline--tempo"),
+            "expected inline tempo marker class; got: {html}"
+        );
+        assert!(
+            html.contains("music-glyph music-glyph--metronome"),
+            "expected metronome glyph SVG; got: {html}"
+        );
+        // 140 BPM → 60/140 * 2 = 0.857s.
+        assert!(
+            // 140 BPM → half-cycle = 60/140 ≈ 0.429s (truncated to
+            // 3 decimal places).
+            html.contains("--cs-metronome-period:0.429s"),
+            "expected animation period derived from BPM; got: {html}"
+        );
+        assert!(
+            html.contains("140 BPM"),
+            "expected '140 BPM' in inline marker; got: {html}"
+        );
+    }
+
+    #[test]
+    fn test_inline_meta_marker_for_time() {
+        let html = render("{tempo: 120}\n[G]a\n{time: 6/8}\n[D]b");
+        assert!(
+            html.contains("meta-inline--time"),
+            "expected inline time marker class; got: {html}"
+        );
+        // Stacked time-signature glyph (numerator on top, fraction
+        // bar, denominator on bottom) — sister-site to React's
+        // `<TimeSignatureGlyph>`.
+        assert!(
+            html.contains("music-glyph--time__num\" aria-hidden=\"true\">6</span>"),
+            "expected stacked numerator '6'; got: {html}"
+        );
+        assert!(
+            html.contains("music-glyph--time__bar\""),
+            "expected fraction bar between digits; got: {html}"
+        );
+        assert!(
+            html.contains("music-glyph--time__den\" aria-hidden=\"true\">8</span>"),
+            "expected stacked denominator '8'; got: {html}"
+        );
+        // The conductor-pattern animation was retired — the
+        // glyph should NOT carry a conduct-N class.
+        assert!(
+            !html.contains("music-glyph--time--conduct-"),
+            "conductor animation was retired; got: {html}"
+        );
+        assert!(
+            !html.contains("<span class=\"meta-inline__value\">6/8</span>"),
+            "redundant text value should not be emitted alongside the icon; got: {html}"
+        );
+    }
+
+    // (The conductor-pattern animation was retired, so the
+    // "no conductor without tempo" / "header tempo seeds the
+    // animation" tests no longer apply — the time-signature
+    // glyph never animates.)
+
+    /// Empty value → no marker (avoids confusing empty brackets).
+    #[test]
+    fn test_inline_meta_marker_skipped_for_empty_value() {
+        let html = render("[G]a\n{key:}\n[D]b");
+        assert!(
+            !html.contains("meta-inline--key"),
+            "empty {{key}} must not produce a marker; got: {html}"
+        );
+    }
+
+    /// Key chip is intentionally absent from the header — the
+    /// inline body marker (`<p class="meta-inline meta-inline--
+    /// key">`) is the canonical positional display.
+    #[test]
+    fn test_single_value_key_emits_no_chip() {
+        let html = render("{key: G}");
+        assert!(
+            !html.contains("<span class=\"meta__chip\">Key G</span>"),
+            "Key chip should be omitted from header; got: {html}"
+        );
+        // The inline marker IS present.
+        assert!(html.contains("meta-inline--key"));
+        assert!(html.contains("<span class=\"meta-inline__value\">G</span>"));
     }
 
     // -- settings.strict missing-{key} warning (R6.100.0, #2291) ----------
@@ -4270,7 +5261,7 @@ mod delegate_tests {
         // Separator between songs
         assert!(html.contains("<hr class=\"song-separator\">"));
         // Each song in its own div.song
-        assert_eq!(html.matches("<div class=\"song\">").count(), 2);
+        assert_eq!(html.matches("<article class=\"song\">").count(), 2);
         // Single HTML document wrapper
         assert_eq!(html.matches("<!DOCTYPE html>").count(), 1);
         assert_eq!(html.matches("</html>").count(), 1);
@@ -4281,10 +5272,43 @@ mod delegate_tests {
         // The scale parameter must be sanitized as a CSS value to prevent
         // injection of arbitrary CSS properties via parentheses and semicolons.
         let html = render("{image: src=photo.jpg scale=0.5); position: fixed; z-index: 9999}");
-        assert!(!html.contains("position"));
-        assert!(!html.contains("z-index"));
-        // Dangerous characters should be stripped by sanitize_css_value
-        assert!(!html.contains("position: fixed"));
+        // Inspect the inline `style="..."` attribute on the image
+        // element, not the document as a whole — the embedded
+        // stylesheet uses `ruby-position` for the chord-block
+        // layout (added in the semantic-HTML refactor) which is
+        // unrelated to the injection vector this test guards.
+        let img_style = extract_img_style(&html);
+        assert!(!img_style.contains("position"), "got style: {img_style}");
+        assert!(!img_style.contains("z-index"), "got style: {img_style}");
+        assert!(
+            !img_style.contains("position: fixed"),
+            "got style: {img_style}"
+        );
+    }
+
+    /// Pull the first `style="..."` attribute of the rendered `<img>`
+    /// element out of the document HTML so injection-vector tests can
+    /// scope their assertions to the attribute they actually
+    /// protect.
+    fn extract_img_style(html: &str) -> String {
+        let needle = "<img ";
+        let img_start = html
+            .find(needle)
+            .expect("rendered html should contain an <img>");
+        let after_img = &html[img_start..];
+        let img_end = after_img.find('>').expect("<img> must close");
+        let img_tag = &after_img[..=img_end];
+        let style_marker = "style=\"";
+        match img_tag.find(style_marker) {
+            None => String::new(),
+            Some(s) => {
+                let after_open = &img_tag[s + style_marker.len()..];
+                let end = after_open
+                    .find('"')
+                    .expect("style attribute must have a closing quote");
+                after_open[..end].to_string()
+            }
+        }
     }
 
     #[test]

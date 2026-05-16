@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor — ChordSketch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700;900&family=Roboto:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="../../tokens.css">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875; color: var(--text-primary); background: var(--canvas); -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; min-height: 100vh; }
+a { color: inherit; }
+
+.topnav { height: 56px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 var(--sp-6); gap: var(--sp-4); }
+.topnav .brand { display: flex; align-items: center; gap: var(--sp-3); font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-16); letter-spacing: -0.01em; text-decoration: none; }
+.topnav .brand .mark { width: 24px; height: 24px; border-radius: var(--r-1); display: block; }
+.topnav .crumbs { display: flex; align-items: center; gap: var(--sp-3); margin-left: var(--sp-6); font-size: var(--fs-14); color: var(--text-secondary); }
+.topnav .crumbs a { text-decoration: none; }
+.topnav .crumbs .sep { color: var(--text-tertiary); }
+.topnav .crumbs .current { color: var(--text-primary); font-weight: 500; }
+.topnav .save-state { display: inline-flex; align-items: center; gap: var(--sp-2); font-family: var(--font-latin); font-weight: 500; font-size: var(--fs-13); color: var(--text-secondary); margin-left: var(--sp-3); }
+.topnav .save-state.saved { color: var(--success-fg); }
+.topnav .save-state.unsaved { color: var(--warning-fg); }
+.topnav .save-state .dot { width: 6px; height: 6px; border-radius: var(--r-full); background: currentColor; }
+.topnav .actions { margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); }
+
+.btn { display: inline-flex; align-items: center; gap: var(--sp-2); height: 36px; padding: 0 var(--sp-4); border-radius: var(--r-2); border: 1px solid transparent; font: 500 var(--fs-14)/1 var(--font-jp); cursor: pointer; transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out); text-decoration: none; }
+.btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.btn-primary { background: var(--crimson-500); color: var(--fg-on-crimson); }
+.btn-primary:hover { background: var(--crimson-600); }
+.btn-secondary { background: var(--surface); color: var(--text-primary); border-color: var(--border-strong); }
+.btn-secondary:hover { background: var(--ink-100); }
+.btn-ghost { background: transparent; color: var(--text-secondary); }
+.btn-ghost:hover { background: var(--ink-100); color: var(--text-primary); }
+.btn-icon { padding: 0; width: 36px; justify-content: center; }
+.btn-sm { height: 28px; padding: 0 var(--sp-3); font-size: var(--fs-13); }
+
+.toolbar { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-6); background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.tool-group { display: flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-3); border-right: 1px solid var(--border); height: 28px; }
+.tool-group:last-of-type { border-right: 0; }
+.tool-group .label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); margin-right: var(--sp-2); }
+.segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--r-2); overflow: hidden; }
+.segmented a, .segmented button { background: var(--surface); border: 0; padding: 0 var(--sp-3); height: 28px; font: 500 var(--fs-13)/1 var(--font-jp); color: var(--text-secondary); cursor: pointer; border-right: 1px solid var(--border); display: inline-flex; align-items: center; text-decoration: none; }
+.segmented a:last-child, .segmented button:last-child { border-right: 0; }
+.segmented [aria-pressed="true"], .segmented [aria-current="page"] { background: var(--ink-1000); color: var(--ink-0); }
+
+.editor { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 0; min-height: 0; }
+@media (max-width: 900px) { .editor { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } .source { border-right: 0 !important; border-bottom: 1px solid var(--border); } }
+
+.pane { display: flex; flex-direction: column; min-height: 0; }
+.pane-head { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-3) var(--sp-6); background: var(--canvas); border-bottom: 1px solid var(--border); }
+.pane-head .eyebrow { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); margin: 0; }
+.pane-head .meta { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-tertiary); }
+.source { background: var(--surface); border-right: 1px solid var(--border); }
+.preview { background: var(--surface); }
+.pane-body { flex: 1; overflow: auto; padding: var(--sp-8); }
+
+.source-code { font-family: var(--font-mono); font-size: var(--fs-14); line-height: 1.857; color: var(--text-primary); white-space: pre; counter-reset: line; padding: 0; }
+.source-code .row { display: grid; grid-template-columns: 36px 1fr; gap: var(--sp-4); }
+.source-code .row::before { content: counter(line); counter-increment: line; font-family: var(--font-mono); font-size: var(--fs-13); color: var(--text-tertiary); text-align: right; user-select: none; padding-right: var(--sp-2); border-right: 1px solid var(--border); }
+.tok-directive { color: var(--text-secondary); }
+.tok-key { color: var(--info-fg); }
+.tok-chord { color: var(--crimson-500); font-weight: 600; }
+.tok-bracket { color: var(--text-tertiary); }
+.tok-comment { color: var(--text-tertiary); font-style: italic; }
+.tok-section { color: var(--ink-700); font-weight: 600; }
+
+.section-label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); margin: var(--sp-6) 0 var(--sp-4); }
+.section-label:first-child { margin-top: 0; }
+.line { font-size: 0; margin-bottom: var(--sp-3); }
+.pair { display: inline-flex; flex-direction: column; align-items: flex-start; vertical-align: bottom; }
+.pair .chord { font-family: var(--font-chord); font-weight: 700; font-size: var(--fs-16); color: var(--crimson-500); line-height: 1; min-height: 1em; }
+.pair .lyric { font-family: var(--font-jp); font-weight: 400; font-size: var(--fs-18); line-height: 1.5; white-space: pre; }
+.preview h1 { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-30); line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 var(--sp-2); }
+.preview .pane-body > .meta { font-family: var(--font-mono); font-size: var(--fs-13); color: var(--text-secondary); margin: 0 0 var(--sp-6); }
+
+.status { display: flex; align-items: center; padding: var(--sp-2) var(--sp-6); background: var(--surface); border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-secondary); gap: var(--sp-6); }
+.status .item { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.status .spacer { flex: 1; }
+.status .ok { color: var(--success-fg); }
+</style>
+</head>
+<body>
+
+<header class="topnav">
+  <a class="brand" href="../../design-system.html">
+    <img class="mark" src="../../../assets/logo.svg" alt="" width="24" height="24">
+    ChordSketch
+  </a>
+  <div class="crumbs">
+    <a href="library.html">Library</a>
+    <span class="sep">›</span>
+    <span class="current">Country Roads</span>
+  </div>
+  <span class="save-state saved" aria-live="polite"><span class="dot"></span>Saved · 14:32</span>
+  <div class="actions">
+    <button class="btn btn-ghost btn-sm">⌘K · Commands</button>
+    <button class="btn btn-ghost btn-icon" aria-label="Undo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg></button>
+    <button class="btn btn-ghost btn-icon" aria-label="Redo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 15-6.7L21 13"/></svg></button>
+    <a href="viewer.html" class="btn btn-secondary">Preview</a>
+    <button class="btn btn-primary">Save</button>
+  </div>
+</header>
+
+<div class="toolbar" role="toolbar" aria-label="Editor tools">
+  <div class="tool-group">
+    <span class="label">Format</span>
+    <div class="segmented" role="group" aria-label="Format">
+      <a href="editor.html" aria-current="page">ChordPro</a>
+      <a href="editor-irealb.html">iReal Pro</a>
+    </div>
+  </div>
+  <div class="tool-group">
+    <span class="label">Transpose</span>
+    <button class="btn btn-secondary btn-sm" aria-label="Transpose down">−</button>
+    <span style="font-family: var(--font-mono); font-size: var(--fs-13); padding: 0 var(--sp-2); min-width: 28px; text-align: center;">+0</span>
+    <button class="btn btn-secondary btn-sm" aria-label="Transpose up">+</button>
+  </div>
+  <div class="tool-group">
+    <span class="label">View</span>
+    <div class="segmented" role="group" aria-label="View">
+      <button aria-pressed="true">Split</button>
+      <button>Source</button>
+      <button>Preview</button>
+    </div>
+  </div>
+  <div class="tool-group">
+    <span class="label">Insert</span>
+    <button class="btn btn-ghost btn-sm">[Chord]</button>
+    <button class="btn btn-ghost btn-sm">{directive}</button>
+    <button class="btn btn-ghost btn-sm">Section</button>
+  </div>
+</div>
+
+<main class="editor">
+  <section class="pane source">
+    <header class="pane-head">
+      <p class="eyebrow">Source · ChordPro</p>
+      <span class="meta">UTF-8 · LF · 14 lines</span>
+    </header>
+    <div class="pane-body">
+<pre class="source-code"><span class="row"><span><span class="tok-bracket">{</span><span class="tok-directive">title</span><span class="tok-bracket">: </span>Country Roads<span class="tok-bracket">}</span></span></span><span class="row"><span><span class="tok-bracket">{</span><span class="tok-directive">artist</span><span class="tok-bracket">: </span>John Denver<span class="tok-bracket">}</span></span></span><span class="row"><span><span class="tok-bracket">{</span><span class="tok-directive">key</span><span class="tok-bracket">: </span><span class="tok-key">G</span><span class="tok-bracket">}</span></span></span><span class="row"><span><span class="tok-bracket">{</span><span class="tok-directive">capo</span><span class="tok-bracket">: </span>0<span class="tok-bracket">}</span></span></span><span class="row"><span><span class="tok-bracket">{</span><span class="tok-directive">tempo</span><span class="tok-bracket">: </span>82<span class="tok-bracket">}</span></span></span><span class="row"><span><span class="tok-bracket">{</span><span class="tok-directive">time</span><span class="tok-bracket">: </span>4/4<span class="tok-bracket">}</span></span></span><span class="row"><span> </span></span><span class="row"><span><span class="tok-comment"># Verse 1</span></span></span><span class="row"><span><span class="tok-bracket">{</span><span class="tok-directive">start_of_verse</span><span class="tok-bracket">}</span></span></span><span class="row"><span><span class="tok-bracket">[</span><span class="tok-chord">G</span><span class="tok-bracket">]</span>Almost heaven, <span class="tok-bracket">[</span><span class="tok-chord">Em</span><span class="tok-bracket">]</span>West Virginia</span></span><span class="row"><span><span class="tok-bracket">[</span><span class="tok-chord">D</span><span class="tok-bracket">]</span>Blue Ridge Mountains, <span class="tok-bracket">[</span><span class="tok-chord">C</span><span class="tok-bracket">]</span>Shenandoah <span class="tok-bracket">[</span><span class="tok-chord">G</span><span class="tok-bracket">]</span>River</span></span><span class="row"><span><span class="tok-bracket">{</span><span class="tok-directive">end_of_verse</span><span class="tok-bracket">}</span></span></span><span class="row"><span> </span></span><span class="row"><span><span class="tok-bracket">{</span><span class="tok-directive">start_of_chorus</span><span class="tok-bracket">}</span></span></span></pre>
+    </div>
+  </section>
+
+  <section class="pane preview">
+    <header class="pane-head">
+      <p class="eyebrow">Preview · HTML</p>
+      <span class="meta">Live · Key G</span>
+    </header>
+    <div class="pane-body">
+      <h1>Country Roads</h1>
+      <p class="meta">John Denver · Key G · Capo 0 · BPM 82 · 4/4</p>
+
+      <p class="section-label">Verse 1</p>
+      <div class="line"><span class="pair"><span class="chord">Gmaj7</span><span class="lyric">Almost heaven, </span></span><span class="pair"><span class="chord">Em7</span><span class="lyric">West Virginia</span></span></div>
+      <div class="line"><span class="pair"><span class="chord">D7sus4</span><span class="lyric">Blue Ridge Mountains, </span></span><span class="pair"><span class="chord">Cmaj7</span><span class="lyric">Shenandoah </span></span><span class="pair"><span class="chord">G/B</span><span class="lyric">River</span></span></div>
+
+      <p class="section-label">Chorus</p>
+      <div class="line"><span class="pair"><span class="chord">G</span><span class="lyric">Country roads, </span></span><span class="pair"><span class="chord">D/F#</span><span class="lyric">take me home</span></span></div>
+      <div class="line"><span class="pair"><span class="chord">Em7</span><span class="lyric">To the place </span></span><span class="pair"><span class="chord">C7♭9</span><span class="lyric">I belong, </span></span><span class="pair"><span class="chord">G/D</span><span class="lyric">West Virginia</span></span></div>
+    </div>
+  </section>
+</main>
+
+<footer class="status" role="status" aria-live="polite">
+  <span class="item"><span class="ok">●</span>Parsed · 0 warnings</span>
+  <span class="item">14 lines · 287 chars</span>
+  <span class="item">5 chords · 2 sections</span>
+  <span class="spacer"></span>
+  <span class="item">Ln 11, Col 28</span>
+  <span class="item">UTF-8</span>
+  <span class="item">ChordPro</span>
+</footer>
+
+</body>
+</html>
