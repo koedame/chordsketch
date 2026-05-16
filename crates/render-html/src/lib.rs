@@ -514,12 +514,14 @@ fn render_song_body_into(
                                 transposed_key_prefers_flat(&song.metadata, transpose_offset);
                             render_chorus_recall(
                                 &directive.value,
-                                &chorus_body,
-                                transpose_offset,
-                                prefer_flat,
-                                &fmt_state,
-                                show_diagrams,
-                                diagram_frets,
+                                &ChorusRecallCtx {
+                                    chorus_body: &chorus_body,
+                                    transpose_offset,
+                                    prefer_flat,
+                                    fmt_state: &fmt_state,
+                                    show_diagrams,
+                                    diagram_frets,
+                                },
                                 html,
                             );
                             chorus_recall_count += 1;
@@ -659,20 +661,31 @@ fn render_song_body_into(
                         if let Some(buf) = chorus_buf.as_mut() {
                             buf.push(line.clone());
                         }
-                        // `directive.value` may be either a
-                        // human-readable label (`{start_of_grid:
-                        // Intro}`) or an attribute payload
-                        // (`{start_of_grid shape="..."}`).
-                        // Suppress the attribute form (anything
-                        // containing `=`) so the section
-                        // heading reads "Grid" instead of the
-                        // raw attribute string; otherwise pass
-                        // the value through as a label.
-                        let label_value = directive
-                            .value
-                            .as_ref()
-                            .filter(|v| !v.contains('='))
-                            .cloned();
+                        // `directive.value` may be:
+                        // - a human-readable label via the
+                        //   colon form (`{start_of_grid: Intro}`),
+                        // - an attribute payload via the inline
+                        //   form (`{start_of_grid shape="..."}`)
+                        //   which MAY include a `label="..."`
+                        //   attribute to be surfaced as the
+                        //   heading.
+                        // Try the structured `label="..."` first,
+                        // then fall back to the colon-form value
+                        // when it doesn't contain `=` (legacy
+                        // human label). When the value contains
+                        // `=` but no `label="..."` (e.g. just
+                        // `shape="..."`), suppress it entirely
+                        // so the heading reads "Grid" instead of
+                        // the raw attribute string.
+                        let label_value = directive.value.as_ref().and_then(|v| {
+                            if let Some(label) = chordsketch_chordpro::grid::extract_grid_label(v) {
+                                Some(label)
+                            } else if !v.contains('=') {
+                                Some(v.clone())
+                            } else {
+                                None
+                            }
+                        });
                         render_section_open("grid", "Grid", &label_value, html);
                         in_grid = true;
                     }
@@ -2061,19 +2074,20 @@ fn render_directive_inner(
             render_section_open("tab", "Tab", &directive.value, html);
         }
         DirectiveKind::StartOfGrid => {
-            // Suppress attribute-payload values (`shape="..."`)
-            // from the section heading; pass through plain
-            // labels (`{start_of_grid: Intro}`) unchanged. The
-            // body loop's outer match intercepts this case to
-            // set `in_grid` and skip this fallback; we still
-            // emit the open tag here for callers that route a
-            // `StartOfGrid` directive through this helper
-            // without a body context (e.g. chorus replay).
-            let label_value = directive
-                .value
-                .as_ref()
-                .filter(|v| !v.contains('='))
-                .cloned();
+            // See the outer body-loop arm for the full
+            // selection logic. This fallback exists for
+            // callers (e.g. chorus replay) that route
+            // `StartOfGrid` through this helper without the
+            // surrounding body context.
+            let label_value = directive.value.as_ref().and_then(|v| {
+                if let Some(label) = chordsketch_chordpro::grid::extract_grid_label(v) {
+                    Some(label)
+                } else if !v.contains('=') {
+                    Some(v.clone())
+                } else {
+                    None
+                }
+            });
             render_section_open("grid", "Grid", &label_value, html);
         }
         DirectiveKind::StartOfAbc => {
@@ -2398,9 +2412,7 @@ fn render_section_open(class: &str, label: &str, value: &Option<String>, html: &
 /// the two surfaces emit equivalent DOM shapes so the
 /// `.grid-*` CSS picks them up identically.
 fn render_grid_line(raw: &str, html: &mut String) {
-    use chordsketch_chordpro::grid::{
-        classify_grid_row, GridBarline, GridRowKind, GridToken,
-    };
+    use chordsketch_chordpro::grid::{GridBarline, GridRowKind, GridToken, classify_grid_row};
     use chordsketch_chordpro::typography::unicode_accidentals;
 
     let row = classify_grid_row(raw);
@@ -2430,7 +2442,10 @@ fn render_grid_line(raw: &str, html: &mut String) {
         Percent2,
     }
     enum Cell {
-        Bar { beats: Vec<BeatSlot>, no_chord: bool },
+        Bar {
+            beats: Vec<BeatSlot>,
+            no_chord: bool,
+        },
         Barline(GridBarline),
         Volta(u8),
     }
@@ -2456,13 +2471,22 @@ fn render_grid_line(raw: &str, html: &mut String) {
                 }
             }
             GridToken::Percent1 => {
-                current.get_or_insert_with(|| (Vec::new(), false)).0.push(BeatSlot::Percent1);
+                current
+                    .get_or_insert_with(|| (Vec::new(), false))
+                    .0
+                    .push(BeatSlot::Percent1);
             }
             GridToken::Percent2 => {
-                current.get_or_insert_with(|| (Vec::new(), false)).0.push(BeatSlot::Percent2);
+                current
+                    .get_or_insert_with(|| (Vec::new(), false))
+                    .0
+                    .push(BeatSlot::Percent2);
             }
             GridToken::Continuation => {
-                current.get_or_insert_with(|| (Vec::new(), false)).0.push(BeatSlot::Continuation);
+                current
+                    .get_or_insert_with(|| (Vec::new(), false))
+                    .0
+                    .push(BeatSlot::Continuation);
             }
             GridToken::NoChord => {
                 let entry = current.get_or_insert_with(|| (Vec::new(), false));
@@ -2508,9 +2532,7 @@ fn render_grid_line(raw: &str, html: &mut String) {
                                         escape(&unicode_accidentals(&names[0]))
                                     );
                                 } else {
-                                    html.push_str(
-                                        "<span class=\"grid-beat grid-beat--multi\">",
-                                    );
+                                    html.push_str("<span class=\"grid-beat grid-beat--multi\">");
                                     for (i, name) in names.iter().enumerate() {
                                         if i > 0 {
                                             html.push_str(
@@ -2690,16 +2712,30 @@ fn strum_class_and_glyph(raw: &str) -> (String, String) {
 /// Re-renders the stored chorus AST lines with the current transpose offset,
 /// so chords are transposed correctly even if `{transpose}` changed after
 /// the chorus was defined.
-fn render_chorus_recall(
-    value: &Option<String>,
-    chorus_body: &[Line],
+/// Per-call rendering context for `render_chorus_recall`.
+///
+/// The previous flat-arg form exceeded clippy's
+/// `too_many_arguments` threshold (8/7). Bundling the
+/// rendering knobs into one struct keeps each call site
+/// readable AND lets clippy 1.95 see only two parameters
+/// (the recall payload + the rendering context) without
+/// resorting to a per-call `#[allow]`.
+struct ChorusRecallCtx<'a> {
+    chorus_body: &'a [Line],
     transpose_offset: i8,
     prefer_flat: bool,
-    fmt_state: &FormattingState,
+    fmt_state: &'a FormattingState,
     show_diagrams: bool,
     diagram_frets: usize,
-    html: &mut String,
-) {
+}
+
+fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, html: &mut String) {
+    let chorus_body = ctx.chorus_body;
+    let transpose_offset = ctx.transpose_offset;
+    let prefer_flat = ctx.prefer_flat;
+    let fmt_state = ctx.fmt_state;
+    let show_diagrams = ctx.show_diagrams;
+    let diagram_frets = ctx.diagram_frets;
     html.push_str("<div class=\"chorus-recall\">\n");
     let display_label = match value {
         Some(v) if !v.is_empty() => format!("Chorus: {}", escape(v)),

@@ -2832,6 +2832,69 @@ mod tests {
     }
 
     #[test]
+    fn grid_inline_attribute_form_extracts_shape() {
+        // `{start_of_grid shape="1+4x2+4"}` should resolve to
+        // the StartOfGrid kind (NOT a custom-section), with the
+        // attribute payload preserved in `value` for the
+        // renderer to consume.
+        let song = parse(r#"{start_of_grid shape="1+4x2+4"}\n| Am . |\n{end_of_grid}"#)
+            .unwrap_or_else(|e| panic!("parse failed: {e:?}"));
+        if let Line::Directive(ref d) = song.lines[0] {
+            assert_eq!(d.kind, DirectiveKind::StartOfGrid);
+            assert_eq!(d.name, "start_of_grid");
+            assert_eq!(d.value.as_deref(), Some(r#"shape="1+4x2+4""#));
+        } else {
+            panic!("expected start_of_grid directive");
+        }
+    }
+
+    #[test]
+    fn grid_inline_label_and_shape_attributes() {
+        // Both attributes ride along in `value`; the renderers
+        // pull them out with `extract_grid_label` / `GridShape::parse`.
+        let song =
+            parse(r#"{start_of_grid shape="4x4" label="Intro"}\n| G . |\n{end_of_grid}"#).unwrap();
+        if let Line::Directive(ref d) = song.lines[0] {
+            assert_eq!(d.kind, DirectiveKind::StartOfGrid);
+            assert!(d.value.as_deref().unwrap().contains(r#"label="Intro""#));
+        } else {
+            panic!("expected start_of_grid directive");
+        }
+    }
+
+    #[test]
+    fn custom_section_with_space_preserves_whole_name() {
+        // `{start_of_foo bar}` is a custom section "foo bar"
+        // (per the legacy contract) — the inline-attribute
+        // split MUST NOT fire because the prefix `start_of_foo`
+        // resolves to `StartOfSection("foo")`, which is
+        // excluded from the split eligibility list.
+        let song = parse("{start_of_foo bar}\ntext\n{end_of_foo bar}").unwrap();
+        if let Line::Directive(ref d) = song.lines[0] {
+            assert_eq!(d.kind, DirectiveKind::StartOfSection("foo bar".to_string()));
+            assert_eq!(d.value, None);
+        } else {
+            panic!("expected StartOfSection");
+        }
+    }
+
+    #[test]
+    fn explicit_colon_value_wins_over_inline_attrs() {
+        // If the directive has a `:`-prefixed value, that value
+        // is authoritative; inline attrs after the directive name
+        // are folded into the name itself (not duplicated into
+        // value). Spec edge case.
+        let song = parse(r#"{start_of_grid shape="4x4": Verse}\n| G |\n{end_of_grid}"#).unwrap();
+        if let Line::Directive(ref d) = song.lines[0] {
+            assert_eq!(d.kind, DirectiveKind::StartOfGrid);
+            // The explicit `:`-prefixed value `Verse` should win.
+            assert_eq!(d.value.as_deref(), Some("Verse"));
+        } else {
+            panic!("expected start_of_grid directive");
+        }
+    }
+
+    #[test]
     fn grid_short_aliases_sog_eog() {
         let song = parse("{sog}\n| Am |\n{eog}").unwrap();
         if let Line::Directive(ref d) = song.lines[0] {

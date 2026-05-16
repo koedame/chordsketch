@@ -1269,13 +1269,21 @@ function LyricsLine({
     ? (event: ReactDragEvent<HTMLDivElement>) => {
         const raw = event.dataTransfer.getData(CHORD_DRAG_MIME);
         if (!raw) return;
-        let payload: ChordDragPayload;
+        let parsed: unknown;
         try {
-          payload = JSON.parse(raw) as ChordDragPayload;
+          parsed = JSON.parse(raw);
         } catch {
           setDropTarget(null);
           return;
         }
+        // Validate the payload before touching the editor
+        // source. A cross-origin drag source can forge our
+        // mime; the schema check is the trust boundary.
+        if (!isValidChordDragPayload(parsed)) {
+          setDropTarget(null);
+          return;
+        }
+        const payload = parsed;
         event.preventDefault();
         const target = findDropTargetInLine(event, line.segments);
         setDropTarget(null);
@@ -1473,12 +1481,15 @@ function buildLyricsDropProps(
     onDrop: (event) => {
       const raw = event.dataTransfer.getData(CHORD_DRAG_MIME);
       if (!raw) return;
-      let payload: ChordDragPayload;
+      let parsed: unknown;
       try {
-        payload = JSON.parse(raw) as ChordDragPayload;
+        parsed = JSON.parse(raw);
       } catch {
         return;
       }
+      // Schema gate — see `isValidChordDragPayload` doc-comment.
+      if (!isValidChordDragPayload(parsed)) return;
+      const payload = parsed;
       event.preventDefault();
       const target = event.currentTarget;
       const charOffset = pointerToLyricCharOffset(
@@ -1510,6 +1521,55 @@ interface ChordDragPayload {
   fromColumn: number;
   fromLength: number;
   chord: string;
+}
+
+/**
+ * Validate a parsed `ChordDragPayload`. The dataTransfer mime
+ * gate (`application/x-chordsketch-chord`) only proves the
+ * payload claims to be ours — a cross-origin drag source can
+ * forge that mime and stuff arbitrary content into the JSON
+ * blob. Without validation, `applyChordReposition` would
+ * happily interpolate the payload's `chord` field into the
+ * ChordPro source, letting an attacker inject directives like
+ * `{image: src="https://evil/?leak"}` via a drag-and-drop
+ * gesture.
+ *
+ * Accepted shape:
+ * - `fromLine` — integer ≥ 1
+ * - `fromColumn` — integer ≥ 0
+ * - `fromLength` — integer ≥ 0
+ * - `chord` — non-empty string containing none of `[]{}<\n\r`
+ *   (which would corrupt the ChordPro source structure).
+ */
+function isValidChordDragPayload(value: unknown): value is ChordDragPayload {
+  if (typeof value !== 'object' || value === null) return false;
+  const p = value as Record<string, unknown>;
+  if (
+    typeof p.fromLine !== 'number' ||
+    !Number.isInteger(p.fromLine) ||
+    p.fromLine < 1
+  )
+    return false;
+  if (
+    typeof p.fromColumn !== 'number' ||
+    !Number.isInteger(p.fromColumn) ||
+    p.fromColumn < 0
+  )
+    return false;
+  if (
+    typeof p.fromLength !== 'number' ||
+    !Number.isInteger(p.fromLength) ||
+    p.fromLength < 0
+  )
+    return false;
+  if (typeof p.chord !== 'string' || p.chord.length === 0) return false;
+  // Reject characters that would corrupt the ChordPro source
+  // structure when interpolated as `[${chord}]`. ChordPro chord
+  // names never contain these characters in any spec form, so
+  // rejecting them is safe and prevents directive-injection
+  // attacks through the drag payload.
+  if (/[\[\]{}<\n\r]/.test(p.chord)) return false;
+  return true;
 }
 
 /**
@@ -1769,31 +1829,82 @@ export interface GridShape {
 }
 
 /**
- * Parse a `shape="L+MxB+R"` attribute string into a structured
- * `GridShape`. Accepts both the bare value (`L+MxB+R`) and the
- * attribute form with surrounding `shape="..."` syntax. Falls
- * back to the spec default `1+4x4+1` on parse failure.
+ * Extract a `label="..."` attribute from a grid directive's
+ * inline value. Sister-site to
+ * `chordsketch_chordpro::grid::extract_grid_label`. Returns
+ * `null` when no `label` attribute is present so callers can
+ * fall back to a default heading.
+ */
+export function extractGridLabel(raw: string): string | null {
+  const quoted = raw.match(/label\s*=\s*"([^"]*)"/i);
+  if (quoted) return quoted[1]!;
+  const bare = raw.match(/label\s*=\s*([^\s]+)/i);
+  if (bare) return bare[1]!;
+  return null;
+}
+
+/**
+ * Parse a `shape="..."` attribute string into a structured
+ * `GridShape`. Three spec-defined forms are accepted (sister-
+ * site to `chordsketch_chordpro::grid::parse_shape_body`):
+ *
+ * - `L+MxB+R` — full form (margin-left + measures × beats +
+ *   margin-right).
+ * - `MxB` — body only; margins default to 0.
+ * - `N` — bare cell count; treated as a single measure of N
+ *   beats with no margins.
+ *
+ * Accepts both the bare value and the attribute form
+ * (`shape="..."` or `shape=...`). Falls back to the spec
+ * default `1+4x4+1` on parse failure.
  */
 export function parseGridShape(raw: string): GridShape {
   const DEFAULT: GridShape = { marginLeft: 1, measures: 4, beats: 4, marginRight: 1 };
-  // Extract the value inside `shape="..."` if the attribute
-  // form was passed; otherwise consume the raw token as-is.
-  const inner = (() => {
-    const m = raw.match(/shape\s*=\s*"([^"]*)"/i);
-    if (m) return m[1]!;
-    const m2 = raw.match(/shape\s*=\s*([^\s]+)/i);
-    if (m2) return m2[1]!;
-    return raw.trim();
-  })();
-  // Match `L+MxB+R`.
-  const m = inner.match(/^\s*(\d+)\s*\+\s*(\d+)\s*[x*]\s*(\d+)\s*\+\s*(\d+)\s*$/i);
-  if (!m) return DEFAULT;
-  return {
-    marginLeft: Number.parseInt(m[1]!, 10),
-    measures: Number.parseInt(m[2]!, 10),
-    beats: Number.parseInt(m[3]!, 10),
-    marginRight: Number.parseInt(m[4]!, 10),
-  };
+  const inner = extractShapeInner(raw);
+  // Try the full L+MxB+R form first.
+  const plus = inner.split('+').map((s) => s.trim());
+  if (plus.length === 3) {
+    const left = Number.parseInt(plus[0]!, 10);
+    const right = Number.parseInt(plus[2]!, 10);
+    const body = splitBodyMeasuresBeats(plus[1]!);
+    if (Number.isFinite(left) && Number.isFinite(right) && body) {
+      return { marginLeft: left, measures: body[0], beats: body[1], marginRight: right };
+    }
+  } else if (plus.length === 1) {
+    // Body-only `MxB` or bare `N` form (margins default to 0).
+    const body = splitBodyMeasuresBeats(plus[0]!);
+    if (body) {
+      return { marginLeft: 0, measures: body[0], beats: body[1], marginRight: 0 };
+    }
+  }
+  return DEFAULT;
+}
+
+/** Extract the inner value from `shape="..."` / `shape=...` /
+ * bare token. */
+function extractShapeInner(raw: string): string {
+  const quoted = raw.match(/shape\s*=\s*"([^"]*)"/i);
+  if (quoted) return quoted[1]!;
+  const bare = raw.match(/shape\s*=\s*([^\s]+)/i);
+  if (bare) return bare[1]!;
+  return raw.trim();
+}
+
+/** Split a body specifier into `[measures, beats]`. */
+function splitBodyMeasuresBeats(body: string): [number, number] | null {
+  const parts = body.split(/[x*]/i).map((s) => s.trim());
+  if (parts.length === 2) {
+    const m = Number.parseInt(parts[0]!, 10);
+    const b = Number.parseInt(parts[1]!, 10);
+    if (Number.isFinite(m) && Number.isFinite(b)) return [m, b];
+    return null;
+  }
+  if (parts.length === 1) {
+    // Bare cell count `N` → 1 measure × N beats.
+    const n = Number.parseInt(parts[0]!, 10);
+    if (Number.isFinite(n)) return [1, n];
+  }
+  return null;
 }
 
 // ---- Header rendering ----------------------------------------------
@@ -2958,16 +3069,26 @@ function handleDirective(
     if (kind.tag === 'startOfChorus') {
       ctx.savedFmt = cloneFormattingState(ctx.fmt);
     }
-    // For grid sections the directive's `value` carries an
-    // attribute payload (`shape="..."`) — NOT a human-readable
-    // label. Suppress it so the section heading defaults to
-    // the generic "Grid" instead of rendering the raw shape
-    // string. The shape is parsed separately and stored on
-    // the section via `gridShape` below.
+    // For grid sections the directive's `value` may carry an
+    // attribute payload (`shape="..." label="..."`) or a
+    // legacy colon-form label. Resolve the human-readable
+    // label by preferring `label="..."` when present, falling
+    // back to the value when it doesn't contain `=`, otherwise
+    // null so the section heading defaults to "Grid". Sister-
+    // site to the Rust renderers' `extract_grid_label` flow.
     const isGrid = kind.tag === 'startOfGrid';
+    const gridLabel = isGrid
+      ? (() => {
+          const v = directive.value ?? '';
+          const extracted = extractGridLabel(v);
+          if (extracted !== null) return extracted;
+          if (!v.includes('=')) return v.length > 0 ? v : null;
+          return null;
+        })()
+      : (directive.value ?? null);
     ctx.section = {
       name: SECTION_TAG_TO_NAME[kind.tag]!,
-      label: isGrid ? null : directive.value ?? null,
+      label: gridLabel,
       children: [],
       startLine: key,
       gridShape: isGrid ? parseGridShape(directive.value ?? '') : null,

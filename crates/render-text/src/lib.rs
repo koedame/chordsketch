@@ -609,16 +609,22 @@ fn render_directive(
         }
         DirectiveKind::StartOfGrid => {
             // `directive.value` may carry an attribute payload
-            // (`{start_of_grid shape="..."}`) — suppress it from
-            // the header so the text output reads `[Grid]`
-            // instead of `[Grid: shape="..."]`. Plain labels
-            // (`{start_of_grid: Intro}`) still render as
-            // `[Grid: Intro]`.
-            let label_value = directive
-                .value
-                .as_ref()
-                .filter(|v| !v.contains('='))
-                .cloned();
+            // (`{start_of_grid shape="..." label="Intro"}`) or a
+            // legacy colon-form label (`{start_of_grid: Intro}`).
+            // Prefer the structured `label="..."` attribute when
+            // present, fall back to the colon-form value when it
+            // doesn't contain `=`, otherwise suppress entirely so
+            // the header reads `[Grid]` (not the raw attribute
+            // string). Sister-site to the HTML and PDF renderers.
+            let label_value = directive.value.as_ref().and_then(|v| {
+                if let Some(label) = chordsketch_chordpro::grid::extract_grid_label(v) {
+                    Some(label)
+                } else if !v.contains('=') {
+                    Some(v.clone())
+                } else {
+                    None
+                }
+            });
             render_section_header("Grid", &label_value, output);
         }
         // Notation block openers (ABC / Lilypond / MusicXML / SVG) are

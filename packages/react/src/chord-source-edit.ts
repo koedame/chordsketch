@@ -124,6 +124,22 @@ export function applyChordReposition(
   source: string,
   evt: ChordRepositionEvent,
 ): ChordRepositionResult {
+  // Defense-in-depth: the React walker already validates the
+  // drag payload via `isValidChordDragPayload` before reaching
+  // this function, but non-React callers (e.g. tests / future
+  // host integrations) may pass an unchecked event. Reject
+  // chord names that would corrupt the ChordPro source
+  // structure when interpolated as `[${chord}]` — brackets,
+  // braces, newlines.
+  if (typeof evt.chord !== 'string' || evt.chord.length === 0) {
+    throw new Error('chord must be a non-empty string');
+  }
+  if (/[\[\]{}<\n\r]/.test(evt.chord)) {
+    throw new Error(
+      `chord ${JSON.stringify(evt.chord)} contains forbidden character ` +
+        '(brackets, braces, angle bracket, newline / carriage return)',
+    );
+  }
   // Use `\n` as the delimiter — the parser is `\n`-only too,
   // so the source coordinates the event carries refer to
   // `\n`-split lines.

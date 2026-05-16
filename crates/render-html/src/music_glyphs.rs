@@ -312,18 +312,23 @@ pub fn metronome_svg(bpm_raw: &str) -> String {
     let period = (60.0 / safe_bpm).clamp(0.05, 5.0);
 
     // Use the validated numeric BPM in the accessible name —
+    // Use the validated numeric BPM in the accessible name —
     // not the raw `bpm_raw` string — so a `{tempo: <script>}`
-    // payload doesn't reach screen readers (the surrounding
-    // `escape_xml` already neutralises XSS, but the read-out
-    // text should still be the clamped numeric value). Falls
-    // back to "unknown" when the source value can't be parsed.
-    let aria = if bpm_raw
-        .trim()
-        .parse::<f32>()
-        .ok()
-        .map_or(false, f32::is_finite)
-    {
-        format!("Metronome at {} BPM", bpm_raw.trim())
+    // payload doesn't reach screen readers AND so a future
+    // refactor that moves the string into a non-escaping
+    // context can't inherit a sanitiser bypass. The
+    // surrounding `escape_xml` already neutralises XSS today;
+    // this is defense-in-depth. Falls back to "unknown" when
+    // the source value can't be parsed.
+    let aria = if bpm.is_finite() && bpm > 0.0 {
+        // Format as an integer when the BPM is whole (the
+        // common case); otherwise preserve one decimal so
+        // unusual values like `90.5` still read accurately.
+        if (bpm - bpm.round()).abs() < f32::EPSILON {
+            format!("Metronome at {} BPM", bpm as i32)
+        } else {
+            format!("Metronome at {bpm} BPM")
+        }
     } else {
         "Metronome (BPM unknown)".to_string()
     };

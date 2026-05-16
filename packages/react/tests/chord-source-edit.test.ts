@@ -182,6 +182,45 @@ describe('applyChordReposition — error paths', () => {
     ).toThrow(/toLine/);
   });
 
+  test.each([
+    ['[bracket]', 'left bracket'],
+    [']bracket', 'right bracket'],
+    ['{brace', 'left brace'],
+    ['brace}', 'right brace'],
+    ['multi\nline', 'newline'],
+    ['carriage\rreturn', 'carriage return'],
+    ['<tag', 'angle bracket'],
+  ])(
+    'rejects chord containing forbidden character (%s — %s)',
+    (chord, _label) => {
+      expect(() =>
+        applyChordReposition('a\nb', {
+          fromLine: 1,
+          fromColumn: 0,
+          fromLength: 1,
+          toLine: 1,
+          toLyricsOffset: 0,
+          chord,
+          copy: true,
+        }),
+      ).toThrow(/forbidden character/);
+    },
+  );
+
+  test('rejects empty chord name', () => {
+    expect(() =>
+      applyChordReposition('a\nb', {
+        fromLine: 1,
+        fromColumn: 0,
+        fromLength: 1,
+        toLine: 1,
+        toLyricsOffset: 0,
+        chord: '',
+        copy: true,
+      }),
+    ).toThrow(/non-empty string/);
+  });
+
   test('throws when from range exceeds line length', () => {
     expect(() =>
       applyChordReposition('hi', {

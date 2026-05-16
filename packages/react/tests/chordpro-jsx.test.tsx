@@ -1425,6 +1425,176 @@ describe('renderChordproAst', () => {
     expect(chords).toEqual(['G', 'C', 'D', 'G', 'Em', 'C', 'Am', 'G']);
   });
 
+  // Grid row label (`A` / `Coda` before the first barline) is
+  // surfaced as a left-side `.grid-row__label` cell rendered
+  // outside the bar grid proper.
+  test('grid row label is rendered in a `.grid-row__label` cell', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [{ chord: null, text: 'Coda | D7 . . . |.', spans: [] }],
+          },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    expect(container.querySelector('.grid-row__label')?.textContent).toBe('Coda');
+  });
+
+  // Grid row trailing comment (any text after the last barline)
+  // surfaces as a right-side `.grid-row__comment` cell.
+  test('grid row trailing comment renders in a `.grid-row__comment` cell', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [{ chord: null, text: '|: G . . . :| repeat 4 times', spans: [] }],
+          },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    expect(container.querySelector('.grid-row__comment')?.textContent).toBe('repeat 4 times');
+  });
+
+  // `%` / `%%` measure-repeat cells render as dedicated beat
+  // slots with `--percent1` / `--percent2` modifier classes.
+  test('grid measure-repeat markers `%` and `%%` render as percent beats', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '| G . | % . | %% . |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    expect(container.querySelectorAll('.grid-beat--percent1').length).toBe(1);
+    expect(container.querySelectorAll('.grid-beat--percent2').length).toBe(1);
+  });
+
+  // Cell-internal `~` puts multiple chords in one beat slot
+  // (`C~G` → both chords share a `.grid-beat--multi`).
+  test('grid multi-chord cell (`C~G`) renders in a `.grid-beat--multi` slot', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '| C~G . . . |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    const multi = container.querySelector('.grid-beat--multi');
+    expect(multi).not.toBeNull();
+    const chordNames = Array.from(multi?.querySelectorAll('.grid-chord') ?? []).map(
+      (c) => c.textContent,
+    );
+    expect(chordNames).toEqual(['C', 'G']);
+    expect(multi?.querySelector('.grid-chord__sep')?.textContent).toBe('~');
+  });
+
+  // Combined `:|:` barline renders as a single `.grid-barline--repeat-both`
+  // marker (not as repeat-end followed by repeat-start).
+  test('combined `:|:` barline renders as a single `--repeat-both` marker', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '| G . :|: C . |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    expect(container.querySelectorAll('.grid-barline--repeat-both').length).toBe(1);
+    // The `:|:` glyph should NOT decompose into separate
+    // repeat-end + repeat-start barlines.
+    expect(container.querySelectorAll('.grid-barline--repeat-end').length).toBe(0);
+    expect(container.querySelectorAll('.grid-barline--repeat-start').length).toBe(0);
+  });
+
+  // Strum row: a leading `s` after the first barline switches
+  // the row to strum mode. Tokens like `dn` / `up` / `d+` / `u+`
+  // get arrow glyphs and modifier classes; dialect tokens
+  // (`dn~up`, `~ux`) survive verbatim under `--custom`.
+  test('strum row detects leading `s` and emits arrow glyphs', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '|s dn up d+ u+ ~up ~ux |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    const line = container.querySelector('.grid-line--strum');
+    expect(line).not.toBeNull();
+    // Strum cells with modifier classes per token shape.
+    expect(line?.querySelector('.grid-strum--down')).not.toBeNull();
+    expect(line?.querySelector('.grid-strum--up')).not.toBeNull();
+    expect(line?.querySelector('.grid-strum--down-accent')).not.toBeNull();
+    expect(line?.querySelector('.grid-strum--up-accent')).not.toBeNull();
+    expect(line?.querySelector('.grid-strum--anticipated')).not.toBeNull();
+    expect(line?.querySelector('.grid-strum--custom')).not.toBeNull();
+  });
+
   // Chord names and key values are typeset with proper Unicode
   // musical accidentals (`♭` / `♯`) so a `{key: Bb}` reads as
   // "B♭" and a chord `[Bb]` shows as "B♭" in the chord row.

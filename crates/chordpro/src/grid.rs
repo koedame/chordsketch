@@ -81,6 +81,29 @@ impl GridShape {
     }
 }
 
+/// Extract a `label="..."` attribute from a grid directive's
+/// inline value. Returns the unquoted label string if found,
+/// otherwise `None`. Used by all renderers to surface the
+/// spec-defined `{start_of_grid label="Intro"}` form as a
+/// human-readable section heading without leaking the
+/// attribute syntax into the rendered output.
+#[must_use]
+pub fn extract_grid_label(raw: &str) -> Option<String> {
+    let start = find_substr_ci(raw, "label")?;
+    let after = raw[start + 5..].trim_start();
+    let after = after.strip_prefix('=')?.trim_start();
+    if let Some(rest) = after.strip_prefix('"') {
+        let end = rest.find('"')?;
+        return Some(rest[..end].to_string());
+    }
+    // Bare-value form `label=Intro` — terminator is whitespace.
+    let end = after.find(char::is_whitespace).unwrap_or(after.len());
+    if end == 0 {
+        return None;
+    }
+    Some(after[..end].to_string())
+}
+
 fn extract_shape_value(raw: &str) -> Option<&str> {
     // `shape="..."` — quoted form
     if let Some(start) = find_substr_ci(raw, "shape") {
@@ -97,44 +120,89 @@ fn extract_shape_value(raw: &str) -> Option<&str> {
     None
 }
 
+/// Find an ASCII case-insensitive substring in a (possibly
+/// non-ASCII) string, returning the BYTE offset of the match.
+///
+/// Walks char boundaries via `char_indices` instead of raw byte
+/// offsets so multibyte UTF-8 sequences preceding the needle
+/// don't trigger a "byte index N is not a char boundary" panic
+/// when we slice for the comparison. The needle is restricted
+/// to ASCII (the grid module only searches for the literal
+/// `"shape"`), so byte-length comparison is safe.
 fn find_substr_ci(hay: &str, needle: &str) -> Option<usize> {
-    let needle_lower = needle.to_ascii_lowercase();
-    let bytes = hay.as_bytes();
-    let n = needle_lower.len();
-    if bytes.len() < n {
-        return None;
+    let n = needle.len();
+    if n == 0 {
+        return Some(0);
     }
-    for i in 0..=bytes.len() - n {
-        if hay[i..i + n].eq_ignore_ascii_case(&needle_lower) {
-            return Some(i);
+    for (idx, _) in hay.char_indices() {
+        let end = idx.checked_add(n)?;
+        if end > hay.len() {
+            return None;
+        }
+        // Only attempt the slice when `end` lands on a char
+        // boundary; otherwise this position is the middle of a
+        // multibyte sequence and the substring obviously can't
+        // match an ASCII needle.
+        if !hay.is_char_boundary(end) {
+            continue;
+        }
+        if hay[idx..end].eq_ignore_ascii_case(needle) {
+            return Some(idx);
         }
     }
     None
 }
 
 fn parse_shape_body(s: &str) -> Option<GridShape> {
+    // The spec defines three forms (see
+    // https://www.chordpro.org/chordpro/directives-env_grid/):
+    //   `L+MxB+R`  — full form with explicit margin cells
+    //   `MxB`      — body only; margins fall back to 0
+    //   `N`        — bare cell count; treated as `0+NxN+0`
+    //                where the body is a single measure of N
+    //                beats (the spec lets the second factor
+    //                default to the missing one)
     let parts: Vec<&str> = s.split('+').map(str::trim).collect();
-    if parts.len() != 3 {
-        return None;
+    match parts.as_slice() {
+        // Full form: L+MxB+R
+        [left, body, right] => {
+            let left = left.parse::<u8>().ok()?;
+            let right = right.parse::<u8>().ok()?;
+            let (measures, beats) = split_body_measures_beats(body)?;
+            Some(GridShape {
+                margin_left: left,
+                measures,
+                beats,
+                margin_right: right,
+            })
+        }
+        // Body-only form: MxB (margins default to 0)
+        [body] => {
+            let (measures, beats) = split_body_measures_beats(body)?;
+            Some(GridShape {
+                margin_left: 0,
+                measures,
+                beats,
+                margin_right: 0,
+            })
+        }
+        _ => None,
     }
-    let left = parts[0].parse::<u8>().ok()?;
-    let body = parts[1];
-    let right = parts[2].parse::<u8>().ok()?;
-    let body_parts: Vec<&str> = body
-        .split(|c| c == 'x' || c == 'X' || c == '*')
-        .map(str::trim)
-        .collect();
-    if body_parts.len() != 2 {
-        return None;
+}
+
+/// Split a body specifier into `(measures, beats)`.
+///
+/// `4x4` → `(4, 4)`. `16` (bare cell count) → `(1, 16)` — the
+/// spec treats a single integer as a flat 1-measure × N-beats
+/// strip, which is what `shape="16"` renders to in the
+/// reference implementation.
+fn split_body_measures_beats(body: &str) -> Option<(u8, u8)> {
+    let parts: Vec<&str> = body.split(['x', 'X', '*']).map(str::trim).collect();
+    match parts.as_slice() {
+        [measures, beats] => Some((measures.parse().ok()?, beats.parse().ok()?)),
+        [single] => Some((1, single.parse().ok()?)),
+        _ => None,
     }
-    let measures = body_parts[0].parse::<u8>().ok()?;
-    let beats = body_parts[1].parse::<u8>().ok()?;
-    Some(GridShape {
-        margin_left: left,
-        measures,
-        beats,
-        margin_right: right,
-    })
 }
 
 /// Single barline variant emitted by the tokeniser.
@@ -283,10 +351,7 @@ pub fn tokenize_grid_line(input: &str) -> Vec<GridToken> {
             i += 1;
             continue;
         }
-        if c == b'n'
-            && (i + 1 >= bytes.len()
-                || matches!(bytes[i + 1], b' ' | b'\t' | b'|'))
-        {
+        if c == b'n' && (i + 1 >= bytes.len() || matches!(bytes[i + 1], b' ' | b'\t' | b'|')) {
             out.push(GridToken::NoChord);
             i += 1;
             continue;
@@ -319,12 +384,8 @@ pub fn tokenize_grid_line(input: &str) -> Vec<GridToken> {
 #[must_use]
 pub fn classify_grid_row(input: &str) -> GridRow {
     let tokens = tokenize_grid_line(input);
-    let first_bar = tokens
-        .iter()
-        .position(|t| is_barline_like(t));
-    let last_bar = tokens
-        .iter()
-        .rposition(|t| is_barline_like(t));
+    let first_bar = tokens.iter().position(is_barline_like);
+    let last_bar = tokens.iter().rposition(is_barline_like);
 
     let label = match first_bar {
         Some(idx) if idx > 0 => {
@@ -375,7 +436,7 @@ pub fn classify_grid_row(input: &str) -> GridRow {
     let body: Vec<GridToken> = body_slice
         .iter()
         .enumerate()
-        .filter(|(i, _)| strum_marker_idx.map_or(true, |sm| *i != sm))
+        .filter(|(i, _)| strum_marker_idx != Some(*i))
         .map(|(_, t)| t.clone())
         .collect();
 
@@ -443,6 +504,28 @@ mod tests {
     }
 
     #[test]
+    fn shape_survives_multibyte_preceding_text() {
+        // Regression: previous `find_substr_ci` byte-indexed
+        // through the input, panicking when a multibyte char
+        // preceded "shape". Public API must not panic on any
+        // input.
+        let shape = GridShape::parse("\u{3042}shape=\"2+8x3+1\"");
+        assert_eq!(
+            shape,
+            GridShape {
+                margin_left: 2,
+                measures: 8,
+                beats: 3,
+                margin_right: 1,
+            }
+        );
+        // Multibyte preceding bare-value form should also work.
+        assert_eq!(GridShape::parse("\u{30B7}shape=1+4x4+1").measures, 4);
+        // Pure non-ASCII input falls back to default (no panic).
+        assert_eq!(GridShape::parse("\u{4E2D}\u{6587}"), GridShape::default());
+    }
+
+    #[test]
     fn shape_parses_bare_value() {
         assert_eq!(
             GridShape::parse("2+8x3+1"),
@@ -451,6 +534,54 @@ mod tests {
                 measures: 8,
                 beats: 3,
                 margin_right: 1,
+            }
+        );
+    }
+
+    #[test]
+    fn extract_label_quoted_form() {
+        assert_eq!(
+            extract_grid_label(r#"label="Intro" shape="4x4""#),
+            Some("Intro".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_label_bare_form() {
+        assert_eq!(extract_grid_label("label=Outro"), Some("Outro".to_string()));
+    }
+
+    #[test]
+    fn extract_label_missing() {
+        assert_eq!(extract_grid_label(r#"shape="1+4x4+1""#), None);
+        assert_eq!(extract_grid_label(""), None);
+    }
+
+    #[test]
+    fn shape_parses_body_only_form() {
+        // Spec form `shape="MxB"` — margins default to 0.
+        assert_eq!(
+            GridShape::parse(r#"shape="4x4""#),
+            GridShape {
+                margin_left: 0,
+                measures: 4,
+                beats: 4,
+                margin_right: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn shape_parses_bare_cell_count() {
+        // Spec form `shape="N"` — single-measure strip of N
+        // beats, no margins.
+        assert_eq!(
+            GridShape::parse(r#"shape="16""#),
+            GridShape {
+                margin_left: 0,
+                measures: 1,
+                beats: 16,
+                margin_right: 0,
             }
         );
     }

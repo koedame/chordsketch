@@ -17,6 +17,8 @@ import {
   lyricsCaretRatio,
   tokenizeGridLine,
   unicodeAccidentals,
+  extractGridLabel,
+  parseGridShape,
 } from '../src/chordpro-jsx';
 
 describe('unicodeAccidentals', () => {
@@ -223,5 +225,52 @@ describe('lyricsCaretRatio', () => {
     // Caret at source col 12 = start of `world`. Lyrics offset =
     // 6 (segment 1's full text) + 0 = 6; ratio = 6/11.
     expect(lyricsCaretRatio(multi, 12, 17)).toBeCloseTo(6 / 11, 4);
+  });
+});
+
+describe('parseGridShape', () => {
+  test('parses full L+MxB+R form', () => {
+    expect(parseGridShape('shape="1+4x2+4"')).toEqual({
+      marginLeft: 1, measures: 4, beats: 2, marginRight: 4,
+    });
+  });
+
+  test('parses body-only MxB form (margins default to 0)', () => {
+    expect(parseGridShape('shape="4x4"')).toEqual({
+      marginLeft: 0, measures: 4, beats: 4, marginRight: 0,
+    });
+  });
+
+  test('parses bare cell-count N as 1-measure × N-beats', () => {
+    expect(parseGridShape('shape="16"')).toEqual({
+      marginLeft: 0, measures: 1, beats: 16, marginRight: 0,
+    });
+  });
+
+  test('falls back to spec default on unparseable input', () => {
+    expect(parseGridShape('garbage')).toEqual({
+      marginLeft: 1, measures: 4, beats: 4, marginRight: 1,
+    });
+  });
+
+  test('falls back to spec default on empty input', () => {
+    expect(parseGridShape('')).toEqual({
+      marginLeft: 1, measures: 4, beats: 4, marginRight: 1,
+    });
+  });
+});
+
+describe('extractGridLabel', () => {
+  test('extracts label from quoted form', () => {
+    expect(extractGridLabel('label="Intro" shape="4x4"')).toBe('Intro');
+  });
+
+  test('extracts label from bare form', () => {
+    expect(extractGridLabel('label=Outro')).toBe('Outro');
+  });
+
+  test('returns null when no label attribute is present', () => {
+    expect(extractGridLabel('shape="4x4"')).toBeNull();
+    expect(extractGridLabel('')).toBeNull();
   });
 });

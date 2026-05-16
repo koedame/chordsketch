@@ -974,12 +974,14 @@ fn render_song_into_doc(
                                 transposed_key_prefers_flat(&song.metadata, transpose_offset);
                             render_chorus_recall(
                                 &d.value,
-                                &chorus_body,
-                                transpose_offset,
-                                prefer_flat,
-                                &fmt_state,
-                                show_diagrams,
-                                diagram_frets,
+                                &ChorusRecallCtx {
+                                    chorus_body: &chorus_body,
+                                    transpose_offset,
+                                    prefer_flat,
+                                    fmt_state: &fmt_state,
+                                    show_diagrams,
+                                    diagram_frets,
+                                },
                                 doc,
                             );
                             chorus_recall_count += 1;
@@ -1309,15 +1311,28 @@ fn render_section_label(directive: &chordsketch_chordpro::ast::Directive, doc: &
         _ => None,
     };
     if let Some(label) = label {
-        // For grid sections the `value` may carry the
-        // `shape="..."` attribute payload; suppress it from
-        // the section heading so the PDF reads "Grid" instead
-        // of "Grid: shape=...". Plain labels (without `=`)
-        // pass through unchanged.
-        let suppress_value = matches!(directive.kind, DirectiveKind::StartOfGrid)
-            && directive.value.as_deref().is_some_and(|v| v.contains('='));
-        let text = match &directive.value {
-            Some(v) if !v.is_empty() && !suppress_value => format!("{label}: {v}"),
+        // For grid sections the `value` may carry an attribute
+        // payload (`shape="..." label="Intro"`) — prefer the
+        // structured `label="..."` attribute, otherwise pass
+        // through plain colon-form labels. Suppress raw
+        // attribute payloads (any value containing `=`).
+        // Sister-site to the HTML and text renderers.
+        let resolved_value: Option<String> = if matches!(directive.kind, DirectiveKind::StartOfGrid)
+        {
+            directive.value.as_ref().and_then(|v| {
+                if let Some(label) = chordsketch_chordpro::grid::extract_grid_label(v) {
+                    Some(label)
+                } else if !v.contains('=') {
+                    Some(v.clone())
+                } else {
+                    None
+                }
+            })
+        } else {
+            directive.value.clone()
+        };
+        let text = match resolved_value {
+            Some(v) if !v.is_empty() => format!("{label}: {v}"),
             _ => label,
         };
         doc.ensure_space(SECTION_SIZE + LINE_GAP);
@@ -1902,16 +1917,22 @@ fn render_keyboard_diagram_pdf(
 ///
 /// Emits a "Chorus" label (with optional custom label) followed by the content
 /// of the most recently defined chorus section.
-fn render_chorus_recall(
-    value: &Option<String>,
-    chorus_body: &[Line],
+/// Per-call rendering context for `render_chorus_recall`.
+///
+/// Bundles the rendering knobs into one struct so the function
+/// signature stays under clippy's `too_many_arguments`
+/// threshold without a per-call `#[allow]`. Sister-site to the
+/// equivalent `ChorusRecallCtx` in `crates/render-html`.
+struct ChorusRecallCtx<'a> {
+    chorus_body: &'a [Line],
     transpose_offset: i8,
     prefer_flat: bool,
-    fmt_state: &PdfFormattingState,
+    fmt_state: &'a PdfFormattingState,
     show_diagrams: bool,
     diagram_frets: usize,
-    doc: &mut PdfDocument,
-) {
+}
+
+fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, doc: &mut PdfDocument) {
     let text = match value {
         Some(v) if !v.is_empty() => format!("Chorus: {v}"),
         _ => "Chorus".to_string(),
@@ -1921,15 +1942,22 @@ fn render_chorus_recall(
     doc.newline(SECTION_SIZE + LINE_GAP);
 
     // Replay the stored chorus body lines.
-    for line in chorus_body {
+    for line in ctx.chorus_body {
         match line {
             Line::Lyrics(lyrics) => {
-                render_lyrics(lyrics, transpose_offset, prefer_flat, fmt_state, doc, false);
+                render_lyrics(
+                    lyrics,
+                    ctx.transpose_offset,
+                    ctx.prefer_flat,
+                    ctx.fmt_state,
+                    doc,
+                    false,
+                );
             }
             Line::Comment(style, text) => render_comment(*style, text, doc),
             Line::Empty => doc.newline(LINE_GAP * 2.0),
             Line::Directive(d) if !d.kind.is_metadata() => {
-                render_directive(d, show_diagrams, diagram_frets, doc);
+                render_directive(d, ctx.show_diagrams, ctx.diagram_frets, doc);
             }
             _ => {}
         }
