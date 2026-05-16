@@ -483,6 +483,11 @@ function BarCell({
           {'\u{E047}'}
         </span>
       )}
+      {!bar.fermata && bar.symbol === 'fermata' && (
+        <span className="fermata" aria-label="Fermata">
+          {'\u{E4C0}'}
+        </span>
+      )}
       {special !== null
         ? special
         : bar.chords.length === 0

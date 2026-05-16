@@ -375,6 +375,7 @@ impl ToJson for MusicalSymbol {
             Self::DaCapo => "da_capo",
             Self::DalSegno => "dal_segno",
             Self::Fine => "fine",
+            Self::Fermata => "fermata",
         };
         write_str(out, s);
     }
@@ -1384,6 +1385,7 @@ impl FromJson for MusicalSymbol {
             "da_capo" => Ok(Self::DaCapo),
             "dal_segno" => Ok(Self::DalSegno),
             "fine" => Ok(Self::Fine),
+            "fermata" => Ok(Self::Fermata),
             other => Err(JsonError::new(
                 0,
                 format!("unknown musical symbol {}", truncate_for_message(other)),

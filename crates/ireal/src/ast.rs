@@ -560,4 +560,8 @@ pub enum MusicalSymbol {
     DalSegno,
     /// "Fine" — terminal marker for a `D.C. al fine` / `D.S. al fine`.
     Fine,
+    /// Fermata mark (𝄐) — hold the marked bar longer than notated.
+    /// Spec token: lowercase `f` in the Rehearsal Marks table at
+    /// <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>.
+    Fermata,
 }

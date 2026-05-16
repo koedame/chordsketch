@@ -21,7 +21,13 @@ export type KeyMode = 'major' | 'minor';
 export type BarLine = 'single' | 'double' | 'final' | 'open_repeat' | 'close_repeat';
 
 /** Repeat / navigation symbol attached to a bar. */
-export type MusicalSymbol = 'segno' | 'coda' | 'da_capo' | 'dal_segno' | 'fine';
+export type MusicalSymbol =
+  | 'segno'
+  | 'coda'
+  | 'da_capo'
+  | 'dal_segno'
+  | 'fine'
+  | 'fermata';
 
 /** Root or bass note. `note` is an uppercase ASCII letter `A`–`G`. */
 export interface ChordRoot {

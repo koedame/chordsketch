@@ -535,6 +535,14 @@ fn render_fine_demo() {
     );
 }
 
+#[test]
+fn render_fermata_demo() {
+    check_golden(
+        "fermata_demo",
+        &music_symbol_demo(MusicalSymbol::Fermata, "Fermata Demo"),
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Fixture: vertical-space hint Y / YY / YYY at row boundaries
 //

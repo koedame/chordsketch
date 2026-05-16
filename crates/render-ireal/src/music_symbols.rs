@@ -13,6 +13,9 @@
 //! - **Segno** (`Segno`) — Bravura U+E047 outline, scaled and
 //!   Y-flipped from font units to SVG.
 //! - **Coda** (`Coda`) — Bravura U+E048 outline, same transform.
+//! - **Fermata** (`Fermata`) — Bravura U+E4C0 (`fermataAbove`)
+//!   outline, same transform. Spec: lowercase `f` in the iReal Pro
+//!   Rehearsal Marks table.
 //! - **D.C.** (`DaCapo`) / **D.S.** (`DalSegno`) / **Fine**
 //!   (`Fine`) — italicised serif `<text>` runs (these are text
 //!   directives in iReal Pro's data model, not SMuFL glyph
@@ -125,6 +128,17 @@ pub(crate) fn render_music_symbols(song: &IrealSong, layout: &Layout) -> String 
                     glyph_cy,
                     bravura::CODA_FONT_CX,
                     bravura::CODA_FONT_CY as f32,
+                );
+            }
+            MusicalSymbol::Fermata => {
+                emit_smufl_path(
+                    &mut out,
+                    "music-symbol-fermata",
+                    bravura::FERMATA_PATH_D,
+                    glyph_cx,
+                    glyph_cy,
+                    bravura::FERMATA_FONT_CX as f32,
+                    bravura::FERMATA_FONT_CY as f32,
                 );
             }
             MusicalSymbol::DaCapo => {
@@ -250,6 +264,23 @@ mod tests {
         assert!(svg.contains("class=\"music-symbol-coda\""));
         assert!(
             svg.contains(&format!("d=\"{}", &bravura::CODA_PATH_D[..PREFIX_LEN])),
+            "{svg}"
+        );
+    }
+
+    #[test]
+    fn fermata_emits_bravura_outline() {
+        let mut song = IrealSong::new();
+        song.sections
+            .push(section('A', vec![bar_with_symbol(MusicalSymbol::Fermata)]));
+        let layout = compute_layout(&song);
+        let svg = render_music_symbols(&song, &layout);
+        assert!(svg.contains("class=\"music-symbol-fermata\""));
+        // Bravura's fermataAbove outline starts with this absolute
+        // moveto; catches a regression that swaps the path data
+        // for a different glyph (e.g. fermataBelow U+E4C1).
+        assert!(
+            svg.contains(&format!("d=\"{}", &bravura::FERMATA_PATH_D[..PREFIX_LEN])),
             "{svg}"
         );
     }

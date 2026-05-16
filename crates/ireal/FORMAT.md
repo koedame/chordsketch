@@ -171,6 +171,7 @@ checks each token in this priority order:
 | `U` | Player ending marker — discard. |
 | `S` | Segno — sets `Bar::symbol = Some(Segno)` on the current bar. |
 | `Q` | Coda — sets `Bar::symbol = Some(Coda)` on the current bar. |
+| `f` | Fermata — sets `Bar::symbol = Some(Fermata)` on the current bar. Renderer paints the Bravura `fermataAbove` glyph (SMuFL U+E4C0) above the bar. |
 | `{` / `}` | Open / close repeat — sets `BarLine::OpenRepeat` / `BarLine::CloseRepeat` on the boundary bars. |
 | `\|` | Bar separator. |
 | `[` / `]` | Double bar open / close — sets `BarLine::Double`. |
