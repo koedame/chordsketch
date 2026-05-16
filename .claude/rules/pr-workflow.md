@@ -17,7 +17,7 @@ below.
 4. **All findings — every severity — resolved in-PR.** Every High / Medium / Low /
    Nit finding produces a fix commit on the PR branch. CI re-runs, then a **delta
    review** examines only the fix commits. The review loop iterates until the
-   delta review surfaces nothing further (or the safety cap in step 6 fires).
+   delta review surfaces nothing further (or the safety cap in step 7 fires).
 5. **No follow-up issues for review findings.** Review bots MUST NOT call
    `gh issue create` during review. If a finding is genuinely out of the PR's
    scope (e.g. a pre-existing defect in an unrelated crate surfaced in passing),
