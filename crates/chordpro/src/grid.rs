@@ -69,11 +69,20 @@ impl Default for GridShape {
 }
 
 impl GridShape {
-    /// Parse a `shape="L+MxB+R"` attribute string.
+    /// Parse a `shape="..."` attribute string.
     ///
-    /// Accepts the bare value (`1+4x4+1`) or the attribute
-    /// form `shape="1+4x4+1"`. Falls back to
-    /// [`GridShape::default`] on parse failure.
+    /// Three spec-defined forms are accepted:
+    /// - `L+MxB+R` — full form (margin-left + measures × beats
+    ///   + margin-right).
+    /// - `MxB` — body only; margins default to 0.
+    /// - `N` — bare cell count; treated as a single measure of
+    ///   N beats with no margins.
+    ///
+    /// The `shape` attribute name and the `x` / `X` / `*`
+    /// separator between measures and beats are all matched
+    /// case-insensitively. Numeric components must be valid
+    /// `u8` (0..=255). Falls back to [`GridShape::default`]
+    /// (the spec default `1+4x4+1`) on parse failure.
     #[must_use]
     pub fn parse(raw: &str) -> Self {
         let inner = extract_shape_value(raw).unwrap_or(raw.trim());
@@ -384,6 +393,17 @@ pub fn tokenize_grid_line(input: &str) -> Vec<GridToken> {
 #[must_use]
 pub fn classify_grid_row(input: &str) -> GridRow {
     let tokens = tokenize_grid_line(input);
+    // Empty input early-out — avoids two layers of
+    // `saturating_sub(1)` guarding against an empty token
+    // stream later in the function.
+    if tokens.is_empty() {
+        return GridRow {
+            label: None,
+            kind: GridRowKind::Chord,
+            body: Vec::new(),
+            trailing_comment: None,
+        };
+    }
     let first_bar = tokens.iter().position(is_barline_like);
     let last_bar = tokens.iter().rposition(is_barline_like);
 
@@ -401,14 +421,10 @@ pub fn classify_grid_row(input: &str) -> GridRow {
         }
         _ => None,
     };
-    let body_range = match (first_bar, last_bar) {
-        (Some(f), Some(l)) if l >= f => f..=l,
-        _ => 0..=tokens.len().saturating_sub(1),
-    };
-    let body_slice: &[GridToken] = if tokens.is_empty() {
-        &[]
-    } else {
-        &tokens[*body_range.start()..=*body_range.end()]
+    let body_slice: &[GridToken] = match (first_bar, last_bar) {
+        (Some(f), Some(l)) if l >= f => &tokens[f..=l],
+        // No barline anywhere — every token is body content.
+        _ => &tokens[..],
     };
 
     // Strum row detection: the first cell after the opening
