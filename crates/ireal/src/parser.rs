@@ -55,8 +55,8 @@
 //!   them.
 
 use crate::ast::{
-    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, Ending,
-    IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
+    Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
 };
 use std::fmt;
 
@@ -645,6 +645,30 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
             rest = r;
             continue;
         }
+        if let Some(r) = rest.strip_prefix('s') {
+            // Chord-size marker — `s` switches every subsequent
+            // chord to `ChordSize::Small`. Placed before the
+            // chord-root check so a top-level `s` (between chord
+            // boundaries, where this branch is reached) acts as a
+            // size modifier, not as a malformed chord. `s` INSIDE
+            // a chord token (e.g. `Csus4`) never reaches this
+            // branch — `consume_chord_token` slurps the whole
+            // chord including the `s` quality character before
+            // control returns to the dispatcher.
+            state.set_chord_size(ChordSize::Small);
+            rest = r;
+            continue;
+        }
+        if let Some(r) = rest.strip_prefix('l') {
+            // Chord-size marker — `l` restores the default chord
+            // size. Like `s` above, this only matches at top level
+            // (between chord boundaries); a trailing `l` inside a
+            // chord-quality string would have been consumed by
+            // `consume_chord_token`.
+            state.set_chord_size(ChordSize::Default);
+            rest = r;
+            continue;
+        }
         if let Some(r) = rest.strip_prefix('{') {
             state.finish_bar();
             state.queue_start_repeat();
@@ -816,6 +840,12 @@ struct ChartParseState {
     in_alternate: bool,
     last_chord: Option<String>,
     time_signature: TimeSignature,
+    /// Display size applied to every subsequently-emitted chord
+    /// until the next `s` / `l` marker. Persists across bar
+    /// boundaries — the spec's "all the following chord symbols
+    /// will be narrower until an `l` symbol is encountered" wording
+    /// is parser-wide, not bar-scoped.
+    current_chord_size: ChordSize,
 }
 
 impl ChartParseState {
@@ -866,6 +896,10 @@ impl ChartParseState {
 
     fn queue_final(&mut self) {
         self.pending_final = true;
+    }
+
+    fn set_chord_size(&mut self, size: ChordSize) {
+        self.current_chord_size = size;
     }
 
     fn add_system_break_space(&mut self, count: u8) {
@@ -987,7 +1021,12 @@ impl ChartParseState {
         // time signature. Beat 1 is a structural placeholder here.
         // See #2057 (render-ireal) for beat-distribution logic.
         let position = BeatPosition::on_beat(1).expect("beat 1 is always a valid NonZeroU8");
-        self.current_bar.chords.push(BarChord { chord, position });
+        let size = self.current_chord_size;
+        self.current_bar.chords.push(BarChord {
+            chord,
+            position,
+            size,
+        });
         Ok(())
     }
 
@@ -1772,5 +1811,83 @@ mod tests {
                 song.sections[0].label,
             );
         }
+    }
+
+    // ---- Chord-size markers `s` / `l` (#2433) ---------------------
+
+    #[test]
+    fn s_token_stamps_small_size_on_subsequent_chords() {
+        // `s` before a chord root sets `ChordSize::Small` on that
+        // chord. All chords after `s` until the next `l` are Small.
+        let url = "irealbook://Test=A==Style=C=44=[*AsC|D|]";
+        let song = parse(url).expect("parse");
+        let bars = &song.sections[0].bars;
+        assert_eq!(
+            bars[0].chords[0].size,
+            ChordSize::Small,
+            "chord C after `s` must be Small"
+        );
+        assert_eq!(
+            bars[1].chords[0].size,
+            ChordSize::Small,
+            "chord D in next bar must also be Small (state persists)"
+        );
+    }
+
+    #[test]
+    fn l_token_restores_default_size() {
+        // `s` sets Small; `l` restores Default. Chords after `l`
+        // are back to Default.
+        let url = "irealbook://Test=A==Style=C=44=[*AsC|lD|E|]";
+        let song = parse(url).expect("parse");
+        let bars = &song.sections[0].bars;
+        assert_eq!(bars[0].chords[0].size, ChordSize::Small, "C after `s`");
+        assert_eq!(bars[1].chords[0].size, ChordSize::Default, "D after `l`");
+        assert_eq!(bars[2].chords[0].size, ChordSize::Default, "E also Default");
+    }
+
+    #[test]
+    fn chord_size_state_persists_across_bar_boundaries() {
+        // The spec says "all the following chord symbols will be
+        // narrower until an `l` symbol is encountered". There is no
+        // bar-boundary reset — the flag persists.
+        let url = "irealbook://Test=A==Style=C=44=[*AsC|D|E|lF]";
+        let song = parse(url).expect("parse");
+        let bars = &song.sections[0].bars;
+        assert_eq!(bars[0].chords[0].size, ChordSize::Small, "C");
+        assert_eq!(bars[1].chords[0].size, ChordSize::Small, "D");
+        assert_eq!(bars[2].chords[0].size, ChordSize::Small, "E");
+        assert_eq!(bars[3].chords[0].size, ChordSize::Default, "F after `l`");
+    }
+
+    #[test]
+    fn chord_size_state_persists_across_section_boundaries() {
+        // Sections are also transparent to the size state — no reset
+        // at the `*X` section-start marker.
+        let url = "irealbook://Test=A==Style=C=44=[*AsC|D][*BE|lF]";
+        let song = parse(url).expect("parse");
+        let sec_a = &song.sections[0];
+        let sec_b = &song.sections[1];
+        assert_eq!(sec_a.bars[0].chords[0].size, ChordSize::Small, "C in A");
+        assert_eq!(sec_a.bars[1].chords[0].size, ChordSize::Small, "D in A");
+        // The `s` from section A must still be active at the start of B.
+        assert_eq!(sec_b.bars[0].chords[0].size, ChordSize::Small, "E in B");
+        assert_eq!(
+            sec_b.bars[1].chords[0].size,
+            ChordSize::Default,
+            "F after `l`"
+        );
+    }
+
+    #[test]
+    fn s_token_does_not_consume_following_chord_letter() {
+        // `s` is a one-character marker; it must NOT swallow the chord
+        // that immediately follows it.
+        let url = "irealbook://Test=A==Style=C=44=[*AsG7|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.chords.len(), 1);
+        assert_eq!(bar0.chords[0].chord.root.note, 'G');
+        assert_eq!(bar0.chords[0].size, ChordSize::Small);
     }
 }

@@ -18,8 +18,8 @@
 #![cfg(feature = "png")]
 
 use chordsketch_ireal::{
-    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, IrealSong,
-    KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
+    IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
 };
 use chordsketch_render_ireal::{
     PAGE_HEIGHT, PAGE_WIDTH,
@@ -57,6 +57,7 @@ fn build_basic_song() -> IrealSong {
     let bar_chord = BarChord {
         chord,
         position: BeatPosition::on_beat(1).unwrap(),
+        size: ChordSize::Default,
     };
     let bar = Bar {
         start: BarLine::OpenRepeat,
