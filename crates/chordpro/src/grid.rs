@@ -689,6 +689,27 @@ mod tests {
     }
 
     #[test]
+    fn tokenize_empty_bracket_cell_drops_to_no_token() {
+        // `[]` unwraps to an empty string, which is then
+        // filtered out by the cell-emission step. This is
+        // intentional: an explicitly-empty bracket carries no
+        // chord information, so the tokeniser treats it the
+        // same as whitespace. The renderer therefore lays out
+        // the surrounding beats as if `[]` weren't there.
+        let toks = tokenize_grid_line("| [] G |");
+        // Exactly one cell token surfaces — the `G`.
+        let cells: Vec<&Vec<String>> = toks
+            .iter()
+            .filter_map(|t| match t {
+                GridToken::Cell(n) => Some(n),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(cells.len(), 1);
+        assert_eq!(cells[0], &vec!["G".to_string()]);
+    }
+
+    #[test]
     fn tokenize_unwraps_bracketed_chord_names() {
         let toks = tokenize_grid_line("| [Am] [C] |");
         let cells: Vec<&Vec<String>> = toks
