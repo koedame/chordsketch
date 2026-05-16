@@ -1086,6 +1086,18 @@ pub fn render(input: &str) -> String {
 //   - `.line { display: flex; flex-wrap: __LINE_FLEX_WRAP__; ...`
 //   - `.chord-diagrams-grid { display: flex; flex-wrap: wrap; ...`
 // Do not alter the prefix bytes of those two rules.
+//
+// Sister-site styling note: the React surface ships a richer
+// stylesheet at `packages/react/src/styles.css` that consumes
+// design-system tokens via CSS custom properties
+// (`var(--cs-font-chord, …)`). This static-HTML stylesheet
+// cannot inherit those tokens at consumer time — the rendered
+// HTML is meant to display correctly in browsers / readers
+// that haven't loaded any consumer stylesheet at all — so
+// every font / color / size is materialised as a literal
+// value here. When the design-system tokens change, BOTH
+// stylesheets need updating; the differences are
+// representational, not behavioural.
 const CSS_TEMPLATE: &str = "\
 body { font-family: \"Noto Sans JP\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; font-size: 1rem; line-height: 1.6875; color: #0A0A0B; max-width: 720px; margin: 2em auto; padding: 0 1em; }
 h1 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-weight: 700; font-size: 1.875rem; letter-spacing: -0.02em; color: #0A0A0B; margin-bottom: 0.2em; }
