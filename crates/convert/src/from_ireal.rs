@@ -313,6 +313,7 @@ fn symbol_label(symbol: MusicalSymbol) -> &'static str {
         MusicalSymbol::DaCapo => "D.C.",
         MusicalSymbol::DalSegno => "D.S.",
         MusicalSymbol::Fine => "Fine",
+        MusicalSymbol::Fermata => "Fermata",
     }
 }
 

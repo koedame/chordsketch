@@ -634,6 +634,17 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
             rest = r;
             continue;
         }
+        if let Some(r) = rest.strip_prefix('f') {
+            // Fermata — lowercase `f` per the iReal Pro Rehearsal
+            // Marks table. Placed before the chord-root check
+            // (`A..=G | W`) so a stray `f` is never misinterpreted
+            // as a chord prefix — lowercase `f` is not a valid root
+            // letter today, but explicit ordering keeps the
+            // dispatcher stable if a future spec revision adds one.
+            state.queue_symbol(MusicalSymbol::Fermata);
+            rest = r;
+            continue;
+        }
         if let Some(r) = rest.strip_prefix('{') {
             state.finish_bar();
             state.queue_start_repeat();
@@ -1705,6 +1716,41 @@ mod tests {
             bar_d.system_break_space, 2,
             "two separate Y runs must accumulate to 2"
         );
+    }
+
+    // ---- Fermata `f` marker (#2431) ------------------------------
+
+    #[test]
+    fn f_token_attaches_fermata_to_current_bar() {
+        // `f` before a bar's chord content labels that bar with
+        // `MusicalSymbol::Fermata` — same attach-to-current-bar
+        // contract as `S` / `Q` (see `queue_symbol`).
+        let url = "irealbook://Test=A==Style=C=44=[*AC|fD|E|F]";
+        let song = parse(url).expect("parse");
+        let bars = &song.sections[0].bars;
+        assert_eq!(bars[0].symbol, None, "first bar carries no fermata");
+        assert_eq!(
+            bars[1].symbol,
+            Some(MusicalSymbol::Fermata),
+            "bar after `f` carries Fermata"
+        );
+        // The chord on the labelled bar must survive — the `f`
+        // branch consumes one character, not the chord that follows.
+        assert_eq!(bars[1].chords[0].chord.root.note, 'D');
+    }
+
+    #[test]
+    fn f_token_does_not_consume_following_chord_letter() {
+        // Regression guard: a hypothetical implementation that
+        // swallowed `f<chord>` together would drop the chord that
+        // shares the bar with the fermata. Lock the per-character
+        // dispatch contract.
+        let url = "irealbook://Test=A==Style=C=44=[*AfG7|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.symbol, Some(MusicalSymbol::Fermata));
+        assert_eq!(bar0.chords.len(), 1);
+        assert_eq!(bar0.chords[0].chord.root.note, 'G');
     }
 
     #[test]

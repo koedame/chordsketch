@@ -167,7 +167,7 @@ The expected SVGs live under `tests/fixtures/<name>/expected.svg`
 `sixteen_bar_loop`, `section_break_irregular`, `multi_chord_bar`,
 `repeats_demo`, `endings_demo`, `section_markers_demo`,
 `final_barline_demo`, `segno_demo`, `coda_demo`, `dc_demo`,
-`ds_demo`, `fine_demo`).
+`ds_demo`, `fine_demo`, `fermata_demo`).
 
 ## Links
 
@@ -180,9 +180,10 @@ The expected SVGs live under `tests/fixtures/<name>/expected.svg`
 
 The crate sources are licensed under MIT.
 
-The segno (U+E047) and coda (U+E048) glyph outlines baked into
-`src/bravura.rs` are derived from the [Bravura SMuFL font][bravura]
-and are redistributed under the [SIL Open Font License 1.1][ofl] —
+The segno (U+E047), coda (U+E048), and fermataAbove (U+E4C0)
+glyph outlines baked into `src/bravura.rs` are derived from the
+[Bravura SMuFL font][bravura] and are redistributed under the
+[SIL Open Font License 1.1][ofl] —
 the OFL text is at `LICENSE-OFL.txt` and the attribution required by
 §4 of the license is in the project-level `NOTICE`. ADR-0014 records
 why the renderer bakes path data instead of bundling the font binary.

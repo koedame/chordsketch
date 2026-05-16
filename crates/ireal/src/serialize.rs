@@ -420,6 +420,7 @@ fn serialize_symbol(out: &mut String, symbol: MusicalSymbol) {
         MusicalSymbol::DaCapo => out.push_str("<D.C.>"),
         MusicalSymbol::DalSegno => out.push_str("<D.S.>"),
         MusicalSymbol::Fine => out.push_str("<Fine>"),
+        MusicalSymbol::Fermata => out.push('f'),
     }
 }
 
@@ -857,6 +858,44 @@ mod tests {
             .flat_map(|s| s.bars.iter())
             .any(|b| b.symbol == Some(MusicalSymbol::DalSegno));
         assert!(found, "DalSegno symbol must survive the round trip");
+    }
+
+    #[test]
+    fn musical_symbol_fermata_round_trips() {
+        // Exercises `MusicalSymbol::Fermata` in `serialize_symbol`.
+        // Serialised as a single `f` glyph attached to the bar;
+        // re-parsed via the `f` token branch in `parse_chord_chart`.
+        let song = IrealSong {
+            title: "Fermata Test".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('G'), ChordQuality::Dominant7),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                    }],
+                    ending: None,
+                    symbol: Some(MusicalSymbol::Fermata),
+                    repeat_previous: false,
+                    no_chord: false,
+                    text_comment: None,
+                    system_break_space: 0,
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        let found = parsed
+            .sections
+            .iter()
+            .flat_map(|s| s.bars.iter())
+            .any(|b| b.symbol == Some(MusicalSymbol::Fermata));
+        assert!(found, "Fermata symbol must survive the round trip");
     }
 
     #[test]
