@@ -8,25 +8,37 @@
 //!
 //! # Format reference
 //!
-//! The open-protocol `irealbook://` plain-text URL form is
-//! publicly specified by iReal Pro in the [iReal Pro Custom Chord
-//! Chart Protocol][spec] and on the companion [developer docs
-//! page][devdocs]; the chord-chart syntax this parser accepts is
-//! drawn from that spec. The obfuscated `irealb://` export — the
-//! `MUSIC_PREFIX` magic and the `obfusc50` unscramble that wrap
-//! the same chord-chart body — is **not** covered by the published
-//! spec and remains a reverse-engineered format. For that half the
-//! public reference is the open-source [`pianosnake/ireal-reader`][1]
-//! JavaScript parser, which itself cites [`ironss/accompaniser`][2]
-//! for the obfuscation algorithm. The Rust port here implements
+//! iReal Pro publishes the [Custom Chord Chart Protocol][spec]
+//! (the chord-chart token grammar — `*X` rehearsal marks, barlines,
+//! repeats, `n` no-chord, `Y/YY/YYY` vertical spacers, etc.) and a
+//! companion [developer docs page][devdocs] (overview of the
+//! `irealb://` and `irealbook://` URL prefixes used to embed
+//! charts). The chord-chart grammar this parser accepts is a
+//! **subset of that spec extended with internal tokens** observed
+//! in real exports (`Kcl`, `XyQ`, `LZ|`) — see
+//! `crates/ireal/FORMAT.md` for the exact token table and the
+//! deltas from the spec.
+//!
+//! What the spec does **not** cover, and what therefore remains
+//! reverse-engineered from external references, are: the
+//! `irealb://` body's `MUSIC_PREFIX` sentinel + `obfusc50`
+//! unscramble; the legacy 6-field `irealbook://` layout this
+//! parser accepts with a packed-digit time signature in slot 5
+//! (the spec's own 6-field example has the literal `n` placeholder
+//! in slot 5 and the time signature embedded inside the chord
+//! stream as a `T..` token); and the `===`-separated multi-song
+//! envelope. For those halves the public references are the
+//! open-source [`pianosnake/ireal-reader`][pianosnake] JavaScript
+//! parser and the [`ironss/accompaniser`][accompaniser]
+//! de-obfuscation routine it cites. The Rust port here implements
 //! the same algorithms against the same shape of token grammar;
 //! round-trip golden tests in `tests/parser.rs` verify the result
 //! against known-good fixtures.
 //!
 //! [spec]: https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol
 //! [devdocs]: https://www.irealpro.com/developer-docs
-//! [1]: https://github.com/pianosnake/ireal-reader
-//! [2]: https://github.com/ironss/accompaniser
+//! [pianosnake]: https://github.com/pianosnake/ireal-reader
+//! [accompaniser]: https://github.com/ironss/accompaniser
 //!
 //! # Scope
 //!
