@@ -608,7 +608,18 @@ fn render_directive(
             render_section_header("Tab", &directive.value, output);
         }
         DirectiveKind::StartOfGrid => {
-            render_section_header("Grid", &directive.value, output);
+            // `directive.value` may carry an attribute payload
+            // (`{start_of_grid shape="..."}`) — suppress it from
+            // the header so the text output reads `[Grid]`
+            // instead of `[Grid: shape="..."]`. Plain labels
+            // (`{start_of_grid: Intro}`) still render as
+            // `[Grid: Intro]`.
+            let label_value = directive
+                .value
+                .as_ref()
+                .filter(|v| !v.contains('='))
+                .cloned();
+            render_section_header("Grid", &label_value, output);
         }
         // Notation block openers (ABC / Lilypond / MusicXML / SVG) are
         // handled in the main render loop's notation-block skip window

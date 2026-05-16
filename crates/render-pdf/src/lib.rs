@@ -1309,8 +1309,15 @@ fn render_section_label(directive: &chordsketch_chordpro::ast::Directive, doc: &
         _ => None,
     };
     if let Some(label) = label {
+        // For grid sections the `value` may carry the
+        // `shape="..."` attribute payload; suppress it from
+        // the section heading so the PDF reads "Grid" instead
+        // of "Grid: shape=...". Plain labels (without `=`)
+        // pass through unchanged.
+        let suppress_value = matches!(directive.kind, DirectiveKind::StartOfGrid)
+            && directive.value.as_deref().is_some_and(|v| v.contains('='));
         let text = match &directive.value {
-            Some(v) if !v.is_empty() => format!("{label}: {v}"),
+            Some(v) if !v.is_empty() && !suppress_value => format!("{label}: {v}"),
             _ => label,
         };
         doc.ensure_space(SECTION_SIZE + LINE_GAP);
