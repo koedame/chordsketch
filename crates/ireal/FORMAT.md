@@ -1,17 +1,47 @@
-# `irealb://` URL format
+# `irealb://` and `irealbook://` URL formats
 
-Reverse-engineered notes on the iReal Pro export URL format. There
-is no published spec; this document reflects what the
-`chordsketch-ireal` parser (`src/parser.rs`) implements, derived
-from the open-source [`pianosnake/ireal-reader`][1] JavaScript
-parser and the [`ironss/accompaniser`][2] de-obfuscation routine
-it cites. The grammar here covers the subset the parser handles —
-features that the iReal app supports but our parser folds into
-`ChordQuality::Custom` (or simply skips) are listed under
-"Out of scope" at the bottom.
+Notes on the iReal Pro export URL formats. iReal Pro publishes the
+[Custom Chord Chart Protocol][spec] (the chord-chart token
+grammar — `*X` rehearsal marks, barlines, repeats, `n` no-chord,
+`Y+` vertical spacers, etc.) and a companion
+[developer docs page][devdocs] (overview of the `irealb://` and
+`irealbook://` URL prefixes used to embed charts).
 
-[1]: https://github.com/pianosnake/ireal-reader
-[2]: https://github.com/ironss/accompaniser
+What the published spec covers, and how this parser relates to it:
+
+- The **chord-chart token grammar** documented in the table below is
+  a **subset of the published spec extended with internal tokens**
+  observed in real exports (`Kcl`, `XyQ`, `LZ|`). Spec tokens the
+  parser does not yet implement (`f` Fermata) are listed under
+  "Out of scope" at the bottom.
+- The **6-field `irealbook://` URL layout** this parser accepts —
+  `Title=Composer=Style=Key=TimeSig=Music`, packed-digit timesig in
+  slot 5, plain-text music body — does **not** match the spec's
+  6-field example, which uses the literal `n` placeholder in slot 5
+  ("no longer used") and embeds the time signature inside the chord
+  stream as a `T..` token. The shape documented below is the legacy
+  iRealBook layout that pianosnake/ireal-reader implements;
+  spec-conformant parsing of the slot-5-`n` shape is tracked
+  separately.
+- The **obfuscated `irealb://` body** — the `MUSIC_PREFIX` sentinel
+  plus the `obfusc50` per-50-char permutation — is **not** covered
+  by the published spec at all. For that half the public references
+  are the open-source [`pianosnake/ireal-reader`][pianosnake]
+  JavaScript parser and the [`ironss/accompaniser`][accompaniser]
+  de-obfuscation routine it cites.
+- The **`===`-separated multi-song envelope** is likewise not in the
+  published spec; pianosnake/ireal-reader is the reference.
+
+This document reflects what the `chordsketch-ireal` parser
+(`src/parser.rs`) implements; the grammar here covers the subset
+the parser handles — features that the iReal app supports but our
+parser folds into `ChordQuality::Custom` (or simply skips) are
+listed under "Out of scope" at the bottom.
+
+[spec]: https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol
+[devdocs]: https://www.irealpro.com/developer-docs
+[pianosnake]: https://github.com/pianosnake/ireal-reader
+[accompaniser]: https://github.com/ironss/accompaniser
 
 ## URL shape
 
@@ -20,9 +50,14 @@ irealb://<percent-encoded-body>
 irealbook://<percent-encoded-body>
 ```
 
-Both prefixes carry the same body grammar. iReal generates
-`irealbook://` when the export holds a named playlist; `irealb://`
-appears for single charts.
+Both prefixes are accepted by `strip_prefix` and dispatch is driven
+by the body's part count + the presence of the `MUSIC_PREFIX`
+sentinel, **not** by the URL prefix. In practice the iReal Pro app
+exports obfuscated bodies under `irealb://` (7..=9 fields, music
+slot starts with the sentinel) and emits the legacy plain-text
+`irealbook://` shape (6 fields, no sentinel) for older / embedded
+exports; the parser accepts either prefix for either shape so a
+mis-labelled export still round-trips.
 
 ### File extension convention
 
@@ -76,7 +111,7 @@ checking which slot starts with the [`MUSIC_PREFIX`](#music-prefix):
 
 | Part count | Layout |
 |---|---|
-| 6 (no part starts with `MUSIC_PREFIX`) | iRealBook six-field: `Title=Composer=Style=Key=TimeSig=Music`. Music body is plain text (no music prefix, no `obfusc50` scramble); time signature is a packed-digit field (`44`, `34`, `68`, `128`) outside the chord stream. Tempo and transpose default to `None` / `0`. |
+| 6 (no part starts with `MUSIC_PREFIX`) | iRealBook six-field: `Title=Composer=Style=Key=TimeSig=Music`. Music body is plain text (no music prefix, no `obfusc50` scramble); time signature is a packed-digit field (`44`, `34`, `68`, `128`) outside the chord stream. Tempo and transpose default to `None` / `0`. **Divergence from spec**: the published [Custom Chord Chart Protocol][spec] documents a different 6-field shape — `Title=Composer=Style=Key=n=Music` with the literal `n` placeholder ("no longer used") in slot 5 and the time signature embedded inside the chord stream as a `T..` token. The shape parsed here is the legacy iRealBook layout that [`pianosnake/ireal-reader`][pianosnake] implements; spec-conformant parsing of the slot-5-`n` shape is a separate concern. |
 | 7 | `Title=Composer=Style=Key=Music=BPM=Repeats` |
 | 8 (parts[4] starts with prefix) | `Title=Composer=Style=Key=Music=CompStyle=BPM=Repeats` |
 | 8 (parts[5] starts with prefix) | `Title=Composer=Style=Key=Transpose=Music=BPM=Repeats` |
@@ -205,6 +240,20 @@ distinguishes:
 - `U` (Player-only ending): no AST representation.
 - `Y+` (Vertical spacer): no AST representation (visual hint
   only).
+- `f` (Fermata): the spec lists this alongside `S` (Segno) and
+  `Q` (Coda) as a rehearsal-mark / bar-attached symbol. The
+  parser has no `f` branch in the music-token loop: the
+  chord-detection path is gated on `A..=G | W` (so lowercase `f`
+  cannot start a chord), and `consume_chord_token`'s
+  quality-continuation allowlist does not include `f` (so a
+  trailing `f` after a chord root terminates the chord token
+  rather than being absorbed into it). With no rule matching, `f`
+  takes the same generic "drop one char" fall-through as
+  unrecognised punctuation — the path noted at the bottom of the
+  chord-chart token grammar table above. Adding a `MusicalSymbol`
+  variant and the matching parser branch is a separate concern
+  and is not blocking; until it lands, the spec's `f` token is a
+  known gap relative to the published grammar.
 - `*X*` closing-`*` sentinel: each `*X` greedily becomes a
   section marker, so `*m*X` parses as **two** sections (`m`
   followed by `X`). This mirrors pianosnake's behaviour — the
@@ -221,8 +270,18 @@ The parser **rejects** as malformed:
 
 ## References
 
-- pianosnake/ireal-reader — JavaScript reference parser.
-- ironss/accompaniser — Lua port; original obfuscation source.
-- daumling/ireal-renderer — JavaScript reference renderer (the
-  AST shape in `src/ast.rs` is modelled on this project's data
-  model).
+- [iReal Pro Custom Chord Chart Protocol][spec] — official
+  spec for the chord-chart token grammar.
+- [iReal Pro Developer Docs][devdocs] — overview of the
+  `irealb://` / `irealbook://` URL prefixes (embedding /
+  cross-app pasteboard).
+- [`pianosnake/ireal-reader`][pianosnake] — JavaScript reference
+  parser; source for the obfuscated body shape and the legacy
+  6-field iRealBook layout.
+- [`ironss/accompaniser`][accompaniser] — Lua port; original
+  source of the `obfusc50` permutation algorithm.
+- [`daumling/ireal-renderer`][daumling] — JavaScript reference
+  renderer; the AST shape in `src/ast.rs` is modelled on this
+  project's data model.
+
+[daumling]: https://github.com/daumling/ireal-renderer
