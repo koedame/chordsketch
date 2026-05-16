@@ -15,7 +15,7 @@
 //! lines.
 //!
 //! Per the ChordPro spec
-//! (https://www.chordpro.org/chordpro/directives-env_grid/):
+//! (<https://www.chordpro.org/chordpro/directives-env_grid/>):
 //!
 //! - `shape="L+MxB+R"` — left margin cells + measures ×
 //!   beats + right margin cells. Default `1+4x4+1`.
@@ -659,7 +659,7 @@ mod tests {
         let kinds: Vec<_> = toks
             .iter()
             .filter(|t| !matches!(t, GridToken::Space))
-            .map(|t| std::mem::discriminant(t))
+            .map(std::mem::discriminant)
             .collect();
         // bar percent1 cont bar percent2 cont bar
         assert_eq!(kinds.len(), 7);
