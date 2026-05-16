@@ -1682,6 +1682,32 @@ mod tests {
     }
 
     #[test]
+    fn two_separate_y_runs_on_same_bar_accumulate() {
+        // Two Y runs separated by other content but not by a
+        // barline both land on the same `current_bar`, so
+        // `add_system_break_space` is called twice. The
+        // `saturating_add` accumulation must combine them.
+        //
+        // Chart: `[*AC|Y<text>Y D|]`
+        //         bar A has chords C; then a new (Single-start) bar B
+        //         is opened by `|`; Y → system_break_space=1; the
+        //         `<text>` comment is consumed; second Y → saturating_add(1)
+        //         → system_break_space=2; chord D → bar B.
+        let url = "irealbook://Test=A==Style=C=44=[*AC|Y<cap>Y D]";
+        let song = parse(url).expect("parse");
+        let bar_d = song
+            .sections
+            .iter()
+            .flat_map(|s| s.bars.iter())
+            .find(|b| b.chords.iter().any(|c| c.chord.root.note == 'D'))
+            .expect("bar with chord D must exist");
+        assert_eq!(
+            bar_d.system_break_space, 2,
+            "two separate Y runs must accumulate to 2"
+        );
+    }
+
+    #[test]
     fn legacy_lowercase_cbo_section_markers_decay_to_custom() {
         // `*c` / `*b` / `*o` are NOT emitted by iReal Pro per the
         // spec (#2450). The parser previously named them

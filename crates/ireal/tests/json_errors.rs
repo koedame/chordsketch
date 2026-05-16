@@ -538,3 +538,50 @@ fn from_json_chord_alternate_present_round_trips() {
     assert_eq!(alt.root.note, 'E');
     assert!(matches!(&alt.quality, ChordQuality::Custom(s) if s == "7#9"));
 }
+
+// ---- system_break_space JSON round-trip coverage (#2434) ---------------
+
+/// A bar with `system_break_space = 2` must serialise to JSON
+/// (emitting the field because it is > 0) and deserialise back with
+/// the same value. Covers the `if self.system_break_space > 0 { … }`
+/// branch in `ToJson` and the `Some(other)` arm in `FromJson`.
+#[test]
+fn bar_system_break_space_nonzero_round_trips_through_json() {
+    let bar = Bar {
+        start: BarLine::Single,
+        end: BarLine::Single,
+        chords: vec![],
+        ending: None,
+        symbol: None,
+        repeat_previous: false,
+        no_chord: false,
+        text_comment: None,
+        system_break_space: 2,
+    };
+    let json = bar.to_json_string();
+    // The field must be emitted when non-zero.
+    assert!(
+        json.contains("\"system_break_space\""),
+        "system_break_space must appear in JSON when non-zero, got {json:?}"
+    );
+    let parsed = Bar::from_json_str(&json).expect("deserialise");
+    assert_eq!(parsed.system_break_space, 2);
+}
+
+/// `system_break_space` values > 3 are out of range; `FromJson` must
+/// return a `JsonError` rather than silently clamping. Covers the
+/// `if n > 3 { return Err(…) }` branch in `FromJson`.
+#[test]
+fn bar_system_break_space_out_of_range_is_rejected() {
+    let json = r#"{"start":"single","end":"single","chords":[],"ending":null,"symbol":null,"system_break_space":4}"#;
+    let result = Bar::from_json_str(json);
+    assert!(
+        result.is_err(),
+        "system_break_space 4 must be rejected (out of range [0, 3])"
+    );
+    let msg = format!("{}", result.unwrap_err());
+    assert!(
+        msg.contains("system_break_space") && msg.contains("range"),
+        "error message must mention the field and the range violation, got {msg:?}"
+    );
+}
