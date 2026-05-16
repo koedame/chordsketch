@@ -135,14 +135,6 @@ fn push_section_open(song: &mut Song, label: &SectionLabel) {
             song.lines
                 .push(Line::Directive(Directive::name_only("start_of_verse")));
         }
-        SectionLabel::Chorus => {
-            song.lines
-                .push(Line::Directive(Directive::name_only("start_of_chorus")));
-        }
-        SectionLabel::Bridge => {
-            song.lines
-                .push(Line::Directive(Directive::name_only("start_of_bridge")));
-        }
         SectionLabel::Letter(c) => {
             // ChordPro has no environment for jazz-form letter
             // labels (`A` / `B` / `C` / `D`). Surface the label as
@@ -156,13 +148,24 @@ fn push_section_open(song: &mut Song, label: &SectionLabel) {
             song.lines
                 .push(Line::Comment(CommentStyle::Normal, "Intro".to_owned()));
         }
-        SectionLabel::Outro => {
-            song.lines
-                .push(Line::Comment(CommentStyle::Normal, "Outro".to_owned()));
-        }
         SectionLabel::Custom(name) => {
-            song.lines
-                .push(Line::Comment(CommentStyle::Normal, name.clone()));
+            // Per #2450, ChordPro `start_of_chorus` /
+            // `start_of_bridge` round-trip via
+            // `Custom("Chorus")` / `Custom("Bridge")` because
+            // iReal Pro has no Chorus / Bridge rehearsal mark.
+            // Re-emit the matching ChordPro environment when the
+            // custom label name happens to match.
+            match name.as_str() {
+                "Chorus" => song
+                    .lines
+                    .push(Line::Directive(Directive::name_only("start_of_chorus"))),
+                "Bridge" => song
+                    .lines
+                    .push(Line::Directive(Directive::name_only("start_of_bridge"))),
+                _ => song
+                    .lines
+                    .push(Line::Comment(CommentStyle::Normal, name.clone())),
+            }
         }
     }
 }
@@ -172,20 +175,21 @@ fn push_section_close(song: &mut Song, label: &SectionLabel) {
         SectionLabel::Verse => song
             .lines
             .push(Line::Directive(Directive::name_only("end_of_verse"))),
-        SectionLabel::Chorus => song
-            .lines
-            .push(Line::Directive(Directive::name_only("end_of_chorus"))),
-        SectionLabel::Bridge => song
-            .lines
-            .push(Line::Directive(Directive::name_only("end_of_bridge"))),
-        // The non-environment labels (`Letter`, `Intro`, `Outro`,
-        // `Custom`) opened with a `{comment}` and have no close
-        // directive — the section ends implicitly when the next
-        // section opens.
-        SectionLabel::Letter(_)
-        | SectionLabel::Intro
-        | SectionLabel::Outro
-        | SectionLabel::Custom(_) => {}
+        SectionLabel::Custom(name) => match name.as_str() {
+            "Chorus" => song
+                .lines
+                .push(Line::Directive(Directive::name_only("end_of_chorus"))),
+            "Bridge" => song
+                .lines
+                .push(Line::Directive(Directive::name_only("end_of_bridge"))),
+            // Other custom labels opened with a `{comment}` and
+            // have no close directive — the section ends
+            // implicitly when the next section opens.
+            _ => {}
+        },
+        // The non-environment labels (`Letter`, `Intro`) opened
+        // with a `{comment}` and have no close directive.
+        SectionLabel::Letter(_) | SectionLabel::Intro => {}
     }
 }
 
@@ -206,13 +210,17 @@ fn push_bars(
     let mut segments: Vec<LyricsSegment> = Vec::new();
     for bar in bars {
         push_pre_bar_marker(&mut segments, bar);
-        if bar.chords.is_empty() {
-            // An empty-chord bar in iReal means "repeat the previous
-            // bar" (the renderer paints a `W` glyph). We surface
-            // that as the previous chord again, since ChordPro has
-            // no equivalent repeat-bar primitive — ChordPro's
-            // `{chorus}` directive is for whole-section recall, not
-            // single-bar repeat.
+        if bar.no_chord {
+            // `n` token in iReal is "no chord — silence". Surface
+            // as the textual `N.C.` marker; do NOT replay the
+            // previous chord (which would be the wrong sound).
+            segments.push(LyricsSegment::text_only("N.C. ".to_owned()));
+        } else if bar.repeat_previous {
+            // `Kcl` / `x` — repeat the previous bar. Replay the
+            // last chord representation so ChordPro consumers see
+            // the same chord sounded again. ChordPro has no
+            // single-bar repeat primitive (`{chorus}` is for
+            // whole-section recall).
             if let Some(repr) = last_chord_repr.as_deref() {
                 segments.push(LyricsSegment::new(
                     Some(ChordProChord::new(repr)),
@@ -224,6 +232,9 @@ fn push_bars(
                     "iReal repeat-bar without prior chord — emitted as silent rest".to_owned(),
                 ));
             }
+        } else if bar.chords.is_empty() {
+            // Empty bar with no marker — leave a placeholder so the
+            // bar boundary glyph still appears in the lyrics line.
         } else {
             for bar_chord in &bar.chords {
                 let repr = chord_to_string(&bar_chord.chord);
@@ -232,6 +243,15 @@ fn push_bars(
                     Some(ChordProChord::new(&repr)),
                     String::new(),
                 ));
+                // Alternate chord stacks above the primary in iReal
+                // Pro charts. ChordPro has no equivalent two-chord
+                // beat slot; surface the alternate inline as a
+                // parenthesised chord so downstream consumers can
+                // detect the original substitution.
+                if let Some(alt) = &bar_chord.chord.alternate {
+                    let alt_repr = chord_to_string(alt);
+                    segments.push(LyricsSegment::text_only(format!("({alt_repr}) ")));
+                }
             }
         }
         if let Some(symbol) = bar.symbol {
@@ -243,6 +263,13 @@ fn push_bars(
                 "({label}) ",
                 label = symbol_label(symbol)
             )));
+        }
+        if let Some(text) = bar.text_comment.as_deref() {
+            // Free-form `<...>` captions (e.g. "13 measure lead
+            // break", "D.S. al 2nd ending") have no structural
+            // ChordPro equivalent. Render inline as parenthesised
+            // text — same treatment as the canonical symbols above.
+            segments.push(LyricsSegment::text_only(format!("({text}) ")));
         }
         // Bar boundary: trailing `|` (with leading space for
         // readability). The Final / Double / repeat barlines lift
@@ -384,6 +411,9 @@ mod tests {
                     }],
                     ending: None,
                     symbol: None,
+                    repeat_previous: false,
+                    no_chord: false,
+                    text_comment: None,
                 }],
             }],
         }
@@ -455,7 +485,7 @@ mod tests {
     #[test]
     fn named_section_labels_emit_environment_directives() {
         let mut s = sample_song();
-        s.sections[0].label = SectionLabel::Chorus;
+        s.sections[0].label = SectionLabel::Custom("Chorus".into());
         let result = convert(&s).unwrap();
         let names: Vec<&str> = result
             .output
@@ -495,6 +525,7 @@ mod tests {
                 note: 'G',
                 accidental: Accidental::Sharp,
             }),
+            alternate: None,
         };
         assert_eq!(chord_to_string(&slash), "C/G#");
     }
@@ -512,16 +543,212 @@ mod tests {
     }
 
     #[test]
-    fn empty_repeat_bar_without_prior_chord_emits_warning() {
+    fn repeat_previous_bar_without_prior_chord_emits_warning() {
         let mut s = IrealSong::new();
         s.title = "Repeat Test".into();
         s.sections.push(Section {
             label: SectionLabel::Letter('A'),
-            // First bar is empty (would normally repeat — but no prior chord).
-            bars: vec![Bar::default()],
+            // First bar is an explicit repeat-previous marker —
+            // but there's no previous chord to repeat, so the
+            // converter must emit a `LossyDrop` warning rather
+            // than silently producing nothing.
+            bars: vec![Bar {
+                repeat_previous: true,
+                ..Bar::default()
+            }],
         });
         let result = convert(&s).unwrap();
         assert!(!result.warnings.is_empty());
         assert_eq!(result.warnings[0].kind, WarningKind::LossyDrop);
+    }
+
+    #[test]
+    fn no_chord_bar_emits_nc_text_not_previous_chord() {
+        // `Bar::no_chord = true` (URL `n`) renders silence, NOT a
+        // replay of the last chord. Sister-site fix to a bug
+        // where the converter conflated `no_chord` with
+        // `repeat_previous` in the pre-fix code path.
+        use chordsketch_chordpro::ast::Line;
+        let mut s = IrealSong::new();
+        s.title = "NC Test".into();
+        s.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars: vec![
+                Bar {
+                    chords: vec![BarChord {
+                        chord: Chord {
+                            root: ChordRoot::natural('C'),
+                            quality: ChordQuality::Major,
+                            bass: None,
+                            alternate: None,
+                        },
+                        position: BeatPosition::on_beat(1).unwrap(),
+                    }],
+                    ..Bar::default()
+                },
+                Bar {
+                    no_chord: true,
+                    ..Bar::default()
+                },
+            ],
+        });
+        let result = convert(&s).unwrap();
+        let song = &result.output;
+        let lyrics_text: String = song
+            .lines
+            .iter()
+            .filter_map(|l| match l {
+                Line::Lyrics(lyrics) => {
+                    Some(lyrics.segments.iter().map(|s| s.text.as_str()).collect())
+                }
+                _ => None,
+            })
+            .collect::<Vec<String>>()
+            .concat();
+        // `N.C.` text must appear; `C` chord must NOT be replayed
+        // for the no-chord bar (it would imply continued tonality).
+        assert!(
+            lyrics_text.contains("N.C."),
+            "no-chord bar must surface as `N.C.` text, got {lyrics_text:?}"
+        );
+    }
+
+    #[test]
+    fn alternate_chord_emits_paren_text_after_primary() {
+        use chordsketch_chordpro::ast::Line;
+        let mut s = IrealSong::new();
+        s.title = "Alt Test".into();
+        s.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars: vec![Bar {
+                chords: vec![BarChord {
+                    chord: Chord {
+                        root: ChordRoot::natural('E'),
+                        quality: ChordQuality::Minor7,
+                        bass: None,
+                        alternate: Some(Box::new(Chord {
+                            root: ChordRoot::natural('E'),
+                            quality: ChordQuality::Custom("7#9".into()),
+                            bass: None,
+                            alternate: None,
+                        })),
+                    },
+                    position: BeatPosition::on_beat(1).unwrap(),
+                }],
+                ..Bar::default()
+            }],
+        });
+        let result = convert(&s).unwrap();
+        let mut chord_reprs: Vec<String> = Vec::new();
+        let mut text_segs: Vec<String> = Vec::new();
+        for line in &result.output.lines {
+            if let Line::Lyrics(lyrics) = line {
+                for seg in &lyrics.segments {
+                    if let Some(c) = &seg.chord {
+                        chord_reprs.push(c.name.clone());
+                    }
+                    if !seg.text.is_empty() {
+                        text_segs.push(seg.text.clone());
+                    }
+                }
+            }
+        }
+        let text_concat: String = text_segs.concat();
+        assert!(
+            chord_reprs.iter().any(|c| c.contains('E')),
+            "primary E chord must appear in chord segments"
+        );
+        // Alternate is surfaced as parenthesised inline text so
+        // ChordPro consumers can detect the substitution.
+        assert!(
+            text_concat.contains("(E"),
+            "alternate must surface as parenthesised text, got {text_concat:?}"
+        );
+    }
+
+    #[test]
+    fn text_comment_emits_paren_text_segment() {
+        use chordsketch_chordpro::ast::Line;
+        let mut s = IrealSong::new();
+        s.title = "Comment Test".into();
+        s.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars: vec![Bar {
+                chords: vec![BarChord {
+                    chord: Chord {
+                        root: ChordRoot::natural('C'),
+                        quality: ChordQuality::Major,
+                        bass: None,
+                        alternate: None,
+                    },
+                    position: BeatPosition::on_beat(1).unwrap(),
+                }],
+                text_comment: Some("Vamp till cue".into()),
+                ..Bar::default()
+            }],
+        });
+        let result = convert(&s).unwrap();
+        let text_concat: String = result
+            .output
+            .lines
+            .iter()
+            .filter_map(|l| match l {
+                Line::Lyrics(lyrics) => {
+                    Some(lyrics.segments.iter().map(|s| s.text.as_str()).collect())
+                }
+                _ => None,
+            })
+            .collect::<Vec<String>>()
+            .concat();
+        assert!(
+            text_concat.contains("Vamp till cue"),
+            "text_comment must round-trip into a text segment, got {text_concat:?}"
+        );
+    }
+
+    /// In-memory ChordPro → iReal-AST → ChordPro round-trip
+    /// preserves chorus identity because `from_ireal` matches on
+    /// the `Custom(name)` string and re-emits `start_of_chorus`.
+    /// Locks the spec-aligned design from #2450.
+    #[test]
+    fn custom_chorus_label_emits_chordpro_chorus_directives() {
+        let mut s = sample_song();
+        s.sections[0].label = SectionLabel::Custom("Chorus".into());
+        let result = convert(&s).unwrap();
+        let names: Vec<&str> = result
+            .output
+            .lines
+            .iter()
+            .filter_map(|line| match line {
+                chordsketch_chordpro::ast::Line::Directive(d) => Some(d.name.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            names.contains(&"start_of_chorus"),
+            "expected `start_of_chorus` in {names:?}"
+        );
+        assert!(
+            names.contains(&"end_of_chorus"),
+            "expected `end_of_chorus` in {names:?}"
+        );
+    }
+
+    #[test]
+    fn custom_bridge_label_emits_chordpro_bridge_directives() {
+        let mut s = sample_song();
+        s.sections[0].label = SectionLabel::Custom("Bridge".into());
+        let result = convert(&s).unwrap();
+        let names: Vec<&str> = result
+            .output
+            .lines
+            .iter()
+            .filter_map(|line| match line {
+                chordsketch_chordpro::ast::Line::Directive(d) => Some(d.name.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(names.contains(&"start_of_bridge"));
+        assert!(names.contains(&"end_of_bridge"));
     }
 }

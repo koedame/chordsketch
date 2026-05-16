@@ -15,14 +15,41 @@ readme = "README.md"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# `png-pdf` toggles every export that pulls a heavy SVG-rasteriser
+# or PDF-writer transitive dep (resvg, tiny-skia, svg2pdf, usvg,
+# fontdb, harfrust, plus the printpdf surface inside
+# chordsketch-render-pdf). Default-on so `cargo build` /
+# `cargo test` / the CLI / FFI / napi crates that depend on this
+# library as `rlib` keep the full surface (#2466 — only the
+# wasm-pack build of `@chordsketch/wasm` runs with
+# `--no-default-features` to ship the lean bundle that the
+# playground / `<ChordSheet format="html">` / `<RendererPreview
+# format="html" | "text">` actually load. PDF / PNG exports live
+# behind `@chordsketch/wasm-export`, a second wasm-pack output
+# from this same crate with default features enabled.
+default = ["png-pdf"]
+png-pdf = [
+  "dep:chordsketch-render-pdf",
+  "chordsketch-render-ireal/png",
+  "chordsketch-render-ireal/pdf",
+]
+
 [dependencies]
 chordsketch-chordpro = { version = "0.4.0", path = "../chordpro" }
 chordsketch-render-text = { version = "0.4.0", path = "../render-text" }
 chordsketch-render-html = { version = "0.4.0", path = "../render-html" }
-chordsketch-render-pdf = { version = "0.4.0", path = "../render-pdf" }
+# render-pdf is gated behind the `png-pdf` feature — its transitive
+# deps (ttf-parser + printpdf path) account for the bulk of the
+# `@chordsketch/wasm` bundle weight, so the lean build does not
+# pull it in.
+chordsketch-render-pdf = { version = "0.4.0", path = "../render-pdf", optional = true }
 chordsketch-ireal = { version = "0.4.0", path = "../ireal" }
 chordsketch-convert = { version = "0.4.0", path = "../convert" }
-chordsketch-render-ireal = { version = "0.4.0", path = "../render-ireal", features = ["png", "pdf"] }
+# render-ireal default features (SVG renderer + chord typography)
+# stay in the lean build; `png` / `pdf` (the resvg / svg2pdf
+# transitive deps) come in via the `png-pdf` feature above.
+chordsketch-render-ireal = { version = "0.4.0", path = "../render-ireal" }
 wasm-bindgen = "0.2"
 # `render_pdf_with_warnings` (#1893) builds its JS return value via
 # `js_sys::Object` + `js_sys::Reflect` and converts the byte payload
@@ -40,3 +67,26 @@ console_error_panic_hook = "0.1"
 # actual `#[wasm_bindgen]` -> `JsValue` boundary that native `cargo test`
 # cannot reach. Run via `wasm-pack test --node` (see `.github/workflows/wasm.yml`).
 wasm-bindgen-test = "0.3"
+
+# wasm-opt configuration (#2466). The wasm-pack-bundled wasm-opt
+# (binaryen 117) ships with bulk-memory ops disabled by default,
+# but the wasm output that `[profile.release].opt-level = "z"`
+# emits uses `memory.fill` everywhere LLVM previously emitted a
+# byte-by-byte zeroing loop. Without `--enable-bulk-memory` the
+# validator rejects the input. The full proposal-feature list
+# below mirrors the set that wasm-bindgen / wasm-pack 0.14+
+# defaults expect, so we stay compatible with whatever the
+# upstream toolchain emits next.
+#
+# `-Oz` picks size over speed at the wasm-opt layer to match the
+# workspace `[profile.release].opt-level = "z"` choice — the two
+# layers (LLVM + binaryen) compound on the size axis.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = [
+  "-Oz",
+  "--enable-bulk-memory",
+  "--enable-mutable-globals",
+  "--enable-nontrapping-float-to-int",
+  "--enable-reference-types",
+  "--enable-sign-ext",
+]

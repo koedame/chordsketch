@@ -34,6 +34,7 @@ export default defineConfig({
       // shared UI) lets the aliases below resolve.
       allow: [
         resolve(here, '../../packages/npm'),
+        resolve(here, '../../packages/npm-export'),
         resolve(here, '../../packages/ui-web'),
         resolve(here, '../../packages/ui-irealb-editor'),
       ],
@@ -61,9 +62,21 @@ export default defineConfig({
         here,
         '../../packages/ui-irealb-editor/src/index.ts',
       ),
+      // The desktop shell imports `render_pdf` / `render_pdf_with_options`
+      // synchronously from the wasm bundle (apps/desktop/src/main.ts
+      // wraps them in the "Save as PDF" command). The `@chordsketch/wasm`
+      // npm package was split in #2466 — the lean variant no longer
+      // ships those exports; they live in `@chordsketch/wasm-export`.
+      // For the desktop app the size trade-off is reversed vs the
+      // playground (the bundle is downloaded once at install time, not
+      // per session), so we alias the bare `@chordsketch/wasm` import
+      // specifier directly to the heavy build and keep the desktop
+      // source unchanged. If the desktop later refactors PDF emission
+      // behind a lazy boundary, drop this alias and import explicitly
+      // from `@chordsketch/wasm-export` there.
       '@chordsketch/wasm': resolve(
         here,
-        '../../packages/npm/web/chordsketch_wasm.js',
+        '../../packages/npm-export/web/chordsketch_wasm.js',
       ),
     },
   },

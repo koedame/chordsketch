@@ -51,3 +51,51 @@ repository = "https://github.com/koedame/chordsketch"
 homepage = "https://github.com/koedame/chordsketch"
 keywords = ["chordpro", "music", "chord", "parser", "lyrics"]
 categories = ["parser-implementations", "text-processing"]
+
+# Release profile tuned for binary size. The wasm bundle (#2466) is
+# the most size-sensitive distribution artefact in this workspace —
+# every byte of `chordsketch_wasm_bg.wasm` is paid by every browser
+# / playground load over the wire. The same opts also shrink the CLI
+# and the FFI / napi cdylib outputs which ship as platform packages
+# (Homebrew bottle, Snap, Scoop, MacPorts, GHCR image, prebuilt napi
+# binaries) — distribution wins for every channel, at a small (<5%)
+# runtime-speed cost vs `opt-level = 3`.
+#
+# Per-key rationale:
+#   opt-level = "z"  — optimise for size; "s" gives ~5% larger binary
+#                      and ~5% faster runtime, "z" is the right pick
+#                      because we pay the size every download but the
+#                      runtime cost only on the hot rendering loop
+#                      which is already O(parse + walk).
+#   lto = "fat"      — cross-crate inlining + dead-code removal,
+#                      typically -20-30% on the wasm binary alone.
+#   codegen-units    — single-unit codegen lets LTO see everything;
+#     = 1              required to get the full LTO benefit.
+#   strip = "debuginfo" — drops DWARF debug info from cdylib
+#                       outputs. Initially set this to "symbols"
+#                       in #2466, which strips the symbol table as
+#                       well — fine for ELF binaries that are
+#                       not dynamically linked, but it broke the
+#                       Python FFI wheel (`crates/ffi`) on Linux:
+#                       maturin's `manylinux2014` build layered
+#                       its own auditwheel-style stripping on top
+#                       and the combination dropped the symbol
+#                       table entries that UniFFI's Python wrapper
+#                       imports (`ChordSketchError` et al.). The
+#                       "debuginfo" setting keeps `.dynsym` intact
+#                       so `dlopen` / `ctypes.CDLL` lookups still
+#                       resolve while still trimming the bulk of
+#                       the DWARF tables. Wasm output is unaffected
+#                       either way (wasm uses its own export
+#                       section, not the ELF symbol table).
+#   panic            — kept at "unwind" (cargo default) so the
+#                       wasm `console_error_panic_hook` and the
+#                       CLI's `Result`-returning paths still see
+#                       structured panic info; switching to "abort"
+#                       would save a further ~5-10% but breaks the
+#                       diagnostic chain on parse-error reports.
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = "debuginfo"

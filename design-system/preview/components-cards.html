@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cards — ChordSketch Components</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="../tokens.css">
+<style>
+* { box-sizing: border-box; } html, body { margin: 0; }
+body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875; color: var(--text-primary); background: var(--canvas); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+.container { max-width: 960px; margin: 0 auto; padding: var(--sp-12) var(--sp-6); }
+.preview-back { font-family: var(--font-latin); font-size: var(--fs-12); font-weight: 600; letter-spacing: 0; color: var(--text-secondary); text-decoration: none; }
+.preview-back:hover { color: var(--text-primary); }
+.eyebrow { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); margin: var(--sp-8) 0 var(--sp-2); }
+.preview-h1 { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-36); line-height: 1.111; letter-spacing: -0.02em; margin: 0 0 var(--sp-3); }
+.preview-deck { color: var(--text-secondary); margin: 0 0 var(--sp-12); max-width: 56ch; }
+.group { margin-bottom: var(--sp-12); }
+.group h2 { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); margin: 0 0 var(--sp-4); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sp-6); }
+
+/* Song card */
+.song-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); padding: var(--sp-5); transition: border-color var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); cursor: pointer; }
+.song-card:hover { border-color: var(--border-strong); transform: translateY(-1px); box-shadow: var(--e-1); }
+.song-card.featured { border-color: var(--crimson-500); }
+.song-card .artist { font-family: var(--font-latin); font-weight: 500; font-size: var(--fs-13); color: var(--text-secondary); margin: 0 0 var(--sp-2); }
+.song-card h3 { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-18); line-height: 1.4; letter-spacing: -0.01em; margin: 0 0 var(--sp-4); }
+.song-card .meta { display: flex; gap: var(--sp-3); flex-wrap: wrap; font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-secondary); margin-bottom: var(--sp-4); font-variant-numeric: tabular-nums; }
+.song-card .footer { display: flex; align-items: center; justify-content: space-between; padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+.badge { display: inline-flex; align-items: center; padding: 2px var(--sp-2); border-radius: var(--r-1); font-family: var(--font-mono); font-weight: 600; font-size: var(--fs-12); }
+.badge.key { background: var(--ink-1000); color: var(--ink-0); }
+.badge.key.crimson { background: var(--crimson-500); color: var(--fg-on-crimson); }
+.badge.format { background: var(--ink-100); color: var(--text-strong); border: 1px solid var(--border); }
+.song-card time { font-family: var(--font-latin); font-weight: 500; font-size: var(--fs-12); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+
+/* Setlist card */
+.setlist { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); padding: var(--sp-5); display: flex; flex-direction: column; }
+.setlist h3 { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-18); margin: 0 0 var(--sp-2); letter-spacing: -0.01em; }
+.setlist .desc { color: var(--text-secondary); font-size: var(--fs-14); margin: 0 0 var(--sp-5); }
+.setlist .stats { display: flex; gap: var(--sp-6); padding: var(--sp-3) 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-bottom: var(--sp-4); }
+.setlist .stat { display: flex; flex-direction: column; gap: var(--sp-1); }
+.setlist .stat .num { font-family: var(--font-mono); font-weight: 600; font-size: var(--fs-24); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.setlist .stat .label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); }
+.setlist time { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-tertiary); margin-top: auto; }
+
+/* Featured */
+.featured-card { background: var(--surface); border: 1px solid var(--crimson-500); border-radius: var(--r-3); padding: var(--sp-6) var(--sp-5); }
+.featured-card .eyebrow { margin: 0 0 var(--sp-1); color: var(--text-secondary); }
+.featured-card h3 { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-24); margin: 0 0 var(--sp-2); letter-spacing: -0.01em; }
+.featured-card p { color: var(--text-secondary); margin: 0 0 var(--sp-5); font-size: var(--fs-14); }
+.btn { display: inline-flex; align-items: center; gap: var(--sp-2); height: 36px; padding: 0 var(--sp-4); border-radius: var(--r-2); border: 1px solid transparent; font: 500 var(--fs-14)/1 var(--font-jp); cursor: pointer; transition: background var(--dur-1) var(--ease-out); text-decoration: none; }
+.btn-primary { background: var(--crimson-500); color: var(--fg-on-crimson); }
+.btn-primary:hover { background: var(--crimson-600); }
+</style>
+</head>
+<body>
+<main class="container">
+  <a href="index.html" class="preview-back">← Components</a>
+  <p class="eyebrow">Component</p>
+  <h1 class="preview-h1">Cards</h1>
+  <p class="preview-deck">Song cards for the library, setlist cards with stats, and featured cards that swap only the border color to <code style="font-family: var(--font-mono);">--crimson-500</code>. Borders stay uniform — no asymmetric thick edges.</p>
+
+  <section class="group">
+    <h2>Song card · default · featured · hover</h2>
+    <div class="grid">
+      <article class="song-card">
+        <p class="artist">John Denver</p>
+        <h3>Country Roads</h3>
+        <div class="meta"><span>Key G</span><span>BPM 82</span><span>Capo 0</span><span>4/4</span></div>
+        <div class="footer">
+          <span class="badge format">ChordPro</span>
+          <span class="badge key">G</span>
+        </div>
+      </article>
+      <article class="song-card featured">
+        <p class="artist">Oasis</p>
+        <h3>Wonderwall</h3>
+        <div class="meta"><span>Key Em</span><span>BPM 87</span><span>Capo 0</span><span>4/4</span></div>
+        <div class="footer">
+          <span class="badge format">ChordPro</span>
+          <span class="badge key crimson">Em</span>
+        </div>
+      </article>
+      <article class="song-card" style="border-color: var(--border-strong); transform: translateY(-1px); box-shadow: var(--e-1);">
+        <p class="artist">Bill Evans Trio · hover</p>
+        <h3>Autumn Leaves</h3>
+        <div class="meta"><span>Key Em</span><span>BPM 124</span><span>Capo 0</span><span>4/4</span></div>
+        <div class="footer">
+          <span class="badge format">iReal Pro</span>
+          <span class="badge key">Em</span>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Setlist card</h2>
+    <div class="grid">
+      <article class="setlist">
+        <h3>Live · 2026-05-12</h3>
+        <p class="desc">The Local · 7:00pm · 4 sets</p>
+        <div class="stats">
+          <div class="stat"><span class="num">14</span><span class="label">Songs</span></div>
+          <div class="stat"><span class="num">52</span><span class="label">Min</span></div>
+          <div class="stat"><span class="num">3</span><span class="label">Keys</span></div>
+        </div>
+        <time datetime="2026-05-12">2026-05-12 · 4 days from now</time>
+      </article>
+      <article class="setlist">
+        <h3>Acoustic standards</h3>
+        <p class="desc">A curated collection of acoustic standards.</p>
+        <div class="stats">
+          <div class="stat"><span class="num">24</span><span class="label">Songs</span></div>
+          <div class="stat"><span class="num">96</span><span class="label">Min</span></div>
+          <div class="stat"><span class="num">5</span><span class="label">Keys</span></div>
+        </div>
+        <time datetime="2026-04-22">Updated 2 weeks ago</time>
+      </article>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Featured card</h2>
+    <div class="grid">
+      <article class="featured-card">
+        <p class="eyebrow">New</p>
+        <h3>Now with iReal Pro</h3>
+        <p>Open iReal Pro charts in ChordSketch and edit the chord progressions in place.</p>
+        <a class="btn btn-primary" href="#">Learn more</a>
+      </article>
+      <article class="featured-card">
+        <p class="eyebrow">Setup</p>
+        <h3>Add your first song</h3>
+        <p>Add one song to the library to start using search and setlist editing.</p>
+        <a class="btn btn-primary" href="#">Add</a>
+      </article>
+    </div>
+  </section>
+</main>
+</body>
+</html>

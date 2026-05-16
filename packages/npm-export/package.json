@@ -1,0 +1,65 @@
+{
+  "name": "@chordsketch/wasm-export",
+  "version": "0.4.0",
+  "description": "ChordPro PDF / PNG export bindings (heavy WebAssembly bundle) — sister of @chordsketch/wasm",
+  "license": "MIT",
+  "type": "module",
+  "main": "./node/chordsketch_wasm.js",
+  "browser": "./web/chordsketch_wasm.js",
+  "module": "./web/chordsketch_wasm.js",
+  "types": "./web/chordsketch_wasm.d.ts",
+  "exports": {
+    ".": {
+      "node": {
+        "types": "./node/chordsketch_wasm.d.ts",
+        "default": "./node/chordsketch_wasm.js"
+      },
+      "browser": {
+        "types": "./web/chordsketch_wasm.d.ts",
+        "default": "./web/chordsketch_wasm.js"
+      },
+      "default": {
+        "types": "./web/chordsketch_wasm.d.ts",
+        "default": "./web/chordsketch_wasm.js"
+      }
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/koedame/chordsketch.git",
+    "directory": "packages/npm-export"
+  },
+  "homepage": "https://github.com/koedame/chordsketch",
+  "keywords": [
+    "chordpro",
+    "music",
+    "chord",
+    "pdf",
+    "png",
+    "export",
+    "wasm",
+    "webassembly"
+  ],
+  "files": [
+    "node/package.json",
+    "node/chordsketch_wasm.js",
+    "node/chordsketch_wasm.d.ts",
+    "node/chordsketch_wasm_bg.wasm",
+    "node/chordsketch_wasm_bg.wasm.d.ts",
+    "web/package.json",
+    "web/chordsketch_wasm.js",
+    "web/chordsketch_wasm.d.ts",
+    "web/chordsketch_wasm_bg.wasm",
+    "web/chordsketch_wasm_bg.wasm.d.ts"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "sideEffects": [
+    "./node/chordsketch_wasm.js",
+    "./web/chordsketch_wasm.js"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -189,12 +189,20 @@ fn populate_sections(ireal: &mut IrealSong, source: &Song, warnings: &mut Vec<Co
                     current = Some(Section::new(SectionLabel::Verse));
                 }
                 DirectiveKind::StartOfChorus => {
+                    // The iReal Pro app does not have a Chorus
+                    // rehearsal mark — `*c` is treated as a custom
+                    // label by the iReal app itself. Round-trip
+                    // through `Custom("Chorus")` so the ChordPro
+                    // semantics survive without producing an
+                    // out-of-spec `irealb://` token (#2450).
                     push_current(&mut current, &mut sections);
-                    current = Some(Section::new(SectionLabel::Chorus));
+                    current = Some(Section::new(SectionLabel::Custom("Chorus".into())));
                 }
                 DirectiveKind::StartOfBridge => {
+                    // Same treatment as Chorus — iReal has no
+                    // Bridge mark; round-trip via `Custom("Bridge")`.
                     push_current(&mut current, &mut sections);
-                    current = Some(Section::new(SectionLabel::Bridge));
+                    current = Some(Section::new(SectionLabel::Custom("Bridge".into())));
                 }
                 DirectiveKind::EndOfVerse
                 | DirectiveKind::EndOfChorus
@@ -376,6 +384,7 @@ fn parse_chordpro_chord(name: &str) -> IrealChord {
                 root: ChordRoot::natural('C'),
                 quality: ChordQuality::Major,
                 bass: None,
+                alternate: None,
             };
         }
     };
@@ -414,6 +423,7 @@ fn parse_chordpro_chord(name: &str) -> IrealChord {
         root,
         quality,
         bass,
+        alternate: None,
     }
 }
 
@@ -778,5 +788,64 @@ mod tests {
         let c = parse_chordpro_chord("");
         assert_eq!(c.root.note, 'C');
         assert_eq!(c.quality, ChordQuality::Major);
+    }
+
+    fn chord_only_lyrics(chord_name: &str) -> chordsketch_chordpro::ast::Line {
+        use chordsketch_chordpro::ast::{Chord, Line, LyricsLine, LyricsSegment};
+        Line::Lyrics(LyricsLine {
+            segments: vec![LyricsSegment::new(
+                Some(Chord::new(chord_name)),
+                String::new(),
+            )],
+        })
+    }
+
+    /// `start_of_chorus` ChordPro directive routes to
+    /// `SectionLabel::Custom("Chorus")` per #2450 (the iReal Pro
+    /// app does not have a Chorus rehearsal mark, so the named
+    /// `SectionLabel::Chorus` variant was removed; the convert
+    /// crate uses a Custom string as the in-memory carrier).
+    #[test]
+    fn chordpro_chorus_directive_routes_to_custom_chorus_label() {
+        use chordsketch_chordpro::ast::{Directive, Line, Song};
+        let mut song = Song::new();
+        song.lines
+            .push(Line::Directive(Directive::name_only("start_of_chorus")));
+        song.lines.push(chord_only_lyrics("C"));
+        song.lines
+            .push(Line::Directive(Directive::name_only("end_of_chorus")));
+        let result = convert(&song).unwrap();
+        let labels: Vec<_> = result
+            .output
+            .sections
+            .iter()
+            .map(|s| s.label.clone())
+            .collect();
+        assert!(
+            labels.contains(&chordsketch_ireal::SectionLabel::Custom("Chorus".into())),
+            "expected Custom(\"Chorus\") in {labels:?}"
+        );
+    }
+
+    #[test]
+    fn chordpro_bridge_directive_routes_to_custom_bridge_label() {
+        use chordsketch_chordpro::ast::{Directive, Line, Song};
+        let mut song = Song::new();
+        song.lines
+            .push(Line::Directive(Directive::name_only("start_of_bridge")));
+        song.lines.push(chord_only_lyrics("D"));
+        song.lines
+            .push(Line::Directive(Directive::name_only("end_of_bridge")));
+        let result = convert(&song).unwrap();
+        let labels: Vec<_> = result
+            .output
+            .sections
+            .iter()
+            .map(|s| s.label.clone())
+            .collect();
+        assert!(
+            labels.contains(&chordsketch_ireal::SectionLabel::Custom("Bridge".into())),
+            "expected Custom(\"Bridge\") in {labels:?}"
+        );
     }
 }

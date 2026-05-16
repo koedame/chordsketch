@@ -17,6 +17,8 @@ Thumbs.db
 crates/wasm/pkg/
 packages/npm/web/
 packages/npm/node/
+packages/npm-export/web/
+packages/npm-export/node/
 
 # UniFFI binding generation scratch dir
 # Created by `ruby.yml` (and any local invocation of the same generate

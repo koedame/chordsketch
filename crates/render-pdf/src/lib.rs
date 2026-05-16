@@ -18,10 +18,11 @@ use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::inline_markup::TextSpan;
 use chordsketch_chordpro::notation::NotationKind;
 use chordsketch_chordpro::render_result::{
-    RenderResult, push_warning, validate_capo, validate_strict_key,
+    RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
-use chordsketch_chordpro::transpose::transpose_chord;
+use chordsketch_chordpro::transpose::{transpose_chord_with_style, transposed_key_prefers_flat};
+use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
 
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
@@ -744,6 +745,7 @@ fn render_song_into_doc(
     );
 
     validate_capo(&song.metadata, warnings);
+    validate_multiple_capo(song, warnings);
     validate_strict_key(&song.metadata, config, warnings);
 
     // Title
@@ -795,6 +797,14 @@ fn render_song_into_doc(
     // every non-End-directive line until the matching End.
     let mut in_notation_block: Option<NotationKind> = None;
 
+    // True while the loop is inside a `{start_of_tab}`, `{start_of_grid}`,
+    // or `{start_of_textblock}` block. Body lines in those sections render
+    // through `render_lyrics` with `verbatim = true` so column alignment
+    // (fret rows, chord-grid bars) is preserved by Courier. The body of
+    // ABC/Lilypond/SVG/MusicXML blocks is suppressed via `in_notation_block`
+    // (#1825), so they don't need the same treatment here.
+    let mut in_verbatim_section = false;
+
     for line in &song.lines {
         // If we are inside a notation block, discard every line until
         // the matching `EndOf…` directive is seen. The section label
@@ -815,7 +825,55 @@ fn render_song_into_doc(
                 if let Some(buf) = chorus_buf.as_mut() {
                     buf.push(line.clone());
                 }
-                render_lyrics(lyrics, transpose_offset, &fmt_state, doc);
+                let prefer_flat = transposed_key_prefers_flat(&song.metadata, transpose_offset);
+                render_lyrics(
+                    lyrics,
+                    transpose_offset,
+                    prefer_flat,
+                    &fmt_state,
+                    doc,
+                    in_verbatim_section,
+                );
+            }
+            // ChordPro spec: `{key}` / `{tempo}` / `{time}` are
+            // `[Nx] [Pos]`; render a small italic line at the
+            // directive's position so the *position* aspect is
+            // visible (Phase B of #2454, sister-site to
+            // `crates/render-html/src/lib.rs` and
+            // `crates/render-text/src/lib.rs`).
+            Line::Directive(d)
+                if d.kind.is_metadata()
+                    && matches!(
+                        d.kind,
+                        DirectiveKind::Key | DirectiveKind::Tempo | DirectiveKind::Time
+                    ) =>
+            {
+                if let Some(value) = d.value.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+                    // Sister-site comment: the HTML / React surfaces
+                    // drop the `Tempo:` text label because the
+                    // metronome glyph carries the signal — PDF
+                    // doesn't render the glyph, so the label is
+                    // intentionally retained here. Same for
+                    // `Key:` / `Time:`.
+                    let line = match d.kind {
+                        DirectiveKind::Key => format!("Key: {}", unicode_accidentals(value)),
+                        DirectiveKind::Tempo => {
+                            // Append the Italian tempo marking when
+                            // the BPM matches a conventional band.
+                            let marking = value
+                                .parse::<f32>()
+                                .ok()
+                                .and_then(tempo_marking_for)
+                                .map(|m| format!(" ({m})"))
+                                .unwrap_or_default();
+                            format!("Tempo: {value} BPM{marking}")
+                        }
+                        DirectiveKind::Time => format!("Time: {value}"),
+                        _ => unreachable!(),
+                    };
+                    doc.text(&line, Font::HelveticaOblique, COMMENT_SIZE);
+                    doc.newline(COMMENT_SIZE + LINE_GAP);
+                }
             }
             Line::Directive(d) if !d.kind.is_metadata() => {
                 if d.kind == DirectiveKind::Diagrams {
@@ -912,13 +970,18 @@ fn render_song_into_doc(
                     }
                     DirectiveKind::Chorus => {
                         if chorus_recall_count < MAX_CHORUS_RECALLS {
+                            let prefer_flat =
+                                transposed_key_prefers_flat(&song.metadata, transpose_offset);
                             render_chorus_recall(
                                 &d.value,
-                                &chorus_body,
-                                transpose_offset,
-                                &fmt_state,
-                                show_diagrams,
-                                diagram_frets,
+                                &ChorusRecallCtx {
+                                    chorus_body: &chorus_body,
+                                    transpose_offset,
+                                    prefer_flat,
+                                    fmt_state: &fmt_state,
+                                    show_diagrams,
+                                    diagram_frets,
+                                },
                                 doc,
                             );
                             chorus_recall_count += 1;
@@ -966,6 +1029,27 @@ fn render_song_into_doc(
                     }
                     DirectiveKind::ColumnBreak => {
                         doc.column_break();
+                    }
+                    // Verbatim sections (#1825 covers ABC/Lilypond/SVG/MusicXML
+                    // separately via `in_notation_block`; tab/grid/textblock
+                    // bodies still flow through the lyrics path and need the
+                    // mono-font flag flipped so column alignment survives).
+                    DirectiveKind::StartOfTab
+                    | DirectiveKind::StartOfGrid
+                    | DirectiveKind::StartOfTextblock => {
+                        if let Some(buf) = chorus_buf.as_mut() {
+                            buf.push(line.clone());
+                        }
+                        in_verbatim_section = true;
+                        render_directive(d, show_diagrams, diagram_frets, doc);
+                    }
+                    DirectiveKind::EndOfTab
+                    | DirectiveKind::EndOfGrid
+                    | DirectiveKind::EndOfTextblock => {
+                        if let Some(buf) = chorus_buf.as_mut() {
+                            buf.push(line.clone());
+                        }
+                        in_verbatim_section = false;
                     }
                     _ => {
                         if let Some(buf) = chorus_buf.as_mut() {
@@ -1048,19 +1132,30 @@ pub fn try_render(input: &str) -> Result<Vec<u8>, chordsketch_chordpro::ParseErr
 fn render_lyrics(
     lyrics: &LyricsLine,
     transpose_offset: i8,
+    prefer_flat: bool,
     fmt_state: &PdfFormattingState,
     doc: &mut PdfDocument,
+    verbatim: bool,
 ) {
     let has_markup = lyrics.segments.iter().any(|s| s.has_markup());
     let lyrics_size = fmt_state.lyrics_size();
     let chord_size = fmt_state.chord_size();
+    // Verbatim sections (`{start_of_tab}`, `{start_of_grid}`,
+    // `{start_of_textblock}`) carry whitespace-significant content where
+    // column alignment matters; switch to Courier so fret diagrams and
+    // chord-grid bars stay aligned in the rendered PDF.
+    let body_font = if verbatim {
+        Font::Courier
+    } else {
+        Font::Helvetica
+    };
 
     if !lyrics.has_chords() {
         doc.ensure_space(lyrics_size + LINE_GAP);
         if has_markup {
             render_lyrics_spans(lyrics, lyrics_size, doc);
         } else {
-            doc.text(&lyrics.text(), Font::Helvetica, lyrics_size);
+            doc.text(&lyrics.text(), body_font, lyrics_size);
         }
         doc.newline(lyrics_size + LINE_GAP);
         return;
@@ -1077,7 +1172,7 @@ fn render_lyrics(
         // rendering and width measurement to avoid duplicate transposition.
         let chord_display: Option<String> = seg.chord.as_ref().map(|c| {
             if transpose_offset != 0 {
-                transpose_chord(c, transpose_offset)
+                transpose_chord_with_style(c, transpose_offset, prefer_flat)
                     .display_name()
                     .to_string()
             } else {
@@ -1216,7 +1311,27 @@ fn render_section_label(directive: &chordsketch_chordpro::ast::Directive, doc: &
         _ => None,
     };
     if let Some(label) = label {
-        let text = match &directive.value {
+        // For grid sections the `value` may carry an attribute
+        // payload (`shape="..." label="Intro"`) — prefer the
+        // structured `label="..."` attribute, otherwise pass
+        // through plain colon-form labels. Suppress raw
+        // attribute payloads (any value containing `=`).
+        // Sister-site to the HTML and text renderers.
+        let resolved_value: Option<String> = if matches!(directive.kind, DirectiveKind::StartOfGrid)
+        {
+            directive.value.as_ref().and_then(|v| {
+                if let Some(label) = chordsketch_chordpro::grid::extract_grid_label(v) {
+                    Some(label)
+                } else if !v.contains('=') {
+                    Some(v.clone())
+                } else {
+                    None
+                }
+            })
+        } else {
+            directive.value.clone()
+        };
+        let text = match resolved_value {
             Some(v) if !v.is_empty() => format!("{label}: {v}"),
             _ => label,
         };
@@ -1802,15 +1917,22 @@ fn render_keyboard_diagram_pdf(
 ///
 /// Emits a "Chorus" label (with optional custom label) followed by the content
 /// of the most recently defined chorus section.
-fn render_chorus_recall(
-    value: &Option<String>,
-    chorus_body: &[Line],
+/// Per-call rendering context for `render_chorus_recall`.
+///
+/// Bundles the rendering knobs into one struct so the function
+/// signature stays under clippy's `too_many_arguments`
+/// threshold without a per-call `#[allow]`. Sister-site to the
+/// equivalent `ChorusRecallCtx` in `crates/render-html`.
+struct ChorusRecallCtx<'a> {
+    chorus_body: &'a [Line],
     transpose_offset: i8,
-    fmt_state: &PdfFormattingState,
+    prefer_flat: bool,
+    fmt_state: &'a PdfFormattingState,
     show_diagrams: bool,
     diagram_frets: usize,
-    doc: &mut PdfDocument,
-) {
+}
+
+fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, doc: &mut PdfDocument) {
     let text = match value {
         Some(v) if !v.is_empty() => format!("Chorus: {v}"),
         _ => "Chorus".to_string(),
@@ -1820,13 +1942,22 @@ fn render_chorus_recall(
     doc.newline(SECTION_SIZE + LINE_GAP);
 
     // Replay the stored chorus body lines.
-    for line in chorus_body {
+    for line in ctx.chorus_body {
         match line {
-            Line::Lyrics(lyrics) => render_lyrics(lyrics, transpose_offset, fmt_state, doc),
+            Line::Lyrics(lyrics) => {
+                render_lyrics(
+                    lyrics,
+                    ctx.transpose_offset,
+                    ctx.prefer_flat,
+                    ctx.fmt_state,
+                    doc,
+                    false,
+                );
+            }
             Line::Comment(style, text) => render_comment(*style, text, doc),
             Line::Empty => doc.newline(LINE_GAP * 2.0),
             Line::Directive(d) if !d.kind.is_metadata() => {
-                render_directive(d, show_diagrams, diagram_frets, doc);
+                render_directive(d, ctx.show_diagrams, ctx.diagram_frets, doc);
             }
             _ => {}
         }
@@ -1837,15 +1968,28 @@ fn render_comment(style: CommentStyle, text: &str, doc: &mut PdfDocument) {
     let font = match style {
         CommentStyle::Normal => Font::Helvetica,
         CommentStyle::Italic | CommentStyle::Boxed => Font::HelveticaOblique,
+        // `{highlight}` is rendered in bold to give it the spec-described
+        // stronger visual emphasis without dragging in a separate font.
+        // Sister-site to `chordsketch-render-html`'s
+        // `comment--highlight` class.
+        CommentStyle::Highlight => Font::HelveticaBold,
     };
     if style == CommentStyle::Boxed {
         let padding = 3.0_f32;
-        let box_h = COMMENT_SIZE + padding * 2.0;
+        // Approximate Helvetica metrics: cap-height ≈ 0.72 em, descent
+        // ≈ 0.21 em. The original implementation placed `rect_y` at
+        // `text_y - COMMENT_SIZE - padding`, which treated the entire em
+        // box as descent below the baseline. The box bottom landed
+        // ~10 pt too low and the box top fell below the cap line, so
+        // characters like `B` and `f` poked above the rectangle.
+        let cap_height = COMMENT_SIZE * 0.72;
+        let descent = COMMENT_SIZE * 0.21;
+        let box_h = cap_height + descent + padding * 2.0;
         doc.ensure_space(box_h + LINE_GAP);
         let x = doc.margin_left();
         let text_y = doc.y();
-        // PDF rect y is bottom-left; text_y is the baseline top.
-        let rect_y = text_y - COMMENT_SIZE - padding;
+        // PDF rect y is bottom-left; text_y is the glyph baseline.
+        let rect_y = text_y - descent - padding;
         let text_w = text_width(text, COMMENT_SIZE);
         let box_w = text_w + padding * 2.0;
         doc.rect_stroke(x, rect_y, box_w, box_h, 0.5);
@@ -2965,7 +3109,7 @@ impl PdfDocument {
             .join(" ");
 
         // Add the CID composite font /F5 when non-Latin-1 glyphs are present.
-        // Object number = 3 + FONTS.len() (first object after the 4 Helvetica fonts).
+        // Object number = 3 + FONTS.len() (first object after the Type1 font block).
         let cid_font_ref = if cid_needed {
             format!(" /F5 {} 0 R", 3 + FONTS.len())
         } else {
@@ -3341,16 +3485,25 @@ enum Font {
     HelveticaBold,
     HelveticaOblique,
     HelveticaBoldOblique,
+    /// Monospace Type1 font used for verbatim sections
+    /// (`{start_of_tab}`, `{start_of_grid}`, `{start_of_textblock}`)
+    /// where column alignment matters.
+    Courier,
 }
 
 impl Font {
     /// Returns the PDF font resource name (must match the page Resources dict).
+    ///
+    /// `/F5` is reserved for the conditionally-emitted Type0 CID font
+    /// (`unicode_face` — NotoSansCJK), so Courier takes `/F6` to avoid
+    /// colliding with it.
     fn pdf_name(self) -> &'static str {
         match self {
             Self::Helvetica => "/F1",
             Self::HelveticaBold => "/F2",
             Self::HelveticaOblique => "/F3",
             Self::HelveticaBoldOblique => "/F4",
+            Self::Courier => "/F6",
         }
     }
 
@@ -3361,16 +3514,20 @@ impl Font {
             Self::HelveticaBold => "Helvetica-Bold",
             Self::HelveticaOblique => "Helvetica-Oblique",
             Self::HelveticaBoldOblique => "Helvetica-BoldOblique",
+            Self::Courier => "Courier",
         }
     }
 }
 
-/// The four fonts used in the output.
-const FONTS: [Font; 4] = [
+/// The Type1 fonts emitted in the output. Courier (index 4) is included
+/// here so it gets its Resources/Font entry alongside the Helvetica
+/// family; the `/F5` slot stays open for the optional Type0 CID font.
+const FONTS: [Font; 5] = [
     Font::Helvetica,
     Font::HelveticaBold,
     Font::HelveticaOblique,
     Font::HelveticaBoldOblique,
+    Font::Courier,
 ];
 
 // ---------------------------------------------------------------------------

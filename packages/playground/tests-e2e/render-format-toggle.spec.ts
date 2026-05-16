@@ -1,67 +1,83 @@
-// Pins the contract that the HTML preview survives a round-trip
-// through the Text or PDF format selector. #2321 / PR #2322 left a
-// residual blank-preview symptom on the HTML → Text → HTML toggle
-// in real Chrome that headless Chromium does not reproduce; #2421
-// hardens the host with a monotonic cache-bust marker so the iframe
-// `srcdoc` attribute is byte-different on every render. This smoke
-// asserts the marker is present and increments — a regression that
-// drops the cache-bust would collapse it to a constant string and
-// fail this test loudly.
+// Pins the inline-render contract on the playground's HTML
+// preview surface.
+//
+// Pre-#2475 this spec drove the Format `<select>` and asserted a
+// monotonic cache-bust marker inside the iframe `srcdoc`
+// (#2421 / PR #2322 / #2421). After the AST → JSX cut-over
+// (ADR-0017, this PR) the html branch renders inline through
+// `<ChordSheet format="html">`'s walker — no iframe, no
+// `srcdoc`, no cache-bust marker. The invariant that survived
+// the architecture change is "transpose changes the rendered
+// chord names": the AST → JSX path replaces the previous
+// "transpose changes the iframe's srcdoc string" guarantee with
+// the more direct "React re-renders the DOM with new chord
+// labels".
+//
+// Selectors target the React playground (#2454 / #2475):
+// `.chordsketch-preview .song` is the AST → JSX root, and chord
+// labels live inside `.chord-block .chord` spans. The transpose
+// stepper is labelled "Transpose up one semitone".
 
 import { expect, test } from '@playwright/test';
 
-test.describe('playground render-format toggle', () => {
-  test('html → text → html keeps the preview rendering and bumps the cache-bust marker', async ({
+async function chordTexts(
+  page: import('@playwright/test').Page,
+): Promise<string[]> {
+  return page
+    .locator('.chordsketch-preview .song .chord-block .chord')
+    .allInnerTexts();
+}
+
+test.describe('playground render inline path', () => {
+  test('mount-time render produces a `.song` tree with chord labels', async ({
     page,
   }) => {
-    await page.goto('./');
-    const iframe = page.locator('iframe#preview');
-    await expect(iframe).toBeVisible();
-
-    const initialSrcdoc = await iframe.getAttribute('srcdoc');
-    expect(initialSrcdoc, 'mount-time srcdoc should be populated').toBeTruthy();
-    expect(initialSrcdoc).toMatch(/<!--\s*r:\d+\s*-->/);
-
-    const formatSelect = page.locator('select#format');
-    await formatSelect.selectOption('text');
-    // The text pane is now visible; the iframe still carries its
-    // previous `srcdoc` value but is hidden via `display: none`.
-    const textPane = page.locator('pre#text-output');
-    await expect(textPane).toBeVisible();
-
-    await formatSelect.selectOption('html');
-    await expect(iframe).toBeVisible();
-
-    const finalSrcdoc = await iframe.getAttribute('srcdoc');
-    expect(finalSrcdoc, 'post-toggle srcdoc should be populated').toBeTruthy();
-    // The iframe must still carry the rendered body; a regression
-    // that wipes the document on hide/show would leave srcdoc empty.
-    expect(finalSrcdoc).toContain('<div class="song"');
-    // Most important assertion: the cache-bust marker increments
-    // monotonically, which guarantees Chromium cannot elide the
-    // navigation as a same-value no-op (#2421).
-    expect(finalSrcdoc).not.toBe(initialSrcdoc);
-    expect(finalSrcdoc).toMatch(/<!--\s*r:\d+\s*-->/);
+    await page.goto('./chordpro/');
+    const song = page.locator('.chordsketch-preview .song');
+    await expect(song).toBeVisible();
+    // The default seed contains lyrics with chord annotations;
+    // the AST walker emits a `.chord` span per chord segment.
+    await expect
+      .poll(async () => (await chordTexts(page)).length)
+      .toBeGreaterThan(0);
   });
 
-  test('repeated html ↔ text toggles produce strictly distinct srcdoc values', async ({
+  test('transpose changes the rendered chord labels', async ({ page }) => {
+    await page.goto('./chordpro/');
+    const song = page.locator('.chordsketch-preview .song');
+    await expect(song).toBeVisible();
+
+    const initial = await chordTexts(page);
+    expect(initial.length).toBeGreaterThan(0);
+
+    await page.getByLabel('Transpose up one semitone').click();
+    await expect
+      .poll(async () => (await chordTexts(page)).join('|'))
+      .not.toBe(initial.join('|'));
+
+    const after = await chordTexts(page);
+    expect(after.length).toBe(initial.length);
+  });
+
+  test('repeated transpose steps produce strictly distinct chord-label sets', async ({
     page,
   }) => {
-    await page.goto('./');
-    const iframe = page.locator('iframe#preview');
-    const formatSelect = page.locator('select#format');
-    await expect(iframe).toBeVisible();
+    await page.goto('./chordpro/');
+    await expect(page.locator('.chordsketch-preview .song')).toBeVisible();
+    const upButton = page.getByLabel('Transpose up one semitone');
 
     const seen = new Set<string>();
-    seen.add((await iframe.getAttribute('srcdoc')) ?? '');
+    seen.add((await chordTexts(page)).join('|'));
+    let last = (await chordTexts(page)).join('|');
     for (let i = 0; i < 4; i++) {
-      await formatSelect.selectOption('text');
-      await formatSelect.selectOption('html');
-      seen.add((await iframe.getAttribute('srcdoc')) ?? '');
+      await upButton.click();
+      await expect.poll(async () => (await chordTexts(page)).join('|')).not.toBe(last);
+      last = (await chordTexts(page)).join('|');
+      seen.add(last);
     }
-    // 1 mount-time + 4 post-toggle writes = 5 distinct strings if
-    // the cache-bust marker is increment-on-render. A regression
-    // that drops the marker collapses this set to size 1.
+    // 1 mount-time + 4 post-step states = 5 distinct chord-label
+    // strings. A regression that breaks the transpose pipeline (or
+    // the AST → JSX walker) would collapse this set.
     expect(seen.size).toBe(5);
   });
 });

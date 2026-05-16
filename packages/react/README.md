@@ -48,28 +48,36 @@ export function Sheet() {
 }
 ```
 
-`format="html"` (default) injects ChordPro's rendered HTML via
-`dangerouslySetInnerHTML`. The output comes from
-`chordsketch-render-html`, which escapes all user-supplied
-ChordPro tokens (titles, lyrics, chord names, attributes, inline
-markup, custom section labels) before emitting markup — for
-first-party ChordPro this is safe to inject directly.
-`format="text"` renders the plain-text chords-above-lyrics output
-inside a `<pre>`; pick that variant if you need a zero-HTML
-preview.
+`format="html"` (default) parses the ChordPro source via
+`@chordsketch/wasm`'s `parseChordpro` export and walks the AST
+into a React tree directly through the `chordpro-jsx` walker.
+No HTML string injection is involved on this path — every
+element reaches the DOM through React reconciliation, so the
+output is amenable to ordinary React composition (selectable
+text spans, hover affordances, snapshot tests). The walker
+mirrors the DOM contract `chordsketch-render-html` produces
+(`.song`, `.line`, `.chord-block`, `<section class="…">`,
+`<p class="comment">`, etc.) so the bundled
+`@chordsketch/react/styles.css` lights up unchanged. See
+[ADR-0017](https://github.com/koedame/chordsketch/blob/main/docs/adr/0017-react-renders-from-ast.md)
+for the architectural split.
 
-**Trust boundary note.** Delegate sections (`{start_of_abc}`,
+`format="text"` renders the plain-text chords-above-lyrics
+output inside a `<pre>`; pick that variant if you need an
+even-more-conservative preview that avoids the JSX walker
+entirely.
+
+**Trust boundary note.** The walker enforces the same URI-scheme
+blocklist (`javascript:`, `vbscript:`, `data:`, `file:`,
+`blob:`) `chordsketch-render-html` applies, so image directives
+with dangerous schemes drop out of the output the same way they
+do on the static-HTML side. Delegate sections (`{start_of_abc}`,
 `{start_of_ly}`, `{start_of_musicxml}`, `{start_of_textblock}`)
-pass their bodies through **raw** per the render-html crate's
-security doc. If you accept **untrusted** ChordPro (e.g. a
-multi-tenant SaaS where end users share songs), combine this
-component with a Content Security Policy that restricts inline
-scripts and external resource loads, or switch to `format="text"`
-for a zero-HTML preview. The playground
-(`packages/ui-web`) uses a sandboxed iframe for the same render
-pipeline because it does not control the ChordPro source it
-renders; `<ChordSheet>` does not sandbox because typical React
-hosts already control their own input.
+are tracked as a follow-up — the walker currently ignores their
+bodies rather than rendering them. If you accept untrusted
+ChordPro and need full delegate-section rendering today, drive
+the static `chordsketch-render-html` output yourself and embed
+it in your own iframe.
 
 Errors are surfaced via an inline `role="alert"` above the
 render by default. Pass `errorFallback={(err) => <YourJsx/>}` to

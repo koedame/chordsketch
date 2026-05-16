@@ -301,6 +301,20 @@ const RENDER_DEBOUNCE_MS = 300;
 // intentionally carries no own styles so it cannot conflict with
 // whatever the body brings.
 //
+// The `<link rel="preconnect"/preload>` block loads the design-system
+// font stack (Noto Sans JP / Inter / JetBrains Mono / Roboto) into
+// the iframe document so the embedded `<style>` block from
+// `render_html_css()` can resolve the `--font-jp` / `--font-chord` /
+// `--font-latin` stacks against real web fonts. iframe srcdoc is a
+// separate document from the host page; web fonts loaded by the
+// parent are NOT inherited, so the load has to happen here. Source
+// Serif 4 and Bravura Text are chart-only and stay loaded by the
+// chart renderer itself. The renderer's CSS template intentionally
+// does NOT carry an `@import` for these — keeping the renderer
+// output self-contained for CLI consumers (no phone-home on saved
+// HTML) and pushing the font load to the host envelope. See
+// DESIGN.md §3 for the role table.
+//
 // Pre-#2321 this template embedded a second copy of body / chord /
 // section styles AND the playground passed a full
 // `<!DOCTYPE>...<body>...</body></html>` document through, so
@@ -323,6 +337,9 @@ const HTML_FRAME_TEMPLATE = (body: string, cacheBust: number): string => `<!DOCT
 <html>
 <head>
 <meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700;900&family=Roboto:wght@400;500;700;900&display=swap">
 <!-- r:${cacheBust} -->
 </head>
 <body>${body}</body>

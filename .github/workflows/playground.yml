@@ -53,6 +53,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Install sibling-package node_modules so tsc can resolve the
+      # transitive `react` / `@codemirror/*` / `@lezer/*` imports
+      # inside `../react/src/*.tsx` files when they are pulled into
+      # the playground's program via tsconfig `paths` /
+      # `include`. Each sibling owns its own lockfile and its own
+      # CI typecheck — installing here is purely about giving
+      # node-style upward module resolution a populated
+      # `packages/<sibling>/node_modules/` to walk into.
+      - name: Install sibling package dependencies
+        working-directory: packages/react
+        run: npm ci
+
+      - name: Install ui-web dependencies
+        working-directory: packages/ui-web
+        run: npm ci
+
+      - name: Install ui-irealb-editor dependencies
+        working-directory: packages/ui-irealb-editor
+        run: npm ci
+
       - name: Typecheck (tsc --noEmit)
         # `packages/playground/src/wasm.d.ts` declares an ambient
         # module for `@chordsketch/wasm` covering every export the

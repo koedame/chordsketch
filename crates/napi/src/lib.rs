@@ -593,16 +593,26 @@ pub fn version() -> String {
     chordsketch_chordpro::version().to_string()
 }
 
-/// Pure-Rust implementation of [`chord_diagram_svg`].
+/// Pure-Rust implementation of [`chord_diagram_svg`] /
+/// [`chord_diagram_svg_with_defines`]. `defines` is a slice of
+/// `(name, raw)` pairs matching
+/// `chordsketch_chordpro::voicings::lookup_diagram`'s contract —
+/// the built-in voicing database is consulted only when no entry
+/// in `defines` matches the chord name.
 fn chord_diagram_svg_inner(
     chord: &str,
     instrument: &str,
+    defines: &[(String, String)],
 ) -> std::result::Result<Option<String>, String> {
     use chordsketch_chordpro::chord_diagram::{render_keyboard_svg, render_svg};
     use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
 
     match instrument.to_ascii_lowercase().as_str() {
         "piano" | "keyboard" | "keys" => {
+            // Keyboard voicings have their own `{define: … keys …}`
+            // shape; the wasm sister-site does not thread defines
+            // through this branch either. Match that gap here so
+            // NAPI behaviour stays consistent.
             Ok(lookup_keyboard_voicing(chord, &[]).map(|v| render_keyboard_svg(&v)))
         }
         "guitar" | "ukulele" | "uke" => {
@@ -611,7 +621,7 @@ fn chord_diagram_svg_inner(
             // when no `{chordfrets}` directive is set), keeping
             // diagrams produced via NAPI visually consistent with
             // sheets rendered through the same binding.
-            Ok(lookup_diagram(chord, &[], instrument, 5).map(|d| render_svg(&d)))
+            Ok(lookup_diagram(chord, defines, instrument, 5).map(|d| render_svg(&d)))
         }
         other => Err(format!(
             "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
@@ -641,7 +651,56 @@ fn chord_diagram_svg_inner(
 #[must_use = "callers must handle the unknown-instrument error"]
 #[napi]
 pub fn chord_diagram_svg(chord: String, instrument: String) -> Result<Option<String>> {
-    chord_diagram_svg_inner(&chord, &instrument).map_err(|msg| Error::new(Status::InvalidArg, msg))
+    chord_diagram_svg_inner(&chord, &instrument, &[])
+        .map_err(|msg| Error::new(Status::InvalidArg, msg))
+}
+
+/// Like [`chord_diagram_svg`], but consults song-level
+/// `{define}` voicings before falling back to the built-in
+/// voicing database. `defines` is a list of `[name, raw]`
+/// tuples — `raw` is the directive body (e.g.
+/// `"base-fret 1 frets 3 3 0 0 1 3"`). Mirrors
+/// `chordsketch_chordpro::voicings::lookup_diagram`'s
+/// "song-level defines take priority" rule so user-defined
+/// chords show up here exactly like the Rust HTML renderer's
+/// `<section class="chord-diagrams">` block. Sister-site to
+/// the wasm `chordDiagramSvgWithDefines` and FFI
+/// `chord_diagram_svg_with_defines` exports
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+///
+/// # Errors
+///
+/// Returns a napi `Error` with status `InvalidArg` when
+/// `instrument` is not one of the supported values.
+#[must_use = "callers must handle the unknown-instrument error"]
+#[napi(js_name = "chordDiagramSvgWithDefines")]
+pub fn chord_diagram_svg_with_defines(
+    chord: String,
+    instrument: String,
+    defines: Vec<Vec<String>>,
+) -> Result<Option<String>> {
+    // napi-rs's `tuple` support is limited; accept `Array<[name,
+    // raw]>` as `Vec<Vec<String>>` and reject malformed inner
+    // arrays at the boundary. Each entry must have exactly two
+    // elements; anything else is a caller error.
+    let mut pairs: Vec<(String, String)> = Vec::with_capacity(defines.len());
+    for (i, entry) in defines.into_iter().enumerate() {
+        if entry.len() != 2 {
+            return Err(Error::new(
+                Status::InvalidArg,
+                format!(
+                    "defines[{i}] must be [name, raw] (length 2); got length {}",
+                    entry.len()
+                ),
+            ));
+        }
+        let mut it = entry.into_iter();
+        let name = it.next().expect("length checked above");
+        let raw = it.next().expect("length checked above");
+        pairs.push((name, raw));
+    }
+    chord_diagram_svg_inner(&chord, &instrument, &pairs)
+        .map_err(|msg| Error::new(Status::InvalidArg, msg))
 }
 
 /// Structured result for ChordPro ↔ iReal Pro conversions
@@ -1504,7 +1563,7 @@ mod tests {
 
     #[test]
     fn test_chord_diagram_svg_inner_guitar_known_chord_returns_svg() {
-        let svg = chord_diagram_svg_inner("C", "guitar").unwrap();
+        let svg = chord_diagram_svg_inner("C", "guitar", &[]).unwrap();
         let svg = svg.expect("guitar C must have a built-in diagram");
         assert!(svg.contains("<svg"));
     }
@@ -1512,14 +1571,14 @@ mod tests {
     #[test]
     fn test_chord_diagram_svg_inner_ukulele_alias_resolves() {
         // "uke" is documented as an alias for "ukulele".
-        let svg = chord_diagram_svg_inner("C", "uke").unwrap();
+        let svg = chord_diagram_svg_inner("C", "uke", &[]).unwrap();
         assert!(svg.is_some(), "ukulele C must resolve via the uke alias");
     }
 
     #[test]
     fn test_chord_diagram_svg_inner_piano_keyboard_aliases_resolve() {
         for alias in ["piano", "keyboard", "keys"] {
-            let result = chord_diagram_svg_inner("C", alias);
+            let result = chord_diagram_svg_inner("C", alias, &[]);
             assert!(
                 result.is_ok(),
                 "{alias:?} must be accepted as a piano alias; got {result:?}"
@@ -1532,13 +1591,13 @@ mod tests {
         // Unknown chord under a known instrument must yield Ok(None),
         // not Err — the docstring promises hosts can render their own
         // fallback for misses.
-        let result = chord_diagram_svg_inner("XYZ-not-a-chord", "guitar").unwrap();
+        let result = chord_diagram_svg_inner("XYZ-not-a-chord", "guitar", &[]).unwrap();
         assert!(result.is_none());
     }
 
     #[test]
     fn test_chord_diagram_svg_inner_unknown_instrument_errors() {
-        let err = chord_diagram_svg_inner("C", "harmonica").unwrap_err();
+        let err = chord_diagram_svg_inner("C", "harmonica", &[]).unwrap_err();
         assert!(
             err.contains("unknown instrument") && err.contains("harmonica"),
             "error must name the offending instrument; got {err:?}"
@@ -1551,7 +1610,7 @@ mod tests {
         // insensitive; the helper's `to_ascii_lowercase` must honour
         // that promise for every alias.
         for variant in ["GUITAR", "Guitar", "gUiTaR"] {
-            let svg = chord_diagram_svg_inner("C", variant)
+            let svg = chord_diagram_svg_inner("C", variant, &[])
                 .unwrap_or_else(|e| panic!("case variant {variant:?} must not error; got {e:?}"));
             assert!(
                 svg.is_some(),

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toast — ChordSketch Components</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="../tokens.css">
+<style>
+* { box-sizing: border-box; } html, body { margin: 0; }
+body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875; color: var(--text-primary); background: var(--canvas); -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+.container { max-width: 960px; margin: 0 auto; padding: var(--sp-12) var(--sp-6); }
+.preview-back { font-family: var(--font-latin); font-size: var(--fs-12); font-weight: 600; letter-spacing: 0; color: var(--text-secondary); }
+.preview-back:hover { color: var(--text-primary); }
+.eyebrow { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); margin: var(--sp-8) 0 var(--sp-2); }
+.preview-h1 { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-36); line-height: 1.111; letter-spacing: -0.02em; margin: 0 0 var(--sp-3); }
+.preview-deck { color: var(--text-secondary); margin: 0 0 var(--sp-12); max-width: 56ch; }
+.group { margin-bottom: var(--sp-12); }
+.group h2 { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); margin: 0 0 var(--sp-4); }
+.frame { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); padding: var(--sp-8); display: flex; flex-direction: column; gap: var(--sp-3); align-items: stretch; }
+
+.toast {
+  display: grid;
+  grid-template-columns: 20px 1fr auto auto;
+  gap: var(--sp-3);
+  align-items: center;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-2);
+  background: var(--ink-1000);
+  color: var(--ink-0);
+  box-shadow: var(--e-2);
+  font-size: var(--fs-14);
+  max-width: 480px;
+}
+.toast.success { background: var(--success-fg); }
+.toast.danger  { background: var(--danger-fg); }
+.toast.warning { background: var(--warning-fg); color: #FFF; }
+.toast .icon { display: inline-flex; }
+.toast .body { display: flex; flex-direction: column; gap: 2px; }
+.toast .body .title { font-weight: 600; }
+.toast .body .desc { color: rgba(255, 255, 255, 0.72); font-size: var(--fs-13); }
+.toast .action { background: transparent; border: 0; color: inherit; font: 600 var(--fs-13)/1 var(--font-jp); cursor: pointer; padding: 0 var(--sp-2); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.toast .action:hover { text-decoration: none; }
+.toast .action:focus-visible { outline: none; box-shadow: 0 0 0 2px currentColor; border-radius: var(--r-1); }
+.toast .close { background: transparent; border: 0; color: rgba(255,255,255,0.6); cursor: pointer; padding: var(--sp-1); display: inline-flex; }
+.toast .close:hover { color: #FFF; }
+
+.stack { display: flex; flex-direction: column; gap: var(--sp-3); }
+</style>
+</head>
+<body>
+<main class="container">
+  <a href="index.html" class="preview-back">← Components</a>
+  <p class="eyebrow">Component</p>
+  <h1 class="preview-h1">Toast</h1>
+  <p class="preview-deck">Default base is <code style="font-family: var(--font-mono);">--ink-1000</code>; success / danger swap to semantic foreground colors. Action buttons inherit the toast foreground and add an underline — no color shift — so contrast holds on every variant.</p>
+
+  <section class="group">
+    <h2>Default</h2>
+    <div class="frame">
+      <div class="toast" role="status">
+        <span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></span>
+        <span class="body"><span class="title">Copied to clipboard</span></span>
+        <button class="action">Undo</button>
+        <button class="close" aria-label="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Success</h2>
+    <div class="frame">
+      <div class="toast success" role="status">
+        <span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg></span>
+        <span class="body">
+          <span class="title">Saved</span>
+          <span class="desc">"Country Roads" has been saved to Library.</span>
+        </span>
+        <button class="action">View</button>
+        <button class="close" aria-label="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Danger</h2>
+    <div class="frame">
+      <div class="toast danger" role="alert">
+        <span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
+        <span class="body">
+          <span class="title">Save failed</span>
+          <span class="desc">Check your connection.</span>
+        </span>
+        <button class="action">Retry</button>
+        <button class="close" aria-label="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Stack — bottom-right</h2>
+    <div class="frame">
+      <div class="stack" style="margin-left: auto;">
+        <div class="toast" role="status">
+          <span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+          <span class="body"><span class="title">Synced · 14:32</span></span>
+          <span></span>
+          <button class="close" aria-label="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+        <div class="toast warning" role="status">
+          <span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+          <span class="body"><span class="title">Unsaved changes</span></span>
+          <button class="action">Save</button>
+          <button class="close" aria-label="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

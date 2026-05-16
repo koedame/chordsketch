@@ -22,12 +22,21 @@ Song {
         key: Some(
             "Am",
         ),
+        keys: [
+            "Am",
+        ],
         tempo: Some(
             "120",
         ),
+        tempos: [
+            "120",
+        ],
         time: Some(
             "4/4",
         ),
+        times: [
+            "4/4",
+        ],
         capo: Some(
             "3",
         ),

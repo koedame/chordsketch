@@ -1,0 +1,1243 @@
+/*
+ * App-level styles for the ChordSketch playground React shell.
+ *
+ * The visual chrome here mirrors the design-system editor reference
+ * at `design-system/ui_kits/web/editor.html`: top-nav with the
+ * brand mark + breadcrumb, a toolbar row with eyebrow-labelled
+ * `tool-group`s and `segmented` controls, two `pane`s with
+ * `pane-head` eyebrows above their bodies, and a status footer
+ * with monospaced metadata. Class names are kept identical to the
+ * reference so anyone already familiar with that file can navigate
+ * this stylesheet without re-learning the vocabulary.
+ *
+ * The reusable components from `@chordsketch/react`
+ * (`<SourceEditor>`, `<RendererPreview>`, `<Transpose>`) bring
+ * their own styling via `@chordsketch/react/styles.css`. The
+ * rules below override that styling where the editor.html chrome
+ * demands a tighter fit.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+/* Design-system tokens at :root scope. `@chordsketch/react/styles.css`
+ * scopes the same tokens to its component root classes
+ * (`.chordsketch-playground`, etc.) which doesn't reach the
+ * playground's own chrome. Mirroring them here keeps every selector
+ * — chordpro and irealpro alike — working without sprinkling
+ * `var(--cs-X, #literal)` fallbacks across every rule. Keep this
+ * in lockstep with `design-system/tokens.css`. */
+:root {
+  --cs-crimson-50: #FDF2F5;
+  --cs-crimson-100: #FBE1E8;
+  --cs-crimson-300: #EC8AA3;
+  --cs-crimson-500: #BD1642;
+  --cs-crimson-600: #A30F37;
+  --cs-crimson-700: #87092C;
+  --cs-crimson-900: #480418;
+  --cs-crimson: var(--cs-crimson-500);
+
+  --cs-ink-0: #FFFFFF;
+  --cs-ink-50: #FAFAF7;
+  --cs-ink-100: #F6F4F7;
+  --cs-ink-200: #E8E6EA;
+  --cs-ink-300: #D4D1D6;
+  --cs-ink-500: #8A8790;
+  --cs-ink-600: #67646D;
+  --cs-ink-700: #44424A;
+  --cs-ink-1000: #0A0A0B;
+
+  --cs-canvas: var(--cs-ink-50);
+  --cs-surface: var(--cs-ink-0);
+  --cs-surface-hover: var(--cs-ink-100);
+  --cs-border: var(--cs-ink-200);
+  --cs-border-strong: var(--cs-ink-300);
+  --cs-text-primary: var(--cs-ink-1000);
+  --cs-text-strong: var(--cs-ink-700);
+  --cs-text-secondary: var(--cs-ink-600);
+  --cs-text-tertiary: var(--cs-ink-500);
+
+  --cs-success-fg: #1A6B3A;
+  --cs-warning-fg: #8A5A07;
+  --cs-danger-surface: #FBE1E8;
+  --cs-danger-fg: #A30F37;
+
+  --cs-focus-ring: 0 0 0 2px var(--cs-ink-0), 0 0 0 4px var(--cs-crimson-500);
+
+  --cs-font-jp: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --cs-font-latin: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --cs-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --cs-font-chord: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --cs-font-chart-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --cs-font-music: "Bravura Text", "Noto Music", "Symbola", serif;
+
+  --cs-fs-10: 0.625rem;
+  --cs-fs-12: 0.75rem;
+  --cs-fs-13: 0.8125rem;
+  --cs-fs-14: 0.875rem;
+  --cs-fs-15: 0.9375rem;
+  --cs-fs-16: 1rem;
+  --cs-fs-18: 1.125rem;
+  --cs-fs-24: 1.5rem;
+  --cs-fs-30: 1.875rem;
+  --cs-fs-36: 2.25rem;
+  --cs-fs-48: 3rem;
+
+  --cs-sp-1: 0.25rem;
+  --cs-sp-2: 0.5rem;
+  --cs-sp-3: 0.75rem;
+  --cs-sp-4: 1rem;
+  --cs-sp-5: 1.25rem;
+  --cs-sp-6: 1.5rem;
+  --cs-sp-8: 2rem;
+  --cs-sp-10: 2.5rem;
+  --cs-sp-12: 3rem;
+  --cs-sp-16: 4rem;
+  --cs-sp-20: 5rem;
+
+  --cs-r-1: 4px;
+  --cs-r-2: 6px;
+  --cs-r-3: 8px;
+  --cs-r-4: 12px;
+  --cs-r-full: 999px;
+
+  --cs-dur-1: 120ms;
+  --cs-dur-2: 240ms;
+  --cs-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+body {
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  font-size: 1rem;
+  line-height: 1.6875;
+  background: var(--cs-canvas, #FAFAF7);
+  color: var(--cs-text-primary, #0A0A0B);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+}
+
+/* ----------------------------------------------------------------
+ * App shell
+ * ---------------------------------------------------------------- */
+
+.chordsketch-app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--cs-canvas, #FAFAF7);
+}
+
+/* ----------------------------------------------------------------
+ * Top nav (`.topnav`) — brand + breadcrumb + actions on the right.
+ * No save state / undo / save button: the playground has no
+ * persistence, so those reference-only chrome elements are
+ * intentionally omitted.
+ * ---------------------------------------------------------------- */
+
+.topnav {
+  height: 56px;
+  background: var(--cs-surface, #FFFFFF);
+  border-bottom: 1px solid var(--cs-border, #E8E6EA);
+  display: flex;
+  align-items: center;
+  padding: 0 1.5rem;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+.topnav .brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  color: var(--cs-text-primary, #0A0A0B);
+}
+
+.topnav .brand .mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 2px;
+  display: block;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><rect width="180" height="180" fill="%23BD1642"/><path d="M82.9328334,100.501459 C84.0311093,98.5297919 86.368868,97.6656987 88.5433381,98.2694599 C88.6578145,98.3008392 88.7693854,98.3264075 88.8821185,98.3548813 C89.0669078,98.400207 89.2522781,98.4437894 89.4422973,98.4821419 C89.5375974,98.5013181 89.635222,98.5239809 89.7287788,98.5408328 C89.7729423,98.5489682 89.8165246,98.5507115 89.8606881,98.5559414 C90.8235681,98.7198111 91.8404902,98.8000027 92.9044814,98.7738532 C95.0353691,98.7209733 97.3208289,98.282244 99.5969912,97.4140831 C106.959508,94.607378 111.430478,88.4041529 109.583748,83.5589548 C108.201896,79.9334821 103.674558,78.0966301 98.3993475,78.5760363 C98.7985621,78.4499379 99.1977766,78.3168664 99.5969912,78.1646186 C106.959508,75.3579135 111.430478,69.1546885 109.583748,64.3089092 C108.201896,60.6840176 103.674558,58.8471657 98.3993475,59.3259907 C98.7985621,59.1998924 99.1977766,59.0668209 99.5969912,58.9145731 C106.959508,56.107868 111.430478,49.904643 109.583748,45.0588637 C107.736436,40.2136655 100.270484,38.5604407 92.9079679,41.3671458 C89.9879487,42.4805302 87.5246727,44.1291063 85.7284976,46.0141894 C84.9382039,46.8498088 84.3135231,47.672063 83.8195895,48.5140746 C66.608037,74.3247206 75.0897488,157.615874 75.0897488,157.615874 C75.5546275,146.069449 77.4478459,110.345846 82.9328334,100.501459 Z" fill="%23FFFFFF"/></svg>');
+  background-size: cover;
+  background-repeat: no-repeat;
+  flex-shrink: 0;
+}
+
+.topnav .crumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: 1.5rem;
+  font-size: 0.875rem;
+  color: var(--cs-text-secondary, #67646D);
+}
+
+.topnav .crumbs .sep {
+  color: var(--cs-text-tertiary, #8A8790);
+}
+
+.topnav .crumbs .current {
+  color: var(--cs-text-primary, #0A0A0B);
+  font-weight: 500;
+}
+
+.topnav .actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Inline tools (Sample / Layout) sit BEFORE `.actions` and consume the
+   leftover horizontal space, pushing `.actions` to the right edge. */
+.topnav__tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.topnav__tools .tool-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--cs-text-secondary, #67646D);
+}
+.topnav__tools .tool-group .label {
+  font-weight: 500;
+}
+
+/* ----------------------------------------------------------------
+ * Buttons (`.btn` + variants) — same vocabulary as the reference.
+ * ---------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 36px;
+  padding: 0 1rem;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  /* Latin-priority font stack — button labels are English /
+     symbols, and `--cs-font-jp` (Noto Sans JP) has a larger
+     vertical line-box than `--cs-font-latin` (Inter), which
+     shifted Latin glyphs visually downward inside a fixed-height
+     `.btn` even though `align-items: center` + `line-height: 1`
+     should have nominally centred them. Latin stack restores the
+     baseline. */
+  font: 500 0.875rem/1 var(--cs-font-latin, "Inter", system-ui, sans-serif);
+  cursor: pointer;
+  transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  text-decoration: none;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--cs-ink-0, #FFFFFF), 0 0 0 4px var(--cs-crimson-500, #BD1642);
+}
+
+.btn-secondary {
+  background: var(--cs-surface, #FFFFFF);
+  color: var(--cs-text-primary, #0A0A0B);
+  border-color: var(--cs-border-strong, #D4D1D6);
+}
+.btn-secondary:hover {
+  background: var(--cs-ink-100, #F6F4F7);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--cs-text-secondary, #67646D);
+}
+.btn-ghost:hover {
+  background: var(--cs-ink-100, #F6F4F7);
+  color: var(--cs-text-primary, #0A0A0B);
+}
+
+.btn-icon {
+  padding: 0;
+  width: 36px;
+  justify-content: center;
+}
+
+.btn-sm {
+  height: 28px;
+  padding: 0 0.75rem;
+  font-size: 0.8125rem;
+}
+
+/* ----------------------------------------------------------------
+ * Toolbar — eyebrow-labelled tool-groups separated by hairline
+ * dividers, segmented controls.
+ * ---------------------------------------------------------------- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.5rem;
+  background: var(--cs-surface, #FFFFFF);
+  border-bottom: 1px solid var(--cs-border, #E8E6EA);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.75rem;
+  border-right: 1px solid var(--cs-border, #E8E6EA);
+  height: 28px;
+}
+
+.tool-group:last-of-type {
+  border-right: 0;
+}
+
+.tool-group .label {
+  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  color: var(--cs-text-tertiary, #8A8790);
+  margin-right: 0.5rem;
+}
+
+.tool-group .transpose-value {
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.8125rem;
+  padding: 0 0.5rem;
+  min-width: 28px;
+  text-align: center;
+  color: var(--cs-text-primary, #0A0A0B);
+  font-feature-settings: "tnum" 1;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--cs-border-strong, #D4D1D6);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.segmented button {
+  background: var(--cs-surface, #FFFFFF);
+  border: 0;
+  padding: 0 0.75rem;
+  height: 28px;
+  font: 500 0.8125rem/1 var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  color: var(--cs-text-secondary, #67646D);
+  cursor: pointer;
+  border-right: 1px solid var(--cs-border, #E8E6EA);
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.segmented button:last-child {
+  border-right: 0;
+}
+
+.segmented button:hover {
+  background: var(--cs-ink-100, #F6F4F7);
+  color: var(--cs-text-primary, #0A0A0B);
+}
+
+.segmented button:focus-visible {
+  outline: none;
+  /* Inset focus so the highlight stays inside the segmented
+   * pill — an outer ring would clip the rounded corners. */
+  box-shadow: inset 0 0 0 2px var(--cs-crimson-500, #BD1642);
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--cs-ink-1000, #0A0A0B);
+  color: var(--cs-ink-0, #FFFFFF);
+}
+
+/* ----------------------------------------------------------------
+ * Editor split + panes
+ * ---------------------------------------------------------------- */
+
+.editor {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  min-height: 0;
+  background: var(--cs-canvas, #FAFAF7);
+}
+
+.editor.editor--source-only,
+.editor.editor--preview-only {
+  grid-template-columns: 1fr;
+  /* Single-pane modes always use a single grid row regardless of
+     viewport width — without this, the @900px media query below
+     forces `grid-template-rows: 1fr 1fr`, leaving the second row
+     empty and the visible pane stuck at half height (#2475
+     follow-up). */
+  grid-template-rows: 1fr;
+}
+
+@media (max-width: 900px) {
+  .editor {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+  .editor.editor--source-only,
+  .editor.editor--preview-only {
+    grid-template-rows: 1fr;
+  }
+  .pane.source {
+    border-right: 0;
+    border-bottom: 1px solid var(--cs-border, #E8E6EA);
+  }
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--cs-surface, #FFFFFF);
+}
+
+.pane.source {
+  border-right: 1px solid var(--cs-border, #E8E6EA);
+}
+
+.editor--source-only .pane.source,
+.editor--preview-only .pane.preview {
+  border-right: 0;
+}
+
+/* In preview-only mode the chord sheet has the whole window's
+   width to itself — centre it on a 960px reading column so it
+   looks like a printed score instead of a left-flushed text
+   block, while still leaving room for long chord+lyric lines
+   without forcing wraps mid-phrase. The split view is wide
+   enough that the column never activates, so this rule is
+   preview-only-mode-scoped to keep the half-pane case
+   unchanged. */
+.editor--preview-only .pane.preview .chordsketch-sheet__content {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: var(--cs-canvas, #FAFAF7);
+  border-bottom: 1px solid var(--cs-border, #E8E6EA);
+  flex-shrink: 0;
+}
+
+.pane-head .eyebrow {
+  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  color: var(--cs-text-secondary, #67646D);
+  margin: 0;
+}
+
+.pane-head .meta {
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.75rem;
+  color: var(--cs-text-tertiary, #8A8790);
+  font-feature-settings: "tnum" 1;
+}
+
+.pane-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pane.source .pane-body > .chordsketch-source-editor {
+  flex: 1;
+  min-height: 0;
+}
+
+.pane.preview > .pane-body > .chordsketch-preview {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ----------------------------------------------------------------
+ * iReal Pro playground primitives
+ *
+ * The iRealPro route mounts a textarea source + an iframe SVG
+ * preview without the React component library, so it needs a few
+ * pane-body fillers that the ChordPro route gets for free from
+ * `<SourceEditor>` and `<RendererPreview>`.
+ * ---------------------------------------------------------------- */
+
+.chordsketch-app__textarea {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  padding: var(--cs-sp-4) var(--cs-sp-6);
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  line-height: 1.6;
+  background: var(--cs-surface);
+  color: var(--cs-text-primary);
+  caret-color: var(--cs-crimson-500);
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.chordsketch-app__textarea:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--cs-crimson-500);
+}
+
+.chordsketch-app__textarea::placeholder {
+  color: var(--cs-text-tertiary);
+}
+
+.chordsketch-app__iframe {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: none;
+  background: var(--cs-surface);
+}
+
+.chordsketch-app__error {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--cs-sp-4) var(--cs-sp-6);
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  line-height: 1.5;
+  background: var(--cs-danger-surface, #FBE1E8);
+  color: var(--cs-danger-fg, #A30F37);
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
+.chordsketch-app__empty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--cs-font-latin);
+  font-size: var(--cs-fs-14);
+  color: var(--cs-text-tertiary);
+  background: var(--cs-canvas);
+}
+
+/* iRealb URL display block beneath the chart. Mirrors the
+ * design-system card styling — same surface / border / radius as
+ * `.chart` so the two read as siblings. */
+.url-card {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-r-3);
+  padding: var(--cs-sp-4) var(--cs-sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-sp-2);
+}
+
+.url-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cs-sp-3);
+}
+
+.url-card__label {
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: var(--cs-fs-12);
+  color: var(--cs-text-tertiary);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.url-card__value {
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  line-height: 1.5;
+  color: var(--cs-text-primary);
+  background: var(--cs-canvas);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-r-2);
+  padding: var(--cs-sp-3);
+  word-break: break-all;
+  white-space: pre-wrap;
+  max-height: 12rem;
+  overflow: auto;
+}
+
+.url-card__textarea {
+  width: 100%;
+  min-height: 8rem;
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  line-height: 1.5;
+  color: var(--cs-text-primary);
+  background: var(--cs-canvas);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-r-2);
+  padding: var(--cs-sp-3);
+  resize: vertical;
+  word-break: break-all;
+}
+.url-card__textarea:focus {
+  outline: 2px solid var(--cs-crimson-500, #BD1642);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.url-card__hint {
+  font-family: var(--cs-font-latin);
+  font-size: var(--cs-fs-12);
+  color: var(--cs-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ----------------------------------------------------------------
+ * iReal Pro playground — editor-irealb.html structure
+ *
+ * The /irealpro/ route follows
+ * `design-system/ui_kits/web/editor-irealb.html` rather than the
+ * ChordPro split-pane layout: topnav · toolbar row · main.page grid
+ * (chart column + 320px inspector) · status footer. The selectors
+ * below mirror that reference 1:1 so updates to the ui_kit can be
+ * ported here mechanically.
+ * ---------------------------------------------------------------- */
+
+.chordsketch-app--irealb {
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Save-state pill in the topnav, between crumbs and actions. */
+.topnav__save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cs-sp-2);
+  margin-left: var(--cs-sp-3);
+  font-family: var(--cs-font-latin);
+  font-weight: 500;
+  font-size: var(--cs-fs-13);
+  color: var(--cs-success-fg, #1A6B3A);
+}
+
+.topnav__save-state .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+/* Toolbar row below topnav. Sticky-feeling but not actually
+ * `position: sticky` — the parent column is short enough that the
+ * row never scrolls out of view on viewport heights we target. */
+.chordsketch-app--irealb > .toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-sp-2);
+  padding: var(--cs-sp-2) var(--cs-sp-6);
+  background: var(--cs-surface);
+  border-bottom: 1px solid var(--cs-border);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.chordsketch-app--irealb .tool-group {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-sp-1);
+  padding: 0 var(--cs-sp-3);
+  border-right: 1px solid var(--cs-border);
+  height: 28px;
+}
+.chordsketch-app--irealb .tool-group:last-of-type { border-right: 0; }
+.chordsketch-app--irealb .tool-group > .label {
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: var(--cs-fs-12);
+  color: var(--cs-text-tertiary);
+  margin-right: var(--cs-sp-2);
+}
+
+.tool-group__readout {
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  color: var(--cs-text-secondary);
+}
+
+.chordsketch-app--irealb .segmented {
+  display: inline-flex;
+  border: 1px solid var(--cs-border-strong);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.chordsketch-app--irealb .segmented a,
+.chordsketch-app--irealb .segmented button {
+  background: var(--cs-surface);
+  border: 0;
+  padding: 0 var(--cs-sp-3);
+  height: 28px;
+  font-family: var(--cs-font-jp);
+  font-weight: 500;
+  font-size: var(--cs-fs-13);
+  color: var(--cs-text-secondary);
+  cursor: pointer;
+  border-right: 1px solid var(--cs-border);
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.chordsketch-app--irealb .segmented a:last-child,
+.chordsketch-app--irealb .segmented button:last-child { border-right: 0; }
+.chordsketch-app--irealb .segmented [aria-pressed='true'],
+.chordsketch-app--irealb .segmented [aria-current='page'] {
+  background: var(--cs-ink-1000);
+  color: var(--cs-ink-0);
+}
+
+/* main.page — chart column + 320px inspector. */
+.chordsketch-app--irealb > .page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--cs-sp-8) var(--cs-sp-6);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--cs-sp-8);
+  align-items: start;
+  background: var(--cs-canvas);
+}
+
+@media (max-width: 1080px) {
+  .chordsketch-app--irealb > .page {
+    grid-template-columns: 1fr;
+  }
+  .chordsketch-app--irealb .inspector { order: 2; }
+}
+
+.page__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-sp-6);
+  min-width: 0;
+}
+
+/* meta-card */
+.meta-card {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: 12px;
+  padding: var(--cs-sp-5) var(--cs-sp-6);
+}
+.meta-card h1 {
+  font-family: var(--cs-font-jp);
+  font-weight: 700;
+  font-size: var(--cs-fs-30);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--cs-sp-1);
+  color: var(--cs-text-primary);
+}
+.meta-card .composer {
+  font-family: var(--cs-font-jp);
+  font-weight: 400;
+  font-size: var(--cs-fs-14);
+  color: var(--cs-text-secondary);
+  margin: 0 0 var(--cs-sp-5);
+}
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--cs-sp-4);
+}
+.meta-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.meta-field label {
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: var(--cs-fs-12);
+  color: var(--cs-text-tertiary);
+}
+.meta-field input,
+.meta-field select {
+  height: 32px;
+  padding: 0 var(--cs-sp-3);
+  border: 1px solid var(--cs-border);
+  border-radius: 6px;
+  background: var(--cs-ink-50);
+  font-family: var(--cs-font-mono);
+  font-weight: 500;
+  font-size: var(--cs-fs-14);
+  color: var(--cs-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.meta-field input:focus,
+.meta-field select:focus {
+  outline: none;
+  border-color: var(--cs-crimson-500);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-focus-ring);
+}
+.meta-field__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--cs-sp-1);
+  min-width: 0;
+}
+.meta-field__row > * { min-width: 0; }
+
+/* chart card containing the rendered iframe */
+.chart-card {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: 12px;
+  padding: var(--cs-sp-3);
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+}
+.chart-card > .chordsketch-app__iframe {
+  flex: 1;
+  min-height: 360px;
+  border: none;
+  width: 100%;
+  border-radius: 8px;
+  background: var(--cs-surface);
+}
+.chart-card > .chordsketch-app__error {
+  margin: 0;
+  padding: var(--cs-sp-4) var(--cs-sp-5);
+}
+
+/* Player-controls strip */
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-sp-6);
+  padding: var(--cs-sp-4) var(--cs-sp-5);
+  background: var(--cs-ink-1000);
+  color: var(--cs-ink-0);
+  border-radius: 12px;
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  font-variant-numeric: tabular-nums;
+}
+.player-controls .play-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--cs-crimson-500);
+  color: #FFFFFF;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.player-controls .play-btn:disabled {
+  background: var(--cs-ink-700);
+  cursor: not-allowed;
+}
+.player-controls .pc-stat {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 56px;
+}
+.player-controls .pc-stat .label {
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: 10px;
+  color: var(--cs-ink-300);
+}
+.player-controls .pc-stat .value {
+  font-weight: 600;
+  color: var(--cs-ink-0);
+}
+.player-controls .pc-stat__key {
+  color: var(--cs-crimson-300) !important;
+}
+
+/* Inspector sidebar */
+.chordsketch-app--irealb .inspector {
+  position: sticky;
+  top: var(--cs-sp-2);
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: 12px;
+  padding: var(--cs-sp-5);
+}
+.chordsketch-app--irealb .inspector header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--cs-sp-4);
+  padding-bottom: var(--cs-sp-3);
+  border-bottom: 1px solid var(--cs-border);
+}
+.chordsketch-app--irealb .inspector header .title {
+  font-family: var(--cs-font-jp);
+  font-weight: 700;
+  font-size: var(--cs-fs-16);
+}
+.chordsketch-app--irealb .inspector header .pos {
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-12);
+  color: var(--cs-text-tertiary);
+}
+.chordsketch-app--irealb .inspector .row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-sp-2);
+  margin-bottom: var(--cs-sp-4);
+}
+.chordsketch-app--irealb .inspector .row > .label {
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: var(--cs-fs-12);
+  color: var(--cs-text-tertiary);
+}
+.inspector__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-sp-2);
+}
+.inspector__nav-readout {
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  color: var(--cs-text-secondary);
+  flex: 1;
+  text-align: center;
+}
+.inspector__chord-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cs-sp-1);
+}
+.inspector__chord-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--cs-sp-1) var(--cs-sp-3);
+  border: 1px solid var(--cs-border-strong);
+  border-radius: 999px;
+  background: var(--cs-surface);
+  font-family: var(--cs-font-chord, var(--cs-font-jp));
+  font-weight: 500;
+  font-size: var(--cs-fs-13);
+  color: var(--cs-text-primary);
+  min-height: 28px;
+}
+.inspector__readout {
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-13);
+  color: var(--cs-text-primary);
+}
+.inspector__placeholder {
+  font-family: var(--cs-font-latin);
+  font-size: var(--cs-fs-13);
+  color: var(--cs-text-tertiary);
+  margin: 0;
+}
+
+/* ----------------------------------------------------------------
+ * Status footer
+ * ---------------------------------------------------------------- */
+
+.status {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1.5rem;
+  background: var(--cs-surface, #FFFFFF);
+  border-top: 1px solid var(--cs-border, #E8E6EA);
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.75rem;
+  color: var(--cs-text-secondary, #67646D);
+  gap: 1.5rem;
+  flex-shrink: 0;
+  font-feature-settings: "tnum" 1;
+}
+
+.status .item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status .spacer {
+  flex: 1;
+}
+
+.status .ok {
+  color: var(--cs-success-fg, #1A6B3A);
+}
+
+.status .warn {
+  color: var(--cs-warning-fg, #8A5A07);
+}
+
+@media (max-width: 768px) {
+  .topnav {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 0.75rem 1rem;
+    gap: 0.5rem;
+  }
+  .topnav .crumbs {
+    margin-left: 0;
+  }
+  .toolbar {
+    padding: 0.5rem 1rem;
+  }
+  .status {
+    flex-wrap: wrap;
+    padding: 0.5rem 1rem;
+    gap: 0.75rem 1.25rem;
+  }
+}
+
+/* ----------------------------------------------------------------
+ * Status footer + warnings panel
+ * ---------------------------------------------------------------- */
+
+.status__parsed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.status__parsed:disabled {
+  cursor: default;
+}
+
+.status__parsed:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--cs-ink-0, #FFFFFF), 0 0 0 4px var(--cs-crimson-500, #BD1642);
+  border-radius: 2px;
+}
+
+.status__parsed--warn {
+  color: var(--cs-warning-fg, #8A5A07);
+}
+
+.status__parsed .ok {
+  color: var(--cs-success-fg, #1A6B3A);
+}
+
+.status__parsed .warn {
+  color: var(--cs-warning-fg, #8A5A07);
+}
+
+.status-warnings {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 3rem;
+  max-width: min(90vw, 32rem);
+  max-height: min(60vh, 20rem);
+  overflow: auto;
+  background: var(--cs-surface, #FFFFFF);
+  border: 1px solid var(--cs-warning-fg, #8A5A07);
+  border-radius: 8px;
+  box-shadow: 0 16px 32px rgba(10, 10, 11, 0.12);
+  padding: 0.75rem 1rem;
+  z-index: 20;
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.8125rem;
+  color: var(--cs-text-primary, #0A0A0B);
+}
+
+.status-warnings ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.status-warnings li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--cs-border, #E8E6EA);
+}
+
+.status-warnings li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.status-warnings__loc {
+  font-weight: 600;
+  color: var(--cs-warning-fg, #8A5A07);
+  font-size: 0.75rem;
+}
+
+.status-warnings__msg {
+  color: var(--cs-text-strong, #44424A);
+}
+
+
+/* ----------------------------------------------------------------
+ * Pane-level toolbar — sits between `.pane-head` and `.pane-body`
+ * to host pane-scoped actions (currently the Insert helpers).
+ * Same `.tool-group` vocabulary as the global `.toolbar`, but
+ * with a slightly tighter padding and a hairline divider beneath
+ * so it visually attaches to the editor body.
+ * ---------------------------------------------------------------- */
+
+.pane-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 1.5rem;
+  background: var(--cs-surface, #FFFFFF);
+  border-bottom: 1px solid var(--cs-border, #E8E6EA);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.pane-toolbar .tool-group {
+  border-right: 0;
+  padding: 0;
+}
+
+/* Sample picker embedded in the topnav `actions` cluster — the
+ * eyebrow `.label` sits inline with the `<select>`, no surrounding
+ * `.tool-group` wrapper because the host's `.actions` cluster
+ * already supplies the `gap`. */
+.topnav__sample {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.topnav__sample > .label {
+  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  color: var(--cs-text-tertiary, #8A8790);
+}
+
+/* `.segmented` already styles the View pill; the modifier hook
+ * stays in case future topnav-specific overrides (compact size,
+ * narrower padding) become necessary. */
+.topnav__view {
+  /* no-op — inherits `.segmented` */
+}
+
+/* ----------------------------------------------------------------
+ * Form select — mirrors `.select` from
+ * `design-system/preview/components-forms.html`. The reference
+ * defines `height: 36px` for full-size form fields; the topnav
+ * cluster uses a compact 28 px variant to sit alongside the
+ * 28 px `.btn-sm` and `.segmented` controls. The native dropdown
+ * arrow is preserved (the reference does not strip it) so the
+ * select still feels like a native form control across browsers.
+ * ---------------------------------------------------------------- */
+
+.chordsketch-app__select {
+  height: 28px;
+  padding: 0 0.75rem;
+  background: var(--cs-surface, #FFFFFF);
+  color: var(--cs-text-primary, #0A0A0B);
+  border: 1px solid var(--cs-border-strong, #D4D1D6);
+  border-radius: 4px;
+  font: 500 0.8125rem/1 var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  cursor: pointer;
+  transition: background var(--cs-dur-1, 120ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)),
+    border-color var(--cs-dur-1, 120ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)),
+    box-shadow var(--cs-dur-1, 120ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1));
+}
+
+.chordsketch-app__select:hover:not(:disabled) {
+  border-color: var(--cs-text-secondary, #67646D);
+}
+
+.chordsketch-app__select:focus,
+.chordsketch-app__select:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500, #BD1642);
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #FFFFFF, 0 0 0 4px #BD1642);
+}
+
+.chordsketch-app__select:disabled {
+  background: var(--cs-ink-50, #FAFAF7);
+  color: var(--cs-text-tertiary, #8A8790);
+  cursor: not-allowed;
+}
+
+/* Ghost-styled select used by the editor's insert toolbar.
+   Matches the visual weight of the `.btn-ghost .btn-sm` siblings
+   (`+ Chord`) so the row reads as a single action group — the
+   user clicks the picker, picks an option, and the snippet is
+   inserted. The `--cs-font-latin` switch mirrors the same
+   change applied to `.btn` (see playground.css §"Buttons /
+   actions") — Latin glyphs sit at the geometric centre of the
+   28px box while Noto Sans JP would push them ~1px down. */
+.chordsketch-app__select.insert-picker {
+  background: transparent;
+  border-color: transparent;
+  color: var(--cs-text-secondary, #67646D);
+  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+}
+.chordsketch-app__select.insert-picker:hover:not(:disabled) {
+  background: var(--cs-ink-100, #F6F4F7);
+  border-color: transparent;
+  color: var(--cs-text-primary, #0A0A0B);
+}

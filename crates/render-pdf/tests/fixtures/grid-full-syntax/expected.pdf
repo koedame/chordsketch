@@ -1,0 +1,101 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R /F6 7 0 R >> /ProcSet [/PDF /Text] >> /Kids [8 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 614 >>
+stream
+BT
+/F2 18 Tf
+56 786 Td
+(Grid Full Syntax) Tj
+ET
+BT
+/F4 10 Tf
+56 756 Td
+(Grid: Full Tour) Tj
+ET
+BT
+/F6 11 Tf
+56 742 Td
+(A    || G7 . | %  . | %% . | .  . |) Tj
+ET
+BT
+/F6 11 Tf
+56 727 Td
+(     | C7 . | %  . || G7 . | %  . ||) Tj
+ET
+BT
+/F6 11 Tf
+56 712 Td
+(     |: C7 . | %  . :|: G7 . | %  . :| repeat 4 times) Tj
+ET
+BT
+/F6 11 Tf
+56 697 Td
+(Coda | D7 . | Eb7  | D7   | G7 . | %  . |.) Tj
+ET
+BT
+/F4 10 Tf
+56 674 Td
+(Grid) Tj
+ET
+BT
+/F6 11 Tf
+56 660 Td
+(| C ~A . . | C ~A . . |) Tj
+ET
+BT
+/F6 11 Tf
+56 645 Td
+(|s dn~up dn~up ~up dn~up | dn~up dn~up ~up dn~up |) Tj
+ET
+BT
+/F6 11 Tf
+56 630 Td
+(| D . . . | % . . . |) Tj
+ET
+endstream
+endobj
+10 0 obj
+<< /Title <FEFF0047007200690064002000460075006C006C002000530079006E007400610078> >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000240 00000 n 
+0000000337 00000 n 
+0000000439 00000 n 
+0000000544 00000 n 
+0000000653 00000 n 
+0000000748 00000 n 
+0000000811 00000 n 
+0000001476 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R /Info 10 0 R >>
+startxref
+1576
+%%EOF

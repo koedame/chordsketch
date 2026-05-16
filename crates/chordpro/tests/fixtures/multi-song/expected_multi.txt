@@ -15,8 +15,13 @@
             key: Some(
                 "G",
             ),
+            keys: [
+                "G",
+            ],
             tempo: None,
+            tempos: [],
             time: None,
+            times: [],
             capo: None,
             sort_title: None,
             sort_artist: None,
@@ -175,8 +180,13 @@
             key: Some(
                 "C",
             ),
+            keys: [
+                "C",
+            ],
             tempo: None,
+            tempos: [],
             time: None,
+            times: [],
             capo: None,
             sort_title: None,
             sort_artist: None,

@@ -43,11 +43,20 @@ jobs:
       - name: Install wasm-pack
         uses: ./.github/actions/install-wasm-pack
 
-      - name: Build WASM (web target)
-        run: wasm-pack build crates/wasm --release --target web --out-dir ../../packages/npm/web
+      # `--no-default-features` (after `--`) toggles off the
+      # `png-pdf` Cargo feature on `chordsketch-wasm`, dropping the
+      # heavy renderer surface that ships in the sister package
+      # `@chordsketch/wasm-export` (#2466). Without this flag this
+      # workflow would publish a ~25× larger bundle that contradicts
+      # the split. Forwarding via `--` is required because wasm-pack
+      # 0.14.0's own argument parser otherwise misinterprets the
+      # positional path when `--no-default-features` is interleaved
+      # before `--target`.
+      - name: Build WASM (web target, lean)
+        run: wasm-pack build crates/wasm --release --target web --out-dir ../../packages/npm/web -- --no-default-features
 
-      - name: Build WASM (nodejs target)
-        run: wasm-pack build crates/wasm --release --target nodejs --out-dir ../../packages/npm/node
+      - name: Build WASM (nodejs target, lean)
+        run: wasm-pack build crates/wasm --release --target nodejs --out-dir ../../packages/npm/node -- --no-default-features
 
       - name: Write sub-package.json files to scope module type
         # The dual-package layout requires each subdirectory to declare

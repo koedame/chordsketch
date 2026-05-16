@@ -44,12 +44,16 @@ through this crate's public API.
 
 ### `Section`
 
-- `label: SectionLabel`. The named-variant set (`Verse`, `Chorus`,
-  `Intro`, `Outro`, `Bridge`) covers the strings the conversion
-  crate (#2053) needs to map deterministically to ChordPro
-  `{start_of_chorus}` / `{start_of_verse}` / etc. Letter form
-  (`A`/`B`/`C`/`D`) is the jazz convention. `Custom(String)` is
-  the escape hatch for anything else.
+- `label: SectionLabel`. The named-variant set is restricted to
+  what the iReal Pro app actually emits: `Verse` (`*V` per spec,
+  `*v` accepted for backwards compat) and `Intro` (`*i`). Letter
+  form (`A`/`B`/`C`/`D`) is the jazz convention. `Custom(String)`
+  is the escape hatch for anything else, including the names
+  ChordPro recognises but iReal does not (`Chorus`, `Bridge`) —
+  the convert crate (#2053) round-trips those via
+  `Custom("Chorus")` / `Custom("Bridge")` so the ChordPro
+  semantics survive without producing out-of-spec
+  `irealb://` tokens (#2450).
 
 ### `Bar`
 
@@ -57,12 +61,10 @@ through this crate's public API.
   Mid-section bars use `Single` on both sides; section boundaries
   use `Double`; repeat blocks use `OpenRepeat` / `CloseRepeat`;
   the chart's last bar uses `Final`.
-- `chords: Vec<BarChord>`. An empty vector is the iReal "repeat
-  the previous bar" idiom (the rendering crate paints a `W` glyph).
-  Storing it as empty rather than introducing a `RepeatPrior`
-  variant on `Bar` keeps the structure denormalised but keeps the
-  bar-list ordering trivially indexable, which matters for the
-  4-bar-per-line layout engine in #2060.
+- `chords: Vec<BarChord>`. An empty vector is a placeholder bar
+  (no chord, no marker) — distinct from `repeat_previous = true`.
+  Keeps the bar-list ordering trivially indexable, which matters
+  for the 4-bar-per-line layout engine in #2060.
 - `ending: Option<Ending>`. `Ending` wraps `NonZeroU8` so the
   `Some(Ending(0))` shape is unrepresentable.
 - `symbol: Option<MusicalSymbol>`. Single-symbol-per-bar matches
@@ -70,6 +72,25 @@ through this crate's public API.
   multiples, this becomes `Vec<MusicalSymbol>` and call sites that
   match on `Option` need to update — flagged here so the migration
   is not surprising.
+- `repeat_previous: bool`. Set when the URL stream contains the
+  `Kcl`, `x`, or `r` token. Distinct from an empty placeholder
+  bar — the renderer paints the percent-style 1-bar simile glyph
+  (SMuFL U+E500) only when this flag is true. `r` (repeat 2
+  measures) currently collapses into the same flag as `x` / `Kcl`;
+  a future schema split may distinguish 1-bar from 2-bar simile.
+- `no_chord: bool`. Set when the URL stream contains `n`. The bar
+  consumes a measure of time but no chord sounds; the renderer
+  paints `N.C.` in the bar's centre.
+- `text_comment: Option<String>`. Free-form `<...>` text comments
+  (`<13 measure lead break>`, `<D.S. al 2nd ending>`) survive the
+  round-trip verbatim. When the comment matches a recognised
+  macro prefix (`<D.C.>`, `<D.S.>`, `<Fine>`), the canonical
+  `MusicalSymbol` is set on `symbol` AND the verbatim text is
+  saved here so longer captions are preserved. A bare-macro
+  comment (`<D.C.>`, `<D.S.>`, `<Fine>` exactly) skips the
+  `text_comment` write — the symbol fully covers the semantics
+  and the text would round-trip into a duplicate. Multiple
+  comments on one bar concatenate with `; ` separator.
 
 ### `BarChord` and `BeatPosition`
 
@@ -82,8 +103,14 @@ through this crate's public API.
 
 ### `Chord` and `ChordQuality`
 
-- `Chord { root, quality, bass }`. Slash chords are decomposed,
-  not encoded as a special quality. `bass.is_none()` is "no slash".
+- `Chord { root, quality, bass, alternate }`. Slash chords are
+  decomposed, not encoded as a special quality. `bass.is_none()`
+  is "no slash". `alternate: Option<Box<Chord>>` carries the
+  iReal Pro `(altchord)` parens — substitution chords stack
+  above the primary at a smaller size in the renderer. The
+  recursion is structurally unbounded but the URL grammar emits
+  one level of parens at most; deeper nesting via direct AST
+  construction is permitted but not produced by the parser.
 - `ChordQuality::Custom(String)`. The named variants cover the
   qualities `chordsketch-render-ireal` (#2057) renders as a
   distinct glyph; everything beyond (extensions, alterations, poly

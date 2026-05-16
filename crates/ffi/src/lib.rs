@@ -421,11 +421,49 @@ pub fn chord_diagram_svg(
     chord: String,
     instrument: String,
 ) -> Result<Option<String>, ChordSketchError> {
+    chord_diagram_svg_with_defines(chord, instrument, Vec::new())
+}
+
+/// Like [`chord_diagram_svg`], but consults song-level
+/// `{define}` voicings before falling back to the built-in
+/// voicing database. `defines` is a list of `(chord_name, raw)`
+/// tuples — `raw` is the directive body (e.g.
+/// `"base-fret 1 frets 3 3 0 0 1 3"`). Mirrors
+/// `chordsketch_chordpro::voicings::lookup_diagram`'s
+/// "song-level defines take priority" rule so user-defined
+/// chords show up here exactly like the Rust HTML renderer's
+/// `<section class="chord-diagrams">` block. Sister-site to
+/// the wasm `chordDiagramSvgWithDefines` and NAPI
+/// `chordDiagramSvgWithDefines` exports
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+///
+/// `defines` is bounded at parse time by the parser's
+/// `MAX_METADATA_ENTRIES = 1000` cap; callers constructing
+/// the list directly SHOULD stay under the same bound.
+///
+/// # Errors
+///
+/// Returns [`ChordSketchError::InvalidConfig`] when
+/// `instrument` is not one of the supported values.
+#[must_use = "callers must handle the unknown-instrument error"]
+pub fn chord_diagram_svg_with_defines(
+    chord: String,
+    instrument: String,
+    defines: Vec<ChordDefine>,
+) -> Result<Option<String>, ChordSketchError> {
     use chordsketch_chordpro::chord_diagram::{render_keyboard_svg, render_svg};
     use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
 
+    let defines_pairs: Vec<(String, String)> =
+        defines.into_iter().map(|d| (d.name, d.raw)).collect();
+
     match instrument.to_ascii_lowercase().as_str() {
         "piano" | "keyboard" | "keys" => {
+            // Keyboard voicings have their own `{define: … keys …}`
+            // shape that the wasm surface doesn't yet thread through
+            // either — match that gap here so the FFI behaviour
+            // is at least consistent across bindings while keyboard
+            // voicings remain a TODO.
             Ok(lookup_keyboard_voicing(&chord, &[]).map(|v| render_keyboard_svg(&v)))
         }
         "guitar" | "ukulele" | "uke" => {
@@ -435,7 +473,7 @@ pub fn chord_diagram_svg(
             // diagrams produced via UniFFI bindings (Python /
             // Swift / Kotlin / Ruby) visually consistent with
             // sheets rendered through the same binding.
-            Ok(lookup_diagram(&chord, &[], &instrument, 5).map(|d| render_svg(&d)))
+            Ok(lookup_diagram(&chord, &defines_pairs, &instrument, 5).map(|d| render_svg(&d)))
         }
         other => Err(ChordSketchError::InvalidConfig {
             reason: format!(
@@ -443,6 +481,27 @@ pub fn chord_diagram_svg(
             ),
         }),
     }
+}
+
+/// A single `{define: <name> <raw>}` voicing entry — the
+/// `(chord_name, raw)` tuple [`chord_diagram_svg_with_defines`]
+/// consults before falling back to the built-in voicing
+/// database. `raw` is the directive body (e.g.
+/// `"base-fret 1 frets 3 3 0 0 1 3"`), matching the same shape
+/// `chordsketch_chordpro::voicings::lookup_diagram` accepts.
+///
+/// Exposed as a UniFFI record so callers in Python / Swift /
+/// Kotlin / Ruby can build the list as a native struct array.
+/// (Declared in `chordsketch.udl`. The Rust struct definition
+/// matches the UDL `dictionary ChordDefine { string name; string
+/// raw; };` declaration — UniFFI's UDL-driven scaffolding
+/// expects the field names and types to line up exactly.)
+#[derive(Clone, Debug)]
+pub struct ChordDefine {
+    /// Chord name (e.g. `"Gsus4"`, `"C#m7"`).
+    pub name: String,
+    /// Raw directive body — what comes after `{define: <name> `.
+    pub raw: String,
 }
 
 /// Structured result for ChordPro ↔ iReal Pro conversions

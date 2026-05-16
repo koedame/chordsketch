@@ -111,6 +111,17 @@ namespace chordsketch {
     [Throws=ChordSketchError]
     string? chord_diagram_svg(string chord, string instrument);
 
+    /// Like `chord_diagram_svg` but consults song-level `{define}`
+    /// voicings before falling back to the built-in voicing
+    /// database. `defines` is a list of `ChordDefine` records —
+    /// each carries a chord name and the raw `{define}` body
+    /// (e.g. `"base-fret 1 frets 3 3 0 0 1 3"`). Mirrors the
+    /// wasm `chordDiagramSvgWithDefines` and NAPI
+    /// `chordDiagramSvgWithDefines` exports per
+    /// `.claude/rules/fix-propagation.md` §Bindings.
+    [Throws=ChordSketchError]
+    string? chord_diagram_svg_with_defines(string chord, string instrument, sequence<ChordDefine> defines);
+
     /// Convert a ChordPro source string into an `irealb://` URL
     /// (#2067 Phase 1).
     ///
@@ -211,6 +222,16 @@ namespace chordsketch {
 /// `parse_and_render_html_with_warnings`. Each warning is a
 /// human-readable diagnostic string captured from the renderer
 /// (e.g. "transpose offset ... clamped to ...").
+/// A single `{define: <name> <raw>}` voicing entry passed to
+/// `chord_diagram_svg_with_defines`. Mirrors the `(name, raw)`
+/// tuple wasm / NAPI bindings accept.
+dictionary ChordDefine {
+    /// Chord name (e.g. `"Gsus4"`, `"C#m7"`).
+    string name;
+    /// Raw directive body — what comes after `{define: <name> `.
+    string raw;
+};
+
 dictionary TextRenderWithWarnings {
     /// Rendered text / HTML output.
     string output;

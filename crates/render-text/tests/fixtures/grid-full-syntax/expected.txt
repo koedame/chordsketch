@@ -1,0 +1,12 @@
+Grid Full Syntax
+
+[Grid: Full Tour]
+A    || G7 . | %  . | %% . | .  . |
+     | C7 . | %  . || G7 . | %  . ||
+     |: C7 . | %  . :|: G7 . | %  . :| repeat 4 times
+Coda | D7 . | Eb7  | D7   | G7 . | %  . |.
+
+[Grid]
+| C ~A . . | C ~A . . |
+|s dn~up dn~up ~up dn~up | dn~up dn~up ~up dn~up |
+| D . . . | % . . . |

@@ -8,6 +8,7 @@ on:
       - 'packages/playground/**'
       - 'packages/ui-web/**'
       - 'packages/npm/**'
+      - 'packages/npm-export/**'
       - '.github/workflows/deploy-playground.yml'
   workflow_dispatch:
 
@@ -46,7 +47,7 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Build @chordsketch/wasm (dual-package layout)
+      - name: Build @chordsketch/wasm (lean, dual-package layout)
         # Use the canonical build script (`packages/npm/scripts/build.mjs`,
         # invoked via `npm run build`). It produces the dual-package layout
         # (web/ ESM + node/ CommonJS, each with its own `package.json`) that
@@ -56,9 +57,38 @@ jobs:
         run: npm run build
         working-directory: packages/npm
 
+      # `@chordsketch/wasm-export` is the heavy sister bundle (PDF /
+      # PNG renderer surface, #2466). Vite resolves the import via
+      # alias to this directory's `web/` build, so it must be built
+      # before the playground build.
+      - name: Build @chordsketch/wasm-export (heavy)
+        run: npm run build
+        working-directory: packages/npm-export
+
       - name: Install playground dependencies
         run: npm ci
         working-directory: packages/playground
+
+      # Install sibling-package node_modules so tsc (run by
+      # the playground's build) can resolve the transitive
+      # react / codemirror / lezer imports inside the
+      # ../react/src/*.tsx files pulled into the playground's
+      # program via tsconfig paths and include. Each sibling
+      # owns its own lockfile and its own CI typecheck — this
+      # step exists purely to give node-style upward module
+      # resolution a populated packages/<sibling>/node_modules/
+      # to walk into.
+      - name: Install @chordsketch/react dependencies
+        run: npm ci
+        working-directory: packages/react
+
+      - name: Install @chordsketch/ui-web dependencies
+        run: npm ci
+        working-directory: packages/ui-web
+
+      - name: Install @chordsketch/ui-irealb-editor dependencies
+        run: npm ci
+        working-directory: packages/ui-irealb-editor
 
       - name: Build playground
         run: npm run build

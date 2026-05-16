@@ -13,13 +13,24 @@ is safe — while its siblings are not.
 Before closing any PR that fixes a bug, run a sister-site audit against the following
 known sibling groups:
 
-### Renderers (text / HTML / PDF)
-`crates/render-text/src/lib.rs`, `crates/render-html/src/lib.rs`, `crates/render-pdf/src/lib.rs`
+### Renderers (text / HTML / PDF / React JSX walker)
+`crates/render-text/src/lib.rs`, `crates/render-html/src/lib.rs`,
+`crates/render-pdf/src/lib.rs`,
+`packages/react/src/chordpro-jsx.tsx`
 
-Any fix to one renderer MUST be audited across all three:
-- Input validation / clamping (e.g., `{columns}` upper bound)
-- Directive match arms and fallback behavior
+Any fix to one rendering surface MUST be audited across all four
+(per [ADR-0017](../../docs/adr/0017-react-renders-from-ast.md) —
+the React JSX walker is a sister site to the three Rust
+renderers, not an alternate entry point into one of them):
+- Input validation / clamping (e.g., `{columns}` upper bound) —
+  applies to the Rust group; the React walker inherits the
+  parse-time clamps
+- Directive match arms and fallback behavior — applies to all
+  four surfaces; missing a match arm in the JSX walker silently
+  drops the directive from the React preview
 - Error handling and warning paths
+- URI sanitisation (`isSafeHref` in the walker mirrors
+  `has_dangerous_uri_scheme` in `chordsketch-render-html`)
 
 ### Bindings (FFI / WASM / NAPI)
 `crates/ffi/src/lib.rs`, `crates/wasm/src/lib.rs`, `crates/napi/src/lib.rs`

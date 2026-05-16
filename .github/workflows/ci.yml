@@ -269,12 +269,18 @@ jobs:
             apps/desktop/package-lock.json
             packages/tree-sitter-chordpro/package-lock.json
 
-      - name: Build @chordsketch/wasm (dual-package layout)
-        # Same canonical build used by `deploy-playground.yml`. Produces
-        # `packages/npm/web/chordsketch_wasm.js` that the desktop Vite
-        # alias resolves to.
+      - name: Build @chordsketch/wasm (lean, dual-package layout)
+        # Same canonical build used by `deploy-playground.yml`.
         run: npm run build
         working-directory: packages/npm
+
+      # The desktop app uses `render_pdf` synchronously in
+      # apps/desktop/src/main.ts, so its Vite alias points
+      # `@chordsketch/wasm` at the HEAVY bundle (#2466). Build it
+      # here so the alias resolves at desktop-build time.
+      - name: Build @chordsketch/wasm-export (heavy)
+        run: npm run build
+        working-directory: packages/npm-export
 
       - name: Install tree-sitter-chordpro grammar deps
         # `apps/desktop`'s `prebuild` script runs `tree-sitter build

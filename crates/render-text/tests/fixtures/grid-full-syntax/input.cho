@@ -1,0 +1,14 @@
+{title: Grid Full Syntax}
+
+{start_of_grid shape="1+4x2+4" label="Full Tour"}
+A    || G7 . | %  . | %% . | .  . |
+     | C7 . | %  . || G7 . | %  . ||
+     |: C7 . | %  . :|: G7 . | %  . :| repeat 4 times
+Coda | D7 . | Eb7  | D7   | G7 . | %  . |.
+{end_of_grid}
+
+{start_of_grid shape="0+2x4+4"}
+| C ~A . . | C ~A . . |
+|s dn~up dn~up ~up dn~up | dn~up dn~up ~up dn~up |
+| D . . . | % . . . |
+{end_of_grid}

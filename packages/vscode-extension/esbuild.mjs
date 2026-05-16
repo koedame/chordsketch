@@ -48,13 +48,23 @@ for (const file of [
 
 // Copy the WASM binary for the WebView (browser build).
 // Prefer the local monorepo build over the installed npm package so a
-// developer (or CI step) that runs `node packages/npm/scripts/build.mjs`
+// developer (or CI step) that runs `node packages/npm-export/scripts/build.mjs`
 // against the in-tree `crates/wasm` source picks up new exports
 // immediately, without waiting for a manual `npm publish` cycle. The
-// node_modules copy from `npm install @chordsketch/wasm` remains a
-// fallback for ad-hoc clones where a Rust toolchain is unavailable.
-const wasmLocalWeb = path.join(repoRoot, 'packages', 'npm', 'web', 'chordsketch_wasm_bg.wasm');
-const wasmNpmWeb = path.join(here, 'node_modules', '@chordsketch', 'wasm', 'web', 'chordsketch_wasm_bg.wasm');
+// node_modules copy from `npm install @chordsketch/wasm-export` remains
+// a fallback for ad-hoc clones where a Rust toolchain is unavailable.
+//
+// `@chordsketch/wasm-export` (NOT the lean `@chordsketch/wasm`) is
+// used here because the extension host's `convertToPdf` command
+// (commands.ts) calls `render_pdf`, which only exists in the heavy
+// bundle since #2466. The WebView side also pulls the heavy bundle
+// to keep the build script simple — the WebView could in principle
+// use the lean variant since it only renders HTML preview, but
+// loading two wasm copies into the same extension distribution
+// doubles the install footprint without a runtime win for a local
+// VS Code install.
+const wasmLocalWeb = path.join(repoRoot, 'packages', 'npm-export', 'web', 'chordsketch_wasm_bg.wasm');
+const wasmNpmWeb = path.join(here, 'node_modules', '@chordsketch', 'wasm-export', 'web', 'chordsketch_wasm_bg.wasm');
 const wasmSrc = fs.existsSync(wasmLocalWeb) ? wasmLocalWeb : wasmNpmWeb;
 const wasmDst = path.join(here, 'dist', 'webview', 'chordsketch_wasm_bg.wasm');
 if (fs.existsSync(wasmSrc)) {
@@ -62,7 +72,7 @@ if (fs.existsSync(wasmSrc)) {
   console.log(`Copied ${path.relative(here, wasmSrc)} → dist/webview/chordsketch_wasm_bg.wasm`);
 } else {
   console.warn('WARNING: chordsketch_wasm_bg.wasm not found in node_modules or local build.');
-  console.warn('         Run `npm install` in packages/vscode-extension/ to fetch @chordsketch/wasm.');
+  console.warn('         Run `npm install` in packages/vscode-extension/ to fetch @chordsketch/wasm-export.');
 }
 
 // Copy the WASM Node.js CJS build for the extension host (convertTo command).
@@ -79,16 +89,19 @@ fs.writeFileSync(path.join(nodeDir, 'package.json'), JSON.stringify({ type: 'com
 const wasmNodeFiles = ['chordsketch_wasm.js', 'chordsketch_wasm_bg.wasm'];
 for (const file of wasmNodeFiles) {
   // Same precedence rule as the web copy above — local in-tree build
-  // first, npm-published fallback second.
-  const localSrc = path.join(repoRoot, 'packages', 'npm', 'node', file);
-  const npmSrc = path.join(here, 'node_modules', '@chordsketch', 'wasm', 'node', file);
+  // first, npm-published fallback second. Uses the HEAVY bundle
+  // (`@chordsketch/wasm-export`) because the extension host calls
+  // `render_pdf` from `convertToPdf` — see comment on `wasmLocalWeb`
+  // for the rationale on why both sides share the heavy variant.
+  const localSrc = path.join(repoRoot, 'packages', 'npm-export', 'node', file);
+  const npmSrc = path.join(here, 'node_modules', '@chordsketch', 'wasm-export', 'node', file);
   const src = fs.existsSync(localSrc) ? localSrc : npmSrc;
   if (fs.existsSync(src)) {
     fs.copyFileSync(src, path.join(nodeDir, file));
     console.log(`Copied ${path.relative(here, src)} → dist/node/${file}`);
   } else {
     console.warn(`WARNING: dist/node/${file} not found in node_modules or local build.`);
-    console.warn('         Run `npm install` in packages/vscode-extension/ to fetch @chordsketch/wasm.');
+    console.warn('         Run `npm install` in packages/vscode-extension/ to fetch @chordsketch/wasm-export.');
   }
 }
 
@@ -108,8 +121,8 @@ const extensionBuild = {
 // The WebView bundle imports from the wasm-pack web target's JS glue.
 // Prefer the local monorepo build over the installed npm package — see
 // the matching comment on the binary copy above for the rationale.
-const wasmJsLocal = path.join(repoRoot, 'packages', 'npm', 'web', 'chordsketch_wasm.js');
-const wasmJsNpm = path.join(here, 'node_modules', '@chordsketch', 'wasm', 'web', 'chordsketch_wasm.js');
+const wasmJsLocal = path.join(repoRoot, 'packages', 'npm-export', 'web', 'chordsketch_wasm.js');
+const wasmJsNpm = path.join(here, 'node_modules', '@chordsketch', 'wasm-export', 'web', 'chordsketch_wasm.js');
 const wasmJsSrc = fs.existsSync(wasmJsLocal) ? wasmJsLocal : wasmJsNpm;
 
 /** @type {esbuild.BuildOptions} */

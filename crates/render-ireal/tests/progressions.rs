@@ -236,7 +236,7 @@ fn section_break_irregular() -> IrealSong {
         bars: verse,
     });
     song.sections.push(Section {
-        label: SectionLabel::Outro,
+        label: SectionLabel::Custom("Outro".into()),
         bars: coda,
     });
     song
@@ -404,7 +404,7 @@ fn section_markers_demo() -> IrealSong {
         bars: vec![chord_bar(), chord_bar()],
     });
     song.sections.push(Section {
-        label: SectionLabel::Chorus,
+        label: SectionLabel::Custom("Chorus".into()),
         bars: vec![chord_bar(), chord_bar()],
     });
     song.sections.push(Section {
@@ -412,7 +412,7 @@ fn section_markers_demo() -> IrealSong {
         bars: vec![chord_bar()],
     });
     song.sections.push(Section {
-        label: SectionLabel::Outro,
+        label: SectionLabel::Custom("Outro".into()),
         bars: vec![chord_bar()],
     });
     song

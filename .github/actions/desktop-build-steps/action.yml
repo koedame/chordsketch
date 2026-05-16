@@ -147,15 +147,30 @@ runs:
           apps/desktop/package-lock.json
           packages/tree-sitter-chordpro/package-lock.json
 
-    - name: Build @chordsketch/wasm (dual-package layout)
-      # Produces `packages/npm/web/chordsketch_wasm.js` — the file
-      # Vite's alias in `apps/desktop/vite.config.ts` resolves to.
-      # `packages/npm` carries no node_modules, so no `npm ci` is
-      # needed here; `scripts/build.mjs` shells out to wasm-pack
-      # directly.
+    - name: Build @chordsketch/wasm (lean, dual-package layout)
+      # The lean variant exposes parse + transpose + text / HTML /
+      # SVG (#2466). The desktop shell does not currently alias the
+      # bare `@chordsketch/wasm` specifier to this build (see the
+      # wasm-export step below), but other workspace consumers do,
+      # so we still produce it for completeness — and so any future
+      # desktop split between "interactive surface" and "export
+      # action" can drop the heavy alias without re-introducing
+      # this build step.
       shell: bash
       run: npm run build
       working-directory: packages/npm
+
+    - name: Build @chordsketch/wasm-export (heavy)
+      # The desktop's `apps/desktop/src/main.ts` calls `render_pdf`
+      # / `render_pdf_with_options` synchronously, and the
+      # `vite.config.ts` alias maps `@chordsketch/wasm` directly to
+      # this directory's `web/chordsketch_wasm.js`. Without this
+      # step the `cargo tauri build` step below errors out at
+      # `beforeBuildCommand: npm run build` (vite cannot resolve
+      # the alias target). #2466 split.
+      shell: bash
+      run: npm run build
+      working-directory: packages/npm-export
 
     - name: Install tree-sitter-chordpro grammar deps
       # `apps/desktop`'s `prebuild` hook (run transitively by

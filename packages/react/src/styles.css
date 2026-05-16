@@ -6,7 +6,145 @@
  * to avoid colliding with host styles; nothing here uses `!important`
  * or hard-coded colour values that would clash with dark/light
  * themes.
+ *
+ * Design-system tokens are exposed under the `--cs-*` namespace so
+ * consumers can override them per-element without colliding with
+ * the workspace `design-system/tokens.css` (`--crimson-*`,
+ * `--ink-*`, …) when both are loaded into the same document. The
+ * namespace is local to this package's selectors. See
+ * `design-system/DESIGN.md` §2 / §3 for the colour and type roles.
+ * Hosts that ship the workspace `design-system/tokens.css` get the
+ * full design language; hosts that ship just this stylesheet get
+ * the inline fallbacks below — visually equivalent for
+ * `:root`-level rendering.
  */
+.chordsketch-playground,
+.chordsketch-source-editor,
+.chordsketch-split-layout,
+.chordsketch-preview {
+  /* Crimson — the only accent. */
+  --cs-crimson-50: #FDF2F5;
+  --cs-crimson-100: #FBE1E8;
+  --cs-crimson-300: #EC8AA3;
+  --cs-crimson-500: #BD1642;
+  --cs-crimson-600: #A30F37;
+  --cs-crimson-700: #87092C;
+  --cs-crimson-900: #480418;
+  --cs-crimson: var(--cs-crimson-500);
+  --cs-fg-on-crimson: #FFFFFF;
+
+  /* Ink — warm neutrals. */
+  --cs-ink-0: #FFFFFF;
+  --cs-ink-50: #FAFAF7;
+  --cs-ink-100: #F6F4F7;
+  --cs-ink-200: #E8E6EA;
+  --cs-ink-300: #D4D1D6;
+  --cs-ink-500: #8A8790;
+  --cs-ink-600: #67646D;
+  --cs-ink-700: #44424A;
+  --cs-ink-1000: #0A0A0B;
+
+  /* Surface / border / text aliases. */
+  --cs-canvas: var(--cs-ink-50);
+  --cs-surface: var(--cs-ink-0);
+  --cs-surface-hover: var(--cs-ink-100);
+  --cs-border: var(--cs-ink-200);
+  --cs-border-strong: var(--cs-ink-300);
+  --cs-text-primary: var(--cs-ink-1000);
+  --cs-text-strong: var(--cs-ink-700);
+  --cs-text-secondary: var(--cs-ink-600);
+  --cs-text-tertiary: var(--cs-ink-500);
+
+  /* Semantic. */
+  --cs-success-surface: #E8F3EC;
+  --cs-success-fg: #1A6B3A;
+  --cs-warning-surface: #FBF1D9;
+  --cs-warning-fg: #8A5A07;
+  --cs-danger-surface: #FBE1E8;
+  --cs-danger-fg: #A30F37;
+  --cs-info-surface: #E6EEF7;
+  --cs-info-fg: #1F4F8A;
+
+  /* Focus. */
+  --cs-focus-ring: 0 0 0 2px var(--cs-ink-0), 0 0 0 4px var(--cs-crimson-500);
+
+  /* Typography families. */
+  --cs-font-jp: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --cs-font-display: "Noto Sans JP", system-ui, sans-serif;
+  --cs-font-latin: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --cs-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --cs-font-sans: var(--cs-font-jp);
+  --cs-font-chord: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --cs-font-chart-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --cs-font-music: "Bravura Text", "Noto Music", "Symbola", serif;
+
+  /* Type scale. */
+  --cs-fs-10: 0.625rem;
+  --cs-fs-12: 0.75rem;
+  --cs-fs-13: 0.8125rem;
+  --cs-fs-14: 0.875rem;
+  --cs-fs-15: 0.9375rem;
+  --cs-fs-16: 1rem;
+  --cs-fs-18: 1.125rem;
+  --cs-fs-24: 1.5rem;
+  --cs-fs-30: 1.875rem;
+  --cs-fs-36: 2.25rem;
+  --cs-fs-48: 3rem;
+  --cs-fs-60: 3.75rem;
+  --cs-fs-72: 4.5rem;
+
+  /* 4pt spacing scale. */
+  --cs-sp-1: 0.25rem;
+  --cs-sp-2: 0.5rem;
+  --cs-sp-3: 0.75rem;
+  --cs-sp-4: 1rem;
+  --cs-sp-5: 1.25rem;
+  --cs-sp-6: 1.5rem;
+  --cs-sp-8: 2rem;
+  --cs-sp-10: 2.5rem;
+  --cs-sp-12: 3rem;
+  --cs-sp-16: 4rem;
+  --cs-sp-20: 5rem;
+  --cs-sp-24: 6rem;
+  --cs-sp-32: 8rem;
+
+  /* Radius. */
+  --cs-r-1: 2px;
+  --cs-r-2: 4px;
+  --cs-r-3: 8px;
+  --cs-r-4: 12px;
+  --cs-r-full: 9999px;
+
+  /* Elevation. */
+  --cs-e-1: 0 1px 2px rgba(10, 10, 11, 0.04);
+  --cs-e-2: 0 4px 12px rgba(10, 10, 11, 0.08);
+  --cs-e-3: 0 16px 32px rgba(10, 10, 11, 0.12);
+  --cs-e-overlay: 0 24px 48px rgba(10, 10, 11, 0.18);
+
+  /* Motion. */
+  --cs-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --cs-dur-1: 120ms;
+  --cs-dur-2: 200ms;
+  --cs-dur-3: 280ms;
+  --cs-dur-4: 400ms;
+
+  /* Container max-widths. */
+  --cs-maxw-app: 1280px;
+  --cs-maxw-reading: 720px;
+  --cs-maxw-guide: 1080px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chordsketch-playground,
+  .chordsketch-source-editor,
+  .chordsketch-split-layout,
+  .chordsketch-preview {
+    --cs-dur-1: 0ms;
+    --cs-dur-2: 0ms;
+    --cs-dur-3: 0ms;
+    --cs-dur-4: 0ms;
+  }
+}
 
 .chordsketch-transpose {
   display: inline-flex;
@@ -64,12 +202,1018 @@
 }
 
 .chordsketch-sheet__content {
-  /* Wrapper for the renderer's HTML output. Empty by design —
-     the baseline rule reserves the selector so hosts can override
-     it (e.g. set `max-height` / `overflow-y` for a scrollable
-     preview pane, or scope `font-size` to the rendered sheet)
-     without first discovering the class by inspecting the DOM. */
+  /* Wrapper for the AST → JSX render path (#2475 / ADR-0017).
+     The pre-#2475 HTML render path's `body { max-width: 720px;
+     margin: 2em auto; padding: 0 1em }` made sense when the
+     output was a standalone document, but the React surface
+     embeds the wrapper inside a host-controlled pane that
+     already constrains width. Carry only the typography
+     baseline and padding here — width is the host's call.
+     Hosts can re-add `max-width` if they want a centred
+     reading column. */
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
+  font-size: 1rem;
+  line-height: 1.6875;
+  color: var(--cs-ink-1000, #0a0a0b);
+  padding: 2em 1.5em;
 }
+
+/* `.song` is the AST walker's root container. It carries no
+   structural styling itself — the children inherit the
+   `chordsketch-sheet__content`'s typography. */
+.chordsketch-sheet__content .song {
+  /* Reserved for future per-song sizing hooks. */
+}
+
+/* Title / subtitle / metadata strip. These map to the
+   `chordsketch-render-html` h1 / h2 / `<p class="meta">` rules. */
+.chordsketch-sheet__content h1 {
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, sans-serif);
+  font-weight: 700;
+  font-size: 1.875rem;
+  letter-spacing: -0.02em;
+  color: var(--cs-ink-1000, #0a0a0b);
+  margin: 0 0 0.2em;
+}
+.chordsketch-sheet__content h2 {
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, sans-serif);
+  font-weight: 400;
+  font-size: 1rem;
+  color: var(--cs-ink-600, #67646d);
+  margin: 0;
+}
+/* Base meta strip — three tiers (attribution / params / supplementary)
+   layer extra modifier classes on top. The base style covers
+   font + color so each tier only needs to override what it
+   actually changes. */
+.chordsketch-sheet__content .meta {
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  font-size: 0.8125rem;
+  color: var(--cs-ink-600, #67646d);
+  margin: 0 0 0.4em;
+  font-feature-settings: "tnum" 1;
+}
+/* Bottom-most meta row needs a wider gap to the song body. */
+.chordsketch-sheet__content .song-header > .meta:last-of-type {
+  margin-bottom: 1.5em;
+}
+
+/* Tier 1 — attribution. "by Artist" reads larger and in the
+   primary text font so it sits visually next to the title. The
+   "Music / Lyrics / Arr." secondary line is the same family but
+   smaller, conveying "supporting credits". */
+.chordsketch-sheet__content .meta--attribution {
+  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+  font-size: 1rem;
+  color: var(--cs-ink-700, #4a4750);
+  margin: 0.1em 0;
+}
+.chordsketch-sheet__content .meta--attribution-secondary {
+  font-size: 0.8125rem;
+  color: var(--cs-ink-500, #8a8790);
+  margin-bottom: 0.8em;
+}
+.chordsketch-sheet__content .meta__label {
+  color: var(--cs-ink-500, #8a8790);
+  font-weight: 400;
+}
+
+/* Tier 2 — musical parameters as pill chips. The values you
+   glance at before performing (Key / Capo / BPM / Time /
+   Duration) get a chip each so the eye can pluck them out of
+   the row at a glance. */
+.chordsketch-sheet__content .meta--params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  margin: 0.2em 0 0.8em;
+}
+.chordsketch-sheet__content .meta__chip {
+  display: inline-block;
+  padding: 0.15em 0.6em;
+  border: 1px solid var(--cs-border, #d4d1d6);
+  border-radius: 4px;
+  background-color: var(--cs-surface-tint, #fafafa);
+  color: var(--cs-ink-800, #2a262e);
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.4;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Tier 3 — supplementary (album / year / copyright). Smallest,
+   most muted; sits at the bottom of the header card so it reads
+   as a footnote. */
+.chordsketch-sheet__content .meta--supplementary {
+  font-size: 0.75rem;
+  color: var(--cs-ink-400, #a8a4ad);
+  margin-bottom: 0.4em;
+}
+
+/* Inline `[Pos]` metadata marker — `{key}` / `{tempo}` / `{time}`
+   directives that appear inside the body (rather than only in
+   the header) render here. ChordPro marks them as `[Nx] [Pos]`
+   so each declaration applies forward from its position; this
+   block makes the position visible so a reader can see *where*
+   a mid-song key / tempo / meter change happens. Sister-site
+   to `crates/render-html/src/lib.rs`'s embedded
+   `.meta-inline` rule. */
+/* Inline `[Pos]` metadata markers — laid out as tag-style
+   chips that flow inline so consecutive `{key}` / `{tempo}` /
+   `{time}` directives sit on the same row instead of taking a
+   full line each.
+   The chip shape mirrors the design-system `.badge` (see
+   `design-system/preview/components-badges.html`): a small
+   inline-flex pill with `--sp-1` gap, `--sp-2` horizontal
+   padding, `--r-1` radius, monospace typography, and a uniform
+   target height so the three marker variants line up
+   horizontally without size drift. Icons inside the chip are
+   capped at 1.1em tall via `.meta-inline__glyph` so they don't
+   stretch the chip vertically when the SVG has its own
+   intrinsic dimensions. */
+.chordsketch-sheet__content .meta-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cs-sp-1, 0.25rem);
+  margin: 0.15em 0.3em 0.15em 0;
+  padding: 0 var(--cs-sp-2, 0.5rem);
+  min-height: 1.6rem;
+  border-radius: var(--cs-r-1, 2px);
+  background-color: var(--cs-ink-100, #f6f4f7);
+  border: 1px solid var(--cs-border, #e8e6ea);
+  font-family: var(--cs-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: var(--cs-fs-12, 0.75rem);
+  color: var(--cs-ink-700, #44424a);
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  font-feature-settings: 'tnum' 1;
+  vertical-align: middle;
+}
+.chordsketch-sheet__content .meta-inline__label {
+  color: var(--cs-ink-500, #8a8790);
+  font-weight: 500;
+}
+.chordsketch-sheet__content .meta-inline__value {
+  color: var(--cs-ink-1000, #0a0a0b);
+  font-weight: 600;
+}
+/* Italian tempo marking shown next to the BPM ("Allegro" etc.) —
+   smaller and a touch muted so the numeric BPM stays the lead
+   element of the chip. */
+.chordsketch-sheet__content .meta-inline__marking {
+  color: var(--cs-ink-500, #67646d);
+  font-weight: 400;
+  font-style: italic;
+}
+
+/* Paired Written / Sounding display for `{key}` markers when
+   transpose is active. The two key groups sit side by side
+   with a small directional separator between them. */
+.chordsketch-sheet__content .meta-inline--key-pair {
+  gap: 0.6em;
+}
+.chordsketch-sheet__content .meta-inline__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+}
+.chordsketch-sheet__content .meta-inline__separator {
+  color: var(--cs-ink-400, #a8a4ad);
+  font-weight: 500;
+}
+
+/* Music-notation glyph slot inside a `.meta-inline` marker —
+   key signature, metronome, or stacked time signature. The
+   glyph sits to the left of the label / value pair and
+   inherits the marker's text color.
+   Constrain height to 1.1em so all three glyph types
+   (key-signature staff, metronome SVG, stacked time-signature
+   digits) render at the same visual height inside the chip —
+   the SVG `width`/`height` attributes set by the React
+   components are overridden by these rules so the chip stays
+   the same shape regardless of which marker variant landed
+   inside it. */
+.chordsketch-sheet__content .meta-inline__glyph {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--cs-ink-1000, #0a0a0b);
+  height: 1.1em;
+}
+.chordsketch-sheet__content .meta-inline__glyph svg {
+  height: 100%;
+  width: auto;
+  display: block;
+}
+/* Time-signature glyph is a span of stacked digits, not an
+   SVG. The chip's `align-items: center` centers it vertically,
+   so we don't need to force a height — letting it size to its
+   natural content (numerator + bar + denominator) keeps the
+   1.5px fraction bar from being flex-shrunk to 0px and
+   restores the visible divider between the two digits.
+   `font-size: 0.85em` keeps the stacked digits compact so
+   they line up with the SVG glyphs' visual size inside the
+   chip. */
+.chordsketch-sheet__content span.meta-inline__glyph.music-glyph--time {
+  font-size: 0.85em;
+}
+
+/* Stacked time-signature numerator / denominator typography.
+   Reads like a real music-notation time signature (e.g. `4`
+   over `4`) with an explicit thin horizontal divider between
+   the digits so the stack reads unambiguously at the small icon
+   size. The conductor-pattern animation (gated on the
+   `.music-glyph--time--conduct-N` modifier) drives a subtle
+   wrist gesture that ticks once per beat at the active BPM —
+   see the `@keyframes cs-conductor-*` rules below. */
+.chordsketch-sheet__content .music-glyph--time {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-family: var(--cs-font-serif, 'Source Serif Pro', serif);
+  font-weight: 700;
+  font-size: 1.1em;
+  letter-spacing: 0;
+}
+.chordsketch-sheet__content .music-glyph--time__num,
+.chordsketch-sheet__content .music-glyph--time__den {
+  display: block;
+  /* Tight stacking — the digits sit immediately above / below
+     each other like an engraved time signature. */
+  line-height: 0.9;
+  font-feature-settings: 'tnum' 1;
+}
+.chordsketch-sheet__content .music-glyph--time__bar {
+  display: block;
+  width: 0.9em;
+  height: 1.5px;
+  margin: 0.05em 0;
+  background-color: currentColor;
+  border-radius: 1px;
+  /* Defence in depth: inside a constrained flex column parent
+     (e.g. the `.meta-inline` chip), without an explicit
+     `flex-shrink: 0` the 1.5px bar gets squashed to 0px to
+     make the digits fit — and the fraction divider
+     disappears. */
+  flex-shrink: 0;
+}
+
+/* Time signature glyph — stacked numerator over denominator
+   with a thin fraction bar between them. The previous
+   conductor-pattern dot animation was retired per playground
+   feedback (it competed visually with the digits and added no
+   actionable info). */
+
+/* Metronome pendulum animation. The CSS custom property
+   `--cs-metronome-period` is set inline by `<MetronomeGlyph>`
+   from the BPM, so the swing rate matches the directive
+   exactly. `animation-direction: alternate` means the
+   `animation-duration` is the time for one half-cycle
+   (extreme-to-extreme), so the duration value is `60 / bpm`
+   seconds — one beat per half-cycle, two beats per full
+   back-and-forth, which matches a real metronome ticking once
+   at each extreme. */
+.chordsketch-sheet__content .music-glyph--metronome__pendulum {
+  /* Pivot at the base of the rod (viewBox x=9, y=19) — inverted
+     pendulum, wiper-style sweep, distinct from a hanging-clock
+     pendulum's top-pivot. */
+  transform-origin: 9px 19px;
+  /* `cubic-bezier(0.55, 0, 0.45, 1)` — middle ground between
+     the original gentle (0.42/0.58) ease-in-out and the
+     overly-aggressive (0.7/0.3) snap that read as artificial.
+     A real mechanical metronome's motion is actually quite
+     smooth (it's a physical inverted pendulum); this curve
+     adds just enough acceleration through center over the
+     named `ease-in-out` to register as "metronome-y" without
+     looking jerky. */
+  animation: cs-metronome-swing var(--cs-metronome-period, 1s) cubic-bezier(0.55, 0, 0.45, 1)
+    infinite alternate;
+}
+@keyframes cs-metronome-swing {
+  from {
+    transform: rotate(-28deg);
+  }
+  to {
+    transform: rotate(28deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chordsketch-sheet__content .music-glyph--metronome__pendulum {
+    animation: none;
+    transform: rotate(0deg);
+  }
+}
+
+/* Attribution role icons — small SVGs inline with the
+   "by Artist" / "Music X" / "Lyrics Y" / tag rows. Inherit the
+   text colour so they pick up the surrounding tier's tone. */
+.chordsketch-sheet__content .role-icon {
+  display: inline-block;
+  vertical-align: -0.15em;
+  margin-right: 0.3em;
+  color: var(--cs-ink-500, #67646d);
+  flex-shrink: 0;
+}
+.chordsketch-sheet__content .meta__role-icon {
+  margin-right: 0.25em;
+}
+.chordsketch-sheet__content .tag__icon {
+  margin-right: 0.2em;
+  color: currentColor;
+}
+
+/* Grid section — iReal Pro-style bar grid.
+   Each `{start_of_grid}` body line lays out a flex row of
+   alternating barlines (fixed-width) and bar cells
+   (`flex: 1` → equal width). Continuation dots from the source
+   are dropped — beat alignment within a bar is handled by the
+   bar cell's own flex distribution.
+   `.grid-line` opens its own row context so the bars don't
+   inherit the lyric `display: flex; flex-wrap: wrap` from the
+   parent. */
+.chordsketch-sheet__content .grid-line {
+  display: flex;
+  align-items: stretch;
+  margin: 0.35em 0;
+  min-height: 2.4em;
+  font-family: var(--cs-font-chord, var(--cs-font-serif, 'Source Serif Pro', serif));
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: var(--cs-ink-900, #1a1718);
+}
+
+/* Bar cell — `flex: 1` so every bar in the row is the same
+   visual width. Inside the bar, beat slots split the cell
+   equally so a `G . C .` source produces four slots with the
+   G under beat 1 and C under beat 3 — matching standard
+   chord-chart engraving. */
+.chordsketch-sheet__content .grid-bar {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  padding: 0.2em 0.4em;
+  min-width: 3em;
+}
+.chordsketch-sheet__content .grid-beat {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+}
+.chordsketch-sheet__content .grid-chord {
+  color: var(--cs-accent, #bd1642);
+  text-align: left;
+}
+.chordsketch-sheet__content .grid-no-chord {
+  color: var(--cs-ink-500, #67646d);
+  font-style: italic;
+  font-weight: 500;
+}
+
+/* Barlines — single, double, repeat, final. Each one is a
+   fixed-width inline-flex separator between two bar cells. */
+.chordsketch-sheet__content .grid-barline {
+  display: inline-flex;
+  align-items: stretch;
+  align-self: stretch;
+  gap: 1.5px;
+  flex-shrink: 0;
+}
+.chordsketch-sheet__content .grid-barline:not([class*='--']) {
+  width: 1.5px;
+  background-color: var(--cs-ink-900, #1a1718);
+}
+.chordsketch-sheet__content .grid-barline__line {
+  display: inline-block;
+  width: 1.5px;
+  background-color: var(--cs-ink-900, #1a1718);
+}
+.chordsketch-sheet__content .grid-barline__line--thick {
+  width: 3.5px;
+}
+.chordsketch-sheet__content .grid-barline__dots {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.18em;
+  padding: 0 2.5px;
+}
+.chordsketch-sheet__content .grid-barline__dots > span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background-color: var(--cs-ink-900, #1a1718);
+  display: inline-block;
+}
+
+/* 1st / 2nd ending bracket — the bracket sits on top of the
+   barline, with a tiny number label tucked above. */
+.chordsketch-sheet__content .grid-volta {
+  display: inline-flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  position: relative;
+}
+.chordsketch-sheet__content .grid-volta .grid-barline__line {
+  background-color: var(--cs-ink-900, #1a1718);
+}
+.chordsketch-sheet__content .grid-volta__bracket {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  position: absolute;
+  top: -0.1em;
+  left: 0;
+}
+.chordsketch-sheet__content .grid-volta__cap {
+  display: block;
+  width: 1.5em;
+  height: 1.5px;
+  background-color: var(--cs-ink-900, #1a1718);
+}
+.chordsketch-sheet__content .grid-volta__label {
+  display: inline-block;
+  margin-left: 0.15em;
+  font-size: 0.7em;
+  font-weight: 600;
+  color: var(--cs-ink-900, #1a1718);
+  line-height: 1;
+  padding-top: 0.1em;
+}
+
+/* Row label (`A`, `Coda`, etc.) — a left-side tag for jazz
+   lead-sheet style annotation. Not in the ChordPro spec but a
+   widely used dialect convention; render as a muted bold cap. */
+.chordsketch-sheet__content .grid-row__label {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding-right: 0.6em;
+  font-weight: 700;
+  color: var(--cs-ink-700, #44424a);
+  text-transform: uppercase;
+  font-size: 0.85em;
+  letter-spacing: 0.04em;
+  min-width: 2em;
+}
+/* Trailing comment (`repeat 4 times`, etc.) — a right-side
+   annotation column. Italicised + smaller so it reads as a
+   performance instruction, not a chord. */
+.chordsketch-sheet__content .grid-row__comment {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding-left: 0.6em;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 0.85em;
+  color: var(--cs-ink-600, #67646d);
+}
+
+/* Combined repeat-end + repeat-start barline (`:|:`). Renders
+   as the standard double-thick-line glyph with dots on BOTH
+   sides — visually one combined bar marker. */
+.chordsketch-sheet__content .grid-barline--repeat-both {
+  /* Inherits the base `.grid-barline` flex shape; the two
+     thick lines + flanking dot groups are children. */
+}
+
+/* Measure-repeat markers. `%` repeats the previous measure,
+   `%%` repeats the previous two — they replace a chord cell
+   in a bar. Render as a centred glyph (a slash-and-dots
+   typesetting trick reads as engraved music notation, but a
+   simple `%` / `%%` glyph also works at this resolution). */
+.chordsketch-sheet__content .grid-percent {
+  font-weight: 700;
+  font-size: 0.9em;
+  color: var(--cs-ink-700, #44424a);
+}
+.chordsketch-sheet__content .grid-beat--percent1,
+.chordsketch-sheet__content .grid-beat--percent2 {
+  justify-content: center;
+}
+
+/* Multi-chord cell separator — a thin tilde between two chord
+   names that share a beat slot (`C~G`). The `~` is `aria-
+   hidden` so screen readers don't read it out; visually it
+   sits between two `.grid-chord` spans. */
+.chordsketch-sheet__content .grid-chord__sep {
+  display: inline-block;
+  margin: 0 0.15em;
+  color: var(--cs-ink-500, #8a8790);
+  font-weight: 400;
+  font-size: 0.85em;
+}
+.chordsketch-sheet__content .grid-beat--multi {
+  gap: 0;
+}
+
+/* Strum row — a row of pattern markers (`↑`, `↓`, `↑+`, `↓+`,
+   etc.) below the chord row. Smaller, muted, monospace so the
+   reader perceives it as performance instruction rather than
+   chord content. */
+.chordsketch-sheet__content .grid-line--strum {
+  margin-top: -0.4em;
+  min-height: 1.6em;
+  font-size: 0.85em;
+  color: var(--cs-ink-600, #67646d);
+}
+.chordsketch-sheet__content .grid-strum {
+  font-weight: 600;
+}
+.chordsketch-sheet__content .grid-strum__glyph {
+  font-family: var(--cs-font-mono, ui-monospace, monospace);
+}
+.chordsketch-sheet__content .grid-strum--up {
+  color: var(--cs-crimson-500, #bd1642);
+}
+.chordsketch-sheet__content .grid-strum--down {
+  color: var(--cs-ink-900, #1a1718);
+}
+.chordsketch-sheet__content .grid-strum--up-accent,
+.chordsketch-sheet__content .grid-strum--down-accent {
+  font-weight: 700;
+}
+.chordsketch-sheet__content .grid-strum--anticipated {
+  font-style: italic;
+}
+.chordsketch-sheet__content .grid-strum--custom {
+  color: var(--cs-ink-600, #67646d);
+  font-style: italic;
+}
+
+/* Screen-reader-only utility for strum-row `aria-label` text.
+   The visual glyph is too compact to spell out the source
+   token, so the SR-only span carries the full raw text. */
+.chordsketch-sheet__content .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Tag row — separate from the main meta strip because `{tag}`
+   is a categorisation signal, not a song attribute. Tags render
+   as pill-shaped chips so they read as a distinct group at a
+   glance. */
+.chordsketch-sheet__content .meta--tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375em;
+  margin: 0 0 1.5em;
+}
+.chordsketch-sheet__content .meta--tags .tag {
+  display: inline-block;
+  padding: 0.125em 0.5em;
+  border: 1px solid var(--cs-border, #d4d1d6);
+  border-radius: 999px;
+  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+  font-size: 0.75rem;
+  color: var(--cs-ink-700, #67646d);
+}
+
+/* Editor↔preview active-line marker. Any element carrying
+   `data-source-line` is the rendered output of the corresponding
+   1-indexed ChordPro source line; the AST walker adds the
+   `line--active` modifier to the element matching the editor's
+   caret position, so consumers can paint a subtle background
+   without needing the `data-source-line` value itself. The
+   selector targets every element class the walker emits
+   (`.line`, `.comment`, `.comment-box`, `.empty-line`, headers
+   inside sections, etc.) by qualifying only on the modifier
+   class.
+
+   Background — a hair of the active-line accent used inside the
+   CodeMirror gutter so the two stay visually paired, even though
+   the two surfaces own their own theming. Border-left adds a
+   discreet leading bar that survives on dark themes too. */
+.chordsketch-sheet__content .line--active {
+  background-color: var(--cs-active-line-bg, rgba(189, 22, 66, 0.06));
+  border-radius: 2px;
+  /* Anchor for the caret-marker overlay below — without
+     `position: relative` the marker's `left` percentage would be
+     relative to the nearest positioned ancestor, which is usually
+     the document root and produces meaningless placement. */
+  position: relative;
+}
+
+/* Preview-side caret marker.
+ *
+ * Two placement modes:
+ *
+ * - **Inline (lyrics row).** Inside a `.lyrics` span the marker
+ *   sits in normal flow BETWEEN `.lyric-char` spans, rendered
+ *   as a 2px-wide inline-block. The character-boundary
+ *   positioning is precise — no proportional-font drift onto a
+ *   glyph.
+ * - **Absolute (chord row, chord-less line).** Inside a
+ *   positioned ancestor (`.chord` or `.line.line--active`) the
+ *   marker is absolutely positioned by `left: X%`. Chord names
+ *   are short and the X% approximation is visually fine.
+ *
+ * Both modes share the same blink + crimson colour so the
+ * caret reads consistently. */
+.chordsketch-sheet__content .caret-marker {
+  width: 2px;
+  background-color: var(--cs-active-line-accent, #BD1642);
+  pointer-events: none;
+  animation: chordsketch-caret-blink 1.06s steps(2, jump-none) infinite;
+  border-radius: 1px;
+}
+/* Inline-flow placement inside a `.lyrics` row. The marker is a
+   zero-margin inline-block that aligns to the surrounding
+   text-line baseline, sitting in the natural gap between
+   character spans. */
+.chordsketch-sheet__content .lyrics > .caret-marker {
+  display: inline-block;
+  vertical-align: text-bottom;
+  height: 1em;
+  /* Negative margin keeps the caret from displacing surrounding
+     characters: it takes up 2px of inline width but absorbs that
+     width back so the rendered lyric line measures the same as
+     without the caret. */
+  margin: 0 -1px;
+}
+/* Absolute placement for the chord row + chord-less line
+   variants (caret is a direct child of a `position: relative`
+   ancestor). */
+.chordsketch-sheet__content .chord > .caret-marker,
+.chordsketch-sheet__content .line--active > .caret-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+@keyframes chordsketch-caret-blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  50.01%, 100% {
+    opacity: 0;
+  }
+}
+/* `prefers-reduced-motion` hides the blink so the caret renders
+   as a steady bar — same affordance, no animation. */
+@media (prefers-reduced-motion: reduce) {
+  .chordsketch-sheet__content .caret-marker {
+    animation: none;
+  }
+}
+
+/* Chord-bearing line — a row of `.chord-block` columns. Each
+   block stacks a chord glyph above the lyric segment it
+   annotates. The chord-block uses inline-flex with
+   `column-reverse` so the chord renders above the lyric without
+   reversing the DOM order — keeping chord-then-lyric in source
+   matches the Rust HTML renderer and lets screen readers
+   announce them in the natural reading order. */
+.chordsketch-sheet__content .line {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0.1em 0;
+}
+.chordsketch-sheet__content .chord-block {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.chordsketch-sheet__content .chord {
+  font-family: var(--cs-font-chord, "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
+  font-weight: 700;
+  color: var(--cs-crimson-500, #bd1642);
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  min-height: 1em;
+  /* Positioning context for the chord-row caret marker — the
+     `<span class="caret-marker">` uses `position: absolute` and
+     resolves its `left: X%` against this span, so a caret in the
+     `[Am]` source bracket lands across the rendered "Am" chord
+     width rather than the whole line. */
+  position: relative;
+}
+/* Drag affordance for the drag-to-reposition feature. Only the
+   real chord spans become draggable (placeholder/aria-hidden
+   chord-row spaces do not), so this rule is scoped to the
+   draggable attribute rather than the `.chord` class wholesale.
+   `grab` flips to `grabbing` while a drag is active. */
+.chordsketch-sheet__content .chord[draggable='true'] {
+  cursor: grab;
+  user-select: none;
+}
+.chordsketch-sheet__content .chord[draggable='true']:active {
+  cursor: grabbing;
+}
+
+/* Per-character span inside a `.lyrics` row. Plain wrapper so
+   the renderer can highlight a single character with a drop-
+   target outline; styling otherwise inherits from `.lyrics`. */
+.chordsketch-sheet__content .lyric-char {
+  /* Tight to its glyph so adjacent chars don't have visible
+     whitespace from default `<span>` line-height inheritance. */
+  display: inline-block;
+}
+/* Drop-target highlight shown while a chord is being dragged
+   over a specific lyric character. A narrow (single-character-
+   wide) dashed crimson rectangle that encloses the target
+   character at the bottom AND extends UPWARD through the chord
+   row above it.
+   - The character itself gets `outline` (not `border`) so its
+     intrinsic width stays unchanged: no reflow as the drop
+     target moves between characters.
+   - A `::before` pseudo-element draws the upper extension —
+     same dashed style, same horizontal extent (anchored to the
+     char so it stays 1-char-wide), height tall enough to fully
+     cover the chord row. The pseudo drops its bottom border so
+     the two shapes meet at the char's top edge and read as one
+     tall enclosure. */
+.chordsketch-sheet__content .lyric-char--drop-target {
+  position: relative;
+  /* Solid background tint is the only highlight — the
+     contrast against the surrounding crimson-on-cream text is
+     strong enough that adding a dashed frame on top reads as
+     decoration noise.
+     IMPORTANT: NO `padding` here. Padding on the inline-block
+     character would change its box dimensions and reflow the
+     entire lyric line vertically whenever the drop target
+     moved between characters. Horizontal breathing room is
+     produced by `box-shadow` (a spread, not a layout box)
+     which paints outside the element without displacing
+     neighbours — drag jitter is eliminated.
+     The 3px tint extension on each side widens the visible
+     column for narrow glyphs (`i`, `l`, `t`, `.`) so they
+     read as a column rather than a caret-sized stripe.
+     Top corners are FLAT so the lyric-row tint meets the
+     `::before` upper extension's flat bottom edge seamlessly;
+     otherwise the two rounded boundaries leave a visible
+     pinch between the chord row and the lyric row. */
+  border-radius: 0 0 3px 3px;
+  background-color: rgba(189, 22, 66, 0.18);
+  box-shadow:
+    -3px 0 0 0 rgba(189, 22, 66, 0.18),
+    3px 0 0 0 rgba(189, 22, 66, 0.18);
+}
+.chordsketch-sheet__content .lyric-char--drop-target::before {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  /* Mirror the box-shadow's horizontal spread. */
+  left: -3px;
+  right: -3px;
+  /* Sit immediately above the char and extend up to the chord
+     row. `1em` against the lyric font (1.125rem ≈ 18px) ≈
+     18px, matching the chord row's text height (1rem = 16px)
+     with a touch of margin. Taller values overshot into the
+     line above and read as a slab. */
+  bottom: 100%;
+  height: 1em;
+  border-radius: 3px 3px 0 0;
+  background-color: rgba(189, 22, 66, 0.18);
+}
+/* End-of-segment drop-target sentinel: a zero-width span shown
+   after the last lyric character when the drop offset is past
+   the segment's text. Width comes from `min-width` so the
+   highlight stays visible. */
+.chordsketch-sheet__content .lyric-char--drop-target-end {
+  display: inline-block;
+  min-width: 0.4em;
+}
+.chordsketch-sheet__content .lyrics {
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
+  font-weight: 400;
+  font-size: 1.125rem;
+  white-space: pre;
+  /* Sister-side of `.chord` — anchor for the lyrics-row caret
+     marker so a caret on a lyric character lands across the
+     rendered lyric width (not pinned to the whole line). */
+  position: relative;
+}
+.chordsketch-sheet__content .empty-line {
+  height: 1em;
+}
+
+/* Sections (verse / chorus / bridge / tab / grid / abc / ly / etc.)
+   wrap a body of lines with a small label above. */
+.chordsketch-sheet__content section {
+  margin: 1em 0;
+}
+/* Section labels are now `<h3>` so screen readers see them as
+   the heading of the enclosing `<section>` (and `aria-labelledby`
+   wires the heading to its section). The default browser
+   heading style would shout the label at body-text size; reset
+   the heading defaults to keep the visual treatment as a small
+   muted label, matching the pre-refactor look. */
+.chordsketch-sheet__content section > .section-label,
+.chordsketch-sheet__content .chorus-recall > .section-label {
+  font-family: var(--cs-font-latin, "Inter", system-ui, -apple-system, sans-serif);
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--cs-ink-600, #67646d);
+  margin: 0 0 0.5em;
+  /* Override `<h3>`'s default `display: block; margin-block-*`. */
+  line-height: 1.4;
+}
+.chordsketch-sheet__content .chorus-recall {
+  margin: 1em 0;
+}
+
+/* Verbatim / monospace sections (tab / grid / abc / ly / textblock). */
+.chordsketch-sheet__content section.tab .lyrics,
+.chordsketch-sheet__content section.grid .lyrics,
+.chordsketch-sheet__content section.abc .lyrics,
+.chordsketch-sheet__content section.ly .lyrics,
+.chordsketch-sheet__content section.textblock .lyrics {
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  font-size: 0.875rem;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Comments — italic for `{comment}` / `{comment_italic}`, bordered
+   inline-block for `{comment_box}`. */
+.chordsketch-sheet__content .comment {
+  font-family: var(--cs-font-latin, "Inter", system-ui, -apple-system, sans-serif);
+  font-style: italic;
+  color: var(--cs-ink-500, #8a8790);
+  margin: 0.3em 0;
+}
+/* Comment-family directives are line-level per spec — each comment
+   occupies its own line. `display: block` keeps that guarantee, and
+   `width: fit-content` lets the decorative box / background hug the
+   actual text (an earlier revision used `display: inline-block` which
+   let two adjacent comments — e.g. `{comment_box}` followed by
+   `{highlight}` — sit on the same row). */
+.chordsketch-sheet__content .comment-box {
+  border: 1px solid var(--cs-border, #d4d1d6);
+  border-radius: 4px;
+  padding: 0.2em 0.5em;
+  display: block;
+  width: fit-content;
+  margin: 0.3em 0;
+}
+/* `{highlight}` — spec sibling of `{comment}` with stronger visual
+   emphasis. The text now sits inside a `<mark>` element so the
+   HTML5 "marked text" semantic carries through. The yellow-marker
+   styling lives on the wrapper `<p>` (not the `<mark>` itself,
+   whose user-agent default background would clash with the
+   wrapper's). Sister to the Rust HTML renderer's
+   `comment--highlight` class. */
+.chordsketch-sheet__content .comment.comment--highlight {
+  background-color: var(--cs-highlight-bg, #fff3a3);
+  color: var(--cs-ink-900, #1a1718);
+  font-style: normal;
+  font-weight: 600;
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+  display: block;
+  width: fit-content;
+}
+/* Drop the user-agent default `<mark>` styling — the wrapper
+   already paints the highlight. */
+.chordsketch-sheet__content .comment.comment--highlight mark {
+  background: none;
+  color: inherit;
+}
+
+/* Embedded images stay fluid inside the wrapper. */
+.chordsketch-sheet__content img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Chord-diagrams section — emitted by the AST walker as
+   `<section class="chord-diagrams" data-position="…">` and gated by
+   the consumer's `chordDiagrams` prop. The four `data-position`
+   values mirror the ChordPro spec (see
+   https://www.chordpro.org/chordpro/directives-diagrams/):
+
+     `bottom` (default) — pinned at the end of the document; in the
+                          PDF reference implementation this is a
+                          page-bottom margin block, on the Web the
+                          natural analogue is `margin-top: auto`.
+     `top`              — between the title strip and the song
+                          body (positioned by the walker's
+                          `ctx.out.splice(headEnd, 0, section)`).
+     `right`            — side column to the right of the body; the
+                          `.song--diagrams-right` wrapper modifier
+                          flips `.song` to a two-column grid.
+     `below`            — natural flow after the last lyric line
+                          (no special positioning; sits where the
+                          walker pushed it).
+
+   The wrapper class `song--diagrams-<position>` on `.song` is the
+   modifier the consumer's CSS can hook into for layout shifts
+   that need to reach the wrapper itself (notably `right`). */
+.chordsketch-sheet__content .chord-diagrams {
+  margin-top: 1.5rem;
+}
+.chordsketch-sheet__content .chord-diagrams-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.chordsketch-sheet__content .chord-diagram-container {
+  /* `<figure>` element wrapping each diagram. Reset the default
+     `margin: 1em` that user agents apply to figures so the grid
+     gap controls spacing instead. */
+  margin: 0;
+}
+
+/* `bottom`: push the diagram block toward the bottom of the
+   wrapper so a tall preview pane mimics the PDF page-bottom
+   placement. Uses flex parent below to make the margin-top:auto
+   take effect. */
+.chordsketch-sheet__content .song--diagrams-bottom {
+  display: flex;
+  flex-direction: column;
+}
+.chordsketch-sheet__content .song--diagrams-bottom .chord-diagrams[data-position='bottom'] {
+  margin-top: auto;
+}
+
+/* `top`: the walker already spliced the section between header and
+   body, so layout just needs to ensure it visually separates from
+   what follows. */
+.chordsketch-sheet__content .chord-diagrams[data-position='top'] {
+  margin-top: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+/* `right`: two-column flex layout with the body wrapped in
+   `.song__body` (left, flex-grow) and the diagrams section
+   pinned to the right (fixed-ish width column).
+
+   The walker emits this shape only when `{diagrams: right}` is
+   active; other positions keep the flat `.song > h1 + ... +
+   section` structure. Falls back to a stacked layout under
+   720 px so narrow preview panes do not crush the body. */
+.chordsketch-sheet__content .song--diagrams-right {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+.chordsketch-sheet__content .song__body {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.chordsketch-sheet__content .song--diagrams-right .chord-diagrams[data-position='right'] {
+  flex: 0 0 auto;
+  min-width: 12rem;
+  max-width: 16rem;
+  margin-top: 0;
+  /* Sticky scroll-follow: the diagram column keeps tracking the
+     viewport while the user reads down the lyrics. `top: 1rem`
+     leaves a small breathing-room gap below whatever sticky
+     header the host page provides (the playground's nav bar is
+     `position: static` so the offset reads as "top of viewport").
+     `align-self: flex-start` is essential — flex children default
+     to `align-self: stretch`, which forces the item to match the
+     container's full height. A stretched item is taller than the
+     viewport in a tall song, so the sticky offset never has
+     anything to anchor against (the item is already at its final
+     position from the start). Pinning to flex-start lets the
+     section keep its intrinsic height, which sticky then offsets
+     against. */
+  align-self: flex-start;
+  position: sticky;
+  top: 1rem;
+  /* `max-height` caps the column to one viewport so a very tall
+     diagram block (many unique chords) does not extend past the
+     visible region and break sticky. The inner grid scrolls
+     independently when content exceeds the cap. */
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+@media (max-width: 720px) {
+  .chordsketch-sheet__content .song--diagrams-right {
+    flex-direction: column;
+  }
+  .chordsketch-sheet__content .song--diagrams-right .chord-diagrams[data-position='right'] {
+    max-width: none;
+    margin-top: 1.5rem;
+    /* Stacked layout — sticky reads as "no column to follow",
+       so drop the sticky positioning entirely along with the
+       viewport-height cap. */
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* `below`: no special wrapper layout; the section sits naturally
+   at the tail of the document flow (mirrors the PDF "in-flow
+   chord box below the last verse" output of the reference
+   implementation). */
 
 .chordsketch-sheet__error {
   padding: 0.5rem 0.75rem;
@@ -166,4 +1310,336 @@
 
 .chordsketch-diagram__error {
   border-style: solid;
+}
+
+/* ---------- Source editor (CodeMirror 6) ---------- */
+
+.chordsketch-source-editor {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--cs-surface);
+}
+
+.chordsketch-source-editor > .cm-editor {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---------- Split layout ---------- */
+
+.chordsketch-split-layout {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  background: var(--cs-canvas);
+}
+
+.chordsketch-split-layout__pane {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--cs-surface);
+}
+
+.chordsketch-split-layout__pane--start {
+  flex: var(--cs-split-ratio, 0.5) 0 0;
+  border-right: 1px solid var(--cs-border);
+}
+
+.chordsketch-split-layout__pane--end {
+  flex: calc(1 - var(--cs-split-ratio, 0.5)) 0 0;
+}
+
+.chordsketch-split-layout__splitter {
+  flex: 0 0 1px;
+  width: 1px;
+  background: var(--cs-border);
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  position: relative;
+  transition: background var(--cs-dur-1) var(--cs-ease-out);
+}
+
+.chordsketch-split-layout__splitter::after {
+  /* Widened invisible hit-target — keeps the visible rule a
+   * 1 px hairline while engaging pointer drags reliably. */
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  right: -5px;
+}
+
+.chordsketch-split-layout__splitter:hover,
+.chordsketch-split-layout__splitter:focus-visible {
+  background: var(--cs-crimson-500);
+}
+
+.chordsketch-split-layout__splitter:focus-visible {
+  outline: none;
+  box-shadow: var(--cs-focus-ring);
+}
+
+@media (max-width: 768px) {
+  .chordsketch-split-layout {
+    flex-direction: column;
+  }
+  .chordsketch-split-layout__pane--start {
+    border-right: none;
+    border-bottom: 1px solid var(--cs-border);
+    flex: 0 0 40%;
+  }
+  .chordsketch-split-layout__pane--end {
+    flex: 1;
+  }
+  .chordsketch-split-layout__splitter {
+    display: none;
+  }
+}
+
+/* ---------- Renderer preview ---------- */
+
+.chordsketch-preview {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--cs-surface);
+  font-family: var(--cs-font-jp);
+  color: var(--cs-text-primary);
+}
+
+.chordsketch-preview--pdf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 2rem;
+  background: var(--cs-canvas);
+  text-align: center;
+  color: var(--cs-text-secondary);
+  font-size: 0.9375rem;
+}
+
+.chordsketch-preview--pdf .chordsketch-pdf-export {
+  height: 36px;
+  padding: 0 1.25rem;
+  background: var(--cs-crimson-500);
+  color: #FFFFFF;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-family: var(--cs-font-jp);
+  font-weight: 500;
+  font-size: 0.875rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--cs-dur-1) var(--cs-ease-out);
+}
+
+.chordsketch-preview--pdf .chordsketch-pdf-export:hover {
+  background: var(--cs-crimson-600);
+}
+
+.chordsketch-preview--pdf .chordsketch-pdf-export:focus-visible {
+  outline: none;
+  box-shadow: var(--cs-focus-ring);
+}
+
+/* ---------- Playground shell ---------- */
+
+.chordsketch-playground {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--cs-canvas);
+  color: var(--cs-text-primary);
+  font-family: var(--cs-font-jp);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.chordsketch-playground__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  height: 56px;
+  padding: 0 1.5rem;
+  background: var(--cs-surface);
+  border-bottom: 1px solid var(--cs-border);
+  flex-shrink: 0;
+}
+
+.chordsketch-playground__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  font-family: var(--cs-font-jp);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  color: var(--cs-text-primary);
+}
+
+.chordsketch-playground__brand-mark {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border-radius: 2px;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><rect width="180" height="180" fill="%23BD1642"/><path d="M82.9328334,100.501459 C84.0311093,98.5297919 86.368868,97.6656987 88.5433381,98.2694599 C88.6578145,98.3008392 88.7693854,98.3264075 88.8821185,98.3548813 C89.0669078,98.400207 89.2522781,98.4437894 89.4422973,98.4821419 C89.5375974,98.5013181 89.635222,98.5239809 89.7287788,98.5408328 C89.7729423,98.5489682 89.8165246,98.5507115 89.8606881,98.5559414 C90.8235681,98.7198111 91.8404902,98.8000027 92.9044814,98.7738532 C95.0353691,98.7209733 97.3208289,98.282244 99.5969912,97.4140831 C106.959508,94.607378 111.430478,88.4041529 109.583748,83.5589548 C108.201896,79.9334821 103.674558,78.0966301 98.3993475,78.5760363 C98.7985621,78.4499379 99.1977766,78.3168664 99.5969912,78.1646186 C106.959508,75.3579135 111.430478,69.1546885 109.583748,64.3089092 C108.201896,60.6840176 103.674558,58.8471657 98.3993475,59.3259907 C98.7985621,59.1998924 99.1977766,59.0668209 99.5969912,58.9145731 C106.959508,56.107868 111.430478,49.904643 109.583748,45.0588637 C107.736436,40.2136655 100.270484,38.5604407 92.9079679,41.3671458 C89.9879487,42.4805302 87.5246727,44.1291063 85.7284976,46.0141894 C84.9382039,46.8498088 84.3135231,47.672063 83.8195895,48.5140746 C66.608037,74.3247206 75.0897488,157.615874 75.0897488,157.615874 C75.5546275,146.069449 77.4478459,110.345846 82.9328334,100.501459 Z" fill="%23FFFFFF"/></svg>');
+  background-size: cover;
+  background-repeat: no-repeat;
+  flex-shrink: 0;
+}
+
+.chordsketch-playground__controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.chordsketch-playground__control-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  color: var(--cs-text-secondary);
+}
+
+.chordsketch-playground__select {
+  height: 32px;
+  padding: 0 0.75rem;
+  background: var(--cs-surface);
+  color: var(--cs-text-primary);
+  border: 1px solid var(--cs-border-strong);
+  border-radius: 4px;
+  font-family: var(--cs-font-jp);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+  text-transform: none;
+  transition: border-color var(--cs-dur-1) var(--cs-ease-out),
+    box-shadow var(--cs-dur-1) var(--cs-ease-out);
+}
+
+.chordsketch-playground__select:hover {
+  border-color: var(--cs-ink-500);
+}
+
+.chordsketch-playground__select:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500);
+  box-shadow: var(--cs-focus-ring);
+}
+
+.chordsketch-playground__transpose {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  color: var(--cs-text-secondary);
+}
+
+.chordsketch-playground__transpose .chordsketch-transpose__button {
+  height: 32px;
+  min-width: 32px;
+  padding: 0 0.75rem;
+  background: var(--cs-surface);
+  color: var(--cs-text-primary);
+  border: 1px solid var(--cs-border-strong);
+  border-radius: 4px;
+  font-family: var(--cs-font-jp);
+  font-weight: 500;
+  font-size: 0.875rem;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1;
+  transition: background var(--cs-dur-1) var(--cs-ease-out),
+    border-color var(--cs-dur-1) var(--cs-ease-out);
+}
+
+.chordsketch-playground__transpose .chordsketch-transpose__button:hover {
+  background: var(--cs-surface-hover);
+  border-color: var(--cs-ink-500);
+}
+
+.chordsketch-playground__transpose .chordsketch-transpose__button:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500);
+  box-shadow: var(--cs-focus-ring);
+}
+
+.chordsketch-playground__transpose .chordsketch-transpose__value {
+  font-family: var(--cs-font-mono);
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--cs-text-primary);
+}
+
+.chordsketch-playground__split {
+  flex: 1;
+  min-height: 0;
+}
+
+.chordsketch-playground__preview-pane {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .chordsketch-playground__header {
+    height: auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+  }
+  .chordsketch-playground__title {
+    justify-content: flex-start;
+  }
+  .chordsketch-playground__controls {
+    justify-content: flex-start;
+    gap: 0.75rem;
+  }
+}
+
+/* Frame for the HTML preview iframe — rendered by `RendererPreview` */
+.chordsketch-preview__frame {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: var(--cs-surface);
+  display: block;
+}
+
+.chordsketch-preview--html {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.chordsketch-preview__error {
+  margin: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--cs-crimson-100, #FBE1E8);
+  color: var(--cs-crimson-700, #87092C);
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.8125rem;
+  border: 1px solid var(--cs-crimson-300, #EC8AA3);
+  border-radius: 4px;
 }

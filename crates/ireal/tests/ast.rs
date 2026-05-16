@@ -120,7 +120,7 @@ fn equality_distinguishes_chord_changes() {
 #[test]
 fn section_label_variants_are_distinct() {
     assert_ne!(SectionLabel::Letter('A'), SectionLabel::Verse);
-    assert_ne!(SectionLabel::Verse, SectionLabel::Chorus);
+    assert_ne!(SectionLabel::Verse, SectionLabel::Intro);
     assert_ne!(
         SectionLabel::Custom("Pre-chorus".into()),
         SectionLabel::Custom("Bridge 2".into())
@@ -212,10 +212,7 @@ fn json_round_trip_handles_every_enum_variant() {
     let labels = [
         SectionLabel::Letter('A'),
         SectionLabel::Verse,
-        SectionLabel::Chorus,
         SectionLabel::Intro,
-        SectionLabel::Outro,
-        SectionLabel::Bridge,
         SectionLabel::Custom("Pre-chorus".into()),
     ];
     let symbols = [
@@ -248,11 +245,15 @@ fn json_round_trip_handles_every_enum_variant() {
                         note: 'D',
                         accidental: Accidental::Flat,
                     }),
+                    alternate: None,
                 },
                 position: BeatPosition::on_beat(u8::try_from(i % 4 + 1).unwrap()).unwrap(),
             }],
             ending: Ending::new(u8::try_from(i % 3 + 1).unwrap()),
             symbol: Some(symbol),
+            repeat_previous: false,
+            no_chord: false,
+            text_comment: None,
         };
         song.sections.push(Section {
             label,
@@ -429,6 +430,9 @@ fn make_sample() -> IrealSong {
         chords: vec![bar_chord],
         ending: Ending::new(1),
         symbol: Some(MusicalSymbol::Segno),
+        repeat_previous: false,
+        no_chord: false,
+        text_comment: None,
     };
     let section = Section {
         label: SectionLabel::Letter('A'),

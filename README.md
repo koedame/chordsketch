@@ -34,13 +34,29 @@ PNG / PDF, and bidirectional ChordPro ↔ iReal Pro conversion.
 ### iReal Pro
 
 - Full `irealb://` URL parser (single-song and multi-song collections)
-  with zero external dependencies in the core crate
+  with zero external dependencies in the core crate. Accepts both the
+  canonical 7..=9-field `irealb://` shape and the iRealBook 6-field
+  `irealbook://` shape (`Title=Composer=Style=Key=TimeSig=Music`).
+- Complete URL grammar coverage: `(altchord)` substitutions, `n`
+  no-chord, `Kcl` / `x` / `r` repeat-previous-measure, `<text>`
+  free-form captions, `S` segno, `Q` coda, `<D.C.>` / `<D.S.>` /
+  `<Fine>` macros, repeat / final / double / single barlines, and
+  N-th endings — all attached to the bar in which the marker
+  appears.
 - Chart renderer producing SVG, PNG (via resvg), and PDF (via svg2pdf)
-  — 4-bars-per-line grid layout, repeat / final / double barlines,
-  N-th-ending brackets, section-letter labels, and Bravura SMuFL music
-  symbols (segno, coda)
+  — 4-bars-per-line grid layout that wraps continuously across
+  section boundaries, repeat / final / double barlines, N-th-ending
+  brackets, section-letter labels, and Bravura SMuFL music symbols
+  (segno, coda). Chord-name typography translates URL-stored
+  shorthand (`b`→♭, `^`→Δ, `h`→ø, `o`→°, `-`→−, `#`→♯) and stacks
+  multi-alteration extensions (`7♭9♯5` → two-line `7♭9 / ♯5`).
+  Available as a `chordTypography` wasm export so React / Svelte /
+  external consumers can drive the same span layout.
 - Bidirectional ChordPro ↔ iReal Pro conversion with structured
-  warnings for lossy drops
+  warnings for lossy drops. The iReal → ChordPro bridge handles
+  the new AST fields end-to-end (`no_chord` → `N.C.` segment,
+  `text_comment` → parenthesised inline text, `chord.alternate`
+  → parenthesised alternate after the primary).
 - `.irealb` (single song) and `.irealbook` (multi-song collection) file
   extensions — picked up by the CLI sniff, the desktop OS file
   associations, and the editor integrations (VS Code, JetBrains, Zed)

@@ -1,15 +1,14 @@
-// Playwright config for the playground browser smoke suite added in
-// #2397. The suite verifies that `mountChordSketchUi` actually wires
-// every editor adapter the playground exposes — pre-existing unit
-// tests covered each layer in isolation but missed the host-level
-// integration where the iRealb factory raced wasm initialisation.
+// Playwright config for the playground browser smoke suite. The
+// suite verifies that the React playground (#2454) actually mounts
+// the CodeMirror editor and renders the preview iframe end-to-end
+// — pre-existing component-level unit tests cover each layer in
+// isolation but miss the host-level integration that the deployed
+// bundle exercises.
 //
 // The suite intentionally targets the production build (`vite preview`
 // over `vite build` output) rather than the dev server. The deployed
 // playground is what users hit; matching that is what catches the
-// real regression class. The dev-only `fs.allow` fix that ships
-// alongside this suite is not exercised by Playwright because the
-// preview server does not consult `fs.allow`.
+// real regression class.
 
 import { defineConfig, devices } from '@playwright/test';
 

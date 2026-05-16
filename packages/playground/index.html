@@ -5,16 +5,166 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <title>ChordSketch Playground</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap"
+  />
+  <style>
+    :root {
+      --crimson-500: #BD1642;
+      --ink-0: #FFFFFF;
+      --ink-50: #FAFAF7;
+      --ink-100: #F6F4F7;
+      --ink-200: #E8E6EA;
+      --ink-300: #D4D1D6;
+      --ink-600: #67646D;
+      --ink-700: #44424A;
+      --ink-1000: #0A0A0B;
+      --font-jp: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+      --font-latin: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      font-family: var(--font-jp);
+      background: var(--ink-50);
+      color: var(--ink-1000);
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 4rem 1.5rem;
+      gap: 2.5rem;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 700;
+      font-size: 1.125rem;
+      letter-spacing: -0.01em;
+    }
+    .brand .mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><rect width="180" height="180" fill="%23BD1642"/><path d="M82.9328334,100.501459 C84.0311093,98.5297919 86.368868,97.6656987 88.5433381,98.2694599 C88.6578145,98.3008392 88.7693854,98.3264075 88.8821185,98.3548813 C89.0669078,98.400207 89.2522781,98.4437894 89.4422973,98.4821419 C89.5375974,98.5013181 89.635222,98.5239809 89.7287788,98.5408328 C89.7729423,98.5489682 89.8165246,98.5507115 89.8606881,98.5559414 C90.8235681,98.7198111 91.8404902,98.8000027 92.9044814,98.7738532 C95.0353691,98.7209733 97.3208289,98.282244 99.5969912,97.4140831 C106.959508,94.607378 111.430478,88.4041529 109.583748,83.5589548 C108.201896,79.9334821 103.674558,78.0966301 98.3993475,78.5760363 C98.7985621,78.4499379 99.1977766,78.3168664 99.5969912,78.1646186 C106.959508,75.3579135 111.430478,69.1546885 109.583748,64.3089092 C108.201896,60.6840176 103.674558,58.8471657 98.3993475,59.3259907 C98.7985621,59.1998924 99.1977766,59.0668209 99.5969912,58.9145731 C106.959508,56.107868 111.430478,49.904643 109.583748,45.0588637 C107.736436,40.2136655 100.270484,38.5604407 92.9079679,41.3671458 C89.9879487,42.4805302 87.5246727,44.1291063 85.7284976,46.0141894 C84.9382039,46.8498088 84.3135231,47.672063 83.8195895,48.5140746 C66.608037,74.3247206 75.0897488,157.615874 75.0897488,157.615874 C75.5546275,146.069449 77.4478459,110.345846 82.9328334,100.501459 Z" fill="%23FFFFFF"/></svg>');
+      background-size: cover;
+      background-repeat: no-repeat;
+      flex-shrink: 0;
+    }
+    h1 {
+      font-weight: 700;
+      font-size: 2.25rem;
+      letter-spacing: -0.02em;
+      text-align: center;
+      max-width: 28rem;
+    }
+    p.lede {
+      font-family: var(--font-latin);
+      color: var(--ink-600);
+      font-size: 1rem;
+      text-align: center;
+      max-width: 32rem;
+      line-height: 1.6;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+      width: 100%;
+      max-width: 720px;
+    }
+    .card {
+      background: var(--ink-0);
+      border: 1px solid var(--ink-200);
+      border-radius: 12px;
+      padding: 1.5rem;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+    }
+    .card:hover {
+      border-color: var(--crimson-500);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px -8px rgba(189, 22, 66, 0.18);
+    }
+    .card:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
+    }
+    .card h2 {
+      font-size: 1.125rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+      color: var(--ink-1000);
+    }
+    .card p {
+      font-family: var(--font-latin);
+      font-size: 0.875rem;
+      color: var(--ink-600);
+      line-height: 1.5;
+    }
+    .card .arrow {
+      display: inline-block;
+      margin-top: 1rem;
+      font-family: var(--font-latin);
+      font-weight: 600;
+      font-size: 0.8125rem;
+      color: var(--crimson-500);
+      letter-spacing: 0.02em;
+    }
+    footer {
+      font-family: var(--font-latin);
+      font-size: 0.8125rem;
+      color: var(--ink-600);
+    }
+    footer a {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      color: var(--ink-700);
+      text-decoration: none;
+      padding: 0.375rem 0.625rem;
+      border-radius: 6px;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    footer a:hover { color: var(--crimson-500); background: var(--ink-100); }
+    footer a:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
+    }
+    footer svg { display: block; }
+  </style>
 </head>
 <body>
-  <!--
-    The editor / preview / controls DOM is built by
-    `mountChordSketchUi` from `@chordsketch/ui-web`. Keep this body
-    minimal: a single `#app` mount point lets the desktop scaffold
-    (#2069) reuse the same library against an empty Tauri WebView.
-    See `packages/ui-web/README.md` for the API contract.
-  -->
-  <div id="app"></div>
-  <script type="module" src="/src/main.ts"></script>
+  <span class="brand"><span class="mark" aria-hidden="true"></span>ChordSketch</span>
+  <h1>Playground</h1>
+  <p class="lede">
+    Try the parser and renderers in your browser. Pick a format below.
+  </p>
+  <div class="grid">
+    <a class="card" href="chordpro/">
+      <h2>ChordPro</h2>
+      <p>Parse and render <code>.cho</code> sheets to HTML, plain text, and PDF. Inline chord brackets, sections, transpose, capo.</p>
+      <span class="arrow">Open ›</span>
+    </a>
+    <a class="card" href="irealpro/">
+      <h2>iReal Pro</h2>
+      <p>Render <code>irealb://</code> URLs as iReal Pro charts. SVG preview with PNG / PDF export.</p>
+      <span class="arrow">Open ›</span>
+    </a>
+  </div>
+  <footer>
+    <a href="https://github.com/koedame/chordsketch" target="_blank" rel="noreferrer noopener" aria-label="View source on GitHub (opens in a new tab)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+        <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2.04c-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.69 1.24 3.34.95.1-.74.4-1.24.72-1.53-2.55-.29-5.23-1.27-5.23-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.16 1.18a10.93 10.93 0 0 1 5.74 0c2.2-1.49 3.16-1.18 3.16-1.18.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.06.78 2.13v3.16c0 .31.21.67.8.56C20.71 21.39 24 17.08 24 12 24 5.65 18.85.5 12 .5z" />
+      </svg>
+      GitHub
+    </a>
+  </footer>
 </body>
 </html>
