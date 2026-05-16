@@ -255,7 +255,7 @@ For each finding, in High → Nit order:
    "zero findings" criterion. Convergence is the delta-review
    output being empty, not "no blocking findings".
 
-Hard cap: 3 review iterations per
+Hard cap: 10 review iterations per
 [`.claude/rules/pr-workflow.md`](../../../rules/pr-workflow.md) step 7.
 If the cap fires before convergence, HALT with
 `halt_reason: "review iteration cap hit with <N> findings outstanding"`.
@@ -301,7 +301,7 @@ Extend `context.json` with:
     "url": "<https://github.com/.../pull/<N>>",
     "head_sha": "<git sha at Ready-for-merge>",
     "ci_status": "passed",
-    "review_iterations": <int 0..=3>,
+    "review_iterations": <int 0..=10>,
     "findings_resolved": {
       "high": <int>,
       "medium": <int>,
@@ -327,7 +327,7 @@ Set the next phase (write to `<state-dir>/current-phase.txt`):
 
 - Remote branch already exists at push time.
 - CI does not settle within the bounded wait (30 min default).
-- Review iteration cap (3) is hit with findings outstanding.
+- Review iteration cap (10) is hit with findings outstanding.
 - A finding's root-cause fix genuinely cannot be produced inside
   this session (cross-team coordination, upstream dependency not
   yet landed, maintainer judgement on a contested trade-off).

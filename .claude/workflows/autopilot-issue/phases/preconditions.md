@@ -59,7 +59,35 @@ Run each check; record the result. Stop at the first failure and HALT.
    ```
    If non-empty, HALT with `halt_reason: "working tree is dirty"`.
 
-6. **One-PR-at-a-time gate** per
+6. **Fetch + main freshness**: the autopilot must start from the
+   latest `main`. The downstream `implementation` phase creates its
+   worktree from `origin/main`, so a stale local fetch would silently
+   base new work on an outdated tree. Fetch and verify in this phase
+   so a network / auth failure halts fast — before any state-modifying
+   work — and so the local `main` matches what `implementation` will
+   branch from.
+   ```bash
+   git fetch origin main --tags
+   local_main=$(git rev-parse main)
+   origin_main=$(git rev-parse origin/main)
+   if [[ "$local_main" != "$origin_main" ]]; then
+     # Local main is behind or has diverged. Fast-forward if behind;
+     # HALT if diverged (the maintainer may have local commits that
+     # need to land in their own PR first).
+     if git merge-base --is-ancestor "$local_main" "$origin_main"; then
+       git merge --ff-only origin/main
+     else
+       # halt_reason rendered verbatim on the orchestrator terminal.
+       printf 'local main (%s) has diverged from origin/main (%s); rebase or reset manually before retrying' \
+         "$local_main" "$origin_main"
+       exit 1  # HALT path; see "Required final actions" footer
+     fi
+   fi
+   ```
+   If `git fetch origin main --tags` itself exits non-zero, HALT with
+   `halt_reason: "git fetch origin failed; check network / SSH auth"`.
+
+7. **One-PR-at-a-time gate** per
    [`.claude/rules/one-pr-at-a-time.md`](../../../rules/one-pr-at-a-time.md).
    The rule applies to ALL maintainer-authored PRs against `main`,
    not just autopilot-driven ones; filter by author + base only:
@@ -70,7 +98,7 @@ Run each check; record the result. Stop at the first failure and HALT.
    If the list is non-empty, HALT with
    `halt_reason: "another open PR by current user against main: #<N> (<branch>)"`.
 
-7. **Plugin availability** per
+8. **Plugin availability** per
    [`.claude/rules/workflow-discipline.md`](../../../rules/workflow-discipline.md)
    §"Required external dependencies". The `pr-review` phase depends
    on the `pr-review-toolkit` plugin for its specialist review
@@ -121,14 +149,20 @@ Write the matching identifier to `<state-dir>/current-phase.txt`.
 - `gh auth status` fails or the authed user does not match.
 - Current branch is not `main`.
 - Working tree is dirty.
+- `git fetch origin` fails.
+- Local `main` has diverged from `origin/main` (cannot be
+  fast-forwarded automatically — maintainer judgement required).
 - Another open PR by the current user against `main` exists.
 - Repository identity check fails (running from a worktree).
 - `pr-review-toolkit` plugin is not installed.
 
 ## Notes
 
-- This phase never touches the worktree or any remote state. It is
-  pure read-only sanity.
+- This phase fetches from origin and may fast-forward the local
+  `main` if it is behind `origin/main`. Other than that one
+  fast-forward (which is non-destructive — only valid when local
+  is an ancestor of origin), it is read-only against both the
+  worktree and any remote state.
 - If you cannot determine a value (e.g. `gh auth status` returns
   ambiguous output), HALT — guessing here cascades into worse decisions
   downstream.

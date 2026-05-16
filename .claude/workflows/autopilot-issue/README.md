@@ -85,8 +85,10 @@ orchestrator might stop early.
 
 - **`preconditions`**: `gh` unauthenticated or wrong user; current
   branch is not `main`; running from a worktree; working tree is
-  dirty; another open PR by the current user against `main` exists;
-  `pr-review-toolkit` plugin is not installed.
+  dirty; `git fetch origin` fails; local `main` has diverged from
+  `origin/main` (cannot be fast-forwarded); another open PR by the
+  current user against `main` exists; `pr-review-toolkit` plugin is
+  not installed.
 - **`issue-selection`**: target issue not authored by the expected
   user, or hard preconditions on the candidate set fail.
 - **`implementation`**: local validation (`cargo fmt --check`,
@@ -95,7 +97,7 @@ orchestrator might stop early.
   would be required to satisfy the issue.
 - **`pr-review`**: remote branch already exists at push time; CI
   does not settle within the bounded wait (30 min default); review
-  iteration cap (3) is hit with findings outstanding; a finding's
+  iteration cap (10) is hit with findings outstanding; a finding's
   root-cause fix genuinely cannot be produced inside this session
   (cross-team coordination, upstream dependency not yet landed,
   maintainer judgement on a contested trade-off — but NOT ADR

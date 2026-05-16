@@ -30,8 +30,14 @@ below.
    Claude squash-merges directly via `gh pr merge --squash`. Otherwise, a
    human inspects the full check rollup (not just the required checks
    listed in branch protection) and performs the squash merge.
-7. **Safety cap** — after 3 auto-review iterations, the process stops and waits for
-   human intervention.
+7. **Safety cap** — after 10 auto-review iterations, the process stops and waits for
+   human intervention. The cap was raised from 3 to 10 because the
+   typical convergence trajectory observed on real PRs (~10 → ~5 →
+   ~1 → 0 findings) needs about four iterations and a cap of 3
+   forced otherwise-clean convergence into a human handoff that was
+   not actually needed; 10 still bounds runaway loops (ADR-needed
+   cases, contested design judgement) without burning the human
+   handoff on routine docs / refactor PRs.
 
 Before merging, the author (or the human doing the merge) verifies there are no
 open GitHub Issues authored by a review bot during this PR's lifetime. Per
