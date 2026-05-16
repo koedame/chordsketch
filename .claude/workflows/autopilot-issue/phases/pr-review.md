@@ -79,8 +79,8 @@ whether to fix or HALT.
 Run the following review surfaces and aggregate the findings into a
 single severity-ordered list (High → Medium → Low → Nit):
 
-- `pr-review-toolkit:code-reviewer` against the PR diff
-- `pr-review-toolkit:silent-failure-hunter` against the PR diff
+- A `general-purpose` sub-agent performing a code review against the PR diff
+- A `general-purpose` sub-agent performing a silent-failure / error-handling audit against the PR diff
 - A cross-check pass against every file in `.claude/rules/` — does the
   diff or PR body violate any rule?
 - Collect existing inline review comments:

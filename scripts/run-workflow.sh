@@ -50,8 +50,16 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --resume) RESUME=true; shift ;;
-    --max-iters) MAX_ITERS="$2"; shift 2 ;;
-    --per-phase-timeout) PER_PHASE_TIMEOUT_SECS="$2"; shift 2 ;;
+    --max-iters)
+      if ! [[ "$2" =~ ^[1-9][0-9]*$ ]]; then
+        echo "--max-iters requires a positive integer, got: $2" >&2; exit 1
+      fi
+      MAX_ITERS="$2"; shift 2 ;;
+    --per-phase-timeout)
+      if ! [[ "$2" =~ ^[1-9][0-9]*$ ]]; then
+        echo "--per-phase-timeout requires a positive integer (seconds), got: $2" >&2; exit 1
+      fi
+      PER_PHASE_TIMEOUT_SECS="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     -*) echo "unknown flag: $1" >&2; usage >&2; exit 1 ;;
     *)
@@ -65,6 +73,11 @@ done
 if [[ -z "$WORKFLOW_NAME" ]]; then
   echo "workflow name required" >&2
   usage >&2
+  exit 1
+fi
+
+if ! [[ "$WORKFLOW_NAME" =~ ^[a-z0-9-]+$ ]]; then
+  echo "workflow name must match [a-z0-9-]+, got: $WORKFLOW_NAME" >&2
   exit 1
 fi
 

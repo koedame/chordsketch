@@ -41,11 +41,12 @@ and continue — do not HALT on a missing board entry.
 
 ### 2. Implementation
 
-Stage the work through three sub-agents in sequence:
+Stage the work through three sub-agents in sequence
+(use the `subagent_type` shown for each):
 
-1. `feature-dev:code-explorer` — map affected crates, callers, fixtures,
+1. `Explore` — map affected crates, callers, fixtures,
    and rule-file constraints. Output: written exploration brief.
-2. `feature-dev:code-architect` — design as a concrete blueprint (files
+2. `Plan` — design as a concrete blueprint (files
    to add/modify, function signatures, fixtures).
 3. `general-purpose` — execute the blueprint:
    - Tests per
