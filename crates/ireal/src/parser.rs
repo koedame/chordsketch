@@ -8,17 +8,37 @@
 //!
 //! # Format reference
 //!
-//! There is no published spec for the iReal Pro URL format. The
-//! nearest public reference is the open-source
-//! [`pianosnake/ireal-reader`][1] JavaScript parser, which itself
-//! cites [`ironss/accompaniser`][2] for the obfuscation
-//! algorithm. The Rust port here implements the same algorithm
-//! against the same shape of token grammar; round-trip golden
-//! tests in `tests/parser.rs` verify the result against
-//! known-good fixtures.
+//! iReal Pro publishes the [Custom Chord Chart Protocol][spec]
+//! (the chord-chart token grammar — `*X` rehearsal marks, barlines,
+//! repeats, `n` no-chord, `Y+` vertical spacers, etc.) and a
+//! companion [developer docs page][devdocs] (overview of the
+//! `irealb://` and `irealbook://` URL prefixes used to embed
+//! charts). The chord-chart grammar this parser accepts is a
+//! **subset of that spec extended with internal tokens** observed
+//! in real exports (`Kcl`, `XyQ`, `LZ|`) — see
+//! `crates/ireal/FORMAT.md` for the exact token table and the
+//! deltas from the spec.
 //!
-//! [1]: https://github.com/pianosnake/ireal-reader
-//! [2]: https://github.com/ironss/accompaniser
+//! What the spec does **not** cover, and what therefore remains
+//! reverse-engineered from external references, are: the
+//! `irealb://` body's `MUSIC_PREFIX` sentinel + `obfusc50`
+//! unscramble; the legacy 6-field `irealbook://` layout this
+//! parser accepts with a packed-digit time signature in slot 5
+//! (the spec's own 6-field example has the literal `n` placeholder
+//! in slot 5 and the time signature embedded inside the chord
+//! stream as a `T..` token); and the `===`-separated multi-song
+//! envelope. For those halves the public references are the
+//! open-source [`pianosnake/ireal-reader`][pianosnake] JavaScript
+//! parser and the [`ironss/accompaniser`][accompaniser]
+//! de-obfuscation routine it cites. The Rust port here implements
+//! the same algorithms against the same shape of token grammar;
+//! round-trip golden tests in `tests/parser.rs` verify the result
+//! against known-good fixtures.
+//!
+//! [spec]: https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol
+//! [devdocs]: https://www.irealpro.com/developer-docs
+//! [pianosnake]: https://github.com/pianosnake/ireal-reader
+//! [accompaniser]: https://github.com/ironss/accompaniser
 //!
 //! # Scope
 //!
