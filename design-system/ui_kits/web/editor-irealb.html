@@ -170,9 +170,9 @@ a { color: inherit; text-decoration: none; }
    data-barline-right attribute below), so we never need `!important`
    to override. */
 .chart-line .bar:last-child { border-right: 1.5px solid var(--ink-1000); }
-.bar[data-barline-right="double"],
-.bar[data-barline-right="repeat"],
-.bar[data-barline-right="end"] { border-right: 0; }
+.chart-line .bar[data-barline-right="double"],
+.chart-line .bar[data-barline-right="repeat"],
+.chart-line .bar[data-barline-right="end"] { border-right: 0; }
 
 /* All barlines render at the same vertical extent: single barlines use
    border-left at the bar's full height, and special barlines use SMuFL
