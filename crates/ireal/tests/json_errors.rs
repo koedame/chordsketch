@@ -654,3 +654,22 @@ fn from_json_rejects_unknown_chord_size() {
         "error must mention the offending value; got {msg:?}"
     );
 }
+
+// ---- MusicalSymbol::Break JSON round-trip (#2448) ----------------------
+
+/// `MusicalSymbol::Break` must serialise to the JSON string `"break"`
+/// and deserialise back to `Break`. Covers:
+/// - the `Self::Break => "break"` arm in `MusicalSymbol::to_json`,
+/// - the `"break" => Ok(Self::Break)` arm in `MusicalSymbol::from_json_value`.
+#[test]
+fn musical_symbol_break_round_trips_through_json() {
+    let json = MusicalSymbol::Break.to_json_string();
+    assert_eq!(
+        json, "\"break\"",
+        "Break must serialise to the JSON string \"break\""
+    );
+    let parsed_json = parse_json(&json).expect("parse JSON");
+    let result = MusicalSymbol::from_json_value(&parsed_json)
+        .expect("Break must deserialise from \"break\"");
+    assert_eq!(result, MusicalSymbol::Break);
+}
