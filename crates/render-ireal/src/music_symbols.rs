@@ -150,6 +150,14 @@ pub(crate) fn render_music_symbols(song: &IrealSong, layout: &Layout) -> String 
             MusicalSymbol::Fine => {
                 emit_text_directive(&mut out, cell.x + GLYPH_LEFT_INSET, glyph_bottom_y, "Fine");
             }
+            MusicalSymbol::Break => {
+                // Drum-silence marker. iReal Pro renders the literal
+                // word "Break" as italic staff text, like the other
+                // text directives (D.C. / D.S. / Fine). The drum
+                // resume boundary (next double barline) is a player
+                // concern with no glyph of its own.
+                emit_text_directive(&mut out, cell.x + GLYPH_LEFT_INSET, glyph_bottom_y, "Break");
+            }
         }
     }
     out

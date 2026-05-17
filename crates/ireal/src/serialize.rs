@@ -245,6 +245,7 @@ fn serialize_music(song: &IrealSong) -> String {
                     matches_macro_prefix(&lower, "d.c.")
                         || matches_macro_prefix(&lower, "d.s.")
                         || matches_macro_prefix(&lower, "fine")
+                        || matches_macro_prefix(&lower, "break")
                 })
                 .unwrap_or(false)
         };
@@ -442,6 +443,7 @@ fn serialize_symbol(out: &mut String, symbol: MusicalSymbol) {
         MusicalSymbol::DalSegno => out.push_str("<D.S.>"),
         MusicalSymbol::Fine => out.push_str("<Fine>"),
         MusicalSymbol::Fermata => out.push('f'),
+        MusicalSymbol::Break => out.push_str("<Break>"),
     }
 }
 

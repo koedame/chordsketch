@@ -926,20 +926,20 @@ impl ChartParseState {
         let trimmed_lower = comment.trim().to_ascii_lowercase();
         // Detect the recognised musical-direction macros. The
         // matched symbol is set directly on `current_bar` (see
-        // `queue_symbol`) — `<D.C.>` / `<D.S.>` / `<Fine>` label
-        // the bar that contains the comment. The full verbatim
-        // text is ALSO saved to `text_comment` so longer captions
-        // like `<D.S. al 2nd ending>` survive the round-trip; the
-        // renderer prefers the descriptive text when present, and
-        // falls back to the canonical symbol when the bar carries
-        // no text.
+        // `queue_symbol`) — `<D.C.>` / `<D.S.>` / `<Fine>` /
+        // `<Break>` label the bar that contains the comment. The
+        // full verbatim text is ALSO saved to `text_comment` so
+        // longer captions like `<D.S. al 2nd ending>` survive the
+        // round-trip; the renderer prefers the descriptive text
+        // when present, and falls back to the canonical symbol
+        // when the bar carries no text.
         //
         // Detection anchors at the START of the comment so common
         // English words that contain the macro substring
-        // (`refine`, `define`, `Configuration`) do NOT trigger.
-        // iReal Pro emits these directives at the head of the
-        // comment by convention; treating them as a substring
-        // match was a false-positive vector.
+        // (`refine`, `define`, `breakaway`, `Configuration`) do
+        // NOT trigger. iReal Pro emits these directives at the
+        // head of the comment by convention; treating them as a
+        // substring match was a false-positive vector.
         let is_macro = if matches_macro_prefix(&trimmed_lower, "d.c.") {
             self.queue_symbol(MusicalSymbol::DaCapo);
             true
@@ -949,6 +949,9 @@ impl ChartParseState {
         } else if matches_macro_prefix(&trimmed_lower, "fine") {
             self.queue_symbol(MusicalSymbol::Fine);
             true
+        } else if matches_macro_prefix(&trimmed_lower, "break") {
+            self.queue_symbol(MusicalSymbol::Break);
+            true
         } else {
             false
         };
@@ -956,11 +959,11 @@ impl ChartParseState {
         if trimmed.is_empty() {
             return;
         }
-        // For a bare-macro comment (`<D.C.>`, `<D.S.>`, `<Fine>`)
-        // the canonical symbol fully covers the semantics; saving
-        // the bare text as `text_comment` would round-trip into a
-        // duplicated comment after re-emission. Skip the
-        // text_comment write in that case so:
+        // For a bare-macro comment (`<D.C.>`, `<D.S.>`, `<Fine>`,
+        // `<Break>`) the canonical symbol fully covers the
+        // semantics; saving the bare text as `text_comment` would
+        // round-trip into a duplicated comment after re-emission.
+        // Skip the text_comment write in that case so:
         //
         //   parse(`<D.C.>`)             → bar.symbol = DaCapo
         //   parse(`<D.C. al coda>`)     → bar.symbol = DaCapo,
@@ -971,7 +974,7 @@ impl ChartParseState {
                 .filter(|c| !matches!(c, '.' | ' '))
                 .collect();
             let collapsed_lower = collapsed.to_ascii_lowercase();
-            if matches!(collapsed_lower.as_str(), "dc" | "ds" | "fine") {
+            if matches!(collapsed_lower.as_str(), "dc" | "ds" | "fine" | "break") {
                 return;
             }
         }
