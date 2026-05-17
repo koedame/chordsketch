@@ -432,7 +432,11 @@ fn serialize_bar_close(out: &mut String, bar: &Bar) {
 
 fn serialize_ending(out: &mut String, ending: Ending) {
     out.push('N');
-    out.push(char::from(b'0' + ending.number()));
+    let digit = match ending {
+        Ending::Numbered(n) => n.get(),
+        Ending::Untitled => 0,
+    };
+    out.push(char::from(b'0' + digit));
 }
 
 fn serialize_symbol(out: &mut String, symbol: MusicalSymbol) {
@@ -858,6 +862,51 @@ mod tests {
             .flat_map(|s| s.bars.iter())
             .any(|b| b.symbol == Some(MusicalSymbol::Break));
         assert!(found_break, "Break symbol must survive the round trip");
+    }
+
+    #[test]
+    fn untitled_ending_round_trips() {
+        // Spec token `N0` ("no text Ending") must survive the URL
+        // round trip: `Ending::Untitled` → `N0` → `Ending::Untitled`.
+        // The pre-#2436 parser fell through on `N0` and dropped
+        // the bracket, breaking the round-trip property.
+        let song = IrealSong {
+            title: "N0 Round Trip".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
+                    }],
+                    ending: Some(Ending::Untitled),
+                    symbol: None,
+                    repeat_previous: false,
+                    no_chord: false,
+                    text_comment: None,
+                    system_break_space: 0,
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        let endings: Vec<_> = parsed
+            .sections
+            .iter()
+            .flat_map(|s| s.bars.iter())
+            .filter_map(|b| b.ending)
+            .collect();
+        assert_eq!(
+            endings,
+            vec![Ending::Untitled],
+            "N0 untitled ending must survive the URL round trip"
+        );
     }
 
     #[test]

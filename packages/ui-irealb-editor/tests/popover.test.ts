@@ -455,13 +455,13 @@ describe('bar-edit popover', () => {
     editor.destroy();
   });
 
-  test('Ending input updates Bar.ending; empty becomes null', () => {
+  test('Ending input updates Bar.ending; empty becomes null; 0 is the Untitled sentinel', () => {
     const wasm = makeStubWasm();
     const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
 
     bar(editor, 0).click();
     const dialog = popoverOf(editor);
-    const endingInput = inputIn(dialog, 'input[type="number"][min="1"]');
+    const endingInput = inputIn(dialog, 'input[type="number"][min="0"]');
     endingInput.value = '2';
     endingInput.dispatchEvent(new Event('input', { bubbles: true }));
     clickButton(dialog, 'Save');
@@ -469,11 +469,22 @@ describe('bar-edit popover', () => {
 
     bar(editor, 0).click();
     const dialog2 = popoverOf(editor);
-    const endingInput2 = inputIn(dialog2, 'input[type="number"][min="1"]');
+    const endingInput2 = inputIn(dialog2, 'input[type="number"][min="0"]');
     endingInput2.value = '';
     endingInput2.dispatchEvent(new Event('input', { bubbles: true }));
     clickButton(dialog2, 'Save');
     expect(readSong(editor).sections[0]?.bars[0]?.ending).toBeNull();
+
+    // `0` is the spec's `N0` Untitled bracket sentinel — must be
+    // accepted (not silently dropped as out-of-range) so a parsed
+    // N0 chart round-trips through the editor.
+    bar(editor, 0).click();
+    const dialog3 = popoverOf(editor);
+    const endingInput3 = inputIn(dialog3, 'input[type="number"][min="0"]');
+    endingInput3.value = '0';
+    endingInput3.dispatchEvent(new Event('input', { bubbles: true }));
+    clickButton(dialog3, 'Save');
+    expect(readSong(editor).sections[0]?.bars[0]?.ending).toBe(0);
 
     editor.destroy();
   });

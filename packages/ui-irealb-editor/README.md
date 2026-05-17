@@ -18,8 +18,10 @@ Shipped:
   every field of the underlying `Bar`: start / end barlines, chord
   rows (root + accidental + 12 named qualities + Custom string +
   optional `/X` bass + beat position 1 / 1.5 / … / 4.5, with
-  add / remove / reorder), N-th ending number (1–9, empty = none),
-  and musical symbol (None / Segno / Coda / D.C. / D.S. / Fine).
+  add / remove / reorder), N-th ending number (0 = untitled
+  bracket per spec `N0`, 1–9 = numbered bracket, empty = no
+  bracket), and musical symbol (None / Segno / Coda / D.C. /
+  D.S. / Fine).
 - #2365 — structural editing via per-section + per-bar UI buttons:
   Add Section (with label prompt), Rename / Delete (with confirm) /
   Move up / Move down per section; Add Bar / Delete bar / Move bar

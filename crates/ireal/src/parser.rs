@@ -706,11 +706,25 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
         if let Some(after_n) = rest.strip_prefix('N') {
             if let Some(d) = after_n.chars().next() {
                 if let Some(digit_value) = d.to_digit(10) {
-                    if let Some(ending) = Ending::new(digit_value as u8) {
-                        state.queue_ending(ending);
-                        rest = &after_n[d.len_utf8()..];
-                        continue;
-                    }
+                    // `N0` is the spec's "no text Ending" token —
+                    // map it to `Ending::Untitled` instead of
+                    // falling through. `N1`..=`N9` route through
+                    // `Ending::new`, which today returns `None`
+                    // only for `0`, and `0` is already consumed by
+                    // the explicit branch above. Use `.expect` so
+                    // any future widening of `Ending::new`'s
+                    // rejection set surfaces as an audible panic
+                    // in tests rather than silently downgrading a
+                    // numbered bracket to `Untitled`.
+                    let ending = if digit_value == 0 {
+                        Ending::Untitled
+                    } else {
+                        Ending::new(digit_value as u8)
+                            .expect("digit_value > 0; Ending::new currently rejects only 0")
+                    };
+                    state.queue_ending(ending);
+                    rest = &after_n[d.len_utf8()..];
+                    continue;
                 }
             }
         }
@@ -1605,7 +1619,21 @@ mod tests {
         let url = "irealbook://Test=A==Style=C=44=[*AN1N2C|D|]";
         let song = parse(url).expect("parse");
         let bar0 = &song.sections[0].bars[0];
-        assert_eq!(bar0.ending.map(|e| e.number()), Some(2));
+        assert_eq!(bar0.ending.and_then(|e| e.number()), Some(2));
+    }
+
+    #[test]
+    fn n0_token_maps_to_untitled_ending() {
+        // Spec token `N0` is the "no text Ending" bracket — the
+        // pre-#2436 parser fell through on `Ending::new(0) == None`
+        // and dropped the bracket entirely. Locking the AST shape
+        // here so regressions resurface as a test failure rather
+        // than as silently-lost layout in the SVG renderer.
+        let url = "irealbook://Test=A==Style=C=44=[*AN0C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.ending, Some(Ending::Untitled));
+        assert_eq!(bar0.ending.and_then(|e| e.number()), None);
     }
 
     #[test]
