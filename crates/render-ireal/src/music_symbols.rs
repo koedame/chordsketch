@@ -150,6 +150,14 @@ pub(crate) fn render_music_symbols(song: &IrealSong, layout: &Layout) -> String 
             MusicalSymbol::Fine => {
                 emit_text_directive(&mut out, cell.x + GLYPH_LEFT_INSET, glyph_bottom_y, "Fine");
             }
+            MusicalSymbol::Break => {
+                // Drum-silence marker. iReal Pro renders the literal
+                // word "Break" as italic staff text, like the other
+                // text directives (D.C. / D.S. / Fine). The drum
+                // resume boundary (next double barline) is a player
+                // concern with no glyph of its own.
+                emit_text_directive(&mut out, cell.x + GLYPH_LEFT_INSET, glyph_bottom_y, "Break");
+            }
         }
     }
     out
@@ -314,6 +322,26 @@ mod tests {
         let layout = compute_layout(&song);
         let svg = render_music_symbols(&song, &layout);
         assert!(svg.contains(">Fine</text>"));
+    }
+
+    #[test]
+    fn break_emits_break_text() {
+        // Drum-silence marker: `Break` is rendered as italic staff
+        // text, mirroring `D.C.` / `D.S.` / `Fine`. Verify both the
+        // text content and the italic style attribute.
+        let mut song = IrealSong::new();
+        song.sections
+            .push(section('A', vec![bar_with_symbol(MusicalSymbol::Break)]));
+        let layout = compute_layout(&song);
+        let svg = render_music_symbols(&song, &layout);
+        assert!(
+            svg.contains(">Break</text>"),
+            "SVG must contain Break text: {svg}"
+        );
+        assert!(
+            svg.contains("font-style=\"italic\""),
+            "Break text must be rendered italic: {svg}"
+        );
     }
 
     #[test]
