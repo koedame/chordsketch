@@ -802,4 +802,48 @@ mod tests {
             "Fermata symbol must surface as `(Fermata)` in lyrics text, got {lyrics_text:?}"
         );
     }
+
+    #[test]
+    fn break_symbol_emits_break_label_in_lyrics() {
+        // Exercises `symbol_label(MusicalSymbol::Break)` → "Break".
+        // ChordPro has no native break directive; the converter emits
+        // "(Break) " as an inline text segment on the chord/lyrics
+        // line, matching the pattern for Segno, Coda, Fermata, etc.
+        use chordsketch_chordpro::ast::Line;
+        let mut s = IrealSong::new();
+        s.title = "Break Test".into();
+        s.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars: vec![Bar {
+                chords: vec![BarChord {
+                    chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                    position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
+                }],
+                symbol: Some(MusicalSymbol::Break),
+                ..Bar::default()
+            }],
+        });
+        let result = convert(&s).unwrap();
+        let lyrics_text: String = result
+            .output
+            .lines
+            .iter()
+            .filter_map(|l| match l {
+                Line::Lyrics(lyrics) => Some(
+                    lyrics
+                        .segments
+                        .iter()
+                        .map(|seg| seg.text.as_str())
+                        .collect(),
+                ),
+                _ => None,
+            })
+            .collect::<Vec<String>>()
+            .concat();
+        assert!(
+            lyrics_text.contains("(Break)"),
+            "Break symbol must surface as `(Break)` in lyrics text, got {lyrics_text:?}"
+        );
+    }
 }

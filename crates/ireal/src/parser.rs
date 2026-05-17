@@ -1893,4 +1893,53 @@ mod tests {
         assert_eq!(bar0.chords[0].chord.root.note, 'G');
         assert_eq!(bar0.chords[0].size, ChordSize::Small);
     }
+
+    // ---- Break macro recognition (#2448) ---------------------------------
+
+    #[test]
+    fn break_comment_sets_symbol_and_no_text_comment() {
+        // `<Break>` must set `symbol = MusicalSymbol::Break` and leave
+        // `text_comment` unset — the bare-macro suppression branch in
+        // `apply_comment` must fire so a subsequent serialize → parse
+        // round-trip does not produce a duplicated `<Break>` comment.
+        let url = "irealbook://Test=A==Style=C=44=[*A<Break>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.symbol, Some(MusicalSymbol::Break));
+        assert!(
+            bar0.text_comment.is_none(),
+            "bare <Break> must not populate text_comment"
+        );
+    }
+
+    #[test]
+    fn break_comment_with_extra_text_sets_both_symbol_and_comment() {
+        // `<Break pattern>` → symbol set AND text_comment kept so
+        // renderers can prefer the richer caption over the plain
+        // "Break" fallback glyph.
+        let url = "irealbook://Test=A==Style=C=44=[*A<Break pattern>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.symbol, Some(MusicalSymbol::Break));
+        assert_eq!(bar0.text_comment.as_deref(), Some("Break pattern"));
+    }
+
+    #[test]
+    fn breakaway_does_not_trigger_break_macro() {
+        // `breakaway` starts with "break" but is immediately followed
+        // by an alphanumeric character — `matches_macro_prefix` must
+        // reject it so `MusicalSymbol::Break` is not spuriously set.
+        let url = "irealbook://Test=A==Style=C=44=[*A<breakaway section>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert!(
+            bar0.symbol.is_none(),
+            "`breakaway` must NOT set MusicalSymbol::Break"
+        );
+        assert_eq!(
+            bar0.text_comment.as_deref(),
+            Some("breakaway section"),
+            "non-macro caption must still land in text_comment"
+        );
+    }
 }

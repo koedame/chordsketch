@@ -815,6 +815,50 @@ mod tests {
     }
 
     #[test]
+    fn musical_symbol_break_round_trips() {
+        // Exercises `MusicalSymbol::Break` in `serialize_symbol`:
+        // `Break` must serialise to `<Break>` and parse back to
+        // `symbol = MusicalSymbol::Break` with no `text_comment`.
+        let song = IrealSong {
+            title: "Break Test".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
+                    }],
+                    ending: None,
+                    symbol: Some(MusicalSymbol::Break),
+                    repeat_previous: false,
+                    no_chord: false,
+                    text_comment: None,
+                    system_break_space: 0,
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        // Verify the raw URL contains the `<Break>` token.
+        assert!(
+            url.contains("<Break>") || url.contains("%3CBreak%3E"),
+            "serialised URL must contain the <Break> comment token: {url}"
+        );
+        let parsed = crate::parse(&url).expect("round trip");
+        let found_break = parsed
+            .sections
+            .iter()
+            .flat_map(|s| s.bars.iter())
+            .any(|b| b.symbol == Some(MusicalSymbol::Break));
+        assert!(found_break, "Break symbol must survive the round trip");
+    }
+
+    #[test]
     fn musical_symbol_da_capo_round_trips() {
         // Exercises `MusicalSymbol::DaCapo` in `serialize_symbol`.
         let song = IrealSong {

@@ -325,6 +325,26 @@ mod tests {
     }
 
     #[test]
+    fn break_emits_break_text() {
+        // Drum-silence marker: `Break` is rendered as italic staff
+        // text, mirroring `D.C.` / `D.S.` / `Fine`. Verify both the
+        // text content and the italic style attribute.
+        let mut song = IrealSong::new();
+        song.sections
+            .push(section('A', vec![bar_with_symbol(MusicalSymbol::Break)]));
+        let layout = compute_layout(&song);
+        let svg = render_music_symbols(&song, &layout);
+        assert!(
+            svg.contains(">Break</text>"),
+            "SVG must contain Break text: {svg}"
+        );
+        assert!(
+            svg.contains("font-style=\"italic\""),
+            "Break text must be rendered italic: {svg}"
+        );
+    }
+
+    #[test]
     fn each_symbol_anchors_to_its_bar_y() {
         // Two bars in the same row, one with segno and one with
         // coda. The outer `translate(glyph_cx, glyph_cy)` of each
