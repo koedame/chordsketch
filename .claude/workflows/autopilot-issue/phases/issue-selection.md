@@ -138,6 +138,7 @@ Write `context.json` with:
   "dry_run": <bool>,
   "target_issue": <int or null>,
   "expected_user": "<string>",
+  "selected_issue": "<DEPRECATED — backward-compat with pre-ADR-0019 --resume contexts. Set to selected_issues[0] for single-issue batches, null for multi-issue batches. Downstream phases MUST read selected_issues[]; this field exists only so old context.json files from interrupted pre-ADR-0019 runs can still be inspected without schema errors>",
   "selected_issues": [
     {
       "number": <int>,

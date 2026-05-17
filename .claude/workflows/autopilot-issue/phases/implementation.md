@@ -22,10 +22,23 @@ and either stop (dry-run) or pass the baton to `pr-review`.
 
 ### 0. Sanity recheck
 
-Re-confirm every `selected_issues[*].author_login == expected_user`.
-If any diverge (a previous phase's state somehow got corrupted between
-`issue-selection` and now), HALT immediately — do not create any
-worktree or modify any file.
+Re-confirm every `selected_issues[*].author_login == expected_user`
+AND that each issue is still open (`state == "OPEN"`). Both checks
+call the GitHub API directly — do not trust the stored context.json
+values alone. If any author diverges, or any issue is no longer open,
+HALT immediately — do not create any worktree or modify any file.
+
+```bash
+expected=$(jq -r '.expected_user // "unchidev"' <state-dir>/context.json)
+for N in <each number in selected_issues>; do
+  actual_author=$(gh issue view "$N" --json author --jq .author.login)
+  actual_state=$(gh issue view "$N" --json state --jq .state)
+  [[ "$actual_author" == "$expected" ]] \
+    || halt "sanity recheck: issue #$N author is $actual_author, expected $expected"
+  [[ "$actual_state" == "OPEN" ]] \
+    || halt "sanity recheck: issue #$N is no longer open (state: $actual_state)"
+done
+```
 
 ### 1. Worktree + branch
 
@@ -104,14 +117,18 @@ for each issue in selected_issues (in batch_order):
         run sub-agents 2.a through 2.c below for this issue
         run targeted validation (2.d)
         if validation passes:
+            if attempt > 1:
+                # A prior corrective action led to this success; record it.
+                record corrective_action with outcome="succeeded"
             commit per 2.e
             break inner while
         else:
             if attempt < 3:
                 analyse failure, adjust approach, retry
-                record entry in corrective_actions[]
+                record corrective_action with outcome="continued-to-next-attempt"
             else:
                 git reset --hard <HEAD before>
+                record corrective_action with outcome="exhausted"
                 add entry to deferred[] with reason + last error
                 break inner while
 ```
@@ -167,13 +184,18 @@ regressions while the context is fresh.
 
 ```bash
 # Identify touched crates from the staged + unstaged diff.
+# Map directory → Cargo package name:
+#   crates/cli  → chordsketch  (package name is `chordsketch`, not `chordsketch-cli`)
+#   crates/<X>  → chordsketch-<X>  for all other crates
 touched=$(git diff --name-only HEAD \
           | grep -oE '^crates/[^/]+' | sort -u)
-crate_flags=$(printf -- '-p chordsketch-%s ' \
-              $(printf '%s\n' "$touched" | sed 's|crates/||'))
+crate_flags=$(printf '%s\n' "$touched" \
+              | sed 's|crates/cli|chordsketch|; s|crates/\([^/]*\)|chordsketch-\1|' \
+              | sort -u \
+              | xargs -I{} printf -- '-p %s ' '{}')
 
 cargo fmt --check
-cargo clippy $crate_flags -- -D warnings
+cargo clippy $crate_flags --all-targets -- -D warnings
 cargo test $crate_flags
 ```
 
@@ -192,7 +214,12 @@ and the final line carries the `Closes #N` reference so squash
 merge to `main` closes the issue:
 
 ```bash
-git add -A
+# Stage only the files this issue's changes touched.
+# Use explicit paths from the Plan sub-agent's file list rather than
+# `git add -A` to avoid accidentally staging unrelated files or
+# credentials. If the sub-agent modified files outside the planned
+# list, review them before staging.
+git add -- <explicit file paths from step 2.b Plan output>
 git commit -m "$(cat <<EOF
 <scope>: <subject line, imperative, ≤ 70 chars> (#<N>)
 
@@ -295,6 +322,7 @@ Extend `context.json` with:
         "outcome": "succeeded | continued-to-next-attempt | exhausted"
       }
     ],
+    "files_changed": "<DEPRECATED — backward-compat with pre-ADR-0019 --resume contexts. Set to the sum of commits[*].files_changed. Downstream phases MUST read commits[]; this field exists only so old context.json files can be inspected without schema errors>",
     "diff_stat": "<output of git diff --stat origin/main...HEAD>",
     "validation": {
       "fmt": "passed",
@@ -317,14 +345,22 @@ Set the next phase (write to `<state-dir>/current-phase.txt`):
 - `dry-run-exit` if `dry_run == true` (regardless of whether any
   issue committed).
 - `HALT` if the sanity recheck failed, the worktree could not be
-  created, every issue ended up Deferred AND the gate cannot be
-  restored to green, or a HALT-classed condition fired as
-  documented in `## HALT conditions` below.
+  created, `dry_run == false` and `commits[]` is empty (every
+  selected issue was deferred and there is nothing to push), every
+  issue ended up Deferred AND the gate cannot be restored to green,
+  or a HALT-classed condition fired as documented in
+  `## HALT conditions` below.
 
 ## HALT conditions (explicit enumeration)
 
 - Sanity recheck of any `selected_issues[*].author_login` fails.
+- Sanity recheck finds any selected issue is no longer open.
 - `git worktree add` fails (existing worktree, dirty state, etc.).
+- `dry_run == false` and `commits[]` is empty after the
+  workspace-wide gate — every selected issue was deferred and there
+  is nothing to push. (Use `dry-run-exit` only when `dry_run ==
+  true`; when pushing is expected and there is nothing to push, HALT
+  so the maintainer sees why all issues were deferred.)
 - The workspace-wide gate fails AND reverting every batched commit
   cannot restore green — i.e. the failure is rooted in `main` at
   the time `preconditions` ran. This is rare and worth a manual

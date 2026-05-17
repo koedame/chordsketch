@@ -51,12 +51,7 @@ git push -u origin "<implementation.branch>"
 ### 2. Open the PR
 
 Use `gh`'s brace-substitution form so the PR-body block does not need
-to know the owner/repo (gh fills these in from the current repo). The
-body aggregates every successfully-applied issue from
-`implementation.commits[]` (one per-issue "What changed" section
-each), records any `implementation.deferred[]` items in a Deferred
-section, and emits one `Closes #N` line per applied issue so squash
-merge to `main` closes every aggregated issue at once.
+to know the owner/repo (gh fills these in from the current repo).
 
 **Title shape:**
 
@@ -67,14 +62,54 @@ merge to `main` closes every aggregated issue at once.
   <YYYY-MM-DD>` (K = `implementation.commits | length`). Keep the
   title under 70 chars — the per-issue detail belongs in the body.
 
+**Body shape — single-issue batch** (`implementation.commits` length == 1):
+Use the historical single-issue body format per
+[`.claude/rules/pr-workflow.md`](../../../rules/pr-workflow.md)
+§"PR Formatting and Commit Messages" so single-issue runs are
+indistinguishable from pre-ADR-0019 PRs on the PR list:
+
 ```bash
 gh pr create \
-  --title "<title per the rules above>" \
+  --title "<scope>: <subject> (#<N>)" \
+  --body "$(cat <<'BODY'
+## What
+<1-3 bullets describing the change>
+
+## Why
+<link to issue, 1-2 sentences naming the motivation>
+
+## Test results
+- cargo fmt --check — passed
+- cargo clippy --workspace --all-targets -- -D warnings — passed
+- cargo test --workspace — passed
+- <fixture-specific or scripts/* check, if applicable>
+
+## Review summary
+<one-line summary of what auto-review will be checking>
+
+## Sister-site audit
+<from context.implementation.sister_site_audit>
+
+## Deferred
+<none, or one-line justification per deferred item>
+
+Closes #<N>
+BODY
+)"
+```
+
+**Body shape — multi-issue batch** (`implementation.commits` length ≥ 2):
+Aggregate every successfully-applied issue (one per-issue "What changed"
+section each), record any `implementation.deferred[]` items, and emit
+one `Closes #N` line per applied issue so squash merge closes every
+aggregated issue at once:
+
+```bash
+gh pr create \
+  --title "batch(autopilot): <K> issues — <YYYY-MM-DD>" \
   --body "$(cat <<'BODY'
 ## Summary
-<one paragraph naming the batch — for a single-issue batch just
-restate the issue's purpose; for a multi-issue batch, list the K
-issues with one-line each>
+<one paragraph listing the K applied issues with one line each>
 
 ## Per-issue changes
 <For each entry in implementation.commits, in commit order, emit:
@@ -100,16 +135,14 @@ above accumulate into>
 
 ## Deferred
 <For each entry in implementation.deferred, emit one bullet:
-- #<N> (<reason>; attempts: <N>): <last_error truncated to one line>
-The Deferred items remain open as issues — they are not absorbed by
-this PR and not closed by merge.>
+- #<N> (<reason>; attempts: <attempts>): <last_error truncated to one line>
+Deferred items remain open as issues — they are not absorbed by this
+PR and not closed by merge.>
 
 ## Review summary
 <one-line summary of what auto-review will be checking>
 
-<For each entry in implementation.commits, append one `Closes #<N>`
-line on its own line so GitHub closes every applied issue on
-squash-merge:>
+<One `Closes #<N>` line per applied issue on its own line:>
 Closes #<N1>
 Closes #<N2>
 ...
