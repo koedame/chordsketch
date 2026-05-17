@@ -22,7 +22,10 @@ self-contained operation.
 .claude/workflow-state/<name>/   # gitignored — created by the orchestrator
   current-phase.txt              # name of the next phase to execute
   context.json                   # JSON state object passed phase-to-phase
-  logs/<timestamp>-<phase>.log   # full `claude -p` stdout/stderr per phase
+  logs/<timestamp>-<phase>.log   # jq-projected stream summaries (tool calls,
+                                 # assistant text, result) + claude's raw
+                                 # stderr; mirrors what streams to the
+                                 # orchestrator's stdout. Mode 600 (umask 077).
   lock                           # flock target preventing concurrent runs
 ```
 

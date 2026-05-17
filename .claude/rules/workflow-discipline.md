@@ -249,10 +249,23 @@ top-level `.gitignore`) or under `$TMPDIR`.
 
 ## Logging and observability
 
-Every `claude -p` invocation is logged to
-`.claude/workflow-state/<name>/logs/<ISO-8601>-<phase>.log`. The
-maintainer's primary debugging tool is `tail -f` on the most recent
-log.
+Every `claude -p` invocation runs with
+`--verbose --output-format=stream-json`; the orchestrator projects each
+tool call, assistant text frame, and the final result line into a
+single-line summary on its own stdout, and mirrors the same projection
+via `tee -a` into
+`.claude/workflow-state/<name>/logs/<ISO-8601>-<phase>.log`. claude's
+stderr is appended to the same log directly (not through the
+projection). Known GitHub credential shapes (`ghp_…`, `gho_…`, `ghs_…`,
+`ghu_…`, `github_pat_…`, `x-access-token:…`) are redacted before the
+projection reaches either surface, and `umask 077` keeps every state
+file owner-only as the primary control.
+
+The maintainer's primary observation channel is the orchestrator's own
+terminal output; `tail -f` on the log remains useful for forensics on
+a finished phase, or to watch a phase started in another terminal. The
+log is the same content the terminal saw, so the two surfaces stay in
+sync.
 
 Phase prompts SHOULD NOT include any instruction to log to stdout
 beyond what `claude -p` naturally produces. Side-effect-based state
