@@ -595,4 +595,11 @@ pub enum MusicalSymbol {
     /// Spec token: lowercase `f` in the Rehearsal Marks table at
     /// <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>.
     Fermata,
+    /// "Break" drum-silence marker. Per the iReal Pro help center,
+    /// inserting `Break` in a chart's staff text causes the drums
+    /// to "stop with a shot on one" until the next double barline.
+    /// Distinct from `N.C.`, which only silences chordal instruments;
+    /// the two may be combined for a complete-silence pickup measure.
+    /// Spec: <https://technimo.helpshift.com/hc/en/3-ireal-pro/faq/101-n-c-symbol-break/?p=all>
+    Break,
 }

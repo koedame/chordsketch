@@ -245,6 +245,7 @@ fn serialize_music(song: &IrealSong) -> String {
                     matches_macro_prefix(&lower, "d.c.")
                         || matches_macro_prefix(&lower, "d.s.")
                         || matches_macro_prefix(&lower, "fine")
+                        || matches_macro_prefix(&lower, "break")
                 })
                 .unwrap_or(false)
         };
@@ -442,6 +443,7 @@ fn serialize_symbol(out: &mut String, symbol: MusicalSymbol) {
         MusicalSymbol::DalSegno => out.push_str("<D.S.>"),
         MusicalSymbol::Fine => out.push_str("<Fine>"),
         MusicalSymbol::Fermata => out.push('f'),
+        MusicalSymbol::Break => out.push_str("<Break>"),
     }
 }
 
@@ -810,6 +812,52 @@ mod tests {
             .flat_map(|s| s.bars.iter())
             .any(|b| b.symbol == Some(MusicalSymbol::Fine));
         assert!(found_fine, "Fine symbol must survive the round trip");
+    }
+
+    #[test]
+    fn musical_symbol_break_round_trips() {
+        // Exercises `MusicalSymbol::Break` in `serialize_symbol`:
+        // `Break` must serialise to `<Break>` and parse back to
+        // `symbol = MusicalSymbol::Break` with no `text_comment`.
+        let song = IrealSong {
+            title: "Break Test".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
+                    }],
+                    ending: None,
+                    symbol: Some(MusicalSymbol::Break),
+                    repeat_previous: false,
+                    no_chord: false,
+                    text_comment: None,
+                    system_break_space: 0,
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        // `irealb_serialize` produces a percent-encoded `irealb://` URL, so
+        // `<` → `%3C` and `>` → `%3E`. The plain `<Break>` form would only
+        // appear in a non-encoded `irealbook://` URL.
+        assert!(
+            url.contains("%3CBreak%3E"),
+            "serialised URL must contain the percent-encoded <Break> token: {url}"
+        );
+        let parsed = crate::parse(&url).expect("round trip");
+        let found_break = parsed
+            .sections
+            .iter()
+            .flat_map(|s| s.bars.iter())
+            .any(|b| b.symbol == Some(MusicalSymbol::Break));
+        assert!(found_break, "Break symbol must survive the round trip");
     }
 
     #[test]
