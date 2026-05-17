@@ -195,13 +195,42 @@ fi
 # gitignored state tree.
 PROMPT_FILE=$(mktemp "$STATE_DIR/prompt.XXXXXX")
 chmod 600 "$PROMPT_FILE"
+
+# Process group of the currently-running phase pipeline, or empty when no
+# phase is running. Populated by run_phase before `wait`, cleared after.
+PHASE_PGID=""
+
+# Terminate the phase pipeline's entire process group on Ctrl-C / SIGTERM
+# / SIGHUP. claude (and any tool it spawned: git, gh, sub-agents) sits in
+# this group; without the negative-PID form below, signaling only the
+# subshell would leave the descendants reparented to init and the
+# orchestrator's terminal would still appear hung.
+terminate_phase_group() {
+  if [[ -z "$PHASE_PGID" ]]; then
+    return 0
+  fi
+  local pgid="$PHASE_PGID"
+  PHASE_PGID=""
+  echo "[orchestrator] terminating phase pipeline (pgid=$pgid)..." >&2
+  kill -TERM "-$pgid" 2>/dev/null || true
+  # Brief grace period before escalating; claude's own SIGTERM handler
+  # may need a moment to flush its final stream-json frame.
+  local i
+  for i in 1 2 3 4 5; do
+    kill -0 "-$pgid" 2>/dev/null || return 0
+    sleep 0.2
+  done
+  kill -KILL "-$pgid" 2>/dev/null || true
+}
+
 # Preserve the original exit code through cleanup. INT/TERM/HUP also fire
 # the trap so a Ctrl-C mid-phase does not leak the prompt file (which can
-# embed full issue bodies from context.json).
-trap 'rc=$?; rm -f "$PROMPT_FILE"; exit "$rc"' EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
-trap 'exit 129' HUP
+# embed full issue bodies from context.json) and so the phase's process
+# group is signaled before the orchestrator exits.
+trap 'rc=$?; terminate_phase_group; rm -f "$PROMPT_FILE"; exit "$rc"' EXIT
+trap 'terminate_phase_group; exit 130' INT
+trap 'terminate_phase_group; exit 143' TERM
+trap 'terminate_phase_group; exit 129' HUP
 
 # --- Initial state -------------------------------------------------------
 # Log the claude binary version at startup so the operator can confirm
@@ -313,28 +342,100 @@ run_phase() {
 
   local log
   log="$STATE_DIR/logs/$(date -u +%Y-%m-%dT%H-%M-%SZ)-${phase}.log"
-  echo "[orchestrator] phase=$phase log=$log"
+  local start_ts
+  start_ts=$(date +%s)
+  echo "[orchestrator] phase=$phase started=$(date -u '+%Y-%m-%dT%H:%M:%SZ') log=$log"
 
   local context_before
   context_before=$(cat "$STATE_DIR/context.json")
 
   build_prompt "$phase" "$file" "$context_before"
 
+  # Drive claude in streaming mode so the operator sees per-turn progress
+  # instead of staring at a silent terminal until the phase finishes. The
+  # stream is line-delimited JSON; jq projects each event into a human-
+  # readable line (tool calls, assistant text, final result), and tee
+  # mirrors that projection into the phase log so terminal and log carry
+  # the same story. claude's stderr is appended to the log directly for
+  # forensics; jq's tolerant per-line `try ... catch empty` keeps a stray
+  # non-JSON line from killing the projection.
+  #
+  # The pipeline runs in a backgrounded subshell with `set -m` so it
+  # gets its own process group (PGID == subshell PID). The orchestrator
+  # then `wait`s on the subshell; `wait` is interruptible by signals,
+  # so a Ctrl-C in the terminal immediately runs the INT trap, which
+  # signals the whole phase process group via terminate_phase_group.
+  # Without this isolation a claude process that ignores SIGINT (or any
+  # long-running tool subprocess) would keep the foreground pipeline
+  # alive and the orchestrator would appear unkillable from the
+  # terminal until claude returned on its own.
+  #
+  # Inside the subshell, `set +m` switches job control back off so the
+  # pipeline stages stay co-grouped under the subshell, and
+  # `set -o pipefail` preserves the timeout-vs-other-failure distinction
+  # the original code derived from ${PIPESTATUS[0]} (timeout's 124 is
+  # the leftmost non-zero status and pipefail propagates it).
   local rc=0
-  "$TIMEOUT_BIN" "$PER_PHASE_TIMEOUT_SECS" \
-    claude --dangerously-skip-permissions -p "$(cat "$PROMPT_FILE")" \
-    >>"$log" 2>&1 || rc=$?
+  set +e
+  set -m
+  (
+    set +m
+    set -o pipefail
+    "$TIMEOUT_BIN" "$PER_PHASE_TIMEOUT_SECS" \
+      claude --dangerously-skip-permissions --verbose \
+        --output-format=stream-json -p "$(cat "$PROMPT_FILE")" \
+        2>>"$log" \
+      | jq -r --unbuffered '
+          try (
+            if .type == "assistant" then
+              (.message.content // [])[] |
+              if .type == "text" and ((.text // "") | length) > 0 then
+                "[claude] " + (.text | gsub("\\s+"; " ") | .[0:240])
+              elif .type == "tool_use" then
+                "[tool]  " + .name + (
+                  .input as $i |
+                  if   ($i.command // null)     then ": " + ($i.command     | gsub("\\s+"; " ") | .[0:160])
+                  elif ($i.file_path // null)   then ": " + $i.file_path
+                  elif ($i.path // null)        then ": " + $i.path
+                  elif ($i.description // null) then ": " + ($i.description | .[0:160])
+                  elif ($i.prompt // null)      then ": " + ($i.prompt      | gsub("\\s+"; " ") | .[0:160])
+                  elif ($i.url // null)         then ": " + $i.url
+                  elif ($i.query // null)       then ": " + ($i.query       | .[0:160])
+                  elif ($i.pattern // null)     then ": " + ($i.pattern     | .[0:160])
+                  else "" end
+                )
+              else empty end
+            elif .type == "result" then
+              "[claude] result=" + (.subtype // "ok")
+              + (if .duration_ms    then " duration=" + (.duration_ms / 1000 | floor | tostring) + "s" else "" end)
+              + (if .total_cost_usd then " cost=$"    + (.total_cost_usd | tostring)                   else "" end)
+            elif .type == "system" and .subtype == "init" then
+              "[claude] session=" + ((.session_id // "?") | tostring | .[0:8])
+            else empty end
+          ) catch empty
+        ' \
+      | tee -a "$log"
+  ) &
+  PHASE_PGID=$!
+  set +m
+  wait "$PHASE_PGID"
+  rc=$?
+  PHASE_PGID=""
+  set -e
+  local elapsed=$(( $(date +%s) - start_ts ))
 
   if [[ $rc -ne 0 ]]; then
     if [[ $rc -eq 124 ]]; then
-      echo "[orchestrator] phase '$phase' exceeded ${PER_PHASE_TIMEOUT_SECS}s timeout (see $log)" >&2
+      echo "[orchestrator] phase '$phase' exceeded ${PER_PHASE_TIMEOUT_SECS}s timeout after ${elapsed}s (see $log)" >&2
       dump_log_tail_on_failure "$log"
       return 124
     fi
-    echo "[orchestrator] claude -p exited $rc on phase '$phase' (see $log)" >&2
+    echo "[orchestrator] claude -p exited $rc on phase '$phase' after ${elapsed}s (see $log)" >&2
     dump_log_tail_on_failure "$log"
     return 1
   fi
+
+  echo "[orchestrator] phase=$phase finished in ${elapsed}s"
 
   if ! jq empty "$STATE_DIR/context.json" 2>/dev/null; then
     echo "[orchestrator] context.json is not valid JSON after phase '$phase' (see $log)" >&2
