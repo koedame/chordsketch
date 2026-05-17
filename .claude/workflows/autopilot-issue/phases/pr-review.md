@@ -40,7 +40,7 @@ if git ls-remote --exit-code origin "<implementation.branch>" >/dev/null 2>&1; t
   # Substitute the orchestrator-supplied state directory path below.
   jq --arg reason "remote branch <implementation.branch> already exists; manual cleanup required" \
     '. + {halt_reason: $reason}' '<state-dir>/context.json' > '<state-dir>/context.json.tmp' \
-    && mv '<state-dir>/context.json.tmp' '<state-dir>/context.json'
+    && command mv '<state-dir>/context.json.tmp' '<state-dir>/context.json'
   printf 'HALT' > '<state-dir>/current-phase.txt'
   exit 0
 fi
@@ -280,6 +280,34 @@ Do NOT call `gh pr merge`. The four-clause merge gate in
 [`.claude/rules/pr-workflow.md`](../../../rules/pr-workflow.md)
 §"Bot-driven merge: conditional permission" requires per-session
 permission this workflow does not assume.
+
+### 5. Persist state BEFORE exiting
+
+This step is the most common failure mode of this phase: pushing fix
+commits and posting the Ready-for-merge comment is the *visible*
+work, but the orchestrator advances only when the state files have
+been semantically updated. Round 2's pr-review correctly did all of
+the visible work, then exited without writing the `pr` field or
+flipping `current-phase.txt` — the orchestrator reported exit 3
+("phase did not semantically update context.json") even though the PR
+was in fact ready. The maintainer then had to do the merge by hand
+because the workflow looked HALTed.
+
+Before exiting, verify in this exact order:
+
+1. `context.json` contains the populated `pr` object (every field in
+   the §"Output" schema below). A `pr.number` of `0` or a missing key
+   counts as a contract violation.
+2. `current-phase.txt` contains `ready-for-merge` on a single line —
+   not `pr-review`, not blank, not `HALT` unless an actual HALT
+   condition fired.
+3. The atomic rewrite uses `command mv` (NOT `mv`), per the
+   orchestrator's "Required final actions" footer.
+
+If any of those is false, the inner phase will look "successful" to a
+human reading the PR comments but the orchestrator will exit 3 and
+the maintainer will absorb the recovery cost. Treat this checklist as
+load-bearing.
 
 ## Forbidden actions
 
