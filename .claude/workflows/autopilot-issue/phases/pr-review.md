@@ -1,14 +1,17 @@
 # Phase: pr-review
 
-Commit, push, open the PR, wait for CI, drive the review loop to
-convergence, and post a Ready-for-merge comment. Do NOT merge.
+Push the implementation phase's per-issue commits, open the batched
+PR, wait for CI, drive the review loop to convergence, and post a
+Ready-for-merge comment. Do NOT merge.
 
 ## Inputs
 
 **Context fields read**:
 
-- `selected_issue.number`, `selected_issue.title`, `selected_issue.url`
+- `selected_issues[*]` — every issue the implementation phase
+  attempted. Use `number`, `title`, `url` for the PR body.
 - `implementation.branch`, `implementation.worktree_path`,
+  `implementation.commits[]`, `implementation.deferred[]`,
   `implementation.diff_stat`, `implementation.sister_site_audit`
 
 ## Steps
@@ -16,15 +19,13 @@ convergence, and post a Ready-for-merge comment. Do NOT merge.
 Work inside `implementation.worktree_path` for every command in this
 phase.
 
-### 1. Commit + push
+### 1. Push the existing commits
 
-Commit using the project's neutral technical voice per
-[`.claude/rules/pr-workflow.md`](../../../rules/pr-workflow.md)
-§"PR Formatting and Commit Messages":
-
-- Imperative mood subject line, ≤ 70 chars
-- No session dates, no quoted messages, no `@handle` attributions
-- Body explains *why*, not *what* (the diff already says what)
+The `implementation` phase already created one commit per
+successfully-applied issue on `implementation.branch` (ADR-0019;
+batch-mode workflow). This phase does NOT author any new commits
+before opening the PR — it only pushes what implementation produced
+and then enters the review-and-fix loop in step 5.
 
 Before pushing, verify the remote branch does not already exist (a
 stale ref from a previous failed run would cause a non-fast-forward
@@ -50,37 +51,68 @@ git push -u origin "<implementation.branch>"
 ### 2. Open the PR
 
 Use `gh`'s brace-substitution form so the PR-body block does not need
-to know the owner/repo (gh fills these in from the current repo). Body
-sections match `.claude/rules/pr-workflow.md` ("What", "Why", "Test
-results", "Review summary"). The "Test plan" / "Test results" wording
-matches the project's review template:
+to know the owner/repo (gh fills these in from the current repo). The
+body aggregates every successfully-applied issue from
+`implementation.commits[]` (one per-issue "What changed" section
+each), records any `implementation.deferred[]` items in a Deferred
+section, and emits one `Closes #N` line per applied issue so squash
+merge to `main` closes every aggregated issue at once.
+
+**Title shape:**
+
+- **Single-issue batch** (length 1): keep the historical
+  `<scope>: <subject> (#<N>)` form so single-issue runs look the
+  same on the PR list as they did before ADR-0019.
+- **Multi-issue batch**: `batch(autopilot): <K> issues —
+  <YYYY-MM-DD>` (K = `implementation.commits | length`). Keep the
+  title under 70 chars — the per-issue detail belongs in the body.
 
 ```bash
 gh pr create \
-  --title "<imperative-mood title, <=70 chars>" \
+  --title "<title per the rules above>" \
   --body "$(cat <<'BODY'
-## What
-<1-3 bullets describing the change>
+## Summary
+<one paragraph naming the batch — for a single-issue batch just
+restate the issue's purpose; for a multi-issue batch, list the K
+issues with one-line each>
 
-## Why
-<link to issue, 1-2 sentences naming the motivation>
+## Per-issue changes
+<For each entry in implementation.commits, in commit order, emit:
 
-## Test results
+### #<N>: <issue title> ([link])
+- Closes #<N>
+- Commit: `<short sha>` <subject>
+- What changed: <1-3 bullets pulled from the commit body's why>
+- Files: <abbreviated path list from the commit's git diff --stat>
+- Sister-site spot-check: <which sibling group was checked for this issue>
+>
+
+## Workspace gate
 - cargo fmt --check — passed
-- cargo clippy --workspace -- -D warnings — passed
+- cargo clippy --workspace --all-targets -- -D warnings — passed
 - cargo test --workspace — passed
 - <fixture-specific or scripts/* check, if applicable>
+
+## Aggregated sister-site audit
+<from context.implementation.sister_site_audit; one to three sentences
+covering the cross-issue audit conclusions the per-issue spot-checks
+above accumulate into>
+
+## Deferred
+<For each entry in implementation.deferred, emit one bullet:
+- #<N> (<reason>; attempts: <N>): <last_error truncated to one line>
+The Deferred items remain open as issues — they are not absorbed by
+this PR and not closed by merge.>
 
 ## Review summary
 <one-line summary of what auto-review will be checking>
 
-## Sister-site audit
-<from context.implementation.sister_site_audit>
-
-## Deferred
-<none, or one-line justification per deferred item, linked to an existing tracker>
-
-Closes #<selected_issue.number>
+<For each entry in implementation.commits, append one `Closes #<N>`
+line on its own line so GitHub closes every applied issue on
+squash-merge:>
+Closes #<N1>
+Closes #<N2>
+...
 BODY
 )"
 ```
@@ -269,12 +301,17 @@ one comment on the PR:
 ```
 Ready for merge.
 
+- Applied issues: <K> (#<N1>, #<N2>, ...)
+- Deferred issues: <M> (#<N3>, #<N4>, ...; see PR body for reasons)
 - Full check rollup: green
 - Auto-review: converged on HEAD
 - Sister-site audit: <one line>
 
 Merge is held for explicit maintainer action per ADR-0013.
 ```
+
+Omit the "Deferred issues" line if `implementation.deferred[]` is
+empty.
 
 Do NOT call `gh pr merge`. The four-clause merge gate in
 [`.claude/rules/pr-workflow.md`](../../../rules/pr-workflow.md)
@@ -329,6 +366,9 @@ Extend `context.json` with:
     "url": "<https://github.com/.../pull/<N>>",
     "head_sha": "<git sha at Ready-for-merge>",
     "ci_status": "passed",
+    "applied_issue_count": <int, length of implementation.commits at Ready-for-merge>,
+    "deferred_issue_count": <int, length of implementation.deferred at Ready-for-merge>,
+    "applied_issues": [<int>, ...],
     "review_iterations": <int 0..=10>,
     "findings_resolved": {
       "high": <int>,
@@ -369,7 +409,13 @@ Set the next phase (write to `<state-dir>/current-phase.txt`):
 
 - This workflow's contract ends at posting the Ready-for-merge comment.
   Cleanup (worktree removal, branch deletion, project-board flip to
-  Done) is the maintainer's responsibility after the squash-merge — or
-  a follow-up workflow's, not this one's.
+  Done for each applied issue) is the maintainer's responsibility
+  after the squash-merge — or a follow-up workflow's, not this one's.
 - If you HALT after the PR is open, leave the PR open and the worktree
   intact. The maintainer can pick up either by hand.
+- The `implementation` phase already validated each issue's commit
+  individually plus the workspace-wide gate over the accumulated
+  commits. The CI matrix on PR open re-runs the same gate plus
+  cross-platform builds; CI failures here are usually platform-specific
+  (macOS / iOS / Windows targets the local Linux gate cannot exercise),
+  not regressions the per-issue loop should have caught.

@@ -1,6 +1,6 @@
 {
   "name": "autopilot-issue",
-  "description": "Single-iteration autonomous issue handler. Pick one open issue authored by unchidev that Claude Code can autonomously implement, do the work in a worktree, run local validation, and (unless dry_run) push, open a PR, and drive review to convergence up to the Ready-for-merge gate.",
+  "description": "Batch-mode autonomous issue handler (ADR-0019). Triage all open issues authored by unchidev, select every high-confidence (4-axis min >=80) candidate up to a cap of 10, implement them in one worktree as one commit per issue on a single batch-YYYY-MM-DD-N1-N2-... branch, run local validation after each issue + a final workspace-wide gate, and (unless dry_run) push, open one PR that aggregates every successful issue, and drive review to convergence up to the Ready-for-merge gate.",
   "entryPhase": "preconditions",
   "phases": {
     "preconditions": {
