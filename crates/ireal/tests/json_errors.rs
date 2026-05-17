@@ -114,6 +114,48 @@ fn ending_untitled_to_json_emits_zero_sentinel() {
     assert_eq!(buf, "0");
 }
 
+#[test]
+fn from_json_rejects_ending_out_of_u8_range() {
+    // The deserializer routes the integer through `extract_u8`,
+    // which must reject 256 (out of u8 range) rather than
+    // silently truncating to 0 (which would alias Untitled).
+    let json = r#"{"start":"single","end":"single","chords":[],"ending":256,"symbol":null}"#;
+    let err = Bar::from_json_str(json).expect_err("256 must reject");
+    assert!(
+        err.message.to_lowercase().contains("u8") || err.message.to_lowercase().contains("range"),
+        "error must point at the u8 range; got {:?}",
+        err.message
+    );
+}
+
+#[test]
+fn from_json_rejects_ending_of_wrong_type() {
+    // A non-integer value must be rejected by `as_int`'s Err arm
+    // (the deserializer never coerces strings to integers).
+    let json = r#"{"start":"single","end":"single","chords":[],"ending":"two","symbol":null}"#;
+    let err = Bar::from_json_str(json).expect_err("string must reject");
+    assert!(
+        err.message.contains("integer"),
+        "error must mention integer expectation; got {:?}",
+        err.message
+    );
+}
+
+#[test]
+fn from_json_rejects_negative_ending() {
+    // `extract_u8` rejects negative integers before they can be
+    // truncated. Without this rejection a hand-edited debug JSON
+    // could silently land on `Untitled` (via two's-complement
+    // wrap to 0) or `Numbered(255)` (via wrap to -1 → 255).
+    let json = r#"{"start":"single","end":"single","chords":[],"ending":-1,"symbol":null}"#;
+    let err = Bar::from_json_str(json).expect_err("negative must reject");
+    assert!(
+        !err.message.is_empty(),
+        "error must surface a diagnostic; got {:?}",
+        err.message
+    );
+}
+
 // ---- JsonError::Display::fmt -------------------------------------------
 
 #[test]

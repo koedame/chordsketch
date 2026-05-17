@@ -202,6 +202,13 @@ mod tests {
         }
     }
 
+    fn bar_with_untitled_ending() -> Bar {
+        Bar {
+            ending: Some(Ending::Untitled),
+            ..Bar::new()
+        }
+    }
+
     fn bar() -> Bar {
         Bar::new()
     }
@@ -327,6 +334,32 @@ mod tests {
         let out = render_endings(&song, &layout);
         // 5 bars → 2 rows of ending=1 → 2 brackets → 2 labels.
         assert_eq!(out.matches("class=\"ending-label\">1.").count(), 2);
+    }
+
+    #[test]
+    fn untitled_ending_suppresses_label_digit() {
+        // `Ending::Untitled` (spec `N0`) renders the bracket lines
+        // and ticks but no `<text class="ending-label">` digit.
+        // Sister-symmetric to
+        // `ending_bracket_spans_consecutive_bars_with_same_ending_number`.
+        let mut song = IrealSong::new();
+        song.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars: vec![bar_with_untitled_ending(), bar_with_untitled_ending()],
+        });
+        let layout = compute_layout(&song);
+        let out = render_endings(&song, &layout);
+        // Bracket geometry must still be present (horizontal + 2 ticks).
+        assert_eq!(
+            out.matches("class=\"ending-bracket\"").count(),
+            3,
+            "untitled bracket must still emit horizontal + 2 ticks, got {out}"
+        );
+        // No digit label whatsoever.
+        assert!(
+            !out.contains("class=\"ending-label\""),
+            "untitled bracket must NOT emit ending-label, got {out}"
+        );
     }
 
     #[test]

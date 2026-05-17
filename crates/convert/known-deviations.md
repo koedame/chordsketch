@@ -207,5 +207,29 @@ when the surrounding chord text survives. Callers that need
 musical-symbol fidelity must keep the iReal AST in memory and
 skip the ChordPro detour.
 
+### `Ending::Untitled` (spec `N0`) round-trip
+
+ChordPro has no first-class N-th ending directive at all. The
+iReal → ChordPro path (`from_ireal.rs::push_pre_bar_marker`)
+surfaces ending brackets as a `"{n}. "` text segment so a
+downstream renderer can match on `\d+\. ` and paint a bracket.
+`Ending::Untitled` (the spec's `N0` "no text Ending") has no
+digit; the converter emits a bare `". "` segment for it. The
+ChordPro → iReal converter does not re-recognise either form,
+so the marker drops on round-trip along with the rest of the
+lyrics text:
+
+- iReal AST `Bar { ending: Some(Ending::Numbered(2)), .. }`
+  → ChordPro lyrics text containing `"2. "`.
+- iReal AST `Bar { ending: Some(Ending::Untitled), .. }`
+  → ChordPro lyrics text containing `". "` (no digit).
+- ChordPro lyrics text → iReal AST: dropped along with every
+  other `LyricsLine` segment, contributing to the aggregated
+  `WarningKind::LossyDrop` "lyrics dropped" warning.
+
+The bare-period form is uniquely ambiguous against ordinary
+punctuation, so consumers that need ending fidelity should keep
+the iReal AST and skip the ChordPro detour.
+
 [`ConversionWarning`]: https://docs.rs/chordsketch-convert/latest/chordsketch_convert/struct.ConversionWarning.html
 [`WarningKind::LossyDrop`]: https://docs.rs/chordsketch-convert/latest/chordsketch_convert/enum.WarningKind.html

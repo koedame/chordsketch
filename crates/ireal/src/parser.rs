@@ -709,15 +709,18 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
                     // `N0` is the spec's "no text Ending" token —
                     // map it to `Ending::Untitled` instead of
                     // falling through. `N1`..=`N9` route through
-                    // `Ending::new` (returns `None` only for `0`,
-                    // which the explicit branch above already
-                    // consumed, so the `unwrap_or` is dead code
-                    // — kept as defense in depth in case the valid
-                    // range of `Ending::new` changes in future).
+                    // `Ending::new`, which today returns `None`
+                    // only for `0`, and `0` is already consumed by
+                    // the explicit branch above. Use `.expect` so
+                    // any future widening of `Ending::new`'s
+                    // rejection set surfaces as an audible panic
+                    // in tests rather than silently downgrading a
+                    // numbered bracket to `Untitled`.
                     let ending = if digit_value == 0 {
                         Ending::Untitled
                     } else {
-                        Ending::new(digit_value as u8).unwrap_or(Ending::Untitled)
+                        Ending::new(digit_value as u8)
+                            .expect("digit_value > 0; Ending::new only rejects 0")
                     };
                     state.queue_ending(ending);
                     rest = &after_n[d.len_utf8()..];

@@ -381,15 +381,19 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
 
   renderChordsSection();
 
-  // Ending number (NonZeroU8 range, 1..=9 in the form; empty = None).
+  // Ending number. Accepts the wasm AST's full ending range:
+  // - empty: no bracket (`null`).
+  // - `0`: spec `N0` "no text Ending" sentinel (renders an unlabelled
+  //   bracket — `Ending::Untitled` on the Rust side).
+  // - `1..=9`: numbered bracket (`Ending::Numbered(n)`).
   const endingInput = el('input', {
     attrs: {
       type: 'number',
-      min: 1,
+      min: 0,
       max: 9,
       step: 1,
       value: draft.ending ?? '',
-      placeholder: 'None',
+      placeholder: 'None (0 = untitled)',
     },
     class: 'irealb-editor__input',
   });
@@ -400,7 +404,7 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
       return;
     }
     const n = Number.parseInt(v, 10);
-    if (!Number.isFinite(n) || n < 1 || n > 9) {
+    if (!Number.isFinite(n) || n < 0 || n > 9) {
       // Out-of-range / non-numeric values are dropped; the AST keeps
       // its previous value until a valid number is entered. The
       // `min`/`max` HTML attributes already constrain the spinner UI.

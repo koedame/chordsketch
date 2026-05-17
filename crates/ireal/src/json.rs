@@ -1233,12 +1233,16 @@ impl FromJson for Bar {
                 // 1..=255 → Numbered. `Ending::new` returns None
                 // only for 0, which is already handled above; the
                 // `ok_or_else` is defense in depth against future
-                // changes to `Ending::new`'s rejection set.
+                // changes to `Ending::new`'s rejection set. The
+                // error message describes the actual rejection
+                // (without claiming "must be non-zero") so a
+                // future widening of the rejected set still
+                // produces a faithful diagnostic.
                 Some(if n == 0 {
                     Ending::Untitled
                 } else {
                     Ending::new(n).ok_or_else(|| {
-                        JsonError::new(0, "ending number must be non-zero".to_string())
+                        JsonError::new(0, format!("ending number {n} rejected by Ending::new"))
                     })?
                 })
             }

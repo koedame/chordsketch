@@ -182,11 +182,12 @@ pub struct Bar {
     /// vector represents a bar that repeats the prior bar's chords
     /// — see [`BarChord`] for anchoring semantics.
     pub chords: Vec<BarChord>,
-    /// `Some(NonZeroU8)` if this bar starts an N-th ending bracket.
-    /// `None` if the bar is not part of an ending. The non-zero
-    /// guarantee means a `1`/`2`/`3` ending always reads as a
-    /// non-zero number; `Ending::is_first` style helpers live on
-    /// [`Ending`] so call sites do not re-derive them.
+    /// Ending bracket attached to this bar, if any.
+    /// `Some(Ending::Numbered(n))` for the spec's `N1` / `N2` / `N3`
+    /// brackets; `Some(Ending::Untitled)` for the `N0` "no text
+    /// Ending" bracket (painted without a digit label); `None` if
+    /// the bar is not part of an ending. Renderers route through
+    /// [`Ending::number`] to decide whether to paint a label digit.
     pub ending: Option<Ending>,
     /// Optional musical-symbol attachment (segno / coda / D.C. /
     /// D.S. / Fine). At most one symbol per bar is the iReal Pro
