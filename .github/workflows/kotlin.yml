@@ -61,7 +61,7 @@ jobs:
         run: cargo build -p chordsketch-ffi --release --target x86_64-unknown-linux-gnu
 
       - name: Upload JNI library
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: jni-linux-x86-64
           path: target/x86_64-unknown-linux-gnu/release/libchordsketch_ffi.so
@@ -131,7 +131,7 @@ jobs:
         run: ${{ matrix.cross && 'cross' || 'cargo' }} build -p chordsketch-ffi --release --target ${{ matrix.target }}
 
       - name: Upload JNI library
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: jni-${{ matrix.jni-dir }}
           path: |
@@ -185,7 +185,7 @@ jobs:
           ./gradlew test
 
       - name: Upload generated Kotlin bindings
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: kotlin-bindings
           path: packages/kotlin/lib/src/main/kotlin/uniffi/
