@@ -395,11 +395,11 @@ run_phase() {
                 "[tool]  " + .name + (
                   .input as $i |
                   if   ($i.command // null)     then ": " + ($i.command     | gsub("\\s+"; " ") | .[0:160])
-                  elif ($i.file_path // null)   then ": " + $i.file_path
-                  elif ($i.path // null)        then ": " + $i.path
+                  elif ($i.file_path // null)   then ": " + ($i.file_path   | .[0:200])
+                  elif ($i.path // null)        then ": " + ($i.path        | .[0:200])
                   elif ($i.description // null) then ": " + ($i.description | .[0:160])
                   elif ($i.prompt // null)      then ": " + ($i.prompt      | gsub("\\s+"; " ") | .[0:160])
-                  elif ($i.url // null)         then ": " + $i.url
+                  elif ($i.url // null)         then ": " + ($i.url         | .[0:160])
                   elif ($i.query // null)       then ": " + ($i.query       | .[0:160])
                   elif ($i.pattern // null)     then ": " + ($i.pattern     | .[0:160])
                   else "" end
@@ -422,7 +422,8 @@ run_phase() {
   rc=$?
   PHASE_PGID=""
   set -e
-  local elapsed=$(( $(date +%s) - start_ts ))
+  local elapsed
+  elapsed=$(( $(date +%s) - start_ts ))
 
   if [[ $rc -ne 0 ]]; then
     if [[ $rc -eq 124 ]]; then
