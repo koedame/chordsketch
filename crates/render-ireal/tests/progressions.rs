@@ -12,8 +12,8 @@
 //! and re-run without the env var to confirm parity.
 
 use chordsketch_ireal::{
-    Bar, BarChord, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize, IrealSong, KeyMode,
-    KeySignature, Section, SectionLabel,
+    Accidental, Bar, BarChord, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize, IrealSong,
+    KeyMode, KeySignature, Section, SectionLabel,
 };
 use chordsketch_render_ireal::{RenderOptions, render_svg};
 
@@ -593,4 +593,105 @@ fn vertical_space_demo() -> IrealSong {
 #[test]
 fn render_vertical_space_demo() {
     check_golden("vertical_space_demo", &vertical_space_demo());
+}
+
+// ---------------------------------------------------------------------------
+// Fixture: chord-size transitions (s / l markers per #2433 / #2476)
+//
+// Mirrors the spec example "A Walkin Thing" — `sEh,A7,|...|sD-,G-,lD-` —
+// where the `s` marker shrinks subsequent chords until an `l` marker
+// restores the default size. Bar 1 packs two Small chords, bar 2 packs
+// three chords transitioning Small → Small → Default mid-bar, and
+// bars 3–4 sit at Default size to prove the state restored cleanly.
+//
+// Bar 2 opens with a Small B♭7/D chord that exercises two otherwise-
+// uncovered paths in `write_chord_spans`:
+//   • `SpanKind::Accidental` with `acc_size` (the ♭ flat glyph)
+//   • `SpanKind::Slash` restore format (non-zero `current_dy` after the
+//     extension span triggers a baseline-reset attr on the slash tspan)
+// ---------------------------------------------------------------------------
+
+fn small_bar_chord(note: char, quality: ChordQuality, beat: u8) -> BarChord {
+    BarChord {
+        chord: Chord::triad(ChordRoot::natural(note), quality),
+        position: BeatPosition::on_beat(beat).unwrap(),
+        size: ChordSize::Small,
+    }
+}
+
+/// Small chord with a flat accidental and a slash bass note.
+///
+/// Used to exercise the `SpanKind::Accidental` path (covered by the
+/// flat ♭ span) and the `SpanKind::Slash` restore path (triggered when
+/// an Extension span precedes the Slash span so `current_dy != 0` at
+/// the point the Slash span is emitted) in `write_chord_spans`.
+fn small_flat_slash_chord(note: char, quality: ChordQuality, bass: char, beat: u8) -> BarChord {
+    BarChord {
+        chord: Chord {
+            root: ChordRoot {
+                note,
+                accidental: Accidental::Flat,
+            },
+            quality,
+            bass: Some(ChordRoot::natural(bass)),
+            alternate: None,
+        },
+        position: BeatPosition::on_beat(beat).unwrap(),
+        size: ChordSize::Small,
+    }
+}
+
+fn default_bar_chord(note: char, quality: ChordQuality, beat: u8) -> BarChord {
+    BarChord {
+        chord: Chord::triad(ChordRoot::natural(note), quality),
+        position: BeatPosition::on_beat(beat).unwrap(),
+        size: ChordSize::Default,
+    }
+}
+
+fn chord_size_demo() -> IrealSong {
+    let mut song = IrealSong::new();
+    song.title = "A Walkin Thing".into();
+    song.style = Some("Medium Swing".into());
+    song.key_signature = KeySignature {
+        root: ChordRoot::natural('D'),
+        mode: KeyMode::Minor,
+    };
+    // Bar 1: `sEh,A7` — both Small, packed on beats 1 and 3.
+    let bar1 = Bar {
+        chords: vec![
+            small_bar_chord('E', ChordQuality::HalfDiminished, 1),
+            small_bar_chord('A', ChordQuality::Dominant7, 3),
+        ],
+        ..Bar::new()
+    };
+    // Bar 2: B♭7/D Small (covers Accidental + Slash restore paths),
+    //        G- Small, D- restored to Default.
+    let bar2 = Bar {
+        chords: vec![
+            small_flat_slash_chord('B', ChordQuality::Dominant7, 'D', 1),
+            small_bar_chord('G', ChordQuality::Minor, 2),
+            default_bar_chord('D', ChordQuality::Minor, 4),
+        ],
+        ..Bar::new()
+    };
+    // Bars 3 / 4: Default-size single chords confirm the state stuck.
+    let bar3 = Bar {
+        chords: vec![default_bar_chord('C', ChordQuality::Major7, 1)],
+        ..Bar::new()
+    };
+    let bar4 = Bar {
+        chords: vec![default_bar_chord('G', ChordQuality::Dominant7, 1)],
+        ..Bar::new()
+    };
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![bar1, bar2, bar3, bar4],
+    });
+    song
+}
+
+#[test]
+fn render_chord_size_demo() {
+    check_golden("chord_size_demo", &chord_size_demo());
 }
