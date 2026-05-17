@@ -56,6 +56,13 @@ apps/desktop/src-tauri/gen/
 # .claude/workflow-state/ is not. See .claude/workflows/README.md.
 .claude/workflow-state/
 
+# Claude Code session-level lock created by the harness when ScheduleWakeup
+# is armed. The file lives at the repo root scope but is local to the session
+# that wrote it. When the workflow orchestrator runs inside a session that has
+# armed a wakeup, this file shows up as untracked and the preconditions phase
+# treats it as a dirty tree and HALTs. The lock must not be committed.
+.claude/scheduled_tasks.lock
+
 # Playwright MCP server scratch dir
 # Created at the repo root when the Playwright MCP server captures
 # page snapshots (`page-*.yml`) or console logs (`console-*.log`)

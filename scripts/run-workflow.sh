@@ -263,8 +263,13 @@ Before you stop, perform every one of the following:
 
 1. Atomically write the updated state to `<state-dir>/context.json`
    (substitute the orchestrator-supplied path above). Write to
-   `<state-dir>/context.json.tmp` first, then `mv` it over the real path.
-   Do not leave the file half-written if you are interrupted.
+   `<state-dir>/context.json.tmp` first, then `command mv` it over the
+   real path. Use `command mv` (NOT plain `mv`) so any `alias
+   mv='mv -i'` in the user's interactive shell does not turn the
+   rename into an interactive y/n prompt that hangs the phase
+   indefinitely; the inner shell has no stdin, so a prompted `mv -i`
+   blocks forever. Do not leave the file half-written if you are
+   interrupted.
 2. Write the chosen next phase name to `<state-dir>/current-phase.txt`
    on a single line (no trailing prose). Valid next-phase identifiers are
    listed in this workflow's `workflow.json` under `phases.<current>.next`
