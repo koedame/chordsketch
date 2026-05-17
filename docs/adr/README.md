@@ -96,3 +96,4 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0016](0016-dependabot-review-skill.md) | Dependabot review moves from a CI bot to a session skill; major bumps are no longer suppressed | Accepted (2026-05-03) |
 | [0017](0017-react-renders-from-ast.md) | React surface renders from AST; Rust HTML renderer demoted to static-output | Accepted (2026-05-10) |
 | [0018](0018-phase-based-shell-orchestrated-workflows.md) | Phase-based shell-orchestrated workflows (declines cc-wf-studio / n8n / Agent SDK as substitutes) | Accepted (2026-05-16) |
+| [0019](0019-batch-mode-autopilot-issue.md) | Batch-mode autopilot-issue workflow (one PR aggregates multiple eligible issues per round) | Accepted (2026-05-17) |
