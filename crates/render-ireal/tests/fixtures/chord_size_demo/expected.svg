@@ -10,7 +10,7 @@
     <text x="48" y="159" font-family="Roboto, sans-serif" font-weight="700" font-size="22" class="chord"><tspan class="chord-root">E</tspan><tspan class="chord-ext" font-size="11" dy="3">ø7</tspan></text>
     <text x="106" y="159" font-family="Roboto, sans-serif" font-weight="700" font-size="22" class="chord"><tspan class="chord-root">A</tspan><tspan class="chord-ext" font-size="11" dy="3">7</tspan></text>
     <line x1="168" y1="120" x2="168" y2="184" stroke="black" stroke-width="1" class="barline-single"/>
-    <text x="176" y="159" font-family="Roboto, sans-serif" font-weight="700" font-size="22" class="chord"><tspan class="chord-root">D</tspan><tspan class="chord-ext" font-size="11" dy="3">−</tspan></text>
+    <text x="176" y="159" font-family="Roboto, sans-serif" font-weight="700" font-size="22" class="chord"><tspan class="chord-root">B</tspan><tspan class="chord-acc" font-size="13" dy="-6">♭</tspan><tspan class="chord-ext" font-size="11" dy="9">7</tspan><tspan class="chord-slash" font-size="22" dy="-3">/</tspan><tspan class="chord-bass">D</tspan></text>
     <text x="205" y="159" font-family="Roboto, sans-serif" font-weight="700" font-size="22" class="chord"><tspan class="chord-root">G</tspan><tspan class="chord-ext" font-size="11" dy="3">−</tspan></text>
     <text x="263" y="159" font-family="Roboto, sans-serif" font-weight="700" font-size="32" class="chord"><tspan class="chord-root">D</tspan><tspan class="chord-ext" font-size="16" dy="5">−</tspan></text>
     <line x1="296" y1="120" x2="296" y2="184" stroke="black" stroke-width="1" class="barline-single"/>

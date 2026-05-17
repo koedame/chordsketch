@@ -12,8 +12,8 @@
 //! and re-run without the env var to confirm parity.
 
 use chordsketch_ireal::{
-    Bar, BarChord, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize, IrealSong, KeyMode,
-    KeySignature, Section, SectionLabel,
+    Accidental, Bar, BarChord, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize, IrealSong,
+    KeyMode, KeySignature, Section, SectionLabel,
 };
 use chordsketch_render_ireal::{RenderOptions, render_svg};
 
@@ -603,11 +603,39 @@ fn render_vertical_space_demo() {
 // restores the default size. Bar 1 packs two Small chords, bar 2 packs
 // three chords transitioning Small → Small → Default mid-bar, and
 // bars 3–4 sit at Default size to prove the state restored cleanly.
+//
+// Bar 2 opens with a Small B♭7/D chord that exercises two otherwise-
+// uncovered paths in `write_chord_spans`:
+//   • `SpanKind::Accidental` with `acc_size` (the ♭ flat glyph)
+//   • `SpanKind::Slash` restore format (non-zero `current_dy` after the
+//     extension span triggers a baseline-reset attr on the slash tspan)
 // ---------------------------------------------------------------------------
 
 fn small_bar_chord(note: char, quality: ChordQuality, beat: u8) -> BarChord {
     BarChord {
         chord: Chord::triad(ChordRoot::natural(note), quality),
+        position: BeatPosition::on_beat(beat).unwrap(),
+        size: ChordSize::Small,
+    }
+}
+
+/// Small chord with a flat accidental and a slash bass note.
+///
+/// Used to exercise the `SpanKind::Accidental` path (covered by the
+/// flat ♭ span) and the `SpanKind::Slash` restore path (triggered when
+/// an Extension span precedes the Slash span so `current_dy != 0` at
+/// the point the Slash span is emitted) in `write_chord_spans`.
+fn small_flat_slash_chord(note: char, quality: ChordQuality, bass: char, beat: u8) -> BarChord {
+    BarChord {
+        chord: Chord {
+            root: ChordRoot {
+                note,
+                accidental: Accidental::Flat,
+            },
+            quality,
+            bass: Some(ChordRoot::natural(bass)),
+            alternate: None,
+        },
         position: BeatPosition::on_beat(beat).unwrap(),
         size: ChordSize::Small,
     }
@@ -637,10 +665,11 @@ fn chord_size_demo() -> IrealSong {
         ],
         ..Bar::new()
     };
-    // Bar 2: `sD-,G-,lD-` — D-/G- Small, then D- restored to Default.
+    // Bar 2: B♭7/D Small (covers Accidental + Slash restore paths),
+    //        G- Small, D- restored to Default.
     let bar2 = Bar {
         chords: vec![
-            small_bar_chord('D', ChordQuality::Minor, 1),
+            small_flat_slash_chord('B', ChordQuality::Dominant7, 'D', 1),
             small_bar_chord('G', ChordQuality::Minor, 2),
             default_bar_chord('D', ChordQuality::Minor, 4),
         ],
