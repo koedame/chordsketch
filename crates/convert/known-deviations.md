@@ -180,5 +180,32 @@ names, not shapes / fingerings.
 Only `{meta: style <name>}` round-trips. Any other `{meta: K V}`
 contributes one aggregated `WarningKind::LossyDrop` warning.
 
+### Musical-symbol round-trip (incl. `MusicalSymbol::Break`)
+
+ChordPro's grammar has no dedicated directive for the iReal Pro
+musical-symbol set (`Segno`, `Coda`, `D.C.`, `D.S.`, `Fine`,
+`Fermata`, `Break`). On the iReal → ChordPro path
+(`from_ireal.rs`) these symbols are surfaced as parenthesised
+inline text on the chord/lyrics line — `(Segno)`, `(D.C.)`,
+`(Break)`, etc. — so the human reading the ChordPro output sees
+the marker, but the ChordPro → iReal converter (`to_ireal.rs`)
+has no inverse rule that re-recognises that text and rebuilds
+the symbol. The marker therefore disappears on round-trip back
+to iReal:
+
+- iReal AST `Bar { symbol: Some(MusicalSymbol::Break), .. }`
+  → ChordPro lyrics text containing `(Break)`.
+- ChordPro `(Break)` → iReal AST: dropped along with all other
+  lyrics text (every `LyricsLine` segment contributes to the
+  aggregated `WarningKind::LossyDrop` "lyrics dropped" warning).
+
+`Break` is called out specifically because the iReal Pro spec
+treats it as a player-side drum-silence directive distinct from
+`N.C.` (chord silence): a chart that round-trips through ChordPro
+loses the "drums stop until the next double bar" instruction even
+when the surrounding chord text survives. Callers that need
+musical-symbol fidelity must keep the iReal AST in memory and
+skip the ChordPro detour.
+
 [`ConversionWarning`]: https://docs.rs/chordsketch-convert/latest/chordsketch_convert/struct.ConversionWarning.html
 [`WarningKind::LossyDrop`]: https://docs.rs/chordsketch-convert/latest/chordsketch_convert/enum.WarningKind.html

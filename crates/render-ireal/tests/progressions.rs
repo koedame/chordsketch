@@ -552,6 +552,45 @@ fn render_fermata_demo() {
 }
 
 // ---------------------------------------------------------------------------
+// Fixture: <Break> drum-silence marker paired with N.C. for a
+// complete-silence pickup measure (#2488).
+//
+// Bar 1 carries both `no_chord = true` (chordal silence) and
+// `symbol = Some(MusicalSymbol::Break)` (drum silence) — together they
+// model the iReal Pro spec's "complete-silence pickup" example. The
+// remaining bars resume the form with normal chords so the Break
+// glyph's horizontal anchor is exercised at the leading-bar position
+// without colliding with chord text.
+// ---------------------------------------------------------------------------
+
+fn break_demo() -> IrealSong {
+    let mut song = IrealSong::new();
+    song.title = "Break Demo".into();
+    song.style = Some("Medium Swing".into());
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![
+            // Bar 1 — pickup: drum silence + chord silence.
+            Bar {
+                symbol: Some(MusicalSymbol::Break),
+                no_chord: true,
+                ..Bar::new()
+            },
+            // Bars 2..=4 — form resumes with chord changes.
+            bar_with_chord('C', ChordQuality::Major7),
+            bar_with_chord('A', ChordQuality::Minor7),
+            bar_with_chord('D', ChordQuality::Minor7),
+        ],
+    });
+    song
+}
+
+#[test]
+fn render_break_demo() {
+    check_golden("break_demo", &break_demo());
+}
+
+// ---------------------------------------------------------------------------
 // Fixture: vertical-space hint Y / YY / YYY at row boundaries
 //
 // 13 bars across one section. The first row (bars 0..=3) carries no hint
