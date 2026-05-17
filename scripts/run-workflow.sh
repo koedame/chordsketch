@@ -435,10 +435,11 @@ run_phase() {
   #
   # Inside the subshell, `set +m` switches job control back off so the
   # pipeline stages stay co-grouped under the subshell. `set -o pipefail`
-  # makes the subshell's exit status the rightmost non-zero exit in the
-  # pipeline; the leftmost stage is claude, so timeout(1)'s 124 (or any
-  # claude failure) propagates intact to the orchestrator's rc==124
-  # branch instead of being masked by a downstream stage's success.
+  # makes the pipeline's exit status the last non-zero exit across all
+  # stages. The downstream stages (awk, jq, tee) exit 0 when their
+  # input closes, so timeout(1)'s 124 — or any non-zero from claude —
+  # is the only non-zero and propagates intact to the orchestrator's
+  # rc==124 / rc!=0 branches.
   #
   # mask_signal_traps wraps the fork → PHASE_PGID assignment so a signal
   # in that one-statement window cannot orphan the just-spawned subshell.
