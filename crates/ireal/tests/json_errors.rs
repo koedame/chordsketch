@@ -115,6 +115,19 @@ fn ending_untitled_to_json_emits_zero_sentinel() {
 }
 
 #[test]
+fn from_json_accepts_zero_as_untitled_sentinel() {
+    // Positive coverage for the `n == 0 → Ending::Untitled`
+    // deserializer arm. Without this assertion a future refactor
+    // that swapped the branch (e.g. `if n == 1`) or removed the
+    // sentinel would only be caught by the inverse `to_json`
+    // assertion; this test locks the parse direction so the
+    // round-trip stays symmetric.
+    let json = r#"{"start":"single","end":"single","chords":[],"ending":0,"symbol":null}"#;
+    let bar = Bar::from_json_str(json).expect("0 is the Untitled sentinel");
+    assert_eq!(bar.ending, Some(Ending::Untitled));
+}
+
+#[test]
 fn from_json_rejects_ending_out_of_u8_range() {
     // The deserializer routes the integer through `extract_u8`,
     // which must reject 256 (out of u8 range) rather than

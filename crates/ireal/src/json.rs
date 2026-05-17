@@ -1233,11 +1233,7 @@ impl FromJson for Bar {
                 // 1..=255 → Numbered. `Ending::new` returns None
                 // only for 0, which is already handled above; the
                 // `ok_or_else` is defense in depth against future
-                // changes to `Ending::new`'s rejection set. The
-                // error message describes the actual rejection
-                // (without claiming "must be non-zero") so a
-                // future widening of the rejected set still
-                // produces a faithful diagnostic.
+                // changes to `Ending::new`'s rejection set.
                 Some(if n == 0 {
                     Ending::Untitled
                 } else {

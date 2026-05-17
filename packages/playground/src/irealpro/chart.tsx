@@ -105,7 +105,11 @@ export interface Bar {
    *   digit label (sentinel matching the wasm AST's
    *   `Ending::Untitled`).
    * - `1..=255`: numbered bracket, the digit is painted as the
-   *   label. */
+   *   label. The wasm AST's `Ending::Numbered` is a `NonZeroU8`
+   *   so the full `1..=255` range is type-allowed, but the iReal
+   *   parser only ever emits `1..=9` (single-digit `N`-prefix
+   *   tokens). Values above 9 are reachable only via hand-built
+   *   JSON. */
   ending: number | null;
   symbol: string | null;
   // ---- Rich extensions (all optional) ----

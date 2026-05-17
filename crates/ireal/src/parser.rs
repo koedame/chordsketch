@@ -720,7 +720,7 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
                         Ending::Untitled
                     } else {
                         Ending::new(digit_value as u8)
-                            .expect("digit_value > 0; Ending::new only rejects 0")
+                            .expect("digit_value > 0; Ending::new currently rejects only 0")
                     };
                     state.queue_ending(ending);
                     rest = &after_n[d.len_utf8()..];
