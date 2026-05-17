@@ -281,7 +281,7 @@ Do NOT call `gh pr merge`. The four-clause merge gate in
 §"Bot-driven merge: conditional permission" requires per-session
 permission this workflow does not assume.
 
-### 5. Persist state BEFORE exiting
+### 7. Persist state BEFORE exiting
 
 This step is the most common failure mode of this phase: pushing fix
 commits and posting the Ready-for-merge comment is the *visible*
