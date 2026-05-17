@@ -235,3 +235,35 @@ empty. This is the convergence criterion — not "no blocking findings" but
   noise — and embedding it in durable artefacts pollutes the signal. Keep
   conversations in chat, issues, or review threads; keep PR bodies and
   commit messages in the technical-record voice.
+
+### Batched-PR formatting (autopilot-issue, ADR-0019)
+
+The `autopilot-issue` workflow can aggregate multiple
+high-confidence eligible issues into one PR per round. Multi-issue
+PR bodies follow this shape so each closed issue stays traceable:
+
+- **Title**: `batch(autopilot): <K> issues — <YYYY-MM-DD>` for
+  multi-issue batches; the historical `<scope>: <subject> (#<N>)`
+  shape for single-issue batches.
+- **Per-issue section**: under `## Per-issue changes`, one
+  `### #<N>: <title>` block per applied issue. Each block names the
+  closed issue, its commit SHA + subject (autopilot writes one
+  commit per issue inside the PR — see
+  [branch-strategy.md](branch-strategy.md) §"Batched autopilot
+  branches"), a 1-3 bullet "what changed", the touched file list,
+  and the sister-site spot-check that issue triggered.
+- **Aggregated sister-site audit**: one `## Aggregated sister-site
+  audit` block summarising the cross-issue audit conclusions the
+  per-issue spot-checks accumulate into.
+- **Deferred section**: any issue the implementation phase
+  attempted but reverted (3-attempt corrective-action loop
+  exhausted) appears under `## Deferred` with its number, reason,
+  and last-error tail. Deferred items remain open as issues — they
+  are NOT absorbed by this PR and not closed by squash-merge.
+- **Closes lines**: one `Closes #N` line per **applied** issue
+  (NOT per deferred issue), each on its own line so GitHub closes
+  every aggregated issue on squash-merge.
+
+Single-issue batches use the unchanged single-issue body shape (one
+`## What` / `## Why` / `## Test results` / `## Review summary` /
+`## Sister-site audit` / `## Deferred` block with one `Closes #N`).

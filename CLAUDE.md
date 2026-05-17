@@ -42,8 +42,14 @@ under `.claude/workflow-state/<name>/` (git-ignored).
 | `scripts/test_run_workflow.py` | End-to-end smoke test for the orchestrator (stubs `claude`, `flock`, `timeout`) |
 
 Architectural rationale: [ADR-0018](docs/adr/0018-phase-based-shell-orchestrated-workflows.md).
-Production workflow: `autopilot-issue` (pick an unchidev-authored
-issue, implement, drive review to convergence, stop at Ready-for-merge).
+Production workflow: `autopilot-issue` — batch-mode autonomous
+handler per [ADR-0019](docs/adr/0019-batch-mode-autopilot-issue.md).
+One round picks every high-confidence (4-axis min ≥80)
+unchidev-authored issue (capped at 10), implements each as one
+commit per issue on a single `batch-YYYY-MM-DD-N1-N2-...` branch,
+opens one aggregated PR, and drives it to Ready-for-merge.
+Single-eligible-candidate rounds degenerate to the historical
+`issue-{N}-{slug}` branch / one-issue PR shape transparently.
 
 ## Architecture
 

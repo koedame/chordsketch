@@ -46,6 +46,12 @@ bug should close all linked issues.
 3. Create worktree + branch from latest `main`.
 4. Implement (commits reference issue: `Part of #N` or `Closes #N`).
 5. Open PR (title references issue, body has `Closes #N`).
+   *(Batched autopilot PRs aggregate multiple issues per
+   [ADR-0019](../../docs/adr/0019-batch-mode-autopilot-issue.md); the
+   PR body has one `Closes #N` line per applied issue and squash-merge
+   closes all of them at once. See
+   [branch-strategy.md](branch-strategy.md) §"Batched autopilot
+   branches" for the branch shape.)*
 6. CI -> auto-review (severity classification) -> human merge.
    See [Pull Request Workflow](pr-workflow.md) for details. Bots do not merge in
    this repo; a human inspects the check rollup and performs the squash merge.

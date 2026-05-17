@@ -1,6 +1,16 @@
 # Workflow: autopilot-issue
 
-Single-iteration autonomous handler for `unchidev`-authored issues.
+Batch-mode autonomous handler for `unchidev`-authored issues
+([ADR-0019](../../../docs/adr/0019-batch-mode-autopilot-issue.md)).
+One round picks every high-confidence eligible candidate (capped at
+10), implements each as a separate commit on a single
+`batch-YYYY-MM-DD-N1-N2-...` branch, opens one PR aggregating every
+applied issue, and drives that PR to Ready-for-merge.
+
+A round with exactly one eligible candidate degenerates to the
+historical "one issue per PR" shape — the branch retains the
+`issue-{N}-{slug}` name and the PR closes one issue — so
+single-issue invocations look unchanged on the PR list.
 
 ## Phases
 
@@ -21,7 +31,8 @@ worktree (if any) is preserved for inspection.
 - `AUTOPILOT_DRY_RUN=1` — skip push/PR steps; exit after local
   validation with `dry-run-exit`.
 - `AUTOPILOT_ISSUE_NUMBER=<N>` — target a specific issue (must still be
-  authored by `unchidev`); skip triage scoring.
+  authored by `unchidev`); skip triage scoring. The resulting batch
+  has exactly one entry.
 
 Both are read from the environment by the `preconditions` phase and
 recorded in `context.json` as `dry_run` (bool) and `target_issue` (int
@@ -90,11 +101,15 @@ orchestrator might stop early.
   current user against `main` exists; `pr-review-toolkit` plugin is
   not installed.
 - **`issue-selection`**: target issue not authored by the expected
-  user, or hard preconditions on the candidate set fail.
-- **`implementation`**: local validation (`cargo fmt --check`,
-  `cargo clippy -- -D warnings`, `cargo test --workspace`, plus any
-  workflow-specific smoke) cannot be made green; a forbidden action
-  would be required to satisfy the issue.
+  user, author re-verification fails for any selected issue, or hard
+  preconditions on the candidate set fail.
+- **`implementation`**: the sanity recheck of any selected issue's
+  author fails; `git worktree add` fails; OR the workspace-wide
+  validation gate fails AND reverting every batched commit cannot
+  restore green (i.e. the failure is rooted in `main` at the time
+  `preconditions` ran). Per-issue failures that the 3-attempt
+  corrective-action loop cannot resolve are recorded as Deferred
+  entries on the batch — they do NOT HALT the batch.
 - **`pr-review`**: remote branch already exists at push time; CI
   does not settle within the bounded wait (30 min default); review
   iteration cap (10) is hit with findings outstanding; a finding's
