@@ -149,9 +149,13 @@ fn from_json_rejects_negative_ending() {
     // wrap to 0) or `Numbered(255)` (via wrap to -1 → 255).
     let json = r#"{"start":"single","end":"single","chords":[],"ending":-1,"symbol":null}"#;
     let err = Bar::from_json_str(json).expect_err("negative must reject");
+    // `extract_u8` produces "integer -1 out of u8 range"; match on the
+    // same terms as `from_json_rejects_ending_out_of_u8_range` so the
+    // assertion proves it is the right error path, not merely that
+    // *some* error was raised.
     assert!(
-        !err.message.is_empty(),
-        "error must surface a diagnostic; got {:?}",
+        err.message.to_lowercase().contains("u8") || err.message.to_lowercase().contains("range"),
+        "error must point at the u8 range; got {:?}",
         err.message
     );
 }
