@@ -118,14 +118,14 @@ pub mod pdf;
 pub mod png;
 mod svg;
 
-use chordsketch_ireal::{BarChord, IrealSong};
+use chordsketch_ireal::{BarChord, ChordSize, IrealSong};
 
 pub use chord_typography::{ChordTypography, SpanKind, TypographySpan, chord_to_typography};
 pub use layout::{BarCoord, EmptyCell, Layout, compute_layout};
 pub use page::{
-    BAR_ROW_HEIGHT, BARS_PER_ROW, CHORD_FONT_SIZE_BASE, CHORD_FONT_SIZE_SUPERSCRIPT, GRID_TOP,
-    HEADER_BAND_HEIGHT, MARGIN_X, MARGIN_Y, MAX_BARS, MAX_CHORDS_PER_BAR, MAX_SECTIONS,
-    PAGE_HEIGHT, PAGE_WIDTH,
+    BAR_ROW_HEIGHT, BARS_PER_ROW, CHORD_FONT_SIZE_BASE, CHORD_FONT_SIZE_BASE_SMALL,
+    CHORD_FONT_SIZE_SUPERSCRIPT, GRID_TOP, HEADER_BAND_HEIGHT, MARGIN_X, MARGIN_Y, MAX_BARS,
+    MAX_CHORDS_PER_BAR, MAX_SECTIONS, PAGE_HEIGHT, PAGE_WIDTH,
 };
 
 /// Caller-supplied render configuration.
@@ -441,18 +441,27 @@ fn write_bar_chord_text(out: &mut String, cell: &BarCoord, chords: &[BarChord], 
         } else {
             String::new()
         };
+        // Pick the root font size from the chord's size hint. The
+        // iReal Pro `s` marker stamps `ChordSize::Small` on every
+        // chord between `s` and the next `l` so dense bars stay
+        // legible; the AST carries the hint per-chord so the renderer
+        // can paint each glyph at its own size without losing
+        // granularity.
+        let base = match bc.size {
+            ChordSize::Default => page::CHORD_FONT_SIZE_BASE,
+            ChordSize::Small => page::CHORD_FONT_SIZE_BASE_SMALL,
+        };
         out.push_str(&format!(
             "    <text x=\"{chord_x}\" y=\"{base_y}\" font-family=\"Roboto, sans-serif\" \
 font-weight=\"700\" font-size=\"{base}\" class=\"chord\"{transform_attr}>",
-            base = page::CHORD_FONT_SIZE_BASE,
         ));
         let typography = chord_typography::chord_to_typography(&bc.chord);
-        write_chord_spans(out, &typography);
+        write_chord_spans(out, &typography, base);
         out.push_str("</text>\n");
     }
 }
 
-fn write_chord_spans(out: &mut String, typography: &ChordTypography) {
+fn write_chord_spans(out: &mut String, typography: &ChordTypography, base_size: i32) {
     // Cumulative `dy` cursor position. SVG `dy` is relative to the
     // previous span's baseline, so each transition between baseline
     // states must emit the inverse of the previous shift before
@@ -460,8 +469,17 @@ fn write_chord_spans(out: &mut String, typography: &ChordTypography) {
     // accounting honest across Root → Accidental → Extension →
     // Slash → Bass → Accidental sequences.
     let mut current_dy: i32 = 0;
-    let acc_dy = page::CHORD_ACCIDENTAL_DY;
-    let qual_dy = page::CHORD_QUALITY_DY;
+    // Scale the accidental / extension sizes and their baseline
+    // shifts proportionally to `base_size`. At `base_size ==
+    // CHORD_FONT_SIZE_BASE` (32) these collapse to the original
+    // constants so existing Default-size golden snapshots stay
+    // byte-stable. For `CHORD_FONT_SIZE_BASE_SMALL` (22) the
+    // accidental / extension / dys shrink by the same ~70 %
+    // ratio so the engraved chord keeps its visual hierarchy.
+    let acc_size = (base_size * page::CHORD_FONT_SIZE_ACCIDENTAL) / page::CHORD_FONT_SIZE_BASE;
+    let ext_size = (base_size * page::CHORD_FONT_SIZE_SUPERSCRIPT) / page::CHORD_FONT_SIZE_BASE;
+    let acc_dy = (base_size * page::CHORD_ACCIDENTAL_DY) / page::CHORD_FONT_SIZE_BASE;
+    let qual_dy = (base_size * page::CHORD_QUALITY_DY) / page::CHORD_FONT_SIZE_BASE;
     for span in &typography.spans {
         let escaped = svg::escape_xml(&span.text);
         match span.kind {
@@ -470,10 +488,7 @@ fn write_chord_spans(out: &mut String, typography: &ChordTypography) {
                 let dy_attr = if restore == 0 {
                     String::new()
                 } else {
-                    format!(
-                        " font-size=\"{base}\" dy=\"{restore}\"",
-                        base = page::CHORD_FONT_SIZE_BASE
-                    )
+                    format!(" font-size=\"{base_size}\" dy=\"{restore}\"")
                 };
                 out.push_str(&format!(
                     "<tspan class=\"chord-root\"{dy_attr}>{escaped}</tspan>"
@@ -486,8 +501,7 @@ fn write_chord_spans(out: &mut String, typography: &ChordTypography) {
                 let target = acc_dy;
                 let shift = target - current_dy;
                 out.push_str(&format!(
-                    "<tspan class=\"chord-acc\" font-size=\"{size}\" dy=\"{shift}\">{escaped}</tspan>",
-                    size = page::CHORD_FONT_SIZE_ACCIDENTAL,
+                    "<tspan class=\"chord-acc\" font-size=\"{acc_size}\" dy=\"{shift}\">{escaped}</tspan>",
                 ));
                 current_dy = target;
             }
@@ -498,8 +512,7 @@ fn write_chord_spans(out: &mut String, typography: &ChordTypography) {
                 let target = qual_dy;
                 let shift = target - current_dy;
                 out.push_str(&format!(
-                    "<tspan class=\"chord-ext\" font-size=\"{size}\" dy=\"{shift}\">{escaped}</tspan>",
-                    size = page::CHORD_FONT_SIZE_SUPERSCRIPT,
+                    "<tspan class=\"chord-ext\" font-size=\"{ext_size}\" dy=\"{shift}\">{escaped}</tspan>",
                 ));
                 current_dy = target;
             }
@@ -508,10 +521,7 @@ fn write_chord_spans(out: &mut String, typography: &ChordTypography) {
                 let attrs = if restore == 0 {
                     String::new()
                 } else {
-                    format!(
-                        " font-size=\"{base}\" dy=\"{restore}\"",
-                        base = page::CHORD_FONT_SIZE_BASE
-                    )
+                    format!(" font-size=\"{base_size}\" dy=\"{restore}\"")
                 };
                 out.push_str(&format!(
                     "<tspan class=\"chord-slash\"{attrs}>{escaped}</tspan>"
@@ -523,10 +533,7 @@ fn write_chord_spans(out: &mut String, typography: &ChordTypography) {
                 let attrs = if restore == 0 {
                     String::new()
                 } else {
-                    format!(
-                        " font-size=\"{base}\" dy=\"{restore}\"",
-                        base = page::CHORD_FONT_SIZE_BASE
-                    )
+                    format!(" font-size=\"{base_size}\" dy=\"{restore}\"")
                 };
                 out.push_str(&format!(
                     "<tspan class=\"chord-bass\"{attrs}>{escaped}</tspan>"
