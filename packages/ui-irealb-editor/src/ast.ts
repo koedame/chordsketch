@@ -70,8 +70,16 @@ export interface BarChord {
   position: BeatPosition;
 }
 
-/** One measure inside a section. `ending` is the N-th-ending number
- * (1, 2, 3, …) or `null`; `symbol` is `null` if no glyph attaches. */
+/** One measure inside a section.
+ *
+ * `ending` mirrors the wasm AST's `Option<Ending>`:
+ * - `null`: no bracket.
+ * - `0`: spec's `N0` "no text Ending" — sentinel for `Ending::Untitled`;
+ *   the renderer paints the bracket without a digit label.
+ * - `1, 2, 3, …`: numbered bracket (`Ending::Numbered(n)`).
+ *
+ * `symbol` is `null` if no glyph attaches.
+ */
 export interface Bar {
   start: BarLine;
   end: BarLine;

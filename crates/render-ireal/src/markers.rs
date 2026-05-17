@@ -14,7 +14,7 @@
 use crate::layout::Layout;
 use crate::page::{BAR_ROW_HEIGHT, GRID_TOP, SECTION_MARKER_SIZE};
 use crate::svg;
-use chordsketch_ireal::{IrealSong, SectionLabel};
+use chordsketch_ireal::{Ending, IrealSong, SectionLabel};
 
 /// Vertical lift above the row top for the section-marker square.
 /// Anchors the marker so it sits in the gap between the previous
@@ -99,37 +99,39 @@ fn format_section_label(label: &SectionLabel) -> String {
 #[must_use]
 pub(crate) fn render_endings(song: &IrealSong, layout: &Layout) -> String {
     let mut out = String::new();
-    let mut run: Option<(u8, usize, usize)> = None; // (ending_n, first_idx, last_idx)
+    // Track the full `Ending` value (not just its label digit) so
+    // adjacent `N0` bars merge into a single unlabelled bracket
+    // and `N1` / `N0` runs split cleanly. `Ending` is `Copy + Eq`.
+    let mut run: Option<(Ending, usize, usize)> = None; // (ending, first_idx, last_idx)
     for (idx, cell) in layout.bars.iter().enumerate() {
         let bar_ending = song
             .sections
             .get(cell.section_index)
             .and_then(|s| s.bars.get(cell.bar_index_in_section))
-            .and_then(|b| b.ending)
-            .map(|e| e.number());
+            .and_then(|b| b.ending);
         match (run, bar_ending) {
-            (None, Some(n)) => run = Some((n, idx, idx)),
+            (None, Some(e)) => run = Some((e, idx, idx)),
             // Compare `idx` against the run's `last` (not `idx -
             // 1`) so the underflow case at `idx == 0` is
-            // structurally impossible — the `(None, Some(n))`
+            // structurally impossible — the `(None, Some(_))`
             // arm above handles the run's first bar, so reaching
             // this arm always implies `last < idx`.
-            (Some((n, first, last)), Some(m)) if m == n && same_row(layout, last, idx) => {
-                run = Some((n, first, idx));
+            (Some((e, first, last)), Some(f)) if f == e && same_row(layout, last, idx) => {
+                run = Some((e, first, idx));
             }
-            (Some((n, first, last)), Some(m)) => {
-                emit_ending_bracket(&mut out, layout, n, first, last);
-                run = Some((m, idx, idx));
+            (Some((e, first, last)), Some(f)) => {
+                emit_ending_bracket(&mut out, layout, e, first, last);
+                run = Some((f, idx, idx));
             }
-            (Some((n, first, last)), None) => {
-                emit_ending_bracket(&mut out, layout, n, first, last);
+            (Some((e, first, last)), None) => {
+                emit_ending_bracket(&mut out, layout, e, first, last);
                 run = None;
             }
             (None, None) => {}
         }
     }
-    if let Some((n, first, last)) = run {
-        emit_ending_bracket(&mut out, layout, n, first, last);
+    if let Some((e, first, last)) = run {
+        emit_ending_bracket(&mut out, layout, e, first, last);
     }
     out
 }
@@ -145,7 +147,7 @@ fn same_row(layout: &Layout, a: usize, b: usize) -> bool {
 fn emit_ending_bracket(
     out: &mut String,
     layout: &Layout,
-    n: u8,
+    ending: Ending,
     first_idx: usize,
     last_idx: usize,
 ) {
@@ -174,12 +176,17 @@ stroke=\"black\" stroke-width=\"1\" class=\"ending-bracket\"/>\n",
         tick_y = bracket_y + ENDING_TICK_HEIGHT,
     ));
     // Label (e.g. "1.") drawn slightly inside the left tick.
-    let label_y = bracket_y - 2;
-    let label_x = x_start + 4;
-    out.push_str(&format!(
-        "    <text x=\"{label_x}\" y=\"{label_y}\" font-family=\"sans-serif\" \
+    // `Ending::Untitled` (spec `N0`) suppresses the label so the
+    // bracket renders as a bare line + ticks per the spec's "no
+    // text Ending" semantics.
+    if let Some(n) = ending.number() {
+        let label_y = bracket_y - 2;
+        let label_x = x_start + 4;
+        out.push_str(&format!(
+            "    <text x=\"{label_x}\" y=\"{label_y}\" font-family=\"sans-serif\" \
 font-size=\"10\" class=\"ending-label\">{n}.</text>\n"
-    ));
+        ));
+    }
 }
 
 #[cfg(test)]
@@ -191,6 +198,13 @@ mod tests {
     fn bar_with_ending(n: u8) -> Bar {
         Bar {
             ending: Ending::new(n),
+            ..Bar::new()
+        }
+    }
+
+    fn bar_with_untitled_ending() -> Bar {
+        Bar {
+            ending: Some(Ending::Untitled),
             ..Bar::new()
         }
     }
@@ -320,6 +334,32 @@ mod tests {
         let out = render_endings(&song, &layout);
         // 5 bars → 2 rows of ending=1 → 2 brackets → 2 labels.
         assert_eq!(out.matches("class=\"ending-label\">1.").count(), 2);
+    }
+
+    #[test]
+    fn untitled_ending_suppresses_label_digit() {
+        // `Ending::Untitled` (spec `N0`) renders the bracket lines
+        // and ticks but no `<text class="ending-label">` digit.
+        // Sister-symmetric to
+        // `ending_bracket_spans_consecutive_bars_with_same_ending_number`.
+        let mut song = IrealSong::new();
+        song.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars: vec![bar_with_untitled_ending(), bar_with_untitled_ending()],
+        });
+        let layout = compute_layout(&song);
+        let out = render_endings(&song, &layout);
+        // Bracket geometry must still be present (horizontal + 2 ticks).
+        assert_eq!(
+            out.matches("class=\"ending-bracket\"").count(),
+            3,
+            "untitled bracket must still emit horizontal + 2 ticks, got {out}"
+        );
+        // No digit label whatsoever.
+        assert!(
+            !out.contains("class=\"ending-label\""),
+            "untitled bracket must NOT emit ending-label, got {out}"
+        );
     }
 
     #[test]

@@ -180,5 +180,56 @@ names, not shapes / fingerings.
 Only `{meta: style <name>}` round-trips. Any other `{meta: K V}`
 contributes one aggregated `WarningKind::LossyDrop` warning.
 
+### Musical-symbol round-trip (incl. `MusicalSymbol::Break`)
+
+ChordPro's grammar has no dedicated directive for the iReal Pro
+musical-symbol set (`Segno`, `Coda`, `D.C.`, `D.S.`, `Fine`,
+`Fermata`, `Break`). On the iReal → ChordPro path
+(`from_ireal.rs`) these symbols are surfaced as parenthesised
+inline text on the chord/lyrics line — `(Segno)`, `(D.C.)`,
+`(Break)`, etc. — so the human reading the ChordPro output sees
+the marker, but the ChordPro → iReal converter (`to_ireal.rs`)
+has no inverse rule that re-recognises that text and rebuilds
+the symbol. The marker therefore disappears on round-trip back
+to iReal:
+
+- iReal AST `Bar { symbol: Some(MusicalSymbol::Break), .. }`
+  → ChordPro lyrics text containing `(Break)`.
+- ChordPro `(Break)` → iReal AST: dropped along with all other
+  lyrics text (every `LyricsLine` segment contributes to the
+  aggregated `WarningKind::LossyDrop` "lyrics dropped" warning).
+
+`Break` is called out specifically because the iReal Pro spec
+treats it as a player-side drum-silence directive distinct from
+`N.C.` (chord silence): a chart that round-trips through ChordPro
+loses the "drums stop until the next double bar" instruction even
+when the surrounding chord text survives. Callers that need
+musical-symbol fidelity must keep the iReal AST in memory and
+skip the ChordPro detour.
+
+### `Ending::Untitled` (spec `N0`) round-trip
+
+ChordPro has no first-class N-th ending directive at all. The
+iReal → ChordPro path (`from_ireal.rs::push_pre_bar_marker`)
+surfaces ending brackets as a `"{n}. "` text segment so a
+downstream renderer can match on `\d+\. ` and paint a bracket.
+`Ending::Untitled` (the spec's `N0` "no text Ending") has no
+digit; the converter emits a bare `". "` segment for it. The
+ChordPro → iReal converter does not re-recognise either form,
+so the marker drops on round-trip along with the rest of the
+lyrics text:
+
+- iReal AST `Bar { ending: Some(Ending::Numbered(2)), .. }`
+  → ChordPro lyrics text containing `"2. "`.
+- iReal AST `Bar { ending: Some(Ending::Untitled), .. }`
+  → ChordPro lyrics text containing `". "` (no digit).
+- ChordPro lyrics text → iReal AST: dropped along with every
+  other `LyricsLine` segment, contributing to the aggregated
+  `WarningKind::LossyDrop` "lyrics dropped" warning.
+
+The bare-period form is uniquely ambiguous against ordinary
+punctuation, so consumers that need ending fidelity should keep
+the iReal AST and skip the ChordPro detour.
+
 [`ConversionWarning`]: https://docs.rs/chordsketch-convert/latest/chordsketch_convert/struct.ConversionWarning.html
 [`WarningKind::LossyDrop`]: https://docs.rs/chordsketch-convert/latest/chordsketch_convert/enum.WarningKind.html

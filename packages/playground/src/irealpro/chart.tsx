@@ -99,6 +99,17 @@ export interface Bar {
   start: BarlineKind | string;
   end: BarlineKind | string;
   chords: BarChord[];
+  /** N-th ending bracket attached to this bar.
+   * - `null` / `undefined`: no bracket.
+   * - `0`: spec's `N0` "no text Ending" — bracket painted without a
+   *   digit label (sentinel matching the wasm AST's
+   *   `Ending::Untitled`).
+   * - `1..=255`: numbered bracket, the digit is painted as the
+   *   label. The wasm AST's `Ending::Numbered` is a `NonZeroU8`
+   *   so the full `1..=255` range is type-allowed, but the iReal
+   *   parser only ever emits `1..=9` (single-digit `N`-prefix
+   *   tokens). Values above 9 are reachable only via hand-built
+   *   JSON. */
   ending: number | null;
   symbol: string | null;
   // ---- Rich extensions (all optional) ----
@@ -387,7 +398,11 @@ function barlineClass(bar: Bar): string[] {
   if (bar.endMark) out.push('last-bar');
   if (bar.active) out.push('active');
   if (bar.ending !== null && bar.ending !== undefined) {
-    out.push('ending', `ending-${bar.ending}`);
+    // `0` is the Untitled sentinel — emit a distinct class so CSS
+    // hooks can target it explicitly and don't read it as a
+    // numbered bracket.
+    out.push('ending');
+    out.push(bar.ending === 0 ? 'ending-untitled' : `ending-${bar.ending}`);
   }
   return out;
 }
@@ -452,7 +467,12 @@ function BarCell({
         <span className="section-marker">{sectionMarker}</span>
       )}
       {bar.ending !== null && bar.ending !== undefined && (
-        <span className="ending-bracket">{bar.ending}.</span>
+        // Untitled (spec `N0`, sentinel `0`) renders the bracket
+        // without a digit label, matching the SVG renderer's
+        // `ending.number() == None` branch.
+        <span className="ending-bracket">
+          {bar.ending === 0 ? null : `${bar.ending}.`}
+        </span>
       )}
       {bar.fermata && (
         <span className="fermata" aria-label="Fermata">
