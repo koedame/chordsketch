@@ -153,10 +153,18 @@ workflows incrementally) without a global registry.
   with a project-scoped `permissions.allow` list when the catalogue
   of phase actions stabilises. Recorded as a watch signal in the
   References section.
-- No structured execution dashboard. The runtime story is `tail -f`
-  on per-phase log files under `.claude/workflow-state/<name>/logs/`.
+- No structured execution dashboard. The runtime story is the
+  orchestrator's own stdout (live per-turn projection of claude's
+  `--output-format=stream-json` events, added in PR #2496), mirrored
+  into `.claude/workflow-state/<name>/logs/<ISO-8601>-<phase>.log` so
+  `tail -f` on the log remains the forensic / second-terminal channel.
   Acceptable while the workflow count is small; revisit if it grows
-  past a handful.
+  past a handful. (Originally this consequence read "the runtime story
+  is `tail -f` on per-phase log files"; updated 2026-05-18 to reflect
+  the streaming projection that replaced silent-stdout behaviour. The
+  ADR's Status field remains unchanged per `adr-discipline.md`'s
+  "do not rewrite accepted ADRs in place" rule — this is a factual
+  consequence-table refresh, not a decision change.)
 - The orchestrator is Bash. Long-term, a Python rewrite may be
   warranted if the orchestrator itself accumulates feature surface
   (retry policies, branching, parallel phases). Watch signal: more
