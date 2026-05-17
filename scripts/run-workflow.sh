@@ -177,6 +177,16 @@ validate_workflow_json() {
 }
 validate_workflow_json || exit 1
 
+# Phase logs now capture projected stream-json tool-use arguments
+# (Bash commands, sub-agent prompts, URLs) that a phase may legitimately
+# pass on a command line — including the host's `$GH_TOKEN` whenever a
+# tool call constructs a `https://x-access-token:…@github.com/…` URL.
+# Force 0700 / 0600 on every file the orchestrator writes from here on so
+# the state tree is owner-only, regardless of the maintainer's interactive
+# umask. The jq projection also redacts known GitHub credential shapes
+# before tee-ing to the log; the umask is the primary control, redaction
+# is defence in depth.
+umask 077
 mkdir -p "$STATE_DIR/logs"
 
 # --- Concurrency lock ----------------------------------------------------
@@ -200,6 +210,14 @@ chmod 600 "$PROMPT_FILE"
 # phase is running. Populated by run_phase before `wait`, cleared after.
 PHASE_PGID=""
 
+# SIGTERM → SIGKILL escalation budget for terminate_phase_group. Five
+# iterations × 0.2 s ≈ 1 s gives claude's SIGTERM handler time to flush
+# its final stream-json frame and any in-flight tool subprocess (git push,
+# cargo build) time to release its temp files. Tune upward if `<log>`
+# shows truncated final frames after Ctrl-C.
+PHASE_TERM_GRACE_ITERS=5
+PHASE_TERM_GRACE_SLEEP_SECS=0.2
+
 # Terminate the phase pipeline's entire process group on Ctrl-C / SIGTERM
 # / SIGHUP. claude (and any tool it spawned: git, gh, sub-agents) sits in
 # this group; without the negative-PID form below, signaling only the
@@ -213,14 +231,40 @@ terminate_phase_group() {
   PHASE_PGID=""
   echo "[orchestrator] terminating phase pipeline (pgid=$pgid)..." >&2
   kill -TERM "-$pgid" 2>/dev/null || true
-  # Brief grace period before escalating; claude's own SIGTERM handler
-  # may need a moment to flush its final stream-json frame.
-  local i
-  for i in 1 2 3 4 5; do
-    kill -0 "-$pgid" 2>/dev/null || return 0
-    sleep 0.2
+  # Grace period before escalating to SIGKILL. `kill -0` returns non-zero
+  # on either ESRCH (process gone — we're done) or EPERM (a privileged
+  # descendant we can't signal — fall through to SIGKILL so we don't
+  # silently leak it). Parse stderr to distinguish the two; ESRCH ends
+  # the loop early, EPERM keeps iterating until the SIGKILL line below.
+  local i err
+  for ((i = 0; i < PHASE_TERM_GRACE_ITERS; i++)); do
+    if err=$(kill -0 "-$pgid" 2>&1); then
+      sleep "$PHASE_TERM_GRACE_SLEEP_SECS"
+      continue
+    fi
+    case "$err" in
+      *"No such process"*|*"no such process"*) return 0 ;;
+      *) ;;  # EPERM or other — keep waiting, then SIGKILL
+    esac
+    sleep "$PHASE_TERM_GRACE_SLEEP_SECS"
   done
   kill -KILL "-$pgid" 2>/dev/null || true
+}
+
+# install_signal_traps / mask_signal_traps bracket the narrow windows in
+# run_phase where PHASE_PGID is stale (empty pre-fork; just-cleared
+# post-wait). Without the mask, a SIGINT arriving in those windows would
+# trigger terminate_phase_group with a stale PHASE_PGID and either orphan
+# the just-spawned subshell or no-op on a dead pgid while the orchestrator
+# exits. Bash queues signals while their trap is `''`; reinstalling the
+# real trap fires any queued signal against the now-populated PHASE_PGID.
+install_signal_traps() {
+  trap 'terminate_phase_group; exit 130' INT
+  trap 'terminate_phase_group; exit 143' TERM
+  trap 'terminate_phase_group; exit 129' HUP
+}
+mask_signal_traps() {
+  trap '' INT TERM HUP
 }
 
 # Preserve the original exit code through cleanup. INT/TERM/HUP also fire
@@ -228,9 +272,7 @@ terminate_phase_group() {
 # embed full issue bodies from context.json) and so the phase's process
 # group is signaled before the orchestrator exits.
 trap 'rc=$?; terminate_phase_group; rm -f "$PROMPT_FILE"; exit "$rc"' EXIT
-trap 'terminate_phase_group; exit 130' INT
-trap 'terminate_phase_group; exit 143' TERM
-trap 'terminate_phase_group; exit 129' HUP
+install_signal_traps
 
 # --- Initial state -------------------------------------------------------
 # Log the claude binary version at startup so the operator can confirm
@@ -357,8 +399,29 @@ run_phase() {
   # readable line (tool calls, assistant text, final result), and tee
   # mirrors that projection into the phase log so terminal and log carry
   # the same story. claude's stderr is appended to the log directly for
-  # forensics; jq's tolerant per-line `try ... catch empty` keeps a stray
-  # non-JSON line from killing the projection.
+  # forensics.
+  #
+  # `jq -rR` reads raw lines and parses each via `fromjson` INSIDE the
+  # `try ... catch empty` block. A bare `jq -r 'try (.type) catch empty'`
+  # only catches errors evaluating the program against an already-parsed
+  # value — a single non-JSON line still trips jq's parser and exits 5,
+  # propagating as a phase failure under pipefail. The `try (fromjson |
+  # ...)` shape moves parsing inside the catch boundary so a stray frame
+  # (truncated NDJSON from a hard-killed claude; an interleaved warning;
+  # a future stream-json format change) is silently dropped instead of
+  # turning a successful phase into a spurious failure.
+  #
+  # An `awk 'length < …'` pre-filter caps any single line to ~1 MiB so a
+  # pathological frame (e.g. a tool_result with megabytes of grep output)
+  # cannot drive jq to OOM. `fflush()` keeps awk line-buffered through the
+  # pipe so progress stays real-time.
+  #
+  # The `redact` jq def scrubs known GitHub credential shapes (ghp_ /
+  # gho_ / ghs_ / ghu_ / github_pat_ / x-access-token:) from string
+  # fields a phase might pass on a Bash command line or in a sub-agent
+  # prompt. The umask 077 above keeps the log owner-only as the primary
+  # control; redaction is defence in depth for the case where a phase
+  # writes the log into an artifact bundle.
   #
   # The pipeline runs in a backgrounded subshell with `set -m` so it
   # gets its own process group (PGID == subshell PID). The orchestrator
@@ -371,12 +434,18 @@ run_phase() {
   # terminal until claude returned on its own.
   #
   # Inside the subshell, `set +m` switches job control back off so the
-  # pipeline stages stay co-grouped under the subshell, and
-  # `set -o pipefail` preserves the timeout-vs-other-failure distinction
-  # the original code derived from ${PIPESTATUS[0]} (timeout's 124 is
-  # the leftmost non-zero status and pipefail propagates it).
+  # pipeline stages stay co-grouped under the subshell. `set -o pipefail`
+  # makes the subshell's exit status the rightmost non-zero exit in the
+  # pipeline; the leftmost stage is claude, so timeout(1)'s 124 (or any
+  # claude failure) propagates intact to the orchestrator's rc==124
+  # branch instead of being masked by a downstream stage's success.
+  #
+  # mask_signal_traps wraps the fork → PHASE_PGID assignment so a signal
+  # in that one-statement window cannot orphan the just-spawned subshell.
+  # install_signal_traps then re-arms the real handlers; any signal
+  # queued during the mask fires the trap with PHASE_PGID populated.
   local rc=0
-  set +e
+  mask_signal_traps
   set -m
   (
     set +m
@@ -385,22 +454,33 @@ run_phase() {
       claude --dangerously-skip-permissions --verbose \
         --output-format=stream-json -p "$(cat "$PROMPT_FILE")" \
         2>>"$log" \
-      | jq -r --unbuffered '
+      | awk 'length < 1048576 { print; fflush() }' \
+      | jq -rR --unbuffered '
+          def redact:
+            gsub("ghp_[A-Za-z0-9_]{20,}"; "[REDACTED]")
+            | gsub("gho_[A-Za-z0-9_]{20,}"; "[REDACTED]")
+            | gsub("ghs_[A-Za-z0-9_]{20,}"; "[REDACTED]")
+            | gsub("ghu_[A-Za-z0-9_]{20,}"; "[REDACTED]")
+            | gsub("github_pat_[A-Za-z0-9_]+"; "[REDACTED]")
+            | gsub("x-access-token:[^@\\s]+"; "[REDACTED]");
+          def norm:
+            gsub("\\s+"; " ") | sub("^ +"; "") | sub(" +$"; "");
           try (
+            fromjson |
             if .type == "assistant" then
               (.message.content // [])[] |
               if .type == "text" and ((.text // "") | length) > 0 then
-                "[claude] " + (.text | gsub("\\s+"; " ") | .[0:240])
+                "[claude] " + (.text | norm | redact | .[0:240])
               elif .type == "tool_use" then
                 "[tool]  " + .name + (
                   .input as $i |
-                  if   ($i.command // null)     then ": " + ($i.command     | gsub("\\s+"; " ") | .[0:160])
+                  if   ($i.command // null)     then ": " + ($i.command     | norm | redact | .[0:160])
                   elif ($i.file_path // null)   then ": " + ($i.file_path   | .[0:200])
                   elif ($i.path // null)        then ": " + ($i.path        | .[0:200])
-                  elif ($i.description // null) then ": " + ($i.description | .[0:160])
-                  elif ($i.prompt // null)      then ": " + ($i.prompt      | gsub("\\s+"; " ") | .[0:160])
-                  elif ($i.url // null)         then ": " + ($i.url         | .[0:160])
-                  elif ($i.query // null)       then ": " + ($i.query       | .[0:160])
+                  elif ($i.description // null) then ": " + ($i.description | norm | redact | .[0:160])
+                  elif ($i.prompt // null)      then ": " + ($i.prompt      | norm | redact | .[0:160])
+                  elif ($i.url // null)         then ": " + ($i.url         | redact | .[0:160])
+                  elif ($i.query // null)       then ": " + ($i.query       | norm | .[0:160])
                   elif ($i.pattern // null)     then ": " + ($i.pattern     | .[0:160])
                   else "" end
                 )
@@ -418,10 +498,20 @@ run_phase() {
   ) &
   PHASE_PGID=$!
   set +m
-  wait "$PHASE_PGID"
-  rc=$?
+  install_signal_traps
+
+  # `wait <pid>` failing under set -e would abort run_phase; `|| rc=$?`
+  # captures the pipefail-aware exit code without disabling errexit so a
+  # future edit inside this block cannot leak errexit-off into the main
+  # loop the way a `set +e` / `set -e` toggle could.
+  wait "$PHASE_PGID" || rc=$?
+  # Brief mask while clearing PHASE_PGID — a signal racing this single
+  # assignment would otherwise fire terminate_phase_group against a
+  # just-finished pgid (harmless ESRCH) which the trap is already happy
+  # to no-op, but the symmetry keeps the windows uniformly closed.
+  mask_signal_traps
   PHASE_PGID=""
-  set -e
+  install_signal_traps
   local elapsed
   elapsed=$(( $(date +%s) - start_ts ))
 
