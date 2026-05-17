@@ -57,7 +57,9 @@ self-contained operation.
 Every phase Markdown file must end with prose instructing Claude to:
 
 1. Atomically rewrite `<state-dir>/context.json` (write to `.tmp`, then
-   `mv`).
+   `command mv` over the real path — NOT plain `mv`, which expands to
+   `mv -i` under a zsh `alias mv='mv -i'` and hangs the phase on the
+   interactive y/n prompt because the inner shell has no stdin).
 2. Write the next phase name to `<state-dir>/current-phase.txt`.
 3. If halting, set `next_phase` to `"HALT"` in context.json AND write
    `HALT` to current-phase.txt AND set a one-sentence `halt_reason`.
