@@ -844,10 +844,12 @@ mod tests {
             ..Default::default()
         };
         let url = irealb_serialize(&song);
-        // Verify the raw URL contains the `<Break>` token.
+        // `irealb_serialize` produces a percent-encoded `irealb://` URL, so
+        // `<` → `%3C` and `>` → `%3E`. The plain `<Break>` form would only
+        // appear in a non-encoded `irealbook://` URL.
         assert!(
-            url.contains("<Break>") || url.contains("%3CBreak%3E"),
-            "serialised URL must contain the <Break> comment token: {url}"
+            url.contains("%3CBreak%3E"),
+            "serialised URL must contain the percent-encoded <Break> token: {url}"
         );
         let parsed = crate::parse(&url).expect("round trip");
         let found_break = parsed
