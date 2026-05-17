@@ -162,6 +162,50 @@ case "${STUB_MODE:-ADVANCE}" in
     mv "$state_dir/context.json.tmp" "$state_dir/context.json"
     printf 'step-2' > "$state_dir/current-phase.txt"
     ;;
+  STREAM_WITH_GARBAGE)
+    # Emit a representative stream-json sequence on stdout including an
+    # intentional non-JSON garbage line. The orchestrator's jq projection
+    # uses `jq -rR` + `try (fromjson | ...) catch empty`, which moves
+    # parsing inside the catch boundary so the garbage line MUST be
+    # silently dropped instead of aborting the phase with jq's exit 5.
+    # The valid frames also exercise the redact path (a fake ghp_ token
+    # in a Bash command) so a future change that removes the def can be
+    # caught by inspecting the projection output if needed.
+    cat <<'JSON'
+{"type":"system","subtype":"init","session_id":"abc12345def67890fedcba9876543210"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Working on phase\n\n  with whitespace"}]}}
+this is not json garbage line that would otherwise abort jq
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"gh api -H 'Authorization: Bearer ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' /user"}}]}}
+another garbage line: }{][
+{"type":"result","subtype":"success","duration_ms":1500,"total_cost_usd":0.01}
+JSON
+    case "$phase" in
+      step-1)
+        printf '%s' "$prior" \
+          | python3 -c 'import sys, json; d=json.loads(sys.stdin.read() or "{}"); d["step1"]="ran"; print(json.dumps(d))' \
+          > "$state_dir/context.json.tmp"
+        mv "$state_dir/context.json.tmp" "$state_dir/context.json"
+        printf 'step-2' > "$state_dir/current-phase.txt"
+        ;;
+      step-2)
+        printf '%s' "$prior" \
+          | python3 -c 'import sys, json; d=json.loads(sys.stdin.read() or "{}"); d["step2"]="ran"; print(json.dumps(d))' \
+          > "$state_dir/context.json.tmp"
+        mv "$state_dir/context.json.tmp" "$state_dir/context.json"
+        printf 'done' > "$state_dir/current-phase.txt"
+        ;;
+    esac
+    ;;
+  HANG)
+    # Record this stub's PID so the SIGTERM test can verify the process
+    # was actually killed by terminate_phase_group's `kill -TERM -<pgid>`
+    # (not merely that the orchestrator itself exited while leaving the
+    # subshell orphaned). `exec sleep` keeps the recorded PID valid because
+    # exec preserves the PID across the program swap; without exec, the
+    # bash wrapper would die and only the sleep child would persist.
+    echo "$$" > "$state_dir/hang.pid"
+    exec sleep 600
+    ;;
   *)
     echo "stub-claude: unknown STUB_MODE ${STUB_MODE:-}" >&2
     exit 66
@@ -498,6 +542,159 @@ class OrchestratorSmokeTests(unittest.TestCase):
             finally:
                 fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
                 holder.close()
+
+    def test_streaming_projection_handles_malformed_lines(self) -> None:
+        """The jq projection uses `-rR` + `try (fromjson | ...) catch empty`
+        so a non-JSON line in claude's stream-json output is silently dropped
+        instead of aborting the phase with jq's exit 5. The STREAM_WITH_GARBAGE
+        stub emits two garbage lines interleaved with valid stream-json frames;
+        the orchestrator must advance through both phases regardless."""
+        with TemporaryDirectory() as tmp:
+            repo = _materialize_repo(Path(tmp))
+            _make_test_workflow(repo)
+            _make_stubs(repo)
+            cp = _run_orchestrator(
+                repo, "test-wf",
+                env={"STUB_MODE": "STREAM_WITH_GARBAGE"},
+            )
+            self.assertEqual(
+                cp.returncode, 0,
+                msg=f"stdout: {cp.stdout}\nstderr: {cp.stderr}",
+            )
+            self.assertIn("workflow finished at terminal phase: done", cp.stdout)
+            state = json.loads(
+                (repo / ".claude" / "workflow-state" / "test-wf" / "context.json").read_text()
+            )
+            self.assertEqual(state.get("step1"), "ran")
+            self.assertEqual(state.get("step2"), "ran")
+            # The projection should redact the fake ghp_ token emitted in the
+            # Bash tool_use command, never leaking it to stdout / log.
+            self.assertNotIn("ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", cp.stdout)
+            self.assertIn("[REDACTED]", cp.stdout)
+            # Phase log should also be redacted (it tee-s from the same projection).
+            log_dir = repo / ".claude" / "workflow-state" / "test-wf" / "logs"
+            log_files = list(log_dir.glob("*.log"))
+            self.assertTrue(log_files, "no phase log files were written")
+            for log in log_files:
+                content = log.read_text(errors="replace")
+                self.assertNotIn(
+                    "ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    content,
+                    msg=f"unredacted token in {log}",
+                )
+
+    def test_phase_log_is_owner_only(self) -> None:
+        """`umask 077` near the top of the orchestrator forces every state
+        file (current-phase.txt, context.json, lock, logs/*.log) to be
+        mode 600 owner-only. The phase log captures projected tool-use
+        arguments which can include credentials, so a world-readable mode
+        from the maintainer's interactive umask is a leak surface."""
+        import stat
+        with TemporaryDirectory() as tmp:
+            repo = _materialize_repo(Path(tmp))
+            _make_test_workflow(repo)
+            _make_stubs(repo)
+            cp = _run_orchestrator(repo, "test-wf", env={"STUB_MODE": "ADVANCE"})
+            self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+            state_dir = repo / ".claude" / "workflow-state" / "test-wf"
+            for path in [
+                state_dir / "context.json",
+                state_dir / "current-phase.txt",
+                state_dir / "lock",
+                *((state_dir / "logs").glob("*.log")),
+            ]:
+                mode = stat.S_IMODE(path.stat().st_mode)
+                # Group and other bits must be zero.
+                self.assertEqual(
+                    mode & 0o077, 0,
+                    msg=f"{path} mode is {oct(mode)}, expected owner-only "
+                        f"(world/group bits must be zero under umask 077)",
+                )
+
+    def test_sigterm_kills_phase_process_group(self) -> None:
+        """SIGTERM to the orchestrator must (1) exit it with code 143,
+        and (2) actually kill the descendant claude process via the
+        terminate_phase_group → `kill -TERM -<pgid>` path — not merely
+        orphan it. HANG mode arranges the stub claude to `exec sleep 600`
+        and record its PID in `hang.pid`; the test sends SIGTERM after
+        the PID file appears and asserts the recorded PID is gone."""
+        import signal
+        import time
+        with TemporaryDirectory() as tmp:
+            repo = _materialize_repo(Path(tmp))
+            _make_test_workflow(repo)
+            _make_stubs(repo)
+
+            base_env = os.environ.copy()
+            base_env["PATH"] = f"{repo / 'bin'}{os.pathsep}{base_env.get('PATH', '')}"
+            base_env["STUB_MODE"] = "HANG"
+
+            proc = subprocess.Popen(
+                [str(repo / "scripts" / "run-workflow.sh"), "test-wf"],
+                cwd=str(repo),
+                env=base_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+            )
+            try:
+                hang_pid_file = (
+                    repo / ".claude" / "workflow-state" / "test-wf" / "hang.pid"
+                )
+                # Wait up to 10 s for the stub to record its PID.
+                hang_pid = None
+                for _ in range(100):
+                    if hang_pid_file.exists():
+                        try:
+                            hang_pid = int(hang_pid_file.read_text().strip())
+                        except (OSError, ValueError):
+                            pass
+                        if hang_pid:
+                            break
+                    time.sleep(0.1)
+                self.assertIsNotNone(
+                    hang_pid,
+                    msg="HANG stub did not record its PID within 10 s",
+                )
+
+                proc.send_signal(signal.SIGTERM)
+
+                # Allow up to 10 s for the orchestrator's escalating
+                # SIGTERM/SIGKILL to reach the hang process and for the
+                # orchestrator itself to exit.
+                try:
+                    stdout, stderr = proc.communicate(timeout=10)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    raise AssertionError(
+                        "orchestrator did not exit within 10 s of SIGTERM"
+                    )
+
+                self.assertEqual(
+                    proc.returncode, 143,
+                    msg=f"stdout: {stdout.decode(errors='replace')}\n"
+                        f"stderr: {stderr.decode(errors='replace')}",
+                )
+
+                # Verify the hang process is gone. ProcessLookupError =>
+                # killed cleanly via the pgid signal path.
+                try:
+                    os.kill(hang_pid, 0)
+                    # Still alive — fail loud.
+                    try:
+                        os.kill(hang_pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    raise AssertionError(
+                        f"hang process {hang_pid} survived orchestrator SIGTERM "
+                        "— terminate_phase_group did not signal the pgid"
+                    )
+                except ProcessLookupError:
+                    pass  # OK — descendant cleaned up.
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.communicate()
 
 
 if __name__ == "__main__":
