@@ -712,8 +712,8 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
                     // `Ending::new` (returns `None` only for `0`,
                     // which the explicit branch above already
                     // consumed, so the `unwrap_or` is dead code
-                    // — kept as defense in depth in case Rust's
-                    // exhaustiveness checking changes shape).
+                    // — kept as defense in depth in case the valid
+                    // range of `Ending::new` changes in future).
                     let ending = if digit_value == 0 {
                         Ending::Untitled
                     } else {
