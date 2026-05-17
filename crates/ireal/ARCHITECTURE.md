@@ -79,8 +79,12 @@ through this crate's public API.
   (no chord, no marker) — distinct from `repeat_previous = true`.
   Keeps the bar-list ordering trivially indexable, which matters
   for the 4-bar-per-line layout engine in #2060.
-- `ending: Option<Ending>`. `Ending` wraps `NonZeroU8` so the
-  `Some(Ending(0))` shape is unrepresentable.
+- `ending: Option<Ending>`. `Ending` is an enum with two
+  variants — `Numbered(NonZeroU8)` for the spec's `N1` / `N2` /
+  `N3` / … brackets, and `Untitled` for the spec's `N0`
+  "no text Ending" bracket. The `Numbered(0)` shape is
+  structurally unrepresentable; an empty-label bracket is only
+  expressible via the dedicated `Untitled` variant.
 - `symbol: Option<MusicalSymbol>`. Single-symbol-per-bar matches
   iReal Pro convention. If a future format extension allows
   multiples, this becomes `Vec<MusicalSymbol>` and call sites that
@@ -264,7 +268,10 @@ type system does not encode:
   is `None`.
 - `ChordRoot.note` restricted to ASCII `A..=G` uppercase.
 - `Ending::new(0)` and `BeatPosition::on_beat(0)` rejected via the
-  `NonZeroU8` field types.
+  `NonZeroU8` field types — `Ending`'s zero-input case is
+  expressed by the dedicated `Untitled` variant (JSON sentinel
+  `"ending": 0`), not by passing `0` through the numbered
+  constructor.
 - `TimeSignature::new` enforces `numerator: 1..=12` and
   `denominator ∈ {2, 4, 8}`.
 

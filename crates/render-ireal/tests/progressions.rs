@@ -385,6 +385,65 @@ fn render_endings_demo() {
 }
 
 // ---------------------------------------------------------------------------
+// Fixture: N0 "no text Ending" (#2436)
+//
+// Bar 1 carries the common run; bars 2–3 are joined under an
+// `Ending::Untitled` bracket (spec `N0`) so the renderer emits a
+// bracket line + ticks WITHOUT a digit label. Bar 4 carries a
+// numbered `Ending::Numbered(2)` so the snapshot exercises both
+// the new untitled-bracket path and the existing numbered-bracket
+// path side by side — a label-suppression regression that re-paints
+// a digit on the untitled run would diff the snapshot loudly.
+// ---------------------------------------------------------------------------
+
+fn n0_ending_demo() -> IrealSong {
+    let mut song = IrealSong::new();
+    song.title = "N0 Ending Demo".into();
+    song.style = Some("Medium Swing".into());
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![
+            // Bar 1 — common run.
+            Bar {
+                chords: vec![BarChord {
+                    chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major7),
+                    position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
+                }],
+                ..Bar::new()
+            },
+            // Bars 2–3 — untitled (N0) ending: label suppressed.
+            Bar {
+                ending: Some(Ending::Untitled),
+                chords: vec![BarChord {
+                    chord: Chord::triad(ChordRoot::natural('A'), ChordQuality::Minor7),
+                    position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
+                }],
+                ..Bar::new()
+            },
+            Bar {
+                ending: Some(Ending::Untitled),
+                chords: vec![BarChord {
+                    chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Minor7),
+                    position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
+                }],
+                ..Bar::new()
+            },
+            // Bar 4 — numbered (N2) ending: "2." label restored.
+            ending_bar(2, 'G', ChordQuality::Dominant7),
+        ],
+    });
+    song
+}
+
+#[test]
+fn render_n0_ending_demo() {
+    check_golden("n0_ending_demo", &n0_ending_demo());
+}
+
+// ---------------------------------------------------------------------------
 // Fixture: section letters / verse / chorus / bridge / custom
 // ---------------------------------------------------------------------------
 

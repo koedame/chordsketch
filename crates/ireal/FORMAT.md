@@ -177,7 +177,7 @@ checks each token in this priority order:
 | `{` / `}` | Open / close repeat — sets `BarLine::OpenRepeat` / `BarLine::CloseRepeat` on the boundary bars. |
 | `\|` | Bar separator. |
 | `[` / `]` | Double bar open / close — sets `BarLine::Double`. |
-| `Nd` (`d` = digit) | N-th ending bracket on the current bar (`N1` = first ending, etc.); rejects digit `0`. |
+| `Nd` (`d` = digit) | N-th ending bracket on the current bar. `N1` / `N2` / `N3` / … map to `Ending::Numbered(NonZeroU8)`; `N0` is the spec's "no text Ending" and maps to `Ending::Untitled`, which the renderer paints as a label-free bracket. |
 | `Z` | Final bar (`BarLine::Final`). |
 | `(...)` | Alternate chord — when the parser is inside a `(...)` block, the next chord token attaches to the previously-pushed chord's `Chord::alternate` field rather than as a new chord on the bar. The renderer stacks the alternate above the primary at a smaller size. |
 | `,` `.` `:` `;` | Punctuation — discard. |

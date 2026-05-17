@@ -270,29 +270,45 @@ pub enum BarLine {
     CloseRepeat,
 }
 
-/// Ending bracket number (1, 2, 3 …). Stored as [`NonZeroU8`] so the
-/// `Option<Ending>` discriminant cannot drift into "ending zero" via
-/// `Default`. Call sites read the number with [`Ending::number`];
-/// equality is structural.
+/// Ending bracket on a bar. `Numbered(n)` is the spec's `N1` /
+/// `N2` / `N3` / … case; [`Ending::Untitled`] is the `N0`
+/// "no text Ending" case where the bracket is painted without a
+/// digit label. The numbered variant stores [`NonZeroU8`] so the
+/// "numbered zero" shape is structurally unrepresentable — the
+/// only way to express an empty-label bracket is through the
+/// dedicated [`Ending::Untitled`] variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Ending(NonZeroU8);
+pub enum Ending {
+    /// Numbered bracket — spec tokens `N1`, `N2`, `N3`, …
+    Numbered(NonZeroU8),
+    /// No-text bracket — spec token `N0`. The renderer paints
+    /// the bracket without a number label.
+    Untitled,
+}
 
 impl Ending {
-    /// Creates an ending with the given number. Returns `None` if
-    /// `n == 0` since "ending zero" is not a meaningful concept in
-    /// the iReal format.
+    /// Creates a numbered ending. Returns `None` for `n == 0`;
+    /// the empty-label bracket is expressed by [`Ending::Untitled`]
+    /// directly, not by passing `0` here.
     #[must_use]
     pub const fn new(n: u8) -> Option<Self> {
         match NonZeroU8::new(n) {
-            Some(nz) => Some(Self(nz)),
+            Some(nz) => Some(Self::Numbered(nz)),
             None => None,
         }
     }
 
-    /// Returns the ending number as a plain `u8`.
+    /// Returns `Some(n)` for [`Ending::Numbered`] and `None`
+    /// for [`Ending::Untitled`]. Callers that paint the bracket
+    /// label must branch on the `None` case to suppress the
+    /// digit; callers that only care whether *some* bracket is
+    /// present should use `Option<Ending>` membership instead.
     #[must_use]
-    pub const fn number(self) -> u8 {
-        self.0.get()
+    pub const fn number(self) -> Option<u8> {
+        match self {
+            Self::Numbered(n) => Some(n.get()),
+            Self::Untitled => None,
+        }
     }
 }
 

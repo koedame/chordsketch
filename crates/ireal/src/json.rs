@@ -188,7 +188,18 @@ impl ToJson for Bar {
         write_array(out, &self.chords);
         out.push_str(",\"ending\":");
         match &self.ending {
-            Some(e) => write_u8(out, e.number()),
+            // Numbered → bare integer (`1`, `2`, …) — preserves
+            // byte stability with every fixture written before
+            // `Ending::Untitled` existed.
+            // Untitled → sentinel `0`. The Ending struct's
+            // pre-`Untitled` constructor (`Ending::new`) rejected
+            // `0`, so no pre-existing fixture carries that byte
+            // sequence; consumers parsing `0` against the old
+            // schema would have raised "ending number must be
+            // non-zero" and not proceeded with corrupted data.
+            // None → `null` (unchanged).
+            Some(Ending::Numbered(n)) => write_u8(out, n.get()),
+            Some(Ending::Untitled) => write_u8(out, 0),
             None => out.push_str("null"),
         }
         out.push_str(",\"symbol\":");
@@ -242,7 +253,14 @@ impl ToJson for BarLine {
 
 impl ToJson for Ending {
     fn to_json(&self, out: &mut String) {
-        write_u8(out, self.number());
+        // Numbered → bare integer; Untitled (spec `N0`) → sentinel
+        // `0`. See the `impl ToJson for Bar` "ending" branch for
+        // the byte-stability rationale.
+        let digit = match self {
+            Self::Numbered(n) => n.get(),
+            Self::Untitled => 0,
+        };
+        write_u8(out, digit);
     }
 }
 
@@ -1211,9 +1229,18 @@ impl FromJson for Bar {
             JsonValue::Null => None,
             other => {
                 let n = extract_u8(other)?;
-                Some(Ending::new(n).ok_or_else(|| {
-                    JsonError::new(0, "ending number must be non-zero".to_string())
-                })?)
+                // 0 → Untitled (spec token `N0`).
+                // 1..=255 → Numbered. `Ending::new` returns None
+                // only for 0, which is already handled above; the
+                // `ok_or_else` is defense in depth against future
+                // changes to `Ending::new`'s rejection set.
+                Some(if n == 0 {
+                    Ending::Untitled
+                } else {
+                    Ending::new(n).ok_or_else(|| {
+                        JsonError::new(0, "ending number must be non-zero".to_string())
+                    })?
+                })
             }
         };
         let symbol = match value.get("symbol")? {

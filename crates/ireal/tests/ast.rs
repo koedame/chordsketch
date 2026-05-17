@@ -52,11 +52,18 @@ fn time_signature_rejects_invalid_inputs() {
 }
 
 #[test]
-fn ending_rejects_zero() {
+fn ending_new_rejects_zero_in_favour_of_untitled_variant() {
+    // `Ending::new(0)` continues to return `None` — the
+    // empty-label bracket case (spec `N0`) is expressed via the
+    // dedicated [`Ending::Untitled`] variant, not by smuggling a
+    // numeric zero through the numbered constructor.
     assert!(Ending::new(0).is_none());
-    assert_eq!(Ending::new(1).unwrap().number(), 1);
-    assert_eq!(Ending::new(2).unwrap().number(), 2);
-    assert_eq!(Ending::new(255).unwrap().number(), 255);
+    assert_eq!(Ending::new(1).unwrap().number(), Some(1));
+    assert_eq!(Ending::new(2).unwrap().number(), Some(2));
+    assert_eq!(Ending::new(255).unwrap().number(), Some(255));
+    // Untitled bracket carries no digit; callers branch on the
+    // `None` return to suppress the label.
+    assert_eq!(Ending::Untitled.number(), None);
 }
 
 #[test]
@@ -266,6 +273,31 @@ fn json_round_trip_handles_every_enum_variant() {
     let json = song.to_json_string();
     let parsed = IrealSong::from_json_str(&json).expect("variant round-trip must succeed");
     assert_eq!(song, parsed);
+}
+
+#[test]
+fn json_round_trip_handles_untitled_ending() {
+    // Locks the spec `N0` ("no text Ending") case end to end through
+    // the JSON serialiser + deserialiser. The serialiser emits the
+    // sentinel `"ending": 0` and the deserialiser maps it back to
+    // `Ending::Untitled`, distinct from `"ending": null` ("no ending
+    // bracket at all") and from `"ending": <n>` (numbered bracket).
+    let mut song = IrealSong::new();
+    song.title = "N0 Round Trip".into();
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![Bar {
+            ending: Some(Ending::Untitled),
+            ..Bar::new()
+        }],
+    });
+    let json = song.to_json_string();
+    assert!(
+        json.contains("\"ending\":0"),
+        "Untitled ending must serialise as the `0` sentinel: {json}"
+    );
+    let parsed = IrealSong::from_json_str(&json).expect("Untitled round-trip must succeed");
+    assert_eq!(parsed, song);
 }
 
 #[test]

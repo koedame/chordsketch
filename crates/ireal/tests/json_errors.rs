@@ -102,6 +102,18 @@ fn ending_to_json_emits_decimal_number() {
     );
 }
 
+#[test]
+fn ending_untitled_to_json_emits_zero_sentinel() {
+    // `Ending::Untitled` (spec `N0`) serialises as the sentinel
+    // `0`, distinct from `null` ("no ending"). The previous
+    // `Ending::new` API rejected `0`, so no pre-`Untitled`
+    // fixture carries this byte sequence and the new value
+    // cannot collide with existing snapshots.
+    let mut buf = String::new();
+    Ending::Untitled.to_json(&mut buf);
+    assert_eq!(buf, "0");
+}
+
 // ---- JsonError::Display::fmt -------------------------------------------
 
 #[test]

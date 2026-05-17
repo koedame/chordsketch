@@ -60,7 +60,7 @@ assert_eq!(parsed, song);
 |---|---|---|
 | `IrealSong` | struct with `title`, `composer`, `style`, `key_signature`, `time_signature`, `tempo`, `transpose`, `sections` | Root AST node. `IrealSong::new()` builds an empty `C major` 4/4 chart. |
 | `Section`, `SectionLabel` | struct + 4-variant enum (`Letter(c)`, `Verse`, `Intro`, `Custom(s)`) | Labelled block of bars. |
-| `Bar`, `BarLine`, `Ending` | struct + 5-variant enum + `NonZeroU8` newtype | One measure with opening / closing barline, chords, ending number, optional `MusicalSymbol`. |
+| `Bar`, `BarLine`, `Ending` | struct + 5-variant enum + 2-variant enum (`Numbered(NonZeroU8)`, `Untitled`) | One measure with opening / closing barline, chords, ending bracket (`N1..=N9` numbered or `N0` untitled per spec), optional `MusicalSymbol`. |
 | `BarChord`, `BeatPosition` | structs | Chord placed at a beat position inside a bar. |
 | `Chord`, `ChordRoot`, `ChordQuality`, `Accidental` | structs + enums | Root, quality (12 named + `Custom`), optional bass note, accidental. |
 | `KeySignature`, `KeyMode`, `TimeSignature` | structs + enum | Key (C major default) and time signature (4/4 default). |
