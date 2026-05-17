@@ -167,6 +167,7 @@ checks each token in this priority order:
 | `r` | Repeat previous two measures — currently collapses to the same `Bar::repeat_previous = true` flag as `x` / `Kcl`. A future schema split may distinguish 1-bar from 2-bar simile via a separate field. |
 | `Y+` | Vertical space hint at the start of a system. Counts consecutive `Y` characters and stamps the count on the bar currently being assembled as `Bar::system_break_space` (clamped to `0..=3` per the spec's `Y` / `YY` / `YYY` shorthand for small / medium / large between-system gap). The renderer applies `VERTICAL_BREAK_PER_LEVEL` SVG units of extra padding above every row whose first bar carries a non-zero hint. |
 | `n` | "No Chord" — sets `Bar::no_chord = true`. The renderer paints `N.C.` in the bar's centre. |
+| `s` / `l` | Chord-size markers (Custom Chord Chart Protocol). `s` ("small") switches the parser's running chord-size state to [`ChordSize::Small`]; `l` ("large") restores [`ChordSize::Default`]. The state persists across bar boundaries until the next marker and is stamped onto every [`BarChord`] emitted while active, so dense bars (multiple chords per measure) can be painted at a narrower font without losing per-chord granularity. The SVG renderer picks a ~70 % base font (`CHORD_FONT_SIZE_BASE_SMALL = 22` vs `CHORD_FONT_SIZE_BASE = 32`) and scales accidental / extension spans + baseline shifts proportionally for Small-tagged chords. |
 | `p` | Pause slash — discard. |
 | `U` | Player ending marker — discard. |
 | `S` | Segno — sets `Bar::symbol = Some(Segno)` on the current bar. |

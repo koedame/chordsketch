@@ -82,6 +82,18 @@ pub const MAX_BARS: usize = 4096;
 /// dominate the bar visually so each chord reads at a glance.
 pub const CHORD_FONT_SIZE_BASE: i32 = 32;
 
+/// Narrower base font for chords carrying the iReal Pro `s`
+/// marker ([`chordsketch_ireal::ChordSize::Small`]).
+///
+/// Sized at ~70 % of [`CHORD_FONT_SIZE_BASE`] (22 / 32 ≈ 0.6875),
+/// matching the iReal Pro spec's "narrower" intent for the `s`
+/// marker — dense bars with multiple chord changes stay legible
+/// without overflowing the cell. The renderer scales the
+/// accidental / extension spans and their baseline shifts
+/// proportionally from this base so the engraved chord keeps its
+/// visual hierarchy at the smaller size.
+pub const CHORD_FONT_SIZE_BASE_SMALL: i32 = 22;
+
 /// Smaller font size used for the quality / extension span
 /// (`Δ7`, `−7`, `ø7`, `sus4`). Mirrors iReal Pro's quality-glyph
 /// proportion — ≈ 50 % of the base size.
