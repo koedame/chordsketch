@@ -13,7 +13,7 @@
 use chordsketch_ireal::{
     Bar, BarChord, BarChordKind, BarLine, BeatGrouping, BeatPosition, Chord, ChordQuality,
     ChordRoot, ChordSize, Ending, FromJson, IrealSong, JsonError, JsonValue, MusicalSymbol,
-    Section, SectionLabel, ToJson, parse_json,
+    Section, SectionLabel, StaffText, ToJson, parse_json,
 };
 
 fn minimal_song_json_with(field: &str, value: &str) -> String {
@@ -462,7 +462,7 @@ fn full_song_round_trips_through_deserializer() {
         symbol: None,
         repeat_previous: false,
         no_chord: false,
-        text_comment: None,
+        staff_texts: Vec::new(),
         system_break_space: 0,
         beat_grouping_override: None,
     };
@@ -528,7 +528,7 @@ fn from_json_bar_without_repeat_previous_defaults_false() {
     let bar = Bar::from_json_str(json).expect("parse");
     assert!(!bar.repeat_previous);
     assert!(!bar.no_chord);
-    assert!(bar.text_comment.is_none());
+    assert!(bar.staff_texts.is_empty());
 }
 
 #[test]
@@ -630,7 +630,7 @@ fn bar_system_break_space_nonzero_round_trips_through_json() {
         symbol: None,
         repeat_previous: false,
         no_chord: false,
-        text_comment: None,
+        staff_texts: Vec::new(),
         system_break_space: 2,
         beat_grouping_override: None,
     };
@@ -846,7 +846,7 @@ fn beat_grouping_override_some_serialises_and_round_trips_through_json() {
         symbol: None,
         repeat_previous: false,
         no_chord: false,
-        text_comment: None,
+        staff_texts: Vec::new(),
         system_break_space: 0,
         beat_grouping_override: Some(grouping),
     };
@@ -937,4 +937,131 @@ fn beat_grouping_override_single_subgroup_is_rejected() {
         msg.contains("two") || msg.contains("subgroup"),
         "error must mention the two-subgroup requirement, got {msg:?}"
     );
+}
+
+// ----------------------------------------------------------------------------
+// StaffText JSON rejection paths (#2426)
+//
+// Each error branch in `StaffText::from_json_value` gets one negative-input
+// test so a future refactor that silently swallows a malformed entry would
+// fail loudly. Mirrors the per-variant rejection coverage already in place
+// for `MusicalSymbol`, `Ending`, `ChordRoot`, etc. above.
+// ----------------------------------------------------------------------------
+
+fn bar_json_with_staff_text(staff_text_json: &str) -> String {
+    format!(
+        "{{\"start\":\"single\",\"end\":\"single\",\"chords\":[],\
+\"ending\":null,\"symbol\":null,\"staff_texts\":[{staff_text_json}]}}"
+    )
+}
+
+#[test]
+fn from_json_rejects_staff_text_missing_type_field() {
+    let json = bar_json_with_staff_text(r#"{"text":"caption"}"#);
+    let err = Bar::from_json_str(&json).expect_err("missing type must error");
+    assert!(
+        format!("{err}").contains("type"),
+        "error must mention the missing `type` field, got {err}"
+    );
+}
+
+#[test]
+fn from_json_rejects_staff_text_unknown_type_value() {
+    let json = bar_json_with_staff_text(r#"{"type":"bogus","text":"x"}"#);
+    let err = Bar::from_json_str(&json).expect_err("unknown type must error");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("type") || msg.contains("text") || msg.contains("repeat_count"),
+        "error must mention the allowed type values, got {msg}"
+    );
+}
+
+#[test]
+fn from_json_rejects_staff_text_text_missing_text_field() {
+    let json = bar_json_with_staff_text(r#"{"type":"text"}"#);
+    let err = Bar::from_json_str(&json).expect_err("missing text must error");
+    assert!(
+        format!("{err}").contains("text"),
+        "error must mention the missing `text` field, got {err}"
+    );
+}
+
+#[test]
+fn from_json_rejects_staff_text_vertical_position_out_of_range() {
+    let json = bar_json_with_staff_text(r#"{"type":"text","text":"x","vertical_position":80}"#);
+    let err = Bar::from_json_str(&json).expect_err("vp>74 must error");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("vertical_position") && msg.contains("74"),
+        "error must mention the [0, 74] range, got {msg}"
+    );
+}
+
+#[test]
+fn from_json_rejects_staff_text_repeat_count_overflow_u16() {
+    let json = bar_json_with_staff_text(r#"{"type":"repeat_count","count":100000}"#);
+    let err = Bar::from_json_str(&json).expect_err("count > u16::MAX must error");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("count") && msg.contains("u16"),
+        "error must mention the u16 overflow, got {msg}"
+    );
+}
+
+#[test]
+fn from_json_rejects_staff_text_repeat_count_negative() {
+    // `u16::try_from(-1)` errors out — the deserializer must reject
+    // before the `NonZeroU16` guard runs. Covers the same code path
+    // as the overflow case but on the opposite side of zero.
+    let json = bar_json_with_staff_text(r#"{"type":"repeat_count","count":-1}"#);
+    let err = Bar::from_json_str(&json).expect_err("negative count must error");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("count") && (msg.contains("u16") || msg.contains("range")),
+        "error must mention the u16 range, got {msg}"
+    );
+}
+
+#[test]
+fn from_json_rejects_staff_text_repeat_count_zero() {
+    // `<0x>` has no defined meaning under the spec, so the payload
+    // is `NonZeroU16`. A `count: 0` JSON document MUST be rejected
+    // — the parser falls through to plain text on `<0x>`, and the
+    // deserializer must agree (sister-site parity).
+    let json = bar_json_with_staff_text(r#"{"type":"repeat_count","count":0}"#);
+    let err = Bar::from_json_str(&json).expect_err("count == 0 must error");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("non-zero") || msg.contains("count"),
+        "error must mention the non-zero requirement, got {msg}"
+    );
+}
+
+#[test]
+fn from_json_staff_text_round_trip_preserves_every_variant() {
+    // Locks the full StaffText surface through ToJson → parse_json
+    // → FromJson. Covers the previously-untested arms in the
+    // `json_round_trip_handles_every_enum_variant` test
+    // (ast.rs::tests).
+    let bar = Bar {
+        start: BarLine::Double,
+        end: BarLine::Final,
+        chords: vec![],
+        ending: None,
+        symbol: None,
+        repeat_previous: false,
+        no_chord: false,
+        staff_texts: vec![
+            StaffText::plain("plain caption"),
+            StaffText::raised("at top", 74),
+            StaffText::raised("near bottom", 0),
+            StaffText::repeat_count(8).expect("8 is non-zero"),
+            StaffText::repeat_count(u16::MAX).expect("u16::MAX is non-zero"),
+        ],
+        system_break_space: 0,
+        beat_grouping_override: None,
+    };
+    let json = bar.to_json_string();
+    let parsed = Bar::from_json_str(&json).expect("round trip must succeed");
+    assert_eq!(parsed.staff_texts, bar.staff_texts);
 }

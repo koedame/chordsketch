@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`chordsketch-ireal` preserves full staff-text content (#2426).**
+  New `StaffText` enum on the AST captures the spec's three staff-
+  text shapes — `<text>` (plain caption), `<*XYtext>` (caption
+  raised by a two-digit position `*XY` ∈ `00..=74`), and `<Nx>`
+  (repeat-count override for the enclosing `{ ... }` block). The
+  repeat-count payload is `core::num::NonZeroU16`, mirroring the
+  `Ending::Numbered(NonZeroU8)` precedent — `<0x>` ("play zero
+  times") falls through to a plain `Text` entry since the spec
+  gives it no defined meaning. Each bar carries an ordered
+  `Vec<StaffText>` on `Bar::staff_texts`, replacing the
+  single-string `Bar::text_comment` so multiple `<...>` tokens on
+  one bar round-trip in source order. Parser classifies the
+  structured forms eagerly: `*XY` outside `0..=74` and single-digit
+  prefixes fall through to plain captions so hand-authored exports
+  survive verbatim. URL serializer zero-pads single-digit positions
+  to match the parser's two-digit-prefix rule; JSON round-trip is
+  additive (`staff_texts` omitted on bars that have none, preserving
+  pre-#2426 snapshot byte stability) and `FromJson` rejects `<0x>` /
+  `vertical_position > 74` / `count > u16::MAX` with typed errors.
+  New `staff-text` SVG class in `chordsketch-render-ireal` paints
+  each entry as an italic serif caption, interpolated linearly
+  between the below-bar default baseline (`pos = 0`) and the
+  music-symbol band (`pos = 74`). `convert::from_ireal` projects
+  each entry into the ChordPro output and surfaces a structured
+  `LossyDrop` warning when a `vertical_position` is dropped
+  (ChordPro has no equivalent surface).
 - **`chordsketch-ireal` open-protocol plain-text serializer (#2425).**
   New `serialize_open_protocol(&IrealSong) -> String` and
   `serialize_open_protocol_collection(&[IrealSong], Option<&str>)`
@@ -46,8 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signature's numerator and persists the override across bars
   ("remains until the opposite is used"); meter changes reset the
   running state. Malformed inputs (`<2++3>`, `<+3>`, sum
-  mismatches) fall through to `text_comment` so the original
-  token round-trips losslessly. The 6-field `irealbook://`
+  mismatches) fall through to `Bar::staff_texts` (#2426) so the
+  original token round-trips losslessly. The 6-field `irealbook://`
   header's time signature now seeds the music-body parser's
   meter state so `<a+b>` directives validate against the
   declared chart meter even when the body has no inline `T..`
@@ -140,7 +166,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     simile glyph (SMuFL U+E500).
   - `<text>` free-form captions (`<13 measure lead break>`,
     `<D.S. al 2nd ending>`) — preserved verbatim on
-    `Bar::text_comment`. Anchored macro detection on `D.C.` /
+    `Bar::staff_texts` (see the dedicated #2426 entry above for
+    the structured `StaffText` shape and the `<*XYtext>` /
+    `<Nx>` variants). Anchored macro detection on `D.C.` /
     `D.S.` / `Fine` prefixes (start-of-comment, followed by
     space/dot/end) replaces a substring match that mis-fired
     on common English words like `refine` / `define`.
@@ -182,9 +210,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `convert::from_ireal` propagates the new AST fields into the
   ChordPro output: `no_chord` → `N.C.` text segment,
   `repeat_previous` → previous-chord replay (or `LossyDrop`
-  warning when there is none), `text_comment` → parenthesised
-  inline text, `chord.alternate` → parenthesised alternate
-  chord after the primary.
+  warning when there is none), `staff_texts` → parenthesised
+  inline text (plain captions verbatim, `<Nx>` overrides as
+  `(Nx)`, `<*XYtext>` raises surfaced as `LossyDrop` warnings
+  per the #2426 entry above), `chord.alternate` → parenthesised
+  alternate chord after the primary.
 - `.claude/rules/playground-is-a-sample.md` — establishes the
   rule that the playground at `packages/playground/` is a
   thin sample consumer of the chordsketch libraries; gaps in

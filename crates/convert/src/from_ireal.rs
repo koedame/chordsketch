@@ -26,7 +26,7 @@ use chordsketch_chordpro::ast::{
 };
 use chordsketch_ireal::{
     Accidental, Bar, BarChordKind, BarLine, Chord as IrealChord, ChordQuality, ChordRoot,
-    IrealSong, KeyMode, KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
+    IrealSong, KeyMode, KeySignature, MusicalSymbol, SectionLabel, StaffText, TimeSignature,
 };
 
 use crate::error::{ConversionWarning, WarningKind};
@@ -281,12 +281,43 @@ fn push_bars(
                 label = symbol_label(symbol)
             )));
         }
-        if let Some(text) = bar.text_comment.as_deref() {
+        for st in &bar.staff_texts {
             // Free-form `<...>` captions (e.g. "13 measure lead
             // break", "D.S. al 2nd ending") have no structural
             // ChordPro equivalent. Render inline as parenthesised
             // text — same treatment as the canonical symbols above.
-            segments.push(LyricsSegment::text_only(format!("({text}) ")));
+            // [`StaffText::Text`] bodies render verbatim; the
+            // structured [`StaffText::RepeatCount`] form renders
+            // as `(Nx)` so a downstream reader can still recover the
+            // original directive intent on visual inspection.
+            //
+            // `vertical_position` on Text entries is intentionally
+            // dropped: ChordPro has no spec equivalent of staff-text
+            // vertical positioning, so a `*36` raise cannot be
+            // represented. Surface this as a structured
+            // [`WarningKind::StaffTextPositionDropped`] warning so
+            // consumers can detect the data loss without diffing the
+            // output strings.
+            let caption = match st {
+                StaffText::Text {
+                    text,
+                    vertical_position,
+                } => {
+                    if let Some(pos) = vertical_position {
+                        warnings.push(ConversionWarning::new(
+                            WarningKind::LossyDrop,
+                            format!(
+                                "iReal staff-text caption `{text}` was raised by *{pos:02} \
+                                 but ChordPro has no vertical-position surface; the offset \
+                                 was dropped (text body preserved)."
+                            ),
+                        ));
+                    }
+                    text.clone()
+                }
+                StaffText::RepeatCount(n) => format!("{n}x", n = n.get()),
+            };
+            segments.push(LyricsSegment::text_only(format!("({caption}) ")));
         }
         // Bar boundary: trailing `|` (with leading space for
         // readability). The Final / Double / repeat barlines lift
@@ -455,7 +486,7 @@ mod tests {
                     symbol: None,
                     repeat_previous: false,
                     no_chord: false,
-                    text_comment: None,
+                    staff_texts: Vec::new(),
                     system_break_space: 0,
                     beat_grouping_override: None,
                 }],
@@ -715,7 +746,7 @@ mod tests {
     }
 
     #[test]
-    fn text_comment_emits_paren_text_segment() {
+    fn staff_text_emits_paren_text_segment() {
         use chordsketch_chordpro::ast::Line;
         let mut s = IrealSong::new();
         s.title = "Comment Test".into();
@@ -733,7 +764,7 @@ mod tests {
                     size: ChordSize::Default,
                     kind: BarChordKind::Played,
                 }],
-                text_comment: Some("Vamp till cue".into()),
+                staff_texts: vec![StaffText::plain("Vamp till cue")],
                 ..Bar::default()
             }],
         });
@@ -752,7 +783,146 @@ mod tests {
             .concat();
         assert!(
             text_concat.contains("Vamp till cue"),
-            "text_comment must round-trip into a text segment, got {text_concat:?}"
+            "staff_texts entry must round-trip into a text segment, got {text_concat:?}"
+        );
+    }
+
+    #[test]
+    fn staff_text_repeat_count_emits_nx_segment() {
+        use chordsketch_chordpro::ast::Line;
+        let mut s = IrealSong::new();
+        s.title = "Repeat Count".into();
+        s.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars: vec![Bar {
+                chords: vec![BarChord {
+                    chord: Chord {
+                        root: ChordRoot::natural('C'),
+                        quality: ChordQuality::Major,
+                        bass: None,
+                        alternate: None,
+                    },
+                    position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
+                    kind: BarChordKind::Played,
+                }],
+                staff_texts: vec![StaffText::repeat_count(8).expect("8 is non-zero")],
+                ..Bar::default()
+            }],
+        });
+        let result = convert(&s).unwrap();
+        let text_concat: String = result
+            .output
+            .lines
+            .iter()
+            .filter_map(|l| match l {
+                Line::Lyrics(lyrics) => {
+                    Some(lyrics.segments.iter().map(|s| s.text.as_str()).collect())
+                }
+                _ => None,
+            })
+            .collect::<Vec<String>>()
+            .concat();
+        assert!(
+            text_concat.contains("(8x)"),
+            "repeat_count must surface as parenthesised `Nx`, got {text_concat:?}"
+        );
+    }
+
+    #[test]
+    fn multiple_staff_texts_preserve_order_in_lyrics_segments() {
+        // Two `StaffText` entries on one bar must appear in source
+        // order in the rendered ChordPro line. Locks the
+        // `for st in &bar.staff_texts` iteration contract — a
+        // future refactor that flips iteration order (e.g.
+        // `IntoIterator::rev()`) would not trip the single-entry
+        // tests above.
+        use chordsketch_chordpro::ast::Line;
+        let mut s = IrealSong::new();
+        s.title = "Order".into();
+        s.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars: vec![Bar {
+                chords: vec![BarChord {
+                    chord: Chord {
+                        root: ChordRoot::natural('C'),
+                        quality: ChordQuality::Major,
+                        bass: None,
+                        alternate: None,
+                    },
+                    position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
+                    kind: BarChordKind::Played,
+                }],
+                staff_texts: vec![
+                    StaffText::plain("first"),
+                    StaffText::repeat_count(8).expect("8 is non-zero"),
+                    StaffText::plain("third"),
+                ],
+                ..Bar::default()
+            }],
+        });
+        let result = convert(&s).unwrap();
+        let text_concat: String = result
+            .output
+            .lines
+            .iter()
+            .filter_map(|l| match l {
+                Line::Lyrics(lyrics) => {
+                    Some(lyrics.segments.iter().map(|s| s.text.as_str()).collect())
+                }
+                _ => None,
+            })
+            .collect::<Vec<String>>()
+            .concat();
+        let first_idx = text_concat.find("(first)").expect("first present");
+        let count_idx = text_concat.find("(8x)").expect("count present");
+        let third_idx = text_concat.find("(third)").expect("third present");
+        assert!(
+            first_idx < count_idx && count_idx < third_idx,
+            "staff_texts must render in source order: got {text_concat:?}"
+        );
+    }
+
+    #[test]
+    fn staff_text_with_vertical_position_emits_lossy_drop_warning() {
+        // A `StaffText::Text` with `vertical_position = Some(_)`
+        // loses its raise offset in ChordPro (no equivalent
+        // surface). The converter surfaces this as a structured
+        // `LossyDrop` warning so consumers can detect the data
+        // loss without diffing output strings (sister-site to the
+        // existing `no_chord` / `repeat_previous` warning paths in
+        // this file).
+        let mut s = IrealSong::new();
+        s.title = "Raised".into();
+        s.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars: vec![Bar {
+                chords: vec![BarChord {
+                    chord: Chord {
+                        root: ChordRoot::natural('C'),
+                        quality: ChordQuality::Major,
+                        bass: None,
+                        alternate: None,
+                    },
+                    position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
+                    kind: BarChordKind::Played,
+                }],
+                staff_texts: vec![StaffText::raised("Solo Section:", 36)],
+                ..Bar::default()
+            }],
+        });
+        let result = convert(&s).unwrap();
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.kind == WarningKind::LossyDrop
+                    && w.message.contains("Solo Section:")
+                    && w.message.contains("*36")),
+            "expected LossyDrop warning mentioning the caption and `*36`, got {:?}",
+            result.warnings,
         );
     }
 
