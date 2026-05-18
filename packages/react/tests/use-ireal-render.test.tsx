@@ -69,4 +69,32 @@ describe('useIrealRender', () => {
     await waitFor(() => expect(result.current.error?.message).toBe('init boom'));
     expect(stub.renderIrealSvg).not.toHaveBeenCalled();
   });
+
+  test('loading does not get stuck when source clears while wasm is initialising', async () => {
+    // Regression: if source changes from non-empty to '' before wasm
+    // finishes loading, the setLoading(true) from the first run must
+    // still resolve to false. Without the setLoading(false) call in the
+    // empty-source path, the loading flag is permanently stuck at true.
+    const stub = makeStub();
+    let resolveLoader!: (value: unknown) => void;
+    const blockedLoader: IrealRenderLoader = vi.fn(
+      () =>
+        new Promise((r) => {
+          resolveLoader = r;
+        }) as ReturnType<IrealRenderLoader>,
+    );
+    const { result, rerender } = renderHook(
+      ({ source }: { source: string }) => useIrealRender(source, blockedLoader),
+      { initialProps: { source: 'irealb://x' } },
+    );
+    // Wasm is loading; loading must be true.
+    expect(result.current.loading).toBe(true);
+    // Clear source before the loader resolves.
+    rerender({ source: '' });
+    // Unblock the loader — run 1 is cancelled; run 2 also awaits the loader.
+    resolveLoader(stub);
+    // loading must settle to false (not stuck).
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.svg).toBeNull();
+  });
 });

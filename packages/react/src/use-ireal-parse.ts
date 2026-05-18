@@ -81,6 +81,11 @@ export function useIrealParse(
           if (cancelled) return;
           setSong(null);
           setError(null);
+          // Reset loading in case a prior run called setLoading(true)
+          // and was then cancelled before it could call setLoading(false)
+          // (e.g. source changed from non-empty to '' while wasm was
+          // still initialising). Without this, loading is stuck at true.
+          setLoading(false);
           return;
         }
         // Split the two failure modes so the surfaced error

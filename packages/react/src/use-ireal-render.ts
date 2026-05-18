@@ -74,6 +74,11 @@ export function useIrealRender(
           if (cancelled) return;
           setSvg(null);
           setError(null);
+          // Reset loading in case a prior run called setLoading(true)
+          // and was then cancelled before it could call setLoading(false)
+          // (e.g. source changed from non-empty to '' while wasm was
+          // still initialising). Without this, loading is stuck at true.
+          setLoading(false);
           return;
         }
         const rendered = renderer.renderIrealSvg(source);
