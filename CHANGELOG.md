@@ -166,7 +166,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     simile glyph (SMuFL U+E500).
   - `<text>` free-form captions (`<13 measure lead break>`,
     `<D.S. al 2nd ending>`) — preserved verbatim on
-    `Bar::text_comment`. Anchored macro detection on `D.C.` /
+    `Bar::staff_texts` (see the dedicated #2426 entry above for
+    the structured `StaffText` shape and the `<*XYtext>` /
+    `<Nx>` variants). Anchored macro detection on `D.C.` /
     `D.S.` / `Fine` prefixes (start-of-comment, followed by
     space/dot/end) replaces a substring match that mis-fired
     on common English words like `refine` / `define`.
@@ -208,9 +210,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `convert::from_ireal` propagates the new AST fields into the
   ChordPro output: `no_chord` → `N.C.` text segment,
   `repeat_previous` → previous-chord replay (or `LossyDrop`
-  warning when there is none), `text_comment` → parenthesised
-  inline text, `chord.alternate` → parenthesised alternate
-  chord after the primary.
+  warning when there is none), `staff_texts` → parenthesised
+  inline text (plain captions verbatim, `<Nx>` overrides as
+  `(Nx)`, `<*XYtext>` raises surfaced as `LossyDrop` warnings
+  per the #2426 entry above), `chord.alternate` → parenthesised
+  alternate chord after the primary.
 - `.claude/rules/playground-is-a-sample.md` — establishes the
   rule that the playground at `packages/playground/` is a
   thin sample consumer of the chordsketch libraries; gaps in

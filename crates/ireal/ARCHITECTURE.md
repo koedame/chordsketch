@@ -138,7 +138,8 @@ through this crate's public API.
   running state — an explicit re-assert is required under the
   new meter. Sum-mismatched groupings (`<3+3>` under 5/4) and
   malformed shapes (`<2++3>`, `<+3>`, `<2+>`) fall through to
-  `text_comment` so the raw token round-trips losslessly. The
+  [`Bar::staff_texts`](src/ast.rs) as a plain `StaffText::Text`
+  entry so the raw token round-trips losslessly. The
   iReal SVG renderer does not paint anything for this directive
   (it is a player-only directive per the spec); the field is
   AST-and-JSON-round-trip-only and is exposed to wasm / FFI /
