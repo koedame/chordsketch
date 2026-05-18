@@ -210,8 +210,9 @@ pub struct Bar {
     /// Ordered list of staff-text entries attached to this bar (URL
     /// token `<...>`, excluding the recognised musical-direction
     /// macros `D.C.` / `D.S.` / `Fine` / variants — those are stored
-    /// on `symbol` instead — and the compound-time beat-grouping
-    /// directive `<a+b>`, which is stored on `beat_grouping_override`).
+    /// on `symbol` instead — and the recognised compound-time
+    /// beat-grouping directive `<a+b>`, which is stored on
+    /// `beat_grouping_override`).
     ///
     /// Each [`StaffText`] entry corresponds to one `<...>` token in
     /// the source URL, preserving the spec's three flavours:
@@ -228,6 +229,19 @@ pub struct Bar {
     ///   iReal Pro player to play the surrounding `{ ... }` block N
     ///   times instead of the default 2; structurally distinct from
     ///   a plain caption whose text happens to be `"8x"`.
+    ///
+    /// Tokens that **look like** a structured form but fail
+    /// validation also land here as plain captions so the original
+    /// URL token survives the round trip:
+    ///
+    /// - A malformed beat-grouping (`<3+3>` whose sum mismatches the
+    ///   time signature, or `<2++3>` with an empty subgroup) lands
+    ///   as `StaffText::Text { vertical_position: None }` rather
+    ///   than `beat_grouping_override`.
+    /// - A `<*XY...>` prefix with `XY > 74` or fewer than two
+    ///   digits falls through to plain text.
+    /// - `<0x>` falls through to plain text since the spec gives
+    ///   the directive no defined meaning at zero.
     ///
     /// Multiple staff-text tokens on the same bar are preserved in
     /// the order they appeared in the source URL (the parser
@@ -316,12 +330,21 @@ pub enum StaffText {
     ///
     /// `vertical_position` carries the two-digit `*XY` prefix when
     /// the source token was `<*XYtext>` and `None` when it was a
-    /// plain `<text>`. The spec's range is `0..=74`; values outside
-    /// that range are clamped at parse time, so any `Some(v)` on a
+    /// plain `<text>`. The spec's range is `0..=74`; URL tokens
+    /// whose prefix lands outside that range **fall through to a
+    /// plain `Text` entry** at parse time (matching the
+    /// beat-grouping fall-through pattern), so any `Some(v)` on a
     /// parser-produced AST already satisfies `v <= 74`. Hand-rolled
-    /// ASTs may carry out-of-range values — renderers / serializers
-    /// re-clamp at their own boundary per the "validate at the
-    /// public boundary" rule in `defensive-inputs.md`.
+    /// ASTs may carry out-of-range values: the
+    /// [`StaffText::raised`] constructor clamps, the JSON
+    /// deserializer rejects with `JsonError`, and the URL / JSON
+    /// serializers re-clamp on emit — all per the "validate at the
+    /// public boundary" rule in `defensive-inputs.md`. The
+    /// asymmetry between "clamp on construction" and "reject on
+    /// deserialise" is deliberate: a JSON document is a trust
+    /// boundary (catch the producer bug early) while a Rust
+    /// constructor is a builder ergonomics path (don't make callers
+    /// re-clamp).
     Text {
         /// The caption body (everything after the optional `*XY`
         /// prefix, before the closing `>`).
@@ -333,12 +356,22 @@ pub enum StaffText {
     /// `<Nx>` repeat-count directive — overrides the default 2-time
     /// repeat for the enclosing `{ ... }` block.
     ///
-    /// The inner `u16` is the literal repeat count from the URL token
-    /// (e.g. `<8x>` → `RepeatCount(8)`). The spec does not document a
-    /// max, but the iReal Pro app caps the editor at three digits;
-    /// the AST keeps `u16` so a hand-constructed value past the
-    /// editor cap still serialises losslessly.
-    RepeatCount(u16),
+    /// The inner [`core::num::NonZeroU16`] is the literal repeat
+    /// count from the URL token (e.g. `<8x>` → `RepeatCount(8)`).
+    /// `0` is rejected at the type level because `<0x>` ("play zero
+    /// times") has no defined meaning under the iReal Pro spec — a
+    /// `<0x>` URL token instead falls through to a plain
+    /// [`Self::Text`] entry at parse time so the original bytes
+    /// survive the round trip. Mirrors the
+    /// [`Ending::Numbered(NonZeroU8)`](Ending) precedent in the
+    /// same crate.
+    ///
+    /// The spec does not document an upper bound; the iReal Pro
+    /// editor's three-digit cap is an app-side authoring constraint
+    /// (not a chart-format invariant), so `u16` is preserved so a
+    /// hand-constructed value above the cap still serialises
+    /// losslessly.
+    RepeatCount(core::num::NonZeroU16),
 }
 
 impl StaffText {
@@ -366,10 +399,13 @@ impl StaffText {
         }
     }
 
-    /// Constructs a `<Nx>` repeat-count staff entry.
+    /// Constructs a `<Nx>` repeat-count staff entry, returning
+    /// `None` for `n = 0` (which has no defined meaning under the
+    /// spec). Mirrors the [`Ending::new`] / [`BeatGrouping::new`]
+    /// pattern used elsewhere in this crate.
     #[must_use]
-    pub const fn repeat_count(n: u16) -> Self {
-        Self::RepeatCount(n)
+    pub fn repeat_count(n: u16) -> Option<Self> {
+        core::num::NonZeroU16::new(n).map(Self::RepeatCount)
     }
 }
 

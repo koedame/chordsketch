@@ -63,31 +63,31 @@ pub(crate) fn render_staff_texts(song: &IrealSong, layout: &Layout) -> String {
         if bar.staff_texts.is_empty() {
             continue;
         }
-        // Group entries by vertical_position: each (Option<u8>) maps
-        // to an anchor y, and entries sharing an anchor stack
-        // downward with a fixed line-height. Stable iteration order
-        // matches source order — `Vec` preserves insertion order on
-        // every Rust target.
+        // Two anchor families: explicitly-positioned entries
+        // (`vertical_position = Some(_)`) pin themselves at a Y
+        // derived from the position and do NOT advance the running
+        // stack; default-anchored entries (plain `Text` without a
+        // position, plus every `RepeatCount`) stack downward at the
+        // below-bar baseline so source order remains visible in
+        // the rendered chart.
         let mut stack_y: i32 = below_baseline_y(cell.y, cell.height);
         for st in &bar.staff_texts {
-            let (baseline_y, mut next_y) = match st {
+            let (baseline_y, advances_stack) = match st {
                 StaffText::Text {
                     vertical_position: Some(pos),
                     ..
-                } => {
-                    let anchor = positioned_baseline_y(cell.y, cell.height, *pos);
-                    (anchor, anchor + STAFF_TEXT_FONT_SIZE + 1)
-                }
-                _ => (stack_y, stack_y + STAFF_TEXT_FONT_SIZE + 1),
+                } => (positioned_baseline_y(cell.y, cell.height, *pos), false),
+                _ => (stack_y, true),
             };
             let body = match st {
                 StaffText::Text { text, .. } => text.clone(),
-                StaffText::RepeatCount(n) => format!("{n}x"),
+                StaffText::RepeatCount(n) => format!("{n}x", n = n.get()),
             };
-            // `<>` characters cannot survive into the body because
-            // the URL serializer strips them, but defensively
-            // XML-escape anyway so a hand-constructed AST cannot
-            // corrupt the SVG.
+            // `<` / `>` cannot survive into the body via the URL
+            // round trip (the serializer strips them), but
+            // defensively XML-escape so a hand-constructed AST
+            // carrying raw `<`/`>`/`&`/`"`/`'` cannot corrupt the
+            // SVG output stream.
             let escaped = svg::escape_xml(&body);
             out.push_str(&format!(
                 "    <text x=\"{x}\" y=\"{baseline_y}\" font-family=\"serif\" \
@@ -95,23 +95,8 @@ font-size=\"{STAFF_TEXT_FONT_SIZE}\" \
 font-style=\"italic\" class=\"staff-text\">{escaped}</text>\n",
                 x = cell.x + TEXT_LEFT_INSET,
             ));
-            // Only the default (None) and the same-anchor groups
-            // need to advance the running `stack_y`; explicitly-
-            // positioned entries pin themselves so the stack
-            // continues from the last default-anchored entry.
-            if matches!(
-                st,
-                StaffText::Text {
-                    vertical_position: None,
-                    ..
-                } | StaffText::RepeatCount(_)
-            ) {
-                stack_y = next_y;
-            } else {
-                // Touch the unused binding so the compiler doesn't
-                // flag an unused branch — `next_y` is computed for
-                // symmetry with the default arm.
-                let _ = &mut next_y;
+            if advances_stack {
+                stack_y = baseline_y + STAFF_TEXT_FONT_SIZE + 1;
             }
         }
     }
@@ -201,13 +186,53 @@ mod tests {
         let mut song = IrealSong::new();
         song.sections.push(section(
             'A',
-            vec![bar_with_staff_texts(vec![StaffText::repeat_count(8)])],
+            vec![bar_with_staff_texts(vec![
+                StaffText::repeat_count(8).expect("8 is non-zero"),
+            ])],
         ));
         let layout = compute_layout(&song);
         let svg = render_staff_texts(&song, &layout);
         assert!(
             svg.contains(">8x<"),
             "expected `8x` rendered between `<text>` tags, got {svg:?}"
+        );
+    }
+
+    #[test]
+    fn multi_byte_utf8_body_round_trips_to_svg() {
+        // `さくら` (3 chars × 3 bytes each = 9 bytes) must survive
+        // intact into the SVG output. Regression guard for any
+        // future renderer change that byte-slices the body.
+        let mut song = IrealSong::new();
+        song.sections.push(section(
+            'A',
+            vec![bar_with_staff_texts(vec![StaffText::plain("さくら")])],
+        ));
+        let layout = compute_layout(&song);
+        let svg = render_staff_texts(&song, &layout);
+        assert!(
+            svg.contains(">さくら</text>"),
+            "expected `さくら` in SVG output, got {svg:?}"
+        );
+    }
+
+    #[test]
+    fn xml_special_chars_in_body_are_escaped() {
+        // The URL serializer strips `<` / `>` from staff-text
+        // bodies, so the parser-built AST never carries them. A
+        // hand-constructed AST (per the public-field contract on
+        // `Bar::staff_texts`) MAY carry them, and the renderer
+        // MUST escape so the SVG output stays well-formed XML.
+        let mut song = IrealSong::new();
+        song.sections.push(section(
+            'A',
+            vec![bar_with_staff_texts(vec![StaffText::plain("a & b < c")])],
+        ));
+        let layout = compute_layout(&song);
+        let svg = render_staff_texts(&song, &layout);
+        assert!(
+            svg.contains(">a &amp; b &lt; c</text>"),
+            "expected XML-escaped body, got {svg:?}"
         );
     }
 

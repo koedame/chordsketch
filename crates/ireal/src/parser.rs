@@ -593,11 +593,13 @@ fn parse_beat_grouping(input: &str) -> Option<BeatGrouping> {
 /// Three shapes are recognised, in priority order:
 ///
 /// 1. **Repeat-count override** — body of the form `Nx` (one or more
-///    ASCII digits followed by a single lowercase `x`). Produces
-///    [`StaffText::RepeatCount(n)`]. Examples: `<8x>`, `<3x>`,
-///    `<128x>`. A body like `<x>` (no digits), `<8X>` (uppercase),
-///    or `<8 x>` (whitespace) does NOT match — the iReal Pro spec
-///    documents only the lowercase, no-whitespace form.
+///    ASCII digits followed by a single lowercase `x`), where `N`
+///    is a non-zero `u16`. Produces [`StaffText::RepeatCount`].
+///    Examples: `<8x>`, `<3x>`, `<128x>`. A body like `<x>` (no
+///    digits), `<8X>` (uppercase), `<8 x>` (whitespace), `<0x>`
+///    (the spec gives `<0x>` no defined meaning), or `<65536x>`
+///    (`u16` overflow) does NOT match — the iReal Pro spec
+///    documents only the lowercase, no-whitespace, non-zero form.
 ///
 /// 2. **Vertically-positioned caption** — body of the form `*XY...`
 ///    (a `*` followed by exactly two ASCII digits, then the caption
@@ -617,17 +619,13 @@ fn parse_beat_grouping(input: &str) -> Option<BeatGrouping> {
 /// it is not a macro phrase (handled by [`classify_macro_comment`])
 /// or a compound-time grouping (handled by [`parse_beat_grouping`]).
 fn classify_staff_text(trimmed: &str) -> StaffText {
-    // (1) `<Nx>` repeat-count form. Match strictly on
-    // `<digits>x` so a caption that happens to end in `x` (e.g.
-    // `<solo break x>`) is not misclassified — there must be no
-    // non-digit characters before the trailing `x` and at least
-    // one digit. The space-tolerant case is intentionally rejected
-    // because the iReal Pro app never emits whitespace inside this
-    // directive.
+    // (1) `<Nx>` repeat-count form.
     if let Some(prefix) = trimmed.strip_suffix('x') {
         if !prefix.is_empty() && prefix.bytes().all(|b| b.is_ascii_digit()) {
             if let Ok(n) = prefix.parse::<u16>() {
-                return StaffText::RepeatCount(n);
+                if let Some(nz) = core::num::NonZeroU16::new(n) {
+                    return StaffText::RepeatCount(nz);
+                }
             }
         }
     }
@@ -642,9 +640,11 @@ fn classify_staff_text(trimmed: &str) -> StaffText {
     if let Some(rest) = trimmed.strip_prefix('*') {
         let bytes = rest.as_bytes();
         if bytes.len() >= 2 && bytes[0].is_ascii_digit() && bytes[1].is_ascii_digit() {
-            // SAFETY: bytes 0 and 1 are confirmed ASCII digits
+            // INVARIANT: bytes 0 and 1 are confirmed ASCII digits
             // above, so they are valid UTF-8 starts and byte index
-            // 2 lands on a char boundary.
+            // 2 lands on a char boundary. (No `unsafe` block is
+            // involved; this is a char-boundary justification for
+            // the safe `&rest[..2]` / `&rest[2..]` slices below.)
             let pos: u8 = rest[..2].parse().expect("two ASCII digits parse as u8");
             if pos <= StaffText::MAX_VERTICAL_POSITION {
                 return StaffText::Text {
@@ -2814,7 +2814,10 @@ mod tests {
         let url = "irealbook://Test=A==Style=C=44=[*A<8x>C|D|]";
         let song = parse(url).expect("parse");
         let bar0 = &song.sections[0].bars[0];
-        assert_eq!(bar0.staff_texts, vec![StaffText::repeat_count(8)]);
+        assert_eq!(
+            bar0.staff_texts,
+            vec![StaffText::repeat_count(8).expect("8 is non-zero")]
+        );
     }
 
     #[test]
@@ -2825,7 +2828,96 @@ mod tests {
         let url = "irealbook://Test=A==Style=C=44=[*A<128x>C|D|]";
         let song = parse(url).expect("parse");
         let bar0 = &song.sections[0].bars[0];
-        assert_eq!(bar0.staff_texts, vec![StaffText::repeat_count(128)]);
+        assert_eq!(
+            bar0.staff_texts,
+            vec![StaffText::repeat_count(128).expect("128 is non-zero")]
+        );
+    }
+
+    #[test]
+    fn staff_text_repeat_count_zero_falls_through_to_plain_text() {
+        // `<0x>` is structurally `digits + 'x'` but the spec gives
+        // it no defined meaning ("play zero times") — the
+        // [`StaffText::RepeatCount`] payload is `NonZeroU16`, so
+        // the URL token falls through to a plain `Text` entry and
+        // round-trips losslessly as `<0x>` text. Locks the
+        // non-zero contract documented on `Bar::staff_texts`.
+        let url = "irealbook://Test=A==Style=C=44=[*A<0x>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.staff_texts, vec![StaffText::plain("0x")]);
+    }
+
+    #[test]
+    fn staff_text_repeat_count_u16_overflow_falls_through_to_plain_text() {
+        // `<65536x>` overflows `u16::MAX` — `prefix.parse::<u16>()`
+        // returns `Err`, the form falls through to plain text, and
+        // the original token survives the round trip verbatim. A
+        // future refactor that swaps `u16` for `u32` or
+        // `saturating_*` would silently change behaviour without
+        // this regression test.
+        let url = "irealbook://Test=A==Style=C=44=[*A<65536x>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.staff_texts, vec![StaffText::plain("65536x")]);
+    }
+
+    #[test]
+    fn staff_text_repeat_count_u16_max_round_trips() {
+        // `<65535x>` is the largest `<Nx>` form representable in
+        // `NonZeroU16` (= `u16::MAX`). Locks the upper boundary
+        // alongside the overflow test above.
+        let url = "irealbook://Test=A==Style=C=44=[*A<65535x>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(
+            bar0.staff_texts,
+            vec![StaffText::repeat_count(u16::MAX).expect("u16::MAX is non-zero")]
+        );
+    }
+
+    #[test]
+    fn staff_text_lone_x_falls_through_to_plain_text() {
+        // `<x>` has no digits before the trailing `x`, so the
+        // `!prefix.is_empty()` guard rejects the repeat-count
+        // shape and the token falls through to plain text. A
+        // future refactor that drops the guard would parse `<x>`
+        // as a degenerate repeat count.
+        let url = "irealbook://Test=A==Style=C=44=[*A<x>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.staff_texts, vec![StaffText::plain("x")]);
+    }
+
+    #[test]
+    fn staff_text_empty_body_produces_no_entry() {
+        // `apply_comment` short-circuits on `trimmed.is_empty()`
+        // before calling `classify_staff_text`. The bar gets no
+        // staff_text entry. A regression that dropped the early
+        // return would produce a zero-width caption.
+        let url = "irealbook://Test=A==Style=C=44=[*A<>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert!(bar0.staff_texts.is_empty(), "got {:?}", bar0.staff_texts);
+    }
+
+    #[test]
+    fn staff_text_vertical_position_zero_and_seventy_four_boundary() {
+        // Locks the inclusive `0..=74` bound — both endpoints
+        // produce a vertically-positioned caption, not a fall
+        // through.
+        let zero =
+            parse("irealbook://Test=A==Style=C=44=[*A<*00caption>C|D|]").expect("parse <*00>");
+        assert_eq!(
+            zero.sections[0].bars[0].staff_texts,
+            vec![StaffText::raised("caption", 0)],
+        );
+        let seventy_four =
+            parse("irealbook://Test=A==Style=C=44=[*A<*74top>C|D|]").expect("parse <*74>");
+        assert_eq!(
+            seventy_four.sections[0].bars[0].staff_texts,
+            vec![StaffText::raised("top", 74)],
+        );
     }
 
     #[test]
@@ -2873,7 +2965,29 @@ mod tests {
         let bar0 = &song.sections[0].bars[0];
         assert_eq!(
             bar0.staff_texts,
-            vec![StaffText::plain("intro"), StaffText::repeat_count(8)]
+            vec![
+                StaffText::plain("intro"),
+                StaffText::repeat_count(8).expect("8 is non-zero"),
+            ]
+        );
+    }
+
+    #[test]
+    fn multiple_staff_texts_reverse_order_also_preserves() {
+        // Companion to the forward-order test above. Swapping the
+        // tokens proves the parser preserves arrival order rather
+        // than sorting by type. Locks the [`StaffText::RepeatCount`]
+        // and [`StaffText::Text`] arrival-order contract from both
+        // directions.
+        let url = "irealbook://Test=A==Style=C=44=[*A<8x><intro>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(
+            bar0.staff_texts,
+            vec![
+                StaffText::repeat_count(8).expect("8 is non-zero"),
+                StaffText::plain("intro"),
+            ]
         );
     }
 }

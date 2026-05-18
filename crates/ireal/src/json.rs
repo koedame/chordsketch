@@ -286,7 +286,7 @@ impl ToJson for StaffText {
             }
             Self::RepeatCount(n) => {
                 out.push_str("\"type\":\"repeat_count\",\"count\":");
-                out.push_str(&n.to_string());
+                out.push_str(&n.get().to_string());
             }
         }
         out.push('}');
@@ -1456,7 +1456,13 @@ impl FromJson for StaffText {
                 let count = u16::try_from(raw).map_err(|_| {
                     JsonError::new(0, format!("staff_text count {raw} out of range for u16"))
                 })?;
-                Ok(Self::RepeatCount(count))
+                let nz = core::num::NonZeroU16::new(count).ok_or_else(|| {
+                    JsonError::new(
+                        0,
+                        "staff_text repeat_count `count` must be non-zero".to_string(),
+                    )
+                })?;
+                Ok(Self::RepeatCount(nz))
             }
             other => Err(JsonError::new(
                 0,

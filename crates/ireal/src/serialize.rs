@@ -606,8 +606,9 @@ fn serialize_chord_chart(song: &IrealSong) -> String {
         // Symbol for THIS bar, emitted INSIDE the bar's content
         // area so the parser's `queue_symbol` (which now sets
         // `current_bar.symbol` directly) lands it on this bar.
-        // Skip when one of the bar's own staff_texts will carry an
-        // equivalent macro phrase on re-parse.
+        // Skip when one of the bar's own staff_texts already
+        // exact-matches a macro phrase that would re-fire on
+        // re-parse. The classifier is exact-match per #2427.
         if !text_carries_macro(bar) {
             if let Some(sym) = bar.symbol {
                 serialize_symbol(&mut chart, sym);
@@ -859,7 +860,7 @@ fn emit_staff_text(out: &mut String, st: &StaffText) {
         }
         StaffText::RepeatCount(n) => {
             out.push('<');
-            out.push_str(&n.to_string());
+            out.push_str(&n.get().to_string());
             out.push('x');
             out.push('>');
         }
@@ -1628,7 +1629,7 @@ mod tests {
                     }],
                     staff_texts: vec![
                         StaffText::raised("Solo Section:", 36),
-                        StaffText::repeat_count(8),
+                        StaffText::repeat_count(8).expect("8 is non-zero"),
                     ],
                     ..Default::default()
                 }],
@@ -1641,7 +1642,7 @@ mod tests {
             parsed.sections[0].bars[0].staff_texts,
             vec![
                 StaffText::raised("Solo Section:", 36),
-                StaffText::repeat_count(8),
+                StaffText::repeat_count(8).expect("8 is non-zero"),
             ],
         );
     }

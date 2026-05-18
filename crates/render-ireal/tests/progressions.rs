@@ -929,7 +929,7 @@ fn staff_text_demo() -> IrealSong {
                     kind: BarChordKind::Played,
                 }],
                 staff_texts: vec![
-                    StaffText::repeat_count(8),
+                    StaffText::repeat_count(8).expect("8 is non-zero"),
                     StaffText::plain("Vamp till cue"),
                 ],
                 ..Bar::new()
