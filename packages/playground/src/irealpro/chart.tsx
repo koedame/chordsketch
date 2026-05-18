@@ -388,23 +388,50 @@ function sectionLabelText(label: SectionLabel): string | null {
   return label.value ?? null;
 }
 
-function barlineClass(bar: Bar): string[] {
-  const out: string[] = [];
-  if (bar.start === 'open_repeat') out.push('repeat-start');
-  if (bar.start === 'double') out.push('double-start');
-  if (bar.end === 'close_repeat') out.push('repeat-end');
-  if (bar.end === 'double') out.push('double-end');
-  if (bar.end === 'final') out.push('final');
-  if (bar.endMark) out.push('last-bar');
-  if (bar.active) out.push('active');
+/** Barline glyph kind painted by `[data-barline-left|right]` CSS
+ * selectors. `single` (the default) is encoded by attribute absence
+ * so the CSS only needs three explicit values. Mirrors the
+ * static design-system reference at
+ * `design-system/ui_kits/web/editor-irealb.html`. */
+type BarlineSide = 'double' | 'repeat' | 'end';
+
+function barlineSide(kind: Bar['start'] | Bar['end'], side: 'start' | 'end'): BarlineSide | null {
+  switch (kind) {
+    case 'double':
+      return 'double';
+    case 'open_repeat':
+      return side === 'start' ? 'repeat' : null;
+    case 'close_repeat':
+      return side === 'end' ? 'repeat' : null;
+    case 'final':
+      return side === 'end' ? 'end' : null;
+    default:
+      return null;
+  }
+}
+
+interface BarVisualState {
+  classes: string[];
+  barlineLeft: BarlineSide | null;
+  barlineRight: BarlineSide | null;
+}
+
+function barVisualState(bar: Bar): BarVisualState {
+  const classes: string[] = [];
+  if (bar.endMark) classes.push('last-bar');
+  if (bar.active) classes.push('active');
   if (bar.ending !== null && bar.ending !== undefined) {
     // `0` is the Untitled sentinel — emit a distinct class so CSS
     // hooks can target it explicitly and don't read it as a
     // numbered bracket.
-    out.push('ending');
-    out.push(bar.ending === 0 ? 'ending-untitled' : `ending-${bar.ending}`);
+    classes.push('ending');
+    classes.push(bar.ending === 0 ? 'ending-untitled' : `ending-${bar.ending}`);
   }
-  return out;
+  return {
+    classes,
+    barlineLeft: barlineSide(bar.start, 'start'),
+    barlineRight: barlineSide(bar.end, 'end'),
+  };
 }
 
 interface BarCellProps {
@@ -420,7 +447,8 @@ function BarCell({
   sectionLabel,
   beats,
 }: BarCellProps): JSX.Element {
-  const classes = ['bar', ...barlineClass(bar)];
+  const visual = barVisualState(bar);
+  const classes = ['bar', ...visual.classes];
   const sectionMarker =
     isFirstOfSection && sectionLabel ? sectionLabelText(sectionLabel) : null;
 
@@ -461,6 +489,8 @@ function BarCell({
   return (
     <div
       className={classes.join(' ')}
+      data-barline-left={visual.barlineLeft ?? undefined}
+      data-barline-right={visual.barlineRight ?? undefined}
       style={{ ['--cs-beats' as string]: String(beats) }}
     >
       {sectionMarker !== null && (
