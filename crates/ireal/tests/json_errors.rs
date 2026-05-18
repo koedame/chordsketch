@@ -737,9 +737,17 @@ fn bar_chord_slash_repeat_serialises_and_round_trips_through_json() {
         ChordSize::Default,
     );
     let played_json = played_bc.to_json_string();
+    // Check both BarChordKind values are absent — a bare
+    // `contains("\"kind\"")` collides with `ChordQuality`'s
+    // own `"kind":` JSON tag, so look for the specific
+    // value strings BarChord uses.
     assert!(
-        !played_json.contains("\"kind\""),
-        "Played chord must NOT emit kind field, got {played_json:?}"
+        !played_json.contains("\"kind\":\"played\""),
+        "Played BarChord must NOT emit its kind field, got {played_json:?}"
+    );
+    assert!(
+        !played_json.contains("\"kind\":\"slash_repeat\""),
+        "Played BarChord must NOT emit slash_repeat, got {played_json:?}"
     );
     // Round-trip: deserialise back and check equality.
     let parsed = BarChord::from_json_str(&json).expect("deserialise");
