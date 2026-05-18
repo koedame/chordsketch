@@ -97,7 +97,7 @@
    data-barline-right attribute below), so we never need `!important`
    to override. The data-barline-right suppression rule below matches
    the `:last-child` rule's specificity (`.chart-line` + `.bar` +
-   attribute = 0,2,1) so the cascade-order tie-break favours the
+   attribute = 0,3,0; attribute selectors are class-level) so the cascade-order tie-break favours the
    later (suppression) rule — the pre-#2497 `:not(.repeat-end):not(.final)`
    workaround silently missed `double-end`, painting both a SMuFL
    `\E031` glyph and the default 1.5px border-right on `:last-child`
