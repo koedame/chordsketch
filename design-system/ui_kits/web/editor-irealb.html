@@ -505,18 +505,38 @@ a { color: inherit; text-decoration: none; }
   grid-column: 1 / -1;
 }
 
-/* Alternate chord — a smaller chord rendered ABOVE the primary chord in
-   the same beat column. Sits inline above the primary so it scrolls with
-   the bar. */
-.chord-stack { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+/* Alternate chord — a smaller chord rendered ABOVE the primary chord at
+   the same beat column. Mirrors iReal Pro's printed convention: the
+   alternate floats above the primary's top, in the inter-line
+   whitespace, as a smaller annotation that does not change the
+   primary's vertical placement within the bar. The `.alt` nests the
+   same `.chord` structure (`.chord-root` + `.chord-acc` + `.chord-qual`,
+   or `.chord.slash` + `.top` + `.bot`) as the primary so chord-symbol
+   grammar is shared end-to-end — the size rules below scale every
+   sub-element down to ~50% of the primary's 44px root. The
+   absolute-positioning approach is the SISTER SITE of the runtime
+   playground at `packages/playground/src/irealpro/chart.css`; both
+   surfaces use `position: absolute; bottom: 100%` so the alt does
+   not take up vertical space inside the bar's grid cell, keeping
+   primary chords aligned across bars. */
+.chord-stack { position: relative; display: inline-block; line-height: 1; }
 .chord-stack .alt {
-  font-family: var(--font-chord);
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--text-secondary);
-  letter-spacing: -0.01em;
-  line-height: 1;
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 4px;
+  color: var(--ink-1000);
+  white-space: nowrap;
+  pointer-events: none;
 }
+.chord-stack .alt .chord { font-weight: 700; line-height: 1; }
+.chord-stack .alt .chord-root { font-size: 22px; }
+.chord-stack .alt .chord-acc { font-size: 13px; vertical-align: 0.55em; margin-left: 1px; }
+.chord-stack .alt .chord-qual { font-size: 13px; vertical-align: -0.15em; }
+.chord-stack .alt .chord-qual.stacked { vertical-align: -0.5em; line-height: 0.95; }
+.chord-stack .alt .chord.slash .top,
+.chord-stack .alt .chord.slash .bot { font-size: 16px; }
+.chord-stack .alt .chord.slash .bot { padding-top: 1px; margin-top: 1px; }
 
 /* Fermata glyph anchored above its chord. Bravura's fermataAbove visible
    ink sits in the top ~25% of the rendered font-size box; the element
@@ -641,7 +661,6 @@ a { color: inherit; text-decoration: none; }
   font-weight: 600;
   font-size: 10px;
   letter-spacing: 0;
-
   color: var(--ink-300);
 }
 .player-controls .pc-stat .value { font-weight: 600; color: var(--ink-0); }
@@ -979,7 +998,9 @@ a { color: inherit; text-decoration: none; }
           </div>
           <div class="bar">
             <span class="chord-stack">
-              <span class="alt">A7<span class="smufl">&#x266D;</span>13</span>
+              <span class="alt">
+                <span class="chord"><span class="chord-root">A</span><span class="chord-qual">7<span class="smufl">&#x266D;</span>13</span></span>
+              </span>
               <span class="chord"><span class="chord-root">A</span><span class="chord-qual">13</span></span>
             </span>
           </div>
@@ -1149,6 +1170,10 @@ a { color: inherit; text-decoration: none; }
       <input class="chord-input" type="text" value="" placeholder="(none)" style="font-size: var(--fs-14); color: var(--text-secondary);">
     </div>
     <div class="row">
+      <span class="label">Text</span>
+      <input class="chord-input" type="text" value="" placeholder="(no text — e.g. Repeat 4×, to Bridge)" style="font-size: var(--fs-14); color: var(--text-secondary);">
+    </div>
+    <div class="row">
       <span class="label">Section</span>
       <div class="chips" role="group">
         <button class="chip">A</button>
@@ -1216,10 +1241,6 @@ a { color: inherit; text-decoration: none; }
         <button class="chip" title="Vertical spacer × 3">×3</button>
         <button class="chip" title="Mark this bar as the playback end">END</button>
       </div>
-    </div>
-    <div class="row">
-      <span class="label">Text label</span>
-      <input class="chord-input" type="text" value="" placeholder="(no text — e.g. Repeat 4×, to Bridge)" style="font-size: var(--fs-14); color: var(--text-secondary);">
     </div>
     <div class="footer">
       <button class="btn btn-secondary btn-sm" style="flex: 1;">Duplicate</button>
