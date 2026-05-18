@@ -97,3 +97,4 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0017](0017-react-renders-from-ast.md) | React surface renders from AST; Rust HTML renderer demoted to static-output | Accepted (2026-05-10) |
 | [0018](0018-phase-based-shell-orchestrated-workflows.md) | Phase-based shell-orchestrated workflows (declines cc-wf-studio / n8n / Agent SDK as substitutes) | Accepted (2026-05-16) |
 | [0019](0019-batch-mode-autopilot-issue.md) | Batch-mode autopilot-issue workflow (one PR aggregates multiple eligible issues per round) | Accepted (2026-05-17) |
+| [0020](0020-ireal-pro-react-surface.md) | iReal Pro React surface is native React (option (b) MVP), not a `ui-irealb-editor` wrapper | Accepted (2026-05-19) |

@@ -88,6 +88,52 @@ export {
   type ChordRepositionResult,
 } from './chord-source-edit';
 
+// iReal Pro surface (#2473 / ADR-0020). Mirrors the ChordPro
+// surface in shape: editor + preview + playground component plus
+// parse / serialise hooks. v0.1.0 ships an MVP feature set —
+// header form + read-only bar grid + URL textarea + SVG preview;
+// see ADR-0020 for the parity gap with `@chordsketch/ui-irealb-editor`.
+export { IrealEditor, type IrealEditorProps } from './ireal-editor';
+export { IrealPreview, type IrealPreviewProps } from './ireal-preview';
+export { IrealPlayground, type IrealPlaygroundProps } from './ireal-playground';
+export {
+  useIrealParse,
+  type UseIrealParseResult,
+} from './use-ireal-parse';
+export {
+  useIrealSerialize,
+  type UseIrealSerializeResult,
+} from './use-ireal-serialize';
+export {
+  useIrealRender,
+  type UseIrealRenderResult,
+} from './use-ireal-render';
+export {
+  irealChordRootToString,
+  irealChordQualityToString,
+  irealChordToString,
+  irealSectionLabelToString,
+} from './ireal-ast';
+export type {
+  IrealAccidental,
+  IrealBar,
+  IrealBarChord,
+  IrealBarChordKind,
+  IrealBarLine,
+  IrealBeatPosition,
+  IrealChord,
+  IrealChordQuality,
+  IrealChordRoot,
+  IrealChordSize,
+  IrealKeyMode,
+  IrealKeySignature,
+  IrealMusicalSymbol,
+  IrealSection,
+  IrealSectionLabel,
+  IrealSong,
+  IrealTimeSignature,
+} from './ireal-ast';
+
 /**
  * The running version of `@chordsketch/react`. Returns the string
  * declared in this package's `package.json` so consumers can verify

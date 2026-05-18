@@ -7,6 +7,11 @@ runtime. Pick a starting point that fits how you are integrating:
 
 - [Render to HTML, plain text, or PDF](tasks/render.md)
 - [Transpose chords by N semitones](tasks/transpose.md)
+- [Embed ChordPro and iReal Pro in a React app](tasks/embed-react.md)
+  — 10 copy-paste recipes covering the `@chordsketch/react`
+  component surface (`<Playground>`, `<ChordSheet>`,
+  `<IrealPlayground>`, `<PdfExport>`, custom AST rendering, SSR
+  notes).
 
 Each task page shows the same operation across every binding, so
 you can copy the snippet that matches your stack.
@@ -34,11 +39,16 @@ bindings (e.g. matching desktop and web renderings).
 
 ## I want UI components
 
-The React / Vue / Svelte component packages are tracked under
-[#2039](https://github.com/koedame/chordsketch/issues/2039) and not
-yet released. When they ship they will get their own task pages
-here. For now this guide focuses on the parsing / transposition /
-rendering layer that all UI work builds on.
+- **React**:
+  [`@chordsketch/react@0.1.0`](https://www.npmjs.com/package/@chordsketch/react)
+  — published, includes both the ChordPro and iReal Pro embedding
+  surfaces. See the
+  [Embed ChordPro and iReal Pro in a React app](tasks/embed-react.md)
+  recipe guide.
+- **Vue / Svelte / others** are tracked under
+  [#2039](https://github.com/koedame/chordsketch/issues/2039) and
+  not yet released. When they ship they will get their own task
+  pages here.
 
 ## How the SDK fits together
 
