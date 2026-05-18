@@ -118,7 +118,7 @@ pub mod pdf;
 pub mod png;
 mod svg;
 
-use chordsketch_ireal::{BarChord, ChordSize, IrealSong};
+use chordsketch_ireal::{BarChord, BarChordKind, ChordSize, IrealSong};
 
 pub use chord_typography::{ChordTypography, SpanKind, TypographySpan, chord_to_typography};
 pub use layout::{BarCoord, EmptyCell, Layout, compute_layout};
@@ -451,6 +451,18 @@ fn write_bar_chord_text(out: &mut String, cell: &BarCoord, chords: &[BarChord], 
             ChordSize::Default => page::CHORD_FONT_SIZE_BASE,
             ChordSize::Small => page::CHORD_FONT_SIZE_BASE_SMALL,
         };
+        // Pause-slash repeats render as a single forward-slash glyph
+        // in place of chord typography — the iReal Pro spec's
+        // "repeat the preceding chord" cue. The slash sits on the
+        // same baseline as a chord root, sized to match, so packed
+        // bars like `|C7,p,p,p,|` line up cleanly.
+        if bc.kind == BarChordKind::SlashRepeat {
+            out.push_str(&format!(
+                "    <text x=\"{chord_x}\" y=\"{base_y}\" font-family=\"Roboto, sans-serif\" \
+font-weight=\"700\" font-size=\"{base}\" class=\"chord slash-repeat\"{transform_attr}>/</text>\n",
+            ));
+            continue;
+        }
         out.push_str(&format!(
             "    <text x=\"{chord_x}\" y=\"{base_y}\" font-family=\"Roboto, sans-serif\" \
 font-weight=\"700\" font-size=\"{base}\" class=\"chord\"{transform_attr}>",

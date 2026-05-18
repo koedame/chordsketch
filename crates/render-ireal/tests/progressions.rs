@@ -12,7 +12,7 @@
 //! and re-run without the env var to confirm parity.
 
 use chordsketch_ireal::{
-    Accidental, Bar, BarChord, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize, IrealSong,
+    Accidental, Bar, BarChord, BarChordKind, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize, IrealSong,
     KeyMode, KeySignature, Section, SectionLabel,
 };
 use chordsketch_render_ireal::{RenderOptions, render_svg};
@@ -24,6 +24,7 @@ fn bar_with_chord(note: char, quality: ChordQuality) -> Bar {
             chord,
             position: BeatPosition::on_beat(1).unwrap(),
             size: ChordSize::Default,
+            kind: BarChordKind::Played,
         }],
         ..Bar::new()
     }
@@ -36,11 +37,13 @@ fn bar_with_two_chords(c1: (char, ChordQuality), c2: (char, ChordQuality)) -> Ba
                 chord: Chord::triad(ChordRoot::natural(c1.0), c1.1),
                 position: BeatPosition::on_beat(1).unwrap(),
                 size: ChordSize::Default,
+                kind: BarChordKind::Played,
             },
             BarChord {
                 chord: Chord::triad(ChordRoot::natural(c2.0), c2.1),
                 position: BeatPosition::on_beat(3).unwrap(),
                 size: ChordSize::Default,
+                kind: BarChordKind::Played,
             },
         ],
         ..Bar::new()
@@ -296,6 +299,7 @@ fn marked_bar(start: BarLine, end: BarLine, note: char, q: ChordQuality) -> Bar 
             chord: Chord::triad(ChordRoot::natural(note), q),
             position: BeatPosition::on_beat(1).unwrap(),
             size: ChordSize::Default,
+            kind: BarChordKind::Played,
         }],
         ..Bar::new()
     }
@@ -309,6 +313,7 @@ fn ending_bar(n: u8, note: char, q: ChordQuality) -> Bar {
             chord: Chord::triad(ChordRoot::natural(note), q),
             position: BeatPosition::on_beat(1).unwrap(),
             size: ChordSize::Default,
+            kind: BarChordKind::Played,
         }],
         ..Bar::new()
     }
@@ -366,6 +371,7 @@ fn endings_demo() -> IrealSong {
                     chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major7),
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 ..Bar::new()
             },
@@ -409,6 +415,7 @@ fn n0_ending_demo() -> IrealSong {
                     chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major7),
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 ..Bar::new()
             },
@@ -419,6 +426,7 @@ fn n0_ending_demo() -> IrealSong {
                     chord: Chord::triad(ChordRoot::natural('A'), ChordQuality::Minor7),
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 ..Bar::new()
             },
@@ -428,6 +436,7 @@ fn n0_ending_demo() -> IrealSong {
                     chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Minor7),
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 ..Bar::new()
             },
@@ -457,6 +466,7 @@ fn section_markers_demo() -> IrealSong {
                 chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major7),
                 position: BeatPosition::on_beat(1).unwrap(),
                 size: ChordSize::Default,
+                kind: BarChordKind::Played,
             }],
             ..Bar::new()
         }
@@ -537,6 +547,7 @@ fn symbol_bar(symbol: MusicalSymbol, note: char, q: ChordQuality) -> Bar {
             chord: Chord::triad(ChordRoot::natural(note), q),
             position: BeatPosition::on_beat(1).unwrap(),
             size: ChordSize::Default,
+            kind: BarChordKind::Played,
         }],
         ..Bar::new()
     }
@@ -714,6 +725,7 @@ fn small_bar_chord(note: char, quality: ChordQuality, beat: u8) -> BarChord {
         chord: Chord::triad(ChordRoot::natural(note), quality),
         position: BeatPosition::on_beat(beat).unwrap(),
         size: ChordSize::Small,
+        kind: BarChordKind::Played,
     }
 }
 
@@ -736,6 +748,7 @@ fn small_flat_slash_chord(note: char, quality: ChordQuality, bass: char, beat: u
         },
         position: BeatPosition::on_beat(beat).unwrap(),
         size: ChordSize::Small,
+        kind: BarChordKind::Played,
     }
 }
 
@@ -744,6 +757,7 @@ fn default_bar_chord(note: char, quality: ChordQuality, beat: u8) -> BarChord {
         chord: Chord::triad(ChordRoot::natural(note), quality),
         position: BeatPosition::on_beat(beat).unwrap(),
         size: ChordSize::Default,
+        kind: BarChordKind::Played,
     }
 }
 

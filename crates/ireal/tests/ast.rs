@@ -7,7 +7,7 @@
 //! the JSON debug output is byte-stable for a known input.
 
 use chordsketch_ireal::{
-    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
+    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
     Ending, FromJson, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel,
     TimeSignature, ToJson,
 };
@@ -257,6 +257,7 @@ fn json_round_trip_handles_every_enum_variant() {
                 },
                 position: BeatPosition::on_beat(u8::try_from(i % 4 + 1).unwrap()).unwrap(),
                 size: ChordSize::Default,
+                kind: BarChordKind::Played,
             }],
             ending: Ending::new(u8::try_from(i % 3 + 1).unwrap()),
             symbol: Some(symbol),
@@ -461,6 +462,7 @@ fn make_sample() -> IrealSong {
         chord,
         position: BeatPosition::on_beat(1).unwrap(),
         size: ChordSize::Default,
+        kind: BarChordKind::Played,
     };
     let bar = Bar {
         start: BarLine::OpenRepeat,

@@ -15,7 +15,7 @@
 //! the env var from the commit — it is read only at test time.
 
 use chordsketch_ireal::{
-    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
+    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
     IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
 };
 use chordsketch_render_ireal::{RenderOptions, render_svg, version};
@@ -28,6 +28,7 @@ fn build_basic_song() -> IrealSong {
         chord,
         position: BeatPosition::on_beat(1).unwrap(),
         size: ChordSize::Default,
+        kind: BarChordKind::Played,
     };
     let bar = Bar {
         start: BarLine::OpenRepeat,
@@ -156,6 +157,7 @@ fn flat_key_emits_unicode_flat_glyph() {
                 chord,
                 position: BeatPosition::on_beat(1).unwrap(),
                 size: ChordSize::Default,
+                kind: BarChordKind::Played,
             }],
             ..Bar::new()
         }],
@@ -303,6 +305,7 @@ fn out_of_range_chord_root_falls_back_to_question_mark() {
                 chord,
                 position: BeatPosition::on_beat(1).unwrap(),
                 size: ChordSize::Default,
+                kind: BarChordKind::Played,
             }],
             ..Bar::new()
         }],
@@ -357,6 +360,7 @@ fn sharp_key_emits_unicode_sharp_glyph() {
                 chord,
                 position: BeatPosition::on_beat(1).unwrap(),
                 size: ChordSize::Default,
+                kind: BarChordKind::Played,
             }],
             ..Bar::new()
         }],
@@ -389,6 +393,7 @@ fn slash_chord_renders_with_chord_slash_and_chord_bass_classes() {
             },
             position: BeatPosition::on_beat(1).unwrap(),
             size: ChordSize::Default,
+            kind: BarChordKind::Played,
         }],
         ..Bar::new()
     };
@@ -439,6 +444,7 @@ fn slash_chord_without_quality_uses_unshifted_slash_span() {
             },
             position: BeatPosition::on_beat(1).unwrap(),
             size: ChordSize::Default,
+            kind: BarChordKind::Played,
         }],
         ..Bar::new()
     };
@@ -471,11 +477,13 @@ fn multi_chord_bar_emits_one_text_per_chord() {
                 chord: Chord::triad(ChordRoot::natural('A'), ChordQuality::Minor7),
                 position: BeatPosition::on_beat(1).unwrap(),
                 size: ChordSize::Default,
+                kind: BarChordKind::Played,
             },
             BarChord {
                 chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Minor7),
                 position: BeatPosition::on_beat(3).unwrap(),
                 size: ChordSize::Default,
+                kind: BarChordKind::Played,
             },
         ],
         ..Bar::new()
@@ -511,6 +519,7 @@ fn excess_chords_per_bar_render_at_most_max_chords_per_bar_root_spans() {
             chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
             position: BeatPosition::on_beat(1).unwrap(),
             size: ChordSize::Default,
+            kind: BarChordKind::Played,
         });
     }
     let bar = Bar {
@@ -546,6 +555,7 @@ fn custom_quality_xml_reserved_chars_are_escaped_at_emit_boundary() {
             ),
             position: BeatPosition::on_beat(1).unwrap(),
             size: ChordSize::Default,
+            kind: BarChordKind::Played,
         }],
         ..Bar::new()
     };

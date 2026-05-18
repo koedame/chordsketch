@@ -55,8 +55,9 @@
 //!   them.
 
 use crate::ast::{
-    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
-    Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot,
+    ChordSize, Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel,
+    TimeSignature,
 };
 use std::fmt;
 
@@ -615,7 +616,18 @@ fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
             continue;
         }
         if let Some(r) = rest.strip_prefix('p') {
-            // Pause slash — no AST impact.
+            // Pause slash — emit a `SlashRepeat` BarChord whose
+            // chord field carries a snapshot of the preceding
+            // chord (see `BarChordKind` doc). An orphan `p` with
+            // no preceding chord (malformed URL) is dropped
+            // silently to match the pre-#2435 behaviour. Inside
+            // a `(...)` alternate-chord paren the slash is also
+            // dropped — alternates are an annotation on the
+            // primary chord, not a beat slot the slash could
+            // legitimately occupy.
+            if !state.in_alternate {
+                state.push_slash_repeat();
+            }
             rest = r;
             continue;
         }
@@ -1043,8 +1055,62 @@ impl ChartParseState {
             chord,
             position,
             size,
+            kind: BarChordKind::Played,
         });
         Ok(())
+    }
+
+    /// Emits a pause-slash marker — a [`BarChord`] with
+    /// [`BarChordKind::SlashRepeat`] carrying a snapshot of the
+    /// preceding chord. Returns `false` (and pushes nothing) when no
+    /// preceding chord exists; that case represents a malformed URL
+    /// and is dropped silently to match the pre-#2435 behaviour of
+    /// orphan `p` tokens.
+    fn push_slash_repeat(&mut self) -> bool {
+        let Some(prev_chord) = self.most_recent_chord() else {
+            return false;
+        };
+        let position = BeatPosition::on_beat(1).expect("beat 1 is always a valid NonZeroU8");
+        let size = self.current_chord_size;
+        self.current_bar.chords.push(BarChord {
+            chord: prev_chord,
+            position,
+            size,
+            kind: BarChordKind::SlashRepeat,
+        });
+        true
+    }
+
+    /// Returns the most recent chord — first the current bar's last
+    /// `Played` chord (a slash repeat of the same bar's previous
+    /// chord), then any previous bar's last `Played` chord (a slash
+    /// repeat across a bar boundary, e.g. `|C7|pF7|`). `SlashRepeat`
+    /// entries are skipped because they themselves carry a snapshot
+    /// of an earlier chord — chaining snapshots is unnecessary and
+    /// would dilute provenance if the original chord changes.
+    fn most_recent_chord(&self) -> Option<Chord> {
+        let from_current = self
+            .current_bar
+            .chords
+            .iter()
+            .rev()
+            .find(|bc| bc.kind == BarChordKind::Played)
+            .map(|bc| bc.chord.clone());
+        if from_current.is_some() {
+            return from_current;
+        }
+        let section = self.current_section.as_ref()?;
+        for bar in section.bars.iter().rev() {
+            if let Some(bc) = bar
+                .chords
+                .iter()
+                .rev()
+                .find(|bc| bc.kind == BarChordKind::Played)
+            {
+                return Some(bc.chord.clone());
+            }
+        }
+        None
     }
 
     fn start_new_bar(&mut self) {
@@ -1507,6 +1573,60 @@ mod tests {
         let url = "irealbook://Test=A==Style=C=44=[*AC| x |D|]";
         let song = parse(url).expect("parse");
         assert!(song.sections[0].bars[1].repeat_previous);
+    }
+
+    #[test]
+    fn pause_slash_emits_slash_repeat_with_previous_chord() {
+        // `|C7ppF7|` — the spec example from
+        // https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol.
+        // Beat 1: C7. Beats 2,3: slash repeats of C7. Beat 4: F7.
+        let url = "irealbook://Test=A==Style=C=44=[*AC7ppF7|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.chords.len(), 4, "C7 + 2 slash + F7 = 4 entries");
+        assert_eq!(bar0.chords[0].kind, BarChordKind::Played);
+        assert_eq!(bar0.chords[0].chord.root.note, 'C');
+        assert_eq!(bar0.chords[1].kind, BarChordKind::SlashRepeat);
+        // SlashRepeat carries a snapshot of the preceding chord so
+        // consumers that introspect harmony see C7, not a sentinel.
+        assert_eq!(bar0.chords[1].chord.root.note, 'C');
+        assert_eq!(bar0.chords[2].kind, BarChordKind::SlashRepeat);
+        assert_eq!(bar0.chords[2].chord.root.note, 'C');
+        assert_eq!(bar0.chords[3].kind, BarChordKind::Played);
+        assert_eq!(bar0.chords[3].chord.root.note, 'F');
+    }
+
+    #[test]
+    fn pause_slash_orphan_at_start_of_song_is_dropped() {
+        // `|pC7|` — orphan `p` with no preceding chord. Per the spec
+        // and the parser's defensive policy, the slash is dropped
+        // silently rather than emitting a SlashRepeat with no
+        // referent.
+        let url = "irealbook://Test=A==Style=C=44=[*ApC7|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(
+            bar0.chords.len(),
+            1,
+            "orphan pause-slash must not emit a chord entry"
+        );
+        assert_eq!(bar0.chords[0].kind, BarChordKind::Played);
+        assert_eq!(bar0.chords[0].chord.root.note, 'C');
+    }
+
+    #[test]
+    fn pause_slash_across_bar_boundary_carries_previous_bar_chord() {
+        // `|C7|p|F7|` — the slash sits in a new bar, repeating the
+        // chord from the previous bar. Tests that `most_recent_chord`
+        // walks back across the bar boundary into the section's
+        // committed bars.
+        let url = "irealbook://Test=A==Style=C=44=[*AC7|p|F7|]";
+        let song = parse(url).expect("parse");
+        let bars = &song.sections[0].bars;
+        assert!(bars.len() >= 3, "expected at least 3 bars, got {bars:?}");
+        assert_eq!(bars[1].chords.len(), 1, "middle bar carries one slash");
+        assert_eq!(bars[1].chords[0].kind, BarChordKind::SlashRepeat);
+        assert_eq!(bars[1].chords[0].chord.root.note, 'C');
     }
 
     #[test]

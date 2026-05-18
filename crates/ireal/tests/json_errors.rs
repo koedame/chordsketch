@@ -11,7 +11,7 @@
 //! `JsonValue::as_str`'s Err arm.
 
 use chordsketch_ireal::{
-    Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize, Ending,
+    Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize, Ending,
     FromJson, IrealSong, JsonError, JsonValue, MusicalSymbol, Section, SectionLabel, ToJson,
     parse_json,
 };
@@ -456,6 +456,7 @@ fn full_song_round_trips_through_deserializer() {
             chord,
             position: BeatPosition::on_beat(1).unwrap(),
             size: ChordSize::Default,
+            kind: BarChordKind::Played,
         }],
         ending: None,
         symbol: None,
@@ -674,6 +675,7 @@ fn bar_chord_small_size_serialises_and_round_trips_through_json() {
         chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Minor7),
         position: BeatPosition::on_beat(1).unwrap(),
         size: ChordSize::Small,
+        kind: BarChordKind::Played,
     };
     let json = bc.to_json_string();
     // The field must be present when non-default.
@@ -686,6 +688,7 @@ fn bar_chord_small_size_serialises_and_round_trips_through_json() {
         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
         position: BeatPosition::on_beat(1).unwrap(),
         size: ChordSize::Default,
+        kind: BarChordKind::Played,
     };
     let default_json = default_bc.to_json_string();
     assert!(
