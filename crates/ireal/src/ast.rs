@@ -877,7 +877,7 @@ fn jump_target_suffix(target: JumpTarget) -> String {
 /// 21+ fall through to the generic `Nth` shape (`4th`, `5th`, ...,
 /// `21st`, `22nd`, `23rd`, ...). The teen exception (`11th`,
 /// `12th`, `13th`) is preserved.
-fn ending_ordinal(n: u8) -> String {
+pub(crate) fn ending_ordinal(n: u8) -> String {
     let suffix = match n % 100 {
         11..=13 => "th",
         _ => match n % 10 {

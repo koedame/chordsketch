@@ -492,30 +492,14 @@ fn jump_target_json_suffix(target: crate::ast::JumpTarget) -> String {
         JumpTarget::AlCoda => "_al_coda".to_owned(),
         JumpTarget::AlFine => "_al_fine".to_owned(),
         JumpTarget::AlEnding(n) => {
-            let ordinal = ending_ordinal_lowercase(n.get());
+            // `crate::ast::ending_ordinal` is the canonical ordinal
+            // formatter shared by `canonical_text` and this JSON
+            // suffix. Both already produce lowercase ordinals
+            // (`1st`, `2nd`, `3rd`, …, `11th`, `21st`).
+            let ordinal = crate::ast::ending_ordinal(n.get());
             format!("_al_{ordinal}_end")
         }
     }
-}
-
-/// Lowercase mirror of `ast::ending_ordinal` — kept private here
-/// because the JSON suffix wants a lowercased ordinal (`1st`,
-/// `2nd`, ..., `11th`, `21st`) and the AST helper is intentionally
-/// not exported. Drift between the two is caught by
-/// `json_round_trip_handles_jump_target_variants` in the integration
-/// test suite, which exercises every `JumpTarget` variant through
-/// both serializer and deserializer.
-fn ending_ordinal_lowercase(n: u8) -> String {
-    let suffix = match n % 100 {
-        11..=13 => "th",
-        _ => match n % 10 {
-            1 => "st",
-            2 => "nd",
-            3 => "rd",
-            _ => "th",
-        },
-    };
-    format!("{n}{suffix}")
 }
 
 // ===========================================================================

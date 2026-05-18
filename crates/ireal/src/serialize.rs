@@ -245,25 +245,45 @@ fn serialize_time_signature_packed(ts: TimeSignature) -> String {
 /// `,`, `#`, `^` per the spec at
 /// <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>.
 ///
-/// Everything outside this set passes through unchanged. The set
-/// is intentionally narrow — chord-chart punctuation outside the
-/// list (`|`, `*`, `:`, `/`, `+`, `-`, `'`, `.`) is browser-safe
-/// inside `href` attribute values, and the iReal Pro app's parser
-/// (and [`crate::parse`]) accept both encoded and unencoded forms
-/// equivalently. Encoding only what the URL spec strictly requires
-/// keeps the output readable when pasted into chat / email
-/// surfaces.
+/// ASCII bytes outside this reserved set pass through unchanged.
+/// Non-ASCII bytes (i.e. each byte of a multi-byte UTF-8 sequence,
+/// with byte value > 0x7F) are individually percent-encoded so that
+/// song metadata containing non-ASCII characters (accented titles,
+/// composer names in non-Latin scripts, etc.) round-trips correctly
+/// through [`crate::parse`]'s `percent_decode` step. Without this
+/// branch, casting `b as char` for bytes > 0x7F reinterprets each
+/// raw byte as a separate Unicode code point, splitting UTF-8
+/// multi-byte sequences and corrupting the resulting string on
+/// parse.
+///
+/// The set is intentionally narrow for ASCII — chord-chart
+/// punctuation outside the list (`|`, `*`, `:`, `/`, `+`, `-`,
+/// `'`, `.`) is browser-safe inside `href` attribute values, and
+/// the iReal Pro app's parser (and [`crate::parse`]) accept both
+/// encoded and unencoded forms equivalently. Encoding only what the
+/// URL spec strictly requires keeps the output readable when pasted
+/// into chat / email surfaces.
 fn percent_encode_open_protocol(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
+    // Worst case: every byte encodes to `%XX` (3 chars). Using
+    // `input.len() * 3` avoids repeated reallocations for
+    // chord-chart bodies that contain many reserved characters
+    // (`[`, `<`, `>`, `=`, space).
+    let mut out = String::with_capacity(input.len() * 3);
     for b in input.bytes() {
         if matches!(
             b,
             b'=' | b' ' | b'{' | b'}' | b'[' | b']' | b'<' | b'>' | b',' | b'#' | b'^'
-        ) {
+        ) || b > 0x7f
+        {
+            // Percent-encode: reserved ASCII chars AND every non-ASCII
+            // byte (second/subsequent bytes of multi-byte UTF-8
+            // sequences). The parser's `percent_decode` step reassembles
+            // the original bytes and validates them as UTF-8.
             out.push('%');
             out.push(hex_upper(b >> 4));
             out.push(hex_upper(b & 0x0f));
         } else {
+            // Safe ASCII byte — passes through verbatim.
             out.push(b as char);
         }
     }
@@ -2111,5 +2131,38 @@ mod tests {
                 "time signature {ts:?} must serialize to `{expected}`"
             );
         }
+    }
+
+    #[test]
+    fn serialize_open_protocol_non_ascii_metadata_round_trips() {
+        // Regression for the non-ASCII byte corruption bug: when a
+        // song's title or composer contains multi-byte UTF-8
+        // characters, `percent_encode_open_protocol` must
+        // individually percent-encode every byte > 0x7F so that
+        // `percent_decode` in the parser reassembles the original
+        // UTF-8 sequence. The earlier `b as char` cast for non-ASCII
+        // bytes reinterpreted each raw byte as a Unicode code point,
+        // splitting e.g. the two-byte UTF-8 sequence for `é`
+        // (0xC3 0xA9) into U+00C3 (Ã) + U+00A9 (©), corrupting the
+        // round-trip.
+        let mut song = IrealSong::new();
+        song.title = "Café au lait".into();
+        song.composer = Some("Ólafur Arnalds".into());
+        song.style = Some("Naïve Bossa".into());
+
+        let url = serialize_open_protocol(&song);
+        let parsed = crate::parse(&url).expect("non-ASCII round trip");
+        assert_eq!(
+            parsed.title, song.title,
+            "title with accented chars must survive round trip"
+        );
+        assert_eq!(
+            parsed.composer, song.composer,
+            "composer with non-ASCII chars must survive round trip"
+        );
+        assert_eq!(
+            parsed.style, song.style,
+            "style with non-ASCII chars must survive round trip"
+        );
     }
 }

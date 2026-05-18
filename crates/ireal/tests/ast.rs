@@ -278,6 +278,42 @@ fn json_round_trip_handles_every_enum_variant() {
 }
 
 #[test]
+fn json_round_trip_handles_jump_target_variants() {
+    // Locks the full JumpTarget variant set through the JSON
+    // serializer + deserializer so that drift between
+    // `ending_ordinal` (ast.rs) and the JSON suffix table (json.rs)
+    // surfaces here. `json_round_trip_handles_every_enum_variant`
+    // covers `DaCapo(Unspecified)` / `DalSegno(Unspecified)` only;
+    // this test covers all four target variants for both families.
+    use chordsketch_ireal::{JumpTarget, MusicalSymbol};
+    let targets = [
+        JumpTarget::Unspecified,
+        JumpTarget::AlCoda,
+        JumpTarget::AlFine,
+        JumpTarget::AlEnding(std::num::NonZeroU8::new(1).unwrap()),
+        JumpTarget::AlEnding(std::num::NonZeroU8::new(2).unwrap()),
+        JumpTarget::AlEnding(std::num::NonZeroU8::new(3).unwrap()),
+        // Overflow ordinal — exercises the generic `Nth` path.
+        JumpTarget::AlEnding(std::num::NonZeroU8::new(11).unwrap()),
+        JumpTarget::AlEnding(std::num::NonZeroU8::new(21).unwrap()),
+    ];
+    for target in targets {
+        for symbol in [
+            MusicalSymbol::DaCapo(target),
+            MusicalSymbol::DalSegno(target),
+        ] {
+            let json = symbol.to_json_string();
+            let parsed = MusicalSymbol::from_json_str(&json)
+                .unwrap_or_else(|e| panic!("JSON round-trip failed for {symbol:?}: {e}"));
+            assert_eq!(
+                parsed, symbol,
+                "JSON round-trip must be identity for {symbol:?} (JSON was {json})"
+            );
+        }
+    }
+}
+
+#[test]
 fn json_round_trip_handles_untitled_ending() {
     // Locks the spec `N0` ("no text Ending") case end to end through
     // the JSON serialiser + deserialiser. The serialiser emits the
