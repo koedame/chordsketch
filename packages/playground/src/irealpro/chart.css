@@ -92,30 +92,44 @@
 .bar:hover { background: rgba(189, 22, 66, 0.05); }
 .bar.active { background: var(--cs-crimson-50); outline: 1.5px solid var(--cs-crimson-500); outline-offset: -1.5px; z-index: 2; }
 
-/* End-of-line single barline. Skipped when the last bar already carries
-   its own glyph-based barline (repeat-end or final), so we never need
-   `!important` to override. */
-.chart-line .bar:last-child:not(.repeat-end):not(.final) { border-right: 1.5px solid var(--cs-ink-1000); }
+/* End-of-line single barline. Skipped when the bar carries its own
+   glyph-based right barline (`double`, `repeat`, or `end` via the
+   data-barline-right attribute below), so we never need `!important`
+   to override. The data-barline-right suppression rule below matches
+   the `:last-child` rule's specificity (`.chart-line` + `.bar` +
+   attribute = 0,2,1) so the cascade-order tie-break favours the
+   later (suppression) rule — the pre-#2497 `:not(.repeat-end):not(.final)`
+   workaround silently missed `double-end`, painting both a SMuFL
+   `\E031` glyph and the default 1.5px border-right on `:last-child`
+   double-ended bars. */
+.chart-line .bar:last-child { border-right: 1.5px solid var(--cs-ink-1000); }
+.chart-line .bar[data-barline-right="double"],
+.chart-line .bar[data-barline-right="repeat"],
+.chart-line .bar[data-barline-right="end"] { border-right: 0; }
 
 /* All barlines render at the same vertical extent: single barlines use
    border-left at the bar's full height, and special barlines use SMuFL
    glyphs sized to match. The bar's min-height drives both via the
-   shared `--barline-h` token, so changing the bar height keeps the
+   shared `--cs-barline-h` token, so changing the bar height keeps the
    single barline and the engraved glyphs in lockstep. */
 .bar {
   --cs-barline-h: 58px;
   min-height: var(--cs-barline-h);
 }
-.bar.repeat-start,
-.bar.repeat-end,
-.bar.double-start,
-.bar.double-end,
-.bar.final { position: relative; }
-.bar.repeat-start::before,
-.bar.double-start::before,
-.bar.repeat-end::after,
-.bar.double-end::after,
-.bar.final::after {
+/* Glyph-based barlines — iReal Pro models each bar as having two
+   independently-configurable sides. `data-barline-left` and
+   `data-barline-right` each take one of `double`, `repeat`, `end`
+   (omit the attribute for `single`). Unknown values fall through
+   silently — keep the value set in sync with the `barlineSide()`
+   helper in `chart.tsx`. */
+.bar[data-barline-left],
+.bar[data-barline-right] { position: relative; }
+.bar[data-barline-left="double"]::before,
+.bar[data-barline-left="repeat"]::before,
+.bar[data-barline-left="end"]::before,
+.bar[data-barline-right="double"]::after,
+.bar[data-barline-right="repeat"]::after,
+.bar[data-barline-right="end"]::after {
   font-family: var(--cs-font-music);
   font-weight: normal;
   /* Empirically tuned so the visible Bravura barline strokes occupy the
@@ -123,12 +137,12 @@
      border-left used on adjacent single barlines. Verified by reading
      pixel data from a Playwright screenshot of the rendered DOM:
        single barline:   y=1..57, h=57
-       repeat-start:     y=1..57, h=57
-       repeat-end:       y=1..57, h=57
-       final:            y=1..57, h=57
+       repeat (left):    y=1..57, h=57
+       repeat (right):   y=1..57, h=57
+       end (final):      y=1..57, h=57
      The values below (font-size 71px, top -1px) were the last in a
-     series of probe edits at this `--cs-barline-h: 58px` setting. If the
-     bar height is changed, both numbers must be re-tuned — Bravura's
+     series of probe edits at this `--cs-barline-h: 58px` setting. If
+     the bar height is changed, both numbers must be re-tuned — Bravura's
      glyph metrics aren't perfectly proportional with font-size. */
   font-size: 71px;
   line-height: 1;
@@ -137,27 +151,30 @@
   top: -1px;
   pointer-events: none;
 }
-.bar.repeat-start { border-left: 0; padding-left: calc(var(--cs-sp-4) + 12px); }
-.bar.repeat-start::before { content: "\E040"; left: -2px; }    /* repeatLeft */
-.bar.repeat-end   { border-right: 0; padding-right: calc(var(--cs-sp-3) + 12px); }
-.bar.repeat-end::after   { content: "\E041"; right: -2px; }    /* repeatRight */
-.bar.final        { border-right: 0; padding-right: calc(var(--cs-sp-3) + 10px); }
-.bar.final::after        { content: "\E032"; right: -2px; }    /* barlineFinal */
-/* SMuFL barlineDouble (U+E031). Drawn as a `::before` on the bar whose
-   `bar.start === 'double'` (typical for the first bar of a new section)
-   and as a `::after` on the bar whose `bar.end === 'double'` (typical
-   for the bar that closes a section into the next). The next sibling
-   bar's normal left border is suppressed via the adjacent-sibling rule
-   below so a double-end isn't paired with a single barline next to it. */
-.bar.double-start { border-left: 0; padding-left: calc(var(--cs-sp-4) + 8px); }
-.bar.double-start::before { content: "\E031"; left: -2px; }    /* barlineDouble */
-.bar.double-end   { border-right: 0; padding-right: calc(var(--cs-sp-3) + 8px); }
-.bar.double-end::after   { content: "\E031"; right: -2px; }    /* barlineDouble */
-/* When a `.double-end` bar is directly followed by another bar within
-   the same chart-line, the next bar's `border-left: 1.5px` would paint
-   a single barline immediately right of the engraved double — producing
-   a triple-line look. Suppress the next bar's left border in that case. */
-.bar.double-end + .bar { border-left: 0; }
+/* Left-barline variants. Each suppresses the default `border-left`
+   and reserves padding-left so the glyph's visible ink doesn't
+   collide with chord content. */
+.bar[data-barline-left="double"] { border-left: 0; padding-left: calc(var(--cs-sp-4) + 8px); }
+.bar[data-barline-left="double"]::before { content: "\E031"; left: -2px; }   /* barlineDouble */
+.bar[data-barline-left="repeat"] { border-left: 0; padding-left: calc(var(--cs-sp-4) + 12px); }
+.bar[data-barline-left="repeat"]::before { content: "\E040"; left: -2px; }   /* repeatLeft */
+.bar[data-barline-left="end"]    { border-left: 0; padding-left: calc(var(--cs-sp-3) + 10px); }
+.bar[data-barline-left="end"]::before    { content: "\E032"; left: -2px; }   /* barlineFinal */
+/* Right-barline variants. The `:last-child` default `border-right`
+   is suppressed above for non-single right values, and the glyph is
+   anchored to the bar's right edge. */
+.bar[data-barline-right="double"] { padding-right: calc(var(--cs-sp-3) + 8px); }
+.bar[data-barline-right="double"]::after { content: "\E031"; right: -2px; }  /* barlineDouble */
+.bar[data-barline-right="repeat"] { padding-right: calc(var(--cs-sp-3) + 12px); }
+.bar[data-barline-right="repeat"]::after { content: "\E041"; right: -2px; }  /* repeatRight */
+.bar[data-barline-right="end"]    { padding-right: calc(var(--cs-sp-3) + 10px); }
+.bar[data-barline-right="end"]::after    { content: "\E032"; right: -2px; }  /* barlineFinal */
+/* When a `data-barline-right="double"` bar is directly followed by
+   another bar within the same chart-line, the next bar's default
+   `border-left: 1.5px` would paint a single barline immediately right
+   of the engraved double — producing a triple-line look. Suppress
+   the next bar's left border in that case. */
+.bar[data-barline-right="double"] + .bar { border-left: 0; }
 /* iReal Pro encodes section transitions symmetrically: the closing
    bar of section N has `end = Double` and the opening bar of section
    N+1 has `start = Double`. Both refer to the same visible double
@@ -165,8 +182,8 @@
    (the convention for the printed app) and suppress the previous
    bar's end-double glyph so the chart doesn't show two engraved
    doubles separated by a cell gap. */
-.bar.double-end:has(+ .bar.double-start)::after { content: none; }
-.bar.double-end:has(+ .bar.double-start) { padding-right: 0; }
+.bar[data-barline-right="double"]:has(+ .bar[data-barline-left="double"])::after { content: none; }
+.bar[data-barline-right="double"]:has(+ .bar[data-barline-left="double"]) { padding-right: 0; }
 
 /* Section marker — small black-filled square with white letter, sitting
    centered above the bar's left barline (iReal Pro's printed-chart

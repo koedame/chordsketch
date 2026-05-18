@@ -87,6 +87,20 @@ a { color: inherit; text-decoration: none; }
 .meta-field label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); }
 .meta-field input, .meta-field select { height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-2); background: var(--ink-50); font: 500 var(--fs-14)/1 var(--font-mono); color: var(--text-primary); transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out); font-variant-numeric: tabular-nums; }
 .meta-field input:focus, .meta-field select:focus { outline: none; border-color: var(--crimson-500); background: var(--surface); box-shadow: var(--focus-ring); }
+/* Key field: root <select> and Major/Minor segmented control share
+   one horizontal row so the field's vertical height matches every
+   other .meta-field (label + 32px control). Without this wrapper
+   the .meta-field's `flex-direction: column` would stack the
+   segmented control below the select and break meta-grid row
+   alignment. */
+.meta-field .key-field-row { display: flex; gap: var(--sp-2); align-items: stretch; min-width: 0; }
+.meta-field .key-field-row > select { flex: 1; min-width: 0; }
+/* Bump the segmented control from its toolbar default (28px) up to
+   the meta-field input height (32px) so the two controls share a
+   baseline. Buttons fill the parent so the active-state background
+   covers the full chip area. */
+.meta-field .key-field-row > .segmented { height: 32px; }
+.meta-field .key-field-row > .segmented button { height: 100%; }
 
 /* ============================================================
    iReal Pro chart — engraved in black on white, no cell grid.
@@ -184,12 +198,16 @@ a { color: inherit; text-decoration: none; }
   min-height: var(--barline-h);
 }
 /* Glyph-based barlines — iReal Pro models each bar as having two
-   independently-configurable sides. data-barline-left and
-   data-barline-right each take one of: `single` (default; rendered
-   by the .bar's border-left or the :last-child border-right above),
-   `double`, `repeat`, `end`. The non-single values emit a SMuFL
-   glyph via ::before / ::after and suppress the corresponding
-   border on the bar. */
+   independently-configurable sides. `data-barline-left` and
+   `data-barline-right` each take one of the three NON-SINGLE values
+   `double` / `repeat` / `end`; omit the attribute entirely for
+   `single` (the default, rendered by the .bar's `border-left` or
+   the `:last-child` `border-right` above). An unrecognised value
+   (e.g. the old class names `final` or `repeat-end`) falls through
+   silently to the default — new bars must use only the three values
+   listed below. The runtime sister site at
+   `packages/playground/src/irealpro/chart.tsx` (helper
+   `barlineSide()`) and `chart.css` keep this enum in lockstep. */
 .bar[data-barline-left="double"]::before,
 .bar[data-barline-left="repeat"]::before,
 .bar[data-barline-left="end"]::before,
@@ -520,7 +538,12 @@ a { color: inherit; text-decoration: none; }
   white-space: nowrap;
 }
 
-/* Vertical spacer between chart-line rows. */
+/* Vertical spacer between chart-line rows. The base class is the
+   ×1 size; ×2 and ×3 add an explicit modifier. There is intentionally
+   no `.x1` modifier — writing `class="chart-line-spacer x1"` is
+   harmless (no rule matches, base size wins) but is the typo that
+   would silently render identical to the default, so prefer
+   `class="chart-line-spacer"` for the ×1 case. */
 .chart-line-spacer { height: var(--sp-6); }
 .chart-line-spacer.x2 { height: var(--sp-12); }
 .chart-line-spacer.x3 { height: var(--sp-20); }
@@ -788,13 +811,15 @@ a { color: inherit; text-decoration: none; }
             </optgroup>
           </select>
         </div>
-        <div class="meta-field"><label for="key-root">Key</label>
-          <select id="key-root" style="color: var(--crimson-500); font-weight: 700;">
-            <option>C</option><option>C♯/D♭</option><option>D</option><option>D♯/E♭</option><option selected>E</option><option>F</option><option>F♯/G♭</option><option>G</option><option>G♯/A♭</option><option>A</option><option>A♯/B♭</option><option>B</option>
-          </select>
-          <div class="segmented" role="group" aria-label="Key mode">
-            <button type="button" aria-pressed="false">Major</button>
-            <button type="button" aria-pressed="true">Minor</button>
+        <div class="meta-field"><label for="key-root" id="key-field-label">Key</label>
+          <div class="key-field-row">
+            <select id="key-root" style="color: var(--crimson-500); font-weight: 700;">
+              <option>C</option><option>C♯/D♭</option><option>D</option><option>D♯/E♭</option><option selected>E</option><option>F</option><option>F♯/G♭</option><option>G</option><option>G♯/A♭</option><option>A</option><option>A♯/B♭</option><option>B</option>
+            </select>
+            <div class="segmented key-mode" role="group" aria-labelledby="key-field-label" aria-label="Key mode">
+              <button type="button" aria-pressed="false">Major</button>
+              <button type="button" aria-pressed="true">Minor</button>
+            </div>
           </div>
         </div>
         <div class="meta-field"><label for="time">Time</label>
@@ -944,8 +969,7 @@ a { color: inherit; text-decoration: none; }
              showcase line. iReal Pro's Symbols palette lets the user
              insert Vertical Spacers between sections; the ×2
              multiplier corresponds to the .chart-line-spacer.x2 size
-             token (×1 and ×3 use the .x1 / .x3 modifiers on the same
-             element). -->
+             token (×1 is the bare class, ×3 uses .chart-line-spacer.x3). -->
         <div class="chart-line-spacer x2" aria-hidden="true"></div>
 
         <!-- Showcase line — bars demonstrating bar-content variants that
