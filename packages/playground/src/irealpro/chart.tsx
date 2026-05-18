@@ -85,9 +85,31 @@ export interface Chord {
   alternate?: Chord | null;
 }
 
+/** Per-chord display size, mirroring the Rust AST's `ChordSize`
+ * enum. iReal Pro's `s` / `l` markers toggle Small / Default
+ * across the chord stream; the wasm AST stamps the active size
+ * onto every emitted `BarChord`. Optional + lower-case strings
+ * because the JSON layer omits the field when default. */
+export type ChordSize = 'default' | 'small';
+
+/** Per-chord paint kind, mirroring the Rust AST's `BarChordKind`
+ * enum (#2435). `'played'` (default, omitted by the JSON layer)
+ * paints chord typography; `'slash_repeat'` paints a single `/`
+ * glyph in place of chord text — the iReal Pro pause-slash
+ * meaning "repeat the preceding chord". The `chord` field on a
+ * SlashRepeat carries a snapshot of the preceding chord so
+ * consumers introspecting harmony see the right value. */
+export type BarChordKind = 'played' | 'slash_repeat';
+
 export interface BarChord {
   chord: Chord;
   position: { beat: number; subdivision: number };
+  /** Per-chord display size. Omitted by the JSON encoder when
+   * `'default'`; consumers should treat absent === default. */
+  size?: ChordSize;
+  /** Per-chord paint kind. Omitted by the JSON encoder when
+   * `'played'`; consumers should treat absent === played. */
+  kind?: BarChordKind;
 }
 
 export interface SectionLabel {
@@ -547,6 +569,19 @@ function BarCell({
               const beat = useBeatPositioning
                 ? bc.position.beat
                 : Math.min(beats, Math.floor((i * beats) / bar.chords.length) + 1);
+              // Pause-slash repeats (#2435) paint a single `/`
+              // glyph in place of chord typography. The
+              // `BarChord.chord` field carries a snapshot of the
+              // preceding chord — consumers introspecting the AST
+              // still see the held harmony — but the renderer
+              // mirrors the SVG renderer's `class="chord
+              // slash-repeat"` output so the visual matches.
+              if (bc.kind === 'slash_repeat') {
+                const dataBeat = beat > 1 ? String(beat) : undefined;
+                return (
+                  <span key={i} className="chord slash-repeat" data-beat={dataBeat}>/</span>
+                );
+              }
               return <ChordSegment key={i} chord={bc.chord} beat={beat} />;
             })}
       {bar.textMark && <span className="text-mark">{bar.textMark}</span>}

@@ -12,8 +12,8 @@
 //! and re-run without the env var to confirm parity.
 
 use chordsketch_ireal::{
-    Accidental, Bar, BarChord, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize, IrealSong,
-    KeyMode, KeySignature, Section, SectionLabel,
+    Accidental, Bar, BarChord, BarChordKind, BeatPosition, Chord, ChordQuality, ChordRoot,
+    ChordSize, IrealSong, KeyMode, KeySignature, Section, SectionLabel,
 };
 use chordsketch_render_ireal::{RenderOptions, render_svg};
 
@@ -24,6 +24,7 @@ fn bar_with_chord(note: char, quality: ChordQuality) -> Bar {
             chord,
             position: BeatPosition::on_beat(1).unwrap(),
             size: ChordSize::Default,
+            kind: BarChordKind::Played,
         }],
         ..Bar::new()
     }
@@ -36,11 +37,13 @@ fn bar_with_two_chords(c1: (char, ChordQuality), c2: (char, ChordQuality)) -> Ba
                 chord: Chord::triad(ChordRoot::natural(c1.0), c1.1),
                 position: BeatPosition::on_beat(1).unwrap(),
                 size: ChordSize::Default,
+                kind: BarChordKind::Played,
             },
             BarChord {
                 chord: Chord::triad(ChordRoot::natural(c2.0), c2.1),
                 position: BeatPosition::on_beat(3).unwrap(),
                 size: ChordSize::Default,
+                kind: BarChordKind::Played,
             },
         ],
         ..Bar::new()
@@ -296,6 +299,7 @@ fn marked_bar(start: BarLine, end: BarLine, note: char, q: ChordQuality) -> Bar 
             chord: Chord::triad(ChordRoot::natural(note), q),
             position: BeatPosition::on_beat(1).unwrap(),
             size: ChordSize::Default,
+            kind: BarChordKind::Played,
         }],
         ..Bar::new()
     }
@@ -309,6 +313,7 @@ fn ending_bar(n: u8, note: char, q: ChordQuality) -> Bar {
             chord: Chord::triad(ChordRoot::natural(note), q),
             position: BeatPosition::on_beat(1).unwrap(),
             size: ChordSize::Default,
+            kind: BarChordKind::Played,
         }],
         ..Bar::new()
     }
@@ -366,6 +371,7 @@ fn endings_demo() -> IrealSong {
                     chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major7),
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 ..Bar::new()
             },
@@ -409,6 +415,7 @@ fn n0_ending_demo() -> IrealSong {
                     chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major7),
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 ..Bar::new()
             },
@@ -419,6 +426,7 @@ fn n0_ending_demo() -> IrealSong {
                     chord: Chord::triad(ChordRoot::natural('A'), ChordQuality::Minor7),
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 ..Bar::new()
             },
@@ -428,6 +436,7 @@ fn n0_ending_demo() -> IrealSong {
                     chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Minor7),
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 ..Bar::new()
             },
@@ -457,6 +466,7 @@ fn section_markers_demo() -> IrealSong {
                 chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major7),
                 position: BeatPosition::on_beat(1).unwrap(),
                 size: ChordSize::Default,
+                kind: BarChordKind::Played,
             }],
             ..Bar::new()
         }
@@ -537,6 +547,7 @@ fn symbol_bar(symbol: MusicalSymbol, note: char, q: ChordQuality) -> Bar {
             chord: Chord::triad(ChordRoot::natural(note), q),
             position: BeatPosition::on_beat(1).unwrap(),
             size: ChordSize::Default,
+            kind: BarChordKind::Played,
         }],
         ..Bar::new()
     }
@@ -714,6 +725,7 @@ fn small_bar_chord(note: char, quality: ChordQuality, beat: u8) -> BarChord {
         chord: Chord::triad(ChordRoot::natural(note), quality),
         position: BeatPosition::on_beat(beat).unwrap(),
         size: ChordSize::Small,
+        kind: BarChordKind::Played,
     }
 }
 
@@ -736,6 +748,7 @@ fn small_flat_slash_chord(note: char, quality: ChordQuality, bass: char, beat: u
         },
         position: BeatPosition::on_beat(beat).unwrap(),
         size: ChordSize::Small,
+        kind: BarChordKind::Played,
     }
 }
 
@@ -744,6 +757,7 @@ fn default_bar_chord(note: char, quality: ChordQuality, beat: u8) -> BarChord {
         chord: Chord::triad(ChordRoot::natural(note), quality),
         position: BeatPosition::on_beat(beat).unwrap(),
         size: ChordSize::Default,
+        kind: BarChordKind::Played,
     }
 }
 
@@ -792,4 +806,68 @@ fn chord_size_demo() -> IrealSong {
 #[test]
 fn render_chord_size_demo() {
     check_golden("chord_size_demo", &chord_size_demo());
+}
+
+/// Asserts the SVG renderer's SlashRepeat paint path (#2435):
+/// a bar with two SlashRepeat entries between a played C7 and F7
+/// produces exactly two `class="chord slash-repeat"` elements
+/// whose text content is the `/` glyph, matches the iReal Pro spec
+/// `|C7ppF7|`. Defends against accidental removal of the
+/// `if bc.kind == BarChordKind::SlashRepeat` branch in
+/// `write_bar_chord_text` — without that branch the assertion
+/// fails because the renderer would paint chord typography
+/// (`C7` text spans) instead of the slash glyph.
+#[test]
+fn render_slash_repeat_emits_slash_glyph() {
+    let c7 = Chord::triad(ChordRoot::natural('C'), ChordQuality::Dominant7);
+    let f7 = Chord::triad(ChordRoot::natural('F'), ChordQuality::Dominant7);
+    let bar = Bar {
+        chords: vec![
+            BarChord::played(
+                c7.clone(),
+                BeatPosition::on_beat(1).unwrap(),
+                ChordSize::Default,
+            ),
+            BarChord::slash_repeat(
+                c7.clone(),
+                BeatPosition::on_beat(2).unwrap(),
+                ChordSize::Default,
+            ),
+            BarChord::slash_repeat(c7, BeatPosition::on_beat(3).unwrap(), ChordSize::Default),
+            BarChord::played(f7, BeatPosition::on_beat(4).unwrap(), ChordSize::Default),
+        ],
+        ..Bar::new()
+    };
+    let mut song = IrealSong::new();
+    song.title = "Slash Repeat".into();
+    song.composer = Some("T".into());
+    song.style = Some("Medium Swing".into());
+    song.key_signature = KeySignature {
+        root: ChordRoot {
+            note: 'C',
+            accidental: Accidental::Natural,
+        },
+        mode: KeyMode::Major,
+    };
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![bar],
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    let slash_count = svg.matches("class=\"chord slash-repeat\"").count();
+    assert_eq!(
+        slash_count, 2,
+        "expected 2 SlashRepeat glyphs in SVG, got {slash_count}; svg fragment: {svg}"
+    );
+    // The slash glyph itself must appear inside the SlashRepeat
+    // <text> elements — guards against a regression that emits
+    // the class but loses the `/` character.
+    assert!(
+        svg.contains("class=\"chord slash-repeat\""),
+        "missing slash-repeat class attribute"
+    );
+    assert!(
+        svg.contains(">/</text>"),
+        "missing slash glyph `/` inside a chord <text> element"
+    );
 }

@@ -12,8 +12,9 @@
 
 use chordsketch_chordpro::ast::{DirectiveKind, Line, LyricsLine, Song};
 use chordsketch_ireal::{
-    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord as IrealChord, ChordQuality, ChordRoot,
-    ChordSize, IrealSong, KeyMode, KeySignature, Section, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord as IrealChord,
+    ChordQuality, ChordRoot, ChordSize, IrealSong, KeyMode, KeySignature, Section, SectionLabel,
+    TimeSignature,
 };
 
 use crate::error::{ConversionWarning, WarningKind};
@@ -281,6 +282,7 @@ fn build_bar_from_lyrics(lyrics: &LyricsLine) -> (Bar, bool) {
                 chord: parsed,
                 position: BeatPosition::on_beat(1).unwrap(),
                 size: ChordSize::Default,
+                kind: BarChordKind::Played,
             });
         }
     }

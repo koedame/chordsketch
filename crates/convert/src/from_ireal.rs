@@ -25,8 +25,8 @@ use chordsketch_chordpro::ast::{
     Song,
 };
 use chordsketch_ireal::{
-    Accidental, Bar, BarLine, Chord as IrealChord, ChordQuality, ChordRoot, IrealSong, KeyMode,
-    KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChordKind, BarLine, Chord as IrealChord, ChordQuality, ChordRoot,
+    IrealSong, KeyMode, KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
 };
 
 use crate::error::{ConversionWarning, WarningKind};
@@ -237,6 +237,17 @@ fn push_bars(
             // bar boundary glyph still appears in the lyrics line.
         } else {
             for bar_chord in &bar.chords {
+                // `SlashRepeat` entries (#2435) are iReal Pro's beat-level
+                // "repeat the preceding chord" marker. ChordPro has no
+                // equivalent — it is a lyric-line format with no per-beat
+                // rhythm notation. Emitting the snapshot chord would produce
+                // duplicate chord tokens (`[C7][C7][C7][F7]` for `|C7ppF7|`)
+                // that clutter the lyrics line without adding harmonic
+                // information. Drop them silently; the preceding `Played`
+                // chord already communicates the harmony.
+                if bar_chord.kind == BarChordKind::SlashRepeat {
+                    continue;
+                }
                 let repr = chord_to_string(&bar_chord.chord);
                 *last_chord_repr = Some(repr.clone());
                 segments.push(LyricsSegment::new(
@@ -418,6 +429,7 @@ mod tests {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Minor7),
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     ending: None,
                     symbol: None,
@@ -595,6 +607,7 @@ mod tests {
                         },
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     ..Bar::default()
                 },
@@ -647,6 +660,7 @@ mod tests {
                     },
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 ..Bar::default()
             }],
@@ -696,6 +710,7 @@ mod tests {
                     },
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 text_comment: Some("Vamp till cue".into()),
                 ..Bar::default()
@@ -782,6 +797,7 @@ mod tests {
                     chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 symbol: Some(MusicalSymbol::Fermata),
                 ..Bar::default()
@@ -826,6 +842,7 @@ mod tests {
                     chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 symbol: Some(MusicalSymbol::Break),
                 ..Bar::default()

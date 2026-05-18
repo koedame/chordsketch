@@ -13,8 +13,8 @@
 //! of features the parser preserves vs drops.
 
 use crate::ast::{
-    Accidental, Bar, BarLine, Chord, ChordQuality, ChordRoot, ChordSize, Ending, IrealSong,
-    KeyMode, KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChordKind, BarLine, Chord, ChordQuality, ChordRoot, ChordSize, Ending,
+    IrealSong, KeyMode, KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
 };
 use crate::parser::{MUSIC_PREFIX, matches_macro_prefix};
 
@@ -335,7 +335,13 @@ fn serialize_music(song: &IrealSong) -> String {
                 });
                 current_size = bc.size;
             }
-            serialize_chord(&mut chart, &bc.chord);
+            match bc.kind {
+                BarChordKind::Played => serialize_chord(&mut chart, &bc.chord),
+                // Pause-slash — the snapshot chord in `bc.chord` is
+                // not emitted; the `p` token tells the iReal Pro
+                // player to hold the previous chord at this beat.
+                BarChordKind::SlashRepeat => chart.push('p'),
+            }
         }
 
         if let Some(text) = &bar.text_comment {
@@ -691,6 +697,7 @@ mod tests {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Minor7),
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     ending: None,
                     symbol: None,
@@ -755,6 +762,7 @@ mod tests {
                     chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 ending: None,
                 symbol: None,
@@ -797,6 +805,7 @@ mod tests {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::Fine),
@@ -836,6 +845,7 @@ mod tests {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::Break),
@@ -883,6 +893,7 @@ mod tests {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     ending: Some(Ending::Untitled),
                     symbol: None,
@@ -925,6 +936,7 @@ mod tests {
                         chord: Chord::triad(ChordRoot::natural('G'), ChordQuality::Dominant7),
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::DaCapo),
@@ -962,6 +974,7 @@ mod tests {
                         chord: Chord::triad(ChordRoot::natural('F'), ChordQuality::Major),
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::DalSegno),
@@ -1001,6 +1014,7 @@ mod tests {
                         chord: Chord::triad(ChordRoot::natural('G'), ChordQuality::Dominant7),
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     ending: None,
                     symbol: Some(MusicalSymbol::Fermata),
@@ -1092,6 +1106,7 @@ mod tests {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     text_comment: Some("see > here".into()),
                     ..Default::default()
@@ -1132,6 +1147,7 @@ mod tests {
                             chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                             position: BeatPosition::on_beat(1).unwrap(),
                             size: ChordSize::Default,
+                            kind: BarChordKind::Played,
                         }],
                         ..Default::default()
                     },
@@ -1174,6 +1190,7 @@ mod tests {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     symbol: Some(MusicalSymbol::Fine),
                     text_comment: Some("refine the chord".into()),
@@ -1213,6 +1230,7 @@ mod tests {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     ..Default::default()
                 }],
@@ -1280,6 +1298,7 @@ mod tests {
                             chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                             position: BeatPosition::on_beat(1).unwrap(),
                             size: ChordSize::Default,
+                            kind: BarChordKind::Played,
                         }],
                         ..Default::default()
                     },
@@ -1290,6 +1309,7 @@ mod tests {
                             chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Major),
                             position: BeatPosition::on_beat(1).unwrap(),
                             size: ChordSize::Default,
+                            kind: BarChordKind::Played,
                         }],
                         system_break_space: 2,
                         ..Default::default()
@@ -1329,6 +1349,7 @@ mod tests {
                             chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                             position: BeatPosition::on_beat(1).unwrap(),
                             size: ChordSize::Default,
+                            kind: BarChordKind::Played,
                         }],
                         ..Default::default()
                     },
@@ -1339,6 +1360,7 @@ mod tests {
                             chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Major),
                             position: BeatPosition::on_beat(1).unwrap(),
                             size: ChordSize::Default,
+                            kind: BarChordKind::Played,
                         }],
                         system_break_space: 2,
                         ..Default::default()
@@ -1382,6 +1404,7 @@ mod tests {
                             chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                             position: BeatPosition::on_beat(1).unwrap(),
                             size: ChordSize::Default,
+                            kind: BarChordKind::Played,
                         }],
                         ..Default::default()
                     },
@@ -1429,6 +1452,7 @@ mod tests {
                         chord: Chord::triad(ChordRoot::natural('F'), ChordQuality::Major),
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     system_break_space: 1,
                     ..Default::default()
@@ -1464,5 +1488,75 @@ mod tests {
             SectionLabel::Custom("x".into()),
             "single-char `Custom(\"x\")` must round-trip identity"
         );
+    }
+
+    /// Pause-slash chords (`BarChordKind::SlashRepeat`) emit `p` in
+    /// the URL and re-parse back into a `SlashRepeat` BarChord whose
+    /// `chord` snapshot matches the preceding chord. Round-trip
+    /// guarantee from the chord level all the way back to the chord
+    /// level — without it, a chart authored in Rust then exported to
+    /// iReal Pro would lose its slash semantics.
+    #[test]
+    fn slash_repeat_round_trips_via_url() {
+        let c7 = Chord::triad(ChordRoot::natural('C'), ChordQuality::Dominant7);
+        let f7 = Chord::triad(ChordRoot::natural('F'), ChordQuality::Dominant7);
+        let song = IrealSong {
+            title: "Slash Repeat".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    chords: vec![
+                        BarChord {
+                            chord: c7.clone(),
+                            position: BeatPosition::on_beat(1).unwrap(),
+                            size: ChordSize::Default,
+                            kind: BarChordKind::Played,
+                        },
+                        BarChord {
+                            chord: c7.clone(),
+                            position: BeatPosition::on_beat(2).unwrap(),
+                            size: ChordSize::Default,
+                            kind: BarChordKind::SlashRepeat,
+                        },
+                        BarChord {
+                            chord: c7.clone(),
+                            position: BeatPosition::on_beat(3).unwrap(),
+                            size: ChordSize::Default,
+                            kind: BarChordKind::SlashRepeat,
+                        },
+                        BarChord {
+                            chord: f7.clone(),
+                            position: BeatPosition::on_beat(4).unwrap(),
+                            size: ChordSize::Default,
+                            kind: BarChordKind::Played,
+                        },
+                    ],
+                    ..Default::default()
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        let bar0 = &parsed.sections[0].bars[0];
+        assert_eq!(
+            bar0.chords.len(),
+            4,
+            "expected 4 chord entries, got {bar0:?}"
+        );
+        assert_eq!(bar0.chords[0].kind, BarChordKind::Played);
+        assert_eq!(bar0.chords[0].chord.root.note, 'C');
+        assert_eq!(bar0.chords[1].kind, BarChordKind::SlashRepeat);
+        // Snapshot is the preceding C7, not F7 — even though the
+        // serialised URL embeds the `p` between C7 and F7, the
+        // parser resolves the snapshot from the chord that came
+        // BEFORE the `p`, not the one after.
+        assert_eq!(bar0.chords[1].chord.root.note, 'C');
+        assert_eq!(bar0.chords[2].kind, BarChordKind::SlashRepeat);
+        assert_eq!(bar0.chords[2].chord.root.note, 'C');
+        assert_eq!(bar0.chords[3].kind, BarChordKind::Played);
+        assert_eq!(bar0.chords[3].chord.root.note, 'F');
     }
 }

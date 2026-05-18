@@ -26,8 +26,9 @@
 //! C0 control chars).
 
 use crate::ast::{
-    Accidental, Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
-    Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot,
+    ChordSize, Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel,
+    TimeSignature,
 };
 
 /// Anything that knows how to write itself as JSON into a `String`
@@ -280,7 +281,24 @@ impl ToJson for BarChord {
             out.push_str(",\"size\":");
             self.size.to_json(out);
         }
+        // Same additive-omit convention for the kind field
+        // (#2435): default `Played` is implicit, only
+        // `SlashRepeat` rounds through the JSON.
+        if self.kind != BarChordKind::Played {
+            out.push_str(",\"kind\":");
+            self.kind.to_json(out);
+        }
         out.push('}');
+    }
+}
+
+impl ToJson for BarChordKind {
+    fn to_json(&self, out: &mut String) {
+        let s = match self {
+            Self::Played => "played",
+            Self::SlashRepeat => "slash_repeat",
+        };
+        write_str(out, s);
     }
 }
 
@@ -1310,11 +1328,29 @@ impl FromJson for BarChord {
             Some(v) => ChordSize::from_json_value(v)?,
             None => ChordSize::Default,
         };
+        let kind = match value.get_optional("kind") {
+            Some(v) => BarChordKind::from_json_value(v)?,
+            None => BarChordKind::Played,
+        };
         Ok(Self {
             chord,
             position,
             size,
+            kind,
         })
+    }
+}
+
+impl FromJson for BarChordKind {
+    fn from_json_value(value: &JsonValue) -> Result<Self, JsonError> {
+        match value.as_str()? {
+            "played" => Ok(Self::Played),
+            "slash_repeat" => Ok(Self::SlashRepeat),
+            other => Err(JsonError::new(
+                0,
+                format!("unknown bar-chord kind {}", truncate_for_message(other)),
+            )),
+        }
     }
 }
 

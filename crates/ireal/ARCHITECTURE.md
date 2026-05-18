@@ -234,6 +234,25 @@ lands, update both in the same PR per
 - **Lyrics.** iReal Pro has no native lyrics surface; the
   ChordPro→iReal converter (#2061) drops them. Modelling lyrics
   in this AST would be premature.
+- **`END` song-terminator symbol (#2451).** iReal Pro's editor
+  surfaces a four-symbol palette — Coda, Segno, Fermata, END — per
+  the Editor's Buttons help article
+  (<https://technimo.helpshift.com/hc/en/3-ireal-pro/faq/245-editor-s-buttons/?p=all>),
+  and the END symbol semantics are documented separately at
+  <https://technimo.helpshift.com/hc/en/3-ireal-pro/faq/124-end-symbol/?p=all>
+  ("the Player will end the song with a Fermata at the bar
+  indicated by the END character"). However, the
+  [open-protocol developer page](https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol)
+  does NOT document a URL token for `END`, and none of the
+  exported `irealb://` URLs in
+  `crates/ireal/tests/fixtures/parser/` carry any token that
+  decodes to `END` or to a literal `E N D` letter sequence in a
+  music-stream position. The empirical conclusion is that the
+  `END` symbol is app-internal only and does NOT round-trip
+  through the `irealb://` URL exporter, so the AST has no
+  representation for it. If a future iReal Pro export is
+  observed to carry the token, reopen #2451 with the URL fragment
+  and the symbol can be added to `MusicalSymbol` then.
 
 ## JSON debug format
 

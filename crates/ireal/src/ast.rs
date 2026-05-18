@@ -322,6 +322,11 @@ impl Ending {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BarChord {
     /// The chord at this position.
+    ///
+    /// For [`BarChordKind::SlashRepeat`] this carries a snapshot of
+    /// the preceding chord so consumers that introspect harmony see
+    /// the right value even when the renderer paints a slash glyph
+    /// instead of chord text.
     pub chord: Chord,
     /// Where in the bar the chord lands.
     pub position: BeatPosition,
@@ -336,6 +341,69 @@ pub struct BarChord {
     /// chord, so the renderer can paint Small chords at a reduced
     /// font / width without losing per-chord granularity.
     pub size: ChordSize,
+    /// What the renderer should paint at this position — a chord
+    /// label or a slash-repeat glyph.
+    pub kind: BarChordKind,
+}
+
+/// Per-chord paint kind, controlled by the iReal Pro pause-slash
+/// `p` token.
+///
+/// The spec's pause-slash means "repeat the preceding chord at this
+/// beat", so a `p` in the URL emits a [`BarChord`] with
+/// [`BarChordKind::SlashRepeat`] whose `chord` field carries a
+/// snapshot of the preceding chord. Renderers paint a slash glyph
+/// instead of the chord typography for [`BarChordKind::SlashRepeat`]
+/// entries; consumers that read the chord field still see the
+/// preceding harmony.
+///
+/// A leading `p` with no preceding chord is a malformed URL — the
+/// parser drops it rather than emitting an orphan slash.
+///
+/// Reference: <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>
+/// — "Slash: Sometimes we might want to add slash symbol to indicate
+/// that we want to repeat the preceding chord: `|C7ppF7|`".
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum BarChordKind {
+    /// A regular chord — the renderer paints chord typography.
+    #[default]
+    Played,
+    /// A pause-slash — the renderer paints a slash glyph in place
+    /// of chord text. The [`BarChord::chord`] field carries the
+    /// preceding chord's value as a snapshot.
+    SlashRepeat,
+}
+
+impl BarChord {
+    /// Constructs a regular [`BarChordKind::Played`] entry. Prefer
+    /// this over a struct literal so the `kind` field is decided
+    /// at the call site rather than relying on `Default`.
+    #[must_use]
+    pub fn played(chord: Chord, position: BeatPosition, size: ChordSize) -> Self {
+        Self {
+            chord,
+            position,
+            size,
+            kind: BarChordKind::Played,
+        }
+    }
+
+    /// Constructs a [`BarChordKind::SlashRepeat`] entry whose `chord`
+    /// field carries a snapshot of the preceding chord. The
+    /// snapshot is the caller's responsibility — pass the chord
+    /// the renderer should treat as the "held" harmony for that
+    /// beat slot. Renderers paint a `/` glyph and ignore the
+    /// snapshot's typography; AST consumers can still introspect
+    /// it for analysis or transposition.
+    #[must_use]
+    pub fn slash_repeat(snapshot: Chord, position: BeatPosition, size: ChordSize) -> Self {
+        Self {
+            chord: snapshot,
+            position,
+            size,
+            kind: BarChordKind::SlashRepeat,
+        }
+    }
 }
 
 /// Per-chord display size, controlled by the iReal Pro `s` / `l`
