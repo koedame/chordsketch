@@ -84,7 +84,12 @@ a { color: inherit; text-decoration: none; }
 .meta-card .composer { font-family: var(--font-jp); font-weight: 400; font-size: var(--fs-14); color: var(--text-secondary); margin: 0 0 var(--sp-5); }
 .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--sp-4); }
 .meta-field { display: flex; flex-direction: column; gap: 4px; }
-.meta-field label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); }
+/* Field-caption typography — shared by the meta-card field labels
+   above the inputs and the width-mode showcase card captions below
+   the chart. Single source of truth so the two surfaces don't drift
+   apart when the design token set evolves. */
+.meta-field label,
+.width-mode-row > .width-mode-card > .caption { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); }
 .meta-field input, .meta-field select { height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-2); background: var(--ink-50); font: 500 var(--fs-14)/1 var(--font-mono); color: var(--text-primary); transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out); font-variant-numeric: tabular-nums; }
 .meta-field input:focus, .meta-field select:focus { outline: none; border-color: var(--crimson-500); background: var(--surface); box-shadow: var(--focus-ring); }
 /* Key field: root <select> and Major/Minor segmented control share
@@ -454,22 +459,35 @@ a { color: inherit; text-decoration: none; }
    on the same baseline as a regular chord. */
 .chord.nc { font-family: var(--font-chord); font-weight: 700; font-size: 22px; letter-spacing: 0.02em; }
 
-/* Invisible-root: the chord root is intentionally not rendered (the
-   chord is held; only the bass moves). Visually this is a slash chord
-   with the top half blank — a horizontal divider plus a bass note
-   below. The oval icon in the iReal Pro editor toolbar is a button
-   glyph, not a chart rendering. */
+/* Invisible-root: the chord is held but its root letter is replaced
+   with an oval glyph; only the bass moves. Visually this is a slash
+   chord whose top half carries a hollow ellipse the size of a chord
+   root, paired with the bass note below the divider. Convention
+   matches iReal Pro's chart rendering (per
+   https://technimo.helpshift.com/hc/en/3-ireal-pro/faq/125-oval-symbol-in-the-editor-invisible-root/).
+   The oval is drawn as a CSS ellipse rather than a SMuFL glyph
+   because Bravura ships no semantically-equivalent codepoint —
+   iReal Pro itself draws a stroked outline, not a music symbol. */
 .chord.invisible-root { display: inline-flex; flex-direction: column; align-items: center; line-height: 1; gap: 0; }
+.chord.invisible-root .root-oval {
+  /* Sized to roughly the visual envelope of a regular `.chord-root`
+     letter (44px font-size capital → ~30×22 ink box) so the cell's
+     vertical metrics line up with neighbouring bars without needing
+     a margin-top spacer below. */
+  display: inline-block;
+  width: 32px;
+  height: 22px;
+  border: 1.75px solid var(--ink-1000);
+  border-radius: 50%;
+  box-sizing: border-box;
+  margin-bottom: 4px;
+}
 .chord.invisible-root .bass {
   font-family: var(--font-chord);
   font-weight: 700;
   font-size: 22px;
   border-top: 1.5px solid var(--ink-1000);
   padding-top: 2px;
-  /* Reserve space ABOVE the divider equal to the chord-root height so
-     the invisible-root cell shares vertical metrics with neighbouring
-     bars. */
-  margin-top: 28px;
   min-width: 28px;
   text-align: center;
   line-height: 1;
@@ -549,9 +567,44 @@ a { color: inherit; text-decoration: none; }
 .chart-line-spacer.x3 { height: var(--sp-20); }
 
 /* Chord width modes. The chart-wide `.chart.compact` modifier scales
-   chord glyphs horizontally (Normal=1, Small=0.7) without touching
-   vertical metrics — matches iReal Pro's N / S toggle. */
-.chart.compact .chord { transform: scaleX(0.72); transform-origin: left center; }
+   chord glyphs horizontally (Normal=1, Small=0.72) without touching
+   vertical metrics — matches iReal Pro's N / S toggle. A second
+   selector `.bar.compact-preview` lets a single bar demonstrate the
+   compression in-place against neighbouring full-width bars, used by
+   the "Width modes" showcase row at the bottom of the demo chart;
+   the two selectors share one transform so the visual scale stays
+   consistent whether the toggle is applied chart-wide or per-bar.
+   The per-bar selector is gated by `:not(.compact)` on the ancestor
+   chart so a `.compact-preview` bar nested inside a `.chart.compact`
+   does NOT compose two transforms (scaleX(0.72)² ≈ 0.52 would
+   silently flatten the chord glyphs further than either mode
+   intends). */
+.chart.compact .chord,
+.chart:not(.compact) .bar.compact-preview .chord { transform: scaleX(0.72); transform-origin: left center; }
+
+/* Width-mode showcase row. Two `.bar`s side-by-side, each carrying
+   four chords packed at beats 1..4 — the canonical "this bar needs
+   compact mode" case. The left card stays at Normal width so the
+   labels above each card read as a before/after pair. The right
+   card carries `.compact-preview` so it inherits the same transform
+   the chart-wide `.chart.compact` toggle would apply, demonstrating
+   the visual benefit without requiring the toolbar toggle to be
+   interactive in this static demo. */
+.width-mode-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6); align-items: stretch; }
+.width-mode-row > .width-mode-card { display: flex; flex-direction: column; gap: var(--sp-2); }
+/* Standalone `.bar` (no enclosing `.chart-line`) — add the right
+   barline that the `.chart-line .bar:last-child` selector would
+   normally provide so the cell reads as a closed bar. Mirrors the
+   `data-barline-right` exclusion pattern from the chart-line bars
+   so a future maintainer who adds a glyph-based right barline to a
+   width-mode card (e.g. `data-barline-right="end"` for a final-bar
+   showcase) doesn't get a double-paint defect (border + SMuFL glyph
+   on the same edge) — same bug class fixed in PR #2497 / commit
+   b4f689c on the chart-line bars. */
+.width-mode-row > .width-mode-card > .bar { border-right: 1.5px solid var(--ink-1000); }
+.width-mode-row > .width-mode-card > .bar[data-barline-right="double"],
+.width-mode-row > .width-mode-card > .bar[data-barline-right="repeat"],
+.width-mode-row > .width-mode-card > .bar[data-barline-right="end"] { border-right: 0; }
 
 /* ---------- Player controls strip ----------
    Sits below the chart body. Mocks the iReal Pro editor's bottom strip:
@@ -975,14 +1028,19 @@ a { color: inherit; text-decoration: none; }
         <!-- Showcase line — bars demonstrating bar-content variants that
              aren't part of the Autumn Leaves form: N.C. (no chord),
              invisible-root chord with a moving bass, repeat-1-bar slash
-             glyph, and repeat-2-bars slash glyph. -->
+             glyph, and repeat-2-bars slash glyph. Section letter [V]
+             (Verse) frames the line as a fifth section type alongside
+             A / B / C / D from the Autumn Leaves form above, matching
+             the V chip in the Inspector. -->
         <div class="chart-line">
           <div class="bar">
+            <span class="section-marker">V</span>
             <span class="chord nc">N.C.</span>
             <span class="text-mark">free time</span>
           </div>
           <div class="bar">
             <span class="chord invisible-root" aria-label="Invisible root over D bass">
+              <span class="root-oval" aria-hidden="true"></span>
               <span class="bass">D</span>
             </span>
           </div>
@@ -1011,6 +1069,35 @@ a { color: inherit; text-decoration: none; }
           </div>
           <div class="bar" data-barline-right="end">
             <span class="chord"><span class="chord-root">C</span></span>
+          </div>
+        </div>
+
+        <!-- Width-mode showcase. Same 4-chord packed bar rendered at
+             Normal width (left) and Small width (right) so the
+             toolbar's N / S toggle has a visible reference. The
+             chord set was chosen so each chord carries a sub-quality
+             (Δ7 / 7 / −7) — that's the highest-density layout where
+             chord glyphs overlap at full width and the compact
+             scaling delivers the cleanest payoff. -->
+        <div class="chart-line-spacer" aria-hidden="true"></div>
+        <div class="width-mode-row" role="group" aria-label="Chord width modes — Normal vs Small">
+          <div class="width-mode-card">
+            <span class="caption">Normal (N)</span>
+            <div class="bar">
+              <span class="chord"><span class="chord-root">D</span><span class="chord-qual">−7</span></span>
+              <span class="chord" data-beat="2"><span class="chord-root">G</span><span class="chord-qual">7</span></span>
+              <span class="chord" data-beat="3"><span class="chord-root">C</span><span class="chord-qual">Δ7</span></span>
+              <span class="chord" data-beat="4"><span class="chord-root">A</span><span class="chord-qual">−7</span></span>
+            </div>
+          </div>
+          <div class="width-mode-card">
+            <span class="caption">Small (S)</span>
+            <div class="bar compact-preview">
+              <span class="chord"><span class="chord-root">D</span><span class="chord-qual">−7</span></span>
+              <span class="chord" data-beat="2"><span class="chord-root">G</span><span class="chord-qual">7</span></span>
+              <span class="chord" data-beat="3"><span class="chord-root">C</span><span class="chord-qual">Δ7</span></span>
+              <span class="chord" data-beat="4"><span class="chord-root">A</span><span class="chord-qual">−7</span></span>
+            </div>
           </div>
         </div>
       </div>
