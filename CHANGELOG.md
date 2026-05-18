@@ -44,16 +44,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **iReal Pro CI smoke is hard-gating on every install path
-  (#2403).** v0.4.0 (2026-05-06) shipped iReal Pro support to
-  Homebrew, Scoop, winget, Snap, Docker, and crates.io, so the
-  pre-release carve-out (`continue-on-error: true` on the three
-  iReal smoke steps in `.github/actions/cli-render-smoke/action.yml`)
-  is removed. `readme-smoke.yml`'s `library-smoke` job's
-  crates.io-mode branch is also flipped on for the iReal half:
-  `chordsketch-ireal = "^0.4"` and `chordsketch-render-ireal =
-  "^0.4"` are now pinned alongside the existing ChordPro
-  constraints. Daily-cron smoke now covers the iReal Pro snippet
-  end-to-end against the published crates.
+  except winget (#2403).** v0.4.0 (2026-05-06) shipped iReal Pro
+  binaries to Homebrew, Scoop, Snap, Docker, and crates.io;
+  these channels' iReal smoke steps are now hard-gating (the
+  pre-release `continue-on-error: true` carve-out is removed
+  from `.github/actions/cli-render-smoke/action.yml`'s three
+  iReal Pro steps for every install path that uses the default
+  `tolerate-ireal-failure: false`). winget-pkgs has not yet
+  ingested the v0.4.0 manifest — `winget install chordsketch`
+  currently resolves to the pre-iReal 0.1.0 binary — so the
+  winget job alone passes `tolerate-ireal-failure: 'true'` to
+  the composite action; the iReal Pro smoke remains
+  informational on that channel until the
+  `packaging/winget/koedame.chordsketch.installer.yaml`
+  manifest is refreshed (stale SHA256 → v0.4.0 SHA256) and
+  submitted to winget-pkgs. `readme-smoke.yml`'s `library-smoke`
+  job's crates.io-mode branch is also flipped on for the iReal
+  half: `chordsketch-ireal = "^0.4"` and
+  `chordsketch-render-ireal = "^0.4"` are now pinned alongside
+  the existing ChordPro constraints. Daily-cron smoke now
+  covers the iReal Pro snippet end-to-end against the published
+  crates.
 
 - **React surface renders ChordPro AST → JSX directly**
   ([ADR-0017](docs/adr/0017-react-renders-from-ast.md), #2475).

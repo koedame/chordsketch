@@ -9,6 +9,18 @@ inputs:
     description: "Directory containing sample.cho, song2.cho, sample-config.json, sample.irealb, and sample.irealbook."
     required: false
     default: ".github/fixtures"
+  tolerate-ireal-failure:
+    description: >
+      When 'true', the three iReal Pro smoke steps run with
+      `continue-on-error: true` so a stale install-channel binary
+      (one that predates the iReal Pro track shipped in v0.4.0)
+      does not fail the whole job. Set to 'true' only on install
+      paths whose registry has NOT yet ingested the v0.4.0
+      manifest — winget-pkgs is the only known channel still in
+      that state as of 2026-05-18 (#2403 follow-up; ChordPro
+      smoke continues to hard-gate regardless of this flag).
+    required: false
+    default: "false"
 runs:
   using: "composite"
   steps:
@@ -91,16 +103,21 @@ runs:
     # in README.md (irealb:// URL, .irealb file, .irealbook collection).
     # iReal Pro shipped in v0.4.0 (2026-05-06) — see CHANGELOG.md
     # "## [0.4.0]" → "#### iReal Pro support (multi-format track,
-    # #2050)". Every registry binary built from that tag and later
-    # supports the iReal Pro track, so these steps are hard-gating
-    # across every install path. The pre-v0.4.0 carve-out
-    # (`continue-on-error: true`) was removed by #2403 once the
-    # release shipped binaries to Homebrew, Scoop, winget, Snap,
-    # Docker, and crates.io.
-    # See #2400 (origin) and #2403 (carve-out removal).
+    # #2050)". The steps are hard-gating by default; the
+    # `tolerate-ireal-failure` input lets a caller scope-narrow to
+    # the install paths whose registry has NOT yet ingested the
+    # v0.4.0 manifest. winget-pkgs is the only known channel still
+    # serving a pre-v0.4.0 binary as of 2026-05-18 (the local
+    # manifest at `packaging/winget/koedame.chordsketch.installer.yaml`
+    # documents the stale SHA256 hash that must be refreshed
+    # before submission). All other channels (Homebrew, Scoop,
+    # Snap, Docker, crates.io, source-build) ship the iReal Pro
+    # binary and hard-gate these steps without the carve-out.
+    # See #2400 (origin) and #2403 (carve-out narrowing).
 
     - name: Render iReal Pro from irealb:// URL
       shell: bash
+      continue-on-error: ${{ inputs.tolerate-ireal-failure == 'true' }}
       run: |
         set -euo pipefail
         # Read the canonical fixture URL from the .irealb file rather
@@ -114,6 +131,7 @@ runs:
 
     - name: Render iReal Pro from .irealb file
       shell: bash
+      continue-on-error: ${{ inputs.tolerate-ireal-failure == 'true' }}
       run: |
         set -euo pipefail
         chordsketch "${{ inputs.fixtures-dir }}/sample.irealb" > out-ireal-file.svg
@@ -123,6 +141,7 @@ runs:
 
     - name: Render iReal Pro from .irealbook collection
       shell: bash
+      continue-on-error: ${{ inputs.tolerate-ireal-failure == 'true' }}
       run: |
         set -euo pipefail
         chordsketch "${{ inputs.fixtures-dir }}/sample.irealbook" > out-ireal-book.svg

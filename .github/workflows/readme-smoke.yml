@@ -461,6 +461,16 @@ jobs:
 
       - name: Render smoke
         uses: ./.github/actions/cli-render-smoke
+        with:
+          # winget-pkgs has not yet ingested the v0.4.0 manifest
+          # (see `packaging/winget/koedame.chordsketch.installer.yaml`'s
+          # stale-SHA256 caveat); `winget install chordsketch`
+          # currently resolves to 0.1.0 which predates the iReal
+          # Pro track. Tolerate iReal smoke failure on the winget
+          # job specifically until the manifest is refreshed and
+          # submitted to winget-pkgs (#2403 follow-up). ChordPro
+          # smoke continues to hard-gate.
+          tolerate-ireal-failure: 'true'
 
   chocolatey:
     name: Chocolatey (Windows)
