@@ -55,7 +55,13 @@ export function useIrealRender(
     let cancelled = false;
 
     const run = async (): Promise<void> => {
-      setLoading(true);
+      // Skip the loading=true → loading=false flicker for empty
+      // sources: no wasm work happens on this path, so consumers
+      // should see a stable `false` from first render to settled
+      // state. We still call the loader so the wasm module is
+      // primed for a later non-empty source.
+      const shouldRender = source.length > 0;
+      if (shouldRender) setLoading(true);
       try {
         if (rendererRef.current === null) {
           const mod = await loaderRef.current();
@@ -64,7 +70,7 @@ export function useIrealRender(
           if (cancelled) return;
         }
         const renderer = rendererRef.current;
-        if (source.length === 0) {
+        if (!shouldRender) {
           if (cancelled) return;
           setSvg(null);
           setError(null);
@@ -81,7 +87,7 @@ export function useIrealRender(
         // Deliberately keep the previous `svg` so a transient
         // invalid edit does not blank the preview.
       } finally {
-        if (!cancelled) {
+        if (!cancelled && shouldRender) {
           setLoading(false);
         }
       }

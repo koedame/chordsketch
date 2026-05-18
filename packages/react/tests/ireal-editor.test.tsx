@@ -235,6 +235,101 @@ describe('<IrealEditor>', () => {
     expect(fieldset?.disabled).toBe(true);
   });
 
+  test('URL textarea commit re-parses on blur and triggers onChange', async () => {
+    // Regression for the silent-failure audit: the URL textarea is
+    // the primary recovery path after an external parse failure
+    // (the metadata fieldset is disabled then). Verify a blur after
+    // editing the URL re-parses + emits.
+    const stub = makeStub();
+    const onChange = vi.fn();
+    render(
+      <IrealEditor source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
+    );
+    await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
+    const urlTextarea = screen.getByLabelText('iReal Pro URL') as HTMLTextAreaElement;
+    fireEvent.change(urlTextarea, { target: { value: 'irealb://new-url' } });
+    fireEvent.blur(urlTextarea);
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    // The stub's parseIrealb echoes back the stored song; serialize
+    // produces a stable URL from the held song.
+    expect(stub.parseIrealb).toHaveBeenCalledWith('irealb://new-url');
+  });
+
+  test('URL textarea commit treats whitespace-only input as empty (clears to empty song)', async () => {
+    const stub = makeStub();
+    const onChange = vi.fn();
+    render(
+      <IrealEditor source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
+    );
+    await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
+    const urlTextarea = screen.getByLabelText('iReal Pro URL') as HTMLTextAreaElement;
+    fireEvent.change(urlTextarea, { target: { value: '   ' } });
+    fireEvent.blur(urlTextarea);
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const titleAfter = (screen.getByLabelText('Title') as HTMLInputElement).value;
+    expect(titleAfter).toBe('');
+  });
+
+  test('URL textarea commit JSON.parse failure surfaces with "Invalid AST JSON" prefix', async () => {
+    const stub = makeStub();
+    stub.parseIrealb.mockImplementation((input: string) => {
+      if (input === 'irealb://garbage') return '{nope}';
+      return JSON.stringify(songFixture());
+    });
+    render(<IrealEditor source="irealb://x" loader={makeLoader(stub)} onChange={vi.fn()} />);
+    await waitFor(() => expect(screen.queryByLabelText('iReal Pro URL')).toBeTruthy());
+    const urlTextarea = screen.getByLabelText('iReal Pro URL') as HTMLTextAreaElement;
+    fireEvent.change(urlTextarea, { target: { value: 'irealb://garbage' } });
+    fireEvent.blur(urlTextarea);
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toMatch(
+        /^Invalid AST JSON from @chordsketch\/wasm\.parseIrealb:/,
+      );
+    });
+  });
+
+  test('echoed source prop (matching our last emit) does NOT re-parse', async () => {
+    // Regression for the silent-failure audit: a controlled parent
+    // that round-trips the editor's emit back via the `source`
+    // prop should not cause the editor to re-parse — re-parsing
+    // would discard any mid-edit URL-textarea typing.
+    const stub = makeStub();
+    const { rerender } = render(
+      <IrealEditor source="irealb://x" loader={makeLoader(stub)} onChange={() => {}} />,
+    );
+    await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalledTimes(1));
+    // Trigger an edit that produces a new URL via serializeIrealb.
+    const titleInput = screen.getByLabelText('Title') as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: 'New' } });
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    // Capture the URL the editor emitted.
+    const calls = stub.serializeIrealb.mock.results;
+    const emittedUrl = calls[calls.length - 1]?.value as string;
+    // Parent passes the editor's own emit back as `source` —
+    // simulating a controlled parent that stores the URL.
+    rerender(
+      <IrealEditor source={emittedUrl} loader={makeLoader(stub)} onChange={() => {}} />,
+    );
+    // Give the effect a tick to run.
+    await new Promise((r) => setTimeout(r, 30));
+    // No additional parseIrealb call: the source matched lastEmittedRef.
+    expect(stub.parseIrealb).toHaveBeenCalledTimes(1);
+  });
+
+  test('external source change with a NEW URL re-parses and resets the URL draft', async () => {
+    // Sister to the previous test: a genuinely new external
+    // source (one we did not emit) must reset the editor.
+    const stub = makeStub();
+    const { rerender } = render(
+      <IrealEditor source="irealb://first" loader={makeLoader(stub)} />,
+    );
+    await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalledTimes(1));
+    rerender(<IrealEditor source="irealb://second" loader={makeLoader(stub)} />);
+    await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalledTimes(2));
+    const urlTextarea = screen.getByLabelText('iReal Pro URL') as HTMLTextAreaElement;
+    expect(urlTextarea.value).toBe('irealb://second');
+  });
+
   test('time-signature numerator dropdown accepts the canonical 1..=12 range', async () => {
     // Regression for the dropdown audit: the underlying AST allows
     // `numerator: 1` (e.g. T14), so the form must keep that value

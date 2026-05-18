@@ -62,7 +62,13 @@ export function useIrealParse(
     let cancelled = false;
 
     const run = async (): Promise<void> => {
-      setLoading(true);
+      // Skip the loading=true → loading=false flicker for empty
+      // sources: no wasm work happens on this path, so consumers
+      // should see a stable `false` from first render to settled
+      // state. We still call the loader so the wasm module is
+      // primed for a later non-empty source.
+      const shouldParse = source.length > 0;
+      if (shouldParse) setLoading(true);
       try {
         if (parserRef.current === null) {
           const mod = await loaderRef.current();
@@ -71,7 +77,7 @@ export function useIrealParse(
           if (cancelled) return;
         }
         const parser = parserRef.current;
-        if (source.length === 0) {
+        if (!shouldParse) {
           if (cancelled) return;
           setSong(null);
           setError(null);
@@ -107,7 +113,7 @@ export function useIrealParse(
         // Deliberately keep the previous `song` so a transient
         // invalid edit does not blank the preview.
       } finally {
-        if (!cancelled) {
+        if (!cancelled && shouldParse) {
           setLoading(false);
         }
       }
