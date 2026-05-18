@@ -13,8 +13,9 @@
 //! of features the parser preserves vs drops.
 
 use crate::ast::{
-    Accidental, Bar, BarChordKind, BarLine, Chord, ChordQuality, ChordRoot, ChordSize, Ending,
-    IrealSong, KeyMode, KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChordKind, BarLine, BeatGrouping, Chord, ChordQuality, ChordRoot,
+    ChordSize, Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, SectionLabel,
+    TimeSignature,
 };
 use crate::parser::{MUSIC_PREFIX, matches_macro_prefix};
 
@@ -170,6 +171,16 @@ fn serialize_music(song: &IrealSong) -> String {
     // round-trip without re-emitting a marker on every chord.
     let mut current_size = ChordSize::Default;
 
+    // Compound-time beat-grouping running state (#2449). The
+    // parser stamps every bar with the active grouping, so a
+    // verbatim round-trip would emit `<a+b>` on every bar — but
+    // the spec only emits the override once per change. Tracking
+    // the previously-emitted grouping lets the serializer emit a
+    // `<a+b>` token only when the grouping differs from the prior
+    // bar, matching how the iReal Pro player consumes the
+    // directive ("remains until the opposite is used").
+    let mut current_grouping: Option<BeatGrouping> = None;
+
     // Flatten all bars across sections so the serializer can peek
     // the *next* bar regardless of section boundary. This is
     // load-bearing for round trips: the parser's `pending_symbol`
@@ -315,6 +326,31 @@ fn serialize_music(song: &IrealSong) -> String {
             // in the bar's centre. Emit before any chord content so
             // the parser's `n`-handler hits before chord parsing.
             chart.push('n');
+        }
+
+        // Emit `<a+b>` compound-time grouping (#2449) only when
+        // the bar's grouping differs from the previously-emitted
+        // state. The parser stamps every bar from the override
+        // forward with the running grouping, so a verbatim re-emit
+        // would duplicate the directive on every bar; only the
+        // change point carries the token. `None → None` (no
+        // emit), `Some(g) → Some(g)` (no emit when equal),
+        // `Some(g) → Some(h≠g)` and `None → Some(g)` and
+        // `Some(g) → None` all emit a token.
+        if bar.beat_grouping_override != current_grouping {
+            if let Some(grouping) = &bar.beat_grouping_override {
+                chart.push('<');
+                let mut first = true;
+                for part in grouping.parts() {
+                    if !first {
+                        chart.push('+');
+                    }
+                    first = false;
+                    chart.push_str(&part.get().to_string());
+                }
+                chart.push('>');
+            }
+            current_grouping = bar.beat_grouping_override.clone();
         }
 
         // Bar contents.
@@ -705,6 +741,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
         };
@@ -770,6 +807,7 @@ mod tests {
                 no_chord: false,
                 text_comment: None,
                 system_break_space: 0,
+                beat_grouping_override: None,
             }],
         }];
         let url = irealb_serialize(&song);
@@ -813,6 +851,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
             ..Default::default()
@@ -853,6 +892,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
             ..Default::default()
@@ -901,6 +941,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
             ..Default::default()
@@ -944,6 +985,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
             ..Default::default()
@@ -982,6 +1024,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
             ..Default::default()
@@ -1022,6 +1065,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
             ..Default::default()
@@ -1312,6 +1356,7 @@ mod tests {
                             kind: BarChordKind::Played,
                         }],
                         system_break_space: 2,
+                        beat_grouping_override: None,
                         ..Default::default()
                     },
                 ],
@@ -1363,6 +1408,7 @@ mod tests {
                             kind: BarChordKind::Played,
                         }],
                         system_break_space: 2,
+                        beat_grouping_override: None,
                         ..Default::default()
                     },
                 ],
@@ -1413,6 +1459,7 @@ mod tests {
                         end: BarLine::Final,
                         repeat_previous: true,
                         system_break_space: 1,
+                        beat_grouping_override: None,
                         ..Default::default()
                     },
                 ],
@@ -1455,6 +1502,7 @@ mod tests {
                         kind: BarChordKind::Played,
                     }],
                     system_break_space: 1,
+                    beat_grouping_override: None,
                     ..Default::default()
                 }],
             }],

@@ -87,23 +87,20 @@ runs:
         fi
 
     # --- iReal Pro smoke ----------------------------------------------------
-    # The next three steps cover the iReal Pro Usage examples documented in
-    # README.md (irealb:// URL, .irealb file, .irealbook collection). They
-    # are marked `continue-on-error: true` because every published binary
-    # on every registry today predates the iReal Pro track (the entire
-    # iReal Pro feature set is in `## [Unreleased]` per CHANGELOG.md).
-    # Workspace-HEAD jobs (source-build, usage-smoke) build from current
-    # code and DO run these steps successfully, providing full end-to-end
-    # coverage of the new commands on every PR. After the next release
-    # publishes iReal-supporting binaries to every channel, the carve-out
-    # is removed so iReal smoke becomes hard-gating on every install
-    # path — that work is tracked in #2403. Until then, failures still
-    # surface visibly in the job log; they just don't fail the job.
+    # The next three steps cover the iReal Pro Usage examples documented
+    # in README.md (irealb:// URL, .irealb file, .irealbook collection).
+    # iReal Pro shipped in v0.4.0 (2026-05-06) — see CHANGELOG.md
+    # "## [0.4.0]" → "#### iReal Pro support (multi-format track,
+    # #2050)". Every registry binary built from that tag and later
+    # supports the iReal Pro track, so these steps are hard-gating
+    # across every install path. The pre-v0.4.0 carve-out
+    # (`continue-on-error: true`) was removed by #2403 once the
+    # release shipped binaries to Homebrew, Scoop, winget, Snap,
+    # Docker, and crates.io.
     # See #2400 (origin) and #2403 (carve-out removal).
 
     - name: Render iReal Pro from irealb:// URL
       shell: bash
-      continue-on-error: true
       run: |
         set -euo pipefail
         # Read the canonical fixture URL from the .irealb file rather
@@ -117,7 +114,6 @@ runs:
 
     - name: Render iReal Pro from .irealb file
       shell: bash
-      continue-on-error: true
       run: |
         set -euo pipefail
         chordsketch "${{ inputs.fixtures-dir }}/sample.irealb" > out-ireal-file.svg
@@ -127,7 +123,6 @@ runs:
 
     - name: Render iReal Pro from .irealbook collection
       shell: bash
-      continue-on-error: true
       run: |
         set -euo pipefail
         chordsketch "${{ inputs.fixtures-dir }}/sample.irealbook" > out-ireal-book.svg
@@ -138,11 +133,14 @@ runs:
         # single song — the same structural sanity check used for the
         # ChordPro multi-file PDF above. If the .irealbook dispatch
         # silently rendered only the first song, this check fails.
-        # Re-render the single-song .irealb in this step so the size
-        # comparison is independent of whether the prior continue-on-
-        # error step succeeded or not — otherwise a missing
-        # out-ireal-file.svg would make `wc -c` error out and silently
-        # invalidate this assertion.
+        # Re-render the single-song .irealb in this step rather than
+        # reusing the prior step's `out-ireal-file.svg` so the size
+        # comparison is independent of any earlier-step disk / I/O
+        # accident — a missing artifact would make `wc -c` error out
+        # and silently invalidate the assertion. The defensive
+        # re-render predates the pre-v0.4.0 `continue-on-error`
+        # carve-out (#2400, #2403) and stays valuable as a robustness
+        # measure even now that every iReal step is hard-gating.
         chordsketch "${{ inputs.fixtures-dir }}/sample.irealb" > out-ireal-single.svg
         single_size=$(wc -c < out-ireal-single.svg)
         book_size=$(wc -c < out-ireal-book.svg)

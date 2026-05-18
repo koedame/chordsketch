@@ -464,6 +464,7 @@ fn full_song_round_trips_through_deserializer() {
         no_chord: false,
         text_comment: None,
         system_break_space: 0,
+        beat_grouping_override: None,
     };
     let mut song = IrealSong::new();
     song.title = "T".to_string();
@@ -631,6 +632,7 @@ fn bar_system_break_space_nonzero_round_trips_through_json() {
         no_chord: false,
         text_comment: None,
         system_break_space: 2,
+        beat_grouping_override: None,
     };
     let json = bar.to_json_string();
     // The field must be emitted when non-zero.

@@ -229,6 +229,30 @@ pub struct Bar {
     /// AST records the hint verbatim so the source `Y+` token
     /// round-trips through serialise → parse without loss.
     pub system_break_space: u8,
+    /// Compound-time-signature beat grouping override.
+    ///
+    /// iReal Pro v2024.4+ lets the user customise how an odd-meter
+    /// time signature (5/8, 5/4, 7/8, 7/4) is felt internally — e.g.
+    /// 5/8 as `3+2` (default) or `2+3`, 7/8 as `4+3` (default), `3+4`,
+    /// or `3+2+2`. The grouping is encoded as a `<digit+digit+...>`
+    /// staff-text token (the canonical "compound time signature"
+    /// directive per
+    /// <https://technimo.helpshift.com/hc/en/3-ireal-pro/faq/461-compound-time-signatures/?p=all>).
+    /// The spec wording is "remains until the opposite is used", so
+    /// the parser tracks a running grouping state across bars and
+    /// stamps it onto every bar from the override forward; the
+    /// running state resets to `None` when the time signature
+    /// itself changes (a new grouping must be reasserted under the
+    /// new meter).
+    ///
+    /// `None` means "use the time signature's natural grouping"
+    /// (the player's built-in default for the meter). For a meter
+    /// without a documented default (anything outside the spec's
+    /// 5/8, 5/4, 7/8, 7/4 list), `None` is the only well-defined
+    /// state — explicit overrides on other meters are still
+    /// accepted and stored verbatim so the round-trip stays
+    /// lossless.
+    pub beat_grouping_override: Option<BeatGrouping>,
 }
 
 impl Bar {
@@ -246,7 +270,56 @@ impl Bar {
             no_chord: false,
             text_comment: None,
             system_break_space: 0,
+            beat_grouping_override: None,
         }
+    }
+}
+
+/// Compound-time-signature beat grouping (#2449).
+///
+/// A non-empty list of positive integers whose sum must equal the
+/// active time signature's numerator. `BeatGrouping(vec![3, 2])`
+/// means "play the bar's 5 beats as 3 + 2"; `BeatGrouping(vec![3,
+/// 2, 2])` means "play 7 beats as 3 + 2 + 2". Each group entry is
+/// a [`NonZeroU8`] so the type rejects zero-length subgroups at
+/// compile time (a `<0+3>` token has no internal-feel meaning).
+///
+/// Construction goes through [`BeatGrouping::new`] (which validates
+/// `parts.is_empty() == false` at runtime) so the parser can
+/// surface `ParseError::InvalidNumericField` on malformed input
+/// rather than panic. Renderers do not paint anything for this
+/// override — it is a player-only directive — but the JSON
+/// serialiser round-trips it byte-for-byte so out-of-process
+/// consumers (wasm, FFI, NAPI) can introspect it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BeatGrouping(Vec<NonZeroU8>);
+
+impl BeatGrouping {
+    /// Constructs a [`BeatGrouping`] from a list of subgroup sizes,
+    /// returning `None` if the list is empty. Each entry must be a
+    /// [`NonZeroU8`]; the caller is responsible for filtering out
+    /// zero-sized subgroups before invoking this constructor.
+    #[must_use]
+    pub fn new(parts: Vec<NonZeroU8>) -> Option<Self> {
+        if parts.is_empty() {
+            None
+        } else {
+            Some(Self(parts))
+        }
+    }
+
+    /// Returns the subgroup sizes in their original order.
+    #[must_use]
+    pub fn parts(&self) -> &[NonZeroU8] {
+        &self.0
+    }
+
+    /// Returns the sum of subgroup sizes. The parser uses this to
+    /// validate the grouping against the active time signature's
+    /// numerator before stamping the override onto a bar.
+    #[must_use]
+    pub fn sum(&self) -> u16 {
+        self.0.iter().map(|n| u16::from(n.get())).sum()
     }
 }
 

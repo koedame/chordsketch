@@ -437,6 +437,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
         }
