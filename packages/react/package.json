@@ -1,7 +1,7 @@
 {
   "name": "@chordsketch/react",
-  "version": "0.0.0",
-  "description": "React components for ChordPro rendering, powered by @chordsketch/wasm",
+  "version": "0.1.0",
+  "description": "React components for embedding ChordPro and iReal Pro editors + previews, powered by @chordsketch/wasm",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -32,6 +32,7 @@
   },
   "keywords": [
     "chordpro",
+    "ireal-pro",
     "music",
     "chord",
     "parser",
@@ -62,7 +63,7 @@
     }
   },
   "dependencies": {
-    "@chordsketch/wasm": "^0.3.0",
+    "@chordsketch/wasm": "^0.4.0",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/language": "^6.12.3",
     "@codemirror/search": "^6.7.0",

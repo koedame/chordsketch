@@ -9,6 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`@chordsketch/react@0.1.0` — first publishable release (#2473).**
+  The React component library moves from `0.0.0` (unpublished
+  scaffold) to `0.1.0` and gains a full iReal Pro surface alongside
+  the existing ChordPro components:
+  - `<IrealEditor source onChange />` — header metadata form
+    (title / composer / style / key root + accidental + mode /
+    time numerator + denominator / tempo / transpose) +
+    read-only bar grid + round-trip URL textarea, all wired
+    through `@chordsketch/wasm`'s `parseIrealb` / `serializeIrealb`.
+  - `<IrealPreview source />` — SVG preview via `renderIrealSvg`.
+  - `<IrealPlayground />` — composite drop-in editor + preview
+    analogous to `<Playground />` for ChordPro. Supports both
+    uncontrolled (`defaultValue`) and controlled (`source` +
+    `onChange`) modes.
+  - Hooks: `useIrealParse`, `useIrealSerialize`, `useIrealRender`,
+    each lazy-loading wasm once per hook instance.
+  - AST types and helpers: `IrealSong`, `IrealSection`, `IrealBar`,
+    `IrealChord`, `IrealChordQuality`, `IrealMusicalSymbol`, …
+    plus `irealChordToString`, `irealSectionLabelToString`, …
+  - Runtime dep on `@chordsketch/wasm` bumped from `^0.3.0` to
+    `^0.4.0` to match the currently-published wasm major.
+  - README extended to L3 quality bar from
+    `.claude/rules/package-documentation.md`: API reference table
+    covering every public export, platform compatibility table,
+    peer-dependency table, Next.js / SSR notes, and the optional
+    `@chordsketch/wasm-export` install hint for `<PdfExport>`.
+  Architectural rationale recorded in
+  [ADR-0020](docs/adr/0020-ireal-pro-react-surface.md): the iReal
+  Pro React surface is a native React implementation (MVP feature
+  set) rather than a wrapper around the private
+  `@chordsketch/ui-irealb-editor`. `@chordsketch/ui-web` and
+  `@chordsketch/ui-irealb-editor` READMEs gain prominent banners
+  stating that external integrators should use `@chordsketch/react`
+  rather than depending on the private packages directly.
 - **`chordsketch-ireal` preserves full staff-text content (#2426).**
   New `StaffText` enum on the AST captures the spec's three staff-
   text shapes — `<text>` (plain caption), `<*XYtext>` (caption
