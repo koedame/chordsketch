@@ -134,9 +134,11 @@ export function IrealEditor({
   const [song, setSong] = useState<IrealSong | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [urlDraft, setUrlDraft] = useState<string>(source);
-  // Track whether the URL textarea has a pending edit the user has
-  // not yet committed (blur / "Apply URL" button), so we don't
-  // overwrite their typing on every source-prop change.
+  // True while the user is actively typing in the URL textarea
+  // (set by `handleUrlChange`, cleared by `handleUrlCommit` or when
+  // an external `source`-prop change takes authority). `emit` checks
+  // this before updating the draft so a field edit does not clobber
+  // mid-URL typing; external source changes always win and clear it.
   const urlDirtyRef = useRef<boolean>(false);
 
   useEffect(() => {

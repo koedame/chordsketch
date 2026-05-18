@@ -1,7 +1,7 @@
 # 0020. iReal Pro React surface is native React, not a wrapper
 
 - **Status**: Accepted
-- **Date**: 2026-05-19
+- **Date**: 2026-05-18
 
 ## Context
 
