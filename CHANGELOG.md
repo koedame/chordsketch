@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`chordsketch-ireal` pause-slash (`p`) support.** The spec's
+  pause-slash token (`|C7ppF7|`: repeat the preceding chord at
+  each `p` beat slot) now round-trips through the AST instead of
+  being silently dropped. New `BarChordKind { Played, SlashRepeat }`
+  enum on [`BarChord`]; the parser emits a `SlashRepeat` entry
+  whose `chord` field carries a snapshot of the preceding chord
+  (across bar boundaries when the slash sits in a new bar), the
+  URL serializer re-emits `p` for each `SlashRepeat`, and the
+  SVG renderer paints a single `/` glyph in the bar's beat
+  column. JSON serializer uses the same additive-omit convention
+  as `size` so existing snapshots stay byte-stable (#2435).
+
 ### Changed
 
 - **React surface renders ChordPro AST → JSX directly**

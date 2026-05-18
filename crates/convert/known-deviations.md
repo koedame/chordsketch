@@ -78,6 +78,19 @@ ChordPro `{meta}` extension); every conformant ChordPro reader
 preserves `{meta}` verbatim, so the round trip back to iReal is
 intact via #2061.
 
+### Pause-slash repeats (`p` / `BarChordKind::SlashRepeat`, #2435)
+
+iReal Pro's `p` token means "repeat the preceding chord at this
+beat" and emits a `BarChordKind::SlashRepeat` entry in the AST
+whose `chord` field carries a snapshot of the preceding harmony.
+ChordPro is a lyric-line format with no per-beat rhythm notation —
+there is no `p` equivalent. The converter drops `SlashRepeat`
+entries silently. The preceding `Played` chord already
+communicates the harmony; emitting the snapshot chord again would
+produce duplicate chord tokens (`[C7][C7][C7][F7]` for
+`|C7ppF7|`) that clutter the lyrics line without adding harmonic
+information.
+
 ## ChordPro → iReal Pro (#2061)
 
 Implemented in `src/to_ireal.rs`. **Lossy** in this direction —

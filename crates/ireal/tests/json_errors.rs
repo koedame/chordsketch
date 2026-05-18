@@ -11,9 +11,9 @@
 //! `JsonValue::as_str`'s Err arm.
 
 use chordsketch_ireal::{
-    Bar, BarChord, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize, Ending,
-    FromJson, IrealSong, JsonError, JsonValue, MusicalSymbol, Section, SectionLabel, ToJson,
-    parse_json,
+    Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
+    Ending, FromJson, IrealSong, JsonError, JsonValue, MusicalSymbol, Section, SectionLabel,
+    ToJson, parse_json,
 };
 
 fn minimal_song_json_with(field: &str, value: &str) -> String {
@@ -456,6 +456,7 @@ fn full_song_round_trips_through_deserializer() {
             chord,
             position: BeatPosition::on_beat(1).unwrap(),
             size: ChordSize::Default,
+            kind: BarChordKind::Played,
         }],
         ending: None,
         symbol: None,
@@ -674,6 +675,7 @@ fn bar_chord_small_size_serialises_and_round_trips_through_json() {
         chord: Chord::triad(ChordRoot::natural('D'), ChordQuality::Minor7),
         position: BeatPosition::on_beat(1).unwrap(),
         size: ChordSize::Small,
+        kind: BarChordKind::Played,
     };
     let json = bc.to_json_string();
     // The field must be present when non-default.
@@ -686,6 +688,7 @@ fn bar_chord_small_size_serialises_and_round_trips_through_json() {
         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
         position: BeatPosition::on_beat(1).unwrap(),
         size: ChordSize::Default,
+        kind: BarChordKind::Played,
     };
     let default_json = default_bc.to_json_string();
     assert!(
@@ -707,6 +710,79 @@ fn chord_size_explicit_default_decodes_to_default() {
     let value = parse_json(r#""default""#).unwrap();
     let size = ChordSize::from_json_value(&value).expect("decode");
     assert_eq!(size, ChordSize::Default);
+}
+
+/// Sister-test of `bar_chord_small_size_serialises_and_round_trips_through_json`
+/// for the `kind` field (#2435). Verifies the additive-omit pattern:
+/// default `Played` does NOT emit `"kind"`, non-default `SlashRepeat`
+/// DOES, and the round-trip preserves the kind.
+#[test]
+fn bar_chord_slash_repeat_serialises_and_round_trips_through_json() {
+    let snapshot = Chord::triad(ChordRoot::natural('C'), ChordQuality::Dominant7);
+    let bc = BarChord::slash_repeat(
+        snapshot.clone(),
+        BeatPosition::on_beat(2).unwrap(),
+        ChordSize::Default,
+    );
+    let json = bc.to_json_string();
+    // The field must be present when non-default.
+    assert!(
+        json.contains("\"kind\":\"slash_repeat\""),
+        "kind must appear as \"slash_repeat\" when SlashRepeat, got {json:?}"
+    );
+    // Played BarChords must NOT emit the field (snapshot-byte-stability).
+    let played_bc = BarChord::played(
+        snapshot,
+        BeatPosition::on_beat(1).unwrap(),
+        ChordSize::Default,
+    );
+    let played_json = played_bc.to_json_string();
+    // Check both BarChordKind values are absent — a bare
+    // `contains("\"kind\"")` collides with `ChordQuality`'s
+    // own `"kind":` JSON tag, so look for the specific
+    // value strings BarChord uses.
+    assert!(
+        !played_json.contains("\"kind\":\"played\""),
+        "Played BarChord must NOT emit its kind field, got {played_json:?}"
+    );
+    assert!(
+        !played_json.contains("\"kind\":\"slash_repeat\""),
+        "Played BarChord must NOT emit slash_repeat, got {played_json:?}"
+    );
+    // Round-trip: deserialise back and check equality.
+    let parsed = BarChord::from_json_str(&json).expect("deserialise");
+    assert_eq!(parsed.kind, BarChordKind::SlashRepeat);
+    assert_eq!(parsed, bc);
+}
+
+/// The `"played"` string in `BarChordKind::from_json_value` is never
+/// emitted by the encoder (Played is the default and is omitted), but
+/// it must still deserialise correctly for hand-crafted JSON consumers.
+/// This test covers the `"played" => Ok(Self::Played)` arm that Codecov
+/// marks uncovered because the omit-when-default policy prevents it from
+/// being exercised by round-trip tests alone.
+#[test]
+fn bar_chord_kind_played_explicit_string_decodes() {
+    let value = parse_json(r#""played""#).unwrap();
+    let kind =
+        BarChordKind::from_json_value(&value).expect("\"played\" must deserialise without error");
+    assert_eq!(
+        kind,
+        BarChordKind::Played,
+        "\"played\" must decode to Played"
+    );
+}
+
+/// Unknown `kind` string must surface a `JsonError`. Covers the
+/// `other => Err(...)` arm in `BarChordKind::from_json_value`.
+#[test]
+fn from_json_rejects_unknown_bar_chord_kind() {
+    let value = parse_json(r#""mystery""#).unwrap();
+    let result = BarChordKind::from_json_value(&value);
+    assert!(
+        result.is_err(),
+        "unknown bar-chord kind must be rejected, got {result:?}"
+    );
 }
 
 /// Unknown chord-size string must surface a `JsonError`.

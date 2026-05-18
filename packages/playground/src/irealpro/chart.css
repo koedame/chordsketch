@@ -408,6 +408,14 @@
    on the same baseline as a regular chord. */
 .chord.nc { font-family: var(--cs-font-chord); font-weight: 700; font-size: 22px; letter-spacing: 0.02em; }
 
+/* Pause-slash repeat (#2435): a single `/` glyph in the chord
+   cell that means "repeat the preceding chord at this beat".
+   Sized to match a regular chord-root letter so packed bars like
+   `|C7,p,p,p,|` line up cleanly. Sister of the SVG renderer's
+   `class="chord slash-repeat"` output in
+   `crates/render-ireal/src/lib.rs::write_bar_chord_text`. */
+.chord.slash-repeat { font-family: var(--cs-font-chord); font-weight: 700; font-size: 36px; line-height: 1; letter-spacing: 0; }
+
 /* Invisible-root: the chord is held but its root letter is replaced
    with an oval glyph; only the bass moves. Visually this is a slash
    chord whose top half carries a hollow ellipse the size of a chord
