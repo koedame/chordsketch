@@ -117,6 +117,65 @@ fn converter_preserves_section_count_for_multi_section_input() {
     assert!(comments.iter().any(|c| c.contains("Section A")));
 }
 
+/// Verifies that `BarChordKind::SlashRepeat` entries are dropped when converting
+/// iReal Pro → ChordPro. ChordPro is a lyric-line format with no per-beat repeat
+/// marker; emitting the snapshot chord would produce duplicate chord tokens.
+/// Covers the `continue` branch at `from_ireal.rs:248` added in #2435.
+#[test]
+fn slash_repeat_bar_chords_are_not_emitted_as_chord_tokens() {
+    // Build `|C7ppF7|`: C7 Played + two SlashRepeat + F7 Played.
+    use chordsketch_ireal::{BarChord, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize};
+    let c7 = Chord::triad(ChordRoot::natural('C'), ChordQuality::Dominant7);
+    let f7 = Chord::triad(ChordRoot::natural('F'), ChordQuality::Dominant7);
+    let bar = Bar {
+        chords: vec![
+            BarChord::played(
+                c7.clone(),
+                BeatPosition::on_beat(1).unwrap(),
+                ChordSize::Default,
+            ),
+            BarChord::slash_repeat(
+                c7.clone(),
+                BeatPosition::on_beat(2).unwrap(),
+                ChordSize::Default,
+            ),
+            BarChord::slash_repeat(
+                c7.clone(),
+                BeatPosition::on_beat(3).unwrap(),
+                ChordSize::Default,
+            ),
+            BarChord::played(f7, BeatPosition::on_beat(4).unwrap(), ChordSize::Default),
+        ],
+        ..Bar::new()
+    };
+    let mut song = IrealSong::new();
+    song.title = "Slash Drop Test".into();
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![bar],
+    });
+    let result = ireal_to_chordpro(&song).expect("convert");
+    // Collect chord name strings from every LyricsSegment in the output.
+    let chord_names: Vec<&str> = result
+        .output
+        .lines
+        .iter()
+        .filter_map(|line| match line {
+            Line::Lyrics(ll) => Some(ll),
+            _ => None,
+        })
+        .flat_map(|ll| ll.segments.iter())
+        .filter_map(|seg| seg.chord.as_ref().map(|c| c.name.as_str()))
+        .collect();
+    // Only the two Played chords must appear — the SlashRepeat entries must not
+    // produce duplicate chord tokens ("C7 C7 C7 F7").
+    assert_eq!(
+        chord_names,
+        vec!["C7", "F7"],
+        "SlashRepeat entries must be dropped; expected [C7, F7], got {chord_names:?}"
+    );
+}
+
 /// Returns all text segments (concatenated) from every lyrics line in the song.
 fn all_lyrics_text(song: &Song) -> String {
     song.lines
