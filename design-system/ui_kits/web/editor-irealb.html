@@ -87,6 +87,20 @@ a { color: inherit; text-decoration: none; }
 .meta-field label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); }
 .meta-field input, .meta-field select { height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-2); background: var(--ink-50); font: 500 var(--fs-14)/1 var(--font-mono); color: var(--text-primary); transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out); font-variant-numeric: tabular-nums; }
 .meta-field input:focus, .meta-field select:focus { outline: none; border-color: var(--crimson-500); background: var(--surface); box-shadow: var(--focus-ring); }
+/* Key field: root <select> and Major/Minor segmented control share
+   one horizontal row so the field's vertical height matches every
+   other .meta-field (label + 32px control). Without this wrapper
+   the .meta-field's `flex-direction: column` would stack the
+   segmented control below the select and break meta-grid row
+   alignment. */
+.meta-field .key-field-row { display: flex; gap: var(--sp-2); align-items: stretch; min-width: 0; }
+.meta-field .key-field-row > select { flex: 1; min-width: 0; }
+/* Bump the segmented control from its toolbar default (28px) up to
+   the meta-field input height (32px) so the two controls share a
+   baseline. Buttons fill the parent so the active-state background
+   covers the full chip area. */
+.meta-field .key-field-row > .segmented { height: 32px; }
+.meta-field .key-field-row > .segmented button { height: 100%; }
 
 /* ============================================================
    iReal Pro chart — engraved in black on white, no cell grid.
@@ -165,10 +179,14 @@ a { color: inherit; text-decoration: none; }
 .bar:hover { background: rgba(189, 22, 66, 0.05); }
 .bar.active { background: var(--crimson-50); outline: 1.5px solid var(--crimson-500); outline-offset: -1.5px; z-index: 2; }
 
-/* End-of-line single barline. Skipped when the last bar already carries
-   its own glyph-based barline (repeat-end or final), so we never need
-   `!important` to override. */
-.chart-line .bar:last-child:not(.repeat-end):not(.final) { border-right: 1.5px solid var(--ink-1000); }
+/* End-of-line single barline. Skipped when the bar carries its own
+   glyph-based right barline (`double`, `repeat`, or `end` via the
+   data-barline-right attribute below), so we never need `!important`
+   to override. */
+.chart-line .bar:last-child { border-right: 1.5px solid var(--ink-1000); }
+.chart-line .bar[data-barline-right="double"],
+.chart-line .bar[data-barline-right="repeat"],
+.chart-line .bar[data-barline-right="end"] { border-right: 0; }
 
 /* All barlines render at the same vertical extent: single barlines use
    border-left at the bar's full height, and special barlines use SMuFL
@@ -179,12 +197,23 @@ a { color: inherit; text-decoration: none; }
   --barline-h: 58px;
   min-height: var(--barline-h);
 }
-.bar.repeat-start,
-.bar.repeat-end,
-.bar.final { position: relative; }
-.bar.repeat-start::before,
-.bar.repeat-end::after,
-.bar.final::after {
+/* Glyph-based barlines — iReal Pro models each bar as having two
+   independently-configurable sides. `data-barline-left` and
+   `data-barline-right` each take one of the three NON-SINGLE values
+   `double` / `repeat` / `end`; omit the attribute entirely for
+   `single` (the default, rendered by the .bar's `border-left` or
+   the `:last-child` `border-right` above). An unrecognised value
+   (e.g. the old class names `final` or `repeat-end`) falls through
+   silently to the default — new bars must use only the three values
+   listed below. The runtime sister site at
+   `packages/playground/src/irealpro/chart.tsx` (helper
+   `barlineSide()`) and `chart.css` keep this enum in lockstep. */
+.bar[data-barline-left="double"]::before,
+.bar[data-barline-left="repeat"]::before,
+.bar[data-barline-left="end"]::before,
+.bar[data-barline-right="double"]::after,
+.bar[data-barline-right="repeat"]::after,
+.bar[data-barline-right="end"]::after {
   font-family: var(--font-music);
   font-weight: normal;
   /* Empirically tuned so the visible Bravura barline strokes occupy the
@@ -192,9 +221,9 @@ a { color: inherit; text-decoration: none; }
      border-left used on adjacent single barlines. Verified by reading
      pixel data from a Playwright screenshot of the rendered DOM:
        single barline:   y=1..57, h=57
-       repeat-start:     y=1..57, h=57
-       repeat-end:       y=1..57, h=57
-       final:            y=1..57, h=57
+       repeat (left):    y=1..57, h=57
+       repeat (right):   y=1..57, h=57
+       end (final):      y=1..57, h=57
      The values below (font-size 71px, top -1px) were the last in a
      series of probe edits at this `--barline-h: 58px` setting. If the
      bar height is changed, both numbers must be re-tuned — Bravura's
@@ -206,12 +235,24 @@ a { color: inherit; text-decoration: none; }
   top: -1px;
   pointer-events: none;
 }
-.bar.repeat-start { border-left: 0; padding-left: calc(var(--sp-4) + 12px); }
-.bar.repeat-start::before { content: "\E040"; left: -2px; }    /* repeatLeft */
-.bar.repeat-end   { border-right: 0; padding-right: calc(var(--sp-3) + 12px); }
-.bar.repeat-end::after   { content: "\E041"; right: -2px; }    /* repeatRight */
-.bar.final        { border-right: 0; padding-right: calc(var(--sp-3) + 10px); }
-.bar.final::after        { content: "\E032"; right: -2px; }    /* barlineFinal */
+/* Left-barline variants. Each suppresses the default border-left and
+   reserves padding-left so the glyph's visible ink doesn't collide
+   with chord content. */
+.bar[data-barline-left="double"] { border-left: 0; padding-left: calc(var(--sp-3) + 8px); }
+.bar[data-barline-left="double"]::before { content: "\E031"; left: -2px; }    /* barlineDouble */
+.bar[data-barline-left="repeat"] { border-left: 0; padding-left: calc(var(--sp-4) + 12px); }
+.bar[data-barline-left="repeat"]::before { content: "\E040"; left: -2px; }    /* repeatLeft */
+.bar[data-barline-left="end"]    { border-left: 0; padding-left: calc(var(--sp-3) + 10px); }
+.bar[data-barline-left="end"]::before    { content: "\E032"; left: -2px; }    /* barlineFinal */
+/* Right-barline variants. The :last-child default border-right is
+   suppressed above for non-single right values, and the glyph is
+   anchored to the bar's right edge. */
+.bar[data-barline-right="double"] { padding-right: calc(var(--sp-3) + 8px); }
+.bar[data-barline-right="double"]::after { content: "\E031"; right: -2px; }   /* barlineDouble */
+.bar[data-barline-right="repeat"] { padding-right: calc(var(--sp-3) + 12px); }
+.bar[data-barline-right="repeat"]::after { content: "\E041"; right: -2px; }   /* repeatRight */
+.bar[data-barline-right="end"]    { padding-right: calc(var(--sp-3) + 10px); }
+.bar[data-barline-right="end"]::after    { content: "\E032"; right: -2px; }   /* barlineFinal */
 
 /* Section marker — small black-filled square with white letter, anchored at
    the top-left of the first bar of a section. Matches iReal Pro's printed
@@ -497,7 +538,12 @@ a { color: inherit; text-decoration: none; }
   white-space: nowrap;
 }
 
-/* Vertical spacer between chart-line rows. */
+/* Vertical spacer between chart-line rows. The base class is the
+   ×1 size; ×2 and ×3 add an explicit modifier. There is intentionally
+   no `.x1` modifier — writing `class="chart-line-spacer x1"` is
+   harmless (no rule matches, base size wins) but is the typo that
+   would silently render identical to the default, so prefer
+   `class="chart-line-spacer"` for the ×1 case. */
 .chart-line-spacer { height: var(--sp-6); }
 .chart-line-spacer.x2 { height: var(--sp-12); }
 .chart-line-spacer.x3 { height: var(--sp-20); }
@@ -765,8 +811,16 @@ a { color: inherit; text-decoration: none; }
             </optgroup>
           </select>
         </div>
-        <div class="meta-field"><label for="key">Key</label>
-          <select id="key" style="color: var(--crimson-500); font-weight: 700;"><option>C</option><option>D</option><option selected>Em</option><option>F</option><option>G</option><option>Am</option></select>
+        <div class="meta-field"><label for="key-root" id="key-field-label">Key</label>
+          <div class="key-field-row">
+            <select id="key-root" style="color: var(--crimson-500); font-weight: 700;">
+              <option>C</option><option>C♯/D♭</option><option>D</option><option>D♯/E♭</option><option selected>E</option><option>F</option><option>F♯/G♭</option><option>G</option><option>G♯/A♭</option><option>A</option><option>A♯/B♭</option><option>B</option>
+            </select>
+            <div class="segmented key-mode" role="group" aria-labelledby="key-field-label">
+              <button type="button" aria-pressed="false">Major</button>
+              <button type="button" aria-pressed="true">Minor</button>
+            </div>
+          </div>
         </div>
         <div class="meta-field"><label for="time">Time</label>
           <select id="time">
@@ -795,7 +849,7 @@ a { color: inherit; text-decoration: none; }
         <!-- Line 1 — chart begins with time signature, then repeat-start barline -->
         <div class="chart-line">
           <span class="time-sig"><span>4</span><span>4</span></span>
-          <div class="bar repeat-start">
+          <div class="bar" data-barline-left="repeat">
             <span class="section-marker">A</span>
             <span class="chord">
               <span class="chord-root">A</span><span class="chord-qual">−7</span>
@@ -814,7 +868,7 @@ a { color: inherit; text-decoration: none; }
         <div class="chart-line">
           <div class="bar"><span class="chord"><span class="chord-root">F</span><span class="chord-acc">&#x266F;</span><span class="chord-qual">ø7</span></span></div>
           <div class="bar"><span class="chord"><span class="chord-root">B</span><span class="chord-qual">7<span class="smufl">&#x266D;</span>9</span></span></div>
-          <div class="bar active repeat-end ending ending-1" aria-current="true">
+          <div class="bar active ending ending-1" data-barline-right="repeat" aria-current="true">
             <span class="ending-bracket">1.</span>
             <span class="chord"><span class="chord-root">E</span><span class="chord-qual">−7</span></span>
           </div>
@@ -886,7 +940,7 @@ a { color: inherit; text-decoration: none; }
           <div class="bar"><span class="chord"><span class="chord-root">D</span><span class="chord-qual">−7</span></span></div>
           <div class="bar"><span class="chord"><span class="chord-root">G</span><span class="chord-qual stacked"><span>7<span class="smufl">&#x266D;</span>9</span><span><span class="smufl">&#x266F;</span>5</span></span></span></div>
           <div class="bar"><span class="chord"><span class="chord-root">C</span><span class="chord-qual">Δ7<span class="smufl">&#x266F;</span>11</span></span></div>
-          <div class="bar final">
+          <div class="bar" data-barline-right="end">
             <span class="chord"><span class="chord-root">B</span><span class="chord-qual">−7</span></span>
             <span class="chord" data-beat="3"><span class="chord-root">E</span><span class="chord-qual">7<span class="smufl">&#x266D;</span>9</span></span>
             <span class="glyph-mark" data-beat="3" aria-label="Coda">&#xE048;</span>
@@ -905,17 +959,24 @@ a { color: inherit; text-decoration: none; }
           </div>
           <div class="bar"><span class="chord"><span class="chord-root">D</span><span class="chord-qual">7</span></span></div>
           <div class="bar"><span class="chord"><span class="chord-root">G</span><span class="chord-qual">Δ7</span></span></div>
-          <div class="bar final last-bar">
+          <div class="bar last-bar" data-barline-right="end">
             <span class="chord"><span class="chord-root">E</span><span class="chord-qual">−7</span></span>
             <span class="end-mark">END</span>
           </div>
         </div>
 
+        <!-- Vertical spacer between the Coda destination and the
+             showcase line. iReal Pro's Symbols palette lets the user
+             insert Vertical Spacers between sections; the ×2
+             multiplier corresponds to the .chart-line-spacer.x2 size
+             token (×1 is the bare class, ×3 uses .chart-line-spacer.x3). -->
+        <div class="chart-line-spacer x2" aria-hidden="true"></div>
+
         <!-- Showcase line — bars demonstrating bar-content variants that
              aren't part of the Autumn Leaves form: N.C. (no chord),
              invisible-root chord with a moving bass, repeat-1-bar slash
              glyph, and repeat-2-bars slash glyph. -->
-        <div class="chart-line" style="margin-top: var(--sp-12);">
+        <div class="chart-line">
           <div class="bar">
             <span class="chord nc">N.C.</span>
             <span class="text-mark">free time</span>
@@ -928,7 +989,29 @@ a { color: inherit; text-decoration: none; }
           <div class="bar">
             <span class="repeat-bar smufl" aria-label="Repeat 1 bar">&#xE500;</span>
           </div>
-          <div class="bar final"><span class="repeat-bar smufl" aria-label="Repeat 2 bars">&#xE501;</span></div>
+          <div class="bar" data-barline-right="end"><span class="repeat-bar smufl" aria-label="Repeat 2 bars">&#xE501;</span></div>
+        </div>
+
+        <!-- Barline-variants showcase. data-barline-left and
+             data-barline-right pick the bar's left and right barlines
+             independently (single / double / repeat / end). Bar 2
+             below carries `double` on the left AND `repeat` on the
+             right — a non-trivial combination the previous
+             single-class model could not express. -->
+        <div class="chart-line-spacer" aria-hidden="true"></div>
+        <div class="chart-line">
+          <div class="bar" data-barline-right="double">
+            <span class="chord"><span class="chord-root">C</span><span class="chord-qual">Δ7</span></span>
+          </div>
+          <div class="bar" data-barline-left="double" data-barline-right="repeat">
+            <span class="chord"><span class="chord-root">G</span><span class="chord-qual">7</span></span>
+          </div>
+          <div class="bar" data-barline-left="repeat">
+            <span class="chord"><span class="chord-root">F</span><span class="chord-qual">Δ7</span></span>
+          </div>
+          <div class="bar" data-barline-right="end">
+            <span class="chord"><span class="chord-root">C</span></span>
+          </div>
         </div>
       </div>
 
