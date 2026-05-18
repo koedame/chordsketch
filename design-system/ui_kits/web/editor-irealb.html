@@ -84,7 +84,12 @@ a { color: inherit; text-decoration: none; }
 .meta-card .composer { font-family: var(--font-jp); font-weight: 400; font-size: var(--fs-14); color: var(--text-secondary); margin: 0 0 var(--sp-5); }
 .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--sp-4); }
 .meta-field { display: flex; flex-direction: column; gap: 4px; }
-.meta-field label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); }
+/* Field-caption typography — shared by the meta-card field labels
+   above the inputs and the width-mode showcase card captions below
+   the chart. Single source of truth so the two surfaces don't drift
+   apart when the design token set evolves. */
+.meta-field label,
+.width-mode-row > .width-mode-card > .caption { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); }
 .meta-field input, .meta-field select { height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-2); background: var(--ink-50); font: 500 var(--fs-14)/1 var(--font-mono); color: var(--text-primary); transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out); font-variant-numeric: tabular-nums; }
 .meta-field input:focus, .meta-field select:focus { outline: none; border-color: var(--crimson-500); background: var(--surface); box-shadow: var(--focus-ring); }
 /* Key field: root <select> and Major/Minor segmented control share
@@ -568,9 +573,14 @@ a { color: inherit; text-decoration: none; }
    compression in-place against neighbouring full-width bars, used by
    the "Width modes" showcase row at the bottom of the demo chart;
    the two selectors share one transform so the visual scale stays
-   consistent whether the toggle is applied chart-wide or per-bar. */
+   consistent whether the toggle is applied chart-wide or per-bar.
+   The per-bar selector is gated by `:not(.compact)` on the ancestor
+   chart so a `.compact-preview` bar nested inside a `.chart.compact`
+   does NOT compose two transforms (scaleX(0.72)² ≈ 0.52 would
+   silently flatten the chord glyphs further than either mode
+   intends). */
 .chart.compact .chord,
-.bar.compact-preview .chord { transform: scaleX(0.72); transform-origin: left center; }
+.chart:not(.compact) .bar.compact-preview .chord { transform: scaleX(0.72); transform-origin: left center; }
 
 /* Width-mode showcase row. Two `.bar`s side-by-side, each carrying
    four chords packed at beats 1..4 — the canonical "this bar needs
@@ -582,11 +592,19 @@ a { color: inherit; text-decoration: none; }
    interactive in this static demo. */
 .width-mode-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6); align-items: stretch; }
 .width-mode-row > .width-mode-card { display: flex; flex-direction: column; gap: var(--sp-2); }
-.width-mode-row > .width-mode-card > .caption { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); }
 /* Standalone `.bar` (no enclosing `.chart-line`) — add the right
    barline that the `.chart-line .bar:last-child` selector would
-   normally provide so the cell reads as a closed bar. */
+   normally provide so the cell reads as a closed bar. Mirrors the
+   `data-barline-right` exclusion pattern from the chart-line bars
+   so a future maintainer who adds a glyph-based right barline to a
+   width-mode card (e.g. `data-barline-right="end"` for a final-bar
+   showcase) doesn't get a double-paint defect (border + SMuFL glyph
+   on the same edge) — same bug class fixed in PR #2497 / commit
+   b4f689c on the chart-line bars. */
 .width-mode-row > .width-mode-card > .bar { border-right: 1.5px solid var(--ink-1000); }
+.width-mode-row > .width-mode-card > .bar[data-barline-right="double"],
+.width-mode-row > .width-mode-card > .bar[data-barline-right="repeat"],
+.width-mode-row > .width-mode-card > .bar[data-barline-right="end"] { border-right: 0; }
 
 /* ---------- Player controls strip ----------
    Sits below the chart body. Mocks the iReal Pro editor's bottom strip:

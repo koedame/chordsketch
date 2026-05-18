@@ -408,22 +408,36 @@
    on the same baseline as a regular chord. */
 .chord.nc { font-family: var(--cs-font-chord); font-weight: 700; font-size: 22px; letter-spacing: 0.02em; }
 
-/* Invisible-root: the chord root is intentionally not rendered (the
-   chord is held; only the bass moves). Visually this is a slash chord
-   with the top half blank — a horizontal divider plus a bass note
-   below. The oval icon in the iReal Pro editor toolbar is a button
-   glyph, not a chart rendering. */
+/* Invisible-root: the chord is held but its root letter is replaced
+   with an oval glyph; only the bass moves. Visually this is a slash
+   chord whose top half carries a hollow ellipse the size of a chord
+   root, paired with the bass note below the divider. Convention
+   matches iReal Pro's chart rendering (per
+   https://technimo.helpshift.com/hc/en/3-ireal-pro/faq/125-oval-symbol-in-the-editor-invisible-root/).
+   The oval is drawn as a CSS ellipse rather than a SMuFL glyph
+   because Bravura ships no semantically-equivalent codepoint —
+   iReal Pro itself draws a stroked outline, not a music symbol.
+   Sister to `design-system/ui_kits/web/editor-irealb.html`. */
 .chord.invisible-root { display: inline-flex; flex-direction: column; align-items: center; line-height: 1; gap: 0; }
+.chord.invisible-root .root-oval {
+  /* Sized to roughly the visual envelope of a regular `.chord-root`
+     letter (44px font-size capital → ~30×22 ink box) so the cell's
+     vertical metrics line up with neighbouring bars without needing
+     a margin-top spacer below. */
+  display: inline-block;
+  width: 32px;
+  height: 22px;
+  border: 1.75px solid var(--cs-ink-1000);
+  border-radius: 50%;
+  box-sizing: border-box;
+  margin-bottom: 4px;
+}
 .chord.invisible-root .bass {
   font-family: var(--cs-font-chord);
   font-weight: 700;
   font-size: 22px;
   border-top: 1.5px solid var(--cs-ink-1000);
   padding-top: 2px;
-  /* Reserve space ABOVE the divider equal to the chord-root height so
-     the invisible-root cell shares vertical metrics with neighbouring
-     bars. */
-  margin-top: 28px;
   min-width: 28px;
   text-align: center;
   line-height: 1;

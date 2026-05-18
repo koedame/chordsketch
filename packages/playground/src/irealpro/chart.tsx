@@ -469,6 +469,7 @@ function BarCell({
       const bassAcc = accidentalGlyph(bar.invisibleRoot.bass.accidental);
       return (
         <span className="chord invisible-root">
+          <span className="root-oval" aria-hidden="true" />
           <span className="bass">
             {bar.invisibleRoot.bass.note}
             {bassAcc && <span className="smufl">{bassAcc}</span>}
