@@ -30,7 +30,8 @@ import {
 } from './render.js';
 import { IrealbEditorState, type IrealbWasm, makeStateFromUrl } from './state.js';
 
-export type { IrealSong, SectionLabel } from './ast.js';
+export type { IrealSong, MusicalSymbol, SectionLabel } from './ast.js';
+export { canonicalSymbolText } from './ast.js';
 export type { IrealbWasm } from './state.js';
 export { SAMPLE_IREALB } from './sample.js';
 
