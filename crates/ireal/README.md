@@ -64,13 +64,14 @@ assert_eq!(parsed, song);
 | `BarChord`, `BeatPosition` | structs | Chord placed at a beat position inside a bar. |
 | `Chord`, `ChordRoot`, `ChordQuality`, `Accidental` | structs + enums | Root, quality (12 named + `Custom`), optional bass note, accidental. |
 | `KeySignature`, `KeyMode`, `TimeSignature` | structs + enum | Key (C major default) and time signature (4/4 default). |
-| `MusicalSymbol` | enum (`Segno`, `Coda`, `DaCapo`, `DalSegno`, `Fine`, `Fermata`) | Bar-attached navigation symbols. |
+| `MusicalSymbol`, `JumpTarget` | enum + 4-variant enum (`Unspecified`, `AlCoda`, `AlFine`, `AlEnding(NonZeroU8)`) | Bar-attached navigation symbols. `DaCapo` / `DalSegno` carry a `JumpTarget` so the eleven player-recognised `D.C. al ...` / `D.S. al ...` phrases ([#2427](https://github.com/koedame/chordsketch/issues/2427)) survive the round trip with their destination intact. |
 | `ToJson` | `fn to_json(&self, &mut String)` and `fn to_json_string(&self) -> String` | Hand-rolled, byte-stable, compact JSON. |
 | `FromJson` | `fn from_json_str(&str) -> Result<Self, JsonError>` and `fn from_json_value(&JsonValue) -> Result<Self, JsonError>` | Round-trip-only deserializer; accepts only the subset `ToJson` emits. |
 | `parse_json` | `fn parse_json(&str) -> Result<JsonValue, JsonError>` | Free function for the underlying JSON value tree. |
 | `parse` / `parse_collection` | `fn parse(url: &str) -> Result<IrealSong, ParseError>` and `fn parse_collection(url: &str) -> Result<(Vec<IrealSong>, Option<String>), ParseError>` | `irealb://` / `irealbook://` URL parser. See `FORMAT.md` for the grammar. |
 | `ParseError` | enum, `Debug + Display + Error` | Error variants from the URL parser. |
-| `irealb_serialize` / `irealbook_serialize` | `fn irealb_serialize(song: &IrealSong) -> String` and `fn irealbook_serialize(songs: &[IrealSong], name: Option<&str>) -> String` | Inverse of `parse` / `parse_collection`. AST-level round trip; URL bytes need not match the original. |
+| `irealb_serialize` / `irealbook_serialize` | `fn irealb_serialize(song: &IrealSong) -> String` and `fn irealbook_serialize(songs: &[IrealSong], name: Option<&str>) -> String` | Inverse of `parse` / `parse_collection` — produces the iReal Pro app's `MUSIC_PREFIX` + `obfusc50` export form. AST-level round trip; URL bytes need not match the original. |
+| `serialize_open_protocol` / `serialize_open_protocol_collection` | `fn serialize_open_protocol(song: &IrealSong) -> String` and `fn serialize_open_protocol_collection(songs: &[IrealSong], name: Option<&str>) -> String` | Open-protocol plain-text `irealbook://` serializer ([#2425](https://github.com/koedame/chordsketch/issues/2425)) — emits the 6-field shape from the spec at <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>. Single-song output round-trips through `parse`; collection output uses a single `=` separator (not `===`) and is NOT round-trippable via `parse_collection`. |
 
 Validating constructors: `TimeSignature::new`, `Ending::new`,
 `BeatPosition::on_beat` all return `Option`. Direct field
@@ -90,11 +91,15 @@ back through `irealb_serialize` / `irealbook_serialize`.
 Open-protocol plain-text **serialization** to the form documented
 at
 [`irealpro.com/ireal-pro-custom-chord-chart-protocol`](https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol)
-is tracked under [#2425](https://github.com/koedame/chordsketch/issues/2425).
-Several player-recognised tokens documented in the iReal Pro Help
-Center are also absent from the AST today; they are tracked
-alongside #2425 under the open-protocol-spec compliance umbrella
-[#2423](https://github.com/koedame/chordsketch/issues/2423).
+ships as `serialize_open_protocol` / `serialize_open_protocol_collection`
+([#2425](https://github.com/koedame/chordsketch/issues/2425)). The
+eleven player-recognised `D.C. al ...` / `D.S. al ...` staff-text
+phrases are now structurally distinguished via
+`MusicalSymbol::DaCapo(JumpTarget)` / `DalSegno(JumpTarget)`
+([#2427](https://github.com/koedame/chordsketch/issues/2427)). Other
+player-recognised tokens documented in the iReal Pro Help Center
+are still absent from the AST and tracked under the open-protocol-spec
+compliance umbrella [#2423](https://github.com/koedame/chordsketch/issues/2423).
 
 Token coverage as of the latest release:
 
@@ -110,7 +115,8 @@ Token coverage as of the latest release:
 | `<text>` staff-text caption (verbatim preservation) | `Bar::text_comment` |
 | `Y` / `YY` / `YYY` between-system vertical-space hint | `Bar::system_break_space` ([#2434](https://github.com/koedame/chordsketch/issues/2434)) |
 | `S` Segno, `Q` Coda, `f` Fermata | `MusicalSymbol::{Segno, Coda, Fermata}` ([#2431](https://github.com/koedame/chordsketch/issues/2431)) |
-| `<D.C.>` / `<D.S.>` / `<Fine>` macro prefixes (collapsed) | `MusicalSymbol::{DaCapo, DalSegno, Fine}` |
+| Eleven player-recognised `<D.C. al ...>` / `<D.S. al ...>` / `<Fine>` phrases + bare `<D.C.>` / `<D.S.>` | `MusicalSymbol::{DaCapo(JumpTarget), DalSegno(JumpTarget), Fine}` ([#2427](https://github.com/koedame/chordsketch/issues/2427)) |
+| Open-protocol plain-text `irealbook://` serializer (6-field shape per spec) | `serialize_open_protocol` / `serialize_open_protocol_collection` ([#2425](https://github.com/koedame/chordsketch/issues/2425)) |
 | `*A`..`*D` / `*i` / `*v` / `*V` section labels | `SectionLabel::{Letter, Intro, Verse}` ([#2432](https://github.com/koedame/chordsketch/issues/2432)) |
 | `N1` / `N2` / `N3` ending brackets (numbers ≥ 1) | `Bar::ending` |
 
@@ -118,9 +124,7 @@ Token coverage as of the latest release:
 
 | Token / shape | Sub-issue |
 |---|---|
-| Open-protocol `irealbook://` plain-text **serializer** | [#2425](https://github.com/koedame/chordsketch/issues/2425) |
 | Full staff-text content (custom text, vertical position, repeat count override) | [#2426](https://github.com/koedame/chordsketch/issues/2426) |
-| 11 D.C. / D.S. macro variants (`<D.C. al Coda>`, `<D.S. al Fine>`, etc.) collapse to single variants | [#2427](https://github.com/koedame/chordsketch/issues/2427) |
 | Chord-size markers `s` (small) / `l` (large) | [#2433](https://github.com/koedame/chordsketch/issues/2433) |
 | Pause-slash `p` (repeat preceding chord) | [#2435](https://github.com/koedame/chordsketch/issues/2435) |
 | `N0` no-text ending | [#2436](https://github.com/koedame/chordsketch/issues/2436) |

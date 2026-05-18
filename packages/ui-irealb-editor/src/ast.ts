@@ -20,14 +20,100 @@ export type KeyMode = 'major' | 'minor';
 /** Barline shape at a bar boundary. */
 export type BarLine = 'single' | 'double' | 'final' | 'open_repeat' | 'close_repeat';
 
-/** Repeat / navigation symbol attached to a bar. */
+/** Repeat / navigation symbol attached to a bar.
+ *
+ * `da_capo` / `dal_segno` are the bare forms; the structured spec
+ * phrases (`<D.C. al Coda>`, `<D.S. al 2nd End.>`, etc.) decode as
+ * the per-target strings below. Mirrors
+ * `MusicalSymbol::DaCapo(JumpTarget)` and the
+ * `jump_target_json_suffix` table in `crates/ireal/src/json.rs`
+ * (#2427). The `da_capo_al_<n>th_end` shape covers ordinals beyond
+ * the spec's `1st`/`2nd`/`3rd` for charts that exceed the
+ * player-recognised set without crashing the AST.
+ */
 export type MusicalSymbol =
   | 'segno'
   | 'coda'
-  | 'da_capo'
-  | 'dal_segno'
   | 'fine'
-  | 'fermata';
+  | 'fermata'
+  | 'break'
+  // D.C. family: bare + four destination shapes.
+  | 'da_capo'
+  | 'da_capo_al_coda'
+  | 'da_capo_al_fine'
+  | `da_capo_al_${number}st_end`
+  | `da_capo_al_${number}nd_end`
+  | `da_capo_al_${number}rd_end`
+  | `da_capo_al_${number}th_end`
+  // D.S. family: bare + four destination shapes.
+  | 'dal_segno'
+  | 'dal_segno_al_coda'
+  | 'dal_segno_al_fine'
+  | `dal_segno_al_${number}st_end`
+  | `dal_segno_al_${number}nd_end`
+  | `dal_segno_al_${number}rd_end`
+  | `dal_segno_al_${number}th_end`;
+
+/**
+ * Helpers for the D.C. / D.S. family that hide the per-ordinal
+ * string-template shape behind a predicate. Consumers (the
+ * playground iReal chart, the popover editor) route through
+ * these so a future expansion of the recognised set lands in one
+ * place. The check accepts the bare forms too because they ARE
+ * part of the same family even though they carry no destination.
+ */
+export function isDaCapo(symbol: MusicalSymbol | null): boolean {
+  return symbol === 'da_capo' || (typeof symbol === 'string' && symbol.startsWith('da_capo_al_'));
+}
+
+export function isDalSegno(symbol: MusicalSymbol | null): boolean {
+  return symbol === 'dal_segno' || (typeof symbol === 'string' && symbol.startsWith('dal_segno_al_'));
+}
+
+/**
+ * Canonical staff-text label for the D.C. / D.S. / Fine / Break
+ * family — mirrors `MusicalSymbol::canonical_text` in
+ * `crates/ireal/src/ast.rs`. Returns `null` for the glyph-only
+ * variants (`segno`, `coda`, `fermata`) so the caller can fall
+ * back to a SMuFL glyph render. Pure TypeScript implementation —
+ * the wasm bridge does not need to expose this because the JSON
+ * keys already encode every needed bit.
+ */
+export function canonicalSymbolText(symbol: MusicalSymbol): string | null {
+  switch (symbol) {
+    case 'segno':
+    case 'coda':
+    case 'fermata':
+      return null;
+    case 'fine':
+      return 'Fine';
+    case 'break':
+      return 'Break';
+    case 'da_capo':
+      return 'D.C.';
+    case 'da_capo_al_coda':
+      return 'D.C. al Coda';
+    case 'da_capo_al_fine':
+      return 'D.C. al Fine';
+    case 'dal_segno':
+      return 'D.S.';
+    case 'dal_segno_al_coda':
+      return 'D.S. al Coda';
+    case 'dal_segno_al_fine':
+      return 'D.S. al Fine';
+    default: {
+      // Ordinal-bearing variant. Decode by stripping the family
+      // prefix and the `_end` suffix, then translating the ordinal
+      // suffix lowercase → uppercase (`1st` → `1st`, `2nd` → `2nd`,
+      // ...). Returns the canonical `D.C. al Nth End.` shape that
+      // the Rust renderer emits.
+      const match = /^(da_capo|dal_segno)_al_(\d+)(st|nd|rd|th)_end$/.exec(symbol);
+      if (!match) return null;
+      const family = match[1] === 'da_capo' ? 'D.C.' : 'D.S.';
+      return `${family} al ${match[2]}${match[3]} End.`;
+    }
+  }
+}
 
 /** Root or bass note. `note` is an uppercase ASCII letter `A`–`G`. */
 export interface ChordRoot {

@@ -266,10 +266,16 @@ fn push_bars(
             }
         }
         if let Some(symbol) = bar.symbol {
-            // Music symbols (segno / coda / D.C. / D.S. / Fine) do
-            // not have ChordPro equivalents. Drop them onto the
-            // bar as a parenthesised text segment so a renderer can
-            // surface them inline.
+            // Music symbols (segno / coda / D.C. / D.S. / Fine /
+            // Fermata / Break) do not have ChordPro equivalents.
+            // Drop them onto the bar as a parenthesised text
+            // segment so a renderer can surface them inline. The
+            // exact label comes from `MusicalSymbol::canonical_text`
+            // when the symbol has one (the D.C. / D.S. / Fine /
+            // Break family) so the eleven spec phrases (#2427)
+            // round-trip with their `al Coda` / `al 1st End.` tail
+            // preserved; otherwise we fall back to the glyph-only
+            // label for Segno / Coda / Fermata.
             segments.push(LyricsSegment::text_only(format!(
                 "({label}) ",
                 label = symbol_label(symbol)
@@ -324,15 +330,29 @@ fn push_pre_bar_marker(segments: &mut Vec<LyricsSegment>, bar: &Bar) {
     }
 }
 
-fn symbol_label(symbol: MusicalSymbol) -> &'static str {
+fn symbol_label(symbol: MusicalSymbol) -> String {
+    // The D.C. / D.S. / Fine / Break family routes through
+    // `MusicalSymbol::canonical_text` so the eleven spec phrases
+    // (#2427) — `D.C. al Coda`, `D.S. al 1st End.`, etc. — survive
+    // the ChordPro round trip with their destination intact.
+    // Segno / Coda / Fermata are pure glyph symbols and have no
+    // canonical text; supply the legacy English label so ChordPro
+    // consumers still see a readable marker. Returning `String`
+    // (rather than `&'static str`) is required because
+    // `JumpTarget::AlEnding(n)` produces a per-call ordinal.
+    if let Some(text) = symbol.canonical_text() {
+        return text;
+    }
     match symbol {
-        MusicalSymbol::Segno => "Segno",
-        MusicalSymbol::Coda => "Coda",
-        MusicalSymbol::DaCapo => "D.C.",
-        MusicalSymbol::DalSegno => "D.S.",
-        MusicalSymbol::Fine => "Fine",
-        MusicalSymbol::Fermata => "Fermata",
-        MusicalSymbol::Break => "Break",
+        MusicalSymbol::Segno => "Segno".to_owned(),
+        MusicalSymbol::Coda => "Coda".to_owned(),
+        MusicalSymbol::Fermata => "Fermata".to_owned(),
+        // The text family always has canonical_text; this arm is
+        // unreachable in practice but kept exhaustive for safety.
+        MusicalSymbol::DaCapo(_)
+        | MusicalSymbol::DalSegno(_)
+        | MusicalSymbol::Fine
+        | MusicalSymbol::Break => unreachable!("text family handled by canonical_text"),
     }
 }
 
@@ -870,5 +890,94 @@ mod tests {
             lyrics_text.contains("(Break)"),
             "Break symbol must surface as `(Break)` in lyrics text, got {lyrics_text:?}"
         );
+    }
+
+    #[test]
+    fn da_capo_with_jump_target_emits_canonical_phrase_in_lyrics() {
+        // Sister-site coverage for #2427: the converter must paint
+        // the full canonical phrase from `MusicalSymbol::canonical_text`
+        // for every structured `JumpTarget` variant. A regression that
+        // dropped the destination (e.g. by routing through a stale
+        // `&'static str` table) would silently shorten the lyrics
+        // marker, losing the player-relevant semantics.
+        use chordsketch_chordpro::ast::Line;
+        use chordsketch_ireal::JumpTarget;
+        let nz = |n: u8| std::num::NonZeroU8::new(n).expect("non-zero ordinal");
+        let cases: &[(MusicalSymbol, &str)] = &[
+            (MusicalSymbol::DaCapo(JumpTarget::Unspecified), "(D.C.)"),
+            (MusicalSymbol::DaCapo(JumpTarget::AlCoda), "(D.C. al Coda)"),
+            (MusicalSymbol::DaCapo(JumpTarget::AlFine), "(D.C. al Fine)"),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(1))),
+                "(D.C. al 1st End.)",
+            ),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(2))),
+                "(D.C. al 2nd End.)",
+            ),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(3))),
+                "(D.C. al 3rd End.)",
+            ),
+            (MusicalSymbol::DalSegno(JumpTarget::Unspecified), "(D.S.)"),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlCoda),
+                "(D.S. al Coda)",
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlFine),
+                "(D.S. al Fine)",
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(1))),
+                "(D.S. al 1st End.)",
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(2))),
+                "(D.S. al 2nd End.)",
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(3))),
+                "(D.S. al 3rd End.)",
+            ),
+        ];
+        for (symbol, expected) in cases {
+            let mut s = IrealSong::new();
+            s.title = "JumpTarget Convert Test".into();
+            s.sections.push(Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
+                        kind: BarChordKind::Played,
+                    }],
+                    symbol: Some(*symbol),
+                    ..Bar::default()
+                }],
+            });
+            let result = convert(&s).unwrap();
+            let lyrics_text: String = result
+                .output
+                .lines
+                .iter()
+                .filter_map(|l| match l {
+                    Line::Lyrics(lyrics) => Some(
+                        lyrics
+                            .segments
+                            .iter()
+                            .map(|seg| seg.text.as_str())
+                            .collect(),
+                    ),
+                    _ => None,
+                })
+                .collect::<Vec<String>>()
+                .concat();
+            assert!(
+                lyrics_text.contains(expected),
+                "symbol {symbol:?} must emit `{expected}` in lyrics text, got {lyrics_text:?}"
+            );
+        }
     }
 }

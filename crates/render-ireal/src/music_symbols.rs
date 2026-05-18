@@ -141,22 +141,24 @@ pub(crate) fn render_music_symbols(song: &IrealSong, layout: &Layout) -> String 
                     bravura::FERMATA_FONT_CY as f32,
                 );
             }
-            MusicalSymbol::DaCapo => {
-                emit_text_directive(&mut out, cell.x + GLYPH_LEFT_INSET, glyph_bottom_y, "D.C.");
-            }
-            MusicalSymbol::DalSegno => {
-                emit_text_directive(&mut out, cell.x + GLYPH_LEFT_INSET, glyph_bottom_y, "D.S.");
-            }
-            MusicalSymbol::Fine => {
-                emit_text_directive(&mut out, cell.x + GLYPH_LEFT_INSET, glyph_bottom_y, "Fine");
-            }
-            MusicalSymbol::Break => {
-                // Drum-silence marker. iReal Pro renders the literal
-                // word "Break" as italic staff text, like the other
-                // text directives (D.C. / D.S. / Fine). The drum
-                // resume boundary (next double barline) is a player
-                // concern with no glyph of its own.
-                emit_text_directive(&mut out, cell.x + GLYPH_LEFT_INSET, glyph_bottom_y, "Break");
+            // The D.C. / D.S. / Fine / Break family is rendered as
+            // italic staff text. The exact phrase comes from
+            // `MusicalSymbol::canonical_text`, which is the single
+            // source of truth shared with the URL serializer and the
+            // ChordPro converter so all four surfaces paint the same
+            // spelling (#2427, `.claude/rules/renderer-parity.md`).
+            // `Segno` / `Coda` / `Fermata` are handled above as
+            // SMuFL glyphs; for those `canonical_text()` returns
+            // `None` and the structural `match` above is exhaustive,
+            // so this arm only fires for the text family.
+            MusicalSymbol::DaCapo(_)
+            | MusicalSymbol::DalSegno(_)
+            | MusicalSymbol::Fine
+            | MusicalSymbol::Break => {
+                let text = symbol
+                    .canonical_text()
+                    .expect("text family always has canonical text");
+                emit_text_directive(&mut out, cell.x + GLYPH_LEFT_INSET, glyph_bottom_y, &text);
             }
         }
     }
@@ -295,9 +297,14 @@ mod tests {
 
     #[test]
     fn da_capo_emits_dc_text() {
+        // Bare `<D.C.>` → `JumpTarget::Unspecified` → "D.C." text.
         let mut song = IrealSong::new();
-        song.sections
-            .push(section('A', vec![bar_with_symbol(MusicalSymbol::DaCapo)]));
+        song.sections.push(section(
+            'A',
+            vec![bar_with_symbol(MusicalSymbol::DaCapo(
+                chordsketch_ireal::JumpTarget::Unspecified,
+            ))],
+        ));
         let layout = compute_layout(&song);
         let svg = render_music_symbols(&song, &layout);
         assert!(svg.contains(">D.C.</text>"));
@@ -306,12 +313,80 @@ mod tests {
 
     #[test]
     fn dal_segno_emits_ds_text() {
+        // Bare `<D.S.>` → `JumpTarget::Unspecified` → "D.S." text.
         let mut song = IrealSong::new();
-        song.sections
-            .push(section('A', vec![bar_with_symbol(MusicalSymbol::DalSegno)]));
+        song.sections.push(section(
+            'A',
+            vec![bar_with_symbol(MusicalSymbol::DalSegno(
+                chordsketch_ireal::JumpTarget::Unspecified,
+            ))],
+        ));
         let layout = compute_layout(&song);
         let svg = render_music_symbols(&song, &layout);
         assert!(svg.contains(">D.S.</text>"));
+    }
+
+    #[test]
+    fn da_capo_with_jump_target_emits_full_phrase() {
+        // Locks the eleven spec phrases through the SVG renderer
+        // (#2427). The renderer must paint the canonical text from
+        // `MusicalSymbol::canonical_text` — same source of truth
+        // the URL serializer and ChordPro converter use, per
+        // `.claude/rules/renderer-parity.md`.
+        use chordsketch_ireal::JumpTarget;
+        let cases: &[(MusicalSymbol, &str)] = &[
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlCoda),
+                ">D.C. al Coda</text>",
+            ),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlFine),
+                ">D.C. al Fine</text>",
+            ),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(std::num::NonZeroU8::new(1).unwrap())),
+                ">D.C. al 1st End.</text>",
+            ),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(std::num::NonZeroU8::new(2).unwrap())),
+                ">D.C. al 2nd End.</text>",
+            ),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(std::num::NonZeroU8::new(3).unwrap())),
+                ">D.C. al 3rd End.</text>",
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlCoda),
+                ">D.S. al Coda</text>",
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlFine),
+                ">D.S. al Fine</text>",
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(std::num::NonZeroU8::new(1).unwrap())),
+                ">D.S. al 1st End.</text>",
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(std::num::NonZeroU8::new(2).unwrap())),
+                ">D.S. al 2nd End.</text>",
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(std::num::NonZeroU8::new(3).unwrap())),
+                ">D.S. al 3rd End.</text>",
+            ),
+        ];
+        for (symbol, expected) in cases {
+            let mut song = IrealSong::new();
+            song.sections
+                .push(section('A', vec![bar_with_symbol(*symbol)]));
+            let layout = compute_layout(&song);
+            let svg = render_music_symbols(&song, &layout);
+            assert!(
+                svg.contains(expected),
+                "symbol {symbol:?} must render `{expected}` in:\n{svg}"
+            );
+        }
     }
 
     #[test]

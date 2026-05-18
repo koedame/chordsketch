@@ -2,6 +2,7 @@
 import React, { Fragment, useMemo, type JSX } from 'react';
 
 import { chordTypography as wasmChordTypography } from '@chordsketch/wasm';
+import { canonicalSymbolText, type MusicalSymbol } from '@chordsketch/ui-irealb-editor';
 
 import './chart.css';
 
@@ -587,11 +588,10 @@ function BarCell({
       {bar.textMark && <span className="text-mark">{bar.textMark}</span>}
       {/* Canonical `bar.symbol` for italic text directives (D.C. / D.S.
           / Fine). Skipped when an explicit `textMark` already covers
-          the slot. */}
-      {!bar.textMark && (bar.symbol === 'da_capo' || bar.symbol === 'dal_segno' || bar.symbol === 'fine') && (
-        <span className="text-mark">
-          {bar.symbol === 'da_capo' ? 'D.C.' : bar.symbol === 'dal_segno' ? 'D.S.' : 'Fine'}
-        </span>
+          the slot. `bar.symbol` is `string | null` from the JSON AST;
+          null is guarded before the cast to `MusicalSymbol`. */}
+      {!bar.textMark && bar.symbol !== null && canonicalSymbolText(bar.symbol as MusicalSymbol) !== null && (
+        <span className="text-mark">{canonicalSymbolText(bar.symbol as MusicalSymbol)}</span>
       )}
       {bar.endMark && <span className="end-mark">{bar.endMark}</span>}
     </div>
