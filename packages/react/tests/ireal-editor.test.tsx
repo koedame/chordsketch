@@ -148,7 +148,10 @@ describe('<IrealEditor>', () => {
   test('empty source seeds an empty song without invoking parseIrealb', async () => {
     const stub = makeStub();
     render(<IrealEditor source="" loader={makeLoader(stub)} />);
-    await waitFor(() => expect(stub.default).toHaveBeenCalled());
+    // The form does not render until wasm finishes loading and the
+    // empty-song seed has hit state, so wait for the Title field
+    // rather than only the default() call.
+    await waitFor(() => expect(screen.queryByLabelText('Title')).toBeTruthy());
     expect(stub.parseIrealb).not.toHaveBeenCalled();
     expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('');
   });
@@ -173,6 +176,77 @@ describe('<IrealEditor>', () => {
     expect(screen.queryByLabelText('iReal Pro URL')).toBeNull();
   });
 
+  test('serialize failure does NOT advance song state past the parent', async () => {
+    // Regression for the silent-failure audit: if serializeIrealb
+    // throws on a user edit, the optimistic `setSong(next)` must
+    // be rolled back so the displayed editor stays aligned with
+    // the URL the parent received.
+    const stub = makeStub();
+    const onChange = vi.fn();
+    render(
+      <IrealEditor source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
+    );
+    await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
+    const titleInput = screen.getByLabelText('Title') as HTMLInputElement;
+    expect(titleInput.value).toBe('Autumn Leaves');
+
+    // Break serializeIrealb. The next field edit should surface an
+    // error and leave the title field showing the OLD value.
+    stub.serializeIrealb.mockImplementation(() => {
+      throw new Error('serialise boom');
+    });
+    fireEvent.change(titleInput, { target: { value: 'Will Be Reverted' } });
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toBe('serialise boom');
+    });
+    expect(onChange).not.toHaveBeenCalled();
+    // Displayed title still reflects the pre-failure song.
+    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Autumn Leaves');
+  });
+
+  test('parse failure after first success disables fields so edits cannot silently overwrite the new (broken) URL', async () => {
+    // Regression for the silent-failure audit: after a successful
+    // initial parse, if the parent passes a new source that fails
+    // to parse, the editor keeps the OLD song's form values
+    // visible (per the stale-state policy) but disables the
+    // fieldset — otherwise a field edit would serialise the OLD
+    // song to a URL, silently replacing the broken URL the
+    // parent passed in.
+    const stub = makeStub();
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <IrealEditor source="irealb://valid" loader={makeLoader(stub)} onChange={onChange} />,
+    );
+    await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
+    const titleInput = screen.getByLabelText('Title') as HTMLInputElement;
+    expect(titleInput.value).toBe('Autumn Leaves');
+
+    // Pass a new source that fails to parse. The error renders
+    // and the form fields keep the stale "Autumn Leaves" values,
+    // but the fieldset is now disabled.
+    stub.parseIrealb.mockImplementation(() => {
+      throw new Error('parse boom');
+    });
+    rerender(
+      <IrealEditor source="irealb://garbage" loader={makeLoader(stub)} onChange={onChange} />,
+    );
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('parse boom'));
+    const fieldset = (screen.getByLabelText('Title') as HTMLInputElement).closest('fieldset');
+    expect(fieldset?.disabled).toBe(true);
+  });
+
+  test('time-signature numerator dropdown accepts the canonical 1..=12 range', async () => {
+    // Regression for the dropdown audit: the underlying AST allows
+    // `numerator: 1` (e.g. T14), so the form must keep that value
+    // selectable. Previously the array started at 2.
+    const stub = makeStub();
+    render(<IrealEditor source="irealb://x" loader={makeLoader(stub)} />);
+    await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
+    const numerator = screen.getByLabelText('Time num.') as HTMLSelectElement;
+    const values = Array.from(numerator.options).map((o) => o.value);
+    expect(values).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']);
+  });
+
   test('transpose input clamps to [-11, 11]', async () => {
     const stub = makeStub();
     const onChange = vi.fn();
@@ -183,7 +257,8 @@ describe('<IrealEditor>', () => {
     const transpose = screen.getByLabelText('Transpose') as HTMLInputElement;
     fireEvent.change(transpose, { target: { value: '50' } });
     await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
-    const serialised = stub.serializeIrealb.mock.calls.at(-1)?.[0] as string;
+    const calls = stub.serializeIrealb.mock.calls;
+    const serialised = calls[calls.length - 1]?.[0] as string;
     const parsed = JSON.parse(serialised) as IrealSong;
     expect(parsed.transpose).toBe(11);
   });

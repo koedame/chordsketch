@@ -86,7 +86,12 @@ function makeEmptySong(): IrealSong {
 const ROOTS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
 const ACCIDENTALS: readonly IrealAccidental[] = ['natural', 'flat', 'sharp'];
 const MODES: readonly IrealKeyMode[] = ['major', 'minor'];
-const TIME_NUMERATORS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
+// Valid `numerator` range is `1..=12` per `crates/ireal/src/ast.rs`
+// (`numerator == 0 || numerator > 12` rejected in `IrealSong::new`).
+// Include `1` so an existing chart with a `T14` time signature
+// round-trips through the dropdown without leaving it stuck on a
+// non-matching option.
+const TIME_NUMERATORS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
 const TIME_DENOMINATORS = [2, 4, 8] as const;
 
 /**
@@ -119,8 +124,12 @@ export function IrealEditor({
   // Tracks the URL we last emitted via `onChange`, so an incoming
   // `source` prop matching it is recognised as our own echo and
   // does not trigger a re-parse (which would discard pending local
-  // typing on a debounce path).
-  const lastEmittedRef = useRef<string>('');
+  // typing on a debounce path). `null` is the "have not emitted
+  // anything yet" sentinel — distinguishing it from `''` is
+  // important because the initial `source` may legitimately be the
+  // empty string and that path still needs to seed the empty-song
+  // state on first run.
+  const lastEmittedRef = useRef<string | null>(null);
 
   const [song, setSong] = useState<IrealSong | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -144,19 +153,38 @@ export function IrealEditor({
           // Our own emit echoed back. Keep the local song state.
           return;
         }
+        // An external `source` change has authority over the
+        // local URL textarea draft: a controlled parent passing
+        // a new URL is asserting "this is the canonical chart
+        // now". Clearing the dirty flag and overwriting the
+        // draft keeps the textarea aligned with the form / bar
+        // grid displayed alongside it. The previous mid-edit
+        // typing is discarded — the host can prevent the
+        // override by leaving the `source` prop stable until
+        // they want to accept user edits.
+        urlDirtyRef.current = false;
         if (source.length === 0) {
           if (cancelled) return;
           setSong(makeEmptySong());
           setError(null);
-          if (!urlDirtyRef.current) setUrlDraft('');
+          setUrlDraft('');
           return;
         }
         const json = wasmRef.current.parseIrealb(source);
-        const parsed = JSON.parse(json) as IrealSong;
+        let parsed: IrealSong;
+        try {
+          parsed = JSON.parse(json) as IrealSong;
+        } catch (jsonError) {
+          throw new Error(
+            `Invalid AST JSON from @chordsketch/wasm.parseIrealb: ${
+              jsonError instanceof Error ? jsonError.message : String(jsonError)
+            }`,
+          );
+        }
         if (cancelled) return;
         setSong(parsed);
         setError(null);
-        if (!urlDirtyRef.current) setUrlDraft(source);
+        setUrlDraft(source);
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e : new Error(String(e)));
@@ -171,17 +199,35 @@ export function IrealEditor({
 
   const emit = useCallback(
     (next: IrealSong): void => {
-      setSong(next);
       const wasm = wasmRef.current;
-      if (wasm === null) return;
-      try {
-        const url = wasm.serializeIrealb(JSON.stringify(next));
-        lastEmittedRef.current = url;
-        if (!urlDirtyRef.current) setUrlDraft(url);
-        if (onChange !== undefined) onChange(url);
-      } catch (e) {
-        setError(e instanceof Error ? e : new Error(String(e)));
+      if (wasm === null) {
+        // Wasm has not finished loading. We deliberately do NOT
+        // apply the optimistic `setSong(next)` because the
+        // subsequent serialise would not run, leaving the
+        // displayed form state ahead of the URL the parent sees.
+        // The form fields disable themselves until wasm is ready
+        // via the `song === null` early-return above, so this
+        // branch is unreachable in practice; the guard exists
+        // for defence-in-depth.
+        return;
       }
+      let url: string;
+      try {
+        url = wasm.serializeIrealb(JSON.stringify(next));
+      } catch (e) {
+        // Serialise failed — do NOT commit the optimistic
+        // `setSong(next)` because the parent will never see the
+        // matching URL, leaving the displayed editor diverged
+        // from the controlled `source` prop. Surface the error
+        // and leave the previously-stable song state untouched.
+        setError(e instanceof Error ? e : new Error(String(e)));
+        return;
+      }
+      setSong(next);
+      lastEmittedRef.current = url;
+      setError(null);
+      if (!urlDirtyRef.current) setUrlDraft(url);
+      if (onChange !== undefined) onChange(url);
     },
     [onChange],
   );
@@ -203,7 +249,16 @@ export function IrealEditor({
     }
     try {
       const json = wasm.parseIrealb(value);
-      const parsed = JSON.parse(json) as IrealSong;
+      let parsed: IrealSong;
+      try {
+        parsed = JSON.parse(json) as IrealSong;
+      } catch (jsonError) {
+        throw new Error(
+          `Invalid AST JSON from @chordsketch/wasm.parseIrealb: ${
+            jsonError instanceof Error ? jsonError.message : String(jsonError)
+          }`,
+        );
+      }
       emit(parsed);
     } catch (e) {
       setError(e instanceof Error ? e : new Error(String(e)));
@@ -226,7 +281,13 @@ export function IrealEditor({
     return errorFallback;
   }, [error, errorFallback]);
 
-  const disabled = readOnly || onChange === undefined;
+  // When an external `source` failed to parse the metadata fieldset
+  // is disabled too. Editing a field would otherwise serialise the
+  // pre-error `song` snapshot and silently emit a URL that
+  // overwrites the broken one the parent passed in — and the user
+  // who pasted the malformed URL would have no signal that their
+  // edit lost their original input.
+  const disabled = readOnly || onChange === undefined || error !== null;
 
   const wrapperClass = ['chordsketch-ireal-editor', className]
     .filter((c): c is string => typeof c === 'string' && c.length > 0)

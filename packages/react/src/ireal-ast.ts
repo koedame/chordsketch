@@ -9,10 +9,23 @@
 // shapes for the framework-agnostic editor used by the playground and
 // the desktop app. The two declarations were carved out independently
 // per [ADR-0020](../../../docs/adr/0020-ireal-pro-react-surface.md);
-// they describe the same wasm output, so changes to one shape MUST
+// they describe the same wasm output, so changes to one *shape* MUST
 // land in the other in the same PR. The fix-propagation rule
 // (`.claude/rules/fix-propagation.md`) applies here as it would to any
 // renderer sister-site pair.
+//
+// **Helper-function divergence (intentional).** The two files share
+// AST shapes but diverge in convenience helpers:
+//   - This file exports stringifiers (`irealChordRootToString`,
+//     `irealChordQualityToString`, `irealChordToString`,
+//     `irealSectionLabelToString`) used by the read-only bar grid in
+//     `<IrealEditor>`.
+//   - `ui-irealb-editor/src/ast.ts` exports navigation-symbol
+//     canonicalisers (`canonicalSymbolText`, `isDaCapo`,
+//     `isDalSegno`) used by its popover-driven bar editor.
+// Each surface adds the helpers it actually uses; adding a helper
+// here that the other file already has (or vice versa) is a
+// fix-propagation defect, but the current asymmetry is by design.
 
 /** Diatonic accidental on a chord root. */
 export type IrealAccidental = 'natural' | 'flat' | 'sharp';

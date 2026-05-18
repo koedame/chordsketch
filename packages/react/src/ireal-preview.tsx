@@ -27,10 +27,20 @@ export interface IrealPreviewProps {
  * Render an `irealb://` URL as inline SVG via
  * `@chordsketch/wasm`'s `renderIrealSvg`. The SVG output is fully
  * server-controlled (Rust renderer) and injected via
- * `dangerouslySetInnerHTML`; consumers passing untrusted iReal Pro
- * URLs should review the
- * [renderer's SMuFL glyph + path output](https://github.com/koedame/chordsketch/tree/main/crates/render-ireal)
- * for confidence that the strings cannot escape the SVG container.
+ * `dangerouslySetInnerHTML`.
+ *
+ * **Trust boundary.** The renderer emits a fixed set of SVG elements
+ * (no `<script>`, no `<foreignObject>`, no `<use href>` pointing at
+ * external resources, no URI-bearing attributes). The injection
+ * surface is therefore restricted to **text-content** paths
+ * (title / composer / style / section labels / chord spans / staff-
+ * text / music-symbol text), every one of which the renderer routes
+ * through `crates/render-ireal/src/svg.rs::escape_xml` before
+ * emission. SMuFL glyph `<path d>` data is statically baked in
+ * `crates/render-ireal/src/bravura.rs` and no user input flows
+ * into it. Consumers can pass untrusted `irealb://` URLs without
+ * sanitising the URL first; the renderer's escape boundary is the
+ * load-bearing control.
  *
  * The component is intentionally narrow: it does not embed pan / zoom
  * controls or wire up click handlers. Hosts that need those can wrap

@@ -32,9 +32,12 @@ Replace `VERSION` with the current version from the badge above.
 npm install '@chordsketch/react@VERSION' react react-dom
 ```
 
-`@chordsketch/wasm` is bundled as a runtime dependency and loads
-itself on first use — hosts do not install it separately. `react` /
-`react-dom` are **peer dependencies** (React 18 or newer).
+`@chordsketch/wasm` is declared as a regular `dependency`, so npm
+installs it automatically as a transitive dependency of
+`@chordsketch/react`; the wasm module is then lazy-loaded on first
+render. Hosts do not install it separately and do not need to call
+`init()`. `react` / `react-dom` are **peer dependencies** (React 18
+or newer).
 
 The PDF / PNG export bundle ships separately as the heavy
 `@chordsketch/wasm-export` peer (~6 MB gzipped). Install it

@@ -41,7 +41,10 @@ export function useIrealRender(
   loader: IrealRenderLoader = defaultLoader,
 ): UseIrealRenderResult {
   const [svg, setSvg] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Start `loading: false` for an empty source — no wasm work
+  // happens in that path, so consumers see a stable `false` rather
+  // than a brief flicker of `true` on first render.
+  const [loading, setLoading] = useState<boolean>(source.length > 0);
   const [error, setError] = useState<Error | null>(null);
 
   const rendererRef = useRef<IrealRenderer | null>(null);

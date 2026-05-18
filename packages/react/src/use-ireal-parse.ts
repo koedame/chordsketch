@@ -48,7 +48,10 @@ export function useIrealParse(
   loader: IrealWasmLoader = defaultLoader,
 ): UseIrealParseResult {
   const [song, setSong] = useState<IrealSong | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Start `loading: false` for an empty source — no wasm work
+  // happens in that path, so consumers see a stable `false` rather
+  // than a brief flicker of `true` on first render.
+  const [loading, setLoading] = useState<boolean>(source.length > 0);
   const [error, setError] = useState<Error | null>(null);
 
   const parserRef = useRef<IrealParser | null>(null);
@@ -74,8 +77,26 @@ export function useIrealParse(
           setError(null);
           return;
         }
+        // Split the two failure modes so the surfaced error
+        // distinguishes a user-input problem (`parseIrealb`
+        // rejected the URL) from a wasm/JSON-contract bug
+        // (`parseIrealb` returned a string `JSON.parse` cannot
+        // load). The latter would never reach a consumer in
+        // normal operation; surfacing it as a distinct
+        // `Invalid AST JSON from wasm` message makes a real
+        // contract bug noticeable in the field instead of
+        // looking like ordinary user error.
         const json = parser.parseIrealb(source);
-        const parsed = JSON.parse(json) as IrealSong;
+        let parsed: IrealSong;
+        try {
+          parsed = JSON.parse(json) as IrealSong;
+        } catch (jsonError) {
+          throw new Error(
+            `Invalid AST JSON from @chordsketch/wasm.parseIrealb: ${
+              jsonError instanceof Error ? jsonError.message : String(jsonError)
+            }`,
+          );
+        }
         if (cancelled) return;
         setSong(parsed);
         setError(null);
