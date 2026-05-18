@@ -1,10 +1,40 @@
 # @chordsketch/ui-irealb-editor
 
+> ## ⚠️ Internal workspace package — not for external use
+>
+> This package is the bar-grid editor that powers the ChordSketch
+> playground's `/irealpro/` route and the Tauri desktop app's iReal
+> Pro view. It is intentionally `"private": true` and is **not
+> published to npm**.
+>
+> **If you are building a third-party application** that embeds an
+> iReal Pro editor or preview, use
+> [`@chordsketch/react`](../react/)'s `<IrealEditor>` /
+> `<IrealPreview>` / `<IrealPlayground>` components instead. Those
+> components are published, follow semver, and present an idiomatic
+> React surface; see
+> [ADR-0020](../../docs/adr/0020-ireal-pro-react-surface.md) for
+> the architectural split between this private editor and the
+> public React surface.
+>
+> Reasons this package stays internal:
+>
+> - It is framework-agnostic DOM, designed to be wired into
+>   `@chordsketch/ui-web`'s `EditorAdapter` slot. External hosts
+>   embedding the editor in a React app should not be forced to
+>   bridge a non-React lifecycle into their tree.
+> - Its API is co-designed with the playground / desktop iteration
+>   loop (popover-driven editing flow, `EditorAdapter` contract,
+>   wasm bridge injection). Publishing it would lock those
+>   choices behind semver. The
+>   [#2473](https://github.com/koedame/chordsketch/issues/2473)
+>   non-goals section spells this out: "Publishing
+>   `@chordsketch/ui-web` or `@chordsketch/ui-irealb-editor`. They
+>   remain private internal packages."
+
 Bar-grid GUI editor for iReal Pro charts. Pluggable into
 [`@chordsketch/ui-web`](../ui-web)'s `MountOptions.createEditor`
 slot via the `EditorAdapter` contract.
-
-This is a private workspace package; not published to npm.
 
 ## Status
 

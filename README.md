@@ -276,9 +276,9 @@ println!("{svg}");
 |---|---|---|
 | [`@chordsketch/wasm`](packages/npm) | `packages/npm` | npm WASM package with TypeScript types |
 | [`@chordsketch/node`](crates/napi) | `crates/napi` | Native Node.js addon (prebuilt binaries, no Rust required) |
-| [`@chordsketch/ui-web`](packages/ui-web) | `packages/ui-web` | Framework-agnostic editor + preview UI shared by the playground and the desktop app |
-| [`@chordsketch/ui-irealb-editor`](packages/ui-irealb-editor) | `packages/ui-irealb-editor` | Bar-grid GUI editor for iReal Pro charts; pluggable into `@chordsketch/ui-web` |
-| [`@chordsketch/react`](packages/react) | `packages/react` | React component library |
+| [`@chordsketch/ui-web`](packages/ui-web) | `packages/ui-web` | **Internal.** Framework-agnostic editor + preview UI shared by the playground and the desktop app. External integrators should use `@chordsketch/react` instead. |
+| [`@chordsketch/ui-irealb-editor`](packages/ui-irealb-editor) | `packages/ui-irealb-editor` | **Internal.** Bar-grid GUI editor for iReal Pro charts, pluggable into `@chordsketch/ui-web`. External integrators should use `@chordsketch/react`'s `<IrealEditor>` instead. |
+| [`@chordsketch/react`](packages/react) | `packages/react` | React component library — embeds ChordPro **and** iReal Pro editors + previews in a few lines of React. |
 | [Python `chordsketch`](crates/ffi) | `crates/ffi` | Python package via UniFFI + maturin |
 | [Swift `ChordSketch`](packages/swift) | `packages/swift` | Swift package with XCFramework |
 | [Kotlin `chordsketch`](packages/kotlin) | `packages/kotlin` | Kotlin/JVM package via JNI |

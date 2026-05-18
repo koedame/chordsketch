@@ -4,17 +4,23 @@
 
 # @chordsketch/react
 
-React component library for rendering [ChordPro](https://www.chordpro.org/)
-files, powered by [`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsketch/wasm).
+React component library for embedding
+[ChordPro](https://www.chordpro.org/) **and**
+[iReal Pro](https://www.irealpro.com/) editors + previews in a few
+lines of React, powered by
+[`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsketch/wasm).
 
-> **Status:** pre-release. The full component surface promised
-> by #2041–#2045 is now shipped: `<PdfExport>` + `usePdfExport`
-> (#2041), `<ChordSheet>` + `useChordRender` (#2042),
-> `<ChordEditor>` + `useDebounced` (#2043),
-> `<Transpose>` + `useTranspose` (#2044), and
-> `<ChordDiagram>` + `useChordDiagram` (#2045). The package
-> awaits its first `npm publish` (manual maintainer step per the
-> scaffold release contract).
+`@chordsketch/react@0.1.0` is the first public release. The ChordPro
+surface (`<ChordSheet>`, `<ChordEditor>`, `<Playground>`,
+`<PdfExport>`, `<Transpose>`, `<ChordDiagram>`, `<SourceEditor>`,
+`<SplitLayout>`, `<RendererPreview>` and the matching hooks) is the
+flagship surface and is feature-complete. The iReal Pro surface
+(`<IrealEditor>`, `<IrealPreview>`, `<IrealPlayground>` and the
+matching hooks) ships an MVP feature set per
+[ADR-0020](https://github.com/koedame/chordsketch/blob/main/docs/adr/0020-ireal-pro-react-surface.md) —
+header metadata editing + read-only bar grid + SVG preview + URL
+round-trip; full popover-based bar editing and structural section
+editing are tracked as follow-up issues.
 
 ## Installation
 
@@ -23,12 +29,44 @@ files, powered by [`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsket
 Replace `VERSION` with the current version from the badge above.
 
 ```bash
-npm install '@chordsketch/react@VERSION' react
+npm install '@chordsketch/react@VERSION' react react-dom
 ```
 
-`@chordsketch/wasm` is bundled as a runtime dependency and loads
-itself — the host does not need to install it separately. `react`
-is a **peer dependency** (React 18 or newer).
+`@chordsketch/wasm` is declared as a regular `dependency`, so npm
+installs it automatically as a transitive dependency of
+`@chordsketch/react`; the wasm module is then lazy-loaded on first
+render. Hosts do not install it separately and do not need to call
+`init()`. `react` / `react-dom` are **peer dependencies** (React 18
+or newer).
+
+The PDF / PNG export bundle ships separately as the heavy
+`@chordsketch/wasm-export` peer (~6 MB gzipped). Install it
+alongside this package **only** if you use the `<PdfExport>` /
+`usePdfExport` surface; it is lazy-loaded the first time you call
+the export.
+
+```bash
+# Optional — only needed for <PdfExport> / usePdfExport.
+npm install @chordsketch/wasm-export
+```
+
+### Peer dependency compatibility
+
+| Peer | Required range | Notes |
+|------|----------------|-------|
+| `react` | `>=18` | Both 18.x and 19.x are supported. |
+| `react-dom` | `>=18` | Track the `react` major. |
+| `@chordsketch/wasm` | `^0.4.0` (runtime dep) | Bundled as a regular dependency; hosts can override at hoist time if they want a specific minor. |
+| `@chordsketch/wasm-export` | `^0.4.0` (optional peer) | Required for `<PdfExport>` / `usePdfExport`. Lazy-loaded on first export. |
+
+### Platform compatibility
+
+| Platform | Status |
+|---|---|
+| Browsers (evergreen Chromium / Firefox / Safari) | Supported — uses the `web` build of `@chordsketch/wasm`. |
+| Node.js 18+ (SSR) | Renderer hooks work via the `node` build of `@chordsketch/wasm`. Editor components mount on the client (`'use client'` boundary in Next.js — see [Next.js notes](#nextjs--ssr) below). |
+| Bun / Deno | Best-effort — both expose the Node.js `import('@chordsketch/wasm')` entry, but no CI coverage today. |
+| React Native / Hermes | Not supported — depends on the browser / Node WebAssembly loaders. |
 
 ## Usage
 
@@ -296,6 +334,156 @@ to the initial value, not necessarily zero. `increment` /
 `decrement` accept an optional step; `setValue` accepts any
 number (including `NaN`, which collapses to `min`) so direct
 binding to a numeric input is safe.
+
+### `<IrealPlayground>` — drop-in iReal Pro editor + preview
+
+```tsx
+import { IrealPlayground } from '@chordsketch/react';
+import '@chordsketch/react/styles.css';
+
+const URL =
+  'irealb://Autumn%20Leaves%3D%5BT44Cm7%20%7C%20F7%20%7C%20BbMaj7%20%7C%20EbMaj7%20%5D%3DJoseph%20Kosma%3DJazz%20Ballad%3DC';
+
+export function Chart() {
+  return <IrealPlayground defaultValue={URL} />;
+}
+```
+
+The composite shows the editor pane (header form + read-only bar
+grid + URL textarea) next to the SVG preview. Pass `source` +
+`onChange` for controlled use; `hidePreview`, `hideBars`, and
+`hideUrl` trim the layout for narrower hosts.
+
+### `<IrealEditor>` — editor pane alone
+
+```tsx
+import { useState } from 'react';
+import { IrealEditor } from '@chordsketch/react';
+
+export function ChartEditor() {
+  const [url, setUrl] = useState('');
+  return <IrealEditor source={url} onChange={setUrl} />;
+}
+```
+
+Edits to title / composer / style / key root + accidental + mode /
+time numerator + denominator / tempo / transpose round-trip through
+`@chordsketch/wasm`'s `parseIrealb` / `serializeIrealb` and fire
+`onChange` with the new URL. The bar grid is read-only in this
+release per
+[ADR-0020](https://github.com/koedame/chordsketch/blob/main/docs/adr/0020-ireal-pro-react-surface.md);
+deep bar editing remains in the private `@chordsketch/ui-irealb-editor`
+package that backs the playground.
+
+`readOnly`, `showUrl`, `showBars`, and a custom `errorFallback` are
+all supported. Omit `onChange` to force read-only display.
+
+### `<IrealPreview>` — SVG preview alone
+
+```tsx
+import { IrealPreview } from '@chordsketch/react';
+
+export function Sheet({ url }: { url: string }) {
+  return <IrealPreview source={url} />;
+}
+```
+
+Calls `@chordsketch/wasm`'s `renderIrealSvg` and injects the result
+via `dangerouslySetInnerHTML`. The SVG is fully server-controlled by
+the Rust renderer (`crates/render-ireal/`); user-supplied chord and
+metadata strings are escaped before being placed inside the SVG.
+
+### iReal Pro hooks
+
+```tsx
+import { useIrealParse, useIrealSerialize, useIrealRender } from '@chordsketch/react';
+
+const { song, loading: parsing, error: parseError } = useIrealParse(url);
+const { url: nextUrl } = useIrealSerialize(song);
+const { svg } = useIrealRender(url);
+```
+
+`useIrealParse` returns the typed AST (`IrealSong`).
+`useIrealSerialize` produces a stable `irealb://` URL string from an
+edited AST. `useIrealRender` is a convenience for the SVG render
+path. All three lazy-load `@chordsketch/wasm` and reuse the
+initialised module across re-renders.
+
+### AST types and helpers
+
+The iReal Pro AST mirrors the Rust `IrealSong` struct verbatim and
+is re-exported on the package boundary:
+
+```ts
+import type {
+  IrealSong,
+  IrealSection,
+  IrealBar,
+  IrealChord,
+  IrealChordQuality,
+  IrealMusicalSymbol,
+} from '@chordsketch/react';
+import { irealChordToString, irealSectionLabelToString } from '@chordsketch/react';
+```
+
+The string helpers render AST nodes back to their iReal-Pro URL
+shorthand (no Unicode translation; the SVG renderer handles that).
+
+## API reference
+
+| Export | Kind | Brief |
+|---|---|---|
+| `<ChordSheet>` | Component | Flagship ChordPro renderer (HTML AST → JSX or text → `<pre>`). |
+| `useChordRender` | Hook | Same pipeline as `<ChordSheet>` exposed as state. |
+| `<ChordEditor>` | Component | Split-pane textarea + live preview + transpose shortcuts. |
+| `<SourceEditor>` | Component | CodeMirror 6 source editor with ChordPro syntax highlight. |
+| `<ChordDiagram>` | Component | Guitar / ukulele / piano voicing SVG from the built-in database. |
+| `useChordDiagram` | Hook | Raw SVG string for the chord-instrument pair. |
+| `<Transpose>` | Component | Accessible ± / reset transposition control. |
+| `useTranspose` | Hook | Clamped state helper for transposition values. |
+| `<PdfExport>` | Component | One-click download button; lazy-loads `@chordsketch/wasm-export`. |
+| `usePdfExport` | Hook | Same export pipeline for custom UIs. |
+| `<Playground>` | Component | High-level "drop-in" ChordPro playground. |
+| `<RendererPreview>` | Component | Format-switcher preview pane. |
+| `<SplitLayout>` | Component | Layout container used by the playground. |
+| `useChordproAst` | Hook | Parse ChordPro source into AST + warnings. |
+| `renderChordproAst` | Function | AST → JSX walker (powers `<ChordSheet format="html">`). |
+| `applyChordReposition` | Function | Apply a drag-to-reposition event to a ChordPro source. |
+| `lyricsOffsetToSourceColumn` | Function | Lyrics-offset → source-column helper for drag UX. |
+| `useDebounced` | Hook | General-purpose debouncer used by `<ChordEditor>`. |
+| `<IrealEditor>` | Component | Header form + read-only bar grid + URL round-trip for iReal Pro. |
+| `<IrealPreview>` | Component | iReal Pro SVG preview via `renderIrealSvg`. |
+| `<IrealPlayground>` | Component | High-level drop-in iReal Pro playground (editor + preview). |
+| `useIrealParse` | Hook | `irealb://` URL → typed AST. |
+| `useIrealSerialize` | Hook | AST → `irealb://` URL. |
+| `useIrealRender` | Hook | `irealb://` URL → SVG string. |
+| `irealChordToString` | Function | Render an iReal AST chord to its URL shorthand. |
+| `irealSectionLabelToString` | Function | Render an iReal AST section label to its display name. |
+| `version()` | Function | Returns the installed package version. |
+
+Every component accepts a `className`, `style`, and where
+applicable a structured `errorFallback` prop (`ReactNode`, a
+render function `(err: Error) => ReactNode`, or `null` to suppress
+entirely).
+
+## Errors
+
+Renderer and parse failures **never** throw out of the components.
+Each surface returns an `error: Error | null` (hooks) or invokes
+`errorFallback` (components) so the host decides how to display the
+failure. When a previous successful render exists, components keep
+the stale output visible alongside the alert so transient parse
+errors do not blank the UI.
+
+## Next.js / SSR
+
+The editor and preview components touch wasm and browser globals on
+mount; mark consuming files with `'use client'` in Next.js's
+App Router. The render hooks themselves are safe to call from the
+server (Node build of `@chordsketch/wasm`), but in practice you will
+want to render the previews on the client so the bundle's WebAssembly
+modules can be cached by the browser's HTTP cache instead of the
+Node `require` cache.
 
 ### Version
 

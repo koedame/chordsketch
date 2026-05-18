@@ -1643,3 +1643,238 @@
   border: 1px solid var(--cs-crimson-300, #EC8AA3);
   border-radius: 4px;
 }
+
+/* ---------- iReal Pro editor + preview (#2473 / ADR-0020) ---------- */
+
+.chordsketch-ireal-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--cs-surface, #ffffff);
+  color: var(--cs-text-primary, #0a0a0b);
+  font-family: var(--cs-font-latin, system-ui, sans-serif);
+}
+
+.chordsketch-ireal-editor__loading {
+  color: var(--cs-text-secondary, #67646d);
+  font-style: italic;
+  margin: 0;
+}
+
+.chordsketch-ireal-editor__error {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--cs-danger-surface, #FBE1E8);
+  color: var(--cs-danger-fg, #A30F37);
+  border: 1px solid var(--cs-crimson-300, #EC8AA3);
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.chordsketch-ireal-editor__metadata {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+  border: 1px solid var(--cs-border, #d4d1d6);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin: 0;
+}
+
+.chordsketch-ireal-editor__metadata > legend {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cs-text-secondary, #67646d);
+  padding: 0 0.25rem;
+}
+
+.chordsketch-ireal-editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+}
+
+.chordsketch-ireal-editor__field > span {
+  font-weight: 600;
+  color: var(--cs-text-secondary, #67646d);
+}
+
+.chordsketch-ireal-editor__field input,
+.chordsketch-ireal-editor__field select {
+  height: 32px;
+  padding: 0 0.5rem;
+  background: var(--cs-surface, #ffffff);
+  border: 1px solid var(--cs-border-strong, #d4d1d6);
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+}
+
+.chordsketch-ireal-editor__field input:focus-visible,
+.chordsketch-ireal-editor__field select:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500, #BD1642);
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
+}
+
+.chordsketch-ireal-editor__field input:disabled,
+.chordsketch-ireal-editor__field select:disabled {
+  background: var(--cs-canvas, #fafaf7);
+  color: var(--cs-text-secondary, #67646d);
+  cursor: not-allowed;
+}
+
+.chordsketch-ireal-editor__key,
+.chordsketch-ireal-editor__time {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
+  gap: 0.5rem;
+  grid-column: 1 / -1;
+}
+
+.chordsketch-ireal-editor__sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.chordsketch-ireal-editor__section {
+  border: 1px solid var(--cs-border, #d4d1d6);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  background: var(--cs-canvas, #fafaf7);
+}
+
+.chordsketch-ireal-editor__section-label {
+  margin: 0 0 0.4rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cs-text-strong, #44424a);
+}
+
+.chordsketch-ireal-editor__bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  gap: 0.4rem;
+}
+
+.chordsketch-ireal-editor__bar {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  background: var(--cs-surface, #ffffff);
+  border: 1px solid var(--cs-border, #d4d1d6);
+  border-radius: 4px;
+  font-family: var(--cs-font-chord, system-ui, sans-serif);
+  font-size: 0.875rem;
+  min-width: 0;
+}
+
+.chordsketch-ireal-editor__bar-index {
+  font-size: 0.75rem;
+  color: var(--cs-text-tertiary, #8a8790);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.chordsketch-ireal-editor__bar-chords {
+  color: var(--cs-crimson-500, #BD1642);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chordsketch-ireal-editor__empty-bars {
+  margin: 0;
+  padding: 0.75rem;
+  font-style: italic;
+  color: var(--cs-text-tertiary, #8a8790);
+  text-align: center;
+  border: 1px dashed var(--cs-border, #d4d1d6);
+  border-radius: 4px;
+}
+
+.chordsketch-ireal-editor__url {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+}
+
+.chordsketch-ireal-editor__url > span {
+  font-weight: 600;
+  color: var(--cs-text-secondary, #67646d);
+}
+
+.chordsketch-ireal-editor__url textarea {
+  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.75rem;
+  padding: 0.5rem;
+  background: var(--cs-surface, #ffffff);
+  border: 1px solid var(--cs-border-strong, #d4d1d6);
+  border-radius: 4px;
+  color: inherit;
+  resize: vertical;
+  min-height: 4rem;
+}
+
+.chordsketch-ireal-editor__url textarea:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500, #BD1642);
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
+}
+
+/* Preview */
+.chordsketch-ireal-preview {
+  padding: 0.75rem;
+  background: var(--cs-surface, #ffffff);
+  border: 1px solid var(--cs-border, #d4d1d6);
+  border-radius: 6px;
+  overflow: auto;
+}
+
+.chordsketch-ireal-preview__error {
+  margin: 0 0 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--cs-danger-surface, #FBE1E8);
+  color: var(--cs-danger-fg, #A30F37);
+  border: 1px solid var(--cs-crimson-300, #EC8AA3);
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.chordsketch-ireal-preview__svg svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Playground composite */
+.chordsketch-ireal-playground {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  min-height: 24rem;
+}
+
+.chordsketch-ireal-playground__editor,
+.chordsketch-ireal-playground__preview {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 900px) {
+  .chordsketch-ireal-playground {
+    grid-template-columns: 1fr;
+  }
+}

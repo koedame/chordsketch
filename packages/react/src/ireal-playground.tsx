@@ -1,0 +1,125 @@
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+
+import { IrealEditor, type IrealEditorLoader } from './ireal-editor';
+import { IrealPreview } from './ireal-preview';
+import type { IrealRenderLoader } from './use-ireal-render';
+
+export interface IrealPlaygroundProps {
+  /**
+   * Initial `irealb://` URL. The component manages the value
+   * internally afterwards; pass {@link source} + {@link onChange}
+   * to drive it externally instead.
+   */
+  defaultValue?: string;
+  /** Controlled value. Pair with {@link onChange}. */
+  source?: string;
+  /** Controlled change callback. Pair with {@link source}. */
+  onChange?: (url: string) => void;
+  /** Read-only mode. */
+  readOnly?: boolean;
+  /** Optional className applied to the wrapper. */
+  className?: string;
+  /** Optional inline style applied to the wrapper. */
+  style?: CSSProperties;
+  /**
+   * Optional renderer for parse / render errors. Defaults to the
+   * inline `role="alert"` fallback inside the child components.
+   * Pass `null` to suppress error UI entirely.
+   */
+  errorFallback?: ReactNode | ((error: Error) => ReactNode) | null;
+  /** Hide the URL textarea inside the editor pane. Defaults to `false`. */
+  hideUrl?: boolean;
+  /** Hide the bar-grid summary inside the editor pane. Defaults to `false`. */
+  hideBars?: boolean;
+  /** Hide the SVG preview pane. Defaults to `false`. */
+  hidePreview?: boolean;
+  /** @internal Loader override for tests. Shared with the preview
+   * pane (which only needs the `renderIrealSvg` shape); the
+   * structural compatibility of `IrealEditorWasm` (parse +
+   * serialize + default) is a superset of `IrealRenderer`
+   * (renderIrealSvg + default), so the editor stub can satisfy
+   * the preview's narrower contract too as long as the test stub
+   * declares `renderIrealSvg`. */
+  loader?: IrealEditorLoader;
+  /** @internal Loader override for the preview pane. Falls back
+   * to `loader` when omitted so a single stub covers both panes. */
+  previewLoader?: IrealRenderLoader;
+}
+
+/**
+ * High-level "drop-in" wrapper that composes {@link IrealEditor} and
+ * {@link IrealPreview}. Hosts that want a single-component embed
+ * analogous to the ChordPro `<Playground>` use this; hosts that need
+ * to control layout themselves should compose the two children
+ * directly.
+ *
+ * Supports both uncontrolled (`defaultValue`) and controlled
+ * (`source` + `onChange`) modes; mixing the two is a configuration
+ * error and the controlled props win.
+ */
+export function IrealPlayground({
+  defaultValue = '',
+  source,
+  onChange,
+  readOnly,
+  className,
+  style,
+  errorFallback,
+  hideUrl = false,
+  hideBars = false,
+  hidePreview = false,
+  loader,
+  previewLoader,
+}: IrealPlaygroundProps): JSX.Element {
+  const isControlled = source !== undefined;
+  const [internalValue, setInternalValue] = useState<string>(defaultValue);
+
+  // Sync the internal state when the parent flips from uncontrolled
+  // to controlled mid-stream. The check guards against the
+  // controlled-default-prop pattern where parents pass a stable
+  // `defaultValue` that should NOT override later user edits.
+  useEffect(() => {
+    if (isControlled && source !== internalValue) {
+      setInternalValue(source);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source]);
+
+  const currentValue = isControlled ? source : internalValue;
+
+  const handleChange = (url: string): void => {
+    if (!isControlled) setInternalValue(url);
+    if (onChange !== undefined) onChange(url);
+  };
+
+  const wrapperClass = ['chordsketch-ireal-playground', className]
+    .filter((c): c is string => typeof c === 'string' && c.length > 0)
+    .join(' ');
+
+  return (
+    <div className={wrapperClass} style={style}>
+      <div className="chordsketch-ireal-playground__editor">
+        <IrealEditor
+          source={currentValue}
+          onChange={readOnly ? undefined : handleChange}
+          readOnly={readOnly}
+          errorFallback={errorFallback}
+          showUrl={!hideUrl}
+          showBars={!hideBars}
+          loader={loader}
+        />
+      </div>
+      {hidePreview ? null : (
+        <div className="chordsketch-ireal-playground__preview">
+          <IrealPreview
+            source={currentValue}
+            errorFallback={errorFallback}
+            loader={
+              previewLoader ?? (loader as unknown as IrealRenderLoader | undefined)
+            }
+          />
+        </div>
+      )}
+    </div>
+  );
+}

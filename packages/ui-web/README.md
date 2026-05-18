@@ -1,15 +1,43 @@
 # @chordsketch/ui-web
 
+> ## ⚠️ Internal workspace package — not for external use
+>
+> This package is the shared **app shell** for the ChordSketch
+> playground (`packages/playground/`) and the Tauri desktop app
+> (`apps/desktop/`). It is intentionally `"private": true` and is
+> **not published to npm**.
+>
+> **If you are building a third-party application** that embeds a
+> ChordPro or iReal Pro editor, use
+> [`@chordsketch/react`](../react/) instead — that package exposes
+> `<Playground>`, `<ChordSheet>`, `<IrealPlayground>` and the
+> matching hooks behind a stable, published API.
+>
+> Reasons this package stays internal:
+>
+> - It exists to deduplicate code between the playground and the
+>   desktop app, not to be a third public surface alongside
+>   `@chordsketch/wasm` and `@chordsketch/react`. Publishing it
+>   would force its API to follow semver, which would slow the
+>   playground / desktop iteration loop.
+> - It is framework-agnostic plain DOM, deliberately incompatible
+>   with React composition out of the box — the React surface
+>   wraps it (or, post-[ADR-0020](../../docs/adr/0020-ireal-pro-react-surface.md),
+>   re-implements its functionality in idiomatic React).
+> - The "internal workspace package" policy is the result of the
+>   [#2473](https://github.com/koedame/chordsketch/issues/2473)
+>   non-goals discussion; see
+>   [ADR-0020](../../docs/adr/0020-ireal-pro-react-surface.md) for
+>   the iReal Pro side of the same decision.
+
 Framework-agnostic playground UI shared between the browser
 [playground](../playground/) (deployed at
-<https://koedame.github.io/chordsketch/>) and the upcoming Tauri
-desktop app ([#2068](https://github.com/koedame/chordsketch/issues/2068)).
-
-This is a **private workspace package**. It is not published to npm.
+<https://koedame.github.io/chordsketch/>) and the Tauri desktop app
+([#2068](https://github.com/koedame/chordsketch/issues/2068)).
 Hosts consume it via direct import (the playground uses Vite's
 `resolve.alias` — see `packages/playground/vite.config.ts`); the desktop
 scaffold added in [#2069](https://github.com/koedame/chordsketch/issues/2069)
-will use the same pattern.
+uses the same pattern.
 
 ## Why a separate package
 
