@@ -109,6 +109,32 @@ through this crate's public API.
   `text_comment` write — the symbol fully covers the semantics
   and the text would round-trip into a duplicate. Multiple
   comments on one bar concatenate with `; ` separator.
+- `system_break_space: u8` (#2434). Vertical-space hint (URL
+  tokens `Y` / `YY` / `YYY` at the start of a system) preserved
+  as a count in `0..=3`. `0` means "no extra space"; `1` / `2` /
+  `3` ask the renderer to add proportional vertical padding above
+  the row this bar belongs to. The parser counts consecutive `Y`
+  characters between bar boundaries (clamping at `3`) and stamps
+  the count on the next bar that begins; whether that bar lands
+  at a row start is a render-time concern, but the AST records
+  the hint verbatim so the source token round-trips through
+  serialise → parse without loss.
+- `beat_grouping_override: Option<BeatGrouping>` (#2449). Compound-time
+  beat grouping override for odd meters (5/4 as `3+2` or `2+3`,
+  7/8 as `4+3` / `3+4` / `3+2+2`). Set when the URL stream
+  contains a `<digit+digit(+digit)*>` staff-text directive whose
+  sum equals the active time signature's numerator; the parser
+  tracks a running grouping state and stamps it onto every
+  subsequent bar from the override forward (the spec's "remains
+  until the opposite is used" wording). Meter changes reset the
+  running state — an explicit re-assert is required under the
+  new meter. Sum-mismatched groupings (`<3+3>` under 5/4) and
+  malformed shapes (`<2++3>`, `<+3>`, `<2+>`) fall through to
+  `text_comment` so the raw token round-trips losslessly. The
+  iReal SVG renderer does not paint anything for this directive
+  (it is a player-only directive per the spec); the field is
+  AST-and-JSON-round-trip-only and is exposed to wasm / FFI /
+  NAPI consumers via the same JSON shape.
 
 ### `BarChord` and `BeatPosition`
 
@@ -153,6 +179,34 @@ through this crate's public API.
   because the iReal grid cannot render them. Construction errors
   return `None` rather than panicking — public APIs validate at
   the boundary per `.claude/rules/defensive-inputs.md`.
+
+### `BeatGrouping` (#2449)
+
+- `BeatGrouping(Vec<NonZeroU8>)` — a newtype wrapping the subgroup
+  sizes of a compound-time directive (`<3+2>` → `BeatGrouping(vec![3,
+  2])`, `<3+2+2>` → `BeatGrouping(vec![3, 2, 2])`). Two compile-time
+  invariants — each subgroup is `NonZeroU8` and each subgroup
+  ≤ 255 — plus two construction-time invariants: non-empty AND
+  at least two subgroups. A single-subgroup grouping (`vec![5]`
+  for 5/4) is a no-op ("5 played as 5" is the default), so the
+  type rejects it; the parser's lexer applies the same rule on
+  input, and promoting the check into the constructor makes the
+  singleton state unrepresentable for every other producer (FFI,
+  test fixtures, future builders).
+- **Deliberate divergence from the AST's public-field contract**:
+  every other AST struct exposes its fields as `pub` per the
+  contract at the top of `ast.rs`. `BeatGrouping` is the lone
+  exception — the inner `Vec` is private because two
+  load-bearing invariants (non-empty + `len() >= 2`) cannot be
+  expressed at the type level and must be enforced at
+  construction. Mutate by replacing the whole
+  `Option<BeatGrouping>` on the parent `Bar`, not by reaching
+  into the inner `Vec`.
+- The cross-field "sum equals the time signature's numerator"
+  invariant lives outside the type — the parser validates it at
+  the stamp boundary, the renderer / JSON serialiser do not
+  re-validate (the constructed value is trusted post-parser per
+  the "validate at the public boundary" rule).
 
 ## Deferred AST scope
 

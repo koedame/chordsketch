@@ -461,6 +461,16 @@ jobs:
 
       - name: Render smoke
         uses: ./.github/actions/cli-render-smoke
+        with:
+          # winget-pkgs has not yet ingested the v0.4.0 manifest
+          # (see `packaging/winget/koedame.chordsketch.installer.yaml`'s
+          # stale-SHA256 caveat); `winget install chordsketch`
+          # currently resolves to 0.1.0 which predates the iReal
+          # Pro track. Tolerate iReal smoke failure on the winget
+          # job specifically until the manifest is refreshed and
+          # submitted to winget-pkgs (#2403 follow-up). ChordPro
+          # smoke continues to hard-gate.
+          tolerate-ireal-failure: 'true'
 
   chocolatey:
     name: Chocolatey (Windows)
@@ -563,16 +573,14 @@ jobs:
           # window where README and reality can disagree.
           #
           # The iReal Pro half of the README's Library Usage section
-          # (chordsketch-ireal + chordsketch-render-ireal) is tested
-          # under PR mode only, because both crates are in `##
-          # [Unreleased]` per CHANGELOG.md and have not been published
-          # to crates.io yet. The daily cron / release event paths
-          # therefore skip the iReal snippet until the first
-          # iReal-supporting release lands; flipping the iReal half on
-          # for crates.io mode is tracked in #2403 (the same follow-up
-          # that removes the cli-render-smoke continue-on-error
-          # carve-out). See #2400 (origin) and #2403 (release
-          # follow-up).
+          # (chordsketch-ireal + chordsketch-render-ireal) is now
+          # tested in both modes: PR uses workspace path deps for
+          # workspace-HEAD coverage, and crates.io mode uses the
+          # caret range `^0.4` against the published 0.4.0 release
+          # (see CHANGELOG "## [0.4.0]" → "#### iReal Pro support
+          # (multi-format track, #2050)"). The pre-v0.4.0 carve-out
+          # that skipped iReal on crates.io was removed by #2403.
+          # See #2400 (origin) and #2403 (release follow-up).
           SCRATCH=/tmp/library-smoke
           mkdir -p "$SCRATCH/src"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -585,15 +593,15 @@ jobs:
           else
             # Cargo `^0.4` means `>=0.4.0, <0.5.0` (the caret rules treat
             # the leftmost non-zero as the breaking-change boundary).
-            # Bump policy: when the workspace bumps to 0.5.x, update both
-            # constraints below to `^0.5` in the same release PR.
+            # Bump policy: when the workspace bumps to 0.5.x, update all
+            # four constraints below to `^0.5` in the same release PR.
             # Otherwise, daily smoke tests will silently stop resolving.
             CORE_DEP='chordsketch-chordpro = "^0.4"'
             RENDER_DEP='chordsketch-render-text = "^0.4"'
-            IREAL_DEP=''
-            IREAL_RENDER_DEP=''
-            INCLUDE_IREAL=0
-            MODE="crates.io published (ChordPro only — iReal not yet published)"
+            IREAL_DEP='chordsketch-ireal = "^0.4"'
+            IREAL_RENDER_DEP='chordsketch-render-ireal = "^0.4"'
+            INCLUDE_IREAL=1
+            MODE="crates.io published (ChordPro + iReal, ^0.4)"
           fi
           echo "library-smoke mode: $MODE"
           {

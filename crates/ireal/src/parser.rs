@@ -55,9 +55,9 @@
 //!   them.
 
 use crate::ast::{
-    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot,
-    ChordSize, Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel,
-    TimeSignature,
+    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatGrouping, BeatPosition, Chord,
+    ChordQuality, ChordRoot, ChordSize, Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol,
+    Section, SectionLabel, TimeSignature,
 };
 use std::fmt;
 
@@ -375,7 +375,6 @@ fn make_song_irealbook(parts: &[&str]) -> Result<IrealSong, ParseError> {
     debug_assert_eq!(parts.len(), 6);
     let (title, composer, style, key_raw, timesig_raw, music_raw) =
         (parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]);
-    let chord_chart = parse_chord_chart(music_raw)?;
     let key_signature = parse_key(key_raw);
     // The 7-field `irealb://` path errors on malformed numeric
     // fields (`InvalidNumericField`); the 6-field `irealbook://`
@@ -388,6 +387,11 @@ fn make_song_irealbook(parts: &[&str]) -> Result<IrealSong, ParseError> {
     let time_signature = parse_time_signature(timesig_raw)
         .map(|(ts, _)| ts)
         .ok_or_else(|| ParseError::InvalidNumericField(timesig_raw.to_owned()))?;
+    // Pass the header meter into the music-body parser so consumer
+    // directives that depend on the active meter (e.g. the #2449
+    // compound-time `<a+b>` grouping) validate against the chart's
+    // declared meter, not `TimeSignature::default()`.
+    let chord_chart = parse_chord_chart_with_header_ts(music_raw, time_signature)?;
     Ok(IrealSong {
         title: title.trim().to_owned(),
         composer: nonempty(composer),
@@ -426,6 +430,47 @@ pub(crate) fn matches_macro_prefix(text: &str, prefix: &str) -> bool {
         Some(c) if c.is_alphanumeric() => false,
         Some(_) => true,
     }
+}
+
+/// Detects the spec's compound-time-signature staff-text token
+/// (#2449) — a `digit+digit(+digit)*` sequence such as `2+3`,
+/// `3+2+2`. Whitespace around the token is rejected; iReal Pro
+/// emits the directive as a bare `<a+b>` with no surrounding
+/// commentary, so any non-digit char outside the `+` separator is
+/// a free-form caption rather than a grouping override.
+///
+/// Each subgroup must parse as a `NonZeroU8`. The function returns
+/// `None` (and `apply_comment` falls through to text-comment
+/// behaviour) for any malformed input: empty subgroups (`<+3>`,
+/// `<2+>`, `<2++3>`), zero-valued subgroups (`<0+3>`), values
+/// outside `1..=u8::MAX`, or non-digit characters.
+///
+/// Sum-vs-time-signature validation is the caller's job — this
+/// helper only parses the lexical shape so the same parsed
+/// grouping can be reused for the running-state and the per-bar
+/// override.
+fn parse_beat_grouping(input: &str) -> Option<BeatGrouping> {
+    if input.is_empty() {
+        return None;
+    }
+    let mut parts = Vec::new();
+    for piece in input.split('+') {
+        // Every `+`-separated piece must be a non-empty integer in
+        // `1..=u8::MAX`. The empty-string rejection here is what
+        // turns `<2++3>` and `<+3>` into None.
+        if piece.is_empty() || !piece.chars().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+        let n: u8 = piece.parse().ok()?;
+        parts.push(core::num::NonZeroU8::new(n)?);
+    }
+    // A single integer without a `+` is not a grouping — the
+    // input was just a number, which is not a compound-time
+    // directive. Spec requires at least two subgroups.
+    if parts.len() < 2 {
+        return None;
+    }
+    BeatGrouping::new(parts)
 }
 
 fn nonempty(s: &str) -> Option<String> {
@@ -502,7 +547,22 @@ struct ChordChart {
 /// resulting [`Section`] / [`Bar`] tree (whereas pianosnake flattens
 /// to a single measures array).
 fn parse_chord_chart(input: &str) -> Result<ChordChart, ParseError> {
+    parse_chord_chart_with_header_ts(input, TimeSignature::default())
+}
+
+/// Variant of [`parse_chord_chart`] that pre-initialises the
+/// chord-chart state's running time signature from the URL
+/// header. Inline `T..` directives still take precedence (they
+/// override mid-chart), but consumer directives like the #2449
+/// compound-time `<a+b>` grouping that validate against the
+/// active meter need the meter to be the *header* meter, not the
+/// `TimeSignature::default()` placeholder.
+fn parse_chord_chart_with_header_ts(
+    input: &str,
+    header_ts: TimeSignature,
+) -> Result<ChordChart, ParseError> {
     let mut state = ChartParseState::new();
+    state.time_signature = header_ts;
     let mut rest = input;
     while let Some(c) = rest.chars().next() {
         // Pre-skip whitespace.
@@ -872,6 +932,16 @@ struct ChartParseState {
     /// will be narrower until an `l` symbol is encountered" wording
     /// is parser-wide, not bar-scoped.
     current_chord_size: ChordSize,
+    /// Active compound-time beat grouping override (#2449).
+    /// Per the spec, an override "remains until the opposite is
+    /// used", so the parser tracks the running grouping and stamps
+    /// it onto every bar from the override forward. Reset to `None`
+    /// whenever the time signature itself changes, because the new
+    /// meter's natural grouping is the only well-defined default
+    /// across the spec's documented odd-meter set (5/8, 5/4, 7/8,
+    /// 7/4); requiring an explicit re-assert under the new meter
+    /// keeps the AST honest about which feel is active.
+    current_beat_grouping: Option<BeatGrouping>,
 }
 
 impl ChartParseState {
@@ -880,6 +950,13 @@ impl ChartParseState {
     }
 
     fn set_time_signature(&mut self, ts: TimeSignature) {
+        if ts != self.time_signature {
+            // The previous bar's running grouping was valid only
+            // under the prior meter; a new meter resets the
+            // running state so an explicit `<a+b>` is needed
+            // before the next bar inherits a non-default feel.
+            self.current_beat_grouping = None;
+        }
         self.time_signature = ts;
     }
 
@@ -949,7 +1026,32 @@ impl ChartParseState {
     }
 
     fn apply_comment(&mut self, comment: &str) {
-        let trimmed_lower = comment.trim().to_ascii_lowercase();
+        // Compound-time beat-grouping override (#2449). Detected
+        // first because the `digit+digit(+...)+` shape is
+        // unambiguously numeric and cannot collide with the
+        // English-prefix macros below. Validation against the
+        // active meter happens inside the helper; on failure the
+        // text falls through to the text-comment path so a
+        // malformed grouping (e.g. `<3+3>` under 5/4) survives
+        // the URL round-trip as free-form text rather than being
+        // silently dropped.
+        let trimmed_input = comment.trim();
+        if let Some(grouping) = parse_beat_grouping(trimmed_input) {
+            let sum = u16::from(self.time_signature.numerator);
+            if grouping.sum() == sum {
+                self.current_beat_grouping = Some(grouping.clone());
+                self.current_bar.beat_grouping_override = Some(grouping);
+                return;
+            }
+            // Sum mismatch: keep going through the rest of
+            // `apply_comment` so the original token is preserved
+            // verbatim on `text_comment`. The spec doesn't say
+            // how the iReal Pro player handles mismatched
+            // groupings; saving the raw text matches the
+            // pre-#2449 fallback behaviour and lets a future
+            // audit recover the original intent.
+        }
+        let trimmed_lower = trimmed_input.to_ascii_lowercase();
         // Detect the recognised musical-direction macros. The
         // matched symbol is set directly on `current_bar` (see
         // `queue_symbol`) — `<D.C.>` / `<D.S.>` / `<Fine>` /
@@ -1142,6 +1244,15 @@ impl ChartParseState {
         if self.pending_double_open {
             self.current_bar.start = BarLine::Double;
             self.pending_double_open = false;
+        }
+        // Inherit the running beat-grouping override (#2449) so the
+        // spec's "remains until the opposite is used" wording is
+        // realised at the AST level: every bar from the override
+        // forward carries the same grouping, and the per-bar field
+        // is sufficient for renderers / consumers without a
+        // separate query over the section's running state.
+        if let Some(grouping) = self.current_beat_grouping.clone() {
+            self.current_bar.beat_grouping_override = Some(grouping);
         }
     }
 
@@ -1593,6 +1704,128 @@ mod tests {
         let url = "irealbook://Test=A==Style=C=44=[*AC| x |D|]";
         let song = parse(url).expect("parse");
         assert!(song.sections[0].bars[1].repeat_previous);
+    }
+
+    #[test]
+    fn compound_time_grouping_3_plus_2_under_5_4() {
+        // Spec example: 5/4 played as 3+2. The `<3+2>` directive
+        // lands on the second bar; subsequent bars inherit the
+        // running grouping per the spec's "remains until the
+        // opposite is used" wording.
+        let url = "irealbook://Test=A==Style=C=54=[*AC|<3+2>D|E|F|]";
+        let song = parse(url).expect("parse");
+        let bars = &song.sections[0].bars;
+        // First bar predates the override.
+        assert!(bars[0].beat_grouping_override.is_none());
+        // Override bar carries the explicit grouping.
+        let g1 = bars[1]
+            .beat_grouping_override
+            .as_ref()
+            .expect("3+2 grouping");
+        assert_eq!(g1.parts().len(), 2);
+        assert_eq!(g1.parts()[0].get(), 3);
+        assert_eq!(g1.parts()[1].get(), 2);
+        // Running state inherits forward.
+        assert_eq!(bars[2].beat_grouping_override, Some(g1.clone()));
+        assert_eq!(bars[3].beat_grouping_override, Some(g1.clone()));
+    }
+
+    #[test]
+    fn compound_time_grouping_3_plus_2_plus_2_under_7_8() {
+        // Spec example: 7/8 as 3+2+2 (non-default for 7/8).
+        let url = "irealbook://Test=A==Style=C=78=[*A<3+2+2>C|D|]";
+        let song = parse(url).expect("parse");
+        let bars = &song.sections[0].bars;
+        let g = bars[0]
+            .beat_grouping_override
+            .as_ref()
+            .expect("3+2+2 grouping");
+        assert_eq!(g.parts().len(), 3);
+        assert_eq!(g.sum(), 7);
+        assert_eq!(bars[1].beat_grouping_override, Some(g.clone()));
+    }
+
+    #[test]
+    fn compound_time_grouping_rejects_sum_mismatch() {
+        // `<3+3>` under 5/4: sum is 6, numerator is 5. The grouping
+        // is rejected as an override but the text falls through to
+        // `text_comment` so the original intent isn't lost on
+        // round-trip.
+        let url = "irealbook://Test=A==Style=C=54=[*A<3+3>C|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert!(bar0.beat_grouping_override.is_none());
+        assert_eq!(bar0.text_comment.as_deref(), Some("3+3"));
+    }
+
+    #[test]
+    fn compound_time_grouping_reset_on_time_signature_change() {
+        // A `<3+2>` override under 5/4 must NOT survive a meter
+        // change to 7/8 — the new meter's natural grouping is the
+        // default, and the parser drops the running state so an
+        // explicit `<a+b>` is needed before the new meter inherits
+        // a non-default feel.
+        let url = "irealbook://Test=A==Style=C=54=[*A<3+2>C|D|T78E|F|]";
+        let song = parse(url).expect("parse");
+        let bars = &song.sections[0].bars;
+        assert_eq!(
+            bars[0]
+                .beat_grouping_override
+                .as_ref()
+                .map(|g| g.parts().len()),
+            Some(2),
+            "5/4 bar carries 3+2"
+        );
+        // After T78 the running state is reset; the post-change
+        // bars carry no override.
+        let post_change: Vec<_> = bars
+            .iter()
+            .skip_while(|b| {
+                b.beat_grouping_override
+                    .as_ref()
+                    .is_some_and(|g| g.parts()[0].get() == 3)
+            })
+            .collect();
+        assert!(
+            !post_change.is_empty(),
+            "expected at least one post-T78 bar"
+        );
+        for b in post_change {
+            assert!(
+                b.beat_grouping_override.is_none(),
+                "T78 must reset the running grouping; got {:?}",
+                b.beat_grouping_override
+            );
+        }
+    }
+
+    #[test]
+    fn compound_time_grouping_rejects_malformed_input() {
+        // Malformed groupings fall through to text_comment rather
+        // than being silently dropped or panicking:
+        //
+        // - `<2++3>`, `<+3>`, `<2+>`: empty subgroup (split-on-`+`
+        //   produces an empty piece).
+        // - `<2+0+3>`: zero subgroup (NonZeroU8 rejects).
+        // - `<2+a>`: non-digit char in a subgroup
+        //   (`piece.chars().all(is_ascii_digit)` rejects).
+        // - `<5>`: single subgroup (the constructor's `len() >= 2`
+        //   rejects; the parser's lexer also rejects on the same
+        //   condition).
+        for token in ["2++3", "+3", "2+", "2+0+3", "2+a", "5"] {
+            let url = format!("irealbook://Test=A==Style=C=44=[*A<{token}>C|]");
+            let song = parse(&url).expect("parse");
+            let bar0 = &song.sections[0].bars[0];
+            assert!(
+                bar0.beat_grouping_override.is_none(),
+                "malformed `<{token}>` must not produce an override"
+            );
+            assert_eq!(
+                bar0.text_comment.as_deref(),
+                Some(token),
+                "malformed token must round-trip via text_comment"
+            );
+        }
     }
 
     #[test]
