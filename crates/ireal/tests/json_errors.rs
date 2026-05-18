@@ -764,8 +764,8 @@ fn bar_chord_slash_repeat_serialises_and_round_trips_through_json() {
 #[test]
 fn bar_chord_kind_played_explicit_string_decodes() {
     let value = parse_json(r#""played""#).unwrap();
-    let kind = BarChordKind::from_json_value(&value)
-        .expect("\"played\" must deserialise without error");
+    let kind =
+        BarChordKind::from_json_value(&value).expect("\"played\" must deserialise without error");
     assert_eq!(
         kind,
         BarChordKind::Played,

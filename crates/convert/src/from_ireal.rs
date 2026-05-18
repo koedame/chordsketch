@@ -25,8 +25,8 @@ use chordsketch_chordpro::ast::{
     Song,
 };
 use chordsketch_ireal::{
-    Accidental, Bar, BarChordKind, BarLine, Chord as IrealChord, ChordQuality, ChordRoot, IrealSong,
-    KeyMode, KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChordKind, BarLine, Chord as IrealChord, ChordQuality, ChordRoot,
+    IrealSong, KeyMode, KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
 };
 
 use crate::error::{ConversionWarning, WarningKind};
