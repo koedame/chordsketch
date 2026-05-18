@@ -891,4 +891,93 @@ mod tests {
             "Break symbol must surface as `(Break)` in lyrics text, got {lyrics_text:?}"
         );
     }
+
+    #[test]
+    fn da_capo_with_jump_target_emits_canonical_phrase_in_lyrics() {
+        // Sister-site coverage for #2427: the converter must paint
+        // the full canonical phrase from `MusicalSymbol::canonical_text`
+        // for every structured `JumpTarget` variant. A regression that
+        // dropped the destination (e.g. by routing through a stale
+        // `&'static str` table) would silently shorten the lyrics
+        // marker, losing the player-relevant semantics.
+        use chordsketch_chordpro::ast::Line;
+        use chordsketch_ireal::JumpTarget;
+        let nz = |n: u8| std::num::NonZeroU8::new(n).expect("non-zero ordinal");
+        let cases: &[(MusicalSymbol, &str)] = &[
+            (MusicalSymbol::DaCapo(JumpTarget::Unspecified), "(D.C.)"),
+            (MusicalSymbol::DaCapo(JumpTarget::AlCoda), "(D.C. al Coda)"),
+            (MusicalSymbol::DaCapo(JumpTarget::AlFine), "(D.C. al Fine)"),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(1))),
+                "(D.C. al 1st End.)",
+            ),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(2))),
+                "(D.C. al 2nd End.)",
+            ),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(3))),
+                "(D.C. al 3rd End.)",
+            ),
+            (MusicalSymbol::DalSegno(JumpTarget::Unspecified), "(D.S.)"),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlCoda),
+                "(D.S. al Coda)",
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlFine),
+                "(D.S. al Fine)",
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(1))),
+                "(D.S. al 1st End.)",
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(2))),
+                "(D.S. al 2nd End.)",
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(3))),
+                "(D.S. al 3rd End.)",
+            ),
+        ];
+        for (symbol, expected) in cases {
+            let mut s = IrealSong::new();
+            s.title = "JumpTarget Convert Test".into();
+            s.sections.push(Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
+                        kind: BarChordKind::Played,
+                    }],
+                    symbol: Some(*symbol),
+                    ..Bar::default()
+                }],
+            });
+            let result = convert(&s).unwrap();
+            let lyrics_text: String = result
+                .output
+                .lines
+                .iter()
+                .filter_map(|l| match l {
+                    Line::Lyrics(lyrics) => Some(
+                        lyrics
+                            .segments
+                            .iter()
+                            .map(|seg| seg.text.as_str())
+                            .collect(),
+                    ),
+                    _ => None,
+                })
+                .collect::<Vec<String>>()
+                .concat();
+            assert!(
+                lyrics_text.contains(expected),
+                "symbol {symbol:?} must emit `{expected}` in lyrics text, got {lyrics_text:?}"
+            );
+        }
+    }
 }

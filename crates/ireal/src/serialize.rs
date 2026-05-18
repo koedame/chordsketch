@@ -17,7 +17,7 @@ use crate::ast::{
     ChordSize, Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, SectionLabel,
     TimeSignature,
 };
-use crate::parser::{MUSIC_PREFIX, matches_macro_prefix};
+use crate::parser::MUSIC_PREFIX;
 
 /// Serializes a single song to an `irealb://` URL.
 ///
@@ -88,14 +88,34 @@ pub fn irealbook_serialize(songs: &[IrealSong], name: Option<&str>) -> String {
 ///
 /// Music is plain text (no `MUSIC_PREFIX` sentinel, no `obfusc50`
 /// scrambling); TimeSig is the spec's packed-digit form (`44`, `34`,
-/// `68`, `128`). The result is then percent-encoded for the small
-/// set of reserved URL / chord-chart characters (`=`, space, `{`,
-/// `}`, `[`, `]`, `<`, `>`, `,`, `#`, `^`) so it is safe to drop
-/// directly into an HTML `href` attribute.
+/// `68`, `128`). The result is then percent-encoded via
+/// [`percent_encode_open_protocol`] — see that function for the full
+/// encoded-byte set.
 ///
-/// The output round-trips back through [`crate::parse`] — the
-/// existing 6-field-irealbook parser arm consumes the same shape
-/// this serializer emits.
+/// The output round-trips back through [`crate::parse`] over the
+/// 6-field-`irealbook://` parser arm, with one documented loss:
+///
+/// # Round-trip limitations
+///
+/// - **`tempo` and `transpose` are dropped.** The 6-field spec
+///   format has no fields for them; only the 7..=9-field `irealb://`
+///   export shape carries those values. Use [`irealb_serialize`] if
+///   tempo / transpose round-trip matters.
+/// - **`=` characters in field values cannot be represented.** The
+///   parser splits the decoded body on `=` after URL decoding, so a
+///   title containing `=` will fracture the field count. Callers
+///   that handle untrusted input should sanitize `=` out of field
+///   values before invoking this function (the iReal Pro app does
+///   not accept `=` in titles either).
+///
+/// # HTML embedding
+///
+/// The percent-encoded output covers the `"`, `'`, `&`, `<`, `>`
+/// HTML hazards, so the URL is safe inside a double-quoted or
+/// single-quoted `href` attribute. Unquoted `href` attributes
+/// still require additional escaping by the consumer (per
+/// [WHATWG §13.1.2.3](https://html.spec.whatwg.org/#attributes-2)
+/// unquoted attributes have a different escape grammar).
 ///
 /// This is distinct from [`irealb_serialize`] / [`irealbook_serialize`]
 /// which target the iReal Pro **export** format (the obfuscated
@@ -229,56 +249,89 @@ fn serialize_open_protocol_music(song: &IrealSong) -> String {
 /// back into an equal [`TimeSignature`]. The leading `T` glyph the
 /// chord-stream embedded form uses is intentionally absent — the
 /// open-protocol body has its own dedicated time-signature field.
+///
+/// Out-of-range numerator / denominator (the public `pub` fields
+/// allow this) fall back to the spec's two-digit default `44`.
+/// Using `to_string` rather than the `b'0' + n` shortcut avoids a
+/// debug-mode arithmetic overflow if a caller hand-constructed a
+/// `TimeSignature` with values outside [`TimeSignature::new`]'s
+/// validated range (numerator 1..=12, denominator ∈ {2,4,8}).
 fn serialize_time_signature_packed(ts: TimeSignature) -> String {
-    let mut s = String::with_capacity(3);
-    if ts.numerator >= 10 {
-        s.push_str(&ts.numerator.to_string());
-    } else {
-        s.push(char::from(b'0' + ts.numerator));
-    }
-    s.push(char::from(b'0' + ts.denominator));
-    s
+    // Validate against the constructor's contract. A direct
+    // public-field mutation that lands outside the validated set
+    // produces a chart the parser would reject anyway, so emitting
+    // the canonical default here is symmetric with the parser's
+    // 4/4 fallback and avoids a debug-mode panic in `b'0' + n` for
+    // n >= 206. Documented in `ast.rs` §"Public-field mutation contract".
+    let (num, den) = match TimeSignature::new(ts.numerator, ts.denominator) {
+        Some(valid) => (valid.numerator, valid.denominator),
+        None => (4, 4),
+    };
+    format!("{num}{den}")
 }
 
-/// Percent-encodes the set of reserved characters for the
-/// open-protocol URL: `=`, space, `{`, `}`, `[`, `]`, `<`, `>`,
-/// `,`, `#`, `^` per the spec at
-/// <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>.
+/// Percent-encodes for the open-protocol URL body. Encodes:
 ///
-/// ASCII bytes outside this reserved set pass through unchanged.
-/// Non-ASCII bytes (i.e. each byte of a multi-byte UTF-8 sequence,
-/// with byte value > 0x7F) are individually percent-encoded so that
-/// song metadata containing non-ASCII characters (accented titles,
-/// composer names in non-Latin scripts, etc.) round-trips correctly
-/// through [`crate::parse`]'s `percent_decode` step. Without this
-/// branch, casting `b as char` for bytes > 0x7F reinterprets each
-/// raw byte as a separate Unicode code point, splitting UTF-8
-/// multi-byte sequences and corrupting the resulting string on
-/// parse.
+/// 1. The spec's reserved set — `=`, space, `{`, `}`, `[`, `]`,
+///    `<`, `>`, `,`, `#`, `^` — per the worked example at
+///    <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>.
+/// 2. The percent sigil `%` itself. Without this, a literal `%` in
+///    a title round-trips as a percent escape: `"100% fun"` would
+///    decode-back to either a different ASCII character (`%41`
+///    → `A`) or a parse error. Encoding `%` is the only way the
+///    scheme can be self-describing.
+/// 3. Every byte `>= 0x80` (every UTF-8 continuation / lead byte).
+///    Browsers and the iReal Pro app's URL handlers both expect
+///    `irealbook://` URLs to be ASCII per RFC 3986; passing
+///    raw UTF-8 through unencoded corrupts non-ASCII titles,
+///    composers, and styles on parser round-trip.
+/// 4. The HTML-attribute hazard set `"`, `'`, `&` so the encoded
+///    URL is safe to drop into a double- or single-quoted `href`
+///    attribute without an additional HTML-escape pass at the
+///    caller.
 ///
-/// The set is intentionally narrow for ASCII — chord-chart
-/// punctuation outside the list (`|`, `*`, `:`, `/`, `+`, `-`,
-/// `'`, `.`) is browser-safe inside `href` attribute values, and
-/// the iReal Pro app's parser (and [`crate::parse`]) accept both
-/// encoded and unencoded forms equivalently. Encoding only what the
-/// URL spec strictly requires keeps the output readable when pasted
-/// into chat / email surfaces.
+/// Encoding the high-bit set rather than the full
+/// `is_unreserved` complement keeps the output readable when
+/// pasted into chat / email surfaces while still being a valid
+/// URL byte sequence. Chord-chart punctuation outside the spec
+/// reserved set (`|`, `*`, `:`, `/`, `+`, `-`, `.`) is pure-ASCII
+/// and passes through unchanged because both the spec and
+/// `decodeURIComponent` accept it verbatim.
+///
+/// Note: this function intentionally encodes `=` INSIDE field
+/// content as `%3D` in addition to the `=` separators added by
+/// [`serialize_open_protocol_body`]. After `percent_decode` on the
+/// parser side, a content `=` is indistinguishable from a separator
+/// `=` (both decode to the same byte before split), so the spec's
+/// URL layout cannot represent `=` inside a field value without a
+/// pre-validation pass. Callers MUST sanitize `=` out of fields
+/// before serializing — `serialize_open_protocol_body` upper-bounds
+/// this exposure by emitting placeholders for empty fields, but
+/// cannot detect a deliberate `=` in a non-empty field.
 fn percent_encode_open_protocol(input: &str) -> String {
-    // Worst case: every byte encodes to `%XX` (3 chars). Using
-    // `input.len() * 3` avoids repeated reallocations for
-    // chord-chart bodies that contain many reserved characters
-    // (`[`, `<`, `>`, `=`, space).
-    let mut out = String::with_capacity(input.len() * 3);
+    // Worst-case allocation: every byte expands to `%XX` (3 chars).
+    // The reserved set + high-bit bytes are the typical hot path.
+    let mut out = String::with_capacity(input.len());
     for b in input.bytes() {
-        if matches!(
-            b,
-            b'=' | b' ' | b'{' | b'}' | b'[' | b']' | b'<' | b'>' | b',' | b'#' | b'^'
-        ) || b > 0x7f
-        {
-            // Percent-encode: reserved ASCII chars AND every non-ASCII
-            // byte (second/subsequent bytes of multi-byte UTF-8
-            // sequences). The parser's `percent_decode` step reassembles
-            // the original bytes and validates them as UTF-8.
+        let must_encode = b >= 0x80
+            || matches!(
+                b,
+                b'=' | b' '
+                    | b'{'
+                    | b'}'
+                    | b'['
+                    | b']'
+                    | b'<'
+                    | b'>'
+                    | b','
+                    | b'#'
+                    | b'^'
+                    | b'%'
+                    | b'"'
+                    | b'\''
+                    | b'&'
+            );
+        if must_encode {
             out.push('%');
             out.push(hex_upper(b >> 4));
             out.push(hex_upper(b & 0x0f));
@@ -469,26 +522,26 @@ fn serialize_chord_chart(song: &IrealSong) -> String {
         // round-trips. The next-bar symbol lookahead applies to
         // single-start neighbours just like any other bar.
         // Helper closure: detect whether a bar's text_comment
-        // already triggers a macro symbol on re-parse, so we can
-        // skip emitting a redundant `<D.C.>` / `<D.S.>` /
-        // `<Fine>` pseudo-comment.
-        // Mirror `apply_comment`'s anchored macro detection: the
-        // suppression must agree with what the parser would
-        // re-derive on round-trip. A naive substring `contains`
-        // here flagged ordinary words like `refine` / `define`,
-        // dropping a perfectly legitimate `bar.symbol` because the
-        // text_comment happened to share a substring with a
-        // recognised macro.
+        // already encodes a structured macro symbol on re-parse,
+        // so we can skip emitting a redundant `<D.C.>` /
+        // `<D.S.>` / `<Fine>` pseudo-comment.
+        //
+        // Routes through the same exact-phrase classifier the
+        // parser uses (`classify_macro_comment`) so the
+        // serializer's "is this redundant?" decision agrees
+        // bit-for-bit with the parser's "did the comment land in
+        // bar.symbol?" decision. A previous prefix-match heuristic
+        // diverged from the parser after #2427 introduced
+        // exact-match classification — that asymmetry would have
+        // silently dropped a `bar.symbol` set on a bar whose
+        // `text_comment` looked like (but did not exact-match) a
+        // macro phrase (e.g. symbol = DaCapo(AlCoda) +
+        // text_comment = "D.C. on Cue"). Sister-site discipline
+        // per `.claude/rules/fix-propagation.md`.
         let text_carries_macro = |b: &Bar| {
             b.text_comment
                 .as_deref()
-                .map(|t| {
-                    let lower = t.trim().to_ascii_lowercase();
-                    matches_macro_prefix(&lower, "d.c.")
-                        || matches_macro_prefix(&lower, "d.s.")
-                        || matches_macro_prefix(&lower, "fine")
-                        || matches_macro_prefix(&lower, "break")
-                })
+                .map(|t| crate::parser::classify_macro_comment(t.trim()).is_some())
                 .unwrap_or(false)
         };
 
@@ -2030,16 +2083,79 @@ mod tests {
     fn serialize_open_protocol_emits_six_fields_after_decode() {
         // After URL-decoding, the body MUST split into exactly 6
         // non-empty fields per the spec
-        // (`Title=Composer=Style=Key=TimeSig=Music`). The parser's
-        // `is_irealbook_six_field` predicate is what routes the URL
-        // to the 6-field arm.
+        // (`Title=Composer=Style=Key=TimeSig=Music`). Asserts the
+        // field count directly so a future regression that adds or
+        // drops a field fails this test rather than silently routing
+        // through a different parser arm.
         let song = populated_open_protocol_song();
         let url = serialize_open_protocol(&song);
-        // Decode by re-using the parser. After parse the field
-        // count is no longer visible, but parse-success is the
-        // load-bearing property the count guarantees.
+        let body = url.strip_prefix("irealbook://").expect("prefix");
+        // Count `%3D` occurrences (encoded `=` separators). For a
+        // 6-field body there are exactly 5 separators.
+        let separator_count = body.matches("%3D").count();
+        assert_eq!(
+            separator_count, 5,
+            "6-field body must have exactly 5 `=` separators (encoded as %3D), got {separator_count} in {body}"
+        );
+        // Sanity: also verify the parser routes successfully through
+        // the 6-field arm.
         let parsed = crate::parse(&url).expect("must route to 6-field parser arm");
         assert_eq!(parsed.title, song.title);
+    }
+
+    #[test]
+    fn serialize_open_protocol_drops_tempo_and_transpose() {
+        // The 6-field spec format has no tempo/transpose fields.
+        // The serializer silently discards them and the parser
+        // defaults them back. This test locks the documented
+        // round-trip limitation so a future change that smuggles
+        // these into the body fails loudly.
+        let mut song = populated_open_protocol_song();
+        song.tempo = Some(180);
+        song.transpose = -2;
+        let url = serialize_open_protocol(&song);
+        let parsed = crate::parse(&url).expect("round trip");
+        assert_eq!(
+            parsed.tempo, None,
+            "tempo must be dropped on open-protocol round trip"
+        );
+        assert_eq!(
+            parsed.transpose, 0,
+            "transpose must be dropped on open-protocol round trip"
+        );
+    }
+
+    #[test]
+    fn serialize_open_protocol_preserves_non_ascii_metadata() {
+        // Multi-byte UTF-8 titles/composers/styles must round-trip
+        // through the URL byte-for-byte. The percent-encoder MUST
+        // encode every byte `>= 0x80` (RFC 3986); a raw
+        // `out.push(b as char)` would reinterpret continuation
+        // bytes as Latin-1 codepoints and corrupt the string on
+        // decode. Regression test for the security-review finding.
+        let mut song = populated_open_protocol_song();
+        song.title = "東京の歌".into();
+        song.composer = Some("José García".into());
+        song.style = Some("Bossa Nova — café".into());
+        let url = serialize_open_protocol(&song);
+        let parsed = crate::parse(&url).expect("non-ASCII round trip");
+        assert_eq!(parsed.title, "東京の歌");
+        assert_eq!(parsed.composer.as_deref(), Some("José García"));
+        assert_eq!(parsed.style.as_deref(), Some("Bossa Nova — café"));
+    }
+
+    #[test]
+    fn serialize_open_protocol_encodes_percent_sign() {
+        // A literal `%` in a field would otherwise be misinterpreted
+        // as the percent-escape sigil on decode (`100%41` → `100A`).
+        // The encoder MUST escape `%` to `%25` for the scheme to be
+        // self-describing. Regression test for the security-review
+        // finding.
+        let mut song = populated_open_protocol_song();
+        song.title = "100% fun".into();
+        let url = serialize_open_protocol(&song);
+        let parsed = crate::parse(&url).expect("`%` round trip");
+        assert_eq!(parsed.title, "100% fun");
     }
 
     #[test]
@@ -2057,18 +2173,32 @@ mod tests {
 
     #[test]
     fn serialize_open_protocol_macro_phrases_round_trip() {
-        // Sister-site coverage for #2427: the eleven D.C. / D.S.
-        // spec phrases must survive the open-protocol round trip,
-        // not just the obfuscated `irealb://` export form. Cover
-        // one representative per family — `AlCoda`, `AlFine`, and
-        // `AlEnding(2)` — so any drift between
-        // `MusicalSymbol::canonical_text` and the parser's
-        // `classify_macro_comment` surfaces here too.
+        // Sister-site coverage for #2427: every D.C. / D.S. spec
+        // phrase + the bare forms + an overflow-ordinal (`AlEnding(11)`)
+        // case must survive the open-protocol round trip. Any drift
+        // between `MusicalSymbol::canonical_text` and the parser's
+        // `classify_macro_comment` surfaces here. Mirrors the
+        // identical sister-site test for the `irealb_serialize`
+        // (obfuscated) path below.
         use crate::ast::JumpTarget;
+        let nz = |n: u8| std::num::NonZeroU8::new(n).expect("non-zero ordinal");
         let cases = [
+            MusicalSymbol::DaCapo(JumpTarget::Unspecified),
             MusicalSymbol::DaCapo(JumpTarget::AlCoda),
+            MusicalSymbol::DaCapo(JumpTarget::AlFine),
+            MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(1))),
+            MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(2))),
+            MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(3))),
+            MusicalSymbol::DalSegno(JumpTarget::Unspecified),
+            MusicalSymbol::DalSegno(JumpTarget::AlCoda),
             MusicalSymbol::DalSegno(JumpTarget::AlFine),
-            MusicalSymbol::DaCapo(JumpTarget::AlEnding(std::num::NonZeroU8::new(2).unwrap())),
+            MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(1))),
+            MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(2))),
+            MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(3))),
+            // Overflow path: exercises the teen-exception ordinal
+            // and confirms the parser does not silently downcast to
+            // a different variant on the round trip.
+            MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(11))),
         ];
         for symbol in cases {
             let mut song = populated_open_protocol_song();
@@ -2084,19 +2214,62 @@ mod tests {
     }
 
     #[test]
+    fn irealb_serialize_macro_phrases_round_trip() {
+        // Sister-site coverage for #2427 through the production
+        // export format (obfuscated `irealb://`). The shared
+        // `serialize_symbol` helper (`serialize.rs`) is exercised by
+        // both export paths; this test isolates the obfusc50 +
+        // MUSIC_PREFIX pipeline so a regression unique to the
+        // obfuscation step fails here rather than slipping past the
+        // open-protocol-only macro test.
+        use crate::ast::JumpTarget;
+        let nz = |n: u8| std::num::NonZeroU8::new(n).expect("non-zero ordinal");
+        let cases = [
+            MusicalSymbol::DaCapo(JumpTarget::AlCoda),
+            MusicalSymbol::DaCapo(JumpTarget::AlFine),
+            MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(3))),
+            MusicalSymbol::DalSegno(JumpTarget::AlCoda),
+            MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(2))),
+        ];
+        for symbol in cases {
+            let mut song = populated_open_protocol_song();
+            song.sections[0].bars[0].symbol = Some(symbol);
+            let url = irealb_serialize(&song);
+            let parsed = crate::parse(&url).expect("irealb round trip");
+            let found = parsed
+                .sections
+                .iter()
+                .flat_map(|s| s.bars.iter())
+                .any(|b| b.symbol == Some(symbol));
+            assert!(
+                found,
+                "macro {symbol:?} lost on irealb_serialize round trip"
+            );
+        }
+    }
+
+    #[test]
     fn serialize_open_protocol_collection_joins_with_single_equals() {
         // Per spec, the open-protocol multi-song body uses a single
         // `=` between songs (not the `===` triple separator of the
-        // iReal app's `irealbook://` export). Encoded form: each
-        // `=` becomes `%3D`, single-occurrence.
+        // iReal app's `irealbook://` export). For N songs, that
+        // produces exactly N*6 - 1 separators (6 fields per song,
+        // joined with a single `=`).
         let song = populated_open_protocol_song();
         let url = serialize_open_protocol_collection(&[song.clone(), song], None);
         assert!(url.starts_with("irealbook://"));
+        let body = url.strip_prefix("irealbook://").expect("prefix");
+        // Two songs × 6 fields = 12 fields → 11 `=` separators.
+        let separator_count = body.matches("%3D").count();
+        assert_eq!(
+            separator_count, 11,
+            "two-song collection must have exactly 11 `=` separators (encoded as %3D), got {separator_count} in {body}"
+        );
         // The `===` triple-separator pattern of the export form
         // must NOT appear (its encoded form would be `%3D%3D%3D`).
         assert!(
-            !url.contains("%3D%3D%3D"),
-            "single-= separator must not produce %3D%3D%3D: {url}"
+            !body.contains("%3D%3D%3D"),
+            "single-= separator must not produce %3D%3D%3D: {body}"
         );
     }
 

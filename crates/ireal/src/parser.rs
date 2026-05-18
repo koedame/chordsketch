@@ -413,25 +413,6 @@ fn make_song_irealbook(parts: &[&str]) -> Result<IrealSong, ParseError> {
     })
 }
 
-/// Returns `true` when a lowercased, trimmed comment text looks
-/// like the iReal Pro macro `prefix` — either the prefix is the
-/// entire string, or the prefix is followed by a space / dot
-/// (e.g. `d.c.` → matches `"d.c."`, `"d.c. al coda"`, but NOT
-/// `"d.c.al"` or `"undefined"`). Used by both the parser's
-/// `apply_comment` and the serializer's macro-suppression
-/// heuristic so the two stay in sync.
-pub(crate) fn matches_macro_prefix(text: &str, prefix: &str) -> bool {
-    if !text.starts_with(prefix) {
-        return false;
-    }
-    match text[prefix.len()..].chars().next() {
-        None => true,
-        Some(' ') => true,
-        Some(c) if c.is_alphanumeric() => false,
-        Some(_) => true,
-    }
-}
-
 /// Maps a staff-text comment to its [`MusicalSymbol`] (#2427).
 ///
 /// Accepts the **eleven player-recognised phrases** from
@@ -441,13 +422,17 @@ pub(crate) fn matches_macro_prefix(text: &str, prefix: &str) -> bool {
 /// space. Surrounding whitespace must already have been trimmed by
 /// the caller.
 ///
-/// The match is **exact**, not a prefix scan: a comment that almost
-/// looks like a macro (`D.C. al 2nd ending`, with the wrong spelling
-/// `ending` for the spec's `End.`) falls through to `None` and lands
-/// in `Bar::text_comment` instead. This is what gives the AST its
-/// "either symbol OR text_comment, never both" invariant — the
-/// parser only stamps a symbol when it can name the spec phrase
-/// unambiguously.
+/// The match is **exact**, not a prefix scan: a comment that
+/// almost looks like a macro (e.g. `<D.C. on Cue>`, where the
+/// tail `on Cue` doesn't match the `al ...` grammar at all) falls
+/// through to `None` and lands in `Bar::text_comment` instead.
+/// This is what gives the AST its "either symbol OR text_comment,
+/// never both" invariant — the parser only stamps a symbol when
+/// it can name the spec phrase unambiguously. `End`, `Ending`,
+/// and `End.` are accepted as synonyms (real exports use all
+/// three); the strict ordinal-suffix check (`1st`/`2nd`/`3rd`/...)
+/// is enforced by [`classify_al_target`] to keep the parser
+/// aligned with the JSON deserializer's grammar.
 pub(crate) fn classify_macro_comment(trimmed: &str) -> Option<MusicalSymbol> {
     let normalised = normalise_macro_text(trimmed);
     // Atomic, single-token bare forms first. The bare D.C. / D.S.
@@ -510,7 +495,21 @@ fn classify_al_target(tail: &str) -> Option<JumpTarget> {
     }
     let n: u8 = ending_body[..digit_end].parse().ok()?;
     let suffix = &ending_body[digit_end..];
-    if !matches!(suffix, "st" | "nd" | "rd" | "th") {
+    // Strict ordinal-suffix check: `1st`, `2nd`, `3rd`, `4th`...
+    // The parser rejects `1rd`/`2st`/`3nd` so it agrees with
+    // [`crate::json::expected_ordinal_suffix`] — sister-site
+    // discipline per `.claude/rules/fix-propagation.md`. The teen
+    // exception (11th/12th/13th) is preserved.
+    let expected = match n % 100 {
+        11..=13 => "th",
+        _ => match n % 10 {
+            1 => "st",
+            2 => "nd",
+            3 => "rd",
+            _ => "th",
+        },
+    };
+    if suffix != expected {
         return None;
     }
     let nz = std::num::NonZeroU8::new(n)?;
@@ -1186,9 +1185,13 @@ impl ChartParseState {
         // plus the bare `<D.C.>` / `<D.S.>` / `<Fine>` / `<Break>`
         // legacy export forms. Anything outside this exact set
         // falls through to `text_comment` so unrecognised free-form
-        // captions (`<13 measure lead break>`, `<D.S. al 2nd
-        // ending>` with the wrong spelling) survive the round trip
-        // as comments rather than spuriously firing a macro.
+        // captions (`<13 measure lead break>`, `<D.C. on Cue>`,
+        // `<solo break>`) survive the round trip as comments rather
+        // than spuriously firing a macro. Note that `End`,
+        // `Ending`, and `End.` ARE accepted as synonyms by
+        // `classify_al_target` because real iReal Pro exports use
+        // all three spellings; only structurally-wrong tails
+        // (`on Cue`, `defining`, etc.) fall through.
         if let Some(symbol) = classify_macro_comment(trimmed) {
             self.queue_symbol(symbol);
             return;
@@ -1722,30 +1725,29 @@ mod tests {
         assert!(matches!(parse(&large), Err(ParseError::InputTooLarge(_))));
     }
 
-    // ---- Macro-prefix detection (anchored, not substring) ----------
+    // ---- Macro classifier (exact-match, post-#2427) ----------------
 
     #[test]
-    fn matches_macro_prefix_handles_dotted_form() {
-        assert!(matches_macro_prefix("d.c.", "d.c."));
-        assert!(matches_macro_prefix("d.c. al coda", "d.c."));
-        assert!(matches_macro_prefix("d.s. al 2nd ending", "d.s."));
-        // Bare macro followed by trailing punctuation.
-        assert!(matches_macro_prefix("fine", "fine"));
-        assert!(matches_macro_prefix("fine.", "fine"));
-    }
-
-    #[test]
-    fn matches_macro_prefix_rejects_english_substrings() {
+    fn classify_macro_rejects_english_substrings() {
         // The regression these tests guard against: a substring
-        // `lower.contains("fine")` happily matched `refine`,
-        // `define`, `D.S. defining`, …, leading to spurious
-        // `MusicalSymbol::Fine` on the bar.
-        assert!(!matches_macro_prefix("refine", "fine"));
-        assert!(!matches_macro_prefix("define", "fine"));
-        assert!(!matches_macro_prefix("undefined", "fine"));
-        assert!(!matches_macro_prefix("13 measure lead break", "fine"));
-        // Dotted-form prefixes inside compound text must not fire.
-        assert!(!matches_macro_prefix("a d.c. directive", "d.c."));
+        // `lower.contains("fine")` would happily match `refine` /
+        // `define`, leading to spurious `MusicalSymbol::Fine` on the
+        // bar. The exact-match classifier (`classify_macro_comment`)
+        // structurally cannot fire for these inputs because the
+        // normalised text isn't an exact key in the match table.
+        for caption in [
+            "refine",
+            "define",
+            "undefined",
+            "13 measure lead break",
+            "a d.c. directive",
+            "breakaway",
+        ] {
+            assert!(
+                classify_macro_comment(caption).is_none(),
+                "caption `{caption}` must not classify as a macro"
+            );
+        }
     }
 
     // ---- Parser behaviour for the new commit's URL tokens ---------
@@ -2178,29 +2180,44 @@ mod tests {
         // (pianosnake's tester corpus has `D.C. al 3rd Ending`).
         // All three spellings — `End.` (spec), `End`, `Ending` —
         // resolve to the same `AlEnding(n)` variant; the canonical
-        // `End.` form is what the serializer re-emits.
-        let cases = [
+        // `End.` form is what the serializer re-emits. Both D.C.
+        // and D.S. families MUST accept all three (sister-site
+        // discipline per `.claude/rules/fix-propagation.md`).
+        let nz = |n: u8| std::num::NonZeroU8::new(n).unwrap();
+        let cases: &[(&str, MusicalSymbol)] = &[
             (
                 "D.C. al 1st End.",
-                JumpTarget::AlEnding(std::num::NonZeroU8::new(1).unwrap()),
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(1))),
             ),
             (
                 "D.C. al 2nd End",
-                JumpTarget::AlEnding(std::num::NonZeroU8::new(2).unwrap()),
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(2))),
             ),
             (
                 "D.C. al 3rd Ending",
-                JumpTarget::AlEnding(std::num::NonZeroU8::new(3).unwrap()),
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(3))),
+            ),
+            (
+                "D.S. al 1st End.",
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(1))),
+            ),
+            (
+                "D.S. al 2nd End",
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(2))),
+            ),
+            (
+                "D.S. al 3rd Ending",
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(3))),
             ),
         ];
-        for (caption, expected_target) in cases {
+        for (caption, expected) in cases {
             let url = format!("irealbook://Test=A==Style=C=44=[*A<{caption}>C|D|]");
             let song = parse(&url).unwrap_or_else(|e| panic!("parse {url}: {e:?}"));
             let bar0 = &song.sections[0].bars[0];
             assert_eq!(
                 bar0.symbol,
-                Some(MusicalSymbol::DaCapo(expected_target)),
-                "caption `{caption}` should resolve to DaCapo({expected_target:?})"
+                Some(*expected),
+                "caption `{caption}` should resolve to {expected:?}"
             );
             assert!(
                 bar0.text_comment.is_none(),
@@ -2221,6 +2238,51 @@ mod tests {
             bar0.symbol.is_none(),
             "`refine` must NOT set MusicalSymbol::Fine"
         );
+    }
+
+    #[test]
+    fn unrecognised_dc_ds_phrases_fall_through_to_text_comment() {
+        // Every structurally-malformed `D.C. al ...` / `D.S. al ...`
+        // tail MUST fall through to `text_comment` with no symbol
+        // attached. Locks the exact-match contract — a future
+        // refactor that re-introduces prefix matching would
+        // produce spurious DaCapo/DalSegno symbols on these
+        // captions and fail the loop. Mirrors the JSON malformed-
+        // input test in `tests/ast.rs`.
+        let captions = [
+            // Tail doesn't start with `al`.
+            "D.C. on Cue",
+            // `al` clause with no recognised target.
+            "D.C. al unknown",
+            // No digit before ordinal suffix.
+            "D.C. al th End.",
+            // Ordinal-suffix disagrees with number.
+            "D.C. al 2st End.",
+            "D.S. al 1rd End.",
+            // Number with no ordinal suffix at all.
+            "D.C. al 1 End.",
+            // Zero ordinal (non-zero NonZeroU8 violation).
+            "D.C. al 0th End.",
+            // Overflow u8.
+            "D.S. al 999th End.",
+            // `al` clause with non-target tail.
+            "D.S. al refining",
+        ];
+        for caption in captions {
+            let url = format!("irealbook://Test=A==Style=C=44=[*A<{caption}>C|D|]");
+            let song = parse(&url).unwrap_or_else(|e| panic!("parse `{url}`: {e:?}"));
+            let bar0 = &song.sections[0].bars[0];
+            assert!(
+                bar0.symbol.is_none(),
+                "caption `{caption}` must NOT classify as a macro; got symbol={:?}",
+                bar0.symbol
+            );
+            assert_eq!(
+                bar0.text_comment.as_deref(),
+                Some(caption),
+                "caption `{caption}` must land in text_comment verbatim"
+            );
+        }
     }
 
     #[test]
@@ -2626,9 +2688,10 @@ mod tests {
 
     #[test]
     fn breakaway_does_not_trigger_break_macro() {
-        // `breakaway` starts with "break" but is immediately followed
-        // by an alphanumeric character — `matches_macro_prefix` must
-        // reject it so `MusicalSymbol::Break` is not spuriously set.
+        // `breakaway` shares the `break` prefix but does NOT match
+        // the exact `break` key in `classify_macro_comment`'s match
+        // table — the structured rejection means `MusicalSymbol::Break`
+        // is not spuriously set.
         let url = "irealbook://Test=A==Style=C=44=[*A<breakaway section>C|D|]";
         let song = parse(url).expect("parse");
         let bar0 = &song.sections[0].bars[0];

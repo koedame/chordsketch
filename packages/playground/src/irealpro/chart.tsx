@@ -17,6 +17,52 @@ interface WasmTypographySpan {
   text: string;
 }
 
+/**
+ * Canonical staff-text label for the D.C. / D.S. / Fine / Break
+ * family of musical symbols. Mirrors `MusicalSymbol::canonical_text`
+ * in `crates/ireal/src/ast.rs` and the `jump_target_json_suffix`
+ * table in `crates/ireal/src/json.rs` (#2427). Returns `null` for
+ * the glyph-only variants so the caller can paint a SMuFL glyph
+ * instead of inline text.
+ *
+ * Per `.claude/rules/renderer-parity.md`: the playground is a
+ * sample consumer; this helper duplicates the Rust table because
+ * the wasm package does not yet expose a `symbol_canonical_text`
+ * function. When/if it does (`MusicalSymbol::canonical_text` could
+ * be wasm-bound), this helper goes away.
+ */
+function canonicalSymbolText(symbol: string | null): string | null {
+  if (symbol == null) return null;
+  switch (symbol) {
+    case 'segno':
+    case 'coda':
+    case 'fermata':
+      return null;
+    case 'fine':
+      return 'Fine';
+    case 'break':
+      return 'Break';
+    case 'da_capo':
+      return 'D.C.';
+    case 'da_capo_al_coda':
+      return 'D.C. al Coda';
+    case 'da_capo_al_fine':
+      return 'D.C. al Fine';
+    case 'dal_segno':
+      return 'D.S.';
+    case 'dal_segno_al_coda':
+      return 'D.S. al Coda';
+    case 'dal_segno_al_fine':
+      return 'D.S. al Fine';
+    default: {
+      const match = /^(da_capo|dal_segno)_al_(\d+)(st|nd|rd|th)_end$/.exec(symbol);
+      if (!match) return null;
+      const family = match[1] === 'da_capo' ? 'D.C.' : 'D.S.';
+      return `${family} al ${match[2]}${match[3]} End.`;
+    }
+  }
+}
+
 function libraryTypography(chord: Chord): WasmTypographySpan[] {
   // The library function takes the canonical AST shape (root /
   // quality / bass) — strip the playground-only `alternate` field
@@ -588,10 +634,8 @@ function BarCell({
       {/* Canonical `bar.symbol` for italic text directives (D.C. / D.S.
           / Fine). Skipped when an explicit `textMark` already covers
           the slot. */}
-      {!bar.textMark && (bar.symbol === 'da_capo' || bar.symbol === 'dal_segno' || bar.symbol === 'fine') && (
-        <span className="text-mark">
-          {bar.symbol === 'da_capo' ? 'D.C.' : bar.symbol === 'dal_segno' ? 'D.S.' : 'Fine'}
-        </span>
+      {!bar.textMark && canonicalSymbolText(bar.symbol) !== null && (
+        <span className="text-mark">{canonicalSymbolText(bar.symbol)}</span>
       )}
       {bar.endMark && <span className="end-mark">{bar.endMark}</span>}
     </div>

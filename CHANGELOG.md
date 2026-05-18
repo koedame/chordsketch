@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`chordsketch-ireal` open-protocol plain-text serializer (#2425).**
+  New `serialize_open_protocol(&IrealSong) -> String` and
+  `serialize_open_protocol_collection(&[IrealSong], Option<&str>)`
+  emitting the 6-field `Title=Composer=Style=Key=TimeSig=Music`
+  shape documented at
+  <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>.
+  Music is plain text (no `MUSIC_PREFIX`, no `obfusc50`); TimeSig
+  is the spec's packed-digit form (`44`, `34`, `68`, `128`). The
+  percent-encoder covers the spec's reserved set
+  (`=`, space, `{`, `}`, `[`, `]`, `<`, `>`, `,`, `#`, `^`) plus
+  the `%` sigil itself, every byte >= 0x80 (UTF-8 safety per RFC
+  3986), and the HTML-attribute hazards (`"`, `'`, `&`) so the
+  output is safe inside a quoted `href`. Single-song output
+  round-trips through `crate::parse`; tempo and transpose are not
+  represented by the 6-field shape and are documented as dropped.
+- **`chordsketch-ireal` distinguishes the eleven player-recognised
+  D.C. / D.S. macro variants (#2427).** `MusicalSymbol::DaCapo` and
+  `DalSegno` now carry a `JumpTarget` enum (`Unspecified` for the
+  legacy bare `<D.C.>` / `<D.S.>` forms; `AlCoda`, `AlFine`,
+  `AlEnding(NonZeroU8)` for the spec phrases). `MusicalSymbol::canonical_text`
+  is the single source of truth shared with the SVG renderer
+  (`crates/render-ireal`), the URL serializer, and the ChordPro
+  converter (`crates/convert`). Parser uses exact-phrase
+  classification (case-insensitive, whitespace-tolerant) with
+  synonym tolerance for `End` / `Ending` alongside the spec
+  `End.`; strict ordinal-suffix check (`1st`/`2nd`/`3rd`/`Nth`)
+  matches the JSON deserializer's grammar.
 - **`chordsketch-ireal` compound-time beat grouping (#2449).**
   Recognises iReal Pro v2024.4+'s `<a+b(+c)*>` staff-text
   directive that customises how an odd-meter time signature is

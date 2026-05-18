@@ -551,3 +551,102 @@ fn make_sample() -> IrealSong {
         sections: vec![section],
     }
 }
+
+// ---------------------------------------------------------------------------
+// #2427: structured `JumpTarget` round-trip through JSON
+// ---------------------------------------------------------------------------
+
+/// Round-trips every recognised `JumpTarget` variant through the
+/// full `IrealSong` JSON `ToJson` / `FromJson` pair (the bot-authored
+/// `json_round_trip_handles_jump_target_variants` above tests the
+/// `MusicalSymbol`-level round trip directly; this test wraps the
+/// symbol inside a full song so the parent-object plumbing is also
+/// exercised). Overflow ordinals (`AlEnding(11)`, `AlEnding(21)`,
+/// `AlEnding(99)`, `AlEnding(255)`) lock the teen-exception and
+/// 21+-recurrence branches of `ending_ordinal`.
+#[test]
+fn json_round_trip_handles_jump_target_variants_in_full_song() {
+    use chordsketch_ireal::JumpTarget;
+    let nz = |n: u8| std::num::NonZeroU8::new(n).expect("non-zero ordinal");
+    let cases = [
+        MusicalSymbol::DaCapo(JumpTarget::Unspecified),
+        MusicalSymbol::DaCapo(JumpTarget::AlCoda),
+        MusicalSymbol::DaCapo(JumpTarget::AlFine),
+        MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(1))),
+        MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(2))),
+        MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(3))),
+        MusicalSymbol::DalSegno(JumpTarget::Unspecified),
+        MusicalSymbol::DalSegno(JumpTarget::AlCoda),
+        MusicalSymbol::DalSegno(JumpTarget::AlFine),
+        MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(1))),
+        MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(2))),
+        MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(3))),
+        // Overflow ordinals — not in the spec's eleven phrases
+        // but accepted by both the parser and JSON deserializer.
+        // Locks the teen exception (11..=13 → "th") and the
+        // 21+ recurrence (`st`/`nd`/`rd` reappear).
+        MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(11))),
+        MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(21))),
+        MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(99))),
+        MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(255))),
+    ];
+    for symbol in cases {
+        let mut song = IrealSong::new();
+        song.title = "JumpTarget JSON Round Trip".into();
+        song.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars: vec![Bar {
+                symbol: Some(symbol),
+                ..Bar::new()
+            }],
+        });
+        let json = song.to_json_string();
+        let parsed = IrealSong::from_json_str(&json)
+            .unwrap_or_else(|e| panic!("JSON round-trip failed for {symbol:?}: {e:?}"));
+        assert_eq!(
+            parsed.sections[0].bars[0].symbol,
+            Some(symbol),
+            "JSON round-trip lost the JumpTarget for {symbol:?}"
+        );
+    }
+}
+
+/// Asserts each malformed JSON shape that `parse_jump_target` MUST
+/// reject. Locks every error arm in `crates/ireal/src/json.rs`'s
+/// `parse_jump_target` so a future refactor can't silently accept
+/// adversarial input.
+#[test]
+fn json_rejects_malformed_jump_target() {
+    // The JSON shape lives inside the `"symbol"` field. Construct
+    // a minimum-shape song document with a hand-rolled symbol
+    // string so each malformed case routes through `parse_jump_target`.
+    let make_json = |symbol_str: &str| {
+        format!(
+            r#"{{"title":"T","composer":null,"style":null,"key_signature":{{"root":{{"note":"C","accidental":"natural"}},"mode":"major"}},"time_signature":{{"numerator":4,"denominator":4}},"tempo":null,"transpose":0,"sections":[{{"label":{{"kind":"letter","value":"A"}},"bars":[{{"start":"single","end":"single","chords":[],"ending":null,"symbol":"{symbol_str}"}}]}}]}}"#
+        )
+    };
+    let cases = [
+        // No `_end` suffix.
+        "da_capo_al_1st",
+        // No digit before suffix.
+        "da_capo_al_th_end",
+        // Suffix-number disagreement.
+        "da_capo_al_2st_end",
+        // Zero ordinal — violates NonZeroU8.
+        "da_capo_al_0th_end",
+        // Overflow u8.
+        "da_capo_al_300th_end",
+        // Empty `al_` target.
+        "da_capo_al__end",
+        // Unknown family.
+        "fermata_al_coda",
+    ];
+    for s in cases {
+        let json = make_json(s);
+        let result = IrealSong::from_json_str(&json);
+        assert!(
+            result.is_err(),
+            "malformed symbol `{s}` should fail but parsed: {result:?}"
+        );
+    }
+}
