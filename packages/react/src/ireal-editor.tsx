@@ -225,6 +225,10 @@ export function IrealEditor({
       }
       setSong(next);
       lastEmittedRef.current = url;
+      // Clear any sticky external-parse error once a local edit
+      // successfully serialises. Without this the fieldset would
+      // remain disabled after the host recovers from a malformed
+      // `source` because `disabled` is gated on `error !== null`.
       setError(null);
       if (!urlDirtyRef.current) setUrlDraft(url);
       if (onChange !== undefined) onChange(url);
