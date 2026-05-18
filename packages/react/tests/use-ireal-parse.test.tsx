@@ -127,12 +127,13 @@ describe('useIrealParse', () => {
     // still resolve to false. Without the setLoading(false) call in the
     // empty-source path, the loading flag is permanently stuck at true.
     const stub = makeStub();
-    let resolveLoader!: (value: unknown) => void;
+    type LoaderResult = Awaited<ReturnType<IrealWasmLoader>>;
+    let resolveLoader!: (value: LoaderResult) => void;
     const blockedLoader: IrealWasmLoader = vi.fn(
       () =>
-        new Promise((r) => {
+        new Promise<LoaderResult>((r) => {
           resolveLoader = r;
-        }) as ReturnType<IrealWasmLoader>,
+        }),
     );
     const { result, rerender } = renderHook(
       ({ source }: { source: string }) => useIrealParse(source, blockedLoader),
@@ -143,7 +144,7 @@ describe('useIrealParse', () => {
     // Clear source before the loader resolves.
     rerender({ source: '' });
     // Unblock the loader — run 1 is cancelled; run 2 also awaits the loader.
-    resolveLoader(stub);
+    resolveLoader(stub as unknown as LoaderResult);
     // loading must settle to false (not stuck).
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.song).toBeNull();
