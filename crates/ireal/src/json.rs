@@ -26,9 +26,9 @@
 //! C0 control chars).
 
 use crate::ast::{
-    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot,
-    ChordSize, Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel,
-    TimeSignature,
+    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatGrouping, BeatPosition, Chord,
+    ChordQuality, ChordRoot, ChordSize, Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol,
+    Section, SectionLabel, TimeSignature,
 };
 
 /// Anything that knows how to write itself as JSON into a `String`
@@ -235,7 +235,30 @@ impl ToJson for Bar {
             out.push_str(",\"system_break_space\":");
             write_u8(out, self.system_break_space.min(3));
         }
+        if let Some(grouping) = &self.beat_grouping_override {
+            // Additive field: omitted when `None` to keep pre-#2449
+            // JSON snapshots byte-stable. The deserialiser defaults
+            // a missing field to `None`, so the omit/restore round
+            // trip preserves equality.
+            out.push_str(",\"beat_grouping_override\":");
+            grouping.to_json(out);
+        }
         out.push('}');
+    }
+}
+
+impl ToJson for BeatGrouping {
+    fn to_json(&self, out: &mut String) {
+        out.push('[');
+        let mut first = true;
+        for part in self.parts() {
+            if !first {
+                out.push(',');
+            }
+            first = false;
+            write_u8(out, part.get());
+        }
+        out.push(']');
     }
 }
 
@@ -1290,6 +1313,10 @@ impl FromJson for Bar {
             }
             None => 0,
         };
+        let beat_grouping_override = match value.get_optional("beat_grouping_override") {
+            Some(v) => Some(BeatGrouping::from_json_value(v)?),
+            None => None,
+        };
         Ok(Self {
             start,
             end,
@@ -1300,6 +1327,30 @@ impl FromJson for Bar {
             no_chord,
             text_comment,
             system_break_space,
+            beat_grouping_override,
+        })
+    }
+}
+
+impl FromJson for BeatGrouping {
+    fn from_json_value(value: &JsonValue) -> Result<Self, JsonError> {
+        let arr = value.as_array()?;
+        let mut parts = Vec::with_capacity(arr.len());
+        for entry in arr {
+            let n = extract_u8(entry)?;
+            let nz = core::num::NonZeroU8::new(n).ok_or_else(|| {
+                JsonError::new(
+                    0,
+                    "beat_grouping_override subgroup must be non-zero".to_string(),
+                )
+            })?;
+            parts.push(nz);
+        }
+        BeatGrouping::new(parts).ok_or_else(|| {
+            JsonError::new(
+                0,
+                "beat_grouping_override must contain at least two subgroups".to_string(),
+            )
         })
     }
 }

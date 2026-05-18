@@ -265,6 +265,7 @@ fn json_round_trip_handles_every_enum_variant() {
             no_chord: false,
             text_comment: None,
             system_break_space: 0,
+            beat_grouping_override: None,
         };
         song.sections.push(Section {
             label,
@@ -474,6 +475,7 @@ fn make_sample() -> IrealSong {
         no_chord: false,
         text_comment: None,
         system_break_space: 0,
+        beat_grouping_override: None,
     };
     let section = Section {
         label: SectionLabel::Letter('A'),

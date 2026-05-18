@@ -9,6 +9,18 @@ inputs:
     description: "Directory containing sample.cho, song2.cho, sample-config.json, sample.irealb, and sample.irealbook."
     required: false
     default: ".github/fixtures"
+  tolerate-ireal-failure:
+    description: >
+      When 'true', the three iReal Pro smoke steps run with
+      `continue-on-error: true` so a stale install-channel binary
+      (one that predates the iReal Pro track shipped in v0.4.0)
+      does not fail the whole job. Set to 'true' only on install
+      paths whose registry has NOT yet ingested the v0.4.0
+      manifest — winget-pkgs is the only known channel still in
+      that state as of 2026-05-18 (#2403 follow-up; ChordPro
+      smoke continues to hard-gate regardless of this flag).
+    required: false
+    default: "false"
 runs:
   using: "composite"
   steps:
@@ -87,23 +99,25 @@ runs:
         fi
 
     # --- iReal Pro smoke ----------------------------------------------------
-    # The next three steps cover the iReal Pro Usage examples documented in
-    # README.md (irealb:// URL, .irealb file, .irealbook collection). They
-    # are marked `continue-on-error: true` because every published binary
-    # on every registry today predates the iReal Pro track (the entire
-    # iReal Pro feature set is in `## [Unreleased]` per CHANGELOG.md).
-    # Workspace-HEAD jobs (source-build, usage-smoke) build from current
-    # code and DO run these steps successfully, providing full end-to-end
-    # coverage of the new commands on every PR. After the next release
-    # publishes iReal-supporting binaries to every channel, the carve-out
-    # is removed so iReal smoke becomes hard-gating on every install
-    # path — that work is tracked in #2403. Until then, failures still
-    # surface visibly in the job log; they just don't fail the job.
-    # See #2400 (origin) and #2403 (carve-out removal).
+    # The next three steps cover the iReal Pro Usage examples documented
+    # in README.md (irealb:// URL, .irealb file, .irealbook collection).
+    # iReal Pro shipped in v0.4.0 (2026-05-06) — see CHANGELOG.md
+    # "## [0.4.0]" → "#### iReal Pro support (multi-format track,
+    # #2050)". The steps are hard-gating by default; the
+    # `tolerate-ireal-failure` input lets a caller scope-narrow to
+    # the install paths whose registry has NOT yet ingested the
+    # v0.4.0 manifest. winget-pkgs is the only known channel still
+    # serving a pre-v0.4.0 binary as of 2026-05-18 (the local
+    # manifest at `packaging/winget/koedame.chordsketch.installer.yaml`
+    # documents the stale SHA256 hash that must be refreshed
+    # before submission). All other channels (Homebrew, Scoop,
+    # Snap, Docker, crates.io, source-build) ship the iReal Pro
+    # binary and hard-gate these steps without the carve-out.
+    # See #2400 (origin) and #2403 (carve-out narrowing).
 
     - name: Render iReal Pro from irealb:// URL
       shell: bash
-      continue-on-error: true
+      continue-on-error: ${{ inputs.tolerate-ireal-failure == 'true' }}
       run: |
         set -euo pipefail
         # Read the canonical fixture URL from the .irealb file rather
@@ -117,7 +131,7 @@ runs:
 
     - name: Render iReal Pro from .irealb file
       shell: bash
-      continue-on-error: true
+      continue-on-error: ${{ inputs.tolerate-ireal-failure == 'true' }}
       run: |
         set -euo pipefail
         chordsketch "${{ inputs.fixtures-dir }}/sample.irealb" > out-ireal-file.svg
@@ -127,7 +141,7 @@ runs:
 
     - name: Render iReal Pro from .irealbook collection
       shell: bash
-      continue-on-error: true
+      continue-on-error: ${{ inputs.tolerate-ireal-failure == 'true' }}
       run: |
         set -euo pipefail
         chordsketch "${{ inputs.fixtures-dir }}/sample.irealbook" > out-ireal-book.svg
@@ -138,11 +152,14 @@ runs:
         # single song — the same structural sanity check used for the
         # ChordPro multi-file PDF above. If the .irealbook dispatch
         # silently rendered only the first song, this check fails.
-        # Re-render the single-song .irealb in this step so the size
-        # comparison is independent of whether the prior continue-on-
-        # error step succeeded or not — otherwise a missing
-        # out-ireal-file.svg would make `wc -c` error out and silently
-        # invalidate this assertion.
+        # Re-render the single-song .irealb in this step rather than
+        # reusing the prior step's `out-ireal-file.svg` so the size
+        # comparison is independent of any earlier-step disk / I/O
+        # accident — a missing artifact would make `wc -c` error out
+        # and silently invalidate the assertion. The defensive
+        # re-render predates the pre-v0.4.0 `continue-on-error`
+        # carve-out (#2400, #2403) and stays valuable as a robustness
+        # measure even now that every iReal step is hard-gating.
         chordsketch "${{ inputs.fixtures-dir }}/sample.irealb" > out-ireal-single.svg
         single_size=$(wc -c < out-ireal-single.svg)
         book_size=$(wc -c < out-ireal-book.svg)

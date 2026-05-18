@@ -13,8 +13,9 @@
 //! of features the parser preserves vs drops.
 
 use crate::ast::{
-    Accidental, Bar, BarChordKind, BarLine, Chord, ChordQuality, ChordRoot, ChordSize, Ending,
-    IrealSong, KeyMode, KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChordKind, BarLine, BeatGrouping, Chord, ChordQuality, ChordRoot,
+    ChordSize, Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, SectionLabel,
+    TimeSignature,
 };
 use crate::parser::{MUSIC_PREFIX, matches_macro_prefix};
 
@@ -170,6 +171,16 @@ fn serialize_music(song: &IrealSong) -> String {
     // round-trip without re-emitting a marker on every chord.
     let mut current_size = ChordSize::Default;
 
+    // Compound-time beat-grouping running state (#2449). The
+    // parser stamps every bar with the active grouping, so a
+    // verbatim round-trip would emit `<a+b>` on every bar — but
+    // the spec only emits the override once per change. Tracking
+    // the previously-emitted grouping lets the serializer emit a
+    // `<a+b>` token only when the grouping differs from the prior
+    // bar, matching how the iReal Pro player consumes the
+    // directive ("remains until the opposite is used").
+    let mut current_grouping: Option<BeatGrouping> = None;
+
     // Flatten all bars across sections so the serializer can peek
     // the *next* bar regardless of section boundary. This is
     // load-bearing for round trips: the parser's `pending_symbol`
@@ -315,6 +326,50 @@ fn serialize_music(song: &IrealSong) -> String {
             // in the bar's centre. Emit before any chord content so
             // the parser's `n`-handler hits before chord parsing.
             chart.push('n');
+        }
+
+        // Emit `<a+b>` compound-time grouping (#2449) only when
+        // the bar's grouping differs from the previously-emitted
+        // state. The parser stamps every bar from the override
+        // forward with the running grouping, so a verbatim re-emit
+        // would duplicate the directive on every bar; only the
+        // change point carries the token. The transitions:
+        //
+        //   None → None             — no emit (no override either side).
+        //   Some(g) → Some(g)       — no emit (override unchanged).
+        //   None → Some(g)          — emit `<a+b>` for `g`.
+        //   Some(g) → Some(h≠g)     — emit `<a+b>` for `h`.
+        //   Some(g) → None          — internal state advances to
+        //                             None but emits NO token. The
+        //                             iReal Pro URL grammar has no
+        //                             "reset grouping" sigil; the
+        //                             only way to clear a running
+        //                             grouping is to change the
+        //                             time signature (a `T..`
+        //                             token mid-chart resets it
+        //                             on the parser side too).
+        //                             A hand-constructed AST that
+        //                             clears the override without a
+        //                             meter change will therefore
+        //                             produce a URL where the
+        //                             grouping persists on round
+        //                             trip; this is a known
+        //                             format limitation, not a
+        //                             serializer bug.
+        if bar.beat_grouping_override != current_grouping {
+            if let Some(grouping) = &bar.beat_grouping_override {
+                chart.push('<');
+                let mut first = true;
+                for part in grouping.parts() {
+                    if !first {
+                        chart.push('+');
+                    }
+                    first = false;
+                    chart.push_str(&part.get().to_string());
+                }
+                chart.push('>');
+            }
+            current_grouping = bar.beat_grouping_override.clone();
         }
 
         // Bar contents.
@@ -705,6 +760,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
         };
@@ -770,6 +826,7 @@ mod tests {
                 no_chord: false,
                 text_comment: None,
                 system_break_space: 0,
+                beat_grouping_override: None,
             }],
         }];
         let url = irealb_serialize(&song);
@@ -813,6 +870,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
             ..Default::default()
@@ -853,6 +911,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
             ..Default::default()
@@ -901,6 +960,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
             ..Default::default()
@@ -944,6 +1004,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
             ..Default::default()
@@ -982,6 +1043,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
             ..Default::default()
@@ -1022,6 +1084,7 @@ mod tests {
                     no_chord: false,
                     text_comment: None,
                     system_break_space: 0,
+                    beat_grouping_override: None,
                 }],
             }],
             ..Default::default()
@@ -1312,6 +1375,7 @@ mod tests {
                             kind: BarChordKind::Played,
                         }],
                         system_break_space: 2,
+                        beat_grouping_override: None,
                         ..Default::default()
                     },
                 ],
@@ -1363,6 +1427,7 @@ mod tests {
                             kind: BarChordKind::Played,
                         }],
                         system_break_space: 2,
+                        beat_grouping_override: None,
                         ..Default::default()
                     },
                 ],
@@ -1413,6 +1478,7 @@ mod tests {
                         end: BarLine::Final,
                         repeat_previous: true,
                         system_break_space: 1,
+                        beat_grouping_override: None,
                         ..Default::default()
                     },
                 ],
@@ -1455,6 +1521,7 @@ mod tests {
                         kind: BarChordKind::Played,
                     }],
                     system_break_space: 1,
+                    beat_grouping_override: None,
                     ..Default::default()
                 }],
             }],
@@ -1558,5 +1625,52 @@ mod tests {
         assert_eq!(bar0.chords[2].chord.root.note, 'C');
         assert_eq!(bar0.chords[3].kind, BarChordKind::Played);
         assert_eq!(bar0.chords[3].chord.root.note, 'F');
+    }
+
+    /// Compound-time grouping serialisation (#2449): the serializer emits
+    /// `<a+b>` only at change points, not once per inherited bar.
+    ///
+    /// The parser stamps every bar from the override forward with the
+    /// running grouping (3 bars in this fixture: bars 1, 2, 3). The
+    /// serializer must emit the token exactly once (bar 1's change point)
+    /// and suppress it on bars 2 and 3. Verifying idempotency
+    /// (`parse → serialize → parse` preserves the grouping) confirms
+    /// both the emission logic and the re-parse path for the `T54`-seeded
+    /// music body the serializer produces.
+    #[test]
+    fn compound_time_grouping_emits_token_once_per_change_point() {
+        // 5/4 song: bar 0 has no override; bars 1–3 inherit `<3+2>`.
+        // irealbook:// (6-field) is used for the source so the header
+        // time signature seeds the parser correctly.
+        let source = "irealbook://Test=A==Style=C=54=[*AC|<3+2>D|E|F|]";
+        let song = crate::parse(source).expect("parse source");
+        let serialized = irealb_serialize(&song);
+        // `<3+2>` is percent-encoded as `%3C3%2B2%3E` in the irealb:// URL.
+        let encoded_token = "%3C3%2B2%3E";
+        let count = serialized.matches(encoded_token).count();
+        assert_eq!(
+            count, 1,
+            "expected exactly one `<3+2>` token in the serialized URL, \
+             got {count}: {serialized:?}"
+        );
+        // Idempotency: re-parse the serialized URL and check grouping survives.
+        let reparsed = crate::parse(&serialized).expect("re-parse");
+        let bars = &reparsed.sections[0].bars;
+        assert!(
+            bars[0].beat_grouping_override.is_none(),
+            "bar 0 predates the override and must have none"
+        );
+        for (i, bar) in bars.iter().enumerate().skip(1) {
+            let g = bar
+                .beat_grouping_override
+                .as_ref()
+                .unwrap_or_else(|| panic!("bar {i} must inherit the 3+2 grouping after re-parse"));
+            assert_eq!(
+                g.sum(),
+                5,
+                "bar {i} grouping sum must be 5 (3+2), got {:?}",
+                g.parts()
+            );
+        }
     }
 }

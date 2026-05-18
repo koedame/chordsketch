@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`chordsketch-ireal` compound-time beat grouping (#2449).**
+  Recognises iReal Pro v2024.4+'s `<a+b(+c)*>` staff-text
+  directive that customises how an odd-meter time signature is
+  felt internally (5/4 as `3+2` or `2+3`, 7/8 as `4+3` / `3+4` /
+  `3+2+2`, …). New [`BeatGrouping`] struct holding a non-empty
+  `Vec<NonZeroU8>` of subgroup sizes plus a `Bar::beat_grouping_override`
+  field. Parser validates the sum against the active time
+  signature's numerator and persists the override across bars
+  ("remains until the opposite is used"); meter changes reset the
+  running state. Malformed inputs (`<2++3>`, `<+3>`, sum
+  mismatches) fall through to `text_comment` so the original
+  token round-trips losslessly. The 6-field `irealbook://`
+  header's time signature now seeds the music-body parser's
+  meter state so `<a+b>` directives validate against the
+  declared chart meter even when the body has no inline `T..`
+  directive. URL serializer emits `<a+b>` only at change points
+  to match the spec's one-token-per-change convention. JSON
+  serialiser uses the additive-omit pattern (default `None`
+  omitted) so pre-#2449 snapshots stay byte-stable.
+
 - **`chordsketch-ireal` pause-slash (`p`) support.** The spec's
   pause-slash token (`|C7ppF7|`: repeat the preceding chord at
   each `p` beat slot) now round-trips through the AST instead of
@@ -22,6 +42,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as `size` so existing snapshots stay byte-stable (#2435).
 
 ### Changed
+
+- **iReal Pro CI smoke is hard-gating on every install path
+  except winget (#2403).** v0.4.0 (2026-05-06) shipped iReal Pro
+  binaries to Homebrew, Scoop, Snap, Docker, and crates.io;
+  these channels' iReal smoke steps are now hard-gating (the
+  pre-release `continue-on-error: true` carve-out is removed
+  from `.github/actions/cli-render-smoke/action.yml`'s three
+  iReal Pro steps for every install path that uses the default
+  `tolerate-ireal-failure: false`). winget-pkgs has not yet
+  ingested the v0.4.0 manifest — `winget install chordsketch`
+  currently resolves to the pre-iReal 0.1.0 binary — so the
+  winget job alone passes `tolerate-ireal-failure: 'true'` to
+  the composite action; the iReal Pro smoke remains
+  informational on that channel until the
+  `packaging/winget/koedame.chordsketch.installer.yaml`
+  manifest is refreshed (stale SHA256 → v0.4.0 SHA256) and
+  submitted to winget-pkgs. `readme-smoke.yml`'s `library-smoke`
+  job's crates.io-mode branch is also flipped on for the iReal
+  half: `chordsketch-ireal = "^0.4"` and
+  `chordsketch-render-ireal = "^0.4"` are now pinned alongside
+  the existing ChordPro constraints. Daily-cron smoke now
+  covers the iReal Pro snippet end-to-end against the published
+  crates.
 
 - **React surface renders ChordPro AST → JSX directly**
   ([ADR-0017](docs/adr/0017-react-renders-from-ast.md), #2475).
