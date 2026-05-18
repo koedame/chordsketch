@@ -55,8 +55,11 @@ PNG / PDF, and bidirectional ChordPro ↔ iReal Pro conversion.
 - Bidirectional ChordPro ↔ iReal Pro conversion with structured
   warnings for lossy drops. The iReal → ChordPro bridge handles
   the new AST fields end-to-end (`no_chord` → `N.C.` segment,
-  `text_comment` → parenthesised inline text, `chord.alternate`
-  → parenthesised alternate after the primary).
+  `staff_texts` → parenthesised inline text — plain captions
+  verbatim, `<Nx>` repeat-count overrides as `(Nx)`, and `<*XY...>`
+  vertical positions surfaced as `LossyDrop` warnings since
+  ChordPro has no equivalent —, `chord.alternate` → parenthesised
+  alternate after the primary).
 - `.irealb` (single song) and `.irealbook` (multi-song collection) file
   extensions — picked up by the CLI sniff, the desktop OS file
   associations, and the editor integrations (VS Code, JetBrains, Zed)

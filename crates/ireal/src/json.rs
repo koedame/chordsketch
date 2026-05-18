@@ -28,7 +28,7 @@
 use crate::ast::{
     Accidental, Bar, BarChord, BarChordKind, BarLine, BeatGrouping, BeatPosition, Chord,
     ChordQuality, ChordRoot, ChordSize, Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol,
-    Section, SectionLabel, TimeSignature,
+    Section, SectionLabel, StaffText, TimeSignature,
 };
 
 /// Anything that knows how to write itself as JSON into a `String`
@@ -218,9 +218,22 @@ impl ToJson for Bar {
         if self.no_chord {
             out.push_str(",\"no_chord\":true");
         }
-        if let Some(text) = &self.text_comment {
-            out.push_str(",\"text_comment\":");
-            write_str(out, text);
+        if !self.staff_texts.is_empty() {
+            // Additive field: omitted when empty so pre-#2426 JSON
+            // snapshots (which carried at most a `text_comment`
+            // string) stay byte-stable on bars that had none. The
+            // deserialiser defaults a missing field to an empty
+            // vector, preserving equality.
+            out.push_str(",\"staff_texts\":[");
+            let mut first = true;
+            for st in &self.staff_texts {
+                if !first {
+                    out.push(',');
+                }
+                first = false;
+                st.to_json(out);
+            }
+            out.push(']');
         }
         if self.system_break_space > 0 {
             // Clamp on emit so AST → JSON → AST round-trips even
@@ -242,6 +255,39 @@ impl ToJson for Bar {
             // trip preserves equality.
             out.push_str(",\"beat_grouping_override\":");
             grouping.to_json(out);
+        }
+        out.push('}');
+    }
+}
+
+impl ToJson for StaffText {
+    fn to_json(&self, out: &mut String) {
+        out.push('{');
+        match self {
+            Self::Text {
+                text,
+                vertical_position,
+            } => {
+                out.push_str("\"type\":\"text\",\"text\":");
+                write_str(out, text);
+                if let Some(pos) = vertical_position {
+                    // Clamp on emit so an AST → JSON → AST round
+                    // trip preserves equality even when a literal
+                    // AST carries an out-of-range value (the
+                    // deserialiser rejects > MAX_VERTICAL_POSITION
+                    // — see `StaffText::from_json_value`).
+                    debug_assert!(
+                        *pos <= StaffText::MAX_VERTICAL_POSITION,
+                        "StaffText::Text::vertical_position must be in 0..=74"
+                    );
+                    out.push_str(",\"vertical_position\":");
+                    write_u8(out, (*pos).min(StaffText::MAX_VERTICAL_POSITION));
+                }
+            }
+            Self::RepeatCount(n) => {
+                out.push_str("\"type\":\"repeat_count\",\"count\":");
+                out.push_str(&n.get().to_string());
+            }
         }
         out.push('}');
     }
@@ -1338,9 +1384,13 @@ impl FromJson for Bar {
             Some(JsonValue::Bool(b)) => *b,
             _ => false,
         };
-        let text_comment = match value.get_optional("text_comment") {
-            Some(JsonValue::String(s)) => Some(s.clone()),
-            _ => None,
+        let staff_texts = match value.get_optional("staff_texts") {
+            Some(v) => v
+                .as_array()?
+                .iter()
+                .map(StaffText::from_json_value)
+                .collect::<Result<Vec<_>, _>>()?,
+            None => Vec::new(),
         };
         let system_break_space = match value.get_optional("system_break_space") {
             Some(other) => {
@@ -1367,10 +1417,61 @@ impl FromJson for Bar {
             symbol,
             repeat_previous,
             no_chord,
-            text_comment,
+            staff_texts,
             system_break_space,
             beat_grouping_override,
         })
+    }
+}
+
+impl FromJson for StaffText {
+    fn from_json_value(value: &JsonValue) -> Result<Self, JsonError> {
+        let kind = value.get("type")?.as_str()?;
+        match kind {
+            "text" => {
+                let text = value.get("text")?.as_str()?.to_string();
+                let vertical_position = match value.get_optional("vertical_position") {
+                    Some(JsonValue::Null) | None => None,
+                    Some(other) => {
+                        let n = extract_u8(other)?;
+                        if n > Self::MAX_VERTICAL_POSITION {
+                            return Err(JsonError::new(
+                                0,
+                                format!(
+                                    "staff_text vertical_position {n} out of range [0, {}]",
+                                    Self::MAX_VERTICAL_POSITION
+                                ),
+                            ));
+                        }
+                        Some(n)
+                    }
+                };
+                Ok(Self::Text {
+                    text,
+                    vertical_position,
+                })
+            }
+            "repeat_count" => {
+                let raw = value.get("count")?.as_int()?;
+                let count = u16::try_from(raw).map_err(|_| {
+                    JsonError::new(0, format!("staff_text count {raw} out of range for u16"))
+                })?;
+                let nz = core::num::NonZeroU16::new(count).ok_or_else(|| {
+                    JsonError::new(
+                        0,
+                        "staff_text repeat_count `count` must be non-zero".to_string(),
+                    )
+                })?;
+                Ok(Self::RepeatCount(nz))
+            }
+            other => Err(JsonError::new(
+                0,
+                format!(
+                    "staff_text `type` must be `text` or `repeat_count`, got {}",
+                    truncate_for_message(other)
+                ),
+            )),
+        }
     }
 }
 

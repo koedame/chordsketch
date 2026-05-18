@@ -99,16 +99,24 @@ through this crate's public API.
 - `no_chord: bool`. Set when the URL stream contains `n`. The bar
   consumes a measure of time but no chord sounds; the renderer
   paints `N.C.` in the bar's centre.
-- `text_comment: Option<String>`. Free-form `<...>` text comments
-  (`<13 measure lead break>`, `<D.S. al 2nd ending>`) survive the
-  round-trip verbatim. When the comment matches a recognised
-  macro prefix (`<D.C.>`, `<D.S.>`, `<Fine>`), the canonical
-  `MusicalSymbol` is set on `symbol` AND the verbatim text is
-  saved here so longer captions are preserved. A bare-macro
-  comment (`<D.C.>`, `<D.S.>`, `<Fine>` exactly) skips the
-  `text_comment` write — the symbol fully covers the semantics
-  and the text would round-trip into a duplicate. Multiple
-  comments on one bar concatenate with `; ` separator.
+- `staff_texts: Vec<StaffText>` (#2426). Ordered list of `<...>`
+  staff-text tokens attached to this bar. Each [`StaffText`] entry
+  preserves one of the spec's three shapes:
+  - `StaffText::Text { text, vertical_position: None }` for a
+    plain `<text>` caption.
+  - `StaffText::Text { text, vertical_position: Some(0..=74) }`
+    for a `<*XYtext>` raised caption (`*XY` is the spec's
+    two-digit position prefix; out-of-range or single-digit
+    prefixes fall through to plain text).
+  - `StaffText::RepeatCount(NonZeroU16)` for a `<Nx>` repeat-count
+    override on the enclosing `{ ... }` block. `<0x>` falls
+    through to plain text since `NonZeroU16` rejects zero.
+  Recognised macro phrases (`<D.C.>`, `<D.S.>`, `<Fine>`,
+  `<Break>`, plus the eleven `D.C./D.S. al ...` variants) take
+  precedence and land on `symbol` instead; recognised compound-time
+  groupings (`<a+b>`) land on `beat_grouping_override` instead;
+  everything else lands here in source order. Multiple tokens on
+  one bar produce multiple `Vec` entries.
 - `system_break_space: u8` (#2434). Vertical-space hint (URL
   tokens `Y` / `YY` / `YYY` at the start of a system) preserved
   as a count in `0..=3`. `0` means "no extra space"; `1` / `2` /
@@ -130,7 +138,8 @@ through this crate's public API.
   running state — an explicit re-assert is required under the
   new meter. Sum-mismatched groupings (`<3+3>` under 5/4) and
   malformed shapes (`<2++3>`, `<+3>`, `<2+>`) fall through to
-  `text_comment` so the raw token round-trips losslessly. The
+  [`Bar::staff_texts`](src/ast.rs) as a plain `StaffText::Text`
+  entry so the raw token round-trips losslessly. The
   iReal SVG renderer does not paint anything for this directive
   (it is a player-only directive per the spec); the field is
   AST-and-JSON-round-trip-only and is exposed to wasm / FFI /
@@ -230,16 +239,11 @@ Tracked under umbrella #2423:
   plain-text (GAP-2). The parser side (GAP-1, #2424) is in for
   the 6-field shape; the 5-field open-protocol input becomes a
   no-op rather than a re-derivation once the serializer lands.
-- **#2426** — preserve full staff-text content (custom text,
-  vertical position, repeat-count override). Today
-  [`Bar::text_comment`](src/ast.rs) keeps the raw caption but
-  strips structural metadata such as `<*XYtext>` positioning and
-  `<8x>` repeat-count overrides.
 - **#2427** — distinguish the 11 D.C. / D.S. macro variants
   (`<D.C. al Coda>`, `<D.S. al Fine>`, `<D.C. al 1st End.>`, …)
   in `MusicalSymbol`. Today they collapse to
   `MusicalSymbol::{DaCapo, DalSegno}` with the longer caption
-  preserved verbatim in `Bar::text_comment`.
+  preserved verbatim in [`Bar::staff_texts`](src/ast.rs).
 - **#2433** — chord-size markers `s` (small) / `l` (large).
 - **#2435** — pause-slash `p` (repeat preceding chord).
 - **#2436** — `N0` no-text ending. Today `Ending` wraps

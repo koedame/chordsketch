@@ -98,8 +98,10 @@ interface Bar {
   repeat_previous?: boolean;
   /** Mirrors the wasm AST's `no_chord` flag (URL `n`). */
   no_chord?: boolean;
-  /** Mirrors the wasm AST's `text_comment` field (URL `<...>`). */
-  text_comment?: string | null;
+  /** Mirrors the wasm AST's `staff_texts` array (URL `<...>` tokens).
+   * Each entry is one staff-text token from the source URL; see
+   * `crates/ireal/src/ast.rs::StaffText` for the variant shapes. */
+  staff_texts?: StaffText[];
   /** Rich-extension flag forwarded to the React chart's BarCell so
    * the percent-style repeat-1-bar SMuFL glyph (U+E500) renders
    * in this bar's centre. Populated from `repeat_previous`. */
@@ -107,9 +109,17 @@ interface Bar {
   /** Rich-extension N.C. flag — populated from `no_chord`. */
   noChord?: boolean;
   /** Rich-extension italic text mark below the bar — populated
-   * from `text_comment`. */
+   * by joining every text-typed entry in `staff_texts`. */
   textMark?: string;
 }
+
+/** Mirrors the Rust `StaffText` enum (#2426). The `type` discriminant
+ * distinguishes free-form captions (`text`, optionally raised by
+ * `vertical_position` in 0..=74) from the spec's `<Nx>` repeat-count
+ * override. */
+type StaffText =
+  | { type: 'text'; text: string; vertical_position?: number | null }
+  | { type: 'repeat_count'; count: number };
 
 interface Section {
   label: SectionLabel;
@@ -158,8 +168,18 @@ function tryParse(source: string): IrealSong | null {
         if (bar.no_chord) {
           bar.noChord = true;
         }
-        if (bar.text_comment) {
-          bar.textMark = bar.text_comment;
+        if (bar.staff_texts && bar.staff_texts.length > 0) {
+          // Join every plain-text staff entry with `; ` — the same
+          // separator the pre-#2426 single-string `text_comment`
+          // field used so existing chart visuals stay byte-stable.
+          // `repeat_count` entries surface as `Nx` so the directive
+          // intent survives the projection.
+          const parts = bar.staff_texts
+            .map((st) => (st.type === 'text' ? st.text : `${st.count}x`))
+            .filter((s) => s.length > 0);
+          if (parts.length > 0) {
+            bar.textMark = parts.join('; ');
+          }
         }
       }
     }

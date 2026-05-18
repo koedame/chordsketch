@@ -879,3 +879,116 @@ fn render_slash_repeat_emits_slash_glyph() {
         "missing slash glyph `/` inside a chord <text> element"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Fixture: staff-text demo (#2426)
+//
+// Four bars exercising every [`StaffText`] shape the parser produces:
+//   • bar 1 — plain caption (`<solo break>`).
+//   • bar 2 — vertically-positioned caption (`<*36Solo Section:>`).
+//   • bar 3 — repeat-count override (`<8x>`) plus a plain caption
+//             ("Vamp till cue") sharing a bar so the source-order
+//             stack-by-default rule is locked in.
+//   • bar 4 — vertical-position 74 — caption rises into the music-
+//             symbol band, exercising the linear-interpolation path.
+// ---------------------------------------------------------------------------
+
+fn staff_text_demo() -> IrealSong {
+    use chordsketch_ireal::StaffText;
+    let mut song = IrealSong::new();
+    song.title = "Staff Text Demo".into();
+    song.style = Some("Medium Swing".into());
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![
+            Bar {
+                chords: vec![BarChord {
+                    chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major7),
+                    position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
+                    kind: BarChordKind::Played,
+                }],
+                staff_texts: vec![StaffText::plain("solo break")],
+                ..Bar::new()
+            },
+            Bar {
+                chords: vec![BarChord {
+                    chord: Chord::triad(ChordRoot::natural('F'), ChordQuality::Major7),
+                    position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
+                    kind: BarChordKind::Played,
+                }],
+                staff_texts: vec![StaffText::raised("Solo Section:", 36)],
+                ..Bar::new()
+            },
+            Bar {
+                chords: vec![BarChord {
+                    chord: Chord::triad(ChordRoot::natural('G'), ChordQuality::Dominant7),
+                    position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
+                    kind: BarChordKind::Played,
+                }],
+                staff_texts: vec![
+                    StaffText::repeat_count(8).expect("8 is non-zero"),
+                    StaffText::plain("Vamp till cue"),
+                ],
+                ..Bar::new()
+            },
+            Bar {
+                chords: vec![BarChord {
+                    chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major7),
+                    position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
+                    kind: BarChordKind::Played,
+                }],
+                staff_texts: vec![StaffText::raised("top", 74)],
+                ..Bar::new()
+            },
+        ],
+    });
+    song
+}
+
+#[test]
+fn render_staff_text_demo() {
+    check_golden("staff_text_demo", &staff_text_demo());
+}
+
+/// Beyond the snapshot, lock in the four structural invariants the
+/// fixture exists to assert:
+///
+/// 1. Every staff-text entry produces a `staff-text` SVG class.
+/// 2. Plain captions (`solo break`, `Vamp till cue`) appear verbatim.
+/// 3. Repeat-count entries render as `Nx` (the directive intent).
+/// 4. The `*74` caption lands above the bar at the same Y as the
+///    music-symbol band; the `*0`-anchored captions stay below.
+///
+/// These would survive a regression that left the snapshot
+/// byte-identical while breaking semantic content — see the
+/// renderer-parity discipline in `.claude/rules/renderer-parity.md`.
+#[test]
+fn staff_text_demo_exercises_every_variant() {
+    let svg = render_svg(&staff_text_demo(), &RenderOptions::default());
+    let staff_text_count = svg.matches("class=\"staff-text\"").count();
+    assert_eq!(
+        staff_text_count, 5,
+        "expected 5 staff-text elements (bar1 + bar2 + bar3×2 + bar4), got {staff_text_count}"
+    );
+    assert!(
+        svg.contains(">solo break</text>"),
+        "missing `solo break` plain caption"
+    );
+    assert!(
+        svg.contains(">Solo Section:</text>"),
+        "missing `Solo Section:` vertically-positioned caption"
+    );
+    assert!(
+        svg.contains(">Vamp till cue</text>"),
+        "missing `Vamp till cue` plain caption (bar 3 second entry)"
+    );
+    assert!(
+        svg.contains(">8x</text>"),
+        "missing `8x` repeat-count caption"
+    );
+    assert!(svg.contains(">top</text>"), "missing `*74` `top` caption");
+}

@@ -237,11 +237,23 @@ fn json_round_trip_handles_every_enum_variant() {
         BarLine::OpenRepeat,
         BarLine::CloseRepeat,
     ];
+    // Cover every `StaffText` shape across the iteration so the
+    // round-trip exercises plain / raised / repeat-count entries
+    // (test-analyzer M1; the standalone `from_json_staff_text_*`
+    // tests in `json_errors.rs` add the corresponding negative
+    // coverage).
+    let staff_text_variants: [Vec<chordsketch_ireal::StaffText>; 4] = [
+        vec![],
+        vec![chordsketch_ireal::StaffText::plain("plain caption")],
+        vec![chordsketch_ireal::StaffText::raised("raised", 36)],
+        vec![chordsketch_ireal::StaffText::repeat_count(8).expect("8 is non-zero")],
+    ];
     for (i, quality) in qualities.iter().enumerate() {
         let label = labels[i % labels.len()].clone();
         let symbol = symbols[i % symbols.len()];
         let start = barlines[i % barlines.len()];
         let end = barlines[(i + 1) % barlines.len()];
+        let staff_texts = staff_text_variants[i % staff_text_variants.len()].clone();
         let bar = Bar {
             start,
             end,
@@ -263,7 +275,7 @@ fn json_round_trip_handles_every_enum_variant() {
             symbol: Some(symbol),
             repeat_previous: false,
             no_chord: false,
-            text_comment: None,
+            staff_texts,
             system_break_space: 0,
             beat_grouping_override: None,
         };
@@ -529,7 +541,7 @@ fn make_sample() -> IrealSong {
         symbol: Some(MusicalSymbol::Segno),
         repeat_previous: false,
         no_chord: false,
-        text_comment: None,
+        staff_texts: Vec::new(),
         system_break_space: 0,
         beat_grouping_override: None,
     };

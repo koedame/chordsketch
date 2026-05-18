@@ -32,7 +32,7 @@ pub mod serialize;
 pub use ast::{
     Accidental, Bar, BarChord, BarChordKind, BarLine, BeatGrouping, BeatPosition, Chord,
     ChordQuality, ChordRoot, ChordSize, Ending, IrealSong, JumpTarget, KeyMode, KeySignature,
-    MusicalSymbol, Section, SectionLabel, TimeSignature,
+    MusicalSymbol, Section, SectionLabel, StaffText, TimeSignature,
 };
 pub use json::{FromJson, JsonError, JsonValue, ToJson, parse_json};
 pub use parser::{ParseError, parse, parse_collection};

@@ -39,7 +39,7 @@ fn build_basic_song() -> IrealSong {
         symbol: Some(MusicalSymbol::Segno),
         repeat_previous: false,
         no_chord: false,
-        text_comment: None,
+        staff_texts: Vec::new(),
         system_break_space: 0,
         beat_grouping_override: None,
     };

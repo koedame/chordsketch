@@ -57,7 +57,7 @@
 use crate::ast::{
     Accidental, Bar, BarChord, BarChordKind, BarLine, BeatGrouping, BeatPosition, Chord,
     ChordQuality, ChordRoot, ChordSize, Ending, IrealSong, JumpTarget, KeyMode, KeySignature,
-    MusicalSymbol, Section, SectionLabel, TimeSignature,
+    MusicalSymbol, Section, SectionLabel, StaffText, TimeSignature,
 };
 use std::fmt;
 
@@ -425,8 +425,8 @@ fn make_song_irealbook(parts: &[&str]) -> Result<IrealSong, ParseError> {
 /// The match is **exact**, not a prefix scan: a comment that
 /// almost looks like a macro (e.g. `<D.C. on Cue>`, where the
 /// tail `on Cue` doesn't match the `al ...` grammar at all) falls
-/// through to `None` and lands in `Bar::text_comment` instead.
-/// This is what gives the AST its "either symbol OR text_comment,
+/// through to `None` and lands in `Bar::staff_texts` instead.
+/// This is what gives the AST its "either symbol OR staff_texts,
 /// never both" invariant — the parser only stamps a symbol when
 /// it can name the spec phrase unambiguously. `End`, `Ending`,
 /// and `End.` are accepted as synonyms (real exports use all
@@ -473,7 +473,7 @@ pub(crate) fn classify_macro_comment(trimmed: &str) -> Option<MusicalSymbol> {
 /// where `<ordinal>` is `1st`/`2nd`/`3rd` for the spec phrases plus
 /// `<n>th` for the overflow path. Anything outside this grammar
 /// returns `None` so the caller drops the macro and stores the
-/// original text in `Bar::text_comment`.
+/// original text in `Bar::staff_texts`.
 fn classify_al_target(tail: &str) -> Option<JumpTarget> {
     match tail {
         "al coda" => return Some(JumpTarget::AlCoda),
@@ -584,6 +584,81 @@ fn parse_beat_grouping(input: &str) -> Option<BeatGrouping> {
         return None;
     }
     BeatGrouping::new(parts)
+}
+
+/// Classifies a non-macro, non-grouping `<...>` body into a
+/// [`StaffText`] variant per the iReal Pro open-protocol "Staff
+/// Text" section (#2426).
+///
+/// Three shapes are recognised, in priority order:
+///
+/// 1. **Repeat-count override** — body of the form `Nx` (one or more
+///    ASCII digits followed by a single lowercase `x`), where `N`
+///    is a non-zero `u16`. Produces [`StaffText::RepeatCount`].
+///    Examples: `<8x>`, `<3x>`, `<128x>`. A body like `<x>` (no
+///    digits), `<8X>` (uppercase), `<8 x>` (whitespace), `<0x>`
+///    (the spec gives `<0x>` no defined meaning), or `<65536x>`
+///    (`u16` overflow) does NOT match — the iReal Pro spec
+///    documents only the lowercase, no-whitespace, non-zero form.
+///
+/// 2. **Vertically-positioned caption** — body of the form `*XY...`
+///    (a `*` followed by exactly two ASCII digits, then the caption
+///    body). The two-digit prefix is parsed as `u8` and validated
+///    against `0..=74` per the spec; out-of-range values fall
+///    through to the plain text branch so the original token
+///    survives the round trip. Single-digit prefixes (`*9`) also
+///    fall through — the spec requires exactly two digits.
+///    Examples: `<*36Solo Section:>` → vertical=36, text="Solo Section:".
+///
+/// 3. **Plain caption** — anything else lands as
+///    [`StaffText::Text`] with `vertical_position = None`. Examples:
+///    `<solo break>`, `<13 measure lead break>`, malformed forms
+///    that fail (1) or (2).
+///
+/// The caller MUST have already pre-trimmed the input and confirmed
+/// it is not a macro phrase (handled by [`classify_macro_comment`])
+/// or a compound-time grouping (handled by [`parse_beat_grouping`]).
+fn classify_staff_text(trimmed: &str) -> StaffText {
+    // (1) `<Nx>` repeat-count form.
+    if let Some(prefix) = trimmed.strip_suffix('x') {
+        if !prefix.is_empty() && prefix.bytes().all(|b| b.is_ascii_digit()) {
+            if let Ok(n) = prefix.parse::<u16>() {
+                if let Some(nz) = core::num::NonZeroU16::new(n) {
+                    return StaffText::RepeatCount(nz);
+                }
+            }
+        }
+    }
+    // (2) `<*XYtext>` vertical-position form. The two-digit
+    // prefix is split on a byte boundary; `*` is single-byte ASCII
+    // so `rest` starts at a char boundary, and `rest` is then
+    // sliced at byte index 2 only after we've confirmed the first
+    // two bytes are ASCII digits (and therefore single-byte chars).
+    // This protects against panics on multi-byte UTF-8 captions
+    // like `<*36さくら>` where naive `split_at(2)` on the raw
+    // body would slice mid-char.
+    if let Some(rest) = trimmed.strip_prefix('*') {
+        let bytes = rest.as_bytes();
+        if bytes.len() >= 2 && bytes[0].is_ascii_digit() && bytes[1].is_ascii_digit() {
+            // INVARIANT: bytes 0 and 1 are confirmed ASCII digits
+            // above, so they are valid UTF-8 starts and byte index
+            // 2 lands on a char boundary. (No `unsafe` block is
+            // involved; this is a char-boundary justification for
+            // the safe `&rest[..2]` / `&rest[2..]` slices below.)
+            let pos: u8 = rest[..2].parse().expect("two ASCII digits parse as u8");
+            if pos <= StaffText::MAX_VERTICAL_POSITION {
+                return StaffText::Text {
+                    text: rest[2..].to_owned(),
+                    vertical_position: Some(pos),
+                };
+            }
+        }
+    }
+    // (3) Plain caption — everything else.
+    StaffText::Text {
+        text: trimmed.to_owned(),
+        vertical_position: None,
+    }
 }
 
 fn nonempty(s: &str) -> Option<String> {
@@ -1158,8 +1233,8 @@ impl ChartParseState {
             }
             // Sum mismatch: keep going through the rest of
             // `apply_comment` so the original token is preserved
-            // verbatim on `text_comment`. The spec doesn't say
-            // how the iReal Pro player handles mismatched
+            // verbatim as a [`StaffText`] entry. The spec doesn't
+            // say how the iReal Pro player handles mismatched
             // groupings; saving the raw text matches the
             // pre-#2449 fallback behaviour and lets a future
             // audit recover the original intent.
@@ -1170,25 +1245,26 @@ impl ChartParseState {
         }
         // Detect the recognised musical-direction macros. The
         // matched symbol is set directly on `current_bar` (see
-        // `queue_symbol`). `text_comment` is intentionally NOT set
-        // when a macro matches: the structured symbol (#2427)
-        // fully captures the spec phrasing and the serializer
-        // re-derives the original `<D.C. al Coda>` / `<D.S. al
-        // 1st End.>` / `<Fine>` text from `MusicalSymbol::canonical_text`.
-        // Saving the same string in both `bar.symbol` and
-        // `bar.text_comment` would round-trip into duplicated
-        // output and force every renderer to deduplicate.
+        // `queue_symbol`). `staff_texts` is intentionally NOT
+        // populated when a macro matches: the structured symbol
+        // (#2427) fully captures the spec phrasing and the
+        // serializer re-derives the original `<D.C. al Coda>` /
+        // `<D.S. al 1st End.>` / `<Fine>` text from
+        // `MusicalSymbol::canonical_text`. Saving the same string in
+        // both `bar.symbol` and a `StaffText` entry would round-trip
+        // into duplicated output and force every renderer to
+        // deduplicate.
         //
         // The match table is the eleven player-recognised phrases
         // from
         // <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>
         // plus the bare `<D.C.>` / `<D.S.>` / `<Fine>` / `<Break>`
         // legacy export forms. Anything outside this exact set
-        // falls through to `text_comment` so unrecognised free-form
-        // captions (`<13 measure lead break>`, `<D.C. on Cue>`,
-        // `<solo break>`) survive the round trip as comments rather
-        // than spuriously firing a macro. Note that `End`,
-        // `Ending`, and `End.` ARE accepted as synonyms by
+        // falls through to a `StaffText` entry so unrecognised
+        // free-form captions (`<13 measure lead break>`, `<D.C. on
+        // Cue>`, `<solo break>`) survive the round trip as staff
+        // text rather than spuriously firing a macro. Note that
+        // `End`, `Ending`, and `End.` ARE accepted as synonyms by
         // `classify_al_target` because real iReal Pro exports use
         // all three spellings; only structurally-wrong tails
         // (`on Cue`, `defining`, etc.) fall through.
@@ -1196,11 +1272,18 @@ impl ChartParseState {
             self.queue_symbol(symbol);
             return;
         }
-        let combined = match self.current_bar.text_comment.take() {
-            Some(prev) => format!("{prev}; {trimmed}"),
-            None => trimmed.to_owned(),
-        };
-        self.current_bar.text_comment = Some(combined);
+        // Everything else is preserved as one [`StaffText`] entry
+        // appended to the bar's `staff_texts`. The shape classifier
+        // (`classify_staff_text`) handles the spec's two structured
+        // forms — `<*XYtext>` (vertical position) and `<Nx>`
+        // (repeat-count override) — and otherwise falls through to
+        // a plain `Text` entry so any caption the iReal Pro app
+        // permitted survives the round trip verbatim. Multiple
+        // tokens on the same bar produce multiple entries in source
+        // order (#2426).
+        self.current_bar
+            .staff_texts
+            .push(classify_staff_text(trimmed));
     }
 
     fn push_chord(&mut self, raw: &str) -> Result<(), ParseError> {
@@ -1352,7 +1435,7 @@ impl ChartParseState {
             && self.current_bar.symbol.is_none()
             && !self.current_bar.repeat_previous
             && !self.current_bar.no_chord
-            && self.current_bar.text_comment.is_none()
+            && self.current_bar.staff_texts.is_empty()
             && self.current_bar.start == BarLine::Single
             && self.current_bar.end == BarLine::Single;
         // `system_break_space` is deliberately excluded from this
@@ -1838,13 +1921,13 @@ mod tests {
     fn compound_time_grouping_rejects_sum_mismatch() {
         // `<3+3>` under 5/4: sum is 6, numerator is 5. The grouping
         // is rejected as an override but the text falls through to
-        // `text_comment` so the original intent isn't lost on
+        // `staff_texts` so the original intent isn't lost on
         // round-trip.
         let url = "irealbook://Test=A==Style=C=54=[*A<3+3>C|]";
         let song = parse(url).expect("parse");
         let bar0 = &song.sections[0].bars[0];
         assert!(bar0.beat_grouping_override.is_none());
-        assert_eq!(bar0.text_comment.as_deref(), Some("3+3"));
+        assert_eq!(bar0.staff_texts, vec![StaffText::plain("3+3")]);
     }
 
     #[test]
@@ -1890,7 +1973,7 @@ mod tests {
 
     #[test]
     fn compound_time_grouping_rejects_malformed_input() {
-        // Malformed groupings fall through to text_comment rather
+        // Malformed groupings fall through to staff_texts rather
         // than being silently dropped or panicking:
         //
         // - `<2++3>`, `<+3>`, `<2+>`: empty subgroup (split-on-`+`
@@ -1910,9 +1993,9 @@ mod tests {
                 "malformed `<{token}>` must not produce an override"
             );
             assert_eq!(
-                bar0.text_comment.as_deref(),
-                Some(token),
-                "malformed token must round-trip via text_comment"
+                bar0.staff_texts,
+                vec![StaffText::plain(token)],
+                "malformed token must round-trip via staff_texts"
             );
         }
     }
@@ -2034,13 +2117,16 @@ mod tests {
     }
 
     #[test]
-    fn text_comment_populates_when_not_a_macro() {
+    fn staff_text_populates_when_not_a_macro() {
         // `<13 measure lead break>` is a free-form caption — should
-        // land in `text_comment`, NOT trigger any macro symbol.
+        // land in `staff_texts`, NOT trigger any macro symbol.
         let url = "irealbook://Test=A==Style=C=44=[*A<13 measure lead break>C|D|]";
         let song = parse(url).expect("parse");
         let bar0 = &song.sections[0].bars[0];
-        assert_eq!(bar0.text_comment.as_deref(), Some("13 measure lead break"));
+        assert_eq!(
+            bar0.staff_texts,
+            vec![StaffText::plain("13 measure lead break")]
+        );
         assert!(
             bar0.symbol.is_none(),
             "non-macro caption must not set symbol"
@@ -2048,27 +2134,27 @@ mod tests {
     }
 
     #[test]
-    fn text_comment_with_dc_macro_sets_structured_symbol_and_skips_text() {
+    fn staff_text_with_dc_macro_sets_structured_symbol_and_skips_text() {
         // Post-#2427: an exact-match spec phrase fills the
         // structured `MusicalSymbol::DaCapo(JumpTarget)` AND skips
-        // text_comment. The serializer re-emits the phrase from
-        // the symbol alone, so duplicating into text_comment would
+        // staff_texts. The serializer re-emits the phrase from
+        // the symbol alone, so duplicating into staff_texts would
         // round-trip into a doubled output.
         let url = "irealbook://Test=A==Style=C=44=[*A<D.C. al Coda>C|D|]";
         let song = parse(url).expect("parse");
         let bar0 = &song.sections[0].bars[0];
         assert_eq!(bar0.symbol, Some(MusicalSymbol::DaCapo(JumpTarget::AlCoda)));
         assert!(
-            bar0.text_comment.is_none(),
-            "exact-match macro must not duplicate into text_comment"
+            bar0.staff_texts.is_empty(),
+            "exact-match macro must not duplicate into staff_texts"
         );
     }
 
     #[test]
     fn bare_macro_uses_unspecified_jump_target() {
-        // `<D.C.>` → DaCapo(Unspecified), no text_comment. The bare
+        // `<D.C.>` → DaCapo(Unspecified), no staff_texts. The bare
         // legacy form is preserved as a first-class variant rather
-        // than being collapsed into the `text_comment` fallback so
+        // than being collapsed into the `staff_texts` fallback so
         // the renderer can paint it identically to the spec phrases.
         let url = "irealbook://Test=A==Style=C=44=[*A<D.C.>C|D|]";
         let song = parse(url).expect("parse");
@@ -2077,18 +2163,18 @@ mod tests {
             bar0.symbol,
             Some(MusicalSymbol::DaCapo(JumpTarget::Unspecified))
         );
-        assert!(bar0.text_comment.is_none());
+        assert!(bar0.staff_texts.is_empty());
     }
 
     #[test]
-    fn unrecognised_macro_spelling_falls_through_to_text_comment() {
+    fn unrecognised_macro_spelling_falls_through_to_staff_text() {
         // `<D.C. on Cue>` doesn't match either the canonical `al
         // ...` grammar or the bare `D.C.` form (the trailing `on
         // Cue` is free-form), so it round-trips as text only.
         let url = "irealbook://Test=A==Style=C=44=[*A<D.C. on Cue>C|D|]";
         let song = parse(url).expect("parse");
         let bar0 = &song.sections[0].bars[0];
-        assert_eq!(bar0.text_comment.as_deref(), Some("D.C. on Cue"));
+        assert_eq!(bar0.staff_texts, vec![StaffText::plain("D.C. on Cue")]);
         assert!(
             bar0.symbol.is_none(),
             "free-form D.C./D.S. caption must NOT fire a macro symbol"
@@ -2156,8 +2242,8 @@ mod tests {
                 "URL `{url}` should produce {expected:?}"
             );
             assert!(
-                bar0.text_comment.is_none(),
-                "URL `{url}`: spec-phrase match must not write text_comment"
+                bar0.staff_texts.is_empty(),
+                "URL `{url}`: spec-phrase match must not write staff_texts"
             );
         }
     }
@@ -2220,8 +2306,8 @@ mod tests {
                 "caption `{caption}` should resolve to {expected:?}"
             );
             assert!(
-                bar0.text_comment.is_none(),
-                "caption `{caption}` should NOT leave a text_comment"
+                bar0.staff_texts.is_empty(),
+                "caption `{caption}` should NOT leave any staff_texts"
             );
         }
     }
@@ -2233,7 +2319,7 @@ mod tests {
         let url = "irealbook://Test=A==Style=C=44=[*A<refine the chord>C|D|]";
         let song = parse(url).expect("parse");
         let bar0 = &song.sections[0].bars[0];
-        assert_eq!(bar0.text_comment.as_deref(), Some("refine the chord"));
+        assert_eq!(bar0.staff_texts, vec![StaffText::plain("refine the chord")]);
         assert!(
             bar0.symbol.is_none(),
             "`refine` must NOT set MusicalSymbol::Fine"
@@ -2241,9 +2327,9 @@ mod tests {
     }
 
     #[test]
-    fn unrecognised_dc_ds_phrases_fall_through_to_text_comment() {
+    fn unrecognised_dc_ds_phrases_fall_through_to_staff_text() {
         // Every structurally-malformed `D.C. al ...` / `D.S. al ...`
-        // tail MUST fall through to `text_comment` with no symbol
+        // tail MUST fall through to `staff_texts` with no symbol
         // attached. Locks the exact-match contract — a future
         // refactor that re-introduces prefix matching would
         // produce spurious DaCapo/DalSegno symbols on these
@@ -2278,9 +2364,9 @@ mod tests {
                 bar0.symbol
             );
             assert_eq!(
-                bar0.text_comment.as_deref(),
-                Some(caption),
-                "caption `{caption}` must land in text_comment verbatim"
+                bar0.staff_texts,
+                vec![StaffText::plain(caption)],
+                "caption `{caption}` must land in staff_texts verbatim"
             );
         }
     }
@@ -2652,9 +2738,9 @@ mod tests {
     // ---- Break macro recognition (#2448) ---------------------------------
 
     #[test]
-    fn break_comment_sets_symbol_and_no_text_comment() {
+    fn break_comment_sets_symbol_and_no_staff_text() {
         // `<Break>` must set `symbol = MusicalSymbol::Break` and leave
-        // `text_comment` unset — the bare-macro suppression branch in
+        // `staff_texts` empty — the bare-macro suppression branch in
         // `apply_comment` must fire so a subsequent serialize → parse
         // round-trip does not produce a duplicated `<Break>` comment.
         let url = "irealbook://Test=A==Style=C=44=[*A<Break>C|D|]";
@@ -2662,19 +2748,19 @@ mod tests {
         let bar0 = &song.sections[0].bars[0];
         assert_eq!(bar0.symbol, Some(MusicalSymbol::Break));
         assert!(
-            bar0.text_comment.is_none(),
-            "bare <Break> must not populate text_comment"
+            bar0.staff_texts.is_empty(),
+            "bare <Break> must not populate staff_texts"
         );
     }
 
     #[test]
-    fn break_with_extra_text_falls_through_to_text_comment_only() {
+    fn break_with_extra_text_falls_through_to_staff_text_only() {
         // Post-#2427: only the exact `<Break>` phrase fires the
         // structured symbol. `<Break pattern>` is free-form text
-        // and lands in `text_comment` without a symbol — the
-        // either-symbol-or-text-comment invariant of the new
+        // and lands in `staff_texts` without a symbol — the
+        // either-symbol-or-staff-text invariant of the new
         // exact-match contract. Renderers that previously used a
-        // symbol+text combination must read text_comment directly
+        // symbol+text combination must read staff_texts directly
         // for non-spec captions.
         let url = "irealbook://Test=A==Style=C=44=[*A<Break pattern>C|D|]";
         let song = parse(url).expect("parse");
@@ -2683,7 +2769,7 @@ mod tests {
             bar0.symbol.is_none(),
             "non-spec caption must not fire symbol"
         );
-        assert_eq!(bar0.text_comment.as_deref(), Some("Break pattern"));
+        assert_eq!(bar0.staff_texts, vec![StaffText::plain("Break pattern")]);
     }
 
     #[test]
@@ -2700,9 +2786,208 @@ mod tests {
             "`breakaway` must NOT set MusicalSymbol::Break"
         );
         assert_eq!(
-            bar0.text_comment.as_deref(),
-            Some("breakaway section"),
-            "non-macro caption must still land in text_comment"
+            bar0.staff_texts,
+            vec![StaffText::plain("breakaway section")],
+            "non-macro caption must still land in staff_texts"
+        );
+    }
+
+    // ---- StaffText parsing (#2426) ---------------------------------
+
+    #[test]
+    fn staff_text_vertical_position_prefix_parses() {
+        // `<*36Solo Section:>` — the two-digit `*XY` prefix raises
+        // the caption by 36 units; the remainder is the caption.
+        let url = "irealbook://Test=A==Style=C=44=[*A<*36Solo Section:>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(
+            bar0.staff_texts,
+            vec![StaffText::raised("Solo Section:", 36)]
+        );
+    }
+
+    #[test]
+    fn staff_text_repeat_count_parses() {
+        // `<8x>` — the `Nx` form is the spec's repeat-count override
+        // for the surrounding `{ ... }` block.
+        let url = "irealbook://Test=A==Style=C=44=[*A<8x>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(
+            bar0.staff_texts,
+            vec![StaffText::repeat_count(8).expect("8 is non-zero")]
+        );
+    }
+
+    #[test]
+    fn staff_text_repeat_count_accepts_multi_digit() {
+        // The spec doesn't pin a digit cap, but the editor permits at
+        // least three digits — the AST keeps `u16` so larger
+        // hand-authored values still round-trip.
+        let url = "irealbook://Test=A==Style=C=44=[*A<128x>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(
+            bar0.staff_texts,
+            vec![StaffText::repeat_count(128).expect("128 is non-zero")]
+        );
+    }
+
+    #[test]
+    fn staff_text_repeat_count_zero_falls_through_to_plain_text() {
+        // `<0x>` is structurally `digits + 'x'` but the spec gives
+        // it no defined meaning ("play zero times") — the
+        // [`StaffText::RepeatCount`] payload is `NonZeroU16`, so
+        // the URL token falls through to a plain `Text` entry and
+        // round-trips losslessly as `<0x>` text. Locks the
+        // non-zero contract documented on `Bar::staff_texts`.
+        let url = "irealbook://Test=A==Style=C=44=[*A<0x>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.staff_texts, vec![StaffText::plain("0x")]);
+    }
+
+    #[test]
+    fn staff_text_repeat_count_u16_overflow_falls_through_to_plain_text() {
+        // `<65536x>` overflows `u16::MAX` — `prefix.parse::<u16>()`
+        // returns `Err`, the form falls through to plain text, and
+        // the original token survives the round trip verbatim. A
+        // future refactor that swaps `u16` for `u32` or
+        // `saturating_*` would silently change behaviour without
+        // this regression test.
+        let url = "irealbook://Test=A==Style=C=44=[*A<65536x>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.staff_texts, vec![StaffText::plain("65536x")]);
+    }
+
+    #[test]
+    fn staff_text_repeat_count_u16_max_round_trips() {
+        // `<65535x>` is the largest `<Nx>` form representable in
+        // `NonZeroU16` (= `u16::MAX`). Locks the upper boundary
+        // alongside the overflow test above.
+        let url = "irealbook://Test=A==Style=C=44=[*A<65535x>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(
+            bar0.staff_texts,
+            vec![StaffText::repeat_count(u16::MAX).expect("u16::MAX is non-zero")]
+        );
+    }
+
+    #[test]
+    fn staff_text_lone_x_falls_through_to_plain_text() {
+        // `<x>` has no digits before the trailing `x`, so the
+        // `!prefix.is_empty()` guard rejects the repeat-count
+        // shape and the token falls through to plain text. A
+        // future refactor that drops the guard would parse `<x>`
+        // as a degenerate repeat count.
+        let url = "irealbook://Test=A==Style=C=44=[*A<x>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.staff_texts, vec![StaffText::plain("x")]);
+    }
+
+    #[test]
+    fn staff_text_empty_body_produces_no_entry() {
+        // `apply_comment` short-circuits on `trimmed.is_empty()`
+        // before calling `classify_staff_text`. The bar gets no
+        // staff_text entry. A regression that dropped the early
+        // return would produce a zero-width caption.
+        let url = "irealbook://Test=A==Style=C=44=[*A<>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert!(bar0.staff_texts.is_empty(), "got {:?}", bar0.staff_texts);
+    }
+
+    #[test]
+    fn staff_text_vertical_position_zero_and_seventy_four_boundary() {
+        // Locks the inclusive `0..=74` bound — both endpoints
+        // produce a vertically-positioned caption, not a fall
+        // through.
+        let zero =
+            parse("irealbook://Test=A==Style=C=44=[*A<*00caption>C|D|]").expect("parse <*00>");
+        assert_eq!(
+            zero.sections[0].bars[0].staff_texts,
+            vec![StaffText::raised("caption", 0)],
+        );
+        let seventy_four =
+            parse("irealbook://Test=A==Style=C=44=[*A<*74top>C|D|]").expect("parse <*74>");
+        assert_eq!(
+            seventy_four.sections[0].bars[0].staff_texts,
+            vec![StaffText::raised("top", 74)],
+        );
+    }
+
+    #[test]
+    fn staff_text_vertical_position_out_of_range_falls_through() {
+        // Spec range is `00..=74`. `*99` is out of range — the parser
+        // falls through to plain text so the original token survives
+        // the round trip rather than being silently clamped (matches
+        // the beat-grouping mismatch fall-through pattern in
+        // `compound_time_grouping_rejects_sum_mismatch`).
+        let url = "irealbook://Test=A==Style=C=44=[*A<*99text>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.staff_texts, vec![StaffText::plain("*99text")]);
+    }
+
+    #[test]
+    fn staff_text_vertical_position_single_digit_falls_through() {
+        // Spec requires exactly two digits after the `*`. `*9text`
+        // (one digit) falls through to plain text.
+        let url = "irealbook://Test=A==Style=C=44=[*A<*9text>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.staff_texts, vec![StaffText::plain("*9text")]);
+    }
+
+    #[test]
+    fn staff_text_vertical_position_multibyte_body_round_trips() {
+        // Regression: `<*36さくら>` must not panic on the
+        // `split_at(2)` step. The byte-index probe in
+        // `classify_staff_text` confirms the two prefix bytes are
+        // ASCII digits before slicing, so the body's multi-byte UTF-8
+        // characters stay intact.
+        let url = "irealbook://Test=A==Style=C=44=[*A<*36さくら>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(bar0.staff_texts, vec![StaffText::raised("さくら", 36)]);
+    }
+
+    #[test]
+    fn multiple_staff_texts_on_one_bar_preserve_order() {
+        // Two `<...>` tokens on the same bar produce two entries in
+        // source order (previously concatenated with `; `).
+        let url = "irealbook://Test=A==Style=C=44=[*A<intro><8x>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(
+            bar0.staff_texts,
+            vec![
+                StaffText::plain("intro"),
+                StaffText::repeat_count(8).expect("8 is non-zero"),
+            ]
+        );
+    }
+
+    #[test]
+    fn multiple_staff_texts_reverse_order_also_preserves() {
+        // Companion to the forward-order test above. Swapping the
+        // tokens proves the parser preserves arrival order rather
+        // than sorting by type. Locks the [`StaffText::RepeatCount`]
+        // and [`StaffText::Text`] arrival-order contract from both
+        // directions.
+        let url = "irealbook://Test=A==Style=C=44=[*A<8x><intro>C|D|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        assert_eq!(
+            bar0.staff_texts,
+            vec![
+                StaffText::repeat_count(8).expect("8 is non-zero"),
+                StaffText::plain("intro"),
+            ]
         );
     }
 }

@@ -77,7 +77,8 @@
 //! `class="barline-double"`, `class="barline-final"`,
 //! `class="barline-repeat-thick"`, `class="barline-repeat-thin"`,
 //! `class="barline-repeat-dot"`, `class="music-symbol-segno"`,
-//! `class="music-symbol-coda"`, `class="music-symbol-text"`).
+//! `class="music-symbol-coda"`, `class="music-symbol-text"`,
+//! `class="staff-text"`).
 //!
 //! The previous segno / coda selector set
 //! (`music-symbol-segno-curve` / `-slash` / `-dot` and
@@ -116,6 +117,7 @@ pub mod page;
 pub mod pdf;
 #[cfg(feature = "png")]
 pub mod png;
+mod staff_texts;
 mod svg;
 
 use chordsketch_ireal::{BarChord, BarChordKind, ChordSize, IrealSong};
@@ -314,6 +316,11 @@ fn write_grid(out: &mut String, song: &IrealSong, layout: &Layout) {
     out.push_str(&markers::render_section_labels(song, layout));
     out.push_str(&markers::render_endings(song, layout));
     out.push_str(&music_symbols::render_music_symbols(song, layout));
+    // Staff text (#2426) sits below the bar by default and above
+    // the bar at `*74`; emit after music symbols so an above-the-
+    // bar caption can layer correctly when both happen on the same
+    // bar.
+    out.push_str(&staff_texts::render_staff_texts(song, layout));
     out.push_str("  </g>\n");
 }
 

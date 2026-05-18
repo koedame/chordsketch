@@ -14,7 +14,7 @@
 
 use crate::ast::{
     Accidental, Bar, BarChordKind, BarLine, BeatGrouping, Chord, ChordQuality, ChordRoot,
-    ChordSize, Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, SectionLabel,
+    ChordSize, Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol, SectionLabel, StaffText,
     TimeSignature,
 };
 use crate::parser::MUSIC_PREFIX;
@@ -526,7 +526,7 @@ fn serialize_chord_chart(song: &IrealSong) -> String {
         // `}`) still needs to be emitted so that a non-Single end
         // round-trips. The next-bar symbol lookahead applies to
         // single-start neighbours just like any other bar.
-        // Helper closure: detect whether a bar's text_comment
+        // Helper closure: detect whether ANY of a bar's staff_texts
         // already encodes a structured macro symbol on re-parse,
         // so we can skip emitting a redundant `<D.C.>` /
         // `<D.S.>` / `<Fine>` pseudo-comment.
@@ -539,15 +539,19 @@ fn serialize_chord_chart(song: &IrealSong) -> String {
         // diverged from the parser after #2427 introduced
         // exact-match classification — that asymmetry would have
         // silently dropped a `bar.symbol` set on a bar whose
-        // `text_comment` looked like (but did not exact-match) a
+        // staff text looked like (but did not exact-match) a
         // macro phrase (e.g. symbol = DaCapo(AlCoda) +
-        // text_comment = "D.C. on Cue"). Sister-site discipline
-        // per `.claude/rules/fix-propagation.md`.
+        // StaffText::Text("D.C. on Cue")). Sister-site discipline
+        // per `.claude/rules/fix-propagation.md`. RepeatCount
+        // entries are skipped — they encode `<Nx>` and can never
+        // collide with a macro phrase.
         let text_carries_macro = |b: &Bar| {
-            b.text_comment
-                .as_deref()
-                .map(|t| crate::parser::classify_macro_comment(t.trim()).is_some())
-                .unwrap_or(false)
+            b.staff_texts.iter().any(|st| match st {
+                StaffText::Text { text, .. } => {
+                    crate::parser::classify_macro_comment(text.trim()).is_some()
+                }
+                StaffText::RepeatCount(_) => false,
+            })
         };
 
         if bar.repeat_previous {
@@ -568,8 +572,8 @@ fn serialize_chord_chart(song: &IrealSong) -> String {
                     serialize_symbol(&mut chart, sym);
                 }
             }
-            if let Some(text) = &bar.text_comment {
-                emit_text_comment(&mut chart, text);
+            for st in &bar.staff_texts {
+                emit_staff_text(&mut chart, st);
             }
             serialize_bar_close(&mut chart, bar);
             if let Some(next) = flat.get(i + 1) {
@@ -602,8 +606,9 @@ fn serialize_chord_chart(song: &IrealSong) -> String {
         // Symbol for THIS bar, emitted INSIDE the bar's content
         // area so the parser's `queue_symbol` (which now sets
         // `current_bar.symbol` directly) lands it on this bar.
-        // Skip when the bar's own text_comment will carry an
-        // equivalent macro substring on re-parse.
+        // Skip when one of the bar's own staff_texts already
+        // exact-matches a macro phrase that would re-fire on
+        // re-parse. The classifier is exact-match per #2427.
         if !text_carries_macro(bar) {
             if let Some(sym) = bar.symbol {
                 serialize_symbol(&mut chart, sym);
@@ -688,15 +693,16 @@ fn serialize_chord_chart(song: &IrealSong) -> String {
             }
         }
 
-        if let Some(text) = &bar.text_comment {
-            // Free-form text comment renders below the bar's right
+        for st in &bar.staff_texts {
+            // Staff-text entries render below the bar's right
             // barline. The `<...>` form is what the parser's
-            // `apply_comment` consumes. Use the `>`-stripping
-            // helper so the regular-bar path inherits the same
-            // round-trip protection as the `repeat_previous`
-            // branch above (sister-site parity per
-            // `.claude/rules/fix-propagation.md`).
-            emit_text_comment(&mut chart, text);
+            // `apply_comment` consumes. `emit_staff_text` routes
+            // each entry through the appropriate encoder
+            // (`<*XYtext>`, `<Nx>`, or plain `<text>`) with the
+            // same `>`-stripping protection the `repeat_previous`
+            // branch above relies on — sister-site parity per
+            // `.claude/rules/fix-propagation.md`.
+            emit_staff_text(&mut chart, st);
         }
 
         serialize_bar_close(&mut chart, bar);
@@ -816,15 +822,49 @@ fn serialize_symbol(out: &mut String, symbol: MusicalSymbol) {
 /// AST manually (per the public-field contract in `ast.rs`)
 /// shouldn't have their chart silently fail to serialize, but
 /// they will lose any `>` characters they typed.
-fn emit_text_comment(out: &mut String, text: &str) {
-    out.push('<');
-    for ch in text.chars() {
-        if ch == '>' {
-            continue;
+/// Emits one [`StaffText`] entry as a `<...>` URL token.
+///
+/// `StaffText::Text` writes `<*XYtext>` when a vertical position is
+/// present (clamped to [`StaffText::MAX_VERTICAL_POSITION`]) and
+/// `<text>` otherwise. `StaffText::RepeatCount(n)` writes `<Nx>` with
+/// the literal `n`. Inner `>` bytes in any caption body are dropped
+/// so the parser's `find('>')` cannot terminate prematurely — the
+/// alternative would be to reject outright, but callers that
+/// constructed an AST manually (per the public-field contract in
+/// `ast.rs`) shouldn't have their chart silently fail to serialise.
+/// They will lose any `>` characters they typed; `<` is safe inside
+/// the body — the parser captures up to the FIRST closing `>`, so a
+/// leading `<` stays inside the staff-text content.
+fn emit_staff_text(out: &mut String, st: &StaffText) {
+    match st {
+        StaffText::Text {
+            text,
+            vertical_position,
+        } => {
+            out.push('<');
+            if let Some(pos) = vertical_position {
+                let clamped = (*pos).min(StaffText::MAX_VERTICAL_POSITION);
+                out.push('*');
+                // Spec requires exactly two digits; pad single-digit
+                // values with a leading zero so the round trip
+                // matches the parser's two-digit prefix expectation.
+                out.push_str(&format!("{clamped:02}"));
+            }
+            for ch in text.chars() {
+                if ch == '>' {
+                    continue;
+                }
+                out.push(ch);
+            }
+            out.push('>');
         }
-        out.push(ch);
+        StaffText::RepeatCount(n) => {
+            out.push('<');
+            out.push_str(&n.get().to_string());
+            out.push('x');
+            out.push('>');
+        }
     }
-    out.push('>');
 }
 
 fn serialize_chord(out: &mut String, chord: &Chord) {
@@ -1051,7 +1091,7 @@ mod tests {
                     symbol: None,
                     repeat_previous: false,
                     no_chord: false,
-                    text_comment: None,
+                    staff_texts: Vec::new(),
                     system_break_space: 0,
                     beat_grouping_override: None,
                 }],
@@ -1117,7 +1157,7 @@ mod tests {
                 symbol: None,
                 repeat_previous: false,
                 no_chord: false,
-                text_comment: None,
+                staff_texts: Vec::new(),
                 system_break_space: 0,
                 beat_grouping_override: None,
             }],
@@ -1161,7 +1201,7 @@ mod tests {
                     symbol: Some(MusicalSymbol::Fine),
                     repeat_previous: false,
                     no_chord: false,
-                    text_comment: None,
+                    staff_texts: Vec::new(),
                     system_break_space: 0,
                     beat_grouping_override: None,
                 }],
@@ -1182,7 +1222,7 @@ mod tests {
     fn musical_symbol_break_round_trips() {
         // Exercises `MusicalSymbol::Break` in `serialize_symbol`:
         // `Break` must serialise to `<Break>` and parse back to
-        // `symbol = MusicalSymbol::Break` with no `text_comment`.
+        // `symbol = MusicalSymbol::Break` with no `staff_texts`.
         let song = IrealSong {
             title: "Break Test".into(),
             composer: Some("T".into()),
@@ -1202,7 +1242,7 @@ mod tests {
                     symbol: Some(MusicalSymbol::Break),
                     repeat_previous: false,
                     no_chord: false,
-                    text_comment: None,
+                    staff_texts: Vec::new(),
                     system_break_space: 0,
                     beat_grouping_override: None,
                 }],
@@ -1251,7 +1291,7 @@ mod tests {
                     symbol: None,
                     repeat_previous: false,
                     no_chord: false,
-                    text_comment: None,
+                    staff_texts: Vec::new(),
                     system_break_space: 0,
                     beat_grouping_override: None,
                 }],
@@ -1295,7 +1335,7 @@ mod tests {
                     symbol: Some(MusicalSymbol::DaCapo(crate::ast::JumpTarget::Unspecified)),
                     repeat_previous: false,
                     no_chord: false,
-                    text_comment: None,
+                    staff_texts: Vec::new(),
                     system_break_space: 0,
                     beat_grouping_override: None,
                 }],
@@ -1333,7 +1373,7 @@ mod tests {
                     symbol: Some(MusicalSymbol::DalSegno(crate::ast::JumpTarget::Unspecified)),
                     repeat_previous: false,
                     no_chord: false,
-                    text_comment: None,
+                    staff_texts: Vec::new(),
                     system_break_space: 0,
                     beat_grouping_override: None,
                 }],
@@ -1372,7 +1412,7 @@ mod tests {
                     symbol: Some(MusicalSymbol::Fermata),
                     repeat_previous: false,
                     no_chord: false,
-                    text_comment: None,
+                    staff_texts: Vec::new(),
                     system_break_space: 0,
                     beat_grouping_override: None,
                 }],
@@ -1439,13 +1479,13 @@ mod tests {
         assert_eq!(name.as_deref(), Some("Playlist"));
     }
 
-    /// Round-trip regression: a `text_comment` containing the
-    /// reserved `>` delimiter must not corrupt the chord stream.
-    /// `emit_text_comment` strips the inner `>` so re-parsing
+    /// Round-trip regression: a staff-text entry whose body contains
+    /// the reserved `>` delimiter must not corrupt the chord stream.
+    /// `emit_staff_text` strips the inner `>` so re-parsing
     /// captures the rest of the caption rather than truncating at
     /// the first `>`.
     #[test]
-    fn text_comment_with_inner_gt_round_trips_on_regular_bar() {
+    fn staff_text_with_inner_gt_round_trips_on_regular_bar() {
         let song = IrealSong {
             title: "GT Regular".into(),
             composer: Some("T".into()),
@@ -1461,7 +1501,7 @@ mod tests {
                         size: ChordSize::Default,
                         kind: BarChordKind::Played,
                     }],
-                    text_comment: Some("see > here".into()),
+                    staff_texts: vec![StaffText::plain("see > here")],
                     ..Default::default()
                 }],
             }],
@@ -1469,13 +1509,13 @@ mod tests {
         };
         let url = irealb_serialize(&song);
         let parsed = crate::parse(&url).expect("round trip must succeed");
-        let got = parsed.sections[0].bars[0]
-            .text_comment
-            .as_deref()
-            .unwrap_or("");
+        let got = match parsed.sections[0].bars[0].staff_texts.as_slice() {
+            [StaffText::Text { text, .. }] => text.clone(),
+            other => panic!("expected single plain staff text, got {other:?}"),
+        };
         assert!(
             !got.contains('>'),
-            "stripped `>` must not survive into parsed comment, got {got:?}"
+            "stripped `>` must not survive into parsed staff text, got {got:?}"
         );
         // The stripped form preserves the rest of the caption.
         assert_eq!(got, "see  here");
@@ -1483,9 +1523,9 @@ mod tests {
 
     /// Sister-site coverage for the `Kcl` (repeat-previous) branch.
     /// Locks in the existing fix that already routes through
-    /// `emit_text_comment`.
+    /// `emit_staff_text`.
     #[test]
-    fn text_comment_with_inner_gt_round_trips_on_kcl_bar() {
+    fn staff_text_with_inner_gt_round_trips_on_kcl_bar() {
         let song = IrealSong {
             title: "GT Kcl".into(),
             composer: Some("T".into()),
@@ -1508,7 +1548,7 @@ mod tests {
                         start: BarLine::Single,
                         end: BarLine::Final,
                         repeat_previous: true,
-                        text_comment: Some("rit. > slow".into()),
+                        staff_texts: vec![StaffText::plain("rit. > slow")],
                         ..Default::default()
                     },
                 ],
@@ -1517,14 +1557,13 @@ mod tests {
         };
         let url = irealb_serialize(&song);
         let parsed = crate::parse(&url).expect("round trip must succeed");
-        let got = parsed.sections[0].bars[1]
-            .text_comment
-            .as_deref()
-            .unwrap_or("");
-        assert!(!got.contains('>'));
+        match parsed.sections[0].bars[1].staff_texts.as_slice() {
+            [StaffText::Text { text, .. }] => assert!(!text.contains('>')),
+            other => panic!("expected single plain staff text, got {other:?}"),
+        }
     }
 
-    /// A `text_comment` whose body contains "refine" (substring
+    /// A staff-text entry whose body contains "refine" (substring
     /// match for the old `lower.contains("fine")` bug) must NOT
     /// suppress an explicit `bar.symbol` on round trip — both
     /// fields survive.
@@ -1546,7 +1585,7 @@ mod tests {
                         kind: BarChordKind::Played,
                     }],
                     symbol: Some(MusicalSymbol::Fine),
-                    text_comment: Some("refine the chord".into()),
+                    staff_texts: vec![StaffText::plain("refine the chord")],
                     ..Default::default()
                 }],
             }],
@@ -1556,14 +1595,90 @@ mod tests {
         let parsed = crate::parse(&url).expect("round trip must succeed");
         let bar = &parsed.sections[0].bars[0];
         assert_eq!(
-            bar.text_comment.as_deref(),
-            Some("refine the chord"),
-            "text_comment must survive verbatim"
+            bar.staff_texts,
+            vec![StaffText::plain("refine the chord")],
+            "staff_texts must survive verbatim"
         );
         assert_eq!(
             bar.symbol,
             Some(MusicalSymbol::Fine),
             "explicit Fine symbol must NOT be suppressed by an English-word substring"
+        );
+    }
+
+    /// Round-trip regression: a vertically-positioned staff text
+    /// (`<*36Solo Section:>`) and a repeat-count override (`<8x>`)
+    /// must both survive serialise → parse without losing their
+    /// structured form (#2426).
+    #[test]
+    fn staff_text_vertical_position_and_repeat_count_round_trip() {
+        let song = IrealSong {
+            title: "Solo".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
+                        kind: BarChordKind::Played,
+                    }],
+                    staff_texts: vec![
+                        StaffText::raised("Solo Section:", 36),
+                        StaffText::repeat_count(8).expect("8 is non-zero"),
+                    ],
+                    ..Default::default()
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip must succeed");
+        assert_eq!(
+            parsed.sections[0].bars[0].staff_texts,
+            vec![
+                StaffText::raised("Solo Section:", 36),
+                StaffText::repeat_count(8).expect("8 is non-zero"),
+            ],
+        );
+    }
+
+    /// Single-digit vertical positions are zero-padded to two digits
+    /// on emit so the parser's `*XY` two-digit-prefix rule still
+    /// matches on re-parse (`<*5text>` would otherwise fall through
+    /// to plain text and lose the vertical-position structure).
+    #[test]
+    fn staff_text_single_digit_vertical_position_zero_pads_on_emit() {
+        let song = IrealSong {
+            title: "Pad".into(),
+            composer: Some("T".into()),
+            style: Some("Medium Swing".into()),
+            sections: vec![Section {
+                label: SectionLabel::Letter('A'),
+                bars: vec![Bar {
+                    start: BarLine::Double,
+                    end: BarLine::Final,
+                    chords: vec![BarChord {
+                        chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
+                        position: BeatPosition::on_beat(1).unwrap(),
+                        size: ChordSize::Default,
+                        kind: BarChordKind::Played,
+                    }],
+                    staff_texts: vec![StaffText::raised("low caption", 5)],
+                    ..Default::default()
+                }],
+            }],
+            ..Default::default()
+        };
+        let url = irealb_serialize(&song);
+        let parsed = crate::parse(&url).expect("round trip must succeed");
+        assert_eq!(
+            parsed.sections[0].bars[0].staff_texts,
+            vec![StaffText::raised("low caption", 5)],
         );
     }
 
@@ -1996,7 +2111,7 @@ mod tests {
                         symbol: None,
                         repeat_previous: false,
                         no_chord: false,
-                        text_comment: None,
+                        staff_texts: Vec::new(),
                         system_break_space: 0,
                         beat_grouping_override: None,
                     },
