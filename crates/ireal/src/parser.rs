@@ -1681,6 +1681,37 @@ mod tests {
     }
 
     #[test]
+    fn pause_slash_inside_alternate_paren_is_dropped() {
+        // `|C7(p)|` — a `p` token that appears inside an `(...)`
+        // alternate-chord paren. The paren scope means the parser is
+        // looking for an alternate chord string, not a beat slot;
+        // `p` is not a valid chord root and has no meaning there.
+        // The parser sets `in_alternate = true` before entering the
+        // paren so the `if !state.in_alternate` guard drops the `p`
+        // without emitting a `SlashRepeat`. This test covers the
+        // `in_alternate == true` branch in the `p` handler to close
+        // the Codecov gap on that line.
+        let url = "irealbook://Test=A==Style=C=44=[*AC7(p)|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        // Only the primary C7 chord should be present — no SlashRepeat
+        // entry, and no spurious chord from the `p` inside the paren.
+        assert_eq!(
+            bar0.chords.len(),
+            1,
+            "p inside alternate paren must not emit a chord entry"
+        );
+        assert_eq!(bar0.chords[0].kind, BarChordKind::Played);
+        assert_eq!(bar0.chords[0].chord.root.note, 'C');
+        // The `(p)` paren did not produce a valid alternate chord —
+        // no alternate should be attached to C7.
+        assert!(
+            bar0.chords[0].chord.alternate.is_none(),
+            "p inside alternate paren must not create an alternate chord"
+        );
+    }
+
+    #[test]
     fn text_comment_populates_when_not_a_macro() {
         // `<13 measure lead break>` is a free-form caption — should
         // land in `text_comment`, NOT trigger any macro symbol.

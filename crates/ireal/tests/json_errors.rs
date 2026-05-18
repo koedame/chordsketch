@@ -755,6 +755,24 @@ fn bar_chord_slash_repeat_serialises_and_round_trips_through_json() {
     assert_eq!(parsed, bc);
 }
 
+/// The `"played"` string in `BarChordKind::from_json_value` is never
+/// emitted by the encoder (Played is the default and is omitted), but
+/// it must still deserialise correctly for hand-crafted JSON consumers.
+/// This test covers the `"played" => Ok(Self::Played)` arm that Codecov
+/// marks uncovered because the omit-when-default policy prevents it from
+/// being exercised by round-trip tests alone.
+#[test]
+fn bar_chord_kind_played_explicit_string_decodes() {
+    let value = parse_json(r#""played""#).unwrap();
+    let kind = BarChordKind::from_json_value(&value)
+        .expect("\"played\" must deserialise without error");
+    assert_eq!(
+        kind,
+        BarChordKind::Played,
+        "\"played\" must decode to Played"
+    );
+}
+
 /// Unknown `kind` string must surface a `JsonError`. Covers the
 /// `other => Err(...)` arm in `BarChordKind::from_json_value`.
 #[test]
