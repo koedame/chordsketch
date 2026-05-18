@@ -11,9 +11,9 @@
 //! `JsonValue::as_str`'s Err arm.
 
 use chordsketch_ireal::{
-    Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize, Ending,
-    FromJson, IrealSong, JsonError, JsonValue, MusicalSymbol, Section, SectionLabel, ToJson,
-    parse_json,
+    Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
+    Ending, FromJson, IrealSong, JsonError, JsonValue, MusicalSymbol, Section, SectionLabel,
+    ToJson, parse_json,
 };
 
 fn minimal_song_json_with(field: &str, value: &str) -> String {
@@ -731,8 +731,11 @@ fn bar_chord_slash_repeat_serialises_and_round_trips_through_json() {
         "kind must appear as \"slash_repeat\" when SlashRepeat, got {json:?}"
     );
     // Played BarChords must NOT emit the field (snapshot-byte-stability).
-    let played_bc =
-        BarChord::played(snapshot, BeatPosition::on_beat(1).unwrap(), ChordSize::Default);
+    let played_bc = BarChord::played(
+        snapshot,
+        BeatPosition::on_beat(1).unwrap(),
+        ChordSize::Default,
+    );
     let played_json = played_bc.to_json_string();
     assert!(
         !played_json.contains("\"kind\""),

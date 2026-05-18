@@ -418,6 +418,7 @@ mod tests {
                         chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Minor7),
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     ending: None,
                     symbol: None,
@@ -595,6 +596,7 @@ mod tests {
                         },
                         position: BeatPosition::on_beat(1).unwrap(),
                         size: ChordSize::Default,
+                        kind: BarChordKind::Played,
                     }],
                     ..Bar::default()
                 },
@@ -647,6 +649,7 @@ mod tests {
                     },
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 ..Bar::default()
             }],
@@ -696,6 +699,7 @@ mod tests {
                     },
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 text_comment: Some("Vamp till cue".into()),
                 ..Bar::default()
@@ -782,6 +786,7 @@ mod tests {
                     chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 symbol: Some(MusicalSymbol::Fermata),
                 ..Bar::default()
@@ -826,6 +831,7 @@ mod tests {
                     chord: Chord::triad(ChordRoot::natural('C'), ChordQuality::Major),
                     position: BeatPosition::on_beat(1).unwrap(),
                     size: ChordSize::Default,
+                    kind: BarChordKind::Played,
                 }],
                 symbol: Some(MusicalSymbol::Break),
                 ..Bar::default()

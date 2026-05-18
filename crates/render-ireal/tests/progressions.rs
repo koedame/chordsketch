@@ -12,8 +12,8 @@
 //! and re-run without the env var to confirm parity.
 
 use chordsketch_ireal::{
-    Accidental, Bar, BarChord, BarChordKind, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize, IrealSong,
-    KeyMode, KeySignature, Section, SectionLabel,
+    Accidental, Bar, BarChord, BarChordKind, BeatPosition, Chord, ChordQuality, ChordRoot,
+    ChordSize, IrealSong, KeyMode, KeySignature, Section, SectionLabel,
 };
 use chordsketch_render_ireal::{RenderOptions, render_svg};
 
@@ -823,17 +823,17 @@ fn render_slash_repeat_emits_slash_glyph() {
     let f7 = Chord::triad(ChordRoot::natural('F'), ChordQuality::Dominant7);
     let bar = Bar {
         chords: vec![
-            BarChord::played(c7.clone(), BeatPosition::on_beat(1).unwrap(), ChordSize::Default),
+            BarChord::played(
+                c7.clone(),
+                BeatPosition::on_beat(1).unwrap(),
+                ChordSize::Default,
+            ),
             BarChord::slash_repeat(
                 c7.clone(),
                 BeatPosition::on_beat(2).unwrap(),
                 ChordSize::Default,
             ),
-            BarChord::slash_repeat(
-                c7,
-                BeatPosition::on_beat(3).unwrap(),
-                ChordSize::Default,
-            ),
+            BarChord::slash_repeat(c7, BeatPosition::on_beat(3).unwrap(), ChordSize::Default),
             BarChord::played(f7, BeatPosition::on_beat(4).unwrap(), ChordSize::Default),
         ],
         ..Bar::new()

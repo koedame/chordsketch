@@ -18,8 +18,9 @@
 #![cfg(feature = "png")]
 
 use chordsketch_ireal::{
-    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
-    IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot,
+    ChordSize, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel,
+    TimeSignature,
 };
 use chordsketch_render_ireal::{
     PAGE_HEIGHT, PAGE_WIDTH,

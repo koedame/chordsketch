@@ -15,8 +15,9 @@
 //! the env var from the commit — it is read only at test time.
 
 use chordsketch_ireal::{
-    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
-    IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot,
+    ChordSize, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel,
+    TimeSignature,
 };
 use chordsketch_render_ireal::{RenderOptions, render_svg, version};
 

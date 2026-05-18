@@ -7,9 +7,9 @@
 //! the JSON debug output is byte-stable for a known input.
 
 use chordsketch_ireal::{
-    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
-    Ending, FromJson, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section, SectionLabel,
-    TimeSignature, ToJson,
+    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot,
+    ChordSize, Ending, FromJson, IrealSong, KeyMode, KeySignature, MusicalSymbol, Section,
+    SectionLabel, TimeSignature, ToJson,
 };
 
 #[test]

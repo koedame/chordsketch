@@ -1541,7 +1541,11 @@ mod tests {
         let url = irealb_serialize(&song);
         let parsed = crate::parse(&url).expect("round trip");
         let bar0 = &parsed.sections[0].bars[0];
-        assert_eq!(bar0.chords.len(), 4, "expected 4 chord entries, got {bar0:?}");
+        assert_eq!(
+            bar0.chords.len(),
+            4,
+            "expected 4 chord entries, got {bar0:?}"
+        );
         assert_eq!(bar0.chords[0].kind, BarChordKind::Played);
         assert_eq!(bar0.chords[0].chord.root.note, 'C');
         assert_eq!(bar0.chords[1].kind, BarChordKind::SlashRepeat);

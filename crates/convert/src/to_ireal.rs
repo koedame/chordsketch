@@ -12,8 +12,9 @@
 
 use chordsketch_chordpro::ast::{DirectiveKind, Line, LyricsLine, Song};
 use chordsketch_ireal::{
-    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord as IrealChord, ChordQuality, ChordRoot,
-    ChordSize, IrealSong, KeyMode, KeySignature, Section, SectionLabel, TimeSignature,
+    Accidental, Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord as IrealChord,
+    ChordQuality, ChordRoot, ChordSize, IrealSong, KeyMode, KeySignature, Section, SectionLabel,
+    TimeSignature,
 };
 
 use crate::error::{ConversionWarning, WarningKind};
