@@ -333,10 +333,29 @@ fn serialize_music(song: &IrealSong) -> String {
         // state. The parser stamps every bar from the override
         // forward with the running grouping, so a verbatim re-emit
         // would duplicate the directive on every bar; only the
-        // change point carries the token. `None → None` (no
-        // emit), `Some(g) → Some(g)` (no emit when equal),
-        // `Some(g) → Some(h≠g)` and `None → Some(g)` and
-        // `Some(g) → None` all emit a token.
+        // change point carries the token. The transitions:
+        //
+        //   None → None             — no emit (no override either side).
+        //   Some(g) → Some(g)       — no emit (override unchanged).
+        //   None → Some(g)          — emit `<a+b>` for `g`.
+        //   Some(g) → Some(h≠g)     — emit `<a+b>` for `h`.
+        //   Some(g) → None          — internal state advances to
+        //                             None but emits NO token. The
+        //                             iReal Pro URL grammar has no
+        //                             "reset grouping" sigil; the
+        //                             only way to clear a running
+        //                             grouping is to change the
+        //                             time signature (a `T..`
+        //                             token mid-chart resets it
+        //                             on the parser side too).
+        //                             A hand-constructed AST that
+        //                             clears the override without a
+        //                             meter change will therefore
+        //                             produce a URL where the
+        //                             grouping persists on round
+        //                             trip; this is a known
+        //                             format limitation, not a
+        //                             serializer bug.
         if bar.beat_grouping_override != current_grouping {
             if let Some(grouping) = &bar.beat_grouping_override {
                 chart.push('<');

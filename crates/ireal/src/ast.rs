@@ -277,31 +277,48 @@ impl Bar {
 
 /// Compound-time-signature beat grouping (#2449).
 ///
-/// A non-empty list of positive integers whose sum must equal the
-/// active time signature's numerator. `BeatGrouping(vec![3, 2])`
-/// means "play the bar's 5 beats as 3 + 2"; `BeatGrouping(vec![3,
+/// A list of two or more positive integers whose sum must equal
+/// the active time signature's numerator. `BeatGrouping(vec![3,
+/// 2])` means "play the bar's 5 beats as 3 + 2"; `BeatGrouping(vec![3,
 /// 2, 2])` means "play 7 beats as 3 + 2 + 2". Each group entry is
 /// a [`NonZeroU8`] so the type rejects zero-length subgroups at
 /// compile time (a `<0+3>` token has no internal-feel meaning).
 ///
+/// # Deliberate divergence from the AST's public-field contract
+///
+/// Every other AST struct in this module exposes its fields as
+/// `pub` per the contract documented at the top of `ast.rs`. This
+/// type is the lone exception: the inner `Vec<NonZeroU8>` is
+/// private because two of its load-bearing invariants (non-empty
+/// and `len() >= 2`) cannot be expressed at the type level and
+/// must be enforced at construction time. Mutate by replacing the
+/// whole `Option<BeatGrouping>` on the parent `Bar`, not by
+/// reaching into the inner `Vec`.
+///
 /// Construction goes through [`BeatGrouping::new`] (which validates
-/// `parts.is_empty() == false` at runtime) so the parser can
-/// surface `ParseError::InvalidNumericField` on malformed input
-/// rather than panic. Renderers do not paint anything for this
-/// override — it is a player-only directive — but the JSON
-/// serialiser round-trips it byte-for-byte so out-of-process
-/// consumers (wasm, FFI, NAPI) can introspect it.
+/// `len() >= 2` at runtime) so the parser can surface
+/// `ParseError::InvalidNumericField` on malformed input rather
+/// than panic. Renderers do not paint anything for this override
+/// — it is a player-only directive — but the JSON serialiser
+/// round-trips it byte-for-byte so out-of-process consumers
+/// (wasm, FFI, NAPI) can introspect it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BeatGrouping(Vec<NonZeroU8>);
 
 impl BeatGrouping {
-    /// Constructs a [`BeatGrouping`] from a list of subgroup sizes,
-    /// returning `None` if the list is empty. Each entry must be a
-    /// [`NonZeroU8`]; the caller is responsible for filtering out
-    /// zero-sized subgroups before invoking this constructor.
+    /// Constructs a [`BeatGrouping`] from a list of subgroup
+    /// sizes, returning `None` if the list contains fewer than two
+    /// subgroups. A single-subgroup grouping (`vec![5]` for 5/4)
+    /// is a no-op ("5 played as 5" is the default), so the type
+    /// rejects it at construction; the parser's lexer already
+    /// applied this rule on input, and promoting the check here
+    /// makes the singleton state unrepresentable for every other
+    /// producer (FFI, test fixtures, future builders). Each entry
+    /// must be a [`NonZeroU8`]; the caller filters out zero-sized
+    /// subgroups before invoking this constructor.
     #[must_use]
     pub fn new(parts: Vec<NonZeroU8>) -> Option<Self> {
-        if parts.is_empty() {
+        if parts.len() < 2 {
             None
         } else {
             Some(Self(parts))

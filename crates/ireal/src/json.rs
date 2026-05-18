@@ -1349,7 +1349,7 @@ impl FromJson for BeatGrouping {
         BeatGrouping::new(parts).ok_or_else(|| {
             JsonError::new(
                 0,
-                "beat_grouping_override must contain at least one subgroup".to_string(),
+                "beat_grouping_override must contain at least two subgroups".to_string(),
             )
         })
     }

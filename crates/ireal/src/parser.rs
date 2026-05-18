@@ -1801,10 +1801,18 @@ mod tests {
 
     #[test]
     fn compound_time_grouping_rejects_malformed_input() {
-        // `<2++3>`, `<+3>`, `<2+>`, `<2+0+3>`: malformed groupings
-        // fall through to text_comment rather than being silently
-        // dropped or panicking.
-        for token in ["2++3", "+3", "2+", "2+0+3"] {
+        // Malformed groupings fall through to text_comment rather
+        // than being silently dropped or panicking:
+        //
+        // - `<2++3>`, `<+3>`, `<2+>`: empty subgroup (split-on-`+`
+        //   produces an empty piece).
+        // - `<2+0+3>`: zero subgroup (NonZeroU8 rejects).
+        // - `<2+a>`: non-digit char in a subgroup
+        //   (`piece.chars().all(is_ascii_digit)` rejects).
+        // - `<5>`: single subgroup (the constructor's `len() >= 2`
+        //   rejects; the parser's lexer also rejects on the same
+        //   condition).
+        for token in ["2++3", "+3", "2+", "2+0+3", "2+a", "5"] {
             let url = format!("irealbook://Test=A==Style=C=44=[*A<{token}>C|]");
             let song = parse(&url).expect("parse");
             let bar0 = &song.sections[0].bars[0];
