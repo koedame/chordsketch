@@ -1617,7 +1617,7 @@ fn parse_jump_target(target_str: &str, whole: &str) -> Result<crate::ast::JumpTa
         "fine" => Ok(JumpTarget::AlFine),
         other => {
             // `<ordinal>_end` where `<ordinal>` is the
-            // `ending_ordinal_lowercase` output (`1st`, `2nd`,
+            // `crate::ast::ending_ordinal` output (`1st`, `2nd`,
             // `3rd`, `4th`, ..., `11th`, `21st`, ...). Strip the
             // `_end` suffix, then strip the alphabetic tail
             // (`st`/`nd`/`rd`/`th`) from the ordinal to recover the
