@@ -1051,7 +1051,7 @@ impl ChartParseState {
             // pre-#2449 fallback behaviour and lets a future
             // audit recover the original intent.
         }
-        let trimmed_lower = comment.trim().to_ascii_lowercase();
+        let trimmed_lower = trimmed_input.to_ascii_lowercase();
         // Detect the recognised musical-direction macros. The
         // matched symbol is set directly on `current_bar` (see
         // `queue_symbol`) — `<D.C.>` / `<D.S.>` / `<Fine>` /

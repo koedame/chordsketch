@@ -1626,4 +1626,51 @@ mod tests {
         assert_eq!(bar0.chords[3].kind, BarChordKind::Played);
         assert_eq!(bar0.chords[3].chord.root.note, 'F');
     }
+
+    /// Compound-time grouping serialisation (#2449): the serializer emits
+    /// `<a+b>` only at change points, not once per inherited bar.
+    ///
+    /// The parser stamps every bar from the override forward with the
+    /// running grouping (3 bars in this fixture: bars 1, 2, 3). The
+    /// serializer must emit the token exactly once (bar 1's change point)
+    /// and suppress it on bars 2 and 3. Verifying idempotency
+    /// (`parse → serialize → parse` preserves the grouping) confirms
+    /// both the emission logic and the re-parse path for the `T54`-seeded
+    /// music body the serializer produces.
+    #[test]
+    fn compound_time_grouping_emits_token_once_per_change_point() {
+        // 5/4 song: bar 0 has no override; bars 1–3 inherit `<3+2>`.
+        // irealbook:// (6-field) is used for the source so the header
+        // time signature seeds the parser correctly.
+        let source = "irealbook://Test=A==Style=C=54=[*AC|<3+2>D|E|F|]";
+        let song = crate::parse(source).expect("parse source");
+        let serialized = irealb_serialize(&song);
+        // `<3+2>` is percent-encoded as `%3C3%2B2%3E` in the irealb:// URL.
+        let encoded_token = "%3C3%2B2%3E";
+        let count = serialized.matches(encoded_token).count();
+        assert_eq!(
+            count, 1,
+            "expected exactly one `<3+2>` token in the serialized URL, \
+             got {count}: {serialized:?}"
+        );
+        // Idempotency: re-parse the serialized URL and check grouping survives.
+        let reparsed = crate::parse(&serialized).expect("re-parse");
+        let bars = &reparsed.sections[0].bars;
+        assert!(
+            bars[0].beat_grouping_override.is_none(),
+            "bar 0 predates the override and must have none"
+        );
+        for (i, bar) in bars.iter().enumerate().skip(1) {
+            let g = bar
+                .beat_grouping_override
+                .as_ref()
+                .unwrap_or_else(|| panic!("bar {i} must inherit the 3+2 grouping after re-parse"));
+            assert_eq!(
+                g.sum(),
+                5,
+                "bar {i} grouping sum must be 5 (3+2), got {:?}",
+                g.parts()
+            );
+        }
+    }
 }

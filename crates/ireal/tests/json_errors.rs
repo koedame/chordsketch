@@ -11,9 +11,9 @@
 //! `JsonValue::as_str`'s Err arm.
 
 use chordsketch_ireal::{
-    Bar, BarChord, BarChordKind, BarLine, BeatPosition, Chord, ChordQuality, ChordRoot, ChordSize,
-    Ending, FromJson, IrealSong, JsonError, JsonValue, MusicalSymbol, Section, SectionLabel,
-    ToJson, parse_json,
+    Bar, BarChord, BarChordKind, BarLine, BeatGrouping, BeatPosition, Chord, ChordQuality,
+    ChordRoot, ChordSize, Ending, FromJson, IrealSong, JsonError, JsonValue, MusicalSymbol,
+    Section, SectionLabel, ToJson, parse_json,
 };
 
 fn minimal_song_json_with(field: &str, value: &str) -> String {
@@ -821,4 +821,96 @@ fn musical_symbol_break_round_trips_through_json() {
     let result = MusicalSymbol::from_json_value(&parsed_json)
         .expect("Break must deserialise from \"break\"");
     assert_eq!(result, MusicalSymbol::Break);
+}
+
+// ---- BeatGrouping JSON round-trip (#2449) ---------------------------------
+
+/// `beat_grouping_override` with a `[3, 2]` grouping must emit
+/// `"beat_grouping_override":[3,2]` and deserialise back to the
+/// same grouping. Covers:
+/// - the `if let Some(grouping) = &self.beat_grouping_override` branch
+///   in `Bar::to_json` (omitted when `None`, present when `Some`),
+/// - `BeatGrouping::to_json` (the array serialiser),
+/// - the `Some(v) => BeatGrouping::from_json_value(v)?` arm in
+///   `Bar::from_json_value`.
+#[test]
+fn beat_grouping_override_some_serialises_and_round_trips_through_json() {
+    use std::num::NonZeroU8;
+    let grouping = BeatGrouping::new(vec![NonZeroU8::new(3).unwrap(), NonZeroU8::new(2).unwrap()])
+        .expect("non-empty grouping");
+    let bar = Bar {
+        start: BarLine::Single,
+        end: BarLine::Single,
+        chords: vec![],
+        ending: None,
+        symbol: None,
+        repeat_previous: false,
+        no_chord: false,
+        text_comment: None,
+        system_break_space: 0,
+        beat_grouping_override: Some(grouping),
+    };
+    let json = bar.to_json_string();
+    // The field must be emitted when `Some`.
+    assert!(
+        json.contains("\"beat_grouping_override\""),
+        "beat_grouping_override must appear in JSON when Some, got {json:?}"
+    );
+    assert!(
+        json.contains("[3,2]"),
+        "beat_grouping_override [3,2] must serialise to [3,2], got {json:?}"
+    );
+    // A `None` bar must NOT emit the field (snapshot-byte-stability).
+    let none_bar = Bar::default();
+    let none_json = none_bar.to_json_string();
+    assert!(
+        !none_json.contains("\"beat_grouping_override\""),
+        "beat_grouping_override must be absent from JSON when None, got {none_json:?}"
+    );
+    // Round-trip: deserialise back and check the grouping.
+    let parsed = Bar::from_json_str(&json).expect("deserialise");
+    let g = parsed
+        .beat_grouping_override
+        .expect("beat_grouping_override must survive round-trip");
+    assert_eq!(g.parts().len(), 2);
+    assert_eq!(g.parts()[0].get(), 3);
+    assert_eq!(g.parts()[1].get(), 2);
+}
+
+/// An empty `beat_grouping_override` array `[]` must be rejected —
+/// a grouping with no subgroups is semantically undefined.
+/// Covers the `BeatGrouping::new(parts).ok_or_else(…)` Err arm
+/// in `BeatGrouping::from_json_value`.
+#[test]
+fn beat_grouping_override_empty_array_is_rejected() {
+    let json = r#"{"start":"single","end":"single","chords":[],"ending":null,"symbol":null,"beat_grouping_override":[]}"#;
+    let result = Bar::from_json_str(json);
+    assert!(
+        result.is_err(),
+        "empty beat_grouping_override array must be rejected, got {result:?}"
+    );
+    let msg = format!("{}", result.unwrap_err());
+    assert!(
+        msg.contains("subgroup") || msg.contains("beat_grouping"),
+        "error must mention the field, got {msg:?}"
+    );
+}
+
+/// A `beat_grouping_override` containing a zero subgroup `[0,3]`
+/// must be rejected — zero-sized subgroups have no internal-feel
+/// meaning. Covers the `NonZeroU8::new(n).ok_or_else(…)` Err arm
+/// in `BeatGrouping::from_json_value`.
+#[test]
+fn beat_grouping_override_zero_subgroup_is_rejected() {
+    let json = r#"{"start":"single","end":"single","chords":[],"ending":null,"symbol":null,"beat_grouping_override":[0,3]}"#;
+    let result = Bar::from_json_str(json);
+    assert!(
+        result.is_err(),
+        "zero subgroup in beat_grouping_override must be rejected, got {result:?}"
+    );
+    let msg = format!("{}", result.unwrap_err());
+    assert!(
+        msg.contains("non-zero") || msg.contains("subgroup"),
+        "error must mention the zero constraint, got {msg:?}"
+    );
 }
