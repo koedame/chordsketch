@@ -88,9 +88,12 @@ pub fn irealbook_serialize(songs: &[IrealSong], name: Option<&str>) -> String {
 ///
 /// Music is plain text (no `MUSIC_PREFIX` sentinel, no `obfusc50`
 /// scrambling); TimeSig is the spec's packed-digit form (`44`, `34`,
-/// `68`, `128`). The result is then percent-encoded via
-/// [`percent_encode_open_protocol`] — see that function for the full
-/// encoded-byte set.
+/// `68`, `128`). The result is percent-encoded for the spec's
+/// reserved characters (`=`, space, `{`, `}`, `[`, `]`, `<`, `>`,
+/// `,`, `#`, `^`), the `%` sigil, every non-ASCII byte
+/// (`>= 0x80`) per RFC 3986, and the HTML-attribute hazards
+/// (`"`, `'`, `&`) so the URL is safe to embed inside a quoted
+/// `href` attribute.
 ///
 /// The output round-trips back through [`crate::parse`] over the
 /// 6-field-`irealbook://` parser arm, with one documented loss:
