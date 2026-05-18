@@ -712,6 +712,50 @@ fn chord_size_explicit_default_decodes_to_default() {
     assert_eq!(size, ChordSize::Default);
 }
 
+/// Sister-test of `bar_chord_small_size_serialises_and_round_trips_through_json`
+/// for the `kind` field (#2435). Verifies the additive-omit pattern:
+/// default `Played` does NOT emit `"kind"`, non-default `SlashRepeat`
+/// DOES, and the round-trip preserves the kind.
+#[test]
+fn bar_chord_slash_repeat_serialises_and_round_trips_through_json() {
+    let snapshot = Chord::triad(ChordRoot::natural('C'), ChordQuality::Dominant7);
+    let bc = BarChord::slash_repeat(
+        snapshot.clone(),
+        BeatPosition::on_beat(2).unwrap(),
+        ChordSize::Default,
+    );
+    let json = bc.to_json_string();
+    // The field must be present when non-default.
+    assert!(
+        json.contains("\"kind\":\"slash_repeat\""),
+        "kind must appear as \"slash_repeat\" when SlashRepeat, got {json:?}"
+    );
+    // Played BarChords must NOT emit the field (snapshot-byte-stability).
+    let played_bc =
+        BarChord::played(snapshot, BeatPosition::on_beat(1).unwrap(), ChordSize::Default);
+    let played_json = played_bc.to_json_string();
+    assert!(
+        !played_json.contains("\"kind\""),
+        "Played chord must NOT emit kind field, got {played_json:?}"
+    );
+    // Round-trip: deserialise back and check equality.
+    let parsed = BarChord::from_json_str(&json).expect("deserialise");
+    assert_eq!(parsed.kind, BarChordKind::SlashRepeat);
+    assert_eq!(parsed, bc);
+}
+
+/// Unknown `kind` string must surface a `JsonError`. Covers the
+/// `other => Err(...)` arm in `BarChordKind::from_json_value`.
+#[test]
+fn from_json_rejects_unknown_bar_chord_kind() {
+    let value = parse_json(r#""mystery""#).unwrap();
+    let result = BarChordKind::from_json_value(&value);
+    assert!(
+        result.is_err(),
+        "unknown bar-chord kind must be rejected, got {result:?}"
+    );
+}
+
 /// Unknown chord-size string must surface a `JsonError`.
 /// Covers the `other => Err(...)` arm in `ChordSize::from_json_value`.
 #[test]

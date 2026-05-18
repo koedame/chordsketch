@@ -1036,11 +1036,25 @@ impl ChartParseState {
         };
         let chord = parse_chord(&resolved)?;
         // When inside `(...)` parens, attach the parsed chord as
-        // the previous chord's `alternate` rather than as a new
-        // chord on the bar. Falls back to a regular push if there
-        // is no previous chord (URL malformed — alt without primary).
+        // the previous *Played* chord's `alternate` rather than as
+        // a new chord on the bar. Walking back to the last Played
+        // entry (rather than `chords.last_mut()`) matters when a
+        // `p` pause-slash sits between the primary chord and the
+        // open paren — e.g. `|C7p(D7)|`. The SlashRepeat at
+        // index 1 is unfit to carry an alternate because it
+        // renders as `/` and the alternate field would never
+        // surface. Attaching to the C7 at index 0 is the only
+        // semantically meaningful destination. Falls back to a
+        // regular push if no Played chord exists (URL malformed —
+        // alt without primary).
         if self.in_alternate {
-            if let Some(prev) = self.current_bar.chords.last_mut() {
+            if let Some(prev) = self
+                .current_bar
+                .chords
+                .iter_mut()
+                .rev()
+                .find(|bc| bc.kind == BarChordKind::Played)
+            {
                 prev.chord.alternate = Some(Box::new(chord));
                 return Ok(());
             }
@@ -1081,13 +1095,19 @@ impl ChartParseState {
         true
     }
 
-    /// Returns the most recent chord — first the current bar's last
-    /// `Played` chord (a slash repeat of the same bar's previous
-    /// chord), then any previous bar's last `Played` chord (a slash
-    /// repeat across a bar boundary, e.g. `|C7|pF7|`). `SlashRepeat`
-    /// entries are skipped because they themselves carry a snapshot
-    /// of an earlier chord — chaining snapshots is unnecessary and
-    /// would dilute provenance if the original chord changes.
+    /// Returns the most recent `Played` chord — first the current
+    /// bar's last `Played` chord (a slash repeat of the same bar's
+    /// previous chord), then any previous bar's last `Played` chord
+    /// inside the current section (a slash repeat across a bar
+    /// boundary, e.g. `|C7|pF7|`). Walks back only within the
+    /// current section; a pause-slash as the first token of a new
+    /// section (input: `|C7|[*Bp|F7|`) is treated as an orphan and
+    /// dropped, because section breaks in iReal Pro typically reset
+    /// the rhythmic context and a slash crossing them would carry
+    /// ambiguous provenance. `SlashRepeat` entries are skipped
+    /// because they themselves carry a snapshot of an earlier
+    /// chord — chaining snapshots is unnecessary and would dilute
+    /// provenance if the original chord changes.
     fn most_recent_chord(&self) -> Option<Chord> {
         let from_current = self
             .current_bar
@@ -1612,6 +1632,37 @@ mod tests {
         );
         assert_eq!(bar0.chords[0].kind, BarChordKind::Played);
         assert_eq!(bar0.chords[0].chord.root.note, 'C');
+    }
+
+    #[test]
+    fn alternate_after_pause_slash_attaches_to_played_chord_not_slash() {
+        // `|C7p(D7)|` — the `(D7)` alternate-chord paren follows a
+        // pause-slash. Without the fix on `push_chord`'s in_alternate
+        // branch, the alternate attaches to the SlashRepeat at
+        // index 1 (via `chords.last_mut()`), which is never painted
+        // because the renderer paints `/` for SlashRepeat. With the
+        // fix, the alternate attaches to the Played C7 at index 0,
+        // where consumers can see it.
+        let url = "irealbook://Test=A==Style=C=44=[*AC7p(D7)|]";
+        let song = parse(url).expect("parse");
+        let bar0 = &song.sections[0].bars[0];
+        // 2 entries: Played C7 + SlashRepeat snapshot.
+        assert_eq!(bar0.chords.len(), 2);
+        assert_eq!(bar0.chords[0].kind, BarChordKind::Played);
+        assert_eq!(bar0.chords[0].chord.root.note, 'C');
+        let alt = bar0.chords[0]
+            .chord
+            .alternate
+            .as_deref()
+            .expect("alternate must attach to the Played C7, not the SlashRepeat");
+        assert_eq!(alt.root.note, 'D');
+        assert_eq!(bar0.chords[1].kind, BarChordKind::SlashRepeat);
+        // The SlashRepeat snapshot must NOT carry the alternate;
+        // it predates the `(D7)` paren in parse order.
+        assert!(
+            bar0.chords[1].chord.alternate.is_none(),
+            "SlashRepeat snapshot must not absorb the alternate"
+        );
     }
 
     #[test]

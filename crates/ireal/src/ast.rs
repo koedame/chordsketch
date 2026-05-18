@@ -374,6 +374,38 @@ pub enum BarChordKind {
     SlashRepeat,
 }
 
+impl BarChord {
+    /// Constructs a regular [`BarChordKind::Played`] entry. Prefer
+    /// this over a struct literal so the `kind` field is decided
+    /// at the call site rather than relying on `Default`.
+    #[must_use]
+    pub fn played(chord: Chord, position: BeatPosition, size: ChordSize) -> Self {
+        Self {
+            chord,
+            position,
+            size,
+            kind: BarChordKind::Played,
+        }
+    }
+
+    /// Constructs a [`BarChordKind::SlashRepeat`] entry whose `chord`
+    /// field carries a snapshot of the preceding chord. The
+    /// snapshot is the caller's responsibility — pass the chord
+    /// the renderer should treat as the "held" harmony for that
+    /// beat slot. Renderers paint a `/` glyph and ignore the
+    /// snapshot's typography; AST consumers can still introspect
+    /// it for analysis or transposition.
+    #[must_use]
+    pub fn slash_repeat(snapshot: Chord, position: BeatPosition, size: ChordSize) -> Self {
+        Self {
+            chord: snapshot,
+            position,
+            size,
+            kind: BarChordKind::SlashRepeat,
+        }
+    }
+}
+
 /// Per-chord display size, controlled by the iReal Pro `s` / `l`
 /// markers.
 ///

@@ -64,10 +64,30 @@ export interface BeatPosition {
   subdivision: number;
 }
 
+/** Per-chord display size, mirroring the Rust AST's `ChordSize`
+ * enum. iReal Pro's `s` / `l` markers toggle Small / Default
+ * across the chord stream. Optional + lower-case strings because
+ * the JSON layer omits the field when default. */
+export type ChordSize = 'default' | 'small';
+
+/** Per-chord paint kind, mirroring the Rust AST's `BarChordKind`
+ * enum (#2435). `'played'` (default, omitted by the JSON layer)
+ * paints chord typography; `'slash_repeat'` paints a single `/`
+ * glyph in place of chord text — the iReal Pro pause-slash
+ * meaning "repeat the preceding chord". The `chord` field on a
+ * SlashRepeat carries a snapshot of the preceding chord. */
+export type BarChordKind = 'played' | 'slash_repeat';
+
 /** A chord placed at a beat inside a bar. */
 export interface BarChord {
   chord: Chord;
   position: BeatPosition;
+  /** Per-chord display size. Omitted by the JSON encoder when
+   * `'default'`; consumers should treat absent === default. */
+  size?: ChordSize;
+  /** Per-chord paint kind. Omitted by the JSON encoder when
+   * `'played'`; consumers should treat absent === played. */
+  kind?: BarChordKind;
 }
 
 /** One measure inside a section.

@@ -807,3 +807,67 @@ fn chord_size_demo() -> IrealSong {
 fn render_chord_size_demo() {
     check_golden("chord_size_demo", &chord_size_demo());
 }
+
+/// Asserts the SVG renderer's SlashRepeat paint path (#2435):
+/// a bar with two SlashRepeat entries between a played C7 and F7
+/// produces exactly two `class="chord slash-repeat"` elements
+/// whose text content is the `/` glyph, matches the iReal Pro spec
+/// `|C7ppF7|`. Defends against accidental removal of the
+/// `if bc.kind == BarChordKind::SlashRepeat` branch in
+/// `write_bar_chord_text` — without that branch the assertion
+/// fails because the renderer would paint chord typography
+/// (`C7` text spans) instead of the slash glyph.
+#[test]
+fn render_slash_repeat_emits_slash_glyph() {
+    let c7 = Chord::triad(ChordRoot::natural('C'), ChordQuality::Dominant7);
+    let f7 = Chord::triad(ChordRoot::natural('F'), ChordQuality::Dominant7);
+    let bar = Bar {
+        chords: vec![
+            BarChord::played(c7.clone(), BeatPosition::on_beat(1).unwrap(), ChordSize::Default),
+            BarChord::slash_repeat(
+                c7.clone(),
+                BeatPosition::on_beat(2).unwrap(),
+                ChordSize::Default,
+            ),
+            BarChord::slash_repeat(
+                c7,
+                BeatPosition::on_beat(3).unwrap(),
+                ChordSize::Default,
+            ),
+            BarChord::played(f7, BeatPosition::on_beat(4).unwrap(), ChordSize::Default),
+        ],
+        ..Bar::new()
+    };
+    let mut song = IrealSong::new();
+    song.title = "Slash Repeat".into();
+    song.composer = Some("T".into());
+    song.style = Some("Medium Swing".into());
+    song.key_signature = KeySignature {
+        root: ChordRoot {
+            note: 'C',
+            accidental: Accidental::Natural,
+        },
+        mode: KeyMode::Major,
+    };
+    song.sections.push(Section {
+        label: SectionLabel::Letter('A'),
+        bars: vec![bar],
+    });
+    let svg = render_svg(&song, &RenderOptions::default());
+    let slash_count = svg.matches("class=\"chord slash-repeat\"").count();
+    assert_eq!(
+        slash_count, 2,
+        "expected 2 SlashRepeat glyphs in SVG, got {slash_count}; svg fragment: {svg}"
+    );
+    // The slash glyph itself must appear inside the SlashRepeat
+    // <text> elements — guards against a regression that emits
+    // the class but loses the `/` character.
+    assert!(
+        svg.contains("class=\"chord slash-repeat\""),
+        "missing slash-repeat class attribute"
+    );
+    assert!(
+        svg.contains(">/</text>"),
+        "missing slash glyph `/` inside a chord <text> element"
+    );
+}
