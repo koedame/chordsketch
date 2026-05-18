@@ -112,7 +112,7 @@ Token coverage as of the latest release:
 | `(altchord)` parenthesised alternate chord | `Chord::alternate` ([#2428](https://github.com/koedame/chordsketch/issues/2428)) |
 | `n` No-Chord | `Bar::no_chord` ([#2429](https://github.com/koedame/chordsketch/issues/2429)) |
 | `Kcl` / `x` / `r` simile (collapsed to a single flag) | `Bar::repeat_previous` ([#2430](https://github.com/koedame/chordsketch/issues/2430)) |
-| `<text>` staff-text caption (verbatim preservation) | `Bar::text_comment` |
+| Staff-text tokens `<text>` / `<*XYtext>` / `<Nx>` (plain caption + spec vertical-position prefix + repeat-count override) | `Bar::staff_texts: Vec<StaffText>` ([#2426](https://github.com/koedame/chordsketch/issues/2426)) |
 | `Y` / `YY` / `YYY` between-system vertical-space hint | `Bar::system_break_space` ([#2434](https://github.com/koedame/chordsketch/issues/2434)) |
 | `S` Segno, `Q` Coda, `f` Fermata | `MusicalSymbol::{Segno, Coda, Fermata}` ([#2431](https://github.com/koedame/chordsketch/issues/2431)) |
 | Eleven player-recognised `<D.C. al ...>` / `<D.S. al ...>` / `<Fine>` phrases + bare `<D.C.>` / `<D.S.>` | `MusicalSymbol::{DaCapo(JumpTarget), DalSegno(JumpTarget), Fine}` ([#2427](https://github.com/koedame/chordsketch/issues/2427)) |
@@ -124,7 +124,6 @@ Token coverage as of the latest release:
 
 | Token / shape | Sub-issue |
 |---|---|
-| Full staff-text content (custom text, vertical position, repeat count override) | [#2426](https://github.com/koedame/chordsketch/issues/2426) |
 | Chord-size markers `s` (small) / `l` (large) | [#2433](https://github.com/koedame/chordsketch/issues/2433) |
 | Pause-slash `p` (repeat preceding chord) | [#2435](https://github.com/koedame/chordsketch/issues/2435) |
 | `N0` no-text ending | [#2436](https://github.com/koedame/chordsketch/issues/2436) |

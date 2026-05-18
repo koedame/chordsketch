@@ -207,14 +207,36 @@ pub struct Bar {
     /// place of a chord — the bar still consumes a measure of time
     /// but no chord is sounded.
     pub no_chord: bool,
-    /// Free-form text comment attached to this bar (URL token
-    /// `<...>` excluding the recognised musical-direction macros
-    /// `D.C.` / `D.S.` / `Fine` / variants — those are stored on
-    /// `symbol` instead). The renderer paints the text below the
-    /// bar's right barline as an italic serif caption (e.g. "13
-    /// measure lead break"). Order is preserved; multiple comments
-    /// on one bar concatenate with `; ` separator.
-    pub text_comment: Option<String>,
+    /// Ordered list of staff-text entries attached to this bar (URL
+    /// token `<...>`, excluding the recognised musical-direction
+    /// macros `D.C.` / `D.S.` / `Fine` / variants — those are stored
+    /// on `symbol` instead — and the compound-time beat-grouping
+    /// directive `<a+b>`, which is stored on `beat_grouping_override`).
+    ///
+    /// Each [`StaffText`] entry corresponds to one `<...>` token in
+    /// the source URL, preserving the spec's three flavours:
+    ///
+    /// - **Plain caption** — `<solo break>` lands as
+    ///   [`StaffText::Text`] with `vertical_position = None`.
+    /// - **Vertically-positioned caption** — `<*36Solo Section:>`
+    ///   lands as [`StaffText::Text`] with the inner text
+    ///   (`"Solo Section:"`) and `vertical_position = Some(36)`. The
+    ///   range is `0..=74` per the official open-protocol page (00
+    ///   below the system → 74 above the system).
+    /// - **Repeat-count override** — `<8x>` lands as
+    ///   [`StaffText::RepeatCount`] with inner value `8`. Tells the
+    ///   iReal Pro player to play the surrounding `{ ... }` block N
+    ///   times instead of the default 2; structurally distinct from
+    ///   a plain caption whose text happens to be `"8x"`.
+    ///
+    /// Multiple staff-text tokens on the same bar are preserved in
+    /// the order they appeared in the source URL (the parser
+    /// `push`es onto this vector). Empty `Vec::new()` means "no
+    /// staff text".
+    ///
+    /// Reference:
+    /// <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>
+    pub staff_texts: Vec<StaffText>,
     /// Vertical-space hint (URL tokens `Y` / `YY` / `YYY` at the
     /// start of a system) preserved as an integer count in
     /// `0..=3`. `0` means "no extra space" (default); `1` / `2` /
@@ -268,10 +290,86 @@ impl Bar {
             symbol: None,
             repeat_previous: false,
             no_chord: false,
-            text_comment: None,
+            staff_texts: Vec::new(),
             system_break_space: 0,
             beat_grouping_override: None,
         }
+    }
+}
+
+/// One `<...>` staff-text token attached to a [`Bar`].
+///
+/// Three structurally distinct flavours per the iReal Pro
+/// open-protocol page (the spec's "Staff Text" section):
+///
+/// - `<text>` — plain caption.
+/// - `<*XYtext>` — caption raised by `XY` units (00..=74) above the
+///   bar baseline.
+/// - `<Nx>` — repeat-count override for the enclosing `{ ... }`
+///   block. Distinct from `<text>` whose body happens to read `"8x"`.
+///
+/// Reference:
+/// <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StaffText {
+    /// Free-form caption, optionally raised by a vertical offset.
+    ///
+    /// `vertical_position` carries the two-digit `*XY` prefix when
+    /// the source token was `<*XYtext>` and `None` when it was a
+    /// plain `<text>`. The spec's range is `0..=74`; values outside
+    /// that range are clamped at parse time, so any `Some(v)` on a
+    /// parser-produced AST already satisfies `v <= 74`. Hand-rolled
+    /// ASTs may carry out-of-range values — renderers / serializers
+    /// re-clamp at their own boundary per the "validate at the
+    /// public boundary" rule in `defensive-inputs.md`.
+    Text {
+        /// The caption body (everything after the optional `*XY`
+        /// prefix, before the closing `>`).
+        text: String,
+        /// Two-digit raise offset, `0..=74`. `None` means "default
+        /// position" (the player's built-in placement).
+        vertical_position: Option<u8>,
+    },
+    /// `<Nx>` repeat-count directive — overrides the default 2-time
+    /// repeat for the enclosing `{ ... }` block.
+    ///
+    /// The inner `u16` is the literal repeat count from the URL token
+    /// (e.g. `<8x>` → `RepeatCount(8)`). The spec does not document a
+    /// max, but the iReal Pro app caps the editor at three digits;
+    /// the AST keeps `u16` so a hand-constructed value past the
+    /// editor cap still serialises losslessly.
+    RepeatCount(u16),
+}
+
+impl StaffText {
+    /// Inclusive upper bound on the spec's `*XY` vertical-position
+    /// prefix (00 below the system → 74 above the system).
+    pub const MAX_VERTICAL_POSITION: u8 = 74;
+
+    /// Constructs a plain `Text` staff entry with no vertical
+    /// position prefix.
+    #[must_use]
+    pub fn plain(text: impl Into<String>) -> Self {
+        Self::Text {
+            text: text.into(),
+            vertical_position: None,
+        }
+    }
+
+    /// Constructs a `Text` staff entry with the given vertical
+    /// position, clamped to [`Self::MAX_VERTICAL_POSITION`].
+    #[must_use]
+    pub fn raised(text: impl Into<String>, vertical_position: u8) -> Self {
+        Self::Text {
+            text: text.into(),
+            vertical_position: Some(vertical_position.min(Self::MAX_VERTICAL_POSITION)),
+        }
+    }
+
+    /// Constructs a `<Nx>` repeat-count staff entry.
+    #[must_use]
+    pub const fn repeat_count(n: u16) -> Self {
+        Self::RepeatCount(n)
     }
 }
 
@@ -765,7 +863,7 @@ pub enum KeyMode {
 /// The bare forms are not in the official eleven player-recognised
 /// phrases but appear routinely in real exports, so the AST models
 /// them as a first-class variant rather than silently dropping the
-/// symbol or routing it through the `text_comment` fallback.
+/// symbol or routing it through the `staff_texts` fallback.
 ///
 /// Spec: <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -26,7 +26,7 @@ use chordsketch_chordpro::ast::{
 };
 use chordsketch_ireal::{
     Accidental, Bar, BarChordKind, BarLine, Chord as IrealChord, ChordQuality, ChordRoot,
-    IrealSong, KeyMode, KeySignature, MusicalSymbol, SectionLabel, TimeSignature,
+    IrealSong, KeyMode, KeySignature, MusicalSymbol, SectionLabel, StaffText, TimeSignature,
 };
 
 use crate::error::{ConversionWarning, WarningKind};
@@ -281,12 +281,20 @@ fn push_bars(
                 label = symbol_label(symbol)
             )));
         }
-        if let Some(text) = bar.text_comment.as_deref() {
+        for st in &bar.staff_texts {
             // Free-form `<...>` captions (e.g. "13 measure lead
             // break", "D.S. al 2nd ending") have no structural
             // ChordPro equivalent. Render inline as parenthesised
             // text — same treatment as the canonical symbols above.
-            segments.push(LyricsSegment::text_only(format!("({text}) ")));
+            // [`StaffText::Text`] bodies render verbatim; the
+            // structured [`StaffText::RepeatCount(n)`] form renders
+            // as `(Nx)` so a downstream reader can still recover the
+            // original directive intent on visual inspection.
+            let caption = match st {
+                StaffText::Text { text, .. } => text.clone(),
+                StaffText::RepeatCount(n) => format!("{n}x"),
+            };
+            segments.push(LyricsSegment::text_only(format!("({caption}) ")));
         }
         // Bar boundary: trailing `|` (with leading space for
         // readability). The Final / Double / repeat barlines lift
@@ -455,7 +463,7 @@ mod tests {
                     symbol: None,
                     repeat_previous: false,
                     no_chord: false,
-                    text_comment: None,
+                    staff_texts: Vec::new(),
                     system_break_space: 0,
                     beat_grouping_override: None,
                 }],
@@ -715,7 +723,7 @@ mod tests {
     }
 
     #[test]
-    fn text_comment_emits_paren_text_segment() {
+    fn staff_text_emits_paren_text_segment() {
         use chordsketch_chordpro::ast::Line;
         let mut s = IrealSong::new();
         s.title = "Comment Test".into();
@@ -733,7 +741,7 @@ mod tests {
                     size: ChordSize::Default,
                     kind: BarChordKind::Played,
                 }],
-                text_comment: Some("Vamp till cue".into()),
+                staff_texts: vec![StaffText::plain("Vamp till cue")],
                 ..Bar::default()
             }],
         });
@@ -752,7 +760,49 @@ mod tests {
             .concat();
         assert!(
             text_concat.contains("Vamp till cue"),
-            "text_comment must round-trip into a text segment, got {text_concat:?}"
+            "staff_texts entry must round-trip into a text segment, got {text_concat:?}"
+        );
+    }
+
+    #[test]
+    fn staff_text_repeat_count_emits_nx_segment() {
+        use chordsketch_chordpro::ast::Line;
+        let mut s = IrealSong::new();
+        s.title = "Repeat Count".into();
+        s.sections.push(Section {
+            label: SectionLabel::Letter('A'),
+            bars: vec![Bar {
+                chords: vec![BarChord {
+                    chord: Chord {
+                        root: ChordRoot::natural('C'),
+                        quality: ChordQuality::Major,
+                        bass: None,
+                        alternate: None,
+                    },
+                    position: BeatPosition::on_beat(1).unwrap(),
+                    size: ChordSize::Default,
+                    kind: BarChordKind::Played,
+                }],
+                staff_texts: vec![StaffText::repeat_count(8)],
+                ..Bar::default()
+            }],
+        });
+        let result = convert(&s).unwrap();
+        let text_concat: String = result
+            .output
+            .lines
+            .iter()
+            .filter_map(|l| match l {
+                Line::Lyrics(lyrics) => {
+                    Some(lyrics.segments.iter().map(|s| s.text.as_str()).collect())
+                }
+                _ => None,
+            })
+            .collect::<Vec<String>>()
+            .concat();
+        assert!(
+            text_concat.contains("(8x)"),
+            "repeat_count must surface as parenthesised `Nx`, got {text_concat:?}"
         );
     }
 

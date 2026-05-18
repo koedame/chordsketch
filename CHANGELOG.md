@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`chordsketch-ireal` preserves full staff-text content (#2426).**
+  New `StaffText` enum on the AST captures the spec's three staff-
+  text shapes — `<text>` (plain caption), `<*XYtext>` (caption
+  raised by a two-digit position `*XY` ∈ `00..=74`), and `<Nx>`
+  (repeat-count override for the enclosing `{ ... }` block). Each
+  bar carries an ordered `Vec<StaffText>` on `Bar::staff_texts`,
+  replacing the single-string `Bar::text_comment` so multiple
+  `<...>` tokens on one bar round-trip in source order. Parser
+  classifies the structured forms eagerly: `*XY` outside `0..=74`
+  and single-digit prefixes fall through to plain captions so
+  hand-authored exports survive verbatim. URL serializer
+  zero-pads single-digit positions to match the parser's two-
+  digit-prefix rule; JSON round-trip is additive (`staff_texts`
+  omitted on bars that have none, preserving pre-#2426 snapshot
+  byte stability). New `staff-text` SVG class in
+  `chordsketch-render-ireal` paints each entry as an italic serif
+  caption, interpolated linearly between the below-bar default
+  baseline (`pos = 0`) and the music-symbol band (`pos = 74`).
 - **`chordsketch-ireal` open-protocol plain-text serializer (#2425).**
   New `serialize_open_protocol(&IrealSong) -> String` and
   `serialize_open_protocol_collection(&[IrealSong], Option<&str>)`
@@ -46,8 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signature's numerator and persists the override across bars
   ("remains until the opposite is used"); meter changes reset the
   running state. Malformed inputs (`<2++3>`, `<+3>`, sum
-  mismatches) fall through to `text_comment` so the original
-  token round-trips losslessly. The 6-field `irealbook://`
+  mismatches) fall through to `Bar::staff_texts` (#2426) so the
+  original token round-trips losslessly. The 6-field `irealbook://`
   header's time signature now seeds the music-body parser's
   meter state so `<a+b>` directives validate against the
   declared chart meter even when the body has no inline `T..`

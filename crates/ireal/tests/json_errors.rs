@@ -462,7 +462,7 @@ fn full_song_round_trips_through_deserializer() {
         symbol: None,
         repeat_previous: false,
         no_chord: false,
-        text_comment: None,
+        staff_texts: Vec::new(),
         system_break_space: 0,
         beat_grouping_override: None,
     };
@@ -528,7 +528,7 @@ fn from_json_bar_without_repeat_previous_defaults_false() {
     let bar = Bar::from_json_str(json).expect("parse");
     assert!(!bar.repeat_previous);
     assert!(!bar.no_chord);
-    assert!(bar.text_comment.is_none());
+    assert!(bar.staff_texts.is_empty());
 }
 
 #[test]
@@ -630,7 +630,7 @@ fn bar_system_break_space_nonzero_round_trips_through_json() {
         symbol: None,
         repeat_previous: false,
         no_chord: false,
-        text_comment: None,
+        staff_texts: Vec::new(),
         system_break_space: 2,
         beat_grouping_override: None,
     };
@@ -846,7 +846,7 @@ fn beat_grouping_override_some_serialises_and_round_trips_through_json() {
         symbol: None,
         repeat_previous: false,
         no_chord: false,
-        text_comment: None,
+        staff_texts: Vec::new(),
         system_break_space: 0,
         beat_grouping_override: Some(grouping),
     };

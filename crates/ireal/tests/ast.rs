@@ -263,7 +263,7 @@ fn json_round_trip_handles_every_enum_variant() {
             symbol: Some(symbol),
             repeat_previous: false,
             no_chord: false,
-            text_comment: None,
+            staff_texts: Vec::new(),
             system_break_space: 0,
             beat_grouping_override: None,
         };
@@ -529,7 +529,7 @@ fn make_sample() -> IrealSong {
         symbol: Some(MusicalSymbol::Segno),
         repeat_previous: false,
         no_chord: false,
-        text_comment: None,
+        staff_texts: Vec::new(),
         system_break_space: 0,
         beat_grouping_override: None,
     };
