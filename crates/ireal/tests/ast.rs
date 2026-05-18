@@ -225,8 +225,8 @@ fn json_round_trip_handles_every_enum_variant() {
     let symbols = [
         MusicalSymbol::Segno,
         MusicalSymbol::Coda,
-        MusicalSymbol::DaCapo,
-        MusicalSymbol::DalSegno,
+        MusicalSymbol::DaCapo(chordsketch_ireal::JumpTarget::Unspecified),
+        MusicalSymbol::DalSegno(chordsketch_ireal::JumpTarget::Unspecified),
         MusicalSymbol::Fine,
         MusicalSymbol::Fermata,
     ];
@@ -333,11 +333,31 @@ fn json_escapes_special_characters() {
 
 #[test]
 fn musical_symbol_variants_are_distinct() {
+    use chordsketch_ireal::JumpTarget;
     assert_ne!(MusicalSymbol::Segno, MusicalSymbol::Coda);
-    assert_ne!(MusicalSymbol::DaCapo, MusicalSymbol::DalSegno);
+    assert_ne!(
+        MusicalSymbol::DaCapo(JumpTarget::Unspecified),
+        MusicalSymbol::DalSegno(JumpTarget::Unspecified)
+    );
     assert_eq!(MusicalSymbol::Fine, MusicalSymbol::Fine);
     assert_ne!(MusicalSymbol::Fermata, MusicalSymbol::Fine);
     assert_ne!(MusicalSymbol::Fermata, MusicalSymbol::Segno);
+    // The eleven JumpTarget combinations must all be distinct so
+    // the AST never collapses spec phrases into each other (#2427).
+    assert_ne!(
+        MusicalSymbol::DaCapo(JumpTarget::Unspecified),
+        MusicalSymbol::DaCapo(JumpTarget::AlCoda)
+    );
+    assert_ne!(
+        MusicalSymbol::DaCapo(JumpTarget::AlCoda),
+        MusicalSymbol::DaCapo(JumpTarget::AlFine)
+    );
+    let one = std::num::NonZeroU8::new(1).unwrap();
+    let two = std::num::NonZeroU8::new(2).unwrap();
+    assert_ne!(
+        MusicalSymbol::DaCapo(JumpTarget::AlEnding(one)),
+        MusicalSymbol::DaCapo(JumpTarget::AlEnding(two))
+    );
 }
 
 #[test]

@@ -266,10 +266,16 @@ fn push_bars(
             }
         }
         if let Some(symbol) = bar.symbol {
-            // Music symbols (segno / coda / D.C. / D.S. / Fine) do
-            // not have ChordPro equivalents. Drop them onto the
-            // bar as a parenthesised text segment so a renderer can
-            // surface them inline.
+            // Music symbols (segno / coda / D.C. / D.S. / Fine /
+            // Fermata / Break) do not have ChordPro equivalents.
+            // Drop them onto the bar as a parenthesised text
+            // segment so a renderer can surface them inline. The
+            // exact label comes from `MusicalSymbol::canonical_text`
+            // when the symbol has one (the D.C. / D.S. / Fine /
+            // Break family) so the eleven spec phrases (#2427)
+            // round-trip with their `al Coda` / `al 1st End.` tail
+            // preserved; otherwise we fall back to the glyph-only
+            // label for Segno / Coda / Fermata.
             segments.push(LyricsSegment::text_only(format!(
                 "({label}) ",
                 label = symbol_label(symbol)
@@ -324,15 +330,29 @@ fn push_pre_bar_marker(segments: &mut Vec<LyricsSegment>, bar: &Bar) {
     }
 }
 
-fn symbol_label(symbol: MusicalSymbol) -> &'static str {
+fn symbol_label(symbol: MusicalSymbol) -> String {
+    // The D.C. / D.S. / Fine / Break family routes through
+    // `MusicalSymbol::canonical_text` so the eleven spec phrases
+    // (#2427) — `D.C. al Coda`, `D.S. al 1st End.`, etc. — survive
+    // the ChordPro round trip with their destination intact.
+    // Segno / Coda / Fermata are pure glyph symbols and have no
+    // canonical text; supply the legacy English label so ChordPro
+    // consumers still see a readable marker. Returning `String`
+    // (rather than `&'static str`) is required because
+    // `JumpTarget::AlEnding(n)` produces a per-call ordinal.
+    if let Some(text) = symbol.canonical_text() {
+        return text;
+    }
     match symbol {
-        MusicalSymbol::Segno => "Segno",
-        MusicalSymbol::Coda => "Coda",
-        MusicalSymbol::DaCapo => "D.C.",
-        MusicalSymbol::DalSegno => "D.S.",
-        MusicalSymbol::Fine => "Fine",
-        MusicalSymbol::Fermata => "Fermata",
-        MusicalSymbol::Break => "Break",
+        MusicalSymbol::Segno => "Segno".to_owned(),
+        MusicalSymbol::Coda => "Coda".to_owned(),
+        MusicalSymbol::Fermata => "Fermata".to_owned(),
+        // The text family always has canonical_text; this arm is
+        // unreachable in practice but kept exhaustive for safety.
+        MusicalSymbol::DaCapo(_)
+        | MusicalSymbol::DalSegno(_)
+        | MusicalSymbol::Fine
+        | MusicalSymbol::Break => unreachable!("text family handled by canonical_text"),
     }
 }
 

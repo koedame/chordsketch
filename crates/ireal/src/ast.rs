@@ -748,22 +748,64 @@ pub enum KeyMode {
 // Musical symbols
 // ---------------------------------------------------------------------------
 
+/// Destination of a `D.C.` / `D.S.` jump (#2427).
+///
+/// Encodes the eleven player-recognised staff-text phrases the iReal
+/// Pro app surfaces in its navigation pop-up:
+///
+/// | Phrase | AST shape |
+/// |---|---|
+/// | `<D.C.>` / `<D.S.>` (bare) | `JumpTarget::Unspecified` |
+/// | `<D.C. al Coda>` / `<D.S. al Coda>` | `JumpTarget::AlCoda` |
+/// | `<D.C. al Fine>` / `<D.S. al Fine>` | `JumpTarget::AlFine` |
+/// | `<D.C. al 1st/2nd/3rd End.>` / `<D.S. al 1st/2nd/3rd End.>` | `JumpTarget::AlEnding(n)` |
+///
+/// `Unspecified` covers the bare `<D.C.>` / `<D.S.>` forms that iReal
+/// Pro exports use when the chart author has not pinned a destination.
+/// The bare forms are not in the official eleven player-recognised
+/// phrases but appear routinely in real exports, so the AST models
+/// them as a first-class variant rather than silently dropping the
+/// symbol or routing it through the `text_comment` fallback.
+///
+/// Spec: <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JumpTarget {
+    /// Bare `<D.C.>` / `<D.S.>` with no destination attached.
+    Unspecified,
+    /// `al Coda` — jump, then resume at the Coda mark.
+    AlCoda,
+    /// `al Fine` — jump, then play to the `Fine` marker and stop.
+    AlFine,
+    /// `al Nth End.` — jump, then take the Nth ending. The spec
+    /// enumerates `1st`, `2nd`, `3rd` (three phrases per macro
+    /// family); higher ordinals are still accepted as a `NonZeroU8`
+    /// so the AST tolerates third-party charts that exceed the
+    /// player's recognised set without crashing.
+    AlEnding(NonZeroU8),
+}
+
 /// A repeat / navigation symbol attached to a bar.
 ///
 /// iReal Pro renders these as Bravura-font glyphs (#2062). The
 /// AST keeps them as plain enum variants so the rendering crate
 /// owns the glyph mapping and the conversion crate (#2053) can
 /// decide which ChordPro directive each symbol maps to.
+///
+/// `DaCapo` / `DalSegno` carry a [`JumpTarget`] (#2427) so the
+/// eleven player-recognised `D.C. al ...` / `D.S. al ...` phrases
+/// survive the round trip. The bare `<D.C.>` / `<D.S.>` forms use
+/// [`JumpTarget::Unspecified`] rather than a separate variant; the
+/// renderer and converter dispatch on the contained target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MusicalSymbol {
     /// Segno mark (𝄋).
     Segno,
     /// Coda mark (𝄌).
     Coda,
-    /// "Da Capo" jump-to-start instruction.
-    DaCapo,
-    /// "Dal Segno" jump-to-segno instruction.
-    DalSegno,
+    /// "Da Capo" jump-to-start instruction, with optional destination.
+    DaCapo(JumpTarget),
+    /// "Dal Segno" jump-to-segno instruction, with optional destination.
+    DalSegno(JumpTarget),
     /// "Fine" — terminal marker for a `D.C. al fine` / `D.S. al fine`.
     Fine,
     /// Fermata mark (𝄐) — hold the marked bar longer than notated.
@@ -777,4 +819,171 @@ pub enum MusicalSymbol {
     /// the two may be combined for a complete-silence pickup measure.
     /// Spec: <https://technimo.helpshift.com/hc/en/3-ireal-pro/faq/101-n-c-symbol-break/?p=all>
     Break,
+}
+
+impl MusicalSymbol {
+    /// Returns the canonical iReal Pro staff-text phrase for this
+    /// symbol — the same string the iReal Pro app paints on screen
+    /// and the parser's exact-match arms accept.
+    ///
+    /// `Segno`, `Coda`, `Fermata` are glyph-only in the iReal Pro
+    /// UI and return `None`; the renderer paints the SMuFL glyph
+    /// directly and never displays a text fallback for them.
+    /// `Break` is the drum-silence staff-text marker and renders
+    /// as the literal `"Break"` word; the renderer paints it as
+    /// italic staff text alongside the D.C. / D.S. / Fine family.
+    ///
+    /// Used by [`crate::serialize`], `chordsketch_render_ireal`,
+    /// and `chordsketch-convert` so the four sister sites (URL
+    /// serializer, SVG renderer, PDF renderer, ChordPro converter)
+    /// share one canonical spelling table per
+    /// [`renderer-parity.md`](https://github.com/koedame/chordsketch/blob/main/.claude/rules/renderer-parity.md).
+    #[must_use]
+    pub fn canonical_text(&self) -> Option<String> {
+        match self {
+            Self::Segno | Self::Coda | Self::Fermata => None,
+            Self::Fine => Some("Fine".to_owned()),
+            Self::Break => Some("Break".to_owned()),
+            Self::DaCapo(target) => Some(format!("D.C.{}", jump_target_suffix(*target))),
+            Self::DalSegno(target) => Some(format!("D.S.{}", jump_target_suffix(*target))),
+        }
+    }
+}
+
+/// Spec ordinal suffix for a `JumpTarget::AlEnding(n)`.
+///
+/// Per the spec the iReal Pro player only recognises `1st`, `2nd`,
+/// `3rd`. Numbers outside that range fall back to a numeric ordinal
+/// (`4th End.`, `5th End.`, …) so a third-party chart that uses
+/// higher endings still round-trips through `canonical_text` rather
+/// than silently dropping the destination. The `1st`/`2nd`/`3rd`
+/// arm matches the spec phrasing verbatim so the player-recognised
+/// charts round-trip byte-stable.
+fn jump_target_suffix(target: JumpTarget) -> String {
+    match target {
+        JumpTarget::Unspecified => String::new(),
+        JumpTarget::AlCoda => " al Coda".to_owned(),
+        JumpTarget::AlFine => " al Fine".to_owned(),
+        JumpTarget::AlEnding(n) => {
+            let ordinal = ending_ordinal(n.get());
+            format!(" al {ordinal} End.")
+        }
+    }
+}
+
+/// Returns the English ordinal label for an ending number.
+///
+/// The spec enumerates `1st`, `2nd`, `3rd`; ordinals `>= 4` and
+/// 21+ fall through to the generic `Nth` shape (`4th`, `5th`, ...,
+/// `21st`, `22nd`, `23rd`, ...). The teen exception (`11th`,
+/// `12th`, `13th`) is preserved.
+fn ending_ordinal(n: u8) -> String {
+    let suffix = match n % 100 {
+        11..=13 => "th",
+        _ => match n % 10 {
+            1 => "st",
+            2 => "nd",
+            3 => "rd",
+            _ => "th",
+        },
+    };
+    format!("{n}{suffix}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn nz(n: u8) -> NonZeroU8 {
+        NonZeroU8::new(n).expect("test ordinal must be non-zero")
+    }
+
+    #[test]
+    fn canonical_text_covers_eleven_spec_phrases_plus_bare_forms() {
+        // The eleven player-recognised phrases from
+        // <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>
+        // round-trip byte-for-byte through `canonical_text`. The two
+        // bare entries (`<D.C.>` / `<D.S.>`) cover the legacy export
+        // shape that lacks a destination.
+        let cases = [
+            (MusicalSymbol::DaCapo(JumpTarget::Unspecified), Some("D.C.")),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlCoda),
+                Some("D.C. al Coda"),
+            ),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlFine),
+                Some("D.C. al Fine"),
+            ),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(1))),
+                Some("D.C. al 1st End."),
+            ),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(2))),
+                Some("D.C. al 2nd End."),
+            ),
+            (
+                MusicalSymbol::DaCapo(JumpTarget::AlEnding(nz(3))),
+                Some("D.C. al 3rd End."),
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::Unspecified),
+                Some("D.S."),
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlCoda),
+                Some("D.S. al Coda"),
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlFine),
+                Some("D.S. al Fine"),
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(1))),
+                Some("D.S. al 1st End."),
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(2))),
+                Some("D.S. al 2nd End."),
+            ),
+            (
+                MusicalSymbol::DalSegno(JumpTarget::AlEnding(nz(3))),
+                Some("D.S. al 3rd End."),
+            ),
+            (MusicalSymbol::Fine, Some("Fine")),
+            (MusicalSymbol::Break, Some("Break")),
+            (MusicalSymbol::Segno, None),
+            (MusicalSymbol::Coda, None),
+            (MusicalSymbol::Fermata, None),
+        ];
+        for (symbol, expected) in cases {
+            assert_eq!(
+                symbol.canonical_text().as_deref(),
+                expected,
+                "canonical_text({symbol:?}) drifted from spec phrasing"
+            );
+        }
+    }
+
+    #[test]
+    fn ending_ordinal_handles_spec_and_overflow_cases() {
+        // 1..=3 hit the spec phrasing arms; 4..=10 fall through to
+        // the generic suffix; the 11-13 teen exception is
+        // preserved; 21..=23 reapply the st/nd/rd suffix to make
+        // sure the overflow path is structurally correct.
+        assert_eq!(ending_ordinal(1), "1st");
+        assert_eq!(ending_ordinal(2), "2nd");
+        assert_eq!(ending_ordinal(3), "3rd");
+        assert_eq!(ending_ordinal(4), "4th");
+        assert_eq!(ending_ordinal(10), "10th");
+        assert_eq!(ending_ordinal(11), "11th");
+        assert_eq!(ending_ordinal(12), "12th");
+        assert_eq!(ending_ordinal(13), "13th");
+        assert_eq!(ending_ordinal(21), "21st");
+        assert_eq!(ending_ordinal(22), "22nd");
+        assert_eq!(ending_ordinal(23), "23rd");
+        assert_eq!(ending_ordinal(101), "101st");
+        assert_eq!(ending_ordinal(111), "111th");
+    }
 }

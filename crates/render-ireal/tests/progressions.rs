@@ -591,17 +591,25 @@ fn render_coda_demo() {
 
 #[test]
 fn render_dc_demo() {
+    use chordsketch_ireal::JumpTarget;
     check_golden(
         "dc_demo",
-        &music_symbol_demo(MusicalSymbol::DaCapo, "Da Capo Demo"),
+        &music_symbol_demo(
+            MusicalSymbol::DaCapo(JumpTarget::Unspecified),
+            "Da Capo Demo",
+        ),
     );
 }
 
 #[test]
 fn render_ds_demo() {
+    use chordsketch_ireal::JumpTarget;
     check_golden(
         "ds_demo",
-        &music_symbol_demo(MusicalSymbol::DalSegno, "Dal Segno Demo"),
+        &music_symbol_demo(
+            MusicalSymbol::DalSegno(JumpTarget::Unspecified),
+            "Dal Segno Demo",
+        ),
     );
 }
 

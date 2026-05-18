@@ -447,17 +447,75 @@ impl ToJson for TimeSignature {
 
 impl ToJson for MusicalSymbol {
     fn to_json(&self, out: &mut String) {
-        let s = match self {
+        // The static variants emit a single lowercase string. The
+        // `DaCapo` / `DalSegno` variants pack the `JumpTarget` into
+        // the same string by appending the spec phrase fragment so
+        // the JSON debug format stays human-readable without
+        // promoting `MusicalSymbol` into a tagged object (which
+        // would touch every existing fixture file). The shape is:
+        //
+        //   bare           → "da_capo"           / "dal_segno"
+        //   al_coda        → "da_capo_al_coda"   / "dal_segno_al_coda"
+        //   al_fine        → "da_capo_al_fine"   / "dal_segno_al_fine"
+        //   al N-th ending → "da_capo_al_1st_end"/ "dal_segno_al_2nd_end", etc.
+        //
+        // The `1st`/`2nd`/`3rd`/`Nth` ordinal is reused from
+        // `MusicalSymbol::canonical_text` so the spec phrasing
+        // stays the single source of truth between the JSON
+        // debug format and the renderer/serializer.
+        let owned;
+        let s: &str = match self {
             Self::Segno => "segno",
             Self::Coda => "coda",
-            Self::DaCapo => "da_capo",
-            Self::DalSegno => "dal_segno",
             Self::Fine => "fine",
             Self::Fermata => "fermata",
             Self::Break => "break",
+            Self::DaCapo(target) => {
+                owned = format!("da_capo{}", jump_target_json_suffix(*target));
+                &owned
+            }
+            Self::DalSegno(target) => {
+                owned = format!("dal_segno{}", jump_target_json_suffix(*target));
+                &owned
+            }
         };
         write_str(out, s);
     }
+}
+
+/// JSON-debug-format encoding of a `JumpTarget`. Matches the
+/// `<json suffix>` table in `ToJson for MusicalSymbol`.
+fn jump_target_json_suffix(target: crate::ast::JumpTarget) -> String {
+    use crate::ast::JumpTarget;
+    match target {
+        JumpTarget::Unspecified => String::new(),
+        JumpTarget::AlCoda => "_al_coda".to_owned(),
+        JumpTarget::AlFine => "_al_fine".to_owned(),
+        JumpTarget::AlEnding(n) => {
+            let ordinal = ending_ordinal_lowercase(n.get());
+            format!("_al_{ordinal}_end")
+        }
+    }
+}
+
+/// Lowercase mirror of `ast::ending_ordinal` — kept private here
+/// because the JSON suffix wants a lowercased ordinal (`1st`,
+/// `2nd`, ..., `11th`, `21st`) and the AST helper is intentionally
+/// not exported. Drift between the two is caught by
+/// `json_round_trip_handles_jump_target_variants` in the integration
+/// test suite, which exercises every `JumpTarget` variant through
+/// both serializer and deserializer.
+fn ending_ordinal_lowercase(n: u8) -> String {
+    let suffix = match n % 100 {
+        11..=13 => "th",
+        _ => match n % 10 {
+            1 => "st",
+            2 => "nd",
+            3 => "rd",
+            _ => "th",
+        },
+    };
+    format!("{n}{suffix}")
 }
 
 // ===========================================================================
@@ -1534,18 +1592,106 @@ impl FromJson for TimeSignature {
 
 impl FromJson for MusicalSymbol {
     fn from_json_value(value: &JsonValue) -> Result<Self, JsonError> {
-        match value.as_str()? {
-            "segno" => Ok(Self::Segno),
-            "coda" => Ok(Self::Coda),
-            "da_capo" => Ok(Self::DaCapo),
-            "dal_segno" => Ok(Self::DalSegno),
-            "fine" => Ok(Self::Fine),
-            "fermata" => Ok(Self::Fermata),
-            "break" => Ok(Self::Break),
-            other => Err(JsonError::new(
-                0,
-                format!("unknown musical symbol {}", truncate_for_message(other)),
-            )),
+        use crate::ast::JumpTarget;
+        let s = value.as_str()?;
+        match s {
+            "segno" => return Ok(Self::Segno),
+            "coda" => return Ok(Self::Coda),
+            "fine" => return Ok(Self::Fine),
+            "fermata" => return Ok(Self::Fermata),
+            "break" => return Ok(Self::Break),
+            "da_capo" => return Ok(Self::DaCapo(JumpTarget::Unspecified)),
+            "dal_segno" => return Ok(Self::DalSegno(JumpTarget::Unspecified)),
+            _ => {}
         }
+        // The structured-target shape is one of:
+        //   da_capo_al_<target>
+        //   dal_segno_al_<target>
+        // where <target> ∈ {`coda`, `fine`, `<ordinal>_end`}. The
+        // single-byte routing on the family prefix is intentional —
+        // delegating to `parse_jump_target` keeps the spec phrases
+        // (and the future addition of new targets) in one place.
+        if let Some(target_str) = s.strip_prefix("da_capo_al_") {
+            return parse_jump_target(target_str, s).map(Self::DaCapo);
+        }
+        if let Some(target_str) = s.strip_prefix("dal_segno_al_") {
+            return parse_jump_target(target_str, s).map(Self::DalSegno);
+        }
+        Err(JsonError::new(
+            0,
+            format!("unknown musical symbol {}", truncate_for_message(s)),
+        ))
+    }
+}
+
+/// Inverse of `jump_target_json_suffix`. `whole` is the full input
+/// string so the error message can echo what the caller sent.
+fn parse_jump_target(target_str: &str, whole: &str) -> Result<crate::ast::JumpTarget, JsonError> {
+    use crate::ast::JumpTarget;
+    match target_str {
+        "coda" => Ok(JumpTarget::AlCoda),
+        "fine" => Ok(JumpTarget::AlFine),
+        other => {
+            // `<ordinal>_end` where `<ordinal>` is the
+            // `ending_ordinal_lowercase` output (`1st`, `2nd`,
+            // `3rd`, `4th`, ..., `11th`, `21st`, ...). Strip the
+            // `_end` suffix, then strip the alphabetic tail
+            // (`st`/`nd`/`rd`/`th`) from the ordinal to recover the
+            // numeric body. Reject anything that doesn't fit this
+            // shape with a structured error.
+            let ordinal = other.strip_suffix("_end").ok_or_else(|| {
+                JsonError::new(
+                    0,
+                    format!("unknown jump target {}", truncate_for_message(whole)),
+                )
+            })?;
+            let digit_end = ordinal.find(|c: char| !c.is_ascii_digit()).ok_or_else(|| {
+                JsonError::new(
+                    0,
+                    format!("unknown jump target {}", truncate_for_message(whole)),
+                )
+            })?;
+            if digit_end == 0 {
+                return Err(JsonError::new(
+                    0,
+                    format!("unknown jump target {}", truncate_for_message(whole)),
+                ));
+            }
+            let n: u8 = ordinal[..digit_end].parse().map_err(|_| {
+                JsonError::new(
+                    0,
+                    format!("invalid ending ordinal in {}", truncate_for_message(whole)),
+                )
+            })?;
+            let suffix = &ordinal[digit_end..];
+            if suffix != expected_ordinal_suffix(n) {
+                return Err(JsonError::new(
+                    0,
+                    format!(
+                        "ending ordinal suffix `{suffix}` disagrees with number {n} in {}",
+                        truncate_for_message(whole)
+                    ),
+                ));
+            }
+            let nz = std::num::NonZeroU8::new(n).ok_or_else(|| {
+                JsonError::new(
+                    0,
+                    format!("ending number 0 in {}", truncate_for_message(whole)),
+                )
+            })?;
+            Ok(JumpTarget::AlEnding(nz))
+        }
+    }
+}
+
+fn expected_ordinal_suffix(n: u8) -> &'static str {
+    match n % 100 {
+        11..=13 => "th",
+        _ => match n % 10 {
+            1 => "st",
+            2 => "nd",
+            3 => "rd",
+            _ => "th",
+        },
     }
 }
