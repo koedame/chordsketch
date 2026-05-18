@@ -914,3 +914,27 @@ fn beat_grouping_override_zero_subgroup_is_rejected() {
         "error must mention the zero constraint, got {msg:?}"
     );
 }
+
+/// A `beat_grouping_override` containing a single subgroup `[5]`
+/// must be rejected — a single-subgroup grouping is a no-op ("5
+/// played as 5" is the default). Covers the `len() < 2` branch of
+/// `BeatGrouping::new` reached via `BeatGrouping::from_json_value`.
+/// This path is distinct from the empty-array case (`[]` → `len()
+/// == 0`) even though both hit the same `len() < 2` guard; the
+/// delta that introduced the `len() >= 2` requirement (#2449 fix)
+/// adds `"5"` to the parser malformed-input test but leaves the
+/// symmetric JSON path untested without this case.
+#[test]
+fn beat_grouping_override_single_subgroup_is_rejected() {
+    let json = r#"{"start":"single","end":"single","chords":[],"ending":null,"symbol":null,"beat_grouping_override":[5]}"#;
+    let result = Bar::from_json_str(json);
+    assert!(
+        result.is_err(),
+        "single-subgroup beat_grouping_override [5] must be rejected, got {result:?}"
+    );
+    let msg = format!("{}", result.unwrap_err());
+    assert!(
+        msg.contains("two") || msg.contains("subgroup"),
+        "error must mention the two-subgroup requirement, got {msg:?}"
+    );
+}
