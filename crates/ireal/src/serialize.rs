@@ -310,8 +310,10 @@ fn serialize_time_signature_packed(ts: TimeSignature) -> String {
 /// cannot detect a deliberate `=` in a non-empty field.
 fn percent_encode_open_protocol(input: &str) -> String {
     // Worst-case allocation: every byte expands to `%XX` (3 chars).
-    // The reserved set + high-bit bytes are the typical hot path.
-    let mut out = String::with_capacity(input.len());
+    // Chord-chart bodies often contain many `[`, `<`, `>`, `=`,
+    // space bytes, so `input.len() * 3` avoids repeated
+    // reallocations on the hot path.
+    let mut out = String::with_capacity(input.len() * 3);
     for b in input.bytes() {
         let must_encode = b >= 0x80
             || matches!(
