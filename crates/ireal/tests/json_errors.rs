@@ -13,7 +13,7 @@
 use chordsketch_ireal::{
     Bar, BarChord, BarChordKind, BarLine, BeatGrouping, BeatPosition, Chord, ChordQuality,
     ChordRoot, ChordSize, Ending, FromJson, IrealSong, JsonError, JsonValue, MusicalSymbol,
-    Section, SectionLabel, ToJson, parse_json,
+    Section, SectionLabel, StaffText, ToJson, parse_json,
 };
 
 fn minimal_song_json_with(field: &str, value: &str) -> String {
@@ -936,5 +936,102 @@ fn beat_grouping_override_single_subgroup_is_rejected() {
     assert!(
         msg.contains("two") || msg.contains("subgroup"),
         "error must mention the two-subgroup requirement, got {msg:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// StaffText FromJson error paths (#2426)
+//
+// `StaffText::from_json_value` has three error branches not covered by the
+// golden-fixture round-trips in `tests/ast.rs`. The code-style rule
+// requires both happy-path and error/edge-case coverage.
+// ---------------------------------------------------------------------------
+
+/// `staff_text vertical_position` out of range (> 74) must be rejected.
+/// Covers the `n > MAX_VERTICAL_POSITION` branch in
+/// `StaffText::from_json_value`.
+#[test]
+fn staff_text_vertical_position_out_of_range_is_rejected_by_json() {
+    // Construct a Bar JSON that embeds a staff-text entry with
+    // vertical_position = 75 (one above the spec maximum of 74).
+    let json = r#"{"start":"single","end":"single","chords":[],"ending":null,"symbol":null,"staff_texts":[{"type":"text","text":"hi","vertical_position":75}]}"#;
+    let result = Bar::from_json_str(json);
+    assert!(
+        result.is_err(),
+        "vertical_position 75 (> MAX 74) must be rejected, got {result:?}"
+    );
+    let msg = format!("{}", result.unwrap_err());
+    assert!(
+        msg.contains("vertical_position") || msg.contains("74"),
+        "error must mention the field / limit, got {msg:?}"
+    );
+}
+
+/// `staff_text` with a negative `count` must be rejected — `u16` cannot
+/// represent negative values. Covers the `u16::try_from(raw).map_err`
+/// branch in `StaffText::from_json_value`.
+#[test]
+fn staff_text_repeat_count_negative_is_rejected_by_json() {
+    let json = r#"{"start":"single","end":"single","chords":[],"ending":null,"symbol":null,"staff_texts":[{"type":"repeat_count","count":-1}]}"#;
+    let result = Bar::from_json_str(json);
+    assert!(
+        result.is_err(),
+        "repeat_count -1 must be rejected (u16 cannot hold negative), got {result:?}"
+    );
+    let msg = format!("{}", result.unwrap_err());
+    assert!(
+        msg.contains("count") || msg.contains("u16") || msg.contains("range"),
+        "error must mention the field / type constraint, got {msg:?}"
+    );
+}
+
+/// `staff_text` with an unknown `type` discriminant must be rejected.
+/// Covers the catch-all `other =>` arm in `StaffText::from_json_value`.
+#[test]
+fn staff_text_unknown_type_discriminant_is_rejected_by_json() {
+    let json = r#"{"start":"single","end":"single","chords":[],"ending":null,"symbol":null,"staff_texts":[{"type":"unknown_kind","text":"hi"}]}"#;
+    let result = Bar::from_json_str(json);
+    assert!(
+        result.is_err(),
+        "unknown staff_text type must be rejected, got {result:?}"
+    );
+    let msg = format!("{}", result.unwrap_err());
+    assert!(
+        msg.contains("type") || msg.contains("repeat_count") || msg.contains("text"),
+        "error must name the valid discriminants or the bad value, got {msg:?}"
+    );
+}
+
+/// Happy-path round-trip: a `StaffText::Text` with a `vertical_position`
+/// survives `ToJson` → `FromJson` with all fields intact.
+#[test]
+fn staff_text_raised_round_trips_through_json() {
+    let bar = Bar {
+        staff_texts: vec![StaffText::raised("Solo Section:", 36)],
+        ..Bar::default()
+    };
+    let json = bar.to_json_string();
+    let parsed = Bar::from_json_str(&json).expect("round-trip must succeed");
+    assert_eq!(
+        parsed.staff_texts,
+        vec![StaffText::raised("Solo Section:", 36)],
+        "raised StaffText must survive JSON round-trip"
+    );
+}
+
+/// Happy-path round-trip: a `StaffText::RepeatCount` survives
+/// `ToJson` → `FromJson`.
+#[test]
+fn staff_text_repeat_count_round_trips_through_json() {
+    let bar = Bar {
+        staff_texts: vec![StaffText::repeat_count(8)],
+        ..Bar::default()
+    };
+    let json = bar.to_json_string();
+    let parsed = Bar::from_json_str(&json).expect("round-trip must succeed");
+    assert_eq!(
+        parsed.staff_texts,
+        vec![StaffText::repeat_count(8)],
+        "RepeatCount StaffText must survive JSON round-trip"
     );
 }
