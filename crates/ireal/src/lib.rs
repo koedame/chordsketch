@@ -31,12 +31,15 @@ pub mod serialize;
 // `chordsketch-chordpro` uses for its frequently-typed names.
 pub use ast::{
     Accidental, Bar, BarChord, BarChordKind, BarLine, BeatGrouping, BeatPosition, Chord,
-    ChordQuality, ChordRoot, ChordSize, Ending, IrealSong, KeyMode, KeySignature, MusicalSymbol,
-    Section, SectionLabel, TimeSignature,
+    ChordQuality, ChordRoot, ChordSize, Ending, IrealSong, JumpTarget, KeyMode, KeySignature,
+    MusicalSymbol, Section, SectionLabel, TimeSignature,
 };
 pub use json::{FromJson, JsonError, JsonValue, ToJson, parse_json};
 pub use parser::{ParseError, parse, parse_collection};
-pub use serialize::{irealb_serialize, irealbook_serialize};
+pub use serialize::{
+    irealb_serialize, irealbook_serialize, serialize_open_protocol,
+    serialize_open_protocol_collection,
+};
 
 /// Returns the library version (the workspace `Cargo.toml` `version`
 /// field, baked in at compile time).
