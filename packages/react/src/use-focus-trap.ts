@@ -1,4 +1,4 @@
-import { type RefObject, useEffect } from 'react';
+import { type RefObject, useEffect, useRef } from 'react';
 
 /**
  * Selector matching every element the dialog's focus trap should
@@ -72,6 +72,17 @@ export function useFocusTrap(
 ): void {
   const { onDismiss, anchorRef, enabled } = options;
 
+  // Stable ref so the effect closure always dispatches to the
+  // latest onDismiss without needing to re-register listeners on
+  // every render where the callback changes identity (e.g. when
+  // the caller does not wrap it in useCallback). This eliminates
+  // the stale-closure risk without adding onDismiss to the effect
+  // deps — which would re-attach listeners on every parent re-render.
+  const onDismissRef = useRef(onDismiss);
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  });
+
   useEffect(() => {
     if (!enabled) return;
     const dialog = dialogRef.current;
@@ -86,7 +97,7 @@ export function useFocusTrap(
     const onKeyDown = (ev: KeyboardEvent): void => {
       if (ev.key === 'Escape') {
         ev.preventDefault();
-        onDismiss();
+        onDismissRef.current();
         return;
       }
       if (ev.key === 'Tab') {
@@ -115,7 +126,7 @@ export function useFocusTrap(
       if (dialog.contains(target)) return;
       const anchor = anchorRef.current;
       if (anchor !== null && anchor.contains(target)) return;
-      onDismiss();
+      onDismissRef.current();
     };
     const ownerDocument = dialog.ownerDocument ?? document;
     ownerDocument.addEventListener('pointerdown', onDocumentPointerDown, true);
@@ -128,6 +139,5 @@ export function useFocusTrap(
         anchor.focus();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 }
