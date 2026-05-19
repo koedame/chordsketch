@@ -371,22 +371,47 @@ fn make_song(body: &str) -> Result<IrealSong, ParseError> {
 /// 12/8) sitting outside the chord stream — re-inject it as the
 /// AST's `time_signature` field instead of as a `T..` directive
 /// embedded in the music. Tempo and transpose default to none / 0.
+///
+/// The spec's worked example "A Walkin Thing" leaves the TimeSig
+/// field as the bare token `n` — `=D-=n=` — and carries the actual
+/// meter on an inline `T44` directive at the head of the music
+/// body. The literal `n` is accepted as an **absent-header**
+/// sentinel; the parser then defers to the inline `T..` directive
+/// (which already takes precedence over a numeric header per
+/// `irealbook_six_field_inline_t_directive_overrides_field_timesig`),
+/// falling back to the spec default 4/4 when the body declares no
+/// meter either. A non-`n` value that does not parse as digits
+/// still surfaces as `InvalidNumericField`, preserving the
+/// sister-site parity with the 7-field path's strict numeric
+/// validation. An empty TimeSig field is not reachable here: the
+/// `=`-split filter at [`make_song`] (mirroring pianosnake) drops
+/// empty parts, so a degenerate `=D-==Music` URL would arrive as a
+/// 5-part body and fail the count check upstream rather than this
+/// branch.
 fn make_song_irealbook(parts: &[&str]) -> Result<IrealSong, ParseError> {
     debug_assert_eq!(parts.len(), 6);
     let (title, composer, style, key_raw, timesig_raw, music_raw) =
         (parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]);
     let key_signature = parse_key(key_raw);
-    // The 7-field `irealb://` path errors on malformed numeric
-    // fields (`InvalidNumericField`); the 6-field `irealbook://`
-    // path mirrors that strict parse rather than silently falling
-    // back to 4/4 — a malformed timesig (`9X`, `0`, empty) is
-    // user-supplied data and should surface as an error per
-    // `.claude/rules/code-style.md` "Silent Fallback" and
-    // `fix-propagation.md` (sister-site parity with the 7-field
-    // numeric-field validation).
-    let time_signature = parse_time_signature(timesig_raw)
-        .map(|(ts, _)| ts)
-        .ok_or_else(|| ParseError::InvalidNumericField(timesig_raw.to_owned()))?;
+    let time_signature = if timesig_raw == "n" {
+        // Spec absent-header sentinel. The inline `T..` directive
+        // in the music body is the authoritative source; use the
+        // 4/4 default as a placeholder so chart-level validation
+        // (e.g. #2449 compound-time grouping) still has a concrete
+        // meter to check against.
+        TimeSignature::default()
+    } else {
+        // The 7-field `irealb://` path errors on malformed numeric
+        // fields (`InvalidNumericField`); the 6-field `irealbook://`
+        // path mirrors that strict parse for non-absent values —
+        // a malformed timesig (`9X`, `0`) is user-supplied data and
+        // should surface as an error per
+        // `.claude/rules/code-style.md` "Silent Fallback" and
+        // `fix-propagation.md`.
+        parse_time_signature(timesig_raw)
+            .map(|(ts, _)| ts)
+            .ok_or_else(|| ParseError::InvalidNumericField(timesig_raw.to_owned()))?
+    };
     // Pass the header meter into the music-body parser so consumer
     // directives that depend on the active meter (e.g. the #2449
     // compound-time `<a+b>` grouping) validate against the chart's
@@ -2390,7 +2415,11 @@ mod tests {
     fn irealbook_six_field_rejects_malformed_timesig() {
         // Sister-site parity with the 7-field path: a malformed
         // numeric field surfaces as `InvalidNumericField` rather
-        // than silently falling back to a default.
+        // than silently falling back to a default. `n` is the only
+        // accepted absent-header sentinel (verified separately in
+        // `irealbook_six_field_accepts_n_sentinel_for_timesig` and
+        // `irealbook_six_field_n_sentinel_falls_back_to_default_when_inline_t_missing`);
+        // anything else still has to parse to a valid time signature.
         let url = "irealbook://Test=A==Style=C=9X=[*AC|D|]";
         match parse(url) {
             Err(ParseError::InvalidNumericField(s)) => {
@@ -2398,6 +2427,34 @@ mod tests {
             }
             other => panic!("expected InvalidNumericField, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn irealbook_six_field_accepts_n_sentinel_for_timesig() {
+        // The spec's worked example "A Walkin Thing" uses `n` in
+        // field 5 to signal "no header time signature; rely on the
+        // inline `T..` directive at the head of the music body."
+        // Verified directly here so a future strictness regression
+        // surfaces at the unit-test layer rather than only via the
+        // integration golden snapshot.
+        let url = "irealbook://Tune=A==Style=C=n=[*AT34C|D|]";
+        let song = parse(url).expect("parse `n` sentinel");
+        assert_eq!(song.time_signature.numerator, 3);
+        assert_eq!(song.time_signature.denominator, 4);
+    }
+
+    #[test]
+    fn irealbook_six_field_n_sentinel_falls_back_to_default_when_inline_t_missing() {
+        // `n` plus a music body without a `T..` directive defers to
+        // the spec default 4/4. The behaviour is asymmetric with the
+        // primary use case (where `T..` is present) and is covered
+        // here so a future change to "treat missing-`T..` after `n`
+        // as an error" surfaces as a unit-test failure rather than a
+        // silent regression on user charts.
+        let url = "irealbook://Tune=A==Style=C=n=[*AC|D|]";
+        let song = parse(url).expect("parse `n` without inline T..");
+        assert_eq!(song.time_signature.numerator, 4);
+        assert_eq!(song.time_signature.denominator, 4);
     }
 
     #[test]
