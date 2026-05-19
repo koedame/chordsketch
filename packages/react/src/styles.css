@@ -1981,6 +1981,147 @@
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
 }
 
+/* Bar-edit popover. Modal dialog rendered as a sibling of the
+ * bar grid (not inside it) so a structural rerender of the grid
+ * does not detach the dialog and lose its focus trap. Positioned
+ * by CSS — the host's container owns the stacking context.
+ * Sister-site: `.irealb-editor__popover` in
+ * `packages/ui-irealb-editor/src/style.css`. */
+.chordsketch-ireal-editor__popover {
+  position: relative;
+  margin-top: 0.4rem;
+  background: var(--cs-surface, #ffffff);
+  border: 1px solid var(--cs-border-strong, #a8a4ae);
+  border-radius: 6px;
+  padding: 0.75rem;
+  box-shadow: var(--cs-elevation-popover, 0 8px 24px rgba(0, 0, 0, 0.12));
+  z-index: 10;
+}
+
+.chordsketch-ireal-editor__popover-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.chordsketch-ireal-editor__popover-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.chordsketch-ireal-editor__popover-section h4 {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cs-text-strong, #44424a);
+}
+
+.chordsketch-ireal-editor__popover-chordrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.4rem;
+  padding: 0.4rem;
+  background: var(--cs-canvas, #fafaf7);
+  border: 1px solid var(--cs-border, #d4d1d6);
+  border-radius: 4px;
+}
+
+.chordsketch-ireal-editor__popover-rowbtn {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  background: var(--cs-surface, #ffffff);
+  border: 1px solid var(--cs-border, #d4d1d6);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--cs-text, inherit);
+}
+
+.chordsketch-ireal-editor__popover-rowbtn:hover:not(:disabled) {
+  background: var(--cs-canvas, #fafaf7);
+  border-color: var(--cs-border-strong, #a8a4ae);
+}
+
+.chordsketch-ireal-editor__popover-rowbtn:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500, #BD1642);
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
+}
+
+.chordsketch-ireal-editor__popover-rowbtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chordsketch-ireal-editor__popover-addrow {
+  appearance: none;
+  align-self: flex-start;
+  background: var(--cs-canvas, #fafaf7);
+  border: 1px dashed var(--cs-border, #d4d1d6);
+  border-radius: 4px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--cs-text-strong, #44424a);
+  cursor: pointer;
+}
+
+.chordsketch-ireal-editor__popover-addrow:hover {
+  background: var(--cs-surface, #ffffff);
+  border-color: var(--cs-border-strong, #a8a4ae);
+}
+
+.chordsketch-ireal-editor__popover-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--cs-border, #d4d1d6);
+}
+
+.chordsketch-ireal-editor__popover-cancel,
+.chordsketch-ireal-editor__popover-save {
+  appearance: none;
+  padding: 0.4rem 0.85rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--cs-border, #d4d1d6);
+}
+
+.chordsketch-ireal-editor__popover-cancel {
+  background: var(--cs-surface, #ffffff);
+  color: var(--cs-text, inherit);
+}
+
+.chordsketch-ireal-editor__popover-save {
+  background: var(--cs-crimson-500, #BD1642);
+  border-color: var(--cs-crimson-500, #BD1642);
+  color: #ffffff;
+}
+
+.chordsketch-ireal-editor__popover-cancel:focus-visible,
+.chordsketch-ireal-editor__popover-save:focus-visible {
+  outline: none;
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
+}
+
+/* Invalid-input modifier — used by the popover's bass-input
+ * field when the parsed value is rejected as malformed. The
+ * AST keeps its previous bass until valid input is entered;
+ * this class surfaces the rejection visually so the user sees
+ * the bass field is not in a saved state. */
+.chordsketch-ireal-editor__input--invalid {
+  border-color: var(--cs-danger-fg, #A30F37) !important;
+  background: var(--cs-danger-surface, #FBE1E8);
+}
+
 /* ARIA live region — visually hidden but kept in the accessibility
    tree so screen readers (NVDA, VoiceOver) receive polite
    structural-edit announcements from `useAnnouncer`. Mirrors
