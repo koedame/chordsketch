@@ -98,16 +98,17 @@ phrases are structurally distinguished via
 `MusicalSymbol::DaCapo(JumpTarget)` / `DalSegno(JumpTarget)`
 ([#2427](https://github.com/koedame/chordsketch/issues/2427)). The
 open-protocol-spec compliance umbrella
-[#2423](https://github.com/koedame/chordsketch/issues/2423) is
-complete: the spec's literal "A Walkin Thing" worked example —
-including its `n` absent-header sentinel in field 5 — round-trips
-through `parse` → `serialize_open_protocol` → `parse` under the
-`parser_open_protocol/a_walkin_thing/` golden fixture in
-`tests/`. The `END` song-terminator
+[#2423](https://github.com/koedame/chordsketch/issues/2423) has
+landed every actionable sub-issue listed below: the spec's literal
+"A Walkin Thing" worked example — including its `n` absent-header
+sentinel in field 5 — round-trips through `parse` →
+`serialize_open_protocol` → `parse` under the
+`tests/fixtures/parser_open_protocol/a_walkin_thing/` golden
+fixture. The `END` song-terminator
 ([#2451](https://github.com/koedame/chordsketch/issues/2451))
-is deferred per `ARCHITECTURE.md` — empirical investigation
-confirmed iReal Pro's URL exporter does not emit the token (it is
-app-internal only).
+is deferred per `ARCHITECTURE.md`'s "Deferred AST scope" → "Other
+deferred items" — empirical investigation confirmed iReal Pro's URL
+exporter does not emit the token (it is app-internal only).
 
 Token coverage as of the latest release:
 
@@ -133,22 +134,31 @@ Token coverage as of the latest release:
 | Pause-slash `p` (repeat preceding chord) | `BarChordKind::SlashRepeat` ([#2435](https://github.com/koedame/chordsketch/issues/2435)) |
 | Compound time-signature additive groupings (`2+3`, `3+4`, `3+2+2`) | `Bar::beat_grouping_override: BeatGrouping` ([#2449](https://github.com/koedame/chordsketch/issues/2449)) |
 
-### Unsupported tokens
+### Out-of-scope or deferred tokens
 
-| Token / shape | Sub-issue | Reason |
-|---|---|---|
-| `END` song-terminator symbol distinct from Fermata | [#2451](https://github.com/koedame/chordsketch/issues/2451) | Deferred — empirical investigation confirmed iReal Pro's URL exporter does not emit `END`; the symbol is app-internal only. See `ARCHITECTURE.md` §`END`. |
-| Convert-crate (`chordsketch-convert`) `SectionLabel::Custom("Chorus" / "Bridge" / "Outro")` emission cleanup | [#2450](https://github.com/koedame/chordsketch/issues/2450) | The phantom AST variants were removed; the residual ChordPro → iReal converter behaviour producing `Custom("Chorus")` etc. is tracked separately. |
+Two open tokens remain — they have **different reopen conditions**
+and are intentionally kept distinct:
+
+| Token / shape | Sub-issue | Class | Reason |
+|---|---|---|---|
+| `END` song-terminator symbol distinct from Fermata | [#2451](https://github.com/koedame/chordsketch/issues/2451) | Blocked on external evidence | Empirical investigation confirmed iReal Pro's URL exporter does not emit `END`; the symbol is app-internal only. See `ARCHITECTURE.md`'s "Deferred AST scope" → "Other deferred items". Reopens if an iReal Pro release starts emitting `END` in URLs. |
+| Convert-crate (`chordsketch-convert`) `SectionLabel::Custom("Chorus" / "Bridge" / "Outro")` emission cleanup | [#2450](https://github.com/koedame/chordsketch/issues/2450) | Actionable, out of this crate's scope | The phantom `SectionLabel::Chorus` / `Bridge` / `Outro` AST variants were already removed from `chordsketch-ireal`. The residual ChordPro → iReal converter behaviour producing `Custom("Chorus")` etc. lives in `chordsketch-convert` and is tracked separately — no parser/AST change is owed by this crate. |
+
+The two classes are tracked in one table only because the column
+positions match; the rows are not interchangeable. A blocked-on-
+external-evidence row only reopens when its trigger condition fires
+upstream, whereas an out-of-scope-here row is fully actionable today
+and lands when whichever sibling crate owns it picks it up.
 
 Umbrella [#2423](https://github.com/koedame/chordsketch/issues/2423)
-is closed: every actionable sub-issue is either implemented and
-listed under "Supported tokens" above, or deferred with an
-explicit reason under "Unsupported tokens". When a deferred row
-becomes actionable again (e.g. an iReal Pro release starts
-emitting `END` in URLs), open a new sub-issue and move the row
-on the same PR that lands the implementation —
-`.claude/rules/release-doc-sync.md` catches drift at release-cut
-time.
+lands every in-scope sub-issue on the PR that introduces this
+section: the round-trip golden fixture demonstrates the spec's
+literal worked example parses + re-serializes correctly, the
+Supported / Out-of-scope tables match the current AST surface
+exactly, and the two open rows above explain their respective
+reopen criteria. `.claude/rules/release-doc-sync.md` catches drift
+at release-cut time if the AST surface evolves and these tables
+fall behind.
 
 ## File extension convention
 

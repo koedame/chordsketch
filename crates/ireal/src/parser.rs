@@ -381,13 +381,14 @@ fn make_song(body: &str) -> Result<IrealSong, ParseError> {
 /// `irealbook_six_field_inline_t_directive_overrides_field_timesig`),
 /// falling back to the spec default 4/4 when the body declares no
 /// meter either. A non-`n` value that does not parse as digits
-/// still surfaces as `InvalidNumericField`, preserving the
-/// sister-site parity with the 7-field path's strict numeric
-/// validation. An empty TimeSig field is not reachable here: the
-/// `=`-split filter at [`make_song`] (mirroring pianosnake) drops
-/// empty parts, so a degenerate `=D-==Music` URL would arrive as a
-/// 5-part body and fail the count check upstream rather than this
-/// branch.
+/// still surfaces as `InvalidNumericField`, preserving the strict
+/// numeric posture #2424 introduced when this 6-field path was
+/// added (and mirroring the analogous `u16` parse for the 7-field
+/// path's `tempo` / `transpose` fields). An empty TimeSig field is
+/// not reachable here: the `=`-split filter at [`make_song`]
+/// (mirroring pianosnake) drops empty parts, so a degenerate
+/// `=D-==Music` URL would arrive as a 5-part body and fail the
+/// count check upstream rather than this branch.
 fn make_song_irealbook(parts: &[&str]) -> Result<IrealSong, ParseError> {
     debug_assert_eq!(parts.len(), 6);
     let (title, composer, style, key_raw, timesig_raw, music_raw) =
@@ -401,13 +402,14 @@ fn make_song_irealbook(parts: &[&str]) -> Result<IrealSong, ParseError> {
         // meter to check against.
         TimeSignature::default()
     } else {
-        // The 7-field `irealb://` path errors on malformed numeric
-        // fields (`InvalidNumericField`); the 6-field `irealbook://`
-        // path mirrors that strict parse for non-absent values —
-        // a malformed timesig (`9X`, `0`) is user-supplied data and
-        // should surface as an error per
-        // `.claude/rules/code-style.md` "Silent Fallback" and
-        // `fix-propagation.md`.
+        // Preserve the strict-numeric posture #2424 introduced for
+        // this branch. A malformed timesig (`9X`, `0`) is
+        // user-supplied data and should surface as an error per
+        // `.claude/rules/code-style.md` "Silent Fallback" rather
+        // than silently falling back to a default — the analogous
+        // strict parse the 7-field path applies to its `u16` tempo
+        // / transpose fields makes that posture consistent across
+        // both `make_song` arms.
         parse_time_signature(timesig_raw)
             .map(|(ts, _)| ts)
             .ok_or_else(|| ParseError::InvalidNumericField(timesig_raw.to_owned()))?
@@ -2455,6 +2457,34 @@ mod tests {
         let song = parse(url).expect("parse `n` without inline T..");
         assert_eq!(song.time_signature.numerator, 4);
         assert_eq!(song.time_signature.denominator, 4);
+    }
+
+    #[test]
+    fn irealbook_six_field_n_sentinel_inline_t_covers_two_and_three_digit_shapes() {
+        // `parse_time_signature` switches grammar between two-digit
+        // (`T44`, `T34`) and three-digit (`T128`) shapes; the inline
+        // override path inside `parse_chord_chart_with_header_ts`
+        // additionally cross-checks compound-meter validation (#2449)
+        // against the header. The `n` sentinel zeroes the header to
+        // default 4/4 — covering both digit shapes here forecloses a
+        // regression where the override only fires for one grammar.
+        // `T44` is the no-op override (header default 4/4 = inline
+        // 4/4), included so a future change to the
+        // "chord_chart.time_signature != TimeSignature::default()"
+        // selector at make_song_irealbook does not silently flip the
+        // no-op case to "rejected as ambiguous".
+        for (inline, num, den) in [("T44", 4, 4), ("T68", 6, 8), ("T128", 12, 8)] {
+            let url = format!("irealbook://Tune=A==Style=C=n=[*A{inline}C|D|]");
+            let song = parse(&url).unwrap_or_else(|e| panic!("parse {inline}: {e:?}"));
+            assert_eq!(
+                song.time_signature.numerator, num,
+                "{inline}: numerator mismatch"
+            );
+            assert_eq!(
+                song.time_signature.denominator, den,
+                "{inline}: denominator mismatch"
+            );
+        }
     }
 
     #[test]
