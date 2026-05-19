@@ -5,16 +5,25 @@
 
 import { useEffect, useState } from 'react';
 
-function readSlug(): string {
-  if (typeof window === 'undefined') return '';
-  const hash = window.location.hash;
+/**
+ * Parse a `window.location.hash` value into a slug. Tolerates
+ * `#`, `#/`, `#/index`, `#foo`, `#/foo`, `#/foo/`, and
+ * `#/foo?query`. Returned slug is the lookup key into
+ * `DOC_GROUPS`. Exported so unit tests can lock the tolerance
+ * clauses without going through React rendering.
+ */
+export function parseHashSlug(hash: string): string {
   if (hash === '' || hash === '#' || hash === '#/' || hash === '#/index') {
     return '';
   }
-  // Tolerate `#/foo`, `#foo`, `#/foo/`, and trailing query strings.
   const trimmed = hash.replace(/^#\/?/, '').replace(/\/$/, '');
   const queryStart = trimmed.indexOf('?');
   return queryStart === -1 ? trimmed : trimmed.slice(0, queryStart);
+}
+
+function readSlug(): string {
+  if (typeof window === 'undefined') return '';
+  return parseHashSlug(window.location.hash);
 }
 
 /**

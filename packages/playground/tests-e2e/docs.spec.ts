@@ -68,14 +68,12 @@ test.describe('docs site', () => {
 
     // The recipe's first recipe heading appears once the page
     // mounts. Using a Markdown-emitted H2 ensures both the
-    // marked-driven render and the slug-id renderer ran. Match
-    // the full first-recipe title so the regex does not also
-    // catch "Recipe 10 — ..." further down the page.
+    // marked-driven render and the slug-id renderer ran. Anchored
+    // `^Recipe 1\b` matches the leading "Recipe 1 …" heading
+    // exactly while excluding both "Recipe 10 …" further down the
+    // page and any future title-prose tweaks after "Recipe 1".
     await expect(
-      page.getByRole('heading', {
-        level: 2,
-        name: /Recipe 1 — Drop in a ChordPro playground/,
-      }),
+      page.getByRole('heading', { level: 2, name: /^Recipe 1\b/ }),
     ).toBeVisible();
 
     // The hash reflects the route the user navigated to so direct
@@ -100,6 +98,30 @@ test.describe('docs site', () => {
     // failure that motivated `.claude/rules/playground-smoke.md`.
     await expect(
       page.getByRole('heading', { level: 1, name: /<ChordSheet>/ }),
+    ).toBeVisible();
+
+    expect(pageErrors).toEqual([]);
+  });
+
+  test('unknown slug renders the not-found panel without erroring', async ({
+    page,
+  }) => {
+    const pageErrors: Error[] = [];
+    page.on('pageerror', (err) => {
+      pageErrors.push(err);
+    });
+
+    await page.goto('./docs/#/this-slug-does-not-exist');
+
+    // The fallback panel surfaces the missing slug and a link back
+    // to the index. Asserts the not-found branch in App.tsx so a
+    // registry-registration regression (slug listed in the nav but
+    // missing the matching `?raw` import) does not silently 404.
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Page not found' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: /docs home/i }),
     ).toBeVisible();
 
     expect(pageErrors).toEqual([]);

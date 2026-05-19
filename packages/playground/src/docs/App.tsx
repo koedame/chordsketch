@@ -4,9 +4,19 @@
 //   - Top header (brand + navigation back to the playground)
 //   - Left sidebar (group → page nav, plus per-page outline once
 //     a page is loaded)
-//   - Main article (rendered Markdown for the active slug)
+//   - Main article (rendered Markdown for the active slug). The
+//     article is wrapped in an error boundary so a `renderMarkdown`
+//     throw (e.g. corrupted Markdown source) surfaces a "Failed to
+//     render" panel instead of blank-pageing the whole docs SPA.
 
-import { useEffect, useMemo, useRef } from 'react';
+import {
+  Component,
+  type ErrorInfo,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
 
 import { DOC_GROUPS, findPage, type DocPage } from './pages';
 import { hrefForSlug, useHashSlug } from './router';
@@ -77,7 +87,9 @@ export function App(): JSX.Element {
         <Sidebar activeSlug={slug} activePage={page} />
         <main className="docs-content" id="docs-content">
           {page !== null ? (
-            <Article page={page} />
+            <ArticleErrorBoundary slug={slug}>
+              <Article page={page} />
+            </ArticleErrorBoundary>
           ) : (
             <NotFound slug={slug} />
           )}
@@ -166,6 +178,62 @@ function Article({ page }: ArticleProps): JSX.Element {
       />
     </article>
   );
+}
+
+interface ArticleErrorBoundaryProps {
+  slug: string;
+  children: ReactNode;
+}
+
+interface ArticleErrorBoundaryState {
+  error: Error | null;
+}
+
+/**
+ * Catches throws from `renderMarkdown` so a malformed Markdown
+ * source or a future marked / DOMPurify regression surfaces a
+ * scoped error panel instead of unmounting the whole docs SPA.
+ * Reset key is the page slug — a new slug clears the error state
+ * so subsequent navigation tries the next page cleanly.
+ */
+class ArticleErrorBoundary extends Component<
+  ArticleErrorBoundaryProps,
+  ArticleErrorBoundaryState
+> {
+  state: ArticleErrorBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): ArticleErrorBoundaryState {
+    return { error };
+  }
+
+  componentDidUpdate(prevProps: ArticleErrorBoundaryProps): void {
+    if (prevProps.slug !== this.props.slug && this.state.error !== null) {
+      this.setState({ error: null });
+    }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    // Surface the failure in the dev console so the maintainer
+    // sees the stack trace; the user-visible panel below shows
+    // the human-readable message only.
+    // eslint-disable-next-line no-console
+    console.error('docs article render failed', error, info);
+  }
+
+  render(): ReactNode {
+    if (this.state.error !== null) {
+      return (
+        <article className="docs-article docs-article-empty">
+          <h1>Failed to render this page</h1>
+          <p role="alert">{this.state.error.message}</p>
+          <p>
+            <a href={hrefForSlug('')}>Return to the docs home</a>.
+          </p>
+        </article>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 interface NotFoundProps {
