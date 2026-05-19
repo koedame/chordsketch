@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`@chordsketch/react@0.2.0` — popover-based bar editor (#2505).**
+  `<IrealEditor>` reaches feature parity with the private
+  `@chordsketch/ui-irealb-editor` for per-bar editing. Clicking
+  a bar cell opens a React-managed modal dialog (`role="dialog"`
+  `aria-modal="true"` with focus trap + Escape / outside-click
+  dismissal) that edits every field on the bar:
+  - Start / end barline (single / double / final / open-repeat /
+    close-repeat).
+  - Chord rows — root letter + accidental + 12 named qualities
+    (Custom string for the rest) + optional `/X` slash-bass +
+    beat position (1 / 1.5 / 2 / 2.5 / 3 / 3.5 / 4 / 4.5). Add /
+    remove / reorder rows.
+  - N-th ending — empty (no bracket) / `0` (untitled `N0`
+    sentinel) / `1..9` (numbered).
+  - Musical symbol — None / Segno / Coda / Fine / Fermata /
+    Break + the 11 player-recognised D.C. / D.S. macro variants.
+  - Bass-input parser distinguishes empty / valid / invalid so
+    a malformed entry keeps the previous bass and surfaces a
+    `chordsketch-ireal-editor__input--invalid` modifier class
+    instead of silently nulling the field.
+  - Save commits via the host's `emit` path so the URL
+    round-trip stays single-source. Cancel / Escape /
+    outside-click discard the draft without firing `onChange`.
+  - Preserves every AST field on the seed bar that the popover
+    does not edit yet (staff-text, system-break hints, beat-
+    grouping overrides) via a `...rest`-spread on Save.
+  Architectural rationale: shipped on top of the foundation in
+  #2510 (focus-trap + announcer hooks + AST helpers) and the
+  bar-grid + structural-editing slice in #2511, closing
+  [#2505](https://github.com/koedame/chordsketch/issues/2505).
+  Sister-site behaviour parity with
+  `packages/ui-irealb-editor/src/popover.ts` is preserved at the
+  contract level; the React port replaces the imperative
+  `renderChordsSection` rebuild with React state and reuses the
+  `useFocusTrap` hook from #2510.
+
 ### Fixed
 
 - **`chordsketch-ireal` parser now accepts the spec's `n`

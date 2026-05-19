@@ -11,6 +11,7 @@ import {
 
 import {
   type IrealAccidental,
+  type IrealBar,
   type IrealKeyMode,
   type IrealSection,
   type IrealSectionLabel,
@@ -22,6 +23,7 @@ import {
   type IrealActiveBarRef,
   type IrealStructuralOps,
 } from './ireal-editor-bar-grid';
+import { IrealBarPopover } from './ireal-editor-popover';
 import {
   makeDefaultBar,
   makeDefaultSection,
@@ -516,14 +518,68 @@ export function IrealEditor({
     };
   }, [song, disabled, emit, announce, promptSectionLabel, confirmDeleteSection, activeBar]);
 
-  // No-op bar-open handler in this slice — the popover lands in a
-  // follow-up PR. Clicking a bar cell still updates the
-  // active-bar ref via `onActiveBarChange` (which fires on focus,
-  // and a click also focuses the button) so keyboard navigation
-  // picks up the new anchor.
-  const handleOpenBar = useCallback((_secIndex: number, _barIndex: number): void => {
-    // Intentionally empty until the popover slice lands.
+  // Popover open-target. When non-null the bar at that index has
+  // its modal popover rendered next to the bar grid; the popover
+  // commits via `onSave(next)` which routes through `emit()`.
+  const [popoverTarget, setPopoverTarget] = useState<{
+    secIndex: number;
+    barIndex: number;
+  } | null>(null);
+
+  // Anchor ref tracking the last-clicked bar-cell button so the
+  // popover's focus trap can exclude pointerdowns on the anchor
+  // from outside-click dismissal and so focus returns to the
+  // anchor on close. Updated via the `onFocus` path inside
+  // `<IrealBarGrid>`, which fires before `onOpenBar`.
+  const popoverAnchorRef = useRef<HTMLElement | null>(null);
+
+  const handleOpenBar = useCallback((secIndex: number, barIndex: number): void => {
+    const active = (typeof document !== 'undefined'
+      ? (document.activeElement as HTMLElement | null)
+      : null);
+    if (active !== null && active.classList?.contains('chordsketch-ireal-editor__bar')) {
+      popoverAnchorRef.current = active;
+    }
+    setPopoverTarget({ secIndex, barIndex });
   }, []);
+
+  const handlePopoverDismiss = useCallback((): void => {
+    setPopoverTarget(null);
+  }, []);
+
+  const handlePopoverSave = useCallback(
+    (secIndex: number, barIndex: number, next: IrealBar): void => {
+      if (song === null) return;
+      const section = song.sections[secIndex];
+      if (!section) return;
+      const bars = section.bars.map((b, i) => (i === barIndex ? next : b));
+      const sections = song.sections.map((s, i) =>
+        i === secIndex ? { ...s, bars } : s,
+      );
+      emit({ ...song, sections });
+    },
+    [song, emit],
+  );
+
+  // The popover edits the bar at `popoverTarget`. Looked up lazily
+  // so a structural mutation that clamps `popoverTarget` (e.g. a
+  // bar deletion while open) renders the popover against the
+  // post-mutation bar at that index — or unmounts the popover if
+  // the slot no longer exists.
+  const popoverBar: IrealBar | null = useMemo(() => {
+    if (popoverTarget === null || song === null) return null;
+    const section = song.sections[popoverTarget.secIndex];
+    if (!section) return null;
+    return section.bars[popoverTarget.barIndex] ?? null;
+  }, [popoverTarget, song]);
+
+  // Dismiss the popover whenever its target bar no longer exists
+  // (e.g. the section was deleted by a sibling structural op).
+  useEffect(() => {
+    if (popoverTarget !== null && popoverBar === null) {
+      setPopoverTarget(null);
+    }
+  }, [popoverTarget, popoverBar]);
 
   const wrapperClass = ['chordsketch-ireal-editor', className]
     .filter((c): c is string => typeof c === 'string' && c.length > 0)
@@ -730,6 +786,17 @@ export function IrealEditor({
               onOpenBar={handleOpenBar}
               ops={ops}
               disabled={disabled}
+            />
+          ) : null}
+          {showBars && popoverTarget !== null && popoverBar !== null ? (
+            <IrealBarPopover
+              key={`${popoverTarget.secIndex}:${popoverTarget.barIndex}`}
+              bar={popoverBar}
+              anchorRef={popoverAnchorRef}
+              onSave={(next) =>
+                handlePopoverSave(popoverTarget.secIndex, popoverTarget.barIndex, next)
+              }
+              onDismiss={handlePopoverDismiss}
             />
           ) : null}
           {showUrl ? (
