@@ -10,18 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Documentation site at `chordsketch.koeda.me/docs/` (#2506,
-  closes §4 of #2473).** Embedding recipes, per-component API
-  reference for `@chordsketch/react`, and cross-binding render /
-  transpose guides — co-located with the existing playground as a
-  fourth Vite multi-page entry per
+  closes §4 of #2473; per-page static deploy landed in #2514).**
+  Embedding recipes, per-component API reference for
+  `@chordsketch/react`, and cross-binding render / transpose guides
+  — co-located with the existing playground as a fourth Vite
+  multi-page entry per
   [ADR-0021](docs/adr/0021-docs-site-co-located-with-playground.md).
-  Canonical Markdown lives under `docs/sdk/`; the docs SPA renders
-  it via `marked` + DOMPurify, hash-routed, with a sidebar + on-page
-  outline. Builds and deploys via the existing
-  `deploy-playground.yml` workflow; covered by
-  `playground-smoke.yml` Playwright assertions on every PR. Root
-  README, `packages/react/README`, and the playground header bars
-  cross-link to the new docs URL.
+  Canonical Markdown lives under `docs/sdk/`;
+  `packages/playground/scripts/build-docs-static.mjs` renders it via
+  `marked` + JSDOM + DOMPurify at build time and emits one
+  `dist/docs/<slug>/index.html` file per registered page. Pages are
+  served as plain static HTML at clean URLs like
+  `/chordsketch/docs/embed-react/`; legacy `#/<slug>` hash URLs
+  redirect via a small inline shim. Builds and deploys via the
+  existing `deploy-playground.yml` workflow (now triggered by
+  `docs/sdk/**` edits); covered by `playground-smoke.yml` Playwright
+  assertions on every PR. Root README, `packages/react/README`, and
+  the playground header bars cross-link to the docs URL.
 
 ### Fixed
 
