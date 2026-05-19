@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && node scripts/build-docs-static.mjs",
+    "build:docs": "vite build --config vite.docs.config.ts && node scripts/build-docs-static.mjs",
+    "dev:docs": "npm run build:docs && vite preview --config vite.docs.config.ts",
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test",

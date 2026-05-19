@@ -1,14 +1,9 @@
-// Docs-only Vite config used by the SSG verification path. The
-// production deploy uses `vite.config.ts` (which builds all four
-// entries — landing / chordpro / irealpro / docs); this sibling
-// config skips the wasm-backed siblings so the docs SSG can be
-// exercised end-to-end on a workstation without a built
-// `@chordsketch/wasm` artefact (the wasm build is expensive and is
-// only required by the chordpro / irealpro entries).
-//
-// Not consumed by deploy-playground.yml or the production build —
-// only by `scripts/build-docs-static.mjs` indirectly when developing
-// or running the docs Playwright suite in isolation.
+// Docs-only Vite config — skips the wasm-backed chordpro / irealpro
+// entries so the docs SSG can be exercised without a built
+// `@chordsketch/wasm` artefact. Not consumed by
+// `deploy-playground.yml`; the canonical CI build runs
+// `vite.config.ts`. Wired into `npm run build:docs` / `npm run
+// dev:docs` for local iteration on the docs route.
 
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
