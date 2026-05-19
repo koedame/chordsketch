@@ -495,7 +495,17 @@ function renderBar(
     class: 'irealb-editor__bar',
     attrs: {
       type: 'button',
-      'aria-label': `Edit bar ${barIndex + 1}`,
+      // Accessible name includes the rendered chord text so
+      // screen-reader users hear which bar they are on, not just
+      // its index. An empty bar (no chords) keeps the plain
+      // "Edit bar N" form so the announcement stays tight.
+      // Sister-site `<IrealBarGrid>` in
+      // `packages/react/src/ireal-editor-bar-grid.tsx` carries
+      // the matching label shape — change both in lockstep.
+      'aria-label':
+        text === ''
+          ? `Edit bar ${barIndex + 1}`
+          : `Edit bar ${barIndex + 1}: ${text}`,
       tabindex: isActiveBar ? '0' : '-1',
     },
     text: text || ' ', // U+00A0 keeps empty cells height-stable.
