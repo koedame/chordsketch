@@ -1,13 +1,17 @@
 import { describe, expect, test } from 'vitest';
 
 import {
+  irealCanonicalSymbolText,
   irealChordQualityToString,
   irealChordRootToString,
   irealChordToString,
+  irealIsDaCapo,
+  irealIsDalSegno,
   irealSectionLabelToString,
   type IrealChord,
   type IrealChordQuality,
   type IrealChordRoot,
+  type IrealMusicalSymbol,
   type IrealSectionLabel,
 } from '../src/ireal-ast';
 
@@ -71,5 +75,79 @@ describe('irealSectionLabelToString', () => {
     [{ kind: 'custom', value: 'Vamp' }, 'Vamp'],
   ])('renders %o as %s', (label, expected) => {
     expect(irealSectionLabelToString(label)).toBe(expected);
+  });
+});
+
+describe('irealIsDaCapo', () => {
+  test.each<[IrealMusicalSymbol | null, boolean]>([
+    [null, false],
+    ['segno', false],
+    ['coda', false],
+    ['fine', false],
+    ['fermata', false],
+    ['break', false],
+    ['da_capo', true],
+    ['da_capo_al_coda', true],
+    ['da_capo_al_fine', true],
+    ['da_capo_al_1st_end', true],
+    ['da_capo_al_2nd_end', true],
+    ['da_capo_al_3rd_end', true],
+    ['da_capo_al_4th_end', true],
+    ['dal_segno', false],
+    ['dal_segno_al_coda', false],
+  ])('classifies %o as %o', (symbol, expected) => {
+    expect(irealIsDaCapo(symbol)).toBe(expected);
+  });
+});
+
+describe('irealIsDalSegno', () => {
+  test.each<[IrealMusicalSymbol | null, boolean]>([
+    [null, false],
+    ['segno', false],
+    ['da_capo', false],
+    ['da_capo_al_coda', false],
+    ['dal_segno', true],
+    ['dal_segno_al_coda', true],
+    ['dal_segno_al_fine', true],
+    ['dal_segno_al_1st_end', true],
+    ['dal_segno_al_2nd_end', true],
+    ['dal_segno_al_3rd_end', true],
+    ['dal_segno_al_4th_end', true],
+  ])('classifies %o as %o', (symbol, expected) => {
+    expect(irealIsDalSegno(symbol)).toBe(expected);
+  });
+});
+
+describe('irealCanonicalSymbolText', () => {
+  test.each<[IrealMusicalSymbol, string | null]>([
+    ['segno', null],
+    ['coda', null],
+    ['fermata', null],
+    ['fine', 'Fine'],
+    ['break', 'Break'],
+    ['da_capo', 'D.C.'],
+    ['da_capo_al_coda', 'D.C. al Coda'],
+    ['da_capo_al_fine', 'D.C. al Fine'],
+    ['da_capo_al_1st_end', 'D.C. al 1st End.'],
+    ['da_capo_al_2nd_end', 'D.C. al 2nd End.'],
+    ['da_capo_al_3rd_end', 'D.C. al 3rd End.'],
+    ['da_capo_al_4th_end', 'D.C. al 4th End.'],
+    ['dal_segno', 'D.S.'],
+    ['dal_segno_al_coda', 'D.S. al Coda'],
+    ['dal_segno_al_fine', 'D.S. al Fine'],
+    ['dal_segno_al_1st_end', 'D.S. al 1st End.'],
+    ['dal_segno_al_2nd_end', 'D.S. al 2nd End.'],
+    ['dal_segno_al_3rd_end', 'D.S. al 3rd End.'],
+    ['dal_segno_al_4th_end', 'D.S. al 4th End.'],
+  ])('renders %o as %o', (symbol, expected) => {
+    expect(irealCanonicalSymbolText(symbol)).toBe(expected);
+  });
+
+  test('returns null for an unrecognised ordinal-bearing variant', () => {
+    // The type system would normally prevent this, but a wasm AST
+    // produced by a future Rust release could carry an unknown
+    // ordinal pattern; the helper must NOT throw on it.
+    const malformed = 'da_capo_al_unknown_end' as unknown as IrealMusicalSymbol;
+    expect(irealCanonicalSymbolText(malformed)).toBeNull();
   });
 });
