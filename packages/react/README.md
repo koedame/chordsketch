@@ -544,6 +544,9 @@ The returned string matches `package.json`'s `version` field.
 ## Links
 
 - [Main repository](https://github.com/koedame/chordsketch)
+- [ChordSketch Docs](https://chordsketch.koeda.me/docs/) —
+  embedding recipes for this package, per-component API
+  reference, and cross-binding render / transpose guides
 - [ChordSketch Playground](https://chordsketch.koeda.me)
   (vanilla-TS) — shows the underlying rendering with
   `@chordsketch/wasm` directly

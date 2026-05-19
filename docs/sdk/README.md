@@ -111,9 +111,11 @@ exposed:
 - **Serialise back to ChordPro**: not currently exposed by any
   binding. Tracked as part of the v0.3.0 multi-format track
   (#2050).
-- **Static-site rendering**: an mdBook or Docusaurus build of this
-  guide is deliberately deferred to a follow-up — picking the
-  right static-site tool is its own decision and the Markdown
-  renders cleanly on GitHub today.
+- **Static-site rendering**: the canonical Markdown under
+  `docs/sdk/` is also rendered by the docs site at
+  [chordsketch.koeda.me/docs](https://chordsketch.koeda.me/docs/)
+  ([ADR-0021](../adr/0021-docs-site-co-located-with-playground.md)).
+  Both surfaces consume the same source — edits here propagate to
+  both on the next deploy.
 
 If you find a gap, please [file an issue](https://github.com/koedame/chordsketch/issues/new).

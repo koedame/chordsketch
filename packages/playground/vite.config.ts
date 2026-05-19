@@ -19,6 +19,12 @@ export default defineConfig({
         landing: resolve(here, 'index.html'),
         chordpro: resolve(here, 'chordpro/index.html'),
         irealpro: resolve(here, 'irealpro/index.html'),
+        // /docs/ co-located per ADR-0021. Its own React entry
+        // hosts a Markdown-driven docs SPA that reads the
+        // canonical sources from `docs/sdk/` via Vite's `?raw`
+        // import. Hash-routed; does not load `@chordsketch/wasm`,
+        // so the docs bundle stays light.
+        docs: resolve(here, 'docs/index.html'),
       },
     },
   },
@@ -83,6 +89,12 @@ export default defineConfig({
         resolve(here, '../ui-web'),
         resolve(here, '../react'),
         resolve(here, '../ui-irealb-editor'),
+        // The docs SPA (#2506 / ADR-0021) reads the canonical
+        // Markdown under `docs/sdk/` via Vite's `?raw` import so
+        // the GitHub-rendered Markdown and the docs site share a
+        // single source. Listing the repo's `docs/` root is the
+        // narrowest allow-entry that satisfies the resolution.
+        resolve(here, '../../docs'),
       ],
     },
   },
