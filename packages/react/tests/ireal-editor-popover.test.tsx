@@ -321,6 +321,41 @@ describe('<IrealEditor> popover — chord rows', () => {
       subdivision: 1,
     });
   });
+
+  test('bass text input syncs correctly after chord-row reorder', async () => {
+    // Regression: ChordRowEditor uses key={index} with local bassRaw state.
+    // Before the fix, reordering left the bass inputs showing the previous
+    // row's value rather than the newly-swapped chord's bass.
+    const seed = songWithOneChordBar();
+    seed.sections[0]!.bars[0]!.chords = [
+      {
+        chord: {
+          root: { note: 'C', accidental: 'natural' },
+          quality: { kind: 'major' },
+          bass: { note: 'G', accidental: 'natural' },
+        },
+        position: { beat: 1, subdivision: 0 },
+      },
+      {
+        chord: {
+          root: { note: 'F', accidental: 'natural' },
+          quality: { kind: 'major' },
+          bass: null,
+        },
+        position: { beat: 3, subdivision: 0 },
+      },
+    ];
+    await renderEditor(seed);
+    openFirstBarPopover();
+    const dialog = await screen.findByRole('dialog');
+    // Move the first chord (C/G, bass=G) down → it becomes row 1.
+    const downButtons = within(dialog).getAllByRole('button', { name: 'Move chord down' });
+    fireEvent.click(downButtons[0]!);
+    // After reorder: row 0 = F (no bass), row 1 = C/G (bass G).
+    const bassInputs = within(dialog).getAllByLabelText('Bass');
+    expect((bassInputs[0] as HTMLInputElement).value).toBe('');
+    expect((bassInputs[1] as HTMLInputElement).value).toBe('G');
+  });
 });
 
 describe('<IrealEditor> popover — preserves unedited fields', () => {

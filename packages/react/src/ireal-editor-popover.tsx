@@ -24,6 +24,7 @@
 
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -410,6 +411,24 @@ function ChordRowEditor({
     barChord.chord.bass !== null ? formatBass(barChord.chord.bass) : '',
   );
   const [bassInvalid, setBassInvalid] = useState<boolean>(false);
+
+  // Sync the bass display whenever the chord's bass changes from outside
+  // this component — specifically after a chord-row reorder. All of the
+  // setter callbacks (setRoot, setAccidental, setQuality) spread
+  // `...barChord.chord`, which preserves the existing `bass` object
+  // reference when the bass itself is not edited, so this effect fires
+  // only when the bass prop actually changes (new reference): either
+  // because the user committed a valid bass entry, or because a reorder
+  // moved a chord with a different bass into this row's slot.
+  // Without this sync, `bassRaw` / `bassInvalid` carry the previous
+  // row's display state after reorder while `barChord` already reflects
+  // the new chord. The AST stored in the parent's `chords` array is
+  // always correct; it is only the text input that goes stale.
+  useEffect(() => {
+    setBassRaw(barChord.chord.bass !== null ? formatBass(barChord.chord.bass) : '');
+    setBassInvalid(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [barChord.chord.bass]);
 
   const setRoot = (note: string): void => {
     onChange({
