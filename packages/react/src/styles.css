@@ -1756,26 +1756,199 @@
   color: var(--cs-text-strong, #44424a);
 }
 
+/*
+ * Bar grid: 4-bars-per-line layout. `__bars` is the role="grid"
+ * container; `__row` is each role="row"; `__bar-wrapper` is each
+ * role="gridcell"; `__bar` is the clickable button inside the cell.
+ * `BARS_PER_ROW = 4` in `ireal-editor-bar-grid.tsx` MUST stay in
+ * lockstep with this 4-column template. Sister-site:
+ * `.irealb-editor__bars` in
+ * `packages/ui-irealb-editor/src/style.css`.
+ */
 .chordsketch-ireal-editor__bars {
-  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
   margin: 0;
   padding: 0;
+}
+
+.chordsketch-ireal-editor__row {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.4rem;
 }
 
-.chordsketch-ireal-editor__bar {
+.chordsketch-ireal-editor__bar-wrapper {
   display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.chordsketch-ireal-editor__bar {
+  appearance: none;
+  display: block;
+  width: 100%;
+  text-align: left;
   padding: 0.3rem 0.5rem;
   background: var(--cs-surface, #ffffff);
   border: 1px solid var(--cs-border, #d4d1d6);
   border-radius: 4px;
   font-family: var(--cs-font-chord, system-ui, sans-serif);
   font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--cs-crimson-500, #BD1642);
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chordsketch-ireal-editor__bar:hover:not(:disabled) {
+  border-color: var(--cs-border-strong, #a8a4ae);
+}
+
+.chordsketch-ireal-editor__bar:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500, #BD1642);
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
+}
+
+.chordsketch-ireal-editor__bar:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Per-bar action buttons (move left / right / delete). */
+.chordsketch-ireal-editor__bar-actions {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.chordsketch-ireal-editor__bar-action {
+  appearance: none;
+  flex: 1 1 0;
+  padding: 0.2rem 0.3rem;
+  background: var(--cs-canvas, #fafaf7);
+  border: 1px solid var(--cs-border, #d4d1d6);
+  border-radius: 3px;
+  font-size: 0.7rem;
+  color: var(--cs-text, inherit);
+  cursor: pointer;
+}
+
+.chordsketch-ireal-editor__bar-action:hover:not(:disabled) {
+  background: var(--cs-surface, #ffffff);
+  border-color: var(--cs-border-strong, #a8a4ae);
+}
+
+.chordsketch-ireal-editor__bar-action:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500, #BD1642);
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
+}
+
+.chordsketch-ireal-editor__bar-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chordsketch-ireal-editor__bar-action--danger {
+  border-color: var(--cs-crimson-300, #EC8AA3);
+  color: var(--cs-crimson-600, #A30F37);
+}
+
+.chordsketch-ireal-editor__bar-action--danger:hover:not(:disabled) {
+  background: var(--cs-danger-surface, #FDF2F5);
+  border-color: var(--cs-crimson-500, #BD1642);
+}
+
+/* Section header: label + per-section action buttons inline. */
+.chordsketch-ireal-editor__section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-bottom: 1px solid var(--cs-border, #d4d1d6);
+  padding-bottom: 0.375rem;
+  margin-bottom: 0.5rem;
+}
+
+.chordsketch-ireal-editor__section-action {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 0.4rem;
+  background: var(--cs-surface, #ffffff);
+  border: 1px solid var(--cs-border, #d4d1d6);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  color: var(--cs-text, inherit);
+  cursor: pointer;
+}
+
+.chordsketch-ireal-editor__section-action:hover:not(:disabled) {
+  background: var(--cs-canvas, #fafaf7);
+  border-color: var(--cs-border-strong, #a8a4ae);
+}
+
+.chordsketch-ireal-editor__section-action:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500, #BD1642);
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
+}
+
+.chordsketch-ireal-editor__section-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chordsketch-ireal-editor__section-action--danger {
+  border-color: var(--cs-crimson-300, #EC8AA3);
+  color: var(--cs-crimson-600, #A30F37);
+}
+
+.chordsketch-ireal-editor__section-action--danger:hover:not(:disabled) {
+  background: var(--cs-danger-surface, #FDF2F5);
+  border-color: var(--cs-crimson-500, #BD1642);
+}
+
+/* Append-bar / append-section trailer buttons. */
+.chordsketch-ireal-editor__add-bar,
+.chordsketch-ireal-editor__add-section {
+  appearance: none;
+  align-self: flex-start;
+  background: var(--cs-canvas, #fafaf7);
+  border: 1px dashed var(--cs-border, #d4d1d6);
+  border-radius: 4px;
+  padding: 0.4rem 0.75rem;
+  margin-top: 0.4rem;
+  font-size: 0.8125rem;
+  color: var(--cs-text-strong, #44424a);
+  cursor: pointer;
+}
+
+.chordsketch-ireal-editor__add-bar:hover:not(:disabled),
+.chordsketch-ireal-editor__add-section:hover:not(:disabled) {
+  background: var(--cs-surface, #ffffff);
+  border-color: var(--cs-border-strong, #a8a4ae);
+}
+
+.chordsketch-ireal-editor__add-bar:focus-visible,
+.chordsketch-ireal-editor__add-section:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500, #BD1642);
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
+}
+
+.chordsketch-ireal-editor__add-bar:disabled,
+.chordsketch-ireal-editor__add-section:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .chordsketch-ireal-editor__bar-index {

@@ -10,14 +10,29 @@ import {
 } from 'react';
 
 import {
-  irealChordToString,
-  irealSectionLabelToString,
   type IrealAccidental,
-  type IrealBar,
   type IrealKeyMode,
   type IrealSection,
+  type IrealSectionLabel,
   type IrealSong,
 } from './ireal-ast';
+import {
+  IrealBarGrid,
+  reconcileActiveBar,
+  type IrealActiveBarRef,
+  type IrealStructuralOps,
+} from './ireal-editor-bar-grid';
+import {
+  makeDefaultBar,
+  makeDefaultSection,
+  sectionLabelEquals,
+  formatSectionLabelForPrompt,
+} from './ireal-editor-defaults';
+import {
+  defaultPromptSectionLabel,
+  defaultConfirmDeleteSection,
+} from './ireal-editor-section-prompt';
+import { useAnnouncer } from './use-announcer';
 
 // Narrow subset of `@chordsketch/wasm` this editor touches. Defined
 // structurally so the wasm glue does not enter the React bundle's
@@ -57,8 +72,23 @@ export interface IrealEditorProps {
   errorFallback?: ReactNode | ((error: Error) => ReactNode) | null;
   /** Whether to show the raw-URL textarea. Defaults to `true`. */
   showUrl?: boolean;
-  /** Whether to show the read-only bar grid. Defaults to `true`. */
+  /** Whether to show the bar grid (structural editing + ARIA grid).
+   * Defaults to `true`. */
   showBars?: boolean;
+  /**
+   * Override for the section-label prompt fired by "+ Add section"
+   * and the per-section rename button. Defaults to
+   * `window.prompt` + the parser in `parseIrealSectionLabel`.
+   * Hosts that want a styled modal can inject a custom resolver
+   * that returns `null` for cancellation.
+   */
+  promptSectionLabel?: (current: IrealSectionLabel | null) => IrealSectionLabel | null;
+  /**
+   * Override for the delete-section confirmation. Defaults to
+   * `window.confirm`. Returning `false` cancels the deletion
+   * before any AST mutation.
+   */
+  confirmDeleteSection?: (label: IrealSectionLabel) => boolean;
   /** Optional loader override.
    * @internal */
   loader?: IrealEditorLoader;
@@ -115,6 +145,8 @@ export function IrealEditor({
   errorFallback,
   showUrl = true,
   showBars = true,
+  promptSectionLabel = defaultPromptSectionLabel,
+  confirmDeleteSection = defaultConfirmDeleteSection,
   loader = defaultLoader,
 }: IrealEditorProps): JSX.Element {
   const wasmRef = useRef<IrealEditorWasm | null>(null);
@@ -295,6 +327,184 @@ export function IrealEditor({
   // edit lost their original input.
   const disabled = readOnly || onChange === undefined || error !== null;
 
+  // Roving-tabindex active bar (#2368 sister-site). `null` for an
+  // empty chart (no Tab stop in the grid until a bar exists).
+  const [activeBar, setActiveBar] = useState<IrealActiveBarRef | null>(null);
+  const { announce, liveRegion } = useAnnouncer();
+
+  // Reconcile the active-bar ref whenever the song's structure
+  // changes — a delete or move can leave the ref pointing at a
+  // non-existent cell. Sister-site: `reconcileActiveBar` in
+  // `packages/ui-irealb-editor/src/index.ts` (lines 151-191).
+  useEffect(() => {
+    if (song === null) return;
+    const next = reconcileActiveBar(activeBar, song.sections);
+    if (next !== activeBar) {
+      setActiveBar(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song?.sections]);
+
+  // Structural editing ops. Each closure mutates a shallow-cloned
+  // song via the existing `emit` path so the URL round-trip stays
+  // single-source — same path the header form already uses.
+  // Sister-site: the `StructuralOps` implementation in
+  // `packages/ui-irealb-editor/src/index.ts` (lines 334-547).
+  const ops = useMemo<IrealStructuralOps>(() => {
+    if (song === null || disabled) {
+      const noop = (): void => {};
+      return {
+        addSection: noop,
+        renameSection: noop,
+        deleteSection: noop,
+        moveSectionUp: noop,
+        moveSectionDown: noop,
+        addBar: noop,
+        deleteBar: noop,
+        moveBarLeft: noop,
+        moveBarRight: noop,
+      };
+    }
+    return {
+      addSection: () => {
+        const label = promptSectionLabel(null);
+        if (label === null) return;
+        emit({
+          ...song,
+          sections: [...song.sections, makeDefaultSection(label)],
+        });
+        announce(`Section ${formatSectionLabelForPrompt(label)} added`);
+      },
+      renameSection: (secIndex, current) => {
+        if (secIndex < 0 || secIndex >= song.sections.length) return;
+        const nextLabel = promptSectionLabel(current);
+        if (nextLabel === null) return;
+        if (sectionLabelEquals(current, nextLabel)) return;
+        const sections = song.sections.map((s, i) =>
+          i === secIndex ? { ...s, label: nextLabel } : s,
+        );
+        emit({ ...song, sections });
+        announce(
+          `Section renamed from ${formatSectionLabelForPrompt(current)} ` +
+            `to ${formatSectionLabelForPrompt(nextLabel)}`,
+        );
+      },
+      deleteSection: (secIndex) => {
+        const section = song.sections[secIndex];
+        if (!section) return;
+        if (!confirmDeleteSection(section.label)) return;
+        const removedLabel = section.label;
+        const sections = song.sections.filter((_, i) => i !== secIndex);
+        emit({ ...song, sections });
+        announce(`Section ${formatSectionLabelForPrompt(removedLabel)} deleted`);
+      },
+      moveSectionUp: (secIndex) => {
+        if (secIndex <= 0 || secIndex >= song.sections.length) return;
+        const sections = [...song.sections];
+        const tmp = sections[secIndex - 1]!;
+        sections[secIndex - 1] = sections[secIndex]!;
+        sections[secIndex] = tmp;
+        // Re-anchor the active-bar ref against the moved section —
+        // see sister-site rationale at
+        // `packages/ui-irealb-editor/src/index.ts:404-417`.
+        if (activeBar !== null) {
+          if (activeBar.secIndex === secIndex) {
+            setActiveBar({ secIndex: secIndex - 1, barIndex: activeBar.barIndex });
+          } else if (activeBar.secIndex === secIndex - 1) {
+            setActiveBar({ secIndex, barIndex: activeBar.barIndex });
+          }
+        }
+        emit({ ...song, sections });
+        announce(
+          `Section ${formatSectionLabelForPrompt(sections[secIndex - 1]!.label)} moved up`,
+        );
+      },
+      moveSectionDown: (secIndex) => {
+        if (secIndex < 0 || secIndex >= song.sections.length - 1) return;
+        const sections = [...song.sections];
+        const tmp = sections[secIndex + 1]!;
+        sections[secIndex + 1] = sections[secIndex]!;
+        sections[secIndex] = tmp;
+        if (activeBar !== null) {
+          if (activeBar.secIndex === secIndex) {
+            setActiveBar({ secIndex: secIndex + 1, barIndex: activeBar.barIndex });
+          } else if (activeBar.secIndex === secIndex + 1) {
+            setActiveBar({ secIndex, barIndex: activeBar.barIndex });
+          }
+        }
+        emit({ ...song, sections });
+        announce(
+          `Section ${formatSectionLabelForPrompt(sections[secIndex + 1]!.label)} moved down`,
+        );
+      },
+      addBar: (secIndex) => {
+        const section = song.sections[secIndex];
+        if (!section) return;
+        const newBarIndex = section.bars.length;
+        const sections = song.sections.map((s, i) =>
+          i === secIndex ? { ...s, bars: [...s.bars, makeDefaultBar()] } : s,
+        );
+        emit({ ...song, sections });
+        announce(
+          `Bar ${newBarIndex + 1} added to section ${formatSectionLabelForPrompt(section.label)}`,
+        );
+      },
+      deleteBar: (secIndex, barIndex) => {
+        const section = song.sections[secIndex];
+        if (!section) return;
+        if (barIndex < 0 || barIndex >= section.bars.length) return;
+        const removedBarNumber = barIndex + 1;
+        const sectionLabel = section.label;
+        const sections = song.sections.map((s, i) =>
+          i === secIndex
+            ? { ...s, bars: s.bars.filter((_, j) => j !== barIndex) }
+            : s,
+        );
+        emit({ ...song, sections });
+        announce(
+          `Bar ${removedBarNumber} deleted from section ${formatSectionLabelForPrompt(sectionLabel)}`,
+        );
+      },
+      moveBarLeft: (secIndex, barIndex) => {
+        const section = song.sections[secIndex];
+        if (!section) return;
+        if (barIndex <= 0 || barIndex >= section.bars.length) return;
+        const bars = [...section.bars];
+        const tmp = bars[barIndex - 1]!;
+        bars[barIndex - 1] = bars[barIndex]!;
+        bars[barIndex] = tmp;
+        const sections = song.sections.map((s, i) =>
+          i === secIndex ? { ...s, bars } : s,
+        );
+        emit({ ...song, sections });
+        announce(`Bar ${barIndex + 1} moved left`);
+      },
+      moveBarRight: (secIndex, barIndex) => {
+        const section = song.sections[secIndex];
+        if (!section) return;
+        if (barIndex < 0 || barIndex >= section.bars.length - 1) return;
+        const bars = [...section.bars];
+        const tmp = bars[barIndex + 1]!;
+        bars[barIndex + 1] = bars[barIndex]!;
+        bars[barIndex] = tmp;
+        const sections = song.sections.map((s, i) =>
+          i === secIndex ? { ...s, bars } : s,
+        );
+        emit({ ...song, sections });
+        announce(`Bar ${barIndex + 1} moved right`);
+      },
+    };
+  }, [song, disabled, emit, announce, promptSectionLabel, confirmDeleteSection, activeBar]);
+
+  // No-op bar-open handler in this slice — the popover lands in a
+  // follow-up PR. Clicking a bar cell still updates the
+  // active-bar ref via `onActiveBarChange` (which fires on focus,
+  // and a click also focuses the button) so keyboard navigation
+  // picks up the new anchor.
+  const handleOpenBar = useCallback((_secIndex: number, _barIndex: number): void => {
+    // Intentionally empty until the popover slice lands.
+  }, []);
+
   const wrapperClass = ['chordsketch-ireal-editor', className]
     .filter((c): c is string => typeof c === 'string' && c.length > 0)
     .join(' ');
@@ -309,6 +519,7 @@ export function IrealEditor({
 
   return (
     <div className={wrapperClass} style={style}>
+      {liveRegion}
       {errorNode}
       {song !== null ? (
         <>
@@ -491,7 +702,16 @@ export function IrealEditor({
               />
             </label>
           </fieldset>
-          {showBars ? <BarGrid sections={song.sections} /> : null}
+          {showBars ? (
+            <IrealBarGrid
+              sections={song.sections}
+              activeBar={activeBar}
+              onActiveBarChange={setActiveBar}
+              onOpenBar={handleOpenBar}
+              ops={ops}
+              disabled={disabled}
+            />
+          ) : null}
           {showUrl ? (
             <label className="chordsketch-ireal-editor__url">
               <span>URL</span>
@@ -512,48 +732,3 @@ export function IrealEditor({
   );
 }
 
-interface BarGridProps {
-  sections: readonly IrealSection[];
-}
-
-function BarGrid({ sections }: BarGridProps): JSX.Element {
-  if (sections.length === 0) {
-    return (
-      <p className="chordsketch-ireal-editor__empty-bars">
-        No sections in this chart.
-      </p>
-    );
-  }
-  return (
-    <div className="chordsketch-ireal-editor__sections">
-      {sections.map((section, sIndex) => (
-        <section
-          key={sIndex}
-          className="chordsketch-ireal-editor__section"
-          aria-label={`Section ${irealSectionLabelToString(section.label)}`}
-        >
-          <h3 className="chordsketch-ireal-editor__section-label">
-            {irealSectionLabelToString(section.label)}
-          </h3>
-          <ol className="chordsketch-ireal-editor__bars">
-            {section.bars.map((bar, bIndex) => (
-              <li key={bIndex} className="chordsketch-ireal-editor__bar">
-                <span className="chordsketch-ireal-editor__bar-index">{bIndex + 1}</span>
-                <span className="chordsketch-ireal-editor__bar-chords">
-                  {formatBarChords(bar)}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </section>
-      ))}
-    </div>
-  );
-}
-
-function formatBarChords(bar: IrealBar): string {
-  if (bar.chords.length === 0) return '—';
-  return bar.chords
-    .map((c) => (c.kind === 'slash_repeat' ? '/' : irealChordToString(c.chord)))
-    .join(' ');
-}
