@@ -10,7 +10,7 @@
 //! native test binary). `codecov.yml` excludes this file from coverage
 //! measurement for that reason; integration coverage of the actual ABI
 //! thunks runs under `wasm-pack test --node` against the
-//! `#[cfg(target_arch = "wasm32")] mod wasm_tests` block in `lib.rs`
+//! `#[cfg(all(test, target_arch = "wasm32"))] mod wasm_tests` block in `lib.rs`
 //! (issue #2352).
 //!
 //! Every function here is a thin wrapper around a `crate::*_inner` /
@@ -276,7 +276,7 @@ pub fn render_pdf_with_options(input: &str, options: JsValue) -> Result<Vec<u8>,
 /// configuration.
 ///
 /// Unlike [`render_html`], the returned string is just the
-/// `<div class="song">...</div>` markup — no `<!DOCTYPE>`, `<html>`,
+/// `<article class="song">...</article>` markup — no `<!DOCTYPE>`, `<html>`,
 /// `<head>`, `<title>`, or embedded `<style>` block. Use this from
 /// hosts that supply their own document envelope (the playground's
 /// `<iframe srcdoc>`, the desktop Tauri shell, the VS Code WebView
@@ -583,7 +583,7 @@ pub fn render_pdf_with_warnings_and_options(
 /// `{ output, warnings }`.
 ///
 /// Body-only counterpart to [`render_html_with_warnings`]; returns the
-/// `<div class="song">...</div>` markup without `<!DOCTYPE>` /
+/// `<article class="song">...</article>` markup without `<!DOCTYPE>` /
 /// `<html>` / `<head>` / `<style>`. See [`render_html_body`] for the
 /// fragment contract and [`render_html_with_warnings`] for the
 /// warnings contract.
@@ -956,9 +956,10 @@ pub fn serialize_irealb(input: &str) -> Result<String, JsValue> {
     do_serialize_irealb(input).map_err(|e| JsValue::from_str(&e))
 }
 
-/// Wasm-exposed wrapper around the pure-Rust [`do_chord_typography`]
-/// helper. See [`renderIrealSvg`](render_ireal_svg)'s span-layout
-/// surface for the typography-span vocabulary the JSON output uses.
+/// Wasm-exposed wrapper around the pure-Rust `do_chord_typography`
+/// helper in `lib.rs`. See [`renderIrealSvg`](render_ireal_svg)'s
+/// span-layout surface for the typography-span vocabulary the JSON
+/// output uses.
 ///
 /// # Errors
 ///

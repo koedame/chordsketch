@@ -39,7 +39,7 @@ use crate::{
     do_parse_irealb, do_render_bytes, do_render_ireal_pdf, do_render_ireal_png,
     do_render_ireal_svg, do_render_pdf_with_warnings, do_render_string,
     do_render_string_with_warnings, do_serialize_irealb, render_html_css_with_options_inner,
-    resolve_options_inner,
+    resolve_options_inner, validate_defines_pairs, validate_inner,
 };
 
 /// Render options matching the WASM package API.
@@ -293,7 +293,7 @@ pub fn render_pdf_with_warnings_and_options(
 /// Render ChordPro input as a body-only HTML fragment using default
 /// configuration.
 ///
-/// Emits just the chord-over-lyrics `<section class="song">…</section>`
+/// Emits just the chord-over-lyrics `<article class="song">…</article>`
 /// fragment without an enclosing `<html>` / `<head>` / `<body>` envelope.
 /// Use this when the caller wants to embed the rendered chart inside an
 /// existing page (React component, CMS shortcode, email template) and
@@ -430,18 +430,12 @@ pub struct ValidationError {
 #[must_use]
 #[napi]
 pub fn validate(input: String) -> Vec<ValidationError> {
-    let result = chordsketch_chordpro::parse_multi_lenient(&input);
-    result
-        .results
+    validate_inner(&input)
         .into_iter()
-        .flat_map(|r| r.errors.into_iter())
-        .map(|e| ValidationError {
-            // `line()` / `column()` are `usize`; clamp the (astronomically
-            // unlikely) overflow at `u32::MAX` so we never panic on
-            // conversion.
-            line: u32::try_from(e.line()).unwrap_or(u32::MAX),
-            column: u32::try_from(e.column()).unwrap_or(u32::MAX),
-            message: e.message,
+        .map(|p| ValidationError {
+            line: p.line,
+            column: p.column,
+            message: p.message,
         })
         .collect()
 }
@@ -503,26 +497,8 @@ pub fn chord_diagram_svg_with_defines(
     instrument: String,
     defines: Vec<Vec<String>>,
 ) -> Result<Option<String>> {
-    // napi-rs's `tuple` support is limited; accept `Array<[name,
-    // raw]>` as `Vec<Vec<String>>` and reject malformed inner
-    // arrays at the boundary. Each entry must have exactly two
-    // elements; anything else is a caller error.
-    let mut pairs: Vec<(String, String)> = Vec::with_capacity(defines.len());
-    for (i, entry) in defines.into_iter().enumerate() {
-        if entry.len() != 2 {
-            return Err(Error::new(
-                Status::InvalidArg,
-                format!(
-                    "defines[{i}] must be [name, raw] (length 2); got length {}",
-                    entry.len()
-                ),
-            ));
-        }
-        let mut it = entry.into_iter();
-        let name = it.next().expect("length checked above");
-        let raw = it.next().expect("length checked above");
-        pairs.push((name, raw));
-    }
+    let pairs =
+        validate_defines_pairs(defines).map_err(|msg| Error::new(Status::InvalidArg, msg))?;
     chord_diagram_svg_inner(&chord, &instrument, &pairs)
         .map_err(|msg| Error::new(Status::InvalidArg, msg))
 }

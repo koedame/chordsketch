@@ -15,7 +15,7 @@
 //!   `codecov.yml` excludes `bindings.rs` from coverage measurement
 //!   (issue #2352); integration coverage of the actual ABI thunks runs
 //!   under `wasm-pack test --node` against the
-//!   `#[cfg(target_arch = "wasm32")] mod wasm_tests` block below.
+//!   `#[cfg(all(test, target_arch = "wasm32"))] mod wasm_tests` block below.
 //! - **`lib`** (this file) — pure-Rust helpers
 //!   (`resolve_config_inner`, `flush_warnings`, `do_render_string`,
 //!   `do_render_bytes`, `render_string_with_warnings_core`,

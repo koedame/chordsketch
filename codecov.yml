@@ -9,8 +9,10 @@
 #   core              standalone floor 85%
 #   Renderers (group) floor 80%, intra-group skew <= 5%
 #   Bindings (group)  floor 70%, intra-group skew <= 10%
-#                     (restored from the 65% interim floor in #2352;
-#                     see §Bindings note below)
+#                     (#2352 restored 70% / 10pp after the structural
+#                     ABI-thunk split; the prior 65% / 21pp interim
+#                     was introduced by #2350. See §Bindings note
+#                     below.)
 #   ireal             floor 85%
 #   convert           floor 80%
 #   convert-musicxml  floor 80%
@@ -24,14 +26,15 @@
 # file that is excluded from coverage measurement via the `ignore:`
 # list at the bottom of this file. Before #2352, those declarations
 # lived in `lib.rs` and the proc-macro-emitted ABI thunks (against
-# Node-API / `serde_wasm_bindgen` runtime symbols) were attributed to
-# the source line of the macro invocation. Those thunks are
-# unreachable from `cargo llvm-cov` because the test binary does not
-# link the runtime they call into, which depressed the measured
-# percentage on napi to ~67% and wasm to ~73% — even though every
-# wrapper is a thin shim around a pure-Rust `*_inner` / `*_core`
-# helper that the unit-test suite already exercised exhaustively
-# (#2350 prepared the helper-side refactor for this split).
+# Node-API on napi and the `__wbindgen_*` host imports on wasm) were
+# attributed to the source line of the macro invocation. Those
+# thunks are unreachable from `cargo llvm-cov` because the test
+# binary does not link the runtime they call into, which depressed
+# the measured percentage on napi to ~67% and wasm to ~73% — even
+# though every wrapper is a thin shim around a pure-Rust `*_inner`
+# / `*_core` helper that the unit-test suite already exercised
+# exhaustively (#2350 prepared the helper-side refactor for this
+# split).
 #
 # Moving the macro invocations out of `lib.rs` makes the coverage
 # numbers reflect what they should: the pure-Rust business logic in
@@ -45,7 +48,7 @@
 #
 # The integration suites for each binding (jest in `crates/napi/
 # __tests__/`, `wasm-bindgen-test` in `crates/wasm/src/lib.rs` under
-# `cfg(target_arch = "wasm32")`, Python smoke in `crates/ffi/
+# `cfg(all(test, target_arch = "wasm32"))`, Python smoke in `crates/ffi/
 # tests/`) continue to exercise the ABI thunks end-to-end on every
 # PR — they are not the source of the Codecov percentage, but they
 # remain the line of defence against regressions in the thin

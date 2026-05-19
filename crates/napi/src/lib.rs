@@ -13,12 +13,14 @@
 //!   from `cargo test` and from `cargo llvm-cov`'s instrumented test
 //!   binary. `codecov.yml` excludes `bindings.rs` from coverage
 //!   measurement for exactly this reason (issue #2352).
-//! - **`lib`** (this file) — pure-Rust helpers (`do_*`, `*_inner`,
-//!   `parse_songs`, `flush_warnings`, …) plus the unit-test suite that
-//!   drives them. Every `#[napi]` function in `bindings.rs` is a
-//!   1–3 line wrapper around one of these helpers, so the tests here
-//!   cover the binding's full business logic without needing the
-//!   Node.js runtime.
+//! - **`lib`** (this file) — pure-Rust helpers (`do_*`, `*_inner`
+//!   for the parse + render + validate pipeline; `parse_songs`,
+//!   `flush_warnings`, `try_parse_transpose`, `format_conversion_warning`
+//!   for the support utilities) plus the unit-test suite that drives
+//!   them. Every `#[napi]` function in `bindings.rs` is a 1–3 line
+//!   wrapper around one of these helpers, so the tests here cover the
+//!   binding's full business logic without needing the Node.js
+//!   runtime.
 //!
 //! Sister-site rule: every helper / wrapper pair added here must have a
 //! matching pair in `crates/wasm/src/{lib.rs, bindings.rs}` and
@@ -90,7 +92,7 @@ fn flush_warnings<T>(result: RenderResult<T>) -> T {
 /// parse → render → flush_warnings path natively. See
 /// [`resolve_config_inner`] for the `napi::Error::Drop` linkage
 /// rationale.
-fn do_render_string(
+pub(crate) fn do_render_string(
     input: &str,
     config: &chordsketch_chordpro::config::Config,
     transpose: i8,
@@ -107,7 +109,7 @@ fn do_render_string(
 /// Parse and render songs as bytes, forwarding any render warnings to stderr.
 ///
 /// See [`do_render_string`] — same pattern for PDF output.
-fn do_render_bytes(
+pub(crate) fn do_render_bytes(
     input: &str,
     config: &chordsketch_chordpro::config::Config,
     transpose: i8,
@@ -132,7 +134,7 @@ fn do_render_bytes(
 /// in plain Rust types here keeps this helper symmetric with
 /// `do_render_pdf_with_warnings`, which cannot return its struct
 /// natively because of the `Buffer` field).
-fn do_render_string_with_warnings(
+pub(crate) fn do_render_string_with_warnings(
     input: &str,
     config: &chordsketch_chordpro::config::Config,
     transpose: i8,
@@ -153,7 +155,7 @@ fn do_render_string_with_warnings(
 /// same parse + render + capture pipeline. Returns a `(Vec<u8>,
 /// Vec<String>)` tuple so unit tests can drive it without constructing
 /// `PdfRenderWithWarnings`, whose `Buffer` field is napi-coupled.
-fn do_render_pdf_with_warnings(
+pub(crate) fn do_render_pdf_with_warnings(
     input: &str,
     config: &chordsketch_chordpro::config::Config,
     transpose: i8,
@@ -198,7 +200,7 @@ fn try_parse_transpose(raw: i32) -> std::result::Result<i8, String> {
 /// unit tests can drive every options-validation branch without
 /// constructing `napi::Error`. The `#[napi]` wrappers in [`bindings`]
 /// convert at the boundary via `bindings::resolve_options`.
-fn resolve_options_inner(
+pub(crate) fn resolve_options_inner(
     config: Option<&str>,
     transpose: i32,
 ) -> std::result::Result<(chordsketch_chordpro::config::Config, i8), String> {
@@ -208,7 +210,9 @@ fn resolve_options_inner(
 }
 
 /// Pure-Rust implementation of [`bindings::render_html_css_with_options`].
-fn render_html_css_with_options_inner(config: Option<&str>) -> std::result::Result<String, String> {
+pub(crate) fn render_html_css_with_options_inner(
+    config: Option<&str>,
+) -> std::result::Result<String, String> {
     let config = resolve_config_inner(config)?;
     Ok(chordsketch_render_html::render_html_css_with_config(
         &config,
@@ -221,7 +225,7 @@ fn render_html_css_with_options_inner(config: Option<&str>) -> std::result::Resu
 /// `chordsketch_chordpro::voicings::lookup_diagram`'s contract —
 /// the built-in voicing database is consulted only when no entry
 /// in `defines` matches the chord name.
-fn chord_diagram_svg_inner(
+pub(crate) fn chord_diagram_svg_inner(
     chord: &str,
     instrument: &str,
     defines: &[(String, String)],
@@ -234,7 +238,11 @@ fn chord_diagram_svg_inner(
             // Keyboard voicings have their own `{define: … keys …}`
             // shape; the wasm sister-site does not thread defines
             // through this branch either. Match that gap here so
-            // NAPI behaviour stays consistent.
+            // NAPI behaviour stays consistent. Drop `defines`
+            // explicitly via `let _ = …;` to make the intentional
+            // omission visible in the diff (mirrors wasm's
+            // `chord_diagram_svg_inner`).
+            let _ = defines;
             Ok(lookup_keyboard_voicing(chord, &[]).map(|v| render_keyboard_svg(&v)))
         }
         "guitar" | "ukulele" | "uke" => {
@@ -277,7 +285,7 @@ fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> Stri
 /// existing test pattern is to call the underlying chordpro logic
 /// directly for the same reason). The `#[napi]` wrapper in [`bindings`]
 /// maps the `String` error into `napi::Error` at the binding boundary.
-fn do_convert_chordpro_to_irealb(
+pub(crate) fn do_convert_chordpro_to_irealb(
     input: &str,
 ) -> std::result::Result<(String, Vec<String>), String> {
     let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
@@ -308,7 +316,7 @@ fn do_convert_chordpro_to_irealb(
 /// Same `Result<_, String>` contract as
 /// [`do_convert_chordpro_to_irealb`] — see that function's note for
 /// why the helper does not return `napi::Result`.
-fn do_convert_irealb_to_chordpro_text(
+pub(crate) fn do_convert_irealb_to_chordpro_text(
     input: &str,
 ) -> std::result::Result<(String, Vec<String>), String> {
     let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
@@ -329,7 +337,7 @@ fn do_convert_irealb_to_chordpro_text(
 /// unit tests can exercise the path without linking against
 /// `napi::Error`'s `Drop` impl. See `do_convert_chordpro_to_irealb`
 /// for the full rationale.
-fn do_render_ireal_svg(input: &str) -> std::result::Result<String, String> {
+pub(crate) fn do_render_ireal_svg(input: &str) -> std::result::Result<String, String> {
     let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
     Ok(chordsketch_render_ireal::render_svg(
         &ireal,
@@ -340,14 +348,14 @@ fn do_render_ireal_svg(input: &str) -> std::result::Result<String, String> {
 /// Run the iReal URL → AST JSON pipeline; native helper. See
 /// [`do_convert_chordpro_to_irealb`] for the `Result<_, String>`
 /// rationale.
-fn do_parse_irealb(input: &str) -> std::result::Result<String, String> {
+pub(crate) fn do_parse_irealb(input: &str) -> std::result::Result<String, String> {
     use chordsketch_ireal::ToJson;
     let song = chordsketch_ireal::parse(input).map_err(|e| format!("parse failed: {e}"))?;
     Ok(song.to_json_string())
 }
 
 /// Run the AST JSON → iReal URL pipeline; native helper.
-fn do_serialize_irealb(input: &str) -> std::result::Result<String, String> {
+pub(crate) fn do_serialize_irealb(input: &str) -> std::result::Result<String, String> {
     use chordsketch_ireal::FromJson;
     let song = chordsketch_ireal::IrealSong::from_json_str(input)
         .map_err(|e| format!("invalid AST JSON: {e}"))?;
@@ -358,7 +366,7 @@ fn do_serialize_irealb(input: &str) -> std::result::Result<String, String> {
 /// unit tests can exercise the path without linking against
 /// `napi::Error`'s `Drop` impl. See `do_render_ireal_svg` for the
 /// full rationale.
-fn do_render_ireal_png(input: &str) -> std::result::Result<Vec<u8>, String> {
+pub(crate) fn do_render_ireal_png(input: &str) -> std::result::Result<Vec<u8>, String> {
     let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
     chordsketch_render_ireal::png::render_png(
         &ireal,
@@ -367,8 +375,82 @@ fn do_render_ireal_png(input: &str) -> std::result::Result<Vec<u8>, String> {
     .map_err(|e| format!("PNG render failed: {e}"))
 }
 
+/// A single validation issue reported by [`bindings::validate`].
+///
+/// Plain Rust struct (no `#[napi(object)]`) so unit tests can drive
+/// [`validate_inner`] without pulling in `napi::Error`'s `Drop` impl.
+/// The bindings wrapper maps each entry into the napi-coupled
+/// `ValidationError` (line / column / message field-for-field) at the
+/// boundary. Sister-site to `crates/wasm/src/lib.rs`'s
+/// `ValidationErrorPayload` — same shape, same purpose.
+pub(crate) struct ValidationErrorPayload {
+    pub(crate) line: u32,
+    pub(crate) column: u32,
+    pub(crate) message: String,
+}
+
+/// Pure-Rust core of [`bindings::validate`]. Parses `input` with the
+/// lenient ChordPro parser and projects every `ParseError` into a
+/// structured `(line, column, message)` triple, clamping the usize
+/// line / column at `u32::MAX` so the cross-binding `u32` field type
+/// stays panic-free on astronomically-large inputs.
+///
+/// Returns `Vec<ValidationErrorPayload>` (not `Vec<ValidationError>`)
+/// so the unit-test suite below can drive every assertion path
+/// without linking `napi::Error`'s `Drop` impl. See
+/// [`resolve_config_inner`] for the linkage rationale.
+pub(crate) fn validate_inner(input: &str) -> Vec<ValidationErrorPayload> {
+    let result = chordsketch_chordpro::parse_multi_lenient(input);
+    result
+        .results
+        .into_iter()
+        .flat_map(|r| r.errors.into_iter())
+        .map(|e| ValidationErrorPayload {
+            // `line()` / `column()` are `usize`; clamp the (astronomically
+            // unlikely) overflow at `u32::MAX` so we never panic on
+            // conversion.
+            line: u32::try_from(e.line()).unwrap_or(u32::MAX),
+            column: u32::try_from(e.column()).unwrap_or(u32::MAX),
+            message: e.message,
+        })
+        .collect()
+}
+
+/// Validate the JS-supplied `defines: Array<[name, raw]>` argument
+/// shape used by [`bindings::chord_diagram_svg_with_defines`]. Each
+/// inner array MUST have exactly two elements; anything else is a
+/// caller error and surfaces as a `String` here, mapped to
+/// `Status::InvalidArg` by the wrapper.
+///
+/// napi-rs's `tuple` support is limited, so the binding accepts
+/// `Array<[name, raw]>` as `Vec<Vec<String>>` and rejects malformed
+/// inner arrays at the boundary. The helper returns the canonical
+/// `Vec<(String, String)>` shape that
+/// `chordsketch_chordpro::voicings::lookup_diagram` consumes.
+///
+/// Pure-Rust — see [`resolve_config_inner`] for the
+/// `napi::Error::Drop` linkage rationale.
+pub(crate) fn validate_defines_pairs(
+    defines: Vec<Vec<String>>,
+) -> std::result::Result<Vec<(String, String)>, String> {
+    let mut pairs: Vec<(String, String)> = Vec::with_capacity(defines.len());
+    for (i, entry) in defines.into_iter().enumerate() {
+        if entry.len() != 2 {
+            return Err(format!(
+                "defines[{i}] must be [name, raw] (length 2); got length {}",
+                entry.len()
+            ));
+        }
+        let mut it = entry.into_iter();
+        let name = it.next().expect("length checked above");
+        let raw = it.next().expect("length checked above");
+        pairs.push((name, raw));
+    }
+    Ok(pairs)
+}
+
 /// Run the iReal PDF-render pipeline; native helper.
-fn do_render_ireal_pdf(input: &str) -> std::result::Result<Vec<u8>, String> {
+pub(crate) fn do_render_ireal_pdf(input: &str) -> std::result::Result<Vec<u8>, String> {
     let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
     chordsketch_render_ireal::pdf::render_pdf(
         &ireal,
@@ -1021,6 +1103,115 @@ mod tests {
                 "case variant {variant:?} must find a guitar-C diagram; got None"
             );
         }
+    }
+
+    #[test]
+    fn test_validate_inner_returns_empty_for_clean_input() {
+        // Sister-site to wasm's `test_validate_returns_empty_for_valid_input`
+        // — both bindings must report zero diagnostics on the same minimal
+        // ChordPro source.
+        let errors = validate_inner(MINIMAL_INPUT);
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_validate_inner_surfaces_unclosed_chord() {
+        // `[G` without a closing bracket triggers a recoverable parse
+        // error. The bindings wrapper field-maps each payload into a
+        // napi `ValidationError`, so pin the payload-shape contract
+        // (line >= 1, column >= 1, message mentions the failure mode)
+        // here in lib.rs where the unit tests can drive every assertion.
+        let errors = validate_inner("{title: Test}\n[G");
+        assert!(!errors.is_empty(), "unclosed chord must produce an error");
+        assert!(
+            errors[0].line >= 1,
+            "line should be one-based, got {}",
+            errors[0].line
+        );
+        assert!(
+            errors[0].column >= 1,
+            "column should be one-based, got {}",
+            errors[0].column
+        );
+        assert!(
+            errors[0].message.contains("unclosed"),
+            "error message should mention `unclosed`, got: {}",
+            errors[0].message
+        );
+    }
+
+    #[test]
+    fn test_validate_inner_empty_input_returns_empty() {
+        // The lenient parser tolerates empty input (no error). Pin the
+        // contract so a future regression that emits a phantom "empty
+        // document" error fails loudly here.
+        let errors = validate_inner("");
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_validate_defines_pairs_well_formed_succeeds() {
+        let pairs = validate_defines_pairs(vec![
+            vec![
+                "Gsus4".to_string(),
+                "base-fret 1 frets 3 3 0 0 1 3".to_string(),
+            ],
+            vec!["Cmaj7".to_string(), "frets x 3 2 0 0 0".to_string()],
+        ])
+        .unwrap();
+        assert_eq!(pairs.len(), 2);
+        assert_eq!(pairs[0].0, "Gsus4");
+        assert_eq!(pairs[0].1, "base-fret 1 frets 3 3 0 0 1 3");
+        assert_eq!(pairs[1].0, "Cmaj7");
+    }
+
+    #[test]
+    fn test_validate_defines_pairs_empty_succeeds() {
+        let pairs = validate_defines_pairs(vec![]).unwrap();
+        assert!(pairs.is_empty());
+    }
+
+    #[test]
+    fn test_validate_defines_pairs_rejects_length_one_entry() {
+        // The `Vec<Vec<String>>` shape comes from napi-rs marshalling
+        // `Array<[name, raw]>`; bad inner-array length is a caller error
+        // that the wrapper maps to `Status::InvalidArg`.
+        let err = validate_defines_pairs(vec![vec!["Gsus4".to_string()]]).unwrap_err();
+        assert!(
+            err.contains("defines[0]") && err.contains("length 2") && err.contains("got length 1"),
+            "error must identify the offending index and length; got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_validate_defines_pairs_rejects_length_three_entry() {
+        let err = validate_defines_pairs(vec![vec![
+            "Gsus4".to_string(),
+            "raw1".to_string(),
+            "extra".to_string(),
+        ]])
+        .unwrap_err();
+        assert!(
+            err.contains("got length 3"),
+            "error must identify the actual length; got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_validate_defines_pairs_reports_offending_index() {
+        // The error message identifies which entry in the array failed
+        // validation, which is the difference between a usable JS error
+        // and a generic "something is wrong".
+        let err = validate_defines_pairs(vec![
+            vec!["Gsus4".to_string(), "ok".to_string()],
+            vec!["Cmaj7".to_string(), "ok".to_string()],
+            vec!["bad".to_string()],
+        ])
+        .unwrap_err();
+        assert!(
+            err.contains("defines[2]"),
+            "error must point at the offending entry (index 2); got: {err}"
+        );
     }
 
     #[test]
