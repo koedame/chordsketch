@@ -356,6 +356,48 @@ describe('<IrealEditor> popover — chord rows', () => {
     expect((bassInputs[0] as HTMLInputElement).value).toBe('');
     expect((bassInputs[1] as HTMLInputElement).value).toBe('G');
   });
+
+  test('bass text input resets after null→null reorder (stale invalid state)', async () => {
+    // Regression guard for the null→null edge case: if the user has typed
+    // an invalid bass in a chord that has no bass, then reorders with
+    // another chord that also has no bass, the dep [barChord.chord.bass]
+    // would see null===null and skip the reset — leaving bassRaw='ZZZ' and
+    // aria-invalid set against the wrong chord. The dep is now [barChord]
+    // so any swap, even null→null, resets the display.
+    const seed = songWithOneChordBar();
+    seed.sections[0]!.bars[0]!.chords = [
+      {
+        chord: {
+          root: { note: 'C', accidental: 'natural' },
+          quality: { kind: 'major' },
+          bass: null,
+        },
+        position: { beat: 1, subdivision: 0 },
+      },
+      {
+        chord: {
+          root: { note: 'F', accidental: 'natural' },
+          quality: { kind: 'major' },
+          bass: null,
+        },
+        position: { beat: 3, subdivision: 0 },
+      },
+    ];
+    await renderEditor(seed);
+    openFirstBarPopover();
+    const dialog = await screen.findByRole('dialog');
+    // Type an invalid bass into row 0 (no onChange fires — AST unchanged).
+    const [bassInput0] = within(dialog).getAllByLabelText('Bass') as HTMLInputElement[];
+    fireEvent.change(bassInput0!, { target: { value: 'ZZZ' } });
+    expect(bassInput0!.getAttribute('aria-invalid')).toBe('true');
+    // Reorder: chord 0 (C, no bass) moves down; chord 1 (F, no bass) takes row 0.
+    const downButtons = within(dialog).getAllByRole('button', { name: 'Move chord down' });
+    fireEvent.click(downButtons[0]!);
+    // Row 0 now holds the F chord — bass display must reset, not carry 'ZZZ'.
+    const [updatedBass0] = within(dialog).getAllByLabelText('Bass') as HTMLInputElement[];
+    expect(updatedBass0!.value).toBe('');
+    expect(updatedBass0!.getAttribute('aria-invalid')).not.toBe('true');
+  });
 });
 
 describe('<IrealEditor> popover — preserves unedited fields', () => {

@@ -412,23 +412,26 @@ function ChordRowEditor({
   );
   const [bassInvalid, setBassInvalid] = useState<boolean>(false);
 
-  // Sync the bass display whenever the chord's bass changes from outside
-  // this component — specifically after a chord-row reorder. All of the
-  // setter callbacks (setRoot, setAccidental, setQuality) spread
-  // `...barChord.chord`, which preserves the existing `bass` object
-  // reference when the bass itself is not edited, so this effect fires
-  // only when the bass prop actually changes (new reference): either
-  // because the user committed a valid bass entry, or because a reorder
-  // moved a chord with a different bass into this row's slot.
-  // Without this sync, `bassRaw` / `bassInvalid` carry the previous
-  // row's display state after reorder while `barChord` already reflects
-  // the new chord. The AST stored in the parent's `chords` array is
-  // always correct; it is only the text input that goes stale.
+  // Sync the bass display whenever the barChord prop changes from outside
+  // this component. Using `barChord` (the whole object) as the dep rather
+  // than `barChord.chord.bass` alone ensures that a null→null reorder
+  // (both outgoing and incoming chord have no bass) still resets any
+  // in-progress `bassRaw` / `bassInvalid` state — `null === null` would
+  // make a narrower dep silently skip the reset, leaving `bassRaw = 'ZZZ'`
+  // and `aria-invalid` set against the wrong chord after the swap.
+  //
+  // The broader dep means the display also resets to the committed state
+  // when the user changes root / accidental / quality / position, which is
+  // defensively correct: those edits produce a new `barChord` reference,
+  // and the committed bass value is the right one to show at that point.
+  //
+  // `formatBass` is a stable module-scope pure function; the eslint-disable
+  // below suppresses the false-positive exhaustive-deps warning for it.
   useEffect(() => {
     setBassRaw(barChord.chord.bass !== null ? formatBass(barChord.chord.bass) : '');
     setBassInvalid(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [barChord.chord.bass]);
+  }, [barChord]);
 
   const setRoot = (note: string): void => {
     onChange({
