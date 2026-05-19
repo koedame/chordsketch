@@ -132,15 +132,29 @@ describe('<IrealEditor> popover — open / dismiss', () => {
     expect(stub.serializeIrealb).not.toHaveBeenCalled();
   });
 
-  test('opening a second popover closes the first (single dialog invariant)', async () => {
-    await renderEditor();
+  test('opening a second popover closes the first AND swaps the bound bar', async () => {
+    // Differentiated seed: bar 1 carries `start: 'single'`, bar 2
+    // carries `start: 'open_repeat'`. Without `key={secIndex:barIndex}`
+    // on `<IrealBarPopover>` React would reuse the same instance
+    // across the swap, leaving the dialog showing bar 1's content
+    // while supposedly editing bar 2 — the assertion below catches
+    // that regression.
+    const seed = songWithOneChordBar();
+    seed.sections[0]!.bars[1]!.start = 'open_repeat';
+    await renderEditor(seed);
     openFirstBarPopover();
-    await screen.findByRole('dialog');
+    const firstDialog = await screen.findByRole('dialog');
+    expect(
+      (within(firstDialog).getByLabelText('Start barline') as HTMLSelectElement).value,
+    ).toBe('single');
     // Click the second bar cell.
     const secondCell = screen.getByRole('button', { name: /^Edit bar 2/ });
     fireEvent.click(secondCell);
-    // Exactly one dialog at any time.
-    expect(screen.getAllByRole('dialog').length).toBe(1);
+    const dialogs = screen.getAllByRole('dialog');
+    expect(dialogs.length).toBe(1);
+    expect(
+      (within(dialogs[0]!).getByLabelText('Start barline') as HTMLSelectElement).value,
+    ).toBe('open_repeat');
   });
 });
 
@@ -195,18 +209,77 @@ describe('<IrealEditor> popover — ending input', () => {
 });
 
 describe('<IrealEditor> popover — symbol picker', () => {
-  test('None / segno / fine / da_capo_al_coda round-trip', async () => {
-    for (const target of ['segno', 'fine', 'da_capo_al_coda'] as const) {
-      const { stub, unmount } = await renderEditor();
-      openFirstBarPopover();
-      await screen.findByRole('dialog');
-      const symbolSelect = screen.getByLabelText('Symbol');
-      fireEvent.change(symbolSelect, { target: { value: target } });
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-      await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
-      expect(stub.lastSong().sections[0]!.bars[0]!.symbol).toBe(target);
-      unmount();
-    }
+  // Parametrised across the full 18-option list. A typo or accidental
+  // drop in `SYMBOL_OPTIONS` (e.g. a missing
+  // `da_capo_al_3rd_end` entry) would surface here as a select-value
+  // failure rather than slipping through to release.
+  test.each([
+    'segno',
+    'coda',
+    'fine',
+    'fermata',
+    'break',
+    'da_capo',
+    'da_capo_al_coda',
+    'da_capo_al_fine',
+    'da_capo_al_1st_end',
+    'da_capo_al_2nd_end',
+    'da_capo_al_3rd_end',
+    'dal_segno',
+    'dal_segno_al_coda',
+    'dal_segno_al_fine',
+    'dal_segno_al_1st_end',
+    'dal_segno_al_2nd_end',
+    'dal_segno_al_3rd_end',
+  ] as const)('%s round-trips through Save', async (target) => {
+    const { stub, unmount } = await renderEditor();
+    openFirstBarPopover();
+    await screen.findByRole('dialog');
+    const symbolSelect = screen.getByLabelText('Symbol');
+    fireEvent.change(symbolSelect, { target: { value: target } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    expect(stub.lastSong().sections[0]!.bars[0]!.symbol).toBe(target);
+    unmount();
+  });
+
+  test('None (empty value) clears the symbol back to null', async () => {
+    const seed = songWithOneChordBar();
+    seed.sections[0]!.bars[0]!.symbol = 'segno';
+    const { stub } = await renderEditor(seed);
+    openFirstBarPopover();
+    await screen.findByRole('dialog');
+    const symbolSelect = screen.getByLabelText('Symbol') as HTMLSelectElement;
+    expect(symbolSelect.value).toBe('segno');
+    fireEvent.change(symbolSelect, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    expect(stub.lastSong().sections[0]!.bars[0]!.symbol).toBeNull();
+  });
+});
+
+describe('<IrealEditor> popover — focus restoration', () => {
+  test('after Cancel, focus returns to the bar cell that opened the popover', async () => {
+    await renderEditor();
+    const cell = screen.getAllByRole('button', { name: /^Edit bar 1/ })[0]!;
+    cell.focus();
+    fireEvent.click(cell);
+    await screen.findByRole('dialog');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement?.getAttribute?.('aria-label')).toMatch(/^Edit bar 1/);
+  });
+
+  test('after Save, focus returns to the (rebuilt) bar cell at the same index', async () => {
+    const { stub } = await renderEditor();
+    const cell = screen.getAllByRole('button', { name: /^Edit bar 1/ })[0]!;
+    cell.focus();
+    fireEvent.click(cell);
+    await screen.findByRole('dialog');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement?.getAttribute?.('aria-label')).toMatch(/^Edit bar 1/);
   });
 });
 
@@ -308,6 +381,49 @@ describe('<IrealEditor> popover — chord rows', () => {
     });
   });
 
+  test('reorder syncs each row\'s bass input from its new chord prop', async () => {
+    // Regression for the positional-key state-desync UX bug: a
+    // `<ChordRowEditor>` reused across reorder must show the new
+    // chord's bass, not the previous slot's bass. Row 0 carries
+    // bass G; row 1 carries no bass. After Move-down on row 0,
+    // the inputs swap positions; without the prop-sync useEffect,
+    // row 0's display would still show "G" because its local
+    // `bassRaw` is stale.
+    const seed = songWithOneChordBar();
+    seed.sections[0]!.bars[0]!.chords = [
+      {
+        chord: {
+          root: { note: 'C', accidental: 'natural' },
+          quality: { kind: 'major' },
+          bass: { note: 'G', accidental: 'natural' },
+        },
+        position: { beat: 1, subdivision: 0 },
+      },
+      {
+        chord: {
+          root: { note: 'D', accidental: 'natural' },
+          quality: { kind: 'minor7' },
+          bass: null,
+        },
+        position: { beat: 3, subdivision: 0 },
+      },
+    ];
+    await renderEditor(seed);
+    openFirstBarPopover();
+    const dialog = await screen.findByRole('dialog');
+    const bassInputs = within(dialog).getAllByLabelText('Bass') as HTMLInputElement[];
+    expect(bassInputs[0]!.value).toBe('G');
+    expect(bassInputs[1]!.value).toBe('');
+    // Swap rows: move row 0 down.
+    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Move chord down' })[0]!);
+    const reordered = within(dialog).getAllByLabelText('Bass') as HTMLInputElement[];
+    // After reorder, the bass-G chord is at row 1 and the
+    // no-bass chord is at row 0. The inputs must reflect the
+    // new bound chords, not retain the previous slot's strings.
+    expect(reordered[0]!.value).toBe('');
+    expect(reordered[1]!.value).toBe('G');
+  });
+
   test('beat position 2.5 maps to { beat: 2, subdivision: 1 }', async () => {
     const { stub } = await renderEditor();
     openFirstBarPopover();
@@ -401,7 +517,7 @@ describe('<IrealEditor> popover — chord rows', () => {
 });
 
 describe('<IrealEditor> popover — preserves unedited fields', () => {
-  test('Save preserves staff_texts / system_break_space / beat_grouping_override', async () => {
+  test('Save preserves staff_texts and system_break_space on the seed bar', async () => {
     const seed = songWithOneChordBar();
     // Cast through unknown because the AST type is conservative —
     // optional fields are not in the IrealBar interface here but

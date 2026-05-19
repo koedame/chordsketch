@@ -10,12 +10,14 @@ React component library for embedding
 lines of React, powered by
 [`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsketch/wasm).
 
-`@chordsketch/react@0.1.0` is the first public release. The ChordPro
-surface (`<ChordSheet>`, `<ChordEditor>`, `<Playground>`,
-`<PdfExport>`, `<Transpose>`, `<ChordDiagram>`, `<SourceEditor>`,
-`<SplitLayout>`, `<RendererPreview>` and the matching hooks) is the
-flagship surface and is feature-complete. As of `v0.2.0` the
-iReal Pro surface (`<IrealEditor>`, `<IrealPreview>`,
+`@chordsketch/react@0.1.0` shipped the first publishable release;
+`@chordsketch/react@0.2.0` reaches feature parity for the iReal
+Pro surface. The ChordPro surface (`<ChordSheet>`,
+`<ChordEditor>`, `<Playground>`, `<PdfExport>`, `<Transpose>`,
+`<ChordDiagram>`, `<SourceEditor>`, `<SplitLayout>`,
+`<RendererPreview>` and the matching hooks) is the flagship
+surface and is feature-complete. As of `v0.2.0` the iReal Pro
+surface (`<IrealEditor>`, `<IrealPreview>`,
 `<IrealPlayground>` and the matching hooks) reaches feature
 parity with the private `@chordsketch/ui-irealb-editor` per
 [ADR-0020](https://github.com/koedame/chordsketch/blob/main/docs/adr/0020-ireal-pro-react-surface.md):

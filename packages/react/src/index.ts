@@ -88,11 +88,15 @@ export {
   type ChordRepositionResult,
 } from './chord-source-edit';
 
-// iReal Pro surface (#2473 / ADR-0020). Mirrors the ChordPro
-// surface in shape: editor + preview + playground component plus
-// parse / serialise hooks. v0.1.0 ships an MVP feature set —
-// header form + read-only bar grid + URL textarea + SVG preview;
-// see ADR-0020 for the parity gap with `@chordsketch/ui-irealb-editor`.
+// iReal Pro surface (#2473 / #2505 / ADR-0020). Mirrors the
+// ChordPro surface in shape: editor + preview + playground
+// component plus parse / serialise hooks. v0.2.0 reaches parity
+// with `@chordsketch/ui-irealb-editor`: interactive bar grid
+// (ARIA `role="grid"` + roving tabindex + keyboard navigation),
+// structural editing (section / bar add / rename / delete /
+// move), and popover-based per-bar chord editing via
+// `<IrealBarPopover>` (focus trap, chord-row editor, N-th
+// ending input, symbol picker).
 export { IrealEditor, type IrealEditorProps } from './ireal-editor';
 export { IrealPreview, type IrealPreviewProps } from './ireal-preview';
 export { IrealPlayground, type IrealPlaygroundProps } from './ireal-playground';

@@ -146,13 +146,22 @@ const TIME_DENOMINATORS = [2, 4, 8] as const;
  *   navigation, `Alt+ArrowLeft`/`Alt+ArrowRight` to reorder, and
  *   `Delete` / `Backspace` to remove the bar.
  *
+ * Clicking a bar cell opens an `<IrealBarPopover>` modal dialog
+ * (`role="dialog"` `aria-modal="true"` with focus trap + Escape /
+ * outside-click dismissal) that edits the bar's start / end
+ * barlines, chord rows (root + accidental + 12 named qualities +
+ * Custom + optional `/X` bass + beat position 1 / 1.5 / … / 4.5;
+ * add / remove / reorder), N-th ending (empty / 0 untitled / 1–9),
+ * and musical symbol (None / Segno / Coda / Fine / Fermata /
+ * Break + the 11 player-recognised D.C. / D.S. macro variants).
+ * Save commits via the host's `emit` path; Cancel / Escape /
+ * outside-click discard the draft.
+ *
  * Per [ADR-0020](../../../docs/adr/0020-ireal-pro-react-surface.md),
- * the remaining v0.1.0 → v0.2.0 parity gap is popover-based
- * per-bar chord editing — clicking a cell sets the active-bar ref
- * but does not yet open an edit dialog. Consumers who need
- * popover editing today should drive `@chordsketch/wasm` directly
- * or consume the playground at
- * <https://chordsketch.koeda.me/chordsketch/irealpro/>.
+ * `v0.2.0` reaches parity with the private
+ * `@chordsketch/ui-irealb-editor` for this surface — the
+ * playground and the desktop app continue to back the DOM editor
+ * during the migration window.
  *
  * `promptSectionLabel` / `confirmDeleteSection` props accept
  * custom resolvers for hosts that want styled modals instead of
@@ -549,7 +558,13 @@ export function IrealEditor({
 
   const handlePopoverSave = useCallback(
     (secIndex: number, barIndex: number, next: IrealBar): void => {
-      if (song === null) return;
+      // Defense-in-depth: the popover trigger (bar-cell button) is
+      // already disabled when the editor is read-only / errored, so
+      // a Save dispatch on a disabled editor is structurally
+      // unreachable. The guard makes the invariant locally
+      // explicit at the receive side — symmetric with the `disabled
+      // ||` short-circuits guarding the structural-ops `useMemo`.
+      if (disabled || song === null) return;
       const section = song.sections[secIndex];
       if (!section) return;
       const bars = section.bars.map((b, i) => (i === barIndex ? next : b));
@@ -558,7 +573,7 @@ export function IrealEditor({
       );
       emit({ ...song, sections });
     },
-    [song, emit],
+    [disabled, song, emit],
   );
 
   // The popover edits the bar at `popoverTarget`. Looked up lazily

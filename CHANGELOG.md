@@ -7,44 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **`@chordsketch/react@0.2.0` — popover-based bar editor (#2505).**
-  `<IrealEditor>` reaches feature parity with the private
-  `@chordsketch/ui-irealb-editor` for per-bar editing. Clicking
-  a bar cell opens a React-managed modal dialog (`role="dialog"`
-  `aria-modal="true"` with focus trap + Escape / outside-click
-  dismissal) that edits every field on the bar:
-  - Start / end barline (single / double / final / open-repeat /
-    close-repeat).
-  - Chord rows — root letter + accidental + 12 named qualities
-    (Custom string for the rest) + optional `/X` slash-bass +
-    beat position (1 / 1.5 / 2 / 2.5 / 3 / 3.5 / 4 / 4.5). Add /
-    remove / reorder rows.
-  - N-th ending — empty (no bracket) / `0` (untitled `N0`
-    sentinel) / `1..9` (numbered).
-  - Musical symbol — None / Segno / Coda / Fine / Fermata /
-    Break + the 11 player-recognised D.C. / D.S. macro variants.
-  - Bass-input parser distinguishes empty / valid / invalid so
-    a malformed entry keeps the previous bass and surfaces a
-    `chordsketch-ireal-editor__input--invalid` modifier class
-    instead of silently nulling the field.
-  - Save commits via the host's `emit` path so the URL
-    round-trip stays single-source. Cancel / Escape /
-    outside-click discard the draft without firing `onChange`.
-  - Preserves every AST field on the seed bar that the popover
-    does not edit yet (staff-text, system-break hints, beat-
-    grouping overrides) via a `...rest`-spread on Save.
-  Architectural rationale: shipped on top of the foundation in
-  #2510 (focus-trap + announcer hooks + AST helpers) and the
-  bar-grid + structural-editing slice in #2511, closing
-  [#2505](https://github.com/koedame/chordsketch/issues/2505).
-  Sister-site behaviour parity with
-  `packages/ui-irealb-editor/src/popover.ts` is preserved at the
-  contract level; the React port replaces the imperative
-  `renderChordsSection` rebuild with React state and reuses the
-  `useFocusTrap` hook from #2510.
-
 ### Fixed
 
 - **`chordsketch-ireal` parser now accepts the spec's `n`
@@ -71,6 +33,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`@chordsketch/react@0.2.0` — iReal Pro surface reaches
+  `@chordsketch/ui-irealb-editor` parity ([#2505](https://github.com/koedame/chordsketch/issues/2505)).**
+  Three slices land in the v0.2.0 release window:
+  - **Foundation hooks + AST-helper parity
+    ([#2510](https://github.com/koedame/chordsketch/pull/2510)).**
+    `useFocusTrap` hook (focus trap + Escape + outside-click
+    dismissal, sister-site to `popover.ts:451-525`); `useAnnouncer`
+    hook (polite ARIA live region with same-tick coalescing
+    semantics, sister-site to `index.ts:105-127`); AST helpers
+    `irealCanonicalSymbolText` / `irealIsDaCapo` / `irealIsDalSegno`
+    closing the asymmetry with `packages/ui-irealb-editor/src/ast.ts`.
+  - **Interactive bar grid + structural editing + keyboard
+    navigation
+    ([#2511](https://github.com/koedame/chordsketch/pull/2511)).**
+    `<IrealBarGrid>` component with ARIA grid semantics
+    (`role="grid"` / `role="row"` / `role="gridcell"`,
+    `aria-rowcount` / `aria-colcount={4}` / `aria-rowindex` /
+    `aria-colindex`), roving tabindex per W3C APG (exactly one
+    bar cell carries `tabindex="0"`), and per-bar accessible
+    name that includes the chord text. Structural editing —
+    section / bar add / rename / delete / move with re-anchoring
+    of the active-bar ref. Keyboard shortcuts on the focused bar
+    cell: `Arrow{Left,Right,Up,Down}` / `Home` / `End` roving
+    navigation, `Alt+ArrowLeft` / `Alt+ArrowRight` reorder,
+    `Delete` / `Backspace` to remove. Polite live-region
+    announcements for every structural op. New
+    `promptSectionLabel` / `confirmDeleteSection` props for hosts
+    that want styled modals instead of `window.prompt` /
+    `window.confirm`.
+  - **Popover-based per-bar chord editing
+    ([#2512](https://github.com/koedame/chordsketch/pull/2512),
+    this PR).** `<IrealBarPopover>` modal dialog (`role="dialog"`
+    `aria-modal="true"` with focus trap + Escape / outside-click
+    dismissal). Edits every bar field: start / end barlines,
+    chord rows (root + accidental + 12 named qualities + Custom
+    + optional `/X` bass + beat position 1 / 1.5 / 2 / 2.5 / 3 /
+    3.5 / 4 / 4.5; add / remove / reorder), N-th ending (empty /
+    `0` untitled / `1..9` numbered), musical symbol (None +
+    Segno + Coda + Fine + Fermata + Break + 11 D.C. / D.S. macro
+    variants). Three-valued bass parser distinguishes empty /
+    valid / invalid so a malformed entry keeps the previous
+    bass and surfaces a
+    `chordsketch-ireal-editor__input--invalid` modifier class.
+    Save commits via the host's `emit` path; Cancel / Escape /
+    outside-click discard the draft. A `...rest`-spread on the
+    seed bar preserves AST fields the popover does not edit
+    (staff-text, system-break hints, beat-grouping overrides).
+  Architectural rationale recorded in
+  [ADR-0020](docs/adr/0020-ireal-pro-react-surface.md): the
+  React port replaces the imperative `renderChordsSection`
+  rebuild from `packages/ui-irealb-editor/src/popover.ts` with
+  React state; behaviour parity is preserved at the contract
+  level (ARIA semantics, structural-op signatures, keyboard
+  dispatch table, bass parser, ending range, symbol picker
+  exhaustiveness). `packages/ui-irealb-editor/src/render.ts`'s
+  bar-cell `aria-label` was updated in lockstep with the React
+  port to include chord-text content per
+  `.claude/rules/fix-propagation.md`.
 - **`@chordsketch/react@0.1.0` — first publishable release (#2473).**
   The React component library moves from `0.0.0` (unpublished
   scaffold) to `0.1.0` and gains a full iReal Pro surface alongside

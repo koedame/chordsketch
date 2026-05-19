@@ -25,7 +25,6 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -217,26 +216,22 @@ export function IrealBarPopover({
   onSave,
   onDismiss,
 }: IrealBarPopoverProps): ReactElement {
-  // Deep-clone the seed bar via JSON round-trip. The IrealBar type
-  // is pure-data (no functions / Maps / Dates) so JSON cloning
-  // preserves it byte-equal. The draft lives in state so React
-  // re-renders sub-components on every keystroke without us
-  // having to wire individual subscriptions. Sister-site:
-  // `popover.ts:128`.
-  const initialDraft = useMemo<IrealBar>(
-    () => JSON.parse(JSON.stringify(bar)) as IrealBar,
-    // The seed bar is captured exactly once on mount — subsequent
-    // re-renders driven by sub-component edits MUST NOT reset the
-    // draft. The eslint-disable below acknowledges that intent.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+  // Seed each piece of draft state lazily — `useState(() => ...)`
+  // runs the initializer exactly once on mount, regardless of how
+  // many times the host re-renders with new `bar` values.
+  // Subsequent re-renders driven by sub-component edits cannot
+  // reset the draft. The IrealBar type is pure-data (no functions
+  // / Maps / Dates) so JSON cloning preserves it byte-equal.
+  // Sister-site: `popover.ts:128`.
+  const [start, setStart] = useState<IrealBarLine>(() => bar.start);
+  const [end, setEnd] = useState<IrealBarLine>(() => bar.end);
+  const [chords, setChords] = useState<IrealBarChord[]>(
+    () => JSON.parse(JSON.stringify(bar.chords)) as IrealBarChord[],
   );
-
-  const [start, setStart] = useState<IrealBarLine>(initialDraft.start);
-  const [end, setEnd] = useState<IrealBarLine>(initialDraft.end);
-  const [chords, setChords] = useState<IrealBarChord[]>(initialDraft.chords);
-  const [ending, setEnding] = useState<number | null>(initialDraft.ending);
-  const [symbol, setSymbol] = useState<IrealMusicalSymbol | null>(initialDraft.symbol);
+  const [ending, setEnding] = useState<number | null>(() => bar.ending);
+  const [symbol, setSymbol] = useState<IrealMusicalSymbol | null>(
+    () => bar.symbol,
+  );
 
   const dialogRef = useRef<HTMLDivElement | null>(null);
   useFocusTrap(dialogRef, { onDismiss, anchorRef, enabled: true });
@@ -424,11 +419,16 @@ function ChordRowEditor({
   // when the user changes root / accidental / quality / position, which is
   // defensively correct: those edits produce a new `barChord` reference,
   // and the committed bass value is the right one to show at that point.
+  // Sister-site rationale: the DOM editor at
+  // `packages/ui-irealb-editor/src/popover.ts` rebuilds the row DOM on
+  // every reorder via `renderChordsSection()`, implicitly discarding
+  // stale state — this useEffect is the React-idiomatic equivalent.
   //
   // `formatBass` is a stable module-scope pure function; the eslint-disable
   // below suppresses the false-positive exhaustive-deps warning for it.
   useEffect(() => {
-    setBassRaw(barChord.chord.bass !== null ? formatBass(barChord.chord.bass) : '');
+    const propStr = barChord.chord.bass !== null ? formatBass(barChord.chord.bass) : '';
+    setBassRaw((prev) => (prev === propStr ? prev : propStr));
     setBassInvalid(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [barChord]);

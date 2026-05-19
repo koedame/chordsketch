@@ -225,16 +225,19 @@ export default function App() {
 }
 ```
 
-The composite shows the editor (header form + read-only bar grid +
-URL textarea) next to the SVG preview. `hidePreview`, `hideBars`,
-and `hideUrl` trim the layout for narrower hosts; pass `source` +
-`onChange` for controlled mode.
+The composite shows the editor (header form + interactive bar grid
+with structural editing + URL textarea) next to the SVG preview.
+`hidePreview`, `hideBars`, and `hideUrl` trim the layout for
+narrower hosts; pass `source` + `onChange` for controlled mode.
 
-> **Editing scope.** v0.1.0 ships header metadata editing only;
-> deep popover-based bar editing is tracked as a follow-up to
-> [ADR-0020](../../adr/0020-ireal-pro-react-surface.md). For the
-> full editor, use the playground at
-> <https://chordsketch.koeda.me/chordsketch/irealpro/>.
+> **Editing scope.** `v0.2.0` brings the iReal Pro surface to
+> parity with the private `@chordsketch/ui-irealb-editor` per
+> [ADR-0020](../../adr/0020-ireal-pro-react-surface.md):
+> structural section / bar editing, ARIA-grid keyboard navigation,
+> and a popover-based per-bar chord editor with a chord-row
+> editor, N-th ending input, and symbol picker. The playground
+> at <https://chordsketch.koeda.me/chordsketch/irealpro/> still
+> hosts the DOM editor for reference comparison.
 
 ## Recipe 9 — Custom iReal Pro rendering
 

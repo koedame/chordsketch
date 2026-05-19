@@ -40,9 +40,12 @@ bindings (e.g. matching desktop and web renderings).
 ## I want UI components
 
 - **React**:
-  [`@chordsketch/react@0.1.0`](https://www.npmjs.com/package/@chordsketch/react)
+  [`@chordsketch/react`](https://www.npmjs.com/package/@chordsketch/react)
   — published, includes both the ChordPro and iReal Pro embedding
-  surfaces. See the
+  surfaces. `v0.2.0` brings the iReal Pro surface to parity with
+  the private `@chordsketch/ui-irealb-editor`: interactive bar
+  grid, structural editing, keyboard navigation, and
+  popover-based per-bar chord editing. See the
   [Embed ChordPro and iReal Pro in a React app](tasks/embed-react.md)
   recipe guide.
 - **Vue / Svelte / others** are tracked under
