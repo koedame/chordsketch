@@ -140,20 +140,31 @@ export interface DocOutlineEntry {
   id: string;
 }
 
-const HEADING_RE = /^(##{1,2})\s+(.+)$/gm;
+// Match ALL heading depths so the slug counter stays in sync with
+// renderMarkdown's counter, which increments across h1-h6 using the
+// same slugify key. Only h2 and h3 entries are pushed to the outline,
+// but h1/h4-h6 headings still advance the counter so that
+// duplicate-slug disambiguation (e.g. "intro" → "intro-1") produces
+// the same IDs here as in renderMarkdown. Without this, a page whose
+// h1 slug collides with an h2 slug would give the h2 an id of
+// "slug-1" in the rendered HTML but an id of "slug" in the outline,
+// producing a broken anchor link for that outline entry.
+const HEADING_RE = /^(#+)\s+(.+)$/gm;
 
 export function extractOutline(source: string): DocOutlineEntry[] {
   const outline: DocOutlineEntry[] = [];
   const seen = new Map<string, number>();
   for (const match of source.matchAll(HEADING_RE)) {
     const hashes = match[1];
-    const level = hashes.length === 2 ? 2 : 3;
+    const depth = hashes.length;
     const text = match[2].trim();
     const base = slugify(text);
     const count = seen.get(base) ?? 0;
     seen.set(base, count + 1);
     const id = count === 0 ? base : `${base}-${count}`;
-    outline.push({ level: level as 2 | 3, text, id });
+    if (depth === 2 || depth === 3) {
+      outline.push({ level: depth as 2 | 3, text, id });
+    }
   }
   return outline;
 }
