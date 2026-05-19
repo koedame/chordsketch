@@ -214,6 +214,29 @@ export function validate(source: string): ValidationError[];
 export function chordDiagramSvg(chord: string, instrument: string): string | null;
 
 /**
+ * Variant of {@link chordDiagramSvg} that consults song-level
+ * `{define}` voicings before falling back to the built-in voicing
+ * database. `defines` is an array of `[name, raw]` tuples, where
+ * `name` is the chord identifier and `raw` is the space-separated
+ * property body of the directive (e.g. `"base-fret 1 frets 3 3 0 0
+ * 1 3"`). Mirrors the WASM `chordDiagramSvgWithDefines` export and
+ * the FFI `chord_diagram_svg_with_defines` UDL function.
+ *
+ * Returns the inline SVG string, or `null` when neither the
+ * supplied defines nor the built-in voicing database has an entry
+ * for this `(chord, instrument)` pair.
+ *
+ * Throws an `Error` (`InvalidArg`) when `instrument` is not one of
+ * the supported values, or when any inner array in `defines` does
+ * not have exactly two elements.
+ */
+export function chordDiagramSvgWithDefines(
+  chord: string,
+  instrument: string,
+  defines: Array<[string, string]>,
+): string | null;
+
+/**
  * Result returned by {@link convertChordproToIrealb} and
  * {@link convertIrealbToChordproText} (#2067 Phase 1).
  *
