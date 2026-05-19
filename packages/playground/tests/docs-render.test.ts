@@ -164,6 +164,17 @@ describe('rewriteHref', () => {
     expect(rewriteHref('#some-heading', 'docs/sdk/tasks')).toBe('#some-heading');
   });
 
+  it('passes through root-relative absolute paths unchanged', () => {
+    // Without this guard a root-relative href would fall into
+    // `resolveRelative` and be rewritten to a github.com blob URL.
+    expect(rewriteHref('/chordsketch/docs/embed-react/', 'docs/sdk')).toBe(
+      '/chordsketch/docs/embed-react/',
+    );
+    expect(rewriteHref('/some/absolute/path', 'docs/sdk/tasks')).toBe(
+      '/some/absolute/path',
+    );
+  });
+
   it('rewrites SPA-era `#/<slug>` hash routes to clean URLs', () => {
     expect(rewriteHref('#/embed-react', 'docs/sdk/reference')).toBe(
       '/chordsketch/docs/embed-react/',

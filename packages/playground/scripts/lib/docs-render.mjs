@@ -304,8 +304,13 @@ export function cleanUrlFor(slug, hashSuffix = '') {
  */
 export function rewriteHref(href, sourceDir) {
   if (href === '') return href;
+  // Absolute / scheme-qualified / protocol-relative /
+  // root-relative / fragment-only: leave as-is. The protocol-
+  // relative check (`//`) is listed before the root-relative
+  // check (`/`) so the longer prefix wins.
   if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return href;
   if (href.startsWith('//')) return href;
+  if (href.startsWith('/')) return href;
 
   // SPA-era hash routes like `#/reference/chord-sheet` and
   // `#/embed-react` survive in the source markdown for compatibility
