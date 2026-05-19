@@ -2,26 +2,32 @@
 //!
 //! Provides the same API as `@chordsketch/wasm` but as a prebuilt native
 //! addon, offering better performance and no WASM overhead.
+//!
+//! # Crate layout
+//!
+//! - **[`bindings`]** — every `#[napi]` entry point and `#[napi(object)]`
+//!   struct. The proc-macro expansion emits `extern "C"` thunks against
+//!   Node-API runtime symbols (`napi_reference_unref`,
+//!   `napi_create_buffer`, …) that are only resolved by the host
+//!   Node.js process at module load, so those lines are unreachable
+//!   from `cargo test` and from `cargo llvm-cov`'s instrumented test
+//!   binary. `codecov.yml` excludes `bindings.rs` from coverage
+//!   measurement for exactly this reason (issue #2352).
+//! - **`lib`** (this file) — pure-Rust helpers (`do_*`, `*_inner`,
+//!   `parse_songs`, `flush_warnings`, …) plus the unit-test suite that
+//!   drives them. Every `#[napi]` function in `bindings.rs` is a
+//!   1–3 line wrapper around one of these helpers, so the tests here
+//!   cover the binding's full business logic without needing the
+//!   Node.js runtime.
+//!
+//! Sister-site rule: every helper / wrapper pair added here must have a
+//! matching pair in `crates/wasm/src/{lib.rs, bindings.rs}` and
+//! `crates/ffi/src/lib.rs`. See `.claude/rules/fix-propagation.md`
+//! §Bindings.
 
 use chordsketch_chordpro::render_result::RenderResult;
-use napi::bindgen_prelude::*;
-use napi_derive::napi;
 
-/// Render options matching the WASM package API.
-#[napi(object)]
-pub struct RenderOptions {
-    /// Semitone transposition offset. Defaults to 0.
-    ///
-    /// Must fit in `i8` (`-128..=127`). Values outside that range cause
-    /// the call to reject with `Status::InvalidArg`, matching the CLI,
-    /// UniFFI, and WASM bindings (issue #1826 — previously this binding
-    /// silently clamped, which produced different output for the same
-    /// input depending on which binding was used).
-    pub transpose: Option<i32>,
-    /// Configuration preset name (e.g., "guitar", "ukulele") or inline
-    /// RRJSON configuration string.
-    pub config: Option<String>,
-}
+pub mod bindings;
 
 /// Resolve a config from an optional preset name or RRJSON string.
 ///
@@ -30,8 +36,8 @@ pub struct RenderOptions {
 /// which references `napi_reference_unref` / `napi_delete_reference` —
 /// symbols the Node.js host resolves at runtime, so a native test
 /// binary that links them fails with `undefined symbol`. The `#[napi]`
-/// wrappers below convert the `String` error into `napi::Error` at the
-/// binding boundary.
+/// wrappers in [`bindings`] convert the `String` error into
+/// `napi::Error` at the binding boundary.
 fn resolve_config_inner(
     config: Option<&str>,
 ) -> std::result::Result<chordsketch_chordpro::config::Config, String> {
@@ -115,80 +121,6 @@ fn do_render_bytes(
     flush_warnings(render_fn(&songs, transpose, config))
 }
 
-/// Render ChordPro input as plain text using default configuration.
-///
-/// Use [`render_text_with_options`] to pass a config preset, inline RRJSON,
-/// or transposition.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_text(input: String) -> Result<String> {
-    Ok(do_render_string(
-        &input,
-        &chordsketch_chordpro::config::Config::defaults(),
-        0,
-        chordsketch_render_text::render_songs_with_warnings,
-    ))
-}
-
-/// Render ChordPro input as an HTML document using default configuration.
-///
-/// Use [`render_html_with_options`] to pass a config preset, inline RRJSON,
-/// or transposition.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_html(input: String) -> Result<String> {
-    Ok(do_render_string(
-        &input,
-        &chordsketch_chordpro::config::Config::defaults(),
-        0,
-        chordsketch_render_html::render_songs_with_warnings,
-    ))
-}
-
-/// Render ChordPro input as a PDF document using default configuration
-/// (returned as a Buffer).
-///
-/// Use [`render_pdf_with_options`] to pass a config preset, inline RRJSON,
-/// or transposition.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_pdf(input: String) -> Result<Buffer> {
-    let bytes = do_render_bytes(
-        &input,
-        &chordsketch_chordpro::config::Config::defaults(),
-        0,
-        chordsketch_render_pdf::render_songs_with_warnings,
-    );
-    Ok(bytes.into())
-}
-
-/// Structured render result returned by the `*_with_warnings` family
-/// (string outputs).
-///
-/// Callers that need warning-driven UI (inline banners, telemetry
-/// aggregation, selective suppression) should use the `*_with_warnings`
-/// entry points. The plain variants (`renderText`, `renderHtml`,
-/// `renderPdf`) forward warnings to `eprintln!`, which lands on process
-/// stderr — fine for CLI scripts but invisible to a React component
-/// embedding the addon. See issue #1827.
-#[napi(object)]
-pub struct TextRenderWithWarnings {
-    /// Rendered text or HTML output.
-    pub output: String,
-    /// Renderer warnings captured during the render pass.
-    pub warnings: Vec<String>,
-}
-
-/// Structured render result for PDF output. See
-/// [`TextRenderWithWarnings`] for the warnings contract.
-#[napi(object)]
-pub struct PdfRenderWithWarnings {
-    /// PDF byte stream.
-    pub output: Buffer,
-    /// Renderer warnings captured during the render pass.
-    pub warnings: Vec<String>,
-}
-
 /// String-returning render that captures warnings as structured data.
 ///
 /// Shared by `render_text_with_warnings` and `render_html_with_warnings`
@@ -215,61 +147,11 @@ fn do_render_string_with_warnings(
     (result.output, result.warnings)
 }
 
-/// Render ChordPro input as plain text, returning both output and
-/// captured warnings.
-///
-/// This is the structured variant of [`render_text`]. Warnings are
-/// returned as an array of strings instead of being forwarded to
-/// process stderr via `eprintln!`. Callers that do not need warnings
-/// should keep using the plain `render_text`.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_text_with_warnings(input: String) -> Result<TextRenderWithWarnings> {
-    let (output, warnings) = do_render_string_with_warnings(
-        &input,
-        &chordsketch_chordpro::config::Config::defaults(),
-        0,
-        chordsketch_render_text::render_songs_with_warnings,
-    );
-    Ok(TextRenderWithWarnings { output, warnings })
-}
-
-/// Render ChordPro input as HTML, returning both output and captured
-/// warnings.
-///
-/// See [`render_text_with_warnings`] for the warnings contract.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_html_with_warnings(input: String) -> Result<TextRenderWithWarnings> {
-    let (output, warnings) = do_render_string_with_warnings(
-        &input,
-        &chordsketch_chordpro::config::Config::defaults(),
-        0,
-        chordsketch_render_html::render_songs_with_warnings,
-    );
-    Ok(TextRenderWithWarnings { output, warnings })
-}
-
-/// Render ChordPro input as a PDF document, returning the byte stream
-/// alongside captured warnings.
-///
-/// See [`render_text_with_warnings`] for the warnings contract.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_pdf_with_warnings(input: String) -> Result<PdfRenderWithWarnings> {
-    let (bytes, warnings) =
-        do_render_pdf_with_warnings(&input, &chordsketch_chordpro::config::Config::defaults(), 0);
-    Ok(PdfRenderWithWarnings {
-        output: bytes.into(),
-        warnings,
-    })
-}
-
 /// Shared implementation for the PDF `*_with_warnings` variants. Extracted
-/// so [`render_pdf_with_warnings`] and
-/// [`render_pdf_with_warnings_and_options`] route through the same
-/// parse + render + capture pipeline. Returns a `(Vec<u8>, Vec<String>)`
-/// tuple so unit tests can drive it without constructing
+/// so [`bindings::render_pdf_with_warnings`] and
+/// [`bindings::render_pdf_with_warnings_and_options`] route through the
+/// same parse + render + capture pipeline. Returns a `(Vec<u8>,
+/// Vec<String>)` tuple so unit tests can drive it without constructing
 /// `PdfRenderWithWarnings`, whose `Buffer` field is napi-coupled.
 fn do_render_pdf_with_warnings(
     input: &str,
@@ -288,10 +170,11 @@ fn do_render_pdf_with_warnings(
 /// `serde_wasm_bindgen`) rejects integers that do not fit in `i8`.
 /// napi-rs has no built-in `i8` unmarshaling — the wire type is `i32` —
 /// so the check has to run here at the first opportunity. Mapped to an
-/// `InvalidArg` error at the `#[napi]` boundary by [`resolve_options`],
-/// giving the same failure shape across all four bindings for the same
-/// input (issue #1826). `render_html_css_with_options` does not appear
-/// here because it has no `transpose` argument — the CSS renderer is
+/// `InvalidArg` error at the `#[napi]` boundary by
+/// [`bindings::render_text_with_options`] and its siblings, giving the
+/// same failure shape across all four bindings for the same input
+/// (issue #1826). `render_html_css_with_options` does not appear here
+/// because it has no `transpose` argument — the CSS renderer is
 /// transpose-invariant.
 ///
 /// The previous implementation clamped instead of rejecting, which
@@ -313,8 +196,8 @@ fn try_parse_transpose(raw: i32) -> std::result::Result<i8, String> {
 /// Pure-Rust resolution of the `(config, transpose)` pair that every
 /// `*_with_options` entry point needs. Returns a `String` error so
 /// unit tests can drive every options-validation branch without
-/// constructing `napi::Error`. The `#[napi]` wrappers convert at the
-/// boundary via [`resolve_options`].
+/// constructing `napi::Error`. The `#[napi]` wrappers in [`bindings`]
+/// convert at the boundary via `bindings::resolve_options`.
 fn resolve_options_inner(
     config: Option<&str>,
     transpose: i32,
@@ -324,202 +207,7 @@ fn resolve_options_inner(
     Ok((config, transpose))
 }
 
-/// `napi::Result` wrapper around [`resolve_options_inner`]. Single
-/// source of truth for the `String` → `napi::Error` mapping done by
-/// every `*_with_options` entry point.
-fn resolve_options(options: RenderOptions) -> Result<(chordsketch_chordpro::config::Config, i8)> {
-    resolve_options_inner(options.config.as_deref(), options.transpose.unwrap_or(0))
-        .map_err(|msg| Error::new(Status::InvalidArg, msg))
-}
-
-/// Render ChordPro input as plain text with options.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_text_with_options(input: String, options: RenderOptions) -> Result<String> {
-    let (config, transpose) = resolve_options(options)?;
-    Ok(do_render_string(
-        &input,
-        &config,
-        transpose,
-        chordsketch_render_text::render_songs_with_warnings,
-    ))
-}
-
-/// Render ChordPro input as an HTML document with options.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_html_with_options(input: String, options: RenderOptions) -> Result<String> {
-    let (config, transpose) = resolve_options(options)?;
-    Ok(do_render_string(
-        &input,
-        &config,
-        transpose,
-        chordsketch_render_html::render_songs_with_warnings,
-    ))
-}
-
-/// Render ChordPro input as a PDF document with options (returned as a Buffer).
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_pdf_with_options(input: String, options: RenderOptions) -> Result<Buffer> {
-    let (config, transpose) = resolve_options(options)?;
-    let bytes = do_render_bytes(
-        &input,
-        &config,
-        transpose,
-        chordsketch_render_pdf::render_songs_with_warnings,
-    );
-    Ok(bytes.into())
-}
-
-/// Render ChordPro input as plain text with options, returning both output
-/// and captured warnings.
-///
-/// Combines the `options` payload of [`render_text_with_options`] with the
-/// structured-warning capture of [`render_text_with_warnings`] (#1895).
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_text_with_warnings_and_options(
-    input: String,
-    options: RenderOptions,
-) -> Result<TextRenderWithWarnings> {
-    let (config, transpose) = resolve_options(options)?;
-    let (output, warnings) = do_render_string_with_warnings(
-        &input,
-        &config,
-        transpose,
-        chordsketch_render_text::render_songs_with_warnings,
-    );
-    Ok(TextRenderWithWarnings { output, warnings })
-}
-
-/// Render ChordPro input as HTML with options, returning both output and
-/// captured warnings.
-///
-/// See [`render_text_with_warnings_and_options`] for the contract.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_html_with_warnings_and_options(
-    input: String,
-    options: RenderOptions,
-) -> Result<TextRenderWithWarnings> {
-    let (config, transpose) = resolve_options(options)?;
-    let (output, warnings) = do_render_string_with_warnings(
-        &input,
-        &config,
-        transpose,
-        chordsketch_render_html::render_songs_with_warnings,
-    );
-    Ok(TextRenderWithWarnings { output, warnings })
-}
-
-/// Render ChordPro input as a PDF document with options, returning the byte
-/// stream alongside captured warnings.
-///
-/// See [`render_text_with_warnings_and_options`] for the contract.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_pdf_with_warnings_and_options(
-    input: String,
-    options: RenderOptions,
-) -> Result<PdfRenderWithWarnings> {
-    let (config, transpose) = resolve_options(options)?;
-    let (bytes, warnings) = do_render_pdf_with_warnings(&input, &config, transpose);
-    Ok(PdfRenderWithWarnings {
-        output: bytes.into(),
-        warnings,
-    })
-}
-
-/// Render ChordPro input as a body-only HTML fragment using default
-/// configuration.
-///
-/// Unlike [`render_html`], the returned string is just the
-/// `<div class="song">...</div>` markup — no `<!DOCTYPE>`, `<html>`,
-/// `<head>`, `<title>`, or embedded `<style>` block. Use this from
-/// hosts that supply their own document envelope so the rendered
-/// chord-over-lyrics layout does not depend on HTML5's nested-document
-/// recovery rules — see #2279.
-///
-/// Pair with [`render_html_css`] to obtain the matching stylesheet.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_html_body(input: String) -> Result<String> {
-    Ok(do_render_string(
-        &input,
-        &chordsketch_chordpro::config::Config::defaults(),
-        0,
-        chordsketch_render_html::render_songs_body_with_warnings,
-    ))
-}
-
-/// Render ChordPro input as a body-only HTML fragment with options.
-///
-/// See [`render_html_body`] for the body-only contract.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_html_body_with_options(input: String, options: RenderOptions) -> Result<String> {
-    let (config, transpose) = resolve_options(options)?;
-    Ok(do_render_string(
-        &input,
-        &config,
-        transpose,
-        chordsketch_render_html::render_songs_body_with_warnings,
-    ))
-}
-
-/// Render ChordPro input as a body-only HTML fragment, returning both
-/// output and captured warnings.
-///
-/// See [`render_html_body`] for the body-only contract and
-/// [`render_text_with_warnings`] for the warnings contract.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_html_body_with_warnings(input: String) -> Result<TextRenderWithWarnings> {
-    let (output, warnings) = do_render_string_with_warnings(
-        &input,
-        &chordsketch_chordpro::config::Config::defaults(),
-        0,
-        chordsketch_render_html::render_songs_body_with_warnings,
-    );
-    Ok(TextRenderWithWarnings { output, warnings })
-}
-
-/// Render ChordPro input as a body-only HTML fragment with options,
-/// returning both output and captured warnings.
-///
-/// Combines the options payload of [`render_html_body_with_options`]
-/// with the structured-warning capture of
-/// [`render_html_body_with_warnings`].
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_html_body_with_warnings_and_options(
-    input: String,
-    options: RenderOptions,
-) -> Result<TextRenderWithWarnings> {
-    let (config, transpose) = resolve_options(options)?;
-    let (output, warnings) = do_render_string_with_warnings(
-        &input,
-        &config,
-        transpose,
-        chordsketch_render_html::render_songs_body_with_warnings,
-    );
-    Ok(TextRenderWithWarnings { output, warnings })
-}
-
-/// Returns the canonical chord-over-lyrics CSS that
-/// [`render_html`] / [`render_html_with_options`] embed inside
-/// `<style>`.
-///
-/// Pair with [`render_html_body`] / [`render_html_body_with_options`]
-/// when the consumer is supplying its own document envelope.
-#[must_use]
-#[napi]
-pub fn render_html_css() -> String {
-    chordsketch_render_html::render_html_css()
-}
-
-/// Pure-Rust implementation of [`render_html_css_with_options`].
+/// Pure-Rust implementation of [`bindings::render_html_css_with_options`].
 fn render_html_css_with_options_inner(config: Option<&str>) -> std::result::Result<String, String> {
     let config = resolve_config_inner(config)?;
     Ok(chordsketch_render_html::render_html_css_with_config(
@@ -527,74 +215,8 @@ fn render_html_css_with_options_inner(config: Option<&str>) -> std::result::Resu
     ))
 }
 
-/// Variant of [`render_html_css`] that honours `settings.wraplines` from
-/// the supplied options (R6.100.0). When `wraplines` is false, the `.line`
-/// rule emits `flex-wrap: nowrap` so chord/lyric runs preserve the source
-/// line structure instead of reflowing onto subsequent rows.
-///
-/// See [`render_html_with_options`] for the `options` format.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_html_css_with_options(options: RenderOptions) -> napi::Result<String> {
-    render_html_css_with_options_inner(options.config.as_deref())
-        .map_err(|msg| Error::new(Status::InvalidArg, msg))
-}
-
-/// A single validation issue reported by [`validate`]. Mirrors the
-/// `ValidationError` interface in `crates/napi/index.d.ts`; the `#[napi(object)]`
-/// attribute marshals this into a plain JS `{line, column, message}` record.
-///
-/// Line and column are one-based, matching the rest of the public API and
-/// the numbers a typical editor diagnostic expects. They are `u32` so
-/// napi-rs can marshal them as plain JS `number`s; overflow is impossible
-/// in practice — a ChordPro source long enough to exceed `u32::MAX` lines
-/// is orders of magnitude above any realistic song file.
-#[napi(object)]
-pub struct ValidationError {
-    /// One-based line number where the issue was detected.
-    pub line: u32,
-    /// One-based column number where the issue was detected.
-    pub column: u32,
-    /// Human-readable description of the issue.
-    pub message: String,
-}
-
-/// Validate ChordPro input and return any parse errors as structured
-/// records. Returns an empty array if the input is valid.
-///
-/// The shape matches the TypeScript `ValidationError[]` declaration in
-/// `index.d.ts`. Prior to #1990 this function returned `Vec<String>`; the
-/// previous spelling is gone in this version rather than kept as a
-/// compatibility shim — the structured form is strictly richer and the
-/// package has no pinned consumers that depend on the string form.
-#[must_use]
-#[napi]
-pub fn validate(input: String) -> Vec<ValidationError> {
-    let result = chordsketch_chordpro::parse_multi_lenient(&input);
-    result
-        .results
-        .into_iter()
-        .flat_map(|r| r.errors.into_iter())
-        .map(|e| ValidationError {
-            // `line()` / `column()` are `usize`; clamp the (astronomically
-            // unlikely) overflow at `u32::MAX` so we never panic on
-            // conversion.
-            line: u32::try_from(e.line()).unwrap_or(u32::MAX),
-            column: u32::try_from(e.column()).unwrap_or(u32::MAX),
-            message: e.message,
-        })
-        .collect()
-}
-
-/// Return the ChordSketch library version.
-#[must_use]
-#[napi]
-pub fn version() -> String {
-    chordsketch_chordpro::version().to_string()
-}
-
-/// Pure-Rust implementation of [`chord_diagram_svg`] /
-/// [`chord_diagram_svg_with_defines`]. `defines` is a slice of
+/// Pure-Rust implementation of [`bindings::chord_diagram_svg`] /
+/// [`bindings::chord_diagram_svg_with_defines`]. `defines` is a slice of
 /// `(name, raw)` pairs matching
 /// `chordsketch_chordpro::voicings::lookup_diagram`'s contract —
 /// the built-in voicing database is consulted only when no entry
@@ -629,94 +251,6 @@ fn chord_diagram_svg_inner(
     }
 }
 
-/// Look up an SVG chord diagram for the given chord name and
-/// instrument, mirroring the WASM `chord_diagram_svg` export
-/// added in #2164.
-///
-/// `instrument` accepts (case-insensitive): `"guitar"`,
-/// `"ukulele"` (alias `"uke"`), or `"piano"` (aliases
-/// `"keyboard"`, `"keys"`). `chord` is a standard ChordPro
-/// chord name. Flat spellings are normalised to sharps via the
-/// same path the core voicing-database lookup uses.
-///
-/// Returns the inline SVG string, or `null` (JavaScript `null`)
-/// when the built-in voicing database has no entry for this
-/// `(chord, instrument)` pair. Hosts typically render a
-/// "chord not found" fallback for that case.
-///
-/// # Errors
-///
-/// Returns a napi `Error` with status `InvalidArg` when
-/// `instrument` is not one of the supported values.
-#[must_use = "callers must handle the unknown-instrument error"]
-#[napi]
-pub fn chord_diagram_svg(chord: String, instrument: String) -> Result<Option<String>> {
-    chord_diagram_svg_inner(&chord, &instrument, &[])
-        .map_err(|msg| Error::new(Status::InvalidArg, msg))
-}
-
-/// Like [`chord_diagram_svg`], but consults song-level
-/// `{define}` voicings before falling back to the built-in
-/// voicing database. `defines` is a list of `[name, raw]`
-/// tuples — `raw` is the directive body (e.g.
-/// `"base-fret 1 frets 3 3 0 0 1 3"`). Mirrors
-/// `chordsketch_chordpro::voicings::lookup_diagram`'s
-/// "song-level defines take priority" rule so user-defined
-/// chords show up here exactly like the Rust HTML renderer's
-/// `<section class="chord-diagrams">` block. Sister-site to
-/// the wasm `chordDiagramSvgWithDefines` and FFI
-/// `chord_diagram_svg_with_defines` exports
-/// (`.claude/rules/fix-propagation.md` §Bindings).
-///
-/// # Errors
-///
-/// Returns a napi `Error` with status `InvalidArg` when
-/// `instrument` is not one of the supported values.
-#[must_use = "callers must handle the unknown-instrument error"]
-#[napi(js_name = "chordDiagramSvgWithDefines")]
-pub fn chord_diagram_svg_with_defines(
-    chord: String,
-    instrument: String,
-    defines: Vec<Vec<String>>,
-) -> Result<Option<String>> {
-    // napi-rs's `tuple` support is limited; accept `Array<[name,
-    // raw]>` as `Vec<Vec<String>>` and reject malformed inner
-    // arrays at the boundary. Each entry must have exactly two
-    // elements; anything else is a caller error.
-    let mut pairs: Vec<(String, String)> = Vec::with_capacity(defines.len());
-    for (i, entry) in defines.into_iter().enumerate() {
-        if entry.len() != 2 {
-            return Err(Error::new(
-                Status::InvalidArg,
-                format!(
-                    "defines[{i}] must be [name, raw] (length 2); got length {}",
-                    entry.len()
-                ),
-            ));
-        }
-        let mut it = entry.into_iter();
-        let name = it.next().expect("length checked above");
-        let raw = it.next().expect("length checked above");
-        pairs.push((name, raw));
-    }
-    chord_diagram_svg_inner(&chord, &instrument, &pairs)
-        .map_err(|msg| Error::new(Status::InvalidArg, msg))
-}
-
-/// Structured result for ChordPro ↔ iReal Pro conversions
-/// (#2067 Phase 1).
-///
-/// Mirrors the FFI / WASM `ConversionWithWarnings` shape so every
-/// binding exposes the same surface: `output` is the converted
-/// string, `warnings` is a list of human-readable diagnostics.
-#[napi(object)]
-pub struct ConversionWithWarnings {
-    /// Converted output string.
-    pub output: String,
-    /// Warnings captured during conversion.
-    pub warnings: Vec<String>,
-}
-
 /// Format a [`chordsketch_convert::ConversionWarning`] as a stable
 /// `"<kind>: <message>"` string. Keeps WASM / NAPI / FFI in lockstep.
 fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> String {
@@ -741,8 +275,8 @@ fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> Stri
 /// only resolved at runtime by the Node.js host, so a test binary
 /// that links them fails with `undefined symbol` (this NAPI crate's
 /// existing test pattern is to call the underlying chordpro logic
-/// directly for the same reason). The `#[napi]` wrapper below maps
-/// the `String` error into `napi::Error` at the binding boundary.
+/// directly for the same reason). The `#[napi]` wrapper in [`bindings`]
+/// maps the `String` error into `napi::Error` at the binding boundary.
 fn do_convert_chordpro_to_irealb(
     input: &str,
 ) -> std::result::Result<(String, Vec<String>), String> {
@@ -791,43 +325,6 @@ fn do_convert_irealb_to_chordpro_text(
     ))
 }
 
-/// Convert a ChordPro source string into an `irealb://` URL
-/// (#2067 Phase 1).
-///
-/// Lossy: lyrics, fonts / colours, capo are dropped (iReal has no
-/// surface for them). Each drop appears in the returned `warnings`.
-///
-/// # Errors
-///
-/// Rejects with status `GenericFailure` when the converter
-/// surfaces a [`chordsketch_convert::ConversionError`].
-#[must_use = "callers must handle conversion errors"]
-#[napi]
-pub fn convert_chordpro_to_irealb(input: String) -> Result<ConversionWithWarnings> {
-    let (output, warnings) = do_convert_chordpro_to_irealb(&input)
-        .map_err(|reason| Error::new(Status::GenericFailure, reason))?;
-    Ok(ConversionWithWarnings { output, warnings })
-}
-
-/// Convert an `irealb://` URL into rendered ChordPro text
-/// (#2067 Phase 1).
-///
-/// Output is the `chordsketch-render-text` rendering of the
-/// converted song, not raw ChordPro source — there is no source
-/// emitter in the workspace yet (deferred to a follow-up PR).
-///
-/// # Errors
-///
-/// Rejects with status `GenericFailure` when the URL is not a
-/// valid `irealb://` payload.
-#[must_use = "callers must handle conversion errors"]
-#[napi]
-pub fn convert_irealb_to_chordpro_text(input: String) -> Result<ConversionWithWarnings> {
-    let (output, warnings) = do_convert_irealb_to_chordpro_text(&input)
-        .map_err(|reason| Error::new(Status::GenericFailure, reason))?;
-    Ok(ConversionWithWarnings { output, warnings })
-}
-
 /// Run the iReal SVG-render pipeline; native helper so the Rust
 /// unit tests can exercise the path without linking against
 /// `napi::Error`'s `Drop` impl. See `do_convert_chordpro_to_irealb`
@@ -838,23 +335,6 @@ fn do_render_ireal_svg(input: &str) -> std::result::Result<String, String> {
         &ireal,
         &chordsketch_render_ireal::RenderOptions::default(),
     ))
-}
-
-/// Render an `irealb://` URL as an iReal Pro-style SVG chart
-/// (#2067 Phase 2a).
-///
-/// Pipeline: `chordsketch_ireal::parse` →
-/// `chordsketch_render_ireal::render_svg` with default
-/// `RenderOptions`.
-///
-/// # Errors
-///
-/// Rejects with status `GenericFailure` when the URL is not a
-/// valid `irealb://` payload.
-#[must_use = "callers must handle conversion errors"]
-#[napi]
-pub fn render_ireal_svg(input: String) -> Result<String> {
-    do_render_ireal_svg(&input).map_err(|reason| Error::new(Status::GenericFailure, reason))
 }
 
 /// Run the iReal URL → AST JSON pipeline; native helper. See
@@ -872,42 +352,6 @@ fn do_serialize_irealb(input: &str) -> std::result::Result<String, String> {
     let song = chordsketch_ireal::IrealSong::from_json_str(input)
         .map_err(|e| format!("invalid AST JSON: {e}"))?;
     Ok(chordsketch_ireal::irealb_serialize(&song))
-}
-
-/// Parse an `irealb://` URL into an AST-shaped JSON string
-/// (#2067 Phase 2b).
-///
-/// The returned JSON object mirrors the `IrealSong` AST in
-/// `chordsketch-ireal`. Pair with [`serialize_irealb`] for the
-/// inverse direction. Field additions are non-breaking; field
-/// removals or renames require a major version bump.
-///
-/// # Errors
-///
-/// Rejects with status `GenericFailure` when the URL is not a
-/// valid `irealb://` payload.
-#[must_use = "callers must handle parse errors"]
-#[napi]
-pub fn parse_irealb(input: String) -> Result<String> {
-    do_parse_irealb(&input).map_err(|reason| Error::new(Status::GenericFailure, reason))
-}
-
-/// Serialize an AST-shaped JSON string into an `irealb://` URL
-/// (#2067 Phase 2b).
-///
-/// The input must match the JSON shape produced by
-/// [`parse_irealb`]. Round-trip identity is guaranteed for any
-/// JSON `parse_irealb` produced on the same library version.
-///
-/// # Errors
-///
-/// Rejects with status `GenericFailure` when the input is not
-/// valid JSON or does not match the AST shape (missing required
-/// fields, out-of-range values).
-#[must_use = "callers must handle serialization errors"]
-#[napi]
-pub fn serialize_irealb(input: String) -> Result<String> {
-    do_serialize_irealb(&input).map_err(|reason| Error::new(Status::GenericFailure, reason))
 }
 
 /// Run the iReal PNG-rasterise pipeline; native helper so the Rust
@@ -933,57 +377,17 @@ fn do_render_ireal_pdf(input: &str) -> std::result::Result<Vec<u8>, String> {
     .map_err(|e| format!("PDF render failed: {e}"))
 }
 
-/// Render an `irealb://` URL as an iReal Pro-style PNG image
-/// (#2067 Phase 2c).
-///
-/// Pipeline: `chordsketch_ireal::parse` →
-/// `chordsketch_render_ireal::png::render_png` with default
-/// `PngOptions` (300 DPI). Returned as a `Buffer` so Node.js
-/// callers can write it directly to a file or stream.
-///
-/// # Errors
-///
-/// Rejects with status `GenericFailure` when the URL is not a
-/// valid `irealb://` payload, or when the underlying rasteriser
-/// fails.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_ireal_png(input: String) -> Result<Buffer> {
-    let bytes =
-        do_render_ireal_png(&input).map_err(|reason| Error::new(Status::GenericFailure, reason))?;
-    Ok(bytes.into())
-}
-
-/// Render an `irealb://` URL as a single-page A4 PDF document
-/// (#2067 Phase 2c).
-///
-/// Pipeline: `chordsketch_ireal::parse` →
-/// `chordsketch_render_ireal::pdf::render_pdf` with default
-/// `PdfOptions`. Returned as a `Buffer` of the PDF byte stream.
-///
-/// # Errors
-///
-/// Rejects with status `GenericFailure` when the URL is not a
-/// valid `irealb://` payload, or when the underlying converter
-/// fails.
-#[must_use = "callers must handle render errors"]
-#[napi]
-pub fn render_ireal_pdf(input: String) -> Result<Buffer> {
-    let bytes =
-        do_render_ireal_pdf(&input).map_err(|reason| Error::new(Status::GenericFailure, reason))?;
-    Ok(bytes.into())
-}
-
 // Unit tests exercise the pure-Rust helpers (`do_render_*`,
 // `resolve_*_inner`, `try_parse_transpose`, `chord_diagram_svg_inner`,
 // `do_convert_*`, `do_render_ireal_*`, `do_parse_irealb`,
-// `do_serialize_irealb`, …) that every `#[napi] pub fn` wraps. The
-// `#[napi]` wrappers themselves cannot be called from `cargo test --lib`
-// because their return types reference `napi::Error`, whose `Drop` impl
-// links against `napi_reference_unref` / `napi_delete_reference` —
-// symbols only resolved by the Node.js host at runtime. The wrappers'
-// bodies are 1–3 line shims around the helpers, so exercising the
-// helpers covers the binding's full business logic.
+// `do_serialize_irealb`, …) that every `#[napi] pub fn` in
+// [`bindings`] wraps. The `#[napi]` wrappers themselves cannot be
+// called from `cargo test --lib` because their return types
+// reference `napi::Error`, whose `Drop` impl links against
+// `napi_reference_unref` / `napi_delete_reference` — symbols only
+// resolved by the Node.js host at runtime. The wrappers' bodies are
+// 1–3 line shims around the helpers, so exercising the helpers
+// covers the binding's full business logic.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1223,7 +627,7 @@ mod tests {
         // a String and `.warnings` is a Vec<String> — these field names
         // and types are part of the public #[napi(object)] API, so a
         // rename is a breaking change that should be deliberate.
-        let v = super::TextRenderWithWarnings {
+        let v = crate::bindings::TextRenderWithWarnings {
             output: String::from("ok"),
             warnings: vec!["w".to_string()],
         };

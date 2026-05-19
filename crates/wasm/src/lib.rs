@@ -2,54 +2,54 @@
 //!
 //! Exposes ChordPro parsing and rendering (HTML, plain text, PDF) to
 //! JavaScript/TypeScript via `wasm-bindgen`.
+//!
+//! # Crate layout
+//!
+//! - **[`bindings`]** — every `#[wasm_bindgen]` entry point, plus the
+//!   `JsValue`-coupled helpers (`deserialize_options`, `resolve_config`,
+//!   `render_string_inner`, `render_string_with_warnings_inner`, …)
+//!   that compose into the public JS surface. The proc-macro expansion
+//!   emits `extern "C"` glue against the `__wbindgen_*` runtime
+//!   resolved by host JS, so those lines are unreachable from
+//!   `cargo test` and `cargo llvm-cov`'s instrumented test binary.
+//!   `codecov.yml` excludes `bindings.rs` from coverage measurement
+//!   (issue #2352); integration coverage of the actual ABI thunks runs
+//!   under `wasm-pack test --node` against the
+//!   `#[cfg(target_arch = "wasm32")] mod wasm_tests` block below.
+//! - **`lib`** (this file) — pure-Rust helpers
+//!   (`resolve_config_inner`, `flush_warnings`, `do_render_string`,
+//!   `do_render_bytes`, `render_string_with_warnings_core`,
+//!   `validate_inner`, `do_parse_chordpro`, `do_convert_*`,
+//!   `do_render_ireal_*`, `do_parse_irealb`, `do_serialize_irealb`,
+//!   `chord_diagram_svg_inner`, `do_chord_typography`, …) plus the
+//!   shared `RenderOptions` / `ValidationErrorPayload` /
+//!   `ConversionWithWarnings` types. Every `#[wasm_bindgen]` function
+//!   in `bindings.rs` is a 1–3 line wrapper around one of these
+//!   helpers, so the native test suite at the bottom covers the
+//!   binding's full business logic without needing the wasm runtime.
+//!
+//! Sister-site rule: every helper / wrapper pair added here must have
+//! a matching pair in `crates/napi/src/{lib.rs, bindings.rs}` and
+//! `crates/ffi/src/lib.rs`. See `.claude/rules/fix-propagation.md`
+//! §Bindings.
 
 use chordsketch_chordpro::render_result::RenderResult;
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::prelude::*;
 
-/// Set up the panic hook on module instantiation so any unexpected panic
-/// in the renderer surfaces in the JavaScript console with a Rust
-/// backtrace instead of an opaque `unreachable executed`. See #1052.
-#[wasm_bindgen(start)]
-pub fn start() {
-    console_error_panic_hook::set_once();
-}
-
-/// JS `console.warn` binding, used to surface render warnings (transpose
-/// saturation, chorus recall limits, deny-listed metadata overrides) to
-/// developers in the browser console.
-///
-/// On wasm32 this resolves to the global `console.warn`. On native test
-/// targets it's a no-op so the unit tests in this file (which run with
-/// `cargo test`, not `wasm-pack test`) still compile and run.
-///
-/// See #1051 — the previous code path called `render_songs_with_transpose`,
-/// which forwards warnings to `eprintln!`. In a browser WASM context
-/// stderr is dropped; in Node.js it goes to a console nobody reads.
-/// Routing warnings through `console.warn` makes them observable in dev
-/// tools without changing the public API surface.
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console, js_name = warn)]
-    fn console_warn(s: &str);
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn console_warn(_s: &str) {}
+pub mod bindings;
 
 /// Render options passed from JavaScript.
 #[derive(Deserialize, Default)]
-struct RenderOptions {
+pub(crate) struct RenderOptions {
     /// Semitone transposition offset. Any `i8` value is accepted; the
     /// renderer reduces modulo 12 internally. (Aligning with the CLI,
     /// UniFFI bindings, and napi-rs binding behavior — see #1053, #1065.)
     #[serde(default)]
-    transpose: i8,
+    pub(crate) transpose: i8,
     /// Configuration preset name (e.g., "guitar", "ukulele") or inline
     /// RRJSON configuration string.
     #[serde(default)]
-    config: Option<String>,
+    pub(crate) config: Option<String>,
 }
 
 /// Resolve a [`chordsketch_chordpro::config::Config`] from the options.
@@ -58,7 +58,7 @@ struct RenderOptions {
 /// drive every config-parse branch without constructing a `JsValue`
 /// (which on native test targets panics on any wasm-bindgen-imported
 /// method call). The wasm-bindgen call sites convert via
-/// [`resolve_config`].
+/// [`bindings::resolve_config`].
 ///
 /// Sister-site note: the napi binding's equivalent helper takes
 /// `Option<&str>` because its caller (`resolve_options_inner`) also
@@ -70,7 +70,7 @@ struct RenderOptions {
 /// reference. The semantic contract — return `String` error for the
 /// "not a preset and not valid RRJSON" case — is identical across
 /// both bindings.
-fn resolve_config_inner(
+pub(crate) fn resolve_config_inner(
     opts: &RenderOptions,
 ) -> std::result::Result<chordsketch_chordpro::config::Config, String> {
     match &opts.config {
@@ -88,20 +88,13 @@ fn resolve_config_inner(
     }
 }
 
-/// `JsValue`-error wrapper around [`resolve_config_inner`]. The single
-/// source of truth for the `String` → `JsValue` mapping done by every
-/// wasm-bindgen entry point.
-fn resolve_config(opts: &RenderOptions) -> Result<chordsketch_chordpro::config::Config, JsValue> {
-    resolve_config_inner(opts).map_err(|e| JsValue::from_str(&e))
-}
-
 /// Forward each warning in a [`RenderResult`] to `console.warn` and
 /// unwrap the output. Single source of truth for the warning side
 /// effect, called by both [`do_render_string`] and [`do_render_bytes`].
 /// See #1109.
-fn flush_warnings<T>(result: RenderResult<T>) -> T {
+pub(crate) fn flush_warnings<T>(result: RenderResult<T>) -> T {
     for w in &result.warnings {
-        console_warn(&format!("chordsketch: {w}"));
+        bindings::console_warn(&format!("chordsketch: {w}"));
     }
     result.output
 }
@@ -116,10 +109,8 @@ fn flush_warnings<T>(result: RenderResult<T>) -> T {
 /// (`split_at_new_song` unconditionally pushes the trailing segment, even
 /// for empty input — see `chordsketch_chordpro::parser`), so the resulting
 /// `Vec<Song>` is never empty and the previous `is_empty()` guard was
-/// dead code (#1083). The return type stays `Result` because
-/// `render_html_with_options` and friends use the same `JsValue` error
-/// channel for their config-parse failures.
-fn do_render_string(
+/// dead code (#1083).
+pub(crate) fn do_render_string(
     input: &str,
     config: &chordsketch_chordpro::config::Config,
     transpose: i8,
@@ -128,22 +119,20 @@ fn do_render_string(
         i8,
         &chordsketch_chordpro::config::Config,
     ) -> RenderResult<String>,
-) -> Result<String, JsValue> {
+) -> String {
     let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
     let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
-    Ok(flush_warnings(render_fn(&songs, transpose, config)))
+    flush_warnings(render_fn(&songs, transpose, config))
 }
 
-/// Parse input and render songs, returning a `Vec<u8>` result.
+/// Parse input and render songs to bytes (PDF). See [`do_render_string`].
 ///
-/// See [`do_render_string`] for the note on console-routed warnings and
-/// the lenient parser always producing at least one song.
-///
-/// Only the PDF / PNG renderers consume the byte path; both are
-/// behind `cfg(feature = "png-pdf")` so this helper is gated to
-/// match (#2466).
+/// Gated by `png-pdf` because every caller (the bindings' PDF wrappers
+/// in `bindings::render_bytes_inner`) is itself gated by that feature
+/// (#2466). On a `no-default-features` lean build, this helper is
+/// unreachable and rustc rightly flags it as dead.
 #[cfg(feature = "png-pdf")]
-fn do_render_bytes(
+pub(crate) fn do_render_bytes(
     input: &str,
     config: &chordsketch_chordpro::config::Config,
     transpose: i8,
@@ -152,288 +141,16 @@ fn do_render_bytes(
         i8,
         &chordsketch_chordpro::config::Config,
     ) -> RenderResult<Vec<u8>>,
-) -> Result<Vec<u8>, JsValue> {
+) -> Vec<u8> {
     let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
     let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
-    Ok(flush_warnings(render_fn(&songs, transpose, config)))
-}
-
-/// Decode a JS-supplied `options` value into a `RenderOptions` struct.
-///
-/// Treats `undefined` and `null` as the default options object so the
-/// `*_with_options` entry points can be called without an explicit
-/// options argument from JS callers.
-fn deserialize_options(options: JsValue) -> Result<RenderOptions, JsValue> {
-    if options.is_undefined() || options.is_null() {
-        Ok(RenderOptions::default())
-    } else {
-        serde_wasm_bindgen::from_value(options).map_err(|e| JsValue::from_str(&e.to_string()))
-    }
-}
-
-/// Resolve config and dispatch a string-returning render call.
-///
-/// Single source of truth shared by `render_html` / `render_text` and
-/// their `*_with_options` counterparts. Avoids the boilerplate duplication
-/// flagged in #1059. Takes `RenderOptions` directly (not `JsValue`) so
-/// the no-options entry points can call this on native test targets
-/// without touching wasm-bindgen-imported types.
-fn render_string_inner(
-    input: &str,
-    opts: RenderOptions,
-    render_fn: fn(
-        &[chordsketch_chordpro::ast::Song],
-        i8,
-        &chordsketch_chordpro::config::Config,
-    ) -> RenderResult<String>,
-) -> Result<String, JsValue> {
-    let config = resolve_config(&opts)?;
-    do_render_string(input, &config, opts.transpose, render_fn)
-}
-
-/// Resolve config and dispatch a bytes-returning render call.
-///
-/// See [`render_string_inner`]. Gated by `png-pdf` — only the PDF
-/// renderer surface uses this helper (#2466).
-#[cfg(feature = "png-pdf")]
-fn render_bytes_inner(
-    input: &str,
-    opts: RenderOptions,
-    render_fn: fn(
-        &[chordsketch_chordpro::ast::Song],
-        i8,
-        &chordsketch_chordpro::config::Config,
-    ) -> RenderResult<Vec<u8>>,
-) -> Result<Vec<u8>, JsValue> {
-    let config = resolve_config(&opts)?;
-    do_render_bytes(input, &config, opts.transpose, render_fn)
-}
-
-/// Render ChordPro input as HTML using default configuration.
-///
-/// Returns the rendered HTML string. Use [`render_html_with_options`]
-/// to pass a config preset or transposition.
-///
-/// The return type is `Result<String, JsValue>` for consistency with
-/// the `*_with_options` variant — this function itself never errors
-/// because the lenient parser always produces at least one song and
-/// the default config never fails to resolve.
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen]
-pub fn render_html(input: &str) -> Result<String, JsValue> {
-    render_string_inner(
-        input,
-        RenderOptions::default(),
-        chordsketch_render_html::render_songs_with_warnings,
-    )
-}
-
-/// Render ChordPro input as plain text using default configuration.
-///
-/// Returns the rendered text string. Use [`render_text_with_options`]
-/// to pass a config preset or transposition.
-///
-/// The return type is `Result<String, JsValue>` for consistency with
-/// the `*_with_options` variant — this function itself never errors
-/// because the lenient parser always produces at least one song and
-/// the default config never fails to resolve.
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen]
-pub fn render_text(input: &str) -> Result<String, JsValue> {
-    render_string_inner(
-        input,
-        RenderOptions::default(),
-        chordsketch_render_text::render_songs_with_warnings,
-    )
-}
-
-/// Render ChordPro input as a PDF document using default configuration.
-///
-/// Returns the PDF as a `Uint8Array`. Use [`render_pdf_with_options`]
-/// to pass a config preset or transposition.
-///
-/// The return type is `Result<Vec<u8>, JsValue>` for consistency with
-/// the `*_with_options` variant — this function itself never errors
-/// because the lenient parser always produces at least one song and
-/// the default config never fails to resolve.
-///
-/// Only available when the `png-pdf` feature is enabled — i.e. in
-/// the `@chordsketch/wasm-export` bundle (#2466). The lean
-/// `@chordsketch/wasm` bundle omits this entry to keep the heavy
-/// `chordsketch-render-pdf` transitive deps out of the playground
-/// load path.
-#[cfg(feature = "png-pdf")]
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen]
-pub fn render_pdf(input: &str) -> Result<Vec<u8>, JsValue> {
-    render_bytes_inner(
-        input,
-        RenderOptions::default(),
-        chordsketch_render_pdf::render_songs_with_warnings,
-    )
-}
-
-/// Render ChordPro input as HTML with options.
-///
-/// `options` is a JavaScript object with optional fields:
-/// - `transpose`: semitone offset (integer in `i8` range; the renderer
-///   reduces modulo 12 internally)
-/// - `config`: preset name ("guitar", "ukulele") or inline RRJSON string
-///
-/// `undefined` or `null` is accepted and treated as the default options
-/// object.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string on parse failure or invalid options.
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen]
-pub fn render_html_with_options(input: &str, options: JsValue) -> Result<String, JsValue> {
-    render_string_inner(
-        input,
-        deserialize_options(options)?,
-        chordsketch_render_html::render_songs_with_warnings,
-    )
-}
-
-/// Render ChordPro input as plain text with options.
-///
-/// See [`render_html_with_options`] for the `options` format.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string on parse failure or invalid options.
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen]
-pub fn render_text_with_options(input: &str, options: JsValue) -> Result<String, JsValue> {
-    render_string_inner(
-        input,
-        deserialize_options(options)?,
-        chordsketch_render_text::render_songs_with_warnings,
-    )
-}
-
-/// Render ChordPro input as a PDF document with options.
-///
-/// See [`render_html_with_options`] for the `options` format.
-///
-/// Returns the PDF as a `Uint8Array`.
-///
-/// Only available with the `png-pdf` feature
-/// (`@chordsketch/wasm-export`, #2466).
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string on parse failure or invalid options.
-#[cfg(feature = "png-pdf")]
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen]
-pub fn render_pdf_with_options(input: &str, options: JsValue) -> Result<Vec<u8>, JsValue> {
-    render_bytes_inner(
-        input,
-        deserialize_options(options)?,
-        chordsketch_render_pdf::render_songs_with_warnings,
-    )
-}
-
-/// Render ChordPro input as a body-only HTML fragment using default
-/// configuration.
-///
-/// Unlike [`render_html`], the returned string is just the
-/// `<div class="song">...</div>` markup — no `<!DOCTYPE>`, `<html>`,
-/// `<head>`, `<title>`, or embedded `<style>` block. Use this from
-/// hosts that supply their own document envelope (the playground's
-/// `<iframe srcdoc>`, the desktop Tauri shell, the VS Code WebView
-/// preview) so the rendered chord-over-lyrics layout does not depend
-/// on HTML5's nested-document recovery rules — see #2279.
-///
-/// Pair with [`render_html_css`] to obtain the matching stylesheet.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string on parse failure.
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen]
-pub fn render_html_body(input: &str) -> Result<String, JsValue> {
-    render_string_inner(
-        input,
-        RenderOptions::default(),
-        chordsketch_render_html::render_songs_body_with_warnings,
-    )
-}
-
-/// Render ChordPro input as a body-only HTML fragment with options.
-///
-/// See [`render_html_body`] for the body-only contract and
-/// [`render_html_with_options`] for the `options` format.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string on parse failure or invalid options.
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen]
-pub fn render_html_body_with_options(input: &str, options: JsValue) -> Result<String, JsValue> {
-    render_string_inner(
-        input,
-        deserialize_options(options)?,
-        chordsketch_render_html::render_songs_body_with_warnings,
-    )
-}
-
-/// Return the canonical chord-over-lyrics CSS that
-/// [`render_html`] / [`render_html_with_options`] embed inside
-/// `<style>`.
-///
-/// Pair with [`render_html_body`] / [`render_html_body_with_options`]
-/// when the consumer is supplying its own document envelope. The
-/// contract is byte-stable; consumers can hash the result for
-/// cache-busting filenames or compare it against an expected hash to
-/// detect renderer-CSS drift across versions.
-#[must_use]
-#[wasm_bindgen]
-pub fn render_html_css() -> String {
-    chordsketch_render_html::render_html_css()
-}
-
-/// Variant of [`render_html_css`] that honours `settings.wraplines` from
-/// the supplied options (R6.100.0). When `wraplines` is false, the `.line`
-/// rule emits `flex-wrap: nowrap` so chord/lyric runs preserve the source
-/// line structure instead of reflowing onto subsequent rows.
-///
-/// See [`render_html_with_options`] for the `options` format.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string if the `config` option value is not a
-/// known preset and cannot be parsed as RRJSON.
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen]
-pub fn render_html_css_with_options(options: JsValue) -> Result<String, JsValue> {
-    let opts = deserialize_options(options)?;
-    let config = resolve_config(&opts)?;
-    Ok(chordsketch_render_html::render_html_css_with_config(
-        &config,
-    ))
-}
-
-/// Structured render result returned by the `*_with_warnings` family.
-///
-/// Serialized to a plain JS object `{ output, warnings }` where
-/// `warnings` is an array of strings captured from the renderer's
-/// internal `RenderResult::warnings` instead of being forwarded to
-/// `console.warn`. See issue #1827 — callers embedding the WASM
-/// package in a UI need structured access to show warnings inline
-/// or suppress them programmatically.
-#[derive(Serialize)]
-struct StringWithWarnings {
-    output: String,
-    warnings: Vec<String>,
+    flush_warnings(render_fn(&songs, transpose, config))
 }
 
 /// Pure-Rust core for the `*_with_warnings` family: parse + render +
 /// capture warnings, returning `(output, warnings)`. Unit-testable
 /// without touching the wasm-bindgen serialisation boundary.
-fn render_string_with_warnings_core(
+pub(crate) fn render_string_with_warnings_core(
     input: &str,
     opts: &RenderOptions,
     render_fn: fn(
@@ -449,40 +166,13 @@ fn render_string_with_warnings_core(
     Ok((result.output, result.warnings))
 }
 
-/// String-returning render that captures warnings instead of
-/// forwarding them to `console.warn`.
-///
-/// Accepts `RenderOptions` so the same inner routine serves both the
-/// no-options `render_*_with_warnings` family (which passes
-/// `RenderOptions::default()`) and the `render_*_with_warnings_and_options`
-/// family introduced in #1895. Config resolution is shared with
-/// `render_string_inner` via [`resolve_config`]. Wasm-bindgen wrapper
-/// over [`render_string_with_warnings_core`] — the wrapper exists
-/// solely to pack `(output, warnings)` into a `JsValue` via
-/// `serde_wasm_bindgen::to_value`, which can only be called on a
-/// wasm32 target / under `wasm-pack test --node`.
-fn render_string_with_warnings_inner(
-    input: &str,
-    opts: RenderOptions,
-    render_fn: fn(
-        &[chordsketch_chordpro::ast::Song],
-        i8,
-        &chordsketch_chordpro::config::Config,
-    ) -> RenderResult<String>,
-) -> Result<JsValue, JsValue> {
-    let (output, warnings) = render_string_with_warnings_core(input, &opts, render_fn)
-        .map_err(|e| JsValue::from_str(&e))?;
-    let payload = StringWithWarnings { output, warnings };
-    serde_wasm_bindgen::to_value(&payload).map_err(|e| JsValue::from_str(&e.to_string()))
-}
-
 /// Pure-Rust core for the bytes-returning `*_with_warnings` family.
 /// See [`render_string_with_warnings_core`] for the rationale.
 ///
 /// Gated by `png-pdf` — only the PDF surface consumes the byte
 /// `*_with_warnings` shape (#2466).
 #[cfg(feature = "png-pdf")]
-fn render_bytes_with_warnings_core(
+pub(crate) fn render_bytes_with_warnings_core(
     input: &str,
     opts: &RenderOptions,
     render_fn: fn(
@@ -498,323 +188,25 @@ fn render_bytes_with_warnings_core(
     Ok((result.output, result.warnings))
 }
 
-/// Bytes-returning render that captures warnings and returns a JS
-/// object `{ output: Uint8Array, warnings: string[] }`.
-///
-/// Built manually via `js_sys::Object` so the PDF bytes reach JS as a
-/// proper `Uint8Array` rather than the plain array `serde_wasm_bindgen`
-/// would produce from a `Vec<u8>` field.
-///
-/// Accepts `RenderOptions` to match [`render_string_with_warnings_inner`].
-/// The wasm32 path constructs a `js_sys::Object` with a `Uint8Array`
-/// output; on native tests we fall back to the serde serialization
-/// (which is dead-code unless a test deliberately exercises this
-/// shell — `wasm-pack test --node` covers the `Uint8Array` path).
-#[cfg(all(feature = "png-pdf", target_arch = "wasm32"))]
-fn render_bytes_with_warnings_inner(
-    input: &str,
-    opts: RenderOptions,
-    render_fn: fn(
-        &[chordsketch_chordpro::ast::Song],
-        i8,
-        &chordsketch_chordpro::config::Config,
-    ) -> RenderResult<Vec<u8>>,
-) -> Result<JsValue, JsValue> {
-    let (bytes, warnings) = render_bytes_with_warnings_core(input, &opts, render_fn)
-        .map_err(|e| JsValue::from_str(&e))?;
-    let obj = js_sys::Object::new();
-    let arr = js_sys::Uint8Array::from(bytes.as_slice());
-    js_sys::Reflect::set(&obj, &JsValue::from_str("output"), &arr.into())?;
-    let warnings_js =
-        serde_wasm_bindgen::to_value(&warnings).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    js_sys::Reflect::set(&obj, &JsValue::from_str("warnings"), &warnings_js)?;
-    Ok(obj.into())
-}
-
-#[cfg(all(feature = "png-pdf", not(target_arch = "wasm32")))]
-fn render_bytes_with_warnings_inner(
-    input: &str,
-    opts: RenderOptions,
-    render_fn: fn(
-        &[chordsketch_chordpro::ast::Song],
-        i8,
-        &chordsketch_chordpro::config::Config,
-    ) -> RenderResult<Vec<u8>>,
-) -> Result<JsValue, JsValue> {
-    // On native test targets, js_sys types are unavailable. Fall back to
-    // a serde serialization so the unit tests can at least round-trip
-    // the *structure* of the return value (the byte payload lands as a
-    // plain array, which is fine for shape-only tests).
-    let (bytes, warnings) = render_bytes_with_warnings_core(input, &opts, render_fn)
-        .map_err(|e| JsValue::from_str(&e))?;
-    #[derive(Serialize)]
-    struct BytesWithWarnings {
-        output: Vec<u8>,
-        warnings: Vec<String>,
-    }
-    serde_wasm_bindgen::to_value(&BytesWithWarnings {
-        output: bytes,
-        warnings,
-    })
-    .map_err(|e| JsValue::from_str(&e.to_string()))
-}
-
-/// Render ChordPro input as HTML and return `{ output, warnings }`.
-///
-/// Unlike [`render_html`], this variant captures renderer warnings as
-/// structured data instead of forwarding them to `console.warn`.
-/// Callers that need warning-driven UI (inline dev banners, telemetry
-/// aggregation, selective suppression) should use this entry point.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string on parse failure.
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen(js_name = renderHtmlWithWarnings)]
-pub fn render_html_with_warnings(input: &str) -> Result<JsValue, JsValue> {
-    render_string_with_warnings_inner(
-        input,
-        RenderOptions::default(),
-        chordsketch_render_html::render_songs_with_warnings,
-    )
-}
-
-/// Render ChordPro input as plain text and return `{ output, warnings }`.
-///
-/// See [`render_html_with_warnings`] for the warnings contract.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string on parse failure.
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen(js_name = renderTextWithWarnings)]
-pub fn render_text_with_warnings(input: &str) -> Result<JsValue, JsValue> {
-    render_string_with_warnings_inner(
-        input,
-        RenderOptions::default(),
-        chordsketch_render_text::render_songs_with_warnings,
-    )
-}
-
-/// Render ChordPro input as a PDF byte stream and return
-/// `{ output: Uint8Array, warnings: string[] }`.
-///
-/// See [`render_html_with_warnings`] for the warnings contract.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string on parse failure.
-// `renderPdfWithWarnings` is gated by `png-pdf` —
-// only present in the `@chordsketch/wasm-export` build (#2466).
-#[cfg(feature = "png-pdf")]
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen(js_name = renderPdfWithWarnings)]
-pub fn render_pdf_with_warnings(input: &str) -> Result<JsValue, JsValue> {
-    render_bytes_with_warnings_inner(
-        input,
-        RenderOptions::default(),
-        chordsketch_render_pdf::render_songs_with_warnings,
-    )
-}
-
-/// Render ChordPro input as HTML with options and return
-/// `{ output, warnings }`.
-///
-/// Combines the `options` payload of [`render_html_with_options`] with
-/// the structured-warning capture of [`render_html_with_warnings`].
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string on parse failure or invalid options.
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen(js_name = renderHtmlWithWarningsAndOptions)]
-pub fn render_html_with_warnings_and_options(
-    input: &str,
-    options: JsValue,
-) -> Result<JsValue, JsValue> {
-    render_string_with_warnings_inner(
-        input,
-        deserialize_options(options)?,
-        chordsketch_render_html::render_songs_with_warnings,
-    )
-}
-
-/// Render ChordPro input as plain text with options and return
-/// `{ output, warnings }`.
-///
-/// See [`render_html_with_warnings_and_options`] for the contract.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string on parse failure or invalid options.
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen(js_name = renderTextWithWarningsAndOptions)]
-pub fn render_text_with_warnings_and_options(
-    input: &str,
-    options: JsValue,
-) -> Result<JsValue, JsValue> {
-    render_string_with_warnings_inner(
-        input,
-        deserialize_options(options)?,
-        chordsketch_render_text::render_songs_with_warnings,
-    )
-}
-
-/// Render ChordPro input as a PDF byte stream with options and return
-/// `{ output: Uint8Array, warnings: string[] }`.
-///
-/// See [`render_html_with_warnings_and_options`] for the contract.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string on parse failure or invalid options.
-// `renderPdfWithWarningsAndOptions` is gated by `png-pdf` —
-// only present in the `@chordsketch/wasm-export` build (#2466).
-#[cfg(feature = "png-pdf")]
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen(js_name = renderPdfWithWarningsAndOptions)]
-pub fn render_pdf_with_warnings_and_options(
-    input: &str,
-    options: JsValue,
-) -> Result<JsValue, JsValue> {
-    render_bytes_with_warnings_inner(
-        input,
-        deserialize_options(options)?,
-        chordsketch_render_pdf::render_songs_with_warnings,
-    )
-}
-
-/// Render ChordPro input as a body-only HTML fragment and return
-/// `{ output, warnings }`.
-///
-/// Body-only counterpart to [`render_html_with_warnings`]; returns the
-/// `<div class="song">...</div>` markup without `<!DOCTYPE>` /
-/// `<html>` / `<head>` / `<style>`. See [`render_html_body`] for the
-/// fragment contract and [`render_html_with_warnings`] for the
-/// warnings contract.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string on parse failure.
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen(js_name = renderHtmlBodyWithWarnings)]
-pub fn render_html_body_with_warnings(input: &str) -> Result<JsValue, JsValue> {
-    render_string_with_warnings_inner(
-        input,
-        RenderOptions::default(),
-        chordsketch_render_html::render_songs_body_with_warnings,
-    )
-}
-
-/// Render ChordPro input as a body-only HTML fragment with options
-/// and return `{ output, warnings }`.
-///
-/// Combines the `options` payload of [`render_html_body_with_options`]
-/// with the structured-warning capture of
-/// [`render_html_body_with_warnings`].
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string on parse failure or invalid options.
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen(js_name = renderHtmlBodyWithWarningsAndOptions)]
-pub fn render_html_body_with_warnings_and_options(
-    input: &str,
-    options: JsValue,
-) -> Result<JsValue, JsValue> {
-    render_string_with_warnings_inner(
-        input,
-        deserialize_options(options)?,
-        chordsketch_render_html::render_songs_body_with_warnings,
-    )
-}
-
-/// Returns the ChordSketch library version.
-#[must_use]
-#[wasm_bindgen]
-pub fn version() -> String {
-    chordsketch_chordpro::version().to_string()
-}
-
-/// Render a chord diagram to SVG for the given chord name and
-/// instrument.
+/// Look up an SVG chord diagram for the given chord name and
+/// instrument. Pure-Rust core that [`bindings::chord_diagram_svg`] and
+/// [`bindings::chord_diagram_svg_with_defines`] both delegate to.
 ///
 /// `instrument` accepts (case-insensitive): `"guitar"`, `"ukulele"`
 /// (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`).
-/// `chord` is a standard ChordPro chord name (e.g. `"Am"`, `"C#m7"`,
-/// `"Bb"`). Flat spellings are normalised to sharps via the same
-/// path the core crate uses for its built-in voicing database
-/// lookup.
 ///
-/// Returns `None` (JavaScript `null`) when the chord or instrument
-/// is not known to the built-in voicing database. Hosts typically
-/// render a plain-text fallback (`"Chord not found"`) for that
-/// case; see the `<ChordDiagram>` component in `@chordsketch/react`
-/// for the reference UI.
-///
-/// Output is inline SVG (`<svg>…</svg>`), suitable for injection
-/// into the DOM via `innerHTML` or React's
-/// `dangerouslySetInnerHTML`. Viewers that can rasterise SVG
-/// (every modern browser) display the diagram directly; consumers
-/// that need raster output can pipe the SVG through a library like
-/// `resvg` or `canvg`.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string on unknown instrument. Unknown
-/// chords are signalled by returning `Option::None`, not an error.
-#[must_use = "callers must handle the unknown-instrument error"]
-#[wasm_bindgen]
-pub fn chord_diagram_svg(chord: &str, instrument: &str) -> Result<Option<String>, JsValue> {
-    do_chord_diagram_svg(chord, instrument, &[])
-}
-
-/// Variant of [`chord_diagram_svg`] that consults song-level
-/// `{define}` directives before falling back to the built-in
-/// voicing database.
-///
-/// `defines` is a JS array of `[name, raw]` tuples, where `name`
-/// is the chord identifier (`"Gsus4"`) and `raw` is the
-/// space-separated property body the directive carries
-/// (`"base-fret 1 frets 3 3 0 0 1 3"`). The React JSX walker
-/// emits each `{define: <name> <raw>}` directive into this shape
-/// so user-defined chord voicings show up under
-/// `<ChordDiagram>` exactly the way they do in the Rust HTML
-/// renderer's `<section class="chord-diagrams">` block.
-///
-/// Mirrors `chordsketch_chordpro::voicings::lookup_diagram`'s
-/// "song-level defines take priority" rule. Sister-site to the
-/// Rust HTML renderer's `lookup_diagram` call inside
-/// `render-html`'s chord-diagrams emission.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string when:
-///   * `instrument` is not one of `"guitar"` / `"ukulele"` /
-///     `"piano"` (or their aliases).
-///   * `defines` is not a deserialisable `[[string, string], …]`
-///     array.
-#[must_use = "callers must handle the unknown-instrument error"]
-#[wasm_bindgen(js_name = chordDiagramSvgWithDefines)]
-pub fn chord_diagram_svg_with_defines(
-    chord: &str,
-    instrument: &str,
-    defines: JsValue,
-) -> Result<Option<String>, JsValue> {
-    let defines_vec: Vec<(String, String)> = if defines.is_undefined() || defines.is_null() {
-        Vec::new()
-    } else {
-        serde_wasm_bindgen::from_value(defines)
-            .map_err(|e| JsValue::from_str(&format!("invalid defines argument: {e}")))?
-    };
-    do_chord_diagram_svg(chord, instrument, &defines_vec)
-}
-
-fn do_chord_diagram_svg(
+/// Returns `Result<_, String>` (not `Result<_, JsValue>`) so unit
+/// tests can exercise every match arm without constructing a
+/// `JsValue` — `JsValue::Drop` calls a wasm-bindgen-imported function
+/// that panics on non-wasm32 targets. Sister-site to the NAPI binding's
+/// `chord_diagram_svg_inner` and the FFI binding's
+/// `chord_diagram_svg_with_defines` (`.claude/rules/fix-propagation.md`
+/// §Bindings).
+pub(crate) fn chord_diagram_svg_inner(
     chord: &str,
     instrument: &str,
     defines: &[(String, String)],
-) -> Result<Option<String>, JsValue> {
+) -> std::result::Result<Option<String>, String> {
     use chordsketch_chordpro::chord_diagram::{render_keyboard_svg, render_svg};
     use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
 
@@ -845,23 +237,23 @@ fn do_chord_diagram_svg(
             // sheet output from `<ChordSheet>` for the same chord.
             Ok(lookup_diagram(chord, defines, instrument, 5).map(|d| render_svg(&d)))
         }
-        other => Err(JsValue::from_str(&format!(
+        other => Err(format!(
             "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
-        ))),
+        )),
     }
 }
 
-/// A single validation issue reported by [`validate`].
+/// A single validation issue reported by [`bindings::validate`].
 ///
 /// Serialised to a plain JS `{line, column, message}` object via
 /// `serde_wasm_bindgen`. Matches the NAPI / FFI `ValidationError`
 /// declarations after #2009. Line and column are one-based (editor
 /// diagnostic convention).
 #[derive(Serialize)]
-struct ValidationErrorPayload {
-    line: u32,
-    column: u32,
-    message: String,
+pub(crate) struct ValidationErrorPayload {
+    pub(crate) line: u32,
+    pub(crate) column: u32,
+    pub(crate) message: String,
 }
 
 /// Shared inner helper used by both the wasm-bindgen wrapper and native
@@ -869,7 +261,7 @@ struct ValidationErrorPayload {
 /// `cargo test -p chordsketch-wasm` runs without hitting the "cannot
 /// call wasm-bindgen imported functions on non-wasm targets" panic that
 /// `serde_wasm_bindgen::to_value` triggers off-target.
-fn validate_inner(input: &str) -> Vec<ValidationErrorPayload> {
+pub(crate) fn validate_inner(input: &str) -> Vec<ValidationErrorPayload> {
     let result = chordsketch_chordpro::parse_multi_lenient(input);
     result
         .results
@@ -882,56 +274,6 @@ fn validate_inner(input: &str) -> Vec<ValidationErrorPayload> {
         })
         .collect()
 }
-
-/// Validate ChordPro input and return any parse errors as structured
-/// records.
-///
-/// Returns a JS array of `{line, column, message}` objects — empty if the
-/// input is valid. Matches the NAPI binding's `ValidationError[]` shape
-/// (#1990) and the FFI binding's `ValidationError` dictionary (#2009).
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string if serialisation fails. In practice,
-/// `serde_wasm_bindgen::to_value` only fails on programmer error, so
-/// this is a defensive return path — callers can treat it as infallible
-/// in normal use.
-// Tell wasm-bindgen to skip its auto-generated TypeScript declaration for
-// `validate` (which would emit `validate(input: string): any` because the
-// Rust signature returns `JsValue`) and inject our own precise one via the
-// `typescript_custom_section` block below. See #2018 for the rationale —
-// downstream TypeScript consumers of `@chordsketch/wasm` should see the
-// same `ValidationError[]` shape the NAPI binding already provides.
-#[wasm_bindgen(js_name = validate, skip_typescript)]
-pub fn validate(input: &str) -> Result<JsValue, JsValue> {
-    serde_wasm_bindgen::to_value(&validate_inner(input))
-        .map_err(|e| JsValue::from_str(&e.to_string()))
-}
-
-#[wasm_bindgen(typescript_custom_section)]
-const VALIDATION_ERROR_TS: &'static str = r#"
-/**
- * A single validation issue reported by {@link validate}.
- *
- * Matches the NAPI (`@chordsketch/node`) `ValidationError` interface and the
- * UDL `ValidationError` dictionary exposed by the FFI bindings.
- */
-export interface ValidationError {
-  /** One-based line number where the issue was detected. */
-  line: number;
-  /** One-based column number where the issue was detected. */
-  column: number;
-  /** Human-readable description of the issue. */
-  message: string;
-}
-
-/**
- * Validate ChordPro input and return any parse errors as structured records.
- *
- * Returns an empty array if the input is valid.
- */
-export function validate(input: string): ValidationError[];
-"#;
 
 // ---- ChordPro parse-to-AST binding -----------------------------
 
@@ -947,9 +289,9 @@ export function validate(input: string): ValidationError[];
 ///      the rendering pipeline used by the Rust HTML / PDF / text
 ///      renderers.
 ///   3. `chordsketch_chordpro::json::ToJson::to_json_string` — the
-///      hand-rolled, zero-dep serialiser added in this PR that the
+///      hand-rolled, zero-dep serialiser the
 ///      `@chordsketch/react` AST → JSX walker consumes.
-fn do_parse_chordpro(
+pub(crate) fn do_parse_chordpro(
     input: &str,
     options: Option<&RenderOptions>,
 ) -> Result<(String, Vec<String>, Option<String>), String> {
@@ -1006,116 +348,6 @@ fn do_parse_chordpro(
     Ok((song.to_json_string(), warnings, transposed_key))
 }
 
-/// Parse a ChordPro source string into an AST JSON document.
-///
-/// Returns the parsed [`chordsketch_chordpro::ast::Song`] as a
-/// JSON object matching the shape declared in
-/// `packages/react/src/chordpro-ast.ts`. Recoverable parse issues
-/// are surfaced through the lenient parser's warnings channel and
-/// drop on the floor at this entry point; a structured
-/// `withWarnings` variant is tracked as a follow-up and not part
-/// of this PR.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string when the parser cannot start
-/// (e.g., input exceeds the lenient parser's hard preconditions).
-#[must_use = "callers must handle parse errors"]
-#[wasm_bindgen(js_name = parseChordpro)]
-pub fn parse_chordpro(input: &str) -> Result<String, JsValue> {
-    do_parse_chordpro(input, None)
-        .map(|(json, _, _)| json)
-        .map_err(|e| JsValue::from_str(&e))
-}
-
-/// Parse a ChordPro source string with optional render options
-/// (transpose, config preset). Same JSON shape as
-/// [`parse_chordpro`]; this entry point mirrors the
-/// `*_with_options` pattern used by the renderer bindings so the
-/// React preview can drive transpose without re-rendering through
-/// the demoted Rust HTML renderer.
-#[must_use = "callers must handle parse errors"]
-#[wasm_bindgen(js_name = parseChordproWithOptions)]
-pub fn parse_chordpro_with_options(input: &str, options: JsValue) -> Result<String, JsValue> {
-    let opts = deserialize_options(options)?;
-    do_parse_chordpro(input, Some(&opts))
-        .map(|(json, _, _)| json)
-        .map_err(|e| JsValue::from_str(&e))
-}
-
-/// Serializable shape returned by [`parse_chordpro_with_warnings`]
-/// and [`parse_chordpro_with_warnings_and_options`].
-///
-/// Mirrors the `ConversionWithWarnings` shape used by the
-/// `convertChordpro*` exports so the React surface can plumb
-/// warnings through a uniform `{ ast, warnings }` channel
-/// regardless of which wasm function it called. `ast` carries the
-/// JSON document produced by [`do_parse_chordpro`]; `warnings` is
-/// the list of recoverable `ParseError` messages the lenient
-/// parser surfaced (each formatted via the `Display` impl).
-#[derive(Debug, Serialize)]
-struct ParseChordproResult {
-    ast: String,
-    warnings: Vec<String>,
-    /// Transposed `{key}` directive value, present only when
-    /// `transpose != 0` AND the source carried a `{key}` directive
-    /// whose value parses as a chord (`Chord::detail.is_some()`).
-    /// `null` otherwise — the React surface should fall back to
-    /// rendering only the original key string in that case. See
-    /// `do_parse_chordpro` for the source-of-truth computation.
-    #[serde(rename = "transposedKey", skip_serializing_if = "Option::is_none")]
-    transposed_key: Option<String>,
-}
-
-/// `parse_chordpro` with the lenient parser's recovered
-/// `ParseError`s plumbed through as `warnings: string[]`.
-///
-/// Closes the silent-failure gap surfaced by the auto-review on
-/// PR #2455 — `parse_chordpro` itself drops the warnings tuple
-/// element on the floor (`.map(|(json, _)| json)`) so the
-/// information is unavailable to the React preview, hiding
-/// recoverable parse issues from the user. This entry point is
-/// the canonical surface for the React hook
-/// (`useChordproAst`); the no-warnings entry points stay around
-/// for callers that genuinely don't care.
-///
-/// # Errors
-///
-/// Same as [`parse_chordpro`] — only hard preconditions fail.
-#[must_use = "callers must handle parse errors"]
-#[wasm_bindgen(js_name = parseChordproWithWarnings)]
-pub fn parse_chordpro_with_warnings(input: &str) -> Result<JsValue, JsValue> {
-    let (ast, warnings, transposed_key) =
-        do_parse_chordpro(input, None).map_err(|e| JsValue::from_str(&e))?;
-    serde_wasm_bindgen::to_value(&ParseChordproResult {
-        ast,
-        warnings,
-        transposed_key,
-    })
-    .map_err(|e| JsValue::from_str(&e.to_string()))
-}
-
-/// Same as [`parse_chordpro_with_warnings`] but threads the
-/// `RenderOptions` payload (transpose / config) so the React
-/// preview can drive transpose without losing the warnings
-/// channel.
-#[must_use = "callers must handle parse errors"]
-#[wasm_bindgen(js_name = parseChordproWithWarningsAndOptions)]
-pub fn parse_chordpro_with_warnings_and_options(
-    input: &str,
-    options: JsValue,
-) -> Result<JsValue, JsValue> {
-    let opts = deserialize_options(options)?;
-    let (ast, warnings, transposed_key) =
-        do_parse_chordpro(input, Some(&opts)).map_err(|e| JsValue::from_str(&e))?;
-    serde_wasm_bindgen::to_value(&ParseChordproResult {
-        ast,
-        warnings,
-        transposed_key,
-    })
-    .map_err(|e| JsValue::from_str(&e.to_string()))
-}
-
 // ---- iReal Pro conversion bindings (#2067 Phase 1) ----
 
 /// Serializable shape returned by both conversion entry points.
@@ -1128,9 +360,9 @@ pub fn parse_chordpro_with_warnings_and_options(
 /// `Debug` is required for the `{result:?}` formatter used by the
 /// `assert!` calls in the unit tests below.
 #[derive(Debug, Serialize)]
-struct ConversionWithWarnings {
-    output: String,
-    warnings: Vec<String>,
+pub(crate) struct ConversionWithWarnings {
+    pub(crate) output: String,
+    pub(crate) warnings: Vec<String>,
 }
 
 /// Format a [`chordsketch_convert::ConversionWarning`] as a stable
@@ -1150,7 +382,7 @@ fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> Stri
 
 /// Run the ChordPro → iReal pipeline; native-test helper used by
 /// the wasm wrapper and by Rust unit tests in this file.
-fn do_convert_chordpro_to_irealb(input: &str) -> Result<ConversionWithWarnings, String> {
+pub(crate) fn do_convert_chordpro_to_irealb(input: &str) -> Result<ConversionWithWarnings, String> {
     let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
     // `split_at_new_song` unconditionally pushes `&input[seg_start..]`
     // last, so `parse_multi_lenient` always returns at least one result;
@@ -1176,7 +408,9 @@ fn do_convert_chordpro_to_irealb(input: &str) -> Result<ConversionWithWarnings, 
 
 /// Run the iReal → ChordPro pipeline; native-test helper used by
 /// the wasm wrapper and by Rust unit tests.
-fn do_convert_irealb_to_chordpro_text(input: &str) -> Result<ConversionWithWarnings, String> {
+pub(crate) fn do_convert_irealb_to_chordpro_text(
+    input: &str,
+) -> Result<ConversionWithWarnings, String> {
     let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
     let converted = chordsketch_convert::ireal_to_chordpro(&ireal)
         .map_err(|e| format!("conversion failed: {e}"))?;
@@ -1191,45 +425,9 @@ fn do_convert_irealb_to_chordpro_text(input: &str) -> Result<ConversionWithWarni
     })
 }
 
-/// Convert a ChordPro source string into an `irealb://` URL
-/// (#2067 Phase 1).
-///
-/// Lossy: lyrics, fonts / colours, and capo are dropped (iReal has
-/// no surface for them). Each drop appears in the returned
-/// `warnings` list.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string when the converter rejects the
-/// source as unrepresentable in iReal.
-#[must_use = "callers must handle conversion errors"]
-#[wasm_bindgen(js_name = convertChordproToIrealb)]
-pub fn convert_chordpro_to_irealb(input: &str) -> Result<JsValue, JsValue> {
-    let payload = do_convert_chordpro_to_irealb(input).map_err(|e| JsValue::from_str(&e))?;
-    serde_wasm_bindgen::to_value(&payload).map_err(|e| JsValue::from_str(&e.to_string()))
-}
-
-/// Convert an `irealb://` URL into rendered ChordPro text
-/// (#2067 Phase 1).
-///
-/// Output is the `chordsketch-render-text` rendering of the
-/// converted song, not raw ChordPro source — there is no source
-/// emitter in the workspace yet (deferred to a follow-up PR).
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string when the URL is not a valid
-/// `irealb://` payload.
-#[must_use = "callers must handle conversion errors"]
-#[wasm_bindgen(js_name = convertIrealbToChordproText)]
-pub fn convert_irealb_to_chordpro_text(input: &str) -> Result<JsValue, JsValue> {
-    let payload = do_convert_irealb_to_chordpro_text(input).map_err(|e| JsValue::from_str(&e))?;
-    serde_wasm_bindgen::to_value(&payload).map_err(|e| JsValue::from_str(&e.to_string()))
-}
-
 /// Run the iReal SVG-render pipeline; native helper used by the
 /// wasm wrapper and the unit tests.
-fn do_render_ireal_svg(input: &str) -> Result<String, String> {
+pub(crate) fn do_render_ireal_svg(input: &str) -> Result<String, String> {
     let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
     Ok(chordsketch_render_ireal::render_svg(
         &ireal,
@@ -1237,26 +435,9 @@ fn do_render_ireal_svg(input: &str) -> Result<String, String> {
     ))
 }
 
-/// Render an `irealb://` URL as an iReal Pro-style SVG chart
-/// (#2067 Phase 2a).
-///
-/// Pipeline: `chordsketch_ireal::parse` →
-/// `chordsketch_render_ireal::render_svg` with default
-/// `RenderOptions`.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string when the URL is not a valid
-/// `irealb://` payload.
-#[must_use = "callers must handle conversion errors"]
-#[wasm_bindgen(js_name = renderIrealSvg)]
-pub fn render_ireal_svg(input: &str) -> Result<String, JsValue> {
-    do_render_ireal_svg(input).map_err(|e| JsValue::from_str(&e))
-}
-
 /// Run the iReal URL → AST JSON pipeline; native helper used by the
 /// wasm wrapper and by Rust unit tests.
-fn do_parse_irealb(input: &str) -> Result<String, String> {
+pub(crate) fn do_parse_irealb(input: &str) -> Result<String, String> {
     use chordsketch_ireal::ToJson;
     let song = chordsketch_ireal::parse(input).map_err(|e| format!("parse failed: {e}"))?;
     Ok(song.to_json_string())
@@ -1264,54 +445,16 @@ fn do_parse_irealb(input: &str) -> Result<String, String> {
 
 /// Run the AST JSON → iReal URL pipeline; native helper used by the
 /// wasm wrapper and by Rust unit tests.
-fn do_serialize_irealb(input: &str) -> Result<String, String> {
+pub(crate) fn do_serialize_irealb(input: &str) -> Result<String, String> {
     use chordsketch_ireal::FromJson;
     let song = chordsketch_ireal::IrealSong::from_json_str(input)
         .map_err(|e| format!("invalid AST JSON: {e}"))?;
     Ok(chordsketch_ireal::irealb_serialize(&song))
 }
 
-/// Parse an `irealb://` URL into an AST-shaped JSON string
-/// (#2067 Phase 2b).
-///
-/// Returns the song as a JSON object whose shape mirrors
-/// [`chordsketch_ireal::IrealSong`]. The format is the
-/// AST wire format and follows the AST's stability promise:
-/// new optional fields may appear in minor releases; renames or
-/// removals require a major bump. Pair with [`serialize_irealb`]
-/// for the inverse direction.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string when the URL is not a valid
-/// `irealb://` payload.
-#[must_use = "callers must handle parse errors"]
-#[wasm_bindgen(js_name = parseIrealb)]
-pub fn parse_irealb(input: &str) -> Result<String, JsValue> {
-    do_parse_irealb(input).map_err(|e| JsValue::from_str(&e))
-}
-
-/// Serialize an AST-shaped JSON string into an `irealb://` URL
-/// (#2067 Phase 2b).
-///
-/// The input must match the JSON shape produced by [`parse_irealb`].
-/// Round-trip identity is guaranteed for any JSON that came out of
-/// `parse_irealb` on the same library version.
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string when the input is not valid JSON
-/// or does not match the AST shape (e.g. missing required fields,
-/// out-of-range values).
-#[must_use = "callers must handle serialization errors"]
-#[wasm_bindgen(js_name = serializeIrealb)]
-pub fn serialize_irealb(input: &str) -> Result<String, JsValue> {
-    do_serialize_irealb(input).map_err(|e| JsValue::from_str(&e))
-}
-
 /// Decompose an iReal Pro chord (passed as the JSON shape that
-/// [`parse_irealb`] emits inside `BarChord.chord`) into the
-/// engraved typography spans the chart should render.
+/// [`bindings::parse_irealb`] emits inside `BarChord.chord`) into
+/// the engraved typography spans the chart should render.
 ///
 /// Output JSON shape — `{ "spans": [{ "kind": "Root" | "Accidental"
 /// | "Extension" | "Slash" | "Bass", "text": "<glyph>" }, …] }`.
@@ -1325,9 +468,10 @@ pub fn serialize_irealb(input: &str) -> Result<String, JsValue> {
 ///
 /// # Errors
 ///
-/// Returns a `JsValue` error string when `chord_json` is not
-/// valid AST-shaped JSON.
-fn do_chord_typography(chord_json: &str) -> Result<String, String> {
+/// Returns an error string when `chord_json` is not valid
+/// AST-shaped JSON. The `JsValue` mapping is done by the wrapper
+/// in [`bindings::chord_typography`].
+pub(crate) fn do_chord_typography(chord_json: &str) -> Result<String, String> {
     use chordsketch_ireal::json::FromJson;
     let value = chordsketch_ireal::json::parse_json(chord_json)
         .map_err(|e| format!("invalid chord JSON: {e}"))?;
@@ -1377,16 +521,6 @@ fn json_escape_into(s: &str, out: &mut String) {
     out.push('"');
 }
 
-/// Wasm-exposed wrapper around the pure-Rust `do_chord_typography`
-/// helper. See [`renderIrealSvg`](render_ireal_svg)'s span-layout
-/// surface for the typography-span vocabulary the JSON output
-/// uses.
-#[must_use = "callers must handle JSON-shape errors"]
-#[wasm_bindgen(js_name = chordTypography)]
-pub fn chord_typography(chord_json: &str) -> Result<String, JsValue> {
-    do_chord_typography(chord_json).map_err(|e| JsValue::from_str(&e))
-}
-
 /// Run the iReal PNG-rasterise pipeline; native helper used by the
 /// wasm wrapper and by Rust unit tests.
 ///
@@ -1394,7 +528,7 @@ pub fn chord_typography(chord_json: &str) -> Result<String, JsValue> {
 /// fontdb / harfrust transitive surface is the dominant size cost
 /// of the heavy wasm bundle (#2466).
 #[cfg(feature = "png-pdf")]
-fn do_render_ireal_png(input: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn do_render_ireal_png(input: &str) -> Result<Vec<u8>, String> {
     let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
     chordsketch_render_ireal::png::render_png(
         &ireal,
@@ -1409,7 +543,7 @@ fn do_render_ireal_png(input: &str) -> Result<Vec<u8>, String> {
 /// Gated by `png-pdf` because svg2pdf pulls the same resvg / usvg
 /// graph plus its own writer surface (#2466).
 #[cfg(feature = "png-pdf")]
-fn do_render_ireal_pdf(input: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn do_render_ireal_pdf(input: &str) -> Result<Vec<u8>, String> {
     let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
     chordsketch_render_ireal::pdf::render_pdf(
         &ireal,
@@ -1418,172 +552,13 @@ fn do_render_ireal_pdf(input: &str) -> Result<Vec<u8>, String> {
     .map_err(|e| format!("PDF render failed: {e}"))
 }
 
-/// Render an `irealb://` URL as an iReal Pro-style PNG image
-/// (#2067 Phase 2c).
-///
-/// Pipeline: `chordsketch_ireal::parse` →
-/// `chordsketch_render_ireal::png::render_png` with default
-/// `PngOptions` (300 DPI, A4-equivalent canvas). Returned as a
-/// `Uint8Array` of the encoded PNG bytes.
-///
-/// Only available with the `png-pdf` feature
-/// (`@chordsketch/wasm-export`, #2466).
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string when the URL is not a valid
-/// `irealb://` payload, or when the underlying rasteriser fails
-/// (e.g. internal SVG parse error).
-#[cfg(feature = "png-pdf")]
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen(js_name = renderIrealPng)]
-pub fn render_ireal_png(input: &str) -> Result<Vec<u8>, JsValue> {
-    do_render_ireal_png(input).map_err(|e| JsValue::from_str(&e))
-}
-
-/// Render an `irealb://` URL as a single-page A4 PDF document
-/// (#2067 Phase 2c).
-///
-/// Pipeline: `chordsketch_ireal::parse` →
-/// `chordsketch_render_ireal::pdf::render_pdf` with default
-/// `PdfOptions`. Returned as a `Uint8Array` of the PDF byte stream.
-///
-/// Only available with the `png-pdf` feature
-/// (`@chordsketch/wasm-export`, #2466).
-///
-/// # Errors
-///
-/// Returns a `JsValue` error string when the URL is not a valid
-/// `irealb://` payload, or when the underlying converter fails.
-#[cfg(feature = "png-pdf")]
-#[must_use = "callers must handle render errors"]
-#[wasm_bindgen(js_name = renderIrealPdf)]
-pub fn render_ireal_pdf(input: &str) -> Result<Vec<u8>, JsValue> {
-    do_render_ireal_pdf(input).map_err(|e| JsValue::from_str(&e))
-}
-
-#[wasm_bindgen(typescript_custom_section)]
-const RENDER_IREAL_SVG_TS: &'static str = r#"
-/**
- * Render an `irealb://` URL as an iReal Pro-style SVG chart
- * (#2067 Phase 2a).
- *
- * Output is a complete, self-contained `<svg>` document.
- *
- * @throws when the input is not a valid `irealb://` payload.
- */
-export function renderIrealSvg(input: string): string;
-"#;
-
-// The `renderIrealPng` / `renderIrealPdf` TypeScript declarations
-// only appear in the heavy bundle (`@chordsketch/wasm-export`)
-// per #2466 — they reference exports that are themselves gated
-// by `cfg(feature = "png-pdf")` above, so emitting the TS shape
-// from the lean build would publish a typed API that does not
-// exist at runtime.
-#[cfg(feature = "png-pdf")]
-#[wasm_bindgen(typescript_custom_section)]
-const RENDER_IREAL_PNG_PDF_TS: &'static str = r#"
-/**
- * Render an `irealb://` URL as a PNG image (#2067 Phase 2c).
- *
- * Pipeline: parse → SVG render → resvg rasterise. Output is the
- * encoded PNG byte stream at the renderer's default 300 DPI.
- *
- * @throws when the input is not a valid `irealb://` payload, or when
- *         the underlying rasteriser fails.
- */
-export function renderIrealPng(input: string): Uint8Array;
-
-/**
- * Render an `irealb://` URL as a single-page A4 PDF document
- * (#2067 Phase 2c).
- *
- * Pipeline: parse → SVG render → svg2pdf conversion. Output is the
- * PDF byte stream; vector content scales without resolution loss.
- *
- * @throws when the input is not a valid `irealb://` payload, or when
- *         the underlying converter fails.
- */
-export function renderIrealPdf(input: string): Uint8Array;
-"#;
-
-#[wasm_bindgen(typescript_custom_section)]
-const PARSE_SERIALIZE_IREALB_TS: &'static str = r#"
-/**
- * Parse an `irealb://` URL into an AST-shaped JSON string
- * (#2067 Phase 2b).
- *
- * The returned JSON mirrors the `IrealSong` AST in
- * `chordsketch-ireal`. Pair with {@link serializeIrealb} for the
- * inverse direction. Field additions are non-breaking; field
- * removals or renames require a major version bump.
- *
- * @throws when the input is not a valid `irealb://` payload.
- */
-export function parseIrealb(input: string): string;
-
-/**
- * Serialize an AST-shaped JSON string into an `irealb://` URL
- * (#2067 Phase 2b).
- *
- * The input must match the JSON shape produced by
- * {@link parseIrealb}. Round-trips are stable for any JSON
- * `parseIrealb` produced on the same library version.
- *
- * @throws when the input is not valid JSON or does not match the
- *         AST shape.
- */
-export function serializeIrealb(input: string): string;
-"#;
-
-#[wasm_bindgen(typescript_custom_section)]
-const CONVERSION_WITH_WARNINGS_TS: &'static str = r#"
-/**
- * Result returned by {@link convertChordproToIrealb} and
- * {@link convertIrealbToChordproText} (#2067 Phase 1).
- *
- * `output` is the converted string (an `irealb://` URL or rendered
- * ChordPro text, depending on direction). `warnings` is a list of
- * `"<kind>: <message>"` diagnostic strings describing information
- * that was dropped or approximated during the conversion.
- *
- * Matches the NAPI `ConversionWithWarnings` interface and the FFI
- * `ConversionWithWarnings` dictionary.
- */
-export interface ConversionWithWarnings {
-  /** Converted output string. */
-  output: string;
-  /** Conversion warnings (lossy drops, approximations, unsupported). */
-  warnings: string[];
-}
-
-/**
- * Convert a ChordPro source string into an `irealb://` URL.
- *
- * Lossy: lyrics, fonts / colours, capo are dropped because iReal
- * has no surface for them. Every drop surfaces in
- * {@link ConversionWithWarnings.warnings}.
- *
- * @throws when the converter rejects the source as unrepresentable
- *         in iReal.
- */
-export function convertChordproToIrealb(input: string): ConversionWithWarnings;
-
-/**
- * Convert an `irealb://` URL into rendered ChordPro text.
- *
- * The output is the `chordsketch-render-text` rendering of the
- * converted song, not raw ChordPro source.
- *
- * @throws when the input is not a valid `irealb://` payload.
- */
-export function convertIrealbToChordproText(input: string): ConversionWithWarnings;
-"#;
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bindings::{render_html, render_html_body, render_html_css, render_text, version};
+
+    #[cfg(feature = "png-pdf")]
+    use crate::bindings::render_pdf;
 
     const MINIMAL_INPUT: &str = "{title: Test}\n[C]Hello";
 
@@ -1663,10 +638,10 @@ mod tests {
     }
 
     // The following tests cover the chordsketch-chordpro APIs that
-    // `resolve_config` delegates to (Config::preset and Config::parse).
-    // They do NOT exercise resolve_config itself or the JsValue boundary —
-    // for that, see the `wasm_tests` module below (gated to wasm32 and
-    // run via `wasm-pack test --node` in CI).
+    // `resolve_config_inner` delegates to (Config::preset and
+    // Config::parse). They do NOT exercise the JsValue boundary —
+    // for that, see the `wasm_tests` module below (gated to wasm32
+    // and run via `wasm-pack test --node` in CI).
 
     #[test]
     fn config_parse_invalid_rrjson_returns_err() {
@@ -2093,6 +1068,59 @@ mod tests {
         assert!(result.is_err());
     }
 
+    // ---- chord_diagram_svg_inner (sister-site to NAPI / FFI) ----
+
+    #[test]
+    fn test_chord_diagram_svg_inner_guitar_known_chord_returns_svg() {
+        let svg = chord_diagram_svg_inner("C", "guitar", &[]).unwrap();
+        let svg = svg.expect("guitar C must have a built-in diagram");
+        assert!(svg.contains("<svg"));
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_inner_ukulele_alias_resolves() {
+        let svg = chord_diagram_svg_inner("C", "uke", &[]).unwrap();
+        assert!(svg.is_some(), "ukulele C must resolve via the uke alias");
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_inner_piano_keyboard_aliases_resolve() {
+        for alias in ["piano", "keyboard", "keys"] {
+            let result = chord_diagram_svg_inner("C", alias, &[]);
+            assert!(
+                result.is_ok(),
+                "{alias:?} must be accepted as a piano alias; got {result:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_inner_unknown_chord_returns_none() {
+        let result = chord_diagram_svg_inner("XYZ-not-a-chord", "guitar", &[]).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_inner_unknown_instrument_errors() {
+        let err = chord_diagram_svg_inner("C", "harmonica", &[]).unwrap_err();
+        assert!(
+            err.contains("unknown instrument") && err.contains("harmonica"),
+            "error must name the offending instrument; got {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_inner_instrument_lookup_is_case_insensitive() {
+        for variant in ["GUITAR", "Guitar", "gUiTaR"] {
+            let svg = chord_diagram_svg_inner("C", variant, &[])
+                .unwrap_or_else(|e| panic!("case variant {variant:?} must not error; got {e:?}"));
+            assert!(
+                svg.is_some(),
+                "case variant {variant:?} must find a guitar-C diagram; got None"
+            );
+        }
+    }
+
     // ---- pure-Rust cores behind every `*_with_warnings*` wrapper -------
 
     #[test]
@@ -2136,8 +1164,6 @@ mod tests {
 
     #[test]
     fn test_render_string_with_warnings_core_emits_output_and_no_warnings_on_clean_input() {
-        // Drives the pure-Rust core that every `render_*_with_warnings*`
-        // wasm-bindgen wrapper delegates to.
         let (output, warnings) = render_string_with_warnings_core(
             MINIMAL_INPUT,
             &RenderOptions::default(),
@@ -2151,8 +1177,6 @@ mod tests {
 
     #[test]
     fn test_render_string_with_warnings_core_captures_saturation_warning() {
-        // Saturating transpose = renderer must surface a warning rather
-        // than dropping it. Pins the contract for the wasm wrapper.
         let opts = RenderOptions {
             transpose: 100,
             config: None,
@@ -2227,57 +1251,42 @@ mod tests {
     }
 
     #[test]
-    fn test_render_string_inner_threads_transpose() {
-        // Plumbing guard: a refactor that forgot to forward
-        // `opts.transpose` into the renderer would compile but silently
-        // ignore the option.
-        let zero = render_string_inner(
+    fn test_do_render_string_threads_transpose() {
+        // Plumbing guard: the helper must thread `transpose` into the
+        // renderer. The wasm wrapper passes `opts.transpose` to it.
+        let zero = do_render_string(
             MINIMAL_INPUT,
-            RenderOptions::default(),
+            &chordsketch_chordpro::config::Config::defaults(),
+            0,
             chordsketch_render_text::render_songs_with_warnings,
-        )
-        .unwrap();
-        let shifted = render_string_inner(
+        );
+        let shifted = do_render_string(
             MINIMAL_INPUT,
-            RenderOptions {
-                transpose: 2,
-                config: None,
-            },
+            &chordsketch_chordpro::config::Config::defaults(),
+            2,
             chordsketch_render_text::render_songs_with_warnings,
-        )
-        .unwrap();
+        );
         assert_ne!(zero, shifted, "transpose=2 must alter rendered text");
     }
 
     #[cfg(feature = "png-pdf")]
     #[test]
-    fn test_render_bytes_inner_threads_transpose() {
-        let zero = render_bytes_inner(
+    fn test_do_render_bytes_threads_transpose() {
+        let zero = do_render_bytes(
             MINIMAL_INPUT,
-            RenderOptions::default(),
+            &chordsketch_chordpro::config::Config::defaults(),
+            0,
             chordsketch_render_pdf::render_songs_with_warnings,
-        )
-        .unwrap();
-        let shifted = render_bytes_inner(
+        );
+        let shifted = do_render_bytes(
             MINIMAL_INPUT,
-            RenderOptions {
-                transpose: 2,
-                config: None,
-            },
+            &chordsketch_chordpro::config::Config::defaults(),
+            2,
             chordsketch_render_pdf::render_songs_with_warnings,
-        )
-        .unwrap();
+        );
         assert_ne!(zero, shifted, "transpose=2 must alter PDF byte stream");
         assert!(zero.starts_with(b"%PDF"));
     }
-
-    // Note: `render_string_inner` / `render_bytes_inner` Err-path tests
-    // are intentionally absent here. Their error variant is `JsValue`,
-    // whose `Drop` calls a wasm-bindgen-imported function that panics
-    // on non-wasm32 targets. The Err path is exercised at the
-    // pure-Rust core level by `test_resolve_config_inner_*` and
-    // `test_render_string_with_warnings_core_propagates_config_error`,
-    // and at the JS boundary by the wasm32 integration tests below.
 }
 
 /// Integration tests that exercise the actual `#[wasm_bindgen]` ->
@@ -2290,7 +1299,19 @@ mod tests {
 /// `.github/workflows/wasm.yml`. See #1055, #1108.
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
-    use super::*;
+    use super::bindings::{
+        chord_diagram_svg, chord_diagram_svg_with_defines, parse_irealb, render_html,
+        render_html_with_options, render_html_with_warnings, render_html_with_warnings_and_options,
+        render_ireal_svg, render_text, render_text_with_options, render_text_with_warnings,
+        render_text_with_warnings_and_options, serialize_irealb, start, validate, version,
+    };
+
+    #[cfg(feature = "png-pdf")]
+    use super::bindings::{
+        render_ireal_pdf, render_ireal_png, render_pdf, render_pdf_with_options,
+        render_pdf_with_warnings, render_pdf_with_warnings_and_options,
+    };
+
     use js_sys::{Array, Reflect};
     use wasm_bindgen::{JsCast, JsValue};
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -2846,11 +1867,46 @@ mod wasm_tests {
         );
     }
 
+    // ---- chord_diagram_svg / chord_diagram_svg_with_defines (#2164) ----
+
+    /// `chord_diagram_svg(chord, "guitar")` returns the inline SVG.
+    #[wasm_bindgen_test]
+    fn chord_diagram_svg_guitar_known_chord_returns_svg() {
+        let svg = chord_diagram_svg("C", "guitar").unwrap();
+        assert!(svg.is_some(), "guitar C should resolve");
+        assert!(svg.unwrap().contains("<svg"));
+    }
+
+    /// Unknown chord under a known instrument yields `None`, not an
+    /// error.
+    #[wasm_bindgen_test]
+    fn chord_diagram_svg_unknown_chord_returns_none() {
+        let svg = chord_diagram_svg("XYZ-not-a-chord", "guitar").unwrap();
+        assert!(svg.is_none(), "unknown chord should yield None");
+    }
+
+    /// Unknown instrument is a `JsValue` error.
+    #[wasm_bindgen_test]
+    fn chord_diagram_svg_unknown_instrument_errors() {
+        let result = chord_diagram_svg("C", "harmonica");
+        assert!(result.is_err(), "unknown instrument should error");
+    }
+
+    /// `chord_diagram_svg_with_defines([])` matches the no-defines
+    /// behaviour.
+    #[wasm_bindgen_test]
+    fn chord_diagram_svg_with_defines_empty_array_matches_bare() {
+        let bare = chord_diagram_svg("C", "guitar").unwrap();
+        let with_empty = chord_diagram_svg_with_defines("C", "guitar", JsValue::UNDEFINED).unwrap();
+        assert_eq!(bare, with_empty);
+    }
+
     // ---- iReal Pro PNG / PDF render (#2067 Phase 2c) ----
 
     /// Exercises the public `renderIrealPng` wrapper through the
     /// actual `JsValue` boundary. Asserts the returned `Uint8Array`
     /// starts with the PNG magic bytes.
+    #[cfg(feature = "png-pdf")]
     #[wasm_bindgen_test]
     fn render_ireal_png_emits_png_bytes() {
         let bytes = render_ireal_png(TINY_IREAL_URL_WASM).unwrap();
@@ -2862,6 +1918,7 @@ mod wasm_tests {
     }
 
     /// Invalid URL surfaces as a `JsValue` error, not a panic.
+    #[cfg(feature = "png-pdf")]
     #[wasm_bindgen_test]
     fn render_ireal_png_invalid_url_errors() {
         let result = render_ireal_png("not a url");
@@ -2871,6 +1928,7 @@ mod wasm_tests {
     /// Exercises the public `renderIrealPdf` wrapper through the
     /// actual `JsValue` boundary. Asserts the returned `Uint8Array`
     /// starts with the PDF magic bytes.
+    #[cfg(feature = "png-pdf")]
     #[wasm_bindgen_test]
     fn render_ireal_pdf_emits_pdf_bytes() {
         let bytes = render_ireal_pdf(TINY_IREAL_URL_WASM).unwrap();
@@ -2882,6 +1940,7 @@ mod wasm_tests {
     }
 
     /// Invalid URL surfaces as a `JsValue` error, not a panic.
+    #[cfg(feature = "png-pdf")]
     #[wasm_bindgen_test]
     fn render_ireal_pdf_invalid_url_errors() {
         let result = render_ireal_pdf("not a url");
