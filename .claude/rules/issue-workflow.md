@@ -36,6 +36,14 @@ bug should close all linked issues.
 | Priority | `priority:high`, `priority:medium`, `priority:low` |
 | Status | `blocked` (waiting on another issue) |
 
+Size labels are **triage planning aids only**. They MUST NOT be
+used as filters when surveying candidate work — see
+[`effort-is-not-a-filter.md`](effort-is-not-a-filter.md) for the
+operative rule and the reasoning. The correct candidate-survey
+filters are feasibility, active blockers, and value; effort is
+metadata that informs *how* a chosen item is split into PRs, not
+*whether* it is taken on.
+
 ## Workflow Lifecycle
 
 1. Create Issue with labels.
