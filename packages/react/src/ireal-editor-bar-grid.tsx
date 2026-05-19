@@ -427,6 +427,33 @@ function handleBarCellKeydown(
   }
 
   if (!ev.altKey && !ev.shiftKey) {
+    if (ev.key === 'Delete' || ev.key === 'Backspace') {
+      ev.preventDefault();
+      // Capture editorRoot from the still-attached cell BEFORE the
+      // structural op. After `ops.deleteBar()` → `setSong()` → React
+      // re-render, the deleted-bar button is removed from the DOM;
+      // `cellEl.closest(…)` on a detached element returns null and the
+      // microtask cannot find the editor root to focus the next cell.
+      // Capturing first keeps the stable container reference alive
+      // across the re-render. Sister-site comment: `render.ts:659-670`.
+      const editorRoot =
+        cellEl !== null
+          ? cellEl.closest<HTMLElement>('.chordsketch-ireal-editor')
+          : null;
+      ops.deleteBar(secIndex, barIndex);
+      // After the structural op + React re-render, focus the
+      // next-sibling cell (or the section's "+ Add bar" trailer
+      // when the section is now empty). The cell DOM was rebuilt by
+      // the re-render, so we resolve through `data-` selectors. The
+      // op is synchronous from the caller's perspective: the host
+      // updates state inside it, React re-renders before the next
+      // microtask, and our queueMicrotask below sees the new DOM.
+      queueMicrotask(() => {
+        focusAfterBarDelete(editorRoot, secIndex, barIndex);
+      });
+      return;
+    }
+
     let nextBarIndex: number | null = null;
     switch (ev.key) {
       case 'ArrowLeft':
@@ -453,23 +480,7 @@ function handleBarCellKeydown(
     if (nextBarIndex !== null) {
       ev.preventDefault();
       focusBarCell(cellEl, secIndex, nextBarIndex);
-      return;
     }
-  }
-
-  if (!ev.altKey && !ev.shiftKey && (ev.key === 'Delete' || ev.key === 'Backspace')) {
-    ev.preventDefault();
-    ops.deleteBar(secIndex, barIndex);
-    // After the structural op + React re-render, focus the
-    // next-sibling cell (or the section's "+ Add bar" trailer
-    // when the section is now empty). The cell DOM was rebuilt by
-    // the re-render, so we resolve through `data-` selectors. The
-    // op is synchronous from the caller's perspective: the host
-    // updates state inside it, React re-renders before the next
-    // microtask, and our queueMicrotask below sees the new DOM.
-    queueMicrotask(() => {
-      focusAfterBarDelete(cellEl, secIndex, barIndex);
-    });
   }
 }
 
@@ -502,12 +513,10 @@ function focusBarCell(
 }
 
 function focusAfterBarDelete(
-  cellEl: HTMLElement | null,
+  editorRoot: HTMLElement | null,
   secIndex: number,
   removedBarIndex: number,
 ): void {
-  if (cellEl === null) return;
-  const editorRoot = cellEl.closest('.chordsketch-ireal-editor');
   if (editorRoot === null) return;
   const sectionEl = editorRoot.querySelector(
     `.chordsketch-ireal-editor__section[data-section-index="${secIndex}"]`,
