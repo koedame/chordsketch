@@ -702,6 +702,27 @@ mod tests {
         assert!(errors.is_empty(), "empty input should produce no errors");
     }
 
+    #[test]
+    fn test_validate_inner_collects_errors_across_multi_song_input() {
+        // Two `{new_song}`-separated segments, each with an unclosed
+        // chord, MUST produce errors from BOTH segments via
+        // `result.results.into_iter().flat_map(|r| r.errors)`. A refactor
+        // that collapsed the flat_map into
+        // `.next().unwrap_or_default().errors` would walk only the first
+        // segment's errors, dropping the second song's parse failures —
+        // catastrophic for hosts that validate multi-song .cho files.
+        // Sister-site to `crates/napi/src/lib.rs::
+        // test_validate_inner_collects_errors_across_multi_song_input`
+        // (fix-propagation.md §Bindings, #2352 delta review).
+        let errors = validate_inner("[G\n{new_song}\n[D");
+        assert!(
+            errors.len() >= 2,
+            "two-segment multi-error input should flat_map errors from both \
+             ParseResults; got {} (regression would surface as 1, not 2+)",
+            errors.len()
+        );
+    }
+
     // -- *_with_warnings captures structured output (#1827) ----------------
     //
     // The `#[wasm_bindgen]` wrappers `render_*_with_warnings` call
