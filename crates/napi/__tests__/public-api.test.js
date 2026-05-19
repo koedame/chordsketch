@@ -109,14 +109,20 @@ describe("NAPI public API surface", () => {
     }
   });
 
-  test("chordDiagramSvgWithDefines returns an SVG for a well-formed defines array", () => {
-    // Exercises the wrapper's happy path: validate_defines_pairs accepts a
-    // [name, raw] array, and the lookup is dispatched against the song-level
-    // defines before falling back to the built-in voicing database. Sister-site
-    // to wasm's `chord_diagram_svg_with_defines_empty_array_matches_bare` at
-    // `crates/wasm/src/lib.rs::wasm_tests` (issue #2352 delta review).
-    const svg = m.chordDiagramSvgWithDefines("Gsus4", "guitar", [
-      ["Gsus4", "base-fret 1 frets 3 3 0 0 1 3"],
+  test("chordDiagramSvgWithDefines surfaces a song-level voicing not in the built-in db", () => {
+    // Use a chord name NOT in the built-in guitar voicing table
+    // (`Xyzzy` is the established not-a-chord sentinel — see
+    // `chord_diagram_svg_inner_unknown_chord_returns_none` in
+    // `crates/wasm/src/lib.rs`). Without defines, the bare
+    // `chordDiagramSvg` lookup returns `null`. With a matching
+    // define, the wrapper must route through `validate_defines_pairs`
+    // → `lookup_diagram` and produce an SVG — proving the defines
+    // path runs (not the built-in fallback). Sister-site to wasm's
+    // `chord_diagram_svg_with_defines_empty_array_matches_bare`
+    // (issue #2352 delta review).
+    expect(m.chordDiagramSvg("Xyzzy", "guitar")).toBeNull();
+    const svg = m.chordDiagramSvgWithDefines("Xyzzy", "guitar", [
+      ["Xyzzy", "base-fret 1 frets 3 3 0 0 1 3"],
     ]);
     expect(typeof svg).toBe("string");
     expect(svg).toContain("<svg");
@@ -131,12 +137,16 @@ describe("NAPI public API surface", () => {
     );
   });
 
-  test("validate() pins flat_map shape on multi-error input", () => {
-    // Three unclosed chord brackets must produce at least two ValidationErrors.
-    // A regression that collapses `flat_map(|r| r.errors)` into
-    // `.next().unwrap_or_default().errors` would still pass the single-error
-    // test above, but fail here (issue #2352 delta review L-1).
-    const errs = m.validate("[G\n[D\n[A");
+  test("validate() pins flat_map shape across `{new_song}` boundaries", () => {
+    // Two `{new_song}`-separated segments each with an unclosed chord
+    // produce errors from BOTH segments via
+    // `flat_map(|r| r.errors)` over `result.results`. A regression
+    // that collapsed this to `.next().unwrap_or_default().errors`
+    // would walk only the first segment, returning 1 error here
+    // instead of >= 2. Sister to lib.rs's
+    // `test_validate_inner_collects_errors_across_multi_song_input`
+    // (issue #2352 delta review L-1).
+    const errs = m.validate("[G\n{new_song}\n[D");
     expect(Array.isArray(errs)).toBe(true);
     expect(errs.length).toBeGreaterThanOrEqual(2);
   });

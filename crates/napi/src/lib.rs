@@ -1150,16 +1150,21 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_inner_collects_multiple_errors() {
-        // Three unclosed chord brackets must produce >= 2 entries through
-        // the `flat_map(|r| r.errors)` collection in `validate_inner`. A
-        // refactor that collapsed the flat_map to
-        // `.next().unwrap_or_default().errors` would still pass the
-        // single-error / clean-input tests above but fail here.
-        let errors = validate_inner("[G\n[D\n[A");
+    fn test_validate_inner_collects_errors_across_multi_song_input() {
+        // Two `{new_song}`-separated segments, each with an unclosed
+        // chord, MUST produce errors from BOTH segments via
+        // `result.results.into_iter().flat_map(|r| r.errors)`. A refactor
+        // that collapsed the flat_map into
+        // `.next().unwrap_or_default().errors` would walk only the first
+        // segment's errors, dropping the second song's parse failures —
+        // catastrophic for hosts that validate multi-song .cho files.
+        // This input has 2 ParseResults, each with >= 1 error, so any
+        // surviving entries past `.next()` proves the flat_map is intact.
+        let errors = validate_inner("[G\n{new_song}\n[D");
         assert!(
             errors.len() >= 2,
-            "multi-error input should surface at least two errors, got {}",
+            "two-segment multi-error input should flat_map errors from both \
+             ParseResults; got {} (regression would surface as 1, not 2+)",
             errors.len()
         );
     }
