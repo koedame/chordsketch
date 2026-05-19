@@ -89,12 +89,6 @@ export default defineConfig({
         resolve(here, '../ui-web'),
         resolve(here, '../react'),
         resolve(here, '../ui-irealb-editor'),
-        // The docs SPA (#2506 / ADR-0021) reads the canonical
-        // Markdown under `docs/sdk/` via Vite's `?raw` import so
-        // the GitHub-rendered Markdown and the docs site share a
-        // single source. Listing the repo's `docs/` root is the
-        // narrowest allow-entry that satisfies the resolution.
-        resolve(here, '../../docs'),
       ],
     },
   },
