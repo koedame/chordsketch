@@ -4,12 +4,12 @@
 powers <https://chordsketch.koeda.me> as a published React component
 library. This page is the recipe collection for the most common
 embedding scenarios; copy-paste into a fresh Vite + React 18 app
-(or Next.js, see [§Server-side rendering / Next.js](#server-side-rendering--nextjs)
+(or Next.js, see [§Server-side rendering / Next.js](#recipe-10-server-side-rendering-nextjs)
 below) and it works.
 
 > **Prerequisite.** `npm install @chordsketch/react react react-dom`.
 > The PDF / PNG export bundle is a separate optional peer — see
-> [§Export to PDF](#export-to-pdf) for when to install it.
+> [§Export to PDF](#recipe-5-export-to-pdf) for when to install it.
 
 ## Recipe 1 — Drop in a ChordPro playground in 30 seconds
 

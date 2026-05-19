@@ -42,12 +42,16 @@ actually works in the deployed bundle.
   (`pageerror` listener — covers the pre-#2397 failure surface and
   any future regression in the same class), clicking a bar opens
   the popover dialog.
-- `tests-e2e/docs.spec.ts`: docs SPA mount at `/chordsketch/docs/`
+- `tests-e2e/docs.spec.ts` + `tests-e2e/docs-links.spec.ts`: static
+  docs deploy at `/chordsketch/docs/`
   ([ADR-0021](../../docs/adr/0021-docs-site-co-located-with-playground.md),
-  #2506) — sidebar nav renders the full page registry, navigating
-  to the embed-react recipe loads its content + updates the hash,
-  cold-load via a deep hash route mounts the matching reference
-  page with no uncaught exceptions.
+  #2506, #2514) — sidebar nav renders the full page registry, every
+  clean URL `/chordsketch/docs/<slug>/` mounts a real article,
+  every cross-page docs URL resolves to a registered slug, every
+  in-page `#anchor` resolves to a heading id on the same page,
+  legacy `#/<slug>` hash URLs redirect via the inline shim, and the
+  sidebar / outline / topbar surfaces contain no bare relative
+  `.md` hrefs.
 
 ## Where it runs
 
