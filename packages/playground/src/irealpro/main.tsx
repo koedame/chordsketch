@@ -389,6 +389,9 @@ function PlaygroundApp(): JSX.Element {
               ))}
             </select>
           </label>
+          <a className="btn btn-ghost btn-sm" href="../docs/">
+            Docs
+          </a>
           <a
             className="btn btn-ghost btn-sm"
             href="https://github.com/koedame/chordsketch"

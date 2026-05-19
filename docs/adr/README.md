@@ -98,3 +98,4 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0018](0018-phase-based-shell-orchestrated-workflows.md) | Phase-based shell-orchestrated workflows (declines cc-wf-studio / n8n / Agent SDK as substitutes) | Accepted (2026-05-16) |
 | [0019](0019-batch-mode-autopilot-issue.md) | Batch-mode autopilot-issue workflow (one PR aggregates multiple eligible issues per round) | Accepted (2026-05-17) |
 | [0020](0020-ireal-pro-react-surface.md) | iReal Pro React surface is native React (option (b) MVP), not a `ui-irealb-editor` wrapper | Accepted (2026-05-19) |
+| [0021](0021-docs-site-co-located-with-playground.md) | Docs site is co-located with the playground (option (a), not Docusaurus / VitePress / subdomain) | Accepted (2026-05-19) |

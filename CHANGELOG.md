@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Documentation site at `chordsketch.koeda.me/docs/` (#2506,
+  closes §4 of #2473).** Embedding recipes, per-component API
+  reference for `@chordsketch/react`, and cross-binding render /
+  transpose guides — co-located with the existing playground as a
+  fourth Vite multi-page entry per
+  [ADR-0021](docs/adr/0021-docs-site-co-located-with-playground.md).
+  Canonical Markdown lives under `docs/sdk/`; the docs SPA renders
+  it via `marked` + DOMPurify, hash-routed, with a sidebar + on-page
+  outline. Builds and deploys via the existing
+  `deploy-playground.yml` workflow; covered by
+  `playground-smoke.yml` Playwright assertions on every PR. Root
+  README, `packages/react/README`, and the playground header bars
+  cross-link to the new docs URL.
+
 ### Fixed
 
 - **`chordsketch-ireal` parser now accepts the spec's `n`
