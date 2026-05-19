@@ -24,8 +24,8 @@ import { type ReactNode, useCallback, useRef, useState } from 'react';
  *   - For two logical edits separated by an `await` / another
  *     microtask hop, the pending latch clears between them and both
  *     announcements fire — verified by
- *     `tests/use-announcer.test.tsx` "a fresh announcement after a
- *     previous flush still announces".
+ *     `tests/use-announcer.test.tsx` "cross-tick announcements both
+ *     fire (latch clears between ticks)".
  *   - The empty-then-set transition the hook performs is what makes
  *     a single announcement audible: `aria-live="polite"` only fires
  *     on actual `textContent` changes, so blank-first guarantees the
