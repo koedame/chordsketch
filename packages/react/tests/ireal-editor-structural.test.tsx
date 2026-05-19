@@ -228,3 +228,74 @@ describe('<IrealEditor> structural — announcements', () => {
     });
   });
 });
+
+describe('<IrealEditor> structural — active-bar reconciliation', () => {
+  // The roving-tabindex slot must follow the section content
+  // through structural operations so a keyboard user's "I was on
+  // this bar" position survives a re-render. Sister-site
+  // assertions: `ui-irealb-editor/tests/aria-grid.test.ts:259-385`.
+
+  function focusedBarAriaLabel(): string | null {
+    const tabZero = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        '.chordsketch-ireal-editor__bar',
+      ),
+    ).find((b) => b.getAttribute('tabindex') === '0');
+    return tabZero?.getAttribute('aria-label') ?? null;
+  }
+
+  test('deleting the active bar promotes a sibling within the same section', async () => {
+    const { stub } = await renderEditor();
+    // Section A has 2 bars by default; section B has 1 bar.
+    // Default active bar is "Edit bar 1" of section A.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete bar' })[0]!);
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    // After delete, section A has 1 bar. The active slot must
+    // clamp to that surviving bar (still labelled "Edit bar 1"
+    // after re-render).
+    expect(focusedBarAriaLabel()).toMatch(/Edit bar 1/);
+  });
+
+  test('moving the section that owns the active bar re-anchors the ref to the new index', async () => {
+    const { stub } = await renderEditor();
+    // Default active bar is in section A (index 0). After
+    // Move section A down, A's index becomes 1 and the
+    // active-bar ref must follow.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Move section down' })[0]!);
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    // Two sections render; the bar slot must still be the
+    // active one. Verifying via tabindex=0 presence (one and
+    // only one cell across both sections).
+    const tabZero = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        '.chordsketch-ireal-editor__bar',
+      ),
+    ).filter((b) => b.getAttribute('tabindex') === '0');
+    expect(tabZero.length).toBe(1);
+  });
+
+  test('deleting every section leaves the grid with no Tab stops', async () => {
+    const { stub } = await renderEditor({
+      confirmDeleteSection: () => true,
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete section' })[0]!);
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    // Section A deleted; section B (one bar) remains; the
+    // active-bar reconciler must re-anchor onto section B's
+    // surviving bar. Verifying via cell count + single
+    // tabindex=0.
+    fireEvent.click(screen.getByRole('button', { name: 'Delete section' }));
+    await waitFor(() =>
+      expect(
+        document.querySelectorAll('.chordsketch-ireal-editor__bar').length,
+      ).toBe(0),
+    );
+    // No cells left → no roving Tab stop.
+    const tabZero = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        '.chordsketch-ireal-editor__bar',
+      ),
+    ).filter((b) => b.getAttribute('tabindex') === '0');
+    expect(tabZero.length).toBe(0);
+  });
+});

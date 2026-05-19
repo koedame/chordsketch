@@ -125,16 +125,36 @@ const TIME_NUMERATORS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
 const TIME_DENOMINATORS = [2, 4, 8] as const;
 
 /**
- * Native React iReal Pro chart editor — header metadata form + a
- * read-only bar grid summarising each section's chord stream + a
- * round-trip URL textarea.
+ * Native React iReal Pro chart editor — header metadata form + an
+ * interactive bar grid with structural editing and keyboard
+ * navigation + a round-trip URL textarea + a polite ARIA live
+ * region that announces structural edits.
+ *
+ * The bar grid surfaces:
+ * - ARIA grid semantics (`role="grid"`, `aria-rowcount`,
+ *   `aria-colcount={4}`, `role="row"`, `role="gridcell"`,
+ *   `aria-rowindex` / `aria-colindex`).
+ * - Roving tabindex per W3C APG — exactly one bar cell carries
+ *   `tabindex="0"` (or none for an empty chart).
+ * - Per-section action buttons (rename / move up / move down /
+ *   delete) and per-bar action buttons (move left / move right /
+ *   delete), plus "+ Add section" / "+ Add bar" trailers.
+ * - Keyboard shortcuts on the focused bar cell:
+ *   `Arrow{Left,Right,Up,Down}` / `Home` / `End` for roving
+ *   navigation, `Alt+ArrowLeft`/`Alt+ArrowRight` to reorder, and
+ *   `Delete` / `Backspace` to remove the bar.
  *
  * Per [ADR-0020](../../../docs/adr/0020-ireal-pro-react-surface.md),
- * this is a v0.1.0 MVP: structural section / bar editing,
- * popover-based per-bar chord editing, and grid keyboard navigation
- * are intentionally not implemented here yet. Consumers who need
- * those today should drive `@chordsketch/wasm` directly or consume
- * the playground at <https://chordsketch.koeda.me/chordsketch/irealpro/>.
+ * the remaining v0.1.0 → v0.2.0 parity gap is popover-based
+ * per-bar chord editing — clicking a cell sets the active-bar ref
+ * but does not yet open an edit dialog. Consumers who need
+ * popover editing today should drive `@chordsketch/wasm` directly
+ * or consume the playground at
+ * <https://chordsketch.koeda.me/chordsketch/irealpro/>.
+ *
+ * `promptSectionLabel` / `confirmDeleteSection` props accept
+ * custom resolvers for hosts that want styled modals instead of
+ * the default `window.prompt` / `window.confirm`.
  */
 export function IrealEditor({
   source,
@@ -406,7 +426,7 @@ export function IrealEditor({
         sections[secIndex] = tmp;
         // Re-anchor the active-bar ref against the moved section —
         // see sister-site rationale at
-        // `packages/ui-irealb-editor/src/index.ts:404-417`.
+        // `packages/ui-irealb-editor/src/index.ts:405-417`.
         if (activeBar !== null) {
           if (activeBar.secIndex === secIndex) {
             setActiveBar({ secIndex: secIndex - 1, barIndex: activeBar.barIndex });

@@ -1951,31 +1951,6 @@
   cursor: not-allowed;
 }
 
-.chordsketch-ireal-editor__bar-index {
-  font-size: 0.75rem;
-  color: var(--cs-text-tertiary, #8a8790);
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-}
-
-.chordsketch-ireal-editor__bar-chords {
-  color: var(--cs-crimson-500, #BD1642);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chordsketch-ireal-editor__empty-bars {
-  margin: 0;
-  padding: 0.75rem;
-  font-style: italic;
-  color: var(--cs-text-tertiary, #8a8790);
-  text-align: center;
-  border: 1px dashed var(--cs-border, #d4d1d6);
-  border-radius: 4px;
-}
-
 .chordsketch-ireal-editor__url {
   display: flex;
   flex-direction: column;

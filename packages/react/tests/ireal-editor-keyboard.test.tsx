@@ -202,3 +202,85 @@ describe('<IrealEditor> keyboard — Alt+Arrow reorder', () => {
     expect(stub.serializeIrealb).not.toHaveBeenCalled();
   });
 });
+
+describe('<IrealEditor> keyboard — defense-in-depth dialog guard', () => {
+  test('Delete is a no-op while a role="dialog" descendant is mounted in the editor', async () => {
+    const { container, stub } = await renderEditor(3);
+    const cells = getCells();
+    // Inject a synthetic dialog inside the editor root so the
+    // handler sees it via the descendant query. The guard is
+    // forward-looking — the real popover lands in a follow-up
+    // slice — but the keyboard handler must already refuse to
+    // mutate while a modal owns input.
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    container
+      .querySelector('.chordsketch-ireal-editor')!
+      .appendChild(dialog);
+    cells[1]!.focus();
+    fireEvent.keyDown(cells[1]!, { key: 'Delete' });
+    expect(stub.serializeIrealb).not.toHaveBeenCalled();
+  });
+
+  test('Delete is a no-op while a native <dialog> descendant is mounted', async () => {
+    const { container, stub } = await renderEditor(3);
+    const cells = getCells();
+    // The native HTML5 `<dialog>` element has an implicit
+    // role="dialog" but does NOT match `[role="dialog"]`. The
+    // guard's third branch (`querySelector('dialog')`) is
+    // exercised here so a future popover using `<dialog>`
+    // without an explicit role still disables destructive
+    // shortcuts.
+    const dialog = document.createElement('dialog');
+    container
+      .querySelector('.chordsketch-ireal-editor')!
+      .appendChild(dialog);
+    cells[1]!.focus();
+    fireEvent.keyDown(cells[1]!, { key: 'Delete' });
+    expect(stub.serializeIrealb).not.toHaveBeenCalled();
+  });
+
+  test('Alt+ArrowRight reorder is a no-op under the dialog guard', async () => {
+    const { container, stub } = await renderEditor(3);
+    const cells = getCells();
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    container
+      .querySelector('.chordsketch-ireal-editor')!
+      .appendChild(dialog);
+    cells[0]!.focus();
+    fireEvent.keyDown(cells[0]!, { key: 'ArrowRight', altKey: true });
+    expect(stub.serializeIrealb).not.toHaveBeenCalled();
+  });
+});
+
+describe('<IrealEditor> keyboard — post-delete focus restoration', () => {
+  test('Delete restores focus to the next-sibling bar cell', async () => {
+    const { stub } = await renderEditor(3);
+    const cells = getCells();
+    cells[1]!.focus();
+    fireEvent.keyDown(cells[1]!, { key: 'Delete' });
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    // After delete + re-render, the cell formerly at index 2 now
+    // occupies index 1. The microtask-scheduled focus restoration
+    // lands there.
+    await Promise.resolve();
+    const newCells = getCells();
+    expect(newCells.length).toBe(2);
+    expect(document.activeElement).toBe(newCells[1]);
+  });
+
+  test('Delete on the only bar of a section restores focus to the "+ Add bar" trailer', async () => {
+    const { stub } = await renderEditor(1);
+    const cells = getCells();
+    cells[0]!.focus();
+    fireEvent.keyDown(cells[0]!, { key: 'Delete' });
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(getCells().length).toBe(0);
+    // The trailer button text contains "+ Add bar"; the focused
+    // element should be that button.
+    expect(document.activeElement?.textContent).toContain('+ Add bar');
+  });
+});
+

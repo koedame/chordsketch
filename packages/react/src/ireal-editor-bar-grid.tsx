@@ -7,7 +7,7 @@
 // readers announce it as activatable and Enter / Space natively
 // trigger the (future) popover open.
 
-import { useEffect, useRef, type KeyboardEvent, type ReactElement } from 'react';
+import { useRef, type KeyboardEvent, type ReactElement } from 'react';
 
 import {
   irealChordToString,
@@ -141,6 +141,15 @@ function SectionBlock({
   disabled,
 }: SectionBlockProps): ReactElement {
   const barsCount = section.bars.length;
+  // `rowCount` matches the number of `role="row"` children we
+  // actually render — including 0 for an empty section. Reporting
+  // a higher row count would diverge from the accessibility tree
+  // (ARIA 1.2: `aria-rowcount` SHOULD agree with the rendered row
+  // descendants). Screen-reader verbalisation of "0 rows" is
+  // strictly correct for an empty grid; the user opens the
+  // structural "+ Add bar" trailer (which is sibling to the grid)
+  // to populate the first row. Sister-site comment:
+  // `packages/ui-irealb-editor/src/render.ts:386-394`.
   const rowCount = Math.ceil(barsCount / BARS_PER_ROW);
   const sectionLabel = irealSectionLabelToString(section.label);
 
@@ -291,7 +300,18 @@ function BarCell({
         ref={cellRef}
         type="button"
         className="chordsketch-ireal-editor__bar"
-        aria-label={`Edit bar ${barIndex + 1}`}
+        // Include the rendered chord text in the accessible name
+        // so screen-reader users hear which bar they are on, not
+        // just its index. `text` is `' '` (U+00A0) for an empty
+        // bar; the conditional drops the trailing `: ` in that
+        // case so the name stays "Edit bar N" rather than "Edit
+        // bar N: " (a screen-reader-announced colon followed by
+        // a non-breaking space).
+        aria-label={
+          text.trim().length === 0
+            ? `Edit bar ${barIndex + 1}`
+            : `Edit bar ${barIndex + 1}: ${text}`
+        }
         tabIndex={isActive ? 0 : -1}
         onClick={() => onOpen(secIndex, barIndex)}
         onFocus={() => onActivate({ secIndex, barIndex })}
@@ -350,11 +370,26 @@ function BarCell({
  * rationale.
  *
  * Defense-in-depth: if a popover dialog is mounted anywhere in
- * the ancestor chain, the handler bails. A real browser cannot
- * focus a bar cell while a focus-trap is active; this guard
- * catches a synthesised `keydown` from a test (or a hypothetical
- * future assistive overlay) that bypasses the trap. Mirrors
- * `render.ts:594-609`.
+ * the editor's subtree, the handler bails. A real browser cannot
+ * focus a bar cell while a popover's focus trap is active; this
+ * guard catches a synthesised `keydown` from a test (or a
+ * hypothetical future assistive overlay) that bypasses the trap.
+ * Mirrors `render.ts:594-609`.
+ *
+ * The guard matches against three shapes so the future popover
+ * mount path activates it unconditionally:
+ *   1. The future `.chordsketch-ireal-editor__popover` class —
+ *      the canonical sister-site selector
+ *      (`render.ts:609` checks `.irealb-editor__popover`).
+ *   2. An element with explicit `role="dialog"` — what
+ *      `<BarPopover>` will render at top level.
+ *   3. A native HTML5 `<dialog>` element — whose implicit ARIA
+ *      role is "dialog" but does NOT match `[role="dialog"]`.
+ * A `role="dialog"` host element injected elsewhere inside the
+ * editor by a consumer would also match (3) and disable
+ * shortcuts; that is accepted because shadowing a destructive
+ * key bind behind any modal is a strictly safer default than
+ * shadowing it behind none.
  */
 function handleBarCellKeydown(
   ev: KeyboardEvent<HTMLButtonElement>,
@@ -364,13 +399,9 @@ function handleBarCellKeydown(
   ops: IrealStructuralOps,
   cellEl: HTMLButtonElement | null,
 ): void {
-  // Bail while a popover is open. The popover lands in a later
-  // slice (#2505 follow-up); leaving the guard in place now so
-  // the eventual integration is a one-line change in the popover
-  // mount path instead of a behaviour shift in this handler.
   if (cellEl !== null) {
     const editorRoot = cellEl.closest('.chordsketch-ireal-editor');
-    if (editorRoot !== null && editorRoot.querySelector('[role="dialog"]') !== null) {
+    if (editorRoot !== null && hasOpenPopover(editorRoot)) {
       return;
     }
   }
@@ -440,6 +471,17 @@ function handleBarCellKeydown(
       focusAfterBarDelete(cellEl, secIndex, barIndex);
     });
   }
+}
+
+/** Returns `true` when any popover-shaped modal is mounted as a
+ * descendant of the editor root. See the guard documentation on
+ * `handleBarCellKeydown` for the three shapes recognised. */
+function hasOpenPopover(editorRoot: Element): boolean {
+  return (
+    editorRoot.querySelector('.chordsketch-ireal-editor__popover') !== null ||
+    editorRoot.querySelector('[role="dialog"]') !== null ||
+    editorRoot.querySelector('dialog') !== null
+  );
 }
 
 function focusBarCell(
@@ -528,21 +570,3 @@ export function reconcileActiveBar(
   return prev;
 }
 
-/** Helper that re-validates the active-bar ref against the current
- * `sections` shape on every change, and dispatches an update only
- * when the ref needs to move. Kept inline in the host component
- * (not exported) — exposed here for tests if the host wants to
- * drive the reconciliation manually. */
-export function useReconcileActiveBar(
-  sections: readonly IrealSection[],
-  activeBar: IrealActiveBarRef | null,
-  setActiveBar: (next: IrealActiveBarRef | null) => void,
-): void {
-  useEffect(() => {
-    const next = reconcileActiveBar(activeBar, sections);
-    if (next !== activeBar) {
-      setActiveBar(next);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections]);
-}
