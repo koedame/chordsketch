@@ -10,17 +10,22 @@ React component library for embedding
 lines of React, powered by
 [`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsketch/wasm).
 
-`@chordsketch/react@0.1.0` is the first public release. The ChordPro
-surface (`<ChordSheet>`, `<ChordEditor>`, `<Playground>`,
-`<PdfExport>`, `<Transpose>`, `<ChordDiagram>`, `<SourceEditor>`,
-`<SplitLayout>`, `<RendererPreview>` and the matching hooks) is the
-flagship surface and is feature-complete. The iReal Pro surface
-(`<IrealEditor>`, `<IrealPreview>`, `<IrealPlayground>` and the
-matching hooks) ships an MVP feature set per
-[ADR-0020](https://github.com/koedame/chordsketch/blob/main/docs/adr/0020-ireal-pro-react-surface.md) —
-header metadata editing + read-only bar grid + SVG preview + URL
-round-trip; full popover-based bar editing and structural section
-editing are tracked as follow-up issues.
+`@chordsketch/react@0.1.0` shipped the first publishable release;
+`@chordsketch/react@0.2.0` reaches feature parity for the iReal
+Pro surface. The ChordPro surface (`<ChordSheet>`,
+`<ChordEditor>`, `<Playground>`, `<PdfExport>`, `<Transpose>`,
+`<ChordDiagram>`, `<SourceEditor>`, `<SplitLayout>`,
+`<RendererPreview>` and the matching hooks) is the flagship
+surface and is feature-complete. As of `v0.2.0` the iReal Pro
+surface (`<IrealEditor>`, `<IrealPreview>`,
+`<IrealPlayground>` and the matching hooks) reaches feature
+parity with the private `@chordsketch/ui-irealb-editor` per
+[ADR-0020](https://github.com/koedame/chordsketch/blob/main/docs/adr/0020-ireal-pro-react-surface.md):
+header metadata editing, ARIA-grid bar editing with structural
+section / bar operations (add / rename / delete / move) and
+keyboard navigation (arrow roving + Alt-arrow reorder + Delete /
+Backspace), popover-based per-bar chord editing (chord row + N-th
+ending + symbol picker), SVG preview, and URL round-trip.
 
 ## Installation
 
@@ -369,14 +374,37 @@ export function ChartEditor() {
 Edits to title / composer / style / key root + accidental + mode /
 time numerator + denominator / tempo / transpose round-trip through
 `@chordsketch/wasm`'s `parseIrealb` / `serializeIrealb` and fire
-`onChange` with the new URL. The bar grid is read-only in this
-release per
-[ADR-0020](https://github.com/koedame/chordsketch/blob/main/docs/adr/0020-ireal-pro-react-surface.md);
-deep bar editing remains in the private `@chordsketch/ui-irealb-editor`
-package that backs the playground.
+`onChange` with the new URL. The bar grid is fully interactive
+as of `v0.2.0` per
+[ADR-0020](https://github.com/koedame/chordsketch/blob/main/docs/adr/0020-ireal-pro-react-surface.md):
 
-`readOnly`, `showUrl`, `showBars`, and a custom `errorFallback` are
-all supported. Omit `onChange` to force read-only display.
+- **Structural editing.** Per-section rename / move up / move
+  down / delete + a `+ Add section` trailer; per-bar move left /
+  move right / delete + a `+ Add bar` trailer. The default
+  section-label prompt uses `window.prompt`; pass
+  `promptSectionLabel` / `confirmDeleteSection` to inject styled
+  modals.
+- **Bar popover.** Clicking a bar cell opens a
+  `role="dialog" aria-modal="true"` editor with a focus trap +
+  Escape / outside-click dismissal. Edit start/end barlines,
+  chord rows (root + accidental + 12 named qualities + Custom
+  + optional slash-bass + beat position 1 / 1.5 / … / 4.5; add
+  / remove / reorder), N-th ending (`empty` / `0` (untitled
+  N0) / `1..9`), and musical symbol (None / Segno / Coda / Fine
+  / Fermata / Break + the 11 player-recognised D.C. / D.S.
+  macro variants). Save commits via the host's `emit` path so
+  the URL round-trip stays single-source.
+- **Accessibility.** The bar grid carries `role="grid"` +
+  `aria-rowcount` + `aria-colcount={4}` + `aria-rowindex` /
+  `aria-colindex`, with W3C APG roving tabindex (exactly one
+  cell holds `tabindex="0"`). Keyboard shortcuts on the focused
+  cell: Arrow / Home / End for roving navigation, Alt+Arrow
+  for reorder, Delete / Backspace to remove the bar. Structural
+  edits announce via a polite ARIA live region.
+
+`readOnly`, `showUrl`, `showBars`, `promptSectionLabel`,
+`confirmDeleteSection`, and a custom `errorFallback` are all
+supported. Omit `onChange` to force read-only display.
 
 ### `<IrealPreview>` — SVG preview alone
 
@@ -451,7 +479,7 @@ shorthand (no Unicode translation; the SVG renderer handles that).
 | `applyChordReposition` | Function | Apply a drag-to-reposition event to a ChordPro source. |
 | `lyricsOffsetToSourceColumn` | Function | Lyrics-offset → source-column helper for drag UX. |
 | `useDebounced` | Hook | General-purpose debouncer used by `<ChordEditor>`. |
-| `<IrealEditor>` | Component | Header form + read-only bar grid + URL round-trip for iReal Pro. |
+| `<IrealEditor>` | Component | Header form + interactive bar grid (ARIA grid + roving tabindex + structural editing + popover-based per-bar editing) + URL round-trip for iReal Pro. |
 | `<IrealPreview>` | Component | iReal Pro SVG preview via `renderIrealSvg`. |
 | `<IrealPlayground>` | Component | High-level drop-in iReal Pro playground (editor + preview). |
 | `useIrealParse` | Hook | `irealb://` URL → typed AST. |
