@@ -1833,6 +1833,27 @@
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
 }
 
+/* ARIA live region — visually hidden but kept in the accessibility
+   tree so screen readers (NVDA, VoiceOver) receive polite
+   structural-edit announcements from `useAnnouncer`. Mirrors
+   `.irealb-editor__sr-only` in
+   `packages/ui-irealb-editor/src/style.css` with the
+   `chordsketch-ireal-editor__` prefix used throughout this package. */
+.chordsketch-ireal-editor__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  /* clip-path is the modern replacement for the deprecated clip
+   * property; both are present for full browser coverage. */
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Preview */
 .chordsketch-ireal-preview {
   padding: 0.75rem;

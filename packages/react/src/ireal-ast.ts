@@ -14,18 +14,22 @@
 // (`.claude/rules/fix-propagation.md`) applies here as it would to any
 // renderer sister-site pair.
 //
-// **Helper-function divergence (intentional).** The two files share
-// AST shapes but diverge in convenience helpers:
-//   - This file exports stringifiers (`irealChordRootToString`,
+// **Helper-function parity.** The two files share AST shapes AND now
+// the same helper set:
+//   - Stringifiers (`irealChordRootToString`,
 //     `irealChordQualityToString`, `irealChordToString`,
-//     `irealSectionLabelToString`) used by the read-only bar grid in
-//     `<IrealEditor>`.
-//   - `ui-irealb-editor/src/ast.ts` exports navigation-symbol
-//     canonicalisers (`canonicalSymbolText`, `isDaCapo`,
-//     `isDalSegno`) used by its popover-driven bar editor.
-// Each surface adds the helpers it actually uses; adding a helper
-// here that the other file already has (or vice versa) is a
-// fix-propagation defect, but the current asymmetry is by design.
+//     `irealSectionLabelToString`) used by both the read-only bar grid
+//     in `<IrealEditor>` and the symbol-picker / chord-row displays
+//     in `<BarPopover>`.
+//   - Navigation-symbol canonicalisers (`irealCanonicalSymbolText`,
+//     `irealIsDaCapo`, `irealIsDalSegno`) — sister-site to
+//     `canonicalSymbolText` / `isDaCapo` / `isDalSegno` in
+//     `ui-irealb-editor/src/ast.ts`; the React popover surface uses
+//     these to label the symbol picker and reason about the D.C. /
+//     D.S. family without hand-coding the ordinal expansion.
+// `.claude/rules/fix-propagation.md` applies: any change to either
+// helper here MUST land in `ui-irealb-editor/src/ast.ts` in the same
+// PR and vice versa.
 
 /** Diatonic accidental on a chord root. */
 export type IrealAccidental = 'natural' | 'flat' | 'sharp';
@@ -240,4 +244,67 @@ export function irealChordToString(chord: IrealChord): string {
   const qual = irealChordQualityToString(chord.quality);
   const bass = chord.bass === null ? '' : `/${irealChordRootToString(chord.bass)}`;
   return `${root}${qual}${bass}`;
+}
+
+/** D.C. family predicate — bare `da_capo` and every `da_capo_al_*`
+ * destination shape. Sister-site to `isDaCapo` in
+ * `ui-irealb-editor/src/ast.ts`; the symbol picker in `<BarPopover>`
+ * uses this to group the D.C. options. The check accepts the bare
+ * form too because it IS part of the family even though it carries
+ * no destination. */
+export function irealIsDaCapo(symbol: IrealMusicalSymbol | null): boolean {
+  return symbol === 'da_capo' || (typeof symbol === 'string' && symbol.startsWith('da_capo_al_'));
+}
+
+/** D.S. family predicate — bare `dal_segno` and every `dal_segno_al_*`
+ * destination shape. Sister-site to `isDalSegno` in
+ * `ui-irealb-editor/src/ast.ts`. */
+export function irealIsDalSegno(symbol: IrealMusicalSymbol | null): boolean {
+  return (
+    symbol === 'dal_segno' ||
+    (typeof symbol === 'string' && symbol.startsWith('dal_segno_al_'))
+  );
+}
+
+/** Canonical staff-text label for the D.C. / D.S. / Fine / Break
+ * family — mirrors `MusicalSymbol::canonical_text` in
+ * `crates/ireal/src/ast.rs` and `canonicalSymbolText` in
+ * `ui-irealb-editor/src/ast.ts`. Returns `null` for the glyph-only
+ * variants (`segno`, `coda`, `fermata`) so the caller can fall back
+ * to a SMuFL glyph render. Pure TypeScript implementation — the
+ * wasm bridge does not need to expose this because the JSON keys
+ * already encode every needed bit. */
+export function irealCanonicalSymbolText(symbol: IrealMusicalSymbol): string | null {
+  switch (symbol) {
+    case 'segno':
+    case 'coda':
+    case 'fermata':
+      return null;
+    case 'fine':
+      return 'Fine';
+    case 'break':
+      return 'Break';
+    case 'da_capo':
+      return 'D.C.';
+    case 'da_capo_al_coda':
+      return 'D.C. al Coda';
+    case 'da_capo_al_fine':
+      return 'D.C. al Fine';
+    case 'dal_segno':
+      return 'D.S.';
+    case 'dal_segno_al_coda':
+      return 'D.S. al Coda';
+    case 'dal_segno_al_fine':
+      return 'D.S. al Fine';
+    default: {
+      // Ordinal-bearing variant. Decode by stripping the family
+      // prefix and the `_end` suffix, then composing the canonical
+      // `D.C. al Nth End.` / `D.S. al Nth End.` shape that the Rust
+      // renderer emits.
+      const match = /^(da_capo|dal_segno)_al_(\d+)(st|nd|rd|th)_end$/.exec(symbol);
+      if (!match) return null;
+      const family = match[1] === 'da_capo' ? 'D.C.' : 'D.S.';
+      return `${family} al ${match[2]}${match[3]} End.`;
+    }
+  }
 }

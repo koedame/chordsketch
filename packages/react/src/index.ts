@@ -113,6 +113,9 @@ export {
   irealChordQualityToString,
   irealChordToString,
   irealSectionLabelToString,
+  irealCanonicalSymbolText,
+  irealIsDaCapo,
+  irealIsDalSegno,
 } from './ireal-ast';
 export type {
   IrealAccidental,
