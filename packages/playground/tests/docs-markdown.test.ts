@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DOCS_SDK_PATH_TO_SLUG,
   extractOutline,
   isExternalHttpHref,
   isSafeHref,
@@ -194,6 +195,18 @@ describe('rewriteHref', () => {
     );
   });
 
+  it('passes through root-relative absolute paths unchanged', () => {
+    // A path like `/chordsketch/docs/#/reference` is an absolute path
+    // from the origin root, not a relative `.md` link. The rewriter
+    // must not resolve it against `sourceDir` (which would produce a
+    // wrong GitHub blob URL). Both the single-slash path and one that
+    // coincidentally starts with a docs-known filename are covered.
+    expect(rewriteHref('/chordsketch/docs/#/reference', 'docs/sdk')).toBe(
+      '/chordsketch/docs/#/reference',
+    );
+    expect(rewriteHref('/absolute', 'docs/sdk/tasks')).toBe('/absolute');
+  });
+
   it('passes through fragment-only hrefs untouched', () => {
     expect(rewriteHref('#some-heading', 'docs/sdk/tasks')).toBe('#some-heading');
     expect(rewriteHref('#/reference', 'docs/sdk/tasks')).toBe('#/reference');
@@ -305,5 +318,36 @@ describe('slugifyWithCounter', () => {
     expect(slugifyWithCounter('Intro', counters)).toBe('intro-1');
     expect(slugifyWithCounter('Intro', counters)).toBe('intro-2');
     expect(slugifyWithCounter('Outro', counters)).toBe('outro');
+  });
+});
+
+describe('DOCS_SDK_PATH_TO_SLUG', () => {
+  // This test must stay in lockstep with DOC_GROUPS in pages.ts AND
+  // with DOCS_SDK_PATH_TO_SLUG in markdown.ts. When a new page is
+  // added to DOC_GROUPS, adding its sourcePath → slug entry to
+  // DOCS_SDK_PATH_TO_SLUG but forgetting to update this test (or
+  // vice-versa) produces a failing assertion that stops the drift
+  // before it reaches the deployed docs site.
+  it('contains exactly the source paths registered in DOC_GROUPS', () => {
+    const expected: Record<string, string> = {
+      'docs/sdk/README.md': '',
+      'docs/sdk/tasks/embed-react.md': 'embed-react',
+      'docs/sdk/tasks/render.md': 'render',
+      'docs/sdk/tasks/transpose.md': 'transpose-task',
+      'docs/sdk/reference/README.md': 'reference',
+      'docs/sdk/reference/chord-sheet.md': 'reference/chord-sheet',
+      'docs/sdk/reference/playground.md': 'reference/playground',
+      'docs/sdk/reference/editors.md': 'reference/editors',
+      'docs/sdk/reference/layout.md': 'reference/layout',
+      'docs/sdk/reference/transpose.md': 'reference/transpose',
+      'docs/sdk/reference/chord-diagram.md': 'reference/chord-diagram',
+      'docs/sdk/reference/pdf-export.md': 'reference/pdf-export',
+      'docs/sdk/reference/chord-source-edit.md': 'reference/chord-source-edit',
+      'docs/sdk/reference/ireal-components.md': 'reference/ireal-components',
+      'docs/sdk/reference/ireal-hooks.md': 'reference/ireal-hooks',
+      'docs/sdk/reference/ireal-helpers.md': 'reference/ireal-helpers',
+      'docs/sdk/reference/version.md': 'reference/version',
+    };
+    expect(DOCS_SDK_PATH_TO_SLUG).toEqual(expected);
   });
 });

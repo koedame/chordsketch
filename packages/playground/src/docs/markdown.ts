@@ -220,10 +220,15 @@ export function slugifyWithCounter(text: string, counters: Map<string, number>):
  * docs SPA's hash routes too.
  *
  * Kept in lockstep with `DOC_GROUPS` in `pages.ts` — adding a page
- * means adding both an entry there AND a row here. The unit test
- * for `rewriteHref` is the safety net.
+ * means adding both an entry there AND a row here. The completeness
+ * test `DOCS_SDK_PATH_TO_SLUG contains exactly the DOC_GROUPS source
+ * paths` in `docs-markdown.test.ts` catches drift at unit-test time;
+ * the Playwright test `every cross-page #/<slug> link resolves to a
+ * registered slug` catches it at integration-test time.
+ *
+ * @internal Exported so `docs-markdown.test.ts` can assert completeness.
  */
-const DOCS_SDK_PATH_TO_SLUG: Readonly<Record<string, string>> = {
+export const DOCS_SDK_PATH_TO_SLUG: Readonly<Record<string, string>> = {
   'docs/sdk/README.md': '',
   'docs/sdk/tasks/embed-react.md': 'embed-react',
   'docs/sdk/tasks/render.md': 'render',
@@ -287,6 +292,10 @@ export function rewriteHref(href: string, sourceDir: string): string {
   // leave as-is. The sanitiser hook below handles `javascript:` etc.
   if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return href;
   if (href.startsWith('//')) return href;
+  // Root-relative absolute paths (e.g. `/chordsketch/docs/#/reference`):
+  // pass through unchanged so the browser resolves them against the origin.
+  // Note: `//` is checked first, so this branch only fires for a single `/`.
+  if (href.startsWith('/')) return href;
   if (href.startsWith('#')) return href;
 
   const hashIdx = href.indexOf('#');
