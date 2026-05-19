@@ -109,6 +109,48 @@ describe("NAPI public API surface", () => {
     }
   });
 
+  test("chordDiagramSvgWithDefines surfaces a song-level voicing not in the built-in db", () => {
+    // Use a chord name NOT in the built-in guitar voicing table
+    // (`Xyzzy` is the established not-a-chord sentinel — see
+    // `chord_diagram_svg_inner_unknown_chord_returns_none` in
+    // `crates/wasm/src/lib.rs`). Without defines, the bare
+    // `chordDiagramSvg` lookup returns `null`. With a matching
+    // define, the wrapper must route through `validate_defines_pairs`
+    // → `lookup_diagram` and produce an SVG — proving the defines
+    // path runs (not the built-in fallback). Sister-site to wasm's
+    // `chord_diagram_svg_with_defines_empty_array_matches_bare`
+    // (issue #2352 delta review).
+    expect(m.chordDiagramSvg("Xyzzy", "guitar")).toBeNull();
+    const svg = m.chordDiagramSvgWithDefines("Xyzzy", "guitar", [
+      ["Xyzzy", "base-fret 1 frets 3 3 0 0 1 3"],
+    ]);
+    expect(typeof svg).toBe("string");
+    expect(svg).toContain("<svg");
+  });
+
+  test("chordDiagramSvgWithDefines throws on a malformed defines entry", () => {
+    // The wrapper maps the helper's `String` error into
+    // `Status::InvalidArg` — exercise that map_err to catch a future
+    // refactor that accidentally drops it.
+    expect(() => m.chordDiagramSvgWithDefines("C", "guitar", [["bad"]])).toThrow(
+      /defines\[0\].*length 2/,
+    );
+  });
+
+  test("validate() pins flat_map shape across `{new_song}` boundaries", () => {
+    // Two `{new_song}`-separated segments each with an unclosed chord
+    // produce errors from BOTH segments via
+    // `flat_map(|r| r.errors)` over `result.results`. A regression
+    // that collapsed this to `.next().unwrap_or_default().errors`
+    // would walk only the first segment, returning 1 error here
+    // instead of >= 2. Sister to lib.rs's
+    // `test_validate_inner_collects_errors_across_multi_song_input`
+    // (issue #2352 delta review L-1).
+    const errs = m.validate("[G\n{new_song}\n[D");
+    expect(Array.isArray(errs)).toBe(true);
+    expect(errs.length).toBeGreaterThanOrEqual(2);
+  });
+
   test("transpose: 0 and omitted transpose produce equal output", () => {
     // Regression guard for #1541's warning-routing ancestry: the `transpose`
     // option must be honoured even when its value is the identity. If a

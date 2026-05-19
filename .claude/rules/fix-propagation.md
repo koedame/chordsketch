@@ -88,7 +88,7 @@ Each sister-site group carries a numeric coverage floor enforced by
 | Group | Group floor | Max intra-group skew |
 |---|---|---|
 | Renderers (`render-text`, `render-html`, `render-pdf`) | 80% | 5 pp |
-| Bindings (`chordsketch-ffi`, `chordsketch-napi`, `chordsketch-wasm`) | 65% (target 70% — see #2352) | 10 pp aspirational; structurally ~21 pp until #2352 |
+| Bindings (`chordsketch-ffi`, `chordsketch-napi`, `chordsketch-wasm`) | 70% | 10 pp |
 | `chordsketch-chordpro` (standalone) | 85% | — |
 | Patch (new lines in any PR) | 70% | — |
 
@@ -100,25 +100,28 @@ as a missing match arm: one binding or renderer is diverging from its
 siblings. Severity defaults to Medium, raised to High if the drop is
 in a security-relevant function.
 
-Binding floors are intentionally lower because the lines `llvm-cov` sees
-are mostly marshalling glue plus the napi-derive / wasm-bindgen ABI
-thunks, which are attributed to the `#[napi]` / `#[wasm_bindgen]`
-source line but unreachable from `cargo llvm-cov` (the test binary
-does not link the Node-API / `serde_wasm_bindgen` runtime they call
-into). The public API surface is exercised via language-runtime
-integration tests (jest, wasm_bindgen_test, Python smoke) that
-llvm-cov does not observe. ffi is the lone exception in this group —
-UniFFI emits its own typed error path (`Result<_, ChordSketchError>`)
-rather than a proc-macro ABI thunk, so it lands at ~88% while
-napi/wasm sit at ~67-73%, producing a structural ~21 pp skew that no
-in-process refactor can close. Raising the floor back to 70% and the
-skew back to 10 pp is gated on #2352 (instrumenting jest /
-wasm-bindgen-test / Python smoke under a coverage-instrumented
-runtime). Until #2352 ships, the table above documents both the
-enforced floor (65%) and the aspirational target (70%); the
-aspirational skew is similarly waived. See `codecov.yml` §Bindings
-note for the single source of truth tying the gate values to this
-rationale.
+The bindings group's `lib.rs` files report coverage of pure-Rust
+business logic only. The `#[napi]` / `#[wasm_bindgen]` ABI thunks
+emitted by the proc macros — which are attributed to the source line
+of the macro invocation but unreachable from `cargo llvm-cov` because
+the test binary does not link the Node-API / `serde_wasm_bindgen`
+runtime — were depressing the measured percentage to ~67% (napi) /
+~73% (wasm). #2352 closed that observability gap by moving every
+`#[napi]` / `#[wasm_bindgen]` declaration into a sibling
+`bindings.rs` file in each binding crate and excluding those files
+from coverage measurement via `codecov.yml`'s `ignore:` list. After
+the move, every line `cargo llvm-cov` reports in the bindings group
+is real Rust logic that the unit-test suite can drive, lifting napi
+and wasm above 95% and putting the group skew at ~10 pp (down from
+~21 pp). ffi follows the same pattern via UniFFI's typed-error path,
+which already places ABI glue in a generated file that does not
+participate in coverage. The integration suites for each binding
+(jest, wasm-bindgen-test, Python smoke) continue to exercise the
+ABI thunks end-to-end; they are not the source of the
+project-coverage number, but they remain the line of defence against
+regressions in the thin wrappers themselves. See `codecov.yml`
+§Bindings note for the single source of truth tying the gate values
+to this rationale.
 
 ## Why
 
