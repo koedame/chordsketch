@@ -25,8 +25,6 @@ test.describe('docs site (static)', () => {
     const heading = page.getByRole('heading', { level: 1 });
     await expect(heading).toContainText('ChordSketch SDK');
 
-    // The sidebar lists every group's pages — verify a sample from
-    // each so a missing entry surfaces here.
     await expect(
       sidebar.getByRole('link', { name: 'Embed in a React app' }),
     ).toBeVisible();
@@ -66,8 +64,6 @@ test.describe('docs site (static)', () => {
     page,
   }) => {
     await page.goto('./docs/#/embed-react');
-    // The inline redirect shim updates the URL on load — wait for
-    // the URL change, then verify the matching article is mounted.
     await page.waitForURL(/\/docs\/embed-react\/$/);
     await expect(
       page.getByRole('heading', { level: 2, name: /^Recipe 1\b/ }),

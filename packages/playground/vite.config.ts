@@ -19,11 +19,11 @@ export default defineConfig({
         landing: resolve(here, 'index.html'),
         chordpro: resolve(here, 'chordpro/index.html'),
         irealpro: resolve(here, 'irealpro/index.html'),
-        // /docs/ co-located per ADR-0021. Its own React entry
-        // hosts a Markdown-driven docs SPA that reads the
-        // canonical sources from `docs/sdk/` via Vite's `?raw`
-        // import. Hash-routed; does not load `@chordsketch/wasm`,
-        // so the docs bundle stays light.
+        // /docs/ co-located per ADR-0021. CSS-only entry: the
+        // deployed HTML is emitted by
+        // `scripts/build-docs-static.mjs` after this build runs;
+        // Vite owns only `docs.css` so the asset participates in
+        // the production bundle and gets content-hashed.
         docs: resolve(here, 'docs/index.html'),
       },
     },

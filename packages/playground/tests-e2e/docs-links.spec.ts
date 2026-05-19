@@ -52,35 +52,69 @@ test.describe('docs site link integrity (static)', () => {
       const pageErrors: Error[] = [];
       page.on('pageerror', (err) => pageErrors.push(err));
 
-      await page.goto(urlForSlug(slug));
+      const response = await page.goto(urlForSlug(slug));
+      // A 200 + h1 pair is the binding contract — a stale build
+      // could 404 the slug, and a build-script bug could write an
+      // empty article. Both fail loudly here.
+      expect(response?.status()).toBe(200);
 
       const h1 = page.getByRole('heading', { level: 1 }).first();
       await expect(h1).toBeVisible();
-      await expect(h1).not.toHaveText('Page not found');
+      const h1Text = await h1.textContent();
+      expect(h1Text?.trim().length ?? 0).toBeGreaterThan(0);
 
       expect(pageErrors).toEqual([]);
     });
   }
 
-  test('no rendered article contains a relative .md link', async ({ page }) => {
-    const offenders: { slug: string; href: string; text: string }[] = [];
+  test('no page contains a relative .md link (article + sidebar + topbar)', async ({
+    page,
+  }) => {
+    // Covers article content (rewriter), sidebar nav (build script),
+    // outline (build script), and topbar (build script). All four
+    // surfaces emit hrefs and all four must be SPA-survivable. Per
+    // `.claude/rules/renderer-parity.md`'s sister-site discipline.
+    const offenders: {
+      slug: string;
+      surface: string;
+      href: string;
+      text: string;
+    }[] = [];
 
     for (const slug of REGISTERED_SLUGS) {
       await page.goto(urlForSlug(slug));
-      const hrefs = await page
-        .locator('main a[href]')
-        .evaluateAll((els) =>
-          els.map((el) => ({
-            href: (el as HTMLAnchorElement).getAttribute('href') ?? '',
+      const hrefs = await page.locator('body a[href]').evaluateAll((els) =>
+        els.map((el) => {
+          const a = el as HTMLAnchorElement;
+          const inSidebar =
+            a.closest('aside.docs-sidebar nav.docs-nav') !== null;
+          const inOutline =
+            a.closest('aside.docs-sidebar nav.docs-outline') !== null;
+          const inTopbar = a.closest('header.docs-topbar') !== null;
+          const inMain = a.closest('main') !== null;
+          const surface = inSidebar
+            ? 'sidebar'
+            : inOutline
+              ? 'outline'
+              : inTopbar
+                ? 'topbar'
+                : inMain
+                  ? 'main'
+                  : 'other';
+          return {
+            href: a.getAttribute('href') ?? '',
             text: el.textContent?.trim() ?? '',
-          })),
-        );
-      for (const { href, text } of hrefs) {
-        const isAbsolute = /^https?:\/\//i.test(href) || href.startsWith('mailto:');
+            surface,
+          };
+        }),
+      );
+      for (const { href, text, surface } of hrefs) {
+        const isAbsolute =
+          /^https?:\/\//i.test(href) || href.startsWith('mailto:');
         const isFragment = href.startsWith('#');
         const isAbsolutePath = href.startsWith('/');
         if (!isAbsolute && !isFragment && !isAbsolutePath) {
-          offenders.push({ slug: slug || '(index)', href, text });
+          offenders.push({ slug: slug || '(index)', surface, href, text });
         }
       }
     }

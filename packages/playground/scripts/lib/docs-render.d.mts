@@ -1,9 +1,3 @@
-// Type declarations for `docs-render.mjs`. The implementation is
-// plain JS because it runs in Node (no transpile step) for the
-// build script; the matching test suite at
-// `tests/docs-render.test.ts` is TypeScript and consumes these
-// declarations.
-
 export interface DocPage {
   slug: string;
   title: string;
@@ -25,8 +19,9 @@ export interface OutlineEntry {
 export const DOC_GROUPS: readonly DocGroup[];
 export const DOCS_BASE: string;
 export const REPO_BLOB_BASE: string;
+export const REGISTERED_SLUGS: readonly string[];
 
-export function findPage(slug: string): DocPage | null;
+export function findPage(slug: string): DocPage | undefined;
 export function allPages(): DocPage[];
 
 export function isSafeHref(href: string | null): boolean;

@@ -139,24 +139,27 @@ keep in lockstep with the package surface.
 - No sidebar nav generator. The nav index page is hand-authored
   from the canonical Markdown structure. This is fine for ~13
   pages; an automated generator becomes worthwhile around ~30.
-- Bundle size grows by `marked` (~30 KB minified) plus the docs
-  React entry. The docs entry is its own chunk via Vite's
-  multi-page input, so the chordpro / irealpro routes are not
-  affected.
+- Build-time dependency footprint: `marked` + `jsdom` + `dompurify`
+  run at build time only and never reach the deployed bundle. The
+  Vite docs entry is now a CSS-only ~700 B JS chunk for content
+  hashing; no React, no router, no markdown runtime.
 
 **Mitigations.**
 
-- The docs entry uses the same lazy-loading pattern as the rest of
-  the playground (no `@chordsketch/wasm` import on the docs
-  routes, so the heavy wasm bundle is not fetched).
+- The deployed pages are zero-JS (other than the inline 6-line
+  hash-redirect shim baked into every HTML file), so the docs
+  routes do not load the wasm bundle even transitively.
 - `playground-smoke.yml` adds at least one Playwright assertion
   per docs entry point per
   [`.claude/rules/playground-smoke.md`](../../.claude/rules/playground-smoke.md);
   the docs site participates in the same browser-mount guarantee.
-- The build script's render pipeline is duplicated structurally
-  with the runtime renderer of the React surface; the vitest suite
-  at `tests/docs-render.test.ts` locks the rules (heading slugs,
-  duplicate-counter behaviour, link rewrite output, URI sanitiser).
+- The render pipeline lives in a single Node-side module
+  (`scripts/lib/docs-render.mjs`) imported by both the SSG driver
+  and the vitest suite. URI-scheme denylist parity with
+  `crates/render-html`'s `has_dangerous_uri_scheme` and the React
+  JSX walker's `isSafeHref` is locked by adversarial unit tests
+  (see `tests/docs-render.test.ts`'s "adversarial parity with the
+  Rust suite" block).
 
 ## Alternatives considered
 

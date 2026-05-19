@@ -9,6 +9,11 @@ on:
       - 'packages/ui-web/**'
       - 'packages/npm/**'
       - 'packages/npm-export/**'
+      # The docs SSG reads `docs/sdk/**` from disk at build time (see
+      # `packages/playground/scripts/build-docs-static.mjs`), so Markdown
+      # edits under that tree must trigger a redeploy or the deployed
+      # docs go silently stale.
+      - 'docs/sdk/**'
       - '.github/workflows/deploy-playground.yml'
   workflow_dispatch:
 

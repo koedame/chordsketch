@@ -1,26 +1,19 @@
-// Static-site generator for the docs route.
-//
-// Runs after `vite build` finishes; reads the canonical Markdown
-// sources under `docs/sdk/`, renders each through the shared pipeline
-// in `lib/docs-render.mjs`, and writes one static HTML file per page
-// into `dist/docs/<slug>/index.html` so every page is reachable at a
-// clean URL (e.g. `/chordsketch/docs/embed-react/`) with no
-// JavaScript dependency.
-//
-// The original hash-routed SPA at `dist/docs/index.html` is overwritten
-// by the static index here; legacy `#/<slug>` URLs land on the static
-// index, which carries a tiny inline shim that redirects to the
-// matching clean URL.
-//
-// Architecture: ADR-0021.
+// Static-site generator for the docs route. See ADR-0021.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
   DOC_GROUPS,
   DOCS_BASE,
+  REGISTERED_SLUGS,
   cleanUrlFor,
   extractOutline,
   renderMarkdown,
@@ -33,18 +26,29 @@ const DIST_DIR = resolve(PLAYGROUND_ROOT, 'dist');
 const DOCS_OUT_DIR = resolve(DIST_DIR, 'docs');
 
 const SITE_BASE = '/chordsketch/';
+const ASSETS_DIR = resolve(PLAYGROUND_ROOT, 'dist/assets');
 
-// Legacy hash URLs (from the SPA era, e.g. shared bookmarks) redirect
-// to the matching clean URL on every page load. Inlined so the static
-// pages have zero JS asset dependencies.
-const HASH_REDIRECT_SHIM = `
+// Inlined to keep the static pages zero-JS-asset. The slug allowlist
+// is baked in at build time so an attacker-supplied
+// `/chordsketch/docs/#/../../evil` cannot push the user out of the
+// docs section — unknown slugs fall back to the docs index.
+function hashRedirectShim() {
+  const allowlist = JSON.stringify(
+    REGISTERED_SLUGS.filter((s) => s !== ''),
+  );
+  return `
 (function(){
   var h = window.location.hash;
   if (typeof h !== 'string' || !h.startsWith('#/')) return;
-  var slug = h.slice(2).replace(/\\/$/, '').split('?')[0];
-  if (!slug) { window.location.replace('${DOCS_BASE}'); return; }
+  var slug = h.slice(2).replace(/\\/$/, '').split('?')[0].split('#')[0];
+  var ok = ${allowlist};
+  if (!slug || ok.indexOf(slug) === -1) {
+    window.location.replace('${DOCS_BASE}');
+    return;
+  }
   window.location.replace('${DOCS_BASE}' + slug + '/');
 })();`.trim();
+}
 
 function escapeText(value) {
   return value
@@ -100,21 +104,31 @@ function topbarHtml() {
 </header>`;
 }
 
+// Vite content-hashes the docs CSS at build time and we can't predict
+// the hash. Scan the assets directory for the docs entry's CSS rather
+// than regex-parsing the just-built HTML — the regex would silently
+// pick the wrong file if a future plugin injects another stylesheet
+// link ahead of the docs entry's.
 function findCssAssetUrl() {
-  const viteHtml = resolve(DOCS_OUT_DIR, 'index.html');
-  if (!existsSync(viteHtml)) {
+  if (!existsSync(ASSETS_DIR)) {
     throw new Error(
-      `Expected Vite to have produced ${viteHtml}; run \`vite build\` first.`,
+      `Expected Vite to have produced ${ASSETS_DIR}; run \`vite build\` first.`,
     );
   }
-  const html = readFileSync(viteHtml, 'utf8');
-  const m = html.match(/href="([^"]+\.css)"/);
-  if (m === null) {
+  const candidates = readdirSync(ASSETS_DIR).filter(
+    (f) => f.startsWith('docs-') && f.endsWith('.css'),
+  );
+  if (candidates.length === 0) {
     throw new Error(
-      'Could not find a CSS asset href in the Vite-built docs/index.html.',
+      `No docs-*.css file under ${ASSETS_DIR}; Vite did not emit the docs entry's CSS.`,
     );
   }
-  return m[1];
+  if (candidates.length > 1) {
+    throw new Error(
+      `Multiple docs-*.css candidates under ${ASSETS_DIR} (${candidates.join(', ')}); ambiguous.`,
+    );
+  }
+  return `${SITE_BASE}assets/${candidates[0]}`;
 }
 
 function pageHtml({ page, contentHtml, outline, cssHref }) {
@@ -132,7 +146,7 @@ function pageHtml({ page, contentHtml, outline, cssHref }) {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" />
   <link rel="stylesheet" href="${cssHref}" />
-  <script>${HASH_REDIRECT_SHIM}</script>
+  <script>${hashRedirectShim()}</script>
 </head>
 <body>
   <div class="docs-shell">
@@ -158,6 +172,21 @@ function ensureDir(p) {
   mkdirSync(p, { recursive: true });
 }
 
+function renderOnePage({ page, cssHref }) {
+  const sourceFile = resolve(REPO_ROOT, page.sourcePath);
+  const source = readFileSync(sourceFile, 'utf8');
+  const contentHtml = renderMarkdown(source, page.sourcePath);
+  const outline = extractOutline(source);
+  const html = pageHtml({ page, contentHtml, outline, cssHref });
+  const outFile =
+    page.slug === ''
+      ? resolve(DOCS_OUT_DIR, 'index.html')
+      : resolve(DOCS_OUT_DIR, page.slug, 'index.html');
+  ensureDir(dirname(outFile));
+  writeFileSync(outFile, html);
+  return outFile;
+}
+
 function main() {
   if (!existsSync(DIST_DIR)) {
     throw new Error(`Missing ${DIST_DIR}; run \`vite build\` first.`);
@@ -166,18 +195,16 @@ function main() {
   let written = 0;
   for (const group of DOC_GROUPS) {
     for (const page of group.pages) {
-      const sourceFile = resolve(REPO_ROOT, page.sourcePath);
-      const source = readFileSync(sourceFile, 'utf8');
-      const contentHtml = renderMarkdown(source, page.sourcePath);
-      const outline = extractOutline(source);
-      const html = pageHtml({ page, contentHtml, outline, cssHref });
-      const outFile =
-        page.slug === ''
-          ? resolve(DOCS_OUT_DIR, 'index.html')
-          : resolve(DOCS_OUT_DIR, page.slug, 'index.html');
-      ensureDir(dirname(outFile));
-      writeFileSync(outFile, html);
-      written++;
+      try {
+        renderOnePage({ page, cssHref });
+        written++;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `build-docs-static: failed rendering slug=${JSON.stringify(page.slug)} sourcePath=${JSON.stringify(page.sourcePath)}: ${message}`,
+          { cause: err },
+        );
+      }
     }
   }
   console.log(
@@ -185,4 +212,13 @@ function main() {
   );
 }
 
-main();
+// Only run when invoked directly as a script. Tests import the
+// helpers below without triggering a build.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}
+
+// Exported only for the vitest suite so the failure modes
+// (`findCssAssetUrl` on a missing dist, etc.) can be exercised
+// without spawning a second `vite build`.
+export { findCssAssetUrl, hashRedirectShim, pageHtml, sidebarHtml };

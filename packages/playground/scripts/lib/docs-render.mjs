@@ -1,21 +1,8 @@
-// Pure Node-side render pipeline for the docs SSG.
-//
-// Imported by:
-//   - `scripts/build-docs-static.mjs` (production build)
-//   - `tests/docs-render.test.ts` (vitest unit suite)
-//
-// JSDOM + DOMPurify supply the sanitiser; `marked` parses Markdown.
-// Heading slugs match GitHub-style anchors. The link renderer routes
-// every relative href through `rewriteHref` so docs/sdk/<page>.md
-// links collapse to clean URLs and other repo paths point at
-// github.com.
-//
-// Per `.claude/rules/sanitizer-security.md`: every string that
-// reaches an HTML attribute passes through DOMPurify here. The
 // URI-scheme denylist mirrors `crates/render-html`'s
 // `has_dangerous_uri_scheme` and the React JSX walker's
 // `isSafeHref` — sister-site parity per
-// `.claude/rules/fix-propagation.md`.
+// `.claude/rules/sanitizer-security.md` + `.claude/rules/fix-propagation.md`.
+// Any addition or removal MUST land in all three sites in the same PR.
 
 import { Marked } from 'marked';
 import { JSDOM } from 'jsdom';
@@ -155,17 +142,42 @@ export const DOC_GROUPS = [
   },
 ];
 
+// Slugs land verbatim in URL segments, in `path.resolve(DOCS_OUT_DIR,
+// slug, 'index.html')`, and in HTML id lookups. Constraining the
+// shape here at module load forecloses path-traversal-shaped slugs
+// (e.g. `../foo`) without trusting downstream consumers to validate.
+const SLUG_RE = /^(?:|[a-z0-9-]+(?:\/[a-z0-9-]+)*)$/;
+const SOURCE_PATH_RE = /^docs\/sdk\/[A-Za-z0-9/_-]+\.md$/;
+
 const PAGE_BY_SOURCE = new Map();
 const PAGE_BY_SLUG = new Map();
 for (const group of DOC_GROUPS) {
   for (const page of group.pages) {
+    if (!SLUG_RE.test(page.slug)) {
+      throw new Error(
+        `Invalid docs slug ${JSON.stringify(page.slug)} — must match ${SLUG_RE}.`,
+      );
+    }
+    if (!SOURCE_PATH_RE.test(page.sourcePath)) {
+      throw new Error(
+        `Invalid sourcePath ${JSON.stringify(page.sourcePath)} for slug ${JSON.stringify(page.slug)} — must match ${SOURCE_PATH_RE}.`,
+      );
+    }
+    if (PAGE_BY_SLUG.has(page.slug)) {
+      throw new Error(`Duplicate docs slug ${JSON.stringify(page.slug)}.`);
+    }
+    if (PAGE_BY_SOURCE.has(page.sourcePath)) {
+      throw new Error(
+        `Duplicate sourcePath ${JSON.stringify(page.sourcePath)}.`,
+      );
+    }
     PAGE_BY_SOURCE.set(page.sourcePath, page);
     PAGE_BY_SLUG.set(page.slug, page);
   }
 }
 
 export function findPage(slug) {
-  return PAGE_BY_SLUG.get(slug) ?? null;
+  return PAGE_BY_SLUG.get(slug);
 }
 
 export function allPages() {
@@ -173,6 +185,10 @@ export function allPages() {
   for (const group of DOC_GROUPS) for (const p of group.pages) out.push(p);
   return out;
 }
+
+/** Frozen list of every registered slug, used by the inline shim
+ *  to refuse navigation to unknown targets. */
+export const REGISTERED_SLUGS = Object.freeze([...PAGE_BY_SLUG.keys()]);
 
 const DANGEROUS_URI_SCHEMES = [
   'javascript:',
@@ -254,7 +270,14 @@ export function slugify(text) {
     .replace(/^-|-$/g, '');
 }
 export function slugifyWithCounter(text, counters) {
-  const base = slugify(text);
+  let base = slugify(text);
+  if (base === '') {
+    // Headings containing only non-ASCII characters (e.g. Japanese)
+    // collapse to an empty slug under the GitHub-flavoured rule.
+    // Emit a deterministic fallback so anchors stay unique instead of
+    // colliding on the empty key.
+    base = 'heading';
+  }
   const count = counters.get(base) ?? 0;
   counters.set(base, count + 1);
   return count === 0 ? base : `${base}-${count}`;
@@ -277,11 +300,26 @@ function dirOf(p) {
   const i = p.lastIndexOf('/');
   return i === -1 ? '' : p.slice(0, i);
 }
+// Throws when a relative path escapes the repo root so the build
+// surfaces author typos like `../../../../foo.md` instead of
+// silently emitting a github.com URL to a non-existent file.
+class RelativePathEscapesRoot extends Error {
+  constructor(baseDir, rel) {
+    super(
+      `Relative path "${rel}" from "${baseDir}" climbs above the repo root.`,
+    );
+    this.name = 'RelativePathEscapesRoot';
+  }
+}
+
 function resolveRelative(baseDir, rel) {
   const segments = baseDir.split('/').filter(Boolean);
   for (const seg of rel.split('/')) {
     if (seg === '' || seg === '.') continue;
     if (seg === '..') {
+      if (segments.length === 0) {
+        throw new RelativePathEscapesRoot(baseDir, rel);
+      }
       segments.pop();
       continue;
     }
@@ -304,20 +342,17 @@ export function cleanUrlFor(slug, hashSuffix = '') {
  */
 export function rewriteHref(href, sourceDir) {
   if (href === '') return href;
-  // Absolute / scheme-qualified / protocol-relative /
-  // root-relative / fragment-only: leave as-is. The protocol-
-  // relative check (`//`) is listed before the root-relative
-  // check (`/`) so the longer prefix wins.
+  // Absolute / scheme-qualified / protocol-relative / root-relative:
+  // pass through. The protocol-relative test (`//`) MUST run before
+  // the root-relative test (`/`) so the longer prefix wins.
   if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return href;
   if (href.startsWith('//')) return href;
   if (href.startsWith('/')) return href;
 
-  // SPA-era hash routes like `#/reference/chord-sheet` and
-  // `#/embed-react` survive in the source markdown for compatibility
-  // with the GitHub repo viewer. Translate them to the static deploy's
-  // clean URL when the target is a registered slug; leave them as
-  // plain in-page anchors otherwise (the browser will scroll to the
-  // matching heading id natively).
+  // Hash routes like `#/reference/chord-sheet` are SSG-only and only
+  // make sense when the slug is registered; translate to a clean URL.
+  // Unknown `#/<x>` hashes pass through as a literal anchor so the
+  // browser still attempts a native fragment scroll.
   if (href.startsWith('#/')) {
     const trimmed = href.slice(2).replace(/\/$/, '');
     const slug = trimmed.split('?')[0];
@@ -325,9 +360,18 @@ export function rewriteHref(href, sourceDir) {
   }
   if (href.startsWith('#')) return href;
 
+  // Order matters: strip the query string before the hash so a link
+  // like `[x](README.md?v=1#heading)` resolves the right basename
+  // for `PAGE_BY_SOURCE` lookup. The query is dropped on rewrite
+  // since static-deploy URLs have no query-string semantics.
+  const queryIdx = href.indexOf('?');
   const hashIdx = href.indexOf('#');
-  const pathPart = hashIdx === -1 ? href : href.slice(0, hashIdx);
+  let pathEnd = href.length;
+  if (queryIdx !== -1) pathEnd = Math.min(pathEnd, queryIdx);
+  if (hashIdx !== -1) pathEnd = Math.min(pathEnd, hashIdx);
+  const pathPart = href.slice(0, pathEnd);
   const hashSuffix = hashIdx === -1 ? '' : href.slice(hashIdx);
+
   const resolved = resolveRelative(sourceDir, pathPart);
 
   const target = PAGE_BY_SOURCE.get(resolved);
@@ -338,18 +382,28 @@ export function rewriteHref(href, sourceDir) {
   return `${REPO_BLOB_BASE}${resolved}${hashSuffix}`;
 }
 
-// Shared JSDOM + DOMPurify across calls — both are pure, both
-// short-lived enough that re-creating per-call would be wasteful.
+// Module-scoped: JSDOM + DOMPurify construction is non-trivial and
+// both instances are safe to reuse across sanitize() calls (the hook
+// reads only the node passed in).
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 const DOMPurify = createDOMPurify(dom.window);
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (!(node instanceof dom.window.Element)) return;
-  const href = node.getAttribute('href');
-  if (href !== null && !isSafeHref(href)) node.removeAttribute('href');
+  const rawHref = node.getAttribute('href');
+  const hrefIsSafe = rawHref === null || isSafeHref(rawHref);
+  if (!hrefIsSafe) node.removeAttribute('href');
   const src = node.getAttribute('src');
   if (src !== null && !isSafeHref(src)) node.removeAttribute('src');
   if (node.hasAttribute('target')) node.removeAttribute('target');
-  if (node.tagName === 'A' && href !== null && isExternalHttpHref(href)) {
+  // External-link decoration runs ONLY after the scheme guard has
+  // accepted the href; otherwise a future denylist change could leak
+  // `target="_blank"` onto an anchor whose href was just stripped.
+  if (
+    node.tagName === 'A' &&
+    hrefIsSafe &&
+    rawHref !== null &&
+    isExternalHttpHref(rawHref)
+  ) {
     node.setAttribute('target', '_blank');
     node.setAttribute('rel', 'noreferrer noopener');
   }
