@@ -109,6 +109,38 @@ describe("NAPI public API surface", () => {
     }
   });
 
+  test("chordDiagramSvgWithDefines returns an SVG for a well-formed defines array", () => {
+    // Exercises the wrapper's happy path: validate_defines_pairs accepts a
+    // [name, raw] array, and the lookup is dispatched against the song-level
+    // defines before falling back to the built-in voicing database. Sister-site
+    // to wasm's `chord_diagram_svg_with_defines_empty_array_matches_bare` at
+    // `crates/wasm/src/lib.rs::wasm_tests` (issue #2352 delta review).
+    const svg = m.chordDiagramSvgWithDefines("Gsus4", "guitar", [
+      ["Gsus4", "base-fret 1 frets 3 3 0 0 1 3"],
+    ]);
+    expect(typeof svg).toBe("string");
+    expect(svg).toContain("<svg");
+  });
+
+  test("chordDiagramSvgWithDefines throws on a malformed defines entry", () => {
+    // The wrapper maps the helper's `String` error into
+    // `Status::InvalidArg` — exercise that map_err to catch a future
+    // refactor that accidentally drops it.
+    expect(() => m.chordDiagramSvgWithDefines("C", "guitar", [["bad"]])).toThrow(
+      /defines\[0\].*length 2/,
+    );
+  });
+
+  test("validate() pins flat_map shape on multi-error input", () => {
+    // Three unclosed chord brackets must produce at least two ValidationErrors.
+    // A regression that collapses `flat_map(|r| r.errors)` into
+    // `.next().unwrap_or_default().errors` would still pass the single-error
+    // test above, but fail here (issue #2352 delta review L-1).
+    const errs = m.validate("[G\n[D\n[A");
+    expect(Array.isArray(errs)).toBe(true);
+    expect(errs.length).toBeGreaterThanOrEqual(2);
+  });
+
   test("transpose: 0 and omitted transpose produce equal output", () => {
     // Regression guard for #1541's warning-routing ancestry: the `transpose`
     // option must be honoured even when its value is the identity. If a

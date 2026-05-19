@@ -1150,6 +1150,21 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_inner_collects_multiple_errors() {
+        // Three unclosed chord brackets must produce >= 2 entries through
+        // the `flat_map(|r| r.errors)` collection in `validate_inner`. A
+        // refactor that collapsed the flat_map to
+        // `.next().unwrap_or_default().errors` would still pass the
+        // single-error / clean-input tests above but fail here.
+        let errors = validate_inner("[G\n[D\n[A");
+        assert!(
+            errors.len() >= 2,
+            "multi-error input should surface at least two errors, got {}",
+            errors.len()
+        );
+    }
+
+    #[test]
     fn test_validate_defines_pairs_well_formed_succeeds() {
         let pairs = validate_defines_pairs(vec![
             vec![
