@@ -74,7 +74,7 @@ the implementation phase to apply in one PR, or exit cleanly with
    | Axis | Question |
    |------|----------|
    | `clarity` | Is the desired end state unambiguous from the issue? |
-   | `scope` | Bounded change? `size:small`/`size:medium` positive; single-crate positive; cross-cutting refactors negative. |
+   | `scope` | Bounded change? Single-crate positive; cross-cutting refactors and changes that span renderer / binding sister-site groups (see [`.claude/rules/fix-propagation.md`](../../../rules/fix-propagation.md) §Sister-Site Groups) negative. The `size:*` labels MUST NOT enter this score — per [`.claude/rules/effort-is-not-a-filter.md`](../../../rules/effort-is-not-a-filter.md), effort estimates are a triage planning aid, not a selection gate. |
    | `verifiability` | Can `cargo fmt --check && cargo clippy --workspace -- -D warnings && cargo test --workspace` confirm success? |
    | `independence` | Avoids secrets, human design judgement, new ADRs per [`.claude/rules/adr-discipline.md`](../../../rules/adr-discipline.md), and cross-team coordination? |
 

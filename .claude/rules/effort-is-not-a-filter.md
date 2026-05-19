@@ -31,12 +31,16 @@ thing its size changes is *how the work is split into PRs*, not
 
 Two structural failure modes motivate this rule:
 
-1. **Effort estimates in this codebase are almost always
-   fabricated.** [`evidence-based-claims.md`](evidence-based-claims.md)
-   already prohibits stating fabricated durations as fact in PRs,
-   comments, and decisions. Filtering on a fabricated number
-   compounds the original error: a weakly-grounded guess
-   ("this looks like 8 hours") becomes a binary go / no-go
+1. **Effort estimates in this codebase are not grounded in
+   measurement.** The `size:*` labels at
+   [`issue-workflow.md`](issue-workflow.md) carry no recorded
+   provenance — there is no convention for the issue author to
+   cite a benchmark, a prior similar PR, or a measurement.
+   [`evidence-based-claims.md`](evidence-based-claims.md) already
+   prohibits stating fabricated durations as fact in PRs,
+   comments, and decisions. Filtering on a number with no recorded
+   grounding compounds the original problem: a weakly-grounded
+   guess ("this looks like 8 hours") becomes a binary go / no-go
    decision the guess never had the precision to support.
 
 2. **The "single PR scope" framing conflates selection with PR
@@ -76,7 +80,11 @@ When surveying candidate work:
    candidate requires access Y that the executor doesn't have",
    or "every candidate has no current value because of project
    state Z". "Every candidate looks like multi-day work" is not
-   an acceptable reason.
+   an acceptable reason. **If any single candidate is feasible,
+   unblocked, and valuable, it is selectable — the existence of
+   smaller-looking alternatives in the same survey set does not
+   tip the survey into "nothing selectable", and the large
+   candidate's size alone never does either.**
 
 ## Scope
 
@@ -88,9 +96,10 @@ Applies to:
 - PR scope decisions inside an active feature branch — a
   cross-cutting concern surfaced mid-PR is not deferred because
   "this PR is getting long." See
-  [`pr-workflow.md`](pr-workflow.md) §"All findings, every
-  severity, resolved in-PR" for the sibling rule that already
-  forbids deferring review findings on similar grounds.
+  [`pr-workflow.md`](pr-workflow.md) §"Automated Flow (default)"
+  step 4 (the bolded clause "All findings — every severity —
+  resolved in-PR") for the sibling rule that already forbids
+  deferring review findings on similar grounds.
 
 Does not apply to:
 
@@ -102,9 +111,13 @@ Does not apply to:
   selected.** That is sequencing within a chosen scope, not
   selection from the candidate pool.
 - **Single-session capacity warnings about a clearly-bounded
-  blocker** (e.g. "this needs a 30-minute external service call
-  that the executor can't make right now"). The blocker, not the
-  duration, is the operative reason.
+  blocker** (e.g. "this needs an external service call the
+  executor lacks credentials for", or "this needs a macOS host
+  the executor doesn't have access to"). The blocker — the
+  missing input, the missing access, the missing tool — is the
+  operative reason. Duration framing must NOT be substituted in
+  here ("this would take all day" is still an effort filter and
+  still prohibited).
 
 ## Cross-references
 
