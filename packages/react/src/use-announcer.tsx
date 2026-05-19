@@ -8,20 +8,38 @@ import { type ReactNode, useCallback, useRef, useState } from 'react';
  * `packages/ui-irealb-editor/src/index.ts` (lines 105-127, the
  * `announce` closure).
  *
+ * **Same-tick coalescing semantics.** The hook flows through React's
+ * state-update pipeline, which batches setState calls inside event
+ * handlers AND inside `queueMicrotask` callbacks under React 18+
+ * concurrent rendering. Two `announce()` calls in the same task
+ * therefore produce ONE observable empty → message transition, with
+ * the last announcement winning. This is a deliberate semantic
+ * difference from the imperative reference at
+ * `ui-irealb-editor/src/index.ts:117-126`, where each call mutates
+ * `textContent` directly with no batching. The React port accepts
+ * the coalescing because:
+ *   - React's commit boundary IS the screen-reader change trigger;
+ *     splitting one logical edit across two batched same-tick
+ *     announces would announce only the last anyway.
+ *   - For two logical edits separated by an `await` / another
+ *     microtask hop, the pending latch clears between them and both
+ *     announcements fire — verified by
+ *     `tests/use-announcer.test.tsx` "a fresh announcement after a
+ *     previous flush still announces".
+ *   - The empty-then-set transition the hook performs is what makes
+ *     a single announcement audible: `aria-live="polite"` only fires
+ *     on actual `textContent` changes, so blank-first guarantees the
+ *     screen reader observes the transition.
+ *
  * The hook returns:
  * - `announce(message)` — push a sentence into the live region.
- *   Two consecutive identical messages still produce two announcement
- *   events because the hook blanks the region first and then sets
- *   the message in a queued microtask, so the live region observes
- *   the empty-then-populated transition as a change. Without the
- *   blank-first transition `aria-live="polite"` would only fire when
- *   `textContent` actually changes — meaning two identical
- *   announcements would otherwise be silent on every screen reader
- *   that follows the spec (NVDA, VoiceOver in particular).
+ *   Same-tick coalescing applies per the section above; cross-tick
+ *   announcements all fire.
  * - `liveRegion` — a JSX node the caller renders once inside the
  *   editor. The element is visually hidden via the
- *   `chordsketch-ireal-editor__sr-only` utility class but stays in
- *   the accessibility tree.
+ *   `chordsketch-ireal-editor__sr-only` utility class declared in
+ *   `packages/react/src/styles.css` but stays in the accessibility
+ *   tree.
  *
  * The live region is rendered as a sibling of the bar grid (not
  * inside it) so a structural rerender of the grid does not detach

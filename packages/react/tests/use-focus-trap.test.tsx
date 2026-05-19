@@ -133,4 +133,19 @@ describe('useFocusTrap', () => {
     });
     expect(document.activeElement).toBe(anchor);
   });
+
+  test('latest-ref: re-rendering with a different onDismiss calls the latest one', () => {
+    // Guards against the stale-closure footgun an inline-lambda
+    // host would otherwise hit. The hook installs its listeners
+    // once per mount (gated on `enabled`); without the latest-ref
+    // pattern, Escape would invoke the FIRST `onDismiss` even
+    // after the parent re-rendered with a new function identity.
+    const firstHandler = vi.fn();
+    const secondHandler = vi.fn();
+    const { rerender } = render(<Harness onDismiss={firstHandler} />);
+    rerender(<Harness onDismiss={secondHandler} />);
+    fireEvent.keyDown(screen.getByTestId('dialog'), { key: 'Escape' });
+    expect(firstHandler).not.toHaveBeenCalled();
+    expect(secondHandler).toHaveBeenCalledTimes(1);
+  });
 });

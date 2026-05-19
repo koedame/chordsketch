@@ -55,16 +55,18 @@ export interface UseFocusTrapOptions {
  *   click; the listener is installed during the open commit, so a
  *   stray pointerdown re-entering this branch would otherwise close
  *   the dialog the same task it mounted).
- * - On unmount the hook returns focus to `anchorRef.current` when
- *   it is still in the document. A detached anchor (host
- *   re-rendered the bar cell while the popover was open — the
- *   common case after a Save) silently falls through.
+ * - On cleanup (unmount OR `enabled` flipping from true → false)
+ *   the hook returns focus to `anchorRef.current` when it is still
+ *   in the document. A detached anchor (host re-rendered the bar
+ *   cell while the popover was open — the common case after a Save)
+ *   silently falls through.
  *
  * The hook deliberately attaches its document `pointerdown`
  * listener inside `useEffect` (not `useLayoutEffect`) so the
  * listener installs ONE task after the open click has finished
  * propagating, closing the race documented at
- * `popover.ts:458-466`.
+ * `popover.ts:452-466` (the "Outside-click dismissal" rationale
+ * comment plus the listener install).
  */
 export function useFocusTrap(
   dialogRef: RefObject<HTMLElement | null>,
