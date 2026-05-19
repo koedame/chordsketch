@@ -35,6 +35,14 @@ export interface DocPage {
   slug: string;
   title: string;
   source: string;
+  /**
+   * Repo-relative path of the page's Markdown source (e.g.
+   * `docs/sdk/tasks/render.md`). Used by the Markdown renderer to
+   * resolve relative links (`../foo.md`, `tasks/bar.md`) against
+   * the right directory so they survive the docs SPA's hash-routed
+   * deploy. See `markdown.ts::rewriteHref`.
+   */
+  sourcePath: string;
   /** Short description shown on the index card / nav link. */
   blurb: string;
 }
@@ -58,6 +66,7 @@ export const DOC_GROUPS: readonly DocGroup[] = [
         blurb:
           'Unified entry point for using ChordSketch from any language or runtime.',
         source: gettingStartedSource,
+        sourcePath: 'docs/sdk/README.md',
       },
     ],
   },
@@ -70,6 +79,7 @@ export const DOC_GROUPS: readonly DocGroup[] = [
         blurb:
           '10 copy-paste recipes for the @chordsketch/react component surface.',
         source: embedReactSource,
+        sourcePath: 'docs/sdk/tasks/embed-react.md',
       },
       {
         slug: 'render',
@@ -77,6 +87,7 @@ export const DOC_GROUPS: readonly DocGroup[] = [
         blurb:
           'Render to HTML, plain text, or PDF — same operation, every host.',
         source: renderSource,
+        sourcePath: 'docs/sdk/tasks/render.md',
       },
       {
         slug: 'transpose-task',
@@ -84,6 +95,7 @@ export const DOC_GROUPS: readonly DocGroup[] = [
         blurb:
           'Transpose by N semitones across every binding (CLI / wasm / FFI / Rust).',
         source: transposeTaskSource,
+        sourcePath: 'docs/sdk/tasks/transpose.md',
       },
     ],
   },
@@ -96,6 +108,7 @@ export const DOC_GROUPS: readonly DocGroup[] = [
         blurb:
           'Per-component and per-hook reference for every export.',
         source: referenceIndexSource,
+        sourcePath: 'docs/sdk/reference/README.md',
       },
       {
         slug: 'reference/chord-sheet',
@@ -103,6 +116,7 @@ export const DOC_GROUPS: readonly DocGroup[] = [
         blurb:
           '<ChordSheet>, renderChordproAst, useChordRender, useChordproAst.',
         source: refChordSheetSource,
+        sourcePath: 'docs/sdk/reference/chord-sheet.md',
       },
       {
         slug: 'reference/playground',
@@ -110,6 +124,7 @@ export const DOC_GROUPS: readonly DocGroup[] = [
         blurb:
           'One-component editor + preview + transpose embed.',
         source: refPlaygroundSource,
+        sourcePath: 'docs/sdk/reference/playground.md',
       },
       {
         slug: 'reference/editors',
@@ -117,12 +132,14 @@ export const DOC_GROUPS: readonly DocGroup[] = [
         blurb:
           '<ChordEditor>, <SourceEditor>, chordProLanguage, chordProTagTable.',
         source: refEditorsSource,
+        sourcePath: 'docs/sdk/reference/editors.md',
       },
       {
         slug: 'reference/layout',
         title: 'Layout primitives',
         blurb: '<SplitLayout>, <RendererPreview>.',
         source: refLayoutSource,
+        sourcePath: 'docs/sdk/reference/layout.md',
       },
       {
         slug: 'reference/transpose',
@@ -130,12 +147,14 @@ export const DOC_GROUPS: readonly DocGroup[] = [
         blurb:
           'Accessible ± / reset control + matching hook for arbitrary UIs.',
         source: refTransposeSource,
+        sourcePath: 'docs/sdk/reference/transpose.md',
       },
       {
         slug: 'reference/chord-diagram',
         title: '<ChordDiagram> + useChordDiagram',
         blurb: 'Inline chord-voicing SVG renderer.',
         source: refChordDiagramSource,
+        sourcePath: 'docs/sdk/reference/chord-diagram.md',
       },
       {
         slug: 'reference/pdf-export',
@@ -143,6 +162,7 @@ export const DOC_GROUPS: readonly DocGroup[] = [
         blurb:
           'Lazy-loaded PDF export button + hook for custom UIs.',
         source: refPdfExportSource,
+        sourcePath: 'docs/sdk/reference/pdf-export.md',
       },
       {
         slug: 'reference/chord-source-edit',
@@ -150,12 +170,14 @@ export const DOC_GROUPS: readonly DocGroup[] = [
         blurb:
           'applyChordReposition, lyricsOffsetToSourceColumn — drag-to-edit primitives.',
         source: refChordSourceEditSource,
+        sourcePath: 'docs/sdk/reference/chord-source-edit.md',
       },
       {
         slug: 'reference/ireal-components',
         title: 'iReal Pro components',
         blurb: '<IrealEditor>, <IrealPreview>, <IrealPlayground>.',
         source: refIrealComponentsSource,
+        sourcePath: 'docs/sdk/reference/ireal-components.md',
       },
       {
         slug: 'reference/ireal-hooks',
@@ -163,6 +185,7 @@ export const DOC_GROUPS: readonly DocGroup[] = [
         blurb:
           'useIrealParse, useIrealSerialize, useIrealRender.',
         source: refIrealHooksSource,
+        sourcePath: 'docs/sdk/reference/ireal-hooks.md',
       },
       {
         slug: 'reference/ireal-helpers',
@@ -170,12 +193,14 @@ export const DOC_GROUPS: readonly DocGroup[] = [
         blurb:
           'irealChord*ToString, irealCanonicalSymbolText, irealIs*.',
         source: refIrealHelpersSource,
+        sourcePath: 'docs/sdk/reference/ireal-helpers.md',
       },
       {
         slug: 'reference/version',
         title: 'version()',
         blurb: 'Runtime version of the installed @chordsketch/react release.',
         source: refVersionSource,
+        sourcePath: 'docs/sdk/reference/version.md',
       },
     ],
   },

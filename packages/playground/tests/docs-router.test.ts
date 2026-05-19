@@ -3,6 +3,11 @@
 // `parseHashSlug` is invoked on cold load + every `hashchange`, so
 // the tolerance clauses are the difference between a deep link
 // landing on the right page and silently dropping to the index.
+//
+// The `useHashSlug` hook tests live in the Playwright suite at
+// `tests-e2e/docs-links.spec.ts` ("clicking an outline link keeps
+// the active page mounted") because they need an actual `hashchange`
+// event firing from a real browser.
 
 import { describe, expect, it } from 'vitest';
 

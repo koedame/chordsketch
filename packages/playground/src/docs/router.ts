@@ -21,20 +21,40 @@ export function parseHashSlug(hash: string): string {
   return queryStart === -1 ? trimmed : trimmed.slice(0, queryStart);
 }
 
+/**
+ * True for hashes that name a route change. `#/`, `#/foo`,
+ * `#/foo/bar`, and the empty hash are routes. Bare `#anchor` forms
+ * are in-page anchors emitted by the Markdown renderer for h2 / h3
+ * heading ids and the on-page outline — they MUST NOT unmount the
+ * active article, and they MUST NOT advance the router. The browser
+ * scrolls natively.
+ */
+function isRouteHash(hash: string): boolean {
+  return hash === '' || hash === '#' || hash.startsWith('#/');
+}
+
 function readSlug(): string {
   if (typeof window === 'undefined') return '';
-  return parseHashSlug(window.location.hash);
+  const hash = window.location.hash;
+  // Cold-load with a non-route hash (someone shared an outline-anchor
+  // URL): land on the index. The browser separately scrolls to the
+  // matching heading id if it exists.
+  if (!isRouteHash(hash)) return '';
+  return parseHashSlug(hash);
 }
 
 /**
  * Subscribe to `hashchange` and return the current slug. Stable
  * across re-renders so the routing layer can treat it as a value,
- * not a side-effect.
+ * not a side-effect. In-page anchor hashes (e.g. `#some-heading`)
+ * are ignored — they fire `hashchange` but do not advance the
+ * router, so clicking the outline scrolls without unmounting.
  */
 export function useHashSlug(): string {
   const [slug, setSlug] = useState<string>(() => readSlug());
   useEffect(() => {
     const handler = () => {
+      if (!isRouteHash(window.location.hash)) return;
       setSlug(readSlug());
     };
     window.addEventListener('hashchange', handler);

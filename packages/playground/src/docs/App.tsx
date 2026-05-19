@@ -164,7 +164,10 @@ interface ArticleProps {
 }
 
 function Article({ page }: ArticleProps): JSX.Element {
-  const html = useMemo(() => renderMarkdown(page.source), [page.source]);
+  const html = useMemo(
+    () => renderMarkdown(page.source, page.sourcePath),
+    [page.source, page.sourcePath],
+  );
   return (
     <article className="docs-article" data-page-slug={page.slug || 'index'}>
       <div

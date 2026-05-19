@@ -14,6 +14,7 @@ import {
   isExternalHttpHref,
   isSafeHref,
   renderMarkdown,
+  rewriteHref,
   slugify,
   slugifyWithCounter,
 } from '../src/docs/markdown';
@@ -123,10 +124,23 @@ describe('renderMarkdown', () => {
     expect(html).toMatch(/rel="noreferrer noopener"/);
   });
 
-  it('leaves relative links unchanged (no target injection)', () => {
+  it('rewrites relative links so they resolve under the docs SPA deploy', () => {
+    // A relative `.md` path works on GitHub's repo viewer but 404s
+    // under the docs SPA's hash-routed deploy. The renderer rewrites
+    // it to either a `#/<slug>` hash route (when the resolved file
+    // is a registered docs/sdk page) or a `github.com` blob URL.
+    // `./other.md` from no source dir resolves to repo-root
+    // `other.md`, which is not a docs/sdk page, so the blob URL
+    // branch fires. No `target=` because the rewriter does not
+    // touch internal hashes; the sanitiser hook re-applies
+    // `target=_blank` only because the rewritten href is now
+    // an absolute https URL — that is the intended behaviour for
+    // a link leaving the SPA.
     const html = renderMarkdown('[doc](./other.md)');
-    expect(html).toContain('href="./other.md"');
-    expect(html).not.toContain('target=');
+    expect(html).toContain(
+      'href="https://github.com/koedame/chordsketch/blob/main/other.md"',
+    );
+    expect(html).toContain('target="_blank"');
   });
 
   it('strips author-supplied target attributes on internal links', () => {
@@ -160,6 +174,68 @@ describe('renderMarkdown', () => {
     // permits richer characters.
     const html = renderMarkdown('## A & B');
     expect(html).toContain('<h2 id="a-b">');
+  });
+});
+
+describe('rewriteHref', () => {
+  it('passes through absolute http(s) URLs', () => {
+    expect(rewriteHref('https://example.com/x', 'docs/sdk')).toBe(
+      'https://example.com/x',
+    );
+    expect(rewriteHref('http://example.com', 'docs/sdk')).toBe(
+      'http://example.com',
+    );
+  });
+
+  it('passes through `mailto:` and protocol-relative URLs', () => {
+    expect(rewriteHref('mailto:a@b.c', 'docs/sdk')).toBe('mailto:a@b.c');
+    expect(rewriteHref('//cdn.example.com/x', 'docs/sdk')).toBe(
+      '//cdn.example.com/x',
+    );
+  });
+
+  it('passes through fragment-only hrefs untouched', () => {
+    expect(rewriteHref('#some-heading', 'docs/sdk/tasks')).toBe('#some-heading');
+    expect(rewriteHref('#/reference', 'docs/sdk/tasks')).toBe('#/reference');
+  });
+
+  it('maps a relative .md path to the matching SPA hash route', () => {
+    // From docs/sdk/README.md the README's `tasks/render.md` link
+    // resolves to docs/sdk/tasks/render.md → slug `render`.
+    expect(rewriteHref('tasks/render.md', 'docs/sdk')).toBe('#/render');
+    expect(rewriteHref('tasks/embed-react.md', 'docs/sdk')).toBe(
+      '#/embed-react',
+    );
+  });
+
+  it('maps a sibling .md from within docs/sdk/tasks to the matching slug', () => {
+    expect(rewriteHref('render.md', 'docs/sdk/tasks')).toBe('#/render');
+    expect(rewriteHref('transpose.md', 'docs/sdk/tasks')).toBe(
+      '#/transpose-task',
+    );
+  });
+
+  it('maps the docs/sdk/README.md path to the SPA index hash', () => {
+    expect(rewriteHref('../README.md', 'docs/sdk/tasks')).toBe('#/');
+  });
+
+  it('rewrites repo paths outside docs/sdk to a github.com blob URL', () => {
+    expect(
+      rewriteHref('../../packages/npm/README.md', 'docs/sdk'),
+    ).toBe('https://github.com/koedame/chordsketch/blob/main/packages/npm/README.md');
+    expect(
+      rewriteHref('../adr/0021-docs-site-co-located-with-playground.md', 'docs/sdk'),
+    ).toBe(
+      'https://github.com/koedame/chordsketch/blob/main/docs/adr/0021-docs-site-co-located-with-playground.md',
+    );
+  });
+
+  it('preserves a #anchor suffix when rewriting to github.com', () => {
+    expect(
+      rewriteHref('../../README.md#installation', 'docs/sdk'),
+    ).toBe(
+      'https://github.com/koedame/chordsketch/blob/main/README.md#installation',
+    );
   });
 });
 

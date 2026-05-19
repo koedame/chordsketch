@@ -211,8 +211,111 @@ export function slugifyWithCounter(text: string, counters: Map<string, number>):
   return count === 0 ? base : `${base}-${count}`;
 }
 
+/**
+ * Repo-relative paths of every docs/sdk page mapped to their SPA
+ * slug. The docs source under `docs/sdk/` is intentionally shared
+ * with the GitHub repo viewer (per ADR-0021), so internal links
+ * are written as relative `.md` paths that work on GitHub. The
+ * renderer rewrites them at render time so they resolve under the
+ * docs SPA's hash routes too.
+ *
+ * Kept in lockstep with `DOC_GROUPS` in `pages.ts` — adding a page
+ * means adding both an entry there AND a row here. The unit test
+ * for `rewriteHref` is the safety net.
+ */
+const DOCS_SDK_PATH_TO_SLUG: Readonly<Record<string, string>> = {
+  'docs/sdk/README.md': '',
+  'docs/sdk/tasks/embed-react.md': 'embed-react',
+  'docs/sdk/tasks/render.md': 'render',
+  'docs/sdk/tasks/transpose.md': 'transpose-task',
+  'docs/sdk/reference/README.md': 'reference',
+  'docs/sdk/reference/chord-sheet.md': 'reference/chord-sheet',
+  'docs/sdk/reference/playground.md': 'reference/playground',
+  'docs/sdk/reference/editors.md': 'reference/editors',
+  'docs/sdk/reference/layout.md': 'reference/layout',
+  'docs/sdk/reference/transpose.md': 'reference/transpose',
+  'docs/sdk/reference/chord-diagram.md': 'reference/chord-diagram',
+  'docs/sdk/reference/pdf-export.md': 'reference/pdf-export',
+  'docs/sdk/reference/chord-source-edit.md': 'reference/chord-source-edit',
+  'docs/sdk/reference/ireal-components.md': 'reference/ireal-components',
+  'docs/sdk/reference/ireal-hooks.md': 'reference/ireal-hooks',
+  'docs/sdk/reference/ireal-helpers.md': 'reference/ireal-helpers',
+  'docs/sdk/reference/version.md': 'reference/version',
+};
+
+/** Anchor under which non-`docs/sdk/` repo paths land on github.com. */
+const REPO_BLOB_BASE = 'https://github.com/koedame/chordsketch/blob/main/';
+
+function dirOf(path: string): string {
+  const idx = path.lastIndexOf('/');
+  return idx === -1 ? '' : path.slice(0, idx);
+}
+
+/**
+ * Resolve `relative` against `baseDir`, normalising `.` and `..`
+ * segments. Both inputs use forward-slash POSIX paths with no
+ * leading slash. Returned value drops any leading `./` or `../`
+ * that escapes past the repo root (treated as no-op).
+ */
+function resolveRelative(baseDir: string, relative: string): string {
+  const segments = baseDir.split('/').filter(Boolean);
+  for (const seg of relative.split('/')) {
+    if (seg === '' || seg === '.') continue;
+    if (seg === '..') {
+      segments.pop();
+      continue;
+    }
+    segments.push(seg);
+  }
+  return segments.join('/');
+}
+
+/**
+ * Rewrite a Markdown `href` so it resolves under the docs SPA's
+ * hash-routed deploy at `/chordsketch/docs/`. Absolute URLs and
+ * fragment-only hrefs pass through; relative paths are resolved
+ * against `sourceDir` (the directory of the page's Markdown
+ * source, e.g. `docs/sdk/tasks`) and then either mapped to the
+ * matching SPA slug or rewritten to a `github.com` blob URL so
+ * the link still works when clicked from the SPA. Exported so
+ * unit tests can lock the rewrite rules without going through
+ * the full Markdown pipeline.
+ */
+export function rewriteHref(href: string, sourceDir: string): string {
+  if (href === '') return href;
+  // Absolute / scheme-qualified / protocol-relative / fragment-only:
+  // leave as-is. The sanitiser hook below handles `javascript:` etc.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return href;
+  if (href.startsWith('//')) return href;
+  if (href.startsWith('#')) return href;
+
+  const hashIdx = href.indexOf('#');
+  const pathPart = hashIdx === -1 ? href : href.slice(0, hashIdx);
+  const hashSuffix = hashIdx === -1 ? '' : href.slice(hashIdx);
+
+  const resolved = resolveRelative(sourceDir, pathPart);
+  if (resolved in DOCS_SDK_PATH_TO_SLUG) {
+    const slug = DOCS_SDK_PATH_TO_SLUG[resolved];
+    // The SPA's hash carries either the route or the in-page anchor
+    // — not both. For the index page we can emit `#/` + suffix
+    // since `#/` is the canonical index route; for non-index pages
+    // dropping the suffix is the least-bad option (no docs/sdk page
+    // currently links to a specific heading on another docs/sdk
+    // page, so the lossy case is unreachable today). Adding such a
+    // link in the future means revisiting the routing model.
+    if (slug === '') {
+      return hashSuffix === '' ? '#/' : hashSuffix;
+    }
+    return `#/${slug}`;
+  }
+  if (resolved === '') {
+    return hashSuffix === '' ? '#/' : hashSuffix;
+  }
+  return `${REPO_BLOB_BASE}${resolved}${hashSuffix}`;
+}
+
 /** Parse Markdown to sanitised HTML ready for React injection. */
-export function renderMarkdown(source: string): string {
+export function renderMarkdown(source: string, sourcePath = ''): string {
   // A fresh `Marked` instance per render keeps the heading-slug
   // counter scoped to one page. Sharing a single configured instance
   // would leak counters across renders (`introduction` on one page
@@ -220,6 +323,7 @@ export function renderMarkdown(source: string): string {
   // `introduction-1`).
   const counters = new Map<string, number>();
   const md = new Marked({ gfm: true, breaks: false });
+  const sourceDir = dirOf(sourcePath);
   md.use({
     renderer: {
       heading(token: Tokens.Heading) {
@@ -227,6 +331,14 @@ export function renderMarkdown(source: string): string {
         const text = plainText(innerHtml);
         const id = slugifyWithCounter(text, counters);
         return `<h${token.depth} id="${escapeAttribute(id)}">${innerHtml}</h${token.depth}>\n`;
+      },
+      link(token: Tokens.Link) {
+        const innerHtml = this.parser.parseInline(token.tokens);
+        const href = rewriteHref(token.href, sourceDir);
+        const titleAttr = token.title
+          ? ` title="${escapeAttribute(token.title)}"`
+          : '';
+        return `<a href="${escapeAttribute(href)}"${titleAttr}>${innerHtml}</a>`;
       },
     },
   });
