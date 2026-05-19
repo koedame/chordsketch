@@ -74,6 +74,15 @@ ChordPro and iReal Pro rendering directly in your browser, no installation
 required. The format toggle in the header switches between the ChordPro
 text editor and the iReal Pro bar-grid GUI editor at runtime.
 
+## Documentation
+
+**[ChordSketch Docs](https://koedame.github.io/chordsketch/docs/)** —
+embedding recipes for `@chordsketch/react`, per-component API
+reference, and cross-binding render / transpose guides. The
+canonical Markdown sources live under
+[`docs/sdk/`](docs/sdk/README.md) and the docs site renders them
+in-place (see [ADR-0021](docs/adr/0021-docs-site-co-located-with-playground.md)).
+
 ## Editor Integration
 
 ChordSketch provides syntax highlighting and Language Server Protocol (LSP)
