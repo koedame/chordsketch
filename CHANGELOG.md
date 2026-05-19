@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`chordsketch-ireal` parser now accepts the spec's `n`
+  absent-header sentinel in the open-protocol `irealbook://`
+  TimeSig field (#2423).** The 6-field shape's worked example "A
+  Walkin Thing" (per
+  <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>)
+  encodes its key + meter as `=D-=n=` and carries the actual
+  meter on an inline `T44` directive at the head of the music
+  body. Previously, the strict-numeric parse arm added in #2424
+  rejected the literal example with
+  `InvalidNumericField("n")`. The parser now treats `n` as a
+  documented "no header time signature; rely on the inline
+  `T..` directive" marker and defers to the music body for the
+  actual meter (falling back to the spec default 4/4 when the
+  body declares no inline `T..` either). Other non-numeric
+  TimeSig values still surface as `InvalidNumericField` to
+  preserve sister-site parity with the 7-field path's strict
+  numeric validation. New round-trip golden fixture at
+  `crates/ireal/tests/fixtures/parser_open_protocol/a_walkin_thing/`
+  drives the spec example through `parse` →
+  `serialize_open_protocol` → `parse` and asserts AST equality,
+  closing the umbrella's last load-bearing acceptance criterion.
+
 ### Added
 
 - **`@chordsketch/react@0.1.0` — first publishable release (#2473).**

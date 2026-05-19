@@ -94,12 +94,21 @@ at
 ships as `serialize_open_protocol` / `serialize_open_protocol_collection`
 ([#2425](https://github.com/koedame/chordsketch/issues/2425)). The
 eleven player-recognised `D.C. al ...` / `D.S. al ...` staff-text
-phrases are now structurally distinguished via
+phrases are structurally distinguished via
 `MusicalSymbol::DaCapo(JumpTarget)` / `DalSegno(JumpTarget)`
-([#2427](https://github.com/koedame/chordsketch/issues/2427)). Other
-player-recognised tokens documented in the iReal Pro Help Center
-are still absent from the AST and tracked under the open-protocol-spec
-compliance umbrella [#2423](https://github.com/koedame/chordsketch/issues/2423).
+([#2427](https://github.com/koedame/chordsketch/issues/2427)). The
+open-protocol-spec compliance umbrella
+[#2423](https://github.com/koedame/chordsketch/issues/2423) has
+landed every actionable sub-issue listed below: the spec's literal
+"A Walkin Thing" worked example — including its `n` absent-header
+sentinel in field 5 — round-trips through `parse` →
+`serialize_open_protocol` → `parse` under the
+`tests/fixtures/parser_open_protocol/a_walkin_thing/` golden
+fixture. The `END` song-terminator
+([#2451](https://github.com/koedame/chordsketch/issues/2451))
+is deferred per `ARCHITECTURE.md`'s "Deferred AST scope" → "Other
+deferred items" — empirical investigation confirmed iReal Pro's URL
+exporter does not emit the token (it is app-internal only).
 
 Token coverage as of the latest release:
 
@@ -108,7 +117,7 @@ Token coverage as of the latest release:
 | Token / shape | AST surface |
 |---|---|
 | `irealb://` 7..=9-field obfuscated export | `parse` / `parse_collection` |
-| `irealbook://` 6-field plain-text (`Title=Composer=Style=Key=TimeSig=Music`) | `parse` / `parse_collection` ([#2424](https://github.com/koedame/chordsketch/issues/2424)) |
+| `irealbook://` 6-field plain-text (`Title=Composer=Style=Key=TimeSig=Music`), including the `n` absent-header sentinel in field 5 | `parse` / `parse_collection` ([#2424](https://github.com/koedame/chordsketch/issues/2424)) |
 | `(altchord)` parenthesised alternate chord | `Chord::alternate` ([#2428](https://github.com/koedame/chordsketch/issues/2428)) |
 | `n` No-Chord | `Bar::no_chord` ([#2429](https://github.com/koedame/chordsketch/issues/2429)) |
 | `Kcl` / `x` / `r` simile (collapsed to a single flag) | `Bar::repeat_previous` ([#2430](https://github.com/koedame/chordsketch/issues/2430)) |
@@ -116,27 +125,40 @@ Token coverage as of the latest release:
 | `Y` / `YY` / `YYY` between-system vertical-space hint | `Bar::system_break_space` ([#2434](https://github.com/koedame/chordsketch/issues/2434)) |
 | `S` Segno, `Q` Coda, `f` Fermata | `MusicalSymbol::{Segno, Coda, Fermata}` ([#2431](https://github.com/koedame/chordsketch/issues/2431)) |
 | Eleven player-recognised `<D.C. al ...>` / `<D.S. al ...>` / `<Fine>` phrases + bare `<D.C.>` / `<D.S.>` | `MusicalSymbol::{DaCapo(JumpTarget), DalSegno(JumpTarget), Fine}` ([#2427](https://github.com/koedame/chordsketch/issues/2427)) |
+| `<Break>` drum-silence staff-text token | `MusicalSymbol::Break` ([#2448](https://github.com/koedame/chordsketch/issues/2448)) |
 | Open-protocol plain-text `irealbook://` serializer (6-field shape per spec) | `serialize_open_protocol` / `serialize_open_protocol_collection` ([#2425](https://github.com/koedame/chordsketch/issues/2425)) |
 | `*A`..`*D` / `*i` / `*v` / `*V` section labels | `SectionLabel::{Letter, Intro, Verse}` ([#2432](https://github.com/koedame/chordsketch/issues/2432)) |
-| `N1` / `N2` / `N3` ending brackets (numbers ≥ 1) | `Bar::ending` |
+| `N1` / `N2` / `N3` ending brackets | `Bar::ending = Some(Ending::Numbered(_))` |
+| `N0` no-text ending | `Bar::ending = Some(Ending::Untitled)` ([#2436](https://github.com/koedame/chordsketch/issues/2436)) |
+| Chord-size markers `s` (small) / `l` (large) | `BarChord::size: ChordSize::{Default, Small}` ([#2433](https://github.com/koedame/chordsketch/issues/2433)) |
+| Pause-slash `p` (repeat preceding chord) | `BarChordKind::SlashRepeat` ([#2435](https://github.com/koedame/chordsketch/issues/2435)) |
+| Compound time-signature additive groupings (`2+3`, `3+4`, `3+2+2`) | `Bar::beat_grouping_override: BeatGrouping` ([#2449](https://github.com/koedame/chordsketch/issues/2449)) |
 
-### Unsupported tokens
+### Out-of-scope or deferred tokens
 
-| Token / shape | Sub-issue |
-|---|---|
-| Chord-size markers `s` (small) / `l` (large) | [#2433](https://github.com/koedame/chordsketch/issues/2433) |
-| Pause-slash `p` (repeat preceding chord) | [#2435](https://github.com/koedame/chordsketch/issues/2435) |
-| `N0` no-text ending | [#2436](https://github.com/koedame/chordsketch/issues/2436) |
-| `Break` drum-silence staff-text token | [#2448](https://github.com/koedame/chordsketch/issues/2448) |
-| Compound time-signature additive groupings (`2+3`, `3+4`, `3+2+2`) | [#2449](https://github.com/koedame/chordsketch/issues/2449) |
-| Section-label reconciliation: `Chorus`/`Bridge`/`Outro` already removed from AST; convert-crate `SectionLabel::Custom` usage not yet cleaned up | [#2450](https://github.com/koedame/chordsketch/issues/2450) |
-| `END` song-terminator symbol distinct from Fermata | [#2451](https://github.com/koedame/chordsketch/issues/2451) |
+Two open tokens remain — they have **different reopen conditions**
+and are intentionally kept distinct:
+
+| Token / shape | Sub-issue | Class | Reason |
+|---|---|---|---|
+| `END` song-terminator symbol distinct from Fermata | [#2451](https://github.com/koedame/chordsketch/issues/2451) | Blocked on external evidence | Empirical investigation confirmed iReal Pro's URL exporter does not emit `END`; the symbol is app-internal only. See `ARCHITECTURE.md`'s "Deferred AST scope" → "Other deferred items". Reopens if an iReal Pro release starts emitting `END` in URLs. |
+| Convert-crate (`chordsketch-convert`) `SectionLabel::Custom("Chorus" / "Bridge" / "Outro")` emission cleanup | [#2450](https://github.com/koedame/chordsketch/issues/2450) | Actionable, out of this crate's scope | The phantom `SectionLabel::Chorus` / `Bridge` / `Outro` AST variants were already removed from `chordsketch-ireal`. The residual ChordPro → iReal converter behaviour producing `Custom("Chorus")` etc. lives in `chordsketch-convert` and is tracked separately — no parser/AST change is owed by this crate. |
+
+The two classes are tracked in one table only because the column
+positions match; the rows are not interchangeable. A blocked-on-
+external-evidence row only reopens when its trigger condition fires
+upstream, whereas an out-of-scope-here row is fully actionable today
+and lands when whichever sibling crate owns it picks it up.
 
 Umbrella [#2423](https://github.com/koedame/chordsketch/issues/2423)
-holds the canonical audit; this table is a release-time snapshot.
-When a sub-issue lands, move its row from Unsupported to
-Supported in the same PR — `.claude/rules/release-doc-sync.md`
-catches drift at release-cut time.
+lands every in-scope sub-issue on the PR that introduces this
+section: the round-trip golden fixture demonstrates the spec's
+literal worked example parses + re-serializes correctly, the
+Supported / Out-of-scope tables match the current AST surface
+exactly, and the two open rows above explain their respective
+reopen criteria. `.claude/rules/release-doc-sync.md` catches drift
+at release-cut time if the AST surface evolves and these tables
+fall behind.
 
 ## File extension convention
 
