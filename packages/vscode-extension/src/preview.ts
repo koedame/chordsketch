@@ -13,7 +13,6 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import * as path from 'path';
-import { resolveDefaultMode } from './config.js';
 import { escapeHtmlAttr, parseSerializedState } from './preview-helpers.js';
 
 /** Message types sent from the extension host to the WebView. */
@@ -398,10 +397,6 @@ class PreviewPanel {
    * values are injected via `<meta>` elements so the WebView script can read
    * them at runtime:
    *   - `chordsketch-wasm-uri`: the WASM binary URI (VS Code WebView URI)
-   *   - `chordsketch-default-mode`: the `chordsketch.preview.defaultMode`
-   *     setting value, used as the initial view mode when no persisted state
-   *     exists (only `"html"` and `"text"` are accepted; anything else falls
-   *     back to `"html"` in the WebView script).
    *   - `chordsketch-document-uri`: the source-document URI. The WebView
    *     persists this via `vscode.setState` on startup so that
    *     [`registerPreviewSerializer`] can reopen the correct document after
@@ -435,13 +430,6 @@ class PreviewPanel {
       ),
     );
 
-    // Read the default mode setting and clamp to the known-valid set so that
-    // an out-of-range config value cannot affect the WebView's behaviour.
-    const rawMode = vscode.workspace
-      .getConfiguration('chordsketch')
-      .get<string>('preview.defaultMode', 'html');
-    const defaultMode = resolveDefaultMode(rawMode);
-
     // Escape EVERY interpolated value in the HTML template, even those
     // derived from VS Code internals (`wasmUri.toString()`,
     // `scriptUri.toString()`, `webview.cspSource`, the crypto-generated
@@ -452,7 +440,6 @@ class PreviewPanel {
     const documentUriAttr = escapeHtmlAttr(this.document.uri.toString());
     const wasmUriAttr = escapeHtmlAttr(wasmUri.toString());
     const scriptUriAttr = escapeHtmlAttr(scriptUri.toString());
-    const defaultModeAttr = escapeHtmlAttr(defaultMode);
     const nonceAttr = escapeHtmlAttr(nonce);
     // cspSource includes the extension's own dist/webview/ origin.
     const cspAttr = escapeHtmlAttr(webview.cspSource);
@@ -471,7 +458,6 @@ class PreviewPanel {
   ">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="chordsketch-wasm-uri" content="${wasmUriAttr}">
-  <meta name="chordsketch-default-mode" content="${defaultModeAttr}">
   <meta name="chordsketch-document-uri" content="${documentUriAttr}">
   <title>ChordSketch Preview</title>
   <style>
@@ -494,6 +480,10 @@ class PreviewPanel {
       display: flex;
       flex-direction: column;
     }
+    /* The VS Code preview only renders HTML; the Format <select>
+       rendered by @chordsketch/react's <ChordProPreview> header is
+       hidden so the toolbar shows just the Transpose control. */
+    #app .chordsketch-chord-pro-preview__control-label { display: none; }
     .cs-vscode-loading {
       padding: 1rem;
       color: var(--vscode-descriptionForeground, #888);

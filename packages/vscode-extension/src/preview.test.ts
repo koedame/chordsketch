@@ -18,7 +18,7 @@ import { escapeHtmlAttr, parseSerializedState } from './preview-helpers.ts';
 // --- parseSerializedState ---
 
 test('parseSerializedState: valid state returns { documentUri }', () => {
-  const state = { documentUri: 'file:///tmp/song.cho', mode: 'html', transpose: 2 };
+  const state = { documentUri: 'file:///tmp/song.cho', transpose: 2 };
   assert.deepEqual(parseSerializedState(state), {
     documentUri: 'file:///tmp/song.cho',
   });
@@ -45,7 +45,7 @@ test('parseSerializedState: primitive returns undefined', () => {
 });
 
 test('parseSerializedState: missing documentUri returns undefined', () => {
-  assert.equal(parseSerializedState({ mode: 'html', transpose: 0 }), undefined);
+  assert.equal(parseSerializedState({ transpose: 0 }), undefined);
 });
 
 test('parseSerializedState: empty-string documentUri returns undefined', () => {

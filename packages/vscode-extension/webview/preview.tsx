@@ -26,7 +26,7 @@
 import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import init from '@chordsketch/wasm';
-import { ChordProPreview, type PreviewFormat } from '@chordsketch/react';
+import { ChordProPreview } from '@chordsketch/react';
 // The component library's stylesheet is bundled as a text asset
 // (see `esbuild.mjs`'s `.css` loader) and injected at runtime into a
 // `<style>` element. The WebView CSP allows `'unsafe-inline'` on
@@ -39,7 +39,6 @@ import {
   safeGetState,
   safeGetStateWithDiagnostics,
   type PanelState,
-  type ViewMode,
 } from './preview-state';
 
 /** VS Code WebView API acquired from the global injected by the host. */
@@ -50,15 +49,6 @@ declare function acquireVsCodeApi(): {
 };
 
 const vscode = acquireVsCodeApi();
-
-/** Reads the host-injected default-mode `<meta>` element. */
-function readMetaDefaultMode(): ViewMode | undefined {
-  const meta = document.querySelector<HTMLMetaElement>(
-    'meta[name="chordsketch-default-mode"]',
-  );
-  const value = meta?.content;
-  return value === 'html' || value === 'text' ? value : undefined;
-}
 
 /** Reads the host-injected document-URI `<meta>` element. */
 function readMetaDocumentUri(): string | undefined {
@@ -102,10 +92,8 @@ function App(): JSX.Element {
     }
     return state;
   }, []);
-  const initialMode: ViewMode = saved.mode ?? readMetaDefaultMode() ?? 'html';
 
   const [source, setSource] = useState<string>('');
-  const [format, setFormat] = useState<PreviewFormat>(initialMode);
   const [transpose, setTranspose] = useState<number>(saved.transpose ?? 0);
   const [wasmReady, setWasmReady] = useState<boolean>(false);
   const [initError, setInitError] = useState<string | null>(null);
@@ -166,19 +154,13 @@ function App(): JSX.Element {
     };
   }, []);
 
-  // Persist mode + transpose whenever they change. The `formats`
-  // allowlist below restricts `format` to `html` / `text`, so the
-  // narrowing here is a defensive consistency check rather than a
-  // user-visible code path — `pdf` is excluded from the selector.
+  // Persist transpose whenever it changes.
   useEffect(() => {
-    const modeForState: ViewMode | undefined =
-      format === 'html' || format === 'text' ? format : undefined;
     vscode.setState({
       ...safeGetState(vscode.getState()),
-      mode: modeForState,
       transpose,
     } satisfies PanelState);
-  }, [format, transpose]);
+  }, [transpose]);
 
   // Persist the source-document URI on first mount so the
   // `WebviewPanelSerializer` can reopen this panel against the same
@@ -190,14 +172,6 @@ function App(): JSX.Element {
         ...safeGetState(vscode.getState()),
         documentUri,
       } satisfies PanelState);
-    }
-  }, []);
-
-  const handleFormatChange = useCallback((next: PreviewFormat) => {
-    // Only `html` / `text` are configured in the `formats` allowlist below,
-    // but `PreviewFormat` itself includes `pdf` — narrow defensively.
-    if (next === 'html' || next === 'text') {
-      setFormat(next);
     }
   }, []);
 
@@ -236,18 +210,16 @@ function App(): JSX.Element {
     );
   }
 
-  // VS Code's `convertToPdf` command exports PDFs through a separate code
-  // path in the extension host, so the in-pane PDF format is intentionally
-  // excluded from the format selector here.
+  // The VS Code preview only renders HTML — `<ChordProPreview>`'s
+  // format `<select>` is hidden via host CSS in `src/preview.ts`.
   return (
     <ChordProPreview
       className="cs-vscode-preview"
       source={source}
-      format={format}
-      onFormatChange={handleFormatChange}
+      format="html"
       transpose={transpose}
       onTransposeChange={handleTransposeChange}
-      formats={['html', 'text']}
+      formats={['html']}
       errorFallback={(err) => (
         <div className="cs-vscode-render-error" role="alert">
           {err.message}
