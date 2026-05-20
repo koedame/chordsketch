@@ -206,6 +206,12 @@ def _build_repo(
                 steps:
                   - run: |
                       npm install "@chordsketch/wasm@${{WASM_VERSION}}"
+              npm-wasm-export:
+                env:
+                  WASM_EXPORT_VERSION: "{smoke_npm_pin}"
+                steps:
+                  - run: |
+                      npm install "@chordsketch/wasm-export@${{WASM_EXPORT_VERSION}}"
               library-smoke:
                 steps:
                   - run: |
