@@ -65,6 +65,38 @@ expected_version = "tag"
 required_secrets = []
 
 [[channels]]
+id = "crates-io-ireal"
+display = "crates.io — chordsketch-ireal"
+kind = "crates-io"
+package = "chordsketch-ireal"
+expected_version = "tag"
+required_secrets = []
+
+[[channels]]
+id = "crates-io-render-ireal"
+display = "crates.io — chordsketch-render-ireal"
+kind = "crates-io"
+package = "chordsketch-render-ireal"
+expected_version = "tag"
+required_secrets = []
+
+[[channels]]
+id = "crates-io-convert"
+display = "crates.io — chordsketch-convert"
+kind = "crates-io"
+package = "chordsketch-convert"
+expected_version = "tag"
+required_secrets = []
+
+[[channels]]
+id = "crates-io-convert-musicxml"
+display = "crates.io — chordsketch-convert-musicxml"
+kind = "crates-io"
+package = "chordsketch-convert-musicxml"
+expected_version = "tag"
+required_secrets = []
+
+[[channels]]
 id = "crates-io-cli"
 display = "crates.io — chordsketch"
 kind = "crates-io"
@@ -103,6 +135,17 @@ required_secrets = []  # Per ADR-0008: maintainer-local manual publish;
                        # no CI secret involved. Verification is still
                        # `npm view @chordsketch/wasm version` (anonymous).
 notes = "Manual local publish per ADR-0008. Patch skew from workspace allowed; see ci/version-skew-allowlist.toml."
+
+# ---------------------------------------------------------------- npm (wasm-export)
+
+[[channels]]
+id = "npm-wasm-export"
+display = "npm — @chordsketch/wasm-export"
+kind = "npm"
+package = "@chordsketch/wasm-export"
+expected_version = "tag"
+required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
+notes = "Heavy-bundle sister of @chordsketch/wasm (#2466). Ships in lockstep with the lean wasm package. Manual local publish per ADR-0008 (docs/releasing.md Step 7d)."
 
 # ---------------------------------------------------------------- npm (tree-sitter)
 

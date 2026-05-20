@@ -47,6 +47,7 @@ def _build_repo(
     *,
     crate_versions: dict[str, str] | None = None,
     npm_version: str = "0.2.0",
+    npm_export_version: str = "0.2.0",
     vscode_version: str = "0.2.0",
     napi_version: str = "0.2.0",
     tree_sitter_version: str = "0.2.0",
@@ -117,11 +118,77 @@ def _build_repo(
         encoding="utf-8",
     )
 
-    # packages/vscode-extension/package.json
+    # packages/npm-export/package.json — wasm-export's heavy bundle, lockstep with wasm
+    npm_export_dir = root / "packages" / "npm-export"
+    npm_export_dir.mkdir(parents=True, exist_ok=True)
+    (npm_export_dir / "package.json").write_text(
+        f'{{\n  "name": "@chordsketch/wasm-export",\n  "version": "{npm_export_version}"\n}}\n',
+        encoding="utf-8",
+    )
+
+    # packages/vscode-extension/package.json — also pins @chordsketch/wasm
+    # in its dependencies block, which load_consumer_pin_constraints checks.
+    consumer_pin = f"^{smoke_caret}.0"
     vscode_dir = root / "packages" / "vscode-extension"
     vscode_dir.mkdir(parents=True, exist_ok=True)
     (vscode_dir / "package.json").write_text(
-        f'{{\n  "name": "chordsketch",\n  "version": "{vscode_version}"\n}}\n',
+        textwrap.dedent(
+            f"""
+            {{
+              "name": "chordsketch",
+              "version": "{vscode_version}",
+              "dependencies": {{
+                "@chordsketch/wasm": "{consumer_pin}"
+              }}
+            }}
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    # packages/react/package.json — pins @chordsketch/wasm (dep) and
+    # @chordsketch/wasm-export (peerDep). react's own version is on its
+    # own track per CLAUDE.md so we only need the pin blocks.
+    react_dir = root / "packages" / "react"
+    react_dir.mkdir(parents=True, exist_ok=True)
+    (react_dir / "package.json").write_text(
+        textwrap.dedent(
+            f"""
+            {{
+              "name": "@chordsketch/react",
+              "version": "0.2.0",
+              "dependencies": {{
+                "@chordsketch/wasm": "{consumer_pin}"
+              }},
+              "peerDependencies": {{
+                "@chordsketch/wasm-export": "{consumer_pin}"
+              }}
+            }}
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    # packages/ui-irealb-editor/package.json — private workspace package
+    # that peer-depends on @chordsketch/wasm.
+    irealb_dir = root / "packages" / "ui-irealb-editor"
+    irealb_dir.mkdir(parents=True, exist_ok=True)
+    (irealb_dir / "package.json").write_text(
+        textwrap.dedent(
+            f"""
+            {{
+              "name": "@chordsketch/ui-irealb-editor",
+              "private": true,
+              "version": "0.0.0",
+              "peerDependencies": {{
+                "@chordsketch/wasm": "{consumer_pin}"
+              }}
+            }}
+            """
+        ).strip()
+        + "\n",
         encoding="utf-8",
     )
 
@@ -133,10 +200,12 @@ def _build_repo(
             f"""
             # synthetic fixture
             jobs:
-              wasm-smoke:
+              npm-wasm:
+                env:
+                  WASM_VERSION: "{smoke_npm_pin}"
                 steps:
                   - run: |
-                      npm install '@chordsketch/wasm@{smoke_npm_pin}'
+                      npm install "@chordsketch/wasm@${{WASM_VERSION}}"
               library-smoke:
                 steps:
                   - run: |

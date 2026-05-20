@@ -1,6 +1,6 @@
 [package]
 name = "chordsketch-wasm"
-version = "0.4.0"
+version = "0.5.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -36,20 +36,20 @@ png-pdf = [
 ]
 
 [dependencies]
-chordsketch-chordpro = { version = "0.4.0", path = "../chordpro" }
-chordsketch-render-text = { version = "0.4.0", path = "../render-text" }
-chordsketch-render-html = { version = "0.4.0", path = "../render-html" }
+chordsketch-chordpro = { version = "0.5.0", path = "../chordpro" }
+chordsketch-render-text = { version = "0.5.0", path = "../render-text" }
+chordsketch-render-html = { version = "0.5.0", path = "../render-html" }
 # render-pdf is gated behind the `png-pdf` feature — its transitive
 # deps (ttf-parser + printpdf path) account for the bulk of the
 # `@chordsketch/wasm` bundle weight, so the lean build does not
 # pull it in.
-chordsketch-render-pdf = { version = "0.4.0", path = "../render-pdf", optional = true }
-chordsketch-ireal = { version = "0.4.0", path = "../ireal" }
-chordsketch-convert = { version = "0.4.0", path = "../convert" }
+chordsketch-render-pdf = { version = "0.5.0", path = "../render-pdf", optional = true }
+chordsketch-ireal = { version = "0.5.0", path = "../ireal" }
+chordsketch-convert = { version = "0.5.0", path = "../convert" }
 # render-ireal default features (SVG renderer + chord typography)
 # stay in the lean build; `png` / `pdf` (the resvg / svg2pdf
 # transitive deps) come in via the `png-pdf` feature above.
-chordsketch-render-ireal = { version = "0.4.0", path = "../render-ireal" }
+chordsketch-render-ireal = { version = "0.5.0", path = "../render-ireal" }
 wasm-bindgen = "0.2"
 # `render_pdf_with_warnings` (#1893) builds its JS return value via
 # `js_sys::Object` + `js_sys::Reflect` and converts the byte payload
