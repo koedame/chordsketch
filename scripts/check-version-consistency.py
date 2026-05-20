@@ -34,9 +34,10 @@ Sources checked:
      canonical workspace version; comparison runs at major.minor
      granularity (`_expected_for` strips the patch when the field
      label ends with `(^major.minor)`).
- 10. `.github/workflows/readme-smoke.yml` — the two hardcoded pins:
+ 10. `.github/workflows/readme-smoke.yml` — three hardcoded pins:
        a. `npm-wasm` job's `env: WASM_VERSION: "<version>"`
-       b. `library-smoke`'s `chordsketch-chordpro = "<caret>"` (and
+       b. `npm-wasm-export` job's `env: WASM_EXPORT_VERSION: "<version>"`
+       c. `library-smoke`'s `chordsketch-chordpro = "<caret>"` (and
           paired chordpro / render-text / ireal / render-ireal pins,
           all caught by the same caret regex)
  11. `packaging/macports/Portfile` — `github.setup … <version> v`
@@ -140,15 +141,22 @@ def load_package_json_version(repo_root: Path, relative: str) -> Source:
     return Source(file=relative, field="version", value=match.group(1))
 
 
-# npm-wasm smoke pin: the job exposes the pinned version via `env:
-# WASM_VERSION: "<version>"` (so the install step and the release-cut
-# registry-probe step both reference the same constant). The check is
-# anchored on the `npm-wasm:` job's indented `env` block so an unrelated
-# `WASM_VERSION:` env elsewhere can't accidentally satisfy the regex.
-_SMOKE_NPM_PIN_RE = re.compile(
-    r"""npm-wasm:.*?\n\s+env:\s*\n\s+WASM_VERSION:\s*['"]([0-9][^'"]*)['"]""",
-    re.DOTALL,
-)
+# npm smoke pins: each smoke job exposes its pinned version via a
+# job-level `env: <VAR>: "<version>"` (the install step and the
+# release-cut registry-probe step both reference the same constant).
+# Each tuple is (job-name-marker, env-var-name, source-field-label).
+# Adding a new wasm/npm smoke means adding a tuple here so the
+# consistency check picks it up automatically. Each anchor is the
+# `<job-name>:.*?\n\s+env:\s*\n\s+<VAR>:` shape so an unrelated env
+# block elsewhere in the file can't accidentally satisfy the regex.
+_SMOKE_NPM_PINS: list[tuple[str, str, str]] = [
+    ("npm-wasm:", "WASM_VERSION", "npm install @chordsketch/wasm pin"),
+    (
+        "npm-wasm-export:",
+        "WASM_EXPORT_VERSION",
+        "npm install @chordsketch/wasm-export pin",
+    ),
+]
 # Line ~450 smoke-test caret constraint (matches the chordsketch-chordpro entry,
 # which is representative of the library-smoke mode's paired pins).
 _SMOKE_CARET_RE = re.compile(
@@ -157,12 +165,17 @@ _SMOKE_CARET_RE = re.compile(
 
 
 def load_readme_smoke_pins(repo_root: Path) -> list[Source]:
-    """Extract the two hardcoded pins from `.github/workflows/readme-smoke.yml`.
+    """Extract the hardcoded pins from `.github/workflows/readme-smoke.yml`.
 
     These pins cannot be in `allowlist` form because they live inside shell
     script bodies inside YAML; regex is the pragmatic extractor. If the YAML
-    is restructured and either regex stops matching, this function raises
+    is restructured and any regex stops matching, this function raises
     `SystemExit` with a clear message so the maintainer knows to update it.
+
+    Each entry in `_SMOKE_NPM_PINS` is checked. The npm-wasm-export job
+    was added in the v0.5.0 release post-publish follow-up (#2523) so
+    the lean and heavy bundles get equivalent smoke coverage and
+    equivalent drift detection at the next release.
     """
     relative = ".github/workflows/readme-smoke.yml"
     path = repo_root / relative
@@ -172,19 +185,26 @@ def load_readme_smoke_pins(repo_root: Path) -> list[Source]:
 
     sources: list[Source] = []
 
-    npm_match = _SMOKE_NPM_PIN_RE.search(text)
-    if npm_match is None:
-        raise SystemExit(
-            f"{relative}: could not find `npm install @chordsketch/wasm@<version>`. "
-            f"If the smoke job was restructured, update _SMOKE_NPM_PIN_RE in this script."
+    for job_marker, env_var, field_label in _SMOKE_NPM_PINS:
+        pattern = (
+            re.escape(job_marker)
+            + r".*?\n\s+env:\s*\n\s+"
+            + re.escape(env_var)
+            + r":\s*['\"]([0-9][^'\"]*)['\"]"
         )
-    sources.append(
-        Source(
-            file=relative,
-            field="npm install @chordsketch/wasm pin",
-            value=npm_match.group(1),
+        match = re.search(pattern, text, re.DOTALL)
+        if match is None:
+            raise SystemExit(
+                f"{relative}: could not find `{job_marker} env: {env_var}: \"<version>\"`. "
+                f"If the smoke job was restructured, update _SMOKE_NPM_PINS in this script."
+            )
+        sources.append(
+            Source(
+                file=relative,
+                field=field_label,
+                value=match.group(1),
+            )
         )
-    )
 
     caret_match = _SMOKE_CARET_RE.search(text)
     if caret_match is None:
