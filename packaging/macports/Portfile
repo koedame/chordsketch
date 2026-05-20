@@ -37,24 +37,14 @@ long_description    ChordSketch is a Rust implementation of the ChordPro file \
                     HTML, or PDF output. Full compatibility with the ChordPro \
                     specification.
 
-# Source-tarball checksums lag the github.setup version above by one
-# release: the v0.5.0 source tarball does not exist until the v0.5.0
-# tag is pushed (which happens after the release-cut PR merges). The
-# values below are the v0.4.0 tarball's checksums — they will be
-# refreshed in the post-release Portfile PR per docs/releasing.md
-# §MacPorts (mirroring the v0.4.0 follow-up PR #2417). The
-# macports-portfile-sync CI guard tolerates this release-cut window
-# per #2413.
-checksums           rmd160  352a8c7890868eddd71818da86e2d5aeb330caaf \
-                    sha256  1edf4cc2e0c3303e0be47a0ac012c028f3a1f42414559ab21e800f5b8df41b15 \
-                    size    7148594
+# Source-tarball checksums for v0.5.0. Regenerate on each release —
+# the canonical procedure lives in `docs/releasing.md` §MacPorts.
+checksums           rmd160  9a661359e1bab8230b984b6903a54cdb6035cbad \
+                    sha256  21392bc0a7cc829da7bb03adf70cbbd450cc2a6a7eb6b4a7c1102cfbda01ed87 \
+                    size    7739468
 
-# Cargo crate manifest auto-generated from HEAD's Cargo.lock at
-# release-cut time via `scripts/macports-regen-cargo-crates.py --apply
-# --from-ref HEAD` per #2413 (the v0.5.0 tag does not yet exist).
-# The next normal CI run after the v0.5.0 tag is pushed will validate
-# this block against `git show v0.5.0:Cargo.lock`. Do not edit by
-# hand — regenerate per docs/releasing.md §MacPorts.
+# Cargo crate manifest auto-generated from `git show v0.5.0:Cargo.lock`.
+# Do not edit by hand — regenerate per docs/releasing.md §MacPorts.
 cargo.crates \
     adler2 2.0.1 320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa \
     adobe-cmap-parser 0.4.1 ae8abfa9a4688de8fc9f42b3f013b6fffec18ed8a554f5f113577e0b9b3212a3 \
