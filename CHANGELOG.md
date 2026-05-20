@@ -10,24 +10,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Inline `{key}` directive now follows the active transpose
-  offset across all three Rust renderers (#2522).** Before this
-  fix, `chordsketch --transpose=2` against a song authored
+  offset across all three Rust renderers, preserving modal
+  qualifiers, extensions, and slash-bass notes (#2522).** Before
+  this fix, `chordsketch --transpose=2` against a song authored
   `{key: G}` emitted `[Key: G]` (text) /
   `<span class="meta-inline__value">G</span>` (HTML) /
   `Key: G` (PDF) alongside chord lines transposed to A — the
-  authored key was leaking into the rendered preview unchanged.
-  All three renderers now apply
-  `chordsketch_chordpro::transpose::canonical_transposed_key` to
-  the directive value, matching the chord-line transpose's
-  prefer-flat convention (so a G song transposed by +3 surfaces
-  `[Key: B♭]`, not `[Key: A#]`). Unparseable values (e.g. a key
-  string that doesn't start with a note letter) fall through to
-  the authored text. The React JSX walker
-  (`packages/react/src/chordpro-jsx.tsx`) already handles this via
-  its "Original → Playing" key-pair design and is unchanged. The
-  v0.5.0 binaries shipped with this regression; it surfaced as
-  `Test action (*)` failures across every PR after the v0.5.0
-  tag was pushed, because the github-action smoke does
+  authored key leaked through unchanged.
+
+  All three renderers now route through a new
+  `chordsketch_chordpro::transpose::canonical_transposed_key_with_style(value, semitones, prefer_flat)`
+  helper that:
+
+  - **Uses the same `prefer_flat` as the chord lines** (derived
+    via `transposed_key_prefers_flat(&song.metadata, transpose_offset)`),
+    so a multi-`{key:}` song where the last anchor lands sharp
+    side renders `[Key: G♯]` next to `G#` chord lines instead of
+    the previously-divergent `[Key: A♭]` next to `G#`. Closes
+    the §"Validation Parity" gap surfaced by the silent-failure
+    audit of #2522.
+  - **Preserves the modal qualifier** — `{key: C dorian}` ↦
+    `[Key: D dorian]` at +2 (the trailing text "dorian" is not a
+    transposable theory token; preserved verbatim from the
+    parsed `ChordDetail::extension`). Sister cases:
+    `{key: G mixolydian}`, `{key: A lydian}`, etc.
+  - **Preserves spelled-out `minor`** — `{key: Bb minor}` ↦
+    `[Key: C minor]` at +2 (the leading space prevents the
+    chord parser's `min` prefix match, so "minor" lands in
+    `ChordDetail::extension` and round-trips verbatim).
+  - **Preserves extensions** — `{key: G7}` ↦ `[Key: A7]` at +2;
+    `{key: Gmaj7}` ↦ `[Key: Amaj7]`; `{key: Gsus4}` ↦
+    `[Key: Asus4]`.
+  - **Transposes slash-bass** — `{key: G/B}` ↦ `[Key: A/C♯]` at
+    +2 (the bass note transposes in lockstep with the root via
+    `transpose_detail_with_style`).
+  - **Compact-form minor** — `{key: Em}` ↦ `[Key: G♭m]` at +2
+    (uses `ChordQuality::Minor`; emits `m` after the
+    transposed-and-respelled accidental).
+  - **Unparseable values** (e.g. a string that doesn't start
+    with a note letter at all — `{key: Hidden}`) fall through
+    to the authored text rather than producing nonsense.
+
+  The React JSX walker
+  (`packages/react/src/chordpro-jsx.tsx:3199-3234`) already
+  emits an "Original → Playing" key-pair when the primary
+  `{key}` differs from the host-supplied `transposedKey`, so
+  the primary-key case is already correct over there. Mid-song
+  `{key}` changes in the walker still fall through to the
+  authored single chip per the walker's documented limitation
+  (the host's `transposedKey` only carries the primary key's
+  transposition) — a cross-surface parity gap with the Rust
+  renderers' new behaviour is tracked as a follow-up.
+
+  The v0.5.0 binaries shipped with this regression; it surfaced
+  as `Test action (*)` failures across every PR after the
+  v0.5.0 tag was pushed, because the github-action smoke does
   `grep -qw 'G'` on the transposed output to verify the chord
   lines actually transposed — and was catching the untransposed
   `[Key: G]` header.

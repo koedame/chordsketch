@@ -328,10 +328,22 @@ pub fn transpose(song: &Song, semitones: i8) -> Song {
 /// Compute the canonical spelling for the song's primary
 /// `{key}` after transposition by `semitones`. Pop / folk
 /// convention: prefer flats for ambiguous black-key pitches
-/// (`Bb` over `A#`, `Eb` over `D#`, `Gb` over `F#`, etc.).
+/// (`Bb` over `A#`, `Eb` over `D#`, `Gb` over `F#`, etc.) — the
+/// preference is derived per-key via [`key_prefers_flat_for_song`].
 ///
-/// Returns `None` when the song has no parseable primary key
-/// (e.g. `{key: C dorian}` or no `{key}` at all).
+/// The chord parser is permissive about trailing text — `{key: C
+/// dorian}` parses as a C-major chord with extension `" dorian"`
+/// and `{key: G/B}` parses as a G chord with bass note `B`. This
+/// function emits the transposed root + accidental + minor flag
+/// ONLY; the modal qualifier and the slash-bass are dropped on
+/// output, which silently changes the rendered text. Use
+/// [`canonical_transposed_key_with_style`] when you need to
+/// preserve those trailing structural details (every Rust
+/// renderer's inline `{key:}` marker does, per #2522).
+///
+/// Returns `None` when the song key isn't a chord token at all
+/// (the value doesn't start with a note letter C / D / E / F / G
+/// / A / B).
 #[must_use]
 pub fn canonical_transposed_key(song_key: Option<&str>, semitones: i8) -> Option<String> {
     let key_str = song_key?;
@@ -345,6 +357,44 @@ pub fn canonical_transposed_key(song_key: Option<&str>, semitones: i8) -> Option
     Some(canonical_key_string(&transposed))
 }
 
+/// Compute the transposed canonical spelling for a `{key:}`
+/// directive value, **preserving the modal qualifier and the
+/// slash-bass note** (`{key: C dorian}` ↦ `D dorian` at +2;
+/// `{key: G/B}` ↦ `A/C#` at +2). The caller provides
+/// `prefer_flat` explicitly so the displayed key uses the SAME
+/// flat/sharp preference the chord lines do (the renderer
+/// computes `prefer_flat = transposed_key_prefers_flat(&song.metadata,
+/// semitones)` and passes it in — per `.claude/rules/renderer-parity.md`
+/// §"Validation Parity" the two decisions MUST agree, or a song
+/// with mid-song `{key:}` changes can surface the same pitch as
+/// `A♭` (key marker) and `G#` (chord lines) in the same vicinity;
+/// see #2522).
+///
+/// This is the strictly-superset variant of
+/// [`canonical_transposed_key`] used by every Rust renderer when
+/// rendering the inline `{key:}` marker. The chord parser is
+/// permissive about trailing text, so this preserves what the
+/// simpler helper drops: `extension` (modal qualifier text after
+/// the root, kept verbatim because it's not a transposable music
+/// theory token) and the slash `/bass` (transposed alongside the
+/// root). Minor keys append `m` after the accidental.
+///
+/// Returns `None` only when the value doesn't start with a note
+/// letter at all — same parseability contract as
+/// [`canonical_transposed_key`].
+#[must_use]
+pub fn canonical_transposed_key_with_style(
+    song_key: Option<&str>,
+    semitones: i8,
+    prefer_flat: bool,
+) -> Option<String> {
+    let key_str = song_key?;
+    let chord = crate::ast::Chord::new(key_str);
+    let detail = chord.detail.as_ref()?;
+    let transposed = transpose_detail_with_style(detail, semitones, prefer_flat);
+    Some(transposed_key_display_string(&transposed))
+}
+
 fn key_prefers_flat_for_song(detail: &ChordDetail, semitones: i8) -> bool {
     let root_semitone = note_to_semitone(detail.root, detail.root_accidental);
     let new_semitone = shift_semitone(root_semitone, semitones);
@@ -356,6 +406,12 @@ fn key_prefers_flat_for_song(detail: &ChordDetail, semitones: i8) -> bool {
 /// Compute the canonical-spelling string for a transposed key
 /// detail. Drops the chord quality (a key is a root + minor
 /// flag, not a chord type) and emits e.g. `"Bb"` / `"F#m"`.
+///
+/// `extension` and `bass_note` are intentionally dropped here —
+/// see [`canonical_transposed_key`]'s doc-comment. Callers that
+/// need to preserve those should use
+/// [`canonical_transposed_key_with_style`] /
+/// [`transposed_key_display_string`].
 fn canonical_key_string(detail: &ChordDetail) -> String {
     let root_semitone = note_to_semitone(detail.root, detail.root_accidental);
     let (new_root, new_acc) = canonical_key_spelling(root_semitone);
@@ -377,6 +433,64 @@ fn canonical_key_string(detail: &ChordDetail) -> String {
     }
     if detail.quality == ChordQuality::Minor {
         s.push('m');
+    }
+    s
+}
+
+/// Format an already-transposed `ChordDetail` as a key-display
+/// string that preserves the modal qualifier and slash-bass
+/// (sister to [`ChordDetail`]'s `Display` impl, but drops
+/// `ChordQuality::Major` — keys aren't chord types).
+///
+/// Unlike [`canonical_key_string`], this trusts the spelling the
+/// caller already picked (via `transpose_detail_with_style`'s
+/// `prefer_flat` argument) instead of re-spelling through the
+/// `canonical_key_spelling` table. That keeps the displayed key
+/// in lockstep with the chord lines.
+fn transposed_key_display_string(detail: &ChordDetail) -> String {
+    let mut s = String::new();
+    s.push(match detail.root {
+        Note::C => 'C',
+        Note::D => 'D',
+        Note::E => 'E',
+        Note::F => 'F',
+        Note::G => 'G',
+        Note::A => 'A',
+        Note::B => 'B',
+    });
+    if let Some(acc) = detail.root_accidental {
+        match acc {
+            Accidental::Sharp => s.push('#'),
+            Accidental::Flat => s.push('b'),
+        }
+    }
+    if detail.quality == ChordQuality::Minor {
+        s.push('m');
+    }
+    // Extension is verbatim source text (e.g. " dorian", " mixolydian",
+    // " add9") — not a transposable theory token, so we preserve it.
+    if let Some(ref ext) = detail.extension {
+        s.push_str(ext);
+    }
+    // Slash bass — the bass note IS transposed in lockstep with the
+    // root via `transpose_detail_with_style`.
+    if let Some((bass, bass_acc)) = detail.bass_note {
+        s.push('/');
+        s.push(match bass {
+            Note::C => 'C',
+            Note::D => 'D',
+            Note::E => 'E',
+            Note::F => 'F',
+            Note::G => 'G',
+            Note::A => 'A',
+            Note::B => 'B',
+        });
+        if let Some(acc) = bass_acc {
+            match acc {
+                Accidental::Sharp => s.push('#'),
+                Accidental::Flat => s.push('b'),
+            }
+        }
     }
     s
 }
