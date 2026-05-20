@@ -21,7 +21,9 @@ use chordsketch_chordpro::render_result::{
     RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
-use chordsketch_chordpro::transpose::{transpose_chord_with_style, transposed_key_prefers_flat};
+use chordsketch_chordpro::transpose::{
+    canonical_transposed_key, transpose_chord_with_style, transposed_key_prefers_flat,
+};
 use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
 
 use flate2::Compression;
@@ -856,7 +858,25 @@ fn render_song_into_doc(
                     // intentionally retained here. Same for
                     // `Key:` / `Time:`.
                     let line = match d.kind {
-                        DirectiveKind::Key => format!("Key: {}", unicode_accidentals(value)),
+                        DirectiveKind::Key => {
+                            // Apply the active transpose offset to the
+                            // displayed key so it matches the chord
+                            // lines, which are transposed via
+                            // `transpose_chord_with_style`. Falls back
+                            // to the authored value when the key is not
+                            // parseable (e.g. `{key: C dorian}`) or
+                            // transpose is 0. Sister-site to render-text
+                            // / render-html / the React JSX walker (per
+                            // `.claude/rules/renderer-parity.md`);
+                            // closes #2522.
+                            let displayed = if transpose_offset == 0 {
+                                value.to_string()
+                            } else {
+                                canonical_transposed_key(Some(value), transpose_offset)
+                                    .unwrap_or_else(|| value.to_string())
+                            };
+                            format!("Key: {}", unicode_accidentals(&displayed))
+                        }
                         DirectiveKind::Tempo => {
                             // Append the Italian tempo marking when
                             // the BPM matches a conventional band.
@@ -4160,6 +4180,37 @@ mod transpose_tests {
         // 2+3=5, C+5=F
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("(F)"));
+    }
+
+    /// Closes #2522 (sister-site to render-text + render-html): the
+    /// `Key:` inline marker in the PDF body MUST follow the active
+    /// transpose offset so it agrees with the chord lines. Tested via
+    /// substring search on the PDF content-stream bytes (the same
+    /// trick `test_transpose_with_cli_offset` uses one test up).
+    #[test]
+    fn test_inline_key_marker_follows_transpose() {
+        let input = "{key: G}\n[G]hi [D]world";
+        let song = chordsketch_chordpro::parse(input).unwrap();
+
+        // No transpose: authored value preserved.
+        let zero = render_song_with_transpose(&song, 0, &Config::defaults());
+        let zero_content = String::from_utf8_lossy(&zero);
+        assert!(
+            zero_content.contains("Key: G"),
+            "no-transpose case must preserve authored `Key: G`"
+        );
+
+        // +2 semitones: G → A.
+        let up_two = render_song_with_transpose(&song, 2, &Config::defaults());
+        let up_two_content = String::from_utf8_lossy(&up_two);
+        assert!(
+            up_two_content.contains("Key: A"),
+            "+2 transpose must surface `Key: A` in PDF stream"
+        );
+        assert!(
+            !up_two_content.contains("Key: G"),
+            "+2 transpose must NOT leave authored `Key: G` in PDF stream"
+        );
     }
 
     #[test]

@@ -10,7 +10,9 @@ use chordsketch_chordpro::render_result::{
     RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
-use chordsketch_chordpro::transpose::{transpose_chord_with_style, transposed_key_prefers_flat};
+use chordsketch_chordpro::transpose::{
+    canonical_transposed_key, transpose_chord_with_style, transposed_key_prefers_flat,
+};
 use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
 use unicode_width::UnicodeWidthStr;
 
@@ -174,10 +176,25 @@ fn render_song_impl(
                     {
                         match directive.kind {
                             DirectiveKind::Key => {
-                                // Typeset `Bb` / `F#` with Unicode
-                                // accidentals — sister-site to the
-                                // React JSX walker + Rust HTML renderer.
-                                output.push(format!("[Key: {}]", unicode_accidentals(value)));
+                                // Apply the active transpose offset to the
+                                // displayed key so it matches the chord
+                                // lines, which are transposed in-place via
+                                // `transpose_chord_with_style`. Falls back
+                                // to the authored value when the key is
+                                // not parseable as a chord root (e.g.
+                                // `{key: C dorian}`) or transpose is 0.
+                                // Sister-site to render-html / render-pdf
+                                // / the React JSX walker (per
+                                // `.claude/rules/renderer-parity.md`);
+                                // closes #2522. Typeset `Bb` / `F#` with
+                                // Unicode accidentals.
+                                let displayed = if transpose_offset == 0 {
+                                    value.to_string()
+                                } else {
+                                    canonical_transposed_key(Some(value), transpose_offset)
+                                        .unwrap_or_else(|| value.to_string())
+                                };
+                                output.push(format!("[Key: {}]", unicode_accidentals(&displayed)));
                             }
                             DirectiveKind::Tempo => {
                                 // Append the Italian tempo marking
@@ -904,6 +921,70 @@ mod tests {
         assert!(
             !output.contains("[Key:"),
             "empty {{key}} must not produce a marker; got:\n{output}"
+        );
+    }
+
+    /// Closes #2522: the inline `[Key: …]` marker MUST follow the
+    /// active transpose offset so it agrees with the chord lines,
+    /// which are transposed in-place. Sister-site to the React JSX
+    /// walker (which emits an "Original → Playing" pair when the
+    /// transposed key differs) and to render-html / render-pdf.
+    #[test]
+    fn test_inline_key_marker_follows_transpose() {
+        use chordsketch_chordpro::config::Config;
+
+        let song = chordsketch_chordpro::parse("{key: G}\n[G]hi [D]world").unwrap();
+
+        // No transpose: authored key passes through unchanged.
+        let zero = render_song_with_transpose(&song, 0, &Config::defaults());
+        assert!(
+            zero.contains("[Key: G]"),
+            "no-transpose case must preserve authored key; got:\n{zero}"
+        );
+
+        // +2 semitones: G → A. Chord line is transposed to A E so the
+        // marker must follow.
+        let up_two = render_song_with_transpose(&song, 2, &Config::defaults());
+        assert!(
+            up_two.contains("[Key: A]"),
+            "+2 transpose must surface [Key: A]; got:\n{up_two}"
+        );
+        assert!(
+            !up_two.contains("[Key: G]"),
+            "+2 transpose must NOT leave [Key: G] in output; got:\n{up_two}"
+        );
+
+        // -3 semitones: G → E. Same invariant in the opposite direction.
+        let down_three = render_song_with_transpose(&song, -3, &Config::defaults());
+        assert!(
+            down_three.contains("[Key: E]"),
+            "-3 transpose must surface [Key: E]; got:\n{down_three}"
+        );
+
+        // Flat-side spelling: transposing G by +3 lands on Bb (not A#).
+        // The displayed key matches the prefer-flat convention the
+        // chord lines use (`canonical_transposed_key` shares the same
+        // logic via `key_prefers_flat_for_song`).
+        let to_bflat = render_song_with_transpose(&song, 3, &Config::defaults());
+        assert!(
+            to_bflat.contains("[Key: B♭]"),
+            "+3 transpose must surface flat-side [Key: B♭]; got:\n{to_bflat}"
+        );
+
+        // Unparseable key (a value that doesn't start with a chord
+        // root letter at all) falls through to the authored value
+        // rather than producing nonsense — same contract as
+        // `canonical_transposed_key`. The chord parser is permissive
+        // about trailing text (e.g. `C dorian` parses as C with
+        // extra text), and forgiving on letters like `F` that ARE
+        // root letters even in non-chord words (`Foo`), so this
+        // branch only fires for strings that don't even start with a
+        // valid note letter (C / D / E / F / G / A / B).
+        let nonchord = chordsketch_chordpro::parse("{key: Hidden}\n[C]hi").unwrap();
+        let nonchord_out = render_song_with_transpose(&nonchord, 2, &Config::defaults());
+        assert!(
+            nonchord_out.contains("[Key: Hidden]"),
+            "unparseable key falls back to authored value; got:\n{nonchord_out}"
         );
     }
 

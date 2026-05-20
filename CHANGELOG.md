@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Inline `{key}` directive now follows the active transpose
+  offset across all three Rust renderers (#2522).** Before this
+  fix, `chordsketch --transpose=2` against a song authored
+  `{key: G}` emitted `[Key: G]` (text) /
+  `<span class="meta-inline__value">G</span>` (HTML) /
+  `Key: G` (PDF) alongside chord lines transposed to A — the
+  authored key was leaking into the rendered preview unchanged.
+  All three renderers now apply
+  `chordsketch_chordpro::transpose::canonical_transposed_key` to
+  the directive value, matching the chord-line transpose's
+  prefer-flat convention (so a G song transposed by +3 surfaces
+  `[Key: B♭]`, not `[Key: A#]`). Unparseable values (e.g. a key
+  string that doesn't start with a note letter) fall through to
+  the authored text. The React JSX walker
+  (`packages/react/src/chordpro-jsx.tsx`) already handles this via
+  its "Original → Playing" key-pair design and is unchanged. The
+  v0.5.0 binaries shipped with this regression; it surfaced as
+  `Test action (*)` failures across every PR after the v0.5.0
+  tag was pushed, because the github-action smoke does
+  `grep -qw 'G'` on the transposed output to verify the chord
+  lines actually transposed — and was catching the untransposed
+  `[Key: G]` header.
+
 ## [0.5.0] - 2026-05-20
 
 ### Added
