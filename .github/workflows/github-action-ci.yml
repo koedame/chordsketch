@@ -3,10 +3,20 @@ name: GitHub Action CI
 # Exercises the composite action defined in packages/github-action/action.yml
 # against a sample fixture on all supported platforms.
 #
-# No paths: filter — the action downloads a published release binary, so any
-# CI regression introduced here is structural (action.yml / workflow wiring),
-# not a code regression. Running unconditionally ensures the test always
-# reflects the current state of the action wiring.
+# Internal-CI mode: every `uses: ./packages/github-action` invocation passes
+# `version: source` so the action builds chordsketch from the current
+# checkout's `crates/cli` (instead of downloading a published release
+# binary). This way the test exercises the action's wiring AND the current
+# code together — a renderer fix on `main` is observable here on the same
+# PR, with no dependency on cutting a new patch release first.
+#
+# External consumers of the action continue to pin a real `version: vX.Y.Z`
+# tag; the `source` sentinel is documented in `packages/github-action/action.yml`
+# as internal-only.
+#
+# No paths: filter — running unconditionally ensures the test always
+# reflects the current state of the action wiring AND the current crate
+# source.
 
 on:
   push:
@@ -34,6 +44,23 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+      # Rust toolchain is required by `version: source` (the action's
+      # `cargo install` build path). Pinned to `stable` so the build
+      # matches what the release pipeline produces on every PR.
+      - uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # stable
+        with:
+          toolchain: stable
+
+      # Cargo build cache keyed per OS + Cargo.lock. Without this every
+      # matrix cell pays the full ~5-minute first-build cost on every PR;
+      # with the cache, subsequent runs reuse the same target/ dir.
+      # `save-if: main only` keeps the cache pool from filling with
+      # PR-specific entries (see `.claude/rules/ci-parallelization.md` §2).
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+        with:
+          shared-key: github-action-ci-${{ runner.os }}-${{ runner.arch }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       # ---- text output (default format) ------------------------------------
       - name: Render to text
         id: render-text
@@ -41,6 +68,7 @@ jobs:
         with:
           input: packages/github-action/fixtures/simple.cho
           output: out/simple.txt
+          version: source
           # format defaults to "text", transpose defaults to "0"
 
       - name: Verify text output exists and is non-empty
@@ -62,6 +90,7 @@ jobs:
           input: packages/github-action/fixtures/simple.cho
           output: out/simple.html
           format: html
+          version: source
 
       - name: Verify HTML output
         shell: bash
@@ -84,6 +113,7 @@ jobs:
           output: out/simple-transposed.txt
           format: text
           transpose: '2'
+          version: source
 
       - name: Verify transposed output
         shell: bash
@@ -117,6 +147,7 @@ jobs:
           output: out/simple-neg-transposed.txt
           format: text
           transpose: '-2'
+          version: source
 
       - name: Verify negative transposed output
         shell: bash
@@ -142,6 +173,7 @@ jobs:
           input: packages/github-action/fixtures/simple.cho
           output: out/simple.pdf
           format: pdf
+          version: source
 
       - name: Verify PDF output
         shell: bash
@@ -173,6 +205,7 @@ jobs:
           input: packages/github-action/fixtures/simple.cho
           output: out/should-not-exist.txt
           format: xlsx
+          version: source
 
       - name: Verify invalid format was rejected
         shell: bash
@@ -192,6 +225,7 @@ jobs:
           input: packages/github-action/fixtures/simple.cho
           output: out/should-not-exist-2.txt
           transpose: abc
+          version: source
 
       - name: Verify invalid transpose was rejected
         shell: bash
@@ -211,6 +245,7 @@ jobs:
           input: packages/github-action/fixtures/simple.cho
           output: out/should-not-exist-3.txt
           transpose: '007'
+          version: source
 
       - name: Verify leading-zero transpose was rejected
         shell: bash

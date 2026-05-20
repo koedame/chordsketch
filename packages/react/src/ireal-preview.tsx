@@ -13,8 +13,14 @@ export interface IrealPreviewProps {
    * Optional renderer for parse / render errors. Defaults to an
    * inline `role="alert"`. Pass `null` to suppress entirely and
    * keep the last successful SVG visible without overlay.
+   *
+   * Shape mirrors {@link ChordProPreviewProps.errorFallback} —
+   * function-only render prop or `null` — so the React surface
+   * stays symmetric across the ChordPro and iReal Pro Tier-1
+   * atoms. Callers that need to render a static `ReactNode` can
+   * wrap it in `() => node`.
    */
-  errorFallback?: ReactNode | ((error: Error) => ReactNode) | null;
+  errorFallback?: ((error: Error) => ReactNode) | null;
   /**
    * Optional loader override. Tests inject a structurally-compatible
    * stub. Production callers should leave the default.
@@ -66,10 +72,7 @@ export function IrealPreview({
         </p>
       );
     }
-    if (typeof errorFallback === 'function') {
-      return errorFallback(error);
-    }
-    return errorFallback;
+    return errorFallback(error);
   }, [error, errorFallback]);
 
   const wrapperClass = ['chordsketch-ireal-preview', className]

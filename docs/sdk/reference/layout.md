@@ -1,16 +1,16 @@
 # Layout primitives
 
 Composition helpers for building custom editor / preview shells.
-`<Playground>` uses these internally; reach for them directly when
+`<ChordProEditor>` uses these internally; reach for them directly when
 you need a different chrome.
 
 ## `<SplitLayout>`
 
 ```tsx
-import { SplitLayout, SourceEditor, RendererPreview } from '@chordsketch/react';
+import { SplitLayout, ChordSourceArea, RendererPreview } from '@chordsketch/react';
 
 <SplitLayout
-  start={<SourceEditor value={source} onChange={setSource} />}
+  start={<ChordSourceArea value={source} onChange={setSource} />}
   end={<RendererPreview source={source} format="html" />}
 />
 ```

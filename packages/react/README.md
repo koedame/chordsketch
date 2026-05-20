@@ -10,22 +10,51 @@ React component library for embedding
 lines of React, powered by
 [`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsketch/wasm).
 
-`@chordsketch/react@0.1.0` shipped the first publishable release;
-`@chordsketch/react@0.2.0` reaches feature parity for the iReal
-Pro surface. The ChordPro surface (`<ChordSheet>`,
-`<ChordEditor>`, `<Playground>`, `<PdfExport>`, `<Transpose>`,
-`<ChordDiagram>`, `<SourceEditor>`, `<SplitLayout>`,
-`<RendererPreview>` and the matching hooks) is the flagship
-surface and is feature-complete. As of `v0.2.0` the iReal Pro
-surface (`<IrealEditor>`, `<IrealPreview>`,
-`<IrealPlayground>` and the matching hooks) reaches feature
-parity with the private `@chordsketch/ui-irealb-editor` per
-[ADR-0020](https://github.com/koedame/chordsketch/blob/main/docs/adr/0020-ireal-pro-react-surface.md):
-header metadata editing, ARIA-grid bar editing with structural
-section / bar operations (add / rename / delete / move) and
-keyboard navigation (arrow roving + Alt-arrow reorder + Delete /
-Backspace), popover-based per-bar chord editing (chord row + N-th
-ending + symbol picker), SVG preview, and URL round-trip.
+`@chordsketch/react@0.3.0` consolidates the component surface into
+three explicit tiers (#2527 / #2533) and removes the ambiguous
+"Editor" suffix from Tier 1 atoms. Tier 3 composed editors are now
+the only components that carry an "Editor" suffix. ChordPro and
+iReal Pro both expose the same three-tier shape so consumers can
+choose the surface that matches their host.
+
+## Component layout (three tiers)
+
+| Tier | Purpose | ChordPro | iReal Pro |
+|------|---------|----------|-----------|
+| **Tier 1 atoms** | Single-responsibility primitives | `<ChordSheet>`, `<ChordTextarea>`, `<ChordSourceArea>`, `<ChordDiagram>`, `<Transpose>`, `<PdfExport>`, `<SplitLayout>`, `<RendererPreview>` | `<IrealBarGrid>`, `<IrealPreview>` |
+| **Tier 2 preview-with-controls** | Preview surface with built-in format / transpose controls — host owns the source | `<ChordProPreview>` | — (use `<IrealPreview>` directly) |
+| **Tier 3 composed editor** | Opinionated all-in-one editor + preview shell | `<ChordProEditor>` | `<IrealProEditor>` |
+
+### Consumer-to-tier mapping
+
+`<ChordProEditor>` and `<IrealProEditor>` are the **recommended
+Tier 3 all-in-one surfaces** for external integrators — they ship
+the playground / desktop UX out of the box and are the right
+default for most embedders. The in-repo playground and the Tauri
+desktop app deliberately compose Tier 1 / Tier 2 components into
+app-specific layouts so they can own their own chrome (page
+routing in the playground; Tauri menu + tree-sitter editor in the
+desktop). External consumers without those constraints should
+reach for the Tier 3 components first.
+
+| Consumer | ChordPro components | iReal Pro components |
+|----------|---------------------|----------------------|
+| Playground page (this repo) | Composes Tier 1 atoms (`<RendererPreview>`, `<Transpose>`, ...) into a custom layout | Composes the iReal Pro atoms similarly |
+| Tauri desktop app | `<ChordProPreview>` (Tier 2) + a local `<ChordProDesktopEditor>` (CodeMirror 6 + `tree-sitter-chordpro`) | `<IrealPreview>` (Tier 1) + a local `<IrealGridEditor>` wrapping `@chordsketch/ui-irealb-editor` |
+| VS Code WebView preview | `<ChordProPreview>` (Tier 2) | `<IrealPreview>` (Tier 1) |
+| External React consumers (recommended) | `<ChordProEditor>` (Tier 3) — opinionated all-in-one | `<IrealProEditor>` (Tier 3) — opinionated all-in-one |
+| External React consumers (custom layout) | Compose Tier 1 atoms (`<ChordSourceArea>` / `<ChordTextarea>` + `<RendererPreview>` or `<ChordProPreview>`) | Compose `<IrealBarGrid>` + `<IrealPreview>` |
+
+Tier 1 atoms never carry an "Editor" suffix — they are
+single-responsibility primitives. `<ChordTextarea>` does include a
+built-in preview pane (the "Textarea" name reflects the editor
+surface technology, not the absence of a preview); `<ChordSourceArea>`
+is the CodeMirror-backed source-edit surface without a preview.
+`<IrealBarGrid>` is the iReal Pro bar-grid editor surface alone.
+Tier 3 composed editors (`<ChordProEditor>`, `<IrealProEditor>`)
+are the only components whose name carries an "Editor" suffix; they
+each compose multiple Tier 1 / Tier 2 surfaces into the opinionated
+all-in-one shell.
 
 ## Installation
 
@@ -145,15 +174,15 @@ multi-pane preview). The renderer is memoised against
 `(source, format, transpose, config)`, so re-renders with
 unchanged inputs do not re-parse.
 
-### `<ChordEditor>` — split-pane edit + live preview
+### `<ChordTextarea>` — split-pane textarea + live preview (Tier 1 atom)
 
 ```tsx
-import { ChordEditor, useTranspose } from '@chordsketch/react';
+import { ChordTextarea, useTranspose } from '@chordsketch/react';
 
 export function Editor() {
   const { value: transpose, setValue: setTranspose } = useTranspose();
   return (
-    <ChordEditor
+    <ChordTextarea
       defaultValue="{title: My Song}\n[G]Hello"
       transpose={transpose}
       onTransposeChange={setTranspose}
@@ -165,20 +194,26 @@ export function Editor() {
 The left pane is a plain `<textarea>` (spell-check / auto-correct
 disabled so ChordPro tokens don't trigger browser corrections),
 the right pane is a `<ChordSheet>` that re-renders a debounced
-copy of the source (default 250 ms). Supports both controlled
-(`value` + `onChange`) and uncontrolled (`defaultValue`) modes,
-plus keyboard shortcuts **Ctrl+ArrowUp / Ctrl+ArrowDown** (Cmd
-on macOS) to fire `onTransposeChange` — wire that callback to
-the `setValue` from `useTranspose()` to get live transposition
-without leaving the editor. Registering `onTransposeChange`
-suppresses the browser's default text-navigation for those key
-combinations (Firefox normally moves the caret to
-start/end-of-paragraph); omit the prop if the browser default
-is preferred.
+copy of the source (default 250 ms). Despite the "Textarea" name
+this atom DOES include a live preview pane — the name reflects
+the editor surface technology (a plain `<textarea>`), not the
+absence of a preview. Pair with `<ChordSourceArea>` if you want
+CodeMirror highlighting, or with `<ChordProPreview>` for a
+preview-only Tier 2 surface.
+
+Supports both controlled (`value` + `onChange`) and uncontrolled
+(`defaultValue`) modes, plus keyboard shortcuts **Ctrl+ArrowUp /
+Ctrl+ArrowDown** (Cmd on macOS) to fire `onTransposeChange` — wire
+that callback to the `setValue` from `useTranspose()` to get live
+transposition without leaving the editor. Registering
+`onTransposeChange` suppresses the browser's default
+text-navigation for those key combinations (Firefox normally moves
+the caret to start/end-of-paragraph); omit the prop if the browser
+default is preferred.
 
 `readOnly`, `previewFormat="text"` (preview inside `<pre>`
 instead of HTML), `config`, custom `errorFallback`, and
-`minTranspose` / `maxTranspose` bounds for the shortcuts are all
+`transposeMin` / `transposeMax` bounds for the shortcuts are all
 passed through. Pass `debounceMs={0}` in tests to make the
 preview re-render synchronously.
 
@@ -187,6 +222,74 @@ so screen-reader users hear an actual name rather than falling
 back to the placeholder (which WAI-ARIA does not treat as an
 accessible name). Override via the `textareaAriaLabel` prop when
 a visible `<label>` provides a better name.
+
+### `<ChordSourceArea>` — CodeMirror source editor (Tier 1 atom)
+
+```tsx
+import { ChordSourceArea } from '@chordsketch/react';
+
+export function SourcePane({ source, onChange }) {
+  return (
+    <ChordSourceArea
+      value={source}
+      onChange={onChange}
+      placeholder="Paste your ChordPro here…"
+    />
+  );
+}
+```
+
+CodeMirror 6 with line numbers, regex-based syntax highlighting
+(chords / directives / comments), bracket matching, history, search,
+and indent-with-tab. Adds ~150 KB of editor runtime in exchange for
+the rich keymaps — pick `<ChordTextarea>` if bundle size is the
+primary constraint. `<ChordSourceArea>` does NOT include a preview
+pane; compose with `<ChordProPreview>` / `<RendererPreview>` for the
+editor + preview split, or use `<ChordProEditor>` for the
+opinionated all-in-one Tier 3 shell.
+
+### `<ChordProPreview>` — preview-with-controls (Tier 2)
+
+```tsx
+import { ChordProPreview } from '@chordsketch/react';
+
+export function Embedded({ source }) {
+  return <ChordProPreview source={source} defaultFormat="html" />;
+}
+```
+
+The right-side surface for hosts that bring their own ChordPro
+source (e.g. VS Code's WebView preview, an embedded docs viewer)
+but want the same in-pane controls the playground exposes without
+composing them by hand: format `<select>` (HTML / Text / PDF) +
+`<Transpose>` control. Both axes support controlled and
+uncontrolled state independently — supply `format` + `onFormatChange`
+to lift format state, or only `defaultFormat` to keep it inside the
+component (same for `transpose` / `onTransposeChange`).
+
+Pass `formats={['html', 'text']}` to restrict the format menu;
+useful for hosts that do not ship `@chordsketch/wasm-export` and
+should not let users pick PDF.
+
+### `<ChordProEditor>` — composed editor + preview (Tier 3)
+
+```tsx
+import { ChordProEditor } from '@chordsketch/react';
+
+export function Page() {
+  return <ChordProEditor defaultSource="{title: Hello}" />;
+}
+```
+
+The all-in-one shell — composes `<ChordSourceArea>` (CodeMirror) on
+the left and `<ChordProPreview>` (format select + transpose +
+renderer) on the right via `<SplitLayout>`. Source / format /
+transpose all support both controlled and uncontrolled modes. Pass
+the corresponding `value` + `onChange` pair to lift state into the
+parent; pass only `default*` to keep state inside the component.
+Use `<ChordProEditor>` when you want the playground / desktop UX
+out of the box; compose Tier 1 atoms directly when you need a
+fully custom layout.
 
 ### `useDebounced` — general-purpose debouncer
 
@@ -198,7 +301,7 @@ const debouncedQuery = useDebounced(rawQuery, 300);
 
 Returns a value that lags the input by at most `delay` ms.
 `delay <= 0` bypasses the debounce and passes the input through
-synchronously (used internally by `<ChordEditor>` in tests).
+synchronously (used internally by `<ChordTextarea>` in tests).
 
 ### `<ChordDiagram>` — guitar / ukulele / piano voicings
 
@@ -340,42 +443,41 @@ to the initial value, not necessarily zero. `increment` /
 number (including `NaN`, which collapses to `min`) so direct
 binding to a numeric input is safe.
 
-### `<IrealPlayground>` — drop-in iReal Pro editor + preview
+### `<IrealProEditor>` — composed iReal Pro editor + preview (Tier 3)
 
 ```tsx
-import { IrealPlayground } from '@chordsketch/react';
+import { IrealProEditor } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
 const URL =
   'irealb://Autumn%20Leaves%3D%5BT44Cm7%20%7C%20F7%20%7C%20BbMaj7%20%7C%20EbMaj7%20%5D%3DJoseph%20Kosma%3DJazz%20Ballad%3DC';
 
 export function Chart() {
-  return <IrealPlayground defaultValue={URL} />;
+  return <IrealProEditor defaultValue={URL} />;
 }
 ```
 
-The composite shows the editor pane (header form + read-only bar
+The composite shows the editor pane (header form + interactive bar
 grid + URL textarea) next to the SVG preview. Pass `source` +
 `onChange` for controlled use; `hidePreview`, `hideBars`, and
 `hideUrl` trim the layout for narrower hosts.
 
-### `<IrealEditor>` — editor pane alone
+### `<IrealBarGrid>` — bar-grid editor surface (Tier 1 atom)
 
 ```tsx
 import { useState } from 'react';
-import { IrealEditor } from '@chordsketch/react';
+import { IrealBarGrid } from '@chordsketch/react';
 
 export function ChartEditor() {
   const [url, setUrl] = useState('');
-  return <IrealEditor source={url} onChange={setUrl} />;
+  return <IrealBarGrid source={url} onChange={setUrl} />;
 }
 ```
 
 Edits to title / composer / style / key root + accidental + mode /
 time numerator + denominator / tempo / transpose round-trip through
 `@chordsketch/wasm`'s `parseIrealb` / `serializeIrealb` and fire
-`onChange` with the new URL. The bar grid is fully interactive
-as of `v0.2.0` per
+`onChange` with the new URL. The bar grid is fully interactive per
 [ADR-0020](https://github.com/koedame/chordsketch/blob/main/docs/adr/0020-ireal-pro-react-surface.md):
 
 - **Structural editing.** Per-section rename / move up / move
@@ -406,7 +508,7 @@ as of `v0.2.0` per
 `confirmDeleteSection`, and a custom `errorFallback` are all
 supported. Omit `onChange` to force read-only display.
 
-### `<IrealPreview>` — SVG preview alone
+### `<IrealPreview>` — SVG preview alone (Tier 1 atom)
 
 ```tsx
 import { IrealPreview } from '@chordsketch/react';
@@ -459,35 +561,36 @@ shorthand (no Unicode translation; the SVG renderer handles that).
 
 ## API reference
 
-| Export | Kind | Brief |
-|---|---|---|
-| `<ChordSheet>` | Component | Flagship ChordPro renderer (HTML AST → JSX or text → `<pre>`). |
-| `useChordRender` | Hook | Same pipeline as `<ChordSheet>` exposed as state. |
-| `<ChordEditor>` | Component | Split-pane textarea + live preview + transpose shortcuts. |
-| `<SourceEditor>` | Component | CodeMirror 6 source editor with ChordPro syntax highlight. |
-| `<ChordDiagram>` | Component | Guitar / ukulele / piano voicing SVG from the built-in database. |
-| `useChordDiagram` | Hook | Raw SVG string for the chord-instrument pair. |
-| `<Transpose>` | Component | Accessible ± / reset transposition control. |
-| `useTranspose` | Hook | Clamped state helper for transposition values. |
-| `<PdfExport>` | Component | One-click download button; lazy-loads `@chordsketch/wasm-export`. |
-| `usePdfExport` | Hook | Same export pipeline for custom UIs. |
-| `<Playground>` | Component | High-level "drop-in" ChordPro playground. |
-| `<RendererPreview>` | Component | Format-switcher preview pane. |
-| `<SplitLayout>` | Component | Layout container used by the playground. |
-| `useChordproAst` | Hook | Parse ChordPro source into AST + warnings. |
-| `renderChordproAst` | Function | AST → JSX walker (powers `<ChordSheet format="html">`). |
-| `applyChordReposition` | Function | Apply a drag-to-reposition event to a ChordPro source. |
-| `lyricsOffsetToSourceColumn` | Function | Lyrics-offset → source-column helper for drag UX. |
-| `useDebounced` | Hook | General-purpose debouncer used by `<ChordEditor>`. |
-| `<IrealEditor>` | Component | Header form + interactive bar grid (ARIA grid + roving tabindex + structural editing + popover-based per-bar editing) + URL round-trip for iReal Pro. |
-| `<IrealPreview>` | Component | iReal Pro SVG preview via `renderIrealSvg`. |
-| `<IrealPlayground>` | Component | High-level drop-in iReal Pro playground (editor + preview). |
-| `useIrealParse` | Hook | `irealb://` URL → typed AST. |
-| `useIrealSerialize` | Hook | AST → `irealb://` URL. |
-| `useIrealRender` | Hook | `irealb://` URL → SVG string. |
-| `irealChordToString` | Function | Render an iReal AST chord to its URL shorthand. |
-| `irealSectionLabelToString` | Function | Render an iReal AST section label to its display name. |
-| `version()` | Function | Returns the installed package version. |
+| Export | Tier | Kind | Brief |
+|---|---|---|---|
+| `<ChordSheet>` | Atom | Component | Flagship ChordPro renderer (HTML AST → JSX or text → `<pre>`). |
+| `useChordRender` | Atom | Hook | Same pipeline as `<ChordSheet>` exposed as state. |
+| `<ChordTextarea>` | Atom | Component | Split-pane textarea + live preview + transpose shortcuts. |
+| `<ChordSourceArea>` | Atom | Component | CodeMirror 6 source editor with ChordPro syntax highlight. |
+| `<ChordDiagram>` | Atom | Component | Guitar / ukulele / piano voicing SVG from the built-in database. |
+| `useChordDiagram` | Atom | Hook | Raw SVG string for the chord-instrument pair. |
+| `<Transpose>` | Atom | Component | Accessible ± / reset transposition control. |
+| `useTranspose` | Atom | Hook | Clamped state helper for transposition values. |
+| `<PdfExport>` | Atom | Component | One-click download button; lazy-loads `@chordsketch/wasm-export`. |
+| `usePdfExport` | Atom | Hook | Same export pipeline for custom UIs. |
+| `<SplitLayout>` | Atom | Component | Layout container with resizable splitter. |
+| `<RendererPreview>` | Atom | Component | Format-switcher preview pane. |
+| `<ChordProPreview>` | Preview-with-controls | Component | `<RendererPreview>` + format select + transpose, for hosts that own the source. |
+| `<ChordProEditor>` | Composed editor | Component | All-in-one ChordPro editor + preview shell. |
+| `useChordproAst` | Atom | Hook | Parse ChordPro source into AST + warnings. |
+| `renderChordproAst` | Atom | Function | AST → JSX walker (powers `<ChordSheet format="html">`). |
+| `applyChordReposition` | Atom | Function | Apply a drag-to-reposition event to a ChordPro source. |
+| `lyricsOffsetToSourceColumn` | Atom | Function | Lyrics-offset → source-column helper for drag UX. |
+| `useDebounced` | Atom | Hook | General-purpose debouncer used by `<ChordTextarea>`. |
+| `<IrealBarGrid>` | Atom | Component | Header form + interactive bar grid + URL round-trip for iReal Pro. |
+| `<IrealPreview>` | Atom | Component | iReal Pro SVG preview via `renderIrealSvg`. |
+| `<IrealProEditor>` | Composed editor | Component | All-in-one iReal Pro editor + preview shell. |
+| `useIrealParse` | Atom | Hook | `irealb://` URL → typed AST. |
+| `useIrealSerialize` | Atom | Hook | AST → `irealb://` URL. |
+| `useIrealRender` | Atom | Hook | `irealb://` URL → SVG string. |
+| `irealChordToString` | Atom | Function | Render an iReal AST chord to its URL shorthand. |
+| `irealSectionLabelToString` | Atom | Function | Render an iReal AST section label to its display name. |
+| `version()` | — | Function | Returns the installed package version. |
 
 Every component accepts a `className`, `style`, and where
 applicable a structured `errorFallback` prop (`ReactNode`, a

@@ -37,7 +37,7 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
    * (`renderChordproAst`'s `activeSourceLine` option), which tags
    * every body element with `data-source-line` and applies a
    * `line--active` modifier to the matching element. Pair with
-   * `<SourceEditor>`'s `onCaretLineChange` callback to keep the
+   * `<ChordSourceArea>`'s `onCaretLineChange` callback to keep the
    * preview's highlighted line in sync with the editor caret.
    * Only consumed by `format="html"` — the text branch passes
    * through unchanged.

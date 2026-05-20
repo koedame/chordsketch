@@ -1,8 +1,10 @@
 // `@chordsketch/ui-irealb-editor` — public entry point.
 //
 // `createIrealbEditor(options)` builds an `EditorAdapter`-shaped
-// object that drops into `@chordsketch/ui-web`'s
-// `MountOptions.createEditor` slot. The adapter:
+// object that hosts mount into their own DOM tree. The adapter
+// contract (see {@link EditorAdapter} below) is self-contained —
+// any host that implements `getValue` / `setValue` / `onChange` /
+// `destroy` / `element` can embed the editor. The adapter:
 //
 //   1. Parses `options.initialValue` (an `irealb://` URL) via the
 //      injected `wasm.parseIrealb`.
@@ -35,14 +37,13 @@ export { canonicalSymbolText } from './ast.js';
 export type { IrealbWasm } from './state.js';
 export { SAMPLE_IREALB } from './sample.js';
 
-/** Subset of `@chordsketch/ui-web`'s `EditorAdapter` this package
- * implements. Re-declared here (rather than imported from
- * `@chordsketch/ui-web`) so the editor stays usable in environments
- * that do not depend on `ui-web` directly — tests, future hosts,
- * and the standalone consumer scenarios called out in #2363. The
- * shape MUST stay byte-equal to `EditorAdapter` in
- * `packages/ui-web/src/index.ts`; if the contract there changes,
- * update this declaration in the same PR. */
+/** Self-contained `EditorAdapter` contract this package exports.
+ * Hosts implement (or wrap) this interface to embed the iReal Pro
+ * editor — the contract has no dependency on any other workspace
+ * package. The shape is deliberately minimal so any host that can
+ * mount a DOM element and observe value changes can integrate the
+ * editor; the canonical React-side host is `@chordsketch/react`'s
+ * `<IrealProEditor>`. */
 export interface EditorAdapter {
   element: HTMLElement;
   getValue(): string;
@@ -52,17 +53,17 @@ export interface EditorAdapter {
   destroy(): void;
 }
 
-/** Options accepted by {@link createIrealbEditor}. The first two
- * fields mirror `@chordsketch/ui-web`'s `EditorFactoryOptions` so
- * this factory drops directly into the `MountOptions.createEditor`
- * slot — the host wraps it in a closure that captures `wasm`. */
+/** Options accepted by {@link createIrealbEditor}. The two leading
+ * fields (`initialValue` / `placeholder`) match the conventional
+ * editor-factory shape a host typically wraps this constructor in;
+ * the host supplies `wasm` once at mount time. */
 export interface CreateIrealbEditorOptions {
   /** Initial `irealb://` URL. Empty string seeds an empty chart
    * (`makeEmptySong()` below) instead of throwing. */
   initialValue: string;
-  /** Reserved for parity with `EditorFactoryOptions`; currently
-   * unused — the iReal editor does not have a single text-input
-   * placeholder. */
+  /** Reserved for parity with the conventional editor-factory
+   * shape; currently unused — the iReal editor does not have a
+   * single text-input placeholder. */
   placeholder?: string;
   /** Injected wasm bridge. The host (playground / desktop /
    * tests) supplies an object whose two methods come from

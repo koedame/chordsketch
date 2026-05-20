@@ -9,8 +9,8 @@ runtime. Pick a starting point that fits how you are integrating:
 - [Transpose chords by N semitones](tasks/transpose.md)
 - [Embed ChordPro and iReal Pro in a React app](tasks/embed-react.md)
   — 10 copy-paste recipes covering the `@chordsketch/react`
-  component surface (`<Playground>`, `<ChordSheet>`,
-  `<IrealPlayground>`, `<PdfExport>`, custom AST rendering, SSR
+  component surface (`<ChordProEditor>`, `<ChordSheet>`,
+  `<IrealProEditor>`, `<PdfExport>`, custom AST rendering, SSR
   notes).
 
 Each task page shows the same operation across every binding, so

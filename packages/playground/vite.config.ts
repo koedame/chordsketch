@@ -46,17 +46,8 @@ export default defineConfig({
       // wasm-export')` inside `use-pdf-export.ts` produces a
       // separate chunk so the initial playground load stays light.
       '@chordsketch/wasm-export': resolve(here, '../npm-export/web/chordsketch_wasm.js'),
-      // Shared editor + preview UI extracted in #2073. Same alias
-      // pattern as the wasm package: ui-web is a sibling workspace
-      // package that ships only TypeScript sources, so Vite consumes
-      // it directly via the `./src/index.ts` main + `./src/style.css`
-      // export. Match-longer-first ordering: the more specific
-      // `/style.css` alias must be listed before the bare package
-      // alias so Vite resolves it correctly.
-      '@chordsketch/ui-web/style.css': resolve(here, '../ui-web/src/style.css'),
-      '@chordsketch/ui-web': resolve(here, '../ui-web/src/index.ts'),
-      // React component library (#2454). Same alias pattern as
-      // ui-web — Vite consumes the TS sources directly. Longer
+      // React component library (#2454). Same alias pattern as the
+      // wasm package — Vite consumes the TS sources directly. Longer
       // specifier (`/styles.css`) is listed before the bare package
       // alias so Vite resolves it correctly.
       '@chordsketch/react/styles.css': resolve(here, '../react/src/styles.css'),
@@ -86,7 +77,6 @@ export default defineConfig({
         here,
         resolve(here, '../npm'),
         resolve(here, '../npm-export'),
-        resolve(here, '../ui-web'),
         resolve(here, '../react'),
         resolve(here, '../ui-irealb-editor'),
       ],

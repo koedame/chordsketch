@@ -2,7 +2,7 @@ import { type ReactNode, useCallback, useRef, useState } from 'react';
 
 /**
  * Hook that owns a polite ARIA live region for structural-edit
- * announcements in `<IrealEditor>`. Mirrors the announcer pattern
+ * announcements in `<IrealBarGrid>`. Mirrors the announcer pattern
  * established by `@chordsketch/ui-irealb-editor`'s
  * `createIrealbEditor` at
  * `packages/ui-irealb-editor/src/index.ts` (lines 105-127, the
@@ -37,7 +37,7 @@ import { type ReactNode, useCallback, useRef, useState } from 'react';
  *   announcements all fire.
  * - `liveRegion` — a JSX node the caller renders once inside the
  *   editor. The element is visually hidden via the
- *   `chordsketch-ireal-editor__sr-only` utility class declared in
+ *   `chordsketch-ireal-bar-grid__sr-only` utility class declared in
  *   `packages/react/src/styles.css` but stays in the accessibility
  *   tree.
  *
@@ -82,7 +82,7 @@ export function useAnnouncer(): UseAnnouncerResult {
 
   const liveRegion = (
     <div
-      className="chordsketch-ireal-editor__sr-only chordsketch-ireal-editor__live"
+      className="chordsketch-ireal-bar-grid__sr-only chordsketch-ireal-bar-grid__live"
       role="status"
       aria-live="polite"
       aria-atomic="true"

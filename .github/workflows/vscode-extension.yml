@@ -92,6 +92,20 @@ jobs:
       - name: Build @chordsketch/wasm-export (heavy) from source
         run: node packages/npm-export/scripts/build.mjs
 
+      - name: Install and build @chordsketch/react
+        # The extension declares `@chordsketch/react` as a `file:`
+        # workspace dep; its `prepare` script auto-builds on
+        # install, but only if the React package's own devDeps are
+        # populated. Run the install + build here explicitly so
+        # esbuild's `@chordsketch/react` alias (in `esbuild.mjs`)
+        # has an in-tree dist to fall back on when the src/ tree
+        # is unavailable, and so type definitions are present for
+        # `tsc --noEmit` (#2527).
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+        working-directory: packages/react
+
       - name: Install dependencies
         run: npm ci
         working-directory: packages/vscode-extension
@@ -247,6 +261,13 @@ jobs:
       # to.
       - name: Build @chordsketch/wasm-export (heavy) from source
         run: node packages/npm-export/scripts/build.mjs
+
+      - name: Install and build @chordsketch/react
+        # See the `build` job above for the rationale (#2527).
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+        working-directory: packages/react
 
       - name: Install dependencies
         run: npm ci

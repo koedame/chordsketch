@@ -5,7 +5,7 @@ name: "@chordsketch/ui-irealb-editor"
 # by the playground / desktop runtime swap landing in #2366. The
 # wasm bridge is injected and stubbed in tests, so this workflow
 # does not need to build @chordsketch/wasm — keeping it tightly
-# scoped to the editor's own logic. Mirrors `ui-web.yml`.
+# scoped to the editor's own logic.
 
 on:
   push:

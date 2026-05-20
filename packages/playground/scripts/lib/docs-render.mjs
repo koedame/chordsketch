@@ -70,15 +70,22 @@ export const DOC_GROUPS = [
       },
       {
         slug: 'reference/playground',
-        title: '<Playground>',
-        blurb: 'One-component editor + preview + transpose embed.',
+        title: '<ChordProEditor>',
+        blurb: 'One-component editor + preview + transpose embed (renamed from <Playground> in v0.3.0).',
         sourcePath: 'docs/sdk/reference/playground.md',
+      },
+      {
+        slug: 'reference/chord-pro-preview',
+        title: '<ChordProPreview>',
+        blurb:
+          'Preview pane + format toggle + transpose controls, no source editor (new in v0.3.0).',
+        sourcePath: 'docs/sdk/reference/chord-pro-preview.md',
       },
       {
         slug: 'reference/editors',
         title: 'Editors',
         blurb:
-          '<ChordEditor>, <SourceEditor>, chordProLanguage, chordProTagTable.',
+          '<ChordTextarea>, <ChordSourceArea>, chordProLanguage, chordProTagTable.',
         sourcePath: 'docs/sdk/reference/editors.md',
       },
       {
@@ -116,7 +123,7 @@ export const DOC_GROUPS = [
       {
         slug: 'reference/ireal-components',
         title: 'iReal Pro components',
-        blurb: '<IrealEditor>, <IrealPreview>, <IrealPlayground>.',
+        blurb: '<IrealBarGrid>, <IrealPreview>, <IrealProEditor>.',
         sourcePath: 'docs/sdk/reference/ireal-components.md',
       },
       {

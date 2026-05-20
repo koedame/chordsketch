@@ -218,7 +218,7 @@ jobs:
     #      Vite alias in `apps/desktop/vite.config.ts` has a target.
     #   2. `npm ci` + `npm run build` inside `apps/desktop/` (runs `tsc`
     #      + `vite build`) to prove the WebView frontend type-checks
-    #      and bundles against the shared `@chordsketch/ui-web` source.
+    #      and bundles against the shared `@chordsketch/react` source.
     #   3. `cargo check -p chordsketch-desktop --all-targets` on the
     #      Tauri Rust side, with webkit2gtk installed.
     # Guarantees both halves of the desktop stack compile on every PR,
@@ -291,6 +291,17 @@ jobs:
         # prebuild needs this install first.
         run: npm ci
         working-directory: packages/tree-sitter-chordpro
+
+      - name: Build @chordsketch/react
+        # The desktop's `tsconfig.json` `paths` mapping points
+        # `@chordsketch/react` at `packages/react/dist/index.d.ts`,
+        # so `tsc` requires a built React package to type-check the
+        # desktop frontend. Install + build here ahead of the
+        # desktop's `npm run build` step (#2527).
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+        working-directory: packages/react
 
       - name: Install desktop frontend deps
         run: npm ci

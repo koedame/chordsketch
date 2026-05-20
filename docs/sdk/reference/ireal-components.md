@@ -1,21 +1,27 @@
 # iReal Pro components
 
 The iReal Pro surface mirrors the ChordPro surface in shape:
-editor + preview + playground composite. All three components
+bar-grid atom + preview + composed editor. All three components
 consume the same wasm bridge under the hood; a parse error
 inside the editor renders through `errorFallback` without
 unmounting the surrounding tree.
 
-## `<IrealPlayground>`
+> Renamed in `@chordsketch/react` v0.3.0
+> ([ADR-0022](../../adr/0022-react-as-canonical-preview-surface.md)).
+> `<IrealEditor>` is now `<IrealBarGrid>` (Tier 1 widget atom) and
+> `<IrealPlayground>` is now `<IrealProEditor>` (Tier 3 composed
+> editor). `<IrealPreview>` keeps its name.
+
+## `<IrealProEditor>`
 
 ```tsx
-import { IrealPlayground } from '@chordsketch/react';
+import { IrealProEditor } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
 const URL =
   'irealb://Autumn%20Leaves%3D%5BT44Cm7%20%7C%20F7%20%7C%20BbMaj7%20%7C%20EbMaj7%20%5D%3DJoseph%20Kosma%3DJazz%20Ballad%3DC';
 
-<IrealPlayground defaultValue={URL} />
+<IrealProEditor defaultValue={URL} />
 ```
 
 | Prop | Type | Default | Description |
@@ -28,12 +34,12 @@ const URL =
 | `hideBars` | `boolean` | `false` | Hide the bar-grid editor inside the editor pane. |
 | `hidePreview` | `boolean` | `false` | Hide the SVG preview pane. |
 | `className`, `style` | — | — | Forwarded to the wrapper. |
-| `errorFallback` | `ReactNode \| (err) => ReactNode \| null` | inline message | Renderer for parse / serialise errors. |
+| `errorFallback` | `((err: Error) => ReactNode) \| null` | inline message | Renderer for parse / serialise errors. |
 | `loader`, `previewLoader` | loader callables | — | Test-only overrides. |
 
-## `<IrealEditor>`
+## `<IrealBarGrid>`
 
-The form-based editor surface used inside `<IrealPlayground>`.
+The form-based bar-grid editor surface used inside `<IrealProEditor>`.
 Available standalone for hosts that want their own preview layout.
 
 | Prop | Type | Description |
@@ -45,7 +51,7 @@ Available standalone for hosts that want their own preview layout.
 | `showBars` | `boolean` | Whether to show the bar-grid editor. Defaults to `true`. |
 | `promptSectionLabel` | `(current) => IrealSectionLabel \| null` | Override the prompt UX for adding / renaming sections. Defaults to `window.prompt`. |
 | `confirmDeleteSection` | `(label) => boolean` | Override the confirm UX for deleting sections. Defaults to `window.confirm`. |
-| `errorFallback` | `ReactNode \| (err) => ReactNode \| null` | Parse / serialise error renderer. |
+| `errorFallback` | `((err: Error) => ReactNode) \| null` | Parse / serialise error renderer. |
 | `className`, `style` | — | Forwarded to the wrapper. |
 | `loader` | loader callable | Test-only override. |
 
@@ -58,7 +64,7 @@ produces.
 | Prop | Type | Description |
 |---|---|---|
 | `source` | `string` | `irealb://` URL to render. |
-| `errorFallback` | `ReactNode \| (err) => ReactNode \| null` | Rendered on parse failure. |
+| `errorFallback` | `((err: Error) => ReactNode) \| null` | Rendered on parse failure. |
 | `className`, `style` | — | Forwarded to the wrapper. |
 | `loader` | loader callable | Test-only override. |
 

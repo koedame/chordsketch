@@ -1963,7 +1963,7 @@ export interface RenderChordproAstOptions {
    * line whose number matches `activeSourceLine` additionally
    * picks up a `line--active` class on its root element.
    *
-   * Pair with the `SourceEditor`'s `onCaretLineChange` callback to
+   * Pair with the `ChordSourceArea`'s `onCaretLineChange` callback to
    * wire up bidirectional caret tracking. Omit to disable the
    * tagging entirely (the walker skips both the attribute and the
    * class). The AST's `lines: ChordproLine[]` array is in

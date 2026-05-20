@@ -28,6 +28,7 @@ const REGISTERED_SLUGS = [
   'reference',
   'reference/chord-sheet',
   'reference/playground',
+  'reference/chord-pro-preview',
   'reference/editors',
   'reference/layout',
   'reference/transpose',

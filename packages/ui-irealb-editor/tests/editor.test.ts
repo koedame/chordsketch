@@ -160,7 +160,7 @@ describe('createIrealbEditor', () => {
 
     // Replace the editor contents programmatically. The contract
     // says: setValue is a load, not a user edit, so onChange must
-    // NOT fire. Mirrors `defaultTextareaEditor` in ui-web.
+    // NOT fire.
     const replacementSong: IrealSong = { ...SAMPLE_SONG, title: 'Loaded' };
     const replacementUrl = `irealb://json:${encodeURIComponent(
       JSON.stringify(replacementSong),
@@ -249,8 +249,7 @@ describe('createIrealbEditor', () => {
   test('initialValue === "" seeds an empty chart without invoking parseIrealb', () => {
     // Empty-string fast path: skipping the wasm parse keeps a
     // freshly-mounted editor predictable when the host has not yet
-    // loaded a file (matches `defaultTextareaEditor`'s empty
-    // initial behaviour).
+    // loaded a file.
     const wasm = makeStubWasm();
     const editor = createIrealbEditor({ initialValue: '', wasm });
 

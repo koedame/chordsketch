@@ -181,6 +181,20 @@ runs:
       run: npm ci
       working-directory: packages/tree-sitter-chordpro
 
+    - name: Build @chordsketch/react
+      # `apps/desktop`'s `tsconfig.json` resolves `@chordsketch/react`
+      # via the `paths` mapping to `packages/react/dist/index.d.ts`;
+      # without a built `dist/` the desktop `tsc` step fails with
+      # "Cannot find module '@chordsketch/react' or its corresponding
+      # type declarations". Install + build the React package here so
+      # the desktop's frontend build picks up the type surface that
+      # ships with the v0.3.0 React consolidation (#2527).
+      shell: bash
+      run: |
+        npm install --no-audit --no-fund
+        npm run build
+      working-directory: packages/react
+
     - name: Install desktop frontend deps
       shell: bash
       run: npm ci

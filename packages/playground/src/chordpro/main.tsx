@@ -13,14 +13,14 @@ if (import.meta.env.DEV) {
 }
 
 import init, { validate, version as wasmVersion } from '@chordsketch/wasm';
-import { SAMPLE_CHORDPRO } from '@chordsketch/ui-web';
+import { SAMPLE_CHORDPRO } from '../sample';
 import {
   PdfExport,
   RendererPreview,
-  SourceEditor,
+  ChordSourceArea,
   applyChordReposition,
   type ChordRepositionEvent,
-  type SourceEditorHandle,
+  type ChordSourceAreaHandle,
 } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
@@ -31,7 +31,7 @@ import '../playground.css';
 // ---------------------------------------------------------------
 //
 // `init()` must resolve before any wasm-backed function is called.
-// `<RendererPreview>` and `<SourceEditor>` from `@chordsketch/react`
+// `<RendererPreview>` and `<ChordSourceArea>` from `@chordsketch/react`
 // either don't depend on wasm (the editor is pure CodeMirror) or
 // gate their first render on the same module's lazy loader, so the
 // playground only needs to kick off `init()` once at module load
@@ -578,7 +578,7 @@ function PlaygroundApp(): JSX.Element {
   const [warningsExpanded, setWarningsExpanded] = useState<boolean>(false);
   const [version, setVersion] = useState<string | null>(cachedVersion);
 
-  const editorRef = useRef<SourceEditorHandle | null>(null);
+  const editorRef = useRef<ChordSourceAreaHandle | null>(null);
 
   useEffect(() => {
     if (version !== null) return;
@@ -606,9 +606,9 @@ function PlaygroundApp(): JSX.Element {
 
   // Bump capo with the functional `setSource` form so rapid clicks
   // in the same event-loop tick read the latest value, not the
-  // closure-captured one. The controlled `<SourceEditor value>`
+  // closure-captured one. The controlled `<ChordSourceArea value>`
   // prop syncs the CodeMirror doc on the next render via
-  // `<SourceEditor>`'s value-sync effect, so we don't need to call
+  // `<ChordSourceArea>`'s value-sync effect, so we don't need to call
   // `editorRef.current?.setValue` here.
   const stepCapo = useCallback((delta: number) => {
     setSource((current) => {
@@ -822,7 +822,7 @@ function PlaygroundApp(): JSX.Element {
               </div>
             </div>
             <div className="pane-body">
-              <SourceEditor
+              <ChordSourceArea
                 ref={editorRef}
                 value={source}
                 onChange={handleSourceChange}

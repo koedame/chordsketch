@@ -16,8 +16,7 @@ playground. This applies symmetrically to:
 - **iReal Pro pipeline**: `chordsketch-ireal` (parser /
   serializer / AST), `chordsketch-render-ireal`,
   `@chordsketch/ui-irealb-editor`.
-- Any **shared infrastructure**: `@chordsketch/wasm`,
-  `@chordsketch/ui-web`.
+- Any **shared infrastructure**: `@chordsketch/wasm`.
 
 ## Why
 

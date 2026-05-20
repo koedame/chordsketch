@@ -94,8 +94,9 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0014](0014-bravura-glyphs-as-svg-paths.md) | Bravura SMuFL glyphs ship as inline SVG paths, not as a bundled font | Accepted (2026-05-01) |
 | [0015](0015-disable-github-merge-queue.md) | Disable GitHub Merge Queue (supersedes ADR-0003) | Accepted (2026-05-03) |
 | [0016](0016-dependabot-review-skill.md) | Dependabot review moves from a CI bot to a session skill; major bumps are no longer suppressed | Accepted (2026-05-03) |
-| [0017](0017-react-renders-from-ast.md) | React surface renders from AST; Rust HTML renderer demoted to static-output | Accepted (2026-05-10) |
+| [0017](0017-react-renders-from-ast.md) | React surface renders from AST; Rust HTML renderer demoted to static-output | Accepted (2026-05-10; consumer classification partially updated by ADR-0022) |
 | [0018](0018-phase-based-shell-orchestrated-workflows.md) | Phase-based shell-orchestrated workflows (declines cc-wf-studio / n8n / Agent SDK as substitutes) | Accepted (2026-05-16) |
 | [0019](0019-batch-mode-autopilot-issue.md) | Batch-mode autopilot-issue workflow (one PR aggregates multiple eligible issues per round) | Accepted (2026-05-17) |
 | [0020](0020-ireal-pro-react-surface.md) | iReal Pro React surface is native React (option (b) MVP), not a `ui-irealb-editor` wrapper | Accepted (2026-05-19) |
 | [0021](0021-docs-site-co-located-with-playground.md) | Docs site is co-located with the playground (option (a), not Docusaurus / VitePress / subdomain) | Accepted (2026-05-19) |
+| [0022](0022-react-as-canonical-preview-surface.md) | React as the canonical preview surface; `@chordsketch/ui-web` retired | Accepted (2026-05-20) |

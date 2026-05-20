@@ -5,16 +5,14 @@
  *
  * Tokens come from the design system (see
  * `design-system/tokens.css` at the workspace root and
- * `design-system/DESIGN.md` §9). The host typically provides
- * them — `@chordsketch/ui-web/style.css` ships an inline copy of
- * the same `:root` block — but the per-package fallback below
- * keeps the editor visually correct when consumed standalone.
+ * `design-system/DESIGN.md` §9). Hosts that already supply the
+ * same `:root` block inherit the values; the per-package fallback
+ * below keeps the editor visually correct when consumed standalone.
  */
 
-/* Mirrors `design-system/tokens.css` 1:1. The host (playground or
- * desktop WebView) typically already supplies these via
- * `@chordsketch/ui-web/style.css`, but the standalone copy here
- * keeps the editor visually correct when consumed without that
+/* Mirrors `design-system/tokens.css` 1:1. Hosts that already
+ * supply these tokens at `:root` inherit them; this standalone
+ * copy keeps the editor visually correct when consumed without a
  * sibling stylesheet. Keep in lockstep with `tokens.css` whenever
  * it changes (see `design-system/DESIGN.md` §9). */
 :root {

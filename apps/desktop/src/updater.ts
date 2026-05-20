@@ -36,25 +36,40 @@ const OPT_OUT_KEY = 'chordsketch-desktop-auto-update-opt-out/v1';
 export function isAutoUpdateOptedOut(): boolean {
   try {
     return window.localStorage.getItem(OPT_OUT_KEY) === 'true';
-  } catch {
+  } catch (err) {
     // Safari private mode / sandboxed iframe — treat as not
     // opted out so the default behaviour is "check for updates".
+    // Log so the failure is observable rather than swallowed.
+    // eslint-disable-next-line no-console
+    console.warn('Failed to read auto-update opt-out preference:', err);
     return false;
   }
 }
 
-/** Persist the user's opt-out preference. */
-export function setAutoUpdateOptOut(optOut: boolean): void {
+/**
+ * Persist the user's opt-out preference. Returns `true` on success,
+ * `false` if the write fails (e.g. private mode, quota exceeded).
+ * Callers that need to inform the user about a lost preference can
+ * react to the `false` return; the default in-process toggle still
+ * applies for the current session even when persistence fails.
+ */
+export function setAutoUpdateOptOut(optOut: boolean): boolean {
   try {
     if (optOut) {
       window.localStorage.setItem(OPT_OUT_KEY, 'true');
     } else {
       window.localStorage.removeItem(OPT_OUT_KEY);
     }
-  } catch {
+    return true;
+  } catch (err) {
     // Persistence failure is a convenience loss, not a
     // correctness failure — the check/no-check decision falls
-    // back to "check" on next launch.
+    // back to "check" on next launch. Log so the failure is
+    // observable; callers can surface a dialog warning the user
+    // their preference will need to be reapplied next launch.
+    // eslint-disable-next-line no-console
+    console.warn('Failed to persist auto-update opt-out preference:', err);
+    return false;
   }
 }
 

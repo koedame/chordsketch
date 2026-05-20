@@ -7,8 +7,8 @@
 // wasm bridge with the parse / serialize methods, so `render.ts`
 // does not have to thread the wasm functions through every event
 // handler. The state object itself is exposed via `state.song` for
-// direct field mutation — no setters / no proxies, matching the
-// "plain DOM, plain TS" idiom used throughout `ui-web`.
+// direct field mutation — no setters, no proxies, plain DOM and
+// plain TS throughout.
 
 import type { IrealSong } from './ast.js';
 

@@ -1,20 +1,27 @@
 # Editors
 
-`@chordsketch/react` ships two editor adapters: a CodeMirror 6-backed
-`<SourceEditor>` (preferred for non-trivial editing) and a
-zero-dep `<ChordEditor>` baseline (a textarea + preview pair).
+`@chordsketch/react` ships two source-editor atoms: a CodeMirror 6-backed
+`<ChordSourceArea>` (preferred for non-trivial editing) and a
+zero-dep `<ChordTextarea>` baseline (a textarea + preview pair).
 
-## `<SourceEditor>`
+> Renamed in `@chordsketch/react` v0.3.0
+> ([ADR-0022](../../adr/0022-react-as-canonical-preview-surface.md)).
+> `<SourceEditor>` is now `<ChordSourceArea>` and `<ChordEditor>` is
+> now `<ChordTextarea>` — Tier 1 widget atoms use widget-type names,
+> while the `Editor` suffix is reserved for Tier 3 composed editors
+> (`<ChordProEditor>`, `<IrealProEditor>`).
+
+## `<ChordSourceArea>`
 
 ```tsx
 import { useRef, useState } from 'react';
-import { SourceEditor, type SourceEditorHandle } from '@chordsketch/react';
+import { ChordSourceArea, type ChordSourceAreaHandle } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
 const [source, setSource] = useState('{title: My Song}\n[G]Hello');
-const editorRef = useRef<SourceEditorHandle>(null);
+const editorRef = useRef<ChordSourceAreaHandle>(null);
 
-<SourceEditor
+<ChordSourceArea
   ref={editorRef}
   value={source}
   onChange={setSource}
@@ -33,7 +40,7 @@ const editorRef = useRef<SourceEditorHandle>(null);
 | `noLineNumbers` | `boolean` | Hide the gutter. |
 | `noLineWrapping` | `boolean` | Disable soft-wrap. |
 
-`SourceEditorHandle` exposes imperative methods via `ref`:
+`ChordSourceAreaHandle` exposes imperative methods via `ref`:
 
 | Method | Description |
 |---|---|
@@ -45,10 +52,10 @@ const editorRef = useRef<SourceEditorHandle>(null);
 Standard `HTMLAttributes<HTMLDivElement>` (e.g. `className`, `id`)
 are forwarded to the wrapper.
 
-## `<ChordEditor>`
+## `<ChordTextarea>`
 
 Lighter-weight alternative: a textarea-backed editor that shares
-the wasm-backed renderer with `<SourceEditor>`. Use when the host
+the wasm-backed renderer with `<ChordSourceArea>`. Use when the host
 already has its own syntax-highlighting infrastructure and only
 needs a plain text input + the preview.
 
@@ -65,7 +72,7 @@ needs a plain text input + the preview.
 | `debounceMs` | `number` | Delay before the preview re-renders. Defaults to `150`. |
 | `placeholder` | `string` | Textarea placeholder. |
 | `textareaAriaLabel` | `string` | Accessible name for the textarea. |
-| `minTranspose` / `maxTranspose` | `number` | Bounds the keyboard shortcuts. Default `-11` / `11`. |
+| `transposeMin` / `transposeMax` | `number` | Bounds the keyboard shortcuts. Default `-11` / `11`. |
 | `loadingFallback` | `ReactNode` | Shown while wasm initialises. |
 | `errorFallback` | `(err) => ReactNode \| null` | Pass `null` to suppress and surface errors elsewhere. |
 | `wasmLoader`, `astWasmLoader` | loader callables | Test-only overrides. |
@@ -77,7 +84,7 @@ import { chordProLanguage, chordProTagTable } from '@chordsketch/react';
 ```
 
 CodeMirror 6 language extension and the tag table used by
-`<SourceEditor>` for ChordPro syntax highlighting. Re-exported so
+`<ChordSourceArea>` for ChordPro syntax highlighting. Re-exported so
 hosts can build their own CodeMirror instance with the same
 highlighter — e.g., to embed a ChordPro snippet inside a
 larger CodeMirror editor.

@@ -239,12 +239,12 @@ describe('cleanUrlFor', () => {
 });
 
 describe('DOC_GROUPS registry', () => {
-  it('declares 17 pages across 3 groups', () => {
+  it('declares 18 pages across 3 groups', () => {
     const total = DOC_GROUPS.reduce(
       (n: number, g: { pages: readonly unknown[] }) => n + g.pages.length,
       0,
     );
-    expect(total).toBe(17);
+    expect(total).toBe(18);
     expect(DOC_GROUPS.map((g) => g.label)).toEqual([
       'Getting started',
       'Recipes',
@@ -301,6 +301,7 @@ describe('findPage / allPages', () => {
       'reference',
       'reference/chord-sheet',
       'reference/playground',
+      'reference/chord-pro-preview',
       'reference/editors',
       'reference/layout',
       'reference/transpose',

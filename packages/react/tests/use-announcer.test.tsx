@@ -36,8 +36,8 @@ describe('useAnnouncer', () => {
   test('uses the shared sr-only utility class so the region stays in the a11y tree', () => {
     render(<Harness messages={[]} />);
     const live = screen.getByRole('status');
-    expect(live.classList.contains('chordsketch-ireal-editor__sr-only')).toBe(true);
-    expect(live.classList.contains('chordsketch-ireal-editor__live')).toBe(true);
+    expect(live.classList.contains('chordsketch-ireal-bar-grid__sr-only')).toBe(true);
+    expect(live.classList.contains('chordsketch-ireal-bar-grid__live')).toBe(true);
   });
 
   test('announce sets the live region textContent after a microtask', async () => {

@@ -17,16 +17,19 @@ The fastest path. One component, no configuration, full editor +
 preview + transpose UI:
 
 ```tsx
-import { Playground } from '@chordsketch/react';
+import { ChordProEditor } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
 export default function App() {
-  return <Playground defaultValue={"{title: My Song}\n[G]Hello [D]world"} />;
+  return <ChordProEditor defaultValue={"{title: My Song}\n[G]Hello [D]world"} />;
 }
 ```
 
-`<Playground>` accepts `source` + `onChange` to drive the value from
+`<ChordProEditor>` accepts `source` + `onChange` to drive the value from
 the host (controlled mode) instead of letting the component own it.
+
+> Renamed from `<Playground>` in `@chordsketch/react` v0.3.0 per
+> [ADR-0022](../../adr/0022-react-as-canonical-preview-surface.md).
 
 ## Recipe 2 — Render a read-only chord sheet
 
@@ -55,26 +58,29 @@ preview.
 
 ## Recipe 3 — Build a custom editor layout
 
-For hosts that want their own pane layout, `<SourceEditor>` (the
+For hosts that want their own pane layout, `<ChordSourceArea>` (the
 CodeMirror 6 editor with ChordPro syntax highlight) and
 `<RendererPreview>` (the format-switching preview pane) compose
 freely:
 
 ```tsx
 import { useState } from 'react';
-import { SourceEditor, RendererPreview, SplitLayout } from '@chordsketch/react';
+import { ChordSourceArea, RendererPreview, SplitLayout } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
 export function Editor() {
   const [source, setSource] = useState('{title: My Song}\n[G]Hello');
   return (
     <SplitLayout
-      start={<SourceEditor value={source} onChange={setSource} />}
+      start={<ChordSourceArea value={source} onChange={setSource} />}
       end={<RendererPreview source={source} format="html" />}
     />
   );
 }
 ```
+
+> `<ChordSourceArea>` was renamed from `<SourceEditor>` in
+> `@chordsketch/react` v0.3.0.
 
 `<SplitLayout>` exposes a `--cs-split-ratio` CSS variable for the
 two-pane ratio and falls back to a stacked layout under 768 px.
@@ -210,20 +216,23 @@ can place anywhere in your tree.
 
 ## Recipe 8 — Drop in an iReal Pro playground
 
-`<IrealPlayground>` is the iReal Pro sibling of `<Playground>` — a
+`<IrealProEditor>` is the iReal Pro sibling of `<ChordProEditor>` — a
 single-component embed for an iReal Pro chart:
 
 ```tsx
-import { IrealPlayground } from '@chordsketch/react';
+import { IrealProEditor } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
 const URL =
   'irealb://Autumn%20Leaves%3D%5BT44Cm7%20%7C%20F7%20%7C%20BbMaj7%20%7C%20EbMaj7%20%5D%3DJoseph%20Kosma%3DJazz%20Ballad%3DC';
 
 export default function App() {
-  return <IrealPlayground defaultValue={URL} />;
+  return <IrealProEditor defaultValue={URL} />;
 }
 ```
+
+> Renamed from `<IrealPlayground>` in `@chordsketch/react` v0.3.0
+> per [ADR-0022](../../adr/0022-react-as-canonical-preview-surface.md).
 
 The composite shows the editor (header form + interactive bar grid
 with structural editing + URL textarea) next to the SVG preview.

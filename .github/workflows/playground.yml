@@ -8,9 +8,9 @@ name: "playground"
 # so a regression surfaces against the change rather than only
 # at deploy time.
 #
-# Mirrors `ui-web.yml`: same setup-node config, same install-then-
-# typecheck-then-test ordering, same concurrency / cancel-in-progress
-# rules.
+# Mirrors `ui-irealb-editor.yml`: same setup-node config, same
+# install-then-typecheck-then-test ordering, same concurrency /
+# cancel-in-progress rules.
 
 on:
   push:
@@ -63,10 +63,6 @@ jobs:
       # `packages/<sibling>/node_modules/` to walk into.
       - name: Install sibling package dependencies
         working-directory: packages/react
-        run: npm ci
-
-      - name: Install ui-web dependencies
-        working-directory: packages/ui-web
         run: npm ci
 
       - name: Install ui-irealb-editor dependencies
