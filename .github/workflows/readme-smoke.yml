@@ -176,35 +176,72 @@ jobs:
   npm-wasm:
     name: npm (@chordsketch/wasm)
     runs-on: ubuntu-latest
+    # Pin to the exact released version so the smoke test verifies
+    # the *specific* artifact it was written against, rather than
+    # silently following whatever the latest published version
+    # happens to be. 0.1.0 is published-but-broken on Node.js (the
+    # --target web init tries to fetch via file:// which Node's
+    # undici does not implement); 0.1.1 ships the dual-package
+    # layout where Node resolves to a wasm-pack --target nodejs
+    # build that auto-loads synchronously.
+    #
+    # Bump policy: every time `@chordsketch/wasm` is published to
+    # npm, update this pin in the same PR that bumps the workspace
+    # version (or, for npm-only patch releases like the dual-package
+    # 0.1.0 → 0.1.1 fix, in the publish PR itself). The README sync
+    # check (.github/workflows/readme-sync.yml) does not catch this
+    # automatically because the version string lives only here.
+    env:
+      WASM_VERSION: "0.5.0"
     steps:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 22
 
+      # Release-cut tolerance: a release-cut PR bumps WASM_VERSION here
+      # in lockstep with the workspace, but the matching `npm publish`
+      # is a maintainer-local manual step that happens AFTER squash-
+      # merge per ADR-0008. During the PR window between version-bump
+      # and manual publish, `npm install @chordsketch/wasm@<VERSION>`
+      # returns ETARGET (notarget: no matching version) and fails this
+      # job — a false-positive that historically blocked every release
+      # cut PR (see #2412/v0.4.0).
+      #
+      # This step probes the registry for the pinned version. If the
+      # version is not yet published, subsequent install + smoke steps
+      # short-circuit cleanly and the job reports success with an
+      # advisory note instead of red. Sister-site to the macports
+      # cargo.crates `--check` fallback (#2413) that tolerates the
+      # same release-cut window for an analogous reason.
+      - name: Probe registry for pinned version
+        id: probe
+        run: |
+          set -euo pipefail
+          # `npm view <pkg>@<ver> version` prints the version when it
+          # exists and exits 0 with empty output when it does not.
+          # The `|| true` guards a network/registry transient (the
+          # ETARGET path is the empty-output case, not a non-zero
+          # exit).
+          published=$(npm view "@chordsketch/wasm@${WASM_VERSION}" version 2>/dev/null || true)
+          if [ -z "$published" ]; then
+            echo "::notice::@chordsketch/wasm@${WASM_VERSION} not yet on npm — assuming release-cut window (per ADR-0008, npm publish is a maintainer-local manual step after this PR squash-merges). Skipping install + smoke; the next daily / main-push run will re-validate against the published artifact."
+            echo "should-skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Found @chordsketch/wasm@${published} on npm; proceeding with install + smoke."
+            echo "should-skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install @chordsketch/wasm in scratch directory
+        if: steps.probe.outputs.should-skip != 'true'
         run: |
           set -euo pipefail
           mkdir -p /tmp/wasm-smoke
           cd /tmp/wasm-smoke
           npm init -y
-          # Pin to the exact released version so the smoke test verifies
-          # the *specific* artifact it was written against, rather than
-          # silently following whatever the latest published version
-          # happens to be. 0.1.0 is published-but-broken on Node.js (the
-          # --target web init tries to fetch via file:// which Node's
-          # undici does not implement); 0.1.1 ships the dual-package
-          # layout where Node resolves to a wasm-pack --target nodejs
-          # build that auto-loads synchronously.
-          #
-          # Bump policy: every time `@chordsketch/wasm` is published to
-          # npm, update this pin in the same PR that bumps the workspace
-          # version (or, for npm-only patch releases like the dual-package
-          # 0.1.0 → 0.1.1 fix, in the publish PR itself). The README sync
-          # check (.github/workflows/readme-sync.yml) does not catch this
-          # automatically because the version string lives only here.
-          npm install '@chordsketch/wasm@0.5.0'
+          npm install "@chordsketch/wasm@${WASM_VERSION}"
 
       - name: Smoke test text + HTML + PDF render
+        if: steps.probe.outputs.should-skip != 'true'
         run: |
           set -euo pipefail
           cd /tmp/wasm-smoke
@@ -575,12 +612,13 @@ jobs:
           # The iReal Pro half of the README's Library Usage section
           # (chordsketch-ireal + chordsketch-render-ireal) is now
           # tested in both modes: PR uses workspace path deps for
-          # workspace-HEAD coverage, and crates.io mode uses the
-          # caret range `^0.4` against the published 0.4.0 release
-          # (see CHANGELOG "## [0.4.0]" → "#### iReal Pro support
-          # (multi-format track, #2050)"). The pre-v0.4.0 carve-out
-          # that skipped iReal on crates.io was removed by #2403.
-          # See #2400 (origin) and #2403 (release follow-up).
+          # workspace-HEAD coverage, and crates.io mode uses a caret
+          # range against the current published major (see CHANGELOG
+          # "## [0.4.0]" → "#### iReal Pro support (multi-format
+          # track, #2050)" for when iReal Pro first reached crates.io).
+          # The pre-v0.4.0 carve-out that skipped iReal on crates.io
+          # was removed by #2403. See #2400 (origin) and #2403 (release
+          # follow-up).
           SCRATCH=/tmp/library-smoke
           mkdir -p "$SCRATCH/src"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -591,17 +629,17 @@ jobs:
             INCLUDE_IREAL=1
             MODE="workspace path deps (PR, ChordPro + iReal)"
           else
-            # Cargo `^0.4` means `>=0.4.0, <0.5.0` (the caret rules treat
+            # Cargo `^0.5` means `>=0.5.0, <0.6.0` (the caret rules treat
             # the leftmost non-zero as the breaking-change boundary).
-            # Bump policy: when the workspace bumps to 0.5.x, update all
-            # four constraints below to `^0.5` in the same release PR.
+            # Bump policy: when the workspace bumps to 0.6.x, update all
+            # four constraints below to `^0.6` in the same release PR.
             # Otherwise, daily smoke tests will silently stop resolving.
             CORE_DEP='chordsketch-chordpro = "^0.5"'
             RENDER_DEP='chordsketch-render-text = "^0.5"'
             IREAL_DEP='chordsketch-ireal = "^0.5"'
             IREAL_RENDER_DEP='chordsketch-render-ireal = "^0.5"'
             INCLUDE_IREAL=1
-            MODE="crates.io published (ChordPro + iReal, ^0.4)"
+            MODE="crates.io published (ChordPro + iReal, ^0.5)"
           fi
           echo "library-smoke mode: $MODE"
           {

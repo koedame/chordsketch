@@ -133,10 +133,12 @@ def _build_repo(
             f"""
             # synthetic fixture
             jobs:
-              wasm-smoke:
+              npm-wasm:
+                env:
+                  WASM_VERSION: "{smoke_npm_pin}"
                 steps:
                   - run: |
-                      npm install '@chordsketch/wasm@{smoke_npm_pin}'
+                      npm install "@chordsketch/wasm@${{WASM_VERSION}}"
               library-smoke:
                 steps:
                   - run: |

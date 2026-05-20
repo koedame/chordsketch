@@ -126,9 +126,14 @@ def load_package_json_version(repo_root: Path, relative: str) -> Source:
     return Source(file=relative, field="version", value=match.group(1))
 
 
-# Line 204 smoke-test pin: `npm install '@chordsketch/wasm@<version>'`
+# npm-wasm smoke pin: the job exposes the pinned version via `env:
+# WASM_VERSION: "<version>"` (so the install step and the release-cut
+# registry-probe step both reference the same constant). The check is
+# anchored on the `npm-wasm:` job's indented `env` block so an unrelated
+# `WASM_VERSION:` env elsewhere can't accidentally satisfy the regex.
 _SMOKE_NPM_PIN_RE = re.compile(
-    r"""npm\s+install\s+['"]@chordsketch/wasm@([0-9][^'"]*)['"]"""
+    r"""npm-wasm:.*?\n\s+env:\s*\n\s+WASM_VERSION:\s*['"]([0-9][^'"]*)['"]""",
+    re.DOTALL,
 )
 # Line ~450 smoke-test caret constraint (matches the chordsketch-chordpro entry,
 # which is representative of the library-smoke mode's paired pins).
