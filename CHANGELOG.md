@@ -74,6 +74,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **Breaking** — `chordsketch.preview.defaultMode` VS Code setting
+  removed; the preview pane is HTML-only. The Format `<select>` in
+  the preview toolbar is hidden. Users who had explicitly set the
+  setting will see an "unknown configuration" warning that can be
+  cleared by deleting the key from `settings.json`. (#2535)
 - **Breaking** — `@chordsketch/ui-web` private workspace package
   deleted entirely. It was a private package (never published to
   npm); external consumers should use `@chordsketch/react`

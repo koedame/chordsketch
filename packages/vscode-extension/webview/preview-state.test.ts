@@ -91,36 +91,19 @@ test('safeGetState: non-object input returns {}', () => {
 
 test('safeGetState: valid input passes through', () => {
   const state = {
-    mode: 'html',
     transpose: 2,
     documentUri: 'file:///tmp/song.cho',
   };
   assert.deepEqual(safeGetState(state), {
-    mode: 'html',
     transpose: 2,
     documentUri: 'file:///tmp/song.cho',
   });
 });
 
-test('safeGetState: text mode accepted', () => {
-  assert.deepEqual(safeGetState({ mode: 'text' }), { mode: 'text' });
-});
-
-test('safeGetState: invalid mode is omitted', () => {
-  const state = { mode: 'pdf', transpose: 1 };
-  assert.deepEqual(safeGetState(state), { transpose: 1 });
-});
-
 test('safeGetState: non-finite transpose is omitted', () => {
-  assert.deepEqual(safeGetState({ mode: 'html', transpose: Number.NaN }), {
-    mode: 'html',
-  });
-  assert.deepEqual(safeGetState({ mode: 'html', transpose: Number.POSITIVE_INFINITY }), {
-    mode: 'html',
-  });
-  assert.deepEqual(safeGetState({ mode: 'html', transpose: Number.NEGATIVE_INFINITY }), {
-    mode: 'html',
-  });
+  assert.deepEqual(safeGetState({ transpose: Number.NaN }), {});
+  assert.deepEqual(safeGetState({ transpose: Number.POSITIVE_INFINITY }), {});
+  assert.deepEqual(safeGetState({ transpose: Number.NEGATIVE_INFINITY }), {});
 });
 
 test('safeGetState: non-number transpose is omitted', () => {
@@ -149,8 +132,8 @@ test('safeGetState: non-string documentUri is omitted', () => {
 });
 
 test('safeGetState: extra unknown fields are dropped', () => {
-  const state = { mode: 'html', extraField: 'ignored', __proto__: { nope: true } };
-  assert.deepEqual(safeGetState(state), { mode: 'html' });
+  const state = { transpose: 1, extraField: 'ignored', __proto__: { nope: true } };
+  assert.deepEqual(safeGetState(state), { transpose: 1 });
 });
 
 // --- safeGetStateWithDiagnostics ---
@@ -168,14 +151,13 @@ test('safeGetStateWithDiagnostics: undefined input is not corrupt', () => {
 });
 
 test('safeGetStateWithDiagnostics: valid input is not corrupt', () => {
-  const result = safeGetStateWithDiagnostics({ mode: 'html', transpose: 1 });
-  assert.deepEqual(result.state, { mode: 'html', transpose: 1 });
+  const result = safeGetStateWithDiagnostics({ transpose: 1 });
+  assert.deepEqual(result.state, { transpose: 1 });
   assert.equal(result.corrupt, false);
 });
 
 test('safeGetStateWithDiagnostics: object with only invalid fields is corrupt', () => {
   const result = safeGetStateWithDiagnostics({
-    mode: 'pdf',
     transpose: Number.NaN,
     documentUri: '',
   });
@@ -191,10 +173,10 @@ test('safeGetStateWithDiagnostics: empty object is corrupt', () => {
 
 test('safeGetStateWithDiagnostics: partially valid input is not corrupt', () => {
   const result = safeGetStateWithDiagnostics({
-    mode: 'html',
-    transpose: Number.NaN, // invalid
+    transpose: 3,
+    documentUri: '', // invalid
   });
-  assert.deepEqual(result.state, { mode: 'html' });
+  assert.deepEqual(result.state, { transpose: 3 });
   assert.equal(result.corrupt, false);
 });
 

@@ -12,12 +12,8 @@
  * drive them with synthetic inputs and verify behaviour.
  */
 
-/** View mode for the preview panel. */
-export type ViewMode = 'html' | 'text';
-
 /** Persisted panel state saved and restored via the VS Code WebView API. */
 export interface PanelState {
-  mode?: ViewMode;
   /** Semitone transposition offset; clamped to [-11, +11]. */
   transpose?: number;
   /**
@@ -83,16 +79,13 @@ export function clamp(n: number, lo: number, hi: number): number {
  * checks.
  *
  * Invalid individual fields are silently dropped — they re-resolve to the
- * caller's default (`readMetaDefaultMode()` for mode, `0` for transpose).
+ * caller's default (`0` for transpose).
  * Callers that need to surface a "corrupt state was dropped" signal to the
  * user should use [`safeGetStateWithDiagnostics`] instead.
  */
 export function safeGetState(raw: unknown): PanelState {
   const obj = isPlainObject(raw) ? raw : null;
   const result: PanelState = {};
-  if (obj?.['mode'] === 'html' || obj?.['mode'] === 'text') {
-    result.mode = obj['mode'] as ViewMode;
-  }
   if (typeof obj?.['transpose'] === 'number' && Number.isFinite(obj['transpose'])) {
     result.transpose = clamp(obj['transpose'] as number, -11, 11);
   }
@@ -117,10 +110,7 @@ export function safeGetStateWithDiagnostics(
 ): { state: PanelState; corrupt: boolean } {
   const state = safeGetState(raw);
   const present = raw !== null && raw !== undefined;
-  const empty =
-    state.mode === undefined &&
-    state.transpose === undefined &&
-    state.documentUri === undefined;
+  const empty = state.transpose === undefined && state.documentUri === undefined;
   return { state, corrupt: present && empty };
 }
 
