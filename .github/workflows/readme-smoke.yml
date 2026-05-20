@@ -240,7 +240,7 @@ jobs:
           npm init -y
           npm install "@chordsketch/wasm@${WASM_VERSION}"
 
-      - name: Smoke test text + HTML + PDF render
+      - name: Smoke test text + HTML render
         if: steps.probe.outputs.should-skip != 'true'
         run: |
           set -euo pipefail
@@ -253,8 +253,13 @@ jobs:
           # imports work. The browser-side `await init()` flow is
           # exercised by the playground manually; CI focuses on Node
           # correctness because that is where automated testing lives.
+          #
+          # PDF rendering moved to @chordsketch/wasm-export in #2466
+          # (the heavy-bundle sister package). This smoke only covers
+          # the lean bundle's surface — text + HTML + version. PDF
+          # smoke lives in the npm-wasm-export job below.
           cat > smoke.mjs << 'EOF'
-          import { render_text, render_html, render_pdf, version } from '@chordsketch/wasm';
+          import { render_text, render_html, version } from '@chordsketch/wasm';
 
           const v = version();
           if (!v) throw new Error('version() returned empty');
@@ -273,7 +278,66 @@ jobs:
             throw new Error('render_html output missing expected content');
           }
           console.log('render_html OK');
+          EOF
+          node smoke.mjs
 
+  npm-wasm-export:
+    name: npm (@chordsketch/wasm-export)
+    runs-on: ubuntu-latest
+    # Heavy-bundle sister package added in #2466 — carries
+    # `render_pdf` (and PNG export) which were split out of
+    # `@chordsketch/wasm` to keep the lean bundle ~175 KB
+    # gzipped. Same pinning + release-cut tolerance pattern as the
+    # `npm-wasm` job above.
+    env:
+      WASM_EXPORT_VERSION: "0.5.0"
+    steps:
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+
+      - name: Probe registry for pinned version
+        id: probe
+        run: |
+          set -euo pipefail
+          published=$(npm view "@chordsketch/wasm-export@${WASM_EXPORT_VERSION}" version 2>/dev/null || true)
+          if [ -z "$published" ]; then
+            echo "::notice::@chordsketch/wasm-export@${WASM_EXPORT_VERSION} not yet on npm — assuming release-cut window (per ADR-0008, npm publish is a maintainer-local manual step after this PR squash-merges). Skipping install + smoke; the next daily / main-push run will re-validate against the published artifact."
+            echo "should-skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Found @chordsketch/wasm-export@${published} on npm; proceeding with install + smoke."
+            echo "should-skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install @chordsketch/wasm-export in scratch directory
+        if: steps.probe.outputs.should-skip != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wasm-export-smoke
+          cd /tmp/wasm-export-smoke
+          npm init -y
+          npm install "@chordsketch/wasm-export@${WASM_EXPORT_VERSION}"
+
+      - name: Smoke test PDF render
+        if: steps.probe.outputs.should-skip != 'true'
+        run: |
+          set -euo pipefail
+          cd /tmp/wasm-export-smoke
+          # `@chordsketch/wasm-export` carries the PDF + PNG exports
+          # split from the lean `@chordsketch/wasm` bundle in #2466.
+          # Same Node / CJS-loading flow as the lean smoke; the only
+          # surface asserted here is `render_pdf` because that's the
+          # function the split moved (and the regression that broke
+          # the v0.5.0 lean smoke at first run was a stale import of
+          # this symbol from the lean bundle).
+          cat > smoke.mjs << 'EOF'
+          import { render_pdf, version } from '@chordsketch/wasm-export';
+
+          const v = version();
+          if (!v) throw new Error('version() returned empty');
+          console.log('version:', v);
+
+          const input = '{title: Smoke}\n{subtitle: WASM-export smoke}\n\n[C]Hello [G]world';
           const pdf = render_pdf(input);
           // render_pdf returns a Uint8Array; check the %PDF magic.
           if (!(pdf instanceof Uint8Array) || pdf.length < 4) {
