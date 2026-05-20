@@ -34,7 +34,7 @@ const URL =
 | `hideBars` | `boolean` | `false` | Hide the bar-grid editor inside the editor pane. |
 | `hidePreview` | `boolean` | `false` | Hide the SVG preview pane. |
 | `className`, `style` | — | — | Forwarded to the wrapper. |
-| `errorFallback` | `ReactNode \| (err) => ReactNode \| null` | inline message | Renderer for parse / serialise errors. |
+| `errorFallback` | `((err: Error) => ReactNode) \| null` | inline message | Renderer for parse / serialise errors. |
 | `loader`, `previewLoader` | loader callables | — | Test-only overrides. |
 
 ## `<IrealBarGrid>`
@@ -51,7 +51,7 @@ Available standalone for hosts that want their own preview layout.
 | `showBars` | `boolean` | Whether to show the bar-grid editor. Defaults to `true`. |
 | `promptSectionLabel` | `(current) => IrealSectionLabel \| null` | Override the prompt UX for adding / renaming sections. Defaults to `window.prompt`. |
 | `confirmDeleteSection` | `(label) => boolean` | Override the confirm UX for deleting sections. Defaults to `window.confirm`. |
-| `errorFallback` | `ReactNode \| (err) => ReactNode \| null` | Parse / serialise error renderer. |
+| `errorFallback` | `((err: Error) => ReactNode) \| null` | Parse / serialise error renderer. |
 | `className`, `style` | — | Forwarded to the wrapper. |
 | `loader` | loader callable | Test-only override. |
 
@@ -64,7 +64,7 @@ produces.
 | Prop | Type | Description |
 |---|---|---|
 | `source` | `string` | `irealb://` URL to render. |
-| `errorFallback` | `(err: Error) => ReactNode \| null` | Rendered on parse failure. |
+| `errorFallback` | `((err: Error) => ReactNode) \| null` | Rendered on parse failure. |
 | `className`, `style` | — | Forwarded to the wrapper. |
 | `loader` | loader callable | Test-only override. |
 
