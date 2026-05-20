@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-20
+
 ### Added
 
 - **Documentation site at `chordsketch.koeda.me/docs/` (#2506,
@@ -230,8 +232,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SVG renderer paints a single `/` glyph in the bar's beat
   column. JSON serializer uses the same additive-omit convention
   as `size` so existing snapshots stay byte-stable (#2435).
+- **`chordsketch-ireal` Fermata (`f`) marker (#2474).** New
+  `MusicalSymbol::Fermata` variant attaches an arc-and-dot
+  fermata to the bar in which the token appears. Parser
+  classifies the bare lower-case `f` token alongside `S` / `Q` /
+  `<Fine>` / `<Break>`; URL serializer round-trips it back to
+  the same single-character form. JSON serialiser stays additive
+  (`musical_symbol: "Fermata"`) so prior snapshots remain
+  byte-stable. SVG renderer paints the fermata above the bar's
+  music-symbol band using a Bravura SMuFL outline (sister-site
+  to the segno / coda glyphs baked in #2348). `convert::from_ireal`
+  surfaces a `LossyDrop` warning because ChordPro has no
+  equivalent surface.
+- **`chordsketch-ireal` `<Break>` drum-silence marker (#2489).**
+  The spec's `<Break>` staff-text directive (one bar of complete
+  rhythm-section silence) is now recognised as the structured
+  `MusicalSymbol::Break` variant instead of falling through to a
+  plain `<text>` caption. Parser uses exact-phrase
+  classification (case-insensitive); URL serializer re-emits
+  `<Break>`; the SVG renderer paints a centred italic "Break"
+  caption in the bar; `convert::from_ireal` projects it as a
+  `LossyDrop`-tagged `{comment: Break}` directive.
+- **`chordsketch-ireal` chord-size markers `s` / `l` (#2477).**
+  iReal Pro's per-chord size prefix (`|s C7 lF7|`: small `C7`,
+  default `F7`) round-trips through the AST via a new
+  `ChordSize { Default, Small }` field on [`BarChord`]. Parser
+  consumes the prefix as part of the chord token; URL serializer
+  re-emits the marker only when `size` is non-default. JSON
+  serializer uses the additive-omit pattern (default omitted) so
+  pre-#2477 snapshots stay byte-stable. **The SVG renderer paints
+  `ChordSize::Small` chords in a narrower font (#2487)** so the
+  size hint reaches the rendered chart.
+- **`chordsketch-ireal` vertical-space hint `Y` / `YY` / `YYY`
+  (#2472).** The spec's between-system vertical-space directive
+  (one, two, or three `Y` tokens hinting "leave 1/2/3 extra
+  blank line(s) before the next system") is now preserved on
+  `Bar::system_break_space` (clamped to `0..=3`). URL serializer
+  re-emits the exact `Y` count at the bar's position; JSON
+  serialiser uses additive-omit (default `0` omitted); the SVG
+  renderer adds proportional vertical padding above the row
+  whose leading bar carries a non-zero hint
+  (`VERTICAL_BREAK_PER_LEVEL` user-units per level).
 
 ### Changed
+
+- **`chordsketch-wasm` / `chordsketch-napi` ABI surfaces moved to
+  `bindings.rs` (#2516, closes #2352).** Every `#[wasm_bindgen]`
+  / `#[napi]` declaration is now in a sibling `bindings.rs` file
+  per binding crate, excluded from `cargo llvm-cov` measurement
+  via `codecov.yml`'s `ignore:` list. The proc-macro-generated
+  ABI thunks were depressing the bindings-group line-coverage
+  number (~67% napi / ~73% wasm) without being reachable from
+  unit tests — moving them out lifts both crates above 95% and
+  brings the bindings group's intra-group skew from ~21 pp to
+  ~10 pp per `.claude/rules/fix-propagation.md` §"Coverage
+  Floors". No public-API change; the wasm / napi npm packages
+  expose exactly the same surface as 0.4.x.
+
 
 - **iReal Pro CI smoke is hard-gating on every install path
   except winget (#2403).** v0.4.0 (2026-05-06) shipped iReal Pro
