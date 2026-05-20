@@ -21,7 +21,9 @@ use chordsketch_chordpro::render_result::{
     RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
-use chordsketch_chordpro::transpose::{transpose_chord_with_style, transposed_key_prefers_flat};
+use chordsketch_chordpro::transpose::{
+    canonical_transposed_key_with_style, transpose_chord_with_style, transposed_key_prefers_flat,
+};
 use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
 
 use flate2::Compression;
@@ -856,7 +858,41 @@ fn render_song_into_doc(
                     // intentionally retained here. Same for
                     // `Key:` / `Time:`.
                     let line = match d.kind {
-                        DirectiveKind::Key => format!("Key: {}", unicode_accidentals(value)),
+                        DirectiveKind::Key => {
+                            // Apply the active transpose offset to the
+                            // displayed key so it matches the chord
+                            // lines (transposed via
+                            // `transpose_chord_with_style`). Uses the
+                            // `_with_style` variant with the same
+                            // song-wide `prefer_flat` chord lines use,
+                            // so multi-`{key}` songs spell the
+                            // displayed key consistently with the
+                            // surrounding chord lines (#2522 §validation
+                            // parity). The helper also preserves modal
+                            // qualifiers (`{key: C dorian}` ↦
+                            // `D dorian`), the trailing word `minor`
+                            // (`{key: Bb minor}` ↦ `C minor`), and the
+                            // slash-bass (`{key: G/B}` ↦ `A/C#`). Falls
+                            // back to the authored value when the
+                            // directive value doesn't start with a note
+                            // letter. Sister-site to render-text /
+                            // render-html / the React JSX walker per
+                            // `.claude/rules/renderer-parity.md`;
+                            // closes #2522.
+                            let displayed = if transpose_offset == 0 {
+                                value.to_string()
+                            } else {
+                                let prefer_flat =
+                                    transposed_key_prefers_flat(&song.metadata, transpose_offset);
+                                canonical_transposed_key_with_style(
+                                    Some(value),
+                                    transpose_offset,
+                                    prefer_flat,
+                                )
+                                .unwrap_or_else(|| value.to_string())
+                            };
+                            format!("Key: {}", unicode_accidentals(&displayed))
+                        }
                         DirectiveKind::Tempo => {
                             // Append the Italian tempo marking when
                             // the BPM matches a conventional band.
@@ -4160,6 +4196,89 @@ mod transpose_tests {
         // 2+3=5, C+5=F
         let content = String::from_utf8_lossy(&bytes);
         assert!(content.contains("(F)"));
+    }
+
+    /// Closes #2522 (sister-site to render-text + render-html): the
+    /// `Key:` inline marker in the PDF body MUST follow the active
+    /// transpose offset so it agrees with the chord lines. Tested via
+    /// substring search on the PDF content-stream bytes (the same
+    /// trick `test_transpose_with_cli_offset` uses one test up).
+    #[test]
+    fn test_inline_key_marker_follows_transpose() {
+        let input = "{key: G}\n[G]hi [D]world";
+        let song = chordsketch_chordpro::parse(input).unwrap();
+
+        // No transpose: authored value preserved.
+        let zero = render_song_with_transpose(&song, 0, &Config::defaults());
+        let zero_content = String::from_utf8_lossy(&zero);
+        assert!(
+            zero_content.contains("Key: G"),
+            "no-transpose case must preserve authored `Key: G`"
+        );
+
+        // +2 semitones: G → A.
+        let up_two = render_song_with_transpose(&song, 2, &Config::defaults());
+        let up_two_content = String::from_utf8_lossy(&up_two);
+        assert!(
+            up_two_content.contains("Key: A"),
+            "+2 transpose must surface `Key: A` in PDF stream"
+        );
+        assert!(
+            !up_two_content.contains("Key: G"),
+            "+2 transpose must NOT leave authored `Key: G` in PDF stream"
+        );
+
+        // −3 semitones: G → E. Negative offsets must work
+        // symmetrically with positive ones (all ASCII, safe to search
+        // in the raw PDF stream).
+        let down_three = render_song_with_transpose(&song, -3, &Config::defaults());
+        let down_three_content = String::from_utf8_lossy(&down_three);
+        assert!(
+            down_three_content.contains("Key: E"),
+            "-3 transpose must surface `Key: E` in PDF stream"
+        );
+
+        // Unparseable key falls back to the authored value. The PDF
+        // builder embeds the full text "Key: Hidden" in the content
+        // stream as ASCII, so a substring search is reliable here.
+        let nonchord = chordsketch_chordpro::parse("{key: Hidden}\n[C]hi").unwrap();
+        let nonchord_bytes = render_song_with_transpose(&nonchord, 2, &Config::defaults());
+        let nonchord_content = String::from_utf8_lossy(&nonchord_bytes);
+        assert!(
+            nonchord_content.contains("Key: Hidden"),
+            "unparseable key must fall back to authored value in PDF stream"
+        );
+    }
+
+    /// Closes #2522 HIGH-2 (silent-failure audit): modal qualifiers,
+    /// extensions, and slash-bass notes MUST be preserved when the
+    /// inline `Key:` marker is transposed. Sister-site to render-text
+    /// and render-html.
+    #[test]
+    fn test_inline_key_marker_preserves_modal_extension_and_bass() {
+        // Modal qualifier preserved.
+        let modal = chordsketch_chordpro::parse("{key: C dorian}\n[C]hi").unwrap();
+        let modal_out = render_song_with_transpose(&modal, 2, &Config::defaults());
+        let modal_content = String::from_utf8_lossy(&modal_out);
+        assert!(
+            modal_content.contains("D dorian"),
+            "modal qualifier must round-trip"
+        );
+
+        // Word `minor` preserved.
+        let bb_minor = chordsketch_chordpro::parse("{key: Bb minor}\n[Bb]hi").unwrap();
+        let bb_minor_out = render_song_with_transpose(&bb_minor, 2, &Config::defaults());
+        let bb_minor_content = String::from_utf8_lossy(&bb_minor_out);
+        assert!(
+            bb_minor_content.contains("C minor"),
+            "spelled-out `minor` must round-trip"
+        );
+
+        // Extension preserved.
+        let seventh = chordsketch_chordpro::parse("{key: G7}\n[G]hi").unwrap();
+        let seventh_out = render_song_with_transpose(&seventh, 2, &Config::defaults());
+        let seventh_content = String::from_utf8_lossy(&seventh_out);
+        assert!(seventh_content.contains("A7"), "extension must round-trip");
     }
 
     #[test]

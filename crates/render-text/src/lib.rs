@@ -10,7 +10,9 @@ use chordsketch_chordpro::render_result::{
     RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
-use chordsketch_chordpro::transpose::{transpose_chord_with_style, transposed_key_prefers_flat};
+use chordsketch_chordpro::transpose::{
+    canonical_transposed_key_with_style, transpose_chord_with_style, transposed_key_prefers_flat,
+};
 use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
 use unicode_width::UnicodeWidthStr;
 
@@ -174,10 +176,46 @@ fn render_song_impl(
                     {
                         match directive.kind {
                             DirectiveKind::Key => {
-                                // Typeset `Bb` / `F#` with Unicode
-                                // accidentals — sister-site to the
-                                // React JSX walker + Rust HTML renderer.
-                                output.push(format!("[Key: {}]", unicode_accidentals(value)));
+                                // Apply the active transpose offset to the
+                                // displayed key so it matches the chord
+                                // lines, which are transposed in-place via
+                                // `transpose_chord_with_style`. Routes
+                                // through `_with_style` so we can pass the
+                                // SAME `prefer_flat` the chord lines use —
+                                // otherwise a multi-`{key}` song where
+                                // `metadata.key` (the last `{key}`) lands
+                                // on the sharp side but the directive
+                                // being rendered would land on the flat
+                                // side would surface `[Key: A♭]` next to
+                                // chord lines spelled with `G#` for the
+                                // same pitch (see #2522). The helper also
+                                // preserves the modal qualifier
+                                // (`{key: C dorian}` ↦ `D dorian`) and
+                                // the slash-bass (`{key: G/B}` ↦ `A/C#`),
+                                // which the simpler `canonical_transposed_key`
+                                // drops. Falls back to the authored value
+                                // when the directive value doesn't even
+                                // start with a note letter. Sister-site to
+                                // render-html / render-pdf / the React JSX
+                                // walker per
+                                // `.claude/rules/renderer-parity.md`;
+                                // closes #2522. Typeset `Bb` / `F#` with
+                                // Unicode accidentals.
+                                let displayed = if transpose_offset == 0 {
+                                    value.to_string()
+                                } else {
+                                    let prefer_flat = transposed_key_prefers_flat(
+                                        &song.metadata,
+                                        transpose_offset,
+                                    );
+                                    canonical_transposed_key_with_style(
+                                        Some(value),
+                                        transpose_offset,
+                                        prefer_flat,
+                                    )
+                                    .unwrap_or_else(|| value.to_string())
+                                };
+                                output.push(format!("[Key: {}]", unicode_accidentals(&displayed)));
                             }
                             DirectiveKind::Tempo => {
                                 // Append the Italian tempo marking
@@ -904,6 +942,182 @@ mod tests {
         assert!(
             !output.contains("[Key:"),
             "empty {{key}} must not produce a marker; got:\n{output}"
+        );
+    }
+
+    /// Closes #2522: the inline `[Key: …]` marker MUST follow the
+    /// active transpose offset so it agrees with the chord lines,
+    /// which are transposed in-place. Sister-site to render-html /
+    /// render-pdf and (in the "Original → Playing" pair shape) to
+    /// the React JSX walker.
+    #[test]
+    fn test_inline_key_marker_follows_transpose() {
+        use chordsketch_chordpro::config::Config;
+
+        let song = chordsketch_chordpro::parse("{key: G}\n[G]hi [D]world").unwrap();
+
+        // No transpose: authored key passes through unchanged.
+        let zero = render_song_with_transpose(&song, 0, &Config::defaults());
+        assert!(
+            zero.contains("[Key: G]"),
+            "no-transpose case must preserve authored key; got:\n{zero}"
+        );
+
+        // +2 semitones: G → A. Chord line is transposed to A E so the
+        // marker must follow.
+        let up_two = render_song_with_transpose(&song, 2, &Config::defaults());
+        assert!(
+            up_two.contains("[Key: A]"),
+            "+2 transpose must surface [Key: A]; got:\n{up_two}"
+        );
+        assert!(
+            !up_two.contains("[Key: G]"),
+            "+2 transpose must NOT leave [Key: G] in output; got:\n{up_two}"
+        );
+
+        // -3 semitones: G → E. Same invariant in the opposite direction.
+        let down_three = render_song_with_transpose(&song, -3, &Config::defaults());
+        assert!(
+            down_three.contains("[Key: E]"),
+            "-3 transpose must surface [Key: E]; got:\n{down_three}"
+        );
+
+        // Flat-side spelling: transposing G by +3 lands on Bb (not A#).
+        // The displayed key matches the prefer-flat convention the
+        // chord lines use (the renderer now feeds the same song-wide
+        // `prefer_flat` into `canonical_transposed_key_with_style`).
+        let to_bflat = render_song_with_transpose(&song, 3, &Config::defaults());
+        assert!(
+            to_bflat.contains("[Key: B♭]"),
+            "+3 transpose must surface flat-side [Key: B♭]; got:\n{to_bflat}"
+        );
+
+        // Unparseable key (a value that doesn't start with a chord
+        // root letter at all) falls through to the authored value
+        // rather than producing nonsense — same contract as
+        // `canonical_transposed_key_with_style`. The chord parser is
+        // permissive about trailing text (e.g. `C dorian` parses as
+        // C with extra text), and forgiving on letters like `F` that
+        // ARE root letters even in non-chord words (`Foo`), so this
+        // branch only fires for strings that don't even start with a
+        // valid note letter (C / D / E / F / G / A / B).
+        let nonchord = chordsketch_chordpro::parse("{key: Hidden}\n[C]hi").unwrap();
+        let nonchord_out = render_song_with_transpose(&nonchord, 2, &Config::defaults());
+        assert!(
+            nonchord_out.contains("[Key: Hidden]"),
+            "unparseable key falls back to authored value; got:\n{nonchord_out}"
+        );
+    }
+
+    /// Closes #2522 (HIGH-2 from the silent-failure audit): modal
+    /// qualifiers, slash-bass notes, and extension text MUST be
+    /// preserved when the inline `{key:}` marker is transposed.
+    /// Before the fix in `canonical_transposed_key_with_style`, the
+    /// renderers used `canonical_transposed_key` which drops these
+    /// — surfacing the same class of information loss the original
+    /// regression introduced, but in a different direction.
+    #[test]
+    fn test_inline_key_marker_preserves_modal_extension_and_bass() {
+        use chordsketch_chordpro::config::Config;
+
+        // Modal qualifier: "dorian" is preserved verbatim (it's not
+        // a transposable theory token).
+        let modal = chordsketch_chordpro::parse("{key: C dorian}\n[C]hi").unwrap();
+        let modal_out = render_song_with_transpose(&modal, 2, &Config::defaults());
+        assert!(
+            modal_out.contains("[Key: D dorian]"),
+            "modal qualifier must round-trip on transpose; got:\n{modal_out}"
+        );
+
+        // "minor" written out as a word (the space prevents the
+        // chord parser's `min` prefix match, so it lands in the
+        // extension field). The minor *modality* is therefore in
+        // the extension text, not the ChordQuality enum — but the
+        // user sees the right text either way.
+        let bb_minor = chordsketch_chordpro::parse("{key: Bb minor}\n[Bb]hi").unwrap();
+        let bb_minor_out = render_song_with_transpose(&bb_minor, 2, &Config::defaults());
+        assert!(
+            bb_minor_out.contains("[Key: C minor]"),
+            "spelled-out `minor` must round-trip; got:\n{bb_minor_out}"
+        );
+
+        // Slash bass: the bass note transposes in lockstep with the
+        // root via `transpose_detail_with_style`.
+        let slash = chordsketch_chordpro::parse("{key: G/B}\n[G]hi").unwrap();
+        let slash_out = render_song_with_transpose(&slash, 2, &Config::defaults());
+        assert!(
+            slash_out.contains("[Key: A/C♯]"),
+            "slash-bass must transpose alongside the root; got:\n{slash_out}"
+        );
+
+        // Extension (`7`, `maj7`, `sus4`, …) preserved verbatim.
+        let seventh = chordsketch_chordpro::parse("{key: G7}\n[G]hi").unwrap();
+        let seventh_out = render_song_with_transpose(&seventh, 2, &Config::defaults());
+        assert!(
+            seventh_out.contains("[Key: A7]"),
+            "extension must round-trip on transpose; got:\n{seventh_out}"
+        );
+
+        // Compact-form minor (`Em`) uses ChordQuality::Minor — the
+        // helper appends `m` after the (transposed) accidental. At
+        // +2 the song-wide `prefer_flat` for an Em key lands flat
+        // side, so the helper spells G♭m (consistent with the chord
+        // lines, which also use G♭m). F♯m / G♭m are enharmonic
+        // equivalents; the convention is owned by
+        // `transposed_key_prefers_flat` and not negotiated here.
+        let em = chordsketch_chordpro::parse("{key: Em}\n[Em]hi").unwrap();
+        let em_out = render_song_with_transpose(&em, 2, &Config::defaults());
+        assert!(
+            em_out.contains("[Key: G♭m]"),
+            "compact minor form must transpose to G♭m at +2 (song-wide prefer_flat); got:\n{em_out}"
+        );
+        assert!(
+            em_out.contains("Gbm"),
+            "chord lines must agree with key marker spelling; got:\n{em_out}"
+        );
+
+        // Flat-side authored key + transpose lands on a flat-side
+        // target — chord lines and key marker must agree.
+        let bb_song = chordsketch_chordpro::parse("{key: Bb}\n[Bb]hi").unwrap();
+        let bb_up_two = render_song_with_transpose(&bb_song, 2, &Config::defaults());
+        assert!(
+            bb_up_two.contains("[Key: C]"),
+            "Bb at +2 lands on C; got:\n{bb_up_two}"
+        );
+    }
+
+    /// Closes #2522 (MEDIUM-3 from the silent-failure audit):
+    /// multi-`{key:}` songs MUST spell the inline key marker the
+    /// same way the chord lines do. Before the fix, the chord
+    /// lines used the song-wide `prefer_flat` (derived from
+    /// `song.metadata.key`, which is the LAST `{key:}` seen) while
+    /// the inline marker used a per-directive `prefer_flat`
+    /// computed against the specific directive value — producing
+    /// outputs where `[Key: A♭]` would appear next to a chord
+    /// spelled `G#` for the same pitch.
+    #[test]
+    fn test_inline_key_marker_agrees_with_chord_lines_on_multi_key_songs() {
+        use chordsketch_chordpro::config::Config;
+
+        // Two `{key:}` directives straddling both sides of the
+        // circle of fifths. With +1 transpose, the song-wide
+        // anchor is the LAST key (`Eb`, sharp side after the
+        // shift), so chord lines render `G#` / `E`. The marker
+        // MUST match the chord-line spelling at both positions.
+        let song = chordsketch_chordpro::parse("{key: G}\n[G]hi\n{key: Eb}\n[Eb]ho").unwrap();
+        let up_one = render_song_with_transpose(&song, 1, &Config::defaults());
+        assert!(
+            up_one.contains("[Key: G♯]"),
+            "primary G with +1 (under last-key Eb anchor) spells `G♯`; got:\n{up_one}"
+        );
+        assert!(
+            up_one.contains("[Key: E]"),
+            "mid-song Eb with +1 spells `E`; got:\n{up_one}"
+        );
+        // Chord lines must use the same spelling.
+        assert!(
+            up_one.contains("G#"),
+            "chord line G at +1 must spell `G#` consistent with the marker; got:\n{up_one}"
         );
     }
 
