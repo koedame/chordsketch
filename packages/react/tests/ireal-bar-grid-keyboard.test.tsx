@@ -4,7 +4,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { IrealEditor, type IrealEditorLoader } from '../src/ireal-editor';
+import { IrealBarGrid, type IrealBarGridLoader } from '../src/ireal-bar-grid';
 import type { IrealSong } from '../src/ireal-ast';
 
 interface EditorStub {
@@ -54,11 +54,11 @@ function makeStub(initial: IrealSong): EditorStub {
 async function renderEditor(barsCount: number) {
   const stub = makeStub(songWithBars(barsCount));
   const onChange = vi.fn();
-  const loader: IrealEditorLoader = vi.fn(
-    async () => stub as unknown as Awaited<ReturnType<IrealEditorLoader>>,
+  const loader: IrealBarGridLoader = vi.fn(
+    async () => stub as unknown as Awaited<ReturnType<IrealBarGridLoader>>,
   );
   const result = render(
-    <IrealEditor source="irealb://x" loader={loader} onChange={onChange} />,
+    <IrealBarGrid source="irealb://x" loader={loader} onChange={onChange} />,
   );
   await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
   return { ...result, stub, onChange };
@@ -66,11 +66,11 @@ async function renderEditor(barsCount: number) {
 
 function getCells(): HTMLButtonElement[] {
   return Array.from(
-    document.querySelectorAll<HTMLButtonElement>('.chordsketch-ireal-editor__bar'),
+    document.querySelectorAll<HTMLButtonElement>('.chordsketch-ireal-bar-grid__bar'),
   );
 }
 
-describe('<IrealEditor> keyboard — roving arrow navigation', () => {
+describe('<IrealBarGrid> keyboard — roving arrow navigation', () => {
   test('ArrowRight moves focus to the next bar within the section', async () => {
     await renderEditor(4);
     const cells = getCells();
@@ -125,7 +125,7 @@ describe('<IrealEditor> keyboard — roving arrow navigation', () => {
   });
 });
 
-describe('<IrealEditor> keyboard — Delete / Backspace', () => {
+describe('<IrealBarGrid> keyboard — Delete / Backspace', () => {
   test('Delete on focused bar cell removes the bar', async () => {
     const { stub } = await renderEditor(3);
     const cells = getCells();
@@ -161,7 +161,7 @@ describe('<IrealEditor> keyboard — Delete / Backspace', () => {
   });
 });
 
-describe('<IrealEditor> keyboard — Alt+Arrow reorder', () => {
+describe('<IrealBarGrid> keyboard — Alt+Arrow reorder', () => {
   test('Alt+ArrowRight moves the focused bar right', async () => {
     const { stub } = await renderEditor(4);
     const cells = getCells();
@@ -203,7 +203,7 @@ describe('<IrealEditor> keyboard — Alt+Arrow reorder', () => {
   });
 });
 
-describe('<IrealEditor> keyboard — defense-in-depth dialog guard', () => {
+describe('<IrealBarGrid> keyboard — defense-in-depth dialog guard', () => {
   test('Delete is a no-op while a role="dialog" descendant is mounted in the editor', async () => {
     const { container, stub } = await renderEditor(3);
     const cells = getCells();
@@ -215,7 +215,7 @@ describe('<IrealEditor> keyboard — defense-in-depth dialog guard', () => {
     const dialog = document.createElement('div');
     dialog.setAttribute('role', 'dialog');
     container
-      .querySelector('.chordsketch-ireal-editor')!
+      .querySelector('.chordsketch-ireal-bar-grid')!
       .appendChild(dialog);
     cells[1]!.focus();
     fireEvent.keyDown(cells[1]!, { key: 'Delete' });
@@ -233,7 +233,7 @@ describe('<IrealEditor> keyboard — defense-in-depth dialog guard', () => {
     // shortcuts.
     const dialog = document.createElement('dialog');
     container
-      .querySelector('.chordsketch-ireal-editor')!
+      .querySelector('.chordsketch-ireal-bar-grid')!
       .appendChild(dialog);
     cells[1]!.focus();
     fireEvent.keyDown(cells[1]!, { key: 'Delete' });
@@ -246,7 +246,7 @@ describe('<IrealEditor> keyboard — defense-in-depth dialog guard', () => {
     const dialog = document.createElement('div');
     dialog.setAttribute('role', 'dialog');
     container
-      .querySelector('.chordsketch-ireal-editor')!
+      .querySelector('.chordsketch-ireal-bar-grid')!
       .appendChild(dialog);
     cells[0]!.focus();
     fireEvent.keyDown(cells[0]!, { key: 'ArrowRight', altKey: true });
@@ -254,7 +254,7 @@ describe('<IrealEditor> keyboard — defense-in-depth dialog guard', () => {
   });
 });
 
-describe('<IrealEditor> keyboard — post-delete focus restoration', () => {
+describe('<IrealBarGrid> keyboard — post-delete focus restoration', () => {
   test('Delete restores focus to the next-sibling bar cell', async () => {
     const { stub } = await renderEditor(3);
     const cells = getCells();

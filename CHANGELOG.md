@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `@chordsketch/react` v0.3.0: new `<ChordProPreview>` Tier 2
+  component — a preview pane with format toggle and transpose
+  controls but no source editor. Drop-in for hosts that own the
+  source (e.g. the VS Code WebView). (#2527, #2533)
+- New [ADR-0022](docs/adr/0022-react-as-canonical-preview-surface.md)
+  records the consolidation decision —
+  `@chordsketch/react` becomes the canonical preview surface and
+  `@chordsketch/ui-web` is retired. [ADR-0017](docs/adr/0017-react-renders-from-ast.md)'s
+  "non-React consumers" list updated accordingly. (#2527)
+
+### Changed
+
+- **Breaking — `@chordsketch/react` v0.3.0 component renames** (no
+  deprecated aliases; external consumers must update imports at the
+  v0.3.0 boundary):
+  - `<Playground>` → `<ChordProEditor>`
+  - `<IrealPlayground>` → `<IrealProEditor>`
+  - `<ChordEditor>` → `<ChordTextarea>`
+  - `<SourceEditor>` → `<ChordSourceArea>`
+  - `<IrealEditor>` → `<IrealBarGrid>`
+
+  The `Editor` suffix is now reserved for Tier 3 composed editors
+  (`<ChordProEditor>`, `<IrealProEditor>`); Tier 1 atoms use
+  widget-type names. The internal helper symbol `IrealBarGrid` was
+  renamed to `IrealBarGridLayout` to free the public name. CSS
+  classes mirror the new names (e.g. `chordsketch-playground*` →
+  `chordsketch-chord-pro-editor*`). See
+  [ADR-0022](docs/adr/0022-react-as-canonical-preview-surface.md)
+  for the rationale. (#2533)
+- VS Code preview WebView: rewritten as a React app mounting
+  `<ChordProPreview>` from `@chordsketch/react`. The bespoke
+  iframe-srcdoc implementation is gone. The WebView bundle grew
+  +438 KB raw / +96 KB gzipped (one-time install cost). (#2528)
+- Tauri desktop: migrated off the deleted `mountChordSketchUi` flow
+  to a React root that mounts `<ChordProEditor>` /
+  `<IrealProEditor>`. Tauri menus / Open-Save dialogs / updater
+  events now route through a new `desktopBridge` singleton. (#2529)
+- Playground page: `SAMPLE_CHORDPRO` / `SAMPLE_IREALB` moved to
+  `packages/playground/src/sample.ts`. All component symbol
+  references updated to v0.3.0 names. (#2530)
+
+### Removed
+
+- **Breaking** — `@chordsketch/ui-web` private workspace package
+  deleted entirely. It was a private package (never published to
+  npm); external consumers should use `@chordsketch/react`
+  directly per
+  [ADR-0022](docs/adr/0022-react-as-canonical-preview-surface.md).
+  (#2527, #2532)
+- `packages/vscode-extension/webview/preview.ts` (the bespoke
+  487-line WebView script) replaced by `webview/preview.tsx` (a
+  319-line React entry).
+- `apps/desktop/src/codemirror-editor.ts` lifted into
+  `apps/desktop/src/ChordProDesktopEditor.tsx` (a React wrapper
+  that preserves the tree-sitter-chordpro integration).
+- `.github/workflows/ui-web.yml` removed (the package it tested no
+  longer exists).
+
 ### Fixed
 
 - **Inline `{key}` directive now follows the active transpose

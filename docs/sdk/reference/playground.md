@@ -1,4 +1,4 @@
-# `<Playground>`
+# `<ChordProEditor>`
 
 The fastest path to embedding a ChordPro editor — one component
 with editor + preview + transpose + PDF export. Mounts the same
@@ -6,11 +6,16 @@ chrome as
 [`https://chordsketch.koeda.me/chordsketch/chordpro/`](https://chordsketch.koeda.me/chordsketch/chordpro/).
 
 ```tsx
-import { Playground } from '@chordsketch/react';
+import { ChordProEditor } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
-<Playground defaultSource={"{title: My Song}\n[G]Hello [D]world"} />
+<ChordProEditor defaultSource={"{title: My Song}\n[G]Hello [D]world"} />
 ```
+
+> Renamed from `<Playground>` in `@chordsketch/react` v0.3.0
+> ([ADR-0022](../../adr/0022-react-as-canonical-preview-surface.md)).
+> The `Editor` suffix denotes a Tier 3 composed editor (source +
+> preview + chrome) in the v0.3.0 layout.
 
 ## Props
 
@@ -33,7 +38,7 @@ import '@chordsketch/react/styles.css';
 Standard `HTMLAttributes<HTMLDivElement>` (e.g. `className`,
 `style`, `id`) are forwarded to the wrapper. `onChange` and
 `title` are omitted from the spread because both have
-semantically loaded uses on `<Playground>` itself.
+semantically loaded uses on `<ChordProEditor>` itself.
 
 ## Controlled vs uncontrolled
 

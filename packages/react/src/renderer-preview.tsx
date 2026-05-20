@@ -41,7 +41,7 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
   /**
    * 1-indexed source line that should be highlighted in the
    * rendered preview. Forwarded to {@link ChordSheet}'s
-   * `activeSourceLine` prop. Pair with `<SourceEditor>`'s
+   * `activeSourceLine` prop. Pair with `<ChordSourceArea>`'s
    * `onCaretLineChange` callback for editor↔preview caret sync.
    * Only consumed by `format="html"`.
    */

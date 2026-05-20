@@ -11,7 +11,7 @@
  * this stylesheet without re-learning the vocabulary.
  *
  * The reusable components from `@chordsketch/react`
- * (`<SourceEditor>`, `<RendererPreview>`, `<Transpose>`) bring
+ * (`<ChordSourceArea>`, `<RendererPreview>`, `<Transpose>`) bring
  * their own styling via `@chordsketch/react/styles.css`. The
  * rules below override that styling where the editor.html chrome
  * demands a tighter fit.
@@ -31,7 +31,7 @@ body,
 
 /* Design-system tokens at :root scope. `@chordsketch/react/styles.css`
  * scopes the same tokens to its component root classes
- * (`.chordsketch-playground`, etc.) which doesn't reach the
+ * (`.chordsketch-chord-pro-editor`, etc.) which doesn't reach the
  * playground's own chrome. Mirroring them here keeps every selector
  * — chordpro and irealpro alike — working without sprinkling
  * `var(--cs-X, #literal)` fallbacks across every rule. Keep this
@@ -479,7 +479,7 @@ a {
   flex-direction: column;
 }
 
-.pane.source .pane-body > .chordsketch-source-editor {
+.pane.source .pane-body > .chordsketch-source-area {
   flex: 1;
   min-height: 0;
 }
@@ -495,7 +495,7 @@ a {
  * The iRealPro route mounts a textarea source + an iframe SVG
  * preview without the React component library, so it needs a few
  * pane-body fillers that the ChordPro route gets for free from
- * `<SourceEditor>` and `<RendererPreview>`.
+ * `<ChordSourceArea>` and `<RendererPreview>`.
  * ---------------------------------------------------------------- */
 
 .chordsketch-app__textarea {

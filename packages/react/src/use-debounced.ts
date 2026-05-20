@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
  * Returns a debounced copy of `value` that only updates after `delay`
  * milliseconds have passed without `value` changing.
  *
- * Used by `<ChordEditor>` to avoid re-rendering the
+ * Used by `<ChordTextarea>` to avoid re-rendering the
  * `@chordsketch/wasm`-backed preview on every keystroke. The
  * returned value lags the input by at most one `delay` window; a
  * change in `delay` flushes the pending timer so the next update

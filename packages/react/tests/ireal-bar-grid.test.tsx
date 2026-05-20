@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { IrealEditor } from '../src/ireal-editor';
-import type { IrealEditorLoader } from '../src/ireal-editor';
+import { IrealBarGrid } from '../src/ireal-bar-grid';
+import type { IrealBarGridLoader } from '../src/ireal-bar-grid';
 import type { IrealSong } from '../src/ireal-ast';
 
 interface EditorStub {
@@ -63,19 +63,19 @@ function makeStub(initial: IrealSong = songFixture()): EditorStub {
   };
 }
 
-function makeLoader(stub: EditorStub): IrealEditorLoader {
-  return vi.fn(async () => stub as unknown as Awaited<ReturnType<IrealEditorLoader>>);
+function makeLoader(stub: EditorStub): IrealBarGridLoader {
+  return vi.fn(async () => stub as unknown as Awaited<ReturnType<IrealBarGridLoader>>);
 }
 
-describe('<IrealEditor>', () => {
+describe('<IrealBarGrid>', () => {
   test('shows a loading state until wasm resolves', async () => {
     let resolve!: (stub: EditorStub) => void;
-    const loader: IrealEditorLoader = () =>
-      new Promise<Awaited<ReturnType<IrealEditorLoader>>>((res) => {
-        resolve = (s) => res(s as unknown as Awaited<ReturnType<IrealEditorLoader>>);
+    const loader: IrealBarGridLoader = () =>
+      new Promise<Awaited<ReturnType<IrealBarGridLoader>>>((res) => {
+        resolve = (s) => res(s as unknown as Awaited<ReturnType<IrealBarGridLoader>>);
       });
-    const { container } = render(<IrealEditor source="irealb://x" loader={loader} />);
-    expect(container.querySelector('.chordsketch-ireal-editor__loading')).toBeTruthy();
+    const { container } = render(<IrealBarGrid source="irealb://x" loader={loader} />);
+    expect(container.querySelector('.chordsketch-ireal-bar-grid__loading')).toBeTruthy();
     const stub = makeStub();
     resolve(stub);
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
@@ -83,7 +83,7 @@ describe('<IrealEditor>', () => {
 
   test('populates form fields from the parsed song', async () => {
     const stub = makeStub();
-    render(<IrealEditor source="irealb://x" loader={makeLoader(stub)} />);
+    render(<IrealBarGrid source="irealb://x" loader={makeLoader(stub)} />);
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
     expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Autumn Leaves');
     expect((screen.getByLabelText('Composer') as HTMLInputElement).value).toBe('Joseph Kosma');
@@ -95,7 +95,7 @@ describe('<IrealEditor>', () => {
 
   test('renders bar grid with section label + chord text', async () => {
     const stub = makeStub();
-    render(<IrealEditor source="irealb://x" loader={makeLoader(stub)} />);
+    render(<IrealBarGrid source="irealb://x" loader={makeLoader(stub)} />);
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
     expect(screen.getByRole('heading', { name: 'A' })).toBeTruthy();
     expect(screen.getByText('C-7')).toBeTruthy();
@@ -105,7 +105,7 @@ describe('<IrealEditor>', () => {
     const stub = makeStub();
     const onChange = vi.fn();
     render(
-      <IrealEditor source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
+      <IrealBarGrid source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
     );
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
     const titleInput = screen.getByLabelText('Title') as HTMLInputElement;
@@ -120,7 +120,7 @@ describe('<IrealEditor>', () => {
 
   test('omitting onChange forces read-only fields', async () => {
     const stub = makeStub();
-    render(<IrealEditor source="irealb://x" loader={makeLoader(stub)} />);
+    render(<IrealBarGrid source="irealb://x" loader={makeLoader(stub)} />);
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
     const titleInput = screen.getByLabelText('Title') as HTMLInputElement;
     // `<fieldset disabled>` propagates the disabled *behaviour* to
@@ -133,7 +133,7 @@ describe('<IrealEditor>', () => {
   test('readOnly={true} disables fields even when onChange is provided', async () => {
     const stub = makeStub();
     render(
-      <IrealEditor
+      <IrealBarGrid
         source="irealb://x"
         loader={makeLoader(stub)}
         onChange={vi.fn()}
@@ -147,7 +147,7 @@ describe('<IrealEditor>', () => {
 
   test('empty source seeds an empty song without invoking parseIrealb', async () => {
     const stub = makeStub();
-    render(<IrealEditor source="" loader={makeLoader(stub)} />);
+    render(<IrealBarGrid source="" loader={makeLoader(stub)} />);
     // The form does not render until wasm finishes loading and the
     // empty-song seed has hit state, so wait for the Title field
     // rather than only the default() call.
@@ -161,7 +161,7 @@ describe('<IrealEditor>', () => {
     stub.parseIrealb.mockImplementation(() => {
       throw new Error('parse boom');
     });
-    render(<IrealEditor source="irealb://garbage" loader={makeLoader(stub)} />);
+    render(<IrealBarGrid source="irealb://garbage" loader={makeLoader(stub)} />);
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toBe('parse boom');
     });
@@ -170,7 +170,7 @@ describe('<IrealEditor>', () => {
   test('hides URL textarea when showUrl=false', async () => {
     const stub = makeStub();
     render(
-      <IrealEditor source="irealb://x" loader={makeLoader(stub)} showUrl={false} />,
+      <IrealBarGrid source="irealb://x" loader={makeLoader(stub)} showUrl={false} />,
     );
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
     expect(screen.queryByLabelText('iReal Pro URL')).toBeNull();
@@ -184,7 +184,7 @@ describe('<IrealEditor>', () => {
     const stub = makeStub();
     const onChange = vi.fn();
     render(
-      <IrealEditor source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
+      <IrealBarGrid source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
     );
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
     const titleInput = screen.getByLabelText('Title') as HTMLInputElement;
@@ -215,7 +215,7 @@ describe('<IrealEditor>', () => {
     const stub = makeStub();
     const onChange = vi.fn();
     const { rerender } = render(
-      <IrealEditor source="irealb://valid" loader={makeLoader(stub)} onChange={onChange} />,
+      <IrealBarGrid source="irealb://valid" loader={makeLoader(stub)} onChange={onChange} />,
     );
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
     const titleInput = screen.getByLabelText('Title') as HTMLInputElement;
@@ -228,7 +228,7 @@ describe('<IrealEditor>', () => {
       throw new Error('parse boom');
     });
     rerender(
-      <IrealEditor source="irealb://garbage" loader={makeLoader(stub)} onChange={onChange} />,
+      <IrealBarGrid source="irealb://garbage" loader={makeLoader(stub)} onChange={onChange} />,
     );
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('parse boom'));
     const fieldset = (screen.getByLabelText('Title') as HTMLInputElement).closest('fieldset');
@@ -243,7 +243,7 @@ describe('<IrealEditor>', () => {
     const stub = makeStub();
     const onChange = vi.fn();
     render(
-      <IrealEditor source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
+      <IrealBarGrid source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
     );
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
     const urlTextarea = screen.getByLabelText('iReal Pro URL') as HTMLTextAreaElement;
@@ -259,7 +259,7 @@ describe('<IrealEditor>', () => {
     const stub = makeStub();
     const onChange = vi.fn();
     render(
-      <IrealEditor source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
+      <IrealBarGrid source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
     );
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
     const urlTextarea = screen.getByLabelText('iReal Pro URL') as HTMLTextAreaElement;
@@ -276,7 +276,7 @@ describe('<IrealEditor>', () => {
       if (input === 'irealb://garbage') return '{nope}';
       return JSON.stringify(songFixture());
     });
-    render(<IrealEditor source="irealb://x" loader={makeLoader(stub)} onChange={vi.fn()} />);
+    render(<IrealBarGrid source="irealb://x" loader={makeLoader(stub)} onChange={vi.fn()} />);
     await waitFor(() => expect(screen.queryByLabelText('iReal Pro URL')).toBeTruthy());
     const urlTextarea = screen.getByLabelText('iReal Pro URL') as HTMLTextAreaElement;
     fireEvent.change(urlTextarea, { target: { value: 'irealb://garbage' } });
@@ -295,7 +295,7 @@ describe('<IrealEditor>', () => {
     // would discard any mid-edit URL-textarea typing.
     const stub = makeStub();
     const { rerender } = render(
-      <IrealEditor source="irealb://x" loader={makeLoader(stub)} onChange={() => {}} />,
+      <IrealBarGrid source="irealb://x" loader={makeLoader(stub)} onChange={() => {}} />,
     );
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalledTimes(1));
     // Trigger an edit that produces a new URL via serializeIrealb.
@@ -308,7 +308,7 @@ describe('<IrealEditor>', () => {
     // Parent passes the editor's own emit back as `source` —
     // simulating a controlled parent that stores the URL.
     rerender(
-      <IrealEditor source={emittedUrl} loader={makeLoader(stub)} onChange={() => {}} />,
+      <IrealBarGrid source={emittedUrl} loader={makeLoader(stub)} onChange={() => {}} />,
     );
     // Give the effect a tick to run.
     await new Promise((r) => setTimeout(r, 30));
@@ -321,10 +321,10 @@ describe('<IrealEditor>', () => {
     // source (one we did not emit) must reset the editor.
     const stub = makeStub();
     const { rerender } = render(
-      <IrealEditor source="irealb://first" loader={makeLoader(stub)} />,
+      <IrealBarGrid source="irealb://first" loader={makeLoader(stub)} />,
     );
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalledTimes(1));
-    rerender(<IrealEditor source="irealb://second" loader={makeLoader(stub)} />);
+    rerender(<IrealBarGrid source="irealb://second" loader={makeLoader(stub)} />);
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalledTimes(2));
     const urlTextarea = screen.getByLabelText('iReal Pro URL') as HTMLTextAreaElement;
     expect(urlTextarea.value).toBe('irealb://second');
@@ -335,7 +335,7 @@ describe('<IrealEditor>', () => {
     // `numerator: 1` (e.g. T14), so the form must keep that value
     // selectable. Previously the array started at 2.
     const stub = makeStub();
-    render(<IrealEditor source="irealb://x" loader={makeLoader(stub)} />);
+    render(<IrealBarGrid source="irealb://x" loader={makeLoader(stub)} />);
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
     const numerator = screen.getByLabelText('Time num.') as HTMLSelectElement;
     const values = Array.from(numerator.options).map((o) => o.value);
@@ -346,7 +346,7 @@ describe('<IrealEditor>', () => {
     const stub = makeStub();
     const onChange = vi.fn();
     render(
-      <IrealEditor source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
+      <IrealBarGrid source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
     );
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
     const transpose = screen.getByLabelText('Transpose') as HTMLInputElement;

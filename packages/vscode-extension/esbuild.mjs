@@ -65,7 +65,16 @@ for (const file of [
 // VS Code install.
 const wasmLocalWeb = path.join(repoRoot, 'packages', 'npm-export', 'web', 'chordsketch_wasm_bg.wasm');
 const wasmNpmWeb = path.join(here, 'node_modules', '@chordsketch', 'wasm-export', 'web', 'chordsketch_wasm_bg.wasm');
-const wasmSrc = fs.existsSync(wasmLocalWeb) ? wasmLocalWeb : wasmNpmWeb;
+// Fallback to the lean `@chordsketch/wasm` package when the heavy
+// `wasm-export` build is unavailable — the WebView only needs HTML /
+// text preview, which is the lean bundle's exact surface (per the
+// alias / fallback set up below for the JS glue).
+const wasmNpmWebLean = path.join(here, 'node_modules', '@chordsketch', 'wasm', 'web', 'chordsketch_wasm_bg.wasm');
+const wasmSrc = fs.existsSync(wasmLocalWeb)
+  ? wasmLocalWeb
+  : fs.existsSync(wasmNpmWeb)
+    ? wasmNpmWeb
+    : wasmNpmWebLean;
 const wasmDst = path.join(here, 'dist', 'webview', 'chordsketch_wasm_bg.wasm');
 if (fs.existsSync(wasmSrc)) {
   fs.copyFileSync(wasmSrc, wasmDst);
@@ -89,13 +98,19 @@ fs.writeFileSync(path.join(nodeDir, 'package.json'), JSON.stringify({ type: 'com
 const wasmNodeFiles = ['chordsketch_wasm.js', 'chordsketch_wasm_bg.wasm'];
 for (const file of wasmNodeFiles) {
   // Same precedence rule as the web copy above — local in-tree build
-  // first, npm-published fallback second. Uses the HEAVY bundle
-  // (`@chordsketch/wasm-export`) because the extension host calls
-  // `render_pdf` from `convertToPdf` — see comment on `wasmLocalWeb`
-  // for the rationale on why both sides share the heavy variant.
+  // first, npm-published HEAVY fallback second, lean fallback third.
+  // The heavy bundle is preferred because the extension host calls
+  // `render_pdf` from `convertToPdf` — but if neither heavy build is
+  // available locally the lean variant still gives the WebView its
+  // preview surface and only `convertToPdf` regresses.
   const localSrc = path.join(repoRoot, 'packages', 'npm-export', 'node', file);
   const npmSrc = path.join(here, 'node_modules', '@chordsketch', 'wasm-export', 'node', file);
-  const src = fs.existsSync(localSrc) ? localSrc : npmSrc;
+  const npmLeanSrc = path.join(here, 'node_modules', '@chordsketch', 'wasm', 'node', file);
+  const src = fs.existsSync(localSrc)
+    ? localSrc
+    : fs.existsSync(npmSrc)
+      ? npmSrc
+      : npmLeanSrc;
   if (fs.existsSync(src)) {
     fs.copyFileSync(src, path.join(nodeDir, file));
     console.log(`Copied ${path.relative(here, src)} → dist/node/${file}`);
@@ -123,11 +138,39 @@ const extensionBuild = {
 // the matching comment on the binary copy above for the rationale.
 const wasmJsLocal = path.join(repoRoot, 'packages', 'npm-export', 'web', 'chordsketch_wasm.js');
 const wasmJsNpm = path.join(here, 'node_modules', '@chordsketch', 'wasm-export', 'web', 'chordsketch_wasm.js');
-const wasmJsSrc = fs.existsSync(wasmJsLocal) ? wasmJsLocal : wasmJsNpm;
+// Fallback to the lean `@chordsketch/wasm` package when neither the
+// in-tree nor the npm-installed `wasm-export` build is available — the
+// WebView side only needs parse + HTML / text render, which is the
+// lean bundle's exact surface. The extension host side keeps using
+// the heavy `wasm-export` build at runtime for the `convertToPdf`
+// command (see the comments around the dist/node/ copy above).
+const wasmJsNpmLean = path.join(here, 'node_modules', '@chordsketch', 'wasm', 'web', 'chordsketch_wasm.js');
+const wasmJsSrc = fs.existsSync(wasmJsLocal)
+  ? wasmJsLocal
+  : fs.existsSync(wasmJsNpm)
+    ? wasmJsNpm
+    : wasmJsNpmLean;
+
+// The React component library — `@chordsketch/react` and its sibling
+// `@chordsketch/react/styles.css` import. The published package's
+// `main` / `module` field already resolves to `dist/index.js`, but we
+// alias to the in-tree TypeScript source so a local change to a React
+// component shows up in the next esbuild run without having to rebuild
+// the React package separately. Mirrors the pattern in
+// `packages/playground/vite.config.ts`. The longer specifier
+// (`/styles.css`) MUST be listed before the bare package alias so
+// esbuild matches it first.
+const reactPkgDir = path.resolve(repoRoot, 'packages', 'react');
+const reactSrcEntry = path.join(reactPkgDir, 'src', 'index.ts');
+const reactSrcCss = path.join(reactPkgDir, 'src', 'styles.css');
+const reactDistEntry = path.join(reactPkgDir, 'dist', 'index.js');
+const reactDistCss = path.join(reactPkgDir, 'dist', 'styles.css');
+const reactEntry = fs.existsSync(reactSrcEntry) ? reactSrcEntry : reactDistEntry;
+const reactCss = fs.existsSync(reactSrcCss) ? reactSrcCss : reactDistCss;
 
 /** @type {esbuild.BuildOptions} */
 const webviewBuild = {
-  entryPoints: ['webview/preview.ts'],
+  entryPoints: ['webview/preview.tsx'],
   bundle: true,
   outfile: 'dist/webview/preview.js',
   format: 'esm',
@@ -135,10 +178,39 @@ const webviewBuild = {
   target: 'es2020',
   sourcemap: true,
   logLevel: 'info',
+  // Inline the React + @chordsketch/react + wasm glue into a single
+  // bundle the VS Code WebView loads via `<script type="module">`.
+  // Dynamic `import('@chordsketch/wasm')` calls inside the React
+  // hooks reach the same bundled module, so the wasm init we run on
+  // mount short-circuits subsequent `default()` calls in the hooks.
+  splitting: false,
+  jsx: 'automatic',
+  // Production React drops the `__DEV__` branches. The CSP only
+  // allows `'wasm-unsafe-eval'`, so any dev-mode helper that touches
+  // `new Function(...)` would be rejected at runtime.
+  define: {
+    'process.env.NODE_ENV': '"production"',
+  },
+  // Inject `react`, `react-dom`, and the React library into the bundle
+  // — the WebView has no module resolver of its own.
+  external: [],
+  loader: {
+    '.css': 'text',
+  },
   alias: {
     // Resolve @chordsketch/wasm to the web (browser) build of the WASM package,
     // matching the pattern used in packages/playground/vite.config.ts.
     '@chordsketch/wasm': wasmJsSrc,
+    // Same trick for the heavy variant: any transitive import from
+    // `@chordsketch/react` that reaches `@chordsketch/wasm-export`
+    // (e.g. the lazy `<PdfExport>` chunk) is steered at the lean
+    // wasm — the VS Code WebView's preview surface drops PDF from
+    // the format selector anyway. We keep the alias rather than
+    // marking it external so an accidental tree-shake miss does not
+    // emit an unresolvable `import('@chordsketch/wasm-export')`.
+    '@chordsketch/wasm-export': wasmJsSrc,
+    '@chordsketch/react/styles.css': reactCss,
+    '@chordsketch/react': reactEntry,
   },
 };
 

@@ -26,8 +26,8 @@ import {
 
 import { chordProLanguage, chordProTagTable } from './chordpro-language';
 
-/** Imperative handle exposed via `ref` from {@link SourceEditor}. */
-export interface SourceEditorHandle {
+/** Imperative handle exposed via `ref` from {@link ChordSourceArea}. */
+export interface ChordSourceAreaHandle {
   /** Move keyboard focus into the editor. */
   focus(): void;
   /** Read the current document contents. */
@@ -64,8 +64,8 @@ export interface SourceEditorHandle {
   setCaret(offset: number): void;
 }
 
-/** Props accepted by {@link SourceEditor}. */
-export interface SourceEditorProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'> {
+/** Props accepted by {@link ChordSourceArea}. */
+export interface ChordSourceAreaProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'> {
   /**
    * Controlled value. When set, the component synchronises the
    * editor doc against `value` on every render so the parent owns
@@ -274,30 +274,32 @@ const designSystemTheme = EditorView.theme(
 );
 
 /**
- * CodeMirror 6 ChordPro source editor. Provides line numbers,
- * regex-based syntax highlighting (chords / directives / comments),
- * bracket matching, history (`Ctrl/Cmd-Z` / `-Y`), search
- * (`Ctrl/Cmd-F`), and indent-with-tab. Theme + highlight pull
- * through CSS variables prefixed `--cs-*` so the editor styles
- * react to the host stylesheet without recompiling.
+ * Tier 1 atom — CodeMirror 6 ChordPro source editor (no preview).
+ * Provides line numbers, regex-based syntax highlighting (chords /
+ * directives / comments), bracket matching, history (`Ctrl/Cmd-Z` /
+ * `-Y`), search (`Ctrl/Cmd-F`), and indent-with-tab. Theme +
+ * highlight pull through CSS variables prefixed `--cs-*` so the
+ * editor styles react to the host stylesheet without recompiling.
  *
  * Controlled and uncontrolled modes mirror the existing
- * `<ChordEditor>` (textarea) component. The two are intentionally
+ * `<ChordTextarea>` (textarea) component. The two are intentionally
  * separate: the textarea is dependency-free, the CodeMirror
  * variant adds ~150 KB of editor runtime in exchange for
  * highlighting and rich keymaps. Pick whichever fits the host's
- * bundle budget.
+ * bundle budget. Pair `<ChordSourceArea>` with `<ChordProPreview>`
+ * for a custom editor+preview layout, or use `<ChordProEditor>`
+ * for the opinionated all-in-one shell.
  *
  * ```tsx
- * <SourceEditor
+ * <ChordSourceArea
  *   value={source}
  *   onChange={setSource}
  *   placeholder="Paste your ChordPro here…"
  * />
  * ```
  */
-export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
-  function SourceEditor(
+export const ChordSourceArea = forwardRef<ChordSourceAreaHandle, ChordSourceAreaProps>(
+  function ChordSourceArea(
     {
       value,
       defaultValue = '',
@@ -485,7 +487,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(
       [],
     );
 
-    const wrapperClass = ['chordsketch-source-editor', className]
+    const wrapperClass = ['chordsketch-source-area', className]
       .filter(Boolean)
       .join(' ');
 

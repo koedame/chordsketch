@@ -1,12 +1,12 @@
-// Integration tests for the new `<IrealBarGrid>` integrated into
-// `<IrealEditor>`. Covers ARIA grid semantics + roving tabindex +
-// active-bar reconciliation. Sister-site (DOM):
+// Integration tests for the bar grid layout inside `<IrealBarGrid>`.
+// Covers ARIA grid semantics + roving tabindex + active-bar
+// reconciliation. Sister-site (DOM):
 // `packages/ui-irealb-editor/tests/aria-grid.test.ts`.
 
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { IrealEditor, type IrealEditorLoader } from '../src/ireal-editor';
+import { IrealBarGrid, type IrealBarGridLoader } from '../src/ireal-bar-grid';
 import type { IrealSong } from '../src/ireal-ast';
 
 interface EditorStub {
@@ -51,21 +51,21 @@ function makeStub(initial: IrealSong): EditorStub {
   };
 }
 
-function makeLoader(stub: EditorStub): IrealEditorLoader {
-  return vi.fn(async () => stub as unknown as Awaited<ReturnType<IrealEditorLoader>>);
+function makeLoader(stub: EditorStub): IrealBarGridLoader {
+  return vi.fn(async () => stub as unknown as Awaited<ReturnType<IrealBarGridLoader>>);
 }
 
 async function renderEditor(song: IrealSong) {
   const stub = makeStub(song);
   const onChange = vi.fn();
   const result = render(
-    <IrealEditor source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
+    <IrealBarGrid source="irealb://x" loader={makeLoader(stub)} onChange={onChange} />,
   );
   await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
   return { ...result, stub, onChange };
 }
 
-describe('<IrealEditor> bar grid — ARIA semantics', () => {
+describe('<IrealBarGrid> bar grid — ARIA semantics', () => {
   test('grid carries role="grid" + aria-rowcount + aria-colcount + aria-label', async () => {
     await renderEditor(songWithBars(7));
     const grid = screen.getByRole('grid');
@@ -101,12 +101,12 @@ describe('<IrealEditor> bar grid — ARIA semantics', () => {
   });
 });
 
-describe('<IrealEditor> bar grid — roving tabindex', () => {
+describe('<IrealBarGrid> bar grid — roving tabindex', () => {
   test('exactly one bar cell has tabindex=0 on initial render', async () => {
     await renderEditor(songWithBars(4));
     const cells = screen
       .getAllByRole('button', { name: /^Edit bar / })
-      .filter((b) => b.classList.contains('chordsketch-ireal-editor__bar'));
+      .filter((b) => b.classList.contains('chordsketch-ireal-bar-grid__bar'));
     const tabZero = cells.filter((c) => c.getAttribute('tabindex') === '0');
     expect(tabZero.length).toBe(1);
     // Per the reconciler default, the first bar of the first
@@ -118,7 +118,7 @@ describe('<IrealEditor> bar grid — roving tabindex', () => {
     await renderEditor(songWithBars(4));
     const cells = screen
       .getAllByRole('button', { name: /^Edit bar / })
-      .filter((b) => b.classList.contains('chordsketch-ireal-editor__bar'));
+      .filter((b) => b.classList.contains('chordsketch-ireal-bar-grid__bar'));
     // Focus the third cell. After commit the slot should have moved.
     cells[2]!.focus();
     await waitFor(() => {
@@ -131,12 +131,12 @@ describe('<IrealEditor> bar grid — roving tabindex', () => {
   test('section with zero bars contributes no Tab stops', async () => {
     const song = songWithBars(0);
     await renderEditor(song);
-    const cells = document.querySelectorAll('.chordsketch-ireal-editor__bar');
+    const cells = document.querySelectorAll('.chordsketch-ireal-bar-grid__bar');
     expect(cells.length).toBe(0);
   });
 });
 
-describe('<IrealEditor> bar grid — focus activation', () => {
+describe('<IrealBarGrid> bar grid — focus activation', () => {
   test('focusing a bar cell moves the roving tabindex slot to it', async () => {
     // The cell's `onFocus` fires `onActiveBarChange`; the
     // resulting state update re-renders the grid with the new
@@ -146,7 +146,7 @@ describe('<IrealEditor> bar grid — focus activation', () => {
     await renderEditor(songWithBars(4));
     const cells = screen
       .getAllByRole('button', { name: /^Edit bar / })
-      .filter((b) => b.classList.contains('chordsketch-ireal-editor__bar'));
+      .filter((b) => b.classList.contains('chordsketch-ireal-bar-grid__bar'));
     cells[3]!.focus();
     await waitFor(() => {
       expect(cells[3]!.getAttribute('tabindex')).toBe('0');

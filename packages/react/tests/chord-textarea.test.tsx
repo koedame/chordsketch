@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { ChordEditor } from '../src/index';
+import { ChordTextarea } from '../src/index';
 import type { ChordWasmLoader } from '../src/use-chord-render';
 import type { ChordproWasmLoader } from '../src/use-chordpro-ast';
 
@@ -66,13 +66,13 @@ function makeAstLoader(stub: ReturnType<typeof makeStub>): ChordproWasmLoader {
   return vi.fn(async () => stub as unknown as Awaited<ReturnType<ChordproWasmLoader>>);
 }
 
-describe('<ChordEditor>', () => {
+describe('<ChordTextarea>', () => {
   test('uncontrolled mode: renders defaultValue and fires onChange on input', async () => {
     const stub = makeStub();
     const onChange = vi.fn();
 
     render(
-      <ChordEditor
+      <ChordTextarea
         defaultValue="start"
         onChange={onChange}
         wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
@@ -95,7 +95,7 @@ describe('<ChordEditor>', () => {
       const [v, setV] = useState('foo');
       return (
         <>
-          <ChordEditor
+          <ChordTextarea
             value={v}
             onChange={setV}
             wasmLoader={makeLoader(makeStub())} astWasmLoader={makeAstLoader(makeStub())}
@@ -118,7 +118,7 @@ describe('<ChordEditor>', () => {
   test('textarea has a default aria-label that overrides the placeholder-as-name fallback', () => {
     const stub = makeStub();
     render(
-      <ChordEditor
+      <ChordTextarea
         defaultValue=""
         wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={0}
@@ -131,7 +131,7 @@ describe('<ChordEditor>', () => {
   test('textareaAriaLabel prop overrides the default accessible name', () => {
     const stub = makeStub();
     render(
-      <ChordEditor
+      <ChordTextarea
         defaultValue=""
         textareaAriaLabel="Lyrics source"
         wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
@@ -148,7 +148,7 @@ describe('<ChordEditor>', () => {
     try {
       // Start controlled (value defined).
       const { rerender } = render(
-        <ChordEditor
+        <ChordTextarea
           value="start"
           onChange={vi.fn()}
           wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
@@ -159,7 +159,7 @@ describe('<ChordEditor>', () => {
       // the React core warning on `<input>`. Regression guard for
       // #2160.
       rerender(
-        <ChordEditor
+        <ChordTextarea
           defaultValue="next"
           onChange={vi.fn()}
           wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
@@ -178,7 +178,7 @@ describe('<ChordEditor>', () => {
 
   test('readOnly forwards to the textarea', () => {
     render(
-      <ChordEditor
+      <ChordTextarea
         defaultValue="frozen"
         readOnly
         wasmLoader={makeLoader(makeStub())} astWasmLoader={makeAstLoader(makeStub())}
@@ -194,7 +194,7 @@ describe('<ChordEditor>', () => {
   test('debounced preview only re-renders after the quiet window', async () => {
     const stub = makeStub();
     render(
-      <ChordEditor
+      <ChordTextarea
         defaultValue=""
         wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={120}
@@ -241,7 +241,7 @@ describe('<ChordEditor>', () => {
     const stub = makeStub();
 
     render(
-      <ChordEditor
+      <ChordTextarea
         defaultValue="x"
         transpose={2}
         onTransposeChange={onTransposeChange}
@@ -275,7 +275,7 @@ describe('<ChordEditor>', () => {
     const stub = makeStub();
 
     render(
-      <ChordEditor
+      <ChordTextarea
         defaultValue="x"
         transpose={5}
         minTranspose={-5}
@@ -297,7 +297,7 @@ describe('<ChordEditor>', () => {
     const stub = makeStub();
 
     render(
-      <ChordEditor
+      <ChordTextarea
         defaultValue="x"
         transpose={-5}
         minTranspose={-5}
@@ -318,7 +318,7 @@ describe('<ChordEditor>', () => {
   test('transpose value is forwarded to the preview via parseChordproWithWarningsAndOptions', async () => {
     const stub = makeStub();
     render(
-      <ChordEditor
+      <ChordTextarea
         defaultValue="src"
         transpose={3}
         wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
@@ -338,14 +338,14 @@ describe('<ChordEditor>', () => {
   test('previewFormat="text" with default transpose still goes through the with-options variant', async () => {
     const stub = makeStub();
     render(
-      <ChordEditor
+      <ChordTextarea
         defaultValue="src"
         previewFormat="text"
         wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={0}
       />,
     );
-    // `<ChordEditor>` defaults `transpose` to 0 and forwards it
+    // `<ChordTextarea>` defaults `transpose` to 0 and forwards it
     // to the preview. `useChordRender` routes any non-undefined
     // transpose through `render_text_with_options`, so the plain
     // `render_text` does not fire here — the check below is on

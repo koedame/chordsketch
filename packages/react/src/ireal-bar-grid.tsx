@@ -18,29 +18,29 @@ import {
   type IrealSong,
 } from './ireal-ast';
 import {
-  IrealBarGrid,
+  IrealBarGridLayout,
   reconcileActiveBar,
   type IrealActiveBarRef,
   type IrealStructuralOps,
-} from './ireal-editor-bar-grid';
-import { IrealBarPopover } from './ireal-editor-popover';
+} from './ireal-bar-grid-layout';
+import { IrealBarPopover } from './ireal-bar-grid-popover';
 import {
   makeDefaultBar,
   makeDefaultSection,
   sectionLabelEquals,
   formatSectionLabelForPrompt,
-} from './ireal-editor-defaults';
+} from './ireal-bar-grid-defaults';
 import {
   defaultPromptSectionLabel,
   defaultConfirmDeleteSection,
-} from './ireal-editor-section-prompt';
+} from './ireal-bar-grid-section-prompt';
 import { useAnnouncer } from './use-announcer';
 
-// Narrow subset of `@chordsketch/wasm` this editor touches. Defined
-// structurally so the wasm glue does not enter the React bundle's
-// type graph. Mirrors the parse/serialise stub in
+// Narrow subset of `@chordsketch/wasm` this component touches.
+// Defined structurally so the wasm glue does not enter the React
+// bundle's type graph. Mirrors the parse/serialise stub in
 // `tests/helpers/wasm-stub.ts`.
-interface IrealEditorWasm {
+interface IrealBarGridWasm {
   default: () => Promise<unknown>;
   parseIrealb: (input: string) => string;
   serializeIrealb: (json: string) => string;
@@ -48,12 +48,12 @@ interface IrealEditorWasm {
 
 /** Loader override. Tests inject a structurally-compatible stub.
  * @internal */
-export type IrealEditorLoader = () => Promise<IrealEditorWasm>;
+export type IrealBarGridLoader = () => Promise<IrealBarGridWasm>;
 
-const defaultLoader: IrealEditorLoader = () =>
-  import('@chordsketch/wasm') as Promise<IrealEditorWasm>;
+const defaultLoader: IrealBarGridLoader = () =>
+  import('@chordsketch/wasm') as Promise<IrealBarGridWasm>;
 
-export interface IrealEditorProps {
+export interface IrealBarGridProps {
   /** Current `irealb://` URL. When this prop changes between renders
    * (and does not match the URL the editor last emitted via
    * `onChange`), the editor re-parses and resets its internal AST. */
@@ -93,7 +93,7 @@ export interface IrealEditorProps {
   confirmDeleteSection?: (label: IrealSectionLabel) => boolean;
   /** Optional loader override.
    * @internal */
-  loader?: IrealEditorLoader;
+  loader?: IrealBarGridLoader;
 }
 
 /** Default empty song. Matches `makeEmptySong` in
@@ -127,10 +127,13 @@ const TIME_NUMERATORS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
 const TIME_DENOMINATORS = [2, 4, 8] as const;
 
 /**
- * Native React iReal Pro chart editor — header metadata form + an
- * interactive bar grid with structural editing and keyboard
- * navigation + a round-trip URL textarea + a polite ARIA live
- * region that announces structural edits.
+ * Tier 1 atom — native React iReal Pro bar-grid editor surface:
+ * header metadata form + an interactive bar grid with structural
+ * editing and keyboard navigation + a round-trip URL textarea +
+ * a polite ARIA live region that announces structural edits.
+ *
+ * Pair with `<IrealPreview>` for a custom layout, or use
+ * `<IrealProEditor>` for the opinionated all-in-one shell.
  *
  * The bar grid surfaces:
  * - ARIA grid semantics (`role="grid"`, `aria-rowcount`,
@@ -167,7 +170,7 @@ const TIME_DENOMINATORS = [2, 4, 8] as const;
  * custom resolvers for hosts that want styled modals instead of
  * the default `window.prompt` / `window.confirm`.
  */
-export function IrealEditor({
+export function IrealBarGrid({
   source,
   onChange,
   readOnly = false,
@@ -179,8 +182,8 @@ export function IrealEditor({
   promptSectionLabel = defaultPromptSectionLabel,
   confirmDeleteSection = defaultConfirmDeleteSection,
   loader = defaultLoader,
-}: IrealEditorProps): JSX.Element {
-  const wasmRef = useRef<IrealEditorWasm | null>(null);
+}: IrealBarGridProps): JSX.Element {
+  const wasmRef = useRef<IrealBarGridWasm | null>(null);
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
 
@@ -339,7 +342,7 @@ export function IrealEditor({
     if (errorFallback === null) return null;
     if (errorFallback === undefined) {
       return (
-        <p className="chordsketch-ireal-editor__error" role="alert">
+        <p className="chordsketch-ireal-bar-grid__error" role="alert">
           {error.message}
         </p>
       );
@@ -546,7 +549,7 @@ export function IrealEditor({
     const active = (typeof document !== 'undefined'
       ? (document.activeElement as HTMLElement | null)
       : null);
-    if (active !== null && active.classList?.contains('chordsketch-ireal-editor__bar')) {
+    if (active !== null && active.classList?.contains('chordsketch-ireal-bar-grid__bar')) {
       popoverAnchorRef.current = active;
     }
     setPopoverTarget({ secIndex, barIndex });
@@ -596,14 +599,14 @@ export function IrealEditor({
     }
   }, [popoverTarget, popoverBar]);
 
-  const wrapperClass = ['chordsketch-ireal-editor', className]
+  const wrapperClass = ['chordsketch-ireal-bar-grid', className]
     .filter((c): c is string => typeof c === 'string' && c.length > 0)
     .join(' ');
 
   if (song === null && error === null) {
     return (
       <div className={wrapperClass} style={style} aria-busy="true">
-        <p className="chordsketch-ireal-editor__loading">Loading…</p>
+        <p className="chordsketch-ireal-bar-grid__loading">Loading…</p>
       </div>
     );
   }
@@ -614,9 +617,9 @@ export function IrealEditor({
       {errorNode}
       {song !== null ? (
         <>
-          <fieldset className="chordsketch-ireal-editor__metadata" disabled={disabled}>
+          <fieldset className="chordsketch-ireal-bar-grid__metadata" disabled={disabled}>
             <legend>Chart metadata</legend>
-            <label className="chordsketch-ireal-editor__field">
+            <label className="chordsketch-ireal-bar-grid__field">
               <span>Title</span>
               <input
                 type="text"
@@ -624,7 +627,7 @@ export function IrealEditor({
                 onChange={(e) => emit({ ...song, title: e.target.value })}
               />
             </label>
-            <label className="chordsketch-ireal-editor__field">
+            <label className="chordsketch-ireal-bar-grid__field">
               <span>Composer</span>
               <input
                 type="text"
@@ -634,7 +637,7 @@ export function IrealEditor({
                 }
               />
             </label>
-            <label className="chordsketch-ireal-editor__field">
+            <label className="chordsketch-ireal-bar-grid__field">
               <span>Style</span>
               <input
                 type="text"
@@ -644,8 +647,8 @@ export function IrealEditor({
                 }
               />
             </label>
-            <div className="chordsketch-ireal-editor__key">
-              <label className="chordsketch-ireal-editor__field">
+            <div className="chordsketch-ireal-bar-grid__key">
+              <label className="chordsketch-ireal-bar-grid__field">
                 <span>Key root</span>
                 <select
                   value={song.key_signature.root.note}
@@ -666,7 +669,7 @@ export function IrealEditor({
                   ))}
                 </select>
               </label>
-              <label className="chordsketch-ireal-editor__field">
+              <label className="chordsketch-ireal-bar-grid__field">
                 <span>Accidental</span>
                 <select
                   value={song.key_signature.root.accidental}
@@ -690,7 +693,7 @@ export function IrealEditor({
                   ))}
                 </select>
               </label>
-              <label className="chordsketch-ireal-editor__field">
+              <label className="chordsketch-ireal-bar-grid__field">
                 <span>Mode</span>
                 <select
                   value={song.key_signature.mode}
@@ -712,8 +715,8 @@ export function IrealEditor({
                 </select>
               </label>
             </div>
-            <div className="chordsketch-ireal-editor__time">
-              <label className="chordsketch-ireal-editor__field">
+            <div className="chordsketch-ireal-bar-grid__time">
+              <label className="chordsketch-ireal-bar-grid__field">
                 <span>Time num.</span>
                 <select
                   value={song.time_signature.numerator}
@@ -734,7 +737,7 @@ export function IrealEditor({
                   ))}
                 </select>
               </label>
-              <label className="chordsketch-ireal-editor__field">
+              <label className="chordsketch-ireal-bar-grid__field">
                 <span>Time denom.</span>
                 <select
                   value={song.time_signature.denominator}
@@ -756,7 +759,7 @@ export function IrealEditor({
                 </select>
               </label>
             </div>
-            <label className="chordsketch-ireal-editor__field">
+            <label className="chordsketch-ireal-bar-grid__field">
               <span>Tempo</span>
               <input
                 type="number"
@@ -776,7 +779,7 @@ export function IrealEditor({
                 }}
               />
             </label>
-            <label className="chordsketch-ireal-editor__field">
+            <label className="chordsketch-ireal-bar-grid__field">
               <span>Transpose</span>
               <input
                 type="number"
@@ -794,7 +797,7 @@ export function IrealEditor({
             </label>
           </fieldset>
           {showBars ? (
-            <IrealBarGrid
+            <IrealBarGridLayout
               sections={song.sections}
               activeBar={activeBar}
               onActiveBarChange={setActiveBar}
@@ -815,7 +818,7 @@ export function IrealEditor({
             />
           ) : null}
           {showUrl ? (
-            <label className="chordsketch-ireal-editor__url">
+            <label className="chordsketch-ireal-bar-grid__url">
               <span>URL</span>
               <textarea
                 value={urlDraft}

@@ -1,6 +1,6 @@
-// Bar grid + per-section / per-bar action buttons + ARIA grid
-// semantics + roving-tabindex + keyboard navigation for
-// `<IrealEditor>`. Sister-site (DOM) to
+// Bar grid layout + per-section / per-bar action buttons + ARIA
+// grid semantics + roving-tabindex + keyboard navigation for
+// `<IrealBarGrid>`. Sister-site (DOM) to
 // `packages/ui-irealb-editor/src/render.ts`'s
 // `renderSection` + `renderBar` + `handleBarCellKeydown` (lines
 // 305-695). Each cell is a `<button type="button">` so screen
@@ -20,7 +20,7 @@ import {
  * Number of bar cells per visual row. The CSS uses
  * `grid-template-columns: repeat(4, ...)`, and the ARIA
  * `aria-rowindex` / `aria-colindex` reflect the same wrap. Changing
- * this MUST update `.chordsketch-ireal-editor__row` in
+ * this MUST update `.chordsketch-ireal-bar-grid__row` in
  * `packages/react/src/styles.css` in lockstep. Sister-site:
  * `BARS_PER_ROW` in `packages/ui-irealb-editor/src/render.ts`.
  */
@@ -51,7 +51,7 @@ export interface IrealStructuralOps {
   moveBarRight(secIndex: number, barIndex: number): void;
 }
 
-export interface IrealBarGridProps {
+export interface IrealBarGridLayoutProps {
   sections: readonly IrealSection[];
   /** The cell that should hold `tabindex="0"`. May be `null` for
    * an empty chart, in which case the grid contributes no Tab
@@ -66,7 +66,7 @@ export interface IrealBarGridProps {
   /** Structural mutators wired to per-section / per-bar action
    * buttons + keyboard shortcuts. */
   ops: IrealStructuralOps;
-  /** Disable every interactive control. Used by `<IrealEditor>` in
+  /** Disable every interactive control. Used by `<IrealBarGrid>` in
    * the parse-error / loading states. */
   disabled: boolean;
 }
@@ -81,19 +81,19 @@ export interface IrealBarGridProps {
  * load-bearing — every assertion in the upstream
  * `tests/aria-grid.test.ts` / `tests/structural.test.ts` /
  * `tests/keyboard.test.ts` (DOM-side) maps to an equivalent
- * assertion in `tests/ireal-editor-{bar-grid,structural,keyboard}.test.tsx`
+ * assertion in `tests/ireal-bar-grid-{layout,structural,keyboard}.test.tsx`
  * (React side).
  */
-export function IrealBarGrid({
+export function IrealBarGridLayout({
   sections,
   activeBar,
   onActiveBarChange,
   onOpenBar,
   ops,
   disabled,
-}: IrealBarGridProps): ReactElement {
+}: IrealBarGridLayoutProps): ReactElement {
   return (
-    <div className="chordsketch-ireal-editor__sections">
+    <div className="chordsketch-ireal-bar-grid__sections">
       {sections.map((section, secIndex) => (
         <SectionBlock
           key={secIndex}
@@ -109,7 +109,7 @@ export function IrealBarGrid({
       ))}
       <button
         type="button"
-        className="chordsketch-ireal-editor__add-section"
+        className="chordsketch-ireal-bar-grid__add-section"
         onClick={() => ops.addSection()}
         disabled={disabled}
       >
@@ -155,14 +155,14 @@ function SectionBlock({
 
   return (
     <section
-      className="chordsketch-ireal-editor__section"
+      className="chordsketch-ireal-bar-grid__section"
       data-section-index={secIndex}
     >
-      <div className="chordsketch-ireal-editor__section-header">
-        <h3 className="chordsketch-ireal-editor__section-label">{sectionLabel}</h3>
+      <div className="chordsketch-ireal-bar-grid__section-header">
+        <h3 className="chordsketch-ireal-bar-grid__section-label">{sectionLabel}</h3>
         <button
           type="button"
-          className="chordsketch-ireal-editor__section-action"
+          className="chordsketch-ireal-bar-grid__section-action"
           aria-label="Rename section"
           onClick={() => ops.renameSection(secIndex, section.label)}
           disabled={disabled}
@@ -171,7 +171,7 @@ function SectionBlock({
         </button>
         <button
           type="button"
-          className="chordsketch-ireal-editor__section-action"
+          className="chordsketch-ireal-bar-grid__section-action"
           aria-label="Move section up"
           onClick={() => ops.moveSectionUp(secIndex)}
           disabled={disabled || secIndex === 0}
@@ -180,7 +180,7 @@ function SectionBlock({
         </button>
         <button
           type="button"
-          className="chordsketch-ireal-editor__section-action"
+          className="chordsketch-ireal-bar-grid__section-action"
           aria-label="Move section down"
           onClick={() => ops.moveSectionDown(secIndex)}
           disabled={disabled || secIndex === sectionsCount - 1}
@@ -189,7 +189,7 @@ function SectionBlock({
         </button>
         <button
           type="button"
-          className="chordsketch-ireal-editor__section-action chordsketch-ireal-editor__section-action--danger"
+          className="chordsketch-ireal-bar-grid__section-action chordsketch-ireal-bar-grid__section-action--danger"
           aria-label="Delete section"
           onClick={() => ops.deleteSection(secIndex)}
           disabled={disabled}
@@ -199,7 +199,7 @@ function SectionBlock({
       </div>
 
       <div
-        className="chordsketch-ireal-editor__bars"
+        className="chordsketch-ireal-bar-grid__bars"
         role="grid"
         aria-rowcount={rowCount}
         aria-colcount={BARS_PER_ROW}
@@ -211,7 +211,7 @@ function SectionBlock({
           return (
             <div
               key={rowIdx}
-              className="chordsketch-ireal-editor__row"
+              className="chordsketch-ireal-bar-grid__row"
               role="row"
               aria-rowindex={rowIdx + 1}
             >
@@ -243,7 +243,7 @@ function SectionBlock({
 
       <button
         type="button"
-        className="chordsketch-ireal-editor__add-bar"
+        className="chordsketch-ireal-bar-grid__add-bar"
         onClick={() => ops.addBar(secIndex)}
         disabled={disabled}
       >
@@ -291,7 +291,7 @@ function BarCell({
 
   return (
     <div
-      className="chordsketch-ireal-editor__bar-wrapper"
+      className="chordsketch-ireal-bar-grid__bar-wrapper"
       data-bar-index={barIndex}
       role="gridcell"
       aria-colindex={colIndex + 1}
@@ -299,7 +299,7 @@ function BarCell({
       <button
         ref={cellRef}
         type="button"
-        className="chordsketch-ireal-editor__bar"
+        className="chordsketch-ireal-bar-grid__bar"
         // Include the rendered chord text in the accessible name
         // so screen-reader users hear which bar they are on, not
         // just its index. `text` is `' '` (U+00A0) for an empty
@@ -320,10 +320,10 @@ function BarCell({
       >
         {text}
       </button>
-      <div className="chordsketch-ireal-editor__bar-actions">
+      <div className="chordsketch-ireal-bar-grid__bar-actions">
         <button
           type="button"
-          className="chordsketch-ireal-editor__bar-action"
+          className="chordsketch-ireal-bar-grid__bar-action"
           aria-label="Move bar left"
           onClick={() => ops.moveBarLeft(secIndex, barIndex)}
           disabled={disabled || barIndex === 0}
@@ -332,7 +332,7 @@ function BarCell({
         </button>
         <button
           type="button"
-          className="chordsketch-ireal-editor__bar-action"
+          className="chordsketch-ireal-bar-grid__bar-action"
           aria-label="Move bar right"
           onClick={() => ops.moveBarRight(secIndex, barIndex)}
           disabled={disabled || barIndex === barsCount - 1}
@@ -341,7 +341,7 @@ function BarCell({
         </button>
         <button
           type="button"
-          className="chordsketch-ireal-editor__bar-action chordsketch-ireal-editor__bar-action--danger"
+          className="chordsketch-ireal-bar-grid__bar-action chordsketch-ireal-bar-grid__bar-action--danger"
           aria-label="Delete bar"
           onClick={() => ops.deleteBar(secIndex, barIndex)}
           disabled={disabled}
@@ -378,7 +378,7 @@ function BarCell({
  *
  * The guard matches against three shapes so the future popover
  * mount path activates it unconditionally:
- *   1. The future `.chordsketch-ireal-editor__popover` class —
+ *   1. The future `.chordsketch-ireal-bar-grid__popover` class —
  *      the canonical sister-site selector
  *      (`render.ts:609` checks `.irealb-editor__popover`).
  *   2. An element with explicit `role="dialog"` — what
@@ -400,7 +400,7 @@ function handleBarCellKeydown(
   cellEl: HTMLButtonElement | null,
 ): void {
   if (cellEl !== null) {
-    const editorRoot = cellEl.closest('.chordsketch-ireal-editor');
+    const editorRoot = cellEl.closest('.chordsketch-ireal-bar-grid');
     if (editorRoot !== null && hasOpenPopover(editorRoot)) {
       return;
     }
@@ -438,7 +438,7 @@ function handleBarCellKeydown(
       // across the re-render. Sister-site comment: `render.ts:659-670`.
       const editorRoot =
         cellEl !== null
-          ? cellEl.closest<HTMLElement>('.chordsketch-ireal-editor')
+          ? cellEl.closest<HTMLElement>('.chordsketch-ireal-bar-grid')
           : null;
       ops.deleteBar(secIndex, barIndex);
       // After the structural op + React re-render, focus the
@@ -489,7 +489,7 @@ function handleBarCellKeydown(
  * `handleBarCellKeydown` for the three shapes recognised. */
 function hasOpenPopover(editorRoot: Element): boolean {
   return (
-    editorRoot.querySelector('.chordsketch-ireal-editor__popover') !== null ||
+    editorRoot.querySelector('.chordsketch-ireal-bar-grid__popover') !== null ||
     editorRoot.querySelector('[role="dialog"]') !== null ||
     editorRoot.querySelector('dialog') !== null
   );
@@ -501,13 +501,13 @@ function focusBarCell(
   barIndex: number,
 ): void {
   if (cellEl === null) return;
-  const editorRoot = cellEl.closest('.chordsketch-ireal-editor');
+  const editorRoot = cellEl.closest('.chordsketch-ireal-bar-grid');
   if (editorRoot === null) return;
   editorRoot
     .querySelector<HTMLButtonElement>(
-      `.chordsketch-ireal-editor__section[data-section-index="${secIndex}"] ` +
-        `.chordsketch-ireal-editor__bar-wrapper[data-bar-index="${barIndex}"] ` +
-        `.chordsketch-ireal-editor__bar`,
+      `.chordsketch-ireal-bar-grid__section[data-section-index="${secIndex}"] ` +
+        `.chordsketch-ireal-bar-grid__bar-wrapper[data-bar-index="${barIndex}"] ` +
+        `.chordsketch-ireal-bar-grid__bar`,
     )
     ?.focus();
 }
@@ -519,15 +519,15 @@ function focusAfterBarDelete(
 ): void {
   if (editorRoot === null) return;
   const sectionEl = editorRoot.querySelector(
-    `.chordsketch-ireal-editor__section[data-section-index="${secIndex}"]`,
+    `.chordsketch-ireal-bar-grid__section[data-section-index="${secIndex}"]`,
   );
   if (sectionEl === null) return;
   const cells = sectionEl.querySelectorAll<HTMLButtonElement>(
-    '.chordsketch-ireal-editor__bar',
+    '.chordsketch-ireal-bar-grid__bar',
   );
   if (cells.length === 0) {
     sectionEl
-      .querySelector<HTMLButtonElement>('.chordsketch-ireal-editor__add-bar')
+      .querySelector<HTMLButtonElement>('.chordsketch-ireal-bar-grid__add-bar')
       ?.focus();
     return;
   }
@@ -539,7 +539,7 @@ function focusAfterBarDelete(
  * Reconcile a `activeBar` reference against a possibly-restructured
  * `sections` array so the bar grid always exposes exactly one
  * Tab stop (or `null` for a completely empty chart). Used by
- * `<IrealEditor>`'s `useEffect` whenever the parsed song changes.
+ * `<IrealBarGrid>`'s `useEffect` whenever the parsed song changes.
  *
  * Returns the same reference when no reconciliation is needed (so
  * callers can use `===` to skip a state update). Sister-site:

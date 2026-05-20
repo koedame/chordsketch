@@ -1,5 +1,5 @@
 // Integration tests for the bar-edit popover wired into
-// `<IrealEditor>`. Sister-site (DOM):
+// `<IrealBarGrid>`. Sister-site (DOM):
 // `packages/ui-irealb-editor/tests/popover.test.ts`.
 //
 // Each test renders the editor against a stub wasm bridge, opens
@@ -9,7 +9,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { IrealEditor, type IrealEditorLoader } from '../src/ireal-editor';
+import { IrealBarGrid, type IrealBarGridLoader } from '../src/ireal-bar-grid';
 import type { IrealBar, IrealSong } from '../src/ireal-ast';
 
 interface EditorStub {
@@ -79,11 +79,11 @@ function makeStub(initial: IrealSong): EditorStub {
 async function renderEditor(initial: IrealSong = songWithOneChordBar()) {
   const stub = makeStub(initial);
   const onChange = vi.fn();
-  const loader: IrealEditorLoader = vi.fn(
-    async () => stub as unknown as Awaited<ReturnType<IrealEditorLoader>>,
+  const loader: IrealBarGridLoader = vi.fn(
+    async () => stub as unknown as Awaited<ReturnType<IrealBarGridLoader>>,
   );
   const result = render(
-    <IrealEditor source="irealb://x" loader={loader} onChange={onChange} />,
+    <IrealBarGrid source="irealb://x" loader={loader} onChange={onChange} />,
   );
   await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
   return { ...result, stub, onChange };
@@ -94,7 +94,7 @@ function openFirstBarPopover(): void {
   fireEvent.click(cell);
 }
 
-describe('<IrealEditor> popover — open / dismiss', () => {
+describe('<IrealBarGrid> popover — open / dismiss', () => {
   test('clicking a bar cell mounts a role="dialog" aria-modal="true"', async () => {
     await renderEditor();
     openFirstBarPopover();
@@ -158,7 +158,7 @@ describe('<IrealEditor> popover — open / dismiss', () => {
   });
 });
 
-describe('<IrealEditor> popover — barline edits', () => {
+describe('<IrealBarGrid> popover — barline edits', () => {
   test('Save commits start/end barline edits to the AST', async () => {
     const { stub } = await renderEditor();
     openFirstBarPopover();
@@ -171,7 +171,7 @@ describe('<IrealEditor> popover — barline edits', () => {
   });
 });
 
-describe('<IrealEditor> popover — ending input', () => {
+describe('<IrealBarGrid> popover — ending input', () => {
   test('empty input → null', async () => {
     const seed = songWithOneChordBar();
     seed.sections[0]!.bars[0]!.ending = 2;
@@ -208,7 +208,7 @@ describe('<IrealEditor> popover — ending input', () => {
   });
 });
 
-describe('<IrealEditor> popover — symbol picker', () => {
+describe('<IrealBarGrid> popover — symbol picker', () => {
   // Parametrised across the full 18-option list. A typo or accidental
   // drop in `SYMBOL_OPTIONS` (e.g. a missing
   // `da_capo_al_3rd_end` entry) would surface here as a select-value
@@ -258,7 +258,7 @@ describe('<IrealEditor> popover — symbol picker', () => {
   });
 });
 
-describe('<IrealEditor> popover — focus restoration', () => {
+describe('<IrealBarGrid> popover — focus restoration', () => {
   test('after Cancel, focus returns to the bar cell that opened the popover', async () => {
     await renderEditor();
     const cell = screen.getAllByRole('button', { name: /^Edit bar 1/ })[0]!;
@@ -283,7 +283,7 @@ describe('<IrealEditor> popover — focus restoration', () => {
   });
 });
 
-describe('<IrealEditor> popover — chord rows', () => {
+describe('<IrealBarGrid> popover — chord rows', () => {
   test('Add chord appends a new default chord row', async () => {
     const { stub } = await renderEditor();
     openFirstBarPopover();
@@ -371,7 +371,7 @@ describe('<IrealEditor> popover — chord rows', () => {
     const dialog = await screen.findByRole('dialog');
     const bassInput = within(dialog).getByLabelText('Bass');
     fireEvent.change(bassInput, { target: { value: 'ZZZ' } });
-    expect(bassInput.classList.contains('chordsketch-ireal-editor__input--invalid')).toBe(true);
+    expect(bassInput.classList.contains('chordsketch-ireal-bar-grid__input--invalid')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
     // AST bass unchanged from the seed value.
@@ -516,7 +516,7 @@ describe('<IrealEditor> popover — chord rows', () => {
   });
 });
 
-describe('<IrealEditor> popover — preserves unedited fields', () => {
+describe('<IrealBarGrid> popover — preserves unedited fields', () => {
   test('Save preserves staff_texts and system_break_space on the seed bar', async () => {
     const seed = songWithOneChordBar();
     // Cast through unknown because the AST type is conservative —

@@ -1,10 +1,10 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 
-import { IrealEditor, type IrealEditorLoader } from './ireal-editor';
+import { IrealBarGrid, type IrealBarGridLoader } from './ireal-bar-grid';
 import { IrealPreview } from './ireal-preview';
 import type { IrealRenderLoader } from './use-ireal-render';
 
-export interface IrealPlaygroundProps {
+export interface IrealProEditorProps {
   /**
    * Initial `irealb://` URL. The component manages the value
    * internally afterwards; pass {@link source} + {@link onChange}
@@ -35,29 +35,29 @@ export interface IrealPlaygroundProps {
   hidePreview?: boolean;
   /** @internal Loader override for tests. Shared with the preview
    * pane (which only needs the `renderIrealSvg` shape); the
-   * structural compatibility of `IrealEditorWasm` (parse +
+   * structural compatibility of `IrealBarGridWasm` (parse +
    * serialize + default) is a superset of `IrealRenderer`
    * (renderIrealSvg + default), so the editor stub can satisfy
    * the preview's narrower contract too as long as the test stub
    * declares `renderIrealSvg`. */
-  loader?: IrealEditorLoader;
+  loader?: IrealBarGridLoader;
   /** @internal Loader override for the preview pane. Falls back
    * to `loader` when omitted so a single stub covers both panes. */
   previewLoader?: IrealRenderLoader;
 }
 
 /**
- * High-level "drop-in" wrapper that composes {@link IrealEditor} and
- * {@link IrealPreview}. Hosts that want a single-component embed
- * analogous to the ChordPro `<Playground>` use this; hosts that need
- * to control layout themselves should compose the two children
- * directly.
+ * Tier 3 composed editor — high-level "drop-in" wrapper that
+ * composes {@link IrealBarGrid} and {@link IrealPreview}. Hosts
+ * that want a single-component embed analogous to the ChordPro
+ * `<ChordProEditor>` use this; hosts that need to control layout
+ * themselves should compose the two children directly.
  *
  * Supports both uncontrolled (`defaultValue`) and controlled
  * (`source` + `onChange`) modes; mixing the two is a configuration
  * error and the controlled props win.
  */
-export function IrealPlayground({
+export function IrealProEditor({
   defaultValue = '',
   source,
   onChange,
@@ -70,7 +70,7 @@ export function IrealPlayground({
   hidePreview = false,
   loader,
   previewLoader,
-}: IrealPlaygroundProps): JSX.Element {
+}: IrealProEditorProps): JSX.Element {
   const isControlled = source !== undefined;
   const [internalValue, setInternalValue] = useState<string>(defaultValue);
 
@@ -92,14 +92,14 @@ export function IrealPlayground({
     if (onChange !== undefined) onChange(url);
   };
 
-  const wrapperClass = ['chordsketch-ireal-playground', className]
+  const wrapperClass = ['chordsketch-ireal-pro-editor', className]
     .filter((c): c is string => typeof c === 'string' && c.length > 0)
     .join(' ');
 
   return (
     <div className={wrapperClass} style={style}>
-      <div className="chordsketch-ireal-playground__editor">
-        <IrealEditor
+      <div className="chordsketch-ireal-pro-editor__editor">
+        <IrealBarGrid
           source={currentValue}
           onChange={readOnly ? undefined : handleChange}
           readOnly={readOnly}
@@ -110,7 +110,7 @@ export function IrealPlayground({
         />
       </div>
       {hidePreview ? null : (
-        <div className="chordsketch-ireal-playground__preview">
+        <div className="chordsketch-ireal-pro-editor__preview">
           <IrealPreview
             source={currentValue}
             errorFallback={errorFallback}

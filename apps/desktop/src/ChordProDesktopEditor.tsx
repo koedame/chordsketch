@@ -1,22 +1,29 @@
 /**
- * CodeMirror 6 + `tree-sitter-chordpro` editor for the desktop app.
+ * Desktop-specific CodeMirror 6 + `tree-sitter-chordpro` ChordPro
+ * editor, wrapped as a controlled-mode React component composed
+ * inside `<App />`. Combines grammar load, a ViewPlugin for
+ * incremental reparse + decorations, and a diagnostics walker.
  *
- * Implements the `EditorAdapter` contract from `@chordsketch/ui-web`
- * so the desktop host can swap in a rich editor without touching
- * the framework-agnostic ui-web code path. The playground stays on
- * the default `<textarea>` factory and does not pay the
- * CodeMirror / web-tree-sitter bundle cost.
+ * Why this lives in `apps/desktop/` instead of `@chordsketch/react`:
+ * `@chordsketch/react`'s built-in `<ChordSourceArea>` uses a
+ * lightweight regex `StreamLanguage` for highlighting and does not
+ * (yet) expose a way to inject custom CodeMirror extensions. The
+ * desktop app's tree-sitter-backed highlighting + diagnostics is
+ * higher fidelity and is its sole consumer in this repo; teaching
+ * `<ChordSourceArea>` to accept an extensions prop is tracked as
+ * follow-up work.
  *
  * The grammar + runtime wasm binaries are copied into
  * `apps/desktop/public/` by `scripts/build-grammar-wasm.mjs` at
  * `prebuild` / `predev` time; Vite serves them at
  * `/tree-sitter-chordpro.wasm` and `/web-tree-sitter.wasm`.
  */
-import type {
-  EditorAdapter,
-  EditorFactory,
-  EditorFactoryOptions,
-} from '@chordsketch/ui-web';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from 'react';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import {
   HighlightStyle,
@@ -41,6 +48,26 @@ import { tags as t, type Tag } from '@lezer/highlight';
 import { Language, Parser, Query } from 'web-tree-sitter';
 
 import { HIGHLIGHTS_QUERY } from './highlights-query.generated';
+
+/** Imperative handle exposed via `ref`. */
+export interface ChordProDesktopEditorHandle {
+  /** Move keyboard focus into the editor. */
+  focus(): void;
+  /** Read the current document contents. */
+  getValue(): string;
+}
+
+export interface ChordProDesktopEditorProps {
+  /** Controlled ChordPro source. */
+  value: string;
+  /** Fires synchronously on every user-initiated edit. Programmatic
+   * `value`-prop updates do NOT fire this handler. */
+  onChange?: (next: string) => void;
+  /** Placeholder text shown when the document is empty. */
+  placeholder?: string;
+  /** className applied to the wrapper `<div>`. */
+  className?: string;
+}
 
 // `tags` recognises a fixed vocabulary. Map every tree-sitter
 // capture name in `queries/highlights.scm` to one of them so
@@ -133,14 +160,6 @@ async function loadGrammar(): Promise<LoadedGrammar> {
   grammarPromise = attempt;
   return attempt;
 }
-
-// `HIGHLIGHTS_QUERY` is generated from
-// `packages/tree-sitter-chordpro/queries/highlights.scm` by
-// `scripts/build-grammar-wasm.mjs` at `prebuild` / `predev` time.
-// That file is gitignored — the grammar is the single source of
-// truth, so a grammar change forces the desktop editor to pick up
-// the new query on the next build rather than relying on a
-// hand-maintained inline copy.
 
 /**
  * ViewPlugin that re-parses the document on every change, runs
@@ -335,7 +354,7 @@ function hasExistingDiagnostics(view: EditorView): boolean {
 }
 
 // Base theme that fills the pane and matches the dark surface of
-// the existing ui-web design tokens. Light-mode overrides live in
+// the shared design tokens. Light-mode overrides live in
 // `codemirror-editor.css` (which Vite bundles alongside this
 // module) and kick in via `prefers-color-scheme: light`.
 const chordproTheme = EditorView.theme(
@@ -357,101 +376,146 @@ const chordproTheme = EditorView.theme(
 );
 
 /**
- * EditorFactory implementation. Passed to
- * `mountChordSketchUi({ createEditor: codemirrorEditorFactory })`
- * from the desktop bootstrap.
+ * Controlled CodeMirror editor with tree-sitter-chordpro
+ * highlighting and diagnostics. Pair the `value` prop with
+ * `onChange` to lift state into the parent; the component never
+ * runs as an uncontrolled editor.
+ *
+ * Programmatic `value` updates from the parent (e.g. File → Open
+ * loading a new buffer) dispatch a CodeMirror change transaction
+ * that bypasses `onChange` — matches the React controlled-input
+ * convention.
  */
-export const codemirrorEditorFactory: EditorFactory = (
-  options: EditorFactoryOptions,
-): EditorAdapter => {
-  const host = document.createElement('div');
-  host.className = 'chordsketch-cm-host';
+export const ChordProDesktopEditor = forwardRef<
+  ChordProDesktopEditorHandle,
+  ChordProDesktopEditorProps
+>(function ChordProDesktopEditor(
+  { value, onChange, placeholder: placeholderText, className },
+  ref,
+) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const onChangeRef = useRef(onChange);
+  // Per-instance flag drained inside the update listener. Set by
+  // the controlled-mode sync effect just before dispatching the
+  // replacement transaction so the change event flows through
+  // CodeMirror's extensions (decorations need to refresh for the
+  // new doc) without `onChange` firing on the React-controlled
+  // setValue path.
+  const suppressNextChangeRef = useRef(false);
 
-  const listeners = new Set<(value: string) => void>();
-  // Per-adapter flag drained inside the update listener. Set by
-  // `setValue` just before dispatching the replacement transaction
-  // so the change event flows through CodeMirror's extensions
-  // (decorations need to refresh for the new doc) without the
-  // subscriber-facing `onChange` handlers firing — the
-  // `EditorAdapter` contract requires programmatic loads to be
-  // invisible to the subscriber. Only a single synchronous
-  // dispatch happens between the flag set and the listener drain,
-  // so there is no observable race.
-  let suppressNextChange = false;
-  const listenerExt = EditorView.updateListener.of((update) => {
-    if (!update.docChanged) return;
-    if (suppressNextChange) {
-      suppressNextChange = false;
-      return;
-    }
-    const value = update.state.doc.toString();
-    for (const handler of listeners) handler(value);
-  });
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
-  const grammarCompartment = new Compartment();
+  // Mount the EditorView once; tear it down on unmount. Subsequent
+  // prop changes flow through the synchronisation effect below.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
 
-  const state = EditorState.create({
-    doc: options.initialValue,
-    extensions: [
-      history(),
-      keymap.of([...defaultKeymap, ...historyKeymap]),
-      EditorView.lineWrapping,
-      chordproTheme,
-      syntaxHighlighting(chordproHighlightStyle),
-      listenerExt,
-      placeholder(options.placeholder ?? ''),
-      // Start empty; `loadGrammar()` injects the highlight plugin
-      // once the wasm is ready. Initial render is plain text —
-      // acceptable for the few hundred milliseconds of grammar
-      // boot, and means a grammar load failure leaves the editor
-      // usable (plain text with no highlighting) rather than
-      // broken.
-      grammarCompartment.of([]),
-    ],
-  });
-  const view = new EditorView({ state, parent: host });
-
-  // Kick off grammar load in the background; on resolution, inject
-  // the highlight plugin via the compartment. Errors are logged to
-  // the console — the user keeps a working plain-text editor.
-  void loadGrammar()
-    .then((grammar) => {
-      view.dispatch({
-        effects: grammarCompartment.reconfigure(highlightPlugin(grammar)),
-      });
-    })
-    .catch((err: unknown) => {
-      console.error('Failed to load tree-sitter-chordpro grammar', err);
+    const listenerExt = EditorView.updateListener.of((update) => {
+      if (!update.docChanged) return;
+      if (suppressNextChangeRef.current) {
+        suppressNextChangeRef.current = false;
+        return;
+      }
+      const next = update.state.doc.toString();
+      onChangeRef.current?.(next);
     });
 
-  return {
-    element: host,
-    getValue: () => view.state.doc.toString(),
-    setValue: (value: string) => {
-      // Replace the whole doc. Internal extensions (decorations,
-      // highlighting) still need to run on this change, so we
-      // dispatch a normal transaction — the `suppressNextChange`
-      // flag above keeps the subscriber-facing listeners silent.
-      suppressNextChange = true;
-      view.dispatch({
-        changes: {
-          from: 0,
-          to: view.state.doc.length,
-          insert: value,
-        },
-      });
-    },
-    onChange(handler) {
-      listeners.add(handler);
-      return () => {
-        listeners.delete(handler);
-      };
-    },
-    focus: () => view.focus(),
-    destroy: () => {
-      listeners.clear();
-      view.destroy();
-    },
-  };
+    const grammarCompartment = new Compartment();
 
-};
+    const state = EditorState.create({
+      doc: value,
+      extensions: [
+        history(),
+        keymap.of([...defaultKeymap, ...historyKeymap]),
+        EditorView.lineWrapping,
+        chordproTheme,
+        syntaxHighlighting(chordproHighlightStyle),
+        listenerExt,
+        placeholder(placeholderText ?? ''),
+        // Start empty; `loadGrammar()` injects the highlight plugin
+        // once the wasm is ready. Initial render is plain text —
+        // acceptable for the few hundred milliseconds of grammar
+        // boot, and means a grammar load failure leaves the editor
+        // usable (plain text with no highlighting) rather than
+        // broken.
+        grammarCompartment.of([]),
+      ],
+    });
+    const view = new EditorView({ state, parent: host });
+    viewRef.current = view;
+
+    // Kick off grammar load in the background; on resolution, inject
+    // the highlight plugin via the compartment. Errors are logged to
+    // the console — the user keeps a working plain-text editor.
+    void loadGrammar()
+      .then((grammar) => {
+        // Guard against the view being destroyed before the grammar
+        // resolves (rapid mount → unmount during HMR).
+        if (viewRef.current !== view) return;
+        view.dispatch({
+          effects: grammarCompartment.reconfigure(highlightPlugin(grammar)),
+        });
+      })
+      .catch((err: unknown) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to load tree-sitter-chordpro grammar', err);
+      });
+
+    return () => {
+      view.destroy();
+      if (viewRef.current === view) viewRef.current = null;
+    };
+    // We intentionally only mount once. `value` updates flow
+    // through the sync effect below; `placeholder` changes require
+    // a remount which the user can force via React's `key` prop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Controlled-mode value synchronisation. Skips when the editor's
+  // current doc already matches to avoid clobbering the caret on a
+  // no-op render.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const current = view.state.doc.toString();
+    if (current === value) return;
+    suppressNextChangeRef.current = true;
+    try {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: value },
+      });
+    } finally {
+      // Defensive: if the listener never observed the change for
+      // any reason (synchronous dispatch always runs the listener,
+      // but a future CodeMirror change could theoretically defer
+      // it), do not leave the flag set across dispatches. The
+      // listener resets it on success; this is the fallback.
+      // We deliberately clear it AFTER dispatch so a normally
+      // synchronous listener has already drained the flag.
+      suppressNextChangeRef.current = false;
+    }
+  }, [value]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus() {
+        viewRef.current?.focus();
+      },
+      getValue() {
+        return viewRef.current?.state.doc.toString() ?? '';
+      },
+    }),
+    [],
+  );
+
+  const wrapperClass = ['chordsketch-cm-host', className]
+    .filter((c): c is string => typeof c === 'string' && c.length > 0)
+    .join(' ');
+
+  return <div ref={hostRef} className={wrapperClass} />;
+});

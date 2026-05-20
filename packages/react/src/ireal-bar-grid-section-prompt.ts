@@ -1,13 +1,13 @@
 // Default section-label prompt + delete-confirm hooks used by
-// `<IrealEditor>`'s structural editing. Sister-site to
+// `<IrealBarGrid>`'s structural editing. Sister-site to
 // `packages/ui-irealb-editor/src/index.ts`'s
 // `defaultPromptSectionLabel` / `defaultConfirmDeleteSection` /
 // `parseSectionLabel` (lines 685-754). Kept in their own file so
 // tests can inject overrides without re-importing the main
-// `<IrealEditor>` module.
+// `<IrealBarGrid>` module.
 
 import type { IrealSectionLabel } from './ireal-ast';
-import { formatSectionLabelForPrompt } from './ireal-editor-defaults';
+import { formatSectionLabelForPrompt } from './ireal-bar-grid-defaults';
 
 /**
  * Parse a free-text section label into the closest
@@ -53,7 +53,7 @@ export function parseIrealSectionLabel(s: string): IrealSectionLabel | null {
  * `defaultPromptSectionLabel`.
  *
  * Hosts that need a styled prompt (e.g. a custom modal dialog) can
- * override via `<IrealEditor>`'s `promptSectionLabel` prop. The
+ * override via `<IrealBarGrid>`'s `promptSectionLabel` prop. The
  * default is `window.prompt` to keep the package's runtime
  * dependency footprint at zero — adding a styled prompt would
  * require a dialog primitive every host would have to opt into.

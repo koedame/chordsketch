@@ -15,8 +15,8 @@ import { useDebounced } from './use-debounced';
 // still carry the warning code path.
 declare const process: { env: { NODE_ENV?: string } };
 
-/** Props accepted by {@link ChordEditor}. */
-export interface ChordEditorProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'> {
+/** Props accepted by {@link ChordTextarea}. */
+export interface ChordTextareaProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'> {
   /**
    * Controlled value. When set, the component does not manage its
    * own internal state — update `value` from the parent on every
@@ -113,14 +113,20 @@ export interface ChordEditorProps extends Omit<HTMLAttributes<HTMLDivElement>, '
 }
 
 /**
- * Split-pane editor + live preview. The editor is a plain
- * `<textarea>` deliberately — richer surfaces (syntax highlighting
- * via tree-sitter-chordpro or CodeMirror) can be layered on top
- * without changing this component's contract, because the public
- * API only promises a controlled / uncontrolled string value and
- * an onChange callback. The preview re-renders a debounced copy
- * of the source via `<ChordSheet>`, so typing does not stall the
- * UI.
+ * Tier 1 atom — split-pane `<textarea>` editor with a built-in
+ * live preview pane. Despite the "Textarea" name this component
+ * does include a preview pane on the right; pair it with
+ * `<ChordSourceArea>` (CodeMirror) for richer source editing, or
+ * with `<ChordProPreview>` if you want a standalone preview
+ * surface without the editor textarea.
+ *
+ * The editor is a plain `<textarea>` deliberately — richer
+ * surfaces (syntax highlighting via tree-sitter-chordpro or
+ * CodeMirror) can be layered on top without changing this
+ * component's contract, because the public API only promises a
+ * controlled / uncontrolled string value and an onChange
+ * callback. The preview re-renders a debounced copy of the
+ * source via `<ChordSheet>`, so typing does not stall the UI.
  *
  * Supports controlled mode (`value` + `onChange`) and
  * uncontrolled mode (`defaultValue`). Keyboard shortcuts
@@ -129,7 +135,7 @@ export interface ChordEditorProps extends Omit<HTMLAttributes<HTMLDivElement>, '
  * clamped into `[minTranspose, maxTranspose]`, so a consumer can
  * bind the component directly to `useTranspose()`.
  */
-export function ChordEditor({
+export function ChordTextarea({
   value,
   defaultValue = '',
   onChange,
@@ -149,7 +155,7 @@ export function ChordEditor({
   astWasmLoader,
   className,
   ...divProps
-}: ChordEditorProps): JSX.Element {
+}: ChordTextareaProps): JSX.Element {
   const isControlled = value !== undefined;
   const [internal, setInternal] = useState<string>(isControlled ? value : defaultValue);
   const current = isControlled ? value : internal;
@@ -158,7 +164,7 @@ export function ChordEditor({
   // Dev-only warning if a caller flips the component between
   // controlled and uncontrolled mid-lifetime. React's built-in
   // `<input>` / `<textarea>` emit the same warning; we mirror the
-  // pattern so the `<ChordEditor>` surface behaves consistently.
+  // pattern so the `<ChordTextarea>` surface behaves consistently.
   // Production builds strip the warning via bundler dead-code
   // elimination on the literal `process.env.NODE_ENV` token; the
   // inline check below matches what React itself uses.
@@ -168,9 +174,9 @@ export function ChordEditor({
     if (wasControlledRef.current !== isControlled) {
       // eslint-disable-next-line no-console
       console.error(
-        `Warning: A component is changing an ${wasControlledRef.current ? 'controlled' : 'uncontrolled'} <ChordEditor> to be ${isControlled ? 'controlled' : 'uncontrolled'}. ` +
-          `<ChordEditor> should not switch between controlled and uncontrolled (or vice versa) during its lifetime. ` +
-          `Decide between using a controlled or uncontrolled <ChordEditor> for the lifetime of the component.`,
+        `Warning: A component is changing an ${wasControlledRef.current ? 'controlled' : 'uncontrolled'} <ChordTextarea> to be ${isControlled ? 'controlled' : 'uncontrolled'}. ` +
+          `<ChordTextarea> should not switch between controlled and uncontrolled (or vice versa) during its lifetime. ` +
+          `Decide between using a controlled or uncontrolled <ChordTextarea> for the lifetime of the component.`,
       );
       wasControlledRef.current = isControlled;
     }
@@ -214,12 +220,12 @@ export function ChordEditor({
     [clampedTranspose, maxTranspose, minTranspose, onTransposeChange],
   );
 
-  const wrapperClass = ['chordsketch-editor', className].filter(Boolean).join(' ');
+  const wrapperClass = ['chordsketch-textarea', className].filter(Boolean).join(' ');
 
   return (
     <div {...divProps} className={wrapperClass}>
       <textarea
-        className="chordsketch-editor__textarea"
+        className="chordsketch-textarea__textarea"
         value={current}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
@@ -237,7 +243,7 @@ export function ChordEditor({
         autoCapitalize="off"
         autoComplete="off"
       />
-      <div className="chordsketch-editor__preview">
+      <div className="chordsketch-textarea__preview">
         <ChordSheet
           source={debounced}
           transpose={clampedTranspose}

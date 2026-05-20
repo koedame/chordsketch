@@ -398,6 +398,13 @@ class PreviewPanel {
    *
    * A `data-` attribute on `<script type="module">` cannot be used because
    * `document.currentScript` is always `null` for ES module scripts (HTML spec).
+   *
+   * The body itself is a single `<div id="app">` root that the React entry
+   * (`webview/preview.tsx`) mounts into via `createRoot`. The bespoke
+   * iframe-srcdoc / plain-text dual-pane HTML the WebView used pre-#2527
+   * is retired in favour of the `<ChordProPreview>` component from
+   * `@chordsketch/react`, which renders the AST directly without an
+   * intermediate iframe (per ADR-0017).
    */
   private buildHtml(): string {
     const webview = this.panel.webview;
@@ -452,77 +459,32 @@ class PreviewPanel {
   <meta name="chordsketch-document-uri" content="${documentUriAttr}">
   <title>ChordSketch Preview</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: var(--vscode-font-family, sans-serif); height: 100vh; display: flex; flex-direction: column; }
-    #toolbar {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-      padding: 4px 8px;
+    /* Minimal host shell — every visual style for the preview itself
+       lives in @chordsketch/react/styles.css (bundled into preview.js)
+       so VS Code, the playground, and the desktop app share the same
+       look. The rules below only own the WebView body framing and the
+       fallback / error states the entry component renders before the
+       React tree mounts. */
+    html, body { height: 100%; margin: 0; padding: 0; }
+    body {
+      font-family: var(--vscode-font-family, sans-serif);
+      color: var(--vscode-foreground, #ccc);
       background: var(--vscode-editor-background, #1e1e1e);
-      border-bottom: 1px solid var(--vscode-editorGroup-border, #444);
-      flex-shrink: 0;
     }
-    #toolbar .view-btn {
-      background: transparent;
-      border: 1px solid var(--vscode-button-secondaryBackground, #555);
-      color: var(--vscode-foreground, #ccc);
-      padding: 2px 10px;
-      cursor: pointer;
-      font-size: 0.75rem;
-      border-radius: 3px;
-      font-family: inherit;
+    #app { height: 100vh; display: flex; flex-direction: column; }
+    #app > .chordsketch-chord-pro-preview {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
     }
-    #toolbar .view-btn.active {
-      background: var(--vscode-button-background, #0078d4);
-      color: var(--vscode-button-foreground, #fff);
-      border-color: var(--vscode-button-background, #0078d4);
-    }
-    #toolbar .view-btn:not(.active):hover {
-      background: var(--vscode-button-secondaryHoverBackground, #3a3a3a);
-    }
-    .toolbar-separator {
-      width: 1px;
-      height: 16px;
-      background: var(--vscode-editorGroup-border, #444);
-      margin: 0 6px;
-      flex-shrink: 0;
-    }
-    #toolbar .transpose-btn {
-      background: transparent;
-      border: 1px solid var(--vscode-button-secondaryBackground, #555);
-      color: var(--vscode-foreground, #ccc);
-      padding: 2px 7px;
-      cursor: pointer;
-      font-size: 0.85rem;
-      border-radius: 3px;
-      font-family: inherit;
-      line-height: 1;
-    }
-    #toolbar .transpose-btn:hover {
-      background: var(--vscode-button-secondaryHoverBackground, #3a3a3a);
-    }
-    #transpose-label {
-      font-size: 0.75rem;
-      color: var(--vscode-foreground, #ccc);
-      min-width: 2.5rem;
-      text-align: center;
-      font-variant-numeric: tabular-nums;
-    }
-    /* Toolbar is disabled until WASM finishes loading so that clicking
-       buttons before init completes is not possible. The script removes
-       the 'disabled' class after a successful init(). */
-    #toolbar.disabled {
-      pointer-events: none;
-      opacity: 0.4;
-    }
-    #loading {
+    .cs-vscode-loading {
       padding: 1rem;
-      color: var(--vscode-descriptionForeground);
+      color: var(--vscode-descriptionForeground, #888);
       font-style: italic;
     }
-    #error {
-      display: none;
+    .cs-vscode-error,
+    .cs-vscode-render-error {
       padding: 0.75rem 1rem;
       background: var(--vscode-inputValidation-errorBackground, #f2dede);
       border-left: 4px solid var(--vscode-inputValidation-errorBorder, #c00);
@@ -531,45 +493,10 @@ class PreviewPanel {
       white-space: pre-wrap;
       word-break: break-word;
     }
-    #preview-frame {
-      flex: 1;
-      border: none;
-      width: 100%;
-      display: none;
-      background: white;
-    }
-    #text-frame {
-      flex: 1;
-      display: none;
-      padding: 1.5rem;
-      overflow: auto;
-      font-family: var(--vscode-editor-font-family, monospace);
-      font-size: var(--vscode-editor-font-size, 13px);
-      line-height: 1.5;
-      background: var(--vscode-editor-background, #1e1e1e);
-      color: var(--vscode-editor-foreground, #d4d4d4);
-      white-space: pre;
-      word-break: normal;
-    }
   </style>
 </head>
 <body>
-  <div id="toolbar" class="disabled">
-    <button id="btn-html" class="view-btn active" title="HTML preview">HTML</button>
-    <button id="btn-text" class="view-btn" title="Plain text preview">Plain text</button>
-    <span class="toolbar-separator" role="separator"></span>
-    <button id="btn-transpose-down" class="transpose-btn" title="Transpose down one semitone">−</button>
-    <span id="transpose-label" aria-live="polite" aria-label="Transpose offset" title="Semitone transposition offset">±0</span>
-    <button id="btn-transpose-up" class="transpose-btn" title="Transpose up one semitone">+</button>
-  </div>
-  <div id="loading">Initializing ChordSketch preview…</div>
-  <div id="error"></div>
-  <iframe
-    id="preview-frame"
-    sandbox="allow-popups allow-popups-to-escape-sandbox"
-    title="ChordPro preview"
-  ></iframe>
-  <pre id="text-frame" aria-label="Plain text preview"></pre>
+  <div id="app"></div>
   <script nonce="${nonce}" src="${scriptUri}" type="module"></script>
 </body>
 </html>`;

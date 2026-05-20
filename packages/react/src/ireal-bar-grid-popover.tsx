@@ -1,4 +1,4 @@
-// Bar-edit popover for `<IrealEditor>`. Sister-site (DOM) to
+// Bar-edit popover for `<IrealBarGrid>`. Sister-site (DOM) to
 // `packages/ui-irealb-editor/src/popover.ts`.
 //
 // Structure: a `<div role="dialog" aria-modal="true">` rendered
@@ -292,17 +292,17 @@ export function IrealBarPopover({
   return (
     <div
       ref={dialogRef}
-      className="chordsketch-ireal-editor__popover"
+      className="chordsketch-ireal-bar-grid__popover"
       role="dialog"
       aria-modal="true"
       aria-label="Edit bar"
       tabIndex={-1}
     >
-      <div className="chordsketch-ireal-editor__popover-body">
+      <div className="chordsketch-ireal-bar-grid__popover-body">
         <BarLineSelect label="Start barline" value={start} onChange={setStart} />
         <BarLineSelect label="End barline" value={end} onChange={setEnd} />
 
-        <div className="chordsketch-ireal-editor__popover-section">
+        <div className="chordsketch-ireal-bar-grid__popover-section">
           <h4>Chords</h4>
           {chords.map((bc, index) => (
             <ChordRowEditor
@@ -318,7 +318,7 @@ export function IrealBarPopover({
           ))}
           <button
             type="button"
-            className="chordsketch-ireal-editor__popover-addrow"
+            className="chordsketch-ireal-bar-grid__popover-addrow"
             onClick={addChord}
           >
             + Add chord
@@ -329,17 +329,17 @@ export function IrealBarPopover({
         <SymbolPicker value={symbol} onChange={setSymbol} />
       </div>
 
-      <div className="chordsketch-ireal-editor__popover-footer">
+      <div className="chordsketch-ireal-bar-grid__popover-footer">
         <button
           type="button"
-          className="chordsketch-ireal-editor__popover-cancel"
+          className="chordsketch-ireal-bar-grid__popover-cancel"
           onClick={onDismiss}
         >
           Cancel
         </button>
         <button
           type="button"
-          className="chordsketch-ireal-editor__popover-save"
+          className="chordsketch-ireal-bar-grid__popover-save"
           onClick={handleSave}
         >
           Save
@@ -361,7 +361,7 @@ interface BarLineSelectProps {
 
 function BarLineSelect({ label, value, onChange }: BarLineSelectProps): ReactElement {
   return (
-    <label className="chordsketch-ireal-editor__field">
+    <label className="chordsketch-ireal-bar-grid__field">
       <span>{label}</span>
       <select
         value={value}
@@ -502,10 +502,10 @@ function ChordRowEditor({
 
   return (
     <div
-      className="chordsketch-ireal-editor__popover-chordrow"
+      className="chordsketch-ireal-bar-grid__popover-chordrow"
       data-row-index={index}
     >
-      <label className="chordsketch-ireal-editor__field">
+      <label className="chordsketch-ireal-bar-grid__field">
         <span>Root</span>
         <select
           value={barChord.chord.root.note}
@@ -518,7 +518,7 @@ function ChordRowEditor({
           ))}
         </select>
       </label>
-      <label className="chordsketch-ireal-editor__field">
+      <label className="chordsketch-ireal-bar-grid__field">
         <span>Acc.</span>
         <select
           value={barChord.chord.root.accidental}
@@ -531,7 +531,7 @@ function ChordRowEditor({
           ))}
         </select>
       </label>
-      <label className="chordsketch-ireal-editor__field">
+      <label className="chordsketch-ireal-bar-grid__field">
         <span>Quality</span>
         <select
           value={barChord.chord.quality.kind}
@@ -547,7 +547,7 @@ function ChordRowEditor({
         </select>
       </label>
       {barChord.chord.quality.kind === 'custom' && (
-        <label className="chordsketch-ireal-editor__field">
+        <label className="chordsketch-ireal-bar-grid__field">
           <span>Custom</span>
           <input
             type="text"
@@ -557,18 +557,18 @@ function ChordRowEditor({
           />
         </label>
       )}
-      <label className="chordsketch-ireal-editor__field">
+      <label className="chordsketch-ireal-bar-grid__field">
         <span>Bass</span>
         <input
           type="text"
           placeholder="/X (optional)"
           value={bassRaw}
           onChange={(e) => handleBassChange(e.target.value)}
-          className={bassInvalid ? 'chordsketch-ireal-editor__input--invalid' : undefined}
+          className={bassInvalid ? 'chordsketch-ireal-bar-grid__input--invalid' : undefined}
           aria-invalid={bassInvalid || undefined}
         />
       </label>
-      <label className="chordsketch-ireal-editor__field">
+      <label className="chordsketch-ireal-bar-grid__field">
         <span>Pos.</span>
         <select
           value={encodeBeatPosition(barChord.position.beat, barChord.position.subdivision)}
@@ -583,7 +583,7 @@ function ChordRowEditor({
       </label>
       <button
         type="button"
-        className="chordsketch-ireal-editor__popover-rowbtn"
+        className="chordsketch-ireal-bar-grid__popover-rowbtn"
         aria-label="Move chord up"
         onClick={onMoveUp}
         disabled={index === 0}
@@ -592,7 +592,7 @@ function ChordRowEditor({
       </button>
       <button
         type="button"
-        className="chordsketch-ireal-editor__popover-rowbtn"
+        className="chordsketch-ireal-bar-grid__popover-rowbtn"
         aria-label="Move chord down"
         onClick={onMoveDown}
         disabled={index === count - 1}
@@ -601,7 +601,7 @@ function ChordRowEditor({
       </button>
       <button
         type="button"
-        className="chordsketch-ireal-editor__popover-rowbtn"
+        className="chordsketch-ireal-bar-grid__popover-rowbtn"
         aria-label="Remove chord"
         onClick={onRemove}
       >
@@ -619,7 +619,7 @@ interface EndingInputProps {
 
 function EndingInput({ value, onChange }: EndingInputProps): ReactElement {
   return (
-    <label className="chordsketch-ireal-editor__field">
+    <label className="chordsketch-ireal-bar-grid__field">
       <span>N-th ending</span>
       <input
         type="number"
@@ -655,7 +655,7 @@ interface SymbolPickerProps {
 
 function SymbolPicker({ value, onChange }: SymbolPickerProps): ReactElement {
   return (
-    <label className="chordsketch-ireal-editor__field">
+    <label className="chordsketch-ireal-bar-grid__field">
       <span>Symbol</span>
       <select
         value={value ?? ''}

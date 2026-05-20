@@ -1,15 +1,21 @@
 {
   "compilerOptions": {
     // ES2021+ for `String.prototype.replaceAll`, which
-    // `codemirror-editor.ts` uses for capture-name normalisation
-    // (multi-dotted captures like `variable.parameter.builtin`
-    // need every dot substituted, not just the first). Tauri's
-    // WebView on every supported OS is recent enough; Vite's
-    // `build.target = "esnext"` already mirrors this.
+    // `ChordProDesktopEditor.tsx` uses for capture-name
+    // normalisation (multi-dotted captures like
+    // `variable.parameter.builtin` need every dot substituted, not
+    // just the first). Tauri's WebView on every supported OS is
+    // recent enough; Vite's `build.target = "esnext"` already
+    // mirrors this.
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    // `react-jsx` (React 17+ runtime) lets `.tsx` files use JSX
+    // without an explicit `import React from 'react'` statement;
+    // matches the convention used in `@chordsketch/react` and the
+    // playground.
+    "jsx": "react-jsx",
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,
@@ -20,16 +26,24 @@
     // The `@chordsketch/wasm` alias points at the extension-less
     // path so `moduleResolution: "bundler"` pairs it with the
     // neighbouring `chordsketch_wasm.d.ts`. The `.js`-suffix form
-    // raises TS7016 from this nested location under TS 5.9.3; both
-    // `apps/desktop` and `packages/playground` use the same
-    // extension-less form to keep the two tsconfigs symmetric.
+    // raises TS7016 from this nested location under TS 5.9.3.
     "paths": {
       "@chordsketch/wasm": ["../../packages/npm/web/chordsketch_wasm"],
-      "@chordsketch/ui-web": ["../../packages/ui-web/src/index.ts"],
-      "@chordsketch/ui-web/style.css": ["../../packages/ui-web/src/style.css"],
+      // Type-check against the React package's published `.d.ts` so
+      // the desktop's `tsc` pass does not re-type-check the upstream
+      // React sources (which carry their own `@chordsketch/wasm`
+      // shape assumptions and surface unrelated errors when included
+      // into this project's compilation unit). Vite resolves the
+      // runtime alias to `packages/react/src/index.ts` (see
+      // `vite.config.ts`) so the dev server still picks up live edits.
+      "@chordsketch/react": ["../../packages/react/dist/index.d.ts"],
+      "@chordsketch/react/styles.css": ["../../packages/react/src/styles.css"],
       "@chordsketch/ui-irealb-editor": ["../../packages/ui-irealb-editor/src/index.ts"],
       "@chordsketch/ui-irealb-editor/style.css": ["../../packages/ui-irealb-editor/src/style.css"]
     }
   },
-  "include": ["src", "../../packages/ui-web/src", "../../packages/ui-irealb-editor/src"]
+  "include": [
+    "src",
+    "../../packages/ui-irealb-editor/src"
+  ]
 }

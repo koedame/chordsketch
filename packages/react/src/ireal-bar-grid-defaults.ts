@@ -1,10 +1,10 @@
 // Default-value constructors + structural-equality helpers for
-// `<IrealEditor>`'s bar grid + structural editing. Sister-site to
+// `<IrealBarGrid>`'s bar grid + structural editing. Sister-site to
 // `packages/ui-irealb-editor/src/index.ts` (the `makeDefaultBar`,
 // `makeDefaultSection`, `sectionLabelEquals`, and
 // `formatSectionLabelForPrompt` helpers there); kept in their own
 // file so tests can mock the prompt path without leaking into the
-// main `<IrealEditor>` module.
+// main `<IrealBarGrid>` module.
 
 import type {
   IrealBar,

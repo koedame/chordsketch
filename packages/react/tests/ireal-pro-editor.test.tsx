@@ -1,11 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { IrealPlayground } from '../src/ireal-playground';
-import type { IrealEditorLoader } from '../src/ireal-editor';
+import { IrealProEditor } from '../src/ireal-pro-editor';
+import type { IrealBarGridLoader } from '../src/ireal-bar-grid';
 import type { IrealSong } from '../src/ireal-ast';
 
-interface PlaygroundStub {
+interface EditorStub {
   default: ReturnType<typeof vi.fn>;
   parseIrealb: ReturnType<typeof vi.fn>;
   serializeIrealb: ReturnType<typeof vi.fn>;
@@ -28,7 +28,7 @@ function songFixture(): IrealSong {
   };
 }
 
-function makeStub(): PlaygroundStub {
+function makeStub(): EditorStub {
   let song = songFixture();
   return {
     default: vi.fn(async () => undefined),
@@ -41,29 +41,29 @@ function makeStub(): PlaygroundStub {
   };
 }
 
-function makeLoader(stub: PlaygroundStub): IrealEditorLoader {
-  return vi.fn(async () => stub as unknown as Awaited<ReturnType<IrealEditorLoader>>);
+function makeLoader(stub: EditorStub): IrealBarGridLoader {
+  return vi.fn(async () => stub as unknown as Awaited<ReturnType<IrealBarGridLoader>>);
 }
 
-describe('<IrealPlayground>', () => {
+describe('<IrealProEditor>', () => {
   test('mounts both editor and preview by default', async () => {
     const stub = makeStub();
     const { container } = render(
-      <IrealPlayground defaultValue="irealb://demo" loader={makeLoader(stub)} />,
+      <IrealProEditor defaultValue="irealb://demo" loader={makeLoader(stub)} />,
     );
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
-    expect(container.querySelector('.chordsketch-ireal-playground__editor')).toBeTruthy();
-    expect(container.querySelector('.chordsketch-ireal-playground__preview')).toBeTruthy();
+    expect(container.querySelector('.chordsketch-ireal-pro-editor__editor')).toBeTruthy();
+    expect(container.querySelector('.chordsketch-ireal-pro-editor__preview')).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId('ireal-svg')).toBeTruthy());
   });
 
   test('hidePreview removes the preview pane', async () => {
     const stub = makeStub();
     const { container } = render(
-      <IrealPlayground defaultValue="irealb://demo" loader={makeLoader(stub)} hidePreview />,
+      <IrealProEditor defaultValue="irealb://demo" loader={makeLoader(stub)} hidePreview />,
     );
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
-    expect(container.querySelector('.chordsketch-ireal-playground__preview')).toBeNull();
+    expect(container.querySelector('.chordsketch-ireal-pro-editor__preview')).toBeNull();
     // Preview's wasm calls should not happen either.
     expect(stub.renderIrealSvg).not.toHaveBeenCalled();
   });
@@ -71,7 +71,7 @@ describe('<IrealPlayground>', () => {
   test('uncontrolled mode: editor edits update internal state', async () => {
     const stub = makeStub();
     render(
-      <IrealPlayground defaultValue="irealb://demo" loader={makeLoader(stub)} />,
+      <IrealProEditor defaultValue="irealb://demo" loader={makeLoader(stub)} />,
     );
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
     const titleInput = screen.getByLabelText('Title') as HTMLInputElement;
@@ -89,7 +89,7 @@ describe('<IrealPlayground>', () => {
     const stub = makeStub();
     const onChange = vi.fn();
     render(
-      <IrealPlayground
+      <IrealProEditor
         source="irealb://controlled"
         onChange={onChange}
         loader={makeLoader(stub)}

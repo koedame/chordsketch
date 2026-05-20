@@ -18,8 +18,9 @@
  * the inline fallbacks below — visually equivalent for
  * `:root`-level rendering.
  */
-.chordsketch-playground,
-.chordsketch-source-editor,
+.chordsketch-chord-pro-editor,
+.chordsketch-chord-pro-preview,
+.chordsketch-source-area,
 .chordsketch-split-layout,
 .chordsketch-preview {
   /* Crimson — the only accent. */
@@ -135,8 +136,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chordsketch-playground,
-  .chordsketch-source-editor,
+  .chordsketch-chord-pro-editor,
+  .chordsketch-chord-pro-preview,
+  .chordsketch-source-area,
   .chordsketch-split-layout,
   .chordsketch-preview {
     --cs-dur-1: 0ms;
@@ -1223,7 +1225,7 @@
   font-size: 0.9em;
 }
 
-.chordsketch-editor {
+.chordsketch-textarea {
   display: grid;
   grid-template-columns: 1fr 1fr;
   min-height: 20rem;
@@ -1232,7 +1234,7 @@
   overflow: hidden;
 }
 
-.chordsketch-editor__textarea {
+.chordsketch-textarea__textarea {
   min-height: 20rem;
   padding: 0.75rem;
   font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
@@ -1256,24 +1258,24 @@
   tab-size: 4;
 }
 
-.chordsketch-editor__textarea:focus-visible {
+.chordsketch-textarea__textarea:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: -2px;
 }
 
-.chordsketch-editor__preview {
+.chordsketch-textarea__preview {
   padding: 0.75rem;
   overflow: auto;
   background: transparent;
 }
 
 @media (max-width: 40rem) {
-  .chordsketch-editor {
+  .chordsketch-textarea {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr 1fr;
   }
 
-  .chordsketch-editor__textarea {
+  .chordsketch-textarea__textarea {
     border-right: none;
     border-bottom: 1px solid currentColor;
   }
@@ -1314,7 +1316,7 @@
 
 /* ---------- Source editor (CodeMirror 6) ---------- */
 
-.chordsketch-source-editor {
+.chordsketch-source-area {
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -1322,7 +1324,7 @@
   background: var(--cs-surface);
 }
 
-.chordsketch-source-editor > .cm-editor {
+.chordsketch-source-area > .cm-editor {
   flex: 1;
   min-height: 0;
 }
@@ -1449,9 +1451,9 @@
   box-shadow: var(--cs-focus-ring);
 }
 
-/* ---------- Playground shell ---------- */
+/* ---------- ChordPro editor shell ---------- */
 
-.chordsketch-playground {
+.chordsketch-chord-pro-editor {
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -1463,7 +1465,7 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-.chordsketch-playground__header {
+.chordsketch-chord-pro-editor__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1475,7 +1477,7 @@
   flex-shrink: 0;
 }
 
-.chordsketch-playground__title {
+.chordsketch-chord-pro-editor__title {
   display: inline-flex;
   align-items: center;
   gap: 0.75rem;
@@ -1487,7 +1489,7 @@
   color: var(--cs-text-primary);
 }
 
-.chordsketch-playground__brand-mark {
+.chordsketch-chord-pro-editor__brand-mark {
   display: inline-block;
   width: 24px;
   height: 24px;
@@ -1498,7 +1500,7 @@
   flex-shrink: 0;
 }
 
-.chordsketch-playground__controls {
+.chordsketch-chord-pro-editor__controls {
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -1506,7 +1508,7 @@
   justify-content: flex-end;
 }
 
-.chordsketch-playground__control-label {
+.chordsketch-chord-pro-editor__control-label {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -1517,7 +1519,7 @@
   color: var(--cs-text-secondary);
 }
 
-.chordsketch-playground__select {
+.chordsketch-chord-pro-editor__select {
   height: 32px;
   padding: 0 0.75rem;
   background: var(--cs-surface);
@@ -1533,17 +1535,17 @@
     box-shadow var(--cs-dur-1) var(--cs-ease-out);
 }
 
-.chordsketch-playground__select:hover {
+.chordsketch-chord-pro-editor__select:hover {
   border-color: var(--cs-ink-500);
 }
 
-.chordsketch-playground__select:focus-visible {
+.chordsketch-chord-pro-editor__select:focus-visible {
   outline: none;
   border-color: var(--cs-crimson-500);
   box-shadow: var(--cs-focus-ring);
 }
 
-.chordsketch-playground__transpose {
+.chordsketch-chord-pro-editor__transpose {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -1554,7 +1556,7 @@
   color: var(--cs-text-secondary);
 }
 
-.chordsketch-playground__transpose .chordsketch-transpose__button {
+.chordsketch-chord-pro-editor__transpose .chordsketch-transpose__button {
   height: 32px;
   min-width: 32px;
   padding: 0 0.75rem;
@@ -1572,18 +1574,18 @@
     border-color var(--cs-dur-1) var(--cs-ease-out);
 }
 
-.chordsketch-playground__transpose .chordsketch-transpose__button:hover {
+.chordsketch-chord-pro-editor__transpose .chordsketch-transpose__button:hover {
   background: var(--cs-surface-hover);
   border-color: var(--cs-ink-500);
 }
 
-.chordsketch-playground__transpose .chordsketch-transpose__button:focus-visible {
+.chordsketch-chord-pro-editor__transpose .chordsketch-transpose__button:focus-visible {
   outline: none;
   border-color: var(--cs-crimson-500);
   box-shadow: var(--cs-focus-ring);
 }
 
-.chordsketch-playground__transpose .chordsketch-transpose__value {
+.chordsketch-chord-pro-editor__transpose .chordsketch-transpose__value {
   font-family: var(--cs-font-mono);
   font-feature-settings: "tnum" 1;
   letter-spacing: 0;
@@ -1591,30 +1593,155 @@
   color: var(--cs-text-primary);
 }
 
-.chordsketch-playground__split {
+.chordsketch-chord-pro-editor__split {
   flex: 1;
   min-height: 0;
 }
 
-.chordsketch-playground__preview-pane {
+.chordsketch-chord-pro-editor__preview-pane {
   display: block;
 }
 
 @media (max-width: 768px) {
-  .chordsketch-playground__header {
+  .chordsketch-chord-pro-editor__header {
     height: auto;
     flex-direction: column;
     align-items: stretch;
     gap: 0.75rem;
     padding: 0.75rem 1rem;
   }
-  .chordsketch-playground__title {
+  .chordsketch-chord-pro-editor__title {
     justify-content: flex-start;
   }
-  .chordsketch-playground__controls {
+  .chordsketch-chord-pro-editor__controls {
     justify-content: flex-start;
     gap: 0.75rem;
   }
+}
+
+/* ---------- ChordPro preview-with-controls (Tier 2) ---------- */
+
+.chordsketch-chord-pro-preview {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.chordsketch-chord-pro-preview__header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  background: var(--cs-surface);
+  border-bottom: 1px solid var(--cs-border);
+  flex-shrink: 0;
+}
+
+.chordsketch-chord-pro-preview__controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex: 1;
+}
+
+.chordsketch-chord-pro-preview__control-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  color: var(--cs-text-secondary);
+}
+
+.chordsketch-chord-pro-preview__select {
+  height: 32px;
+  padding: 0 0.75rem;
+  background: var(--cs-surface);
+  color: var(--cs-text-primary);
+  border: 1px solid var(--cs-border-strong);
+  border-radius: 4px;
+  font-family: var(--cs-font-jp);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+  text-transform: none;
+  transition: border-color var(--cs-dur-1) var(--cs-ease-out),
+    box-shadow var(--cs-dur-1) var(--cs-ease-out);
+}
+
+.chordsketch-chord-pro-preview__select:hover {
+  border-color: var(--cs-ink-500);
+}
+
+.chordsketch-chord-pro-preview__select:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500);
+  box-shadow: var(--cs-focus-ring);
+}
+
+.chordsketch-chord-pro-preview__transpose {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  color: var(--cs-text-secondary);
+}
+
+.chordsketch-chord-pro-preview__transpose .chordsketch-transpose__button {
+  height: 32px;
+  min-width: 32px;
+  padding: 0 0.75rem;
+  background: var(--cs-surface);
+  color: var(--cs-text-primary);
+  border: 1px solid var(--cs-border-strong);
+  border-radius: 4px;
+  font-family: var(--cs-font-jp);
+  font-weight: 500;
+  font-size: 0.875rem;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1;
+  transition: background var(--cs-dur-1) var(--cs-ease-out),
+    border-color var(--cs-dur-1) var(--cs-ease-out);
+}
+
+.chordsketch-chord-pro-preview__transpose .chordsketch-transpose__button:hover {
+  background: var(--cs-surface-hover);
+  border-color: var(--cs-ink-500);
+}
+
+.chordsketch-chord-pro-preview__transpose .chordsketch-transpose__button:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500);
+  box-shadow: var(--cs-focus-ring);
+}
+
+.chordsketch-chord-pro-preview__transpose .chordsketch-transpose__value {
+  font-family: var(--cs-font-mono);
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--cs-text-primary);
+}
+
+.chordsketch-chord-pro-preview__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chordsketch-chord-pro-preview__renderer {
+  flex: 1;
+  min-height: 0;
 }
 
 /* Frame for the HTML preview iframe — rendered by `RendererPreview` */
@@ -1646,7 +1773,7 @@
 
 /* ---------- iReal Pro editor + preview (#2473 / ADR-0020) ---------- */
 
-.chordsketch-ireal-editor {
+.chordsketch-ireal-bar-grid {
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -1656,13 +1783,13 @@
   font-family: var(--cs-font-latin, system-ui, sans-serif);
 }
 
-.chordsketch-ireal-editor__loading {
+.chordsketch-ireal-bar-grid__loading {
   color: var(--cs-text-secondary, #67646d);
   font-style: italic;
   margin: 0;
 }
 
-.chordsketch-ireal-editor__error {
+.chordsketch-ireal-bar-grid__error {
   margin: 0;
   padding: 0.5rem 0.75rem;
   background: var(--cs-danger-surface, #FBE1E8);
@@ -1672,7 +1799,7 @@
   font-size: 0.875rem;
 }
 
-.chordsketch-ireal-editor__metadata {
+.chordsketch-ireal-bar-grid__metadata {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: 0.75rem;
@@ -1682,27 +1809,27 @@
   margin: 0;
 }
 
-.chordsketch-ireal-editor__metadata > legend {
+.chordsketch-ireal-bar-grid__metadata > legend {
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--cs-text-secondary, #67646d);
   padding: 0 0.25rem;
 }
 
-.chordsketch-ireal-editor__field {
+.chordsketch-ireal-bar-grid__field {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   font-size: 0.8125rem;
 }
 
-.chordsketch-ireal-editor__field > span {
+.chordsketch-ireal-bar-grid__field > span {
   font-weight: 600;
   color: var(--cs-text-secondary, #67646d);
 }
 
-.chordsketch-ireal-editor__field input,
-.chordsketch-ireal-editor__field select {
+.chordsketch-ireal-bar-grid__field input,
+.chordsketch-ireal-bar-grid__field select {
   height: 32px;
   padding: 0 0.5rem;
   background: var(--cs-surface, #ffffff);
@@ -1712,42 +1839,42 @@
   font: inherit;
 }
 
-.chordsketch-ireal-editor__field input:focus-visible,
-.chordsketch-ireal-editor__field select:focus-visible {
+.chordsketch-ireal-bar-grid__field input:focus-visible,
+.chordsketch-ireal-bar-grid__field select:focus-visible {
   outline: none;
   border-color: var(--cs-crimson-500, #BD1642);
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
 }
 
-.chordsketch-ireal-editor__field input:disabled,
-.chordsketch-ireal-editor__field select:disabled {
+.chordsketch-ireal-bar-grid__field input:disabled,
+.chordsketch-ireal-bar-grid__field select:disabled {
   background: var(--cs-canvas, #fafaf7);
   color: var(--cs-text-secondary, #67646d);
   cursor: not-allowed;
 }
 
-.chordsketch-ireal-editor__key,
-.chordsketch-ireal-editor__time {
+.chordsketch-ireal-bar-grid__key,
+.chordsketch-ireal-bar-grid__time {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
   gap: 0.5rem;
   grid-column: 1 / -1;
 }
 
-.chordsketch-ireal-editor__sections {
+.chordsketch-ireal-bar-grid__sections {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-.chordsketch-ireal-editor__section {
+.chordsketch-ireal-bar-grid__section {
   border: 1px solid var(--cs-border, #d4d1d6);
   border-radius: 6px;
   padding: 0.5rem 0.75rem;
   background: var(--cs-canvas, #fafaf7);
 }
 
-.chordsketch-ireal-editor__section-label {
+.chordsketch-ireal-bar-grid__section-label {
   margin: 0 0 0.4rem;
   font-size: 0.8125rem;
   font-weight: 700;
@@ -1760,12 +1887,12 @@
  * Bar grid: 4-bars-per-line layout. `__bars` is the role="grid"
  * container; `__row` is each role="row"; `__bar-wrapper` is each
  * role="gridcell"; `__bar` is the clickable button inside the cell.
- * `BARS_PER_ROW = 4` in `ireal-editor-bar-grid.tsx` MUST stay in
+ * `BARS_PER_ROW = 4` in `ireal-bar-grid-layout.tsx` MUST stay in
  * lockstep with this 4-column template. Sister-site:
  * `.irealb-editor__bars` in
  * `packages/ui-irealb-editor/src/style.css`.
  */
-.chordsketch-ireal-editor__bars {
+.chordsketch-ireal-bar-grid__bars {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -1773,20 +1900,20 @@
   padding: 0;
 }
 
-.chordsketch-ireal-editor__row {
+.chordsketch-ireal-bar-grid__row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.4rem;
 }
 
-.chordsketch-ireal-editor__bar-wrapper {
+.chordsketch-ireal-bar-grid__bar-wrapper {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
   min-width: 0;
 }
 
-.chordsketch-ireal-editor__bar {
+.chordsketch-ireal-bar-grid__bar {
   appearance: none;
   display: block;
   width: 100%;
@@ -1806,28 +1933,28 @@
   cursor: pointer;
 }
 
-.chordsketch-ireal-editor__bar:hover:not(:disabled) {
+.chordsketch-ireal-bar-grid__bar:hover:not(:disabled) {
   border-color: var(--cs-border-strong, #a8a4ae);
 }
 
-.chordsketch-ireal-editor__bar:focus-visible {
+.chordsketch-ireal-bar-grid__bar:focus-visible {
   outline: none;
   border-color: var(--cs-crimson-500, #BD1642);
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
 }
 
-.chordsketch-ireal-editor__bar:disabled {
+.chordsketch-ireal-bar-grid__bar:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
 
 /* Per-bar action buttons (move left / right / delete). */
-.chordsketch-ireal-editor__bar-actions {
+.chordsketch-ireal-bar-grid__bar-actions {
   display: flex;
   gap: 0.2rem;
 }
 
-.chordsketch-ireal-editor__bar-action {
+.chordsketch-ireal-bar-grid__bar-action {
   appearance: none;
   flex: 1 1 0;
   padding: 0.2rem 0.3rem;
@@ -1839,34 +1966,34 @@
   cursor: pointer;
 }
 
-.chordsketch-ireal-editor__bar-action:hover:not(:disabled) {
+.chordsketch-ireal-bar-grid__bar-action:hover:not(:disabled) {
   background: var(--cs-surface, #ffffff);
   border-color: var(--cs-border-strong, #a8a4ae);
 }
 
-.chordsketch-ireal-editor__bar-action:focus-visible {
+.chordsketch-ireal-bar-grid__bar-action:focus-visible {
   outline: none;
   border-color: var(--cs-crimson-500, #BD1642);
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
 }
 
-.chordsketch-ireal-editor__bar-action:disabled {
+.chordsketch-ireal-bar-grid__bar-action:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.chordsketch-ireal-editor__bar-action--danger {
+.chordsketch-ireal-bar-grid__bar-action--danger {
   border-color: var(--cs-crimson-300, #EC8AA3);
   color: var(--cs-crimson-600, #A30F37);
 }
 
-.chordsketch-ireal-editor__bar-action--danger:hover:not(:disabled) {
+.chordsketch-ireal-bar-grid__bar-action--danger:hover:not(:disabled) {
   background: var(--cs-danger-surface, #FDF2F5);
   border-color: var(--cs-crimson-500, #BD1642);
 }
 
 /* Section header: label + per-section action buttons inline. */
-.chordsketch-ireal-editor__section-header {
+.chordsketch-ireal-bar-grid__section-header {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -1875,7 +2002,7 @@
   margin-bottom: 0.5rem;
 }
 
-.chordsketch-ireal-editor__section-action {
+.chordsketch-ireal-bar-grid__section-action {
   appearance: none;
   display: inline-flex;
   align-items: center;
@@ -1891,35 +2018,35 @@
   cursor: pointer;
 }
 
-.chordsketch-ireal-editor__section-action:hover:not(:disabled) {
+.chordsketch-ireal-bar-grid__section-action:hover:not(:disabled) {
   background: var(--cs-canvas, #fafaf7);
   border-color: var(--cs-border-strong, #a8a4ae);
 }
 
-.chordsketch-ireal-editor__section-action:focus-visible {
+.chordsketch-ireal-bar-grid__section-action:focus-visible {
   outline: none;
   border-color: var(--cs-crimson-500, #BD1642);
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
 }
 
-.chordsketch-ireal-editor__section-action:disabled {
+.chordsketch-ireal-bar-grid__section-action:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.chordsketch-ireal-editor__section-action--danger {
+.chordsketch-ireal-bar-grid__section-action--danger {
   border-color: var(--cs-crimson-300, #EC8AA3);
   color: var(--cs-crimson-600, #A30F37);
 }
 
-.chordsketch-ireal-editor__section-action--danger:hover:not(:disabled) {
+.chordsketch-ireal-bar-grid__section-action--danger:hover:not(:disabled) {
   background: var(--cs-danger-surface, #FDF2F5);
   border-color: var(--cs-crimson-500, #BD1642);
 }
 
 /* Append-bar / append-section trailer buttons. */
-.chordsketch-ireal-editor__add-bar,
-.chordsketch-ireal-editor__add-section {
+.chordsketch-ireal-bar-grid__add-bar,
+.chordsketch-ireal-bar-grid__add-section {
   appearance: none;
   align-self: flex-start;
   background: var(--cs-canvas, #fafaf7);
@@ -1932,38 +2059,38 @@
   cursor: pointer;
 }
 
-.chordsketch-ireal-editor__add-bar:hover:not(:disabled),
-.chordsketch-ireal-editor__add-section:hover:not(:disabled) {
+.chordsketch-ireal-bar-grid__add-bar:hover:not(:disabled),
+.chordsketch-ireal-bar-grid__add-section:hover:not(:disabled) {
   background: var(--cs-surface, #ffffff);
   border-color: var(--cs-border-strong, #a8a4ae);
 }
 
-.chordsketch-ireal-editor__add-bar:focus-visible,
-.chordsketch-ireal-editor__add-section:focus-visible {
+.chordsketch-ireal-bar-grid__add-bar:focus-visible,
+.chordsketch-ireal-bar-grid__add-section:focus-visible {
   outline: none;
   border-color: var(--cs-crimson-500, #BD1642);
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
 }
 
-.chordsketch-ireal-editor__add-bar:disabled,
-.chordsketch-ireal-editor__add-section:disabled {
+.chordsketch-ireal-bar-grid__add-bar:disabled,
+.chordsketch-ireal-bar-grid__add-section:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.chordsketch-ireal-editor__url {
+.chordsketch-ireal-bar-grid__url {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   font-size: 0.8125rem;
 }
 
-.chordsketch-ireal-editor__url > span {
+.chordsketch-ireal-bar-grid__url > span {
   font-weight: 600;
   color: var(--cs-text-secondary, #67646d);
 }
 
-.chordsketch-ireal-editor__url textarea {
+.chordsketch-ireal-bar-grid__url textarea {
   font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
   font-size: 0.75rem;
   padding: 0.5rem;
@@ -1975,7 +2102,7 @@
   min-height: 4rem;
 }
 
-.chordsketch-ireal-editor__url textarea:focus-visible {
+.chordsketch-ireal-bar-grid__url textarea:focus-visible {
   outline: none;
   border-color: var(--cs-crimson-500, #BD1642);
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
@@ -1987,7 +2114,7 @@
  * by CSS — the host's container owns the stacking context.
  * Sister-site: `.irealb-editor__popover` in
  * `packages/ui-irealb-editor/src/style.css`. */
-.chordsketch-ireal-editor__popover {
+.chordsketch-ireal-bar-grid__popover {
   position: relative;
   margin-top: 0.4rem;
   background: var(--cs-surface, #ffffff);
@@ -1998,19 +2125,19 @@
   z-index: 10;
 }
 
-.chordsketch-ireal-editor__popover-body {
+.chordsketch-ireal-bar-grid__popover-body {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
 }
 
-.chordsketch-ireal-editor__popover-section {
+.chordsketch-ireal-bar-grid__popover-section {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
 }
 
-.chordsketch-ireal-editor__popover-section h4 {
+.chordsketch-ireal-bar-grid__popover-section h4 {
   margin: 0;
   font-size: 0.8125rem;
   font-weight: 700;
@@ -2019,7 +2146,7 @@
   color: var(--cs-text-strong, #44424a);
 }
 
-.chordsketch-ireal-editor__popover-chordrow {
+.chordsketch-ireal-bar-grid__popover-chordrow {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
@@ -2030,7 +2157,7 @@
   border-radius: 4px;
 }
 
-.chordsketch-ireal-editor__popover-rowbtn {
+.chordsketch-ireal-bar-grid__popover-rowbtn {
   appearance: none;
   width: 28px;
   height: 28px;
@@ -2042,23 +2169,23 @@
   color: var(--cs-text, inherit);
 }
 
-.chordsketch-ireal-editor__popover-rowbtn:hover:not(:disabled) {
+.chordsketch-ireal-bar-grid__popover-rowbtn:hover:not(:disabled) {
   background: var(--cs-canvas, #fafaf7);
   border-color: var(--cs-border-strong, #a8a4ae);
 }
 
-.chordsketch-ireal-editor__popover-rowbtn:focus-visible {
+.chordsketch-ireal-bar-grid__popover-rowbtn:focus-visible {
   outline: none;
   border-color: var(--cs-crimson-500, #BD1642);
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
 }
 
-.chordsketch-ireal-editor__popover-rowbtn:disabled {
+.chordsketch-ireal-bar-grid__popover-rowbtn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.chordsketch-ireal-editor__popover-addrow {
+.chordsketch-ireal-bar-grid__popover-addrow {
   appearance: none;
   align-self: flex-start;
   background: var(--cs-canvas, #fafaf7);
@@ -2070,12 +2197,12 @@
   cursor: pointer;
 }
 
-.chordsketch-ireal-editor__popover-addrow:hover {
+.chordsketch-ireal-bar-grid__popover-addrow:hover {
   background: var(--cs-surface, #ffffff);
   border-color: var(--cs-border-strong, #a8a4ae);
 }
 
-.chordsketch-ireal-editor__popover-footer {
+.chordsketch-ireal-bar-grid__popover-footer {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
@@ -2084,8 +2211,8 @@
   border-top: 1px solid var(--cs-border, #d4d1d6);
 }
 
-.chordsketch-ireal-editor__popover-cancel,
-.chordsketch-ireal-editor__popover-save {
+.chordsketch-ireal-bar-grid__popover-cancel,
+.chordsketch-ireal-bar-grid__popover-save {
   appearance: none;
   padding: 0.4rem 0.85rem;
   border-radius: 4px;
@@ -2095,19 +2222,19 @@
   border: 1px solid var(--cs-border, #d4d1d6);
 }
 
-.chordsketch-ireal-editor__popover-cancel {
+.chordsketch-ireal-bar-grid__popover-cancel {
   background: var(--cs-surface, #ffffff);
   color: var(--cs-text, inherit);
 }
 
-.chordsketch-ireal-editor__popover-save {
+.chordsketch-ireal-bar-grid__popover-save {
   background: var(--cs-crimson-500, #BD1642);
   border-color: var(--cs-crimson-500, #BD1642);
   color: #ffffff;
 }
 
-.chordsketch-ireal-editor__popover-cancel:focus-visible,
-.chordsketch-ireal-editor__popover-save:focus-visible {
+.chordsketch-ireal-bar-grid__popover-cancel:focus-visible,
+.chordsketch-ireal-bar-grid__popover-save:focus-visible {
   outline: none;
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #BD1642);
 }
@@ -2117,7 +2244,7 @@
  * AST keeps its previous bass until valid input is entered;
  * this class surfaces the rejection visually so the user sees
  * the bass field is not in a saved state. */
-.chordsketch-ireal-editor__input--invalid {
+.chordsketch-ireal-bar-grid__input--invalid {
   border-color: var(--cs-danger-fg, #A30F37) !important;
   background: var(--cs-danger-surface, #FBE1E8);
 }
@@ -2127,8 +2254,8 @@
    structural-edit announcements from `useAnnouncer`. Mirrors
    `.irealb-editor__sr-only` in
    `packages/ui-irealb-editor/src/style.css` with the
-   `chordsketch-ireal-editor__` prefix used throughout this package. */
-.chordsketch-ireal-editor__sr-only {
+   `chordsketch-ireal-bar-grid__` prefix used throughout this package. */
+.chordsketch-ireal-bar-grid__sr-only {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -2168,23 +2295,23 @@
   height: auto;
 }
 
-/* Playground composite */
-.chordsketch-ireal-playground {
+/* iReal Pro editor composite */
+.chordsketch-ireal-pro-editor {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1rem;
   min-height: 24rem;
 }
 
-.chordsketch-ireal-playground__editor,
-.chordsketch-ireal-playground__preview {
+.chordsketch-ireal-pro-editor__editor,
+.chordsketch-ireal-pro-editor__preview {
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
 
 @media (max-width: 900px) {
-  .chordsketch-ireal-playground {
+  .chordsketch-ireal-pro-editor {
     grid-template-columns: 1fr;
   }
 }

@@ -33,7 +33,7 @@ on:
       - "packages/npm/**"
       - "packages/npm-export/**"
       - "packages/tree-sitter-chordpro/**"
-      - "packages/ui-web/**"
+      - "packages/react/**"
       # Only the three crates `chordsketch-desktop` depends on —
       # `chordpro`, `render-html`, `render-pdf`. Changes to sibling
       # crates (`lsp`, `ffi`, `napi`, `wasm`, `cli`,
@@ -59,7 +59,7 @@ on:
       - "packages/npm/**"
       - "packages/npm-export/**"
       - "packages/tree-sitter-chordpro/**"
-      - "packages/ui-web/**"
+      - "packages/react/**"
       # Only the three crates `chordsketch-desktop` depends on —
       # `chordpro`, `render-html`, `render-pdf`. Changes to sibling
       # crates (`lsp`, `ffi`, `napi`, `wasm`, `cli`,

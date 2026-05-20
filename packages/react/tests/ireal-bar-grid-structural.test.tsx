@@ -1,11 +1,11 @@
 // Integration tests for structural editing (add/rename/delete/move
-// section + bar) in `<IrealEditor>`. Sister-site (DOM):
+// section + bar) in `<IrealBarGrid>`. Sister-site (DOM):
 // `packages/ui-irealb-editor/tests/structural.test.ts`.
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { IrealEditor, type IrealEditorLoader } from '../src/ireal-editor';
+import { IrealBarGrid, type IrealBarGridLoader } from '../src/ireal-bar-grid';
 import type {
   IrealSong,
   IrealSectionLabel,
@@ -56,8 +56,8 @@ function makeStub(initial: IrealSong): EditorStub {
   };
 }
 
-function makeLoader(stub: EditorStub): IrealEditorLoader {
-  return vi.fn(async () => stub as unknown as Awaited<ReturnType<IrealEditorLoader>>);
+function makeLoader(stub: EditorStub): IrealBarGridLoader {
+  return vi.fn(async () => stub as unknown as Awaited<ReturnType<IrealBarGridLoader>>);
 }
 
 async function renderEditor(opts?: {
@@ -68,7 +68,7 @@ async function renderEditor(opts?: {
   const stub = makeStub(opts?.song ?? twoSectionsSong());
   const onChange = vi.fn();
   const result = render(
-    <IrealEditor
+    <IrealBarGrid
       source="irealb://x"
       loader={makeLoader(stub)}
       onChange={onChange}
@@ -80,7 +80,7 @@ async function renderEditor(opts?: {
   return { ...result, stub, onChange };
 }
 
-describe('<IrealEditor> structural — add section', () => {
+describe('<IrealBarGrid> structural — add section', () => {
   test('appends with prompted label + one default bar', async () => {
     const { stub } = await renderEditor({
       promptSectionLabel: () => ({ kind: 'letter', value: 'C' }),
@@ -104,7 +104,7 @@ describe('<IrealEditor> structural — add section', () => {
   });
 });
 
-describe('<IrealEditor> structural — rename section', () => {
+describe('<IrealBarGrid> structural — rename section', () => {
   test('replaces label after prompt + seeds prompt with current value', async () => {
     const prompt = vi.fn<(c: IrealSectionLabel | null) => IrealSectionLabel | null>(
       () => ({ kind: 'letter', value: 'X' }),
@@ -128,7 +128,7 @@ describe('<IrealEditor> structural — rename section', () => {
   });
 });
 
-describe('<IrealEditor> structural — delete section', () => {
+describe('<IrealBarGrid> structural — delete section', () => {
   test('confirmation accepted removes the section', async () => {
     const { stub } = await renderEditor({
       confirmDeleteSection: () => true,
@@ -149,7 +149,7 @@ describe('<IrealEditor> structural — delete section', () => {
   });
 });
 
-describe('<IrealEditor> structural — move section', () => {
+describe('<IrealBarGrid> structural — move section', () => {
   test('Move section up swaps with the previous; disabled at index 0', async () => {
     const { stub } = await renderEditor();
     const moveUps = screen.getAllByRole('button', { name: 'Move section up' });
@@ -171,7 +171,7 @@ describe('<IrealEditor> structural — move section', () => {
   });
 });
 
-describe('<IrealEditor> structural — bar operations', () => {
+describe('<IrealBarGrid> structural — bar operations', () => {
   test('Add bar appends to the targeted section only', async () => {
     const { stub } = await renderEditor();
     const addBarButtons = screen.getAllByRole('button', { name: '+ Add bar' });
@@ -203,7 +203,7 @@ describe('<IrealEditor> structural — bar operations', () => {
   });
 });
 
-describe('<IrealEditor> structural — announcements', () => {
+describe('<IrealBarGrid> structural — announcements', () => {
   test('section add announces via the live region', async () => {
     const { container } = await renderEditor({
       promptSectionLabel: () => ({ kind: 'letter', value: 'C' }),
@@ -229,7 +229,7 @@ describe('<IrealEditor> structural — announcements', () => {
   });
 });
 
-describe('<IrealEditor> structural — active-bar reconciliation', () => {
+describe('<IrealBarGrid> structural — active-bar reconciliation', () => {
   // The roving-tabindex slot must follow the section content
   // through structural operations so a keyboard user's "I was on
   // this bar" position survives a re-render. Sister-site
@@ -238,7 +238,7 @@ describe('<IrealEditor> structural — active-bar reconciliation', () => {
   function focusedBarAriaLabel(): string | null {
     const tabZero = Array.from(
       document.querySelectorAll<HTMLButtonElement>(
-        '.chordsketch-ireal-editor__bar',
+        '.chordsketch-ireal-bar-grid__bar',
       ),
     ).find((b) => b.getAttribute('tabindex') === '0');
     return tabZero?.getAttribute('aria-label') ?? null;
@@ -268,7 +268,7 @@ describe('<IrealEditor> structural — active-bar reconciliation', () => {
     // only one cell across both sections).
     const tabZero = Array.from(
       document.querySelectorAll<HTMLButtonElement>(
-        '.chordsketch-ireal-editor__bar',
+        '.chordsketch-ireal-bar-grid__bar',
       ),
     ).filter((b) => b.getAttribute('tabindex') === '0');
     expect(tabZero.length).toBe(1);
@@ -287,13 +287,13 @@ describe('<IrealEditor> structural — active-bar reconciliation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete section' }));
     await waitFor(() =>
       expect(
-        document.querySelectorAll('.chordsketch-ireal-editor__bar').length,
+        document.querySelectorAll('.chordsketch-ireal-bar-grid__bar').length,
       ).toBe(0),
     );
     // No cells left → no roving Tab stop.
     const tabZero = Array.from(
       document.querySelectorAll<HTMLButtonElement>(
-        '.chordsketch-ireal-editor__bar',
+        '.chordsketch-ireal-bar-grid__bar',
       ),
     ).filter((b) => b.getAttribute('tabindex') === '0');
     expect(tabZero.length).toBe(0);

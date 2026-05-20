@@ -9,7 +9,7 @@ export {
   type ChordDiagramInstrument,
   type ChordDiagramResult,
 } from './use-chord-diagram';
-export { ChordEditor, type ChordEditorProps } from './chord-editor';
+export { ChordTextarea, type ChordTextareaProps } from './chord-textarea';
 export { ChordSheet, type ChordSheetProps } from './chord-sheet';
 export {
   useChordRender,
@@ -61,12 +61,16 @@ export type {
   ChordproTextSpan,
 } from './chordpro-ast';
 
-// Editor + layout primitives (#2454). The CodeMirror-backed
-// `<SourceEditor>` is heavier than the existing `<ChordEditor>`
-// (textarea) and adds its own dependency tree under
-// `@codemirror/*`; tree-shaking drops it from bundles that do not
-// import it.
-export { SourceEditor, type SourceEditorHandle, type SourceEditorProps } from './source-editor';
+// Editor + layout primitives (#2454 / #2527). The CodeMirror-backed
+// `<ChordSourceArea>` is heavier than the dependency-free
+// `<ChordTextarea>` (textarea-with-preview) and adds its own
+// dependency tree under `@codemirror/*`; tree-shaking drops it
+// from bundles that do not import it.
+export {
+  ChordSourceArea,
+  type ChordSourceAreaHandle,
+  type ChordSourceAreaProps,
+} from './chord-source-area';
 export { chordProLanguage, chordProTagTable } from './chordpro-language';
 export { SplitLayout, type SplitLayoutProps } from './split-layout';
 export {
@@ -74,7 +78,14 @@ export {
   type PreviewFormat,
   type RendererPreviewProps,
 } from './renderer-preview';
-export { Playground, type PlaygroundProps } from './playground';
+export {
+  ChordProPreview,
+  type ChordProPreviewProps,
+} from './chord-pro-preview';
+export {
+  ChordProEditor,
+  type ChordProEditorProps,
+} from './chord-pro-editor';
 
 // Drag-to-reposition chord helpers. `<ChordSheet>` /
 // `renderChordproAst`'s `onChordReposition` callback emits
@@ -88,18 +99,16 @@ export {
   type ChordRepositionResult,
 } from './chord-source-edit';
 
-// iReal Pro surface (#2473 / #2505 / ADR-0020). Mirrors the
-// ChordPro surface in shape: editor + preview + playground
-// component plus parse / serialise hooks. v0.2.0 reaches parity
-// with `@chordsketch/ui-irealb-editor`: interactive bar grid
-// (ARIA `role="grid"` + roving tabindex + keyboard navigation),
-// structural editing (section / bar add / rename / delete /
-// move), and popover-based per-bar chord editing via
-// `<IrealBarPopover>` (focus trap, chord-row editor, N-th
-// ending input, symbol picker).
-export { IrealEditor, type IrealEditorProps } from './ireal-editor';
+// iReal Pro surface (#2473 / #2505 / #2527 / ADR-0020). Mirrors the
+// ChordPro surface in shape: Tier 1 atom (`<IrealBarGrid>`) +
+// Tier 1 preview (`<IrealPreview>`) + Tier 3 composed editor
+// (`<IrealProEditor>`), plus parse / serialise hooks.
+export { IrealBarGrid, type IrealBarGridProps } from './ireal-bar-grid';
 export { IrealPreview, type IrealPreviewProps } from './ireal-preview';
-export { IrealPlayground, type IrealPlaygroundProps } from './ireal-playground';
+export {
+  IrealProEditor,
+  type IrealProEditorProps,
+} from './ireal-pro-editor';
 export {
   useIrealParse,
   type UseIrealParseResult,

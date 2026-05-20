@@ -1,24 +1,31 @@
 # ChordSketch Desktop
 
-Tauri v2 desktop editor that loads `@chordsketch/ui-web` inside the
-WebView. The editor + preview surface is shared byte-for-byte with the
-browser playground (`packages/playground/`), so any new feature on one
-side propagates automatically.
+Tauri v2 desktop editor that mounts a React tree from
+`@chordsketch/react` inside the WebView. The ChordPro editor +
+preview surface is shared with the browser playground
+(`packages/playground/`) via `@chordsketch/react` so any new feature
+on one side propagates automatically; the iRealb bar-grid editor is
+consumed from `@chordsketch/ui-irealb-editor` via a thin React
+wrapper.
 
 ## Layout
 
 ```
 apps/desktop/
-├── index.html          # Vite entry (mount point = #app)
-├── package.json        # vite + typescript devDeps
-├── tsconfig.json       # paths to @chordsketch/wasm + @chordsketch/ui-web
-├── vite.config.ts      # aliases + dev server on :1420
+├── index.html                   # Vite entry (mount point = #app)
+├── package.json                 # vite + typescript devDeps + react
+├── tsconfig.json                # paths to @chordsketch/{wasm,react,ui-irealb-editor}
+├── vite.config.ts               # aliases + dev server on :1420
 ├── src/
-│   └── main.ts         # Mounts ui-web against @chordsketch/wasm
-├── dist/               # gitignored; Vite build output
-└── src-tauri/          # Rust / Tauri app shell
+│   ├── main.tsx                 # Mounts <App /> + Tauri menus / dialogs / updater
+│   ├── App.tsx                  # React root: source / mode / transpose / format state
+│   ├── desktop-bridge.ts        # Singleton bridge between React and the Tauri layer
+│   ├── ChordProDesktopEditor.tsx # CodeMirror 6 + tree-sitter-chordpro editor (React)
+│   └── IrealGridEditor.tsx      # React wrapper around createIrealbEditor
+├── dist/                        # gitignored; Vite build output
+└── src-tauri/                   # Rust / Tauri app shell
     ├── Cargo.toml
-    ├── tauri.conf.json # beforeDev/beforeBuild = npm run dev|build
+    ├── tauri.conf.json          # beforeDev/beforeBuild = npm run dev|build
     ├── build.rs
     ├── capabilities/
     ├── icons/
@@ -72,9 +79,9 @@ cargo tauri dev
 ```
 
 Tauri spawns `npm run dev` (Vite) and waits for `http://localhost:1420`
-before opening the native window. Edits to `apps/desktop/src/main.ts`,
-`packages/ui-web/src/**`, or `packages/npm/web/**` trigger HMR inside
-the WebView.
+before opening the native window. Edits to `apps/desktop/src/**`,
+`packages/react/src/**`, `packages/ui-irealb-editor/src/**`, or
+`packages/npm/web/**` trigger HMR inside the WebView.
 
 ## Production build
 
@@ -158,7 +165,7 @@ Opt-out is stored in `localStorage` under
 `chordsketch-desktop-auto-update-opt-out/v1`. Users can toggle
 it by opening the (forthcoming; tracked in #2199) Preferences
 dialog; the `toggleAutoUpdate()` helper in
-`apps/desktop/src/main.ts` is exported so a menu / settings
+`apps/desktop/src/main.tsx` is exported so a menu / settings
 surface can wire it in.
 
 ### First-time updater setup (maintainer)
@@ -193,8 +200,9 @@ pubkey.
   default workspace operations** via `default-members` in the root
   `Cargo.toml`. Bare `cargo build` from the repo root does not touch
   it, so contributors without the Tauri system libs are unaffected.
-- `@chordsketch/ui-web` and `@chordsketch/wasm` are consumed via Vite
-  `resolve.alias` and `tsconfig.paths` entries, mirroring the pattern
-  used by `packages/playground/`. There is no npm workspaces root —
+- `@chordsketch/react`, `@chordsketch/ui-irealb-editor`, and
+  `@chordsketch/wasm` are consumed via Vite `resolve.alias` and
+  `tsconfig.paths` entries, mirroring the pattern used by
+  `packages/playground/`. There is no npm workspaces root —
   `apps/desktop` is an independent package with its own
   `package-lock.json`.

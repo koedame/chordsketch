@@ -6,7 +6,6 @@ on:
     paths:
       - 'crates/wasm/**'
       - 'packages/playground/**'
-      - 'packages/ui-web/**'
       - 'packages/npm/**'
       - 'packages/npm-export/**'
       # The docs SSG reads `docs/sdk/**` from disk at build time (see
@@ -86,10 +85,6 @@ jobs:
       - name: Install @chordsketch/react dependencies
         run: npm ci
         working-directory: packages/react
-
-      - name: Install @chordsketch/ui-web dependencies
-        run: npm ci
-        working-directory: packages/ui-web
 
       - name: Install @chordsketch/ui-irealb-editor dependencies
         run: npm ci

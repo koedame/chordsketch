@@ -1,12 +1,12 @@
 name: Playground Smoke
 
-# Browser-level smoke for the playground bundle. Verifies that every
-# editor adapter `mountChordSketchUi` can mount actually mounts in a
-# real browser against the production-build dist — the integration
-# layer the unit-test suites in `packages/ui-web/tests/` and
-# `packages/ui-irealb-editor/tests/` cannot reach because they stub
-# wasm. Introduced in #2397 after the iRealb factory shipped with a
-# wasm-init race that no unit suite caught.
+# Browser-level smoke for the playground bundle. Verifies that the
+# playground's React surface mounts in a real browser against the
+# production-build dist — the integration layer the unit-test suites
+# in `packages/react/tests/` and `packages/ui-irealb-editor/tests/`
+# cannot reach because they stub wasm. Introduced in #2397 after the
+# iRealb factory shipped with a wasm-init race that no unit suite
+# caught.
 #
 # Runs unconditionally on every PR (no `paths:` filter) per the
 # guarantee-style-checks discipline in
@@ -97,10 +97,6 @@ jobs:
       - name: Install @chordsketch/react dependencies
         run: npm ci
         working-directory: packages/react
-
-      - name: Install @chordsketch/ui-web dependencies
-        run: npm ci
-        working-directory: packages/ui-web
 
       - name: Install @chordsketch/ui-irealb-editor dependencies
         run: npm ci
