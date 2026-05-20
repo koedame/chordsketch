@@ -14,23 +14,37 @@ Sources checked:
 
   1. Every crate's `package.version` in `crates/*/Cargo.toml`
   2. `packages/npm/package.json` `version`
-  3. `packages/vscode-extension/package.json` `version`
-  4. `crates/napi/package.json` `version`
-  5. Every `crates/napi/npm/<target-triple>/package.json` `version`
+  3. `packages/npm-export/package.json` `version`
+     (`@chordsketch/wasm-export` — the heavy-bundle sister of
+     `@chordsketch/wasm`; ships in lockstep per #2466)
+  4. `packages/vscode-extension/package.json` `version`
+  5. `crates/napi/package.json` `version`
+  6. `crates/napi/package.json` `optionalDependencies[<platform>]`
+     (every platform pin in the napi meta package — all must equal
+     canonical or the resolver loads a mismatched native binary; see
+     #2517's release-time review for the regression that motivated this)
+  7. Every `crates/napi/npm/<target-triple>/package.json` `version`
      (the per-platform prebuilt-binary packages published alongside
-     `@chordsketch/node` — must all share the main package's version or
-     `optionalDependencies` resolution breaks)
-  6. `packages/tree-sitter-chordpro/package.json` `version`
-  7. `.github/workflows/readme-smoke.yml` — the two hardcoded pins:
-       a. L~204: `npm install '@chordsketch/wasm@<version>'`
-       b. L~450–451: `chordsketch-chordpro = "<caret>"` and
-          `chordsketch-render-text = "<caret>"` (matched by both)
-  8. `packaging/macports/Portfile` — `github.setup … <version> v`
-  9. `packaging/nix/package.nix` — `version = "X.Y.Z";`
- 10. `packaging/winget/*.yaml` — `PackageVersion: X.Y.Z`
- 11. `apps/desktop/src-tauri/Cargo.toml` — `package.version`
- 12. `apps/desktop/src-tauri/tauri.conf.json` — top-level `"version"`
- 13. `apps/desktop/package.json` — `version`
+     `@chordsketch/node`)
+  8. `packages/tree-sitter-chordpro/package.json` `version`
+  9. Consumer caret-pin constraints — `^<major>.<minor>.0` for
+     `@chordsketch/wasm` / `@chordsketch/wasm-export` referenced by
+     `packages/vscode-extension`, `packages/react`, and
+     `packages/ui-irealb-editor`. The constraint MUST cover the
+     canonical workspace version; comparison runs at major.minor
+     granularity (`_expected_for` strips the patch when the field
+     label ends with `(^major.minor)`).
+ 10. `.github/workflows/readme-smoke.yml` — the two hardcoded pins:
+       a. `npm-wasm` job's `env: WASM_VERSION: "<version>"`
+       b. `library-smoke`'s `chordsketch-chordpro = "<caret>"` (and
+          paired chordpro / render-text / ireal / render-ireal pins,
+          all caught by the same caret regex)
+ 11. `packaging/macports/Portfile` — `github.setup … <version> v`
+ 12. `packaging/nix/package.nix` — `version = "X.Y.Z";`
+ 13. `packaging/winget/*.yaml` — `PackageVersion: X.Y.Z`
+ 14. `apps/desktop/src-tauri/Cargo.toml` — `package.version`
+ 15. `apps/desktop/src-tauri/tauri.conf.json` — top-level `"version"`
+ 16. `apps/desktop/package.json` — `version`
      (CLI and GUI are always in lockstep; the three desktop manifests
      must all agree with the workspace canonical.)
 
@@ -126,9 +140,14 @@ def load_package_json_version(repo_root: Path, relative: str) -> Source:
     return Source(file=relative, field="version", value=match.group(1))
 
 
-# Line 204 smoke-test pin: `npm install '@chordsketch/wasm@<version>'`
+# npm-wasm smoke pin: the job exposes the pinned version via `env:
+# WASM_VERSION: "<version>"` (so the install step and the release-cut
+# registry-probe step both reference the same constant). The check is
+# anchored on the `npm-wasm:` job's indented `env` block so an unrelated
+# `WASM_VERSION:` env elsewhere can't accidentally satisfy the regex.
 _SMOKE_NPM_PIN_RE = re.compile(
-    r"""npm\s+install\s+['"]@chordsketch/wasm@([0-9][^'"]*)['"]"""
+    r"""npm-wasm:.*?\n\s+env:\s*\n\s+WASM_VERSION:\s*['"]([0-9][^'"]*)['"]""",
+    re.DOTALL,
 )
 # Line ~450 smoke-test caret constraint (matches the chordsketch-chordpro entry,
 # which is representative of the library-smoke mode's paired pins).
@@ -276,6 +295,137 @@ def load_winget_versions(repo_root: Path) -> list[Source]:
     return sources
 
 
+def load_napi_optional_deps(repo_root: Path) -> list[Source]:
+    """Collect every entry from `crates/napi/package.json` `optionalDependencies`.
+
+    The napi-rs prebuilt-binary layout publishes a meta package
+    (`@chordsketch/node`) plus one package per platform triple. The
+    meta resolves the right native addon at install time via
+    `optionalDependencies`; for that resolution to land on a binary
+    that matches the JS shim, every entry MUST equal the canonical
+    workspace version. The platform-package `version` fields themselves
+    are already enforced by `load_napi_platform_package_versions`, but
+    the meta-side pins live in a separate JSON object that the bare
+    `"version"` regex (`load_package_json_version`) does not see.
+
+    Background — every `@chordsketch/node@0.3.0` and `@0.4.0` release
+    to date shipped with this block stuck at `0.2.2`, so Node consumers
+    have been installing a v0.2.2 native binary against a v0.3.0/v0.4.0
+    JS shim (silent ABI drift). #2517 fixed the block and added this
+    loader so the gap cannot reopen at the next release cut.
+    """
+    sources: list[Source] = []
+    meta = repo_root / "crates" / "napi" / "package.json"
+    if not meta.is_file():
+        return sources
+    import json as _json
+
+    try:
+        data = _json.loads(meta.read_text(encoding="utf-8"))
+    except _json.JSONDecodeError as exc:
+        raise SystemExit(f"crates/napi/package.json: invalid JSON: {exc}")
+    optional = data.get("optionalDependencies") or {}
+    if not isinstance(optional, dict):
+        raise SystemExit(
+            "crates/napi/package.json: optionalDependencies is not an object"
+        )
+    for name, value in sorted(optional.items()):
+        if not isinstance(value, str):
+            raise SystemExit(
+                f"crates/napi/package.json: optionalDependencies[{name!r}] "
+                f"is not a string"
+            )
+        sources.append(
+            Source(
+                file="crates/napi/package.json",
+                field=f"optionalDependencies[{name}]",
+                value=value,
+            )
+        )
+    return sources
+
+
+# Consumer-pin caret constraints. Each entry is a workspace-internal
+# package whose `package.json` constrains a published `@chordsketch/*`
+# sister package via `^X.Y.0`. The constraint MUST cover the current
+# canonical version or the consumer will silently resolve to the prior
+# major-minor when the canonical's major-minor bumps. The
+# `.claude/rules/package-documentation.md` §"Version Consistency Rule"
+# already names two of these (vscode-extension + npm/wasm) — this
+# loader extends the check to every published workspace consumer that
+# pins `@chordsketch/wasm` or `@chordsketch/wasm-export`.
+_CONSUMER_PINS: list[tuple[str, str, str]] = [
+    # (file, dotted-path, dep-name)
+    ("packages/vscode-extension/package.json", "dependencies", "@chordsketch/wasm"),
+    ("packages/react/package.json", "dependencies", "@chordsketch/wasm"),
+    ("packages/react/package.json", "peerDependencies", "@chordsketch/wasm-export"),
+    ("packages/ui-irealb-editor/package.json", "peerDependencies", "@chordsketch/wasm"),
+]
+
+
+def load_consumer_pin_constraints(repo_root: Path) -> list[Source]:
+    """Collect `^X.Y.0`-style consumer pins for workspace sister packages.
+
+    Returns one Source per entry in `_CONSUMER_PINS`. The reported
+    value is `X.Y` (the major.minor extracted from the leading caret
+    constraint), and the field label carries the `_CARET_FIELD_SUFFIX`
+    so `_expected_for` runs the major-minor comparison against the
+    workspace canonical.
+
+    The constraint pattern must be exactly `^<major>.<minor>.<patch>`;
+    anything else (e.g. `*`, `workspace:`, a range expression) is a
+    structural shape change worth surfacing as a SystemExit so the
+    maintainer updates this loader explicitly. The current set of
+    consumers all use the simple caret form per CLAUDE.md.
+    """
+    import json as _json
+
+    sources: list[Source] = []
+    for rel, block, dep in _CONSUMER_PINS:
+        path = repo_root / rel
+        if not path.is_file():
+            raise SystemExit(
+                f"{rel}: file not found (referenced by load_consumer_pin_constraints)"
+            )
+        try:
+            data = _json.loads(path.read_text(encoding="utf-8"))
+        except _json.JSONDecodeError as exc:
+            raise SystemExit(f"{rel}: invalid JSON: {exc}")
+        block_obj = data.get(block)
+        if block_obj is None:
+            raise SystemExit(
+                f"{rel}: missing {block!r} block — expected to find a "
+                f"{dep!r} entry there"
+            )
+        if not isinstance(block_obj, dict):
+            raise SystemExit(f"{rel}: {block!r} is not an object")
+        constraint = block_obj.get(dep)
+        if constraint is None:
+            raise SystemExit(
+                f"{rel}: {block}[{dep!r}] is missing"
+            )
+        if not isinstance(constraint, str):
+            raise SystemExit(
+                f"{rel}: {block}[{dep!r}] is not a string"
+            )
+        match = re.fullmatch(r"\^(\d+\.\d+)\.\d+", constraint)
+        if match is None:
+            raise SystemExit(
+                f"{rel}: {block}[{dep!r}] = {constraint!r} — expected exact "
+                f"`^<major>.<minor>.<patch>` shape; update "
+                f"load_consumer_pin_constraints if the constraint shape "
+                f"has changed intentionally."
+            )
+        sources.append(
+            Source(
+                file=rel,
+                field=f"{block}[{dep}] {_CARET_FIELD_SUFFIX}",
+                value=match.group(1),
+            )
+        )
+    return sources
+
+
 def load_napi_platform_package_versions(repo_root: Path) -> list[Source]:
     """Collect versions from every `crates/napi/npm/*/package.json`.
 
@@ -359,6 +509,14 @@ def load_all_sources(repo_root: Path) -> list[Source]:
     sources: list[Source] = []
     sources.extend(load_crate_versions(repo_root))
     sources.append(load_package_json_version(repo_root, "packages/npm/package.json"))
+    # `@chordsketch/wasm-export` ships in lockstep with `@chordsketch/wasm`
+    # per CLAUDE.md (#2466 added it as the heavy-bundle sister package).
+    # `npm-export` was silently exempt from this check until #2517 added
+    # it here — the gap allowed at least one cross-package release window
+    # (v0.4.0) to ship with the npm-export version field drifted.
+    sources.append(
+        load_package_json_version(repo_root, "packages/npm-export/package.json")
+    )
     sources.append(
         load_package_json_version(repo_root, "packages/vscode-extension/package.json")
     )
@@ -369,6 +527,8 @@ def load_all_sources(repo_root: Path) -> list[Source]:
         )
     )
     sources.extend(load_napi_platform_package_versions(repo_root))
+    sources.extend(load_napi_optional_deps(repo_root))
+    sources.extend(load_consumer_pin_constraints(repo_root))
     sources.extend(load_readme_smoke_pins(repo_root))
     # Pinned version strings inside packaging/<channel>/ files. See #1864:
     # these silently went stale across v0.2.0 → v0.2.2 and were only
@@ -453,10 +613,16 @@ def _source_key(source: Source) -> tuple[str, str]:
 # `<major>.<minor>.<patch>` directly. Every source has its own "expected value
 # given the canonical crate version" function. The default is identity.
 _CARET_FIELD_LABEL = "library-smoke caret constraint (^major.minor)"
+# Suffix used by every caret-pin field label across the script so
+# `_expected_for` can switch to `major.minor` comparison without
+# hardcoding one specific label. The library-smoke caret label
+# above is the seed example; the consumer-pin loader below appends
+# the same suffix to its per-dependency labels.
+_CARET_FIELD_SUFFIX = "(^major.minor)"
 
 
 def _expected_for(source: Source, canonical: str) -> str:
-    if source.field == _CARET_FIELD_LABEL:
+    if source.field.endswith(_CARET_FIELD_SUFFIX):
         parts = canonical.split(".")
         if len(parts) < 2:
             return canonical

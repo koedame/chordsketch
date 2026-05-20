@@ -166,7 +166,7 @@ at post-release verification rather than before the tag is cut.
    local operation. CI never publishes to npm. The flow:
 
    ```bash
-   # 7a. @chordsketch/wasm (dual web/node package)
+   # 7a. @chordsketch/wasm (dual web/node package, lean bundle)
    cd packages/npm && npm run build && npm whoami && npm publish && cd ../..
 
    # 7b. tree-sitter-chordpro
@@ -176,6 +176,12 @@ at post-release verification rather than before the tag is cut.
    #     CI's napi.yml uploads the platform tarballs to the GitHub
    #     Release; the local script fetches and publishes them.
    ./crates/napi/scripts/local-publish.sh v$V
+
+   # 7d. @chordsketch/wasm-export (heavy bundle: PDF/PNG export,
+   #     dual web/node package). Ships in lockstep with
+   #     @chordsketch/wasm per #2466 — same canonical version, same
+   #     manual-publish workflow.
+   cd packages/npm-export && npm run build && npm publish && cd ../..
    ```
 
    `npm whoami` should print `unchidev` before any publish; if not,
@@ -185,6 +191,7 @@ at post-release verification rather than before the tag is cut.
    Verify:
    ```bash
    npm view @chordsketch/wasm version          # should show X.Y.Z
+   npm view @chordsketch/wasm-export version    # should show X.Y.Z
    npm view tree-sitter-chordpro version        # should show X.Y.Z
    npm view @chordsketch/node version          # should show X.Y.Z
    for triple in linux-x64-gnu linux-arm64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
