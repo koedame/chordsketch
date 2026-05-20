@@ -829,6 +829,7 @@ jobs:
       - docker-ghcr
       - docker-hub
       - npm-wasm
+      - npm-wasm-export
       - cargo-install
       - source-build
       - homebrew
