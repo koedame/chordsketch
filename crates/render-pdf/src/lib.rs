@@ -882,10 +882,8 @@ fn render_song_into_doc(
                             let displayed = if transpose_offset == 0 {
                                 value.to_string()
                             } else {
-                                let prefer_flat = transposed_key_prefers_flat(
-                                    &song.metadata,
-                                    transpose_offset,
-                                );
+                                let prefer_flat =
+                                    transposed_key_prefers_flat(&song.metadata, transpose_offset);
                                 canonical_transposed_key_with_style(
                                     Some(value),
                                     transpose_offset,

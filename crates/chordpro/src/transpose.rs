@@ -329,7 +329,11 @@ pub fn transpose(song: &Song, semitones: i8) -> Song {
 /// `{key}` after transposition by `semitones`. Pop / folk
 /// convention: prefer flats for ambiguous black-key pitches
 /// (`Bb` over `A#`, `Eb` over `D#`, `Gb` over `F#`, etc.) — the
-/// preference is derived per-key via [`key_prefers_flat_for_song`].
+/// preference is derived per-key via a private heuristic. For
+/// callers that need explicit control over flat-vs-sharp
+/// (e.g. to match the chord-line spelling decided by
+/// [`transposed_key_prefers_flat`]), use
+/// [`canonical_transposed_key_with_style`].
 ///
 /// The chord parser is permissive about trailing text — `{key: C
 /// dorian}` parses as a C-major chord with extension `" dorian"`
