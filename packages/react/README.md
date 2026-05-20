@@ -61,8 +61,8 @@ npm install @chordsketch/wasm-export
 |------|----------------|-------|
 | `react` | `>=18` | Both 18.x and 19.x are supported. |
 | `react-dom` | `>=18` | Track the `react` major. |
-| `@chordsketch/wasm` | `^0.4.0` (runtime dep) | Bundled as a regular dependency; hosts can override at hoist time if they want a specific minor. |
-| `@chordsketch/wasm-export` | `^0.4.0` (optional peer) | Required for `<PdfExport>` / `usePdfExport`. Lazy-loaded on first export. |
+| `@chordsketch/wasm` | `^0.5.0` (runtime dep) | Bundled as a regular dependency; hosts can override at hoist time if they want a specific minor. |
+| `@chordsketch/wasm-export` | `^0.5.0` (optional peer) | Required for `<PdfExport>` / `usePdfExport`. Lazy-loaded on first export. |
 
 ### Platform compatibility
 
