@@ -113,14 +113,12 @@ Settings live under **ChordSketch** in Settings UI (or edit
 |---|---|---|---|
 | `chordsketch.lsp.enabled` | `boolean` | `true` | Enable the Language Server (diagnostics, completions, hover, formatting). |
 | `chordsketch.lsp.path` | `string` | `""` | Absolute path to a `chordsketch-lsp` binary. Empty uses (1) the binary on `PATH` if present, then (2) the bundled binary for your platform. |
-| `chordsketch.preview.defaultMode` | `"html"` \| `"text"` | `"html"` | Default rendering mode when a new preview panel opens. Changing this affects the next preview only; existing panels keep their persisted mode. |
 
 ## Features
 
 - **Syntax highlighting** for ChordPro directives, chord symbols,
   comments, and tab/ABC blocks via a TextMate grammar.
-- **Live preview** that re-renders on each edit, with HTML and plain
-  text modes (see `chordsketch.preview.defaultMode`).
+- **Live HTML preview** that re-renders on each edit.
 - **Transpose** commands that shift every chord by ±1 semitone.
 - **Export** the current song as HTML, plain text, or PDF via
   `chordsketch.convertTo`.
