@@ -14,8 +14,8 @@
  * app all share the same preview surface.
  *
  * The WebView still owns the lifecycle wiring — message protocol with the
- * extension host, persisted state (view mode + transpose + source-document
- * URI) via `vscode.setState`, and the one-shot wasm init — but everything
+ * extension host, persisted state (transpose + source-document URI) via
+ * `vscode.setState`, and the one-shot wasm init — but everything
  * inside the `<div id="app">` element is React-driven.
  *
  * Pure state-validation helpers (state shape, type guards, clamping, error

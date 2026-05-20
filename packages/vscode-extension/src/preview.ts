@@ -5,9 +5,9 @@
  * HTML using `@chordsketch/wasm` loaded in the WebView context. Updates are
  * debounced at 300 ms to avoid flooding the WASM renderer on every keystroke.
  *
- * Panel state (view mode, transpose offset, source document URI) is persisted
- * via the WebView's `vscode.setState` API so that preview tabs are restored
- * across VS Code restarts by [`ChordSketchPreviewSerializer`].
+ * Panel state (transpose offset, source document URI) is persisted via the
+ * WebView's `vscode.setState` API so that preview tabs are restored across
+ * VS Code restarts by [`ChordSketchPreviewSerializer`].
  */
 
 import * as vscode from 'vscode';
