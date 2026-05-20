@@ -43,7 +43,7 @@ YAML noise.
 **Required (workflows that run at least weekly):**
 `ci.yml`, `wasm.yml`, `python.yml`, `ruby.yml`, `kotlin.yml`, `swift.yml`,
 `napi.yml`, `ffi.yml`, `deploy-playground.yml`, `readme-smoke.yml`,
-`coverage.yml`, `vscode-extension.yml`
+`coverage.yml`, `vscode-extension.yml`, `github-action-ci.yml`
 
 **Intentionally omitted (infrequent — cache expires before next run):**
 - `release.yml` — ~every 10 days on version tags

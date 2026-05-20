@@ -155,20 +155,26 @@
   "scripts": {
     "build": "node esbuild.mjs",
     "build:watch": "node esbuild.mjs --watch",
-    "lint": "tsc --noEmit",
-    "test": "node --experimental-transform-types --test 'src/**/*.test.ts'",
+    "lint": "tsc --noEmit && npm run lint:webview",
+    "lint:webview": "tsc --noEmit -p webview/tsconfig.json",
+    "test": "node --experimental-transform-types --test 'src/**/*.test.ts' 'webview/**/*.test.ts'",
     "compile:integration": "tsc -p tsconfig.integration.json",
     "test:integration": "vscode-test",
     "package": "vsce package --no-dependencies",
     "prepackage": "npm run build"
   },
   "dependencies": {
+    "@chordsketch/react": "file:../react",
     "@chordsketch/wasm": "^0.5.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.7",
     "@types/node": "^22.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
     "@types/vscode": "^1.85.0",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",

@@ -2,13 +2,13 @@
  * Styling for the CodeMirror-backed ChordPro editor used by the
  * desktop app. Light/dark palettes are driven by
  * `prefers-color-scheme` so the editor matches the OS theme
- * without touching JS — ui-web's own surface is dark-only for now,
- * but the CodeMirror pane lives inside the same scroller and
- * should follow the system preference once ui-web picks up a
- * light palette in a future iteration.
+ * without touching JS — the React preview pane that lives in the
+ * same scroller is dark-only today, but the CodeMirror pane
+ * follows the system preference so it can light up automatically
+ * once the shared design tokens grow a light palette.
  *
  * Class-name mapping must stay in sync with `HighlightStyle`
- * entries in `codemirror-editor.ts` (`cm-chordpro-*`).
+ * entries in `ChordProDesktopEditor.tsx` (`cm-chordpro-*`).
  */
 
 .chordsketch-cm-host {
@@ -46,10 +46,11 @@
 }
 
 /*
- * Dark palette (default; ui-web's design tokens are dark today).
- * Tokens draw from the Tauri WebView page so picking up the ui-web
- * `--accent` / `--editor-text` custom properties keeps the editor
- * and the preview pane in the same visual language.
+ * Dark palette (default; the shared design tokens at
+ * `design-system/tokens.css` and `@chordsketch/react/styles.css` are
+ * dark today). Tokens draw from the Tauri WebView page so picking up
+ * the `--accent` / `--editor-text` custom properties keeps the
+ * editor and the preview pane in the same visual language.
  */
 .cm-chordpro-comment {
   color: #7c8fa5;

@@ -19,22 +19,22 @@
 >
 > Reasons this package stays internal:
 >
-> - It is framework-agnostic DOM, designed to be wired into
->   `@chordsketch/ui-web`'s `EditorAdapter` slot. External hosts
->   embedding the editor in a React app should not be forced to
->   bridge a non-React lifecycle into their tree.
+> - It is framework-agnostic DOM. External hosts embedding the
+>   editor in a React app should not be forced to bridge a
+>   non-React lifecycle into their tree —
+>   [`@chordsketch/react`](../react/)'s `<IrealProEditor>` is the
+>   canonical React-side host.
 > - Its API is co-designed with the playground / desktop iteration
 >   loop (popover-driven editing flow, `EditorAdapter` contract,
 >   wasm bridge injection). Publishing it would lock those
->   choices behind semver. The
->   [#2473](https://github.com/koedame/chordsketch/issues/2473)
->   non-goals section spells this out: "Publishing
->   `@chordsketch/ui-web` or `@chordsketch/ui-irealb-editor`. They
->   remain private internal packages."
+>   choices behind semver.
 
-Bar-grid GUI editor for iReal Pro charts. Pluggable into
-[`@chordsketch/ui-web`](../ui-web)'s `MountOptions.createEditor`
-slot via the `EditorAdapter` contract.
+Bar-grid GUI editor for iReal Pro charts. Exports a self-contained
+`EditorAdapter` contract (TypeScript interface) that any host can
+implement to embed a structured iReal Pro chart editor. Hosts
+using [`@chordsketch/react`](../react/)'s `<IrealProEditor>` get
+this integration for free; standalone hosts can consume the
+adapter directly.
 
 ## Status
 
@@ -64,7 +64,7 @@ Shipped:
 
 Subsequent iterations:
 
-- #2366 — `@chordsketch/ui-web` runtime swap + iRealb input toggle.
+- #2366 — host-driven runtime swap + iRealb input toggle.
 - #2367 — desktop integration (Open / Save dispatch + View menu).
 - #2368 — keyboard navigation + ARIA grid semantics.
 
@@ -84,10 +84,13 @@ import { parseIrealb, serializeIrealb } from '@chordsketch/wasm';
 import { createIrealbEditor } from '@chordsketch/ui-irealb-editor';
 import '@chordsketch/ui-irealb-editor/style.css';
 
-mountChordSketchUi(root, {
-  renderers,
-  createEditor: (opts) =>
-    createIrealbEditor({ ...opts, wasm: { parseIrealb, serializeIrealb } }),
+const adapter = createIrealbEditor({
+  initialValue: '',
+  wasm: { parseIrealb, serializeIrealb },
+});
+root.appendChild(adapter.element);
+adapter.onChange((url) => {
+  // Persist or forward the updated `irealb://` URL.
 });
 ```
 
@@ -108,9 +111,12 @@ interface IrealbWasm {
 }
 ```
 
-The `EditorAdapter` returned matches the `@chordsketch/ui-web`
-contract verbatim: `getValue` / `setValue` / `onChange` / `destroy`,
-plus `element` for DOM mounting.
+The `EditorAdapter` returned exposes a small, self-contained
+contract: `getValue` / `setValue` / `onChange` / `destroy`, plus
+`element` for DOM mounting. Hosts implement (or wrap) this
+contract to embed the editor — the interface lives entirely in
+this package and has no dependency on any other workspace
+package.
 
 ## Keyboard shortcuts
 

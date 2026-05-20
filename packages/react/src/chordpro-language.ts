@@ -2,7 +2,7 @@
  * Tiny ChordPro language module for CodeMirror 6 — exported for
  * users who want to assemble their own `EditorView` against the
  * same syntax highlighting tokens the components in this package
- * use. {@link SourceEditor} consumes this internally; standalone
+ * use. {@link ChordSourceArea} consumes this internally; standalone
  * use is a deliberate opt-in for hosts with custom keymaps,
  * autocomplete, or linting.
  *

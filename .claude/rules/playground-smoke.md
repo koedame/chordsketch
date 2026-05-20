@@ -1,13 +1,16 @@
 # Playground Smoke Discipline
 
-Origin: #2397, where `mountChordSketchUi` shipped a wasm-init race
-that no in-process suite caught — three test layers (ui-web,
-ui-irealb-editor, playground) each green, each blind to the
-integration.
+Origin: #2397, where the playground mount path shipped a wasm-init
+race that no in-process suite caught — three test layers (formerly
+ui-web, ui-irealb-editor, playground) each green, each blind to the
+integration. The ui-web package is gone as of #2527 (the playground
+now composes `@chordsketch/react` atoms directly), but the
+discipline that PR created — one Playwright smoke per mount path —
+remains in force.
 
-`@chordsketch/ui-web`'s `mountChordSketchUi` integrates several
-otherwise-independent layers (renderer wasm bundle, editor adapter
-factory, format-toggle host wiring) at runtime. Each layer carries
+The playground's React entry composes several otherwise-independent
+layers (renderer wasm bundle, React component tree, format-toggle
+host wiring, sample-data injection) at runtime. Each layer carries
 its own unit-test suite that **deliberately stubs the boundaries** to
 the others — it is faster to test, and it lets a package's tests run
 without a built sibling. The cost is that no in-process suite ever
@@ -18,15 +21,15 @@ playground mounts is loading the page in a real browser.
 
 Any PR that
 
-- adds a new `EditorFactory` invocation site in the playground or the
-  desktop app,
+- adds a new mount site for a React component in the playground or
+  the desktop app,
 - adds a new format-toggle entry to the playground (currently
   ChordPro / iRealb),
-- changes `mountChordSketchUi`'s mount sequence (init order, factory
-  signature, error-recovery path),
+- changes the playground's mount sequence (init order, render
+  ordering, error-recovery path),
 - changes `Renderers.init` semantics, or
 - changes the wasm bundle's exported surface in a way that the
-  playground or desktop adapters consume
+  playground or desktop consumers depend on
 
 MUST extend the Playwright smoke suite at
 `packages/playground/tests-e2e/` so the new path is exercised end to

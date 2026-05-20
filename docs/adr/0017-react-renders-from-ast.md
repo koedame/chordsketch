@@ -1,6 +1,6 @@
 # 0017. React surface renders from AST; Rust HTML renderer demoted to static-output
 
-- **Status**: Accepted
+- **Status**: Accepted (consumer classification partially updated by ADR-0022; the AST-walker decision stands)
 - **Date**: 2026-05-10
 
 ## Context
@@ -40,11 +40,13 @@ Split the HTML rendering surfaces:
 - **Rust HTML renderer** (`chordsketch-render-html`) stays as the
   canonical static-HTML emitter for **non-React consumers**: CLI
   (`chordsketch render --format html`), FFI bindings
-  (`@chordsketch/node`, Python, Swift, Kotlin, Ruby), the GitHub
-  Action, and the VS Code extension's iframe preview — every surface
-  that does not own a JS / React runtime. The 4,889-line
-  implementation, the renderer-parity rules around it, the golden
-  tests, and the sister-site coverage floor remain unchanged.
+  (`@chordsketch/node`, Python, Swift, Kotlin, Ruby), and the GitHub
+  Action — every surface that does not own a JS / React runtime.
+  The 4,889-line implementation, the renderer-parity rules around
+  it, the golden tests, and the sister-site coverage floor remain
+  unchanged. (The VS Code extension's preview was originally
+  classified here; ADR-0022 moved it onto the React surface — see
+  §"Subsequent ADRs".)
 - **React surface** (`<ChordSheet format="html">`,
   `<RendererPreview format="html">`, the playground) renders
   **AST → JSX directly**. The wasm bundle exposes the parsed
@@ -185,3 +187,12 @@ by construction.
 - iReal Pro AST exposure in `crates/ireal/src/json.rs` (#2055):
   precedent for hand-rolling a zero-dep JSON serializer in a
   zero-dep crate.
+
+## Subsequent ADRs
+
+- **Updated 2026-05-20 (ADR-0022)**: VS Code preview removed from
+  the non-React consumers list; it now consumes
+  `@chordsketch/react`'s `<ChordProPreview>` directly. The
+  remaining non-React consumers are the CLI, FFI bindings, and the
+  GitHub Action. The AST-walker decision in this ADR is unchanged
+  — only the consumer classification narrowed.

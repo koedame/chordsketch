@@ -57,7 +57,7 @@ export interface SplitLayoutProps extends Omit<HTMLAttributes<HTMLDivElement>, '
  * the visible rule.
  *
  * ```tsx
- * <SplitLayout start={<SourceEditor … />} end={<ChordSheet … />} />
+ * <SplitLayout start={<ChordSourceArea … />} end={<ChordSheet … />} />
  * ```
  */
 export function SplitLayout({

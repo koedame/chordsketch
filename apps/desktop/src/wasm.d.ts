@@ -5,7 +5,7 @@
 // case for first-time clones) still typechecks. The declarations
 // below cover only the *subset* of `packages/playground/src/wasm.d.ts`
 // the desktop entry imports — when a new wasm export is added to
-// `apps/desktop/src/main.ts`, add it here too. (The desktop omits
+// `apps/desktop/src/main.tsx`, add it here too. (The desktop omits
 // `validate` / `ValidationError` because no menu / handler currently
 // surfaces parser diagnostics; add those declarations alongside the
 // import that needs them.)

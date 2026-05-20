@@ -3,9 +3,9 @@
   "private": true,
   "version": "0.5.0",
   "type": "module",
-  "description": "Vite frontend for the ChordSketch desktop app; mounts @chordsketch/ui-web inside the Tauri WebView.",
+  "description": "Vite frontend for the ChordSketch desktop app; mounts the React tree from @chordsketch/react inside the Tauri WebView.",
   "scripts": {
-    "prebuild": "node scripts/build-grammar-wasm.mjs",
+    "prebuild": "npm install --prefix ../../packages/react --no-audit --no-fund --silent && npm run build --prefix ../../packages/react --silent && node scripts/build-grammar-wasm.mjs",
     "predev": "node scripts/build-grammar-wasm.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
@@ -20,6 +20,9 @@
     "@lezer/highlight": "^1.2.3",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.7.0",
     "codemirror": "^6.0.2",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",
@@ -28,6 +31,8 @@
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-dialog": "^2.7.0",
-    "@tauri-apps/plugin-opener": "^2.5.0"
+    "@tauri-apps/plugin-opener": "^2.5.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }

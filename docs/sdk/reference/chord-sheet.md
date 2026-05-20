@@ -19,7 +19,7 @@ import '@chordsketch/react/styles.css';
 | `transpose` | `number` | `0` | Semitone offset forwarded to the renderer. |
 | `format` | `'html' \| 'text'` | `'html'` | `'html'` walks the AST into a React tree via `renderChordproAst`; `'text'` returns a `<pre>` block. |
 | `chordDiagramsInstrument` | `'guitar' \| 'ukulele' \| 'piano' \| ...` | — | When set, append a chord-diagrams grid after the song. Honours `{diagrams: off}` / `{no_diagrams}`. HTML format only. |
-| `activeSourceLine` | `number` | — | 1-indexed source line to highlight in the rendered output. Paired with `<SourceEditor>`'s `onCaretLineChange`. HTML format only. |
+| `activeSourceLine` | `number` | — | 1-indexed source line to highlight in the rendered output. Paired with `<ChordSourceArea>`'s `onCaretLineChange`. HTML format only. |
 | `caretColumn` | `number` | — | 0-indexed caret column inside the active line. Paired with `caretLineLength` to position the inline caret marker. |
 | `caretLineLength` | `number` | — | Total character length of the active source line. |
 | `onChordReposition` | `(event: ChordRepositionEvent) => void` | — | Enables drag-and-drop chord repositioning. See [chord source-edit helpers](#/reference/chord-source-edit). |

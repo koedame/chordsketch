@@ -1,12 +1,12 @@
 name: Playground Smoke
 
-# Browser-level smoke for the playground bundle. Verifies that every
-# editor adapter `mountChordSketchUi` can mount actually mounts in a
-# real browser against the production-build dist — the integration
-# layer the unit-test suites in `packages/ui-web/tests/` and
-# `packages/ui-irealb-editor/tests/` cannot reach because they stub
-# wasm. Introduced in #2397 after the iRealb factory shipped with a
-# wasm-init race that no unit suite caught.
+# Browser-level smoke for the playground bundle. Verifies that the
+# playground's React surface mounts in a real browser against the
+# production-build dist — the integration layer the unit-test suites
+# in `packages/react/tests/` and `packages/ui-irealb-editor/tests/`
+# cannot reach because they stub wasm. Introduced in #2397 after the
+# iRealb factory shipped with a wasm-init race that no unit suite
+# caught.
 #
 # Runs unconditionally on every PR (no `paths:` filter) per the
 # guarantee-style-checks discipline in
@@ -94,13 +94,18 @@ jobs:
       # lockfile and its own CI typecheck — installing here is
       # purely about giving node-style upward module resolution
       # a populated packages/<sibling>/node_modules/ to walk into.
-      - name: Install @chordsketch/react dependencies
-        run: npm ci
+      - name: Install and build @chordsketch/react
+        # `npm ci` populates the React package's own devDeps so the
+        # playground's `tsc` can resolve transitive imports inside
+        # `../react/src/*.tsx` files. The `npm run build` step emits
+        # `dist/` (consumed by other workspaces that resolve
+        # `@chordsketch/react` via their `paths` mapping or by the
+        # docs SSG) — necessary as of v0.3.0's React-consolidation
+        # build graph (#2527).
+        run: |
+          npm ci
+          npm run build
         working-directory: packages/react
-
-      - name: Install @chordsketch/ui-web dependencies
-        run: npm ci
-        working-directory: packages/ui-web
 
       - name: Install @chordsketch/ui-irealb-editor dependencies
         run: npm ci

@@ -19,7 +19,7 @@
 //   - Stringifiers (`irealChordRootToString`,
 //     `irealChordQualityToString`, `irealChordToString`,
 //     `irealSectionLabelToString`) used by both the read-only bar grid
-//     in `<IrealEditor>` and the symbol-picker / chord-row displays
+//     in `<IrealBarGrid>` and the symbol-picker / chord-row displays
 //     in `<BarPopover>`.
 //   - Navigation-symbol canonicalisers (`irealCanonicalSymbolText`,
 //     `irealIsDaCapo`, `irealIsDalSegno`) — sister-site to
