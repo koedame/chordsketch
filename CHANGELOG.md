@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   props renamed to `transposeMin` / `transposeMax`** to match the
   `<ChordProPreview>` prop names and the `<Transpose>` primitive's
   `min` / `max` props. No deprecated aliases. (#2534)
+- **Breaking — `<IrealPreview>` `errorFallback` type narrowed**: the
+  prop now accepts `((error: Error) => ReactNode) | null` only — the
+  bare `ReactNode` branch was removed to make the type symmetric with
+  `<ChordSheet>`, `<ChordProPreview>`, and `<ChordTextarea>`. Callers
+  who passed a static `ReactNode` should wrap it: `() => node`.
+  (#2534)
 - VS Code preview WebView: rewritten as a React app mounting
   `<ChordProPreview>` from `@chordsketch/react`. The bespoke
   iframe-srcdoc implementation is gone. The WebView bundle grew

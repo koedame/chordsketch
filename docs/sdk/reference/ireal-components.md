@@ -64,7 +64,7 @@ produces.
 | Prop | Type | Description |
 |---|---|---|
 | `source` | `string` | `irealb://` URL to render. |
-| `errorFallback` | `ReactNode \| (err) => ReactNode \| null` | Rendered on parse failure. |
+| `errorFallback` | `(err: Error) => ReactNode \| null` | Rendered on parse failure. |
 | `className`, `style` | — | Forwarded to the wrapper. |
 | `loader` | loader callable | Test-only override. |
 
