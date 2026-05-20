@@ -17,8 +17,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "chordsketchFFI",
-            url: "https://github.com/koedame/chordsketch/releases/download/v0.4.0/chordsketch-xcframework.zip",
-            checksum: "4aeebeee2bd5e067e6a4417e7eb7080f1f26a7e9d49c8686c92d00616d45d90c"
+            url: "https://github.com/koedame/chordsketch/releases/download/v0.5.0/chordsketch-xcframework.zip",
+            checksum: "416eb75f8cfa08c3015b814831740ed19ada0f917cb73247304043463b92eca8"
         ),
         .target(
             name: "ChordSketch",
