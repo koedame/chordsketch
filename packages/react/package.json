@@ -55,7 +55,7 @@
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18",
-    "@chordsketch/wasm-export": "^0.5.0"
+    "@chordsketch/wasm-export": "^0.4.0"
   },
   "peerDependenciesMeta": {
     "@chordsketch/wasm-export": {
@@ -63,7 +63,7 @@
     }
   },
   "dependencies": {
-    "@chordsketch/wasm": "^0.5.0",
+    "@chordsketch/wasm": "^0.4.0",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/language": "^6.12.3",
     "@codemirror/search": "^6.7.0",
