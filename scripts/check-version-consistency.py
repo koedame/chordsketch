@@ -34,9 +34,10 @@ Sources checked:
      canonical workspace version; comparison runs at major.minor
      granularity (`_expected_for` strips the patch when the field
      label ends with `(^major.minor)`).
- 10. `.github/workflows/readme-smoke.yml` — the two hardcoded pins:
+ 10. `.github/workflows/readme-smoke.yml` — three hardcoded pins:
        a. `npm-wasm` job's `env: WASM_VERSION: "<version>"`
-       b. `library-smoke`'s `chordsketch-chordpro = "<caret>"` (and
+       b. `npm-wasm-export` job's `env: WASM_EXPORT_VERSION: "<version>"`
+       c. `library-smoke`'s `chordsketch-chordpro = "<caret>"` (and
           paired chordpro / render-text / ireal / render-ireal pins,
           all caught by the same caret regex)
  11. `packaging/macports/Portfile` — `github.setup … <version> v`
