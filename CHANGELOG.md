@@ -289,7 +289,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Floors". No public-API change; the wasm / napi npm packages
   expose exactly the same surface as 0.4.x.
 
-
 - **iReal Pro CI smoke is hard-gating on every install path
   except winget (#2403).** v0.4.0 (2026-05-06) shipped iReal Pro
   binaries to Homebrew, Scoop, Snap, Docker, and crates.io;
