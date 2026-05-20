@@ -54,10 +54,11 @@ test.describe('iRealb playground mount', () => {
     // assertion.
     await expect(chart.locator('.chart-body')).toBeVisible();
 
-    // The URL textarea is the canonical edit surface — it is the
-    // only `<textarea>` on the page and carries an explicit
-    // accessible name.
-    const urlField = page.getByLabel('iRealb URL');
+    // The URL textarea is the canonical edit surface. The accessible
+    // name `iRealb URL` matches both the section wrapper (aria-label
+    // "iRealb URL editor") and the textarea itself; scoping by role
+    // disambiguates to the textarea exactly.
+    const urlField = page.getByRole('textbox', { name: 'iRealb URL' });
     await expect(urlField).toBeVisible();
     await expect(urlField).not.toHaveValue('');
 
