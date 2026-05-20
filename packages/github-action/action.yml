@@ -109,6 +109,16 @@ runs:
         if [ "${RUNNER_OS:-}" = "Windows" ] || [ -f "${INSTALL_DIR}/bin/chordsketch.exe" ]; then
           BIN="${INSTALL_DIR}/bin/chordsketch.exe"
         fi
+        # On Windows, this bash step runs under Git Bash where
+        # `${HOME}` resolves to a POSIX-style `/c/Users/...` path.
+        # The render step on Windows runs under PowerShell, which
+        # cannot execute `/c/...`-style paths — it needs the native
+        # `C:\Users\...` form. Convert via `cygpath -w` when
+        # available (Git Bash ships it). Other shells (Linux, macOS)
+        # pass the POSIX path through unchanged.
+        if command -v cygpath >/dev/null 2>&1; then
+          BIN=$(cygpath -w "${BIN}")
+        fi
         echo "CHORDSKETCH_BIN=${BIN}" >> "$GITHUB_ENV"
 
     # ---- install: Linux and macOS -------------------------------------------
