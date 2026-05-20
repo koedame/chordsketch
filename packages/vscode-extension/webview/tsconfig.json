@@ -10,7 +10,12 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    // Required so `*.test.ts` files can import sibling `.ts` modules
+    // by full filename — matches the convention used in
+    // `src/*.test.ts`, which is executed directly by
+    // `node --experimental-transform-types`.
+    "allowImportingTsExtensions": true
   },
   "include": ["./**/*.ts", "./**/*.tsx"]
 }

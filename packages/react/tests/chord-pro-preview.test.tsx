@@ -170,4 +170,180 @@ describe('<ChordProPreview>', () => {
     );
     expect(screen.getByRole('button', { name: 'Download PDF' })).toBeTruthy();
   });
+
+  test('transposeMin / transposeMax bound the transpose buttons', () => {
+    function Controlled() {
+      const [t, setT] = useState(0);
+      return (
+        <ChordProPreview
+          source="src"
+          transpose={t}
+          onTransposeChange={setT}
+          transposeMin={-3}
+          transposeMax={3}
+          wasmLoader={makeLoader(makeStub())}
+        />
+      );
+    }
+    render(<Controlled />);
+    const up = screen.getByLabelText('Transpose up one semitone') as HTMLButtonElement;
+    // Click up six times — the last three should be no-ops because the
+    // bound clamps at +3.
+    for (let i = 0; i < 6; i++) fireEvent.click(up);
+    const output = screen.getByRole('status');
+    expect(output.textContent).toContain('+3');
+    // The up button is disabled at the boundary (incrementDisabled
+    // path in `<Transpose>`).
+    expect(up.disabled).toBe(true);
+  });
+
+  test('format outside `formats` falls back to the first allowed format and warns in dev', () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(
+        // The host passes `format="pdf"` but restricts the allowed
+        // list to `['html', 'text']` — the active value would not
+        // match any `<option>`. Fall back to `'html'` (the first
+        // entry of `formats`).
+        <ChordProPreview
+          source="src"
+          format="pdf"
+          formats={['html', 'text']}
+          wasmLoader={makeLoader(makeStub())}
+        />,
+      );
+      const select = screen.getByLabelText('Format') as HTMLSelectElement;
+      // The select's `value` reflects the fallback, not the
+      // mismatched prop — proves the fallback fired before the DOM
+      // committed.
+      expect(select.value).toBe('html');
+      const messages = err.mock.calls.map((call) => String(call[0]));
+      expect(
+        messages.some(
+          (m) => m.includes('not in the allowed') && m.includes('"pdf"'),
+        ),
+      ).toBe(true);
+    } finally {
+      err.mockRestore();
+    }
+  });
+
+  test('incoming controlled transpose is clamped against [transposeMin, transposeMax]', () => {
+    // Caller passes `transpose=15` but `transposeMax=5` — the
+    // displayed readout and forwarded value must clamp to 5, not
+    // render the out-of-range value.
+    render(
+      <ChordProPreview
+        source="src"
+        transpose={15}
+        transposeMin={-5}
+        transposeMax={5}
+        wasmLoader={makeLoader(makeStub())}
+      />,
+    );
+    const output = screen.getByRole('status');
+    expect(output.textContent).toContain('+5');
+  });
+
+  test('transposeMin > transposeMax: dev warning fires and bounds are swapped', () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(
+        // Inverted bound pair — the component should swap them
+        // internally so the control stays usable.
+        <ChordProPreview
+          source="src"
+          defaultTranspose={0}
+          transposeMin={5}
+          transposeMax={-5}
+          wasmLoader={makeLoader(makeStub())}
+        />,
+      );
+      const messages = err.mock.calls.map((call) => String(call[0]));
+      expect(
+        messages.some((m) =>
+          m.includes('transposeMin (5) > transposeMax (-5)'),
+        ),
+      ).toBe(true);
+      // The up button stays enabled because the swapped bounds are
+      // `[-5, 5]`, not `[5, -5]`. A regression that did not swap
+      // would render the button disabled at 0 (since 0 >= 5 would
+      // be true under the un-swapped check? actually 0 < 5 means it
+      // would stay enabled — pivot to the down direction).
+      // Assert at least one of the buttons is actionable by
+      // clicking the down button and checking the readout drops.
+      const down = screen.getByLabelText('Transpose down one semitone');
+      fireEvent.click(down);
+      const output = screen.getByRole('status');
+      expect(output.textContent).toContain('-1');
+    } finally {
+      err.mockRestore();
+    }
+  });
+
+  test('dev-warning fires when format flips between controlled and uncontrolled', () => {
+    const stub = makeStub();
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { rerender } = render(
+        <ChordProPreview
+          source="src"
+          format="html"
+          onFormatChange={vi.fn()}
+          wasmLoader={makeLoader(stub)}
+        />,
+      );
+      rerender(
+        <ChordProPreview
+          source="src"
+          defaultFormat="text"
+          wasmLoader={makeLoader(stub)}
+        />,
+      );
+      const messages = err.mock.calls.map((call) => String(call[0]));
+      expect(
+        messages.some(
+          (m) =>
+            m.includes('<ChordProPreview> format') &&
+            m.includes('controlled') &&
+            m.includes('uncontrolled'),
+        ),
+      ).toBe(true);
+    } finally {
+      err.mockRestore();
+    }
+  });
+
+  test('dev-warning fires when transpose flips between controlled and uncontrolled', () => {
+    const stub = makeStub();
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { rerender } = render(
+        <ChordProPreview
+          source="src"
+          transpose={1}
+          onTransposeChange={vi.fn()}
+          wasmLoader={makeLoader(stub)}
+        />,
+      );
+      rerender(
+        <ChordProPreview
+          source="src"
+          defaultTranspose={0}
+          wasmLoader={makeLoader(stub)}
+        />,
+      );
+      const messages = err.mock.calls.map((call) => String(call[0]));
+      expect(
+        messages.some(
+          (m) =>
+            m.includes('<ChordProPreview> transpose') &&
+            m.includes('controlled') &&
+            m.includes('uncontrolled'),
+        ),
+      ).toBe(true);
+    } finally {
+      err.mockRestore();
+    }
+  });
 });

@@ -3,7 +3,7 @@
  * menu / dialog / updater layer that lives outside React.
  *
  * The Tauri menu items, native dialogs, and window-close guard are
- * created once at boot in `main.ts` and persist for the lifetime
+ * created once at boot in `main.tsx` and persist for the lifetime
  * of the process; they cannot consume React state directly. The
  * bridge is the seam: `<App />` calls {@link attach} on mount to
  * publish the current set of state mutators + accessors, and the
@@ -14,18 +14,16 @@
  * desktop window only hosts a single React root. Attaching a
  * second listener replaces the first.
  *
- * Design rationale: React owns state and publishes a handle
- * outward via this singleton. Tauri-side menu handlers stay
- * imperative (calling `bridge.runSave()` etc.) while React handles
- * rendering,
- * controlled inputs, and component lifecycles cleanly.
+ * Design rationale: React owns state and publishes a handle outward
+ * via this singleton. Tauri-side menu handlers stay imperative
+ * (calling `bridge.setSource(value)` / `bridge.focusEditor()` etc.)
+ * while React handles rendering, controlled inputs, and component
+ * lifecycles cleanly.
  */
 
 /**
  * Editor mode shared by `<App />` and the View menu radio pair.
- * Kept in lockstep with the matching type in `App.tsx`. See the
- * historical comment in `main.ts` (preserved through the migration)
- * for the per-mode rationale.
+ * Kept in lockstep with the matching type in `App.tsx`.
  */
 export type EditorMode = 'chordpro' | 'irealb-grid' | 'irealb-text';
 
@@ -34,7 +32,8 @@ export type EditorMode = 'chordpro' | 'irealb-grid' | 'irealb-text';
  * Every method is synchronous from React's perspective — internal
  * state updates batch normally; callers should treat them as
  * fire-and-forget. The read-side accessors return the most recent
- * committed React state value at call time.
+ * committed React state value at call time — see the bridge-attach
+ * `useEffect` in `App.tsx` for the synchronous-read contract.
  */
 export interface DesktopBridgeListener {
   /** Read the current editor buffer. */
@@ -71,6 +70,24 @@ let listener: DesktopBridgeListener | null = null;
 type SourceChangeHandler = (value: string) => void;
 const sourceChangeHandlers = new Set<SourceChangeHandler>();
 
+/**
+ * True when running under a Vite dev server (HMR is active). Used
+ * by `attach()` to gate the "replacing existing listener" warning
+ * so production builds stay quiet. `import.meta.env.DEV` is
+ * Vite-injected and inlined at build time; the optional-chain
+ * guards a vitest / jest / non-Vite test runner where
+ * `import.meta.env` may be absent.
+ */
+function isDevelopmentBuild(): boolean {
+  try {
+    return Boolean(
+      (import.meta as { env?: { DEV?: boolean } }).env?.DEV,
+    );
+  } catch {
+    return false;
+  }
+}
+
 function requireListener(): DesktopBridgeListener {
   if (listener === null) {
     throw new Error(
@@ -84,7 +101,7 @@ function requireListener(): DesktopBridgeListener {
 /**
  * Bridge surface consumed by Tauri menu / dialog / updater code.
  * The shape is intentionally narrow — only state mutation + a tiny
- * change-notification side channel. File I/O lives in `main.ts`
+ * change-notification side channel. File I/O lives in `main.tsx`
  * because it depends on the Tauri APIs directly.
  */
 export const desktopBridge = {
@@ -92,9 +109,24 @@ export const desktopBridge = {
    * Register the React-side listener. Returns a detach function
    * that should be called from React on unmount. Replacing an
    * existing listener is allowed (HMR re-renders); the previous
-   * listener is dropped silently.
+   * listener is dropped.
+   *
+   * In development builds we log a warning when an existing
+   * listener is replaced — typically this is HMR-driven and
+   * harmless, but seeing it outside of HMR is a signal that a
+   * second `<App />` was accidentally mounted into the same
+   * window. Production builds skip the warning to avoid noise in
+   * shipped consoles.
    */
   attach(next: DesktopBridgeListener): () => void {
+    if (listener !== null && isDevelopmentBuild()) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        'desktopBridge.attach: replacing an existing listener. ' +
+          'If this is not an HMR reload, a second <App /> may have been ' +
+          'mounted into the same window.',
+      );
+    }
     listener = next;
     return () => {
       if (listener === next) listener = null;
@@ -135,7 +167,7 @@ export const desktopBridge = {
   },
 
   /**
-   * Subscribe to source changes. Used by `main.ts` to drive the
+   * Subscribe to source changes. Used by `main.tsx` to drive the
    * window-title dirty-marker update on every edit. Returns the
    * unsubscribe function. Multiple subscribers are supported (one
    * per registered consumer); React is NOT one of them — React
@@ -154,9 +186,15 @@ export const desktopBridge = {
    * surface; exposed so the React state-update path can drive the
    * subscribers without a layer of indirection.
    *
+   * Named with a leading underscore to flag that this method is
+   * not part of the documented Tauri-facing surface; only
+   * `<App />` should call it. Renaming from `notifySourceChange`
+   * (no underscore) made the access-control intent visible to
+   * future consumers reading the bridge surface alphabetically.
+   *
    * @internal
    */
-  notifySourceChange(value: string): void {
+  _notifySourceChange(value: string): void {
     for (const handler of sourceChangeHandlers) {
       try {
         handler(value);

@@ -70,8 +70,14 @@ export interface IrealBarGridProps {
   /** Optional inline style applied to the wrapper. */
   style?: CSSProperties;
   /** Optional renderer for parse / serialise errors. Defaults to an
-   * inline `role="alert"`. Pass `null` to hide errors entirely. */
-  errorFallback?: ReactNode | ((error: Error) => ReactNode) | null;
+   * inline `role="alert"`. Pass `null` to hide errors entirely.
+   *
+   * Shape mirrors {@link ChordProPreviewProps.errorFallback} —
+   * function-only render prop or `null` — so the React surface
+   * stays symmetric across the ChordPro and iReal Pro Tier-1
+   * atoms. Callers that need to render a static `ReactNode` can
+   * wrap it in `() => node`. */
+  errorFallback?: ((error: Error) => ReactNode) | null;
   /** Whether to show the raw-URL textarea. Defaults to `true`. */
   showUrl?: boolean;
   /** Whether to show the bar grid (structural editing + ARIA grid).
@@ -347,10 +353,7 @@ export function IrealBarGrid({
         </p>
       );
     }
-    if (typeof errorFallback === 'function') {
-      return errorFallback(error);
-    }
-    return errorFallback;
+    return errorFallback(error);
   }, [error, errorFallback]);
 
   // When an external `source` failed to parse the metadata fieldset

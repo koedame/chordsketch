@@ -39,6 +39,23 @@ export interface PdfExportProps
    */
   onError?: (error: Error) => void;
   /**
+   * Optional render prop that takes over the default inline
+   * `role="alert"` error rendering when the most recent
+   * `exportPdf` call rejected. Receives the `Error` instance;
+   * return any `ReactNode`. Pass `null` to suppress the inline
+   * error entirely (useful when the host surfaces the error via
+   * `onError` + a toast). Defaults to a minimal `role="alert"`
+   * div containing `error.message`.
+   *
+   * The inline error addresses a silent-failure surface: prior
+   * to this prop, a `<PdfExport>` button whose render rejected
+   * would re-enable itself with no user-visible indication that
+   * the click had failed — only the `onError` callback fired, and
+   * consumers that did not wire one (e.g. `<RendererPreview
+   * format="pdf">`) swallowed the error silently.
+   */
+  errorFallback?: ((error: Error) => ReactNode) | null;
+  /**
    * Test-only WASM loader override. Consumers never need to
    * supply this — the production default lazy-loads
    * `@chordsketch/wasm-export` (the heavy bundle that owns the
@@ -51,11 +68,21 @@ export interface PdfExportProps
   wasmLoader?: WasmLoader;
 }
 
+function defaultPdfErrorFallback(error: Error): ReactNode {
+  return (
+    <div role="alert" className="chordsketch-pdf-export__error">
+      {error.message}
+    </div>
+  );
+}
+
 /**
  * Button that renders `source` to PDF via `@chordsketch/wasm-export` and
  * triggers a browser download on click. While the render is in
  * flight the button is set `disabled` and `aria-busy="true"` so
- * assistive tech surfaces the loading state.
+ * assistive tech surfaces the loading state. If the render rejects,
+ * a `role="alert"` inline error renders below the button — see the
+ * {@link PdfExportProps.errorFallback} prop to customise or suppress.
  *
  * ```tsx
  * <PdfExport source={chordpro} filename="song.pdf">
@@ -73,11 +100,12 @@ export function PdfExport({
   children = 'Export PDF',
   onExported,
   onError,
+  errorFallback = defaultPdfErrorFallback,
   wasmLoader,
   disabled,
   ...buttonProps
 }: PdfExportProps): JSX.Element {
-  const { exportPdf, loading } = usePdfExport(wasmLoader);
+  const { exportPdf, loading, error } = usePdfExport(wasmLoader);
 
   const handleClick = useCallback(() => {
     exportPdf(source, filename, options).then(
@@ -91,7 +119,7 @@ export function PdfExport({
     );
   }, [exportPdf, source, filename, options, onExported, onError]);
 
-  return (
+  const button = (
     <button
       type="button"
       {...buttonProps}
@@ -101,5 +129,23 @@ export function PdfExport({
     >
       {children}
     </button>
+  );
+
+  // When there is no error to render AND the consumer hasn't opted
+  // out of the inline error rendering, return just the button so the
+  // common no-error path matches the pre-#2534 DOM shape exactly —
+  // wrapping every export in a `<span>` would force consumers to
+  // re-target CSS selectors. The error branch wraps in a fragment so
+  // the `role="alert"` region renders as a sibling without altering
+  // the button's position in the layout.
+  if (error === null || errorFallback === null) {
+    return button;
+  }
+
+  return (
+    <>
+      {button}
+      {errorFallback(error)}
+    </>
   );
 }

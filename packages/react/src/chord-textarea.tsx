@@ -91,9 +91,9 @@ export interface ChordTextareaProps extends Omit<HTMLAttributes<HTMLDivElement>,
    */
   errorFallback?: ((error: Error) => ReactNode) | null;
   /** Minimum transpose offset the keyboard shortcuts will emit. Defaults to `-11`. */
-  minTranspose?: number;
+  transposeMin?: number;
   /** Maximum transpose offset the keyboard shortcuts will emit. Defaults to `11`. */
-  maxTranspose?: number;
+  transposeMax?: number;
   /**
    * Test-only WASM loader override forwarded to `<ChordSheet>`'s
    * text branch (`format="text"`). Production callers never need
@@ -132,7 +132,7 @@ export interface ChordTextareaProps extends Omit<HTMLAttributes<HTMLDivElement>,
  * uncontrolled mode (`defaultValue`). Keyboard shortcuts
  * `Ctrl+ArrowUp` / `Cmd+ArrowUp` / `Ctrl+ArrowDown` /
  * `Cmd+ArrowDown` fire `onTransposeChange` with the next value
- * clamped into `[minTranspose, maxTranspose]`, so a consumer can
+ * clamped into `[transposeMin, transposeMax]`, so a consumer can
  * bind the component directly to `useTranspose()`.
  */
 export function ChordTextarea({
@@ -149,8 +149,8 @@ export function ChordTextarea({
   textareaAriaLabel = 'ChordPro editor',
   loadingFallback,
   errorFallback,
-  minTranspose = -11,
-  maxTranspose = 11,
+  transposeMin = -11,
+  transposeMax = 11,
   wasmLoader,
   astWasmLoader,
   className,
@@ -182,6 +182,24 @@ export function ChordTextarea({
     }
   }, [isControlled]);
 
+  // Dev-only warning + defensive swap: callers occasionally pass an
+  // inverted bound pair (`transposeMin > transposeMax`) which would
+  // otherwise propagate to `Math.min` / `Math.max` and silently
+  // disable the shortcuts. Normalise to `[min(a,b), max(a,b)]` so
+  // the runtime stays well-defined even when the warning fires.
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (transposeMin > transposeMax) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `Warning: <ChordTextarea> received transposeMin (${transposeMin}) > transposeMax (${transposeMax}). ` +
+          `The bounds will be swapped to keep the control usable, but the caller should pass min ≤ max.`,
+      );
+    }
+  }, [transposeMin, transposeMax]);
+  const effectiveTransposeMin = Math.min(transposeMin, transposeMax);
+  const effectiveTransposeMax = Math.max(transposeMin, transposeMax);
+
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>): void => {
       const next = event.target.value;
@@ -194,10 +212,10 @@ export function ChordTextarea({
   );
 
   const clampedTranspose = useMemo(() => {
-    if (transpose < minTranspose) return minTranspose;
-    if (transpose > maxTranspose) return maxTranspose;
+    if (transpose < effectiveTransposeMin) return effectiveTransposeMin;
+    if (transpose > effectiveTransposeMax) return effectiveTransposeMax;
     return transpose;
-  }, [transpose, minTranspose, maxTranspose]);
+  }, [transpose, effectiveTransposeMin, effectiveTransposeMax]);
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -205,19 +223,19 @@ export function ChordTextarea({
       if (onTransposeChange === undefined) return;
       if (event.key === 'ArrowUp') {
         event.preventDefault();
-        const next = Math.min(maxTranspose, clampedTranspose + 1);
+        const next = Math.min(effectiveTransposeMax, clampedTranspose + 1);
         if (next !== clampedTranspose) {
           onTransposeChange(next);
         }
       } else if (event.key === 'ArrowDown') {
         event.preventDefault();
-        const next = Math.max(minTranspose, clampedTranspose - 1);
+        const next = Math.max(effectiveTransposeMin, clampedTranspose - 1);
         if (next !== clampedTranspose) {
           onTransposeChange(next);
         }
       }
     },
-    [clampedTranspose, maxTranspose, minTranspose, onTransposeChange],
+    [clampedTranspose, effectiveTransposeMax, effectiveTransposeMin, onTransposeChange],
   );
 
   const wrapperClass = ['chordsketch-textarea', className].filter(Boolean).join(' ');

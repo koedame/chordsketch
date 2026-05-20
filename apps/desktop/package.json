@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Vite frontend for the ChordSketch desktop app; mounts the React tree from @chordsketch/react inside the Tauri WebView.",
   "scripts": {
-    "prebuild": "node scripts/build-grammar-wasm.mjs",
+    "prebuild": "(cd ../../packages/react && npm install --no-audit --no-fund --silent && npm run build) && node scripts/build-grammar-wasm.mjs",
     "predev": "node scripts/build-grammar-wasm.mjs",
     "dev": "vite",
     "build": "tsc && vite build",

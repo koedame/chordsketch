@@ -292,6 +292,17 @@ jobs:
         run: npm ci
         working-directory: packages/tree-sitter-chordpro
 
+      - name: Build @chordsketch/react
+        # The desktop's `tsconfig.json` `paths` mapping points
+        # `@chordsketch/react` at `packages/react/dist/index.d.ts`,
+        # so `tsc` requires a built React package to type-check the
+        # desktop frontend. Install + build here ahead of the
+        # desktop's `npm run build` step (#2527).
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+        working-directory: packages/react
+
       - name: Install desktop frontend deps
         run: npm ci
         working-directory: apps/desktop

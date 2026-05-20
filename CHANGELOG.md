@@ -38,17 +38,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `chordsketch-chord-pro-editor*`). See
   [ADR-0022](docs/adr/0022-react-as-canonical-preview-surface.md)
   for the rationale. (#2533)
+- **Breaking — `<ChordTextarea>` `minTranspose` / `maxTranspose`
+  props renamed to `transposeMin` / `transposeMax`** to match the
+  `<ChordProPreview>` prop names and the `<Transpose>` primitive's
+  `min` / `max` props. No deprecated aliases. (#2534)
 - VS Code preview WebView: rewritten as a React app mounting
   `<ChordProPreview>` from `@chordsketch/react`. The bespoke
   iframe-srcdoc implementation is gone. The WebView bundle grew
-  +438 KB raw / +96 KB gzipped (one-time install cost). (#2528)
+  +438 KB raw / +96 KB gzipped (one-time install cost; measured
+  via `npm run build` in `packages/vscode-extension` against the
+  pre-#2528 and post-#2528 esbuild outputs, gzipped via
+  `gzip -9 -k`). (#2528)
 - Tauri desktop: migrated off the deleted `mountChordSketchUi` flow
-  to a React root that mounts `<ChordProEditor>` /
-  `<IrealProEditor>`. Tauri menus / Open-Save dialogs / updater
-  events now route through a new `desktopBridge` singleton. (#2529)
+  to a React root. The shell composes Tier 1 / Tier 2 components
+  for app-specific layout: a local `<ChordProDesktopEditor>`
+  (CodeMirror 6 + `tree-sitter-chordpro`) plus `<ChordProPreview>`
+  for ChordPro mode, and a local `<IrealGridEditor>` plus
+  `<IrealPreview>` for iReal Pro mode. Tauri menus / Open-Save
+  dialogs / updater events now route through a new `desktopBridge`
+  singleton. (#2529)
 - Playground page: `SAMPLE_CHORDPRO` / `SAMPLE_IREALB` moved to
-  `packages/playground/src/sample.ts`. All component symbol
-  references updated to v0.3.0 names. (#2530)
+  `packages/playground/src/sample.ts` and re-used by the Tauri
+  desktop via a Vite alias. The page composes Tier 1 atoms
+  directly (`<RendererPreview>`, `<Transpose>`, ...) into its own
+  layout rather than mounting the all-in-one Tier 3 component, so
+  the playground keeps full control of its chrome and routing.
+  All component symbol references updated to v0.3.0 names.
+  (#2530)
 
 ### Removed
 

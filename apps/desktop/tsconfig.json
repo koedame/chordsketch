@@ -39,11 +39,13 @@
       "@chordsketch/react": ["../../packages/react/dist/index.d.ts"],
       "@chordsketch/react/styles.css": ["../../packages/react/src/styles.css"],
       "@chordsketch/ui-irealb-editor": ["../../packages/ui-irealb-editor/src/index.ts"],
-      "@chordsketch/ui-irealb-editor/style.css": ["../../packages/ui-irealb-editor/src/style.css"]
+      "@chordsketch/ui-irealb-editor/style.css": ["../../packages/ui-irealb-editor/src/style.css"],
+      "@chordsketch/playground-sample": ["../../packages/playground/src/sample.ts"]
     }
   },
   "include": [
     "src",
-    "../../packages/ui-irealb-editor/src"
+    "../../packages/ui-irealb-editor/src",
+    "../../packages/playground/src/sample.ts"
   ]
 }

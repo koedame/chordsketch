@@ -82,8 +82,17 @@ jobs:
       # step exists purely to give node-style upward module
       # resolution a populated packages/<sibling>/node_modules/
       # to walk into.
-      - name: Install @chordsketch/react dependencies
-        run: npm ci
+      - name: Install and build @chordsketch/react
+        # `npm ci` populates the React package's own devDeps so the
+        # playground's `tsc` can resolve transitive imports inside
+        # `../react/src/*.tsx` files. The `npm run build` step emits
+        # `dist/` (consumed by other workspaces that resolve
+        # `@chordsketch/react` via their `paths` mapping or by the
+        # docs SSG) — necessary as of v0.3.0's React-consolidation
+        # build graph (#2527).
+        run: |
+          npm ci
+          npm run build
         working-directory: packages/react
 
       - name: Install @chordsketch/ui-irealb-editor dependencies

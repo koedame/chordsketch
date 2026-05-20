@@ -28,6 +28,7 @@ import { getVersion } from '@tauri-apps/api/app';
 
 import { App } from './App';
 import { desktopBridge, type EditorMode } from './desktop-bridge';
+import { ErrorBoundary } from './ErrorBoundary';
 import './codemirror-editor.css';
 // The iRealb bar-grid GUI editor renders directly into DOM that
 // is not styled by `@chordsketch/react/styles.css`; the package
@@ -169,8 +170,14 @@ function canParseAsIrealbUrl(value: string): boolean {
     parseIrealb(value);
     return true;
   } catch (e) {
+    // Parse failures here are observable problems (user opened a
+    // file the iRealb parser rejected, attempted a mode swap on
+    // non-URL text). Use `console.warn` so the diagnostics are
+    // visible in the dev console by default — `console.debug` is
+    // filtered out at the default WebView verbosity level and was
+    // effectively swallowed.
     // eslint-disable-next-line no-console
-    console.debug('canParseAsIrealbUrl: parse failed', e);
+    console.warn('canParseAsIrealbUrl: parse failed', e);
     return false;
   }
 }
@@ -186,10 +193,13 @@ function loadRecents(): string[] {
     return parsed
       .filter((x): x is string => typeof x === 'string' && x.length > 0)
       .slice(0, MAX_RECENTS);
-  } catch {
+  } catch (err) {
     // Malformed JSON or inaccessible localStorage — fall back to an
     // empty list. A bad write from a future version cannot brick the
-    // menu; the list simply resets.
+    // menu; the list simply resets. Log so the failure is observable
+    // in the dev console rather than swallowed.
+    // eslint-disable-next-line no-console
+    console.warn('Failed to load recent files from localStorage:', err);
     return [];
   }
 }
@@ -197,9 +207,12 @@ function loadRecents(): string[] {
 function persistRecents(list: string[]): void {
   try {
     window.localStorage.setItem(RECENTS_STORAGE_KEY, JSON.stringify(list));
-  } catch {
+  } catch (err) {
     // Persistence failure is a convenience loss, not a correctness
-    // failure.
+    // failure. Log so the failure is observable; the next launch
+    // simply seeds an empty recents list.
+    // eslint-disable-next-line no-console
+    console.warn('Failed to persist recent files to localStorage:', err);
   }
 }
 
@@ -838,12 +851,16 @@ async function bootstrap(rootEl: HTMLElement): Promise<void> {
   await init();
 
   // Mount the React root. `<App />` registers its listener with
-  // `desktopBridge` inside a layout effect, so by the time
-  // `createRoot.render` returns the listener may not yet be
+  // `desktopBridge` inside a regular effect (`useEffect`), so by the
+  // time `createRoot.render` returns the listener may not yet be
   // available — we await a microtask via the source-change
   // subscription before reading the seeded buffer.
   const reactRoot = createRoot(rootEl);
-  reactRoot.render(<App />);
+  reactRoot.render(
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>,
+  );
 
   // Wait until the React tree has registered with the bridge.
   await waitForBridge();
@@ -875,21 +892,45 @@ async function bootstrap(rootEl: HTMLElement): Promise<void> {
  * React commits its layout effects synchronously after the initial
  * render (`createRoot.render` is async on React 18, but `flushSync`
  * inside the implementation drains layout effects before returning
- * from the next microtask), so a single microtask flush is enough
- * in practice. The 50 ms safety cap guards against any future React
- * change that would defer effect commits further; if it fires, the
- * later `desktopBridge` accessors will throw their descriptive
- * "no listener attached" error so the failure is loud.
+ * from the next microtask), so the listener typically attaches on
+ * the very first tick.
+ *
+ * The 5 second hard cap is the safety net for a catastrophic
+ * scenario — wasm init blocking on disk, a future React change that
+ * defers effect commits behind an unusually slow scheduler, or a
+ * crashed React tree that never commits at all. Hitting the cap is
+ * a hard failure (not a silent "carry on" the way the prior 50 ms
+ * cap allowed), so we throw a SPECIFIC error rather than fall
+ * through to the bridge's generic "no listener attached" message.
+ *
+ * The 5 s value is a defensive upper bound, not a measured budget.
+ * The first-tick attach observed in normal boots is well under
+ * 50 ms; we keep two orders of magnitude of headroom so a slow
+ * disk / Rosetta startup / debugger pause does not falsely trip
+ * the alarm. Per `.claude/rules/evidence-based-claims.md`, the
+ * exact number should be tightened once we have measured boot
+ * times across a real macOS / Windows / Linux matrix.
+ *
+ * Polling uses an exponential-backoff cadence (10ms → 20ms → 40ms
+ * → … capped at 200ms) so we spend microseconds when the listener
+ * is about to attach and seconds when it is genuinely stuck.
  */
+const BRIDGE_WAIT_TIMEOUT_MS = 5_000;
+const BRIDGE_WAIT_INITIAL_INTERVAL_MS = 10;
+const BRIDGE_WAIT_MAX_INTERVAL_MS = 200;
+
 async function waitForBridge(): Promise<void> {
-  const deadline = Date.now() + 50;
+  const deadline = Date.now() + BRIDGE_WAIT_TIMEOUT_MS;
+  let interval = BRIDGE_WAIT_INITIAL_INTERVAL_MS;
   while (!desktopBridge.isAttached()) {
-    if (Date.now() > deadline) return;
-    // Yield to the React scheduler / commit queue. A 0 ms timer
-    // satisfies the microtask drain; an explicit `Promise.resolve()`
-    // alone is not enough because React commits effects in a
-    // separate macrotask.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (Date.now() >= deadline) {
+      throw new Error(
+        'ChordSketch UI failed to initialize within 5 seconds. ' +
+          'Please restart the app.',
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, interval));
+    interval = Math.min(interval * 2, BRIDGE_WAIT_MAX_INTERVAL_MS);
   }
 }
 
@@ -897,15 +938,26 @@ async function waitForBridge(): Promise<void> {
  * Toggle the "Check for updates automatically" preference. Stops
  * the running loop when the user opts out, and restarts it on the
  * way back in so the next tick isn't a day away.
+ *
+ * If `setAutoUpdateOptOut` cannot persist the preference (e.g.
+ * Safari private mode, full disk), surface a dialog so the user
+ * knows their choice will need to be reapplied next launch.
  */
-export function toggleAutoUpdate(): void {
+export async function toggleAutoUpdate(): Promise<void> {
   const nextOptedOut = !isAutoUpdateOptedOut();
-  setAutoUpdateOptOut(nextOptedOut);
+  const persisted = setAutoUpdateOptOut(nextOptedOut);
   if (nextOptedOut) {
     autoUpdateCancel?.();
     autoUpdateCancel = null;
   } else if (!autoUpdateCancel) {
     autoUpdateCancel = startAutoUpdateLoop();
+  }
+  if (!persisted) {
+    await message(
+      'Your auto-update preference could not be saved and will need to ' +
+        'be reapplied on the next launch.',
+      { title: 'Could not save preference', kind: 'warning' },
+    );
   }
 }
 

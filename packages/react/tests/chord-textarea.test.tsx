@@ -245,8 +245,8 @@ describe('<ChordTextarea>', () => {
         defaultValue="x"
         transpose={2}
         onTransposeChange={onTransposeChange}
-        minTranspose={-5}
-        maxTranspose={5}
+        transposeMin={-5}
+        transposeMax={5}
         wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={0}
       />,
@@ -278,8 +278,8 @@ describe('<ChordTextarea>', () => {
       <ChordTextarea
         defaultValue="x"
         transpose={5}
-        minTranspose={-5}
-        maxTranspose={5}
+        transposeMin={-5}
+        transposeMax={5}
         onTransposeChange={onTransposeChange}
         wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={0}
@@ -300,8 +300,8 @@ describe('<ChordTextarea>', () => {
       <ChordTextarea
         defaultValue="x"
         transpose={-5}
-        minTranspose={-5}
-        maxTranspose={5}
+        transposeMin={-5}
+        transposeMax={5}
         onTransposeChange={onTransposeChange}
         wasmLoader={makeLoader(stub)} astWasmLoader={makeAstLoader(stub)}
         debounceMs={0}

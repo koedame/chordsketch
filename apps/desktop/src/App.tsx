@@ -2,7 +2,7 @@
  * React root for the desktop frontend. Owns the editor / preview
  * state (source, mode, transpose, format) and publishes a
  * {@link desktopBridge} listener so the Tauri menu / dialog /
- * updater layer in `main.ts` can mutate the state from outside
+ * updater layer in `main.tsx` can mutate the state from outside
  * React.
  *
  * Three editor modes:
@@ -20,9 +20,9 @@
  *    via the View menu as a fallback when the user wants to
  *    read or hand-edit the URL string.
  *
- * The sample seed (`SAMPLE_CHORDPRO`) is shared with the browser
- * playground (`packages/playground/src/sample.ts`) so a pristine
- * launch shows the same default content across hosts.
+ * The sample seed (`SAMPLE_CHORDPRO`) is imported from the browser
+ * playground (`packages/playground/src/sample.ts`) so the two hosts
+ * read the same default content from one source of truth.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
@@ -42,38 +42,12 @@ import {
   type IrealGridEditorHandle,
 } from './IrealGridEditor';
 import { desktopBridge, type EditorMode } from './desktop-bridge';
-
-/**
- * Default ChordPro content shown on first launch. Shared with the
- * browser playground (`packages/playground/src/sample.ts`) so both
- * hosts seed the same buffer.
- */
-const SAMPLE_CHORDPRO = `{title: Amazing Grace}
-{subtitle: John Newton}
-{key: G}
-{tempo: 80}
-
-{start_of_verse: Verse 1}
-[G]Amazing [G7]grace, how [C]sweet the [G]sound,
-That [G]saved a [Em]wretch like [D]me.
-I [G]once was [G7]lost, but [C]now am [G]found,
-Was [G]blind but [D]now I [G]see.
-{end_of_verse}
-
-{start_of_verse: Verse 2}
-[G]'Twas grace that [G7]taught my [C]heart to [G]fear,
-And [G]grace my [Em]fears re[D]lieved.
-How [G]precious [G7]did that [C]grace ap[G]pear,
-The [G]hour I [D]first be[G]lieved.
-{end_of_verse}
-
-{start_of_chorus}
-[C]Through many [G]dangers, [Em]toils and [G]snares,
-I [G]have al[Em]ready [D]come.
-'Tis [G]grace hath [G7]brought me [C]safe thus [G]far,
-And [G]grace will [D]lead me [G]home.
-{end_of_chorus}
-`;
+// `SAMPLE_CHORDPRO` is imported from the playground so the desktop
+// and the browser playground share one source of truth. The Vite
+// alias (`apps/desktop/vite.config.ts`) + tsconfig path mapping
+// (`apps/desktop/tsconfig.json`) route this specifier to
+// `packages/playground/src/sample.ts`.
+import { SAMPLE_CHORDPRO } from '@chordsketch/playground-sample';
 
 type PreviewFormat = 'html' | 'text' | 'pdf';
 
@@ -130,17 +104,17 @@ export function App(): JSX.Element {
   // open, mode swap) drive `lastSavedContent` directly and update
   // the title imperatively. The bridge's `setSource` (used by
   // file-open code) goes through a separate path below that does NOT
-  // call `notifySourceChange`.
+  // call `_notifySourceChange`.
   const handleSourceChange = useCallback((next: string) => {
     setSourceState(next);
-    desktopBridge.notifySourceChange(next);
+    desktopBridge._notifySourceChange(next);
   }, []);
 
   const handleTextAreaChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>) => {
       const next = event.currentTarget.value;
       setSourceState(next);
-      desktopBridge.notifySourceChange(next);
+      desktopBridge._notifySourceChange(next);
     },
     [],
   );
@@ -161,12 +135,19 @@ export function App(): JSX.Element {
 
   // Publish the bridge listener on mount, detach on unmount.
   //
-  // Every setter mirror-updates the ref BEFORE calling React's
-  // setState so a Tauri-side caller (e.g. `runOpen` in `main.tsx`)
-  // that issues `setSource()` then immediately reads `getSource()`
-  // sees the new value, without waiting for the next React render
-  // to commit. The ref is the imperative source of truth from
-  // Tauri's perspective; React's state drives the DOM.
+  // The bridge's setters below mirror-update the ref BEFORE calling
+  // React's setState so a Tauri-side caller (e.g. `runOpen` in
+  // `main.tsx`) that issues `setSource()` then immediately reads
+  // `getSource()` sees the new value, without waiting for the next
+  // React render to commit. The user-edit React state path
+  // (`handleSourceChange`) is intentionally NOT covered by the
+  // synchronous-read guarantee: it goes through `setSourceState` only
+  // and the ref catches up on the next render via the
+  // `useEffect(..., [source])` mirror above. That asymmetry is
+  // correct — Tauri-side menu handlers are the only callers that
+  // need the synchronous-read invariant. The ref is the imperative
+  // source of truth from Tauri's perspective; React's state drives
+  // the DOM.
   useEffect(() => {
     const detach = desktopBridge.attach({
       getSource() {

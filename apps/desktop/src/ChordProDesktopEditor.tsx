@@ -10,8 +10,8 @@
  * (yet) expose a way to inject custom CodeMirror extensions. The
  * desktop app's tree-sitter-backed highlighting + diagnostics is
  * higher fidelity and is its sole consumer in this repo; teaching
- * `<ChordSourceArea>` to accept an extensions prop is tracked as
- * follow-up work.
+ * `<ChordSourceArea>` to accept an extensions prop would let this
+ * editor move into the shared package later.
  *
  * The grammar + runtime wasm binaries are copied into
  * `apps/desktop/public/` by `scripts/build-grammar-wasm.mjs` at
@@ -23,6 +23,7 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
 } from 'react';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import {
@@ -403,6 +404,14 @@ export const ChordProDesktopEditor = forwardRef<
   // new doc) without `onChange` firing on the React-controlled
   // setValue path.
   const suppressNextChangeRef = useRef(false);
+  // Surface grammar load status so the editor can render a visible
+  // banner if the tree-sitter wasm fails to load. The editor remains
+  // usable as a plain-text editor in that case, but the user is
+  // told why highlighting + diagnostics are missing rather than
+  // silently going without them.
+  const [grammarStatus, setGrammarStatus] = useState<
+    'loading' | 'loaded' | 'failed'
+  >('loading');
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -449,8 +458,12 @@ export const ChordProDesktopEditor = forwardRef<
     viewRef.current = view;
 
     // Kick off grammar load in the background; on resolution, inject
-    // the highlight plugin via the compartment. Errors are logged to
-    // the console — the user keeps a working plain-text editor.
+    // the highlight plugin via the compartment. On rejection the
+    // editor stays usable as plain text and a visible banner above
+    // the editor tells the user highlighting + diagnostics are
+    // unavailable — surfacing the failure beyond the dev console so
+    // a user without devtools open knows why their editor looks
+    // plain.
     void loadGrammar()
       .then((grammar) => {
         // Guard against the view being destroyed before the grammar
@@ -459,10 +472,13 @@ export const ChordProDesktopEditor = forwardRef<
         view.dispatch({
           effects: grammarCompartment.reconfigure(highlightPlugin(grammar)),
         });
+        setGrammarStatus('loaded');
       })
       .catch((err: unknown) => {
         // eslint-disable-next-line no-console
         console.error('Failed to load tree-sitter-chordpro grammar', err);
+        if (viewRef.current !== view) return;
+        setGrammarStatus('failed');
       });
 
     return () => {
@@ -513,9 +529,41 @@ export const ChordProDesktopEditor = forwardRef<
     [],
   );
 
-  const wrapperClass = ['chordsketch-cm-host', className]
+  const wrapperClass = [
+    'chordsketch-cm-host',
+    grammarStatus === 'failed' ? 'chordsketch-cm-host--degraded' : null,
+    className,
+  ]
     .filter((c): c is string => typeof c === 'string' && c.length > 0)
     .join(' ');
 
-  return <div ref={hostRef} className={wrapperClass} />;
+  // The host `<div>` is kept stable across grammar-status changes
+  // so the mounted EditorView is never relocated by a React
+  // reconcile pass. When the grammar load fails we render a
+  // sibling banner ABOVE the host element rather than re-wrapping
+  // it. `role="alert"` ensures screen readers announce the
+  // degraded state on attach.
+  return (
+    <>
+      {grammarStatus === 'failed' ? (
+        <div
+          role="alert"
+          className="chordsketch-cm-grammar-banner"
+          style={{
+            padding: '0.5rem 1rem',
+            background: '#3a2a00',
+            color: '#ffd66e',
+            borderBottom: '1px solid #66501a',
+            fontSize: '0.85rem',
+            fontFamily:
+              "'-apple-system', 'BlinkMacSystemFont', 'Segoe UI', sans-serif",
+          }}
+        >
+          Syntax highlighting unavailable — ChordPro grammar failed to load.
+          Edit will work but without highlighting or diagnostics.
+        </div>
+      ) : null}
+      <div ref={hostRef} className={wrapperClass} />
+    </>
+  );
 });

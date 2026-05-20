@@ -40,6 +40,10 @@ export default defineConfig({
         resolve(here, '../../packages/npm-export'),
         resolve(here, '../../packages/react'),
         resolve(here, '../../packages/ui-irealb-editor'),
+        // The desktop seed (SAMPLE_CHORDPRO) is imported from the
+        // playground so the two surfaces share one source of truth;
+        // see the `@chordsketch/playground-sample` alias below.
+        resolve(here, '../../packages/playground'),
       ],
     },
   },
@@ -88,6 +92,14 @@ export default defineConfig({
       '@chordsketch/wasm': resolve(
         here,
         '../../packages/npm-export/web/chordsketch_wasm.js',
+      ),
+      // Share the `SAMPLE_CHORDPRO` seed with the browser playground
+      // so the two hosts read from one source of truth — eliminates
+      // the byte-for-byte duplicate that previously lived inline in
+      // `apps/desktop/src/App.tsx`.
+      '@chordsketch/playground-sample': resolve(
+        here,
+        '../../packages/playground/src/sample.ts',
       ),
     },
   },

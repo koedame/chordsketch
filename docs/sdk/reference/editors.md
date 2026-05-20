@@ -72,7 +72,7 @@ needs a plain text input + the preview.
 | `debounceMs` | `number` | Delay before the preview re-renders. Defaults to `150`. |
 | `placeholder` | `string` | Textarea placeholder. |
 | `textareaAriaLabel` | `string` | Accessible name for the textarea. |
-| `minTranspose` / `maxTranspose` | `number` | Bounds the keyboard shortcuts. Default `-11` / `11`. |
+| `transposeMin` / `transposeMax` | `number` | Bounds the keyboard shortcuts. Default `-11` / `11`. |
 | `loadingFallback` | `ReactNode` | Shown while wasm initialises. |
 | `errorFallback` | `(err) => ReactNode \| null` | Pass `null` to suppress and surface errors elsewhere. |
 | `wasmLoader`, `astWasmLoader` | loader callables | Test-only overrides. |

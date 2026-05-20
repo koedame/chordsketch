@@ -75,6 +75,13 @@ export const DOC_GROUPS = [
         sourcePath: 'docs/sdk/reference/playground.md',
       },
       {
+        slug: 'reference/chord-pro-preview',
+        title: '<ChordProPreview>',
+        blurb:
+          'Preview pane + format toggle + transpose controls, no source editor (new in v0.3.0).',
+        sourcePath: 'docs/sdk/reference/chord-pro-preview.md',
+      },
+      {
         slug: 'reference/editors',
         title: 'Editors',
         blurb:

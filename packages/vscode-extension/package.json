@@ -155,8 +155,9 @@
   "scripts": {
     "build": "node esbuild.mjs",
     "build:watch": "node esbuild.mjs --watch",
-    "lint": "tsc --noEmit",
-    "test": "node --experimental-transform-types --test 'src/**/*.test.ts'",
+    "lint": "tsc --noEmit && npm run lint:webview",
+    "lint:webview": "tsc --noEmit -p webview/tsconfig.json",
+    "test": "node --experimental-transform-types --test 'src/**/*.test.ts' 'webview/**/*.test.ts'",
     "compile:integration": "tsc -p tsconfig.integration.json",
     "test:integration": "vscode-test",
     "package": "vsce package --no-dependencies",

@@ -168,6 +168,23 @@ const reactDistCss = path.join(reactPkgDir, 'dist', 'styles.css');
 const reactEntry = fs.existsSync(reactSrcEntry) ? reactSrcEntry : reactDistEntry;
 const reactCss = fs.existsSync(reactSrcCss) ? reactSrcCss : reactDistCss;
 
+// `@chordsketch/react`'s source files import from bare specifiers like
+// `react`, `react/jsx-runtime`, and `react-dom/client`. When esbuild
+// bundles the in-tree source via the `@chordsketch/react` alias above,
+// it resolves those bare specifiers from the importing file's
+// directory upward — but `packages/react/node_modules/` is NOT
+// installed in the vscode-extension CI job, and the React-package
+// devDeps live there. Resolve every React specifier explicitly
+// against the vscode-extension's own `node_modules/react` /
+// `node_modules/react-dom` (declared as production deps in
+// packages/vscode-extension/package.json), so the WebView bundle
+// reaches a guaranteed copy of React regardless of whether the
+// sibling React package has had its deps installed.
+const vscodeReactDir = path.resolve(here, 'node_modules', 'react');
+const vscodeReactDomDir = path.resolve(here, 'node_modules', 'react-dom');
+const vscodeReactJsxRuntime = path.join(vscodeReactDir, 'jsx-runtime.js');
+const vscodeReactDomClient = path.join(vscodeReactDomDir, 'client.js');
+
 /** @type {esbuild.BuildOptions} */
 const webviewBuild = {
   entryPoints: ['webview/preview.tsx'],
@@ -211,6 +228,21 @@ const webviewBuild = {
     '@chordsketch/wasm-export': wasmJsSrc,
     '@chordsketch/react/styles.css': reactCss,
     '@chordsketch/react': reactEntry,
+    // React + ReactDOM specifier aliases. The in-tree
+    // `@chordsketch/react` source imports bare `react`,
+    // `react/jsx-runtime`, and `react-dom/client`; without these
+    // aliases esbuild starts resolution in
+    // `packages/react/node_modules/`, which is not populated in
+    // the vscode-extension CI job (the React package's deps live
+    // there as devDeps). Point each specifier directly at this
+    // package's own `node_modules/react*` so the WebView bundle
+    // always reaches a populated copy. The longer specifiers
+    // MUST be listed before the bare package aliases so esbuild
+    // matches them first.
+    'react/jsx-runtime': vscodeReactJsxRuntime,
+    'react-dom/client': vscodeReactDomClient,
+    'react': vscodeReactDir,
+    'react-dom': vscodeReactDomDir,
   },
 };
 

@@ -10,7 +10,7 @@
  *      is responsible for running that install before this script.
  *   2. Copy the grammar wasm into `apps/desktop/public/` (served at
  *      the Vite root, resolved at runtime by
- *      `src/codemirror-editor.ts`).
+ *      `src/ChordProDesktopEditor.tsx`).
  *   3. Copy the `web-tree-sitter` runtime wasm from node_modules
  *      into the same public dir, because the runtime uses
  *      `locateFile` to resolve its sibling wasm from the page URL.
@@ -75,12 +75,12 @@ copyFileSync(runtimeSrc, runtimeDst);
 console.log(`Copied ${runtimeSrc} → ${runtimeDst}`);
 
 // Emit the highlights query as a generated TypeScript module so
-// `codemirror-editor.ts` can `import` it. Keeps
+// `ChordProDesktopEditor.tsx` can `import` it. Keeps
 // `packages/tree-sitter-chordpro/queries/highlights.scm` as the
 // single source of truth — any grammar change re-runs this
 // script (via the `prebuild` / `predev` npm hooks) and refreshes
 // the generated file atomically. Without this, an inline copy in
-// `codemirror-editor.ts` silently drifted on every grammar
+// `ChordProDesktopEditor.tsx` silently drifted on every grammar
 // update.
 const queryPath = resolve(grammarDir, 'queries', 'highlights.scm');
 const queryText = readFileSync(queryPath, 'utf8');

@@ -17,6 +17,10 @@
  * extension host, persisted state (view mode + transpose + source-document
  * URI) via `vscode.setState`, and the one-shot wasm init — but everything
  * inside the `<div id="app">` element is React-driven.
+ *
+ * Pure state-validation helpers (state shape, type guards, clamping, error
+ * formatting) live in [`./preview-state`] so they can be unit-tested
+ * without the React mount / `acquireVsCodeApi` global.
  */
 
 import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
@@ -28,6 +32,15 @@ import { ChordProPreview, type PreviewFormat } from '@chordsketch/react';
 // `<style>` element. The WebView CSP allows `'unsafe-inline'` on
 // `style-src` for VS Code's own theme injections, so this is safe.
 import chordsketchReactCss from '@chordsketch/react/styles.css';
+import {
+  clamp,
+  formatError,
+  isExtToWebview,
+  safeGetState,
+  safeGetStateWithDiagnostics,
+  type PanelState,
+  type ViewMode,
+} from './preview-state';
 
 /** VS Code WebView API acquired from the global injected by the host. */
 declare function acquireVsCodeApi(): {
@@ -37,85 +50,6 @@ declare function acquireVsCodeApi(): {
 };
 
 const vscode = acquireVsCodeApi();
-
-/** View mode for the preview panel. */
-type ViewMode = 'html' | 'text';
-
-/** Persisted panel state saved and restored via the VS Code WebView API. */
-interface PanelState {
-  mode?: ViewMode;
-  /** Semitone transposition offset; clamped to [-11, +11]. */
-  transpose?: number;
-  /**
-   * URI string of the source document this panel is previewing.
-   *
-   * Written on first run so that VS Code's `WebviewPanelSerializer` can look
-   * up the document when restoring the panel after a restart. See
-   * `registerPreviewSerializer` in `../src/preview.ts`.
-   */
-  documentUri?: string;
-}
-
-/** Message types received from the extension host. */
-type ExtToWebview =
-  | { type: 'update'; text: string }
-  | { type: 'transpose'; delta: 1 | -1 };
-
-/**
- * Type guard for messages received from the extension host.
- *
- * Validates the shape of `event.data` before field access so that unknown
- * or malformed messages are silently ignored rather than causing TypeErrors.
- */
-function isExtToWebview(raw: unknown): raw is ExtToWebview {
-  if (typeof raw !== 'object' || raw === null) {
-    return false;
-  }
-  const r = raw as Record<string, unknown>;
-  if (r['type'] === 'update') {
-    return typeof r['text'] === 'string';
-  }
-  if (r['type'] === 'transpose') {
-    return r['delta'] === 1 || r['delta'] === -1;
-  }
-  return false;
-}
-
-/**
- * Formats a thrown value into a readable error message.
- *
- * Prefers `.message` from Error instances to avoid `[object Object]` on
- * structured JsError objects with line/col info — mirrors the same helper
- * inside `packages/ui-web/src/index.ts` (see #1060, #1087).
- */
-function formatError(e: unknown): string {
-  if (e instanceof Error) {
-    return e.message;
-  }
-  return String(e);
-}
-
-/**
- * Returns a validated copy of the persisted WebView state.
- *
- * `vscode.getState()` returns `unknown`; this function narrows the result to a
- * well-typed `PanelState` with each field individually validated, so that a
- * corrupted or forward-incompatible stored value cannot bypass type-level checks.
- */
-function safeGetState(): PanelState {
-  const raw = vscode.getState() as Record<string, unknown> | null;
-  const result: PanelState = {};
-  if (raw?.['mode'] === 'html' || raw?.['mode'] === 'text') {
-    result.mode = raw['mode'] as ViewMode;
-  }
-  if (typeof raw?.['transpose'] === 'number' && Number.isFinite(raw['transpose'])) {
-    result.transpose = Math.max(-11, Math.min(11, raw['transpose'] as number));
-  }
-  if (typeof raw?.['documentUri'] === 'string' && raw['documentUri'].length > 0) {
-    result.documentUri = raw['documentUri'];
-  }
-  return result;
-}
 
 /** Reads the host-injected default-mode `<meta>` element. */
 function readMetaDefaultMode(): ViewMode | undefined {
@@ -144,11 +78,6 @@ function readMetaWasmUri(): string | undefined {
   return value && value.length > 0 ? value : undefined;
 }
 
-/** Clamps `n` into the inclusive `[lo, hi]` range. */
-function clamp(n: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, n));
-}
-
 /**
  * Root React component for the preview WebView.
  *
@@ -158,7 +87,21 @@ function clamp(n: number, lo: number, hi: number): number {
  * external integration (init, message dispatch, state persistence).
  */
 function App(): JSX.Element {
-  const saved = useMemo(() => safeGetState(), []);
+  // Resolve initial state once, surfacing a one-shot warning to the
+  // extension host if the persisted blob was non-null but contributed
+  // zero validated fields — without the diagnostic, a corrupt persisted
+  // state would silently reset to defaults and the user would never know
+  // their last-used mode / transpose was discarded.
+  const saved = useMemo<PanelState>(() => {
+    const { state, corrupt } = safeGetStateWithDiagnostics(vscode.getState());
+    if (corrupt) {
+      vscode.postMessage({
+        type: 'warning',
+        message: 'Preview restored with corrupt state; resetting to defaults',
+      });
+    }
+    return state;
+  }, []);
   const initialMode: ViewMode = saved.mode ?? readMetaDefaultMode() ?? 'html';
 
   const [source, setSource] = useState<string>('');
@@ -231,7 +174,7 @@ function App(): JSX.Element {
     const modeForState: ViewMode | undefined =
       format === 'html' || format === 'text' ? format : undefined;
     vscode.setState({
-      ...safeGetState(),
+      ...safeGetState(vscode.getState()),
       mode: modeForState,
       transpose,
     } satisfies PanelState);
@@ -242,8 +185,11 @@ function App(): JSX.Element {
   // `TextDocument` after a VS Code restart.
   useEffect(() => {
     const documentUri = readMetaDocumentUri();
-    if (documentUri && documentUri !== safeGetState().documentUri) {
-      vscode.setState({ ...safeGetState(), documentUri } satisfies PanelState);
+    if (documentUri && documentUri !== safeGetState(vscode.getState()).documentUri) {
+      vscode.setState({
+        ...safeGetState(vscode.getState()),
+        documentUri,
+      } satisfies PanelState);
     }
   }, []);
 
@@ -262,7 +208,22 @@ function App(): JSX.Element {
   if (initError !== null) {
     return (
       <div className="cs-vscode-error" role="alert">
-        {initError}
+        <div className="cs-vscode-error-message">{initError}</div>
+        <button
+          type="button"
+          className="cs-vscode-error-reload"
+          onClick={() => {
+            // Force the WebView to reload itself — the extension host
+            // will reissue the same HTML on the next mount, including a
+            // fresh wasm URI / nonce. `location.reload()` is permitted
+            // by the WebView CSP and avoids needing a host-side
+            // round-trip for the common "transient wasm init failure"
+            // case (e.g. cold-cache 503).
+            window.location.reload();
+          }}
+        >
+          Reload Preview
+        </button>
       </div>
     );
   }

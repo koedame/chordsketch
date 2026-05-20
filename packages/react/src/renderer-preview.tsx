@@ -56,13 +56,26 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
    * for semantics. Only consumed by `format="html"`.
    */
   onChordReposition?: (event: ChordRepositionEvent) => void;
-  /** Optional content rendered while the wasm runtime is initialising. */
+  /**
+   * Optional content rendered while the wasm runtime is initialising.
+   *
+   * Only honoured by the inline `html` / `text` branches — the
+   * `pdf` branch is a download button (rendered by
+   * {@link PdfExport}), not a streaming surface, so it has no
+   * "loading" state to show before the user clicks. PDF in-flight
+   * state is communicated via the button's `aria-busy` attribute
+   * instead.
+   */
   loadingFallback?: ReactNode;
   /**
    * Optional render prop that takes over when a parse or render
    * error occurs. Receives the `Error` instance; return any
    * `ReactNode`. Defaults to a minimal `role="alert"` div showing
    * the error message.
+   *
+   * Honoured by every branch: the `html` / `text` branches forward
+   * to {@link ChordSheet}, and the `pdf` branch wraps
+   * {@link PdfExport}'s default inline error rendering.
    */
   errorFallback?: ((error: Error) => ReactNode) | null;
   /**

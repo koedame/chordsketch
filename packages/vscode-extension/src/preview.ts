@@ -20,7 +20,10 @@ import { escapeHtmlAttr, parseSerializedState } from './preview-helpers.js';
 type ExtToWebview = { type: 'update'; text: string } | { type: 'transpose'; delta: 1 | -1 };
 
 /** Message types received from the WebView in the extension host. */
-type WebviewToExt = { type: 'ready' } | { type: 'error'; message: string };
+type WebviewToExt =
+  | { type: 'ready' }
+  | { type: 'error'; message: string }
+  | { type: 'warning'; message: string };
 
 /**
  * Type guard for messages received from the WebView.
@@ -36,7 +39,7 @@ function isWebviewToExt(raw: unknown): raw is WebviewToExt {
   if (r['type'] === 'ready') {
     return true;
   }
-  if (r['type'] === 'error') {
+  if (r['type'] === 'error' || r['type'] === 'warning') {
     return typeof r['message'] === 'string';
   }
   return false;
@@ -304,6 +307,14 @@ class PreviewPanel {
           this.outputChannel = vscode.window.createOutputChannel('ChordSketch Preview');
         }
         this.outputChannel.appendLine(`Preview render error: ${raw.message}`);
+      } else if (raw.type === 'warning') {
+        // Non-fatal diagnostics from the WebView (e.g. "corrupt persisted
+        // state dropped"). Surface via the same output channel as errors so
+        // the user can review them without an intrusive notification.
+        if (!this.outputChannel) {
+          this.outputChannel = vscode.window.createOutputChannel('ChordSketch Preview');
+        }
+        this.outputChannel.appendLine(`Preview warning: ${raw.message}`);
       }
     });
   }
@@ -431,15 +442,20 @@ class PreviewPanel {
       .get<string>('preview.defaultMode', 'html');
     const defaultMode = resolveDefaultMode(rawMode);
 
-    // Escape the document URI for safe interpolation into a `content`
-    // attribute. The URI is derived from VS Code's own `TextDocument.uri`
-    // so it is already well-formed, but escaping `&`/`<`/`>`/`"` defends
-    // against pathological file names that could otherwise break out of
-    // the attribute.
+    // Escape EVERY interpolated value in the HTML template, even those
+    // derived from VS Code internals (`wasmUri.toString()`,
+    // `scriptUri.toString()`, `webview.cspSource`, the crypto-generated
+    // `nonce`). VS Code's own values are well-formed today, but applying
+    // the escape symmetrically defends against any future drift in
+    // either VS Code's behaviour or our derivation logic — per
+    // `.claude/rules/sanitizer-security.md` §"Security Asymmetry".
     const documentUriAttr = escapeHtmlAttr(this.document.uri.toString());
-
+    const wasmUriAttr = escapeHtmlAttr(wasmUri.toString());
+    const scriptUriAttr = escapeHtmlAttr(scriptUri.toString());
+    const defaultModeAttr = escapeHtmlAttr(defaultMode);
+    const nonceAttr = escapeHtmlAttr(nonce);
     // cspSource includes the extension's own dist/webview/ origin.
-    const csp = webview.cspSource;
+    const cspAttr = escapeHtmlAttr(webview.cspSource);
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -447,15 +463,15 @@ class PreviewPanel {
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'none';
-    script-src 'nonce-${nonce}' 'wasm-unsafe-eval';
-    style-src ${csp} 'unsafe-inline';
-    img-src ${csp} data:;
-    font-src ${csp};
-    connect-src ${csp};
+    script-src 'nonce-${nonceAttr}' 'wasm-unsafe-eval';
+    style-src ${cspAttr} 'unsafe-inline';
+    img-src ${cspAttr} data:;
+    font-src ${cspAttr};
+    connect-src ${cspAttr};
   ">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="chordsketch-wasm-uri" content="${wasmUri}">
-  <meta name="chordsketch-default-mode" content="${defaultMode}">
+  <meta name="chordsketch-wasm-uri" content="${wasmUriAttr}">
+  <meta name="chordsketch-default-mode" content="${defaultModeAttr}">
   <meta name="chordsketch-document-uri" content="${documentUriAttr}">
   <title>ChordSketch Preview</title>
   <style>
@@ -493,11 +509,29 @@ class PreviewPanel {
       white-space: pre-wrap;
       word-break: break-word;
     }
+    .cs-vscode-error-message { margin-bottom: 0.75rem; }
+    .cs-vscode-error-reload {
+      font-family: inherit;
+      font-size: 0.875rem;
+      padding: 0.35rem 0.75rem;
+      border: 1px solid var(--vscode-button-border, transparent);
+      background: var(--vscode-button-background, #0e639c);
+      color: var(--vscode-button-foreground, #fff);
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    .cs-vscode-error-reload:hover {
+      background: var(--vscode-button-hoverBackground, #1177bb);
+    }
+    .cs-vscode-error-reload:focus-visible {
+      outline: 1px solid var(--vscode-focusBorder, #007fd4);
+      outline-offset: 1px;
+    }
   </style>
 </head>
 <body>
   <div id="app"></div>
-  <script nonce="${nonce}" src="${scriptUri}" type="module"></script>
+  <script nonce="${nonceAttr}" src="${scriptUriAttr}" type="module"></script>
 </body>
 </html>`;
   }

@@ -48,6 +48,7 @@
   ],
   "scripts": {
     "build": "tsup && node -e \"require('fs').copyFileSync('src/styles.css','dist/styles.css')\"",
+    "prepare": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

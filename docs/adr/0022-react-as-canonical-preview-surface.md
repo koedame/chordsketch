@@ -42,10 +42,22 @@ Consolidate every JS-runtime preview host on `@chordsketch/react`:
 - The VS Code WebView preview uses `<ChordProPreview>` — a new Tier
   2 component in `@chordsketch/react` providing a source-less
   preview with a format toggle and transpose control.
-- The Tauri desktop app uses `<ChordProEditor>` — the Tier 3
-  composed editor component (source pane + preview pane + shared
-  toolbar).
-- The playground's ChordPro page uses `<ChordProEditor>`.
+- The Tauri desktop app composes Tier 1 / Tier 2 components into an
+  app-specific shell: a local `<ChordProDesktopEditor>` (CodeMirror
+  6 + `tree-sitter-chordpro`) paired with `<ChordProPreview>` for
+  ChordPro mode, and a local `<IrealGridEditor>` (wrapping
+  `@chordsketch/ui-irealb-editor`'s bar grid) paired with
+  `<IrealPreview>` for iReal Pro mode. The desktop deliberately
+  does NOT use the Tier 3 all-in-one editors so it can plug in the
+  higher-fidelity tree-sitter editor and own the Tauri menu /
+  open-save / mode-swap lifecycle directly.
+- The playground composes Tier 1 atoms (`<RendererPreview>`,
+  `<Transpose>`, ...) into a custom layout for the same reason —
+  the playground page chrome and routing belong to the host, not to
+  the React package.
+- `<ChordProEditor>` and `<IrealProEditor>` remain the recommended
+  Tier 3 all-in-one surfaces for external integrators who want the
+  default editor + preview shell out of the box.
 
 Retire `@chordsketch/ui-web` entirely. The `packages/ui-web/`
 directory is deleted; its only remaining consumer (the Tauri

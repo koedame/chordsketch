@@ -1,8 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { IrealProEditor } from '../src/ireal-pro-editor';
-import type { IrealBarGridLoader } from '../src/ireal-bar-grid';
+import { IrealProEditor, type CombinedIrealLoader } from '../src/ireal-pro-editor';
 import type { IrealSong } from '../src/ireal-ast';
 
 interface EditorStub {
@@ -41,8 +40,11 @@ function makeStub(): EditorStub {
   };
 }
 
-function makeLoader(stub: EditorStub): IrealBarGridLoader {
-  return vi.fn(async () => stub as unknown as Awaited<ReturnType<IrealBarGridLoader>>);
+function makeLoader(stub: EditorStub): CombinedIrealLoader {
+  // The stub provides `parseIrealb` + `serializeIrealb` (bar-grid
+  // surface) AND `renderIrealSvg` (preview surface), satisfying the
+  // intersection at the prop boundary without an `unknown`-cast.
+  return vi.fn(async () => stub as unknown as Awaited<ReturnType<CombinedIrealLoader>>);
 }
 
 describe('<IrealProEditor>', () => {

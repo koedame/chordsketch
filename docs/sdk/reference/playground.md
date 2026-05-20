@@ -21,7 +21,7 @@ import '@chordsketch/react/styles.css';
 
 | Prop | Type | Default | Description |
 |---|---|---|---|
-| `defaultSource` | `string` | sample song | Initial uncontrolled source. Ignored when `source` is set. |
+| `defaultSource` | `string` | `""` | Initial uncontrolled source (empty document by default). Ignored when `source` is set. |
 | `source` | `string` | — | Controlled source value. Pair with `onSourceChange`. |
 | `onSourceChange` | `(next: string) => void` | — | Fires synchronously on every edit. |
 | `defaultFormat` | `'html' \| 'text' \| 'pdf'` | `'html'` | Initial preview format (uncontrolled). |
@@ -30,7 +30,7 @@ import '@chordsketch/react/styles.css';
 | `defaultTranspose` | `number` | `0` | Initial transposition offset (uncontrolled). |
 | `transpose` | `number` | — | Controlled transposition offset. Pair with `onTransposeChange`. |
 | `onTransposeChange` | `(next: number) => void` | — | Fires when the user commits a new offset. |
-| `title` | `ReactNode` | `"ChordSketch Playground"` | Heading shown in the header bar. |
+| `title` | `string \| null` | `"ChordSketch"` | Heading shown in the header bar. Pass `null` or `""` to omit the heading entirely. |
 | `pdfFilename` | `string` | `"chordsketch-output.pdf"` | Filename for the PDF download. |
 | `headerExtras` | `ReactNode` | — | Slot for host-supplied controls in the header bar (e.g. a "Save to library" button). |
 | `wasmLoader` | loader callable | — | Test-only override. |

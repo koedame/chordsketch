@@ -27,12 +27,23 @@ choose the surface that matches their host.
 
 ### Consumer-to-tier mapping
 
-| Consumer | ChordPro tier used | iReal Pro tier used |
-|----------|--------------------|---------------------|
-| Playground page (this repo) | `<ChordProEditor>` (Tier 3) | `<IrealProEditor>` (Tier 3) |
-| Tauri desktop app | `<ChordProEditor>` (Tier 3) | `<IrealProEditor>` (Tier 3) |
+`<ChordProEditor>` and `<IrealProEditor>` are the **recommended
+Tier 3 all-in-one surfaces** for external integrators — they ship
+the playground / desktop UX out of the box and are the right
+default for most embedders. The in-repo playground and the Tauri
+desktop app deliberately compose Tier 1 / Tier 2 components into
+app-specific layouts so they can own their own chrome (page
+routing in the playground; Tauri menu + tree-sitter editor in the
+desktop). External consumers without those constraints should
+reach for the Tier 3 components first.
+
+| Consumer | ChordPro components | iReal Pro components |
+|----------|---------------------|----------------------|
+| Playground page (this repo) | Composes Tier 1 atoms (`<RendererPreview>`, `<Transpose>`, ...) into a custom layout | Composes the iReal Pro atoms similarly |
+| Tauri desktop app | `<ChordProPreview>` (Tier 2) + a local `<ChordProDesktopEditor>` (CodeMirror 6 + `tree-sitter-chordpro`) | `<IrealPreview>` (Tier 1) + a local `<IrealGridEditor>` wrapping `@chordsketch/ui-irealb-editor` |
 | VS Code WebView preview | `<ChordProPreview>` (Tier 2) | `<IrealPreview>` (Tier 1) |
-| Custom embed with own editor | Compose Tier 1 atoms (`<ChordSourceArea>` / `<ChordTextarea>` + `<RendererPreview>` or `<ChordProPreview>`) | Compose `<IrealBarGrid>` + `<IrealPreview>` |
+| External React consumers (recommended) | `<ChordProEditor>` (Tier 3) — opinionated all-in-one | `<IrealProEditor>` (Tier 3) — opinionated all-in-one |
+| External React consumers (custom layout) | Compose Tier 1 atoms (`<ChordSourceArea>` / `<ChordTextarea>` + `<RendererPreview>` or `<ChordProPreview>`) | Compose `<IrealBarGrid>` + `<IrealPreview>` |
 
 Tier 1 atoms never carry an "Editor" suffix — they are
 single-responsibility primitives. `<ChordTextarea>` does include a
@@ -202,7 +213,7 @@ default is preferred.
 
 `readOnly`, `previewFormat="text"` (preview inside `<pre>`
 instead of HTML), `config`, custom `errorFallback`, and
-`minTranspose` / `maxTranspose` bounds for the shortcuts are all
+`transposeMin` / `transposeMax` bounds for the shortcuts are all
 passed through. Pass `debounceMs={0}` in tests to make the
 preview re-render synchronously.
 

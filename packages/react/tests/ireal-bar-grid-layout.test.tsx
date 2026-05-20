@@ -104,14 +104,25 @@ describe('<IrealBarGrid> bar grid — ARIA semantics', () => {
 describe('<IrealBarGrid> bar grid — roving tabindex', () => {
   test('exactly one bar cell has tabindex=0 on initial render', async () => {
     await renderEditor(songWithBars(4));
-    const cells = screen
-      .getAllByRole('button', { name: /^Edit bar / })
-      .filter((b) => b.classList.contains('chordsketch-ireal-bar-grid__bar'));
-    const tabZero = cells.filter((c) => c.getAttribute('tabindex') === '0');
-    expect(tabZero.length).toBe(1);
-    // Per the reconciler default, the first bar of the first
-    // non-empty section receives the slot.
-    expect(tabZero[0]!.getAttribute('aria-label')).toBe('Edit bar 1');
+    // The roving-tabindex slot is set by a `useEffect` in
+    // `<IrealBarGrid>` that depends on `song.sections`: the first
+    // render after `parseIrealb` commits the bar cells with
+    // `tabindex="-1"`, then the reconciler effect fires and a
+    // second commit promotes the first bar to `tabindex="0"`.
+    // `await renderEditor` only waits for `parseIrealb` itself, so
+    // the assertion must wait for the second commit's slot
+    // promotion — without the `waitFor`, the test races the
+    // reconciler and flakes ~1 in 3 runs.
+    await waitFor(() => {
+      const cells = screen
+        .getAllByRole('button', { name: /^Edit bar / })
+        .filter((b) => b.classList.contains('chordsketch-ireal-bar-grid__bar'));
+      const tabZero = cells.filter((c) => c.getAttribute('tabindex') === '0');
+      expect(tabZero.length).toBe(1);
+      // Per the reconciler default, the first bar of the first
+      // non-empty section receives the slot.
+      expect(tabZero[0]!.getAttribute('aria-label')).toBe('Edit bar 1');
+    });
   });
 
   test('focusing a different cell moves the tabindex=0 slot', async () => {

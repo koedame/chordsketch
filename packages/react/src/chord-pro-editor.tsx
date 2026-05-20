@@ -1,11 +1,20 @@
 import type { HTMLAttributes, ReactNode } from 'react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ChordProPreview } from './chord-pro-preview';
 import { ChordSourceArea } from './chord-source-area';
 import type { PreviewFormat } from './renderer-preview';
 import { SplitLayout } from './split-layout';
 import type { ChordWasmLoader } from './use-chord-render';
+
+// Minimal `process.env.NODE_ENV` typing so we do not pull in
+// `@types/node` for a single dev-only reference. The exact
+// `process.env.NODE_ENV` token is required — bundlers (esbuild,
+// Rollup, Vite, webpack DefinePlugin) replace it at build time and
+// a helper that accesses it via `globalThis.process` would not
+// match the substitution pattern, so the production build would
+// still carry the warning code path.
+declare const process: { env: { NODE_ENV?: string } };
 
 /** Props accepted by {@link ChordProEditor}. */
 export interface ChordProEditorProps
@@ -43,8 +52,19 @@ export interface ChordProEditorProps
   transpose?: number;
   /** Fires when the transposition control commits a new offset. */
   onTransposeChange?: (next: number) => void;
-  /** Heading text shown in the header bar. Defaults to `"ChordSketch"`. */
-  title?: ReactNode;
+  /**
+   * Heading text shown in the header bar. Defaults to
+   * `"ChordSketch"`. Pass `null` or the empty string to omit the
+   * heading entirely.
+   *
+   * Narrowed to `string | null` (no `ReactNode` substructure)
+   * because the heading is rendered inside a single `<h1>` next to
+   * a brand mark — the layout assumes one-line text content, not
+   * arbitrary React subtrees. The narrow type also avoids the
+   * `title === 0` truthiness ambiguity a permissive `ReactNode`
+   * would surface.
+   */
+  title?: string | null;
   /** Filename used for the PDF download. Defaults to `"chordsketch-output.pdf"`. */
   pdfFilename?: string;
   /**
@@ -113,13 +133,72 @@ export function ChordProEditor({
     [isSourceControlled, onSourceChange],
   );
 
+  // L4: dev-only controlled/uncontrolled flip warnings for source,
+  // format, and transpose. `<ChordProPreview>` already warns for its
+  // own `format` / `transpose` axes, but the warnings there mention
+  // `<ChordProPreview>` — adding the editor-scoped checks keeps the
+  // diagnostic pointing at the surface the caller actually touched.
+  const isFormatControlled = formatProp !== undefined;
+  const isTransposeControlled = transposeProp !== undefined;
+  const wasSourceControlledRef = useRef(isSourceControlled);
+  const wasFormatControlledRef = useRef(isFormatControlled);
+  const wasTransposeControlledRef = useRef(isTransposeControlled);
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (wasSourceControlledRef.current !== isSourceControlled) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `Warning: A component is changing an ${wasSourceControlledRef.current ? 'controlled' : 'uncontrolled'} <ChordProEditor> source to be ${isSourceControlled ? 'controlled' : 'uncontrolled'}. ` +
+          `<ChordProEditor> should not switch between controlled and uncontrolled (or vice versa) during its lifetime. ` +
+          `Decide between using a controlled or uncontrolled <ChordProEditor> source for the lifetime of the component.`,
+      );
+      wasSourceControlledRef.current = isSourceControlled;
+    }
+  }, [isSourceControlled]);
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (wasFormatControlledRef.current !== isFormatControlled) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `Warning: A component is changing an ${wasFormatControlledRef.current ? 'controlled' : 'uncontrolled'} <ChordProEditor> format to be ${isFormatControlled ? 'controlled' : 'uncontrolled'}. ` +
+          `<ChordProEditor> should not switch between controlled and uncontrolled (or vice versa) during its lifetime. ` +
+          `Decide between using a controlled or uncontrolled <ChordProEditor> format for the lifetime of the component.`,
+      );
+      wasFormatControlledRef.current = isFormatControlled;
+    }
+  }, [isFormatControlled]);
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (wasTransposeControlledRef.current !== isTransposeControlled) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `Warning: A component is changing an ${wasTransposeControlledRef.current ? 'controlled' : 'uncontrolled'} <ChordProEditor> transpose to be ${isTransposeControlled ? 'controlled' : 'uncontrolled'}. ` +
+          `<ChordProEditor> should not switch between controlled and uncontrolled (or vice versa) during its lifetime. ` +
+          `Decide between using a controlled or uncontrolled <ChordProEditor> transpose for the lifetime of the component.`,
+      );
+      wasTransposeControlledRef.current = isTransposeControlled;
+    }
+  }, [isTransposeControlled]);
+
   const wrapperClass = ['chordsketch-chord-pro-editor', className]
     .filter(Boolean)
     .join(' ');
 
-  const hasTitle =
-    title !== null && title !== undefined && title !== false && title !== '';
-  const hasHeader = hasTitle || headerExtras !== undefined;
+  // `title` is narrowed to `string | null` so the falsy check is
+  // unambiguous — no `ReactNode` substructure means no `0` /
+  // `false` / array edge cases to reason about. The `!== ''` clause
+  // suppresses the brand-mark `<h1>` when the host explicitly opts
+  // out via an empty string (a common "hide the title" idiom).
+  const hasTitle = title !== null && title !== undefined && title !== '';
+  // `headerExtras` is `ReactNode`, and `null` / `false` are valid
+  // React-rendered values that produce no DOM. Treat them as "no
+  // header extras" so a host that conditionally renders header
+  // controls (`headerExtras={enabled ? <SaveButton/> : null}`)
+  // doesn't get an empty `<div class="…__controls">` rendered when
+  // the conditional is falsy.
+  const hasHeaderExtras =
+    headerExtras !== undefined && headerExtras !== null && headerExtras !== false;
+  const hasHeader = hasTitle || hasHeaderExtras;
 
   return (
     <div {...divProps} className={wrapperClass}>
@@ -134,7 +213,7 @@ export function ChordProEditor({
               <span className="chordsketch-chord-pro-editor__brand-text">{title}</span>
             </h1>
           ) : null}
-          {headerExtras !== undefined ? (
+          {hasHeaderExtras ? (
             <div className="chordsketch-chord-pro-editor__controls">{headerExtras}</div>
           ) : null}
         </header>
