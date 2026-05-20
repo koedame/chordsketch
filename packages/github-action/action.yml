@@ -21,7 +21,17 @@ inputs:
     required: false
     default: '0'
   version:
-    description: 'ChordSketch release tag to install (e.g. "v0.2.0"). Defaults to "latest".'
+    description: |
+      ChordSketch release tag to install (e.g. "v0.2.0"). Defaults to
+      "latest" (resolves to the most recent published GitHub release).
+
+      Internal-only sentinel: pass "source" to build chordsketch from
+      the current checkout's `crates/cli` via `cargo install`. This
+      requires a Rust toolchain on PATH and is intended for the
+      action's own self-test workflow (`github-action-ci.yml`) so
+      regressions in the action's wiring against the current code
+      are caught before the next release. External consumers should
+      always pin a real version tag.
     required: false
     default: 'latest'
 
@@ -55,7 +65,51 @@ runs:
             "https://api.github.com/repos/koedame/chordsketch/releases/latest" \
             | jq -r '.tag_name')
         fi
+        # `source` is an internal sentinel — the next step builds
+        # from the workspace via `cargo install` instead of
+        # downloading a published binary. The literal `source` string
+        # is preserved in the output so the install step can branch
+        # on it.
         echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+    # ---- install: build from source (internal CI only) ----------------------
+    # When `version: source`, build chordsketch from the workspace's
+    # `crates/cli` instead of downloading a release binary. This lets
+    # the action's own self-test workflow exercise the action's
+    # wiring against the CURRENT commit, catching regressions before
+    # the next release ships. External consumers should not pass
+    # `source` — the step requires a Rust toolchain on PATH (set up
+    # by the consuming workflow) and assumes the workspace is the
+    # chordsketch repo. The branch is silently skipped otherwise.
+    - name: Build ChordSketch from source (internal CI only)
+      id: install-source
+      if: steps.resolve-version.outputs.version == 'source'
+      shell: bash
+      env:
+        # `GITHUB_ACTION_PATH` is the action's own location on the
+        # runner. For a local `uses: ./packages/github-action`,
+        # the workspace's `crates/cli` is two levels up.
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        if ! command -v cargo >/dev/null 2>&1; then
+          echo "version: source requires a Rust toolchain on PATH; install one in the consuming workflow before invoking this action." >&2
+          exit 1
+        fi
+        CLI_DIR="${ACTION_PATH}/../../crates/cli"
+        if [ ! -d "${CLI_DIR}" ]; then
+          echo "version: source could not locate crates/cli at ${CLI_DIR}. The sentinel is only valid when the action is invoked via a local 'uses: ./packages/github-action' from the chordsketch repo." >&2
+          exit 1
+        fi
+        INSTALL_DIR="${HOME}/.chordsketch-action"
+        # `--locked` honors Cargo.lock so the source build matches
+        # what main.yml's release pipeline would produce.
+        cargo install --path "${CLI_DIR}" --root "${INSTALL_DIR}" --locked
+        BIN="${INSTALL_DIR}/bin/chordsketch"
+        if [ "${RUNNER_OS:-}" = "Windows" ] || [ -f "${INSTALL_DIR}/bin/chordsketch.exe" ]; then
+          BIN="${INSTALL_DIR}/bin/chordsketch.exe"
+        fi
+        echo "CHORDSKETCH_BIN=${BIN}" >> "$GITHUB_ENV"
 
     # ---- install: Linux and macOS -------------------------------------------
     # Downloads the pre-built tarball, verifies SHA-256 checksum against
@@ -64,7 +118,7 @@ runs:
     # vs shasum (BSD-only) portability differences across Linux and macOS.
     - name: Install ChordSketch (Linux / macOS)
       id: install-unix
-      if: runner.os != 'Windows'
+      if: runner.os != 'Windows' && steps.resolve-version.outputs.version != 'source'
       shell: bash
       env:
         CHORDSKETCH_VERSION: ${{ steps.resolve-version.outputs.version }}
@@ -116,7 +170,7 @@ runs:
     # GITHUB_ENV as a Windows path for use by the pwsh render step below.
     - name: Install ChordSketch (Windows)
       id: install-windows
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && steps.resolve-version.outputs.version != 'source'
       shell: pwsh
       env:
         CHORDSKETCH_VERSION: ${{ steps.resolve-version.outputs.version }}
