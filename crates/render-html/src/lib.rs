@@ -3043,6 +3043,24 @@ mod tests {
             to_bflat.contains("<span class=\"meta-inline__value\">B\u{266D}</span>"),
             "+3 transpose must surface flat-side `B♭`; got:\n{to_bflat}"
         );
+
+        // −3 semitones: G → E. Negative offsets must work
+        // symmetrically with positive ones.
+        let down_three = render_song_with_transpose(&song, -3, &Config::defaults());
+        assert!(
+            down_three.contains("<span class=\"meta-inline__value\">E</span>"),
+            "-3 transpose must surface key value `E`; got:\n{down_three}"
+        );
+
+        // Unparseable key: a value that doesn't start with a chord root
+        // letter falls through to the authored text unchanged (same
+        // contract as `canonical_transposed_key`).
+        let nonchord = chordsketch_chordpro::parse("{key: Hidden}\n[C]hi").unwrap();
+        let nonchord_out = render_song_with_transpose(&nonchord, 2, &Config::defaults());
+        assert!(
+            nonchord_out.contains("<span class=\"meta-inline__value\">Hidden</span>"),
+            "unparseable key must fall back to authored value; got:\n{nonchord_out}"
+        );
     }
 
     #[test]

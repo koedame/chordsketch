@@ -4211,6 +4211,27 @@ mod transpose_tests {
             !up_two_content.contains("Key: G"),
             "+2 transpose must NOT leave authored `Key: G` in PDF stream"
         );
+
+        // −3 semitones: G → E. Negative offsets must work
+        // symmetrically with positive ones (all ASCII, safe to search
+        // in the raw PDF stream).
+        let down_three = render_song_with_transpose(&song, -3, &Config::defaults());
+        let down_three_content = String::from_utf8_lossy(&down_three);
+        assert!(
+            down_three_content.contains("Key: E"),
+            "-3 transpose must surface `Key: E` in PDF stream"
+        );
+
+        // Unparseable key falls back to the authored value. The PDF
+        // builder embeds the full text "Key: Hidden" in the content
+        // stream as ASCII, so a substring search is reliable here.
+        let nonchord = chordsketch_chordpro::parse("{key: Hidden}\n[C]hi").unwrap();
+        let nonchord_bytes = render_song_with_transpose(&nonchord, 2, &Config::defaults());
+        let nonchord_content = String::from_utf8_lossy(&nonchord_bytes);
+        assert!(
+            nonchord_content.contains("Key: Hidden"),
+            "unparseable key must fall back to authored value in PDF stream"
+        );
     }
 
     #[test]
