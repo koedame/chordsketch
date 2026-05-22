@@ -1,0 +1,2192 @@
+{
+  "version": "2.11",
+  "children": [
+    {
+      "type": "frame",
+      "id": "ZyOcR",
+      "x": 1640,
+      "y": 0,
+      "name": "Slide 01 — Cover (L02)",
+      "clip": true,
+      "width": 1920,
+      "height": 1080,
+      "fill": "#FAFAF7",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "XIhdR",
+          "x": 120,
+          "y": 360,
+          "width": 1500,
+          "layout": "vertical",
+          "gap": 36,
+          "children": [
+            {
+              "type": "rectangle",
+              "id": "AUuz0",
+              "fill": "#BD1642",
+              "width": 120,
+              "height": 4
+            },
+            {
+              "type": "text",
+              "id": "oh9om",
+              "fill": "#0A0A0B",
+              "content": "ChordSketch",
+              "lineHeight": 1.05,
+              "fontFamily": "Noto Sans JP",
+              "fontSize": 140,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "k5ql2",
+              "fill": "#44424A",
+              "content": "Chord sheets for ChordPro and iReal Pro",
+              "lineHeight": 1.3,
+              "fontFamily": "Inter",
+              "fontSize": 36
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "tBFne",
+          "x": 120,
+          "y": 950,
+          "fill": "#8A8790",
+          "content": "v0.5.0 · MIT",
+          "fontFamily": "Inter",
+          "fontSize": 22,
+          "letterSpacing": 1.5
+        },
+        {
+          "type": "frame",
+          "id": "y45SNK",
+          "x": 1700,
+          "y": 860,
+          "width": 120,
+          "height": 120,
+          "fill": "#BD1642",
+          "cornerRadius": 14,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "path",
+              "id": "QPB2E",
+              "name": "logo-mark",
+              "geometry": "M82.93283 100.50146c1.09828-1.97167 3.43603-2.83576 5.61051-2.232 0.11448 0.03138 0.22605 0.05695 0.33878 0.08542 0.18479 0.04533 0.37016 0.08891 0.56018 0.12726 0.0953 0.01918 0.19292 0.04184 0.28648 0.05869 0.04416 0.00814 0.08775 0.00988 0.13191 0.01511 0.96288 0.16387 1.9798 0.24406 3.04379 0.21791 2.13089-0.05288 4.41635-0.49161 6.69251-1.35977 7.36252-2.80671 11.83349-9.00993 9.98676-13.85513-1.38185-3.62547-5.90919-5.46232-11.1844-4.98291 0.39921-0.1261 0.79843-0.25917 1.19764-0.41142 7.36252-2.80671 11.83349-9.00993 9.98676-13.85571-1.38185-3.62489-5.90919-5.46174-11.1844-4.98292 0.39921-0.1261 0.79843-0.25917 1.19764-0.41142 7.36252-2.80671 11.83349-9.00993 9.98676-13.85571-1.84731-4.8452-9.31326-6.49842-16.67578-3.69171-2.92002 1.11338-5.3833 2.76196-7.17947 4.64704-0.79029 0.83562-1.41497 1.65787-1.90891 2.49988-17.21155 25.81065-8.72984 109.1018-8.72984 109.1018 0.46488-11.54642 2.3581-47.27003 7.84308-57.11441z",
+              "viewBox": [
+                0,
+                0,
+                180,
+                180
+              ],
+              "fill": "#FFFFFF",
+              "width": 120,
+              "height": 120
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "VSC6O",
+      "x": 3760,
+      "y": 0,
+      "name": "Slide 02 — Section (L03)",
+      "clip": true,
+      "width": 1920,
+      "height": 1080,
+      "fill": "#FAFAF7",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "OYekh",
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "layout": "vertical",
+          "gap": 36,
+          "padding": 100,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "YC510",
+              "fill": "#BD1642",
+              "content": "PART ONE",
+              "fontFamily": "Inter",
+              "fontSize": 24,
+              "fontWeight": "500",
+              "letterSpacing": 6
+            },
+            {
+              "type": "text",
+              "id": "wQitG",
+              "fill": "#0A0A0B",
+              "textGrowth": "fixed-width",
+              "width": 1300,
+              "content": "A library of songs, beautifully rendered.",
+              "lineHeight": 1.15,
+              "textAlign": "center",
+              "fontFamily": "Noto Sans JP",
+              "fontSize": 64,
+              "fontWeight": "700"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "jYVxX",
+      "x": 5880,
+      "y": 0,
+      "name": "Slide 03 — ChordPro (L05)",
+      "clip": true,
+      "width": 1920,
+      "height": 1080,
+      "fill": "#FAFAF7",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "I3Gog",
+          "x": 120,
+          "y": 100,
+          "width": 1680,
+          "height": 880,
+          "gap": 80,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "KNB2n",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 28,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Sa5ly",
+                  "fill": "#BD1642",
+                  "content": "FORMAT 01",
+                  "fontFamily": "Inter",
+                  "fontSize": 22,
+                  "fontWeight": "700",
+                  "letterSpacing": 3
+                },
+                {
+                  "type": "text",
+                  "id": "s4xuP",
+                  "fill": "#0A0A0B",
+                  "content": "ChordPro",
+                  "lineHeight": 1.1,
+                  "fontFamily": "Noto Sans JP",
+                  "fontSize": 96,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "moErE",
+                  "fill": "#44424A",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Plain-text chord sheets with inline brackets. Diff-friendly, transpose-aware, exportable to text, HTML, and PDF.",
+                  "lineHeight": 1.45,
+                  "fontFamily": "Inter",
+                  "fontSize": 28,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "RrhvL",
+              "width": "fill_container",
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "rZbWg",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 12,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E8E6EA"
+                  },
+                  "layout": "vertical",
+                  "gap": 24,
+                  "padding": 32,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "T7iem6",
+                      "width": "fill_container",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "sIigP",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "FabvQ",
+                              "fill": "#E8E6EA",
+                              "width": 12,
+                              "height": 12
+                            },
+                            {
+                              "type": "ellipse",
+                              "id": "S3a2d",
+                              "fill": "#E8E6EA",
+                              "width": 12,
+                              "height": 12
+                            },
+                            {
+                              "type": "ellipse",
+                              "id": "lBBNe",
+                              "fill": "#E8E6EA",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "rT6ax",
+                          "width": "fill_container",
+                          "justifyContent": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "wvPKu",
+                              "fill": "#67646D",
+                              "content": "song.cho",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 16,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "ig6mL",
+                      "fill": "#E8E6EA",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "S8oxdd",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "padding": [
+                        8,
+                        4
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Iu6ZO",
+                          "fill": "#1F4F8A",
+                          "content": "{title: Amazing Grace}",
+                          "lineHeight": 1.4,
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 22,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "fZcqn",
+                          "fill": "#1F4F8A",
+                          "content": "{key: G}",
+                          "lineHeight": 1.4,
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 22,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "b1EO2",
+                          "width": "fill_container",
+                          "height": 14
+                        },
+                        {
+                          "type": "frame",
+                          "id": "s6KVn2",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "w1PbJl",
+                              "fill": "#BD1642",
+                              "content": "[G]",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "pD5wo",
+                              "fill": "#0A0A0B",
+                              "content": "Amazing ",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "e63K5D",
+                              "fill": "#BD1642",
+                              "content": "[G7]",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "YlGSY",
+                              "fill": "#0A0A0B",
+                              "content": "grace, how ",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "tTP7z",
+                              "fill": "#BD1642",
+                              "content": "[C]",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "WWCLL",
+                              "fill": "#0A0A0B",
+                              "content": "sweet the ",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "e5e1P",
+                              "fill": "#BD1642",
+                              "content": "[G]",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "IA7Xi",
+                              "fill": "#0A0A0B",
+                              "content": "sound",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Oevsx",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "GvuJ8",
+                              "fill": "#0A0A0B",
+                              "content": "That ",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "oIaTD",
+                              "fill": "#BD1642",
+                              "content": "[G]",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "ZuJzC",
+                              "fill": "#0A0A0B",
+                              "content": "saved a ",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "Qr1qo",
+                              "fill": "#BD1642",
+                              "content": "[Em]",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "bCov9",
+                              "fill": "#0A0A0B",
+                              "content": "wretch like ",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "vhRs2",
+                              "fill": "#BD1642",
+                              "content": "[D]",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "jfoWu",
+                              "fill": "#0A0A0B",
+                              "content": "me",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "RlCV4",
+                              "fill": "#BD1642",
+                              "content": "[D7]",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "xMjRN",
+                              "fill": "#0A0A0B",
+                              "content": ".",
+                              "lineHeight": 1.4,
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "ltjVV",
+      "x": 8000,
+      "y": 0,
+      "name": "Slide 04 — iReal Pro (L06)",
+      "clip": true,
+      "width": 1920,
+      "height": 1080,
+      "fill": "#FAFAF7",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "WCEA2",
+          "x": 120,
+          "y": 100,
+          "width": 1680,
+          "height": 880,
+          "gap": 80,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "zP2iZ",
+              "width": "fill_container",
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "scFmK",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 12,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E8E6EA"
+                  },
+                  "layout": "vertical",
+                  "gap": 28,
+                  "padding": 32,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Dbf5N",
+                      "fill": "#44424A",
+                      "content": "Autumn Leaves   —   Kosma",
+                      "fontFamily": "Source Serif 4",
+                      "fontSize": 24,
+                      "fontWeight": "normal",
+                      "fontStyle": "italic"
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "S1U0i9",
+                      "fill": "#E8E6EA",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "D8mAX",
+                      "width": "fill_container",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "SHy1O",
+                          "width": "fill_container",
+                          "height": 96,
+                          "padding": 16,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "LClf6",
+                              "fill": "#0A0A0B",
+                              "content": "Cm7",
+                              "fontFamily": "Roboto",
+                              "fontSize": 36,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "rectangle",
+                          "id": "gPgtT",
+                          "fill": "#D4D1D6",
+                          "width": 1,
+                          "height": 72
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ZMn1W",
+                          "width": "fill_container",
+                          "height": 96,
+                          "padding": 16,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Avzkt",
+                              "fill": "#0A0A0B",
+                              "content": "F7",
+                              "fontFamily": "Roboto",
+                              "fontSize": 36,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "rectangle",
+                          "id": "lxaB3",
+                          "fill": "#D4D1D6",
+                          "width": 1,
+                          "height": 72
+                        },
+                        {
+                          "type": "frame",
+                          "id": "xatEj",
+                          "width": "fill_container",
+                          "height": 96,
+                          "padding": 16,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "g0qklk",
+                              "fill": "#0A0A0B",
+                              "content": "B♭Maj7",
+                              "fontFamily": "Roboto",
+                              "fontSize": 36,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "rectangle",
+                          "id": "wMS3Y",
+                          "fill": "#D4D1D6",
+                          "width": 1,
+                          "height": 72
+                        },
+                        {
+                          "type": "frame",
+                          "id": "vaPUm",
+                          "width": "fill_container",
+                          "height": 96,
+                          "padding": 16,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "H1WCY",
+                              "fill": "#0A0A0B",
+                              "content": "E♭Maj7",
+                              "fontFamily": "Roboto",
+                              "fontSize": 36,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "TvL9S",
+                      "width": "fill_container",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "M0lYf",
+                          "width": "fill_container",
+                          "height": 96,
+                          "padding": 16,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "k0Gef",
+                              "fill": "#0A0A0B",
+                              "content": "Am7♭5",
+                              "fontFamily": "Roboto",
+                              "fontSize": 36,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "rectangle",
+                          "id": "vlyO0",
+                          "fill": "#D4D1D6",
+                          "width": 1,
+                          "height": 72
+                        },
+                        {
+                          "type": "frame",
+                          "id": "AtOmS",
+                          "width": "fill_container",
+                          "height": 96,
+                          "padding": 16,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "OS3Rw",
+                              "fill": "#0A0A0B",
+                              "content": "D7",
+                              "fontFamily": "Roboto",
+                              "fontSize": 36,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "rectangle",
+                          "id": "aadgK",
+                          "fill": "#D4D1D6",
+                          "width": 1,
+                          "height": 72
+                        },
+                        {
+                          "type": "frame",
+                          "id": "gSz1r",
+                          "width": "fill_container",
+                          "height": 96,
+                          "padding": 16,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "lPypf",
+                              "fill": "#0A0A0B",
+                              "content": "Gm",
+                              "fontFamily": "Roboto",
+                              "fontSize": 36,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "rectangle",
+                          "id": "iIX7H",
+                          "fill": "#D4D1D6",
+                          "width": 1,
+                          "height": 72
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ZrvE3",
+                          "width": "fill_container",
+                          "height": 96,
+                          "padding": 16,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "N2VseP",
+                              "fill": "#0A0A0B",
+                              "content": "Gm",
+                              "fontFamily": "Roboto",
+                              "fontSize": 36,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "JGxnv",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 28,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "PsRxk",
+                  "fill": "#BD1642",
+                  "content": "FORMAT 02",
+                  "fontFamily": "Inter",
+                  "fontSize": 22,
+                  "fontWeight": "700",
+                  "letterSpacing": 3
+                },
+                {
+                  "type": "text",
+                  "id": "iN4f6",
+                  "fill": "#0A0A0B",
+                  "content": "iReal Pro",
+                  "lineHeight": 1.1,
+                  "fontFamily": "Noto Sans JP",
+                  "fontSize": 96,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "zL4oX",
+                  "fill": "#44424A",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Bar-grid lead sheets with sections, repeats, and endings. Round-trip with .cho and export to SVG, PNG, and PDF.",
+                  "lineHeight": 1.45,
+                  "fontFamily": "Inter",
+                  "fontSize": 28,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "ui2hd",
+      "x": 10120,
+      "y": 0,
+      "name": "Slide 05 — 3 Pillars (L07)",
+      "clip": true,
+      "width": 1920,
+      "height": 1080,
+      "fill": "#FAFAF7",
+      "layout": "vertical",
+      "gap": 80,
+      "padding": 120,
+      "justifyContent": "center",
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "text",
+          "id": "pkNVF",
+          "fill": "#BD1642",
+          "content": "WHY CHORDSKETCH",
+          "textAlign": "center",
+          "fontFamily": "Inter",
+          "fontSize": 22,
+          "fontWeight": "600",
+          "letterSpacing": 2.2
+        },
+        {
+          "type": "text",
+          "id": "Ka2U0",
+          "fill": "#0A0A0B",
+          "content": "Built for real-world use",
+          "lineHeight": 1.15,
+          "textAlign": "center",
+          "fontFamily": "Noto Sans JP",
+          "fontSize": 48,
+          "fontWeight": "700"
+        },
+        {
+          "type": "frame",
+          "id": "mcUoY",
+          "width": "fill_container",
+          "gap": 50,
+          "children": [
+            {
+              "type": "frame",
+              "id": "A13KiI",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "stroke": {
+                "thickness": 1,
+                "fill": "#E8E6EA"
+              },
+              "layout": "vertical",
+              "gap": 24,
+              "padding": 40,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "OIpBb",
+                  "width": 80,
+                  "height": 80,
+                  "fill": "#BD1642",
+                  "cornerRadius": 40,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "brBVd",
+                      "width": 40,
+                      "height": 40,
+                      "iconFontName": "music",
+                      "iconFontFamily": "lucide",
+                      "fill": "#FFFFFF"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "mtmQF",
+                  "fill": "#0A0A0B",
+                  "content": "Two formats",
+                  "lineHeight": 1.2,
+                  "fontFamily": "Noto Sans JP",
+                  "fontSize": 32,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "EADZs",
+                  "fill": "#67646D",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "ChordPro & iReal Pro, fully round-trippable.",
+                  "lineHeight": 1.4,
+                  "fontFamily": "Inter",
+                  "fontSize": 20
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "soxRw",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "stroke": {
+                "thickness": 1,
+                "fill": "#E8E6EA"
+              },
+              "layout": "vertical",
+              "gap": 24,
+              "padding": 40,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "GFLL7",
+                  "width": 80,
+                  "height": 80,
+                  "fill": "#BD1642",
+                  "cornerRadius": 40,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "GMLX5",
+                      "width": 40,
+                      "height": 40,
+                      "iconFontName": "arrow-up-down",
+                      "iconFontFamily": "lucide",
+                      "fill": "#FFFFFF"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "ak3zn",
+                  "fill": "#0A0A0B",
+                  "content": "Transpose anywhere",
+                  "lineHeight": 1.2,
+                  "fontFamily": "Noto Sans JP",
+                  "fontSize": 32,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "Xx3Ph",
+                  "fill": "#67646D",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Per-song key changes that respect canonical spelling.",
+                  "lineHeight": 1.4,
+                  "fontFamily": "Inter",
+                  "fontSize": 20
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "o33tiK",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "stroke": {
+                "thickness": 1,
+                "fill": "#E8E6EA"
+              },
+              "layout": "vertical",
+              "gap": 24,
+              "padding": 40,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "gzf8H",
+                  "width": 80,
+                  "height": 80,
+                  "fill": "#BD1642",
+                  "cornerRadius": 40,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "xlBML",
+                      "width": 40,
+                      "height": 40,
+                      "iconFontName": "file-text",
+                      "iconFontFamily": "lucide",
+                      "fill": "#FFFFFF"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "ZF944",
+                  "fill": "#0A0A0B",
+                  "content": "Export everywhere",
+                  "lineHeight": 1.2,
+                  "fontFamily": "Noto Sans JP",
+                  "fontSize": 32,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "Mbq7Q",
+                  "fill": "#67646D",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Text, HTML, PDF, SVG, PNG.",
+                  "lineHeight": 1.4,
+                  "fontFamily": "Inter",
+                  "fontSize": 20
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "SNwC6",
+      "x": 1640,
+      "y": 1280,
+      "name": "Slide 06 — KPI (L09)",
+      "clip": true,
+      "width": 1920,
+      "height": 1080,
+      "fill": "#FAFAF7",
+      "layout": "vertical",
+      "gap": 32,
+      "padding": 120,
+      "justifyContent": "center",
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "text",
+          "id": "riWJt",
+          "fill": "#8A8790",
+          "content": "OPEN-SOURCE PROJECT",
+          "textAlign": "center",
+          "fontFamily": "Inter",
+          "fontSize": 24,
+          "fontWeight": "500",
+          "letterSpacing": 2.4
+        },
+        {
+          "type": "text",
+          "id": "O6GxKp",
+          "fill": "#BD1642",
+          "content": "0.5.0",
+          "lineHeight": 1,
+          "textAlign": "center",
+          "fontFamily": "Noto Sans JP",
+          "fontSize": 200,
+          "fontWeight": "700"
+        },
+        {
+          "type": "text",
+          "id": "NuGY8",
+          "fill": "#44424A",
+          "content": "Latest release · MIT-licensed · Rust + WebAssembly",
+          "lineHeight": 1.3,
+          "textAlign": "center",
+          "fontFamily": "Inter",
+          "fontSize": 28
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Z1Sn8",
+      "x": 3760,
+      "y": 1280,
+      "name": "Slide 07 — Process (L13)",
+      "clip": true,
+      "width": 1920,
+      "height": 1080,
+      "fill": "#FAFAF7",
+      "layout": "vertical",
+      "gap": 80,
+      "padding": 100,
+      "children": [
+        {
+          "type": "frame",
+          "id": "OJhyM",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "children": [
+            {
+              "type": "text",
+              "id": "MvXK1",
+              "fill": "#BD1642",
+              "content": "HOW IT WORKS",
+              "fontFamily": "Inter",
+              "fontSize": 22,
+              "fontWeight": "700",
+              "letterSpacing": 3
+            },
+            {
+              "type": "text",
+              "id": "P2RPIA",
+              "fill": "#0A0A0B",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "From plain text to performance-ready",
+              "lineHeight": 1.15,
+              "fontFamily": "Noto Sans JP",
+              "fontSize": 48,
+              "fontWeight": "700"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "iSxgv",
+          "width": "fill_container",
+          "height": "fill_container",
+          "gap": 24,
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "f1DTx",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 24,
+              "padding": [
+                16,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "k0QjD",
+                  "width": 96,
+                  "height": 96,
+                  "fill": "#BD1642",
+                  "cornerRadius": 48,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Bp7pz",
+                      "fill": "#FFFFFF",
+                      "content": "1",
+                      "fontFamily": "Noto Sans JP",
+                      "fontSize": 36,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "qnfct",
+                  "fill": "#0A0A0B",
+                  "content": "Write",
+                  "fontFamily": "Noto Sans JP",
+                  "fontSize": 28,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "uJW2v",
+                  "fill": "#67646D",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Author in ChordPro or iReal Pro.",
+                  "lineHeight": 1.4,
+                  "textAlign": "center",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "bZlcv",
+              "width": 40,
+              "height": 40,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "ukVAj",
+                  "width": 32,
+                  "height": 32,
+                  "iconFontName": "arrow-right",
+                  "iconFontFamily": "lucide",
+                  "fill": "#D4D1D6"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "zCXgR",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 24,
+              "padding": [
+                16,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "XlaO0",
+                  "width": 96,
+                  "height": 96,
+                  "fill": "#BD1642",
+                  "cornerRadius": 48,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "xjNFl",
+                      "fill": "#FFFFFF",
+                      "content": "2",
+                      "fontFamily": "Noto Sans JP",
+                      "fontSize": 36,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "s5AHXL",
+                  "fill": "#0A0A0B",
+                  "content": "Parse",
+                  "fontFamily": "Noto Sans JP",
+                  "fontSize": 28,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "JqSro",
+                  "fill": "#67646D",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Zero-dep Rust parser builds the AST.",
+                  "lineHeight": 1.4,
+                  "textAlign": "center",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "HspnE",
+              "width": 40,
+              "height": 40,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "EhzKM",
+                  "width": 32,
+                  "height": 32,
+                  "iconFontName": "arrow-right",
+                  "iconFontFamily": "lucide",
+                  "fill": "#D4D1D6"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "w6SPiy",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 24,
+              "padding": [
+                16,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "SFClM",
+                  "width": 96,
+                  "height": 96,
+                  "fill": "#BD1642",
+                  "cornerRadius": 48,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "zMyW3",
+                      "fill": "#FFFFFF",
+                      "content": "3",
+                      "fontFamily": "Noto Sans JP",
+                      "fontSize": 36,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "Z8jt8",
+                  "fill": "#0A0A0B",
+                  "content": "Render",
+                  "fontFamily": "Noto Sans JP",
+                  "fontSize": 28,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "kU2h0",
+                  "fill": "#67646D",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Text, HTML, PDF, SVG.",
+                  "lineHeight": 1.4,
+                  "textAlign": "center",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "iq6p0",
+              "width": 40,
+              "height": 40,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "Rv4bv",
+                  "width": 32,
+                  "height": 32,
+                  "iconFontName": "arrow-right",
+                  "iconFontFamily": "lucide",
+                  "fill": "#D4D1D6"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "x4r7x",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 24,
+              "padding": [
+                16,
+                8
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "baikk",
+                  "width": 96,
+                  "height": 96,
+                  "fill": "#BD1642",
+                  "cornerRadius": 48,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Uruxq",
+                      "fill": "#FFFFFF",
+                      "content": "4",
+                      "fontFamily": "Noto Sans JP",
+                      "fontSize": 36,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "AnOqd",
+                  "fill": "#0A0A0B",
+                  "content": "Share",
+                  "fontFamily": "Noto Sans JP",
+                  "fontSize": 28,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "IzD73",
+                  "fill": "#67646D",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "CLI, web, VS Code, desktop.",
+                  "lineHeight": 1.4,
+                  "textAlign": "center",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "IrY0a",
+      "x": 5880,
+      "y": 1280,
+      "name": "Slide 08 — Matrix (L15)",
+      "clip": true,
+      "width": 1920,
+      "height": 1080,
+      "fill": "#FAFAF7",
+      "layout": "vertical",
+      "gap": 60,
+      "padding": 100,
+      "children": [
+        {
+          "type": "frame",
+          "id": "h3408",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "children": [
+            {
+              "type": "text",
+              "id": "dKCoL",
+              "fill": "#BD1642",
+              "content": "PLATFORM",
+              "fontFamily": "Inter",
+              "fontSize": 22,
+              "fontWeight": "700",
+              "letterSpacing": 3
+            },
+            {
+              "type": "text",
+              "id": "VNGkC",
+              "fill": "#0A0A0B",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Everywhere you write music",
+              "lineHeight": 1.15,
+              "fontFamily": "Noto Sans JP",
+              "fontSize": 48,
+              "fontWeight": "700"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "J8ToK",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 28,
+          "children": [
+            {
+              "type": "frame",
+              "id": "J3gPO",
+              "width": "fill_container",
+              "height": "fill_container",
+              "gap": 28,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "naeR3",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 12,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E8E6EA"
+                  },
+                  "layout": "vertical",
+                  "gap": 20,
+                  "padding": 40,
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "KrLef",
+                      "width": 40,
+                      "height": 40,
+                      "iconFontName": "terminal",
+                      "iconFontFamily": "lucide",
+                      "fill": "#BD1642"
+                    },
+                    {
+                      "type": "text",
+                      "id": "vesu7",
+                      "fill": "#0A0A0B",
+                      "content": "Command Line",
+                      "fontFamily": "Noto Sans JP",
+                      "fontSize": 32,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "LhZLh",
+                      "fill": "#67646D",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "chordsketch render song.cho --format pdf",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Inter",
+                      "fontSize": 22,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "g9m3qa",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 12,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E8E6EA"
+                  },
+                  "layout": "vertical",
+                  "gap": 20,
+                  "padding": 40,
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "e3cOMZ",
+                      "width": 40,
+                      "height": 40,
+                      "iconFontName": "globe",
+                      "iconFontFamily": "lucide",
+                      "fill": "#BD1642"
+                    },
+                    {
+                      "type": "text",
+                      "id": "KcJ0B",
+                      "fill": "#0A0A0B",
+                      "content": "Web Playground",
+                      "fontFamily": "Noto Sans JP",
+                      "fontSize": 32,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "jl0C2",
+                      "fill": "#67646D",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Edit and preview in any browser via WebAssembly.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Inter",
+                      "fontSize": 22,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "tKbxS",
+              "width": "fill_container",
+              "height": "fill_container",
+              "gap": 28,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "HyrLf",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 12,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E8E6EA"
+                  },
+                  "layout": "vertical",
+                  "gap": 20,
+                  "padding": 40,
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "P6FcI",
+                      "width": 40,
+                      "height": 40,
+                      "iconFontName": "code",
+                      "iconFontFamily": "lucide",
+                      "fill": "#BD1642"
+                    },
+                    {
+                      "type": "text",
+                      "id": "IdKoh",
+                      "fill": "#0A0A0B",
+                      "content": "VS Code",
+                      "fontFamily": "Noto Sans JP",
+                      "fontSize": 32,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "pSNOb",
+                      "fill": "#67646D",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Syntax highlighting, LSP, and live preview.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Inter",
+                      "fontSize": 22,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "N8wfC",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 12,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E8E6EA"
+                  },
+                  "layout": "vertical",
+                  "gap": 20,
+                  "padding": 40,
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "HayE6",
+                      "width": 40,
+                      "height": 40,
+                      "iconFontName": "monitor",
+                      "iconFontFamily": "lucide",
+                      "fill": "#BD1642"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Vrtr9",
+                      "fill": "#0A0A0B",
+                      "content": "Desktop App",
+                      "fontFamily": "Noto Sans JP",
+                      "fontSize": 32,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ly3xQ",
+                      "fill": "#67646D",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Native Tauri app for macOS, Windows, Linux.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Inter",
+                      "fontSize": 22,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "I2dDHQ",
+      "x": 8000,
+      "y": 1280,
+      "name": "Slide 09 — List (L19)",
+      "clip": true,
+      "width": 1920,
+      "height": 1080,
+      "fill": "#FAFAF7",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "XpSfA",
+          "x": 120,
+          "y": 200,
+          "width": 1680,
+          "height": 720,
+          "fill": "#FAFAF7",
+          "layout": "vertical",
+          "gap": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "d4a6Ze",
+              "fill": "#BD1642",
+              "content": "CAPABILITIES",
+              "fontFamily": "Inter",
+              "fontSize": 22,
+              "fontWeight": "700",
+              "letterSpacing": 4
+            },
+            {
+              "type": "text",
+              "id": "OKUE2",
+              "fill": "#0A0A0B",
+              "content": "What it does",
+              "lineHeight": 1.15,
+              "fontFamily": "Noto Sans JP",
+              "fontSize": 56,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "y5kXLh",
+              "width": 1,
+              "height": 32,
+              "fill": "#FAFAF7"
+            },
+            {
+              "type": "frame",
+              "id": "waatA",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 28,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "pgOCt",
+                  "width": "fill_container",
+                  "gap": 20,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "wJj0y",
+                      "width": 36,
+                      "height": 36,
+                      "iconFontName": "circle-check",
+                      "iconFontFamily": "lucide",
+                      "fill": "#BD1642"
+                    },
+                    {
+                      "type": "text",
+                      "id": "KQPfW",
+                      "fill": "#0A0A0B",
+                      "content": "Parse ChordPro and iReal Pro losslessly",
+                      "lineHeight": 1.2,
+                      "fontFamily": "Noto Sans JP",
+                      "fontSize": 32,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "eleMW",
+                  "width": "fill_container",
+                  "gap": 20,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "mFUNX",
+                      "width": 36,
+                      "height": 36,
+                      "iconFontName": "circle-check",
+                      "iconFontFamily": "lucide",
+                      "fill": "#BD1642"
+                    },
+                    {
+                      "type": "text",
+                      "id": "U1bvk4",
+                      "fill": "#0A0A0B",
+                      "content": "Transpose songs while preserving canonical spelling",
+                      "lineHeight": 1.2,
+                      "fontFamily": "Noto Sans JP",
+                      "fontSize": 32,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "gDt80",
+                  "width": "fill_container",
+                  "gap": 20,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "T7Oxa",
+                      "width": 36,
+                      "height": 36,
+                      "iconFontName": "circle-check",
+                      "iconFontFamily": "lucide",
+                      "fill": "#BD1642"
+                    },
+                    {
+                      "type": "text",
+                      "id": "kL4Fy",
+                      "fill": "#0A0A0B",
+                      "content": "Render to text, HTML, PDF, SVG, and PNG",
+                      "lineHeight": 1.2,
+                      "fontFamily": "Noto Sans JP",
+                      "fontSize": 32,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "JReBP",
+                  "width": "fill_container",
+                  "gap": 20,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "v1oVNW",
+                      "width": 36,
+                      "height": 36,
+                      "iconFontName": "circle-check",
+                      "iconFontFamily": "lucide",
+                      "fill": "#BD1642"
+                    },
+                    {
+                      "type": "text",
+                      "id": "gwNf6",
+                      "fill": "#0A0A0B",
+                      "content": "Edit live in the browser, VS Code, or the desktop app",
+                      "lineHeight": 1.2,
+                      "fontFamily": "Noto Sans JP",
+                      "fontSize": 32,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "i9RO17",
+                  "width": "fill_container",
+                  "gap": 20,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "hUeOG",
+                      "width": 36,
+                      "height": 36,
+                      "iconFontName": "circle-check",
+                      "iconFontFamily": "lucide",
+                      "fill": "#BD1642"
+                    },
+                    {
+                      "type": "text",
+                      "id": "u1Wgv",
+                      "fill": "#0A0A0B",
+                      "content": "Distribute as Rust crate, npm, PyPI, gem, Swift, Kotlin",
+                      "lineHeight": 1.2,
+                      "fontFamily": "Noto Sans JP",
+                      "fontSize": 32,
+                      "fontWeight": "500"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "wDf1w",
+      "x": 10120,
+      "y": 1280,
+      "name": "Slide 10 — Closing (L20)",
+      "clip": true,
+      "width": 1920,
+      "height": 1080,
+      "fill": "#FAFAF7",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "bZAIc",
+          "x": 0,
+          "y": 0,
+          "name": "stage",
+          "width": 1920,
+          "height": 1080,
+          "fill": "#FAFAF7",
+          "layout": "vertical",
+          "padding": [
+            120,
+            160
+          ],
+          "justifyContent": "space_between",
+          "children": [
+            {
+              "type": "frame",
+              "id": "wEDQt",
+              "name": "topBar",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "XzV1P",
+                  "gap": 16,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "YQGyE",
+                      "width": 56,
+                      "height": 56,
+                      "fill": "#BD1642",
+                      "cornerRadius": 12,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "path",
+                          "id": "zgqQY",
+                          "name": "logo-mark",
+                          "geometry": "M82.93283 100.50146c1.09828-1.97167 3.43603-2.83576 5.61051-2.232 0.11448 0.03138 0.22605 0.05695 0.33878 0.08542 0.18479 0.04533 0.37016 0.08891 0.56018 0.12726 0.0953 0.01918 0.19292 0.04184 0.28648 0.05869 0.04416 0.00814 0.08775 0.00988 0.13191 0.01511 0.96288 0.16387 1.9798 0.24406 3.04379 0.21791 2.13089-0.05288 4.41635-0.49161 6.69251-1.35977 7.36252-2.80671 11.83349-9.00993 9.98676-13.85513-1.38185-3.62547-5.90919-5.46232-11.1844-4.98291 0.39921-0.1261 0.79843-0.25917 1.19764-0.41142 7.36252-2.80671 11.83349-9.00993 9.98676-13.85571-1.38185-3.62489-5.90919-5.46174-11.1844-4.98292 0.39921-0.1261 0.79843-0.25917 1.19764-0.41142 7.36252-2.80671 11.83349-9.00993 9.98676-13.85571-1.84731-4.8452-9.31326-6.49842-16.67578-3.69171-2.92002 1.11338-5.3833 2.76196-7.17947 4.64704-0.79029 0.83562-1.41497 1.65787-1.90891 2.49988-17.21155 25.81065-8.72984 109.1018-8.72984 109.1018 0.46488-11.54642 2.3581-47.27003 7.84308-57.11441z",
+                          "viewBox": [
+                            0,
+                            0,
+                            180,
+                            180
+                          ],
+                          "fill": "#FFFFFF",
+                          "width": 56,
+                          "height": 56
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "wAPaK",
+                      "fill": "#0A0A0B",
+                      "content": "ChordSketch",
+                      "fontFamily": "Noto Sans JP",
+                      "fontSize": 28,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "F9hC6",
+                  "fill": "#8A8790",
+                  "content": "THANK YOU",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "500",
+                  "letterSpacing": 4
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "bd9Uc",
+              "name": "center",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 32,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "TmlP7",
+                  "width": 120,
+                  "height": 4,
+                  "fill": "#BD1642"
+                },
+                {
+                  "type": "text",
+                  "id": "O5xMX3",
+                  "fill": "#0A0A0B",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Write. Render. Share.",
+                  "lineHeight": 1.05,
+                  "fontFamily": "Noto Sans JP",
+                  "fontSize": 128,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "OEOQm",
+                  "fill": "#44424A",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Open-source chord sheets for ChordPro and iReal Pro.",
+                  "lineHeight": 1.3,
+                  "fontFamily": "Noto Sans JP",
+                  "fontSize": 32
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "JvHSL",
+              "name": "bottomBar",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "end",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "addRG",
+                  "layout": "vertical",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ImvNT",
+                      "gap": 14,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "pTlCW",
+                          "width": 22,
+                          "height": 22,
+                          "iconFontName": "github",
+                          "iconFontFamily": "lucide",
+                          "fill": "#BD1642"
+                        },
+                        {
+                          "type": "text",
+                          "id": "navhu",
+                          "fill": "#0A0A0B",
+                          "content": "github.com/koedame/chordsketch",
+                          "fontFamily": "Inter",
+                          "fontSize": 24,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "IUIri",
+                      "gap": 14,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "Mcfag",
+                          "width": 22,
+                          "height": 22,
+                          "iconFontName": "globe",
+                          "iconFontFamily": "lucide",
+                          "fill": "#BD1642"
+                        },
+                        {
+                          "type": "text",
+                          "id": "W4jH70",
+                          "fill": "#0A0A0B",
+                          "content": "chordsketch.koeda.me",
+                          "fontFamily": "Inter",
+                          "fontSize": 24,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "IUblS",
+                      "gap": 14,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "rOoz9",
+                          "width": 22,
+                          "height": 22,
+                          "iconFontName": "tag",
+                          "iconFontFamily": "lucide",
+                          "fill": "#BD1642"
+                        },
+                        {
+                          "type": "text",
+                          "id": "R88ARA",
+                          "fill": "#0A0A0B",
+                          "content": "MIT · v0.5.0",
+                          "fontFamily": "Inter",
+                          "fontSize": 24,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "GBgcx",
+                  "fill": "#BD1642",
+                  "cornerRadius": 8,
+                  "gap": 12,
+                  "padding": [
+                    20,
+                    36
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "J4nDc",
+                      "fill": "#FFFFFF",
+                      "content": "Get started",
+                      "fontFamily": "Inter",
+                      "fontSize": 24,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "icon_font",
+                      "id": "KA8Ad",
+                      "width": 22,
+                      "height": 22,
+                      "iconFontName": "arrow-right",
+                      "iconFontFamily": "lucide",
+                      "fill": "#FFFFFF"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
