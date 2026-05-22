@@ -91,9 +91,10 @@ export type WasmLoader = () => Promise<PdfRenderer>;
 // is solved by the sibling shim declaration, so this site needs no
 // suppression directive. The `as Promise<PdfRenderer>` cast is
 // LOAD-BEARING: the shorthand ambient declaration types the module
-// as `any`, and without the cast that `any` would survive the
-// `await mod = loader()` below — silently dropping the narrow
-// surface contract `exportPdf` relies on.
+// as `any`, which TypeScript silently accepts via `WasmLoader`'s
+// return annotation. Without the cast the narrow `PdfRenderer`
+// surface contract is invisible at this definition site and could
+// be lost if `WasmLoader`'s return type is ever widened.
 const defaultLoader: WasmLoader = () =>
   import('@chordsketch/wasm-export') as Promise<PdfRenderer>;
 
