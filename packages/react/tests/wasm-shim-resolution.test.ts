@@ -149,13 +149,11 @@ function compileSrc({ withShim }: { withShim: boolean }): readonly ts.Diagnostic
 /**
  * Discover every `src/` source file that contains a dynamic
  * `import('@chordsketch/wasm')` call expression, including
- * variants the surface regex misses (template literals,
- * intermediate whitespace, multi-line). AST-based discovery is
- * brittle to fewer refactor classes than a literal-string regex —
- * see the silent-failure review on #2542 for the enumeration.
- *
- * Files that ONLY mention `@chordsketch/wasm` in comments or string
- * literals outside an `import(...)` call are excluded.
+ * template-literal arguments (`` import(`@chordsketch/wasm`) ``)
+ * that a literal-string regex would miss. AST discovery also
+ * excludes false positives the regex would otherwise hit — the
+ * shim's own header comment names the call-syntax exemplar, and a
+ * regex on file content would treat that as a real import site.
  */
 function discoverWasmImportSites(): string[] {
   const out: string[] = [];
