@@ -1,45 +1,34 @@
-import { readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, expect, test } from 'vitest';
 
-// Regression tests for #2540.
+// Regression tests for #2540. See `src/wasm-shim.d.ts` for why the
+// ambient declaration exists. The tests pin its contract from three
+// angles:
 //
-// `@chordsketch/react`'s `prepare` script runs `tsup`'s DTS build,
-// which type-checks every dynamic `import('@chordsketch/wasm')` site
-// in `src/`. The runtime artefacts that ship `@chordsketch/wasm`'s
-// type declarations (`web/chordsketch_wasm.d.ts`, `node/chordsketch_wasm.d.ts`)
-// are wasm-pack output and do NOT exist in a fresh source checkout.
-// Workspace consumers therefore hit `TS7016` / `TS2307` at
-// `pnpm install` time because `prepare` cannot finish without those
-// declarations — and the build that would produce them is itself
-// downstream of the failing install.
-//
-// The fix declares `@chordsketch/wasm` as an ambient module in
-// `src/`, the same pattern `wasm-export-shim.d.ts` applies to the
-// optional `@chordsketch/wasm-export` peer (#2539). The shim only
-// kicks in when the real `.d.ts` files are absent; when they are
-// present (npm-registry install or post-wasm-pack workspace), the
-// real declarations supersede the ambient. These tests pin that
-// contract:
-//
-//  1. positive — `src/` type-checks cleanly when the shim is present
-//     and `node_modules/@chordsketch/wasm` instances are hidden;
-//  2. negative control — without the shim (and with the peer still
-//     hidden) the dynamic-import sites emit `TS7016` / `TS2307` for
-//     `@chordsketch/wasm`. Proves the shim is load-bearing;
-//  3. policy — `src/` does NOT carry a suppression directive on or
-//     near a `@chordsketch/wasm` import line. Reintroducing one would
-//     paper over the resolution problem in the same silent-failure
-//     style `.claude/rules/root-cause-fixes.md` calls out.
+//  1. positive — `src/` type-checks cleanly with the shim present
+//     and every other resolution path for `@chordsketch/wasm`
+//     hidden;
+//  2. negative control — without the shim (every other resolution
+//     path still hidden) every dynamic-import site emits a
+//     missing-types diagnostic. Proves the shim is load-bearing for
+//     the entire surface, not just one representative site;
+//  3. policy — no file in `src/` that imports `@chordsketch/wasm`
+//     carries a `@ts-(expect-error|ignore|nocheck)` directive.
+//     Reintroducing one would paper over the resolution problem in
+//     the same silent-failure style `.claude/rules/root-cause-fixes.md`
+//     calls out.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SRC_DIR = resolve(here, '../src');
 const SHIM_PATH = resolve(SRC_DIR, 'wasm-shim.d.ts');
 const TSCONFIG_PATH = resolve(here, '../tsconfig.json');
 
-const TS_EXTS = new Set(['.ts', '.tsx', '.d.ts']);
+const TS_EXTS = new Set(['.ts', '.tsx']);
+const WASM_IMPORT_RE = /import\(\s*['"]@chordsketch\/wasm['"]\s*\)/;
+const SUPPRESSION_RE = /@ts-(?:expect-error|ignore|nocheck)\b/;
 
 function collectSourceFiles(root: string): string[] {
   const out: string[] = [];
@@ -47,10 +36,10 @@ function collectSourceFiles(root: string): string[] {
     const full = join(root, name);
     if (statSync(full).isDirectory()) {
       out.push(...collectSourceFiles(full));
-    } else if (
-      TS_EXTS.has(extname(full)) ||
-      full.endsWith('.d.ts')
-    ) {
+    } else if (TS_EXTS.has(extname(full)) || full.endsWith('.d.ts')) {
+      // `extname('foo.d.ts')` returns '.ts' so the second clause is
+      // belt-and-braces against a future TS_EXTS change that drops
+      // '.ts'.
       out.push(full);
     }
   }
@@ -73,24 +62,30 @@ function loadCompilerOptions(): ts.CompilerOptions {
 }
 
 /**
- * Build a compiler host that refuses to resolve any node_modules
- * path containing `@chordsketch/wasm` (without matching
- * `@chordsketch/wasm-export`, which is a sibling module). Hiding the
- * real peer keeps the negative-control assertion robust against a
- * developer who has the wasm artefacts installed locally.
+ * Build a compiler host that refuses to resolve `@chordsketch/wasm`
+ * via any of the project's two primary resolution paths:
  *
- * Assumes a conventional `node_modules` layout (npm / pnpm hoisted /
- * pnpm `.pnpm/...` virtual store all include the segment). Yarn PnP
- * has no `node_modules` segment and would need a different strategy;
- * CI for this repo does not exercise PnP.
+ *   - `node_modules/@chordsketch/wasm/...` (npm-registry install,
+ *     pnpm hoisted, pnpm `.pnpm/...` virtual store)
+ *   - `packages/npm/...` (the workspace-relative path that
+ *     `tsconfig.json`'s `paths` mapping points at)
+ *
+ * Hiding both keeps the assertions accurate regardless of whether
+ * the developer has run `wasm-pack build` locally — without the
+ * `packages/npm/` filter, the positive test could silently pass via
+ * the real wasm-pack output rather than the shim. The sibling
+ * `@chordsketch/wasm-export` ambient is left in place so its own
+ * regression test (`tests/use-pdf-export-optional-peer.test.ts`)
+ * stays unaffected when run alongside this one.
  */
 function makeHost(options: ts.CompilerOptions): ts.CompilerHost {
   const host = ts.createCompilerHost(options);
 
   const shouldHide = (path: string): boolean => {
-    if (!path.includes('node_modules')) return false;
     if (path.includes('@chordsketch/wasm-export')) return false;
-    return path.includes('@chordsketch/wasm');
+    if (!path.includes('@chordsketch/wasm') && !path.includes('packages/npm/'))
+      return false;
+    return path.includes('node_modules') || path.includes('packages/npm/');
   };
 
   const originalFileExists = host.fileExists.bind(host);
@@ -109,6 +104,17 @@ function makeHost(options: ts.CompilerOptions): ts.CompilerHost {
 function compileSrc({ withShim }: { withShim: boolean }): readonly ts.Diagnostic[] {
   const options = loadCompilerOptions();
   const allFiles = collectSourceFiles(SRC_DIR);
+  // Fail loud if the shim was renamed without updating SHIM_PATH —
+  // otherwise the `withShim: false` filter would silently become a
+  // no-op and the negative control would degrade to a duplicate of
+  // the positive test.
+  if (!allFiles.includes(SHIM_PATH)) {
+    throw new Error(
+      `Test setup invariant: expected shim file at ${SHIM_PATH}. ` +
+        `Update SHIM_PATH if the shim was renamed; otherwise the ` +
+        `negative control degrades silently.`,
+    );
+  }
   const rootNames = withShim
     ? allFiles
     : allFiles.filter((p) => p !== SHIM_PATH);
@@ -118,22 +124,70 @@ function compileSrc({ withShim }: { withShim: boolean }): readonly ts.Diagnostic
 }
 
 describe('@chordsketch/wasm shim resolution', () => {
-  test('src typechecks cleanly when the shim is present and the peer is unresolved', () => {
+  test('src typechecks cleanly when the shim is present and every other peer-resolution path is hidden', () => {
+    // The positive test compiles the entire `src/` tree because the
+    // production failure (the package's pre-publish DTS build) also
+    // type-checks the whole tree. Any unrelated TS regression
+    // elsewhere in `src/` will fail this test with a noisy message —
+    // that is intentional: the contract is "src/ compiles", not
+    // "the import site compiles in isolation".
     const diagnostics = compileSrc({ withShim: true }).map((d) =>
       ts.flattenDiagnosticMessageText(d.messageText, '\n'),
     );
     expect(diagnostics).toEqual([]);
   });
 
-  test('src emits a missing-types diagnostic for @chordsketch/wasm when the shim is absent', () => {
-    // Negative control. Proves the shim is what unblocks resolution
-    // for every dynamic-import site, not some incidental fallback.
+  test('every src file dynamically importing @chordsketch/wasm emits a missing-types diagnostic when the shim is absent', () => {
+    // Negative control. The filter accepts TS2307 (no module found
+    // anywhere) AND TS7016 (declaration file missing for a JS
+    // module). Which code fires depends on whether the runtime
+    // bundle is present alongside the missing `.d.ts`; the test
+    // accepts either. A future wasm-pack change that shipped a stub
+    // `.d.ts` with incomplete exports would shift the diagnostic
+    // class (TS2305 / TS2339), in which case this test needs
+    // updating — that is intentional, the test pins the current
+    // failure mode.
     const diagnostics = compileSrc({ withShim: false });
     const wasmErrors = diagnostics.filter((d) => {
       if (d.code !== 7016 && d.code !== 2307) return false;
       const msg = ts.flattenDiagnosticMessageText(d.messageText, '\n');
       return msg.includes('@chordsketch/wasm') && !msg.includes('@chordsketch/wasm-export');
     });
-    expect(wasmErrors).not.toHaveLength(0);
+    const filesWithErrors = new Set(
+      wasmErrors.map((d) => d.file?.fileName).filter((n): n is string => Boolean(n)),
+    );
+    const expectedSites = collectSourceFiles(SRC_DIR).filter((p) => {
+      if (!TS_EXTS.has(extname(p))) return false;
+      if (p.endsWith('.d.ts')) return false;
+      const source = readFileSync(p, 'utf8');
+      return WASM_IMPORT_RE.test(source);
+    });
+    // Asserting "≥ every site that imports the module" pins the
+    // shim's claim that it unblocks the ENTIRE dynamic-import
+    // surface. A future refactor that drops some sites is welcome;
+    // a future refactor that drops the shim and silently leaves
+    // some sites failing is the regression class we want to catch.
+    expect(filesWithErrors.size).toBeGreaterThanOrEqual(expectedSites.length);
+  });
+
+  test('src files importing @chordsketch/wasm carry no suppression directive', () => {
+    // Sibling-test symmetry with #2541's wasm-export shim policy
+    // (`tests/use-pdf-export-optional-peer.test.ts`). A future
+    // contributor reintroducing `@ts-expect-error`,
+    // `@ts-ignore`, or `@ts-nocheck` near a `@chordsketch/wasm`
+    // import would recreate the silent-failure class
+    // `.claude/rules/root-cause-fixes.md` warns about — the
+    // directive would silently flip between dead and load-bearing
+    // depending on consumer resolution state. The shim's whole
+    // point is to make every such directive unnecessary.
+    const offending: string[] = [];
+    for (const path of collectSourceFiles(SRC_DIR)) {
+      if (!TS_EXTS.has(extname(path))) continue;
+      if (path.endsWith('.d.ts')) continue;
+      const source = readFileSync(path, 'utf8');
+      if (!WASM_IMPORT_RE.test(source)) continue;
+      if (SUPPRESSION_RE.test(source)) offending.push(path);
+    }
+    expect(offending).toEqual([]);
   });
 });
