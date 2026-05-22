@@ -1,28 +1,22 @@
 // Ambient declaration for the OPTIONAL peer `@chordsketch/wasm-export`.
 //
-// `@chordsketch/wasm-export` is declared in `package.json` as an
-// optional peer dependency (`peerDependenciesMeta`): consumers who use
-// `<PdfExport>` install it themselves; consumers who only use
-// `<ChordSheet>` don't pay the heavy WebAssembly download. As a result
-// the module may or may not be resolvable when this package is
-// type-checked — `tsc` (and `tsup`'s DTS build, which the package's
-// `prepare` hook runs on `pnpm install`) sees a `TS2307 Cannot find
-// module` error in the unresolved case but a clean import in the
-// resolved case.
+// The peer carries `peerDependenciesMeta.optional: true` in
+// `package.json`: consumers who use `<PdfExport>` install it
+// themselves; consumers who only use `<ChordSheet>` don't pay the
+// heavy WebAssembly download. The module may therefore be unresolved
+// at type-check time.
 //
-// Suppressing the diagnostic with `@ts-expect-error` flips the failure
-// mode in the resolved case to `TS2578 Unused '@ts-expect-error'
-// directive` (#2539). Suppressing it with `@ts-ignore` silences not
-// only the resolution error but every future diagnostic on the same
-// line, including unrelated typos and cast mismatches.
+// Without this declaration the call site in `use-pdf-export.ts` would
+// need a suppression directive (#2539). Either choice misfires under
+// one of the two consumer states: `@ts-expect-error` becomes dead
+// once the peer auto-resolves; `@ts-ignore` silently swallows every
+// other diagnostic on the same line. Declaring the module here lets
+// the call site stay directive-free and subject to all future TS
+// checks.
 //
-// Declaring the module here makes resolution succeed in both states
-// without any suppression directive at the call site. When the
-// optional peer is installed alongside the consumer's build, that
-// package's own `.d.ts` (shipped by wasm-pack) is the source of truth
-// for the module's surface; this ambient declaration only takes over
-// when the resolver finds nothing else. The structural
-// `Promise<PdfRenderer>` cast at the lazy-load site (see
-// `use-pdf-export.ts`) is what pins the subset this package actually
-// touches — the ambient does not need to repeat that contract.
+// The shorthand form (no body) yields `any`, so the real `.d.ts`
+// shipped by the optional peer — when installed in the consumer's
+// `node_modules` — supersedes this ambient without merge conflict.
+// The narrow `Promise<PdfRenderer>` cast at the lazy-load site pins
+// the subset `exportPdf` actually touches.
 declare module '@chordsketch/wasm-export';

@@ -87,14 +87,10 @@ export interface UsePdfExportResult {
 export type WasmLoader = () => Promise<PdfRenderer>;
 
 // Lazy-load `@chordsketch/wasm-export` only when an export is
-// actually requested. The optional-peer resolution problem (a
-// suppression directive here used to flip between dead and
-// load-bearing depending on whether the consumer's package
-// manager auto-installed the peer — see #2539) is solved
-// upstream by the ambient declaration in `wasm-export-shim.d.ts`,
-// so this site needs no directive. The structural
-// `Promise<PdfRenderer>` cast pins the narrow subset that
-// `usePdfExport` actually touches.
+// actually requested. The optional-peer resolution issue (#2539)
+// is solved by `wasm-export-shim.d.ts`, so this site needs no
+// suppression directive. The structural `Promise<PdfRenderer>`
+// cast pins the narrow subset `exportPdf` touches.
 const defaultLoader: WasmLoader = () =>
   import('@chordsketch/wasm-export') as Promise<PdfRenderer>;
 
