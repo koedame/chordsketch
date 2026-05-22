@@ -90,9 +90,10 @@ export type WasmLoader = () => Promise<PdfRenderer>;
 // actually requested. The optional-peer resolution issue (#2539)
 // is solved by the sibling shim declaration, so this site needs no
 // suppression directive. The `as Promise<PdfRenderer>` cast is
-// LOAD-BEARING: without it the shorthand ambient declaration would
-// propagate `any` into `rendererPromiseRef` and silently lose the
-// narrow surface contract `exportPdf` relies on.
+// LOAD-BEARING: the shorthand ambient declaration types the module
+// as `any`, and without the cast that `any` would survive the
+// `await mod = loader()` below — silently dropping the narrow
+// surface contract `exportPdf` relies on.
 const defaultLoader: WasmLoader = () =>
   import('@chordsketch/wasm-export') as Promise<PdfRenderer>;
 
