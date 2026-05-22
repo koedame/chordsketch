@@ -77,14 +77,14 @@ export type ChordDiagramWasmLoader = () => Promise<DiagramRenderer>;
 // runtime contract; consumers that pass their own loader are
 // expected to satisfy it directly.
 //
-// Asymmetry note: the other dynamic `import('@chordsketch/wasm')`
-// sites in `src/` use a single `as Promise<T>` cast, which surfaces
-// a `TS2352` if the real wasm-pack declarations supersede the
-// ambient shim (`wasm-shim.d.ts`, #2540) with a shape incompatible
-// with `T`. The `unknown` step here erases shape conformance by
-// construction, so the cast at this site cannot carry the same
-// divergence-detection responsibility — that responsibility lives
-// in the runtime test against a stubbed renderer instead.
+// Asymmetry note: a single-step `as Promise<T>` cast on a dynamic
+// `import('@chordsketch/wasm')` would surface a `TS2352` if the
+// real wasm-pack declarations supersede the ambient shim
+// (`wasm-shim.d.ts`, #2540) with a shape incompatible with `T`.
+// The `unknown` step here erases shape conformance by construction,
+// so the cast at this site cannot carry that divergence-detection
+// responsibility — it lives in the runtime test against a stubbed
+// renderer instead.
 const defaultLoader: ChordDiagramWasmLoader = () =>
   import('@chordsketch/wasm') as unknown as Promise<DiagramRenderer>;
 

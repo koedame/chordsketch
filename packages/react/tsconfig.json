@@ -13,6 +13,10 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "baseUrl": ".",
     "paths": {
+      // If this target changes, update `makeHost.shouldHide` in
+      // `tests/wasm-shim-resolution.test.ts` — the negative-control
+      // test hides this path to keep its assertions accurate when
+      // the wasm-pack artefacts exist locally.
       "@chordsketch/wasm": ["../npm/web/chordsketch_wasm"]
     }
   },
