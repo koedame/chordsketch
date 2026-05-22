@@ -1922,6 +1922,23 @@ export interface RenderChordproAstOptions {
    */
   transposedKey?: string | null;
   /**
+   * Per-directive transposed-key map keyed by the authored
+   * `{key:}` directive value (e.g. `{ G: "A", D: "E" }` for a
+   * song with both directives transposed +2). Plumbed in from
+   * `useChordproAst`'s `transposedKeyDirectives`, which is
+   * sourced from the wasm `ParseChordproResult` (#2525).
+   *
+   * When present, the walker uses it for EVERY `{key:}`
+   * directive — primary AND mid-song — to emit a paired
+   * "Original → Playing" chip, achieving four-way parity with
+   * the Rust text / HTML / PDF renderers per
+   * `.claude/rules/renderer-parity.md`. When omitted, the walker
+   * falls back to the older `transposedKey`-only path that
+   * shows the pair for the primary directive only and leaves
+   * mid-song directives authored.
+   */
+  transposedKeyDirectives?: Record<string, string>;
+  /**
    * Append a chord-diagram grid showing each unique chord used in
    * the lyrics + each chord declared via `{define}`. Mirrors the
    * `<section class="chord-diagrams">` block
@@ -2843,8 +2860,27 @@ interface WalkContext {
    * paired "Written / Sounding" display matching the Perl
    * `key_print` / `key_sound` distinction. `null` when no
    * transposition is active or it lands on the same key.
+   *
+   * Retained as a back-compat path for hosts that supply only
+   * the primary `transposedKey` and not the full
+   * `transposedKeyDirectives` map; the body walker prefers the
+   * map when it has an entry for the directive's value (#2525).
    */
   soundingKey: string | null;
+  /**
+   * Per-directive transposed-key map keyed by the authored
+   * `{key:}` directive value (e.g. `{ G: "A", D: "E" }` for a
+   * song with both directives transposed +2). Sister-site to the
+   * Rust renderers' inline `canonical_transposed_key_with_style`
+   * calls per `{key:}` directive — without this channel the
+   * walker only knew the song-primary's transposition and fell
+   * back to the authored value for every other directive,
+   * diverging from the static-output renderers. The host
+   * supplies this map via
+   * `RenderChordproAstOptions.transposedKeyDirectives`; closes
+   * #2525.
+   */
+  transposedKeyDirectives: Record<string, string>;
   /**
    * Chord drag-and-drop callback (see
    * `RenderChordproAstOptions.onChordReposition`). When
@@ -3181,24 +3217,27 @@ function handleDirective(
   // the metronome).
   if (kind.tag === 'key' && directive.value && directive.value.trim().length > 0) {
     const keyName = directive.value.trim();
-    // When transposition is active AND this `{key}` directive
-    // matches the song-primary key (the one the host's
-    // `transposedKey` was computed against), render a paired
-    // "Original / Playing" display so the player can see both
-    // the source-authored key and the resulting capo / transposed
-    // key. "Original" / "Playing" reads more naturally for
-    // guitar-style chord sheets than the technically correct
-    // "Written" / "Sounding" pair (the latter trips up readers
-    // who haven't internalised the music-theory distinction).
-    //
-    // Mid-song `{key}` changes (and any `{key}` whose value
-    // doesn't match the primary) fall through to the single
-    // chip — the host's `transposedKey` only knows the primary
-    // key's transposition, so applying it blindly to a
-    // different `{key}` would be incorrect.
-    const showSounding =
-      ctx.soundingKey != null && ctx.primaryKey != null && keyName === ctx.primaryKey;
-    if (showSounding && ctx.soundingKey != null) {
+    // Resolve the sounding (transposed) value for this specific
+    // directive. Prefer the per-directive map (#2525) — it
+    // covers every `{key:}` directive in the song, primary and
+    // mid-song alike, computed via the same
+    // `canonical_transposed_key_with_style` +
+    // `transposed_key_prefers_flat` pair the Rust renderers use,
+    // so the four surfaces agree on the displayed transposed
+    // value. Fall back to the older `soundingKey` channel (which
+    // only knows the song-primary's transposition) for hosts
+    // that haven't been updated yet — that path's behaviour is
+    // unchanged: it pairs the primary `{key:}` only and leaves
+    // mid-song directives authored.
+    const mappedSounding = ctx.transposedKeyDirectives[keyName];
+    const soundingFromMap =
+      mappedSounding !== undefined && mappedSounding !== keyName ? mappedSounding : null;
+    const soundingFromPrimary =
+      ctx.soundingKey != null && ctx.primaryKey != null && keyName === ctx.primaryKey
+        ? ctx.soundingKey
+        : null;
+    const sounding = soundingFromMap ?? soundingFromPrimary;
+    if (sounding !== null) {
       pushElement(
         ctx,
         <span key={key} className="meta-inline meta-inline--key meta-inline--key-pair">
@@ -3211,11 +3250,9 @@ function handleDirective(
             →
           </span>
           <span className="meta-inline__group">
-            <KeySignatureGlyph keyName={ctx.soundingKey} className="meta-inline__glyph" />
+            <KeySignatureGlyph keyName={sounding} className="meta-inline__glyph" />
             <span className="meta-inline__label">Playing:</span>{' '}
-            <span className="meta-inline__value">
-              {unicodeAccidentals(ctx.soundingKey)}
-            </span>
+            <span className="meta-inline__value">{unicodeAccidentals(sounding)}</span>
           </span>
         </span>,
         key, // source-line for `line--active` decoration
@@ -3432,6 +3469,7 @@ export function renderChordproAst(
       options.transposedKey && options.transposedKey !== song.metadata.key
         ? options.transposedKey
         : null,
+    transposedKeyDirectives: options.transposedKeyDirectives ?? {},
     onChordReposition: options.onChordReposition,
   };
   // Emit header first so metadata lands above the body even when
