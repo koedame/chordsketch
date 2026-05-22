@@ -29,6 +29,32 @@ pub enum KeySigType {
     Natural,
 }
 
+/// Diagnostic result of a key-signature lookup. Distinguishes the
+/// two failure modes so callers can emit a warning when a
+/// well-formed key-name parsed but missed the lookup table — a
+/// signal that the table has a gap and the glyph is silently
+/// blank.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeySignatureLookup {
+    /// The input parsed and the lookup table resolved to an
+    /// accidental count and direction.
+    Resolved(usize, KeySigType),
+    /// The input parsed as a key name (root in `A..=G`, optional
+    /// `b`/`#` accidental, optional minor suffix) but no lookup
+    /// table entry exists for the parsed `(root, accidental,
+    /// is_minor)` triple. The glyph caller should still render
+    /// an empty staff but SHOULD emit a warning so the table gap
+    /// is observable — the silent empty-staff render gave screen
+    /// readers and sighted users contradictory information (#2526).
+    ParsedButMissing,
+    /// The input did not parse as a key name at all (empty,
+    /// non-letter root, or unsupported suffix such as
+    /// `{key: C dorian}`). Callers fall back to the staff-only
+    /// glyph without a warning — modal `{key}` values are valid
+    /// ChordPro and not a table-gap signal.
+    Unparseable,
+}
+
 /// Order of sharps in a key signature, in their conventional
 /// treble-clef staff positions (`y` = half-line steps from the
 /// top staff line; 0 = top line, 1 = first space, …).
@@ -57,12 +83,30 @@ const FLAT_ORDER: &[(&str, f32)] = &[
 /// `{key}` value. Accepts both major (`G`, `Bb`, `F#`) and minor
 /// (`Em`, `E minor`, `f# min`) spellings; unicode ♯ / ♭ are
 /// normalised to ASCII. Returns `None` for an unparseable input
-/// so callers can render the marker without an icon.
+/// OR for a parseable key whose lookup table has no entry, so
+/// callers can render the marker without an icon. Callers that
+/// need to distinguish the two None cases (e.g. to emit a warning
+/// on a parseable-but-missing-from-table input) should use
+/// [`key_signature_for_with_diagnostics`].
 #[must_use]
 pub fn key_signature_for(key: &str) -> Option<(usize, KeySigType)> {
+    match key_signature_for_with_diagnostics(key) {
+        KeySignatureLookup::Resolved(count, kind) => Some((count, kind)),
+        KeySignatureLookup::ParsedButMissing | KeySignatureLookup::Unparseable => None,
+    }
+}
+
+/// Variant of [`key_signature_for`] that distinguishes a
+/// parseable-but-missing input from an unparseable one. Used by
+/// the HTML renderer to emit a warning when a key string that
+/// parses as a chord nonetheless has no lookup entry — a signal
+/// that the table has a silent gap rather than that the caller
+/// passed a modal `{key}` value (#2526).
+#[must_use]
+pub fn key_signature_for_with_diagnostics(key: &str) -> KeySignatureLookup {
     let trimmed = key.trim();
     if trimmed.is_empty() {
-        return None;
+        return KeySignatureLookup::Unparseable;
     }
     // Normalise unicode accidentals to ASCII so `F♯` and `F#`
     // hit the same table entry. NBSP / ideographic spaces fold
@@ -80,9 +124,12 @@ pub fn key_signature_for(key: &str) -> Option<(usize, KeySigType)> {
 
     // Parse `<root>[b|#]( m | min | minor)?` case-insensitively.
     let mut chars = ascii.chars();
-    let root = chars.next()?.to_ascii_uppercase();
+    let Some(root_ch) = chars.next() else {
+        return KeySignatureLookup::Unparseable;
+    };
+    let root = root_ch.to_ascii_uppercase();
     if !('A'..='G').contains(&root) {
-        return None;
+        return KeySignatureLookup::Unparseable;
     }
     let mut accidental = String::new();
     let rest: String = chars.collect();
@@ -97,7 +144,7 @@ pub fn key_signature_for(key: &str) -> Option<(usize, KeySigType)> {
     let suffix_trim = suffix.trim().to_ascii_lowercase();
     let is_minor = matches!(suffix_trim.as_str(), "m" | "min" | "minor");
     if !is_minor && !suffix_trim.is_empty() {
-        return None;
+        return KeySignatureLookup::Unparseable;
     }
 
     let note = format!("{root}{accidental}");
@@ -120,6 +167,15 @@ pub fn key_signature_for(key: &str) -> Option<(usize, KeySigType)> {
         ("Gb", (6, KeySigType::Flat)),
         ("Cb", (7, KeySigType::Flat)),
     ];
+    // Minor table includes Dbm / Gbm / Cbm as enharmonic
+    // aliases of C#m / F#m / Bm respectively — these spellings
+    // arise from `transposed_key_prefers_flat`-driven transpose
+    // landings (e.g. `{key: Am}` +4 with prefer-flat → `Dbm`,
+    // #2526). Conventional notation uses the sharp-side
+    // key signature for these (D-flat minor has no real signature;
+    // by convention the 4-sharp C-sharp minor signature is
+    // borrowed), so the staff glyph shows sharps even when chord
+    // lines spell flats.
     let minor: &[(&str, (usize, KeySigType))] = &[
         ("A", (0, KeySigType::Natural)),
         ("E", (1, KeySigType::Sharp)),
@@ -136,9 +192,15 @@ pub fn key_signature_for(key: &str) -> Option<(usize, KeySigType)> {
         ("Bb", (5, KeySigType::Flat)),
         ("Eb", (6, KeySigType::Flat)),
         ("Ab", (7, KeySigType::Flat)),
+        ("Cb", (2, KeySigType::Sharp)),
+        ("Gb", (3, KeySigType::Sharp)),
+        ("Db", (4, KeySigType::Sharp)),
     ];
     let table = if is_minor { minor } else { major };
-    table.iter().find(|(n, _)| *n == note).map(|(_, v)| *v)
+    match table.iter().find(|(n, _)| *n == note).map(|(_, v)| *v) {
+        Some((count, kind)) => KeySignatureLookup::Resolved(count, kind),
+        None => KeySignatureLookup::ParsedButMissing,
+    }
 }
 
 /// Emit an inline SVG mini key-signature glyph for the given
@@ -415,6 +477,70 @@ mod tests {
         assert_eq!(key_signature_for("Dm"), Some((1, KeySigType::Flat)));
         assert_eq!(key_signature_for("Cm"), Some((3, KeySigType::Flat)));
         assert_eq!(key_signature_for("F#m"), Some((3, KeySigType::Sharp)));
+    }
+
+    #[test]
+    fn key_signature_enharmonic_flat_side_minor_returns_sharp_side_count() {
+        // Dbm / Gbm / Cbm arise from `transposed_key_prefers_flat`
+        // landings (e.g. `{key: Am}` +4 → `Dbm`). They have no
+        // standalone key signature — by convention the staff
+        // glyph borrows the sharp-side enharmonic's signature
+        // (Dbm ↔ C#m = 4 sharps, Gbm ↔ F#m = 3 sharps,
+        // Cbm ↔ Bm = 2 sharps). Without these entries the glyph
+        // emitted an empty staff that contradicted the
+        // `aria-label="Key Dbm"` (#2526).
+        assert_eq!(key_signature_for("Dbm"), Some((4, KeySigType::Sharp)));
+        assert_eq!(key_signature_for("Gbm"), Some((3, KeySigType::Sharp)));
+        assert_eq!(key_signature_for("Cbm"), Some((2, KeySigType::Sharp)));
+        // Unicode ♭ variant routes through the same normalisation
+        // and lands on the same entry.
+        assert_eq!(key_signature_for("D♭m"), Some((4, KeySigType::Sharp)));
+    }
+
+    #[test]
+    fn key_signature_svg_enharmonic_minor_emits_sharp_accidentals() {
+        // Dbm uses the C#m signature (4 sharps) so the rendered
+        // SVG carries 4 `<g>` accidental groups, not an empty
+        // staff. Before #2526 the glyph for Dbm had zero `<g>`
+        // groups while still carrying `aria-label="Key Dbm"`,
+        // mismatching screen readers and sighted users.
+        let svg = key_signature_svg("Dbm");
+        assert_eq!(svg.matches("<g ").count(), 4);
+        assert!(svg.contains("Key Dbm"));
+        assert!(svg.contains("4 sharps"));
+    }
+
+    #[test]
+    fn key_signature_diagnostics_distinguishes_unparseable_from_table_gap() {
+        // Sanity: in-table entries report Resolved.
+        assert_eq!(
+            key_signature_for_with_diagnostics("A"),
+            KeySignatureLookup::Resolved(3, KeySigType::Sharp)
+        );
+        // Modal / non-key suffix => Unparseable (no warning).
+        assert_eq!(
+            key_signature_for_with_diagnostics("C dorian"),
+            KeySignatureLookup::Unparseable
+        );
+        assert_eq!(
+            key_signature_for_with_diagnostics(""),
+            KeySignatureLookup::Unparseable
+        );
+        assert_eq!(
+            key_signature_for_with_diagnostics("H"),
+            KeySignatureLookup::Unparseable
+        );
+        // Fbm parses as a key (root F, flat accidental, minor
+        // suffix) but no table entry exists — Fbm = 8 flats is
+        // outside the standard 0..=7 range and `transposed_key`
+        // canonicalises it to Em instead, so #2526's backfill
+        // intentionally does not include it. The diagnostics
+        // variant surfaces the table gap so the renderer can
+        // emit a warning instead of a silent empty-staff glyph.
+        assert_eq!(
+            key_signature_for_with_diagnostics("Fbm"),
+            KeySignatureLookup::ParsedButMissing
+        );
     }
 
     #[test]

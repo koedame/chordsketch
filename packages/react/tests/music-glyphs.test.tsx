@@ -53,6 +53,25 @@ describe('keySignatureFor', () => {
     expect(sig?.type).toBe(type);
   });
 
+  // Dbm / Gbm / Cbm arise from `transposed_key_prefers_flat`
+  // landings (e.g. `{key: Am}` +4 with prefer-flat → `Dbm`,
+  // #2526). They have no standalone key signature — by convention
+  // the glyph borrows the sharp-side enharmonic's signature
+  // (Dbm ↔ C#m = 4 sharps, Gbm ↔ F#m = 3 sharps, Cbm ↔ Bm = 2
+  // sharps). Without these entries the glyph emitted an empty
+  // staff that contradicted `aria-label="Key Dbm"`.
+  test.each([
+    ['Dbm', 4, 'sharp'],
+    ['Gbm', 3, 'sharp'],
+    ['Cbm', 2, 'sharp'],
+    ['D♭m', 4, 'sharp'],
+  ])('enharmonic flat-side minor %s maps to %d %s', (input, count, type) => {
+    const sig = keySignatureFor(input);
+    expect(sig).not.toBeNull();
+    expect(sig?.count).toBe(count);
+    expect(sig?.type).toBe(type);
+  });
+
   test('accepts unicode ♯ / ♭ accidentals and lowercase trailing m', () => {
     expect(keySignatureFor('F♯')?.count).toBe(6);
     expect(keySignatureFor('B♭')?.count).toBe(2);
@@ -132,6 +151,17 @@ describe('<KeySignatureGlyph>', () => {
     const svg = container.querySelector('svg.music-glyph--key');
     expect(svg).not.toBeNull();
     expect(svg?.querySelectorAll('g').length).toBe(0);
+  });
+
+  test('Dbm renders 4 sharps via the enharmonic C#m signature (#2526)', () => {
+    // Before the gap was filled, Dbm rendered an empty staff
+    // (0 accidental groups) while the aria-label still announced
+    // "Key Dbm" — a silent visual + accessibility mismatch.
+    const { container } = render(<KeySignatureGlyph keyName="Dbm" />);
+    const svg = container.querySelector('svg.music-glyph--key');
+    expect(svg).not.toBeNull();
+    expect(svg?.querySelectorAll('g').length).toBe(4);
+    expect(svg?.getAttribute('aria-label')).toBe('Key Dbm (4 sharps)');
   });
 
   test('aria-label spells out the key + accidental count for screen readers', () => {

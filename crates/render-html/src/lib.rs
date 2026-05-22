@@ -423,6 +423,29 @@ fn render_song_body_into(
                                     )
                                     .unwrap_or_else(|| value.to_string())
                                 };
+                                // Surface a warning when the
+                                // key string parses as a chord
+                                // root + accidental + optional
+                                // minor suffix but the
+                                // key-signature lookup table has
+                                // no entry. This is the silent
+                                // empty-staff failure mode
+                                // #2526 closed — the table-gap
+                                // case is observable now, modal
+                                // `{key: C dorian}` values (which
+                                // do not parse as a chord) stay
+                                // silent.
+                                if matches!(
+                                    music_glyphs::key_signature_for_with_diagnostics(&displayed),
+                                    music_glyphs::KeySignatureLookup::ParsedButMissing
+                                ) {
+                                    push_warning(
+                                        warnings,
+                                        format!(
+                                            "key signature lookup table missing entry for parseable key: {displayed}"
+                                        ),
+                                    );
+                                }
                                 html.push_str(&format!(
                                     "<span class=\"meta-inline meta-inline--key\">\
                                      {glyph}\

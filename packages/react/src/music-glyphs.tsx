@@ -112,6 +112,14 @@ export function keySignatureFor(
     Gb: [6, 'flat'],
     Cb: [7, 'flat'],
   };
+  // Minor table includes Dbm / Gbm / Cbm as enharmonic aliases of
+  // C#m / F#m / Bm respectively — these spellings arise from
+  // `transposed_key_prefers_flat`-driven transpose landings (e.g.
+  // `{key: Am}` +4 with prefer-flat → `Dbm`, #2526). Conventional
+  // notation borrows the sharp-side key signature for them
+  // (D-flat minor has no real signature), so the staff glyph shows
+  // sharps even when chord lines spell flats. Sister-site to
+  // `crates/render-html/src/music_glyphs.rs`.
   const MINOR: Record<string, [number, 'sharp' | 'flat' | 'natural']> = {
     A: [0, 'natural'],
     E: [1, 'sharp'],
@@ -128,6 +136,9 @@ export function keySignatureFor(
     Bb: [5, 'flat'],
     Eb: [6, 'flat'],
     Ab: [7, 'flat'],
+    Cb: [2, 'sharp'],
+    Gb: [3, 'sharp'],
+    Db: [4, 'sharp'],
   };
   const table = isMinor ? MINOR : MAJOR;
   const note = `${root}${accidental}`;
