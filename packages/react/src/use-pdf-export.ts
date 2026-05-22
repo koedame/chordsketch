@@ -86,18 +86,16 @@ export interface UsePdfExportResult {
  */
 export type WasmLoader = () => Promise<PdfRenderer>;
 
-// `@chordsketch/wasm-export` is declared in package.json as an
-// OPTIONAL peer dependency — consumers who use `<PdfExport>`
-// install it themselves; consumers who only use `<ChordSheet>`
-// don't pay the ~6 MB download. This means tsc may not be able to
-// resolve the module at build time (e.g., when the react package
-// is typechecked in CI before wasm-export is published / linked).
-// `@ts-expect-error` silences the resolution error while the
-// structural `Promise<PdfRenderer>` cast preserves the type-check
-// at the use site.
+// Lazy-load `@chordsketch/wasm-export` only when an export is
+// actually requested. The optional-peer resolution problem (a
+// suppression directive here used to flip between dead and
+// load-bearing depending on whether the consumer's package
+// manager auto-installed the peer — see #2539) is solved
+// upstream by the ambient declaration in `wasm-export-shim.d.ts`,
+// so this site needs no directive. The structural
+// `Promise<PdfRenderer>` cast pins the narrow subset that
+// `usePdfExport` actually touches.
 const defaultLoader: WasmLoader = () =>
-  // @ts-expect-error optional peer dep; see `peerDependenciesMeta` in package.json
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   import('@chordsketch/wasm-export') as Promise<PdfRenderer>;
 
 /**
