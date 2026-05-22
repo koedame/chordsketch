@@ -1105,6 +1105,52 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_chordpro_transposed_key_directives_deduplicates_same_key() {
+        // The same {key:} value appearing more than once (e.g. an
+        // opening directive and a section repeat) must produce only
+        // one map entry — the transposed value is identical for both
+        // occurrences and the first wins. Exercises the
+        // `contains_key` deduplication branch in
+        // `do_parse_chordpro`.
+        let opts = RenderOptions {
+            transpose: 2,
+            config: None,
+        };
+        let (_json, _warnings, _transposed_key, transposed_key_directives) =
+            do_parse_chordpro("{key: G}\n[G]verse\n{key: G}\n[G]chorus", Some(&opts)).unwrap();
+        assert_eq!(
+            transposed_key_directives.len(),
+            1,
+            "duplicate {{key: G}} must not produce two map entries, got: {transposed_key_directives:?}"
+        );
+        assert_eq!(
+            transposed_key_directives.get("G").map(String::as_str),
+            Some("A"),
+            "{{key: G}} +2 must transpose to A, got: {transposed_key_directives:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_chordpro_transposed_key_directives_identity_at_octave() {
+        // transpose=+12 is an octave — the key lands on the same
+        // pitch class (C → C) so the identity-skip guard prevents
+        // the no-op entry from entering the map. The walker treats
+        // presence-in-map as "show the pair", so an identity entry
+        // would incorrectly trigger the pair display for unchanged
+        // keys.
+        let opts = RenderOptions {
+            transpose: 12,
+            config: None,
+        };
+        let (_json, _warnings, _transposed_key, transposed_key_directives) =
+            do_parse_chordpro("{key: C}\n[C]Hello", Some(&opts)).unwrap();
+        assert!(
+            transposed_key_directives.is_empty(),
+            "transpose+12 (identity) must not produce a map entry for C→C, got: {transposed_key_directives:?}"
+        );
+    }
+
+    #[test]
     fn test_parse_chordpro_transposed_key_null_when_transpose_zero() {
         let opts = RenderOptions {
             transpose: 0,
@@ -1131,11 +1177,18 @@ mod tests {
             transpose: 2,
             config: None,
         };
-        let (_json, _warnings, transposed_key, _transposed_key_directives) =
+        let (_json, _warnings, transposed_key, transposed_key_directives) =
             do_parse_chordpro("{key: ???}", Some(&opts)).unwrap();
         assert!(
             transposed_key.is_none(),
             "unparseable key must surface as `None` so the React surface can fall back, got: {transposed_key:?}"
+        );
+        // The directive-map loop must also skip non-note-letter
+        // values (the `canonical_transposed_key_with_style` → None
+        // branch), so the map stays empty for the same input.
+        assert!(
+            transposed_key_directives.is_empty(),
+            "unparseable key must not appear in transposed_key_directives, got: {transposed_key_directives:?}"
         );
     }
 

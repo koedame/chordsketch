@@ -3146,6 +3146,24 @@ mod tests {
     }
 
     #[test]
+    fn test_key_parseable_but_missing_from_table_emits_warning() {
+        // `{key: Fbm}` parses as a valid key name (root=F, flat
+        // accidental, minor suffix) but has no entry in the
+        // key-signature lookup table — it is enharmonically
+        // equivalent to Em, which `canonical_transposed_key` never
+        // produces, but a user can hand-write it. The renderer must
+        // emit a diagnostics warning rather than silently showing an
+        // empty staff glyph (#2526).
+        let song = chordsketch_chordpro::parse("{key: Fbm}\n[Em]Hi").unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            result.warnings.iter().any(|w| w.contains("Fbm")),
+            "expected a warning for parseable-but-missing key Fbm, got: {:?}",
+            result.warnings
+        );
+    }
+
+    #[test]
     fn test_render_empty() {
         let song = chordsketch_chordpro::parse("").unwrap();
         let html = render_song(&song);
