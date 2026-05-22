@@ -6,17 +6,15 @@
 // heavy WebAssembly download. The module may therefore be unresolved
 // at type-check time.
 //
-// Without this declaration the call site in `use-pdf-export.ts` would
-// need a suppression directive (#2539). Either choice misfires under
-// one of the two consumer states: `@ts-expect-error` becomes dead
+// Without this declaration the lazy-load call site would need a
+// suppression directive (#2539). Either choice misfires under one of
+// the two consumer resolution states: `@ts-expect-error` becomes dead
 // once the peer auto-resolves; `@ts-ignore` silently swallows every
 // other diagnostic on the same line. Declaring the module here lets
 // the call site stay directive-free and subject to all future TS
-// checks.
+// checks. The narrow `Promise<PdfRenderer>` cast at the call site
+// (see `use-pdf-export.ts`) keeps the surface contract explicit.
 //
-// The shorthand form (no body) yields `any`, so the real `.d.ts`
-// shipped by the optional peer — when installed in the consumer's
-// `node_modules` — supersedes this ambient without merge conflict.
-// The narrow `Promise<PdfRenderer>` cast at the lazy-load site pins
-// the subset `exportPdf` actually touches.
+// Body-less form yields `any`; the real `.d.ts` shipped by the
+// optional peer supersedes it when installed.
 declare module '@chordsketch/wasm-export';
