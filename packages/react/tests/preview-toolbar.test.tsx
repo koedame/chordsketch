@@ -67,40 +67,44 @@ describe('<PreviewToolbar>', () => {
         capturedFilename = this.download;
       });
 
-    const stub = makePdfStub();
-    render(
-      <PreviewToolbar
-        source={SAMPLE}
-        onSourceChange={vi.fn()}
-        transpose={0}
-        onTransposeChange={vi.fn()}
-        exportFilename="my-song.pdf"
-        wasmLoader={makePdfLoader(stub)}
-      />,
-    );
-    const exportGroup = screen.getByRole('group', { name: 'Export' });
-    const button = within(exportGroup).getByRole('button', {
-      name: PDF_EXPORT_DEFAULT_LABEL,
-    });
-    await act(async () => {
-      fireEvent.click(button);
-    });
-    expect(capturedFilename).toBe('my-song.pdf');
-    // Sanity check the source / options round-trip while we have the
-    // stub wired: a regression that dropped `source` would also
-    // surface here, not silently in production. The toolbar always
-    // passes `options={{ transpose }}` with the current value (here
-    // `0`), so `usePdfExport` routes through `render_pdf_with_options`
-    // rather than `render_pdf` per the branch at
-    // `packages/react/src/use-pdf-export.ts:187-189`.
-    expect(stub.render_pdf_with_options).toHaveBeenCalledWith(SAMPLE, {
-      transpose: 0,
-    });
-    expect(stub.render_pdf).not.toHaveBeenCalled();
-    // Restore the anchor-click prototype mock so subsequent tests in
-    // this file (or in tests sharing the jsdom environment) do not
-    // inherit our captured-filename behaviour.
-    clickSpy.mockRestore();
+    try {
+      const stub = makePdfStub();
+      render(
+        <PreviewToolbar
+          source={SAMPLE}
+          onSourceChange={vi.fn()}
+          transpose={0}
+          onTransposeChange={vi.fn()}
+          exportFilename="my-song.pdf"
+          wasmLoader={makePdfLoader(stub)}
+        />,
+      );
+      const exportGroup = screen.getByRole('group', { name: 'Export' });
+      const button = within(exportGroup).getByRole('button', {
+        name: PDF_EXPORT_DEFAULT_LABEL,
+      });
+      await act(async () => {
+        fireEvent.click(button);
+      });
+      expect(capturedFilename).toBe('my-song.pdf');
+      // Sanity check the source / options round-trip while we have the
+      // stub wired: a regression that dropped `source` would also
+      // surface here, not silently in production. The toolbar always
+      // passes `options={{ transpose }}` with the current value (here
+      // `0`), so `usePdfExport` routes through `render_pdf_with_options`
+      // rather than `render_pdf` per the branch at
+      // `packages/react/src/use-pdf-export.ts:187-189`.
+      expect(stub.render_pdf_with_options).toHaveBeenCalledWith(SAMPLE, {
+        transpose: 0,
+      });
+      expect(stub.render_pdf).not.toHaveBeenCalled();
+    } finally {
+      // Restore the anchor-click prototype mock unconditionally so
+      // subsequent tests in this file (or in tests sharing the jsdom
+      // environment) do not inherit our captured-filename behaviour,
+      // even if an assertion above throws.
+      clickSpy.mockRestore();
+    }
   });
 
   test('exposes the shared PDF export button label inside the Export group', () => {
