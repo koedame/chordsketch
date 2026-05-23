@@ -28,6 +28,13 @@ import { Fragment, cloneElement, isValidElement, useMemo, useState } from 'react
 import type { CSSProperties, DragEvent as ReactDragEvent, JSX, ReactNode } from 'react';
 
 import { ChordDiagram } from './chord-diagram';
+
+// Minimal `process.env.NODE_ENV` typing for dev-only assertions
+// below — same pattern as `ireal-pro-editor.tsx` /
+// `chord-textarea.tsx`. Bundlers (esbuild, Vite, webpack) replace
+// the literal `process.env.NODE_ENV` token at build time, so the
+// production bundle drops the dev-only branch entirely.
+declare const process: { env: { NODE_ENV?: string } };
 import {
   KeySignatureGlyph,
   MetronomeGlyph,
@@ -405,6 +412,31 @@ type GridToken =
   | { kind: 'space' };
 
 /**
+ * Single source of truth for cell-text terminator characters.
+ *
+ * The cell-text fallback in {@link tokenizeGridLine} reads a
+ * run of characters NOT in this set. The dispatch above it
+ * MUST handle every character in this set with a named branch
+ * that advances the cursor unconditionally; otherwise the
+ * outer loop pins on a head terminator nobody consumed (the
+ * bug fixed in issue #2556).
+ *
+ * `:` is in the set because it is the head of the `:|` / `:|:`
+ * repeat-end markers; a bare `:` not followed by `|` is
+ * dialect garbage that the cell-text path drops via the
+ * no-progress guard at the end of {@link tokenizeGridLine}.
+ *
+ * Sister-site: `DIALECT_TERMINATORS` in
+ * `crates/chordpro/src/grid.rs`. The two sets MUST remain in
+ * lockstep so the four rendering surfaces consume equivalent
+ * token streams.
+ */
+const DIALECT_TERMINATOR_RE = /[\s|:]/;
+function isDialectTerminator(ch: string): boolean {
+  return DIALECT_TERMINATOR_RE.test(ch);
+}
+
+/**
  * Tokenise a ChordPro grid line into structured pieces the
  * walker can lay out as iReal Pro-style bars. Handles every
  * spec-defined barline marker (`|:` / `:|` / `:|:` / `||` /
@@ -502,19 +534,26 @@ export function tokenizeGridLine(input: string): GridToken[] {
       i += 1;
       continue;
     }
-    // Read a cell token — any contiguous run of non-whitespace
-    // non-bar / non-colon characters. Chord brackets `[X]` are
-    // unwrapped: the parser produces a chord-bearing lyrics
-    // segment, but for grid lines we get the raw text, so let
-    // `[`...`]` survive as a chord name and trim the brackets
-    // ourselves.
+    // Cell-text fallback: read a run of non-terminator
+    // characters. Chord brackets `[X]` are unwrapped below.
     let j = i;
-    while (j < input.length && !/[\s|:]/.test(input[j]!)) j++;
+    while (j < input.length && !isDialectTerminator(input[j]!)) j++;
     if (j === i) {
-      // The head char is itself a terminator that no named
-      // branch above consumed — today only a bare `:` not
-      // followed by `|`. Drop it and advance so the outer
-      // loop cannot pin on the same offset and hang.
+      // Head char is a terminator the dispatch above did not
+      // consume. The terminator set + the named-branch dispatch
+      // must agree; if a future maintainer widens
+      // `DIALECT_TERMINATOR_RE` without adding a matching named
+      // branch, the dev-only assertion below fires so the bug
+      // class from issue #2556 (no-progress infinite loop) can
+      // never silently regress.
+      //
+      // Sister-site: same guard in `tokenize_grid_line`.
+      if (process.env.NODE_ENV !== 'production') {
+        console.assert(
+          isDialectTerminator(input[i]!),
+          `tokenizeGridLine no-progress guard reached on non-terminator char ${JSON.stringify(input[i])}`,
+        );
+      }
       i += 1;
       continue;
     }

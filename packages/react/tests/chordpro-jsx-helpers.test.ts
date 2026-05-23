@@ -150,53 +150,75 @@ describe('tokenizeGridLine', () => {
     expect(chord).toEqual({ kind: 'cell', names: ['nb13'] });
   });
 
-  // Regression tests for the no-progress branch in the cell-text
-  // reader (issue #2556). A bare `:` not followed by `|` used to
-  // hang the tokeniser because the cell-read terminator set
-  // includes `:` itself — `j === i`, nothing pushed, `i = j`
-  // pinned the outer loop on the same offset. The guard added in
-  // the same commit advances `i` by one in that branch; these
-  // tests pin the contract so the regression cannot return.
-  test('returns in bounded time for a bare trailing `:`', () => {
+  // Regression tests for #2556 — sister-site to the same
+  // cases in `crates/chordpro/src/grid.rs`. See the production
+  // guard in `tokenizeGridLine` for the mechanism; these tests
+  // pin the user-observable contract.
+  test('drops a bare trailing `:` without hanging the tokenizer', () => {
     // Mid-edit state captured from the kitchen-sink sample: a
     // grid row whose final `|` has been deleted but the trailing
-    // `:` survives. Pre-fix this input hung the renderer.
+    // `:` survives. Pre-fix this input made `tokenizeGridLine`
+    // spin without forward progress.
     const input = '|: C7 . | %  . :|: G7 . | %  . :';
-    const tokens = tokenizeGridLine(input);
-    // The stray `:` is dropped silently; the rest of the row
-    // still produces a valid token stream that ends with the
-    // last cell (no trailing barline because the source has none).
-    const kinds = tokens.filter((t) => t.kind !== 'space').map((t) => t.kind);
-    expect(kinds).toEqual([
-      'repeat-start',
-      'cell',
-      'continuation',
-      'barline',
-      'percent1',
-      'continuation',
-      'repeat-both',
-      'cell',
-      'continuation',
-      'barline',
-      'percent1',
-      'continuation',
+    const nonSpace = tokenizeGridLine(input).filter((t) => t.kind !== 'space');
+    // Assert full token shape (not just kinds): catches a
+    // regression that swaps `repeat-both` for `barline` or
+    // mangles the surviving chord names.
+    expect(nonSpace).toEqual([
+      { kind: 'repeat-start' },
+      { kind: 'cell', names: ['C7'] },
+      { kind: 'continuation' },
+      { kind: 'barline' },
+      { kind: 'percent1' },
+      { kind: 'continuation' },
+      { kind: 'repeat-both' },
+      { kind: 'cell', names: ['G7'] },
+      { kind: 'continuation' },
+      { kind: 'barline' },
+      { kind: 'percent1' },
+      { kind: 'continuation' },
     ]);
   });
 
-  test('drops a lone `:` and emits no tokens', () => {
+  test('emits no tokens for a lone `:`', () => {
     expect(tokenizeGridLine(':')).toEqual([]);
   });
 
+  test('drops a run of `:` and still terminates', () => {
+    // Drives the no-progress guard through multiple iterations.
+    // A regression that reverted the unconditional `i += 1`
+    // would hang here under vitest's per-test timeout.
+    expect(tokenizeGridLine(':::::::')).toEqual([]);
+  });
+
   test('drops a `:` sitting between two cells', () => {
-    // `C : D` — the orphan colon between cells is dialect
-    // garbage. The tokeniser must skip it and still surface the
-    // two cells on either side.
-    const tokens = tokenizeGridLine('C : D');
-    const cells = tokens.filter((t) => t.kind === 'cell');
+    const cells = tokenizeGridLine('C : D').filter((t) => t.kind === 'cell');
     expect(cells).toEqual([
       { kind: 'cell', names: ['C'] },
       { kind: 'cell', names: ['D'] },
     ]);
+  });
+
+  test('terminates for arbitrary inputs drawn from the dispatch alphabet', () => {
+    // Property check: the outer loop must terminate for any
+    // input drawn from the dispatch alphabet, regardless of
+    // ordering. Generated deterministically from a small LCG so
+    // the corpus survives across runs. A regression that
+    // reintroduces the no-progress shape would hang one of the
+    // cases here under vitest's per-test timeout.
+    const alphabet = '|:.%~ \t[]nstC7G:1234ABs';
+    let state = 0xc0ffee;
+    for (let n = 0; n < 256; n++) {
+      const len = state % 48;
+      let s = '';
+      for (let k = 0; k < len; k++) {
+        state = (Math.imul(state, 1103515245) + 12345) >>> 0;
+        s += alphabet[(state >>> 16) % alphabet.length];
+      }
+      // Calling tokenizeGridLine is enough — if it doesn't
+      // return, vitest's harness times the test out.
+      tokenizeGridLine(s);
+    }
   });
 });
 
