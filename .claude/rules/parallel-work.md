@@ -1,13 +1,36 @@
 # Parallel Work Rules
 
-## Git Worktree Isolation
+## Git Worktree Isolation (opt-in)
 
-- Each Claude Code instance MUST work in a separate git worktree.
-- Worktree location: `../chordsketch-wt/issue-{N}-{slug}/`
-- Never modify files outside your own worktree.
+Worktrees are the isolation mechanism for **concurrent** work — when more than
+one Claude Code instance, tmux pane, or maintainer is actively editing the
+repository at the same time. They are NOT required for routine single-session
+work; the main checkout plus a feature branch is enough when nothing else is
+editing in parallel.
+
+When a worktree IS used:
+
+- One worktree per concurrent instance — never modify files outside your own
+  worktree.
+- Worktree location: `../chordsketch-wt/issue-{N}-{slug}/`.
 - Each worktree has its own `target/` directory — no build lock contention.
 
+The `autopilot-issue` workflow always creates its own worktree because it
+batches multiple issues into one branch and isolates the failure surface; that
+behaviour is owned by the workflow and does not change with this rule.
+
 ## Setup for a New Task
+
+Default (single instance, no concurrent work):
+
+```bash
+# From the main repo checkout
+git fetch origin
+git checkout -b issue-{N}-{slug} origin/main
+```
+
+When you actually need worktree isolation (concurrent instances, autopilot,
+keeping `main` checked out while you build):
 
 ```bash
 # From the main repo checkout
@@ -17,6 +40,15 @@ cd ../chordsketch-wt/issue-{N}-{slug}
 ```
 
 ## Cleanup after PR Merge
+
+Branch-only flow:
+
+```bash
+git checkout main && git pull --ff-only
+git branch -d issue-{N}-{slug}
+```
+
+Worktree flow:
 
 ```bash
 git worktree remove ../chordsketch-wt/issue-{N}-{slug}
