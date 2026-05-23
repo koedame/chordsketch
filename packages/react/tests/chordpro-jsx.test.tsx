@@ -1411,8 +1411,16 @@ describe('renderChordproAst', () => {
     const { container } = render(renderChordproAst(ast));
     const gridLine = container.querySelector('.grid-line');
     expect(gridLine).not.toBeNull();
-    // Volta marker + final barline.
-    expect(gridLine?.querySelectorAll('.grid-volta').length).toBe(2);
+    // Two volta brackets surface in the row. The source has
+    // `| |1` (single barline + volta-1) and `:| |2` (repeat-
+    // end + volta-2); the marker-collapse pass merges each
+    // pair into a single cell whose host marker carries a
+    // `.grid-volta__bracket` overlay, so we count brackets
+    // rather than standalone `.grid-volta` cells. The
+    // standalone `.grid-volta` cell only appears when a volta
+    // marker is NOT preceded by another barline marker (e.g.
+    // a volta at the very start of a row).
+    expect(gridLine?.querySelectorAll('.grid-volta__bracket').length).toBe(2);
     expect(gridLine?.querySelector('.grid-barline--final')).not.toBeNull();
     // 8 bars (each chord lands in its own bar cell).
     expect(gridLine?.querySelectorAll('.grid-bar').length).toBe(8);
@@ -1478,9 +1486,47 @@ describe('renderChordproAst', () => {
     expect(container.querySelector('.grid-row__comment')?.textContent).toBe('repeat 4 times');
   });
 
-  // `%` / `%%` measure-repeat cells render as dedicated beat
-  // slots with `--percent1` / `--percent2` modifier classes.
-  test('grid measure-repeat markers `%` and `%%` render as percent beats', () => {
+  // `%` is a single-bar repeat. `%%` expands at render time
+  // into a `%` mark in its own bar AND a `%` mark in the
+  // following bar (when the following bar is empty / pure
+  // continuation) — the engraving convention chosen for this
+  // surface is to drop a single-bar mark into every repeated
+  // bar rather than draw one straddle-glyph across the
+  // barline. After expansion, no `--percent2` cells survive.
+  test('grid measure-repeat: `%` stays single-bar, `%%` expands to `%` in this bar and the next', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          // Source: bar1=G, bar2=%, bar3=%%, bar4=empty (only continuations).
+          // After expansion: bar1=G, bar2=%, bar3=%, bar4=%.
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '| G . | % . | %% . | .  . |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    expect(container.querySelectorAll('.grid-beat--percent1').length).toBe(3);
+    expect(container.querySelectorAll('.grid-beat--percent2').length).toBe(0);
+  });
+
+  // `%%` followed by a bar that already has a chord MUST NOT
+  // overwrite that chord AND MUST NOT half-rewrite itself to a
+  // single `%` — half-rewriting would silently downgrade the
+  // "repeat previous TWO" semantics to "repeat previous ONE".
+  // Both bars stay intact: the `%%` falls through to the
+  // 2-bar repeat glyph (the best available representation when
+  // the expansion preconditions are not met), and the chord
+  // bar keeps its chord.
+  test('grid `%%` does not overwrite a following bar that already has content', () => {
     const ast: ChordproSong = {
       metadata: EMPTY_META,
       lines: [
@@ -1490,7 +1536,7 @@ describe('renderChordproAst', () => {
         },
         {
           kind: 'lyrics',
-          value: { segments: [{ chord: null, text: '| G . | % . | %% . |', spans: [] }] },
+          value: { segments: [{ chord: null, text: '| G . | %% . | C . |', spans: [] }] },
         },
         {
           kind: 'directive',
@@ -1499,8 +1545,689 @@ describe('renderChordproAst', () => {
       ],
     };
     const { container } = render(renderChordproAst(ast));
-    expect(container.querySelectorAll('.grid-beat--percent1').length).toBe(1);
+    // `%%` survives as percent2 (rendered with 2-bar glyph),
+    // bar 3 keeps its C chord, and no half-rewrite to `%` happens.
     expect(container.querySelectorAll('.grid-beat--percent2').length).toBe(1);
+    expect(container.querySelectorAll('.grid-beat--percent1').length).toBe(0);
+    const chords = Array.from(container.querySelectorAll('.grid-chord')).map((c) => c.textContent);
+    expect(chords).toEqual(['G', 'C']);
+  });
+
+  // Cross-group label alignment: when rows have DIFFERENT bar
+  // counts they land in different `.grid-line-group` blocks, but
+  // the section still propagates the LONGEST label / comment
+  // text via `--cs-grid-label-max-text` / `--cs-grid-comment-
+  // max-text`. Each `.grid-row__label` / `.grid-row__comment`
+  // uses that var as its `::before` pseudo content, forcing the
+  // cell to reserve the widest rendered width so an `A` row and
+  // a `CODA` row align their bar-start positions even though
+  // their groups are independent grids.
+  test('grid section emits CSS vars for widest label/comment across all rows', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          // 4-bar row labelled `A`, no trailing comment.
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: 'A | G . | C . | D . | G . |', spans: [] }] },
+        },
+        {
+          // 4-bar row, no label, trailing `repeat 4 times`.
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '| C . | D . | G . | C . | repeat 4 times', spans: [] }] },
+        },
+        {
+          // 5-bar row labelled `CODA`, no trailing comment.
+          // Different bar count → separate `.grid-line-group`.
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: 'CODA | D . | E . | F . | G . | C . |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    const section = container.querySelector('section.grid') as HTMLElement | null;
+    expect(section).not.toBeNull();
+    // The CSS vars are quoted CSS string literals; the widest
+    // label is `"CODA"`, the widest comment is `"repeat 4 times"`.
+    expect(section?.style.getPropertyValue('--cs-grid-label-max-text')).toBe('"CODA"');
+    expect(section?.style.getPropertyValue('--cs-grid-comment-max-text')).toBe('"repeat 4 times"');
+  });
+
+  // Body grid template edge cases — the template must
+  // resolve cleanly for rows that have only one bar (no
+  // intermediate markers in body) AND for rows that have no
+  // body bars at all (degenerate sources). A regression that
+  // shipped an empty / mis-shaped template would crash CSS
+  // grid placement and stack cells vertically.
+  test('grid body template handles single-bar and empty-body edge cases', () => {
+    const makeAst = (text: string): ChordproSong => ({
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text, spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    });
+
+    // Single-bar row: lead `|`, bar(G), trail `|`. Body has
+    // just the one bar — template should be `1fr` (one column).
+    {
+      const { container, unmount } = render(renderChordproAst(makeAst('| G . |')));
+      const body = container.querySelector('.grid-line__body') as HTMLElement | null;
+      expect(body).not.toBeNull();
+      expect(body!.style.gridTemplateColumns).toBe('1fr');
+      expect(body!.childElementCount).toBe(1);
+      unmount();
+    }
+
+    // Degenerate row with only a single barline (no bars): the
+    // single `||` becomes lead, no trail, body is empty. Template
+    // falls back to `auto` so the grid still resolves.
+    {
+      const { container, unmount } = render(renderChordproAst(makeAst('||')));
+      const body = container.querySelector('.grid-line__body') as HTMLElement | null;
+      expect(body).not.toBeNull();
+      expect(body!.style.gridTemplateColumns).toBe('auto');
+      expect(body!.childElementCount).toBe(0);
+      unmount();
+    }
+  });
+
+  // Marker-collapse rule: when a non-volta marker is
+  // immediately followed by a volta marker in the source, the
+  // pair collapses to a single rendered cell. The host marker
+  // keeps its own glyph (repeat-end thick line, double-bar
+  // pair, etc.) and the volta-N bracket is overlaid on top
+  // via `.grid-volta__bracket`. Without this, the source
+  // `:| |2` rendered as TWO separate cells (a redundant
+  // barline double-strike) and the volta-2 bracket landed
+  // beside the repeat-end glyph instead of above the same
+  // barline position.
+  // Edge case for `%%` (repeat-previous-two-bars) expansion.
+  // When the source has no PRIOR bar to repeat (first bar of
+  // section is `%%`), expansion must NOT silently rewrite the
+  // `%%` to a `%` (which would lie about "repeat previous
+  // bar" — there is no previous bar). The `%%` survives so
+  // `renderBeat` paints the real 2-bar repeat glyph as the
+  // best available representation of malformed input.
+  test('grid `%%` in the first bar of a section is left unexpanded (no prior bar to repeat)', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          // No prior bar exists in the section before `%%`.
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '| %% . | .  . |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    // The %% survives as a percent2 beat (rendered with the
+    // 2-bar fallback glyph), and the following empty bar is
+    // NOT silently filled with a `%` — empty stays empty so
+    // the malformed source is visually distinct from the
+    // well-formed `%%` pattern.
+    expect(container.querySelectorAll('.grid-beat--percent2').length).toBe(1);
+    expect(container.querySelectorAll('.grid-beat--percent1').length).toBe(0);
+  });
+
+  // `%%` at the END of a row (no next bar to expand into) is
+  // similarly left unrewritten — silently rewriting `%%` to a
+  // single `%` would change the engraved meaning from
+  // "repeat previous TWO" to "repeat previous ONE".
+  test('grid `%%` with no following bar is left unexpanded', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          // `%%` is the LAST bar of the row.
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '| G . | C . | %% . |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    expect(container.querySelectorAll('.grid-beat--percent2').length).toBe(1);
+    expect(container.querySelectorAll('.grid-beat--percent1').length).toBe(0);
+  });
+
+  // Multiple `%%` beats in a SINGLE bar (rare but legal source
+  // like `| %% %% . . |`) all get rewritten — not just the
+  // first occurrence. Pre-fix, `findIndex` only rewrote the
+  // first match, leaving subsequent `percent2` beats to fall
+  // through to the renderBeat "should not be reachable" arm.
+  test('grid expands every `%%` beat in a multi-%% bar (not just the first)', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          // Prior bar `G` exists, next bar empty — every `%%`
+          // in bar 2 should rewrite to `%`.
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '| G . | %% %% . . | .  . . . |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    // Both `%%` in bar 2 rewrite to `%`, plus the next bar
+    // gets a `%` (one expansion run only — multiple `%%` in
+    // the same bar still target a single next-bar expansion).
+    expect(container.querySelectorAll('.grid-beat--percent2').length).toBe(0);
+    expect(container.querySelectorAll('.grid-beat--percent1').length).toBeGreaterThanOrEqual(3);
+  });
+
+  // Multi-volta chain `:| |2 |3 Am` collapses all volta cells
+  // onto the same host barline. The resulting overlay carries
+  // every ending in a single bracket (`2.3.`) — one bracket per
+  // barline position regardless of how many endings start
+  // there. Pre-fix, the second volta in the chain survived as
+  // a standalone `.grid-volta` cell, double-drawing the
+  // barline visually.
+  test('grid collapses chained voltas (`:| |2 |3`) into one overlay carrying every ending', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '|: G . | C . :| |2 |3 Am . | G . |.', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    // No standalone `.grid-volta` cell survives — both `|2`
+    // and `|3` collapse into the `:|` host's overlay.
+    expect(container.querySelectorAll('.grid-volta').length).toBe(0);
+    // The host carries a single bracket overlay whose label
+    // concatenates every ending (`2.3.`).
+    const bracket = container.querySelector('.grid-volta__bracket');
+    expect(bracket).not.toBeNull();
+    expect(bracket?.querySelector('.grid-volta__label')?.textContent).toBe('2.3.');
+  });
+
+  // Strum `~~` (consecutive tildes, possible source noise)
+  // must not render zero-content `.grid-strum__part` spans
+  // flanked by separator dots — the visible glyph would be a
+  // stray `··` with no corresponding source token.
+  test('grid strum row drops empty segments from `~~` consecutive-tilde tokens', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '|s dn~~up |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    // `dn~~up` → split [dn, '', up] → empty filtered → 2 parts
+    // → 1 separator dot (between dn and up). No empty parts.
+    expect(container.querySelectorAll('.grid-strum__part').length).toBe(2);
+    expect(container.querySelectorAll('.grid-strum__sep').length).toBe(1);
+  });
+
+  test('grid collapses [marker, volta] pairs into a single overlay-bearing cell', () => {
+    const cases: Array<{
+      source: string;
+      hostSelector: string;
+      hostLabel: string;
+      voltaText: string;
+      // Standalone `.grid-volta` cell count in the row body
+      // after collapse — must drop to zero when every volta
+      // was preceded by a barline marker.
+      remainingStandalone: number;
+    }> = [
+      // `| |1` — bare barline + volta-1.
+      {
+        source: '| G . | C . | |1 Em . | C . | |2 Am . | G . |.',
+        hostSelector: '.grid-barline:not([class*="--"])',
+        hostLabel: 'bare barline',
+        voltaText: '1.',
+        remainingStandalone: 0,
+      },
+      // `:| |2` — repeat-end + volta-2.
+      {
+        source: '|: G . | C . :| |2 Am . | G . |.',
+        hostSelector: '.grid-barline--repeat-end',
+        hostLabel: 'repeat-end',
+        voltaText: '2.',
+        remainingStandalone: 0,
+      },
+      // `:|: |3` — repeat-both + volta-3.
+      {
+        source: '|: G . | C . :|: |3 Am . | G . |.',
+        hostSelector: '.grid-barline--repeat-both',
+        hostLabel: 'repeat-both',
+        voltaText: '3.',
+        remainingStandalone: 0,
+      },
+      // `|| |2` — double + volta-2.
+      {
+        source: '|| G . | C . || |2 Am . | G . |.',
+        hostSelector: '.grid-barline--double',
+        hostLabel: 'double',
+        voltaText: '2.',
+        remainingStandalone: 0,
+      },
+      // Volta at row start has NO preceding marker, so it is
+      // NOT collapsed; it keeps its own `.grid-volta` cell.
+      {
+        source: '|1 Em . | C . |.',
+        hostSelector: '.grid-volta',
+        hostLabel: 'standalone volta at row start',
+        voltaText: '1.',
+        remainingStandalone: 1,
+      },
+    ];
+    for (const c of cases) {
+      const ast: ChordproSong = {
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+          },
+          {
+            kind: 'lyrics',
+            value: { segments: [{ chord: null, text: c.source, spans: [] }] },
+          },
+          {
+            kind: 'directive',
+            value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+          },
+        ],
+      };
+      const { container, unmount } = render(renderChordproAst(ast));
+      // Find the host marker carrying the bracket overlay.
+      const hostsWithBracket = Array.from(
+        container.querySelectorAll(c.hostSelector),
+      ).filter((el) => el.querySelector('.grid-volta__bracket'));
+      expect(
+        hostsWithBracket.length,
+        `expected one ${c.hostLabel} carrying the volta-overlay for source "${c.source}"`,
+      ).toBeGreaterThanOrEqual(1);
+      // The overlay's label text matches the volta number.
+      const labelText = hostsWithBracket[0]?.querySelector('.grid-volta__label')?.textContent;
+      expect(labelText).toBe(c.voltaText);
+      // Count any standalone `.grid-volta` cells that survived
+      // collapse — for non-leading voltas this must be zero.
+      const standaloneVoltas = container.querySelectorAll('.grid-volta').length;
+      expect(standaloneVoltas).toBe(c.remainingStandalone);
+      unmount();
+    }
+  });
+
+  // The body grid template must size one column per body cell
+  // (in source order) — bars get `1fr`, markers get the slot
+  // var. Sources like `|1 ... :| |2 ... |.` legitimately put
+  // two consecutive markers in the body (repeat-end followed
+  // by a volta-2 start). An earlier template that assumed
+  // strict bar/marker alternation gave too few columns and
+  // wrapped the overflow cells onto fake new rows, breaking
+  // the entire grid. Regression guard.
+  test('grid body template matches cell count when markers cluster', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          // Mirrors the kitchen-sink "Outro Riff" row 2 source.
+          kind: 'lyrics',
+          value: {
+            segments: [
+              { chord: null, text: '|1 Em . . . | C . . . :| |2 Am . . . | G . . . |.', spans: [] },
+            ],
+          },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    const body = container.querySelector('.grid-line__body') as HTMLElement | null;
+    expect(body).not.toBeNull();
+    const template = body!.style.gridTemplateColumns;
+    // Body cell stream after lead `|1` and trail `|.` are
+    // extracted, AND after the marker-collapse pass merges
+    // `:| |2` into a single repeat-end marker carrying a
+    // volta-2 overlay: bar(Em), barline, bar(C), repeat-end+
+    // volta-2, bar(Am), barline, bar(G). That is 4 bars + 3
+    // markers = 7 columns. (Pre-collapse the cluster would
+    // have left 4 markers; the prior bar/marker alternation
+    // template assumption broke on EITHER count and the
+    // alternation rewrite handles both.)
+    expect((template.match(/\b1fr\b/g) ?? []).length).toBe(4);
+    expect((template.match(/var\(--cs-grid-barline-slot/g) ?? []).length).toBe(3);
+    // Same count of grid items as columns — no overflow onto
+    // implicit row tracks.
+    expect(body!.childElementCount).toBe(7);
+    // The middle marker MUST be the repeat-end glyph carrying
+    // the volta-2 bracket overlay (not a separate volta cell).
+    const repeatEnd = body!.querySelector('.grid-barline--repeat-end');
+    expect(repeatEnd).not.toBeNull();
+    expect(repeatEnd?.querySelector('.grid-volta__bracket')?.textContent).toContain('2.');
+    // No standalone `.grid-volta` survived in the body.
+    expect(body!.querySelectorAll('.grid-volta').length).toBe(0);
+  });
+
+  // Lead/trail wrappers carry `data-barline-type` so CSS can
+  // apply per-type `justify-self`:
+  // - `repeat-start` / `double` / `barline` / `volta` → left
+  //   (default `justify-self: start` on `.grid-row__lead`)
+  // - `final` / `repeat-end` → right
+  // - `repeat-both` → center
+  // The attribute is the contract — verify it surfaces with
+  // the parser's `kind` value for every barline marker type.
+  test('grid row exposes data-barline-type on lead/trail wrappers per barline kind', () => {
+    const cases: Array<{ source: string; leadKind: string; trailKind: string }> = [
+      // `|` (bare barline)
+      { source: '| G . | C . |', leadKind: 'barline', trailKind: 'barline' },
+      // `||` (double)
+      { source: '|| G . | C . ||', leadKind: 'double', trailKind: 'double' },
+      // `|.` (final) - typically trailing
+      { source: '| G . | C . |.', leadKind: 'barline', trailKind: 'final' },
+      // `|:` / `:|` (repeat-start / repeat-end)
+      { source: '|: G . | C . :|', leadKind: 'repeat-start', trailKind: 'repeat-end' },
+      // `:|:` (repeat-both) - rare as lead/trail but must round-trip
+      { source: ':|: G . | C . :|:', leadKind: 'repeat-both', trailKind: 'repeat-both' },
+    ];
+    for (const c of cases) {
+      const ast: ChordproSong = {
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+          },
+          {
+            kind: 'lyrics',
+            value: { segments: [{ chord: null, text: c.source, spans: [] }] },
+          },
+          {
+            kind: 'directive',
+            value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+          },
+        ],
+      };
+      const { container, unmount } = render(renderChordproAst(ast));
+      const lead = container.querySelector('.grid-row__lead');
+      const trail = container.querySelector('.grid-row__trail');
+      expect(
+        lead?.getAttribute('data-barline-type'),
+        `lead kind for source "${c.source}"`,
+      ).toBe(c.leadKind);
+      expect(
+        trail?.getAttribute('data-barline-type'),
+        `trail kind for source "${c.source}"`,
+      ).toBe(c.trailKind);
+      unmount();
+    }
+  });
+
+  // Section publishes `--cs-grid-barline-slot` in `em` units
+  // sized to the widest barline KIND that appears anywhere in
+  // the section. The body grid template in every row uses this
+  // var as the column width for marker cells, so all body
+  // slots resolve to the same pixel width regardless of which
+  // mix of barlines a particular row has. The em value is the
+  // table in `widthForBarlineKind` (chordpro-jsx.tsx) — bump
+  // both in lockstep.
+  test('grid section publishes --cs-grid-barline-slot em from widest barline kind', () => {
+    const cases: Array<{ source: string; expectedEm: number }> = [
+      // Only bare `|` → smallest slot.
+      { source: '| G . | C . |', expectedEm: 0.3 },
+      // Contains `||` → bumps to double width.
+      { source: '|| G . | C . ||', expectedEm: 0.5 },
+      // Contains `|.` → final width.
+      { source: '| G . | C . |.', expectedEm: 0.6 },
+      // Contains `|:` / `:|` → repeat width.
+      { source: '|: G . | C . :|', expectedEm: 1.2 },
+      // Contains `:|:` → widest.
+      { source: '|: G . | C . :|: D . :|', expectedEm: 1.7 },
+    ];
+    for (const c of cases) {
+      const ast: ChordproSong = {
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+          },
+          {
+            kind: 'lyrics',
+            value: { segments: [{ chord: null, text: c.source, spans: [] }] },
+          },
+          {
+            kind: 'directive',
+            value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+          },
+        ],
+      };
+      const { container, unmount } = render(renderChordproAst(ast));
+      const section = container.querySelector('section.grid') as HTMLElement | null;
+      expect(section).not.toBeNull();
+      // Inline style carries the var assignment; the value is
+      // `<em>em` so a string comparison is safe.
+      expect(
+        section?.style.getPropertyValue('--cs-grid-barline-slot'),
+        `slot var for source "${c.source}"`,
+      ).toBe(`${c.expectedEm}em`);
+      unmount();
+    }
+  });
+
+  // Each row tags its OWN widest barline-kind em value on the
+  // `.grid-line` wrapper. `flushSection` takes the max across
+  // children to derive `--cs-grid-barline-slot`. The per-row
+  // attribute is the contract — verify it for a row that has
+  // a mix of kinds.
+  test('grid row exposes data-max-barline-em equal to its widest barline kind', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          // Mix of `|` (0.3), `:|` (1.2), and `|.` (0.6) — max is 1.2.
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '| G . | C . :| D . |.', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    const line = container.querySelector('.grid-line') as HTMLElement | null;
+    expect(line?.getAttribute('data-max-barline-em')).toBe('1.2');
+  });
+
+  // Empty-label rows MUST still emit the `.grid-row__label`
+  // cell so that the section's subgrid label column reserves
+  // the same width for every row. Without this, an unlabelled
+  // row would skip column 1 of the row subgrid and shift its
+  // leading barline left by one column — visible regression
+  // when a labelled and an unlabelled row are siblings.
+  test('grid row emits .grid-row__label cell even when label text is empty', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          // No leading text before the first barline = empty label.
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '| G . | C . |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    const label = container.querySelector('.grid-row__label');
+    expect(label, 'label cell must exist even for empty label').not.toBeNull();
+    // Empty label is marked aria-hidden so AT does not announce
+    // a meaningless empty heading-like text node.
+    expect(label?.getAttribute('aria-hidden')).toBe('true');
+    expect(label?.textContent ?? '').toBe('');
+    // Same contract for the comment cell on a row with no
+    // trailing text — it must exist so the right gutter stays
+    // a reserved column.
+    const comment = container.querySelector('.grid-row__comment');
+    expect(comment).not.toBeNull();
+    expect(comment?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  // Strum row (a `s` token immediately after the opening
+  // barline) renders its compound `~`-separated tokens as
+  // individual arrow glyphs split by a visible separator. Per
+  // the user spec: `dn~up` is "down then up", not the literal
+  // string `dn~up`. The leading-`~` anticipation variant
+  // (`~up`) prefixes a faded `~` and renders the remaining
+  // glyph.
+  test('grid strum row splits ~-separated compound tokens into arrow glyphs', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          // `s` marks a strum row. `dn~up` = down then up;
+          // `~up` = anticipated up; `d+` = accented down.
+          kind: 'lyrics',
+          value: {
+            segments: [{ chord: null, text: '|s dn~up ~up d+ | d~u u~d ~d d+ |', spans: [] }],
+          },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    // Strum rows pick up the `grid-line--strum` modifier.
+    expect(container.querySelector('.grid-line--strum')).not.toBeNull();
+    // Compound tokens emit one `.grid-strum__part` per side of
+    // each `~`. Source has: `dn~up` (2 parts) + `~up` (1 part,
+    // leading-~ marks the whole token as anticipated) + `d+`
+    // (1 part) + `d~u` (2) + `u~d` (2) + `~d` (1) + `d+` (1).
+    // Total parts: 2+1+1+2+2+1+1 = 10.
+    expect(container.querySelectorAll('.grid-strum__part').length).toBe(10);
+    // Anticipation prefix appears for the 2 `~`-leading tokens.
+    expect(container.querySelectorAll('.grid-strum__antic').length).toBe(2);
+    // Visible separator `·` between parts of a compound token —
+    // one fewer than the part count within a compound. The
+    // compounds with >1 parts here: `dn~up` (1 sep), `d~u` (1),
+    // `u~d` (1). Total: 3 separators.
+    expect(container.querySelectorAll('.grid-strum__sep').length).toBe(3);
+  });
+
+  // Row structure for cross-section bar-edge alignment: each
+  // `.grid-line` carries dedicated `.grid-row__lead` and
+  // `.grid-row__trail` cells (the first / last barline of the
+  // row) outside the central `.grid-line__body`. The section's
+  // 5-column CSS grid pins lead to col 2 (left-anchored) and
+  // trail to col 4 (right-anchored), so every row's bar-grid
+  // starts and ends at the same X — independently of bar count
+  // or leading-barline kind (`|` / `||` / `|:`).
+  test('grid row separates leading and trailing barlines into their own cells', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '|: G . | C . :|', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    const lead = container.querySelector('.grid-row__lead');
+    const trail = container.querySelector('.grid-row__trail');
+    const body = container.querySelector('.grid-line__body');
+    expect(lead?.querySelector('.grid-barline--repeat-start')).not.toBeNull();
+    expect(trail?.querySelector('.grid-barline--repeat-end')).not.toBeNull();
+    // Body holds 2 bars + 1 intermediate barline (the middle `|`).
+    expect(body?.querySelectorAll('.grid-bar').length).toBe(2);
+    expect(body?.querySelectorAll('.grid-barline').length).toBe(1);
   });
 
   // Cell-internal `~` puts multiple chords in one beat slot
