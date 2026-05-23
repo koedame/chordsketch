@@ -1244,12 +1244,17 @@ a {
    28px box while Noto Sans JP would push them ~1px down. */
 .chordsketch-app__select.insert-picker {
   background-color: transparent;
+  /* The base selector's background shorthand now includes an SVG
+     chevron image. Override background-image here so the ghost
+     insert-picker remains arrow-free and minimal-chrome. */
+  background-image: none;
   border-color: transparent;
   color: var(--cs-text-secondary, #67646D);
   font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
 }
 .chordsketch-app__select.insert-picker:hover:not(:disabled) {
   background-color: var(--cs-ink-100, #F6F4F7);
+  background-image: none;
   border-color: transparent;
   color: var(--cs-text-primary, #0A0A0B);
 }
