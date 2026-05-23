@@ -14,6 +14,7 @@ import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import * as path from 'path';
 import { escapeHtmlAttr, parseSerializedState } from './preview-helpers.js';
+import { setCapoInSource } from './capo-edit.js';
 
 /** Message types sent from the extension host to the WebView. */
 type ExtToWebview = { type: 'update'; text: string } | { type: 'transpose'; delta: 1 | -1 };
@@ -22,7 +23,8 @@ type ExtToWebview = { type: 'update'; text: string } | { type: 'transpose'; delt
 type WebviewToExt =
   | { type: 'ready' }
   | { type: 'error'; message: string }
-  | { type: 'warning'; message: string };
+  | { type: 'warning'; message: string }
+  | { type: 'edit-capo'; capo: number };
 
 /**
  * Type guard for messages received from the WebView.
@@ -40,6 +42,9 @@ function isWebviewToExt(raw: unknown): raw is WebviewToExt {
   }
   if (r['type'] === 'error' || r['type'] === 'warning') {
     return typeof r['message'] === 'string';
+  }
+  if (r['type'] === 'edit-capo') {
+    return typeof r['capo'] === 'number' && Number.isFinite(r['capo']);
   }
   return false;
 }
@@ -314,8 +319,35 @@ class PreviewPanel {
           this.outputChannel = vscode.window.createOutputChannel('ChordSketch Preview');
         }
         this.outputChannel.appendLine(`Preview warning: ${raw.message}`);
+      } else if (raw.type === 'edit-capo') {
+        // Capo +/− was clicked in the WebView toolbar. Recompute the new
+        // document text against the LIVE `TextDocument` (not the snapshot
+        // the WebView held when the user clicked) so concurrent edits in
+        // the editor pane are not clobbered.
+        void this.applyCapoEdit(raw.capo);
       }
     });
+  }
+
+  /**
+   * Rewrites the source document so its `{capo: N}` directive matches
+   * `nextCapo`. Applied via `WorkspaceEdit` against the live
+   * `TextDocument`; the resulting `onDidChangeTextDocument` echoes a
+   * fresh `update` message back to the WebView through the regular
+   * debounced path.
+   */
+  private async applyCapoEdit(nextCapo: number): Promise<void> {
+    if (this.disposed) return;
+    const current = this.document.getText();
+    const updated = setCapoInSource(current, nextCapo);
+    if (updated === current) return;
+    const edit = new vscode.WorkspaceEdit();
+    const fullRange = new vscode.Range(
+      this.document.positionAt(0),
+      this.document.positionAt(current.length),
+    );
+    edit.replace(this.document.uri, fullRange, updated);
+    await vscode.workspace.applyEdit(edit);
   }
 
   private wireDisposal(): void {

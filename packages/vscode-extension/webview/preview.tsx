@@ -26,7 +26,7 @@
 import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import init from '@chordsketch/wasm';
-import { ChordProPreview } from '@chordsketch/react';
+import { ChordProPreview, readCapo } from '@chordsketch/react';
 // The component library's stylesheet is bundled as a text asset
 // (see `esbuild.mjs`'s `.css` loader) and injected at runtime into a
 // `<style>` element. The WebView CSP allows `'unsafe-inline'` on
@@ -179,6 +179,19 @@ function App(): JSX.Element {
     setTranspose(clamp(next, -11, 11));
   }, []);
 
+  // Performance-toolbar Capo: `<ChordProPreview toolbar="performance">`
+  // rewrites the source with the new `{capo: N}` directive and forwards
+  // the result via `onSourceChange`. The WebView does not own the
+  // canonical document — it forwards the numeric capo to the extension
+  // host, which applies a `WorkspaceEdit` against the live
+  // `TextDocument`. The host then echoes a fresh `update` back through
+  // the existing debounced channel, so `source` is updated by the
+  // round-trip rather than by a local `setSource` here.
+  const handleSourceChange = useCallback((next: string) => {
+    const nextCapo = readCapo(next);
+    vscode.postMessage({ type: 'edit-capo', capo: nextCapo });
+  }, []);
+
   if (initError !== null) {
     return (
       <div className="cs-vscode-error" role="alert">
@@ -211,7 +224,11 @@ function App(): JSX.Element {
   }
 
   // The VS Code preview only renders HTML — `<ChordProPreview>`'s
-  // format `<select>` is hidden via host CSS in `src/preview.ts`.
+  // format `<select>` is hidden automatically in `performance` toolbar
+  // mode when only one format is allowed. The performance toolbar
+  // gives the WebView the same Transpose / Capo / Export controls the
+  // playground exposes; Capo edits round-trip through `onSourceChange`
+  // → `edit-capo` message → host `WorkspaceEdit` → echoed `update`.
   return (
     <ChordProPreview
       className="cs-vscode-preview"
@@ -220,6 +237,8 @@ function App(): JSX.Element {
       transpose={transpose}
       onTransposeChange={handleTransposeChange}
       formats={['html']}
+      toolbar="performance"
+      onSourceChange={handleSourceChange}
       errorFallback={(err) => (
         <div className="cs-vscode-render-error" role="alert">
           {err.message}

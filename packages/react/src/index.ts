@@ -24,6 +24,11 @@ export {
   type UsePdfExportResult,
 } from './use-pdf-export';
 export { Transpose, type TransposeProps } from './transpose';
+export { Capo, type CapoProps } from './capo';
+export {
+  PreviewToolbar,
+  type PreviewToolbarProps,
+} from './preview-toolbar';
 export {
   useTranspose,
   type UseTransposeOptions,
@@ -87,14 +92,24 @@ export {
   type ChordProEditorProps,
 } from './chord-pro-editor';
 
-// Drag-to-reposition chord helpers. `<ChordSheet>` /
-// `renderChordproAst`'s `onChordReposition` callback emits
-// `ChordRepositionEvent` values; consumers feed them through
-// `applyChordReposition` together with the current ChordPro
-// source to compute the updated source text.
+// Source-side edit helpers. The drag-to-reposition contract
+// (`applyChordReposition` + `<ChordSheet>` / `renderChordproAst`'s
+// `onChordReposition` callback) and the performance-toolbar capo
+// contract (`readCapo` / `setCapoInSource`) both live in
+// `chord-source-edit.ts`. External hosts that own the ChordPro
+// document (VS Code extension, custom editor shells) can read
+// + write the `{capo: N}` directive directly via the helpers
+// when applying a `<Capo>` change through their own document
+// edit pipeline.
 export {
+  CAPO_MAX,
+  CAPO_MIN,
+  TRANSPOSE_MAX,
+  TRANSPOSE_MIN,
   applyChordReposition,
   lyricsOffsetToSourceColumn,
+  readCapo,
+  setCapoInSource,
   type ChordRepositionEvent,
   type ChordRepositionResult,
 } from './chord-source-edit';

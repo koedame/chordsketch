@@ -2,6 +2,7 @@ import type { HTMLAttributes, KeyboardEvent } from 'react';
 import { useCallback, useMemo } from 'react';
 
 import { clamp as clampValue } from './clamp';
+import { TRANSPOSE_MAX, TRANSPOSE_MIN } from './chord-source-edit';
 
 /** Props accepted by {@link Transpose}. */
 export interface TransposeProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> {
@@ -9,9 +10,9 @@ export interface TransposeProps extends Omit<HTMLAttributes<HTMLDivElement>, 'on
   value: number;
   /** Fired when the user clicks a button or presses a keyboard shortcut. */
   onChange: (next: number) => void;
-  /** Minimum offset the buttons will emit. Defaults to `-11`. */
+  /** Minimum offset the buttons will emit. Defaults to {@link TRANSPOSE_MIN} (`-11`). */
   min?: number;
-  /** Maximum offset the buttons will emit. Defaults to `+11`. */
+  /** Maximum offset the buttons will emit. Defaults to {@link TRANSPOSE_MAX} (`+11`). */
   max?: number;
   /** Step size for `+` / `−` buttons. Defaults to `1`. */
   step?: number;
@@ -58,8 +59,8 @@ function defaultFormat(value: number): string {
 export function Transpose({
   value,
   onChange,
-  min = -11,
-  max = 11,
+  min = TRANSPOSE_MIN,
+  max = TRANSPOSE_MAX,
   step = 1,
   resetValue = 0,
   label = 'Transpose',

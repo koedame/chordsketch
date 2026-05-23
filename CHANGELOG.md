@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `@chordsketch/react`: new `<PreviewToolbar>` performance-toolbar
+  component composing `<Transpose>` + `<Capo>` + `<PdfExport>`,
+  plus the new `<Capo>` primitive (mirrors the `<Transpose>` API
+  with an additional source-pair shape that round-trips through
+  `{capo: N}` via the new `readCapo` / `setCapoInSource` helpers).
+  `<ChordProPreview>` gains a `toolbar` prop
+  (`"transpose-only"` (default, backwards-compatible) /
+  `"performance"` / `false` / custom `ReactNode`) — opt into
+  `"performance"` to surface the new toolbar without composing
+  primitives by hand. (#2545)
+- `@chordsketch/react`: exported `CAPO_MIN`, `CAPO_MAX`,
+  `TRANSPOSE_MIN`, `TRANSPOSE_MAX` constants alongside the existing
+  drag-to-reposition helpers in `chord-source-edit.ts`. (#2545)
+- VS Code extension: preview WebView now uses `<ChordProPreview
+  toolbar="performance">` so the Capo and Export PDF controls
+  reach feature parity with the playground. Capo edits round-trip
+  through a new `edit-capo` host message that applies a
+  `WorkspaceEdit` against the live `TextDocument`. (#2545)
 - `@chordsketch/react` v0.3.0: new `<ChordProPreview>` Tier 2
   component — a preview pane with format toggle and transpose
   controls but no source editor. Drop-in for hosts that own the
@@ -21,6 +39,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- VS Code extension: command titles renamed from `ChordSketch: …`
+  to `ChordPro: …` (Open Preview / Open Preview to the Side /
+  Transpose Up / Transpose Down / Export As…) so the commands
+  group with other file-format actions in the Command Palette
+  search. Command IDs (`chordsketch.*`) and keybindings are
+  unchanged. (#2544)
+- Playground (`packages/playground`): preview pane now consumes
+  the new `<PreviewToolbar>` from `@chordsketch/react` instead of
+  the hand-rolled `pane-toolbar` block. The inline `readCapo` /
+  `setCapoInSource` helpers and the `CAPO_*` / `TRANSPOSE_*`
+  constants moved into the React package per
+  [playground-is-a-sample.md](.claude/rules/playground-is-a-sample.md).
+  (#2545)
 - **Breaking — `@chordsketch/react` v0.3.0 component renames** (no
   deprecated aliases; external consumers must update imports at the
   v0.3.0 boundary):
