@@ -17,7 +17,11 @@ export {
   type ChordRenderOptions,
   type ChordRenderResult,
 } from './use-chord-render';
-export { PdfExport, type PdfExportProps } from './pdf-export';
+export {
+  PdfExport,
+  type PdfExportProps,
+  PDF_EXPORT_DEFAULT_LABEL,
+} from './pdf-export';
 export {
   usePdfExport,
   type PdfExportOptions,

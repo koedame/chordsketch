@@ -8,7 +8,11 @@ import {
 } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { PdfExport, usePdfExport } from '../src/index';
+import {
+  PDF_EXPORT_DEFAULT_LABEL,
+  PdfExport,
+  usePdfExport,
+} from '../src/index';
 import type { WasmLoader } from '../src/use-pdf-export';
 
 const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // "%PDF" magic bytes
@@ -183,7 +187,7 @@ describe('<PdfExport>', () => {
     );
 
     render(<PdfExport source="x" filename="x.pdf" wasmLoader={makeLoader(stub)} />);
-    const button = screen.getByRole('button', { name: 'Export PDF' });
+    const button = screen.getByRole('button', { name: PDF_EXPORT_DEFAULT_LABEL });
 
     fireEvent.click(button);
 
@@ -207,7 +211,7 @@ describe('<PdfExport>', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export PDF' }));
+    fireEvent.click(screen.getByRole('button', { name: PDF_EXPORT_DEFAULT_LABEL }));
 
     await waitFor(() =>
       expect(stub.render_pdf_with_options).toHaveBeenCalledWith('{title: Hi}', {
@@ -230,7 +234,7 @@ describe('<PdfExport>', () => {
       <PdfExport source="x" filename="x.pdf" onError={onError} wasmLoader={makeLoader(stub)} />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export PDF' }));
+    fireEvent.click(screen.getByRole('button', { name: PDF_EXPORT_DEFAULT_LABEL }));
 
     await waitFor(() => expect(onError).toHaveBeenCalledWith(boom));
   });

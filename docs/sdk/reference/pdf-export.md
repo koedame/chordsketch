@@ -26,7 +26,7 @@ import { PdfExport } from '@chordsketch/react';
 | `source` | `string` | (required) | ChordPro source to render. |
 | `filename` | `string` | `"chordsketch-output.pdf"` | Filename for the download. |
 | `options` | `PdfExportOptions` | — | `{ transpose?, config? }` forwarded to the renderer. |
-| `children` | `ReactNode` | `"Export PDF"` | Button label. |
+| `children` | `ReactNode` | `PDF_EXPORT_DEFAULT_LABEL` (`"Export PDF"`) | Button label. The default is also exported as a named constant so sister components (e.g. `<PreviewToolbar>`) can render the same string. |
 | `onExported` | `(filename: string) => void` | — | Fires after the download has been initiated. |
 | `onError` | `(error: Error) => void` | — | Fires when the underlying call rejects. |
 | `wasmLoader` | loader callable | dynamic import | Test-only override. |

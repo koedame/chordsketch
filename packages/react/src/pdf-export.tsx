@@ -7,6 +7,15 @@ import {
   usePdfExport,
 } from './use-pdf-export';
 
+/**
+ * Default label rendered when a {@link PdfExport} consumer passes no
+ * `children`. Exported so sister sites that compose their own export
+ * button (notably `<PreviewToolbar>`'s Export group) can render the
+ * same string without restating the literal — keeping every call site
+ * in lockstep with this default through a single source of truth.
+ */
+export const PDF_EXPORT_DEFAULT_LABEL = 'Export PDF';
+
 /** Props accepted by the {@link PdfExport} button. */
 export interface PdfExportProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'onError'> {
@@ -97,7 +106,7 @@ export function PdfExport({
   source,
   filename = 'chordsketch-output.pdf',
   options,
-  children = 'Export PDF',
+  children = PDF_EXPORT_DEFAULT_LABEL,
   onExported,
   onError,
   errorFallback = defaultPdfErrorFallback,

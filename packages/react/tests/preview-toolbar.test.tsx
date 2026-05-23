@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { PreviewToolbar } from '../src/index';
+import { PDF_EXPORT_DEFAULT_LABEL, PreviewToolbar } from '../src/index';
 
 const SAMPLE = '{title: Demo}\n{key: G}\n[C]Hello';
 
@@ -21,6 +21,30 @@ describe('<PreviewToolbar>', () => {
     expect(screen.getByRole('group', { name: 'Transpose' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Capo' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Export' })).toBeTruthy();
+  });
+
+  test('Export group exposes the shared PDF export button label', () => {
+    // The Export group composes <PdfExport> with an explicit children
+    // node (icon + label). If a future refactor drops the literal or
+    // overrides it inconsistently with the shared default, the rendered
+    // accessible name diverges from `PdfExport`'s default and from the
+    // other call sites that inherit it. Scope the assertion to the
+    // Export group so an unrelated <PdfExport> mounted elsewhere in
+    // the toolbar by a future refactor cannot mask a regression here.
+    render(
+      <PreviewToolbar
+        source={SAMPLE}
+        onSourceChange={vi.fn()}
+        transpose={0}
+        onTransposeChange={vi.fn()}
+      />,
+    );
+    const exportGroup = screen.getByRole('group', { name: 'Export' });
+    expect(
+      within(exportGroup).getByRole('button', {
+        name: PDF_EXPORT_DEFAULT_LABEL,
+      }),
+    ).toBeTruthy();
   });
 
   test('hides Capo when onSourceChange is omitted', () => {

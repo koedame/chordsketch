@@ -1,7 +1,7 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 
 import { Capo } from './capo';
-import { PdfExport } from './pdf-export';
+import { PDF_EXPORT_DEFAULT_LABEL, PdfExport } from './pdf-export';
 import { Transpose } from './transpose';
 import {
   CAPO_MAX,
@@ -171,7 +171,7 @@ export function PreviewToolbar({
             className="chordsketch-preview-toolbar__export btn btn-secondary btn-sm"
           >
             {EXPORT_ICON}
-            Export PDF
+            {PDF_EXPORT_DEFAULT_LABEL}
           </PdfExport>
         </div>
       ) : null}

@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@chordsketch/react`: exported `CAPO_MIN`, `CAPO_MAX`,
   `TRANSPOSE_MIN`, `TRANSPOSE_MAX` constants alongside the existing
   drag-to-reposition helpers in `chord-source-edit.ts`. (#2545)
+- `@chordsketch/react`: exported `PDF_EXPORT_DEFAULT_LABEL`
+  (`"Export PDF"`) — the single source of truth for the
+  `<PdfExport>` button's default `children` and the
+  `<PreviewToolbar>` Export group's button label. Downstream
+  consumers building their own export UI can import the constant
+  to stay in lockstep with the library's default. (#2558)
 - VS Code extension: preview WebView now uses `<ChordProPreview
   toolbar="performance">` so the Capo and Export PDF controls
   reach feature parity with the playground. Capo edits round-trip
@@ -42,10 +48,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@chordsketch/react`: PDF export button label unified to
   `"Export PDF"` across `<RendererPreview>` (PDF branch) and
   `<PreviewToolbar>` to match `<PdfExport>`'s own default and the
-  desktop app's `File → Export PDF…` menu. Tests and documentation
-  examples updated; the `<PdfExport>` `children` default was
-  already `"Export PDF"` so behaviour for direct consumers is
-  unchanged. (#2558)
+  desktop app's `File → Export PDF…` menu. The default is now a
+  single exported source of truth, `PDF_EXPORT_DEFAULT_LABEL`, which
+  `<PdfExport>` uses as its `children` default and which
+  `<PreviewToolbar>` consumes for its Export-group button so both
+  call sites stay in lockstep with any future relabel. Tests and
+  documentation examples updated; behaviour for direct `<PdfExport>`
+  consumers is unchanged (the default value is the same string). (#2558)
 - VS Code extension: command titles renamed from `ChordSketch: …`
   to `ChordPro: …` (Open Preview / Open Preview to the Side /
   Transpose Up / Transpose Down / Export As…) so the commands
