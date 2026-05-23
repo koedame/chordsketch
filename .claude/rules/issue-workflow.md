@@ -71,7 +71,7 @@ metadata that informs *how* a chosen item is split into PRs, not
    linked `Closes #N`, or — if that workflow is not enabled — flip the
    Status to Done manually with the same `gh` snippet below, using
    option ID `98236657`.
-8. Cleanup worktree.
+8. Cleanup: delete the local branch (and remove the worktree if one was used).
 
 ### Updating Project Board Status
 
