@@ -160,7 +160,7 @@ describe('<ChordProPreview>', () => {
     expect(onTransposeChange).toHaveBeenCalledWith(1);
   });
 
-  test('PDF branch renders the download button', () => {
+  test('PDF branch renders the export button', () => {
     render(
       <ChordProPreview
         source="src"

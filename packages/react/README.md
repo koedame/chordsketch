@@ -346,7 +346,7 @@ Returns the raw SVG string (or `null` when not in the database),
 plus loading / error state. Useful for hosts that want to embed
 the diagram inside custom markup (tooltip, popover, etc.).
 
-### `<PdfExport>` — one-click PDF download
+### `<PdfExport>` — one-click PDF export
 
 ```tsx
 import { PdfExport } from '@chordsketch/react';
@@ -571,7 +571,7 @@ shorthand (no Unicode translation; the SVG renderer handles that).
 | `useChordDiagram` | Atom | Hook | Raw SVG string for the chord-instrument pair. |
 | `<Transpose>` | Atom | Component | Accessible ± / reset transposition control. |
 | `useTranspose` | Atom | Hook | Clamped state helper for transposition values. |
-| `<PdfExport>` | Atom | Component | One-click download button; lazy-loads `@chordsketch/wasm-export`. |
+| `<PdfExport>` | Atom | Component | One-click export button; lazy-loads `@chordsketch/wasm-export`. |
 | `usePdfExport` | Atom | Hook | Same export pipeline for custom UIs. |
 | `<SplitLayout>` | Atom | Component | Layout container with resizable splitter. |
 | `<RendererPreview>` | Atom | Component | Format-switcher preview pane. |
