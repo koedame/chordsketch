@@ -637,7 +637,8 @@
    centred in the visible bar — no further offset needed.
    Because each glyph sits ENTIRELY within its own slot, the
    glyph never overflows into the adjacent bar's content
-   area — eliminating the `:|:G` overlap class of bug. */
+   area, so a barline glyph never paints over adjacent
+   chord text. */
 .chordsketch-sheet__content .grid-line__body > .grid-barline,
 .chordsketch-sheet__content .grid-line__body > .grid-volta {
   justify-self: center;

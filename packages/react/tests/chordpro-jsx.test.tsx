@@ -1519,10 +1519,13 @@ describe('renderChordproAst', () => {
   });
 
   // `%%` followed by a bar that already has a chord MUST NOT
-  // overwrite that chord — the source is malformed against the
-  // ChordPro spec ("%% repeats the previous two measures" implies
-  // the next bar should be empty), but the user-authored chord
-  // takes priority over the auto-expansion.
+  // overwrite that chord AND MUST NOT half-rewrite itself to a
+  // single `%` — half-rewriting would silently downgrade the
+  // "repeat previous TWO" semantics to "repeat previous ONE".
+  // Both bars stay intact: the `%%` falls through to the
+  // 2-bar repeat glyph (the best available representation when
+  // the expansion preconditions are not met), and the chord
+  // bar keeps its chord.
   test('grid `%%` does not overwrite a following bar that already has content', () => {
     const ast: ChordproSong = {
       metadata: EMPTY_META,
@@ -1542,8 +1545,10 @@ describe('renderChordproAst', () => {
       ],
     };
     const { container } = render(renderChordproAst(ast));
-    // Only the %% bar gets converted; bar 3 keeps its C chord.
-    expect(container.querySelectorAll('.grid-beat--percent1').length).toBe(1);
+    // `%%` survives as percent2 (rendered with 2-bar glyph),
+    // bar 3 keeps its C chord, and no half-rewrite to `%` happens.
+    expect(container.querySelectorAll('.grid-beat--percent2').length).toBe(1);
+    expect(container.querySelectorAll('.grid-beat--percent1').length).toBe(0);
     const chords = Array.from(container.querySelectorAll('.grid-chord')).map((c) => c.textContent);
     expect(chords).toEqual(['G', 'C']);
   });
@@ -1655,6 +1660,168 @@ describe('renderChordproAst', () => {
   // barline double-strike) and the volta-2 bracket landed
   // beside the repeat-end glyph instead of above the same
   // barline position.
+  // Edge case for `%%` (repeat-previous-two-bars) expansion.
+  // When the source has no PRIOR bar to repeat (first bar of
+  // section is `%%`), expansion must NOT silently rewrite the
+  // `%%` to a `%` (which would lie about "repeat previous
+  // bar" — there is no previous bar). The `%%` survives so
+  // `renderBeat` paints the real 2-bar repeat glyph as the
+  // best available representation of malformed input.
+  test('grid `%%` in the first bar of a section is left unexpanded (no prior bar to repeat)', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          // No prior bar exists in the section before `%%`.
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '| %% . | .  . |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    // The %% survives as a percent2 beat (rendered with the
+    // 2-bar fallback glyph), and the following empty bar is
+    // NOT silently filled with a `%` — empty stays empty so
+    // the malformed source is visually distinct from the
+    // well-formed `%%` pattern.
+    expect(container.querySelectorAll('.grid-beat--percent2').length).toBe(1);
+    expect(container.querySelectorAll('.grid-beat--percent1').length).toBe(0);
+  });
+
+  // `%%` at the END of a row (no next bar to expand into) is
+  // similarly left unrewritten — silently rewriting `%%` to a
+  // single `%` would change the engraved meaning from
+  // "repeat previous TWO" to "repeat previous ONE".
+  test('grid `%%` with no following bar is left unexpanded', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          // `%%` is the LAST bar of the row.
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '| G . | C . | %% . |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    expect(container.querySelectorAll('.grid-beat--percent2').length).toBe(1);
+    expect(container.querySelectorAll('.grid-beat--percent1').length).toBe(0);
+  });
+
+  // Multiple `%%` beats in a SINGLE bar (rare but legal source
+  // like `| %% %% . . |`) all get rewritten — not just the
+  // first occurrence. Pre-fix, `findIndex` only rewrote the
+  // first match, leaving subsequent `percent2` beats to fall
+  // through to the renderBeat "should not be reachable" arm.
+  test('grid expands every `%%` beat in a multi-%% bar (not just the first)', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          // Prior bar `G` exists, next bar empty — every `%%`
+          // in bar 2 should rewrite to `%`.
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '| G . | %% %% . . | .  . . . |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    // Both `%%` in bar 2 rewrite to `%`, plus the next bar
+    // gets a `%` (one expansion run only — multiple `%%` in
+    // the same bar still target a single next-bar expansion).
+    expect(container.querySelectorAll('.grid-beat--percent2').length).toBe(0);
+    expect(container.querySelectorAll('.grid-beat--percent1').length).toBeGreaterThanOrEqual(3);
+  });
+
+  // Multi-volta chain `:| |2 |3 Am` collapses all volta cells
+  // onto the same host barline. The resulting overlay carries
+  // every ending in a single bracket (`2.3.`) — one bracket per
+  // barline position regardless of how many endings start
+  // there. Pre-fix, the second volta in the chain survived as
+  // a standalone `.grid-volta` cell, double-drawing the
+  // barline visually.
+  test('grid collapses chained voltas (`:| |2 |3`) into one overlay carrying every ending', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '|: G . | C . :| |2 |3 Am . | G . |.', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    // No standalone `.grid-volta` cell survives — both `|2`
+    // and `|3` collapse into the `:|` host's overlay.
+    expect(container.querySelectorAll('.grid-volta').length).toBe(0);
+    // The host carries a single bracket overlay whose label
+    // concatenates every ending (`2.3.`).
+    const bracket = container.querySelector('.grid-volta__bracket');
+    expect(bracket).not.toBeNull();
+    expect(bracket?.querySelector('.grid-volta__label')?.textContent).toBe('2.3.');
+  });
+
+  // Strum `~~` (consecutive tildes, possible source noise)
+  // must not render zero-content `.grid-strum__part` spans
+  // flanked by separator dots — the visible glyph would be a
+  // stray `··` with no corresponding source token.
+  test('grid strum row drops empty segments from `~~` consecutive-tilde tokens', () => {
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'start_of_grid', value: null, kind: { tag: 'startOfGrid' }, selector: null },
+        },
+        {
+          kind: 'lyrics',
+          value: { segments: [{ chord: null, text: '|s dn~~up |', spans: [] }] },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'end_of_grid', value: null, kind: { tag: 'endOfGrid' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(renderChordproAst(ast));
+    // `dn~~up` → split [dn, '', up] → empty filtered → 2 parts
+    // → 1 separator dot (between dn and up). No empty parts.
+    expect(container.querySelectorAll('.grid-strum__part').length).toBe(2);
+    expect(container.querySelectorAll('.grid-strum__sep').length).toBe(1);
+  });
+
   test('grid collapses [marker, volta] pairs into a single overlay-bearing cell', () => {
     const cases: Array<{
       source: string;

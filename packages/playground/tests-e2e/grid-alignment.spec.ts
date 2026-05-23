@@ -47,7 +47,22 @@ import { expect, test } from '@playwright/test';
 
 const ALMOST_EQ_PX = 0.5; // round-off slack in floating-point CSS layout
 
+// Captured uncaught exceptions for the active test. Filled by
+// the `pageerror` listener registered in `pickKitchenSinkSample`.
+// Tests can assert this stays empty as the catch-all integrity
+// check that complements specific structural assertions.
+const recordedPageErrors: Error[] = [];
+
 async function pickKitchenSinkSample(page: import('@playwright/test').Page) {
+  // Catch any uncaught exception that reaches the window during
+  // the mount + sample-swap flow. Per `.claude/rules/playground-
+  // smoke.md`: a `pageerror` listener guards against the pre-#2397
+  // class of failure where the editor mounts cleanly and renders
+  // partially, but a wasm-bridge / walker exception silently drops
+  // a section without crashing the suite. Tests below can assert
+  // `recordedPageErrors.length === 0` to catch this class.
+  recordedPageErrors.length = 0;
+  page.on('pageerror', (err) => recordedPageErrors.push(err));
   await page.goto('./chordpro/');
   // Wait for the CodeMirror editor to mount and the wasm-backed
   // preview to produce its first `.song` tree. Without this the
@@ -141,6 +156,13 @@ test.describe('chordpro grid — column alignment across rows', () => {
     page,
   }) => {
     await pickKitchenSinkSample(page);
+    // Catch-all: any uncaught exception during mount + sample-
+    // swap is a regression even when the per-edge layout
+    // assertions below still pass on the cells that did render.
+    expect(
+      recordedPageErrors.map((e) => e.message),
+      'uncaught exceptions reached the window during kitchen-sink mount',
+    ).toEqual([]);
     const section = await findAcodaSection(page);
     const rows = section.locator('.grid-line');
     const rowCount = await rows.count();
