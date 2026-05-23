@@ -3198,14 +3198,20 @@ interface WalkContext {
 /**
  * Wrap `s` as a CSS string literal so it is safe to embed in a
  * CSS `content:` property via a custom property. Escapes the
- * two characters that have meaning inside a double-quoted CSS
- * string — backslash and the closing double-quote. Used by the
- * grid-section label/comment gutter sizer to render the longest
- * text invisibly behind every cell so subgrid `auto` columns
- * size to the wider rendered width.
+ * characters that are significant inside a double-quoted CSS
+ * string: backslash, the closing double-quote, and the three
+ * newline variants (U+000A LF, U+000D CR, U+000C FF) that
+ * terminate a CSS string and would produce a parse error causing
+ * the `::before` sizer pseudo to silently fall back to `''`.
+ * Used by the grid-section label/comment gutter sizer to render
+ * the longest text invisibly behind every cell so subgrid `auto`
+ * columns size to the wider rendered width.
  */
 function cssStringLiteral(s: string): string {
-  return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  return `"${s
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/[\n\r\f]/g, ' ')}"`;
 }
 
 function flushSection(ctx: WalkContext, key: number): void {

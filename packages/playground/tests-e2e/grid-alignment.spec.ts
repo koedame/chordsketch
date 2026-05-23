@@ -506,7 +506,7 @@ test.describe('chordpro grid — body intermediate barline alignment', () => {
   // shifts the glyph rightward by half its own width.
   // Regression guard for the `:|:` shifted-position
   // report.
-  test(':|: glyph anchor sits on the slot right edge (= bar boundary)', async ({
+  test(':|: glyph anchor sits on the slot centre (= bar boundary)', async ({
     page,
   }) => {
     await pickKitchenSinkSample(page);
