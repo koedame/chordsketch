@@ -298,6 +298,7 @@ layout in either place.
 | `preview/components-table.html` | Library table, stats table |
 | `preview/components-toast.html` | Default, success, danger, warning, stack |
 | `preview/components-progress.html` | Linear bar, spinner, skeleton |
+| `templates/chordsketch.xml` | draw.io shape library. Open once via **File → Open Library…** in the draw.io desktop app or app.diagrams.net; a "chordsketch" tab then appears in the left sidebar of every `.drawio` you create. Holds 32 pre-styled shapes (buttons / pills / surface / accent / divider / cluster / system component / data infra / actor) and 7 arrow specimens (sync / async / dep / data primary / warning / danger / info). Drag onto the canvas of any new diagram — no swatch reference page, no per-cell hex editing. |
 | `../assets/logo.svg` | Brand mark (vector, 180×180, `#BD1642` field) |
 | `../assets/logo-128.png` | Raster derivative — VS Code extension icon |
 | `../assets/logo-256.png` | Raster derivative — Marketplace README header / high-DPI contexts |
