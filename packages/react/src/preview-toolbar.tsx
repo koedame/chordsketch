@@ -3,6 +3,7 @@ import type { HTMLAttributes, ReactNode } from 'react';
 import { Capo } from './capo';
 import { PDF_EXPORT_DEFAULT_LABEL, PdfExport } from './pdf-export';
 import { Transpose } from './transpose';
+import type { WasmLoader } from './use-pdf-export';
 import {
   CAPO_MAX,
   CAPO_MIN,
@@ -46,6 +47,16 @@ export interface PreviewToolbarProps
   showExport?: boolean;
   /** Filename for the PDF download. Defaults to `chordsketch-output.pdf`. */
   exportFilename?: string;
+  /**
+   * Test-only WASM loader override for the Export group's
+   * `<PdfExport>`. Production callers never supply this — the
+   * default dynamic import of `@chordsketch/wasm-export` resolves
+   * at click time. Tests inject a stub renderer to drive the
+   * export click path without loading real wasm.
+   *
+   * @internal
+   */
+  wasmLoader?: WasmLoader;
   /**
    * Optional extra content rendered as a fourth group at the end
    * of the toolbar. Useful for host-specific actions (e.g. a
@@ -108,6 +119,7 @@ export function PreviewToolbar({
   showCapo,
   showExport = true,
   exportFilename = 'chordsketch-output.pdf',
+  wasmLoader,
   trailing,
   className,
   ...divProps
@@ -168,6 +180,7 @@ export function PreviewToolbar({
             source={source}
             options={{ transpose }}
             filename={exportFilename}
+            wasmLoader={wasmLoader}
             className="chordsketch-preview-toolbar__export btn btn-secondary btn-sm"
           >
             {EXPORT_ICON}

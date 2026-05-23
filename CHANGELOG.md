@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `<PreviewToolbar>` Export group's button label. Downstream
   consumers building their own export UI can import the constant
   to stay in lockstep with the library's default. (#2558)
+- `@chordsketch/react`: `<PreviewToolbar>` now accepts an
+  `@internal` `wasmLoader` prop forwarded to the inner
+  `<PdfExport>` so tests can drive the Export-group click path
+  with a stubbed renderer. Production consumers do not supply
+  this; the default dynamic import of `@chordsketch/wasm-export`
+  resolves at click time as before. (#2558)
 - VS Code extension: preview WebView now uses `<ChordProPreview
   toolbar="performance">` so the Capo and Export PDF controls
   reach feature parity with the playground. Capo edits round-trip
