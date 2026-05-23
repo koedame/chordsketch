@@ -150,21 +150,26 @@ Bot-driven merge is conditional on the four-clause check above — see
 
 ## Parallel Development with tmux
 
-This project is designed for multiple Claude Code instances working simultaneously
-via tmux.
+This project supports multiple Claude Code instances working simultaneously
+via tmux. Worktrees are the isolation mechanism **when running concurrently**;
+single-session work does not need a worktree by default.
 
-**Key principle**: Each instance works in an isolated git worktree. No shared mutable
-state.
+**Key principle**: When more than one instance is active, each works in an
+isolated git worktree. No shared mutable state across concurrent instances.
 
-| Resource | Isolation Method |
+| Resource | Isolation Method (concurrent runs) |
 |---|---|
 | Git branch | One branch per worktree, named `issue-{N}-{slug}` |
 | Build artifacts | Each worktree has its own `target/` directory |
 | Network ports | `3000 + issue_number` |
 | Working directory | `../chordsketch-wt/issue-{N}-{slug}/` |
 
-**Before starting work**: Always create a fresh worktree from latest `origin/main`.
-**After PR merge**: Remove the worktree and local branch.
+**Default (single instance)**: branch from latest `origin/main` in the main
+checkout — no worktree.
+**Concurrent runs / autopilot batches**: create a worktree under
+`../chordsketch-wt/issue-{N}-{slug}/`.
+**After PR merge**: delete the local branch (and remove the worktree if one
+was created).
 
 ## Ticket-Driven Development
 

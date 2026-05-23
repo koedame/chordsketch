@@ -2,7 +2,7 @@
 
 Drive PRs to `main` through the merge pipeline **serially**. Do not
 open a new PR against `main` until the previous one has merged and
-the working tree (branch + worktree) is cleaned up.
+the branch is cleaned up (and the worktree, if one was used).
 
 ## Rule
 
@@ -10,10 +10,11 @@ When a batch of independent issues is in scope, process them one at
 a time:
 
 1. Pick one issue.
-2. Create a worktree and branch from the latest `origin/main`.
+2. Create a branch from the latest `origin/main` (add a worktree if
+   running concurrent instances — see `parallel-work.md`).
 3. Implement, push, open the PR.
 4. Wait for CI. Address blocking review findings.
-5. Merge. Delete the branch. Remove the worktree.
+5. Merge. Delete the branch (and remove the worktree if one was used).
 6. Only **then** start the next issue.
 
 Opening multiple PRs against `main` in parallel is prohibited unless

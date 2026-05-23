@@ -48,10 +48,13 @@ metadata that informs *how* a chosen item is split into PRs, not
 
 1. Create Issue with labels.
 2. Move the issue to **In Progress** on the [chordsketch project board](https://github.com/orgs/koedame/projects/1)
-   at the moment work actually starts — i.e. the first commit or worktree
-   creation, not at planning time. Issues still sitting in Todo while a
-   PR exists against them are a signal that this step was skipped.
-3. Create worktree + branch from latest `main`.
+   at the moment work actually starts — i.e. the first commit (or worktree
+   creation, if one is being used), not at planning time. Issues still sitting
+   in Todo while a PR exists against them are a signal that this step was
+   skipped.
+3. Create a branch from latest `main`. Use a worktree only when running
+   concurrent instances or invoking the autopilot workflow — see
+   [`parallel-work.md`](parallel-work.md).
 4. Implement (commits reference issue: `Part of #N` or `Closes #N`).
 5. Open PR (title references issue, body has `Closes #N`).
    *(Batched autopilot PRs aggregate multiple issues per
@@ -68,7 +71,7 @@ metadata that informs *how* a chosen item is split into PRs, not
    linked `Closes #N`, or — if that workflow is not enabled — flip the
    Status to Done manually with the same `gh` snippet below, using
    option ID `98236657`.
-8. Cleanup worktree.
+8. Cleanup: delete the local branch (and remove the worktree if one was used).
 
 ### Updating Project Board Status
 
