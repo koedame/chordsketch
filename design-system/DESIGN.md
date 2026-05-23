@@ -298,6 +298,7 @@ layout in either place.
 | `preview/components-table.html` | Library table, stats table |
 | `preview/components-toast.html` | Default, success, danger, warning, stack |
 | `preview/components-progress.html` | Linear bar, spinner, skeleton |
+| `templates/chordsketch-starter.drawio` | draw.io starter — palette swatches, typography stack, generic shapes (surface card, primary / ghost button, semantic pills, accent node, cluster container, default + emphasis arrows). Copy a shape into any new `.drawio` diagram to stay on-brand. |
 | `../assets/logo.svg` | Brand mark (vector, 180×180, `#BD1642` field) |
 | `../assets/logo-128.png` | Raster derivative — VS Code extension icon |
 | `../assets/logo-256.png` | Raster derivative — Marketplace README header / high-DPI contexts |
