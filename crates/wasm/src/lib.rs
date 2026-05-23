@@ -277,6 +277,28 @@ pub(crate) fn validate_inner(input: &str) -> Vec<ValidationErrorPayload> {
 
 // ---- ChordPro parse-to-AST binding -----------------------------
 
+/// Tuple returned by [`do_parse_chordpro`]. Carried as a type
+/// alias so callers do not trip clippy's `type_complexity` lint
+/// and so the React-binding plumbing in `bindings.rs` has a
+/// single source of truth for the shape.
+///
+/// Fields, in order:
+///
+/// - `String` — the AST JSON document.
+/// - `Vec<String>` — recoverable lenient-parser warnings.
+/// - `Option<String>` — transposed song-primary `{key}` value;
+///   `None` when transpose is zero or the primary key cannot be
+///   parsed.
+/// - `BTreeMap<String, String>` — per-directive transposed `{key}`
+///   map for every `{key:}` directive in the song (primary +
+///   mid-song), keyed by the authored value.
+pub(crate) type ParseChordproPayload = (
+    String,
+    Vec<String>,
+    Option<String>,
+    std::collections::BTreeMap<String, String>,
+);
+
 /// Run the ChordPro source → AST JSON pipeline; native helper used
 /// by the wasm wrapper and Rust unit tests. The pipeline:
 ///
@@ -294,8 +316,12 @@ pub(crate) fn validate_inner(input: &str) -> Vec<ValidationErrorPayload> {
 pub(crate) fn do_parse_chordpro(
     input: &str,
     options: Option<&RenderOptions>,
-) -> Result<(String, Vec<String>, Option<String>), String> {
+) -> Result<ParseChordproPayload, String> {
+    use chordsketch_chordpro::ast::{DirectiveKind, Line};
     use chordsketch_chordpro::json::ToJson;
+    use chordsketch_chordpro::transpose::{
+        canonical_transposed_key, canonical_transposed_key_with_style, transposed_key_prefers_flat,
+    };
 
     let parse_options = chordsketch_chordpro::ParseOptions::default();
     let parse_result = chordsketch_chordpro::parse_lenient_with_options(input, &parse_options);
@@ -325,13 +351,63 @@ pub(crate) fn do_parse_chordpro(
         // the song landed on. Returns `None` for unparseable
         // keys (e.g. `{key: C dorian}`) — the walker falls back
         // to showing the original key only in that case.
-        chordsketch_chordpro::transpose::canonical_transposed_key(
-            song.metadata.key.as_deref(),
-            transpose_steps,
-        )
+        canonical_transposed_key(song.metadata.key.as_deref(), transpose_steps)
     } else {
         None
     };
+
+    // Build a map of `original {key} value → transposed value`
+    // covering every `{key:}` directive in the song (primary +
+    // mid-song). This lets the React JSX walker (#2525) render
+    // every `{key:}` chip — not just the song-primary one —
+    // through the same canonical-spelling pipeline as the Rust
+    // text / HTML / PDF renderers, closing the four-way parity
+    // gap left by #2524.
+    //
+    // Uses the song-wide `prefer_flat` derived from
+    // `transposed_key_prefers_flat(metadata, transpose)`, so a
+    // mid-song `{key: D}` spells consistently with the chord
+    // lines (which all carry the same prefer-flat decision).
+    // Sister-site to the inline computations in
+    // `crates/render-{text,html,pdf}/src/lib.rs`.
+    //
+    // BTreeMap (instead of HashMap) keeps the serialised JSON
+    // key order deterministic across runs — useful for test
+    // snapshots and easier diffs.
+    let mut transposed_key_directives = std::collections::BTreeMap::<String, String>::new();
+    if transpose_steps != 0 {
+        let prefer_flat = transposed_key_prefers_flat(&song.metadata, transpose_steps);
+        for line in &song.lines {
+            let Line::Directive(directive) = line else {
+                continue;
+            };
+            if directive.kind != DirectiveKind::Key {
+                continue;
+            }
+            let Some(value) = directive
+                .value
+                .as_deref()
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+            else {
+                continue;
+            };
+            if transposed_key_directives.contains_key(value) {
+                continue;
+            }
+            let Some(transposed) =
+                canonical_transposed_key_with_style(Some(value), transpose_steps, prefer_flat)
+            else {
+                continue;
+            };
+            // Skip entries where the transpose is a no-op so the
+            // walker can treat presence-in-map as "show the pair".
+            if transposed == value {
+                continue;
+            }
+            transposed_key_directives.insert(value.to_string(), transposed);
+        }
+    }
 
     // Apply transpose if requested. Mirrors the renderer entry
     // points which do this same step before rendering — keeps the
@@ -345,7 +421,12 @@ pub(crate) fn do_parse_chordpro(
         steps => chordsketch_chordpro::transpose::transpose(&song, steps),
     };
 
-    Ok((song.to_json_string(), warnings, transposed_key))
+    Ok((
+        song.to_json_string(),
+        warnings,
+        transposed_key,
+        transposed_key_directives,
+    ))
 }
 
 // ---- iReal Pro conversion bindings (#2067 Phase 1) ----
@@ -891,7 +972,7 @@ mod tests {
 
     #[test]
     fn test_parse_chordpro_emits_ast_json() {
-        let (json, warnings, _transposed_key) =
+        let (json, warnings, _transposed_key, _transposed_key_directives) =
             do_parse_chordpro("{title: My Song}\n[Am]Hello [G]world", None).unwrap();
         assert!(json.starts_with('{'), "expected JSON object, got: {json}");
         assert!(
@@ -915,7 +996,8 @@ mod tests {
             transpose: 2,
             config: None,
         };
-        let (json, _, _transposed_key) = do_parse_chordpro("[C]Hello", Some(&opts)).unwrap();
+        let (json, _, _transposed_key, _transposed_key_directives) =
+            do_parse_chordpro("[C]Hello", Some(&opts)).unwrap();
         // C transposed up 2 semitones lands on D.
         assert!(
             json.contains("\"name\":\"D\""),
@@ -929,7 +1011,8 @@ mod tests {
             transpose: 0,
             config: None,
         };
-        let (json, _, _transposed_key) = do_parse_chordpro("[C]Hello", Some(&opts)).unwrap();
+        let (json, _, _transposed_key, _transposed_key_directives) =
+            do_parse_chordpro("[C]Hello", Some(&opts)).unwrap();
         assert!(
             json.contains("\"name\":\"C\""),
             "transpose=0 must not alter chord names, got: {json}"
@@ -938,7 +1021,8 @@ mod tests {
 
     #[test]
     fn test_parse_chordpro_empty_input_returns_empty_song() {
-        let (json, warnings, _transposed_key) = do_parse_chordpro("", None).unwrap();
+        let (json, warnings, _transposed_key, _transposed_key_directives) =
+            do_parse_chordpro("", None).unwrap();
         assert!(
             json.contains("\"lines\":[]"),
             "empty input must yield an empty lines array, got: {json}"
@@ -956,7 +1040,7 @@ mod tests {
             transpose: 2,
             config: None,
         };
-        let (json, _warnings, transposed_key) =
+        let (json, _warnings, transposed_key, transposed_key_directives) =
             do_parse_chordpro("{key: G}\n[G]Hello", Some(&opts)).unwrap();
         assert!(
             json.contains("\"key\":\"G\""),
@@ -967,6 +1051,103 @@ mod tests {
             Some("A"),
             "transpose +2 from G should land on A"
         );
+        // The {key: G} directive appears in song.lines too, so the
+        // mid-song-key map (#2525) carries the same G→A mapping
+        // that the walker uses for the body chip.
+        assert_eq!(
+            transposed_key_directives.get("G").map(String::as_str),
+            Some("A"),
+            "{{key: G}} directive must surface in transposed_key_directives, got: {transposed_key_directives:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_chordpro_transposed_key_directives_covers_mid_song_keys() {
+        // The walker (#2525) needs the transposed value for every
+        // {key:} directive in the song, not just the primary, so
+        // mid-song key chips render with the canonical transposed
+        // spelling matching the Rust text / HTML / PDF surfaces.
+        let opts = RenderOptions {
+            transpose: 2,
+            config: None,
+        };
+        let (_json, _warnings, _transposed_key, transposed_key_directives) =
+            do_parse_chordpro("{key: G}\n[G]Hello\n{key: D}\n[D]world", Some(&opts)).unwrap();
+        // Both directives must surface: primary G→A and mid-song
+        // D→E. The walker keys lookups by directive value so each
+        // unique original maps to its transposed counterpart.
+        assert_eq!(
+            transposed_key_directives.get("G").map(String::as_str),
+            Some("A"),
+        );
+        assert_eq!(
+            transposed_key_directives.get("D").map(String::as_str),
+            Some("E"),
+        );
+    }
+
+    #[test]
+    fn test_parse_chordpro_transposed_key_directives_empty_when_transpose_zero() {
+        // transpose=0 means original and transposed are identical
+        // for every {key:} directive; emit an empty map so the
+        // serialised result drops the field entirely (via
+        // skip_serializing_if).
+        let opts = RenderOptions {
+            transpose: 0,
+            config: None,
+        };
+        let (_json, _warnings, _transposed_key, transposed_key_directives) =
+            do_parse_chordpro("{key: G}\n[G]Hello", Some(&opts)).unwrap();
+        assert!(
+            transposed_key_directives.is_empty(),
+            "transpose=0 must not emit any directive transpositions, got: {transposed_key_directives:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_chordpro_transposed_key_directives_deduplicates_same_key() {
+        // The same {key:} value appearing more than once (e.g. an
+        // opening directive and a section repeat) must produce only
+        // one map entry — the transposed value is identical for both
+        // occurrences and the first wins. Exercises the
+        // `contains_key` deduplication branch in
+        // `do_parse_chordpro`.
+        let opts = RenderOptions {
+            transpose: 2,
+            config: None,
+        };
+        let (_json, _warnings, _transposed_key, transposed_key_directives) =
+            do_parse_chordpro("{key: G}\n[G]verse\n{key: G}\n[G]chorus", Some(&opts)).unwrap();
+        assert_eq!(
+            transposed_key_directives.len(),
+            1,
+            "duplicate {{key: G}} must not produce two map entries, got: {transposed_key_directives:?}"
+        );
+        assert_eq!(
+            transposed_key_directives.get("G").map(String::as_str),
+            Some("A"),
+            "{{key: G}} +2 must transpose to A, got: {transposed_key_directives:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_chordpro_transposed_key_directives_identity_at_octave() {
+        // transpose=+12 is an octave — the key lands on the same
+        // pitch class (C → C) so the identity-skip guard prevents
+        // the no-op entry from entering the map. The walker treats
+        // presence-in-map as "show the pair", so an identity entry
+        // would incorrectly trigger the pair display for unchanged
+        // keys.
+        let opts = RenderOptions {
+            transpose: 12,
+            config: None,
+        };
+        let (_json, _warnings, _transposed_key, transposed_key_directives) =
+            do_parse_chordpro("{key: C}\n[C]Hello", Some(&opts)).unwrap();
+        assert!(
+            transposed_key_directives.is_empty(),
+            "transpose+12 (identity) must not produce a map entry for C→C, got: {transposed_key_directives:?}"
+        );
     }
 
     #[test]
@@ -975,7 +1156,7 @@ mod tests {
             transpose: 0,
             config: None,
         };
-        let (_json, _warnings, transposed_key) =
+        let (_json, _warnings, transposed_key, _transposed_key_directives) =
             do_parse_chordpro("{key: G}\n[G]Hello", Some(&opts)).unwrap();
         assert!(
             transposed_key.is_none(),
@@ -996,11 +1177,18 @@ mod tests {
             transpose: 2,
             config: None,
         };
-        let (_json, _warnings, transposed_key) =
+        let (_json, _warnings, transposed_key, transposed_key_directives) =
             do_parse_chordpro("{key: ???}", Some(&opts)).unwrap();
         assert!(
             transposed_key.is_none(),
             "unparseable key must surface as `None` so the React surface can fall back, got: {transposed_key:?}"
+        );
+        // The directive-map loop must also skip non-note-letter
+        // values (the `canonical_transposed_key_with_style` → None
+        // branch), so the map stays empty for the same input.
+        assert!(
+            transposed_key_directives.is_empty(),
+            "unparseable key must not appear in transposed_key_directives, got: {transposed_key_directives:?}"
         );
     }
 

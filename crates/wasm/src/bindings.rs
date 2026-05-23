@@ -777,6 +777,27 @@ struct ParseChordproResult {
     /// `do_parse_chordpro` for the source-of-truth computation.
     #[serde(rename = "transposedKey", skip_serializing_if = "Option::is_none")]
     transposed_key: Option<String>,
+    /// Map of `original {key:} directive value → transposed
+    /// value`, covering every `{key:}` directive in the song
+    /// (primary + mid-song). Present only when `transpose != 0`
+    /// AND at least one `{key:}` value parsed as a chord.
+    ///
+    /// Lets the React JSX walker render mid-song `{key:}` chips
+    /// with the canonically-transposed value too — without this
+    /// channel the walker only knew the song-primary's
+    /// transposition and fell back to the authored value for
+    /// every other directive, diverging from the Rust text /
+    /// HTML / PDF renderers (#2525).
+    ///
+    /// Entries where transpose is a no-op (e.g. modal `{key: C
+    /// dorian}` values that don't parse) are intentionally
+    /// omitted so the walker can treat presence-in-map as
+    /// "show the pair".
+    #[serde(
+        rename = "transposedKeyDirectives",
+        skip_serializing_if = "std::collections::BTreeMap::is_empty"
+    )]
+    transposed_key_directives: std::collections::BTreeMap<String, String>,
 }
 
 /// Parse a ChordPro source string into an AST JSON document.
@@ -797,7 +818,7 @@ struct ParseChordproResult {
 #[wasm_bindgen(js_name = parseChordpro)]
 pub fn parse_chordpro(input: &str) -> Result<String, JsValue> {
     do_parse_chordpro(input, None)
-        .map(|(json, _, _)| json)
+        .map(|(json, _, _, _)| json)
         .map_err(|e| JsValue::from_str(&e))
 }
 
@@ -812,7 +833,7 @@ pub fn parse_chordpro(input: &str) -> Result<String, JsValue> {
 pub fn parse_chordpro_with_options(input: &str, options: JsValue) -> Result<String, JsValue> {
     let opts = deserialize_options(options)?;
     do_parse_chordpro(input, Some(&opts))
-        .map(|(json, _, _)| json)
+        .map(|(json, _, _, _)| json)
         .map_err(|e| JsValue::from_str(&e))
 }
 
@@ -834,12 +855,13 @@ pub fn parse_chordpro_with_options(input: &str, options: JsValue) -> Result<Stri
 #[must_use = "callers must handle parse errors"]
 #[wasm_bindgen(js_name = parseChordproWithWarnings)]
 pub fn parse_chordpro_with_warnings(input: &str) -> Result<JsValue, JsValue> {
-    let (ast, warnings, transposed_key) =
+    let (ast, warnings, transposed_key, transposed_key_directives) =
         do_parse_chordpro(input, None).map_err(|e| JsValue::from_str(&e))?;
     serde_wasm_bindgen::to_value(&ParseChordproResult {
         ast,
         warnings,
         transposed_key,
+        transposed_key_directives,
     })
     .map_err(|e| JsValue::from_str(&e.to_string()))
 }
@@ -855,12 +877,13 @@ pub fn parse_chordpro_with_warnings_and_options(
     options: JsValue,
 ) -> Result<JsValue, JsValue> {
     let opts = deserialize_options(options)?;
-    let (ast, warnings, transposed_key) =
+    let (ast, warnings, transposed_key, transposed_key_directives) =
         do_parse_chordpro(input, Some(&opts)).map_err(|e| JsValue::from_str(&e))?;
     serde_wasm_bindgen::to_value(&ParseChordproResult {
         ast,
         warnings,
         transposed_key,
+        transposed_key_directives,
     })
     .map_err(|e| JsValue::from_str(&e.to_string()))
 }
