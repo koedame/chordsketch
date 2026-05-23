@@ -168,7 +168,7 @@ describe('<ChordProPreview>', () => {
         wasmLoader={makeLoader(makeStub())}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Export PDF' })).toBeTruthy();
   });
 
   test('transposeMin / transposeMax bound the transpose buttons', () => {

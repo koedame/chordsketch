@@ -17,7 +17,7 @@ page load does not pay for it.
 import { PdfExport } from '@chordsketch/react';
 
 <PdfExport source={chordproSource} filename="amazing-grace.pdf">
-  Download PDF
+  Export PDF
 </PdfExport>
 ```
 
@@ -26,7 +26,7 @@ import { PdfExport } from '@chordsketch/react';
 | `source` | `string` | (required) | ChordPro source to render. |
 | `filename` | `string` | `"chordsketch-output.pdf"` | Filename for the download. |
 | `options` | `PdfExportOptions` | — | `{ transpose?, config? }` forwarded to the renderer. |
-| `children` | `ReactNode` | `"Download PDF"` | Button label. |
+| `children` | `ReactNode` | `"Export PDF"` | Button label. |
 | `onExported` | `(filename: string) => void` | — | Fires after the download has been initiated. |
 | `onError` | `(error: Error) => void` | — | Fires when the underlying call rejects. |
 | `wasmLoader` | loader callable | dynamic import | Test-only override. |

@@ -86,7 +86,7 @@ function defaultPdfErrorFallback(error: Error): ReactNode {
  *
  * ```tsx
  * <PdfExport source={chordpro} filename="song.pdf">
- *   Download PDF
+ *   Export PDF
  * </PdfExport>
  * ```
  *

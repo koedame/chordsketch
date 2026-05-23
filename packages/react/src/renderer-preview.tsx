@@ -131,16 +131,14 @@ export function RendererPreview({
     return (
       <div {...divProps} className={`${wrapperClass} chordsketch-preview--pdf`}>
         <p className="chordsketch-preview__hint">
-          Click the button to generate and download a PDF.
+          Click the button to generate and export a PDF.
         </p>
         <PdfExport
           source={source}
           options={{ transpose, config }}
           filename={pdfFilename}
           className="chordsketch-pdf-export"
-        >
-          Download PDF
-        </PdfExport>
+        />
       </div>
     );
   }

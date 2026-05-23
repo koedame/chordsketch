@@ -133,8 +133,8 @@ describe('<ChordProEditor>', () => {
     render(<ChordProEditor wasmLoader={makeLoader(makeStub())} />);
     const select = screen.getByLabelText('Format') as HTMLSelectElement;
     fireEvent.change(select, { target: { value: 'pdf' } });
-    // PDF branch renders a download button.
-    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeTruthy();
+    // PDF branch renders an export button.
+    expect(screen.getByRole('button', { name: 'Export PDF' })).toBeTruthy();
   });
 
   test('controlled source: edits propagate via onSourceChange', () => {

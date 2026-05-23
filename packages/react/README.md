@@ -359,7 +359,7 @@ const source = `{title: Amazing Grace}
 export function SaveButton() {
   return (
     <PdfExport source={source} filename="amazing-grace.pdf">
-      Download PDF
+      Export PDF
     </PdfExport>
   );
 }

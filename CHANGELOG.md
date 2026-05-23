@@ -39,6 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `@chordsketch/react`: PDF export button label unified to
+  `"Export PDF"` across `<RendererPreview>` (PDF branch) and
+  `<PreviewToolbar>` to match `<PdfExport>`'s own default and the
+  desktop app's `File → Export PDF…` menu. Tests and documentation
+  examples updated; the `<PdfExport>` `children` default was
+  already `"Export PDF"` so behaviour for direct consumers is
+  unchanged. (#2558)
 - VS Code extension: command titles renamed from `ChordSketch: …`
   to `ChordPro: …` (Open Preview / Open Preview to the Side /
   Transpose Up / Transpose Down / Export As…) so the commands

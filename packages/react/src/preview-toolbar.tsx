@@ -54,7 +54,7 @@ export interface PreviewToolbarProps
   trailing?: ReactNode;
 }
 
-const DOWNLOAD_ICON = (
+const EXPORT_ICON = (
   <svg
     width="16"
     height="16"
@@ -170,8 +170,8 @@ export function PreviewToolbar({
             filename={exportFilename}
             className="chordsketch-preview-toolbar__export btn btn-secondary btn-sm"
           >
-            {DOWNLOAD_ICON}
-            Download PDF
+            {EXPORT_ICON}
+            Export PDF
           </PdfExport>
         </div>
       ) : null}
