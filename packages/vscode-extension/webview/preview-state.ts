@@ -31,6 +31,13 @@ export type ExtToWebview =
   | { type: 'update'; text: string }
   | { type: 'transpose'; delta: 1 | -1 };
 
+/** Message types posted from the WebView to the extension host. */
+export type WebviewToExt =
+  | { type: 'ready' }
+  | { type: 'error'; message: string }
+  | { type: 'warning'; message: string }
+  | { type: 'edit-capo'; capo: number };
+
 /**
  * Type guard for messages received from the extension host.
  *

@@ -1,6 +1,7 @@
 import type { ChangeEvent, HTMLAttributes, ReactNode } from 'react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
+import { PreviewToolbar } from './preview-toolbar';
 import { RendererPreview, type PreviewFormat } from './renderer-preview';
 import { Transpose } from './transpose';
 import type { ChordDiagramInstrument } from './use-chord-diagram';
@@ -66,6 +67,31 @@ export interface ChordProPreviewProps
    * `ReactNode`. Pass `null` to suppress the error UI.
    */
   errorFallback?: ((error: Error) => ReactNode) | null;
+  /**
+   * Selects the header toolbar layout.
+   *
+   * - `"transpose-only"` (default) — preserves the pre-#2545
+   *   behaviour: format `<select>` + `<Transpose>`.
+   * - `"performance"` — adds a pane-level {@link PreviewToolbar}
+   *   (Transpose + Capo + Export) below the header. Capo and
+   *   Export require {@link ChordProPreviewProps.onSourceChange};
+   *   without it the Capo group is silently dropped.
+   * - `false` — no toolbar / no header at all (preview body only).
+   * - A `ReactNode` — escape hatch that replaces the entire
+   *   toolbar with caller-supplied JSX.
+   */
+  toolbar?: 'transpose-only' | 'performance' | false | ReactNode;
+  /**
+   * Required by `toolbar="performance"`'s Capo group — invoked
+   * when the user steps the capo and the {@link PreviewToolbar}
+   * rewrites the `{capo: N}` directive in `source`. Hosts that
+   * pipe document edits through a separate channel (e.g. VS
+   * Code's `WorkspaceEdit` over a message protocol) should
+   * forward this through that channel.
+   */
+  onSourceChange?: (next: string) => void;
+  /** Forwarded to {@link PreviewToolbar} when toolbar="performance". */
+  pdfExportFilename?: string;
   /** Forwarded to the underlying {@link RendererPreview}. */
   chordDiagramsInstrument?: ChordDiagramInstrument;
   /**
@@ -119,6 +145,9 @@ export function ChordProPreview({
   loadingFallback,
   errorFallback,
   chordDiagramsInstrument,
+  toolbar = 'transpose-only',
+  onSourceChange,
+  pdfExportFilename,
   wasmLoader,
   className,
   ...divProps
@@ -236,38 +265,78 @@ export function ChordProPreview({
     .filter(Boolean)
     .join(' ');
 
+  // Resolve the `toolbar` prop into the three render-time
+  // decisions. The string literals are the supported keywords;
+  // anything else that is not `false` is treated as caller-
+  // supplied JSX that replaces the header.
+  const isPerformanceToolbar = toolbar === 'performance';
+  const isHidden = toolbar === false;
+  const isStandardHeader =
+    toolbar === undefined || toolbar === 'transpose-only' || toolbar === 'performance';
+  const customHeader = !isStandardHeader && !isHidden ? toolbar : null;
+
+  // In `performance` mode the format `<select>` is hidden when
+  // only one format is allowed — a single-option select is dead
+  // UI, and hosts like the VS Code WebView pin to `['html']`.
+  // In the default `transpose-only` mode the select always
+  // renders to preserve the pre-#2545 behaviour.
+  const showFormatSelect = isPerformanceToolbar ? formats.length > 1 : true;
+  // The header-level Transpose moves into <PreviewToolbar> when
+  // the performance toolbar is active.
+  const showHeaderTranspose = !isPerformanceToolbar;
+  const showStandardHeader =
+    isStandardHeader && !isHidden && (showFormatSelect || showHeaderTranspose);
+
   return (
     <div {...divProps} className={wrapperClass}>
-      <header className="chordsketch-chord-pro-preview__header">
-        <div className="chordsketch-chord-pro-preview__controls">
-          <label
-            htmlFor={formatSelectId}
-            className="chordsketch-chord-pro-preview__control-label"
-          >
-            Format
-            <select
-              id={formatSelectId}
-              className="chordsketch-chord-pro-preview__select"
-              value={format}
-              onChange={handleFormatChange}
-            >
-              {formats.map((value) => (
-                <option key={value} value={value}>
-                  {FORMAT_LABELS[value] ?? value}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Transpose
-            className="chordsketch-chord-pro-preview__transpose"
-            value={transposeValue}
-            onChange={handleTransposeChange}
-            min={effectiveTransposeMin}
-            max={effectiveTransposeMax}
-            label="Transpose"
-          />
-        </div>
-      </header>
+      {customHeader}
+      {showStandardHeader ? (
+        <header className="chordsketch-chord-pro-preview__header">
+          <div className="chordsketch-chord-pro-preview__controls">
+            {showFormatSelect ? (
+              <label
+                htmlFor={formatSelectId}
+                className="chordsketch-chord-pro-preview__control-label"
+              >
+                Format
+                <select
+                  id={formatSelectId}
+                  className="chordsketch-chord-pro-preview__select"
+                  value={format}
+                  onChange={handleFormatChange}
+                >
+                  {formats.map((value) => (
+                    <option key={value} value={value}>
+                      {FORMAT_LABELS[value] ?? value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {showHeaderTranspose ? (
+              <Transpose
+                className="chordsketch-chord-pro-preview__transpose"
+                value={transposeValue}
+                onChange={handleTransposeChange}
+                min={effectiveTransposeMin}
+                max={effectiveTransposeMax}
+                label="Transpose"
+              />
+            ) : null}
+          </div>
+        </header>
+      ) : null}
+      {isPerformanceToolbar ? (
+        <PreviewToolbar
+          source={source}
+          onSourceChange={onSourceChange}
+          transpose={transposeValue}
+          onTransposeChange={handleTransposeChange}
+          transposeMin={effectiveTransposeMin}
+          transposeMax={effectiveTransposeMax}
+          exportFilename={pdfExportFilename}
+        />
+      ) : null}
       <div className="chordsketch-chord-pro-preview__body">
         <RendererPreview
           className="chordsketch-chord-pro-preview__renderer"

@@ -1,8 +1,14 @@
 import { describe, expect, test } from 'vitest';
 
 import {
+  CAPO_MAX,
+  CAPO_MIN,
+  TRANSPOSE_MAX,
+  TRANSPOSE_MIN,
   applyChordReposition,
   lyricsOffsetToSourceColumn,
+  readCapo,
+  setCapoInSource,
 } from '../src/chord-source-edit';
 
 describe('lyricsOffsetToSourceColumn', () => {
@@ -233,5 +239,99 @@ describe('applyChordReposition — error paths', () => {
         copy: false,
       }),
     ).toThrow(/exceeds line length/);
+  });
+});
+
+describe('constants', () => {
+  test('TRANSPOSE / CAPO bounds expose the playground toolbar range', () => {
+    expect(TRANSPOSE_MIN).toBe(-11);
+    expect(TRANSPOSE_MAX).toBe(11);
+    expect(CAPO_MIN).toBe(0);
+    expect(CAPO_MAX).toBe(12);
+  });
+});
+
+describe('readCapo', () => {
+  test('returns 0 when no {capo} directive is present', () => {
+    expect(readCapo('{title: Demo}\n[C]Hello')).toBe(0);
+    expect(readCapo('')).toBe(0);
+  });
+
+  test('parses a positive directive value', () => {
+    expect(readCapo('{title: Demo}\n{capo: 3}\n[C]Hello')).toBe(3);
+  });
+
+  test('parses without whitespace after the colon', () => {
+    expect(readCapo('{capo:5}\nlyrics')).toBe(5);
+  });
+
+  test('clamps out-of-range positive values into [CAPO_MIN, CAPO_MAX]', () => {
+    expect(readCapo('{capo: 99}\nlyrics')).toBe(CAPO_MAX);
+  });
+
+  test('treats malformed and negative values as 0', () => {
+    expect(readCapo('{capo: -3}\nlyrics')).toBe(0);
+    expect(readCapo('{capo: }\nlyrics')).toBe(0);
+  });
+
+  test('honours only the first {capo} occurrence', () => {
+    expect(readCapo('{capo: 2}\n{capo: 7}\n[C]Hi')).toBe(2);
+  });
+});
+
+describe('setCapoInSource', () => {
+  test('updates an existing directive in place', () => {
+    const source = '{title: Demo}\n{capo: 2}\n[C]Hello';
+    expect(setCapoInSource(source, 5)).toBe('{title: Demo}\n{capo: 5}\n[C]Hello');
+  });
+
+  test('removes the directive (and its trailing newline) when capo is 0', () => {
+    const source = '{title: Demo}\n{capo: 2}\n[C]Hello';
+    expect(setCapoInSource(source, 0)).toBe('{title: Demo}\n[C]Hello');
+  });
+
+  test('returns source unchanged when capo is 0 and no directive exists', () => {
+    const source = '[C]Hello';
+    expect(setCapoInSource(source, 0)).toBe(source);
+  });
+
+  test('inserts after the {key} anchor when no directive exists', () => {
+    const source = '{title: Demo}\n{key: G}\n[C]Hello';
+    expect(setCapoInSource(source, 4)).toBe(
+      '{title: Demo}\n{key: G}\n{capo: 4}\n[C]Hello',
+    );
+  });
+
+  test('inserts after the {title} anchor when no {key} is present', () => {
+    const source = '{title: Demo}\n[C]Hello';
+    expect(setCapoInSource(source, 4)).toBe(
+      '{title: Demo}\n{capo: 4}\n[C]Hello',
+    );
+  });
+
+  test('inserts at the start when no metadata anchor exists', () => {
+    expect(setCapoInSource('[C]Hello', 3)).toBe('{capo: 3}\n[C]Hello');
+  });
+
+  test('clamps capo into [CAPO_MIN, CAPO_MAX] before writing', () => {
+    expect(setCapoInSource('[C]Hi', 99)).toBe('{capo: 12}\n[C]Hi');
+    // Negative collapses to 0 → directive omitted entirely.
+    expect(setCapoInSource('[C]Hi', -5)).toBe('[C]Hi');
+  });
+
+  test('preserves multi-byte lyric bodies untouched', () => {
+    // The directive lives at the top of the document, so the
+    // unicode body characters never enter the regex match range.
+    const source = '{title: 日本語}\n[C]こんにちは';
+    expect(setCapoInSource(source, 2)).toBe(
+      '{title: 日本語}\n{capo: 2}\n[C]こんにちは',
+    );
+  });
+
+  test('round-trips: setCapoInSource then readCapo returns the input', () => {
+    const source = '{title: Demo}\n{key: D}\n[C]Hello';
+    for (const value of [0, 1, 5, 7, 12]) {
+      expect(readCapo(setCapoInSource(source, value))).toBe(value);
+    }
   });
 });
