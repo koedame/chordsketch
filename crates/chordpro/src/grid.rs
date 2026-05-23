@@ -283,6 +283,33 @@ pub struct GridRow {
     pub trailing_comment: Option<String>,
 }
 
+/// Single source of truth for cell-text terminator bytes.
+///
+/// The cell-text fallback in [`tokenize_grid_line`] reads a
+/// run of bytes that are NOT in this set. The dispatch above
+/// it MUST handle every byte in this set with a named branch
+/// that advances the cursor unconditionally; otherwise the
+/// outer loop would pin on a head terminator nobody consumed
+/// (the bug fixed in issue #2556).
+///
+/// `b':'` is in the set because it is the head of the `:|` /
+/// `:|:` repeat-end markers; a bare `:` not followed by `|` is
+/// dialect garbage that the cell-text path drops via the
+/// no-progress guard at the end of [`tokenize_grid_line`].
+/// `b'\n'` / `b'\r'` are deliberately absent — grid rows are
+/// already line-split upstream.
+///
+/// Sister-site: `DIALECT_TERMINATORS` in
+/// `packages/react/src/chordpro-jsx.tsx`. The two sets MUST
+/// remain in lockstep so the four rendering surfaces consume
+/// equivalent token streams.
+const DIALECT_TERMINATORS: &[u8] = b" \t|:";
+
+#[inline]
+fn is_dialect_terminator(b: u8) -> bool {
+    DIALECT_TERMINATORS.contains(&b)
+}
+
 /// Tokenise a grid row into `[GridToken]`.
 ///
 /// Sister-site to `tokenizeGridLine` in
@@ -365,12 +392,35 @@ pub fn tokenize_grid_line(input: &str) -> Vec<GridToken> {
             i += 1;
             continue;
         }
-        // Read a cell token — any contiguous run of
-        // non-whitespace / non-bar / non-colon characters.
-        // Chord brackets `[X]` are unwrapped.
+        // Cell-text fallback: read a run of non-terminator
+        // bytes. Chord brackets `[X]` are unwrapped below.
         let start = i;
-        while i < bytes.len() && !matches!(bytes[i], b' ' | b'\t' | b'|' | b':') {
+        while i < bytes.len() && !is_dialect_terminator(bytes[i]) {
             i += 1;
+        }
+        if i == start {
+            // Head byte is a terminator the dispatch above did
+            // not consume. Drop it and advance so the outer
+            // loop makes progress.
+            //
+            // The assertion is a postcondition invariant: the
+            // inner `while` exits with zero progress only when
+            // `is_dialect_terminator(bytes[i])` is already true
+            // (that is the loop exit condition). It fires if a
+            // future refactor decouples the while condition from
+            // `is_dialect_terminator`. Regression protection for
+            // the "new terminator without a dispatch branch"
+            // scenario (issue #2556 class) comes from the LCG
+            // property test.
+            //
+            // Sister-site: same guard in `tokenizeGridLine`.
+            debug_assert!(
+                is_dialect_terminator(bytes[i]),
+                "tokenize_grid_line no-progress guard: non-terminator byte {:?} must not reach this branch",
+                bytes[i] as char
+            );
+            i += 1;
+            continue;
         }
         let mut raw = &input[start..i];
         if raw.starts_with('[') && raw.ends_with(']') && raw.len() >= 2 {
@@ -759,5 +809,110 @@ mod tests {
     fn classify_row_chord_when_not_strum() {
         let row = classify_grid_row("| G7 . . . |");
         assert_eq!(row.kind, GridRowKind::Chord);
+    }
+
+    // Regression tests for #2556 — sister-site to the same
+    // cases in `packages/react/tests/chordpro-jsx-helpers.test.ts`.
+    // See the production guard in `tokenize_grid_line` for the
+    // mechanism; these tests pin the user-observable contract.
+    #[test]
+    fn tokenize_trailing_bare_colon_terminates() {
+        // Mid-edit state captured from the kitchen-sink sample.
+        // Pre-fix `tokenize_grid_line` spun without forward
+        // progress on the trailing `:`.
+        let toks = tokenize_grid_line("|: C7 . | %  . :|: G7 . | %  . :");
+        let non_space: Vec<&GridToken> = toks
+            .iter()
+            .filter(|t| !matches!(t, GridToken::Space))
+            .collect();
+        // `GridToken: PartialEq` — direct comparison catches a
+        // future regression that swaps `RepeatBoth` for `Single`
+        // (which a discriminant-only check would silently miss).
+        assert_eq!(
+            non_space,
+            vec![
+                &GridToken::Barline(GridBarline::RepeatStart),
+                &GridToken::Cell(vec!["C7".into()]),
+                &GridToken::Continuation,
+                &GridToken::Barline(GridBarline::Single),
+                &GridToken::Percent1,
+                &GridToken::Continuation,
+                &GridToken::Barline(GridBarline::RepeatBoth),
+                &GridToken::Cell(vec!["G7".into()]),
+                &GridToken::Continuation,
+                &GridToken::Barline(GridBarline::Single),
+                &GridToken::Percent1,
+                &GridToken::Continuation,
+            ]
+        );
+    }
+
+    #[test]
+    fn tokenize_lone_colon_drops_to_no_tokens() {
+        assert!(tokenize_grid_line(":").is_empty());
+    }
+
+    #[test]
+    fn tokenize_run_of_colons_terminates() {
+        // Drives the no-progress guard through multiple
+        // iterations. A discriminant-only check on the first
+        // colon would pass even if a future regression reverted
+        // the unconditional `i += 1`.
+        assert!(tokenize_grid_line(":::::::").is_empty());
+    }
+
+    #[test]
+    fn tokenize_colon_between_cells_is_dropped() {
+        let toks = tokenize_grid_line("C : D");
+        let cells: Vec<&Vec<String>> = toks
+            .iter()
+            .filter_map(|t| match t {
+                GridToken::Cell(n) => Some(n),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(cells.len(), 2);
+        assert_eq!(cells[0], &vec!["C".to_string()]);
+        assert_eq!(cells[1], &vec!["D".to_string()]);
+    }
+
+    #[test]
+    fn tokenize_grid_line_terminates_for_arbitrary_ascii_input() {
+        // Property check: the outer loop must terminate for any
+        // input drawn from the dispatch alphabet, regardless of
+        // ordering. Generated deterministically (no rand dep)
+        // from a small LCG so the corpus survives across runs.
+        // A regression that reintroduces the no-progress shape
+        // would hang one of the cases here under the test
+        // runner's per-test timeout.
+        let alphabet = b"|:.%~ \t[]nstC7G:1234ABs";
+        let mut state: u32 = 0xC0FFEE;
+        for _ in 0..256 {
+            let mut s = String::new();
+            let len = (state as usize) % 48;
+            for _ in 0..len {
+                state = state.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                let idx = (state >> 16) as usize % alphabet.len();
+                s.push(alphabet[idx] as char);
+            }
+            // Just calling tokenize_grid_line is enough — if it
+            // doesn't return, the test runner kills the harness.
+            let _ = tokenize_grid_line(&s);
+        }
+    }
+
+    #[test]
+    fn classify_row_with_trailing_bare_colon_demotes_to_row_comment() {
+        // The cell-text guard drops the trailing `:`, after which
+        // the row's last barline is the `|` before `% .`. The
+        // engraving classifier therefore demotes the orphan
+        // `% .` to a `trailing_comment` because the row no longer
+        // has a closing barline. This is intentional mid-edit
+        // behaviour — pinning it at the parse layer so a future
+        // change to `classify_grid_row` that re-promotes the
+        // percent back to a body cell fails here rather than
+        // silently rewriting three golden snapshots.
+        let row = classify_grid_row("|: G7 . | %  . :");
+        assert_eq!(row.trailing_comment.as_deref(), Some("% ."));
     }
 }

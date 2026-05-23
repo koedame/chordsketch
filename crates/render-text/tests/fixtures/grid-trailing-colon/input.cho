@@ -1,0 +1,5 @@
+{title: Grid Trailing Colon}
+
+{start_of_grid shape="1+4x2+4"}
+     |: C7 . | %  . :|: G7 . | %  . :
+{end_of_grid}

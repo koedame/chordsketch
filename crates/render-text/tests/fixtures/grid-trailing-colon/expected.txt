@@ -1,0 +1,4 @@
+Grid Trailing Colon
+
+[Grid]
+     |: C7 . | %  . :|: G7 . | %  . :
