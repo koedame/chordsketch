@@ -49,9 +49,10 @@ test.describe('chordpro grid — bare trailing colon', () => {
     // edit reaches `tokenizeGridLine`.
     const editor = page.locator('.cm-content');
     await editor.click();
-    const selectAll =
-      process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
-    await page.keyboard.press(selectAll);
+    // `ControlOrMeta+A` is Playwright's built-in cross-platform
+    // shorthand (Ctrl on Linux/Windows, Cmd on macOS); no
+    // `process.platform` branch needed.
+    await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.press('Delete');
     // `page.keyboard.type` issues keystrokes one at a time, so the
     // renderer runs on every intermediate state including the

@@ -785,28 +785,30 @@ mod tests {
         // Mid-edit state captured from the kitchen-sink sample.
         // Pre-fix this input hung the renderer.
         let toks = tokenize_grid_line("|: C7 . | %  . :|: G7 . | %  . :");
-        let kinds: Vec<std::mem::Discriminant<GridToken>> = toks
+        let non_space: Vec<&GridToken> = toks
             .iter()
             .filter(|t| !matches!(t, GridToken::Space))
-            .map(std::mem::discriminant)
             .collect();
         // Stray trailing `:` is dropped; the rest is a valid
         // token stream ending at the last continuation.
+        // `GridToken: PartialEq` — compare directly so that a
+        // future regression swapping `RepeatBoth` for `Single`
+        // (etc.) is caught here rather than silently passing.
         assert_eq!(
-            kinds,
+            non_space,
             vec![
-                std::mem::discriminant(&GridToken::Barline(GridBarline::RepeatStart)),
-                std::mem::discriminant(&GridToken::Cell(vec!["C7".into()])),
-                std::mem::discriminant(&GridToken::Continuation),
-                std::mem::discriminant(&GridToken::Barline(GridBarline::Single)),
-                std::mem::discriminant(&GridToken::Percent1),
-                std::mem::discriminant(&GridToken::Continuation),
-                std::mem::discriminant(&GridToken::Barline(GridBarline::RepeatBoth)),
-                std::mem::discriminant(&GridToken::Cell(vec!["G7".into()])),
-                std::mem::discriminant(&GridToken::Continuation),
-                std::mem::discriminant(&GridToken::Barline(GridBarline::Single)),
-                std::mem::discriminant(&GridToken::Percent1),
-                std::mem::discriminant(&GridToken::Continuation),
+                &GridToken::Barline(GridBarline::RepeatStart),
+                &GridToken::Cell(vec!["C7".into()]),
+                &GridToken::Continuation,
+                &GridToken::Barline(GridBarline::Single),
+                &GridToken::Percent1,
+                &GridToken::Continuation,
+                &GridToken::Barline(GridBarline::RepeatBoth),
+                &GridToken::Cell(vec!["G7".into()]),
+                &GridToken::Continuation,
+                &GridToken::Barline(GridBarline::Single),
+                &GridToken::Percent1,
+                &GridToken::Continuation,
             ]
         );
     }
