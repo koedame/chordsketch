@@ -1,16 +1,105 @@
 /**
  * Source-side edit helpers for the drag-to-reposition chord
- * feature. The React surface emits a `ChordRepositionEvent`
- * describing what the user did (drag from line A column X →
- * drop at line B lyrics-offset Y); the consumer applies the
- * event to the ChordPro source string via
- * `applyChordReposition` and dispatches the result into its
- * editor.
+ * feature and the performance-toolbar capo control. The React
+ * surface emits a `ChordRepositionEvent` describing what the
+ * user did (drag from line A column X → drop at line B
+ * lyrics-offset Y); the consumer applies the event to the
+ * ChordPro source string via `applyChordReposition` and
+ * dispatches the result into its editor. The capo helpers
+ * (`readCapo` / `setCapoInSource`) round-trip a `{capo: N}`
+ * directive through the source so the `<Capo>` control stays
+ * a thin wrapper over the document — no parallel state.
  *
  * Kept here (not inside the JSX walker) so the math has unit
  * coverage independent of the DOM and so external consumers
- * can drive the same transformation without rendering a sheet.
+ * (VS Code extension host, custom editor shells) can drive the
+ * same transformations without rendering a sheet.
  */
+
+/** Minimum semitone offset the `<Transpose>` control emits by default. */
+export const TRANSPOSE_MIN = -11;
+/** Maximum semitone offset the `<Transpose>` control emits by default. */
+export const TRANSPOSE_MAX = 11;
+/** Minimum capo fret position the `<Capo>` control emits. */
+export const CAPO_MIN = 0;
+/** Maximum capo fret position the `<Capo>` control emits. */
+export const CAPO_MAX = 12;
+
+// Matches `{capo: N}` (or `{capo:-N}`) with optional whitespace
+// around the value and an optional trailing newline. The trailing
+// newline is captured so removal does not leave a blank line where
+// the directive used to be.
+const CAPO_DIRECTIVE_RE = /\{capo:\s*(-?\d+)\s*\}\s*\n?/;
+
+// Anchor for inserting a new `{capo: N}` next to the other top-of-
+// document metadata directives. We slot it AFTER any run of
+// `{title}` / `{subtitle}` / `{artist}` / `{key}` / `{tempo}` /
+// `{time}` at the very top of the source, so a freshly inserted
+// capo keeps the metadata block contiguous instead of landing
+// inside the lyrics.
+const CAPO_ANCHOR_RE = /^(\{(?:title|subtitle|artist|key|tempo|time)[^}]*\}\s*\n)+/;
+
+function clampInt(n: number, min: number, max: number): number {
+  if (Number.isNaN(n)) return min;
+  if (n < min) return min;
+  if (n > max) return max;
+  return n;
+}
+
+/**
+ * Parse the `{capo: N}` directive out of a ChordPro source string.
+ *
+ * Returns `0` when no directive is present, when the value is
+ * malformed, or when `N` is negative. Out-of-range positive values
+ * are clamped into `[CAPO_MIN, CAPO_MAX]` so a stale or hand-edited
+ * source cannot make the `<Capo>` control display a value its
+ * `+` / `−` buttons would refuse to emit.
+ *
+ * Only the first `{capo}` occurrence is honoured — a second
+ * directive mid-document is ignored (ChordPro's reference
+ * implementation treats `{capo}` as song metadata, so multiple
+ * declarations have no defined meaning).
+ */
+export function readCapo(source: string): number {
+  const match = source.match(CAPO_DIRECTIVE_RE);
+  if (!match) return CAPO_MIN;
+  const n = parseInt(match[1], 10);
+  if (!Number.isFinite(n) || n < 0) return CAPO_MIN;
+  return clampInt(n, CAPO_MIN, CAPO_MAX);
+}
+
+/**
+ * Round-trip a capo value into a ChordPro source string.
+ *
+ * - When `capo === 0`, any existing `{capo: N}` directive is
+ *   removed (including the trailing newline). A source that
+ *   never had a `{capo}` directive is returned unchanged.
+ * - When `capo !== 0` and a directive already exists, the value
+ *   is replaced in place.
+ * - When `capo !== 0` and no directive exists, a new
+ *   `{capo: N}\n` line is inserted **after** the run of top-of-
+ *   document metadata directives (`{title}` / `{subtitle}` /
+ *   `{artist}` / `{key}` / `{tempo}` / `{time}`) — or at the
+ *   start of the source if no such run exists.
+ *
+ * `capo` is clamped into `[CAPO_MIN, CAPO_MAX]` before being
+ * written, mirroring the `<Capo>` control's button bounds so a
+ * caller cannot persist a value the UI would refuse to display.
+ */
+export function setCapoInSource(source: string, capo: number): string {
+  const clamped = clampInt(Math.trunc(capo), CAPO_MIN, CAPO_MAX);
+  const directive = clamped === CAPO_MIN ? '' : `{capo: ${clamped}}\n`;
+  if (CAPO_DIRECTIVE_RE.test(source)) {
+    return source.replace(CAPO_DIRECTIVE_RE, directive);
+  }
+  if (clamped === CAPO_MIN) return source;
+  const anchor = source.match(CAPO_ANCHOR_RE);
+  if (anchor) {
+    const idx = (anchor.index ?? 0) + anchor[0].length;
+    return `${source.slice(0, idx)}${directive}${source.slice(idx)}`;
+  }
+  return `${directive}${source}`;
+}
 
 /**
  * Describes a chord-reposition gesture in source-coordinate

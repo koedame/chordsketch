@@ -346,4 +346,101 @@ describe('<ChordProPreview>', () => {
       err.mockRestore();
     }
   });
+
+  // -------------------------------------------------------------
+  // toolbar prop (#2545)
+  // -------------------------------------------------------------
+
+  test('toolbar="transpose-only" (default) keeps the existing header', () => {
+    render(
+      <ChordProPreview
+        source="src"
+        wasmLoader={makeLoader(makeStub())}
+      />,
+    );
+    expect(screen.getByRole('group', { name: 'Transpose' })).toBeTruthy();
+    expect(screen.getByLabelText('Format')).toBeTruthy();
+    expect(
+      screen.queryByRole('toolbar', { name: 'Preview performance controls' }),
+    ).toBeNull();
+  });
+
+  test('toolbar="performance" renders <PreviewToolbar> with Capo + Export', () => {
+    render(
+      <ChordProPreview
+        source="{title: Demo}"
+        toolbar="performance"
+        onSourceChange={vi.fn()}
+        formats={['html']}
+        wasmLoader={makeLoader(makeStub())}
+      />,
+    );
+    expect(
+      screen.getByRole('toolbar', { name: 'Preview performance controls' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Transpose' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Capo' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Export' })).toBeTruthy();
+    // Format select is hidden in performance mode with a single allowed format.
+    expect(screen.queryByLabelText('Format')).toBeNull();
+  });
+
+  test('toolbar={false} suppresses the entire header', () => {
+    render(
+      <ChordProPreview
+        source="src"
+        toolbar={false}
+        wasmLoader={makeLoader(makeStub())}
+      />,
+    );
+    expect(screen.queryByLabelText('Format')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Transpose' })).toBeNull();
+    expect(
+      screen.queryByRole('toolbar', { name: 'Preview performance controls' }),
+    ).toBeNull();
+  });
+
+  test('toolbar={node} renders caller-supplied JSX in place of the header', () => {
+    render(
+      <ChordProPreview
+        source="src"
+        toolbar={<div data-testid="custom-toolbar">Custom</div>}
+        wasmLoader={makeLoader(makeStub())}
+      />,
+    );
+    expect(screen.getByTestId('custom-toolbar')).toBeTruthy();
+    expect(screen.queryByLabelText('Format')).toBeNull();
+  });
+
+  test('performance toolbar drops Capo group when onSourceChange is omitted', () => {
+    render(
+      <ChordProPreview
+        source="src"
+        toolbar="performance"
+        formats={['html']}
+        wasmLoader={makeLoader(makeStub())}
+      />,
+    );
+    expect(screen.queryByRole('group', { name: 'Capo' })).toBeNull();
+    expect(screen.getByRole('group', { name: 'Transpose' })).toBeTruthy();
+  });
+
+  test('performance toolbar transpose +/− routes through onTransposeChange', () => {
+    const onTransposeChange = vi.fn();
+    render(
+      <ChordProPreview
+        source="src"
+        toolbar="performance"
+        transpose={0}
+        onTransposeChange={onTransposeChange}
+        onSourceChange={vi.fn()}
+        formats={['html']}
+        wasmLoader={makeLoader(makeStub())}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Transpose up one semitone' }),
+    );
+    expect(onTransposeChange).toHaveBeenCalledWith(1);
+  });
 });

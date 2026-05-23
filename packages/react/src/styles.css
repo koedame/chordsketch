@@ -187,6 +187,93 @@
   outline-offset: 2px;
 }
 
+.chordsketch-capo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: inherit;
+}
+
+.chordsketch-capo__label {
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
+.chordsketch-capo__value {
+  min-width: 2.5ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.chordsketch-capo__button {
+  min-width: 2rem;
+  padding: 0.25rem 0.5rem;
+  font: inherit;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: inherit;
+}
+
+.chordsketch-capo__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.chordsketch-capo__button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* Performance toolbar — Transpose / Capo / Export. Hosts that
+ * supply their own theme (the playground via .pane-toolbar /
+ * .tool-group classes) override these via their own stylesheet;
+ * the BEM rules below are the fallback that keeps the toolbar
+ * usable in unstyled hosts (VS Code WebView, ad-hoc embedding).
+ */
+.chordsketch-preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.375rem 0.75rem;
+  flex-wrap: wrap;
+}
+
+.chordsketch-preview-toolbar__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chordsketch-preview-toolbar__label {
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
+.chordsketch-preview-toolbar__export {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  font: inherit;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: inherit;
+}
+
+.chordsketch-preview-toolbar__export:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.chordsketch-preview-toolbar__export:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
 .chordsketch-sheet {
   font-family: inherit;
 }
