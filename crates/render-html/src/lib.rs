@@ -423,6 +423,29 @@ fn render_song_body_into(
                                     )
                                     .unwrap_or_else(|| value.to_string())
                                 };
+                                // Surface a warning when the
+                                // key string parses as a chord
+                                // root + accidental + optional
+                                // minor suffix but the
+                                // key-signature lookup table has
+                                // no entry. This is the silent
+                                // empty-staff failure mode
+                                // #2526 closed — the table-gap
+                                // case is observable now, modal
+                                // `{key: C dorian}` values (which
+                                // do not parse as a chord) stay
+                                // silent.
+                                if matches!(
+                                    music_glyphs::key_signature_for_with_diagnostics(&displayed),
+                                    music_glyphs::KeySignatureLookup::ParsedButMissing
+                                ) {
+                                    push_warning(
+                                        warnings,
+                                        format!(
+                                            "key signature lookup table missing entry for parseable key: {displayed}"
+                                        ),
+                                    );
+                                }
                                 html.push_str(&format!(
                                     "<span class=\"meta-inline meta-inline--key\">\
                                      {glyph}\
@@ -3119,6 +3142,24 @@ mod tests {
         assert!(
             seventh_out.contains("A7"),
             "extension must round-trip; got:\n{seventh_out}"
+        );
+    }
+
+    #[test]
+    fn test_key_parseable_but_missing_from_table_emits_warning() {
+        // `{key: Fbm}` parses as a valid key name (root=F, flat
+        // accidental, minor suffix) but has no entry in the
+        // key-signature lookup table — it is enharmonically
+        // equivalent to Em, which `canonical_transposed_key` never
+        // produces, but a user can hand-write it. The renderer must
+        // emit a diagnostics warning rather than silently showing an
+        // empty staff glyph (#2526).
+        let song = chordsketch_chordpro::parse("{key: Fbm}\n[Em]Hi").unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            result.warnings.iter().any(|w| w.contains("Fbm")),
+            "expected a warning for parseable-but-missing key Fbm, got: {:?}",
+            result.warnings
         );
     }
 

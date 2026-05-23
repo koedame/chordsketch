@@ -276,7 +276,7 @@ function ChordSheetAstBranch({
   caretLineLength: number | undefined;
   onChordReposition: ((event: ChordRepositionEvent) => void) | undefined;
 }): JSX.Element {
-  const { ast, loading, error, transposedKey } = useChordproAst(
+  const { ast, loading, error, transposedKey, transposedKeyDirectives } = useChordproAst(
     source,
     { transpose, config },
     wasmLoader,
@@ -304,6 +304,7 @@ function ChordSheetAstBranch({
       <div className="chordsketch-sheet__content">
         {renderChordproAst(ast, {
           transposedKey,
+          transposedKeyDirectives,
           chordDiagrams: chordDiagramsInstrument
             ? { instrument: chordDiagramsInstrument }
             : null,

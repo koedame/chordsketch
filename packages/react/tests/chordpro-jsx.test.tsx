@@ -1676,11 +1676,13 @@ describe('renderChordproAst', () => {
     }
   });
 
-  test('mid-song {key} that does not match the primary key stays single even under transpose', () => {
-    // Host's `transposedKey` is computed against the primary key
-    // (last `metadata.key`); applying it to an unrelated mid-song
-    // `{key}` would be incorrect, so those markers fall through to
-    // the single chip.
+  test('mid-song {key} falls back to single chip when only transposedKey is supplied (back-compat)', () => {
+    // Hosts that haven't been updated to thread
+    // `transposedKeyDirectives` still get the older behaviour:
+    // only the primary `{key:}` directive (the one whose value
+    // matches `metadata.key`) gets the pair display, mid-song
+    // directives stay authored. The map-based path supersedes
+    // this and is exercised by the next test.
     const ast: ChordproSong = {
       metadata: { ...EMPTY_META, key: 'D', keys: ['G', 'D'] },
       lines: [
@@ -1697,10 +1699,76 @@ describe('renderChordproAst', () => {
     const { container } = render(renderChordproAst(ast, { transposedKey: 'E' }));
     const markers = container.querySelectorAll('.meta-inline--key');
     expect(markers).toHaveLength(2);
-    // First `{key: G}` — not the primary, so single chip.
+    // First `{key: G}` — not the primary, no map → single chip.
     expect(markers[0]?.classList.contains('meta-inline--key-pair')).toBe(false);
     // Second `{key: D}` — primary, gets the Written + Sounding pair.
     expect(markers[1]?.classList.contains('meta-inline--key-pair')).toBe(true);
+  });
+
+  // #2525: mid-song `{key:}` directives now reach the same
+  // canonical transpose path the Rust renderers use, surfaced
+  // via the host's `transposedKeyDirectives` map. The walker
+  // emits an Original → Playing pair for every directive whose
+  // authored value appears in the map.
+  test('mid-song {key} renders Original → Playing pair when transposedKeyDirectives covers it', () => {
+    const ast: ChordproSong = {
+      metadata: { ...EMPTY_META, key: 'G', keys: ['G', 'D'] },
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'key', value: 'G', kind: { tag: 'key' }, selector: null },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'key', value: 'D', kind: { tag: 'key' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(
+      renderChordproAst(ast, {
+        transposedKey: 'A',
+        transposedKeyDirectives: { G: 'A', D: 'E' },
+      }),
+    );
+    const markers = container.querySelectorAll('.meta-inline--key');
+    expect(markers).toHaveLength(2);
+    // Primary `{key: G}` → Original G → Playing A.
+    expect(markers[0]?.classList.contains('meta-inline--key-pair')).toBe(true);
+    const primaryGroups = markers[0]?.querySelectorAll('.meta-inline__group');
+    expect(primaryGroups?.[0]?.querySelector('.meta-inline__value')?.textContent).toBe('G');
+    expect(primaryGroups?.[1]?.querySelector('.meta-inline__value')?.textContent).toBe('A');
+    // Mid-song `{key: D}` → Original D → Playing E (the bug
+    // #2525 closed — before the fix this was a single `Key: D`
+    // chip ignoring the transpose).
+    expect(markers[1]?.classList.contains('meta-inline--key-pair')).toBe(true);
+    const midGroups = markers[1]?.querySelectorAll('.meta-inline__group');
+    expect(midGroups?.[0]?.querySelector('.meta-inline__value')?.textContent).toBe('D');
+    expect(midGroups?.[1]?.querySelector('.meta-inline__value')?.textContent).toBe('E');
+  });
+
+  test('mid-song {key} stays single when transposedKeyDirectives entry equals the authored value', () => {
+    // Wasm already filters out no-op entries (transpose=0 or
+    // identity transpose), but the walker also guards in case a
+    // host hand-builds the map. Pair display only fires when
+    // original !== transposed.
+    const ast: ChordproSong = {
+      metadata: { ...EMPTY_META, key: 'G', keys: ['G'] },
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'key', value: 'G', kind: { tag: 'key' }, selector: null },
+        },
+      ],
+    };
+    const { container } = render(
+      renderChordproAst(ast, {
+        transposedKeyDirectives: { G: 'G' },
+      }),
+    );
+    expect(container.querySelector('.meta-inline--key-pair')).toBeNull();
+    expect(container.querySelector('.meta-inline--key .meta-inline__label')?.textContent).toBe(
+      'Key:',
+    );
   });
 
   test('extended metadata lands in tiered rows: attribution / params / supplementary / tags', () => {

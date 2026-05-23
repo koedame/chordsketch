@@ -13,6 +13,7 @@ interface ChordproParser {
     ast: string;
     warnings: string[];
     transposedKey?: string;
+    transposedKeyDirectives?: Record<string, string>;
   };
   parseChordproWithWarningsAndOptions: (
     input: string,
@@ -21,6 +22,7 @@ interface ChordproParser {
     ast: string;
     warnings: string[];
     transposedKey?: string;
+    transposedKeyDirectives?: Record<string, string>;
   };
 }
 
@@ -84,6 +86,17 @@ export interface ChordproAstResult {
    * `ParseChordproResult` shape.
    */
   transposedKey: string | null;
+  /**
+   * Map of `original {key:} directive value → transposed value`
+   * covering every `{key:}` directive in the song (primary +
+   * mid-song). Empty when `transpose === 0` or no `{key:}`
+   * directive parsed as a chord. Mirrors the
+   * `transposedKeyDirectives` field on the wasm
+   * `ParseChordproResult` shape (#2525) — the walker uses it to
+   * render mid-song key chips with the canonical transposed
+   * spelling matching the Rust text / HTML / PDF surfaces.
+   */
+  transposedKeyDirectives: Record<string, string>;
 }
 
 /**
@@ -121,6 +134,9 @@ export function useChordproAst(
   const [error, setError] = useState<Error | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [transposedKey, setTransposedKey] = useState<string | null>(null);
+  const [transposedKeyDirectives, setTransposedKeyDirectives] = useState<
+    Record<string, string>
+  >({});
   // Bumping `retryNonce` forces the effect to re-fire even when
   // (`source`, `transpose`, `config`) are unchanged — the hook
   // surface for consumers that hit a transient WASM-init failure
@@ -173,6 +189,7 @@ export function useChordproAst(
         setAst(parsed);
         setWarnings(result.warnings);
         setTransposedKey(result.transposedKey ?? null);
+        setTransposedKeyDirectives(result.transposedKeyDirectives ?? {});
         setError(null);
       } catch (e) {
         if (cancelled) return;
@@ -206,5 +223,13 @@ export function useChordproAst(
     setRetryNonce((n) => n + 1);
   }, []);
 
-  return { ast, loading, error, warnings, retry, transposedKey };
+  return {
+    ast,
+    loading,
+    error,
+    warnings,
+    retry,
+    transposedKey,
+    transposedKeyDirectives,
+  };
 }
