@@ -1,0 +1,219 @@
+<mxfile host="design-system">
+    <diagram id="chordsketch-system-starter" name="System diagram">
+        <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="920" pageHeight="1200" math="0" shadow="0" adaptiveColors="auto">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+
+                <mxCell id="t-title" value="ChordSketch — draw.io system-diagram starter" style="text;html=1;align=left;verticalAlign=middle;fontSize=24;fontStyle=1;fontFamily=Noto Sans JP;fontColor=#0A0A0B;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="40" width="840" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="t-subtitle" value="Drop-in shapes for architecture sketches. Connection styles are split into neutral connectors (sync / async / dep — one each) and data-flow intent variants (primary / warning / danger / info) so you pick the right intent up front. Pair with chordsketch-starter.drawio." style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontFamily=Inter;fontColor=#67646D;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="78" width="840" height="36" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="t-comp-header" value="Component shapes" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;fontStyle=1;fontFamily=Inter;fontColor=#44424A;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="128" width="400" height="20" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="sh-service" value="Service&lt;br/&gt;&lt;font color=&quot;#67646D&quot; style=&quot;font-weight:normal&quot;&gt;CLI, daemon&lt;/font&gt;" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D4D1D6;strokeWidth=1;fontColor=#0A0A0B;fontFamily=Inter;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="156" width="130" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="sh-crate" value="Library / crate&lt;br/&gt;&lt;font color=&quot;#67646D&quot; style=&quot;font-weight:normal&quot;&gt;chordsketch-chordpro&lt;/font&gt;" style="shape=cube;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D4D1D6;fontColor=#0A0A0B;fontFamily=Inter;fontSize=12;fontStyle=1;size=10;" vertex="1" parent="1">
+                    <mxGeometry x="180" y="156" width="130" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="sh-binding" value="Binding&lt;br/&gt;&lt;font color=&quot;#87092C&quot; style=&quot;font-weight:normal&quot;&gt;@chordsketch/wasm&lt;/font&gt;" style="shape=cube;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;whiteSpace=wrap;html=1;fillColor=#FDF2F5;strokeColor=#BD1642;fontColor=#87092C;fontFamily=Inter;fontSize=12;fontStyle=1;size=10;" vertex="1" parent="1">
+                    <mxGeometry x="320" y="156" width="130" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="sh-consumer" value="Consumer pkg&lt;br/&gt;&lt;font color=&quot;#67646D&quot; style=&quot;font-weight:normal&quot;&gt;npm / PyPI / Maven&lt;/font&gt;" style="shape=folder;whiteSpace=wrap;html=1;tabWidth=46;tabHeight=14;tabPosition=left;fillColor=#FFFFFF;strokeColor=#D4D1D6;fontColor=#0A0A0B;fontFamily=Inter;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="460" y="156" width="130" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="sh-host" value="Host app&lt;br/&gt;&lt;font color=&quot;#67646D&quot; style=&quot;font-weight:normal&quot;&gt;playground / VS Code&lt;/font&gt;" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#FAFAF7;strokeColor=#D4D1D6;strokeWidth=1.5;fontColor=#0A0A0B;fontFamily=Inter;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="600" y="156" width="130" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="sh-external" value="External system&lt;br/&gt;&lt;font color=&quot;#67646D&quot; style=&quot;font-weight:normal&quot;&gt;3rd-party API&lt;/font&gt;" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#F6F4F7;strokeColor=#8A8790;fontColor=#44424A;fontFamily=Inter;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="740" y="156" width="140" height="80" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="t-data-header" value="Data &amp; infrastructure shapes" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;fontStyle=1;fontFamily=Inter;fontColor=#44424A;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="266" width="400" height="20" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="sh-db" value="Database&lt;br/&gt;&lt;font color=&quot;#67646D&quot; style=&quot;font-weight:normal&quot;&gt;SQLite, Postgres…&lt;/font&gt;" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D4D1D6;fontColor=#0A0A0B;fontFamily=Inter;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="294" width="130" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="sh-file" value="File / artifact&lt;br/&gt;&lt;font color=&quot;#67646D&quot; style=&quot;font-weight:normal&quot;&gt;.cho · .pdf · .json&lt;/font&gt;" style="shape=document;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D4D1D6;fontColor=#0A0A0B;fontFamily=Inter;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="180" y="294" width="130" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="sh-cache" value="Cache&lt;br/&gt;&lt;font color=&quot;#67646D&quot; style=&quot;font-weight:normal&quot;&gt;in-memory · CDN&lt;/font&gt;" style="rounded=1;arcSize=50;whiteSpace=wrap;html=1;fillColor=#FAFAF7;strokeColor=#D4D1D6;fontColor=#0A0A0B;fontFamily=Inter;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="320" y="294" width="130" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="sh-queue" value="Queue / stream&lt;br/&gt;&lt;font color=&quot;#67646D&quot; style=&quot;font-weight:normal&quot;&gt;async hand-off&lt;/font&gt;" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fillColor=#FAFAF7;strokeColor=#D4D1D6;fontColor=#0A0A0B;fontFamily=Inter;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="460" y="294" width="130" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="sh-registry" value="Registry&lt;br/&gt;&lt;font color=&quot;#67646D&quot; style=&quot;font-weight:normal&quot;&gt;crates.io · npm · GHCR&lt;/font&gt;" style="shape=folder;whiteSpace=wrap;html=1;tabWidth=46;tabHeight=14;tabPosition=left;fillColor=#F6F4F7;strokeColor=#8A8790;fontColor=#44424A;fontFamily=Inter;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="600" y="294" width="130" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="sh-actor" value="Actor / user" style="shape=umlActor;whiteSpace=wrap;html=1;fillColor=#67646D;strokeColor=#67646D;fontColor=#44424A;fontFamily=Inter;fontSize=12;fontStyle=1;verticalLabelPosition=bottom;verticalAlign=top;labelPosition=center;" vertex="1" parent="1">
+                    <mxGeometry x="788" y="294" width="44" height="60" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="t-bound-header" value="Boundary clusters" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;fontStyle=1;fontFamily=Inter;fontColor=#44424A;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="404" width="400" height="20" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="cluster-internal" value="Internal boundary" style="swimlane;html=1;startSize=28;fillColor=#FFFFFF;strokeColor=#D4D1D6;fontColor=#44424A;fontFamily=Inter;fontSize=12;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="434" width="400" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="cluster-internal-child" value="Internal service&lt;br/&gt;&lt;font color=&quot;#67646D&quot; style=&quot;font-weight:normal&quot;&gt;solid ink-300 border on ink-0&lt;/font&gt;" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D4D1D6;strokeWidth=1.5;fontColor=#0A0A0B;fontFamily=Inter;fontSize=12;fontStyle=1;" vertex="1" parent="cluster-internal">
+                    <mxGeometry x="24" y="44" width="180" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="cluster-internal-note" value="Components owned by ChordSketch. Solid border + ink-0 fill." style="text;html=1;align=left;verticalAlign=top;fontSize=11;fontFamily=Inter;fontColor=#67646D;" vertex="1" parent="cluster-internal">
+                    <mxGeometry x="220" y="44" width="160" height="80" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="cluster-external" value="External / 3rd-party boundary" style="swimlane;html=1;startSize=28;fillColor=#FAFAF7;strokeColor=#8A8790;dashed=1;fontColor=#44424A;fontFamily=Inter;fontSize=12;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+                    <mxGeometry x="460" y="434" width="420" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="cluster-external-child" value="External service&lt;br/&gt;&lt;font color=&quot;#67646D&quot; style=&quot;font-weight:normal&quot;&gt;dashed ink-500 border on ink-50&lt;/font&gt;" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#FAFAF7;strokeColor=#8A8790;strokeWidth=1.5;dashed=1;fontColor=#44424A;fontFamily=Inter;fontSize=12;fontStyle=1;" vertex="1" parent="cluster-external">
+                    <mxGeometry x="24" y="44" width="180" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="cluster-external-note" value="Anything outside ChordSketch's control — registries, browsers, OS APIs, SaaS. Dashed border + ink-50 fill." style="text;html=1;align=left;verticalAlign=top;fontSize=11;fontFamily=Inter;fontColor=#67646D;" vertex="1" parent="cluster-external">
+                    <mxGeometry x="220" y="44" width="180" height="80" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="t-conn-neutral-header" value="Connection styles — neutral connectors" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;fontStyle=1;fontFamily=Inter;fontColor=#44424A;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="592" width="600" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar-sync" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#67646D;strokeWidth=1.5;" edge="1" parent="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="40" y="628" as="sourcePoint"/>
+                        <mxPoint x="180" y="628" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-sync-lbl" value="sync — HTTP / RPC / function call" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontFamily=Inter;fontColor=#67646D;" vertex="1" parent="1">
+                    <mxGeometry x="194" y="616" width="246" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar-async" value="" style="endArrow=open;html=1;rounded=0;strokeColor=#67646D;strokeWidth=1.5;dashed=1;" edge="1" parent="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="40" y="664" as="sourcePoint"/>
+                        <mxPoint x="180" y="664" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-async-lbl" value="async — queue / webhook / fire-and-forget" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontFamily=Inter;fontColor=#67646D;" vertex="1" parent="1">
+                    <mxGeometry x="194" y="652" width="246" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar-dep" value="" style="endArrow=open;html=1;rounded=0;strokeColor=#8A8790;strokeWidth=1;dashed=1;" edge="1" parent="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="40" y="700" as="sourcePoint"/>
+                        <mxPoint x="180" y="700" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-dep-lbl" value="dep — A uses / depends on B" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontStyle=2;fontFamily=Inter;fontColor=#67646D;" vertex="1" parent="1">
+                    <mxGeometry x="194" y="688" width="246" height="24" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="t-conn-intent-header" value="Data-flow intent variants — pick the semantic" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;fontStyle=1;fontFamily=Inter;fontColor=#44424A;" vertex="1" parent="1">
+                    <mxGeometry x="460" y="592" width="400" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar-data-primary" value="" style="endArrow=classicThin;html=1;rounded=0;strokeColor=#BD1642;strokeWidth=2.5;" edge="1" parent="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="460" y="628" as="sourcePoint"/>
+                        <mxPoint x="600" y="628" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-data-primary-lbl" value="primary — the path you want read first (crimson-500)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontFamily=Inter;fontColor=#87092C;" vertex="1" parent="1">
+                    <mxGeometry x="614" y="616" width="266" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar-data-warning" value="" style="endArrow=classicThin;html=1;rounded=0;strokeColor=#8A5A07;strokeWidth=2.5;" edge="1" parent="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="460" y="664" as="sourcePoint"/>
+                        <mxPoint x="600" y="664" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-data-warning-lbl" value="warning — caution / unsaved (warning-fg #8A5A07)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontFamily=Inter;fontColor=#8A5A07;" vertex="1" parent="1">
+                    <mxGeometry x="614" y="652" width="266" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar-data-danger" value="" style="endArrow=classicThin;html=1;rounded=0;strokeColor=#A30F37;strokeWidth=2.5;" edge="1" parent="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="460" y="700" as="sourcePoint"/>
+                        <mxPoint x="600" y="700" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-data-danger-lbl" value="danger — failure / destructive (danger-fg #A30F37)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontFamily=Inter;fontColor=#A30F37;" vertex="1" parent="1">
+                    <mxGeometry x="614" y="688" width="266" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="ar-data-info" value="" style="endArrow=classicThin;html=1;rounded=0;strokeColor=#1F4F8A;strokeWidth=2.5;" edge="1" parent="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="460" y="736" as="sourcePoint"/>
+                        <mxPoint x="600" y="736" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ar-data-info-lbl" value="info — informational hint (info-fg #1F4F8A)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontFamily=Inter;fontColor=#1F4F8A;" vertex="1" parent="1">
+                    <mxGeometry x="614" y="724" width="266" height="24" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="t-ex-header" value="Example sketch — actor reaches the wasm binding through the playground host" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;fontStyle=1;fontFamily=Inter;fontColor=#44424A;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="788" width="840" height="20" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="ex-actor" value="Musician" style="shape=umlActor;whiteSpace=wrap;html=1;fillColor=#67646D;strokeColor=#67646D;fontColor=#44424A;fontFamily=Inter;fontSize=12;fontStyle=1;verticalLabelPosition=bottom;verticalAlign=top;labelPosition=center;" vertex="1" parent="1">
+                    <mxGeometry x="68" y="850" width="44" height="60" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="ex-cluster-internal" value="ChordSketch (internal)" style="swimlane;html=1;startSize=28;fillColor=#FFFFFF;strokeColor=#D4D1D6;fontColor=#44424A;fontFamily=Inter;fontSize=12;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+                    <mxGeometry x="180" y="820" width="380" height="220" as="geometry"/>
+                </mxCell>
+                <mxCell id="ex-host" value="Playground host" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#FAFAF7;strokeColor=#D4D1D6;strokeWidth=1.5;fontColor=#0A0A0B;fontFamily=Inter;fontSize=12;fontStyle=1;" vertex="1" parent="ex-cluster-internal">
+                    <mxGeometry x="24" y="48" width="160" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="ex-binding" value="@chordsketch/wasm" style="shape=cube;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;whiteSpace=wrap;html=1;fillColor=#FDF2F5;strokeColor=#BD1642;fontColor=#87092C;fontFamily=Inter;fontSize=12;fontStyle=1;size=10;" vertex="1" parent="ex-cluster-internal">
+                    <mxGeometry x="24" y="112" width="160" height="64" as="geometry"/>
+                </mxCell>
+                <mxCell id="ex-crate" value="chordsketch-chordpro" style="shape=cube;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D4D1D6;fontColor=#0A0A0B;fontFamily=Inter;fontSize=12;fontStyle=1;size=10;" vertex="1" parent="ex-cluster-internal">
+                    <mxGeometry x="216" y="112" width="140" height="64" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="ex-cluster-external" value="Registries (external)" style="swimlane;html=1;startSize=28;fillColor=#FAFAF7;strokeColor=#8A8790;dashed=1;fontColor=#44424A;fontFamily=Inter;fontSize=12;fontStyle=1;align=left;spacingLeft=12;" vertex="1" parent="1">
+                    <mxGeometry x="600" y="820" width="280" height="220" as="geometry"/>
+                </mxCell>
+                <mxCell id="ex-reg-crates" value="crates.io" style="shape=folder;whiteSpace=wrap;html=1;tabWidth=46;tabHeight=14;tabPosition=left;fillColor=#F6F4F7;strokeColor=#8A8790;fontColor=#44424A;fontFamily=Inter;fontSize=12;fontStyle=1;" vertex="1" parent="ex-cluster-external">
+                    <mxGeometry x="24" y="48" width="116" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="ex-reg-npm" value="npm" style="shape=folder;whiteSpace=wrap;html=1;tabWidth=46;tabHeight=14;tabPosition=left;fillColor=#F6F4F7;strokeColor=#8A8790;fontColor=#44424A;fontFamily=Inter;fontSize=12;fontStyle=1;" vertex="1" parent="ex-cluster-external">
+                    <mxGeometry x="148" y="48" width="108" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="ex-reg-note" value="chordpro publishes to crates.io; the wasm binding publishes to npm." style="text;html=1;align=left;verticalAlign=top;fontSize=11;fontFamily=Inter;fontColor=#67646D;" vertex="1" parent="ex-cluster-external">
+                    <mxGeometry x="24" y="112" width="232" height="80" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="ex-edge-actor-host" value="opens" style="endArrow=classic;html=1;rounded=0;strokeColor=#67646D;strokeWidth=1.5;fontFamily=Inter;fontSize=11;fontColor=#44424A;labelBackgroundColor=#FAFAF7;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="ex-actor" target="ex-host">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ex-edge-host-binding" value="" style="endArrow=open;html=1;rounded=0;strokeColor=#8A8790;strokeWidth=1;dashed=1;fontFamily=Inter;fontSize=11;fontColor=#67646D;fontStyle=2;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="ex-cluster-internal" source="ex-host" target="ex-binding">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ex-edge-binding-crate" value="calls" style="endArrow=classic;html=1;rounded=0;strokeColor=#67646D;strokeWidth=1.5;fontFamily=Inter;fontSize=11;fontColor=#44424A;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="ex-cluster-internal" source="ex-binding" target="ex-crate">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ex-edge-crate-registry" value="published" style="endArrow=classicThin;html=1;rounded=0;strokeColor=#BD1642;strokeWidth=2.5;fontFamily=Inter;fontSize=11;fontStyle=1;fontColor=#87092C;labelBackgroundColor=#FAFAF7;" edge="1" parent="1" source="ex-crate" target="ex-reg-crates">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ex-edge-binding-npm" value="published" style="endArrow=classicThin;html=1;rounded=0;strokeColor=#BD1642;strokeWidth=2.5;fontFamily=Inter;fontSize=11;fontStyle=1;fontColor=#87092C;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="ex-binding" target="ex-reg-npm">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="t-retheme-header" value="Retheming an existing diagram" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontStyle=1;fontFamily=Inter;fontColor=#44424A;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="1064" width="600" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="t-retheme-body" value="To swap one intent for another after the fact: open the .drawio in draw.io → Extras → Edit Diagram → find/replace the source hex in the raw XML (e.g. data-primary #BD1642 → data-warning #8A5A07). The intent variants above show every design-system-compliant target colour." style="text;html=1;align=left;verticalAlign=top;fontSize=11;fontFamily=Inter;fontColor=#67646D;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="1086" width="840" height="48" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="t-footer" value="Tokens: design-system/tokens.css · Rules: design-system/DESIGN.md · Built-in draw.io shapes only (cube, cylinder3, cloud, document, hexagon, folder, umlActor)." style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontFamily=Inter;fontColor=#8A8790;fontStyle=2;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="1158" width="840" height="20" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

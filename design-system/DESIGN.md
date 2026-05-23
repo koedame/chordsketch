@@ -298,6 +298,8 @@ layout in either place.
 | `preview/components-table.html` | Library table, stats table |
 | `preview/components-toast.html` | Default, success, danger, warning, stack |
 | `preview/components-progress.html` | Linear bar, spinner, skeleton |
+| `templates/chordsketch-starter.drawio` | draw.io starter — palette swatches, typography stack, surface card, accent node, divider, cluster. Button row is split by intent (primary / ghost / danger / secondary); pill row is one per semantic surface (success / warning / danger / info); connection-intent specimens show default / primary / warning / info. Pick the variant that matches the role and the colour is correct by construction. |
+| `templates/chordsketch-system-starter.drawio` | draw.io system-diagram starter — service / library / binding / consumer / host / external component shapes, infrastructure shapes (database, file, cache, queue, registry, actor), boundary clusters (internal solid / external dashed), and connection styles split into neutral connectors (sync / async / dependency) and data-flow intent variants (primary / warning / danger / info). Plus a worked example using each style in one sketch. |
 | `../assets/logo.svg` | Brand mark (vector, 180×180, `#BD1642` field) |
 | `../assets/logo-128.png` | Raster derivative — VS Code extension icon |
 | `../assets/logo-256.png` | Raster derivative — Marketplace README header / high-DPI contexts |
