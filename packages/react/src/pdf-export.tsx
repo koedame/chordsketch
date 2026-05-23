@@ -30,7 +30,9 @@ export interface PdfExportProps
   /** Semitone transposition / config preset forwarded to the renderer. */
   options?: PdfExportOptions;
   /**
-   * Button label. Defaults to `"Export PDF"`. Pass a component tree
+   * Button label. Defaults to {@link PDF_EXPORT_DEFAULT_LABEL}
+   * (`"Export PDF"`) — re-import the constant when composing custom
+   * UIs that need to render the same string. Pass a component tree
    * (e.g. an icon + label) for richer styling.
    */
   children?: ReactNode;

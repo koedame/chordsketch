@@ -23,7 +23,7 @@ describe('<PreviewToolbar>', () => {
     expect(screen.getByRole('group', { name: 'Export' })).toBeTruthy();
   });
 
-  test('Export group exposes the shared PDF export button label', () => {
+  test('exposes the shared PDF export button label inside the Export group', () => {
     // The Export group composes <PdfExport> with an explicit children
     // node (icon + label). If a future refactor drops the literal or
     // overrides it inconsistently with the shared default, the rendered

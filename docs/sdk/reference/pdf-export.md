@@ -26,7 +26,7 @@ import { PdfExport } from '@chordsketch/react';
 | `source` | `string` | (required) | ChordPro source to render. |
 | `filename` | `string` | `"chordsketch-output.pdf"` | Filename for the download. |
 | `options` | `PdfExportOptions` | — | `{ transpose?, config? }` forwarded to the renderer. |
-| `children` | `ReactNode` | `PDF_EXPORT_DEFAULT_LABEL` (`"Export PDF"`) | Button label. The default is also exported as a named constant so sister components (e.g. `<PreviewToolbar>`) can render the same string. |
+| `children` | `ReactNode` | `PDF_EXPORT_DEFAULT_LABEL` (`"Export PDF"`) | Button label. Re-import the named constant to keep sister components (e.g. `<PreviewToolbar>`) in lockstep. |
 | `onExported` | `(filename: string) => void` | — | Fires after the download has been initiated. |
 | `onError` | `(error: Error) => void` | — | Fires when the underlying call rejects. |
 | `wasmLoader` | loader callable | dynamic import | Test-only override. |
@@ -46,7 +46,7 @@ Returns the same export pipeline as state for custom UIs
 
 | Field | Type | Description |
 |---|---|---|
-| `exportPdf` | `(source: string, options?: PdfExportOptions, filename?: string) => Promise<void>` | Run an export. Returns when the download has been initiated. |
+| `exportPdf` | `(source: string, filename: string, options?: PdfExportOptions) => Promise<void>` | Run an export. Returns when the download has been initiated. |
 | `loading` | `boolean` | True while the heavy bundle is loading or a render is in flight. |
 | `error` | `Error \| null` | Non-null when the latest call rejected. |
 

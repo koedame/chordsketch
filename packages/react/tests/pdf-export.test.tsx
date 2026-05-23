@@ -239,3 +239,15 @@ describe('<PdfExport>', () => {
     await waitFor(() => expect(onError).toHaveBeenCalledWith(boom));
   });
 });
+
+describe('PDF_EXPORT_DEFAULT_LABEL', () => {
+  // Public-API contract: pin the literal value at the constant's
+  // declaration site so a typo or unintentional relabel of the
+  // exported default cannot pass silently through every consumer
+  // test (which all assert via the constant and would happily
+  // accept any string). Without this assertion, the only safety
+  // net against a relabel is human review.
+  test('is the literal string "Export PDF"', () => {
+    expect(PDF_EXPORT_DEFAULT_LABEL).toBe('Export PDF');
+  });
+});
