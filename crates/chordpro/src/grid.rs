@@ -372,6 +372,16 @@ pub fn tokenize_grid_line(input: &str) -> Vec<GridToken> {
         while i < bytes.len() && !matches!(bytes[i], b' ' | b'\t' | b'|' | b':') {
             i += 1;
         }
+        if i == start {
+            // The head byte is itself a terminator that no named
+            // branch above consumed — today only a bare `:` not
+            // followed by `|`. Drop it and advance so the outer
+            // loop cannot pin on the same offset and hang.
+            // Sister-site to the same guard in `tokenizeGridLine`
+            // (packages/react/src/chordpro-jsx.tsx).
+            i += 1;
+            continue;
+        }
         let mut raw = &input[start..i];
         if raw.starts_with('[') && raw.ends_with(']') && raw.len() >= 2 {
             raw = &raw[1..raw.len() - 1];
@@ -759,5 +769,68 @@ mod tests {
     fn classify_row_chord_when_not_strum() {
         let row = classify_grid_row("| G7 . . . |");
         assert_eq!(row.kind, GridRowKind::Chord);
+    }
+
+    // Regression tests for the no-progress branch in the cell-text
+    // reader (issue #2556). A bare `:` not followed by `|` used to
+    // hang the tokeniser because the cell-read terminator set
+    // includes `:` itself — `start == i`, nothing pushed, the
+    // outer loop pinned on the same offset. The guard added in
+    // the same commit advances `i` by one in that branch; these
+    // tests pin the contract so the regression cannot return, and
+    // are sister-site to the same cases in
+    // `packages/react/tests/chordpro-jsx-helpers.test.ts`.
+    #[test]
+    fn tokenize_trailing_bare_colon_terminates() {
+        // Mid-edit state captured from the kitchen-sink sample.
+        // Pre-fix this input hung the renderer.
+        let toks = tokenize_grid_line("|: C7 . | %  . :|: G7 . | %  . :");
+        let kinds: Vec<std::mem::Discriminant<GridToken>> = toks
+            .iter()
+            .filter(|t| !matches!(t, GridToken::Space))
+            .map(std::mem::discriminant)
+            .collect();
+        // Stray trailing `:` is dropped; the rest is a valid
+        // token stream ending at the last continuation.
+        assert_eq!(
+            kinds,
+            vec![
+                std::mem::discriminant(&GridToken::Barline(GridBarline::RepeatStart)),
+                std::mem::discriminant(&GridToken::Cell(vec!["C7".into()])),
+                std::mem::discriminant(&GridToken::Continuation),
+                std::mem::discriminant(&GridToken::Barline(GridBarline::Single)),
+                std::mem::discriminant(&GridToken::Percent1),
+                std::mem::discriminant(&GridToken::Continuation),
+                std::mem::discriminant(&GridToken::Barline(GridBarline::RepeatBoth)),
+                std::mem::discriminant(&GridToken::Cell(vec!["G7".into()])),
+                std::mem::discriminant(&GridToken::Continuation),
+                std::mem::discriminant(&GridToken::Barline(GridBarline::Single)),
+                std::mem::discriminant(&GridToken::Percent1),
+                std::mem::discriminant(&GridToken::Continuation),
+            ]
+        );
+    }
+
+    #[test]
+    fn tokenize_lone_colon_drops_to_no_tokens() {
+        assert!(tokenize_grid_line(":").is_empty());
+    }
+
+    #[test]
+    fn tokenize_colon_between_cells_is_dropped() {
+        // `C : D` — the orphan colon between cells is dialect
+        // garbage. The tokeniser must skip it and still surface
+        // the two cells on either side.
+        let toks = tokenize_grid_line("C : D");
+        let cells: Vec<&Vec<String>> = toks
+            .iter()
+            .filter_map(|t| match t {
+                GridToken::Cell(n) => Some(n),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(cells.len(), 2);
+        assert_eq!(cells[0], &vec!["C".to_string()]);
+        assert_eq!(cells[1], &vec!["D".to_string()]);
     }
 }

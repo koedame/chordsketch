@@ -510,6 +510,14 @@ export function tokenizeGridLine(input: string): GridToken[] {
     // ourselves.
     let j = i;
     while (j < input.length && !/[\s|:]/.test(input[j]!)) j++;
+    if (j === i) {
+      // The head char is itself a terminator that no named
+      // branch above consumed — today only a bare `:` not
+      // followed by `|`. Drop it and advance so the outer
+      // loop cannot pin on the same offset and hang.
+      i += 1;
+      continue;
+    }
     let raw = input.slice(i, j);
     if (raw.startsWith('[') && raw.endsWith(']')) {
       raw = raw.slice(1, -1);
