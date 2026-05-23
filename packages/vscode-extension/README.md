@@ -85,24 +85,26 @@ cargo install chordsketch-lsp
    ```
 
 3. Click the preview icon in the editor title bar (or run
-   **ChordSketch: Open Preview to the Side** from the Command Palette
+   **ChordPro: Open Preview to the Side** from the Command Palette
    with `Ctrl+Shift+P` / `Cmd+Shift+P`) to see the rendered song next
    to the source.
-4. Run **ChordSketch: Transpose Up / Down** to shift every chord by
+4. Run **ChordPro: Transpose Up / Down** to shift every chord by
    one semitone.
 
 ## Commands
 
 Commands are available in the Command Palette when the active editor
-has language `chordpro`.
+has language `chordpro`. Titles use the `ChordPro:` prefix so they
+group with other file-format actions when searching for `chordpro`
+in the Command Palette; the underlying command IDs are unchanged.
 
 | Command | Title | Notes |
 |---|---|---|
-| `chordsketch.openPreview` | ChordSketch: Open Preview | |
-| `chordsketch.openPreviewToSide` | ChordSketch: Open Preview to the Side | |
-| `chordsketch.transposeUp` | ChordSketch: Transpose Up | Shifts every chord by +1 semitone |
-| `chordsketch.transposeDown` | ChordSketch: Transpose Down | Shifts every chord by −1 semitone |
-| `chordsketch.convertTo` | ChordSketch: Export As… | Exports the current song to HTML, text, or PDF |
+| `chordsketch.openPreview` | ChordPro: Open Preview | |
+| `chordsketch.openPreviewToSide` | ChordPro: Open Preview to the Side | |
+| `chordsketch.transposeUp` | ChordPro: Transpose Up | Shifts every chord by +1 semitone |
+| `chordsketch.transposeDown` | ChordPro: Transpose Down | Shifts every chord by −1 semitone |
+| `chordsketch.convertTo` | ChordPro: Export As… | Exports the current song to HTML, text, or PDF |
 
 ## Configuration
 
