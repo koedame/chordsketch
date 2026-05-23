@@ -621,14 +621,24 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
     | { kind: 'percent1' }
     | { kind: 'percent2' };
   type Bar = { kind: 'bar'; beats: BeatSlot[]; noChord: boolean };
-  type Marker =
-    | { kind: 'repeat-start' }
-    | { kind: 'repeat-end' }
-    | { kind: 'repeat-both' }
-    | { kind: 'double' }
-    | { kind: 'final' }
-    | { kind: 'volta'; ending: number }
-    | { kind: 'barline' };
+  // A barline-kind marker can carry an optional `voltas` overlay
+  // (one or more ending numbers when the source has `:| |2` or
+  // `:| |2 |3`). The standalone `volta` marker is a separate
+  // shape used only when a volta cell is at row start without a
+  // preceding barline. Modelling these as two parallel union
+  // members keeps "standalone volta carrying its own overlay"
+  // unrepresentable at compile time and removes the need for
+  // any field-write cast.
+  type BarlineKind =
+    | 'barline'
+    | 'double'
+    | 'final'
+    | 'repeat-start'
+    | 'repeat-end'
+    | 'repeat-both';
+  type BarlineMarker = { kind: BarlineKind; voltas?: number[] };
+  type StandaloneVolta = { kind: 'volta'; ending: number };
+  type Marker = BarlineMarker | StandaloneVolta;
   type Cell = Bar | Marker;
   const cells: Cell[] = [];
   let current: Bar | null = null;
@@ -683,6 +693,123 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
   }
   flush();
 
+  // Collapse `[non-volta-marker, volta+]` runs into the host
+  // marker, which then carries the volta endings as an overlay.
+  // A run is one non-volta marker immediately followed by ANY
+  // number of volta cells (`:| |1 |2 |3 Am`). Multiple-volta
+  // chains land on a SINGLE overlay (`1.2.3.`) because the
+  // engraving convention is one bracket per barline position,
+  // even when several endings start there. A run with a single
+  // trailing volta (`:| |2`) is the common case. After this
+  // pass, NO `volta` cell follows a non-volta marker — any
+  // surviving `volta` cell is at row start with no preceding
+  // marker (e.g. the lead `|1` of `|1 Em . :|`).
+  for (let i = 0; i < cells.length; i++) {
+    const here = cells[i]!;
+    if (here.kind === 'bar' || here.kind === 'volta') continue;
+    const endings: number[] = [];
+    let j = i + 1;
+    while (j < cells.length) {
+      const next = cells[j]!;
+      if (next.kind !== 'volta') break;
+      endings.push(next.ending);
+      j++;
+    }
+    if (endings.length > 0) {
+      cells.splice(i + 1, endings.length);
+      here.voltas = endings;
+    }
+  }
+
+  // Expand `%%` (repeat-previous-two-bars) into a `%` mark in
+  // its own bar PLUS a `%` mark in the next bar. The chosen
+  // engraving convention is one single-bar mark per repeated
+  // bar rather than a straddle glyph across the barline.
+  //
+  // Three precondition cases the expansion handles explicitly
+  // so a malformed source never silently mis-renders:
+  //
+  // 1. NO PRIOR BAR (`%%` is the first bar of the section) —
+  //    nothing to repeat. The `%%` survives unrewritten and
+  //    `renderBeat` paints a real 2-bar repeat glyph as a
+  //    "best available representation" rather than a `%`
+  //    that lies about what's being repeated.
+  // 2. NO NEXT BAR (`%%` is the last bar of the row) — same
+  //    handling as #1. The `%%` survives.
+  // 3. NEXT BAR HAS CONTENT — leave the `%%` intact (don't
+  //    half-rewrite by replacing only the current bar) and
+  //    let `renderBeat` paint the 2-bar glyph. This makes
+  //    the malformed source visually distinct from the
+  //    well-formed `%% .` pattern.
+  //
+  // A bar can contain multiple `%%` beats (`| %% %% |` —
+  // rare but legal). Every percent2 in the bar gets rewritten,
+  // not just the first one.
+  const hasPriorBar = (idx: number): boolean => {
+    for (let k = idx - 1; k >= 0; k--) {
+      if (cells[k]!.kind === 'bar') return true;
+    }
+    return false;
+  };
+  const findNextBar = (idx: number): number => {
+    for (let k = idx + 1; k < cells.length; k++) {
+      if (cells[k]!.kind === 'bar') return k;
+    }
+    return -1;
+  };
+  for (let i = 0; i < cells.length; i++) {
+    const cell = cells[i]!;
+    if (cell.kind !== 'bar') continue;
+    if (!cell.beats.some((b) => b.kind === 'percent2')) continue;
+    if (!hasPriorBar(i)) continue;
+    const nextBarIdx = findNextBar(i);
+    if (nextBarIdx === -1) continue;
+    const next = cells[nextBarIdx] as Bar;
+    const nextHasContent = next.beats.some(
+      (b) => b.kind === 'chord' || b.kind === 'strum' || b.kind === 'percent1' || b.kind === 'percent2',
+    );
+    if (nextHasContent) continue;
+    cell.beats = cell.beats.map((b) =>
+      b.kind === 'percent2' ? { kind: 'percent1' } : b,
+    );
+    next.beats = [{ kind: 'percent1' }];
+  }
+
+  // Volta bracket overlay that a non-volta marker can carry
+  // when collapsed from a `[marker, volta]` source pair. The
+  // bracket positions absolute against its host marker; the
+  // host must be `position: relative` (provided by the
+  // `.grid-barline` CSS rule).
+  // L-shape volta bracket: the horizontal cap and the vertical
+  // leg are both drawn as the bracket box's own border edges
+  // (`border-top` + `border-left`), so the leg is naturally
+  // continuous with the host barline beneath it. The label
+  // ("1." / "2.") tucks inside the L's corner.
+  // Render the volta-ending overlay (`1.`, `1.2.`, `1.2.3.` for
+  // a single or chained ending list). Returns `null` when the
+  // endings array is empty so the caller can splat the result
+  // unconditionally.
+  const renderVoltaOverlay = (endings: number[]): JSX.Element | null => {
+    if (endings.length === 0) return null;
+    const label = endings.map((n) => `${n}.`).join('');
+    const ariaParts = endings.map((n) => `${n} ending`).join(' and ');
+    return (
+      <span className="grid-volta__bracket" role="note" aria-label={ariaParts}>
+        <span className="grid-volta__label">{label}</span>
+      </span>
+    );
+  };
+
+  // Compose an `aria-label` for a barline host. When a volta
+  // overlay is attached, append the ending list so screen
+  // readers announce the combined musical meaning instead of
+  // only the barline kind.
+  const barlineAriaLabel = (base: string, voltas: number[] | undefined): string => {
+    if (!voltas || voltas.length === 0) return base;
+    const endingLabel = voltas.map((n) => `${n} ending`).join(' and ');
+    return `${base}, ${endingLabel}`;
+  };
+
   const renderMarker = (m: Marker, idx: number): JSX.Element => {
     switch (m.kind) {
       case 'repeat-start':
@@ -690,7 +817,7 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
           <span
             key={idx}
             className="grid-barline grid-barline--repeat-start"
-            aria-label="repeat start"
+            aria-label={barlineAriaLabel('repeat start', m.voltas)}
           >
             <span className="grid-barline__line grid-barline__line--thick" />
             <span className="grid-barline__line" />
@@ -698,6 +825,7 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
               <span />
               <span />
             </span>
+            {renderVoltaOverlay(m.voltas ?? [])}
           </span>
         );
       case 'repeat-end':
@@ -705,7 +833,7 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
           <span
             key={idx}
             className="grid-barline grid-barline--repeat-end"
-            aria-label="repeat end"
+            aria-label={barlineAriaLabel('repeat end', m.voltas)}
           >
             <span className="grid-barline__dots">
               <span />
@@ -713,6 +841,7 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
             </span>
             <span className="grid-barline__line" />
             <span className="grid-barline__line grid-barline__line--thick" />
+            {renderVoltaOverlay(m.voltas ?? [])}
           </span>
         );
       case 'repeat-both':
@@ -723,7 +852,7 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
           <span
             key={idx}
             className="grid-barline grid-barline--repeat-both"
-            aria-label="repeat end and start"
+            aria-label={barlineAriaLabel('repeat end and start', m.voltas)}
           >
             <span className="grid-barline__dots">
               <span />
@@ -735,34 +864,58 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
               <span />
               <span />
             </span>
+            {renderVoltaOverlay(m.voltas ?? [])}
           </span>
         );
-      case 'double':
+      case 'double': {
+        const hasOverlay = m.voltas !== undefined && m.voltas.length > 0;
         return (
-          <span key={idx} className="grid-barline grid-barline--double" aria-hidden="true">
+          <span
+            key={idx}
+            className="grid-barline grid-barline--double"
+            aria-label={hasOverlay ? barlineAriaLabel('double barline', m.voltas) : undefined}
+            aria-hidden={hasOverlay ? undefined : true}
+          >
             <span className="grid-barline__line" />
             <span className="grid-barline__line" />
+            {renderVoltaOverlay(m.voltas ?? [])}
           </span>
         );
+      }
       case 'final':
         return (
-          <span key={idx} className="grid-barline grid-barline--final" aria-label="final barline">
+          <span
+            key={idx}
+            className="grid-barline grid-barline--final"
+            aria-label={barlineAriaLabel('final barline', m.voltas)}
+          >
             <span className="grid-barline__line" />
             <span className="grid-barline__line grid-barline__line--thick" />
+            {renderVoltaOverlay(m.voltas ?? [])}
           </span>
         );
       case 'volta':
         return (
           <span key={idx} className="grid-volta" aria-label={`${m.ending} ending`}>
             <span className="grid-volta__bracket">
-              <span className="grid-volta__cap" />
               <span className="grid-volta__label">{m.ending}.</span>
             </span>
             <span className="grid-barline__line" />
           </span>
         );
-      case 'barline':
-        return <span key={idx} className="grid-barline" aria-hidden="true" />;
+      case 'barline': {
+        const hasOverlay = m.voltas !== undefined && m.voltas.length > 0;
+        return (
+          <span
+            key={idx}
+            className="grid-barline"
+            aria-label={hasOverlay ? barlineAriaLabel('barline', m.voltas) : undefined}
+            aria-hidden={hasOverlay ? undefined : true}
+          >
+            {renderVoltaOverlay(m.voltas ?? [])}
+          </span>
+        );
+      }
     }
   };
 
@@ -797,27 +950,63 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
             ))}
           </span>
         );
-      case 'strum':
+      case 'strum': {
+        // Split compound `~`-separated tokens (`dn~up`, `d+~u+`,
+        // `~ux`) into elementary parts and render each part as
+        // its own glyph. A leading empty segment from a leading
+        // `~` (e.g. `~up`) marks the whole compound as
+        // anticipated. The combined token still renders as a
+        // single beat slot, but each component reads as a
+        // discrete arrow.
+        // Split on `~`, drop the leading empty marker (the
+        // anticipation prefix has its own glyph), and filter
+        // any remaining empty segments so a malformed source
+        // like `dn~~up` does not render zero-content
+        // separator beads (`↓··↑`).
+        const parts = slot.raw.split('~');
+        const anticipated = parts[0] === '';
+        const tokens = (anticipated ? parts.slice(1) : parts).filter(
+          (p) => p.length > 0,
+        );
         return (
           <span key={idx} className={`grid-beat grid-strum ${strumClassFor(slot.raw)}`}>
             <span className="grid-strum__glyph" aria-hidden="true">
-              {strumGlyphFor(slot.raw)}
+              {anticipated ? <span className="grid-strum__antic">~</span> : null}
+              {tokens.map((part, pi) => (
+                <Fragment key={pi}>
+                  {pi > 0 ? (
+                    <span className="grid-strum__sep" aria-hidden="true">·</span>
+                  ) : null}
+                  <span className={`grid-strum__part ${strumClassFor(part)}`}>
+                    {strumGlyphFor(part)}
+                  </span>
+                </Fragment>
+              ))}
             </span>
             <span className="sr-only">{slot.raw}</span>
           </span>
         );
+      }
       case 'continuation':
         return <span key={idx} className="grid-beat" />;
       case 'percent1':
         return (
           <span key={idx} className="grid-beat grid-beat--percent1" aria-label="repeat previous bar">
-            <span className="grid-percent" aria-hidden="true">%</span>
+            <RepeatBarGlyph bars={1} />
           </span>
         );
       case 'percent2':
+        // Reached when the expansion pass declined to rewrite
+        // a `%%` beat — there was no prior bar to repeat, no
+        // following bar to inject the second `%` into, or the
+        // following bar already carried musical content. The
+        // 2-bar repeat glyph is the best available
+        // representation of the source intent in those cases
+        // (better than silently downgrading to a single-bar
+        // `%` that would misstate the engraving).
         return (
           <span key={idx} className="grid-beat grid-beat--percent2" aria-label="repeat previous two bars">
-            <span className="grid-percent" aria-hidden="true">%%</span>
+            <RepeatBarGlyph bars={2} />
           </span>
         );
     }
@@ -842,40 +1031,232 @@ function renderGridLine(line: ChordproLyricsLine, key: number): JSX.Element {
   const labelText = renderLabel(labelTokens);
   const commentText = renderLabel(commentTokens);
 
-  return (
-    <div key={key} className={isStrumRow ? 'grid-line grid-line--strum' : 'grid-line'}>
-      {labelText.length > 0 ? (
-        <span className="grid-row__label">{labelText}</span>
-      ) : null}
-      {cells.map((cell, idx) => {
-        if (cell.kind === 'bar') {
-          // Each bar lays out one beat slot per source token
-          // (`cell` or `.`). The bar width is split equally
-          // between slots so a `G . C .` bar puts G under
-          // beat 1 and C under beat 3 — matching standard
-          // chord-chart engraving where the chord prints over
-          // the beat it starts on. A pure `G . . .` bar
-          // anchors G in slot 1 and leaves the rest empty
-          // (the chord continues to ring).
-          const beats = cell.beats.length > 0 ? cell.beats : [{ kind: 'continuation' as const }];
-          return (
-            <span key={idx} className="grid-bar" data-beats={beats.length}>
-              {cell.noChord ? (
-                <span className="grid-no-chord" aria-label="no chord">
-                  N.C.
-                </span>
-              ) : (
-                beats.map((b, bi) => renderBeat(b, bi))
-              )}
+  // Render any single cell — a bar (with its beat slots) or a
+  // marker (barline, volta, repeat). Extracted so the leading,
+  // trailing, and body cells all go through the same path.
+  const renderCell = (cell: Cell, idx: number): JSX.Element => {
+    if (cell.kind === 'bar') {
+      // Each bar lays out one beat slot per source token
+      // (`cell` or `.`). The bar width is split equally between
+      // slots so a `G . C .` bar puts G under beat 1 and C
+      // under beat 3 — matching standard chord-chart engraving
+      // where the chord prints over the beat it starts on. A
+      // pure `G . . .` bar anchors G in slot 1 and leaves the
+      // rest empty (the chord continues to ring).
+      const beats = cell.beats.length > 0 ? cell.beats : [{ kind: 'continuation' as const }];
+      // `%` repeat cells centre in the bar (not pinned to the
+      // beat-1 flex slot) — engraving convention. `%%` is
+      // pre-expanded into `%` here + `%` in the next bar.
+      const hasPercent1 = beats.some((b) => b.kind === 'percent1');
+      const barClass = hasPercent1
+        ? 'grid-bar grid-bar--percent1-center'
+        : 'grid-bar';
+      return (
+        <span key={idx} className={barClass} data-beats={beats.length}>
+          {cell.noChord ? (
+            <span className="grid-no-chord" aria-label="no chord">
+              N.C.
             </span>
-          );
-        }
-        return renderMarker(cell, idx);
-      })}
-      {commentText.length > 0 ? (
-        <span className="grid-row__comment">{commentText}</span>
-      ) : null}
+          ) : (
+            beats.map((b, bi) => renderBeat(b, bi))
+          )}
+        </span>
+      );
+    }
+    return renderMarker(cell, idx);
+  };
+
+  // Estimated visual width (in `em` units, relative to the grid
+  // font size) of each barline kind's rendered glyph. Used to
+  // size the body's barline column slots uniformly across the
+  // section so every same-bar-count row has identical bar X
+  // positions even when its intermediate barlines mix kinds.
+  // Exhaustive on the closed `BarlineKind` set — adding a new
+  // kind to the union fails the build here without a width,
+  // so a regression cannot silently fall back to the bare-line
+  // default and produce too-narrow slots that overlap chords.
+  const widthForBarlineKind = (kind: BarlineKind): number => {
+    switch (kind) {
+      case 'repeat-both':
+        return 1.7;
+      case 'repeat-start':
+      case 'repeat-end':
+        return 1.2;
+      case 'final':
+        return 0.6;
+      case 'double':
+        return 0.5;
+      case 'barline':
+        return 0.3;
+    }
+  };
+  // Standalone volta cell width — its glyph is just the
+  // bracket leg above the row's lead position, so its
+  // intrinsic body-slot width is the same as a bare `|`.
+  const STANDALONE_VOLTA_EM = 0.3;
+  // Maximum barline-glyph width across this row's cells — used
+  // as a per-line floor when computing the section-wide slot
+  // width in flushSection.
+  const maxBarlineEm = cells.reduce((max, c) => {
+    if (c.kind === 'bar') return max;
+    if (c.kind === 'volta') return Math.max(max, STANDALONE_VOLTA_EM);
+    return Math.max(max, widthForBarlineKind(c.kind));
+  }, 0.3);
+
+  // Slice the cells stream into three buckets so the row can
+  // place them in fixed section-level subgrid columns: the
+  // FIRST cell (always a marker — `bodyTokens` starts with a
+  // barline-kind token) becomes the row's leading-barline
+  // slot; the LAST cell (a marker, when there is more than one
+  // cell) becomes the trailing-barline slot; everything in
+  // between becomes the body. The section grid pins lead and
+  // trail to their own columns so all rows' leading edges line
+  // up at the section's left margin and trailing edges line up
+  // at the section's right margin — independent of how many
+  // bars each row contains.
+  const leadCell = cells.length > 0 && cells[0]!.kind !== 'bar' ? cells[0]! : null;
+  const trailCell =
+    cells.length > 1 && cells[cells.length - 1]!.kind !== 'bar'
+      ? cells[cells.length - 1]!
+      : null;
+  const bodyStart = leadCell ? 1 : 0;
+  const bodyEnd = trailCell ? cells.length - 1 : cells.length;
+  const bodyCells = cells.slice(bodyStart, bodyEnd);
+
+  // Body grid template: one column per body cell, in source
+  // order. Bar cells get `1fr` (they share remaining body
+  // width equally); marker cells (barlines, voltas) get the
+  // section-wide uniform `--cs-grid-barline-slot` width. We
+  // CANNOT assume strict bar/marker alternation — sources
+  // like `… :| |2 …` legitimately put two consecutive
+  // markers in the body (a repeat-end immediately followed
+  // by a volta-2 bracket). Building the template from the
+  // actual cell sequence keeps the column count in sync with
+  // the rendered children regardless of how the markers
+  // cluster. Empty bodies fall back to `auto`.
+  const bodyTemplate =
+    bodyCells.length > 0
+      ? bodyCells
+          .map((c) => (c.kind === 'bar' ? '1fr' : 'var(--cs-grid-barline-slot, 1em)'))
+          .join(' ')
+      : 'auto';
+
+  return (
+    <div
+      key={key}
+      className={isStrumRow ? 'grid-line grid-line--strum' : 'grid-line'}
+      data-label-text={labelText}
+      data-comment-text={commentText}
+      data-max-barline-em={maxBarlineEm}
+    >
+      {/* Label gutter — sized to the SECTION's longest label
+          via `::before` pseudo + `--cs-grid-label-max-text` var
+          set in flushSection. Empty rows still occupy the
+          column so bar-start positions align. */}
+      <span
+        className="grid-row__label"
+        aria-hidden={labelText.length === 0 ? true : undefined}
+      >
+        <span className="grid-row__label__text">{labelText}</span>
+      </span>
+      {/* Leading barline cell — section subgrid col 2. The
+          `data-barline-type` attribute drives a per-type
+          `justify-self` rule in CSS so each glyph anchors at
+          the conventionally correct edge of its column slot:
+          `|:` (repeat-start), `||` (double), `|` (single) anchor
+          LEFT; `:|` (repeat-end), `|.` (final) anchor RIGHT;
+          `:|:` (repeat-both) anchors CENTER. Volta brackets
+          fall through to the default left anchor. */}
+      <span
+        className="grid-row__lead"
+        data-barline-type={leadCell?.kind}
+      >
+        {leadCell ? renderCell(leadCell, -1) : null}
+      </span>
+      {/* Body — intermediate barlines + bars. Laid out as a
+          per-row CSS grid alternating `1fr` bar columns and
+          `var(--cs-grid-barline-slot)` barline columns. The
+          slot variable is published by the section so every
+          row uses the same barline-column width; combined
+          with the section subgrid sharing a single `1fr` body
+          column across all rows, same-bar-count rows end up
+          with identical bar widths AND identical barline X
+          positions. Each barline element then uses per-type
+          `justify-self` to land its glyph's logical anchor
+          (left edge / center / right edge) on the column's
+          edge per the engraving convention. */}
+      <span
+        className="grid-line__body"
+        style={{ gridTemplateColumns: bodyTemplate }}
+      >
+        {bodyCells.map((cell, idx) => renderCell(cell, idx))}
+      </span>
+      {/* Trailing barline cell — section subgrid col 4. Per-type
+          alignment via `data-barline-type` mirrors the lead cell:
+          types whose visual "barline position" sits at the right
+          edge of the glyph (`|.`, `:|`, `||` at row end) anchor
+          RIGHT; `|:` (rarely used as a trailing barline but
+          handled for completeness) anchors LEFT; `:|:` anchors
+          CENTER. */}
+      <span
+        className="grid-row__trail"
+        data-barline-type={trailCell?.kind}
+      >
+        {trailCell ? renderCell(trailCell, -2) : null}
+      </span>
+      <span
+        className="grid-row__comment"
+        aria-hidden={commentText.length === 0 ? true : undefined}
+      >
+        <span className="grid-row__comment__text">{commentText}</span>
+      </span>
     </div>
+  );
+}
+
+/**
+ * Conventional measure-repeat glyph: a thick slash flanked by
+ * two dots. One slash for `%` (repeat previous bar), two slashes
+ * with a separating dot pair in the middle for `%%` (repeat
+ * previous two bars). Rendered as inline SVG so the glyph is
+ * crisp at every zoom level — the SMuFL code points 𝄎 / 𝄏
+ * (U+1D14E / U+1D14F) lack reliable system-font coverage.
+ */
+function RepeatBarGlyph({ bars }: { bars: 1 | 2 }): JSX.Element {
+  // Standard music-notation repeat sign: a thick slash flanked
+  // by one dot upper-left and one dot lower-right. The 2-bar
+  // variant adds a SECOND slash next to the first inside the
+  // same dot pair (per the user's correction — it's not two
+  // independent `%` signs side-by-side, just one repeat glyph
+  // with more slashes). SMuFL: 𝄎 (U+1D14E) / 𝄏 (U+1D14F).
+  if (bars === 2) {
+    return (
+      <svg
+        className="grid-percent"
+        viewBox="0 0 20 16"
+        width="1.25em"
+        height="1em"
+        aria-hidden="true"
+      >
+        <circle cx="4" cy="5" r="1.4" fill="currentColor" />
+        <line x1="2" y1="13" x2="11" y2="3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        <line x1="7" y1="13" x2="16" y2="3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        <circle cx="16" cy="11" r="1.4" fill="currentColor" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      className="grid-percent"
+      viewBox="0 0 16 16"
+      width="1em"
+      height="1em"
+      aria-hidden="true"
+    >
+      <circle cx="4" cy="5" r="1.4" fill="currentColor" />
+      <line x1="2" y1="13" x2="14" y2="3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      <circle cx="12" cy="11" r="1.4" fill="currentColor" />
+    </svg>
   );
 }
 
@@ -905,25 +1286,21 @@ function strumClassFor(raw: string): string {
 }
 
 /**
- * Visual glyph for a strum token. Returns a short arrow / mark
- * sequence the renderer drops into a `.grid-strum__glyph` span.
- * Spec-defined tokens get the conventional arrow glyphs; tilde-
- * prefixed and dialect-only tokens fall back to the raw text
- * (with `~` rendered as a leading tilde so the reader sees the
- * source intent).
+ * Visual glyph for an ELEMENTARY strum token (no `~`). Callers
+ * are expected to have split compound tokens (`dn~up`,
+ * `d+~u+`) on `~` and to handle the anticipation marker
+ * separately. Spec-defined primitives get conventional arrow
+ * glyphs; dialect-only primitives (`ux`, `dx`, etc.) fall back
+ * to the raw text so the reader still sees the source intent.
  */
 function strumGlyphFor(raw: string): string {
-  const anticipated = raw.startsWith('~');
-  const stripped = anticipated ? raw.slice(1) : raw;
-  const ant = anticipated ? '~' : '';
-  if (/^(up|u)$/i.test(stripped)) return `${ant}↑`;
-  if (/^(dn|d)$/i.test(stripped)) return `${ant}↓`;
-  if (/^u\+$/i.test(stripped)) return `${ant}↑+`;
-  if (/^d\+$/i.test(stripped)) return `${ant}↓+`;
-  if (/^ua$/i.test(stripped)) return `${ant}↑·`;
-  if (/^da$/i.test(stripped)) return `${ant}↓·`;
-  // Dialect variants (`dn~up`, `~ux`, `d+~u+`, etc.) — pass
-  // through verbatim so the reader still sees the source intent.
+  if (/^(up|u)$/i.test(raw)) return '↑';
+  if (/^(dn|d)$/i.test(raw)) return '↓';
+  if (/^u\+$/i.test(raw)) return '↑+';
+  if (/^d\+$/i.test(raw)) return '↓+';
+  if (/^ua$/i.test(raw)) return '↑·';
+  if (/^da$/i.test(raw)) return '↓·';
+  // Dialect primitives (`ux`, `dx`, etc.) — pass through.
   return raw;
 }
 
@@ -2891,6 +3268,27 @@ interface WalkContext {
   onChordReposition?: (event: ChordRepositionEvent) => void;
 }
 
+/**
+ * Wrap `s` as a CSS string literal so it is safe to embed in a
+ * CSS `content:` property via a custom property. Escapes
+ * backslash and the closing double-quote, and collapses the
+ * three newline variants (U+000A LF, U+000D CR, U+000C FF)
+ * to a literal space — an unescaped newline terminates a CSS
+ * string and would produce a parse error causing the
+ * `::before` sizer pseudo to silently fall back to `''`.
+ * The collapse-to-space form is preferred over CSS hex
+ * (`\\A` / `\\D` / `\\C`) for the sizer use case: the
+ * pseudo's content is invisible and only used for
+ * `min-content` width measurement, where a single horizontal
+ * run is the intended geometry.
+ */
+function cssStringLiteral(s: string): string {
+  return `"${s
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/[\n\r\f]/g, ' ')}"`;
+}
+
 function flushSection(ctx: WalkContext, key: number): void {
   if (!ctx.section) return;
   const { name, label, children, startLine } = ctx.section;
@@ -2930,11 +3328,57 @@ function flushSection(ctx: WalkContext, key: number): void {
     ctx.activeSourceLine !== undefined &&
     (ctx.activeSourceLine === startLine || ctx.activeSourceLine === endLine);
   const sectionClassName = sectionActive ? `${name} line--active` : name;
+  // For grid sections, propagate section-wide layout metadata
+  // (longest label/comment text, widest barline kind) via CSS
+  // custom properties on the `<section>` so every row's
+  // `::before` sizer and body grid resolve to the same X
+  // positions. The per-row metadata is published as data-*
+  // attributes by `renderGridLine`; this loop reads it back
+  // and folds it into the section style.
+  let sectionStyleObj: CSSProperties | undefined = sectionStyle ?? undefined;
+  if (name === 'grid') {
+    let longestLabel = '';
+    let longestComment = '';
+    let maxBarlineEm = 0.3;
+    for (const child of children) {
+      if (!isValidElement(child)) continue;
+      const props = child.props as {
+        'data-label-text'?: string;
+        'data-comment-text'?: string;
+        'data-max-barline-em'?: number;
+      };
+      const lt = props['data-label-text'];
+      if (typeof lt === 'string' && lt.length > longestLabel.length) {
+        longestLabel = lt;
+      }
+      const ct = props['data-comment-text'];
+      if (typeof ct === 'string' && ct.length > longestComment.length) {
+        longestComment = ct;
+      }
+      const w = props['data-max-barline-em'];
+      if (typeof w === 'number' && w > maxBarlineEm) {
+        maxBarlineEm = w;
+      }
+    }
+    sectionStyleObj = {
+      ...(sectionStyleObj ?? {}),
+      ['--cs-grid-label-max-text' as never]: cssStringLiteral(longestLabel),
+      ['--cs-grid-comment-max-text' as never]: cssStringLiteral(longestComment),
+      // Barline-slot width for the body grid in each row. Set
+      // from the widest barline kind appearing anywhere in this
+      // section so every barline slot in every row is identical
+      // — that's what gives same-bar-count rows pixel-aligned
+      // bar widths even when their intermediate barline kinds
+      // differ (a row of `|` separators and a row containing
+      // `:|:` end up with the same per-bar X span).
+      ['--cs-grid-barline-slot' as never]: `${maxBarlineEm}em`,
+    };
+  }
   ctx.out.push(
     <section
       key={key}
       className={sectionClassName}
-      style={sectionStyle ?? undefined}
+      style={sectionStyleObj}
       data-source-line={startLine}
       aria-labelledby={labelId}
     >
