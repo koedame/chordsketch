@@ -97,7 +97,7 @@
                 <mxCell id="t-mono" value="Mono — JetBrains Mono 400, 13px · file paths, identifiers, code refs" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontFamily=JetBrains Mono;fontColor=#44424A;" vertex="1" parent="1">
                     <mxGeometry x="40" y="514" width="840" height="20" as="geometry"/>
                 </mxCell>
-                <mxCell id="t-chord" value="Chord — Roboto 500, 18px:    Cmaj7    G/B    F♯m7♭5    A°7" style="text;html=1;align=left;verticalAlign=middle;fontSize=18;fontStyle=1;fontFamily=Roboto;fontColor=#0A0A0B;" vertex="1" parent="1">
+                <mxCell id="t-chord" value="Chord — Roboto 700, 18px:    Cmaj7    G/B    F♯m7♭5    A°7" style="text;html=1;align=left;verticalAlign=middle;fontSize=18;fontStyle=1;fontFamily=Roboto;fontColor=#0A0A0B;" vertex="1" parent="1">
                     <mxGeometry x="40" y="538" width="840" height="26" as="geometry"/>
                 </mxCell>
 
