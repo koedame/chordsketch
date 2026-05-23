@@ -400,17 +400,23 @@ pub fn tokenize_grid_line(input: &str) -> Vec<GridToken> {
         }
         if i == start {
             // Head byte is a terminator the dispatch above did
-            // not consume. The widened terminator set + the
-            // named-branch dispatch must agree; if a future PR
-            // adds a terminator without adding a named branch,
-            // the debug assertion below fires in tests so the
-            // bug class from issue #2556 (no-progress infinite
-            // loop) can never silently regress.
+            // not consume. Drop it and advance so the outer
+            // loop makes progress.
+            //
+            // The assertion is a postcondition invariant: the
+            // inner `while` exits with zero progress only when
+            // `is_dialect_terminator(bytes[i])` is already true
+            // (that is the loop exit condition). It fires if a
+            // future refactor decouples the while condition from
+            // `is_dialect_terminator`. Regression protection for
+            // the "new terminator without a dispatch branch"
+            // scenario (issue #2556 class) comes from the LCG
+            // property test.
             //
             // Sister-site: same guard in `tokenizeGridLine`.
             debug_assert!(
                 is_dialect_terminator(bytes[i]),
-                "tokenize_grid_line no-progress guard reached on non-terminator byte {:?}",
+                "tokenize_grid_line no-progress guard: non-terminator byte {:?} must not reach this branch",
                 bytes[i] as char
             );
             i += 1;

@@ -540,18 +540,22 @@ export function tokenizeGridLine(input: string): GridToken[] {
     while (j < input.length && !isDialectTerminator(input[j]!)) j++;
     if (j === i) {
       // Head char is a terminator the dispatch above did not
-      // consume. The terminator set + the named-branch dispatch
-      // must agree; if a future maintainer widens
-      // `DIALECT_TERMINATOR_RE` without adding a matching named
-      // branch, the dev-only assertion below fires so the bug
-      // class from issue #2556 (no-progress infinite loop) can
-      // never silently regress.
+      // consume. Drop it and advance.
+      //
+      // The assertion is a postcondition invariant: the inner
+      // `while` exits with zero progress only when
+      // `isDialectTerminator(input[i])` is already true (that
+      // is the loop exit condition). It fires if a future
+      // refactor decouples the while condition from
+      // `isDialectTerminator`. Regression protection for the
+      // "new terminator without a dispatch branch" scenario
+      // (issue #2556 class) comes from the property test.
       //
       // Sister-site: same guard in `tokenize_grid_line`.
       if (process.env.NODE_ENV !== 'production') {
         console.assert(
           isDialectTerminator(input[i]!),
-          `tokenizeGridLine no-progress guard reached on non-terminator char ${JSON.stringify(input[i])}`,
+          `tokenizeGridLine no-progress guard: non-terminator char ${JSON.stringify(input[i])} must not reach this branch`,
         );
       }
       i += 1;
