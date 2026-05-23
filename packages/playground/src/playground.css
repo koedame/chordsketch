@@ -1187,20 +1187,32 @@ a {
  * defines `height: 36px` for full-size form fields; the topnav
  * cluster uses a compact 28 px variant to sit alongside the
  * 28 px `.btn-sm` and `.segmented` controls. The native dropdown
- * arrow is preserved (the reference does not strip it) so the
- * select still feels like a native form control across browsers.
+ * arrow is stripped (`appearance: none`) and replaced with an
+ * inline SVG chevron so the arrow position is controllable: at
+ * 28 px the platform arrow rendered ~10 px from the right edge,
+ * which read as detached from the option text. The custom chevron
+ * sits 8 px from the right edge consistently across browsers.
+ * Line-height matches the box height to vertically centre the
+ * glyph baseline — `line-height: 1` was leaving a ~1 px sag with
+ * Noto Sans JP because the JP metrics include extra descender
+ * space below the visual baseline.
  * ---------------------------------------------------------------- */
 
 .chordsketch-app__select {
   height: 28px;
-  padding: 0 0.75rem;
-  background: var(--cs-surface, #FFFFFF);
+  padding: 0 28px 0 0.75rem;
+  background: var(--cs-surface, #FFFFFF)
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%2367646D' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+    no-repeat right 8px center;
   color: var(--cs-text-primary, #0A0A0B);
   border: 1px solid var(--cs-border-strong, #D4D1D6);
   border-radius: 4px;
-  font: 500 0.8125rem/1 var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  font: 500 0.8125rem/28px var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   cursor: pointer;
-  transition: background var(--cs-dur-1, 120ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)),
+  transition: background-color var(--cs-dur-1, 120ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)),
     border-color var(--cs-dur-1, 120ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)),
     box-shadow var(--cs-dur-1, 120ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1));
 }
@@ -1231,13 +1243,13 @@ a {
    actions") — Latin glyphs sit at the geometric centre of the
    28px box while Noto Sans JP would push them ~1px down. */
 .chordsketch-app__select.insert-picker {
-  background: transparent;
+  background-color: transparent;
   border-color: transparent;
   color: var(--cs-text-secondary, #67646D);
   font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
 }
 .chordsketch-app__select.insert-picker:hover:not(:disabled) {
-  background: var(--cs-ink-100, #F6F4F7);
+  background-color: var(--cs-ink-100, #F6F4F7);
   border-color: transparent;
   color: var(--cs-text-primary, #0A0A0B);
 }

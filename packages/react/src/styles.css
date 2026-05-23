@@ -528,24 +528,145 @@
 }
 
 /* Grid section — iReal Pro-style bar grid.
-   Each `{start_of_grid}` body line lays out a flex row of
-   alternating barlines (fixed-width) and bar cells
-   (`flex: 1` → equal width). Continuation dots from the source
-   are dropped — beat alignment within a bar is handled by the
-   bar cell's own flex distribution.
-   `.grid-line` opens its own row context so the bars don't
-   inherit the lyric `display: flex; flex-wrap: wrap` from the
-   parent. */
+   The SECTION is a CSS grid with five columns:
+     1. label gutter (auto, sized to widest label)
+     2. leading-barline slot (auto, sized to widest leading barline)
+     3. body — bars + intermediate barlines (1fr, equal across rows)
+     4. trailing-barline slot (auto, sized to widest trailing barline)
+     5. comment gutter (auto, sized to widest comment)
+   Each `.grid-line` is a subgrid of these five columns, so:
+   - all rows' bar grids start at the same X (col 2 left edge);
+   - all rows' bar grids end at the same X (col 4 right edge);
+   - the body width is identical across rows (col 3 = 1fr), so
+     same-bar-count rows naturally distribute bars to the same
+     positions even though different-count rows have different
+     bar widths within that shared body span. */
+.chordsketch-sheet__content section.grid {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  column-gap: 0;
+}
+.chordsketch-sheet__content section.grid > .section-label {
+  grid-column: 1 / -1;
+}
 .chordsketch-sheet__content .grid-line {
-  display: flex;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   align-items: stretch;
+  position: relative;
   margin: 0.35em 0;
+  padding-top: 0.9em;
   min-height: 2.4em;
   font-family: var(--cs-font-chord, var(--cs-font-serif, 'Source Serif Pro', serif));
   font-weight: 600;
   font-size: 1rem;
   line-height: 1.4;
   color: var(--cs-ink-900, #1a1718);
+}
+/* Leading-barline slot — section subgrid col 2. Default
+   `justify-self: start` anchors the glyph to the column's LEFT
+   edge so `||` and `|` rows share the same starting X. Per-
+   type overrides below align each glyph to the edge that the
+   engraving convention treats as the "barline position":
+   `|.` (final) and `:|` (repeat-end) anchor RIGHT (their
+   thick line carries the barline meaning); `:|:`
+   (repeat-end-and-start) anchors CENTER. The widest leading
+   barline in the section determines the column width via auto
+   sizing, so left/right/center within that column resolves
+   visibly to a per-type offset within a shared X range. */
+.chordsketch-sheet__content .grid-row__lead {
+  display: inline-flex;
+  align-items: stretch;
+  justify-self: start;
+}
+.chordsketch-sheet__content .grid-row__lead[data-barline-type='final'],
+.chordsketch-sheet__content .grid-row__lead[data-barline-type='repeat-end'] {
+  justify-self: end;
+}
+.chordsketch-sheet__content .grid-row__lead[data-barline-type='repeat-both'] {
+  justify-self: center;
+}
+
+/* Body — section subgrid col 3. A per-row CSS grid whose
+   columns alternate `1fr` (bars) and `var(--cs-grid-barline-
+   slot)` (intermediate barlines). The slot variable is set by
+   the section to the widest barline kind appearing anywhere
+   in this section, so every barline slot in every row is
+   identical. Combined with the section subgrid sharing one
+   `1fr` body width across all rows, same-bar-count rows end
+   up with pixel-identical bar widths regardless of how their
+   intermediate barlines mix. */
+.chordsketch-sheet__content .grid-line__body {
+  display: grid;
+  /* grid-template-columns set per-row via inline style */
+  align-items: stretch;
+  min-width: 0;
+}
+/* Per-type alignment for body intermediate barlines.
+
+   The bar boundary is the slot's CENTRE (not its right
+   edge). Each barline glyph is positioned so its
+   conventional engraving anchor lands exactly on the slot
+   centre — `justify-self: center` plus a per-kind translate
+   that compensates for where the anchor sits inside the
+   glyph's own bounding box:
+
+   - CENTER-anchored kinds (`|`, `||`, `:|:`, volta): anchor
+     is in the middle of the glyph. `justify-self: center`
+     puts the glyph centre on the slot centre — no translate
+     needed.
+
+   - RIGHT-anchored kinds (`:|`, `|.`): anchor is the THICK
+     line at the glyph's right edge. With `justify-self:
+     center` the glyph centre sits on the slot centre, so
+     the right edge sits half-a-glyph to the RIGHT of the
+     slot centre. `translateX(-50%)` shifts the whole glyph
+     leftward by half its own width so the right edge lands
+     on the slot centre.
+
+   - LEFT-anchored kinds (`|:` repeat-start): anchor is the
+     thick line at the glyph's LEFT edge. `translateX(50%)`
+     shifts the glyph rightward by half its width so the
+     left edge lands on the slot centre.
+
+   Result: the boundary X is identical across rows for any
+   mix of barline kinds. The bar ELEMENT centre also equals
+   the VISIBLE bar centre (boundary-to-boundary midpoint),
+   so a `%` glyph centred in its bar element is automatically
+   centred in the visible bar — no further offset needed.
+   Because each glyph sits ENTIRELY within its own slot, the
+   glyph never overflows into the adjacent bar's content
+   area — eliminating the `:|:G` overlap class of bug. */
+.chordsketch-sheet__content .grid-line__body > .grid-barline,
+.chordsketch-sheet__content .grid-line__body > .grid-volta {
+  justify-self: center;
+}
+.chordsketch-sheet__content .grid-line__body > .grid-barline--repeat-end,
+.chordsketch-sheet__content .grid-line__body > .grid-barline--final {
+  transform: translateX(-50%);
+}
+.chordsketch-sheet__content .grid-line__body > .grid-barline--repeat-start {
+  transform: translateX(50%);
+}
+
+/* Trailing-barline slot — section subgrid col 4. Default
+   `justify-self: end` anchors the glyph to the column's RIGHT
+   edge. Per-type overrides for the cases where the engraving
+   convention places the barline anchor elsewhere: `|:`
+   (repeat-start) anchors LEFT (rare as a trailing barline but
+   handled for completeness); `:|:` anchors CENTER. `|.`,
+   `:|`, and `||` at row end keep the default right anchor. */
+.chordsketch-sheet__content .grid-row__trail {
+  display: inline-flex;
+  align-items: stretch;
+  justify-self: end;
+}
+.chordsketch-sheet__content .grid-row__trail[data-barline-type='repeat-start'] {
+  justify-self: start;
+}
+.chordsketch-sheet__content .grid-row__trail[data-barline-type='repeat-both'] {
+  justify-self: center;
 }
 
 /* Bar cell — `flex: 1` so every bar in the row is the same
@@ -585,6 +706,12 @@
   align-self: stretch;
   gap: 1.5px;
   flex-shrink: 0;
+  /* Anchors an optional `.grid-volta__bracket` overlay when a
+     source like `:| |2` collapses the two markers into one
+     cell. Without `position: relative` the absolute-positioned
+     bracket escapes to the section ancestor and floats over
+     unrelated content. */
+  position: relative;
 }
 .chordsketch-sheet__content .grid-barline:not([class*='--']) {
   width: 1.5px;
@@ -625,57 +752,133 @@
   background-color: var(--cs-ink-900, #1a1718);
 }
 .chordsketch-sheet__content .grid-volta__bracket {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
   position: absolute;
-  top: -0.1em;
+  /* Lift the bracket above the bar so the `1.` / `2.` label
+     does not overlap the barline glyph beneath it. The parent
+     `.grid-line` reserves `padding-top` for this clearance.
+     The `4px` of extra lift opens a small gap between the
+     leg's bottom and the host barline's top — keeps the L
+     and the barline visually distinct rather than reading as
+     one continuous run of pixels.
+     `left` anchors the bracket to the host glyph's
+     conventional "barline X" — see per-host overrides below.
+     Default `0` matches the standalone `.grid-volta` host
+     (whose own line sits at the element's left edge). */
+  top: calc(-0.85em - 4px);
   left: 0;
+  /* L-shape: top edge = horizontal cap, left edge = vertical
+     leg. Both drawn as borders so the corner is a single
+     rendered intersection and the leg meets the barline
+     beneath without any gap or seam. */
+  border-top: 1.5px solid var(--cs-ink-900, #1a1718);
+  border-left: 1.5px solid var(--cs-ink-900, #1a1718);
+  box-sizing: border-box;
+  height: 0.85em;
+  min-width: 1em;
+  display: inline-flex;
+  align-items: flex-start;
+  padding: 0.08em 0.25em 0 0.25em;
+  pointer-events: none;
 }
-.chordsketch-sheet__content .grid-volta__cap {
-  display: block;
-  width: 1.5em;
-  height: 1.5px;
-  background-color: var(--cs-ink-900, #1a1718);
+/* When the bracket overlays a collapsed `[marker, volta]`
+   host (e.g. `:| |2` → repeat-end with volta-2 overlay), the
+   bracket cap must start at the HOST'S barline anchor — not
+   at the host element's left edge — so the cap visually
+   springs from the same X as the line the volta annotates.
+   For each barline kind that places its conventional anchor
+   somewhere other than the left edge of its glyph, anchor
+   the bracket accordingly:
+   - repeat-end / final → thick line at the RIGHT, anchor 100%
+   - repeat-both / double / single bare `|` → glyph centre, 50%
+   - repeat-start → thick line at the LEFT (default `0` works) */
+.chordsketch-sheet__content .grid-barline--repeat-end > .grid-volta__bracket,
+.chordsketch-sheet__content .grid-barline--final > .grid-volta__bracket {
+  left: 100%;
+}
+.chordsketch-sheet__content .grid-barline--repeat-both > .grid-volta__bracket,
+.chordsketch-sheet__content .grid-barline--double > .grid-volta__bracket,
+.chordsketch-sheet__content .grid-barline:not([class*='--']) > .grid-volta__bracket {
+  left: 50%;
 }
 .chordsketch-sheet__content .grid-volta__label {
   display: inline-block;
-  margin-left: 0.15em;
   font-size: 0.7em;
   font-weight: 600;
   color: var(--cs-ink-900, #1a1718);
   line-height: 1;
-  padding-top: 0.1em;
+  white-space: nowrap;
 }
 
 /* Row label (`A`, `Coda`, etc.) — a left-side tag for jazz
    lead-sheet style annotation. Not in the ChordPro spec but a
-   widely used dialect convention; render as a muted bold cap. */
+   widely used dialect convention; render as a muted bold cap.
+
+   The `::before` pseudo carries the SECTION's longest label
+   text (set as a CSS string in `--cs-grid-label-max-text` on
+   the `<section>` by flushSection). It is `height: 0` so the
+   visible row layout is unchanged, but its intrinsic width —
+   measured in this label's own font + size + weight + letter-
+   spacing + uppercase transform — counts toward the cell's
+   max-content. Subgrid `auto` columns size to max-content, so
+   every group's first column ends up the same width and an A
+   row aligns with a CODA row. `1ch` and similar abstract units
+   were too loose for uppercase + letter-spacing; only an actual
+   text measurement gives pixel-accurate alignment. */
 .chordsketch-sheet__content .grid-row__label {
-  display: inline-flex;
+  display: inline-grid;
+  /* One cell, one row. Both `::before` (the sizer) and
+     `.grid-row__label__text` (the visible content) explicitly
+     target `grid-area: 1 / 1`, so they OVERLAY instead of
+     stacking — that is what makes the cell width equal the
+     widest label without painting it twice. An earlier
+     `inline-flex` version laid the two as sibling flex items
+     and added their widths, giving a too-wide gutter. */
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
   align-items: center;
-  flex-shrink: 0;
   padding-right: 0.6em;
   font-weight: 700;
   color: var(--cs-ink-700, #44424a);
   text-transform: uppercase;
   font-size: 0.85em;
   letter-spacing: 0.04em;
-  min-width: 2em;
+}
+.chordsketch-sheet__content .grid-row__label::before {
+  content: var(--cs-grid-label-max-text, '');
+  grid-area: 1 / 1;
+  visibility: hidden;
+  white-space: pre;
+  pointer-events: none;
+}
+.chordsketch-sheet__content .grid-row__label__text {
+  grid-area: 1 / 1;
 }
 /* Trailing comment (`repeat 4 times`, etc.) — a right-side
-   annotation column. Italicised + smaller so it reads as a
-   performance instruction, not a chord. */
+   annotation column. Same `::before` sizer treatment as the
+   label (via `--cs-grid-comment-max-text`) so an empty row and
+   a `repeat 4 times` row reserve the same right gutter width.
+   Italicised + smaller so it reads as a performance
+   instruction, not a chord. */
 .chordsketch-sheet__content .grid-row__comment {
-  display: inline-flex;
+  display: inline-grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
   align-items: center;
-  flex-shrink: 0;
   padding-left: 0.6em;
   font-style: italic;
   font-weight: 500;
   font-size: 0.85em;
   color: var(--cs-ink-600, #67646d);
+}
+.chordsketch-sheet__content .grid-row__comment::before {
+  content: var(--cs-grid-comment-max-text, '');
+  grid-area: 1 / 1;
+  visibility: hidden;
+  white-space: pre;
+  pointer-events: none;
+}
+.chordsketch-sheet__content .grid-row__comment__text {
+  grid-area: 1 / 1;
 }
 
 /* Combined repeat-end + repeat-start barline (`:|:`). Renders
@@ -692,13 +895,31 @@
    typesetting trick reads as engraved music notation, but a
    simple `%` / `%%` glyph also works at this resolution). */
 .chordsketch-sheet__content .grid-percent {
-  font-weight: 700;
-  font-size: 0.9em;
   color: var(--cs-ink-700, #44424a);
+  display: inline-block;
+  vertical-align: middle;
 }
 .chordsketch-sheet__content .grid-beat--percent1,
 .chordsketch-sheet__content .grid-beat--percent2 {
   justify-content: center;
+}
+/* `%` centres in its bar (not pinned to the beat-1 flex slot).
+   With the slot-centre boundary model (see body barline
+   alignment above), the bar element's centre equals the
+   visible bar's centre — so a plain `translate(-50%, -50%)`
+   from `left: 50%; top: 50%` is sufficient. No extra
+   horizontal offset for slot width. `%%` is expanded into
+   two consecutive `%` cells at render time (one in the
+   current bar, one in the next), so there is no separate
+   2-bar engraving glyph. */
+.chordsketch-sheet__content .grid-bar--percent1-center {
+  position: relative;
+}
+.chordsketch-sheet__content .grid-bar--percent1-center .grid-beat--percent1 {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 /* Multi-chord cell separator — a thin tilde between two chord
@@ -731,6 +952,22 @@
 }
 .chordsketch-sheet__content .grid-strum__glyph {
   font-family: var(--cs-font-mono, ui-monospace, monospace);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.05em;
+}
+.chordsketch-sheet__content .grid-strum__antic {
+  font-style: italic;
+  color: var(--cs-ink-500, #8a8790);
+  margin-right: 0.1em;
+}
+.chordsketch-sheet__content .grid-strum__sep {
+  color: var(--cs-ink-400, #b6b1bd);
+  font-size: 0.7em;
+  padding: 0 0.05em;
+}
+.chordsketch-sheet__content .grid-strum__part {
+  display: inline-block;
 }
 .chordsketch-sheet__content .grid-strum--up {
   color: var(--cs-crimson-500, #bd1642);
