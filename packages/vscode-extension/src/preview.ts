@@ -44,7 +44,7 @@ function isWebviewToExt(raw: unknown): raw is WebviewToExt {
     return typeof r['message'] === 'string';
   }
   if (r['type'] === 'edit-capo') {
-    return typeof r['capo'] === 'number' && Number.isFinite(r['capo'] as number);
+    return typeof r['capo'] === 'number' && Number.isFinite(r['capo']);
   }
   return false;
 }

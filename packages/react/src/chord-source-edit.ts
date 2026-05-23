@@ -40,7 +40,7 @@ const CAPO_DIRECTIVE_RE = /\{capo:\s*(-?\d+)\s*\}\s*\n?/;
 const CAPO_ANCHOR_RE = /^(\{(?:title|subtitle|artist|key|tempo|time)[^}]*\}\s*\n)+/;
 
 function clampInt(n: number, min: number, max: number): number {
-  if (!Number.isFinite(n)) return min;
+  if (Number.isNaN(n)) return min;
   if (n < min) return min;
   if (n > max) return max;
   return n;

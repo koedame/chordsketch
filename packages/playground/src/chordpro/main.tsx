@@ -21,6 +21,8 @@ import {
   TRANSPOSE_MAX,
   TRANSPOSE_MIN,
   applyChordReposition,
+  readCapo,
+  setCapoInSource,
   type ChordRepositionEvent,
   type ChordSourceAreaHandle,
 } from '@chordsketch/react';
@@ -600,6 +602,16 @@ function PlaygroundApp(): JSX.Element {
     });
   }, []);
 
+  // Capo source change: use the functional-updater form of `setSource`
+  // so rapid consecutive Capo clicks always read the latest state, not
+  // the stale `source` prop captured by the render cycle that set up the
+  // current <PreviewToolbar> instance. Extract the numeric capo from the
+  // rewritten source, then apply it against the live state via the updater.
+  const handleCapoSourceChange = useCallback((next: string) => {
+    const nextCapo = readCapo(next);
+    setSource((latest) => setCapoInSource(latest, nextCapo));
+  }, []);
+
   return (
     <div className="chordsketch-app">
       <header className="topnav">
@@ -775,7 +787,7 @@ function PlaygroundApp(): JSX.Element {
             </header>
             <PreviewToolbar
               source={source}
-              onSourceChange={setSource}
+              onSourceChange={handleCapoSourceChange}
               transpose={transpose}
               onTransposeChange={setTranspose}
               transposeMin={TRANSPOSE_MIN}

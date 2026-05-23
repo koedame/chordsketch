@@ -272,7 +272,7 @@ export function ChordProPreview({
   const isPerformanceToolbar = toolbar === 'performance';
   const isHidden = toolbar === false;
   const isStandardHeader =
-    toolbar === undefined || toolbar === 'transpose-only' || toolbar === 'performance';
+    toolbar === 'transpose-only' || toolbar === 'performance';
   const customHeader = !isStandardHeader && !isHidden ? toolbar : null;
 
   // In `performance` mode the format `<select>` is hidden when
