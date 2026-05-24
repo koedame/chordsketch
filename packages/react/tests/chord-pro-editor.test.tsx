@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeAll, describe, expect, test, vi } from 'vitest';
 
-import { ChordProEditor } from '../src/index';
+import { ChordProEditor, PDF_EXPORT_DEFAULT_LABEL } from '../src/index';
 import type { ChordWasmLoader } from '../src/use-chord-render';
 
 // `<SplitLayout>` (used by `<ChordProEditor>` to lay out source +
@@ -133,8 +133,10 @@ describe('<ChordProEditor>', () => {
     render(<ChordProEditor wasmLoader={makeLoader(makeStub())} />);
     const select = screen.getByLabelText('Format') as HTMLSelectElement;
     fireEvent.change(select, { target: { value: 'pdf' } });
-    // PDF branch renders a download button.
-    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeTruthy();
+    // PDF branch renders an export button using the shared default label.
+    expect(
+      screen.getByRole('button', { name: PDF_EXPORT_DEFAULT_LABEL }),
+    ).toBeTruthy();
   });
 
   test('controlled source: edits propagate via onSourceChange', () => {

@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { ChordProPreview } from '../src/index';
+import { ChordProPreview, PDF_EXPORT_DEFAULT_LABEL } from '../src/index';
 import type { ChordWasmLoader } from '../src/use-chord-render';
 
 function emptyAst(marker?: string): string {
@@ -160,7 +160,7 @@ describe('<ChordProPreview>', () => {
     expect(onTransposeChange).toHaveBeenCalledWith(1);
   });
 
-  test('PDF branch renders the download button', () => {
+  test('PDF branch renders the export button using the shared default label', () => {
     render(
       <ChordProPreview
         source="src"
@@ -168,7 +168,9 @@ describe('<ChordProPreview>', () => {
         wasmLoader={makeLoader(makeStub())}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: PDF_EXPORT_DEFAULT_LABEL }),
+    ).toBeTruthy();
   });
 
   test('transposeMin / transposeMax bound the transpose buttons', () => {
