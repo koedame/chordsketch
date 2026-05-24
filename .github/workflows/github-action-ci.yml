@@ -47,7 +47,7 @@ jobs:
       # Rust toolchain is required by `version: source` (the action's
       # `cargo install` build path). Pinned to `stable` so the build
       # matches what the release pipeline produces on every PR.
-      - uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # stable
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           toolchain: stable
 
