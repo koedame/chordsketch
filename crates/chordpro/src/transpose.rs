@@ -1268,6 +1268,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(debug_assertions)]
     #[should_panic(expected = "capo 25 exceeds the 1..=24 range")]
     fn effective_transpose_panics_on_out_of_band_capo() {
         // `capo_validated` already gates the meaningful range at 24
