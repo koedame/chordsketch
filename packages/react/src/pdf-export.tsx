@@ -7,6 +7,15 @@ import {
   usePdfExport,
 } from './use-pdf-export';
 
+/**
+ * Default label rendered when a {@link PdfExport} consumer passes no
+ * `children`. Exported so sister sites that compose their own export
+ * button (notably `<PreviewToolbar>`'s Export group) can render the
+ * same string without restating the literal — keeping every call site
+ * in lockstep with this default through a single source of truth.
+ */
+export const PDF_EXPORT_DEFAULT_LABEL = 'Export PDF';
+
 /** Props accepted by the {@link PdfExport} button. */
 export interface PdfExportProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'onError'> {
@@ -21,7 +30,9 @@ export interface PdfExportProps
   /** Semitone transposition / config preset forwarded to the renderer. */
   options?: PdfExportOptions;
   /**
-   * Button label. Defaults to `"Export PDF"`. Pass a component tree
+   * Button label. Defaults to {@link PDF_EXPORT_DEFAULT_LABEL}
+   * (`"Export PDF"`) — re-import the constant when composing custom
+   * UIs that need to render the same string. Pass a component tree
    * (e.g. an icon + label) for richer styling.
    */
   children?: ReactNode;
@@ -86,7 +97,7 @@ function defaultPdfErrorFallback(error: Error): ReactNode {
  *
  * ```tsx
  * <PdfExport source={chordpro} filename="song.pdf">
- *   Download PDF
+ *   Export PDF
  * </PdfExport>
  * ```
  *
@@ -97,7 +108,7 @@ export function PdfExport({
   source,
   filename = 'chordsketch-output.pdf',
   options,
-  children = 'Export PDF',
+  children = PDF_EXPORT_DEFAULT_LABEL,
   onExported,
   onError,
   errorFallback = defaultPdfErrorFallback,

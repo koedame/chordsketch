@@ -23,7 +23,7 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
   /**
    * Output format. `"html"` renders the song as design-system styled
    * HTML; `"text"` renders the chords-above-lyrics text format;
-   * `"pdf"` shows a download button that produces a PDF on demand.
+   * `"pdf"` shows an export button that produces a PDF on demand.
    */
   format: PreviewFormat;
   /** Filename used for the PDF download. Defaults to `"chordsketch-output.pdf"`. */
@@ -60,7 +60,7 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
    * Optional content rendered while the wasm runtime is initialising.
    *
    * Only honoured by the inline `html` / `text` branches — the
-   * `pdf` branch is a download button (rendered by
+   * `pdf` branch is an export button (rendered by
    * {@link PdfExport}), not a streaming surface, so it has no
    * "loading" state to show before the user clicks. PDF in-flight
    * state is communicated via the button's `aria-busy` attribute
@@ -138,9 +138,7 @@ export function RendererPreview({
           options={{ transpose, config }}
           filename={pdfFilename}
           className="chordsketch-pdf-export"
-        >
-          Download PDF
-        </PdfExport>
+        />
       </div>
     );
   }

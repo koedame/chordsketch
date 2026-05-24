@@ -42,7 +42,7 @@ export default defineConfig({
       // `packages/npm-export/` build so the playground can drive
       // `<PdfExport>` without depending on an npm-published copy.
       // The PDF / PNG bundle is only loaded when a user actually
-      // clicks "Download PDF" — the dynamic `import('@chordsketch/
+      // clicks "Export PDF" — the dynamic `import('@chordsketch/
       // wasm-export')` inside `use-pdf-export.ts` produces a
       // separate chunk so the initial playground load stays light.
       '@chordsketch/wasm-export': resolve(here, '../npm-export/web/chordsketch_wasm.js'),
