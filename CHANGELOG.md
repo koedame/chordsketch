@@ -35,7 +35,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `<Transpose>`'s default UI range narrows to `±6` (down from
   `±11`); the feature ceiling `TRANSPOSE_MIN` / `TRANSPOSE_MAX`
   remains `±11` and hosts can pass explicit `min` / `max` to
-  widen the slider. (#2560)
+  widen the slider. **Breaking**: the `resetValue` prop is
+  removed from both `<Capo>` and `<Transpose>` — there is no
+  longer a Reset button, and the native slider's Home key (or a
+  controlled `onChange(0)` from the host) covers the same
+  ergonomics. (#2560)
+- `@chordsketch/react`: the `<Capo>` slider's host-supplied
+  `value` (controlled mode) and the source-derived `{capo: N}`
+  (source-pair mode) are now clamped into `[min, max]` at render
+  time as well as at change time, so a host that passes
+  `value=10` with default `max=12` sees the slider thumb and the
+  `<output>` readout agree on the displayed value. Same change
+  applied to `<Transpose>`. (#2560)
+- `@chordsketch/react`: `<Capo>`'s `aria-describedby` id is now
+  generated via React 18's `useId()` instead of `Math.random()`,
+  so server-rendered hosts (Next.js, Remix) no longer hit
+  hydration mismatches when the ★ markers are visible. (#2560)
+- `chordsketch_chordpro::render_result::validate_capo` warning
+  messages now end with `(rendered as no capo)` so a user who
+  writes an out-of-range or non-integer `{capo}` value learns
+  both what was wrong with their input and what the rendered
+  output represents. (#2560)
+- `chordsketch-wasm`'s `do_parse_chordpro` (the React preview's
+  parse entry point) now calls `validate_capo` so invalid
+  `{capo}` values surface the same warning the Rust renderers
+  emit, closing the validation-parity gap between the React
+  surface and the static-output renderers. (#2560)
 
 ### Added
 

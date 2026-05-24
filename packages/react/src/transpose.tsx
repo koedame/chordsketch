@@ -84,6 +84,12 @@ export function Transpose({
     [min, max],
   );
 
+  // Clamp the host-supplied `value` for display purposes. The native
+  // range input visually pins the thumb to the bound when `value`
+  // is out of range, but the `<output>` readout would otherwise
+  // surface the raw (unclamped) prop and disagree with the thumb.
+  const displayValue = clamp(value);
+
   const handleSliderChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>): void => {
       const parsed = Number.parseInt(event.target.value, 10);
@@ -118,7 +124,7 @@ export function Transpose({
         min={min}
         max={max}
         step={step}
-        value={value}
+        value={displayValue}
         onChange={handleSliderChange}
         aria-label={ariaLabel}
       />
@@ -127,7 +133,7 @@ export function Transpose({
         aria-live="polite"
         aria-atomic="true"
       >
-        {formatValue(value)}
+        {formatValue(displayValue)}
       </output>
     </div>
   );

@@ -109,11 +109,20 @@ fn render_song_impl(
         chordsketch_chordpro::ast::CapoValidation::Valid(n) => n,
         _ => 0,
     };
-    let (combined_transpose, _) = chordsketch_chordpro::transpose::effective_transpose(
+    let (combined_transpose, top_saturated) = chordsketch_chordpro::transpose::effective_transpose(
         cli_transpose,
         song_transpose_delta,
         song_capo,
     );
+    if top_saturated {
+        push_warning(
+            warnings,
+            format!(
+                "transpose offset {cli_transpose} + {song_transpose_delta} - capo \
+                 {song_capo} exceeds i8 range, clamped to {combined_transpose}"
+            ),
+        );
+    }
     let mut transpose_offset: i8 = combined_transpose;
     // Stores the AST lines of the most recently defined chorus body.
     // Re-rendered at recall time so the current transpose offset is applied.
@@ -1448,6 +1457,85 @@ mod transpose_tests {
             result.warnings.iter().any(|w| w.contains("\"999\"")),
             "expected warning about out-of-range value, got: {:?}",
             result.warnings
+        );
+    }
+
+    #[test]
+    fn test_capo_transposes_displayed_chords() {
+        // ADR-0023: {capo: N} now shifts the displayed chord names
+        // by -N semitones in every renderer. Sister-site to the
+        // render-html / render-pdf tests of the same name.
+        let input = "{key: C}\n{capo: 2}\n[C]Hi";
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let result =
+            render_song_with_warnings(&song, 0, &chordsketch_chordpro::config::Config::defaults());
+        assert!(
+            result.output.contains("Bb"),
+            "{{capo: 2}} on {{key: C}} must render [C] as Bb, got: {}",
+            result.output
+        );
+    }
+
+    #[test]
+    fn test_capo_subtracts_in_composition_with_cli_transpose() {
+        // ADR-0023 composition rule: file + cli - capo. cli=+4 and
+        // {capo: 2} compose to effective +2 (file=0), so [C]
+        // renders as D. This pins the "ONE place" promise — a
+        // renderer that accidentally drops capo from the formula
+        // (or uses the old `combine_transpose`) would emit C, not
+        // D.
+        let input = "{key: C}\n{capo: 2}\n[C]Hi";
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let output =
+            render_song_with_transpose(&song, 4, &chordsketch_chordpro::config::Config::defaults());
+        assert!(
+            output.contains('D'),
+            "cli=+4, capo=2 must net +2 so [C] shifts to D, got: {output}"
+        );
+    }
+
+    #[test]
+    fn test_transpose_directive_with_capo_saturation_emits_warning() {
+        // Sister-site to render-html / render-pdf: the combined
+        // `file + cli - capo` overflows i8, the saturation arm
+        // rewired through `effective_transpose` must surface a
+        // warning citing the capo value alongside the
+        // `{transpose}` value.
+        let input = "{capo: 5}\n{transpose: 120}\n[C]Hi";
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let result =
+            render_song_with_warnings(&song, 20, &chordsketch_chordpro::config::Config::defaults());
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("exceeds i8 range") && w.contains("capo") && w.contains("120")),
+            "expected saturation warning citing capo and 120, got: {:?}",
+            result.warnings,
+        );
+    }
+
+    #[test]
+    fn test_capo_top_level_saturation_emits_warning() {
+        // ADR-0023 + Finding 1: a song whose cli_transpose alone
+        // already saturates the offset must surface a warning even
+        // when no in-song `{transpose}` directive is present. This
+        // covers the top-level `effective_transpose` saturation
+        // branch rewired by Finding 1.
+        let input = "{capo: 5}\n[C]Hi";
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let result = render_song_with_warnings(
+            &song,
+            i8::MIN,
+            &chordsketch_chordpro::config::Config::defaults(),
+        );
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("exceeds i8 range") && w.contains("capo")),
+            "expected top-level saturation warning citing capo, got: {:?}",
+            result.warnings,
         );
     }
 

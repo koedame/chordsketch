@@ -1,5 +1,5 @@
 import type { ChangeEvent, HTMLAttributes } from 'react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useId, useMemo } from 'react';
 
 import {
   CAPO_MAX,
@@ -142,6 +142,13 @@ export function Capo(props: CapoProps): JSX.Element {
     (next: number): number => clampValue(next, min, max),
     [min, max],
   );
+  // The host may pass a `value` outside `[min, max]` (controlled
+  // mode) or the source may carry a `{capo: N}` outside the
+  // slider's range. Native `<input type="range">` will visually
+  // clamp the thumb to the bound but the `<output>` readout would
+  // surface the raw value, producing a "thumb at +6 / readout +10"
+  // disagreement. Clamp at render time so both surfaces agree.
+  const displayValue = clamp(rawValue);
 
   const emit = useCallback(
     (next: number): void => {
@@ -187,10 +194,12 @@ export function Capo(props: CapoProps): JSX.Element {
     return result.sort((a, b) => a - b);
   }, [bestPositions, min, max]);
 
-  const markerDescriptionId = useMemo(
-    () => (markers.length > 0 ? `chordsketch-capo-best-${Math.random().toString(36).slice(2, 9)}` : undefined),
-    [markers.length],
-  );
+  // Use React 18's `useId` so the generated id is stable across
+  // server-render and client-hydration. The previous `Math.random()`
+  // path produced a fresh value on every call and broke SSR
+  // hydration whenever a host server-rendered `<Capo>`.
+  const baseId = useId();
+  const markerDescriptionId = markers.length > 0 ? `${baseId}-capo-best` : undefined;
 
   const range = max - min;
   const ariaLabel =
@@ -219,7 +228,7 @@ export function Capo(props: CapoProps): JSX.Element {
           min={min}
           max={max}
           step={step}
-          value={rawValue}
+          value={displayValue}
           onChange={handleSliderChange}
           aria-label={ariaLabel}
           aria-describedby={markerDescriptionId}
@@ -250,7 +259,7 @@ export function Capo(props: CapoProps): JSX.Element {
         aria-live="polite"
         aria-atomic="true"
       >
-        {formatValue(rawValue)}
+        {formatValue(displayValue)}
       </output>
       {markerDescriptionId ? (
         <span id={markerDescriptionId} className="chordsketch-capo__sr-only">

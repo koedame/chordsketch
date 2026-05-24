@@ -241,11 +241,20 @@ fn render_song_body_into(
         chordsketch_chordpro::ast::CapoValidation::Valid(n) => n,
         _ => 0,
     };
-    let (combined_transpose, _) = chordsketch_chordpro::transpose::effective_transpose(
+    let (combined_transpose, top_saturated) = chordsketch_chordpro::transpose::effective_transpose(
         cli_transpose,
         song_transpose_delta,
         song_capo,
     );
+    if top_saturated {
+        push_warning(
+            warnings,
+            format!(
+                "transpose offset {cli_transpose} + {song_transpose_delta} - capo \
+                 {song_capo} exceeds i8 range, clamped to {combined_transpose}"
+            ),
+        );
+    }
     let mut transpose_offset: i8 = combined_transpose;
     let mut fmt_state = FormattingState::default();
     // `<article>` is the semantic root for a self-contained song —
@@ -3665,6 +3674,74 @@ mod transpose_tests {
             result.warnings.iter().any(|w| w.contains("\"999\"")),
             "expected warning about out-of-range value, got: {:?}",
             result.warnings
+        );
+    }
+
+    #[test]
+    fn test_capo_transposes_displayed_chords() {
+        // ADR-0023: {capo: N} now shifts the displayed chord names
+        // by -N semitones in every renderer. This test pins the
+        // text-renderer-equivalent guarantee for HTML — a [C] under
+        // {key: C}+{capo: 2} renders as B♭, not C.
+        let input = "{key: C}\n{capo: 2}\n[C]Hi";
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            result.output.contains("<span class=\"chord\">B♭</span>"),
+            "{{capo: 2}} on {{key: C}} must render [C] as B♭, got: {}",
+            result.output
+        );
+    }
+
+    #[test]
+    fn test_capo_subtracts_in_composition_with_cli_transpose() {
+        // ADR-0023 composition rule: file + cli - capo. cli=+4 and
+        // {capo: 2} compose to effective +2, so [C] renders as D.
+        // Sister-site to render-text / render-pdf.
+        let input = "{key: C}\n{capo: 2}\n[C]Hi";
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let output = render_song_with_transpose(&song, 4, &Config::defaults());
+        assert!(
+            output.contains("<span class=\"chord\">D</span>"),
+            "cli=+4, capo=2 must net +2 so [C] shifts to D, got: {output}"
+        );
+    }
+
+    #[test]
+    fn test_capo_top_level_saturation_emits_warning() {
+        // Sister-site to render-text / render-pdf. Top-level
+        // `effective_transpose` saturation must surface a warning
+        // (Finding 1).
+        let input = "{capo: 5}\n[C]Hi";
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, i8::MIN, &Config::defaults());
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("exceeds i8 range") && w.contains("capo")),
+            "expected top-level saturation warning citing capo, got: {:?}",
+            result.warnings,
+        );
+    }
+
+    #[test]
+    fn test_transpose_directive_with_capo_saturation_emits_warning() {
+        // Combined offset `file + cli - capo` overflows i8 — the
+        // `if saturated` branch must surface a warning that cites
+        // the capo value alongside the {transpose} value, so a user
+        // who stacked the two pathologically large can diagnose the
+        // clamp. Exercises the saturation arm rewired by ADR-0023.
+        let input = "{capo: 5}\n{transpose: 120}\n[C]Hi";
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 20, &Config::defaults());
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("exceeds i8 range") && w.contains("capo") && w.contains("120")),
+            "expected saturation warning citing capo and 120, got: {:?}",
+            result.warnings,
         );
     }
 

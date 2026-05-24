@@ -632,7 +632,7 @@ pub fn combine_transpose(file_offset: i8, cli_offset: i8) -> (i8, bool) {
 /// [`crate::ast::Metadata::capo_validated`], which already rejects
 /// values outside the guitarist-meaningful range).
 ///
-/// See [`docs/adr/0023-capo-transposes-displayed-chords.md`] for the
+/// See `docs/adr/0023-capo-transposes-displayed-chords.md` for the
 /// rationale.
 #[must_use]
 pub fn effective_transpose(file_offset: i8, cli_offset: i8, capo: u8) -> (i8, bool) {
