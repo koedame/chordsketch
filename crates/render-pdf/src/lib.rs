@@ -741,21 +741,22 @@ fn render_song_into_doc(
         chordsketch_chordpro::ast::CapoValidation::Valid(n) => n,
         _ => 0,
     };
-    let (combined_transpose, top_saturated) = chordsketch_chordpro::transpose::effective_transpose(
+    let top = chordsketch_chordpro::transpose::effective_transpose(
         cli_transpose,
         song_transpose_delta,
         song_capo,
     );
-    if top_saturated {
+    if top.saturated {
         push_warning(
             warnings,
             format!(
                 "transpose offset {cli_transpose} + {song_transpose_delta} - capo \
-                 {song_capo} exceeds i8 range, clamped to {combined_transpose}"
+                 {song_capo} exceeds i8 range, clamped to {}",
+                top.offset
             ),
         );
     }
-    let mut transpose_offset: i8 = combined_transpose;
+    let mut transpose_offset: i8 = top.offset;
     let mut fmt_state = PdfFormattingState::default();
 
     // Read configurable frets_shown for chord diagrams.
@@ -960,22 +961,22 @@ fn render_song_into_doc(
                             }
                         },
                     };
-                    let (combined, saturated) =
-                        chordsketch_chordpro::transpose::effective_transpose(
-                            file_offset,
-                            cli_transpose,
-                            song_capo,
-                        );
-                    if saturated {
+                    let combined = chordsketch_chordpro::transpose::effective_transpose(
+                        file_offset,
+                        cli_transpose,
+                        song_capo,
+                    );
+                    if combined.saturated {
                         push_warning(
                             warnings,
                             format!(
                                 "transpose offset {file_offset} + {cli_transpose} - capo \
-                                 {song_capo} exceeds i8 range, clamped to {combined}"
+                                 {song_capo} exceeds i8 range, clamped to {}",
+                                combined.offset
                             ),
                         );
                     }
-                    transpose_offset = combined;
+                    transpose_offset = combined.offset;
                     continue;
                 }
                 if d.kind.is_font_size_color() {

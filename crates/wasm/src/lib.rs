@@ -356,8 +356,9 @@ pub(crate) fn do_parse_chordpro(
     // warning's text matches the helper's argument naming, and so
     // any future addition of a file-side override has a clean slot
     // to fill.
-    let (transpose_steps, saturated) = effective_transpose(0, cli_transpose, song_capo);
-    if saturated {
+    let composed = effective_transpose(0, cli_transpose, song_capo);
+    let transpose_steps = composed.offset;
+    if composed.saturated {
         warnings.push(format!(
             "transpose offset {cli_transpose} - capo {song_capo} exceeds i8 range, clamped to {transpose_steps}"
         ));

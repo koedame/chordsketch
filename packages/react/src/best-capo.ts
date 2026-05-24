@@ -16,6 +16,7 @@
 // chords is included in the count — `G/B` contributes 0 accidentals,
 // `D/F#` contributes 1.
 
+import { CAPO_MAX } from './chord-source-edit';
 import type {
   ChordproAccidental,
   ChordproChord,
@@ -24,8 +25,15 @@ import type {
   ChordproSong,
 } from './chordpro-ast';
 
-/** Inclusive upper bound the slider uses for capo positions. */
-export const BEST_CAPO_MAX = 12;
+/**
+ * Inclusive upper bound for the candidate capo positions
+ * `computeBestCapoPositions` enumerates. Re-exports `CAPO_MAX` from
+ * `chord-source-edit.ts` so the search range stays in lockstep with
+ * the slider's physical range — if `CAPO_MAX` widens to support a
+ * longer guitar neck, the best-capo picker enumerates the new
+ * positions automatically.
+ */
+export const BEST_CAPO_MAX = CAPO_MAX;
 
 /**
  * Whether a chromatic semitone (`0..12`) spells with an accidental
@@ -95,10 +103,20 @@ function collectChordSemitones(song: ChordproSong): number[] {
 
 /** Result returned by {@link computeBestCapoPositions}. */
 export interface BestCapoResult {
-  /** Sorted ascending list of capo positions tied for the minimum. */
-  positions: number[];
-  /** Glyph count those tied positions all achieve. */
-  minAccidentals: number;
+  /**
+   * Sorted ascending, deduplicated capo positions tied for the
+   * minimum accidental count. Every entry lies in
+   * `[0, BEST_CAPO_MAX]`. Declared as `ReadonlyArray<number>` so a
+   * caller cannot mutate the result in place (the invariants above
+   * are guaranteed at construction time only).
+   */
+  readonly positions: ReadonlyArray<number>;
+  /**
+   * Number of accidental glyphs (`♯` / `♭`) that every position in
+   * {@link positions} produces across the song's chord roots. Always
+   * `>= 0`.
+   */
+  readonly minAccidentals: number;
 }
 
 /**

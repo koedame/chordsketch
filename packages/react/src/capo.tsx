@@ -67,12 +67,16 @@ export type CapoProps = CapoModeProps &
     /** Format the capo indicator. Defaults to a bare integer. */
     formatValue?: (value: number) => React.ReactNode;
     /**
-     * Capo positions to surface as ★ markers on the slider — see
-     * `computeBestCapoPositions` in `best-capo.ts`. Pass an empty
-     * array (or omit) to suppress the markers. The ★ marker has
-     * no behavioural effect; it is purely a visual hint.
+     * Capo positions to surface as ★ markers on the slider — pass
+     * `BestCapoResult.positions` from {@link computeBestCapoPositions}
+     * (in `best-capo.ts`). Entries outside `[min, max]` are
+     * silently ignored. Pass an empty array (or omit) to suppress
+     * the markers. The ★ marker has no behavioural effect; it is
+     * purely a visual hint. Declared as `ReadonlyArray<number>`
+     * so the caller cannot mutate it in place after handing it to
+     * the component.
      */
-    bestPositions?: number[];
+    bestPositions?: ReadonlyArray<number>;
   };
 
 function defaultFormat(value: number): string {
