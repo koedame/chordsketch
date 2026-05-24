@@ -105,6 +105,23 @@ describe('<Capo>', () => {
     expect(document.querySelector('.chordsketch-capo__markers')).toBeNull();
   });
 
+  test('rejects NaN, Infinity, and non-integer entries from bestPositions', () => {
+    // NaN slips through `pos < min || pos > max` because every NaN
+    // comparison evaluates to false. Without the `Number.isInteger`
+    // guard the marker span would render with `left: NaN%`. Test
+    // the full set of pathological inputs in one shot.
+    render(
+      <Capo
+        value={0}
+        onChange={vi.fn()}
+        bestPositions={[Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 3.5, 4]}
+      />,
+    );
+    const markers = document.querySelectorAll('.chordsketch-capo__marker');
+    expect(markers.length).toBe(1);
+    expect(markers[0]?.getAttribute('data-best-capo')).toBe('4');
+  });
+
   test('exposes the slider value via the visible readout', () => {
     render(<Capo value={4} onChange={vi.fn()} />);
     expect(screen.getByText('4')).toBeTruthy();

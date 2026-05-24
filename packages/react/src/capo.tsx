@@ -190,6 +190,14 @@ export function Capo(props: CapoProps): JSX.Element {
     const seen = new Set<number>();
     const result: number[] = [];
     for (const pos of bestPositions) {
+      // Reject non-finite or non-integer entries before the range
+      // check: NaN slips past `pos < min || pos > max` (every NaN
+      // comparison evaluates to false in JS) and would otherwise
+      // produce a `left: NaN%` CSS rule and a `data-best-capo="NaN"`
+      // attribute on the marker span. Infinity is rejected for the
+      // same reason. Integer-only matches the contract of capo
+      // positions (`computeBestCapoPositions` always emits integers).
+      if (!Number.isInteger(pos)) continue;
       if (pos < min || pos > max) continue;
       if (seen.has(pos)) continue;
       seen.add(pos);
