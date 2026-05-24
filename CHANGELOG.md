@@ -7,8 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking**: `{capo: N}` now transposes the rendered chord names
+  by `-N` semitones across every rendering surface (text / HTML /
+  PDF Rust renderers and the `@chordsketch/react` `chordpro-jsx`
+  walker), matching what a guitarist expects when reaching for the
+  capo control. The `{capo}` directive itself stays in the AST and
+  each renderer's existing capo-annotation behaviour is unchanged.
+  Composes with `{transpose}` and the CLI / API transpose offset
+  via a new `effective_transpose(file, cli, capo)` helper in
+  `chordsketch_chordpro::transpose`; renderers route through this
+  helper so the rule lives in one place. See
+  [ADR-0023](docs/adr/0023-capo-transposes-displayed-chords.md).
+  Consumers that depended on the old "capo is a printed annotation
+  only" behaviour will see chord-line output shift; strip the
+  `{capo}` directive before rendering, or pass `cli_transpose +
+  capo` explicitly, to recover the pre-change output. (#2560)
+- `@chordsketch/react`: `<Capo>` and `<Transpose>` switch from
+  `− / + / Reset` buttons to a native `<input type="range">`
+  slider with a current-value readout. Keyboard support now comes
+  from the native range input (arrow keys, Home / End, PageUp /
+  PageDown); the legacy `+ / = / − / _ / 0` wrapper-level
+  shortcuts are removed. `<Capo>` accepts a new `bestPositions`
+  prop that paints ★ markers at the "easiest capo position" tied
+  set — pair with the new `computeBestCapoPositions` helper.
+  `<Transpose>`'s default UI range narrows to `±6` (down from
+  `±11`); the feature ceiling `TRANSPOSE_MIN` / `TRANSPOSE_MAX`
+  remains `±11` and hosts can pass explicit `min` / `max` to
+  widen the slider. (#2560)
+
 ### Added
 
+- `@chordsketch/react`: new `computeBestCapoPositions(ast)` helper
+  (and the matching `BEST_CAPO_MAX` constant /
+  `BestCapoResult` type) — computes the capo positions tied for
+  the lowest accidental-glyph count from a parsed song, driving
+  `<Capo>`'s ★ slider markers. Mirrors the canonical-spelling
+  pipeline from `chordsketch_chordpro::transpose::canonical_key_spelling`
+  on the React side so no extra wasm function is needed. (#2560)
+- `chordsketch_chordpro::transpose::effective_transpose(file, cli,
+  capo)` — single-source helper that composes the file-level
+  `{transpose}` value, the CLI / API transpose offset, and the
+  song's `{capo}` value into the chord-line shift the four
+  rendering surfaces apply. Wired into each Rust renderer in place
+  of the previous `combine_transpose` call. (#2560)
+- New [ADR-0023](docs/adr/0023-capo-transposes-displayed-chords.md)
+  records the `{capo}` semantic change and the
+  `effective_transpose` helper's place in the pipeline. (#2560)
 - `@chordsketch/react`: new `<PreviewToolbar>` performance-toolbar
   component composing `<Transpose>` + `<Capo>` + `<PdfExport>`,
   plus the new `<Capo>` primitive (mirrors the `<Transpose>` API

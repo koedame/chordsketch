@@ -1,4 +1,4 @@
-import type { HTMLAttributes, KeyboardEvent } from 'react';
+import type { ChangeEvent, HTMLAttributes } from 'react';
 import { useCallback, useMemo } from 'react';
 
 import {
@@ -21,7 +21,7 @@ type CapoModeProps =
   | {
       /** Current capo position (controlled mode). */
       value: number;
-      /** Fired when the user clicks a button or presses a shortcut. */
+      /** Fired when the slider's input value changes. */
       onChange: (next: number) => void;
       source?: undefined;
       onSourceChange?: undefined;
@@ -30,7 +30,7 @@ type CapoModeProps =
       /** Full ChordPro source — the `{capo: N}` directive is read out. */
       source: string;
       /**
-       * Fired when the user clicks a button or presses a shortcut.
+       * Fired when the slider's input value changes.
        * Receives the updated source with the `{capo: N}` directive
        * inserted / updated / removed via {@link setCapoInSource}.
        *
@@ -46,21 +46,14 @@ type CapoModeProps =
 /** Props accepted by {@link Capo}. */
 export type CapoProps = CapoModeProps &
   Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'children'> & {
-    /** Minimum capo position the buttons will emit. Defaults to {@link CAPO_MIN} (`0`). */
+    /** Minimum capo position. Defaults to {@link CAPO_MIN} (`0`). */
     min?: number;
-    /** Maximum capo position the buttons will emit. Defaults to {@link CAPO_MAX} (`12`). */
+    /** Maximum capo position. Defaults to {@link CAPO_MAX} (`12`). */
     max?: number;
-    /** Step size for `+` / `−` buttons. Defaults to `1`. */
+    /** Step size for the slider. Defaults to `1`. */
     step?: number;
     /**
-     * Value the reset button (and the `0` keyboard shortcut)
-     * emit. Defaults to `0` so the reset returns to "no capo".
-     * The reset button only renders when the current value
-     * differs from `resetValue`.
-     */
-    resetValue?: number;
-    /**
-     * Optional label shown inline with the buttons. Defaults to
+     * Optional label shown inline with the slider. Defaults to
      * `"Capo"`. Pass `null` to omit the visible label; the
      * component still exposes `aria-label` on the wrapper.
      */
@@ -68,14 +61,18 @@ export type CapoProps = CapoModeProps &
     /**
      * Optional notification fired in source-pair mode in addition
      * to `onSourceChange`. Receives the numeric capo value the
-     * source was rewritten with. Lets hosts that need both —
-     * for example to update a status bar or trigger a host-side
-     * edit — observe the capo value without re-parsing the
-     * directive on every change.
+     * source was rewritten with.
      */
     onCapoChange?: (next: number) => void;
     /** Format the capo indicator. Defaults to a bare integer. */
     formatValue?: (value: number) => React.ReactNode;
+    /**
+     * Capo positions to surface as ★ markers on the slider — see
+     * `computeBestCapoPositions` in `best-capo.ts`. Pass an empty
+     * array (or omit) to suppress the markers. The ★ marker has
+     * no behavioural effect; it is purely a visual hint.
+     */
+    bestPositions?: number[];
   };
 
 function defaultFormat(value: number): string {
@@ -89,15 +86,16 @@ function isSourceMode(
 }
 
 /**
- * Accessible capo control: a − button, a current-value readout,
- * a + button, and a reset button (only rendered when the position
- * differs from `resetValue`). Keyboard support on the wrapper:
- * `+` / `=` step up, `-` / `_` step down, `0` resets.
+ * Accessible capo control: a native `<input type="range">` slider
+ * with a current-value readout and optional ★ markers at the
+ * "easiest capo position" tied set. Keyboard support comes from
+ * the native range input (Arrow keys, Home / End, PageUp /
+ * PageDown).
  *
  * Two API shapes are supported and mutually exclusive:
  *
  * 1. **Controlled** — `value` + `onChange`. Acts as a pure
- *    stepper, identical in shape to `<Transpose>`.
+ *    slider, identical in shape to `<Transpose>`.
  *
  *    ```tsx
  *    const [capo, setCapo] = useState(0);
@@ -105,26 +103,30 @@ function isSourceMode(
  *    ```
  *
  * 2. **Source-pair** — `source` + `onSourceChange`. The capo
- *    value is derived from `source` via {@link readCapo}; clicks
- *    write the new source through {@link setCapoInSource} and
- *    emit the result via `onSourceChange`. Use this shape when
- *    the host already owns the ChordPro string — there is no
+ *    value is derived from `source` via {@link readCapo}; slider
+ *    changes write the new source through {@link setCapoInSource}
+ *    and emit the result via `onSourceChange`. Use this shape
+ *    when the host already owns the ChordPro string — there is no
  *    second piece of capo state to keep in sync.
  *
  *    ```tsx
  *    <Capo source={source} onSourceChange={setSource} />
  *    ```
+ *
+ * Per ADR-0023, the slider's value drives a render-time `-capo`
+ * semitone shift applied by the renderer pipeline; this component
+ * itself does not transpose chord lines.
  */
 export function Capo(props: CapoProps): JSX.Element {
   const {
     min = CAPO_MIN,
     max = CAPO_MAX,
     step = 1,
-    resetValue = 0,
     label = 'Capo',
     formatValue = defaultFormat,
     onCapoChange,
     className,
+    bestPositions,
     // Extract the mode-specific fields so they do not leak into
     // the spread onto the wrapper div.
     value: controlledValue,
@@ -155,79 +157,94 @@ export function Capo(props: CapoProps): JSX.Element {
     [clamp, sourceMode, source, onSourceChange, onCapoChange, onChange],
   );
 
-  const handleDecrement = useCallback(() => emit(rawValue - step), [emit, rawValue, step]);
-  const handleIncrement = useCallback(() => emit(rawValue + step), [emit, rawValue, step]);
-
-  const clampedResetValue = useMemo(
-    () => clampValue(resetValue, min, max),
-    [resetValue, min, max],
-  );
-
-  const handleReset = useCallback(() => {
-    // Reset routes through `emit` so source-pair mode rewrites
-    // the directive (typically removing it when reset==0) and
-    // controlled mode just fires `onChange` with the bounded
-    // reset value.
-    emit(clampedResetValue);
-  }, [emit, clampedResetValue]);
-
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>): void => {
-      switch (event.key) {
-        case '+':
-        case '=':
-          event.preventDefault();
-          handleIncrement();
-          break;
-        case '-':
-        case '_':
-          event.preventDefault();
-          handleDecrement();
-          break;
-        case '0':
-          if (rawValue !== clampedResetValue) {
-            event.preventDefault();
-            handleReset();
-          }
-          break;
-        default:
-          break;
-      }
+  const handleSliderChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>): void => {
+      // The native range input clamps on its own, but parse +
+      // re-clamp anyway so a programmatic `event.target.value`
+      // outside `min..=max` (e.g. driven by automation in tests)
+      // still lands inside the contract.
+      const parsed = Number.parseInt(event.target.value, 10);
+      if (Number.isNaN(parsed)) return;
+      emit(parsed);
     },
-    [handleIncrement, handleDecrement, handleReset, rawValue, clampedResetValue],
+    [emit],
   );
 
-  const decrementDisabled = rawValue <= min;
-  const incrementDisabled = rawValue >= max;
+  // Build the ★ marker positions. We keep only entries that fall
+  // inside `min..=max` so a host that narrowed the range does not
+  // see stranded markers outside the slider track. Empty list →
+  // no markers rendered.
+  const markers = useMemo(() => {
+    if (!bestPositions || bestPositions.length === 0) return [] as number[];
+    const seen = new Set<number>();
+    const result: number[] = [];
+    for (const pos of bestPositions) {
+      if (pos < min || pos > max) continue;
+      if (seen.has(pos)) continue;
+      seen.add(pos);
+      result.push(pos);
+    }
+    return result.sort((a, b) => a - b);
+  }, [bestPositions, min, max]);
+
+  const markerDescriptionId = useMemo(
+    () => (markers.length > 0 ? `chordsketch-capo-best-${Math.random().toString(36).slice(2, 9)}` : undefined),
+    [markers.length],
+  );
+
+  const range = max - min;
+  const ariaLabel =
+    typeof divProps['aria-label'] === 'string'
+      ? divProps['aria-label']
+      : typeof label === 'string'
+        ? label
+        : 'Capo';
 
   return (
     <div
       {...divProps}
       role="group"
-      aria-label={
-        typeof divProps['aria-label'] === 'string'
-          ? divProps['aria-label']
-          : typeof label === 'string'
-            ? label
-            : 'Capo'
-      }
+      aria-label={ariaLabel}
       className={['chordsketch-capo', className].filter(Boolean).join(' ')}
-      onKeyDown={handleKeyDown}
     >
       {label !== null ? (
         <span className="chordsketch-capo__label" aria-hidden="true">
           {label}
         </span>
       ) : null}
-      <button
-        type="button"
-        onClick={handleDecrement}
-        disabled={decrementDisabled}
-        aria-label={step === 1 ? 'Capo down one fret' : `Capo down ${step} frets`}
-        className="chordsketch-capo__button chordsketch-capo__button--decrement"
-      >
-        −
-      </button>
+      <div className="chordsketch-capo__slider-wrap">
+        <input
+          type="range"
+          className="chordsketch-capo__slider"
+          min={min}
+          max={max}
+          step={step}
+          value={rawValue}
+          onChange={handleSliderChange}
+          aria-label={ariaLabel}
+          aria-describedby={markerDescriptionId}
+        />
+        {markers.length > 0 && range > 0 ? (
+          <div className="chordsketch-capo__markers" aria-hidden="true">
+            {markers.map((pos) => {
+              // Position the ★ proportionally over the slider
+              // track. `left: 0%` aligns with `min`, `100%`
+              // aligns with `max`.
+              const percent = ((pos - min) / range) * 100;
+              return (
+                <span
+                  key={pos}
+                  className="chordsketch-capo__marker"
+                  style={{ left: `${percent}%` }}
+                  data-best-capo={pos}
+                >
+                  ★
+                </span>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
       <output
         className="chordsketch-capo__value"
         aria-live="polite"
@@ -235,28 +252,11 @@ export function Capo(props: CapoProps): JSX.Element {
       >
         {formatValue(rawValue)}
       </output>
-      <button
-        type="button"
-        onClick={handleIncrement}
-        disabled={incrementDisabled}
-        aria-label={step === 1 ? 'Capo up one fret' : `Capo up ${step} frets`}
-        className="chordsketch-capo__button chordsketch-capo__button--increment"
-      >
-        +
-      </button>
-      {rawValue !== clampedResetValue ? (
-        <button
-          type="button"
-          onClick={handleReset}
-          aria-label={
-            clampedResetValue === 0
-              ? 'Reset capo to zero'
-              : `Reset capo to ${clampedResetValue}`
-          }
-          className="chordsketch-capo__button chordsketch-capo__button--reset"
-        >
-          Reset
-        </button>
+      {markerDescriptionId ? (
+        <span id={markerDescriptionId} className="chordsketch-capo__sr-only">
+          ★ marks the easiest capo position{markers.length === 1 ? '' : 's'} —
+          chord roots use the fewest accidentals there.
+        </span>
       ) : null}
     </div>
   );

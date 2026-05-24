@@ -122,7 +122,7 @@ describe('<ChordProPreview>', () => {
     expect(select.value).toBe('pdf');
   });
 
-  test('uncontrolled transpose: button clicks fire internal updates', () => {
+  test('uncontrolled transpose: slider changes fire internal updates', () => {
     render(
       <ChordProPreview
         source="src"
@@ -130,8 +130,8 @@ describe('<ChordProPreview>', () => {
         wasmLoader={makeLoader(makeStub())}
       />,
     );
-    const up = screen.getByLabelText('Transpose up one semitone');
-    fireEvent.click(up);
+    const slider = screen.getByRole('slider', { name: 'Transpose' });
+    fireEvent.change(slider, { target: { value: '1' } });
     // The Transpose readout displays the current value; the
     // component should now show +1.
     const output = screen.getByRole('status');
@@ -155,8 +155,8 @@ describe('<ChordProPreview>', () => {
       );
     }
     render(<Controlled />);
-    const up = screen.getByLabelText('Transpose up one semitone');
-    fireEvent.click(up);
+    const slider = screen.getByRole('slider', { name: 'Transpose' });
+    fireEvent.change(slider, { target: { value: '1' } });
     expect(onTransposeChange).toHaveBeenCalledWith(1);
   });
 
@@ -173,7 +173,7 @@ describe('<ChordProPreview>', () => {
     ).toBeTruthy();
   });
 
-  test('transposeMin / transposeMax bound the transpose buttons', () => {
+  test('transposeMin / transposeMax bound the transpose slider', () => {
     function Controlled() {
       const [t, setT] = useState(0);
       return (
@@ -188,15 +188,14 @@ describe('<ChordProPreview>', () => {
       );
     }
     render(<Controlled />);
-    const up = screen.getByLabelText('Transpose up one semitone') as HTMLButtonElement;
-    // Click up six times — the last three should be no-ops because the
-    // bound clamps at +3.
-    for (let i = 0; i < 6; i++) fireEvent.click(up);
+    const slider = screen.getByRole('slider', { name: 'Transpose' }) as HTMLInputElement;
+    expect(slider.min).toBe('-3');
+    expect(slider.max).toBe('3');
+    // A programmatic value beyond max clamps to max.
+    fireEvent.change(slider, { target: { value: '9' } });
     const output = screen.getByRole('status');
     expect(output.textContent).toContain('+3');
-    // The up button is disabled at the boundary (incrementDisabled
-    // path in `<Transpose>`).
-    expect(up.disabled).toBe(true);
+    expect(slider.value).toBe('3');
   });
 
   test('format outside `formats` falls back to the first allowed format and warns in dev', () => {
@@ -272,10 +271,11 @@ describe('<ChordProPreview>', () => {
       // would render the button disabled at 0 (since 0 >= 5 would
       // be true under the un-swapped check? actually 0 < 5 means it
       // would stay enabled — pivot to the down direction).
-      // Assert at least one of the buttons is actionable by
-      // clicking the down button and checking the readout drops.
-      const down = screen.getByLabelText('Transpose down one semitone');
-      fireEvent.click(down);
+      // Assert the slider is actionable: dragging the slider
+      // down should drop the readout to -1, confirming the
+      // swapped bounds did not pin the value at 0.
+      const slider = screen.getByRole('slider', { name: 'Transpose' });
+      fireEvent.change(slider, { target: { value: '-1' } });
       const output = screen.getByRole('status');
       expect(output.textContent).toContain('-1');
     } finally {
@@ -427,7 +427,7 @@ describe('<ChordProPreview>', () => {
     expect(screen.getByRole('group', { name: 'Transpose' })).toBeTruthy();
   });
 
-  test('performance toolbar transpose +/− routes through onTransposeChange', () => {
+  test('performance toolbar transpose slider routes through onTransposeChange', () => {
     const onTransposeChange = vi.fn();
     render(
       <ChordProPreview
@@ -440,8 +440,9 @@ describe('<ChordProPreview>', () => {
         wasmLoader={makeLoader(makeStub())}
       />,
     );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Transpose up one semitone' }),
+    fireEvent.change(
+      screen.getByRole('slider', { name: 'Transpose' }),
+      { target: { value: '1' } },
     );
     expect(onTransposeChange).toHaveBeenCalledWith(1);
   });

@@ -103,8 +103,17 @@ fn render_song_impl(
     // The base config transpose is already folded into cli_transpose by the caller.
     let song_transpose_delta = Config::song_transpose_delta(&song_overrides);
     let mut output = Vec::new();
-    let (combined_transpose, _) =
-        chordsketch_chordpro::transpose::combine_transpose(cli_transpose, song_transpose_delta);
+    // ADR-0023: capo subtracts from the effective transpose so the
+    // displayed chord names match the shapes a guitarist holds at fret N.
+    let song_capo = match song.metadata.capo_validated() {
+        chordsketch_chordpro::ast::CapoValidation::Valid(n) => n,
+        _ => 0,
+    };
+    let (combined_transpose, _) = chordsketch_chordpro::transpose::effective_transpose(
+        cli_transpose,
+        song_transpose_delta,
+        song_capo,
+    );
     let mut transpose_offset: i8 = combined_transpose;
     // Stores the AST lines of the most recently defined chorus body.
     // Re-rendered at recall time so the current transpose offset is applied.
@@ -291,16 +300,18 @@ fn render_song_impl(
                             }
                         },
                     };
-                    let (combined, saturated) = chordsketch_chordpro::transpose::combine_transpose(
-                        file_offset,
-                        cli_transpose,
-                    );
+                    let (combined, saturated) =
+                        chordsketch_chordpro::transpose::effective_transpose(
+                            file_offset,
+                            cli_transpose,
+                            song_capo,
+                        );
                     if saturated {
                         push_warning(
                             warnings,
                             format!(
-                                "transpose offset {file_offset} + {cli_transpose} \
-                                 exceeds i8 range, clamped to {combined}"
+                                "transpose offset {file_offset} + {cli_transpose} - capo \
+                                 {song_capo} exceeds i8 range, clamped to {combined}"
                             ),
                         );
                     }

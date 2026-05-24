@@ -317,10 +317,11 @@ pub(crate) fn do_parse_chordpro(
     input: &str,
     options: Option<&RenderOptions>,
 ) -> Result<ParseChordproPayload, String> {
-    use chordsketch_chordpro::ast::{DirectiveKind, Line};
+    use chordsketch_chordpro::ast::{CapoValidation, DirectiveKind, Line};
     use chordsketch_chordpro::json::ToJson;
     use chordsketch_chordpro::transpose::{
-        canonical_transposed_key, canonical_transposed_key_with_style, transposed_key_prefers_flat,
+        canonical_transposed_key, canonical_transposed_key_with_style, effective_transpose,
+        transposed_key_prefers_flat,
     };
 
     let parse_options = chordsketch_chordpro::ParseOptions::default();
@@ -329,10 +330,24 @@ pub(crate) fn do_parse_chordpro(
     // the structural recovery happens inline. Surface them to the
     // React preview as `warnings` so they ride alongside the AST
     // without aborting the render.
-    let warnings: Vec<String> = parse_result.errors.iter().map(|w| format!("{w}")).collect();
+    let mut warnings: Vec<String> = parse_result.errors.iter().map(|w| format!("{w}")).collect();
 
     let song = parse_result.song;
-    let transpose_steps = options.map(|o| o.transpose).unwrap_or(0);
+    let cli_transpose = options.map(|o| o.transpose).unwrap_or(0);
+    // ADR-0023: fold `{capo: N}` into the transpose offset so the
+    // React JSX walker (which renders from the transposed AST it
+    // receives here) agrees with the Rust renderers on what `{capo}`
+    // does to the displayed chord names.
+    let song_capo = match song.metadata.capo_validated() {
+        CapoValidation::Valid(n) => n,
+        _ => 0,
+    };
+    let (transpose_steps, saturated) = effective_transpose(cli_transpose, 0, song_capo);
+    if saturated {
+        warnings.push(format!(
+            "transpose offset {cli_transpose} - capo {song_capo} exceeds i8 range, clamped to {transpose_steps}"
+        ));
+    }
 
     // Compute the transposed `{key}` directive string for the
     // React preview's "Original Key X · Play Key Y" header.

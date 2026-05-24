@@ -611,6 +611,37 @@ pub fn combine_transpose(file_offset: i8, cli_offset: i8) -> (i8, bool) {
     (file_offset.saturating_add(cli_offset), saturated)
 }
 
+/// Compose a song's effective transpose offset from the file-level
+/// `{transpose}` value, the CLI / API transpose offset, and the song's
+/// `{capo}` value.
+///
+/// The rule is `file + cli - capo`: a capo on fret `N` lets the guitarist
+/// keep the song's sounding pitch while displaying chord names shifted
+/// down by `N` semitones (the shapes they actually hold). Capo therefore
+/// subtracts from the chord-line offset, in contrast to `{transpose}` /
+/// `--transpose` which add to it.
+///
+/// Returns `(result, saturated)` where `result` is the clamped offset and
+/// `saturated` is `true` if the exact arithmetic would have overflowed
+/// `i8`. Saturation semantics mirror [`combine_transpose`] so renderers
+/// can route through one rule without special-casing capo.
+///
+/// `capo` is the song's validated capo position in semitones (`1..=24`
+/// for an in-range `{capo}` directive, `0` for "no capo" / unset /
+/// out-of-range — call sites should derive `capo` from
+/// [`crate::ast::Metadata::capo_validated`], which already rejects
+/// values outside the guitarist-meaningful range).
+///
+/// See [`docs/adr/0023-capo-transposes-displayed-chords.md`] for the
+/// rationale.
+#[must_use]
+pub fn effective_transpose(file_offset: i8, cli_offset: i8, capo: u8) -> (i8, bool) {
+    let exact = file_offset as i16 + cli_offset as i16 - capo as i16;
+    let saturated = exact < i8::MIN as i16 || exact > i8::MAX as i16;
+    let clamped = exact.clamp(i8::MIN as i16, i8::MAX as i16) as i8;
+    (clamped, saturated)
+}
+
 // ===========================================================================
 // Tests
 // ===========================================================================
@@ -1136,6 +1167,63 @@ mod tests {
         let (result, saturated) = combine_transpose(100, 27);
         assert_eq!(result, 127);
         assert!(!saturated);
+    }
+
+    // --- effective_transpose (ADR-0023) ---
+
+    #[test]
+    fn effective_transpose_no_capo_matches_combine() {
+        // capo = 0 -> identical to combine_transpose for in-range inputs.
+        let (eff, eff_sat) = effective_transpose(2, 3, 0);
+        let (comb, comb_sat) = combine_transpose(2, 3);
+        assert_eq!(eff, comb);
+        assert_eq!(eff_sat, comb_sat);
+    }
+
+    #[test]
+    fn effective_transpose_capo_subtracts() {
+        // {capo: 2} on a song with no other transpose: the displayed
+        // chords shift down by 2 semitones (the shapes the guitarist
+        // holds with a capo on fret 2).
+        let (result, saturated) = effective_transpose(0, 0, 2);
+        assert_eq!(result, -2);
+        assert!(!saturated);
+    }
+
+    #[test]
+    fn effective_transpose_composes_with_file_and_cli() {
+        // file = +3, cli = +1, capo = 2 -> effective = 3 + 1 - 2 = 2.
+        let (result, saturated) = effective_transpose(3, 1, 2);
+        assert_eq!(result, 2);
+        assert!(!saturated);
+    }
+
+    #[test]
+    fn effective_transpose_max_capo_does_not_saturate() {
+        // capo = 24 (the upper bound of `capo_validated`'s valid
+        // range) on a zero-transpose song lands at -24, well inside
+        // i8::MIN.
+        let (result, saturated) = effective_transpose(0, 0, 24);
+        assert_eq!(result, -24);
+        assert!(!saturated);
+    }
+
+    #[test]
+    fn effective_transpose_negative_saturation() {
+        // file = i8::MIN, cli = 0, capo = 24 -> exact = -128 - 24
+        // which underflows i8 and must saturate at i8::MIN.
+        let (result, saturated) = effective_transpose(i8::MIN, 0, 24);
+        assert_eq!(result, i8::MIN);
+        assert!(saturated);
+    }
+
+    #[test]
+    fn effective_transpose_positive_saturation_via_file_cli() {
+        // file + cli > i8::MAX must saturate even before subtracting
+        // capo, mirroring combine_transpose's overflow contract.
+        let (result, saturated) = effective_transpose(100, 50, 0);
+        assert_eq!(result, 127);
+        assert!(saturated);
     }
 
     // -- transposable bracket-form defines (R6.100.0, #2302) -------------

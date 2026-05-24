@@ -1,7 +1,7 @@
 // Smoke verification that the playground's preview pane mounts the
-// performance toolbar (#2545) — Transpose / Capo / Export — and
-// that keyboard navigation moves focus across groups and the
-// disabled state at boundaries is reachable.
+// performance toolbar (#2545, #2560) — Transpose / Capo / Export
+// sliders + button — and that the slider controls drive the
+// underlying state correctly.
 //
 // Structural assertions only: this verifies the toolbar exists and
 // its accessibility wiring is in place. Pixel-level appearance is
@@ -21,50 +21,46 @@ test.describe('performance toolbar', () => {
     await expect(toolbar.getByRole('group', { name: 'Export' })).toBeVisible();
   });
 
-  test('Transpose +/- click drives the readout value', async ({ page }) => {
+  test('Transpose slider drives the readout value', async ({ page }) => {
     await page.goto('./chordpro/');
     const transposeGroup = page.getByRole('group', { name: 'Transpose' });
-    await transposeGroup.getByRole('button', { name: 'Transpose up one semitone' }).click();
+    const slider = transposeGroup.getByRole('slider', { name: 'Transpose' });
+    await slider.fill('1');
     // The Transpose `<output>` uses aria-live but stays in the DOM as
-    // the inner text of `.chordsketch-transpose__value` — assert on the
-    // visible text rather than coupling to an internal attribute.
+    // the inner text of `.chordsketch-transpose__value` — assert on
+    // the visible text rather than coupling to an internal attribute.
     await expect(transposeGroup).toContainText('+1');
   });
 
-  test('Capo +/- rewrites the {capo: N} directive in the editor source', async ({
+  test('Capo slider rewrites the {capo: N} directive in the editor source', async ({
     page,
   }) => {
     await page.goto('./chordpro/');
     const editor = page.locator('.cm-editor .cm-content');
     await expect(editor).toBeVisible();
-    // The bundled sample has no {capo} directive; clicking Capo + once
-    // inserts `{capo: 1}` after the metadata anchor. We don't pin the
-    // exact position — just assert the directive shows up.
-    await page
-      .getByRole('group', { name: 'Capo' })
-      .getByRole('button', { name: 'Capo up one fret' })
-      .click();
+    // The bundled sample has no {capo} directive; setting the slider
+    // to 1 inserts `{capo: 1}` after the metadata anchor. We don't
+    // pin the exact position — just assert the directive shows up.
+    const capoGroup = page.getByRole('group', { name: 'Capo' });
+    await capoGroup.getByRole('slider', { name: 'Capo' }).fill('1');
     await expect(editor).toContainText('{capo: 1}');
   });
 
-  test('Transpose down disables at the -11 lower bound', async ({ page }) => {
+  test('Transpose slider exposes the toolbar default ±11 range', async ({ page }) => {
     await page.goto('./chordpro/');
     const transposeGroup = page.getByRole('group', { name: 'Transpose' });
-    const down = transposeGroup.getByRole('button', { name: 'Transpose down one semitone' });
-    // Step down 11 times to hit the lower bound.
-    for (let i = 0; i < 11; i++) {
-      await down.click();
-    }
+    const slider = transposeGroup.getByRole('slider', { name: 'Transpose' });
+    await expect(slider).toHaveAttribute('min', '-11');
+    await expect(slider).toHaveAttribute('max', '11');
+    await slider.fill('-11');
     await expect(transposeGroup).toContainText('-11');
-    await expect(down).toBeDisabled();
   });
 
-  test('keyboard `+` shortcut inside a group steps the value', async ({ page }) => {
+  test('Capo slider exposes the 0..=12 range', async ({ page }) => {
     await page.goto('./chordpro/');
     const capoGroup = page.getByRole('group', { name: 'Capo' });
-    // Focus a button inside the group so the keydown reaches the wrapper.
-    await capoGroup.getByRole('button', { name: 'Capo up one fret' }).focus();
-    await page.keyboard.press('+');
-    await expect(capoGroup).toContainText('1');
+    const slider = capoGroup.getByRole('slider', { name: 'Capo' });
+    await expect(slider).toHaveAttribute('min', '0');
+    await expect(slider).toHaveAttribute('max', '12');
   });
 });

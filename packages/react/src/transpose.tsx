@@ -1,33 +1,45 @@
-import type { HTMLAttributes, KeyboardEvent } from 'react';
-import { useCallback, useMemo } from 'react';
+import type { ChangeEvent, HTMLAttributes } from 'react';
+import { useCallback } from 'react';
 
 import { clamp as clampValue } from './clamp';
-import { TRANSPOSE_MAX, TRANSPOSE_MIN } from './chord-source-edit';
+
+/**
+ * Default minimum the `<Transpose>` slider exposes when the host
+ * does not pass `min` explicitly. The `TRANSPOSE_MIN` /
+ * `TRANSPOSE_MAX` constants in `chord-source-edit.ts` are the
+ * absolute feature limits (`±11`); the slider's default render
+ * range is the narrower `±6` per #2560, since wider transposition
+ * is rarely useful in practice and the narrower scale is easier
+ * to read on a slider.
+ */
+export const TRANSPOSE_DEFAULT_MIN = -6;
+/** Default maximum the `<Transpose>` slider exposes. See {@link TRANSPOSE_DEFAULT_MIN}. */
+export const TRANSPOSE_DEFAULT_MAX = 6;
 
 /** Props accepted by {@link Transpose}. */
 export interface TransposeProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> {
   /** Current semitone offset (controlled mode). */
   value: number;
-  /** Fired when the user clicks a button or presses a keyboard shortcut. */
+  /** Fired when the slider's input value changes. */
   onChange: (next: number) => void;
-  /** Minimum offset the buttons will emit. Defaults to {@link TRANSPOSE_MIN} (`-11`). */
+  /**
+   * Minimum offset the slider will emit. Defaults to
+   * {@link TRANSPOSE_DEFAULT_MIN} (`-6`). Pass an explicit value
+   * (down to the `TRANSPOSE_MIN` floor of `-11`) to widen the
+   * range.
+   */
   min?: number;
-  /** Maximum offset the buttons will emit. Defaults to {@link TRANSPOSE_MAX} (`+11`). */
+  /**
+   * Maximum offset the slider will emit. Defaults to
+   * {@link TRANSPOSE_DEFAULT_MAX} (`+6`). Pass an explicit value
+   * (up to the `TRANSPOSE_MAX` ceiling of `+11`) to widen the
+   * range.
+   */
   max?: number;
-  /** Step size for `+` / `−` buttons. Defaults to `1`. */
+  /** Step size for the slider. Defaults to `1`. */
   step?: number;
   /**
-   * Value the reset button (and the `0` keyboard shortcut) emit.
-   * Defaults to `0` so the button returns to the identity
-   * transposition. Pair with `useTranspose({ initial: N })` by
-   * setting `resetValue={N}` — the hook's `reset()` returns to
-   * `initial`, so matching them keeps the "reset" semantics
-   * consistent across both surfaces. The reset button only
-   * renders when `value !== resetValue`.
-   */
-  resetValue?: number;
-  /**
-   * Optional label shown inline with the buttons. Defaults to
+   * Optional label shown inline with the slider. Defaults to
    * `"Transpose"`. Pass `null` to omit the visible label; the
    * component still exposes `aria-label` on the wrapper.
    */
@@ -42,10 +54,10 @@ function defaultFormat(value: number): string {
 }
 
 /**
- * Accessible transposition control: a − button, a current-value
- * readout, a + button, and a reset button (only rendered when the
- * offset is non-zero). Keyboard support on the wrapper: `+` / `=`
- * step up, `-` / `_` step down, `0` resets to zero.
+ * Accessible transposition control: a native `<input type="range">`
+ * slider with a signed current-value readout. Keyboard support
+ * comes from the native range input (Arrow keys, Home / End,
+ * PageUp / PageDown).
  *
  * The component is **controlled** — pass `value` and `onChange`.
  * Wire up `useTranspose()` next to it if you want the internal
@@ -59,10 +71,9 @@ function defaultFormat(value: number): string {
 export function Transpose({
   value,
   onChange,
-  min = TRANSPOSE_MIN,
-  max = TRANSPOSE_MAX,
+  min = TRANSPOSE_DEFAULT_MIN,
+  max = TRANSPOSE_DEFAULT_MAX,
   step = 1,
-  resetValue = 0,
   label = 'Transpose',
   formatValue = defaultFormat,
   className,
@@ -73,97 +84,44 @@ export function Transpose({
     [min, max],
   );
 
-  const handleDecrement = useCallback(() => {
-    onChange(clamp(value - step));
-  }, [onChange, clamp, value, step]);
-
-  const handleIncrement = useCallback(() => {
-    onChange(clamp(value + step));
-  }, [onChange, clamp, value, step]);
-
-  const clampedResetValue = useMemo(
-    () => clampValue(resetValue, min, max),
-    [resetValue, min, max],
-  );
-
-  const handleReset = useCallback(() => {
-    // Emit the clamped reset value so out-of-range `resetValue`
-    // props do not leak past the component boundary. The render
-    // guard (`value !== clampedResetValue`) and the reset
-    // button's `aria-label` already use the clamped value; this
-    // keeps `onChange`'s payload consistent across all three.
-    onChange(clampedResetValue);
-  }, [onChange, clampedResetValue]);
-
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>): void => {
-      // Keyboard shortcuts fire only when the wrapper or one of its
-      // descendants has focus, so they don't interfere with form
-      // fields elsewhere on the page.
-      switch (event.key) {
-        case '+':
-        case '=':
-          event.preventDefault();
-          handleIncrement();
-          break;
-        case '-':
-        case '_':
-          event.preventDefault();
-          handleDecrement();
-          break;
-        case '0':
-          if (value !== clampedResetValue) {
-            event.preventDefault();
-            handleReset();
-          }
-          break;
-        default:
-          // Let arrow keys and tab key bubble as usual — they
-          // already move focus between the individual buttons.
-          break;
-      }
+  const handleSliderChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>): void => {
+      const parsed = Number.parseInt(event.target.value, 10);
+      if (Number.isNaN(parsed)) return;
+      onChange(clamp(parsed));
     },
-    [handleIncrement, handleDecrement, handleReset, value, clampedResetValue],
+    [onChange, clamp],
   );
 
-  const decrementDisabled = value <= min;
-  const incrementDisabled = value >= max;
+  const ariaLabel =
+    typeof divProps['aria-label'] === 'string'
+      ? divProps['aria-label']
+      : typeof label === 'string'
+        ? label
+        : 'Transpose';
 
   return (
     <div
       {...divProps}
       role="group"
-      // `aria-label` has to be a string; fall back to the literal
-      // `"Transpose"` if the caller passed a ReactNode label (e.g.
-      // `<span>🎵</span>`) so the group still has an accessible
-      // name. Consumers who want a different accessible name can
-      // pass an explicit `aria-label` through divProps, which wins.
-      aria-label={
-        typeof divProps['aria-label'] === 'string'
-          ? divProps['aria-label']
-          : typeof label === 'string'
-            ? label
-            : 'Transpose'
-      }
+      aria-label={ariaLabel}
       className={['chordsketch-transpose', className].filter(Boolean).join(' ')}
-      onKeyDown={handleKeyDown}
     >
       {label !== null ? (
         <span className="chordsketch-transpose__label" aria-hidden="true">
           {label}
         </span>
       ) : null}
-      <button
-        type="button"
-        onClick={handleDecrement}
-        disabled={decrementDisabled}
-        aria-label={
-          step === 1 ? 'Transpose down one semitone' : `Transpose down ${step} semitones`
-        }
-        className="chordsketch-transpose__button chordsketch-transpose__button--decrement"
-      >
-        −
-      </button>
+      <input
+        type="range"
+        className="chordsketch-transpose__slider"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={handleSliderChange}
+        aria-label={ariaLabel}
+      />
       <output
         className="chordsketch-transpose__value"
         aria-live="polite"
@@ -171,31 +129,6 @@ export function Transpose({
       >
         {formatValue(value)}
       </output>
-      <button
-        type="button"
-        onClick={handleIncrement}
-        disabled={incrementDisabled}
-        aria-label={
-          step === 1 ? 'Transpose up one semitone' : `Transpose up ${step} semitones`
-        }
-        className="chordsketch-transpose__button chordsketch-transpose__button--increment"
-      >
-        +
-      </button>
-      {value !== clampedResetValue ? (
-        <button
-          type="button"
-          onClick={handleReset}
-          aria-label={
-            clampedResetValue === 0
-              ? 'Reset transposition to zero'
-              : `Reset transposition to ${clampedResetValue}`
-          }
-          className="chordsketch-transpose__button chordsketch-transpose__button--reset"
-        >
-          Reset
-        </button>
-      ) : null}
     </div>
   );
 }

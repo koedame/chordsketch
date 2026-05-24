@@ -166,25 +166,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-.chordsketch-transpose__button {
-  min-width: 2rem;
-  padding: 0.25rem 0.5rem;
-  font: inherit;
+.chordsketch-transpose__slider {
+  width: 8rem;
+  vertical-align: middle;
   cursor: pointer;
-  background: transparent;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  color: inherit;
-}
-
-.chordsketch-transpose__button:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
-}
-
-.chordsketch-transpose__button:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 2px;
 }
 
 .chordsketch-capo {
@@ -205,25 +190,44 @@
   font-variant-numeric: tabular-nums;
 }
 
-.chordsketch-capo__button {
-  min-width: 2rem;
-  padding: 0.25rem 0.5rem;
-  font: inherit;
+.chordsketch-capo__slider-wrap {
+  position: relative;
+  display: inline-block;
+  width: 8rem;
+}
+
+.chordsketch-capo__slider {
+  width: 100%;
+  vertical-align: middle;
   cursor: pointer;
-  background: transparent;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  color: inherit;
 }
 
-.chordsketch-capo__button:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
+.chordsketch-capo__markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
-.chordsketch-capo__button:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 2px;
+.chordsketch-capo__marker {
+  position: absolute;
+  top: -0.9em;
+  transform: translateX(-50%);
+  font-size: 0.85em;
+  line-height: 1;
+  color: currentColor;
+  opacity: 0.8;
+}
+
+.chordsketch-capo__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 /* Performance toolbar — Transpose / Capo / Export. Hosts that

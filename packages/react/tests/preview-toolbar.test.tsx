@@ -159,33 +159,21 @@ describe('<PreviewToolbar>', () => {
     expect(screen.getByRole('group', { name: 'Capo' })).toBeTruthy();
   });
 
-  test('Transpose button disables at min/max boundaries', () => {
-    const onTranspose = vi.fn();
-    const { rerender } = render(
+  test('Transpose slider reflects the host value and renders the toolbar default ±11 range', () => {
+    render(
       <PreviewToolbar
         source={SAMPLE}
         onSourceChange={vi.fn()}
-        transpose={-11}
-        onTransposeChange={onTranspose}
+        transpose={-6}
+        onTransposeChange={vi.fn()}
       />,
     );
-    expect(
-      (screen.getByRole('button', { name: 'Transpose down one semitone' }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true);
-
-    rerender(
-      <PreviewToolbar
-        source={SAMPLE}
-        onSourceChange={vi.fn()}
-        transpose={11}
-        onTransposeChange={onTranspose}
-      />,
-    );
-    expect(
-      (screen.getByRole('button', { name: 'Transpose up one semitone' }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true);
+    const slider = screen.getByRole('slider', { name: 'Transpose' }) as HTMLInputElement;
+    expect(slider.value).toBe('-6');
+    // PreviewToolbar passes TRANSPOSE_MIN/MAX (±11) to <Transpose>
+    // so the host's wider range survives the slider default of ±6.
+    expect(slider.min).toBe('-11');
+    expect(slider.max).toBe('11');
   });
 
   test('Capo group writes {capo} into source via onSourceChange', () => {
@@ -198,7 +186,8 @@ describe('<PreviewToolbar>', () => {
         onTransposeChange={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Capo up one fret' }));
+    const capoSlider = screen.getByRole('slider', { name: 'Capo' }) as HTMLInputElement;
+    fireEvent.change(capoSlider, { target: { value: '1' } });
     expect(onSourceChange).toHaveBeenCalledWith(
       '{title: Demo}\n{key: G}\n{capo: 1}\n[C]Hello',
     );
