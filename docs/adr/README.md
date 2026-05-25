@@ -90,10 +90,10 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0010](0010-image-path-resolution-stays-strict.md) | Image path resolution stays strict (declines R6.100 `~` and folder-next-to-song) | Accepted (2026-04-28) |
 | [0011](0011-html-styles-stay-inline.md) | HTML styles stay inline-per-element (declines R6.100 `default/screen/print` + `html.style.embed`) | Accepted (2026-04-28) |
 | [0012](0012-macports-portfile-cargo-crates-tag-relative.md) | MacPorts Portfile cargo.crates is tag-relative, not HEAD-relative | Accepted (2026-04-29) |
-| [0013](0013-conditional-bot-driven-merge.md) | Bot-driven merge is allowed under explicit session permission | Accepted (2026-04-29; condition 4 updated by ADR-0015; clause 1 extended for Dependabot patch/minor by ADR-0024) |
+| [0013](0013-conditional-bot-driven-merge.md) | Bot-driven merge is allowed under explicit session permission | Accepted (2026-04-29; condition 4 updated by ADR-0015; clause 1 extended for unattended Dependabot merge by ADR-0024) |
 | [0014](0014-bravura-glyphs-as-svg-paths.md) | Bravura SMuFL glyphs ship as inline SVG paths, not as a bundled font | Accepted (2026-05-01) |
 | [0015](0015-disable-github-merge-queue.md) | Disable GitHub Merge Queue (supersedes ADR-0003) | Accepted (2026-05-03) |
-| [0016](0016-dependabot-review-skill.md) | Dependabot review moves from a CI bot to a session skill; major bumps are no longer suppressed | Accepted (2026-05-03; unattended patch/minor merge added by ADR-0024) |
+| [0016](0016-dependabot-review-skill.md) | Dependabot review moves from a CI bot to a session skill; major bumps are no longer suppressed | Accepted (2026-05-03; unattended scheduled run added by ADR-0024) |
 | [0017](0017-react-renders-from-ast.md) | React surface renders from AST; Rust HTML renderer demoted to static-output | Accepted (2026-05-10; consumer classification partially updated by ADR-0022) |
 | [0018](0018-phase-based-shell-orchestrated-workflows.md) | Phase-based shell-orchestrated workflows (declines cc-wf-studio / n8n / Agent SDK as substitutes) | Accepted (2026-05-16) |
 | [0019](0019-batch-mode-autopilot-issue.md) | Batch-mode autopilot-issue workflow (one PR aggregates multiple eligible issues per round) | Accepted (2026-05-17) |
@@ -101,4 +101,4 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0021](0021-docs-site-co-located-with-playground.md) | Docs site is co-located with the playground (option (a), not Docusaurus / VitePress / subdomain) | Accepted (2026-05-19) |
 | [0022](0022-react-as-canonical-preview-surface.md) | React as the canonical preview surface; `@chordsketch/ui-web` retired | Accepted (2026-05-20) |
 | [0023](0023-capo-transposes-displayed-chords.md) | `{capo}` directive transposes displayed chords | Accepted (2026-05-24) |
-| [0024](0024-scheduled-dependabot-merge.md) | Scheduled unattended Dependabot merge for patch/minor bumps (extends ADR-0013 clause 1) | Accepted (2026-05-25) |
+| [0024](0024-scheduled-dependabot-merge.md) | Scheduled unattended Dependabot review-and-merge, all bump types (extends ADR-0013 clause 1) | Accepted (2026-05-25) |

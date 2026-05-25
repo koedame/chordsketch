@@ -112,35 +112,37 @@ why condition (4) is a direct squash and not a merge-queue enqueue.
 If any of (1)–(4) is not satisfied, post the "Ready for merge"
 comment and wait for the human merger.
 
-### Scheduled unattended Dependabot merge (ADR-0024)
+### Scheduled unattended Dependabot review-and-merge (ADR-0024)
 
 Clause 1 above ("explicit, current-session permission") is extended —
-**for Dependabot patch/minor bumps only** — by
+**for Dependabot PRs** — by
 [ADR-0024](../../docs/adr/0024-scheduled-dependabot-merge.md). A
-scheduled, maintainer-operated automation MAY squash-merge such a PR
-without a per-session human invocation when **all** of the following
-hold:
+scheduled, maintainer-operated automation MAY run the
+`/dependabot-review`-equivalent flow (audit, apply required code-side
+adaptation, squash-merge) without a per-session human invocation, for
+any bump type (patch, minor, or major), when **all** of the following
+hold for a PR:
 
-1. **Author is `dependabot[bot]`** and the bump is **patch or minor**
-   (never major — majors are commented and left for a human, preserving
-   ADR-0016's release-note-reading gate).
-2. **An automated audit returns `SAFE`** — diff confined to the
-   manifest/lockfile (cargo) or a single workflow `uses:` line
-   (github-actions), no GitHub Advisory Database hit against the new
-   version, and release notes between old and new showing no breaking or
-   undocumented behavioural change.
-3. **Full check rollup green** (clause 2 above, unchanged — required AND
-   non-required).
+1. **Author is `dependabot[bot]`.**
+2. **The audit clears the PR** with a `SAFE` verdict (no change needed)
+   or a `FIXED` verdict (the automation applied the required code-side
+   adaptation as commits on the Dependabot branch). The audit covers
+   diff sanity, GitHub Advisory Database exposure, and release notes
+   across every version between old and new.
+3. **Full check rollup green** on the final commit (clause 2 above,
+   unchanged — required AND non-required; for a `FIXED` PR, the rollup
+   *after* the adaptation commits).
 4. **Direct squash** (clause 4 above, unchanged).
-5. **The audit posts its verdict as a PR comment before merging.** A
-   PR that does not clear the audit (`BLOCKED` / `NEEDS_REVIEW`) is
-   commented and left open for a human; it is never merged unattended.
+5. **The audit posts its verdict as a PR comment before merging.** A PR
+   the audit cannot clear (`BLOCKED` / `NEEDS_REVIEW`) is commented and
+   left open for a human; it is never merged unattended.
 
-For this narrow class, the scheduled automation's configured run is the
-maintainer's standing authorization and replaces clause 1's per-session
-keystroke. This carve-out applies to nothing else: every non-Dependabot
-bot-initiated merge, and every Dependabot **major** bump, still requires
-explicit current-session permission per clause 1.
+The semver level is not part of the gate — majors are handled the same
+way the attended skill handles them (read release notes, adapt the code,
+let the full matrix validate). The scheduled run is the maintainer's
+standing authorization and replaces clause 1's per-session keystroke for
+Dependabot PRs. Every **non-Dependabot** bot-initiated merge still
+requires explicit current-session permission per clause 1.
 
 #### Historical rationale (superseded)
 
