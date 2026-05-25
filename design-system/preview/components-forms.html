@@ -140,28 +140,36 @@ a { color: inherit; }
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
+  /* box-sizing: border-box keeps the thumb at 16×16px with `border: 0`
+     so that the inset box-shadow ring does not expand the outer box to
+     20×20 (the content-box default). The production styles.css uses the
+     same approach and documents the alignment reason in a comment. */
+  box-sizing: border-box;
   width: 16px; height: 16px;
   border-radius: var(--r-full);
   background: var(--crimson-500);
-  border: 2px solid var(--ink-0);
-  box-shadow: var(--e-1);
+  border: 0;
+  box-shadow: inset 0 0 0 2px var(--ink-0), var(--e-1);
   margin-top: -6px;            /* (4 - 16) / 2 to centre on the track */
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .slider::-moz-range-thumb {
+  box-sizing: border-box;
   width: 16px; height: 16px;
   border-radius: var(--r-full);
   background: var(--crimson-500);
-  border: 2px solid var(--ink-0);
-  box-shadow: var(--e-1);
+  border: 0;
+  box-shadow: inset 0 0 0 2px var(--ink-0), var(--e-1);
   transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .slider:hover::-webkit-slider-thumb { background: var(--crimson-600); }
 .slider:hover::-moz-range-thumb { background: var(--crimson-600); }
 .slider:active::-webkit-slider-thumb { transform: scale(1.08); }
 .slider:active::-moz-range-thumb { transform: scale(1.08); }
-.slider:focus-visible::-webkit-slider-thumb { box-shadow: var(--focus-ring); }
-.slider:focus-visible::-moz-range-thumb { box-shadow: var(--focus-ring); }
+/* Preserve the inset white ring when focus-visible is active so it
+   is not lost under the focus ring (matches styles.css behaviour). */
+.slider:focus-visible::-webkit-slider-thumb { box-shadow: inset 0 0 0 2px var(--ink-0), var(--focus-ring); }
+.slider:focus-visible::-moz-range-thumb { box-shadow: inset 0 0 0 2px var(--ink-0), var(--focus-ring); }
 .slider:disabled { cursor: not-allowed; opacity: 0.5; }
 
 /* Slider track wrapper — flexes to fill the available width
