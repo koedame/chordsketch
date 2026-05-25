@@ -2,14 +2,13 @@ import type { HTMLAttributes, ReactNode } from 'react';
 
 import { Capo } from './capo';
 import { PDF_EXPORT_DEFAULT_LABEL, PdfExport } from './pdf-export';
-import { Transpose } from './transpose';
-import type { WasmLoader } from './use-pdf-export';
 import {
-  CAPO_MAX,
-  CAPO_MIN,
-  TRANSPOSE_MAX,
-  TRANSPOSE_MIN,
-} from './chord-source-edit';
+  TRANSPOSE_DEFAULT_MAX,
+  TRANSPOSE_DEFAULT_MIN,
+  Transpose,
+} from './transpose';
+import type { WasmLoader } from './use-pdf-export';
+import { CAPO_MAX, CAPO_MIN } from './chord-source-edit';
 
 /** Props accepted by {@link PreviewToolbar}. */
 export interface PreviewToolbarProps
@@ -27,9 +26,14 @@ export interface PreviewToolbarProps
   transpose: number;
   /** Fires when the user clicks the Transpose +/− / Reset buttons. */
   onTransposeChange: (next: number) => void;
-  /** Minimum transpose offset. Defaults to {@link TRANSPOSE_MIN} (`-11`). */
+  /**
+   * Minimum transpose offset. Defaults to
+   * {@link TRANSPOSE_DEFAULT_MIN} (`-6`) — the same default the
+   * standalone `<Transpose>` slider uses. Hosts that need the
+   * wider feature range (`±11`) pass it explicitly.
+   */
   transposeMin?: number;
-  /** Maximum transpose offset. Defaults to {@link TRANSPOSE_MAX} (`11`). */
+  /** Maximum transpose offset. Defaults to {@link TRANSPOSE_DEFAULT_MAX} (`+6`). */
   transposeMax?: number;
   /** Minimum capo position. Defaults to {@link CAPO_MIN} (`0`). */
   capoMin?: number;
@@ -111,8 +115,8 @@ export function PreviewToolbar({
   onSourceChange,
   transpose,
   onTransposeChange,
-  transposeMin = TRANSPOSE_MIN,
-  transposeMax = TRANSPOSE_MAX,
+  transposeMin = TRANSPOSE_DEFAULT_MIN,
+  transposeMax = TRANSPOSE_DEFAULT_MAX,
   capoMin = CAPO_MIN,
   capoMax = CAPO_MAX,
   showTranspose = true,
@@ -162,6 +166,11 @@ export function PreviewToolbar({
           min={capoMin}
           max={capoMax}
           label="Capo"
+          /* Thread the active transpose offset through so the
+             ★ best-capo markers shift with the host's
+             `<Transpose>` slider — best-capo recommendations
+             are computed against the *transposed* chord roots. */
+          transpose={transpose}
         />
       ) : null}
       {showExport ? (

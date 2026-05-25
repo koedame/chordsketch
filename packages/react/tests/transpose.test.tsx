@@ -3,6 +3,18 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { Transpose, useTranspose } from '../src/index';
 
+function getSlider(): HTMLInputElement {
+  return screen.getByRole('slider', { name: 'Transpose' }) as HTMLInputElement;
+}
+
+// The tick rail renders the same numerals (e.g. `0`, `+3`) as the
+// readout, so plain text queries match more than once. Target the
+// `<output>` element directly when asserting on the displayed value.
+function getReadoutText(): string {
+  const out = document.querySelector('.chordsketch-transpose__value');
+  return out?.textContent ?? '';
+}
+
 describe('useTranspose', () => {
   test('initial defaults to 0', () => {
     const { result } = renderHook(() => useTranspose());
@@ -64,120 +76,51 @@ describe('useTranspose', () => {
 });
 
 describe('<Transpose>', () => {
-  test('renders current value with a + sign for positive values', () => {
+  test('renders the controlled value as a range slider with default ±6 bounds', () => {
     render(<Transpose value={3} onChange={vi.fn()} />);
     expect(screen.getByRole('group', { name: 'Transpose' })).toBeTruthy();
-    expect(screen.getByText('+3')).toBeTruthy();
+    const slider = getSlider();
+    expect(slider.type).toBe('range');
+    expect(slider.min).toBe('-6');
+    expect(slider.max).toBe('6');
+    expect(slider.value).toBe('3');
+  });
+
+  test('renders the readout with a + sign for positive values', () => {
+    render(<Transpose value={3} onChange={vi.fn()} />);
+    expect(getReadoutText()).toBe('+3');
   });
 
   test('renders without a + for zero and a − for negatives', () => {
     const { rerender } = render(<Transpose value={0} onChange={vi.fn()} />);
-    expect(screen.getByText('0')).toBeTruthy();
+    expect(getReadoutText()).toBe('0');
     rerender(<Transpose value={-2} onChange={vi.fn()} />);
-    expect(screen.getByText('-2')).toBeTruthy();
+    expect(getReadoutText()).toBe('-2');
   });
 
-  test('clicking + / − fires onChange with the clamped next value', () => {
-    const onChange = vi.fn();
-    render(<Transpose value={10} onChange={onChange} max={11} min={-11} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Transpose up one semitone' }));
-    expect(onChange).toHaveBeenLastCalledWith(11);
-    fireEvent.click(screen.getByRole('button', { name: 'Transpose down one semitone' }));
-    expect(onChange).toHaveBeenLastCalledWith(9);
-  });
-
-  test('increment button is disabled at max, decrement button disabled at min', () => {
-    const { rerender } = render(<Transpose value={11} onChange={vi.fn()} max={11} min={-11} />);
-    const upButton = screen.getByRole('button', { name: 'Transpose up one semitone' });
-    expect(upButton.hasAttribute('disabled')).toBe(true);
-    rerender(<Transpose value={-11} onChange={vi.fn()} max={11} min={-11} />);
-    const downButton = screen.getByRole('button', { name: 'Transpose down one semitone' });
-    expect(downButton.hasAttribute('disabled')).toBe(true);
-  });
-
-  test('reset button appears only when value is non-zero', () => {
-    const { rerender } = render(<Transpose value={0} onChange={vi.fn()} />);
-    expect(screen.queryByRole('button', { name: 'Reset transposition to zero' })).toBeNull();
-    rerender(<Transpose value={3} onChange={vi.fn()} />);
-    const reset = screen.getByRole('button', { name: 'Reset transposition to zero' });
-    expect(reset).toBeTruthy();
-  });
-
-  test('reset button click fires onChange with 0', () => {
-    const onChange = vi.fn();
-    render(<Transpose value={3} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Reset transposition to zero' }));
-    expect(onChange).toHaveBeenCalledWith(0);
-  });
-
-  test('resetValue prop emits that value on reset click and updates aria-label', () => {
-    const onChange = vi.fn();
-    render(<Transpose value={3} onChange={onChange} resetValue={2} />);
-    const resetButton = screen.getByRole('button', { name: 'Reset transposition to 2' });
-    fireEvent.click(resetButton);
-    expect(onChange).toHaveBeenCalledWith(2);
-  });
-
-  test('out-of-range resetValue is clamped to [min, max] before onChange fires', () => {
-    const onChange = vi.fn();
-    render(
-      <Transpose
-        value={3}
-        onChange={onChange}
-        resetValue={15}
-        min={-11}
-        max={11}
-      />,
-    );
-    // The button advertises the clamped value (11) so the
-    // on-click payload must match — otherwise the label lies
-    // about what clicking does. Regression guard for #2172.
-    const resetButton = screen.getByRole('button', { name: 'Reset transposition to 11' });
-    fireEvent.click(resetButton);
-    expect(onChange).toHaveBeenCalledWith(11);
-  });
-
-  test('reset button is hidden when value equals resetValue (not just zero)', () => {
-    const { rerender } = render(<Transpose value={2} onChange={vi.fn()} resetValue={2} />);
-    expect(screen.queryByRole('button', { name: /Reset transposition/ })).toBeNull();
-    rerender(<Transpose value={3} onChange={vi.fn()} resetValue={2} />);
-    expect(screen.getByRole('button', { name: 'Reset transposition to 2' })).toBeTruthy();
-  });
-
-  test('keyboard 0 emits resetValue when set, and is a no-op at resetValue', () => {
-    const onChange = vi.fn();
-    const { rerender } = render(
-      <Transpose value={3} onChange={onChange} resetValue={2} />,
-    );
-    fireEvent.keyDown(screen.getByRole('group'), { key: '0' });
-    expect(onChange).toHaveBeenLastCalledWith(2);
-    onChange.mockClear();
-    rerender(<Transpose value={2} onChange={onChange} resetValue={2} />);
-    fireEvent.keyDown(screen.getByRole('group'), { key: '0' });
-    expect(onChange).not.toHaveBeenCalled();
-  });
-
-  test('keyboard shortcuts: + / - / 0 fire onChange', () => {
-    const onChange = vi.fn();
-    render(<Transpose value={2} onChange={onChange} />);
-    const group = screen.getByRole('group');
-    fireEvent.keyDown(group, { key: '+' });
-    expect(onChange).toHaveBeenLastCalledWith(3);
-    fireEvent.keyDown(group, { key: '-' });
-    expect(onChange).toHaveBeenLastCalledWith(1);
-    fireEvent.keyDown(group, { key: '0' });
-    expect(onChange).toHaveBeenLastCalledWith(0);
-    // Unrelated keys do not fire onChange.
-    onChange.mockClear();
-    fireEvent.keyDown(group, { key: 'a' });
-    expect(onChange).not.toHaveBeenCalled();
-  });
-
-  test('keyboard 0 on a zero-value input is a no-op (does not spuriously fire onChange)', () => {
+  test('changing the slider emits the parsed value', () => {
     const onChange = vi.fn();
     render(<Transpose value={0} onChange={onChange} />);
-    fireEvent.keyDown(screen.getByRole('group'), { key: '0' });
-    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.change(getSlider(), { target: { value: '4' } });
+    expect(onChange).toHaveBeenLastCalledWith(4);
+    fireEvent.change(getSlider(), { target: { value: '-3' } });
+    expect(onChange).toHaveBeenLastCalledWith(-3);
+  });
+
+  test('clamps programmatic values outside min/max to the bound', () => {
+    const onChange = vi.fn();
+    render(<Transpose value={0} onChange={onChange} />);
+    fireEvent.change(getSlider(), { target: { value: '99' } });
+    expect(onChange).toHaveBeenLastCalledWith(6);
+    fireEvent.change(getSlider(), { target: { value: '-99' } });
+    expect(onChange).toHaveBeenLastCalledWith(-6);
+  });
+
+  test('explicit min/max props widen past the default ±6 cap', () => {
+    render(<Transpose value={0} onChange={vi.fn()} min={-11} max={11} />);
+    const slider = getSlider();
+    expect(slider.min).toBe('-11');
+    expect(slider.max).toBe('11');
   });
 
   test('forwards unknown props to the wrapper div', () => {
@@ -195,12 +138,15 @@ describe('<Transpose>', () => {
         formatValue={(v) => `${v} st`}
       />,
     );
-    expect(screen.getByText('2 st')).toBeTruthy();
+    expect(getReadoutText()).toBe('2 st');
   });
 
-  test('aria-labels reflect the actual step size when step != 1', () => {
-    render(<Transpose value={0} onChange={vi.fn()} step={2} />);
-    expect(screen.getByRole('button', { name: 'Transpose up 2 semitones' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Transpose down 2 semitones' })).toBeTruthy();
+  test('clamps an out-of-range value prop in the readout (display path)', () => {
+    // Host passes `value=15` with default `max=6`: the native
+    // range input clamps the thumb to `+6` visually, but the
+    // `<output>` would otherwise show `+15` and disagree with
+    // the thumb. Pin the render-time clamp.
+    render(<Transpose value={15} onChange={vi.fn()} />);
+    expect(getReadoutText()).toBe('+6');
   });
 });

@@ -410,18 +410,19 @@ fn main() -> ExitCode {
         } else {
             config_transpose_f64 as i8
         };
-    let (effective_transpose, saturated) =
+    let combined =
         chordsketch_chordpro::transpose::combine_transpose(config_transpose, cli.transpose);
-    if saturated {
+    if combined.saturated {
         emit_warning(
             cli.warnings_json,
             "transpose",
             &format!(
                 "transpose offset {} + {} exceeds i8 range, clamped to {}",
-                config_transpose, cli.transpose, effective_transpose
+                config_transpose, cli.transpose, combined.offset
             ),
         );
     }
+    let effective_transpose = combined.offset;
 
     let mut all_songs: Vec<chordsketch_chordpro::ast::Song> = Vec::new();
     let mut had_error = false;

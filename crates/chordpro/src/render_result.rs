@@ -43,18 +43,30 @@ pub fn push_warning(warnings: &mut Vec<String>, message: impl Into<String>) {
 /// a user who pipes the same `.cho` file to text, HTML, and PDF now
 /// sees the same warning regardless of which renderer they chose.
 pub fn validate_capo(metadata: &Metadata, warnings: &mut Vec<String>) {
+    // The "rendered as no capo" suffix mirrors what the renderer
+    // pipeline actually does with the invalid value (per ADR-0023:
+    // `effective_transpose` receives `capo = 0` and the chord-line
+    // shift collapses), so a user who sees the warning understands
+    // both *what* was wrong with their input and *what* the output
+    // they are looking at represents.
     match metadata.capo_validated() {
         CapoValidation::Unset | CapoValidation::Valid(_) => {}
         CapoValidation::OutOfRange(n) => {
             push_warning(
                 warnings,
-                format!("{{capo}} value {n} out of range (expected 1..=24); ignored"),
+                format!(
+                    "{{capo}} value {n} out of range (expected 1..=24); ignored \
+                     (rendered as no capo)"
+                ),
             );
         }
         CapoValidation::NotInteger(raw) => {
             push_warning(
                 warnings,
-                format!("{{capo}} value {raw:?} is not a valid integer; ignored"),
+                format!(
+                    "{{capo}} value {raw:?} is not a valid integer; ignored \
+                     (rendered as no capo)"
+                ),
             );
         }
     }

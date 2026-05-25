@@ -7,8 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking**: `{capo: N}` now transposes the rendered chord names
+  by `-N` semitones across every rendering surface (text / HTML /
+  PDF Rust renderers and the `@chordsketch/react` `chordpro-jsx`
+  walker), matching what a guitarist expects when reaching for the
+  capo control. The `{capo}` directive itself stays in the AST and
+  each renderer's existing capo-annotation behaviour is unchanged.
+  Composes with `{transpose}` and the CLI / API transpose offset
+  via a new `effective_transpose(file, cli, capo)` helper in
+  `chordsketch_chordpro::transpose`; renderers route through this
+  helper so the rule lives in one place. See
+  [ADR-0023](docs/adr/0023-capo-transposes-displayed-chords.md).
+  Consumers that depended on the old "capo is a printed annotation
+  only" behaviour will see chord-line output shift; strip the
+  `{capo}` directive before rendering, or pass `cli_transpose +
+  capo` explicitly, to recover the pre-change output. (#2560)
+- `@chordsketch/react`: `<Capo>` and `<Transpose>` switch from
+  `− / + / Reset` buttons to a native `<input type="range">`
+  slider with a current-value readout. Keyboard support now comes
+  from the native range input (arrow keys, Home / End, PageUp /
+  PageDown); the legacy `+ / = / − / _ / 0` wrapper-level
+  shortcuts are removed. `<Capo>` accepts a new `bestPositions`
+  prop that paints ★ markers at the "easiest capo position" tied
+  set — pair with the new `computeBestCapoPositions` helper.
+  `<Transpose>`'s default UI range narrows to `±6` (down from
+  `±11`); the feature ceiling `TRANSPOSE_MIN` / `TRANSPOSE_MAX`
+  remains `±11` and hosts can pass explicit `min` / `max` to
+  widen the slider. **Breaking**: the `resetValue` prop is
+  removed from both `<Capo>` and `<Transpose>` — there is no
+  longer a Reset button, and the native slider's Home key (or a
+  controlled `onChange(0)` from the host) covers the same
+  ergonomics. (#2560)
+- `@chordsketch/react`: the `<Capo>` slider's host-supplied
+  `value` (controlled mode) and the source-derived `{capo: N}`
+  (source-pair mode) are now clamped into `[min, max]` at render
+  time as well as at change time, so a host that passes
+  `value=10` with default `max=12` sees the slider thumb and the
+  `<output>` readout agree on the displayed value. Same change
+  applied to `<Transpose>`. (#2560)
+- `@chordsketch/react`: `<Capo>`'s `aria-describedby` id is now
+  generated via React 18's `useId()` instead of `Math.random()`,
+  so server-rendered hosts (Next.js, Remix) no longer hit
+  hydration mismatches when the ★ markers are visible. (#2560)
+- `chordsketch_chordpro::render_result::validate_capo` warning
+  messages now end with `(rendered as no capo)` so a user who
+  writes an out-of-range or non-integer `{capo}` value learns
+  both what was wrong with their input and what the rendered
+  output represents. (#2560)
+- `chordsketch-wasm`'s `do_parse_chordpro` (the React preview's
+  parse entry point) now calls `validate_capo` so invalid
+  `{capo}` values surface the same warning the Rust renderers
+  emit, closing the validation-parity gap between the React
+  surface and the static-output renderers. (#2560)
+
 ### Added
 
+- `@chordsketch/react`: new `computeBestCapoPositions(ast)` helper
+  (and the matching `BEST_CAPO_MAX` constant /
+  `BestCapoResult` type) — computes the capo positions tied for
+  the lowest accidental-glyph count from a parsed song, driving
+  `<Capo>`'s ★ slider markers. Mirrors the canonical-spelling
+  pipeline from `chordsketch_chordpro::transpose::canonical_key_spelling`
+  on the React side so no extra wasm function is needed. (#2560)
+- `chordsketch_chordpro::transpose::effective_transpose(file, cli,
+  capo)` — single-source helper that composes the file-level
+  `{transpose}` value, the CLI / API transpose offset, and the
+  song's `{capo}` value into the chord-line shift the four
+  rendering surfaces apply. Wired into each Rust renderer in place
+  of the previous `combine_transpose` call. (#2560)
+- New [ADR-0023](docs/adr/0023-capo-transposes-displayed-chords.md)
+  records the `{capo}` semantic change and the
+  `effective_transpose` helper's place in the pipeline. (#2560)
 - `@chordsketch/react`: new `<PreviewToolbar>` performance-toolbar
   component composing `<Transpose>` + `<Capo>` + `<PdfExport>`,
   plus the new `<Capo>` primitive (mirrors the `<Transpose>` API

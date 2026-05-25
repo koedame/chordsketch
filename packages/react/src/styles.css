@@ -148,82 +148,396 @@
   }
 }
 
-.chordsketch-transpose {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-family: inherit;
-}
+/* ------------------------------------------------------------------
+ * Slider (Transpose / Capo).
+ *
+ * The visual contract is the design-system Slider component (see
+ * `design-system/preview/components-forms.html`): a 4px ink-200
+ * track with crimson thumb, `−` / `+` step buttons on either
+ * side, tick marks at every step position, numeric labels under
+ * the major ticks, and a monospace value readout on the right.
+ * Both Capo and Transpose share the same vertical layout so they
+ * sit on the same horizontal baseline in the toolbar.
+ *
+ * Class names stay component-scoped (`chordsketch-*`) so a host
+ * that already uses `<input type="range">` elsewhere is not
+ * affected. Hosts shipping `design-system/tokens.css` pick up
+ * the same paint via the `--cs-*` aliases above.
+ * ------------------------------------------------------------------ */
 
-.chordsketch-transpose__label {
-  font-size: 0.85em;
-  opacity: 0.7;
-}
-
-.chordsketch-transpose__value {
-  min-width: 2.5ch;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.chordsketch-transpose__button {
-  min-width: 2rem;
-  padding: 0.25rem 0.5rem;
-  font: inherit;
-  cursor: pointer;
-  background: transparent;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  color: inherit;
-}
-
-.chordsketch-transpose__button:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
-}
-
-.chordsketch-transpose__button:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 2px;
-}
-
+/* Outer wrapper (group). Two-row layout: the top row carries the
+ * label and the live value readout, the bottom row carries the
+ * `−` / slider / `+` controls plus tick labels. The two-row shape
+ * gives the slider track full horizontal width without crowding
+ * the label or the readout. Both Capo and Transpose use the same
+ * structure so they sit on identical baselines in the toolbar. */
+.chordsketch-transpose,
 .chordsketch-capo {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--cs-sp-1, 0.25rem);
+  /* Stretch to fill the parent's column. The slider's tick rail
+   * has a sensible minimum (`.__slider-wrap` carries its own
+   * min-width) so the host can park the control in tight
+   * spaces without exploding the label row. */
+  flex: 1 1 auto;
+  width: 100%;
+  /* Tick labels live inside `__slider-wrap`'s own
+   * `padding-bottom`, so the outer wrapper does not need to
+   * reserve additional space. (The earlier 18px allocation
+   * here double-padded the box and stretched the toolbar
+   * vertically.) */
+  font-family: var(--cs-font-jp, inherit);
+  color: var(--cs-text-primary, inherit);
+  line-height: 1;
+}
+
+/* Top row: label on the left, readout on the right. Width is set
+ * to 100% so the `justify-content: space-between` actually has
+ * room to push the readout to the right edge of the slider's
+ * available column. */
+.chordsketch-transpose__header,
+.chordsketch-capo__header {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--cs-sp-3, 0.75rem);
+}
+
+/* Bottom row: `−` button, slider track wrap, `+` button. Width
+ * pinned to the parent column so the wrap inside can flex to
+ * fill the available horizontal space (otherwise the controls
+ * row settles on the wrap's own min-width). */
+.chordsketch-transpose__controls,
+.chordsketch-capo__controls {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--cs-sp-2, 0.5rem);
+}
+
+.chordsketch-transpose__label,
+.chordsketch-capo__label {
+  font-family: var(--cs-font-jp, inherit);
+  font-weight: 500;
+  font-size: var(--cs-fs-13, 0.8125rem);
+  color: var(--cs-text-secondary, currentColor);
+}
+
+/* `−` / `+` step buttons. */
+.chordsketch-transpose__btn,
+.chordsketch-capo__btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  font-family: inherit;
-}
-
-.chordsketch-capo__label {
-  font-size: 0.85em;
-  opacity: 0.7;
-}
-
-.chordsketch-capo__value {
-  min-width: 2.5ch;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.chordsketch-capo__button {
-  min-width: 2rem;
-  padding: 0.25rem 0.5rem;
-  font: inherit;
+  justify-content: center;
+  padding: 0;
+  background: var(--cs-surface, #FFFFFF);
+  border: 1px solid var(--cs-border-strong, #D4D1D6);
+  border-radius: var(--cs-r-2, 4px);
+  color: var(--cs-text-primary, inherit);
+  font-family: var(--cs-font-latin, inherit);
+  font-weight: 600;
+  font-size: var(--cs-fs-14, 0.875rem);
+  line-height: 1;
   cursor: pointer;
-  background: transparent;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  color: inherit;
+  transition:
+    background var(--cs-dur-1, 120ms) var(--cs-ease-out, ease-out),
+    border-color var(--cs-dur-1, 120ms) var(--cs-ease-out, ease-out);
 }
-
-.chordsketch-capo__button:disabled {
+.chordsketch-transpose__btn:hover:not(:disabled),
+.chordsketch-capo__btn:hover:not(:disabled) {
+  background: var(--cs-surface-hover, #F6F4F7);
+  border-color: var(--cs-text-secondary, #67646D);
+}
+.chordsketch-transpose__btn:focus-visible,
+.chordsketch-capo__btn:focus-visible {
+  outline: none;
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #FFFFFF, 0 0 0 4px #BD1642);
+}
+.chordsketch-transpose__btn:disabled,
+.chordsketch-capo__btn:disabled {
   cursor: not-allowed;
   opacity: 0.4;
 }
 
-.chordsketch-capo__button:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 2px;
+.chordsketch-transpose__value,
+.chordsketch-capo__value {
+  min-width: 3ch;
+  text-align: right;
+  font-family: var(--cs-font-mono, ui-monospace, monospace);
+  font-size: var(--cs-fs-13, 0.8125rem);
+  font-weight: 600;
+  color: var(--cs-text-primary, inherit);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Slider-track wrapper. Holds the input + ticks + labels (+ ★ on
+ * Capo). Position context for every absolute child. Inside the
+ * `__controls` row the wrap takes the remaining horizontal space
+ * between the two step buttons. */
+.chordsketch-transpose__slider-wrap,
+.chordsketch-capo__slider-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  /* The labelled tick rail has 13 numerals across the track
+   * (Transpose ±6 → −6..+6; Capo → 0..12). Each two-digit label
+   * needs ~16px to avoid colliding with its neighbours, so the
+   * slider wrap needs to stretch to at least 12rem (~192px). */
+  min-width: 12rem;
+  /* The wrap holds three layers stacked over a 24px slider track:
+   *   - tick lines (small): rendered on the track itself
+   *   - ★ best-capo markers: sit ~10px above the track
+   *   - numeric tick labels: sit ~14px below the track
+   * Reserve space for all three so the wrap's bounding box
+   * matches what the user actually sees. Without this padding,
+   * `overflow: hidden` from a host would visibly clip the
+   * labels and ★ above/below the track. */
+  padding-top: 14px;
+  padding-bottom: 16px;
+}
+.chordsketch-transpose__slider-wrap > .chordsketch-transpose__slider,
+.chordsketch-capo__slider-wrap > .chordsketch-capo__slider {
+  display: block;
+}
+
+.chordsketch-transpose__slider,
+.chordsketch-capo__slider {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 24px;
+  background: transparent;
+  margin: 0;
+  cursor: pointer;
+}
+.chordsketch-transpose__slider:focus,
+.chordsketch-capo__slider:focus {
+  outline: none;
+}
+
+/* Track — vendor pseudos must be in separate selectors. */
+.chordsketch-transpose__slider::-webkit-slider-runnable-track,
+.chordsketch-capo__slider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--cs-ink-200, #E8E6EA);
+  border-radius: var(--cs-r-full, 9999px);
+}
+.chordsketch-transpose__slider::-moz-range-track,
+.chordsketch-capo__slider::-moz-range-track {
+  height: 4px;
+  background: var(--cs-ink-200, #E8E6EA);
+  border-radius: var(--cs-r-full, 9999px);
+}
+
+/* Thumb. The thumb's outer box is exactly 16×16px so the
+ * `inset: 0 8px` on the tick rail (= thumb half-width) keeps
+ * ticks, labels, and ★ markers perfectly aligned with the
+ * thumb at every value. The white inner ring is painted with
+ * `box-shadow: inset` instead of a CSS `border` (which would
+ * grow the outer box to 20×20 under the default content-box
+ * sizing and break the alignment).
+ *
+ * Margin-top centres the 16px thumb on the 4px track:
+ * (4 − 16) / 2 = −6px. */
+.chordsketch-transpose__slider::-webkit-slider-thumb,
+.chordsketch-capo__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: var(--cs-r-full, 9999px);
+  background: var(--cs-crimson-500, #BD1642);
+  box-shadow:
+    inset 0 0 0 2px var(--cs-ink-0, #FFFFFF),
+    var(--cs-e-1, 0 1px 2px rgba(10, 10, 11, 0.04));
+  margin-top: -6px;
+  transition:
+    background var(--cs-dur-1, 120ms) var(--cs-ease-out, ease-out),
+    transform var(--cs-dur-1, 120ms) var(--cs-ease-out, ease-out);
+}
+.chordsketch-transpose__slider::-moz-range-thumb,
+.chordsketch-capo__slider::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: var(--cs-r-full, 9999px);
+  background: var(--cs-crimson-500, #BD1642);
+  box-shadow:
+    inset 0 0 0 2px var(--cs-ink-0, #FFFFFF),
+    var(--cs-e-1, 0 1px 2px rgba(10, 10, 11, 0.04));
+  transition:
+    background var(--cs-dur-1, 120ms) var(--cs-ease-out, ease-out),
+    transform var(--cs-dur-1, 120ms) var(--cs-ease-out, ease-out);
+}
+.chordsketch-transpose__slider:hover::-webkit-slider-thumb,
+.chordsketch-capo__slider:hover::-webkit-slider-thumb {
+  background: var(--cs-crimson-600, #A30F37);
+}
+.chordsketch-transpose__slider:hover::-moz-range-thumb,
+.chordsketch-capo__slider:hover::-moz-range-thumb {
+  background: var(--cs-crimson-600, #A30F37);
+}
+.chordsketch-transpose__slider:active::-webkit-slider-thumb,
+.chordsketch-capo__slider:active::-webkit-slider-thumb {
+  transform: scale(1.08);
+}
+.chordsketch-transpose__slider:active::-moz-range-thumb,
+.chordsketch-capo__slider:active::-moz-range-thumb {
+  transform: scale(1.08);
+}
+.chordsketch-transpose__slider:focus-visible::-webkit-slider-thumb,
+.chordsketch-capo__slider:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    inset 0 0 0 2px var(--cs-ink-0, #FFFFFF),
+    var(--cs-focus-ring, 0 0 0 2px #FFFFFF, 0 0 0 4px #BD1642);
+}
+.chordsketch-transpose__slider:focus-visible::-moz-range-thumb,
+.chordsketch-capo__slider:focus-visible::-moz-range-thumb {
+  box-shadow:
+    inset 0 0 0 2px var(--cs-ink-0, #FFFFFF),
+    var(--cs-focus-ring, 0 0 0 2px #FFFFFF, 0 0 0 4px #BD1642);
+}
+.chordsketch-transpose__slider:disabled,
+.chordsketch-capo__slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Tick rail — short vertical bars centered on the 4px track at
+ * every step position. The wrap is 24px so the rail sits at
+ * 50% (= the track centre line). Z-index 0 so the thumb (z-index
+ * 1) sits above.
+ *
+ * `inset: 0 8px`: the native range-input thumb is 16px wide so
+ * its centre travels between `min + 8px` (left bound) and
+ * `max − 8px` (right bound) inside the track. Inset the tick
+ * rail by the thumb half-width so `left: 0%` lines up with the
+ * thumb at `min` and `left: 100%` lines up with the thumb at
+ * `max`. Without this every tick is offset 8px outward from the
+ * matching thumb position. */
+.chordsketch-transpose__ticks,
+.chordsketch-capo__ticks {
+  position: absolute;
+  inset: 0 8px;
+  pointer-events: none;
+  z-index: 0;
+}
+.chordsketch-transpose__tick,
+.chordsketch-capo__tick {
+  position: absolute;
+  /* `top: 14px + 12px = 26px`: 14px padding-top + 12px (= slider
+   * vertical centre, half of the 24px hit area). Anchor in pixels
+   * rather than `50%` because the wrap's padding-box is now
+   * asymmetric (14px top, 16px bottom) and `50%` would land below
+   * the slider's centre line. */
+  top: 26px;
+  width: 1px;
+  height: 6px;
+  transform: translate(-50%, -50%);
+  background: var(--cs-ink-300, #D4D1D6);
+  border-radius: var(--cs-r-full, 9999px);
+}
+.chordsketch-transpose__tick--major,
+.chordsketch-capo__tick--major {
+  height: 10px;
+  background: var(--cs-ink-500, #8A8790);
+}
+
+/* Numeric tick labels — small monospace numerals positioned just
+ * under the slider track. Same `left/right: 8px` inset as the
+ * tick rail so labels align with their tick marks (and the thumb
+ * at the matching value).
+ *
+ * `top`: place the labels just below the slider track's bottom
+ * edge so they fit inside the wrap's 14+24+16 = 54px box without
+ * clipping. 14px padding-top + 24px slider + 2px gap = 40px. */
+.chordsketch-transpose__tick-labels,
+.chordsketch-capo__tick-labels {
+  position: absolute;
+  top: 40px;
+  left: 8px;
+  right: 8px;
+  height: 14px;
+  pointer-events: none;
+  font-family: var(--cs-font-mono, ui-monospace, monospace);
+  /* 9px — every step carries a label (Transpose 13, Capo 13);
+   * pair the tight scale with the 12rem-min slider track so the
+   * 2-character (`-6` / `12`) endpoints clear their neighbours. */
+  font-size: 0.5625rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--cs-text-tertiary, #8A8790);
+  font-variant-numeric: tabular-nums;
+}
+.chordsketch-transpose__tick-label,
+.chordsketch-capo__tick-label {
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+/* Capo-only: ★ best-position markers, above the track. Same
+ * thumb half-width inset as the tick rail so each ★ sits
+ * directly over the slider's thumb when the value matches. */
+.chordsketch-capo__markers {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  pointer-events: none;
+  z-index: 2;
+}
+.chordsketch-capo__marker {
+  position: absolute;
+  /* Sit ★ just above the slider track. 14px padding-top
+   * accommodates the marker's ~12px glyph plus 2px breathing
+   * room. */
+  top: 0;
+  transform: translateX(-50%);
+  font-size: var(--cs-fs-12, 0.75rem);
+  line-height: 1;
+  color: var(--cs-crimson-500, #BD1642);
+  opacity: 0.95;
+}
+
+.chordsketch-capo__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+/* Source-pair-mode hint shown when the wasm-driven AST parse
+ * fails (network drop, MIME mismatch, parse error). The
+ * component sets `role="status"` + `aria-live="polite"` so
+ * screen readers announce the missing recommendation
+ * politely. */
+.chordsketch-capo__hint {
+  display: block;
+  margin-top: var(--cs-sp-1, 0.25rem);
+  font-family: var(--cs-font-jp, inherit);
+  font-size: var(--cs-fs-12, 0.75rem);
+  line-height: 1;
+  color: var(--cs-text-tertiary, #8A8790);
+}
+.chordsketch-capo__hint--error {
+  color: var(--cs-danger-fg, #A30F37);
 }
 
 /* Performance toolbar — Transpose / Capo / Export. Hosts that
@@ -234,16 +548,26 @@
  */
 .chordsketch-preview-toolbar {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.375rem 0.75rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--cs-sp-3, 0.75rem);
+  padding: var(--cs-sp-3, 0.75rem) var(--cs-sp-4, 1rem);
 }
 
 .chordsketch-preview-toolbar__group {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--cs-sp-2, 0.5rem);
+}
+
+/* The Transpose and Capo groups stack vertically inside the
+ * toolbar so each slider can spread to the full toolbar width
+ * and give its 13 tick labels the maximum horizontal room.
+ * The Export group (when present) stays shrink-to-fit on the
+ * right via its own toolbar layout. */
+.chordsketch-preview-toolbar__group--transpose,
+.chordsketch-preview-toolbar__group--capo {
+  width: 100%;
 }
 
 .chordsketch-preview-toolbar__label {

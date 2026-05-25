@@ -308,7 +308,10 @@ a {
   gap: 0.25rem;
   padding: 0 0.75rem;
   border-right: 1px solid var(--cs-border, #E8E6EA);
-  height: 28px;
+  /* `min-height` instead of `height` — slider tool-groups
+   * (Transpose / Capo) need to grow taller than a row of buttons
+   * to accommodate their tick labels (#2560). */
+  min-height: 28px;
 }
 
 .tool-group:last-of-type {
@@ -449,7 +452,7 @@ a {
 .pane-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--cs-sp-3, 0.75rem);
   padding: 0.75rem 1.5rem;
   background: var(--cs-canvas, #FAFAF7);
   border-bottom: 1px solid var(--cs-border, #E8E6EA);
@@ -470,6 +473,55 @@ a {
   font-size: 0.75rem;
   color: var(--cs-text-tertiary, #8A8790);
   font-feature-settings: "tnum" 1;
+  /* Push the meta caption + everything that follows it to the
+   * right edge of the pane head. The Export PDF button (when
+   * mounted under the same parent) flows naturally to the right
+   * after this auto-margin spacer. */
+  margin-left: auto;
+}
+
+/* Export PDF button in the pane header. Implements the
+ * design-system `.btn.btn-secondary.btn-sm` spec (28px height,
+ * surface bg, border-strong outline, ink-100 hover, crimson
+ * focus ring) — see
+ * `design-system/preview/components-buttons.html`. The
+ * `<PdfExport>` component renders a plain `<button>`, so we
+ * target it via the `pane-head__export` class the host attaches. */
+.pane-head__export {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cs-sp-2, 0.5rem);
+  height: 28px;
+  padding: 0 var(--cs-sp-3, 0.75rem);
+  background: var(--cs-surface, #FFFFFF);
+  border: 1px solid var(--cs-border-strong, #D4D1D6);
+  border-radius: var(--cs-r-2, 4px);
+  color: var(--cs-text-primary, #0A0A0B);
+  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
+  font-weight: 500;
+  font-size: var(--cs-fs-13, 0.8125rem);
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background var(--cs-dur-1, 120ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)),
+    border-color var(--cs-dur-1, 120ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1));
+}
+
+.pane-head__export:hover:not(:disabled) {
+  background: var(--cs-ink-100, #F6F4F7);
+  border-color: var(--cs-text-secondary, #67646D);
+}
+
+.pane-head__export:focus-visible {
+  outline: none;
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #FFFFFF, 0 0 0 4px #BD1642);
+}
+
+.pane-head__export:disabled,
+.pane-head__export[aria-busy='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .pane-body {
