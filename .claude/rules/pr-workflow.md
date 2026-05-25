@@ -137,6 +137,11 @@ hold for a PR:
    the audit cannot clear (`BLOCKED` / `NEEDS_REVIEW`) is commented and
    left open for a human; it is never merged unattended.
 
+**Clause 3** (auto-review converged on HEAD) is satisfied by the
+automation's own audit pass — analogous to ADR-0016's mapping where the
+skill's audit cycle IS the converged review. Clauses 2 and 4 are
+unchanged and must be met verbatim.
+
 The semver level is not part of the gate — majors are handled the same
 way the attended skill handles them (read release notes, adapt the code,
 let the full matrix validate). The scheduled run is the maintainer's
