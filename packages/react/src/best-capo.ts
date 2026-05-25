@@ -87,12 +87,29 @@ function chordBassSemitone(chord: ChordproChord): number | null {
  * Parse the song's `{capo: N}` metadata into a 0..=24 semitone
  * offset. Out-of-range / non-integer values resolve to 0 so the
  * helper never panics on user input. Mirrors the Rust-side
- * `Metadata::capo_validated` contract.
+ * `Metadata::capo_validated` contract exactly:
+ *
+ * - `null` / `undefined` / missing → `0`
+ * - whitespace-only / empty after trim → `0`
+ * - non-digit characters (e.g. `"1e5"`, `"3.5"`, `"-3"`, `"foo"`)
+ *   → `0`. The Rust side parses via `u32::from_str` which rejects
+ *   scientific notation, decimals, and signs; `Number.parseInt`
+ *   would happily consume the leading digits of `"1e5"` (→ `1`),
+ *   so we gate on a strict `^\d+$` regex first.
+ * - integer outside `1..=24` → `0`
+ * - integer in `1..=24` → that integer
  */
 function parseSongCapo(song: ChordproSong): number {
   const raw = song.metadata.capo;
   if (raw === null || raw === undefined) return 0;
-  const n = Number.parseInt(raw.trim(), 10);
+  const trimmed = raw.trim();
+  // Pure-digit guard mirrors `u32::from_str`: rejects "1e5",
+  // "3.5", "-3", "+3", and the empty string in one shot. Without
+  // this gate `Number.parseInt("1e5", 10)` returns 1 and the
+  // helper would treat `{capo: 1e5}` as `capo = 1` — out of sync
+  // with the Rust renderer's `NotInteger → no capo` resolution.
+  if (!/^\d+$/.test(trimmed)) return 0;
+  const n = Number(trimmed);
   if (!Number.isInteger(n)) return 0;
   if (n < 1 || n > 24) return 0;
   return n;

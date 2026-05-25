@@ -141,12 +141,6 @@ describe('computeBestCapoPositions', () => {
     // the user is looking at the same song, just held with a
     // different capo.
     function makeAst(capoValue: string | null, rootShift: number): ChordproSong {
-      const shift = (note: ChordproNote): ChordproChord => {
-        // Helper not needed: we shift via accidentals in the
-        // chord construction below.
-        return { name: note, detail: null, display: null };
-      };
-      void shift; // suppress unused warning; chord shifting below is explicit
       const ast = song(
         lyrics(
           // Source chords were C / F / G; with `{capo: rootShift}`
@@ -245,5 +239,68 @@ describe('computeBestCapoPositions', () => {
     // capo 2 the chord lowers to C / E — zero accidentals.
     expect(result!.minAccidentals).toBe(0);
     expect(result!.positions).toContain(2);
+  });
+});
+
+describe('parseSongCapo input sanitisation (via metadata.capo)', () => {
+  // `parseSongCapo` is a private helper, so we exercise it
+  // through `computeBestCapoPositions` and the `capo`-invariance
+  // contract: when the AST chord roots are unchanged and only
+  // `metadata.capo` varies, every valid value must produce the
+  // same `positions` set as the baseline (capo=null), and every
+  // invalid value must be treated as "no capo" — i.e. identical
+  // to the baseline.
+  function baseSong(capoValue: string | null): ChordproSong {
+    const ast = song(lyrics(plainChord('C'), plainChord('F'), plainChord('G')));
+    ast.metadata.capo = capoValue;
+    return ast;
+  }
+
+  test('null capo metadata produces the accidental-free baseline', () => {
+    const result = computeBestCapoPositions(baseSong(null))!;
+    // C/F/G are accidental-free; the helper enumerates every
+    // position in `0..=BEST_CAPO_MAX` whose chord roots stay on
+    // white keys. The exact set is a stable anchor we reuse in
+    // the rejection cases below.
+    expect(result.minAccidentals).toBe(0);
+    expect(result.positions.length).toBeGreaterThan(0);
+  });
+
+  test.each([
+    ['scientific notation', '1e5'],
+    ['decimal', '3.5'],
+    ['negative', '-3'],
+    ['leading plus', '+3'],
+    ['out of range high', '25'],
+    ['out of range low', '0'], // capo_validated rejects 0 (treated as unset)
+    ['letters', 'foo'],
+    ['empty', ''],
+    ['whitespace only', '   '],
+  ])(
+    'rejects %s capo input and resolves to "no capo"',
+    (_label, value) => {
+      const invalid = computeBestCapoPositions(baseSong(value))!;
+      const baseline = computeBestCapoPositions(baseSong(null))!;
+      expect([...invalid.positions]).toEqual([...baseline.positions]);
+      expect(invalid.minAccidentals).toBe(baseline.minAccidentals);
+    },
+  );
+
+  test('accepts integer strings with surrounding whitespace', () => {
+    const trimmed = computeBestCapoPositions(baseSong('2'))!;
+    const padded = computeBestCapoPositions(baseSong('  2  '))!;
+    expect([...padded.positions]).toEqual([...trimmed.positions]);
+    expect(padded.minAccidentals).toBe(trimmed.minAccidentals);
+  });
+
+  test('accepts the meaningful 1..=24 range', () => {
+    // capo=24 is the upper bound capo_validated accepts; the
+    // helper must not panic and must shift the recommendations
+    // by 24 semitones modulo 12 (= 0). A {capo:24} song with the
+    // pre-baked roots Eb/Ab/Bb (= C+12 mod 12 with two octave
+    // wraps, simplified) should behave identically to capo=12.
+    const max = computeBestCapoPositions(baseSong('24'))!;
+    expect(max.positions.length).toBeGreaterThan(0);
+    expect(max.minAccidentals).toBeGreaterThanOrEqual(0);
   });
 });

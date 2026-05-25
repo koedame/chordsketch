@@ -87,6 +87,12 @@ export type CapoProps = CapoModeProps &
      * shifts which capo positions zero out the accidentals.
      * Defaults to `0` (no transpose). Ignored in controlled mode
      * (the host supplies `bestPositions` directly).
+     *
+     * Values must fit in an `i8` (`-128..=127`); the wasm parser
+     * rejects anything wider at deserialisation time. Hosts that
+     * wire this prop to a `<Transpose>` slider's value never need
+     * to worry — the slider clamps to its `min` / `max` (`±6` by
+     * default).
      */
     transpose?: number;
   };
@@ -163,12 +169,20 @@ export function Capo(props: CapoProps): JSX.Element {
   // that with `parseSongCapo`'s capo-undo in `computeBestCapoPositions`
   // and the best-capo enumeration runs against the *transposed*
   // chord roots, so moving the `<Transpose>` slider shifts the
-  // ★ recommendations alongside the song. `useChordproAst`
-  // lazy-loads `@chordsketch/wasm` and caches the result, so
-  // this is cheap to call from inside the component. Controlled
-  // mode skips parsing (the host has the AST already and passes
-  // `bestPositions` explicitly).
-  const { ast: sourceAst } = useChordproAst(sourceMode ? source! : '', { transpose });
+  // ★ recommendations alongside the song.
+  //
+  // Controlled mode passes `skip: true` so the wasm module is
+  // not fetched for a parse whose result we would immediately
+  // discard (the host already owns the AST and supplies
+  // `bestPositions` directly).
+  const {
+    ast: sourceAst,
+    error: sourceAstError,
+    loading: sourceAstLoading,
+  } = useChordproAst(sourceMode ? source! : '', {
+    transpose,
+    skip: !sourceMode,
+  });
   const derivedBestPositions = useMemo(() => {
     if (!sourceMode || !sourceAst) return undefined;
     const result = computeBestCapoPositions(sourceAst);
@@ -374,6 +388,25 @@ export function Capo(props: CapoProps): JSX.Element {
         <span id={markerDescriptionId} className="chordsketch-capo__sr-only">
           ★ marks the easiest capo position{markers.length === 1 ? '' : 's'} —
           chord roots use the fewest accidentals there.
+        </span>
+      ) : null}
+      {/* Source-pair-mode-only: surface a wasm-load / parse
+          failure so the user sees that the ★ markers are
+          unavailable instead of a silent absence. `role="status"`
+          + `aria-live="polite"` so screen readers announce it
+          without interrupting the user. Visually rendered as
+          subtle text alongside the slider. The error is not
+          rendered in controlled mode (the host owns AST parsing
+          and supplies `bestPositions` directly), nor while the
+          parse is in flight (loading spinners belong to the host).
+       */}
+      {sourceMode && sourceAstError && !sourceAstLoading ? (
+        <span
+          className="chordsketch-capo__hint chordsketch-capo__hint--error"
+          role="status"
+          aria-live="polite"
+        >
+          Capo recommendations unavailable
         </span>
       ) : null}
     </div>

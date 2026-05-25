@@ -183,7 +183,11 @@
    * spaces without exploding the label row. */
   flex: 1 1 auto;
   width: 100%;
-  padding-bottom: 18px; /* room for the tick labels under the track */
+  /* Tick labels live inside `__slider-wrap`'s own
+   * `padding-bottom`, so the outer wrapper does not need to
+   * reserve additional space. (The earlier 18px allocation
+   * here double-padded the box and stretched the toolbar
+   * vertically.) */
   font-family: var(--cs-font-jp, inherit);
   color: var(--cs-text-primary, inherit);
   line-height: 1;
@@ -517,6 +521,23 @@
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
+}
+
+/* Source-pair-mode hint shown when the wasm-driven AST parse
+ * fails (network drop, MIME mismatch, parse error). The
+ * component sets `role="status"` + `aria-live="polite"` so
+ * screen readers announce the missing recommendation
+ * politely. */
+.chordsketch-capo__hint {
+  display: block;
+  margin-top: var(--cs-sp-1, 0.25rem);
+  font-family: var(--cs-font-jp, inherit);
+  font-size: var(--cs-fs-12, 0.75rem);
+  line-height: 1;
+  color: var(--cs-text-tertiary, #8A8790);
+}
+.chordsketch-capo__hint--error {
+  color: var(--cs-danger-fg, #A30F37);
 }
 
 /* Performance toolbar — Transpose / Capo / Export. Hosts that

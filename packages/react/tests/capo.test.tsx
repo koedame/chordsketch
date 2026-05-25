@@ -130,4 +130,14 @@ describe('<Capo>', () => {
     const out = document.querySelector('.chordsketch-capo__value');
     expect(out?.textContent).toBe('4');
   });
+
+  test('clamps an out-of-range value prop in the readout (display path)', () => {
+    // Host passing `value=15` with `max=12`: the native range
+    // input clamps the thumb visually, but the `<output>` would
+    // otherwise display the raw 15 and disagree with the thumb.
+    // Pin the render-time clamp.
+    render(<Capo value={15} onChange={vi.fn()} min={0} max={12} />);
+    const out = document.querySelector('.chordsketch-capo__value');
+    expect(out?.textContent).toBe('12');
+  });
 });

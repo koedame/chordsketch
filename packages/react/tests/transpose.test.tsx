@@ -140,4 +140,13 @@ describe('<Transpose>', () => {
     );
     expect(getReadoutText()).toBe('2 st');
   });
+
+  test('clamps an out-of-range value prop in the readout (display path)', () => {
+    // Host passes `value=15` with default `max=6`: the native
+    // range input clamps the thumb to `+6` visually, but the
+    // `<output>` would otherwise show `+15` and disagree with
+    // the thumb. Pin the render-time clamp.
+    render(<Transpose value={15} onChange={vi.fn()} />);
+    expect(getReadoutText()).toBe('+6');
+  });
 });
