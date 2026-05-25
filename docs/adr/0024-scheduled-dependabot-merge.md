@@ -1,7 +1,7 @@
 # 0024. Scheduled unattended Dependabot merge for patch/minor bumps
 
 - **Status**: Accepted
-- **Date**: 2026-05-26
+- **Date**: 2026-05-25
 
 ## Context
 

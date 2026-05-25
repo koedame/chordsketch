@@ -1,7 +1,14 @@
 # 0016. Dependabot review moves from a CI bot to a session skill; major bumps are no longer suppressed
 
-- **Status**: Accepted
+- **Status**: Accepted (unattended patch/minor merge added by ADR-0024 on 2026-05-25)
 - **Date**: 2026-05-03
+
+> **Update (2026-05-25):** [ADR-0024](0024-scheduled-dependabot-merge.md) adds a
+> scheduled, maintainer-operated automation path for Dependabot **patch/minor**
+> bumps. For that narrow class, the automation's configured run replaces
+> condition-1's per-session keystroke when a five-condition gate is satisfied.
+> Major bumps continue to require a human invocation of `/dependabot-review`,
+> preserving this ADR's intent.
 
 ## Context
 

@@ -101,4 +101,4 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0021](0021-docs-site-co-located-with-playground.md) | Docs site is co-located with the playground (option (a), not Docusaurus / VitePress / subdomain) | Accepted (2026-05-19) |
 | [0022](0022-react-as-canonical-preview-surface.md) | React as the canonical preview surface; `@chordsketch/ui-web` retired | Accepted (2026-05-20) |
 | [0023](0023-capo-transposes-displayed-chords.md) | `{capo}` directive transposes displayed chords | Accepted (2026-05-24) |
-| [0024](0024-scheduled-dependabot-merge.md) | Scheduled unattended Dependabot merge for patch/minor bumps (extends ADR-0013 clause 1) | Accepted (2026-05-26) |
+| [0024](0024-scheduled-dependabot-merge.md) | Scheduled unattended Dependabot merge for patch/minor bumps (extends ADR-0013 clause 1) | Accepted (2026-05-25) |

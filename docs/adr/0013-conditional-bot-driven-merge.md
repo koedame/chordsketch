@@ -1,6 +1,6 @@
 # 0013. Bot-driven merge is allowed under explicit session permission
 
-- **Status**: Accepted (condition 4 updated by ADR-0015 on 2026-05-03)
+- **Status**: Accepted (condition 4 updated by ADR-0015 on 2026-05-03; clause 1 extended for Dependabot patch/minor by ADR-0024 on 2026-05-25)
 - **Date**: 2026-04-29
 
 > **Update (2026-05-03):** Condition (4) below ("Merge queue path
@@ -12,6 +12,16 @@
 > for the active rule, see `.claude/rules/pr-workflow.md`
 > §"Bot-driven merge: conditional permission" and ADR-0015's
 > "Decision" section.
+
+> **Update (2026-05-25):** Condition (1) ("Explicit, current-session
+> permission") is extended — for **Dependabot patch/minor bumps
+> only** — by [ADR-0024](0024-scheduled-dependabot-merge.md). A
+> scheduled, maintainer-operated automation may squash-merge such PRs
+> without a per-session human invocation when the full five-condition
+> gate in ADR-0024 is satisfied. Every non-Dependabot bot-initiated
+> merge and every Dependabot major bump still requires explicit
+> current-session permission per condition (1). Conditions (2)–(4)
+> are unchanged.
 
 ## Context
 
