@@ -600,15 +600,88 @@ fn transpose_transposable_define_with_style(
     })
 }
 
+/// The clamped result of composing two or three transpose operands,
+/// paired with a diagnostic flag indicating whether the exact
+/// arithmetic overflowed `i8` (in which case `offset` was clamped to
+/// the nearest bound and the renderer should emit a user-visible
+/// warning).
+///
+/// Returned by both [`combine_transpose`] and [`effective_transpose`].
+/// The named struct (rather than a bare `(i8, bool)` tuple) lets the
+/// invariant "saturated = the offset was silently clamped" live at the
+/// type layer instead of in doc comments, and prevents accidental
+/// field reordering at destructuring sites.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use]
+pub struct TransposeResult {
+    /// The composed semitone offset, clamped to `i8::MIN..=i8::MAX`.
+    pub offset: i8,
+    /// `true` when the exact composition would have overflowed `i8`
+    /// and the [`offset`] field carries a saturated value. Renderers
+    /// surface this as a user-visible "transpose offset … clamped to …"
+    /// warning so the user is not silently misled by the clamp.
+    ///
+    /// [`offset`]: TransposeResult::offset
+    pub saturated: bool,
+}
+
 /// Combine a file-level transpose offset with a CLI transpose offset.
 ///
-/// Returns `(result, saturated)` where `result` is the clamped sum and
-/// `saturated` is `true` if the exact sum would have overflowed i8.
-#[must_use]
-pub fn combine_transpose(file_offset: i8, cli_offset: i8) -> (i8, bool) {
+/// `offset` is the clamped sum and `saturated` is `true` if the exact
+/// sum would have overflowed `i8`. The returned [`TransposeResult`]
+/// is already `#[must_use]`, so callers cannot discard the saturation
+/// flag silently.
+pub fn combine_transpose(file_offset: i8, cli_offset: i8) -> TransposeResult {
     let exact = file_offset as i16 + cli_offset as i16;
-    let saturated = exact < i8::MIN as i16 || exact > i8::MAX as i16;
-    (file_offset.saturating_add(cli_offset), saturated)
+    let saturated = !(i8::MIN as i16..=i8::MAX as i16).contains(&exact);
+    TransposeResult {
+        offset: file_offset.saturating_add(cli_offset),
+        saturated,
+    }
+}
+
+/// Compose a song's effective transpose offset from the file-level
+/// `{transpose}` value, the CLI / API transpose offset, and the song's
+/// `{capo}` value.
+///
+/// The rule is `file + cli - capo`: a capo on fret `N` lets the guitarist
+/// keep the song's sounding pitch while displaying chord names shifted
+/// down by `N` semitones (the shapes they actually hold). Capo therefore
+/// subtracts from the chord-line offset, in contrast to `{transpose}` /
+/// `--transpose` which add to it.
+///
+/// `offset` is the clamped result and `saturated` is `true` if the exact
+/// arithmetic would have overflowed `i8`. Saturation semantics mirror
+/// [`combine_transpose`] so renderers can route through one rule
+/// without special-casing capo.
+///
+/// `capo` is the song's validated capo position in semitones (`1..=24`
+/// for an in-range `{capo}` directive, `0` for "no capo" / unset /
+/// out-of-range — call sites should derive `capo` from
+/// [`crate::ast::Metadata::capo_validated`], which already rejects
+/// values outside the guitarist-meaningful range).
+///
+/// See `docs/adr/0023-capo-transposes-displayed-chords.md` for the
+/// rationale.
+///
+/// # Panics
+///
+/// In debug builds, panics if `capo > 24`. `capo_validated` already
+/// caps the meaningful range at 24 frets; a larger value indicates a
+/// bug at the call site rather than legitimate input. Release builds
+/// silently clamp (the arithmetic itself is overflow-safe via `i16`).
+pub fn effective_transpose(file_offset: i8, cli_offset: i8, capo: u8) -> TransposeResult {
+    debug_assert!(
+        capo <= 24,
+        "capo {capo} exceeds the 1..=24 range guarded by Metadata::capo_validated",
+    );
+    let exact = file_offset as i16 + cli_offset as i16 - capo as i16;
+    let saturated = !(i8::MIN as i16..=i8::MAX as i16).contains(&exact);
+    let clamped = exact.clamp(i8::MIN as i16, i8::MAX as i16) as i8;
+    TransposeResult {
+        offset: clamped,
+        saturated,
+    }
 }
 
 // ===========================================================================
@@ -1112,30 +1185,99 @@ mod tests {
 
     #[test]
     fn combine_transpose_no_overflow() {
-        let (result, saturated) = combine_transpose(5, 3);
-        assert_eq!(result, 8);
-        assert!(!saturated);
+        let result = combine_transpose(5, 3);
+        assert_eq!(result.offset, 8);
+        assert!(!result.saturated);
     }
 
     #[test]
     fn combine_transpose_positive_overflow() {
-        let (result, saturated) = combine_transpose(100, 50);
-        assert_eq!(result, 127);
-        assert!(saturated);
+        let result = combine_transpose(100, 50);
+        assert_eq!(result.offset, 127);
+        assert!(result.saturated);
     }
 
     #[test]
     fn combine_transpose_negative_overflow() {
-        let (result, saturated) = combine_transpose(-100, -50);
-        assert_eq!(result, -128);
-        assert!(saturated);
+        let result = combine_transpose(-100, -50);
+        assert_eq!(result.offset, -128);
+        assert!(result.saturated);
     }
 
     #[test]
     fn combine_transpose_exact_max() {
-        let (result, saturated) = combine_transpose(100, 27);
-        assert_eq!(result, 127);
-        assert!(!saturated);
+        let result = combine_transpose(100, 27);
+        assert_eq!(result.offset, 127);
+        assert!(!result.saturated);
+    }
+
+    // --- effective_transpose (ADR-0023) ---
+
+    #[test]
+    fn effective_transpose_no_capo_matches_combine() {
+        // capo = 0 -> identical to combine_transpose for in-range inputs.
+        let eff = effective_transpose(2, 3, 0);
+        let comb = combine_transpose(2, 3);
+        assert_eq!(eff, comb);
+    }
+
+    #[test]
+    fn effective_transpose_capo_subtracts() {
+        // {capo: 2} on a song with no other transpose: the displayed
+        // chords shift down by 2 semitones (the shapes the guitarist
+        // holds with a capo on fret 2).
+        let result = effective_transpose(0, 0, 2);
+        assert_eq!(result.offset, -2);
+        assert!(!result.saturated);
+    }
+
+    #[test]
+    fn effective_transpose_composes_with_file_and_cli() {
+        // file = +3, cli = +1, capo = 2 -> effective = 3 + 1 - 2 = 2.
+        let result = effective_transpose(3, 1, 2);
+        assert_eq!(result.offset, 2);
+        assert!(!result.saturated);
+    }
+
+    #[test]
+    fn effective_transpose_max_capo_does_not_saturate() {
+        // capo = 24 (the upper bound of `capo_validated`'s valid
+        // range) on a zero-transpose song lands at -24, well inside
+        // i8::MIN.
+        let result = effective_transpose(0, 0, 24);
+        assert_eq!(result.offset, -24);
+        assert!(!result.saturated);
+    }
+
+    #[test]
+    fn effective_transpose_negative_saturation() {
+        // file = i8::MIN, cli = 0, capo = 24 -> exact = -128 - 24
+        // which underflows i8 and must saturate at i8::MIN.
+        let result = effective_transpose(i8::MIN, 0, 24);
+        assert_eq!(result.offset, i8::MIN);
+        assert!(result.saturated);
+    }
+
+    #[test]
+    fn effective_transpose_positive_saturation_via_file_cli() {
+        // file + cli > i8::MAX must saturate even before subtracting
+        // capo, mirroring combine_transpose's overflow contract.
+        let result = effective_transpose(100, 50, 0);
+        assert_eq!(result.offset, 127);
+        assert!(result.saturated);
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "capo 25 exceeds the 1..=24 range")]
+    fn effective_transpose_panics_on_out_of_band_capo() {
+        // `capo_validated` already gates the meaningful range at 24
+        // frets; a caller that passes 25 is a contract violation,
+        // not legitimate input. Debug builds panic via
+        // `debug_assert!` so the call site is caught during
+        // development. Release builds silently clamp via the
+        // overflow-safe `i16` arithmetic.
+        let _ = effective_transpose(0, 0, 25);
     }
 
     // -- transposable bracket-form defines (R6.100.0, #2302) -------------

@@ -735,9 +735,28 @@ fn render_song_into_doc(
     // The base config transpose is already folded into cli_transpose by the caller.
     let song_overrides = song.config_overrides();
     let song_transpose_delta = Config::song_transpose_delta(&song_overrides);
-    let (combined_transpose, _) =
-        chordsketch_chordpro::transpose::combine_transpose(cli_transpose, song_transpose_delta);
-    let mut transpose_offset: i8 = combined_transpose;
+    // ADR-0023: capo subtracts from the effective transpose so the
+    // displayed chord names match the shapes a guitarist holds at fret N.
+    let song_capo = match song.metadata.capo_validated() {
+        chordsketch_chordpro::ast::CapoValidation::Valid(n) => n,
+        _ => 0,
+    };
+    let top = chordsketch_chordpro::transpose::effective_transpose(
+        cli_transpose,
+        song_transpose_delta,
+        song_capo,
+    );
+    if top.saturated {
+        push_warning(
+            warnings,
+            format!(
+                "transpose offset {cli_transpose} + {song_transpose_delta} - capo \
+                 {song_capo} exceeds i8 range, clamped to {}",
+                top.offset
+            ),
+        );
+    }
+    let mut transpose_offset: i8 = top.offset;
     let mut fmt_state = PdfFormattingState::default();
 
     // Read configurable frets_shown for chord diagrams.
@@ -942,20 +961,22 @@ fn render_song_into_doc(
                             }
                         },
                     };
-                    let (combined, saturated) = chordsketch_chordpro::transpose::combine_transpose(
+                    let combined = chordsketch_chordpro::transpose::effective_transpose(
                         file_offset,
                         cli_transpose,
+                        song_capo,
                     );
-                    if saturated {
+                    if combined.saturated {
                         push_warning(
                             warnings,
                             format!(
-                                "transpose offset {file_offset} + {cli_transpose} \
-                                 exceeds i8 range, clamped to {combined}"
+                                "transpose offset {file_offset} + {cli_transpose} - capo \
+                                 {song_capo} exceeds i8 range, clamped to {}",
+                                combined.offset
                             ),
                         );
                     }
-                    transpose_offset = combined;
+                    transpose_offset = combined.offset;
                     continue;
                 }
                 if d.kind.is_font_size_color() {
@@ -4294,6 +4315,58 @@ mod transpose_tests {
             result.warnings.iter().any(|w| w.contains("\"999\"")),
             "expected warning about out-of-range value, got: {:?}",
             result.warnings
+        );
+    }
+
+    #[test]
+    fn test_capo_subtracts_in_composition_with_cli_transpose() {
+        // ADR-0023 composition rule: file + cli - capo. cli=+4 and
+        // {capo: 2} compose to effective +2, so [C] renders as D.
+        // Sister-site to render-text / render-html.
+        let input = "{key: C}\n{capo: 2}\n[C]Hi";
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let bytes = render_song_with_transpose(&song, 4, &Config::defaults());
+        let content = String::from_utf8_lossy(&bytes);
+        assert!(
+            content.contains("(D)"),
+            "cli=+4, capo=2 must net +2 so [C] shifts to D, got PDF text stream"
+        );
+    }
+
+    #[test]
+    fn test_capo_top_level_saturation_emits_warning() {
+        // Sister-site to render-text / render-html. Top-level
+        // `effective_transpose` saturation must surface a warning
+        // (Finding 1).
+        let input = "{capo: 5}\n[C]Hi";
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, i8::MIN, &Config::defaults());
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("exceeds i8 range") && w.contains("capo")),
+            "expected top-level saturation warning citing capo, got: {:?}",
+            result.warnings,
+        );
+    }
+
+    #[test]
+    fn test_transpose_directive_with_capo_saturation_emits_warning() {
+        // ADR-0023: `file + cli - capo` overflows i8 — the
+        // saturation arm rewired through `effective_transpose` must
+        // surface a warning that cites the capo value alongside
+        // the {transpose} value.
+        let input = "{capo: 5}\n{transpose: 120}\n[C]Hi";
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let result = render_song_with_warnings(&song, 20, &Config::defaults());
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("exceeds i8 range") && w.contains("capo") && w.contains("120")),
+            "expected saturation warning citing capo and 120, got: {:?}",
+            result.warnings,
         );
     }
 

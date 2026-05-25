@@ -28,7 +28,15 @@ interface ChordproParser {
 
 /** Options accepted by the parse call. */
 export interface ChordproParseOptions {
-  /** Semitone transposition offset (reduced modulo 12 by the parser). */
+  /**
+   * Semitone transposition offset (reduced modulo 12 by the
+   * parser). The wasm parser deserialises this into an `i8`
+   * (`-128..=127`); values outside that range are rejected at
+   * deserialisation time and surface as a parse error on the
+   * hook's `error` state. Callers driving the value through the
+   * `<Transpose>` slider stay well inside the range because the
+   * slider clamps via its `min` / `max` props.
+   */
   transpose?: number;
   /**
    * Configuration preset name (e.g. `"guitar"`, `"ukulele"`) or
@@ -39,6 +47,15 @@ export interface ChordproParseOptions {
    * `+config.*` overrides) without a separate hook.
    */
   config?: string;
+  /**
+   * When `true`, the hook holds `ast` at `null` and never
+   * triggers the wasm load. Use this in components that
+   * conditionally need a parsed AST (e.g. `<Capo>` in
+   * controlled mode does not parse `source`) so the wasm
+   * module is not fetched eagerly when its output would be
+   * discarded.
+   */
+  skip?: boolean;
 }
 
 /** Result state returned by {@link useChordproAst}. */
@@ -147,9 +164,17 @@ export function useChordproAst(
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
 
-  const { transpose, config } = options;
+  const { transpose, config, skip = false } = options;
 
   useEffect(() => {
+    if (skip) {
+      // Caller is signalling the AST will not be consumed — keep
+      // the hook idle so the wasm module is not fetched. Reset
+      // `loading` to `false` so consumers can still inspect the
+      // (`null`) `ast` state without thinking work is in flight.
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
 
     const run = async (): Promise<void> => {
@@ -217,7 +242,7 @@ export function useChordproAst(
     // for the identical pattern + rationale (inline loaders would
     // invalidate the effect every render).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, transpose, config, retryNonce]);
+  }, [source, transpose, config, retryNonce, skip]);
 
   const retry = useCallback(() => {
     setRetryNonce((n) => n + 1);

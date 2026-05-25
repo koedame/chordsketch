@@ -16,10 +16,9 @@ import init, { validate, version as wasmVersion } from '@chordsketch/wasm';
 import { SAMPLE_CHORDPRO } from '../sample';
 import {
   PreviewToolbar,
+  PdfExport,
   RendererPreview,
   ChordSourceArea,
-  TRANSPOSE_MAX,
-  TRANSPOSE_MIN,
   applyChordReposition,
   readCapo,
   setCapoInSource,
@@ -784,14 +783,49 @@ function PlaygroundApp(): JSX.Element {
             <header className="pane-head">
               <p className="eyebrow">Preview · HTML</p>
               <span className="meta">{previewMeta}</span>
+              {/* Export PDF lives in the pane header (right-aligned
+                  via `.pane-head__export`) so the slider toolbar
+                  underneath only carries the two transposition
+                  controls. */}
+              <PdfExport
+                source={source}
+                options={{ transpose }}
+                className="pane-head__export"
+              >
+                {/* Inline download icon to match the design-system
+                    Button's "with icon" pattern (see
+                    design-system/preview/components-buttons.html
+                    §"With icon"). Keep `aria-hidden` so screen
+                    readers only announce the textual label. */}
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Export PDF
+              </PdfExport>
             </header>
             <PreviewToolbar
               source={source}
               onSourceChange={handleCapoSourceChange}
               transpose={transpose}
               onTransposeChange={setTranspose}
-              transposeMin={TRANSPOSE_MIN}
-              transposeMax={TRANSPOSE_MAX}
+              showExport={false}
+              /* `transposeMin/Max` left at the PreviewToolbar default
+                 (±6) so the slider rail stays readable on narrow
+                 preview panes. The feature ceiling of ±11 is still
+                 reachable by hosts that pass an explicit override. */
             />
             <div className="pane-body">
               <RendererPreview

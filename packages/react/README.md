@@ -415,14 +415,16 @@ export function Controls() {
 }
 ```
 
-The component renders a `−` / current-value readout / `+` trio
-plus a Reset button that appears only when the offset is non-zero.
-Buttons carry per-direction `aria-label`s (`"Transpose up one
-semitone"`, etc.), the readout is an `<output>` with `aria-live="polite"`
-so screen readers announce changes, and the wrapper listens for
-`+` / `-` / `0` keys while focus is inside so keyboard users can
-step without mouse hits. Values are clamped into `[min, max]`
-(defaults `-11`…`+11`) in both the controlled mode and via the
+The component renders a native `<input type="range">` slider and a
+signed current-value readout. The readout is an `<output>` with
+`aria-live="polite"` so screen readers announce changes; keyboard
+users get the native range input's built-in semantics (arrow keys,
+Home / End, PageUp / PageDown). The slider's default UI range is
+`±6` semitones — narrower than the feature ceiling
+`TRANSPOSE_MIN` / `TRANSPOSE_MAX` (`±11`) — so hosts that want a
+wider range pass explicit `min` / `max` props (down to `-11` /
+up to `+11`). Values are clamped into `[min, max]` in both the
+controlled mode's `value` prop (display-side clamp) and via the
 hook's own `setValue`.
 
 ### `useTranspose` — state helper for custom UIs

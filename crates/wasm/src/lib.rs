@@ -317,10 +317,11 @@ pub(crate) fn do_parse_chordpro(
     input: &str,
     options: Option<&RenderOptions>,
 ) -> Result<ParseChordproPayload, String> {
-    use chordsketch_chordpro::ast::{DirectiveKind, Line};
+    use chordsketch_chordpro::ast::{CapoValidation, DirectiveKind, Line};
     use chordsketch_chordpro::json::ToJson;
     use chordsketch_chordpro::transpose::{
-        canonical_transposed_key, canonical_transposed_key_with_style, transposed_key_prefers_flat,
+        canonical_transposed_key, canonical_transposed_key_with_style, effective_transpose,
+        transposed_key_prefers_flat,
     };
 
     let parse_options = chordsketch_chordpro::ParseOptions::default();
@@ -329,10 +330,39 @@ pub(crate) fn do_parse_chordpro(
     // the structural recovery happens inline. Surface them to the
     // React preview as `warnings` so they ride alongside the AST
     // without aborting the render.
-    let warnings: Vec<String> = parse_result.errors.iter().map(|w| format!("{w}")).collect();
+    let mut warnings: Vec<String> = parse_result.errors.iter().map(|w| format!("{w}")).collect();
 
     let song = parse_result.song;
-    let transpose_steps = options.map(|o| o.transpose).unwrap_or(0);
+    let cli_transpose = options.map(|o| o.transpose).unwrap_or(0);
+    // ADR-0023: fold `{capo: N}` into the transpose offset so the
+    // React JSX walker (which renders from the transposed AST it
+    // receives here) agrees with the Rust renderers on what `{capo}`
+    // does to the displayed chord names.
+    let song_capo = match song.metadata.capo_validated() {
+        CapoValidation::Valid(n) => n,
+        _ => 0,
+    };
+    // Mirror the Rust renderers' validate_capo invocation so the
+    // React preview surfaces the same "{capo} value N out of range"
+    // diagnostic instead of going silent (renderer-parity.md
+    // §Validation Parity). The renderer code path emits this
+    // warning at the top of render_song_impl; the wasm parse path
+    // is the React surface's equivalent entry point.
+    chordsketch_chordpro::render_result::validate_capo(&song.metadata, &mut warnings);
+    // The wasm path has no `{+config.settings.transpose}` extraction
+    // (renderers fold that in via `Config::song_transpose_delta`
+    // before reaching their own `effective_transpose` call). Pass
+    // `cli_transpose` in the `cli_offset` slot so the saturation
+    // warning's text matches the helper's argument naming, and so
+    // any future addition of a file-side override has a clean slot
+    // to fill.
+    let composed = effective_transpose(0, cli_transpose, song_capo);
+    let transpose_steps = composed.offset;
+    if composed.saturated {
+        warnings.push(format!(
+            "transpose offset {cli_transpose} - capo {song_capo} exceeds i8 range, clamped to {transpose_steps}"
+        ));
+    }
 
     // Compute the transposed `{key}` directive string for the
     // React preview's "Original Key X · Play Key Y" header.
@@ -1087,6 +1117,106 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_chordpro_capo_subtracts_from_transpose_offset_for_react_walker() {
+        // ADR-0023: the wasm parse entry point folds {capo: N} into
+        // the transpose offset it hands to `transpose(song, …)`, so
+        // the React JSX walker sees pre-transposed chord names that
+        // already incorporate the capo's `-N` shift. A song with no
+        // CLI transpose but `{capo: 2}` and a `[C]` segment must
+        // emit a `[B♭]` (canonical flat-side spelling) chord name in
+        // the resulting AST. The {capo} directive itself must remain
+        // in the lines so renderers can still surface it as
+        // metadata.
+        let opts = RenderOptions {
+            transpose: 0,
+            config: None,
+        };
+        let (json, warnings, _, _) =
+            do_parse_chordpro("{key: C}\n{capo: 2}\n[C]Hi", Some(&opts)).unwrap();
+        assert!(
+            json.contains("\"name\":\"Bb\""),
+            "capo=2 must shift the chord by -2 semitones (C→Bb), got: {json}"
+        );
+        assert!(
+            json.contains("\"capo\":\"2\""),
+            "{{capo:2}} metadata must round-trip on the AST, got: {json}"
+        );
+        assert!(
+            warnings.is_empty(),
+            "in-range capo + zero transpose emits no saturation warning, got: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_chordpro_capo_cancels_cli_transpose() {
+        // ADR-0023 composition rule: file + cli - capo. With
+        // cli=+2 and {capo: 2} the displayed offset is 0, so a
+        // `[C]` chord stays as `[C]` — capo cancels the CLI
+        // transpose for display purposes (the guitarist plays the
+        // C shape, the capo raises it to D sounding pitch).
+        let opts = RenderOptions {
+            transpose: 2,
+            config: None,
+        };
+        let (json, _, transposed_key, _) =
+            do_parse_chordpro("{key: C}\n{capo: 2}\n[C]Hi", Some(&opts)).unwrap();
+        assert!(
+            json.contains("\"name\":\"C\""),
+            "cli=+2 - capo=2 must net 0 so [C] stays [C], got: {json}"
+        );
+        // transposed_key is computed against the effective offset
+        // (0), which is a no-op against the original {key: C}; the
+        // wasm path elides the field in that case.
+        assert!(
+            transposed_key.is_none(),
+            "effective offset 0 should not emit a transposedKey chip, got: {transposed_key:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_chordpro_capo_saturation_emits_warning() {
+        // Capo plus an i8::MIN-class cli transpose underflows the
+        // signed-8-bit composition; the saturation branch in
+        // `do_parse_chordpro` must surface a warning so consumers
+        // know the offset was clamped rather than silently truncated.
+        let opts = RenderOptions {
+            transpose: i8::MIN,
+            config: None,
+        };
+        let (_, warnings, _, _) = do_parse_chordpro("{capo: 5}\n[C]Hi", Some(&opts)).unwrap();
+        assert!(
+            warnings.iter().any(|w| w.contains("exceeds i8 range")),
+            "saturation must emit a warning, got: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_chordpro_invalid_capo_falls_back_to_zero_and_warns() {
+        // `{capo: 999}` lands in `CapoValidation::OutOfRange` and
+        // the AST-rewriting path here treats the out-of-range
+        // capo as a no-op for the displayed offset. The wasm parse
+        // path mirrors the Rust renderers by calling
+        // `validate_capo` so the React preview surfaces the same
+        // warning instead of going silent
+        // (`.claude/rules/renderer-parity.md` §Validation Parity).
+        let opts = RenderOptions {
+            transpose: 0,
+            config: None,
+        };
+        let (json, warnings, _, _) = do_parse_chordpro("{capo: 999}\n[C]Hi", Some(&opts)).unwrap();
+        assert!(
+            json.contains("\"name\":\"C\""),
+            "out-of-range capo must fall back to a no-op offset, got: {json}"
+        );
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("out of range") && w.contains("999")),
+            "expected the canonical {{capo}} out-of-range warning to reach the React preview, got: {warnings:?}"
+        );
+    }
+
+    #[test]
     fn test_parse_chordpro_transposed_key_directives_empty_when_transpose_zero() {
         // transpose=0 means original and transposed are identical
         // for every {key:} directive; emit an empty map so the
@@ -1797,8 +1927,10 @@ mod wasm_tests {
     /// `{transpose: N}` was tried first but is the wrong trigger for
     /// this test: the saturation path in the text renderer only fires
     /// when an external transpose is ALSO supplied
-    /// (`combine_transpose(file_offset, cli_transpose)` in
-    /// `crates/render-text/src/lib.rs` L167-177). The no-options
+    /// (`effective_transpose(file_offset, cli_transpose, capo)` —
+    /// `crates/chordpro/src/transpose.rs`, called from the
+    /// per-directive `{transpose}` handler in
+    /// `crates/render-text/src/lib.rs`). The no-options
     /// `render_text_with_warnings` passes `transpose: 0` to the
     /// renderer, so a file-only `{transpose: 100}` combines to 100
     /// and does not saturate — no warning emitted, assertion fails.
@@ -1931,9 +2063,12 @@ mod wasm_tests {
     ///
     /// Sentinel: a `{transpose: 100}` directive in the source combined
     /// with a CLI `transpose: 100` exceeds the `i8` range (200 > 127),
-    /// so `chordsketch_chordpro::transpose::combine_transpose` saturates
-    /// and the renderer pushes a `transpose offset ... clamped to ...`
-    /// warning. See `crates/render-text/src/lib.rs` line 124-131.
+    /// so `chordsketch_chordpro::transpose::effective_transpose`
+    /// (the helper introduced in ADR-0023 that composes `file + cli
+    /// - capo`) saturates and the renderer pushes a
+    /// `transpose offset ... clamped to ...` warning. See the
+    /// per-directive `{transpose}` handler in
+    /// `crates/render-text/src/lib.rs` for the call site.
     /// (The HTML and PDF renderers have identical saturation paths;
     /// we exercise text here because it has the smallest output.)
     ///

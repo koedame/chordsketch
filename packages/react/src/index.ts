@@ -30,6 +30,11 @@ export {
 export { Transpose, type TransposeProps } from './transpose';
 export { Capo, type CapoProps } from './capo';
 export {
+  computeBestCapoPositions,
+  BEST_CAPO_MAX,
+  type BestCapoResult,
+} from './best-capo';
+export {
   PreviewToolbar,
   type PreviewToolbarProps,
 } from './preview-toolbar';
