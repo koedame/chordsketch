@@ -65,6 +65,178 @@ a { color: inherit; }
 .switch input:checked + .track { background: var(--crimson-500); }
 .switch input:checked + .track::before { transform: translateX(16px); }
 .switch input:focus-visible + .track { box-shadow: var(--focus-ring); }
+
+/* Slider group — two-row composition with the label + readout on
+   top and `−` / slider / `+` controls underneath. The two-row
+   shape gives the slider track full horizontal width without the
+   label or readout crowding it. */
+.slider-group {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 12rem;
+  padding-bottom: 18px; /* room for tick labels under the track */
+}
+.slider-group__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.slider-group__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.slider-group__label { font: 500 var(--fs-13)/1 var(--font-jp); color: var(--text-secondary); }
+.slider-group__btn {
+  flex-shrink: 0;
+  width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-2);
+  color: var(--text-primary);
+  font: 600 var(--fs-14)/1 var(--font-latin);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.slider-group__btn:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--text-secondary); }
+.slider-group__btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.slider-group__btn:disabled { cursor: not-allowed; opacity: 0.4; }
+.slider-group__readout {
+  min-width: 3ch; text-align: right;
+  font-family: var(--font-mono); font-size: var(--fs-13); font-weight: 600;
+  font-variant-numeric: tabular-nums; color: var(--text-primary);
+}
+
+/* Slider — native `<input type="range">` restyled to match the
+   design-system surface. Track is a 4px ink rail with a crimson
+   thumb on top; focus ring uses the canonical --focus-ring token. */
+.slider {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 24px;                /* hit area; track is 4px centred */
+  background: transparent;     /* paint via ::-webkit-slider-runnable-track */
+  margin: 0;
+  cursor: pointer;
+}
+.slider:focus { outline: none; }
+.slider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--ink-200);
+  border-radius: var(--r-full);
+}
+.slider::-moz-range-track {
+  height: 4px;
+  background: var(--ink-200);
+  border-radius: var(--r-full);
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px; height: 16px;
+  border-radius: var(--r-full);
+  background: var(--crimson-500);
+  border: 2px solid var(--ink-0);
+  box-shadow: var(--e-1);
+  margin-top: -6px;            /* (4 - 16) / 2 to centre on the track */
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+.slider::-moz-range-thumb {
+  width: 16px; height: 16px;
+  border-radius: var(--r-full);
+  background: var(--crimson-500);
+  border: 2px solid var(--ink-0);
+  box-shadow: var(--e-1);
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+.slider:hover::-webkit-slider-thumb { background: var(--crimson-600); }
+.slider:hover::-moz-range-thumb { background: var(--crimson-600); }
+.slider:active::-webkit-slider-thumb { transform: scale(1.08); }
+.slider:active::-moz-range-thumb { transform: scale(1.08); }
+.slider:focus-visible::-webkit-slider-thumb { box-shadow: var(--focus-ring); }
+.slider:focus-visible::-moz-range-thumb { box-shadow: var(--focus-ring); }
+.slider:disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* Slider track wrapper — flexes to fill the available width
+   between the two step buttons. Holds the input plus
+   absolute-positioned tick marks and ★ markers. */
+.slider-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 24px;
+}
+
+/* Tick rail — short vertical bars on the slider track at every
+   step position. Inset by `8px` (= thumb half-width) so
+   `left: 0%` aligns with the thumb at `min` and `left: 100%`
+   with the thumb at `max`. Without the inset every tick is
+   offset 8px outward from the matching thumb position. */
+.slider-ticks {
+  position: absolute;
+  inset: 0 8px;
+  pointer-events: none;
+}
+.slider-tick-line {
+  position: absolute;
+  top: 50%;
+  width: 1px;
+  height: 6px;
+  transform: translate(-50%, -50%);
+  background: var(--ink-300);
+  border-radius: var(--r-full);
+}
+.slider-tick-line--major { height: 10px; background: var(--ink-500); }
+
+/* Tick labels — small numerals positioned just under the ticks.
+   The wrap reserves extra bottom padding via the parent
+   `.slider-group__track` (set by the host) when labels are present. */
+.slider-tick-labels {
+  position: absolute;
+  top: calc(50% + 8px);
+  left: 8px; right: 8px;  /* matches `.slider-ticks` inset */
+  height: 14px;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;       /* 11px — smaller than --fs-12 to avoid crowding */
+  line-height: 1;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.slider-tick-label {
+  position: absolute;
+  transform: translateX(-50%);
+}
+/* Edge bias — keeps the leftmost and rightmost labels flush with
+   the slider wrap's bounds instead of half-overflowing. */
+.slider-tick-label[data-edge="start"] { transform: translateX(0); }
+.slider-tick-label[data-edge="end"]   { transform: translateX(-100%); }
+
+/* ★ best-capo markers — sit above the slider's hit area. Inset
+   matches `.slider-ticks` so each ★ aligns with the thumb at
+   that value. */
+.slider-marks {
+  position: absolute;
+  inset: 0 8px;
+  pointer-events: none;
+}
+.slider-mark-star {
+  position: absolute;
+  top: -0.6em;
+  transform: translateX(-50%);
+  font-size: var(--fs-12);
+  line-height: 1;
+  color: var(--crimson-500);
+  opacity: 0.95;
+}
+
 </style>
 </head>
 <body>
@@ -149,6 +321,99 @@ a { color: inherit; }
         <button aria-pressed="true">Split</button>
         <button aria-pressed="false">Source</button>
         <button aria-pressed="false">Preview</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Slider</h2>
+    <div class="frame">
+      <div class="field">
+        <div class="slider-group" role="group" aria-label="Transpose">
+          <div class="slider-group__header">
+            <span class="slider-group__label">Transpose</span>
+            <output class="slider-group__readout" for="transpose-slider">+2</output>
+          </div>
+          <div class="slider-group__controls">
+            <button type="button" class="slider-group__btn" aria-label="Transpose down one semitone">−</button>
+            <div class="slider-wrap">
+              <input id="transpose-slider" class="slider" type="range" min="-6" max="6" step="1" value="2" aria-label="Transpose">
+              <!-- Step ticks: short vertical lines at every step.
+                   Major tick (=0) highlights the identity position. -->
+              <div class="slider-ticks" aria-hidden="true">
+                <span class="slider-tick-line" style="left: 0%;"></span>
+                <span class="slider-tick-line" style="left: 8.333%;"></span>
+                <span class="slider-tick-line" style="left: 16.667%;"></span>
+                <span class="slider-tick-line" style="left: 25%;"></span>
+                <span class="slider-tick-line" style="left: 33.333%;"></span>
+                <span class="slider-tick-line" style="left: 41.667%;"></span>
+                <span class="slider-tick-line slider-tick-line--major" style="left: 50%;"></span>
+                <span class="slider-tick-line" style="left: 58.333%;"></span>
+                <span class="slider-tick-line" style="left: 66.667%;"></span>
+                <span class="slider-tick-line" style="left: 75%;"></span>
+                <span class="slider-tick-line" style="left: 83.333%;"></span>
+                <span class="slider-tick-line" style="left: 91.667%;"></span>
+                <span class="slider-tick-line" style="left: 100%;"></span>
+              </div>
+              <div class="slider-tick-labels" aria-hidden="true">
+                <span class="slider-tick-label" data-edge="start" style="left: 0%;">−6</span>
+                <span class="slider-tick-label" style="left: 25%;">−3</span>
+                <span class="slider-tick-label" style="left: 50%;">0</span>
+                <span class="slider-tick-label" style="left: 75%;">+3</span>
+                <span class="slider-tick-label" data-edge="end" style="left: 100%;">+6</span>
+              </div>
+            </div>
+            <button type="button" class="slider-group__btn" aria-label="Transpose up one semitone">+</button>
+          </div>
+        </div>
+        <span class="help">Signed readout in monospace; native range-input keyboard semantics; <code style="font-family: var(--font-mono);">−</code> / <code style="font-family: var(--font-mono);">+</code> buttons step by 1.</span>
+      </div>
+      <div class="field">
+        <div class="slider-group" role="group" aria-label="Capo">
+          <div class="slider-group__header">
+            <span class="slider-group__label">Capo</span>
+            <output class="slider-group__readout" for="capo-slider">0</output>
+          </div>
+          <div class="slider-group__controls">
+            <button type="button" class="slider-group__btn" aria-label="Capo down one fret" disabled>−</button>
+            <div class="slider-wrap">
+              <input id="capo-slider" class="slider" type="range" min="0" max="12" step="1" value="0" aria-label="Capo">
+              <div class="slider-ticks" aria-hidden="true">
+                <span class="slider-tick-line slider-tick-line--major" style="left: 0%;"></span>
+                <span class="slider-tick-line" style="left: 8.333%;"></span>
+                <span class="slider-tick-line" style="left: 16.667%;"></span>
+                <span class="slider-tick-line" style="left: 25%;"></span>
+                <span class="slider-tick-line" style="left: 33.333%;"></span>
+                <span class="slider-tick-line" style="left: 41.667%;"></span>
+                <span class="slider-tick-line" style="left: 50%;"></span>
+                <span class="slider-tick-line" style="left: 58.333%;"></span>
+                <span class="slider-tick-line" style="left: 66.667%;"></span>
+                <span class="slider-tick-line" style="left: 75%;"></span>
+                <span class="slider-tick-line" style="left: 83.333%;"></span>
+                <span class="slider-tick-line" style="left: 91.667%;"></span>
+                <span class="slider-tick-line" style="left: 100%;"></span>
+              </div>
+              <div class="slider-tick-labels" aria-hidden="true">
+                <span class="slider-tick-label" data-edge="start" style="left: 0%;">0</span>
+                <span class="slider-tick-label" style="left: 25%;">3</span>
+                <span class="slider-tick-label" style="left: 50%;">6</span>
+                <span class="slider-tick-label" style="left: 75%;">9</span>
+                <span class="slider-tick-label" data-edge="end" style="left: 100%;">12</span>
+              </div>
+              <!-- ★ best-capo markers — emitted by
+                   `@chordsketch/react`'s `computeBestCapoPositions`
+                   helper. Positioned by left-percentage relative
+                   to the slider's min..=max range. -->
+              <div class="slider-marks" aria-hidden="true">
+                <span class="slider-mark-star" style="left: 0%;">★</span>
+                <span class="slider-mark-star" style="left: 41.667%;">★</span>
+                <span class="slider-mark-star" style="left: 58.333%;">★</span>
+              </div>
+            </div>
+            <button type="button" class="slider-group__btn" aria-label="Capo up one fret">+</button>
+          </div>
+        </div>
+        <span class="help">★ marks capo positions tied for the fewest accidentals (here: <code style="font-family: var(--font-mono);">0</code>, <code style="font-family: var(--font-mono);">5</code>, <code style="font-family: var(--font-mono);">7</code> for a C / F / G song). <code style="font-family: var(--font-mono);">−</code> button disabled at the lower bound.</span>
       </div>
     </div>
   </section>

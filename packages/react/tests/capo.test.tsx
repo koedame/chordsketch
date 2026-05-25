@@ -123,7 +123,11 @@ describe('<Capo>', () => {
   });
 
   test('exposes the slider value via the visible readout', () => {
+    // The tick rail now labels every step, so a plain `getByText('4')`
+    // would match the tick label as well as the `<output>` readout.
+    // Target the `<output>` element directly.
     render(<Capo value={4} onChange={vi.fn()} />);
-    expect(screen.getByText('4')).toBeTruthy();
+    const out = document.querySelector('.chordsketch-capo__value');
+    expect(out?.textContent).toBe('4');
   });
 });

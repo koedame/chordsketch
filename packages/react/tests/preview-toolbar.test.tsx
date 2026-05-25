@@ -159,7 +159,7 @@ describe('<PreviewToolbar>', () => {
     expect(screen.getByRole('group', { name: 'Capo' })).toBeTruthy();
   });
 
-  test('Transpose slider reflects the host value and renders the toolbar default ±11 range', () => {
+  test('Transpose slider reflects the host value and uses the ±6 default range', () => {
     render(
       <PreviewToolbar
         source={SAMPLE}
@@ -170,10 +170,11 @@ describe('<PreviewToolbar>', () => {
     );
     const slider = screen.getByRole('slider', { name: 'Transpose' }) as HTMLInputElement;
     expect(slider.value).toBe('-6');
-    // PreviewToolbar passes TRANSPOSE_MIN/MAX (±11) to <Transpose>
-    // so the host's wider range survives the slider default of ±6.
-    expect(slider.min).toBe('-11');
-    expect(slider.max).toBe('11');
+    // PreviewToolbar passes TRANSPOSE_DEFAULT_MIN/MAX (±6) so the
+    // slider stays readable on narrow preview panes. Hosts widening
+    // to the feature ceiling (±11) pass transposeMin/Max explicitly.
+    expect(slider.min).toBe('-6');
+    expect(slider.max).toBe('6');
   });
 
   test('Capo group writes {capo} into source via onSourceChange', () => {

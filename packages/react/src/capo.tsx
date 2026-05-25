@@ -1,6 +1,7 @@
 import type { ChangeEvent, HTMLAttributes } from 'react';
 import { useCallback, useId, useMemo } from 'react';
 
+import { computeBestCapoPositions } from './best-capo';
 import {
   CAPO_MAX,
   CAPO_MIN,
@@ -8,6 +9,7 @@ import {
   setCapoInSource,
 } from './chord-source-edit';
 import { clamp as clampValue } from './clamp';
+import { useChordproAst } from './use-chordpro-ast';
 
 /**
  * Either of the two `<Capo>` shapes. Mirrors `<Transpose>`'s
@@ -77,6 +79,16 @@ export type CapoProps = CapoModeProps &
      * the component.
      */
     bestPositions?: ReadonlyArray<number>;
+    /**
+     * Active transpose offset, in source-pair mode. When the host
+     * also drives a `<Transpose>` slider, pass the same value here
+     * so the ★ best-capo recommendations reflect the
+     * *transposed* chord roots — moving the transpose slider
+     * shifts which capo positions zero out the accidentals.
+     * Defaults to `0` (no transpose). Ignored in controlled mode
+     * (the host supplies `bestPositions` directly).
+     */
+    transpose?: number;
   };
 
 function defaultFormat(value: number): string {
@@ -131,6 +143,7 @@ export function Capo(props: CapoProps): JSX.Element {
     onCapoChange,
     className,
     bestPositions,
+    transpose = 0,
     // Extract the mode-specific fields so they do not leak into
     // the spread onto the wrapper div.
     value: controlledValue,
@@ -142,6 +155,26 @@ export function Capo(props: CapoProps): JSX.Element {
 
   const sourceMode = isSourceMode(props);
   const rawValue = sourceMode ? readCapo(source!) : controlledValue!;
+
+  // Source-pair mode: parse the source so the ★ best-capo hint
+  // appears automatically without the host having to pre-compute
+  // it. Threading `transpose` through here lets the AST come back
+  // with chord roots already shifted by `transpose - capo` — pair
+  // that with `parseSongCapo`'s capo-undo in `computeBestCapoPositions`
+  // and the best-capo enumeration runs against the *transposed*
+  // chord roots, so moving the `<Transpose>` slider shifts the
+  // ★ recommendations alongside the song. `useChordproAst`
+  // lazy-loads `@chordsketch/wasm` and caches the result, so
+  // this is cheap to call from inside the component. Controlled
+  // mode skips parsing (the host has the AST already and passes
+  // `bestPositions` explicitly).
+  const { ast: sourceAst } = useChordproAst(sourceMode ? source! : '', { transpose });
+  const derivedBestPositions = useMemo(() => {
+    if (!sourceMode || !sourceAst) return undefined;
+    const result = computeBestCapoPositions(sourceAst);
+    return result?.positions;
+  }, [sourceMode, sourceAst]);
+  const effectiveBestPositions = bestPositions ?? derivedBestPositions;
   const clamp = useCallback(
     (next: number): number => clampValue(next, min, max),
     [min, max],
@@ -186,10 +219,10 @@ export function Capo(props: CapoProps): JSX.Element {
   // see stranded markers outside the slider track. Empty list →
   // no markers rendered.
   const markers = useMemo(() => {
-    if (!bestPositions || bestPositions.length === 0) return [] as number[];
+    if (!effectiveBestPositions || effectiveBestPositions.length === 0) return [] as number[];
     const seen = new Set<number>();
     const result: number[] = [];
-    for (const pos of bestPositions) {
+    for (const pos of effectiveBestPositions) {
       // Reject non-finite or non-integer entries before the range
       // check: NaN slips past `pos < min || pos > max` (every NaN
       // comparison evaluates to false in JS) and would otherwise
@@ -204,7 +237,7 @@ export function Capo(props: CapoProps): JSX.Element {
       result.push(pos);
     }
     return result.sort((a, b) => a - b);
-  }, [bestPositions, min, max]);
+  }, [effectiveBestPositions, min, max]);
 
   // Use React 18's `useId` so the generated id is stable across
   // server-render and client-hydration. The previous `Math.random()`
@@ -221,6 +254,22 @@ export function Capo(props: CapoProps): JSX.Element {
         ? label
         : 'Capo';
 
+  // Tick marks AND numeric labels at every step — every grid
+  // line is annotated so the user does not have to interpolate.
+  const ticks = useMemo(() => {
+    if (range <= 0 || step <= 0) return [] as Array<{ pos: number; major: boolean }>;
+    const out: Array<{ pos: number; major: boolean }> = [];
+    for (let p = min; p <= max; p += step) {
+      out.push({ pos: p, major: true });
+    }
+    return out;
+  }, [min, max, step, range]);
+
+  const handleDecrement = useCallback(() => emit(displayValue - step), [emit, displayValue, step]);
+  const handleIncrement = useCallback(() => emit(displayValue + step), [emit, displayValue, step]);
+  const decrementDisabled = displayValue <= min;
+  const incrementDisabled = displayValue >= max;
+
   return (
     <div
       {...divProps}
@@ -228,51 +277,99 @@ export function Capo(props: CapoProps): JSX.Element {
       aria-label={ariaLabel}
       className={['chordsketch-capo', className].filter(Boolean).join(' ')}
     >
-      {label !== null ? (
-        <span className="chordsketch-capo__label" aria-hidden="true">
-          {label}
-        </span>
-      ) : null}
-      <div className="chordsketch-capo__slider-wrap">
-        <input
-          type="range"
-          className="chordsketch-capo__slider"
-          min={min}
-          max={max}
-          step={step}
-          value={displayValue}
-          onChange={handleSliderChange}
-          aria-label={ariaLabel}
-          aria-describedby={markerDescriptionId}
-        />
-        {markers.length > 0 && range > 0 ? (
-          <div className="chordsketch-capo__markers" aria-hidden="true">
-            {markers.map((pos) => {
-              // Position the ★ proportionally over the slider
-              // track. `left: 0%` aligns with `min`, `100%`
-              // aligns with `max`.
-              const percent = ((pos - min) / range) * 100;
-              return (
-                <span
-                  key={pos}
-                  className="chordsketch-capo__marker"
-                  style={{ left: `${percent}%` }}
-                  data-best-capo={pos}
-                >
-                  ★
-                </span>
-              );
-            })}
-          </div>
-        ) : null}
+      <div className="chordsketch-capo__header">
+        {label !== null ? (
+          <span className="chordsketch-capo__label" aria-hidden="true">
+            {label}
+          </span>
+        ) : (
+          <span />
+        )}
+        <output
+          className="chordsketch-capo__value"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {formatValue(displayValue)}
+        </output>
       </div>
-      <output
-        className="chordsketch-capo__value"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {formatValue(displayValue)}
-      </output>
+      <div className="chordsketch-capo__controls">
+        <button
+          type="button"
+          className="chordsketch-capo__btn chordsketch-capo__btn--decrement"
+          onClick={handleDecrement}
+          disabled={decrementDisabled}
+          aria-label={step === 1 ? 'Capo down one fret' : `Capo down ${step} frets`}
+        >
+          −
+        </button>
+        <div className="chordsketch-capo__slider-wrap">
+          <input
+            type="range"
+            className="chordsketch-capo__slider"
+            min={min}
+            max={max}
+            step={step}
+            value={displayValue}
+            onChange={handleSliderChange}
+            aria-label={ariaLabel}
+            aria-describedby={markerDescriptionId}
+          />
+          {range > 0 ? (
+            <>
+              <div className="chordsketch-capo__ticks" aria-hidden="true">
+                {ticks.map(({ pos, major }) => (
+                  <span
+                    key={pos}
+                    className={
+                      major
+                        ? 'chordsketch-capo__tick chordsketch-capo__tick--major'
+                        : 'chordsketch-capo__tick'
+                    }
+                    style={{ left: `${((pos - min) / range) * 100}%` }}
+                  />
+                ))}
+              </div>
+              <div className="chordsketch-capo__tick-labels" aria-hidden="true">
+                {ticks
+                  .filter(({ major }) => major)
+                  .map(({ pos }) => (
+                    <span
+                      key={pos}
+                      className="chordsketch-capo__tick-label"
+                      style={{ left: `${((pos - min) / range) * 100}%` }}
+                    >
+                      {pos}
+                    </span>
+                  ))}
+              </div>
+              {markers.length > 0 ? (
+                <div className="chordsketch-capo__markers" aria-hidden="true">
+                  {markers.map((pos) => (
+                    <span
+                      key={pos}
+                      className="chordsketch-capo__marker"
+                      style={{ left: `${((pos - min) / range) * 100}%` }}
+                      data-best-capo={pos}
+                    >
+                      ★
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          className="chordsketch-capo__btn chordsketch-capo__btn--increment"
+          onClick={handleIncrement}
+          disabled={incrementDisabled}
+          aria-label={step === 1 ? 'Capo up one fret' : `Capo up ${step} frets`}
+        >
+          +
+        </button>
+      </div>
       {markerDescriptionId ? (
         <span id={markerDescriptionId} className="chordsketch-capo__sr-only">
           ★ marks the easiest capo position{markers.length === 1 ? '' : 's'} —

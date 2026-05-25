@@ -7,6 +7,14 @@ function getSlider(): HTMLInputElement {
   return screen.getByRole('slider', { name: 'Transpose' }) as HTMLInputElement;
 }
 
+// The tick rail renders the same numerals (e.g. `0`, `+3`) as the
+// readout, so plain text queries match more than once. Target the
+// `<output>` element directly when asserting on the displayed value.
+function getReadoutText(): string {
+  const out = document.querySelector('.chordsketch-transpose__value');
+  return out?.textContent ?? '';
+}
+
 describe('useTranspose', () => {
   test('initial defaults to 0', () => {
     const { result } = renderHook(() => useTranspose());
@@ -80,14 +88,14 @@ describe('<Transpose>', () => {
 
   test('renders the readout with a + sign for positive values', () => {
     render(<Transpose value={3} onChange={vi.fn()} />);
-    expect(screen.getByText('+3')).toBeTruthy();
+    expect(getReadoutText()).toBe('+3');
   });
 
   test('renders without a + for zero and a − for negatives', () => {
     const { rerender } = render(<Transpose value={0} onChange={vi.fn()} />);
-    expect(screen.getByText('0')).toBeTruthy();
+    expect(getReadoutText()).toBe('0');
     rerender(<Transpose value={-2} onChange={vi.fn()} />);
-    expect(screen.getByText('-2')).toBeTruthy();
+    expect(getReadoutText()).toBe('-2');
   });
 
   test('changing the slider emits the parsed value', () => {
@@ -130,6 +138,6 @@ describe('<Transpose>', () => {
         formatValue={(v) => `${v} st`}
       />,
     );
-    expect(screen.getByText('2 st')).toBeTruthy();
+    expect(getReadoutText()).toBe('2 st');
   });
 });

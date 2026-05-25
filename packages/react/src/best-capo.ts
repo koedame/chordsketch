@@ -83,8 +83,35 @@ function chordBassSemitone(chord: ChordproChord): number | null {
   return (((base + accidentalShift(detail.bassNote.accidental)) % 12) + 12) % 12;
 }
 
-/** Collect every (root, bass) semitone pair driven by an actual chord. */
+/**
+ * Parse the song's `{capo: N}` metadata into a 0..=24 semitone
+ * offset. Out-of-range / non-integer values resolve to 0 so the
+ * helper never panics on user input. Mirrors the Rust-side
+ * `Metadata::capo_validated` contract.
+ */
+function parseSongCapo(song: ChordproSong): number {
+  const raw = song.metadata.capo;
+  if (raw === null || raw === undefined) return 0;
+  const n = Number.parseInt(raw.trim(), 10);
+  if (!Number.isInteger(n)) return 0;
+  if (n < 1 || n > 24) return 0;
+  return n;
+}
+
+/**
+ * Collect every (root, bass) semitone pair driven by an actual chord.
+ *
+ * The AST emitted by `@chordsketch/wasm`'s `parseChordpro*` path has
+ * already folded `{capo: N}` into the effective transpose offset
+ * (ADR-0023), so the chord roots stored on the AST are *displayed*
+ * roots — shifted by `-capo` from the source's literal roots. Add
+ * `capo` back here so the best-capo enumeration sees the original
+ * roots and produces a stable answer independent of the current
+ * capo position.
+ */
 function collectChordSemitones(song: ChordproSong): number[] {
+  const capoBack = parseSongCapo(song);
+  const undoCapo = (s: number) => (((s + capoBack) % 12) + 12) % 12;
   const out: number[] = [];
   for (const line of song.lines as ChordproLine[]) {
     if (line.kind !== 'lyrics') continue;
@@ -93,9 +120,9 @@ function collectChordSemitones(song: ChordproSong): number[] {
       if (!chord) continue;
       const root = chordRootSemitone(chord);
       if (root === null) continue;
-      out.push(root);
+      out.push(undoCapo(root));
       const bass = chordBassSemitone(chord);
-      if (bass !== null) out.push(bass);
+      if (bass !== null) out.push(undoCapo(bass));
     }
   }
   return out;
