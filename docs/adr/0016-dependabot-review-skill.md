@@ -1,7 +1,16 @@
 # 0016. Dependabot review moves from a CI bot to a session skill; major bumps are no longer suppressed
 
-- **Status**: Accepted
+- **Status**: Accepted (unattended scheduled run added by ADR-0024 on 2026-05-25)
 - **Date**: 2026-05-03
+
+> **Update (2026-05-25):** [ADR-0024](0024-scheduled-dependabot-merge.md) adds a
+> scheduled, maintainer-operated automation path that runs this skill's
+> audit-and-merge unattended, for Dependabot PRs of any bump type (the audit
+> reads release notes and applies code-side adaptation for majors exactly as the
+> attended skill does). The automation's configured run replaces condition-1's
+> per-session keystroke when the five-condition gate in ADR-0024 is satisfied;
+> the merge gate is the audit verdict plus a green full rollup, not the semver
+> level. PRs the audit cannot clear stay on the human path.
 
 ## Context
 

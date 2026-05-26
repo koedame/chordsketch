@@ -39,3 +39,10 @@ single round implements every high-confidence eligible issue (capped at
   code-side fixes — and squash-merges the safe ones. See [ADR-0016](../../docs/adr/0016-dependabot-review-skill.md)
   for the policy rationale and [Pull Request Workflow](pr-workflow.md) §"Bot-driven
   merge: conditional permission" for the four-clause merge gate the skill operates under.
+- A **scheduled, maintainer-operated automation** may additionally run the same
+  audit-and-merge unattended (no per-session human invocation), for any bump
+  type including majors, per [ADR-0024](../../docs/adr/0024-scheduled-dependabot-merge.md)
+  and [Pull Request Workflow](pr-workflow.md) §"Scheduled unattended Dependabot
+  review-and-merge". The gate is the audit verdict (`SAFE`/`FIXED`) plus a green
+  full rollup, not the semver level; PRs the audit cannot clear
+  (`BLOCKED` / `NEEDS_REVIEW`) stay on the human path.
