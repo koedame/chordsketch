@@ -112,6 +112,43 @@ why condition (4) is a direct squash and not a merge-queue enqueue.
 If any of (1)–(4) is not satisfied, post the "Ready for merge"
 comment and wait for the human merger.
 
+### Scheduled unattended Dependabot review-and-merge (ADR-0024)
+
+Clause 1 above ("explicit, current-session permission") is extended —
+**for Dependabot PRs** — by
+[ADR-0024](../../docs/adr/0024-scheduled-dependabot-merge.md). A
+scheduled, maintainer-operated automation MAY run the
+`/dependabot-review`-equivalent flow (audit, apply required code-side
+adaptation, squash-merge) without a per-session human invocation, for
+any bump type (patch, minor, or major), when **all** of the following
+hold for a PR:
+
+1. **Author is `dependabot[bot]`.**
+2. **The audit clears the PR** with a `SAFE` verdict (no change needed)
+   or a `FIXED` verdict (the automation applied the required code-side
+   adaptation as commits on the Dependabot branch). The audit covers
+   diff sanity, GitHub Advisory Database exposure, and release notes
+   across every version between old and new.
+3. **Full check rollup green** on the final commit (clause 2 above,
+   unchanged — required AND non-required; for a `FIXED` PR, the rollup
+   *after* the adaptation commits).
+4. **Direct squash** (clause 4 above, unchanged).
+5. **The audit posts its verdict as a PR comment before merging.** A PR
+   the audit cannot clear (`BLOCKED` / `NEEDS_REVIEW`) is commented and
+   left open for a human; it is never merged unattended.
+
+**Clause 3** (auto-review converged on HEAD) is satisfied by the
+automation's own audit pass — analogous to ADR-0016's mapping where the
+skill's audit cycle IS the converged review. Clauses 2 and 4 are
+unchanged and must be met verbatim.
+
+The semver level is not part of the gate — majors are handled the same
+way the attended skill handles them (read release notes, adapt the code,
+let the full matrix validate). The scheduled run is the maintainer's
+standing authorization and replaces clause 1's per-session keystroke for
+Dependabot PRs. Every **non-Dependabot** bot-initiated merge still
+requires explicit current-session permission per clause 1.
+
 #### Historical rationale (superseded)
 
 A previous iteration of this workflow had bots run `gh pr merge --squash --auto` after
