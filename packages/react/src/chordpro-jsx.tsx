@@ -54,7 +54,11 @@ import type {
   ChordproSong,
   ChordproTextSpan,
 } from './chordpro-ast';
-import type { ChordDiagramInstrument } from './use-chord-diagram';
+import type {
+  ChordDiagramHorizontalStringOrder,
+  ChordDiagramInstrument,
+  ChordDiagramOrientation,
+} from './use-chord-diagram';
 import type { ChordRepositionEvent } from './chord-source-edit';
 
 // ---- Sanitiser helpers --------------------------------------------
@@ -2399,6 +2403,23 @@ export interface RenderChordproAstOptions {
      * basis.
      */
     instrument?: ChordDiagramInstrument;
+    /**
+     * Diagram orientation forwarded to `<ChordDiagram>` (#2572).
+     * Defaults to `"vertical"`. Pass `"horizontal"` to render the
+     * Japanese-tablature layout (nut on the left, fretboard
+     * extending rightward). Sister-site to the Rust HTML / PDF
+     * renderers' `diagrams.orientation` config key — the React
+     * walker mirrors the behaviour via this option rather than
+     * by reading `{+config.diagrams.orientation: …}` overrides,
+     * which the walker does not currently dispatch on.
+     */
+    orientation?: ChordDiagramOrientation;
+    /**
+     * String-row order for horizontal-orientation diagrams.
+     * Defaults to `"reader"` (high pitch on top — see ADR-0026).
+     * Ignored when `orientation` is `"vertical"`.
+     */
+    horizontalStringOrder?: ChordDiagramHorizontalStringOrder;
   } | null;
   /**
    * 1-indexed source line that the consumer's editor caret is
@@ -4031,10 +4052,11 @@ export function renderChordproAst(
   let rightSection: ReactNode = null;
   let bottomSection: ReactNode = null;
   if (diagramsState?.visible && options.chordDiagrams) {
+    const chordDiagramsOpts = options.chordDiagrams;
     const names = collectChordNames(song);
     if (names.length > 0) {
       const instrument =
-        diagramsState.instrument ?? options.chordDiagrams.instrument ?? 'guitar';
+        diagramsState.instrument ?? chordDiagramsOpts.instrument ?? 'guitar';
       // Collect every `{define}` in the song so user-defined
       // voicings reach the wasm `lookup_diagram` call. Mirrors
       // the Rust HTML renderer's `song.fretted_defines()` path.
@@ -4064,6 +4086,8 @@ export function renderChordproAst(
                   chord={name}
                   instrument={instrument}
                   defines={defines}
+                  orientation={chordDiagramsOpts.orientation}
+                  horizontalStringOrder={chordDiagramsOpts.horizontalStringOrder}
                 />
               </figure>
             ))}

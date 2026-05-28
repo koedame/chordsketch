@@ -32,7 +32,36 @@ interface DiagramRenderer {
     instrument: string,
     defines: Array<[string, string]>,
   ) => string | null | undefined;
+  /**
+   * Variant honouring the horizontal-orientation knob added in
+   * #2572. `orientation` and `stringOrder` accept the same string
+   * values the Rust `resolve_orientation` /
+   * `resolve_horizontal_string_order` helpers do; `null` /
+   * `undefined` falls back to defaults (vertical / reader-view).
+   */
+  chordDiagramSvgWithDefinesOrientation?: (
+    chord: string,
+    instrument: string,
+    defines: Array<[string, string]>,
+    orientation: string | null | undefined,
+    stringOrder: string | null | undefined,
+  ) => string | null | undefined;
 }
+
+/** Diagram orientation accepted by {@link useChordDiagram}. */
+export type ChordDiagramOrientation = 'vertical' | 'horizontal';
+
+/**
+ * Row order for horizontal-orientation diagrams.
+ *
+ * - `'reader'` — high pitch on top, matches tablature stave order
+ *   (the default per ADR-0026).
+ * - `'player'` — low pitch on top, mirrors what a right-handed
+ *   player sees looking down at the instrument.
+ *
+ * Has no effect when {@link ChordDiagramOrientation} is `'vertical'`.
+ */
+export type ChordDiagramHorizontalStringOrder = 'reader' | 'player';
 
 /** Supported instrument families for chord diagram lookup. */
 export type ChordDiagramInstrument =
@@ -109,6 +138,8 @@ export function useChordDiagram(
   instrument: ChordDiagramInstrument,
   loader: ChordDiagramWasmLoader = defaultLoader,
   defines?: ReadonlyArray<readonly [string, string]>,
+  orientation?: ChordDiagramOrientation,
+  stringOrder?: ChordDiagramHorizontalStringOrder,
 ): ChordDiagramResult {
   const [svg, setSvg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -137,18 +168,27 @@ export function useChordDiagram(
           rendererRef.current = mod;
         }
         const renderer = rendererRef.current;
-        // Prefer the defines-aware export when the host wasm
-        // bundle ships it. Older bundles (pre-#2466 follow-up)
-        // only expose `chord_diagram_svg`, so fall back to that
-        // path — user-defined voicings won't be honoured there,
-        // but at least the built-in lookup still works.
-        const result = renderer.chordDiagramSvgWithDefines
-          ? renderer.chordDiagramSvgWithDefines(
-              chord,
-              instrument,
-              defines ? defines.map(([n, r]) => [n, r]) : [],
-            )
-          : renderer.chord_diagram_svg(chord, instrument);
+        // Prefer the orientation-aware export when present; fall back to
+        // the defines-aware export (pre-#2572 bundles) and ultimately to
+        // the plain export (pre-#2466 bundles). Older bundles silently
+        // drop the orientation knob — diagrams render in the legacy
+        // vertical layout, which is the same behaviour the caller would
+        // see if they omitted `orientation` entirely.
+        const definesArray = defines ? defines.map(([n, r]) => [n, r] as [string, string]) : [];
+        let result: string | null | undefined;
+        if (renderer.chordDiagramSvgWithDefinesOrientation) {
+          result = renderer.chordDiagramSvgWithDefinesOrientation(
+            chord,
+            instrument,
+            definesArray,
+            orientation ?? null,
+            stringOrder ?? null,
+          );
+        } else if (renderer.chordDiagramSvgWithDefines) {
+          result = renderer.chordDiagramSvgWithDefines(chord, instrument, definesArray);
+        } else {
+          result = renderer.chord_diagram_svg(chord, instrument);
+        }
         if (cancelled) return;
         setSvg(result ?? null);
         setError(null);
@@ -175,7 +215,7 @@ export function useChordDiagram(
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chord, instrument, definesKey]);
+  }, [chord, instrument, definesKey, orientation, stringOrder]);
 
   return { svg, loading, error };
 }

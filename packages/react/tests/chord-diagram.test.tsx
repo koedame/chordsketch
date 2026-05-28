@@ -150,3 +150,99 @@ describe('useChordDiagram', () => {
     await waitFor(() => expect(screen.getByTestId('out').textContent).toBe('NONE'));
   });
 });
+
+// Orientation pass-through (#2572) — the React surface adds two optional
+// props that should ultimately reach the wasm `chord_diagram_svg_*`
+// exports. We assert at the boundary rather than rendering the real SVG
+// because the stub renderer fully captures the contract.
+describe('<ChordDiagram> orientation pass-through (#2572)', () => {
+  function makeOrientationStub() {
+    return {
+      default: vi.fn(async () => undefined),
+      chord_diagram_svg: vi.fn(() => '<svg data-mode="legacy"></svg>'),
+      chordDiagramSvgWithDefines: vi.fn(() => '<svg data-mode="defines"></svg>'),
+      chordDiagramSvgWithDefinesOrientation: vi.fn(
+        (
+          _chord: string,
+          _instrument: string,
+          _defines: unknown,
+          orientation: string | null | undefined,
+          stringOrder: string | null | undefined,
+        ) =>
+          `<svg data-mode="oriented" data-orientation="${orientation ?? 'null'}" data-string-order="${
+            stringOrder ?? 'null'
+          }"></svg>`,
+      ),
+    };
+  }
+
+  test('passes orientation="horizontal" through to the wasm export', async () => {
+    const stub = makeOrientationStub();
+    const { container } = render(
+      <ChordDiagram
+        chord="Am"
+        instrument="guitar"
+        orientation="horizontal"
+        wasmLoader={makeLoader(stub as unknown as StubRenderer)}
+      />,
+    );
+    await waitFor(() => {
+      const svg = container.querySelector('.chordsketch-diagram svg');
+      expect(svg?.getAttribute('data-mode')).toBe('oriented');
+      expect(svg?.getAttribute('data-orientation')).toBe('horizontal');
+    });
+    expect(stub.chordDiagramSvgWithDefinesOrientation).toHaveBeenCalledWith(
+      'Am',
+      'guitar',
+      [],
+      'horizontal',
+      null,
+    );
+    expect(stub.chordDiagramSvgWithDefines).not.toHaveBeenCalled();
+  });
+
+  test('passes horizontalStringOrder="player" alongside orientation', async () => {
+    const stub = makeOrientationStub();
+    render(
+      <ChordDiagram
+        chord="Am"
+        instrument="guitar"
+        orientation="horizontal"
+        horizontalStringOrder="player"
+        wasmLoader={makeLoader(stub as unknown as StubRenderer)}
+      />,
+    );
+    await waitFor(() => {
+      expect(stub.chordDiagramSvgWithDefinesOrientation).toHaveBeenCalledWith(
+        'Am',
+        'guitar',
+        [],
+        'horizontal',
+        'player',
+      );
+    });
+  });
+
+  test('falls back to the defines-only export when the orientation export is absent', async () => {
+    // Older wasm bundles (pre-#2572) only ship
+    // `chordDiagramSvgWithDefines`. The hook must degrade gracefully so
+    // hosts pinning an older wasm bundle keep rendering — just without
+    // orientation honoured.
+    const stub = makeOrientationStub();
+    const noOrientation: typeof stub & {
+      chordDiagramSvgWithDefinesOrientation?: typeof stub.chordDiagramSvgWithDefinesOrientation;
+    } = { ...stub };
+    delete noOrientation.chordDiagramSvgWithDefinesOrientation;
+    render(
+      <ChordDiagram
+        chord="Am"
+        instrument="guitar"
+        orientation="horizontal"
+        wasmLoader={makeLoader(noOrientation as unknown as StubRenderer)}
+      />,
+    );
+    await waitFor(() => {
+      expect(noOrientation.chordDiagramSvgWithDefines).toHaveBeenCalledWith('Am', 'guitar', []);
+    });
+  });
+});

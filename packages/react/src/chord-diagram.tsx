@@ -1,7 +1,9 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 
 import {
+  type ChordDiagramHorizontalStringOrder,
   type ChordDiagramInstrument,
+  type ChordDiagramOrientation,
   type ChordDiagramWasmLoader,
   useChordDiagram,
 } from './use-chord-diagram';
@@ -23,6 +25,19 @@ export interface ChordDiagramProps extends Omit<HTMLAttributes<HTMLDivElement>, 
    * `<section class="chord-diagrams">` block.
    */
   defines?: ReadonlyArray<readonly [string, string]>;
+  /**
+   * Diagram orientation (#2572). Defaults to `"vertical"` — nut on
+   * top, frets running downward. Pass `"horizontal"` for the
+   * Japanese-tablature convention with nut on the left and frets
+   * running rightward.
+   */
+  orientation?: ChordDiagramOrientation;
+  /**
+   * Row order for horizontal-orientation diagrams. Defaults to
+   * `"reader"` (high pitch on top, matches tablature stave order —
+   * see ADR-0026). Ignored when `orientation` is `"vertical"`.
+   */
+  horizontalStringOrder?: ChordDiagramHorizontalStringOrder;
   /**
    * Optional node shown while the WASM module loads. Defaults to
    * a minimal `role="status"` placeholder.
@@ -100,6 +115,8 @@ export function ChordDiagram({
   chord,
   instrument = 'guitar',
   defines,
+  orientation,
+  horizontalStringOrder,
   loadingFallback,
   notFoundFallback = defaultNotFoundFallback,
   errorFallback = defaultErrorFallback,
@@ -107,7 +124,14 @@ export function ChordDiagram({
   className,
   ...divProps
 }: ChordDiagramProps): JSX.Element {
-  const { svg, loading, error } = useChordDiagram(chord, instrument, wasmLoader, defines);
+  const { svg, loading, error } = useChordDiagram(
+    chord,
+    instrument,
+    wasmLoader,
+    defines,
+    orientation,
+    horizontalStringOrder,
+  );
 
   const wrapperClass = ['chordsketch-diagram', className].filter(Boolean).join(' ');
 
