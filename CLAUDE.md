@@ -21,6 +21,45 @@ cargo fmt --check    # Check formatting (CI enforced)
 cargo fmt            # Auto-format code
 ```
 
+Reproducible CLI build via nix (uses the pinned `nixpkgs` in
+`flake.nix`):
+
+```bash
+nix build .#chordsketch         # Build the CLI inside a nix sandbox
+nix run . -- --version          # Run the built CLI
+nix flake check                 # Eval-time checks (incl. fetchurl UA)
+```
+
+`nix build` runs the same Rust toolchain version as the
+nixos-unstable revision pinned in `flake.nix` and runs the
+package's unit-test suite inside the sandbox. The build relies on
+a crates.io-compliant `User-Agent` injection from the
+`identifiedFetchurlOverlay` in `flake.nix` (see that file's
+comment block for the rationale); `nix flake check` asserts the
+UA stays wired in so a refactor that silently drops it fails
+loudly instead of returning crates.io 403s.
+
+Playground + docs site (run inside `packages/playground/`):
+
+```bash
+npm test             # vitest (docs SSG + helpers)
+npm run typecheck    # tsc --noEmit
+npm run build        # vite build + Shiki-highlighted static docs
+npm run build:docs   # docs-only build (skips wasm-dependent entries)
+npm run dev:docs     # docs-only preview (static build, then `vite preview`)
+npm run test:e2e     # Playwright smoke (use playwright.docs.config.ts
+                     # locally to skip wasm-dependent specs)
+```
+
+`npm run build` and `npm run build:docs` invoke
+`scripts/build-docs-static.mjs`'s `assertEveryFenceLangIsLoaded`
+gate per [ADR-0025](docs/adr/0025-build-time-syntax-highlighting-shiki.md);
+a fence header in `docs/sdk/**/*.md` that is not in `SHIKI_LANGS`
+(or in `SHIKI_LANG_ALIASES` with a loaded target) fails the build.
+Add the lang in
+`packages/playground/scripts/lib/docs-render.mjs` in the same
+commit.
+
 ## Workflows
 
 Long-running autonomous tasks live under `.claude/workflows/<name>/` and

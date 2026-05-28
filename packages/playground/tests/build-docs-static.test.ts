@@ -11,9 +11,13 @@ import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 
 import {
+  assertEveryFenceLangIsLoaded,
+  collectFenceLangs,
   findCssAssetUrl,
   hashRedirectShim,
   pageHtml,
+  parseFenceHeaders,
+  validateFenceLangs,
 } from '../scripts/build-docs-static.mjs';
 
 const PLAYGROUND_ROOT = resolve(__dirname, '..');
@@ -171,5 +175,135 @@ describe('findCssAssetUrl', () => {
     }
     const url = findCssAssetUrl();
     expect(url).toMatch(/^\/chordsketch\/assets\/docs-[\w-]+\.css$/);
+  });
+});
+
+describe('validateFenceLangs', () => {
+  it('throws when an unsupported lang appears in the map (mutation-test anchor)', () => {
+    // Without this test the gate's core predicate
+    // (`if (resolveShikiLang(lang) === null)`) can be collapsed
+    // to `if (false)` and the build-time validator becomes a
+    // no-op — yet `assertEveryFenceLangIsLoaded` still passes on
+    // the live corpus. The synthetic input pins the predicate.
+    expect(() =>
+      validateFenceLangs(new Map([['klingon', ['docs/sdk/foo.md']]])),
+    ).toThrow(/klingon/);
+  });
+
+  it('mentions every offending source path in the error message', () => {
+    let err: unknown = null;
+    try {
+      validateFenceLangs(
+        new Map([
+          ['klingon', ['docs/sdk/a.md', 'docs/sdk/b.md']],
+          ['martian', ['docs/sdk/c.md']],
+        ]),
+      );
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Error);
+    const msg = (err as Error).message;
+    expect(msg).toContain('docs/sdk/a.md');
+    expect(msg).toContain('docs/sdk/b.md');
+    expect(msg).toContain('docs/sdk/c.md');
+    expect(msg).toContain('SHIKI_LANGS');
+  });
+
+  it('accepts a map where every lang resolves through Shiki', () => {
+    expect(() =>
+      validateFenceLangs(
+        new Map([
+          ['tsx', ['docs/sdk/tasks/embed-react.md']],
+          ['chordpro', ['docs/sdk/tasks/render.md']],
+        ]),
+      ),
+    ).not.toThrow();
+  });
+});
+
+describe('assertEveryFenceLangIsLoaded', () => {
+  it('passes against the current docs/sdk corpus', () => {
+    // The build-time gate that turns "Shiki silently falls back to
+    // plain <pre><code> for an undeclared lang" into a build
+    // failure. On main, every fence MUST resolve through Shiki.
+    expect(() => assertEveryFenceLangIsLoaded()).not.toThrow();
+  });
+
+  it('reports every fence-header lang found across all registered pages', () => {
+    const usages = collectFenceLangs();
+    // The corpus survey at the time of this PR landed: bash,
+    // chordpro, kotlin, python, ruby, rust, swift, ts, tsx. The
+    // floor of 7 leaves room for legitimate additions / removals
+    // without rewriting the test.
+    expect(usages.size).toBeGreaterThanOrEqual(7);
+    // Two anchor langs that MUST appear or the embed-react and
+    // chordpro-rendering tests above lose their basis.
+    expect(usages.has('tsx')).toBe(true);
+    expect(usages.has('chordpro')).toBe(true);
+  });
+
+  it('records every page that uses a given fence lang', () => {
+    // The error message in the gate lists the source paths so the
+    // maintainer can find offending fences fast. Pin that the
+    // collection actually carries that provenance.
+    const usages = collectFenceLangs();
+    const chordproSources = usages.get('chordpro') ?? [];
+    expect(chordproSources.length).toBeGreaterThanOrEqual(1);
+    expect(
+      chordproSources.every(
+        (p: string) => p.startsWith('docs/sdk/') && p.endsWith('.md'),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('parseFenceHeaders (FENCE_OPEN_RE coverage)', () => {
+  it('matches backtick-fenced lang headers', () => {
+    expect(parseFenceHeaders('```tsx\nfoo\n```\n')).toEqual(['tsx']);
+  });
+
+  it('matches tilde-fenced lang headers (CommonMark §4.5)', () => {
+    // ~~~ is a valid fence delimiter and MUST be recognised — a
+    // future doc author using `~~~bash` for a recipe block must
+    // not ship un-highlighted with a green build.
+    expect(parseFenceHeaders('~~~bash\necho hi\n~~~\n')).toEqual(['bash']);
+  });
+
+  it('matches up to three leading spaces before the fence chars', () => {
+    // CommonMark allows 0–3 leading spaces on the opening fence.
+    // 4+ spaces makes it an indented code block (different
+    // construct) and MUST NOT be matched.
+    expect(parseFenceHeaders('   ```tsx\nfoo\n   ```\n')).toEqual(['tsx']);
+    expect(parseFenceHeaders('    ```tsx\nfoo\n    ```\n')).toEqual([]);
+  });
+
+  it('does NOT register prose after a closing fence as a fence lang', () => {
+    // Regression test for the round-2 bug where `\s*` between the
+    // fence chars and the lang let the regex consume the trailing
+    // newlines of a closing fence and match the first word of
+    // prose. The fix replaced `\s*` with `[ \t]*`.
+    const source = '```tsx\nfoo\n```\n\nReturns a song.\n';
+    expect(parseFenceHeaders(source)).toEqual(['tsx']);
+  });
+
+  it('ignores inline-code spans (single backticks)', () => {
+    // Single backticks are inline code, not fences. They MUST NOT
+    // contribute to the lang map. This is implicitly covered by
+    // the `{3,}` quantifier but worth pinning structurally.
+    expect(parseFenceHeaders('Use `Returns` in prose.\n')).toEqual([]);
+  });
+
+  it('does NOT match a fence opened with exactly two backticks or tildes', () => {
+    // Pins the `{3,}` lower bound. A mutation weakening to `{2,}`
+    // would treat ` ``tsx ` as a fence opener and would register
+    // a spurious lang from any 2-tick run starting a prose line.
+    expect(parseFenceHeaders('``tsx\nfoo\n``\n')).toEqual([]);
+    expect(parseFenceHeaders('~~tsx\nfoo\n~~\n')).toEqual([]);
+  });
+
+  it('returns multiple langs across multiple fences in order', () => {
+    const source = '```tsx\na\n```\n\n```bash\nb\n```\n\n~~~rust\nc\n~~~\n';
+    expect(parseFenceHeaders(source)).toEqual(['tsx', 'bash', 'rust']);
   });
 });

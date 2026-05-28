@@ -37,6 +37,17 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
+      - name: Flake check (eval-time assertions)
+        # Runs `nix flake check` to exercise the
+        # `checks.fetchurl-ua-injected` assertion in `flake.nix`,
+        # which pins the `identifiedFetchurlOverlay` User-Agent
+        # injection. A refactor that silently dropped the
+        # overlay would still build successfully if the binary
+        # cache had the artefacts; the explicit assertion catches
+        # the regression at evaluation time, before the next cold
+        # cache run hits crates.io 403s.
+        run: nix flake check --no-build
+
       - name: Build chordsketch CLI
         run: nix build .#chordsketch
 

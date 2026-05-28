@@ -4,9 +4,14 @@
 // `.claude/rules/sanitizer-security.md` + `.claude/rules/fix-propagation.md`.
 // Any addition or removal MUST land in all three sites in the same PR.
 
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { Marked } from 'marked';
 import { JSDOM } from 'jsdom';
 import createDOMPurify from 'dompurify';
+import { createHighlighter } from 'shiki';
 
 const SITE_BASE = '/chordsketch/';
 export const DOCS_BASE = `${SITE_BASE}docs/`;
@@ -207,6 +212,16 @@ const DANGEROUS_URI_SCHEMES = [
 ];
 
 function isInvisibleFormatChar(code) {
+  // Covers (a) the canonical BIDI / format-control set that
+  // CVE-2021-42574 (Trojan Source) recognises, (b) Unicode
+  // variation selectors (U+FE00–U+FE0F, U+E0100–U+E01EF) and
+  // Mongolian variation selectors (U+180B–U+180D), and (c)
+  // language-tag characters (U+E0000–U+E007F). All of these
+  // render invisibly and have been used in steganography and
+  // prompt-injection vectors against text-processing pipelines.
+  // Neutralise them on every path that does not need them — no
+  // legitimate ChordPro / docs-source content uses these
+  // codepoints.
   return (
     code === 0x00ad ||
     code === 0x200b ||
@@ -216,8 +231,12 @@ function isInvisibleFormatChar(code) {
     code === 0x200f ||
     code === 0x2060 ||
     code === 0xfeff ||
+    (code >= 0x180b && code <= 0x180d) ||
     (code >= 0x202a && code <= 0x202e) ||
-    (code >= 0x2066 && code <= 0x2069)
+    (code >= 0x2066 && code <= 0x2069) ||
+    (code >= 0xfe00 && code <= 0xfe0f) ||
+    (code >= 0xe0000 && code <= 0xe007f) ||
+    (code >= 0xe0100 && code <= 0xe01ef)
   );
 }
 function isAsciiWhitespace(c) {
@@ -389,6 +408,79 @@ export function rewriteHref(href, sourceDir) {
   return `${REPO_BLOB_BASE}${resolved}${hashSuffix}`;
 }
 
+// DOMPurify config + style-narrowing hook
+//
+// `style` is added to PURIFY_CONFIG.ADD_ATTR so Shiki's per-token
+// `<span style="color:#XXXXXX">` survives sanitisation. DOMPurify
+// 3.x treats `style` as a URI-safe attribute (see
+// DEFAULT_URI_SAFE_ATTRIBUTES in DOMPurify/src/attrs.ts), which
+// means the IS_ALLOWED_URI regex is NOT applied to the CSS value —
+// so a `style="background-image:url(/exfil)"` written into an
+// authored markdown source would otherwise survive into the
+// deployed HTML and fire a GitHub-Pages-origin request from every
+// reader's browser.
+//
+// Defence strategy: fail-closed allowlist of CSS
+// property:value patterns Shiki actually emits. Anything else
+// (`url(...)`, `image-set(...)`, `image(...)`, CSS hex escapes
+// like `url\28...\29` that browsers normalise to `url(...)`,
+// `@import` smuggled via inline-style — which browsers ignore
+// but the allowlist catches anyway, CSS comments inside the value,
+// custom `var(--x)` references with payloads) does not match and
+// triggers full-attribute strip. The allowlist matches the full
+// known repertoire of Shiki themes (color, font-style,
+// font-weight, text-decoration). A future Shiki release adding a
+// new declaration will trip the unit tests (which assert legitimate
+// output survives) and force a deliberate widening here, not
+// silent regression of the security posture.
+//
+// USE_PROFILES.html intentionally excludes the svg and mathml
+// profiles (see DOMPurify/src/tags.ts) so the `<span>` allowance
+// does NOT propagate into an SVG/MathML subtree — a future change
+// that adds `svg: true` here MUST re-audit the style allowlist.
+const SHIKI_STYLE_TAGS = new Set(['PRE', 'CODE', 'SPAN']);
+// Match a single CSS declaration in the form `property: value`,
+// trimmed. Each branch is one property Shiki may emit; the value
+// patterns are deliberately strict (no parens, no backslashes, no
+// quotes, no whitespace except inside enumerated keywords). The
+// hex-colour widths cover the four CSS-spec lengths (3, 4, 6, 8);
+// 5- and 7-digit hex values are CSS-malformed and never emitted by
+// any bundled Shiki theme. The `text-decoration` value allows a
+// space-separated combination so a token carrying both
+// `underline` and `line-through` bits (which Shiki's core renderer
+// joins with a space) survives the allowlist.
+const HEX_COLOUR_VALUE = /#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})/i;
+const TEXT_DECORATION_KW = /(?:underline|none|line-through|overline)/;
+const SHIKI_STYLE_DECL_RE = new RegExp(
+  `^(?:` +
+    `color\\s*:\\s*${HEX_COLOUR_VALUE.source}` +
+    `|background-color\\s*:\\s*${HEX_COLOUR_VALUE.source}` +
+    `|font-style\\s*:\\s*(?:italic|normal|oblique)` +
+    `|font-weight\\s*:\\s*(?:bold|normal|lighter|bolder|[1-9]00)` +
+    `|text-decoration\\s*:\\s*${TEXT_DECORATION_KW.source}` +
+    `(?:\\s+${TEXT_DECORATION_KW.source})*` +
+    `)$`,
+  'i',
+);
+const PURIFY_CONFIG = {
+  USE_PROFILES: { html: true },
+  ADD_ATTR: ['id', 'style'],
+};
+
+/** Fail-closed: returns true ONLY when every `;`-separated
+ *  declaration in the supplied style value matches the Shiki
+ *  property:value allowlist. Empty / whitespace-only values are
+ *  treated as legitimate (DOMPurify would have left them as-is). */
+function isLegitimateShikiStyle(value) {
+  if (value.trim() === '') return true;
+  for (const raw of value.split(';')) {
+    const decl = raw.trim();
+    if (decl === '') continue;
+    if (!SHIKI_STYLE_DECL_RE.test(decl)) return false;
+  }
+  return true;
+}
+
 // Module-scoped: JSDOM + DOMPurify construction is non-trivial and
 // both instances are safe to reuse across sanitize() calls (the hook
 // reads only the node passed in).
@@ -414,12 +506,220 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     node.setAttribute('target', '_blank');
     node.setAttribute('rel', 'noreferrer noopener');
   }
+  // `tagName` is uppercase in JSDOM for standard HTML elements
+  // (`PRE` / `CODE` / `SPAN`). Custom elements and unknown tags are
+  // intentionally outside SHIKI_STYLE_TAGS — their `style` is
+  // stripped even if DOMPurify happens to pass the tag through.
+  // Even on the three allowed tags, the value is gated through the
+  // strict Shiki property:value allowlist; anything else (CSS
+  // `url(...)` / `image-set(...)` / hex-escaped parens /
+  // unrecognised properties) loses the entire attribute.
+  const styleAttr = node.getAttribute('style');
+  if (styleAttr !== null) {
+    if (
+      !SHIKI_STYLE_TAGS.has(node.tagName) ||
+      !isLegitimateShikiStyle(styleAttr)
+    ) {
+      node.removeAttribute('style');
+    }
+  }
 });
 
-const PURIFY_CONFIG = {
-  USE_PROFILES: { html: true },
-  ADD_ATTR: ['id'],
+// Shiki highlighter. Build-time only per
+// [ADR-0025](../../../../docs/adr/0025-build-time-syntax-highlighting-shiki.md);
+// the deployed pages carry zero JS beyond the inline hash-redirect
+// shim ([ADR-0021](../../../../docs/adr/0021-docs-site-co-located-with-playground.md)).
+// The highlighter object is reused across every page render so we
+// pay grammar / theme load cost once. The ChordPro grammar is
+// sister-site to `syntaxes/chordpro.tmLanguage.json` — the same
+// TextMate grammar VS Code (`packages/vscode-extension`, copied via
+// esbuild) and the JetBrains plugin
+// (`packages/jetbrains-plugin/textmate/chordpro/`) already ship for
+// editor highlighting, so on-page docs colour matches what those
+// editors render. (The Zed extension uses an independent
+// tree-sitter grammar at `packages/tree-sitter-chordpro` — out of
+// scope here per ADR-0025.)
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(HERE, '../../../..');
+const CHORDPRO_GRAMMAR_PATH = resolve(
+  REPO_ROOT,
+  'syntaxes/chordpro.tmLanguage.json',
+);
+let CHORDPRO_GRAMMAR;
+try {
+  CHORDPRO_GRAMMAR = JSON.parse(readFileSync(CHORDPRO_GRAMMAR_PATH, 'utf8'));
+} catch (err) {
+  throw new Error(
+    `Failed to load ChordPro TextMate grammar from ${CHORDPRO_GRAMMAR_PATH}. ` +
+      `This grammar is the sister site of the VS Code / JetBrains chordpro ` +
+      `language packages; verify the file exists and is valid JSON.`,
+    { cause: err },
+  );
+}
+// Languages preloaded into the singleton Shiki highlighter. The
+// roster MUST cover every fence header used under `docs/sdk/` —
+// `build-docs-static.mjs` enforces this at build time via
+// `assertEveryFenceLangIsLoaded` so an undeclared lang fails the
+// build instead of silently rendering plain `<pre><code>`.
+const SHIKI_LANGS = [
+  'bash',
+  'json',
+  'kotlin',
+  'python',
+  'ruby',
+  'rust',
+  'shell',
+  'swift',
+  'tsx',
+  'typescript',
+  { ...CHORDPRO_GRAMMAR, name: 'chordpro' },
+];
+const SHIKI_THEME = 'github-dark';
+let HIGHLIGHTER;
+try {
+  HIGHLIGHTER = await createHighlighter({
+    themes: [SHIKI_THEME],
+    langs: SHIKI_LANGS,
+  });
+} catch (err) {
+  const langNames = SHIKI_LANGS.map((l) =>
+    typeof l === 'string' ? l : (l.name ?? '<unnamed grammar>'),
+  ).join(', ');
+  throw new Error(
+    `Shiki highlighter failed to initialise (theme=${SHIKI_THEME}, ` +
+      `langs=[${langNames}]). One of the grammars or the theme may be ` +
+      `malformed; check the trace and confirm Shiki version compatibility.`,
+    { cause: err },
+  );
+}
+// Aliases for fence headers actually used in the docs corpus.
+// Every alias's resolved value MUST appear in SHIKI_LOADED_LANGS
+// below; the build-time validator catches drift on the next build.
+const SHIKI_LANG_ALIASES = new Map([
+  ['ts', 'typescript'],
+  ['sh', 'bash'],
+  ['shellscript', 'bash'],
+]);
+const SHIKI_LOADED_LANGS = new Set(HIGHLIGHTER.getLoadedLanguages());
+
+// HAST `<pre>` properties to keep on Shiki output. Everything else
+// — Shiki's inline `style="background-color:..."`, `tabindex`, any
+// future string- or symbol-keyed property — is stripped so the
+// `.docs-prose pre` CSS rule keeps controlling background, padding,
+// and border-radius. Allowlist semantics: future Shiki versions
+// adding new wrapper attrs cannot leak into the deployed HTML.
+const SHIKI_PRE_KEEP_PROPERTIES = new Set(['class']);
+const stripPreWrapper = {
+  pre(node) {
+    if (!node.properties) {
+      // Shiki's hast contract requires every `<pre>` node to carry a
+      // `properties` object (so the `class="shiki <theme>"` attribute
+      // can land). A missing object means the upstream API changed;
+      // failing loudly here is the only way to keep this transformer
+      // honest — a silent no-op would let inline `style` regress.
+      throw new Error(
+        'Shiki HAST <pre> node has no `properties` object; the ' +
+          'highlighter API may have changed and `stripPreWrapper` is ' +
+          'no longer effective.',
+      );
+    }
+    for (const key of Object.keys(node.properties)) {
+      if (!SHIKI_PRE_KEEP_PROPERTIES.has(key)) {
+        delete node.properties[key];
+      }
+    }
+    // Object.keys() ignores symbol-keyed properties. Defensive: a
+    // future HAST node that smuggles a Symbol-keyed sentinel
+    // (private internal state, framework instrumentation, …) would
+    // otherwise bypass the allowlist intent — drop those too.
+    for (const sym of Object.getOwnPropertySymbols(node.properties)) {
+      delete node.properties[sym];
+    }
+  },
 };
+
+/** Returns the canonical Shiki language id for a fence-header
+ *  string, or `null` when the lang is unknown / empty. Exposed for
+ *  the build-time validator in `build-docs-static.mjs`. */
+export function resolveShikiLang(lang) {
+  if (!lang) return null;
+  const lower = lang.toLowerCase();
+  const aliased = SHIKI_LANG_ALIASES.get(lower) ?? lower;
+  return SHIKI_LOADED_LANGS.has(aliased) ? aliased : null;
+}
+
+/** HTML-escape for text-node content (NOT attribute values; see
+ *  `escapeAttribute` for that context). Also filters BIDI overrides
+ *  and other invisible-format chars + null bytes so the unknown-lang
+ *  fallback path cannot smuggle Trojan-Source style payloads into
+ *  the deployed HTML. */
+function escapeHtmlText(value) {
+  let filtered = '';
+  for (const ch of value) {
+    const code = ch.codePointAt(0);
+    if (code === 0 || isInvisibleFormatChar(code)) continue;
+    filtered += ch;
+  }
+  return filtered
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Build-time-only function; the docs corpus's longest fence body
+// (an ASCII architecture diagram in `docs/sdk/README.md`, measured
+// at 1395 bytes by walking every fence under `docs/sdk/` — see
+// ADR-0025 §"Decision" + §"Consequences") sits well under this
+// ceiling. Note: that fence carries no info-string lang, so it
+// reaches Shiki via the fallback path. The cap turns a runaway
+// input (a machine-generated doc file, a mis-rendered binary
+// embedded in a fence) into a build error instead of an OOM or
+// pathological highlight run.
+const MAX_CODE_BLOCK_BYTES = 256 * 1024;
+
+/**
+ * Build-time syntax highlight for a single Markdown code fence.
+ * Falls back to a sanitised `<pre><code>` for unknown languages
+ * (also see `assertEveryFenceLangIsLoaded` in `build-docs-static.mjs`
+ * which prevents that fallback from being silent on the deployed
+ * corpus).
+ *
+ * Inputs come from in-repo markdown files, but the function is
+ * exported and could be reused. The size cap is the only validation
+ * — `code` is forwarded to Shiki and may legitimately contain any
+ * Unicode; the fallback path additionally strips invisible-format
+ * characters to neutralise Trojan-Source payloads.
+ *
+ * @param {string} code The fence body.
+ * @param {string} lang The fence header (e.g. "tsx", "chordpro", "").
+ * @returns {string} HTML — either `<pre class="shiki ..."><code>…</code></pre>`
+ *                   or `<pre><code>…</code></pre>` for unknown langs.
+ * @throws {Error} when `code` exceeds `MAX_CODE_BLOCK_BYTES`.
+ */
+export function highlightCodeBlock(code, lang) {
+  // Semantics: input MUST be `<= MAX_CODE_BLOCK_BYTES`. Inputs of
+  // exactly the cap size are accepted; the first rejected size is
+  // `MAX_CODE_BLOCK_BYTES + 1`. The boundary is pinned by a unit
+  // test on both sides so a mutation flipping `>` ↔ `>=` is caught.
+  if (Buffer.byteLength(code, 'utf8') > MAX_CODE_BLOCK_BYTES) {
+    throw new Error(
+      `highlightCodeBlock input exceeds ${MAX_CODE_BLOCK_BYTES} bytes; ` +
+        `inputs come from in-repo markdown fences which should never be ` +
+        `this large. Either split the fence or raise MAX_CODE_BLOCK_BYTES.`,
+    );
+  }
+  const resolved = resolveShikiLang(lang);
+  if (resolved === null) {
+    return `<pre><code>${escapeHtmlText(code)}</code></pre>`;
+  }
+  return HIGHLIGHTER.codeToHtml(code, {
+    lang: resolved,
+    theme: SHIKI_THEME,
+    transformers: [stripPreWrapper],
+  });
+}
 
 /** Parse Markdown to sanitised HTML; `sourcePath` may be empty for
  *  ad-hoc inputs (no relative-link rewriting then). */
@@ -443,16 +743,42 @@ export function renderMarkdown(source, sourcePath = '') {
           : '';
         return `<a href="${escapeAttribute(href)}"${titleAttr}>${innerHtml}</a>`;
       },
+      code(token) {
+        return highlightCodeBlock(token.text, token.lang ?? '');
+      },
     },
   });
   const html = md.parse(source);
   return DOMPurify.sanitize(html, PURIFY_CONFIG);
 }
 
-const FENCE_RE = /^```[\s\S]*?^```/gm;
+// Strip CommonMark fenced code blocks before heading extraction.
+// Sister-site to `FENCE_OPEN_RE` in `build-docs-static.mjs`: any
+// fence shape that the build-time validator treats as a code block
+// MUST also be excised here, otherwise a `##  heading` line
+// embedded inside the fence body would silently appear in the
+// on-page outline with a broken anchor (the heading does not reach
+// the rendered HTML, so the link 404-scrolls).
+//
+// CommonMark §4.5 requires the closing fence to (a) use the same
+// character (backtick or tilde) as the opening fence and (b) be at
+// least as long. Two regexes — one per character — express (a)
+// without backreference acrobatics across characters; within each
+// regex a backreference to the opening-run capture plus `\1*`
+// expresses (b) — the closing run is at least the opening length
+// plus zero-or-more additional fence chars. Both opening and
+// closing fences allow 0–3 leading spaces and a trailing run of
+// spaces/tabs (but not newlines).
+const BACKTICK_FENCE_RE =
+  /^ {0,3}(`{3,})[\s\S]*?^ {0,3}\1`*[^\S\n]*$/gm;
+const TILDE_FENCE_RE =
+  /^ {0,3}(~{3,})[\s\S]*?^ {0,3}\1~*[^\S\n]*$/gm;
 const HEADING_RE = /^(#+)\s+(.+)$/gm;
 export function extractOutline(source) {
-  const stripped = source.replace(FENCE_RE, (block) =>
+  let stripped = source.replace(BACKTICK_FENCE_RE, (block) =>
+    block.replace(/[^\n]/g, ''),
+  );
+  stripped = stripped.replace(TILDE_FENCE_RE, (block) =>
     block.replace(/[^\n]/g, ''),
   );
   const outline = [];

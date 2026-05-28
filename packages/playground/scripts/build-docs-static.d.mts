@@ -9,3 +9,25 @@ export function pageHtml(args: {
   outline: OutlineEntry[];
   cssHref: string;
 }): string;
+
+/** Returns every fence-header lang found in the supplied markdown
+ *  source string. Exposed for unit tests that need to exercise the
+ *  fence regex against synthetic inputs (~~~ fences, indented
+ *  fences, closing-fence-followed-by-prose). */
+export function parseFenceHeaders(source: string): string[];
+
+/** Map of `lang` → list of `sourcePath`s that opened a fence with
+ *  that header. Used by `assertEveryFenceLangIsLoaded` and exported
+ *  for tests. */
+export function collectFenceLangs(): Map<string, string[]>;
+
+/** Throws when the supplied `lang → sourcePath[]` map contains a
+ *  fence header that does not resolve through `resolveShikiLang`.
+ *  Split out from `assertEveryFenceLangIsLoaded` so unit tests can
+ *  exercise the negative branch on a synthetic map. */
+export function validateFenceLangs(usages: Map<string, string[]>): void;
+
+/** Throws when any fence header in the docs corpus does not
+ *  resolve through `resolveShikiLang`. Called from `main` so the
+ *  build aborts before any HTML is written. */
+export function assertEveryFenceLangIsLoaded(): Map<string, string[]>;
