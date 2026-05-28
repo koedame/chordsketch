@@ -40,3 +40,4 @@ export function renderMarkdown(source: string, sourcePath?: string): string;
 export function extractOutline(source: string): OutlineEntry[];
 
 export function highlightCodeBlock(code: string, lang: string): string;
+export function resolveShikiLang(lang: string): string | null;

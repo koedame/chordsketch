@@ -394,6 +394,31 @@ export function rewriteHref(href, sourceDir) {
   return `${REPO_BLOB_BASE}${resolved}${hashSuffix}`;
 }
 
+// DOMPurify config + style-narrowing hook
+//
+// `style` is added to PURIFY_CONFIG.ADD_ATTR so Shiki's per-token
+// `<span style="color:#XXXXXX">` survives sanitisation. DOMPurify
+// 3.x treats `style` as a URI-safe attribute (see
+// DEFAULT_URI_SAFE_ATTRIBUTES in DOMPurify/src/attrs.ts), which means
+// the IS_ALLOWED_URI regex is NOT applied to the CSS value — so a
+// `style="background-image:url(/exfil)"` written into an authored
+// markdown source would otherwise survive into the deployed HTML
+// and fire a GitHub-Pages-origin request from every reader's
+// browser. We defend in two layers below: (1) restrict the
+// attribute to the three tags Shiki emits, (2) strip any surviving
+// `style` whose value contains `url(`, which Shiki never emits.
+//
+// USE_PROFILES.html intentionally excludes the svg and mathml
+// profiles (see DOMPurify/src/tags.ts) so the `<span>` allowance
+// does NOT propagate into an SVG/MathML subtree — a future change
+// that adds `svg: true` here MUST re-audit the style allowlist.
+const SHIKI_STYLE_TAGS = new Set(['PRE', 'CODE', 'SPAN']);
+const CSS_URL_RE = /url\s*\(/i;
+const PURIFY_CONFIG = {
+  USE_PROFILES: { html: true },
+  ADD_ATTR: ['id', 'style'],
+};
+
 // Module-scoped: JSDOM + DOMPurify construction is non-trivial and
 // both instances are safe to reuse across sanitize() calls (the hook
 // reads only the node passed in).
@@ -419,44 +444,63 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     node.setAttribute('target', '_blank');
     node.setAttribute('rel', 'noreferrer noopener');
   }
-  // `style` is enabled in PURIFY_CONFIG.ADD_ATTR only to let Shiki's
-  // per-token `<span style="color:...">` survive. DOMPurify's CSS
-  // sanitiser already strips URLs / expressions / behaviour, but
-  // restrict the attribute to the three tags Shiki emits so an
-  // unrelated `<div style="...">` in a future markdown file cannot
-  // ride the same allowlist.
+  // `tagName` is uppercase in JSDOM for standard HTML elements
+  // (`PRE` / `CODE` / `SPAN`). Custom elements and unknown tags are
+  // intentionally outside SHIKI_STYLE_TAGS — their `style` is
+  // stripped even if DOMPurify happens to pass the tag through.
   const styleAttr = node.getAttribute('style');
-  if (styleAttr !== null && !SHIKI_STYLE_TAGS.has(node.tagName)) {
-    node.removeAttribute('style');
+  if (styleAttr !== null) {
+    if (!SHIKI_STYLE_TAGS.has(node.tagName)) {
+      node.removeAttribute('style');
+    } else if (CSS_URL_RE.test(styleAttr)) {
+      // Shiki only emits `color:#XXXXXX` / `font-style:italic` etc.
+      // — never `url(...)`. Any surviving `url(...)` reached this
+      // hook from an authored markdown source bypassing DOMPurify's
+      // URI check (which is skipped for URI-safe attributes); strip
+      // the whole attribute. Covers `background-image:url(/exfil)`,
+      // `url(javascript:...)`, `-moz-binding:url(...)`, and
+      // `behaviour:url(...)`.
+      node.removeAttribute('style');
+    }
   }
 });
 
-const SHIKI_STYLE_TAGS = new Set(['PRE', 'CODE', 'SPAN']);
-
-const PURIFY_CONFIG = {
-  USE_PROFILES: { html: true },
-  ADD_ATTR: ['id', 'style'],
-};
-
-// Shiki highlighter. Build-time only (the deployed pages carry zero
-// JS beyond the inline hash-redirect shim per ADR-0021); the
-// highlighter object is reused across every page render so we pay
-// grammar / theme load cost once. The ChordPro grammar is sister-site
-// to `syntaxes/chordpro.tmLanguage.json` — the same TextMate grammar
-// VS Code, Zed, and the JetBrains plugin ship for editor
-// highlighting, so on-page docs colour matches what readers see in
-// their editor.
+// Shiki highlighter. Build-time only per
+// [ADR-0025](../../../../docs/adr/0025-build-time-syntax-highlighting-shiki.md);
+// the deployed pages carry zero JS beyond the inline hash-redirect
+// shim ([ADR-0021](../../../../docs/adr/0021-docs-site-co-located-with-playground.md)).
+// The highlighter object is reused across every page render so we
+// pay grammar / theme load cost once. The ChordPro grammar is
+// sister-site to `syntaxes/chordpro.tmLanguage.json` — the same
+// TextMate grammar VS Code (`packages/vscode-extension`, copied via
+// esbuild) and the JetBrains plugin
+// (`packages/jetbrains-plugin/textmate/chordpro/`) already ship for
+// editor highlighting, so on-page docs colour matches what those
+// editors render. (The Zed extension uses an independent
+// tree-sitter grammar at `packages/tree-sitter-chordpro` — out of
+// scope here per ADR-0025.)
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '../../../..');
-const CHORDPRO_GRAMMAR = JSON.parse(
-  readFileSync(
-    resolve(REPO_ROOT, 'syntaxes/chordpro.tmLanguage.json'),
-    'utf8',
-  ),
+const CHORDPRO_GRAMMAR_PATH = resolve(
+  REPO_ROOT,
+  'syntaxes/chordpro.tmLanguage.json',
 );
-// Match the corpus surveyed under `docs/sdk/` (` ``` ` fences) plus
-// the obvious near-aliases. New languages used in markdown MUST be
-// added here or the renderer falls back to plain `<pre><code>`.
+let CHORDPRO_GRAMMAR;
+try {
+  CHORDPRO_GRAMMAR = JSON.parse(readFileSync(CHORDPRO_GRAMMAR_PATH, 'utf8'));
+} catch (err) {
+  throw new Error(
+    `Failed to load ChordPro TextMate grammar from ${CHORDPRO_GRAMMAR_PATH}. ` +
+      `This grammar is the sister site of the VS Code / JetBrains chordpro ` +
+      `language packages; verify the file exists and is valid JSON.`,
+    { cause: err },
+  );
+}
+// Languages preloaded into the singleton Shiki highlighter. The
+// roster MUST cover every fence header used under `docs/sdk/` —
+// `build-docs-static.mjs` enforces this at build time via
+// `assertEveryFenceLangIsLoaded` so an undeclared lang fails the
+// build instead of silently rendering plain `<pre><code>`.
 const SHIKI_LANGS = [
   'bash',
   'json',
@@ -471,42 +515,85 @@ const SHIKI_LANGS = [
   { ...CHORDPRO_GRAMMAR, name: 'chordpro' },
 ];
 const SHIKI_THEME = 'github-dark';
-const HIGHLIGHTER = await createHighlighter({
-  themes: [SHIKI_THEME],
-  langs: SHIKI_LANGS,
-});
-// `ts` is an alias for `typescript` in docs fences; Shiki's
-// bundled-languages alias map covers it for the dynamic loader but
-// not for a preloaded highlighter, so resolve aliases up-front.
+let HIGHLIGHTER;
+try {
+  HIGHLIGHTER = await createHighlighter({
+    themes: [SHIKI_THEME],
+    langs: SHIKI_LANGS,
+  });
+} catch (err) {
+  const langNames = SHIKI_LANGS.map((l) =>
+    typeof l === 'string' ? l : (l.name ?? '<unnamed grammar>'),
+  ).join(', ');
+  throw new Error(
+    `Shiki highlighter failed to initialise (theme=${SHIKI_THEME}, ` +
+      `langs=[${langNames}]). One of the grammars or the theme may be ` +
+      `malformed; check the trace and confirm Shiki version compatibility.`,
+    { cause: err },
+  );
+}
+// Aliases for fence headers actually used in the docs corpus.
+// Every alias's resolved value MUST appear in SHIKI_LOADED_LANGS
+// below; the build-time validator catches drift on the next build.
 const SHIKI_LANG_ALIASES = new Map([
   ['ts', 'typescript'],
-  ['js', 'javascript'],
   ['sh', 'bash'],
   ['shellscript', 'bash'],
 ]);
 const SHIKI_LOADED_LANGS = new Set(HIGHLIGHTER.getLoadedLanguages());
 
-// Strip Shiki's wrapper-level inline `style` / `tabindex` so the
-// existing `.docs-prose pre` rule keeps controlling background,
-// padding, and border radius. Per-token `<span>` colours stay.
+// HAST `<pre>` properties to keep on Shiki output. Everything else
+// (Shiki's inline `style="background-color:..."`, `tabindex`, and
+// any future presentational attributes) is stripped so the
+// `.docs-prose pre` CSS rule keeps controlling background, padding,
+// and border-radius. Allowlist semantics — future Shiki versions
+// adding new wrapper attrs cannot leak into the deployed HTML.
+const SHIKI_PRE_KEEP_PROPERTIES = new Set(['class']);
 const stripPreWrapper = {
   pre(node) {
-    if (node.properties) {
-      delete node.properties.style;
-      delete node.properties.tabindex;
+    if (!node.properties) {
+      // Shiki's hast contract requires every `<pre>` node to carry a
+      // `properties` object (so the `class="shiki <theme>"` attribute
+      // can land). A missing object means the upstream API changed;
+      // failing loudly here is the only way to keep this transformer
+      // honest — a silent no-op would let inline `style` regress.
+      throw new Error(
+        'Shiki HAST <pre> node has no `properties` object; the ' +
+          'highlighter API may have changed and `stripPreWrapper` is ' +
+          'no longer effective.',
+      );
+    }
+    for (const key of Object.keys(node.properties)) {
+      if (!SHIKI_PRE_KEEP_PROPERTIES.has(key)) {
+        delete node.properties[key];
+      }
     }
   },
 };
 
-function resolveShikiLang(lang) {
+/** Returns the canonical Shiki language id for a fence-header
+ *  string, or `null` when the lang is unknown / empty. Exposed for
+ *  the build-time validator in `build-docs-static.mjs`. */
+export function resolveShikiLang(lang) {
   if (!lang) return null;
   const lower = lang.toLowerCase();
   const aliased = SHIKI_LANG_ALIASES.get(lower) ?? lower;
   return SHIKI_LOADED_LANGS.has(aliased) ? aliased : null;
 }
 
+/** HTML-escape for text-node content (NOT attribute values; see
+ *  `escapeAttribute` for that context). Also filters BIDI overrides
+ *  and other invisible-format chars + null bytes so the unknown-lang
+ *  fallback path cannot smuggle Trojan-Source style payloads into
+ *  the deployed HTML. */
 function escapeHtmlText(value) {
-  return value
+  let filtered = '';
+  for (const ch of value) {
+    const code = ch.codePointAt(0);
+    if (code === 0 || isInvisibleFormatChar(code)) continue;
+    filtered += ch;
+  }
+  return filtered
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -514,10 +601,41 @@ function escapeHtmlText(value) {
     .replace(/'/g, '&#39;');
 }
 
-/** Build-time syntax highlight for a Markdown code fence. Falls back
- *  to plain `<pre><code>` when the language is unknown so a
- *  mis-tagged fence still renders. */
+// Build-time-only function; the docs corpus's longest fence is
+// ~1.5 KB. A generous ceiling here turns a runaway input (a
+// machine-generated doc file, a mis-rendered binary embedded in a
+// fence) into a build error instead of an OOM or pathological
+// highlight run. `chordsketch-chordpro` enforces analogous caps per
+// `.claude/rules/code-style.md` §"Resource Limits".
+const MAX_CODE_BLOCK_BYTES = 256 * 1024;
+
+/**
+ * Build-time syntax highlight for a single Markdown code fence.
+ * Falls back to a sanitised `<pre><code>` for unknown languages
+ * (also see `assertEveryFenceLangIsLoaded` in `build-docs-static.mjs`
+ * which prevents that fallback from being silent on the deployed
+ * corpus).
+ *
+ * Inputs come from in-repo markdown files, but the function is
+ * exported and could be reused. The size cap is the only validation
+ * — `code` is forwarded to Shiki and may legitimately contain any
+ * Unicode; the fallback path additionally strips invisible-format
+ * characters to neutralise Trojan-Source payloads.
+ *
+ * @param {string} code The fence body.
+ * @param {string} lang The fence header (e.g. "tsx", "chordpro", "").
+ * @returns {string} HTML — either `<pre class="shiki ..."><code>…</code></pre>`
+ *                   or `<pre><code>…</code></pre>` for unknown langs.
+ * @throws {Error} when `code` exceeds `MAX_CODE_BLOCK_BYTES`.
+ */
 export function highlightCodeBlock(code, lang) {
+  if (Buffer.byteLength(code, 'utf8') > MAX_CODE_BLOCK_BYTES) {
+    throw new Error(
+      `highlightCodeBlock input exceeds ${MAX_CODE_BLOCK_BYTES} bytes; ` +
+        `inputs come from in-repo markdown fences which should never be ` +
+        `this large. Either split the fence or raise MAX_CODE_BLOCK_BYTES.`,
+    );
+  }
   const resolved = resolveShikiLang(lang);
   if (resolved === null) {
     return `<pre><code>${escapeHtmlText(code)}</code></pre>`;

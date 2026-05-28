@@ -11,6 +11,8 @@ import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 
 import {
+  assertEveryFenceLangIsLoaded,
+  collectFenceLangs,
   findCssAssetUrl,
   hashRedirectShim,
   pageHtml,
@@ -171,5 +173,41 @@ describe('findCssAssetUrl', () => {
     }
     const url = findCssAssetUrl();
     expect(url).toMatch(/^\/chordsketch\/assets\/docs-[\w-]+\.css$/);
+  });
+});
+
+describe('assertEveryFenceLangIsLoaded', () => {
+  it('passes against the current docs/sdk corpus', () => {
+    // The build-time gate that turns "Shiki silently falls back to
+    // plain <pre><code> for an undeclared lang" into a build
+    // failure. On main, every fence MUST resolve through Shiki.
+    expect(() => assertEveryFenceLangIsLoaded()).not.toThrow();
+  });
+
+  it('reports every fence-header lang found across all registered pages', () => {
+    const usages = collectFenceLangs();
+    // The corpus survey at the time of this PR landed: bash,
+    // chordpro, kotlin, python, ruby, rust, swift, ts, tsx. The
+    // floor of 7 leaves room for legitimate additions / removals
+    // without rewriting the test.
+    expect(usages.size).toBeGreaterThanOrEqual(7);
+    // Two anchor langs that MUST appear or the embed-react and
+    // chordpro-rendering tests above lose their basis.
+    expect(usages.has('tsx')).toBe(true);
+    expect(usages.has('chordpro')).toBe(true);
+  });
+
+  it('records every page that uses a given fence lang', () => {
+    // The error message in the gate lists the source paths so the
+    // maintainer can find offending fences fast. Pin that the
+    // collection actually carries that provenance.
+    const usages = collectFenceLangs();
+    const chordproSources = usages.get('chordpro') ?? [];
+    expect(chordproSources.length).toBeGreaterThanOrEqual(1);
+    expect(
+      chordproSources.every(
+        (p: string) => p.startsWith('docs/sdk/') && p.endsWith('.md'),
+      ),
+    ).toBe(true);
   });
 });

@@ -17,6 +17,7 @@ import {
   cleanUrlFor,
   extractOutline,
   renderMarkdown,
+  resolveShikiLang,
 } from './lib/docs-render.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -187,10 +188,68 @@ function renderOnePage({ page, cssHref }) {
   return outFile;
 }
 
+// Match ` ```<lang> ` and ` ```<lang> {meta...} ` opening fences,
+// ignoring closing fences and indented fences.
+const FENCE_OPEN_RE = /^```([A-Za-z0-9_+\-]+)/gm;
+
+/**
+ * Walk every registered docs page, collect every fence-header lang,
+ * and assert each one resolves through `resolveShikiLang`. The point
+ * is to turn "silent fallback to plain `<pre><code>`" — which clears
+ * unit tests and produces a green build but ships un-highlighted
+ * blocks — into a loud build failure. New `.md` files or new fence
+ * langs must extend `SHIKI_LANGS` / `SHIKI_LANG_ALIASES` in the same
+ * commit.
+ */
+export function collectFenceLangs() {
+  const usages = new Map(); // lang → [sourcePath, ...]
+  for (const group of DOC_GROUPS) {
+    for (const page of group.pages) {
+      const sourceFile = resolve(REPO_ROOT, page.sourcePath);
+      const source = readFileSync(sourceFile, 'utf8');
+      for (const match of source.matchAll(FENCE_OPEN_RE)) {
+        const lang = match[1];
+        const list = usages.get(lang) ?? [];
+        if (!list.includes(page.sourcePath)) list.push(page.sourcePath);
+        usages.set(lang, list);
+      }
+    }
+  }
+  return usages;
+}
+
+export function assertEveryFenceLangIsLoaded() {
+  const usages = collectFenceLangs();
+  const missing = [];
+  for (const [lang, sources] of usages) {
+    if (resolveShikiLang(lang) === null) {
+      missing.push({ lang, sources });
+    }
+  }
+  if (missing.length > 0) {
+    const lines = missing
+      .map(
+        ({ lang, sources }) =>
+          `  - \`\`\`${lang}\`\`\` used in: ${sources.join(', ')}`,
+      )
+      .join('\n');
+    throw new Error(
+      `build-docs-static: ${missing.length} fence language(s) used in ` +
+        `docs/sdk/ are not loaded by Shiki:\n${lines}\n\n` +
+        `Add the lang to SHIKI_LANGS (or to SHIKI_LANG_ALIASES with a ` +
+        `loaded target) in packages/playground/scripts/lib/docs-render.mjs.`,
+    );
+  }
+  return usages;
+}
+
 function main() {
   if (!existsSync(DIST_DIR)) {
     throw new Error(`Missing ${DIST_DIR}; run \`vite build\` first.`);
   }
+  // Fail-fast: if any docs page introduces a fence header Shiki
+  // doesn't know about, the build aborts before we write any HTML.
+  assertEveryFenceLangIsLoaded();
   const cssHref = findCssAssetUrl();
   let written = 0;
   for (const group of DOC_GROUPS) {
