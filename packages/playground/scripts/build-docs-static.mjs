@@ -17,6 +17,7 @@ import {
   cleanUrlFor,
   extractOutline,
   renderMarkdown,
+  resolveShikiLang,
 } from './lib/docs-render.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -187,10 +188,105 @@ function renderOnePage({ page, cssHref }) {
   return outFile;
 }
 
+// CommonMark fence opening: 0–3 leading spaces, then a run of 3+
+// backticks OR 3+ tildes, then an optional info-string starting
+// with the lang. Horizontal whitespace (`[ \t]*`) between the fence
+// chars and the lang is allowed — but NOT newlines, otherwise a
+// closing fence followed by prose like ` ```\n\nReturns a song. `
+// would consume the newlines via `\s*` and match `Returns` as a
+// fence lang. Closing fences (no info string) are excluded by the
+// `([A-Za-z0-9_+\-]+)` capture requiring at least one identifier
+// character. The `m` flag anchors `^` at line start; the
+// character-class `+` is linear in input length (no ReDoS surface).
+const FENCE_OPEN_RE =
+  /^ {0,3}(?:`{3,}|~{3,})[ \t]*([A-Za-z0-9_+\-]+)/gm;
+
+/**
+ * Walk every registered docs page, collect every fence-header lang,
+ * and return a `lang → sourcePath[]` map. Both backtick and tilde
+ * fences are matched per CommonMark §4.5 (Fenced code blocks).
+ */
+/**
+ * Pure helper: returns every fence-header lang found in the supplied
+ * markdown source string. Exposed for unit tests that need to
+ * exercise FENCE_OPEN_RE against synthetic inputs (`~~~lang`,
+ * indented fences, closing-fence-followed-by-prose) without
+ * touching the disk-bound corpus walker.
+ */
+export function parseFenceHeaders(source) {
+  const out = [];
+  for (const match of source.matchAll(FENCE_OPEN_RE)) {
+    out.push(match[1]);
+  }
+  return out;
+}
+
+export function collectFenceLangs() {
+  const usages = new Map(); // lang → [sourcePath, ...]
+  for (const group of DOC_GROUPS) {
+    for (const page of group.pages) {
+      const sourceFile = resolve(REPO_ROOT, page.sourcePath);
+      const source = readFileSync(sourceFile, 'utf8');
+      for (const lang of parseFenceHeaders(source)) {
+        const list = usages.get(lang) ?? [];
+        if (!list.includes(page.sourcePath)) list.push(page.sourcePath);
+        usages.set(lang, list);
+      }
+    }
+  }
+  return usages;
+}
+
+/**
+ * Throws when the supplied `lang → sourcePath[]` map contains any
+ * fence header that does not resolve through `resolveShikiLang`.
+ * Split out from `assertEveryFenceLangIsLoaded` so unit tests can
+ * inject a synthetic map and exercise the negative branch
+ * directly — the integrated function passes on the live corpus by
+ * design, so the predicate itself would otherwise be untested.
+ */
+export function validateFenceLangs(usages) {
+  const missing = [];
+  for (const [lang, sources] of usages) {
+    if (resolveShikiLang(lang) === null) {
+      missing.push({ lang, sources });
+    }
+  }
+  if (missing.length > 0) {
+    const lines = missing
+      .map(
+        ({ lang, sources }) =>
+          `  - \`\`\`${lang}\`\`\` used in: ${sources.join(', ')}`,
+      )
+      .join('\n');
+    throw new Error(
+      `build-docs-static: ${missing.length} fence language(s) used in ` +
+        `docs/sdk/ are not loaded by Shiki:\n${lines}\n\n` +
+        `Add the lang to SHIKI_LANGS (or to SHIKI_LANG_ALIASES with a ` +
+        `loaded target) in packages/playground/scripts/lib/docs-render.mjs.`,
+    );
+  }
+}
+
+/**
+ * Build-time gate: scan every page, then validate every collected
+ * fence lang. Called from `main` so the build aborts before any
+ * HTML is written. Turns "silent fallback to plain `<pre><code>`"
+ * into a loud build failure.
+ */
+export function assertEveryFenceLangIsLoaded() {
+  const usages = collectFenceLangs();
+  validateFenceLangs(usages);
+  return usages;
+}
+
 function main() {
   if (!existsSync(DIST_DIR)) {
     throw new Error(`Missing ${DIST_DIR}; run \`vite build\` first.`);
   }
+  // Fail-fast: if any docs page introduces a fence header Shiki
+  // doesn't know about, the build aborts before we write any HTML.
+  assertEveryFenceLangIsLoaded();
   const cssHref = findCssAssetUrl();
   let written = 0;
   for (const group of DOC_GROUPS) {

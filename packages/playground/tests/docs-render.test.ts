@@ -13,6 +13,7 @@ import {
   DOC_GROUPS,
   cleanUrlFor,
   extractOutline,
+  highlightCodeBlock,
   isExternalHttpHref,
   isSafeHref,
   renderMarkdown,
@@ -329,6 +330,76 @@ describe('extractOutline depth filter', () => {
       '3:Detail',
     ]);
   });
+
+  it('excludes headings nested inside a ~~~ tilde-fenced code block', async () => {
+    // Sister-site to the build-time `FENCE_OPEN_RE` validator: any
+    // fence shape the validator treats as a code block MUST also
+    // be stripped here, otherwise an embedded `## heading` line
+    // ships a phantom on-page-outline entry with a broken anchor.
+    const { extractOutline } = await import(
+      '../scripts/lib/docs-render.mjs'
+    );
+    const source = [
+      '## Real heading',
+      '',
+      '~~~tsx',
+      '## Not a heading',
+      'const x = 1;',
+      '~~~',
+      '',
+      '## Another real heading',
+    ].join('\n');
+    const outline = extractOutline(source);
+    expect(outline.map((e) => e.text)).toEqual([
+      'Real heading',
+      'Another real heading',
+    ]);
+  });
+
+  it('strips 0–3-space-indented backtick fences before outline extraction', async () => {
+    // CommonMark allows the opening fence to start with up to 3
+    // leading spaces. The validator covers the same indented shape;
+    // extractOutline must too.
+    const { extractOutline } = await import(
+      '../scripts/lib/docs-render.mjs'
+    );
+    const source = [
+      '## Real',
+      '',
+      '   ```tsx',
+      '## Not a heading',
+      '   ```',
+      '',
+      '## Other',
+    ].join('\n');
+    const outline = extractOutline(source);
+    expect(outline.map((e) => e.text)).toEqual(['Real', 'Other']);
+  });
+
+  it('honours CommonMark closing-fence length parity (4-backtick block)', async () => {
+    // A 4-backtick fence may contain `` ``` `` as literal code
+    // because CommonMark requires the closing fence to be at
+    // least as long as the opening. A regex that closes a
+    // 4-backtick block on a 3-backtick line would over-strip,
+    // hiding a heading the rendered HTML actually contains. Pin
+    // the length-aware closing-fence behaviour.
+    const { extractOutline } = await import(
+      '../scripts/lib/docs-render.mjs'
+    );
+    const source = [
+      '## Real',
+      '',
+      '````tsx',
+      '```',
+      '## Not a heading',
+      '```',
+      '````',
+      '',
+      '## Other',
+    ].join('\n');
+    const outline = extractOutline(source);
+    expect(outline.map((e) => e.text)).toEqual(['Real', 'Other']);
+  });
 });
 
 describe('slugifyWithCounter fallback', () => {
@@ -412,6 +483,9 @@ describe('isSafeHref — adversarial parity with the Rust suite', () => {
     { label: 'soft-hyphen split', href: 'java\u00adscript:alert(1)' },
     { label: 'RTL-override split', href: 'java\u202escript:alert(1)' },
     { label: 'BOM split', href: 'java\ufeffscript:alert(1)' },
+    { label: 'Mongolian VS split', href: 'java\u180bscript:alert(1)' },
+    { label: 'variation-selector split', href: 'java\ufe0fscript:alert(1)' },
+    { label: 'lang-tag split', href: `java\u{E0041}script:alert(1)` },
     // The 30-char filter cap MUST apply to filtered characters, not
     // raw input — 50 invisible-format chars must not push
     // `javascript:` past the cap.
@@ -425,4 +499,423 @@ describe('isSafeHref — adversarial parity with the Rust suite', () => {
       expect(isSafeHref(href)).toBe(false);
     });
   }
+});
+
+// Hex colour widths emitted by Shiki are 3 / 4 / 6 / 8 — anything
+// else is invalid CSS. Pin the regex tightly so a future Shiki
+// release emitting a malformed colour fails the assertion instead
+// of slipping through a permissive `{3,8}` window.
+const HEX_COLOUR = /#(?:[0-9A-Fa-f]{3,4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})/;
+const COLOUR_SPAN_RE = new RegExp(`<span style="color:${HEX_COLOUR.source}">`);
+
+describe('highlightCodeBlock', () => {
+  it('emits a shiki-wrapped pre + per-token coloured spans for a known language', () => {
+    const html = highlightCodeBlock(
+      "import { ChordSheet } from '@chordsketch/react';",
+      'tsx',
+    );
+    expect(html.startsWith('<pre class="shiki')).toBe(true);
+    expect(html).toMatch(COLOUR_SPAN_RE);
+    expect(html).toContain('ChordSheet');
+    // Wrapper-level presentation attrs (Shiki's `style`,
+    // `tabindex`, and any future ones the `stripPreWrapper`
+    // allowlist drops) must be absent so the existing `.docs-prose
+    // pre` CSS rule keeps controlling background / padding / radius.
+    expect(html).not.toMatch(/<pre[^>]*\sstyle=/);
+    expect(html).not.toMatch(/<pre[^>]*\stabindex=/);
+  });
+
+  it('preserves tokenisation boundaries: keyword and string land in distinct coloured spans', () => {
+    // A regression that collapses all tokens into a single coloured
+    // span would still satisfy the "<span color> import </span>"
+    // assertion above. Asserting that distinct token classes land
+    // in *different* colour values catches that mutation.
+    const html = highlightCodeBlock(
+      "import { ChordSheet } from '@chordsketch/react';",
+      'tsx',
+    );
+    const importMatch = html.match(
+      new RegExp(`<span style="color:(${HEX_COLOUR.source})">import</span>`),
+    );
+    // Shiki preserves the leading whitespace inside the string span
+    // (` '@chordsketch/react'`), so the regex tolerates leading spaces.
+    const stringMatch = html.match(
+      new RegExp(
+        `<span style="color:(${HEX_COLOUR.source})">\\s*'@chordsketch/react'</span>`,
+      ),
+    );
+    expect(importMatch?.[1]).toBeDefined();
+    expect(stringMatch?.[1]).toBeDefined();
+    expect(importMatch![1].toLowerCase()).not.toBe(
+      stringMatch![1].toLowerCase(),
+    );
+  });
+
+  it('wraps each source line in a <span class="line"> structural marker', () => {
+    // Pinning the per-line wrapper structurally lets future
+    // features (copy button, line numbers, gutter scrolling) hang
+    // off a stable class name. Regression: a Shiki option flip
+    // that drops the wrapper would silently break them.
+    const html = highlightCodeBlock('const a = 1;\nconst b = 2;', 'tsx');
+    const matches = html.match(/<span class="line">/g);
+    expect(matches?.length).toBe(2);
+  });
+
+  it('highlights ChordPro using the in-repo TextMate grammar', () => {
+    // `syntaxes/chordpro.tmLanguage.json` scopes `{title` as a
+    // `keyword.control.directive.chordpro` and the value as a
+    // string. Both segments MUST land in distinct coloured spans —
+    // otherwise the grammar load silently fell back to plain text.
+    const html = highlightCodeBlock('{title: Demo}', 'chordpro');
+    expect(html.startsWith('<pre class="shiki')).toBe(true);
+    expect(html).toMatch(
+      new RegExp(`<span style="color:${HEX_COLOUR.source}">title</span>`),
+    );
+    expect(html).toMatch(
+      new RegExp(`<span style="color:${HEX_COLOUR.source}">Demo</span>`),
+    );
+  });
+
+  it('falls back to plain escaped <pre><code> for an unknown language', () => {
+    expect(highlightCodeBlock('a < b && c', 'klingon')).toBe(
+      '<pre><code>a &lt; b &amp;&amp; c</code></pre>',
+    );
+  });
+
+  it('falls back to plain escaped <pre><code> when no language is set', () => {
+    expect(highlightCodeBlock('plain', '')).toBe('<pre><code>plain</code></pre>');
+  });
+
+  it('escapes every HTML special char in the unknown-lang fallback', () => {
+    // The five-char minimum is the OWASP HTML-encoding baseline.
+    // A regression on any one of these would let an authored
+    // markdown source smuggle bytes into the deployed HTML.
+    expect(highlightCodeBlock(`&<>"'`, 'klingon')).toBe(
+      `<pre><code>&amp;&lt;&gt;&quot;&#39;</code></pre>`,
+    );
+  });
+
+  it('strips RTL-override (U+202E) from the fallback path while preserving surrounding ASCII', () => {
+    // CVE-2021-42574 / Trojan Source: U+202E reverses the visual
+    // order of following characters and has been used to make
+    // authored source bytes disagree with their rendered
+    // presentation. The fallback path must drop the override
+    // character; legitimate ASCII bytes around it must survive.
+    const input = `before\u{202E}after`;
+    const out = highlightCodeBlock(input, 'klingon');
+    expect(out).toContain('beforeafter');
+    expect(out).not.toContain('\u{202E}');
+  });
+
+  it('strips null bytes from the fallback path', () => {
+    // Null bytes inside HTML can confuse downstream tools and
+    // appear in historical sanitiser bypass chains; drop them.
+    const out = highlightCodeBlock(`a\u{0000}b`, 'klingon');
+    expect(out).toBe('<pre><code>ab</code></pre>');
+  });
+
+  it('preserves ordinary ASCII spaces in the fallback path', () => {
+    // Pins that the BIDI / null filter does NOT collateral-damage
+    // legitimate whitespace — a regression that broadened the
+    // filter to drop U+0020 would mangle every multi-word code
+    // sample on the deployed pages.
+    expect(highlightCodeBlock('hello world', 'klingon')).toBe(
+      '<pre><code>hello world</code></pre>',
+    );
+  });
+
+  it('strips variation selectors and language-tag characters', () => {
+    // Variation selectors (U+FE00– U+FE0F) and language-tag chars
+    // (U+E0000– U+E007F) render invisibly and have been used in
+    // steganography / prompt-injection vectors. Neutralise them
+    // on every path that does not need them — no legitimate
+    // ChordPro / docs-source content uses these codepoints.
+    const input = `a\u{FE0F}b\u{E0041}c`;
+    const out = highlightCodeBlock(input, 'klingon');
+    expect(out).toBe('<pre><code>abc</code></pre>');
+  });
+
+  it('strips Mongolian variation selectors (U+180B-U+180D)', () => {
+    // Same invisible-format-control class as the FE / E01 ranges;
+    // present in steganography payloads against text pipelines.
+    const input = `a\u{180B}b\u{180C}c\u{180D}d`;
+    const out = highlightCodeBlock(input, 'klingon');
+    expect(out).toBe('<pre><code>abcd</code></pre>');
+  });
+
+  it('resolves the `ts` alias and produces shiki-wrapped output', () => {
+    const html = highlightCodeBlock('const x: number = 1;', 'ts');
+    expect(html.startsWith('<pre class="shiki')).toBe(true);
+    expect(html).toMatch(COLOUR_SPAN_RE);
+  });
+
+  it('highlights `js` blocks via Shiki\'s auto-loaded tsx-dep grammar', () => {
+    // `js` is NOT in `SHIKI_LANG_ALIASES`, but Shiki auto-loads it
+    // as an embedded dependency of `tsx` so `resolveShikiLang('js')`
+    // returns `'js'` directly. Pin that resolution against a future
+    // Shiki upgrade that changes the tsx → js auto-load relationship.
+    const html = highlightCodeBlock('const x = 1;', 'js');
+    expect(html.startsWith('<pre class="shiki')).toBe(true);
+    expect(html).toMatch(COLOUR_SPAN_RE);
+  });
+
+  it('resolves the `sh` alias to a loaded grammar', () => {
+    const html = highlightCodeBlock('echo hello', 'sh');
+    expect(html.startsWith('<pre class="shiki')).toBe(true);
+    expect(html).toMatch(COLOUR_SPAN_RE);
+  });
+
+  it('resolves the `shellscript` alias to a loaded grammar', () => {
+    const html = highlightCodeBlock('echo hello', 'shellscript');
+    expect(html.startsWith('<pre class="shiki')).toBe(true);
+    expect(html).toMatch(COLOUR_SPAN_RE);
+  });
+
+  it('throws when the input exceeds the documented size cap', () => {
+    // Inputs come from in-repo markdown fences; an input over the
+    // cap is a contract violation (machine-generated doc, embedded
+    // binary, …). Surfacing it as a build error is preferable to a
+    // pathological highlight run or silent truncation.
+    const big = 'a'.repeat(257 * 1024);
+    expect(() => highlightCodeBlock(big, 'tsx')).toThrow(
+      /exceeds 262144 bytes/,
+    );
+  });
+
+  it('accepts input at exactly the size cap (lower boundary)', () => {
+    // Pins the boundary so a mutation flipping `>` to `>=` is
+    // caught. Semantics: 262144-byte input passes; 262145-byte
+    // input throws.
+    const atCap = 'a'.repeat(262144);
+    expect(() => highlightCodeBlock(atCap, 'klingon')).not.toThrow();
+  });
+
+  it('throws at exactly one byte over the cap (upper boundary)', () => {
+    const overCap = 'a'.repeat(262145);
+    expect(() => highlightCodeBlock(overCap, 'klingon')).toThrow(
+      /exceeds 262144 bytes/,
+    );
+  });
+});
+
+describe('renderMarkdown code-fence integration', () => {
+  it('runs Shiki on a fenced TSX block and survives DOMPurify with per-span colours intact', () => {
+    // DOMPurify's HTML profile strips `style` by default. The
+    // colour-span output is the integration evidence that the
+    // PURIFY_CONFIG allowance + the SHIKI_STYLE_TAGS guard hook are
+    // both wired in; without either, the spans would survive but
+    // their `style` would not.
+    const html = renderMarkdown(
+      "```tsx\nimport { x } from 'y';\n```\n",
+      'docs/sdk/tasks/embed-react.md',
+    );
+    expect(html).toMatch(/<pre class="shiki[^"]*"><code>/);
+    expect(html).toMatch(COLOUR_SPAN_RE);
+  });
+
+  // Adversarial allowlist tests — per
+  // `.claude/rules/sanitizer-security.md` §"Testing completeness".
+  // The `style` ADD_ATTR widening is the only attack surface this
+  // PR opens; each blocked tag class needs an explicit test, and
+  // each blocked CSS value pattern needs an explicit test.
+  it('strips style on a <div> outside SHIKI_STYLE_TAGS', () => {
+    const html = renderMarkdown(
+      '<div style="background:red">payload</div>\n',
+      'docs/sdk/README.md',
+    );
+    expect(html).not.toContain('style="background:red"');
+  });
+
+  it('strips style on an <a> outside SHIKI_STYLE_TAGS', () => {
+    const html = renderMarkdown(
+      '<a href="https://example.com" style="color:red">x</a>\n',
+      'docs/sdk/README.md',
+    );
+    expect(html).not.toMatch(/<a[^>]*\sstyle=/);
+  });
+
+  it('strips style on a <p> outside SHIKI_STYLE_TAGS', () => {
+    const html = renderMarkdown(
+      '<p style="font-size:99px">x</p>\n',
+      'docs/sdk/README.md',
+    );
+    expect(html).not.toMatch(/<p[^>]*\sstyle=/);
+  });
+
+  it('strips style on an SVG child even when USE_PROFILES.html lets it through', () => {
+    // USE_PROFILES.html does NOT enable SVG, so the whole subtree
+    // is stripped. This test pins that posture — if a future
+    // contributor adds `svg: true` to USE_PROFILES, this assertion
+    // catches the regression and forces them through the
+    // sanitiser-security audit before widening the profile.
+    const html = renderMarkdown(
+      '<svg><g style="fill:red"></g></svg>\n',
+      'docs/sdk/README.md',
+    );
+    expect(html).not.toContain('<svg');
+    expect(html).not.toContain('fill:red');
+  });
+
+  it('strips any style on PRE/CODE/SPAN whose value does not match the Shiki allowlist', () => {
+    // Defence is a fail-closed allowlist of CSS property:value
+    // patterns Shiki actually emits. Anything else loses the
+    // entire attribute. Test the resource-loading CSS surface
+    // that motivated the allowlist:
+    //
+    // - `url(...)` — covers the canonical exfil channel; DOMPurify
+    //   treats `style` as URI-safe so the URI regex does NOT
+    //   apply to CSS values.
+    // - `image(...)` / `image-set(...)` — CSS image functions
+    //   that can initiate network requests WITHOUT containing
+    //   the substring `url(`. A `url(`-only regex would miss
+    //   these; the allowlist catches them by construction.
+    // - CSS hex escape `\28` for `(` — browsers normalise it
+    //   back to `url(` at parse time; the allowlist's strict
+    //   value pattern rejects backslash entirely.
+    // - `@import url(...)` smuggled into inline style — browsers
+    //   ignore `@import` inside `style` attributes, but the
+    //   allowlist rejects it regardless.
+    // - `var(--x)` referencing CSS custom properties — payload
+    //   surface for selector-based exfil; allowlist rejects.
+    // - Whitespace + case + punctuation variations on `url(`.
+    const vectors = [
+      '<span style="background-image:url(/exfil)">x</span>',
+      '<span style="background:url(javascript:alert(1))">x</span>',
+      '<span style="-moz-binding:url(http://evil.example/x)">x</span>',
+      '<span style="behavior:url(#default)">x</span>',
+      '<span style="background : URL  ( /exfil )">x</span>',
+      '<span style="background-image:image(/exfil)">x</span>',
+      '<span style="background-image:image-set(\\"/exfil\\" 1x)">x</span>',
+      '<span style="background-image:cross-fade(url(/exfil) 50%)">x</span>',
+      '<span style="background-image:url\\28/exfil\\29">x</span>',
+      '<span style="background-image:url\\000028/exfil\\000029">x</span>',
+      '<span style="@import url(http://evil)">x</span>',
+      '<span style="--x:url(/exfil)">x</span>',
+      // Comment-bypass attempt (CSS allows `/* */` between tokens).
+      '<span style="background:url/* */(/exfil)">x</span>',
+      // `color:` is in the allowlist but only with a strict hex
+      // value; a `url(...)` payload smuggled into the `color`
+      // property must NOT bypass the property-level check.
+      '<span style="color:url(/exfil)">x</span>',
+    ];
+    // Match a real element opening tag with a style attribute
+    // whose value contains a dangerous token. Escaped text (e.g.
+    // `&lt;span style="..."&gt;`) is NOT a real element and does
+    // not pose a CSS exfil risk, so the regex anchors on `<word`
+    // (literal `<`) — escaped `&lt;` would not match.
+    const DANGEROUS_STYLE_RE =
+      /<\w+[^>]*\sstyle="[^"]*(?:url|image|cross-fade|@import|\\)[^"]*"/i;
+    for (const v of vectors) {
+      const html = renderMarkdown(`${v}\n`, 'docs/sdk/README.md');
+      // Either the span survives without ANY style attribute, or
+      // it does not survive at all — both are acceptable; the
+      // critical assertion is that no real element carries a
+      // resource-loading or escape-bearing style value.
+      expect(html, v).not.toMatch(DANGEROUS_STYLE_RE);
+    }
+  });
+
+  it('strips style values that do not match the Shiki property:value allowlist', () => {
+    // Catches "unrecognised property" mutations: a future
+    // contributor who widens the allowlist (e.g. to permit
+    // `width:` for layout shenanigans) gets a failing test on
+    // every property NOT yet allowed. The four below are
+    // properties browsers honour but Shiki never emits.
+    const vectors = [
+      '<span style="width:9999px">x</span>',
+      '<span style="position:absolute;top:0;left:0">x</span>',
+      '<span style="display:none">x</span>',
+      '<span style="opacity:0">x</span>',
+    ];
+    for (const v of vectors) {
+      const html = renderMarkdown(`${v}\n`, 'docs/sdk/README.md');
+      expect(html, v).not.toMatch(/<span[^>]*style=/);
+    }
+  });
+
+  it('preserves the legitimate Shiki allowlist values across themes', () => {
+    // Pins every property:value Shiki may legitimately emit so a
+    // future allowlist tightening that breaks one of them fails
+    // here, not silently in deployed output.
+    const survivors = [
+      'color:#abc',
+      'color:#abcd',
+      'color:#ABCDEF',
+      'color:#abcdef12',
+      'background-color:#000000',
+      'font-style:italic',
+      'font-style:oblique',
+      'font-weight:bold',
+      'font-weight:700',
+      'text-decoration:underline',
+      // Shiki's core renderer joins multiple decoration bits with
+      // a space when a token carries both (e.g. underline +
+      // strikethrough). The allowlist must accept that.
+      'text-decoration:underline line-through',
+    ];
+    for (const decl of survivors) {
+      const html = renderMarkdown(
+        `<span style="${decl}">x</span>\n`,
+        'docs/sdk/README.md',
+      );
+      expect(html, decl).toMatch(
+        new RegExp(`<span[^>]*style="${decl.replace('#', '#')}"`, 'i'),
+      );
+    }
+  });
+
+  it('preserves a multi-declaration Shiki style value (split path)', () => {
+    // Without a multi-decl positive case, a mutation that drops
+    // the `split(';')` in `isLegitimateShikiStyle` (treating the
+    // whole value as one declaration) is uncaught: every
+    // single-decl survivor still matches under both code paths,
+    // but a real Shiki output like `color:#fff;font-style:italic`
+    // would be stripped entirely. Pin the split path here.
+    const html = renderMarkdown(
+      '<span style="color:#abc;font-style:italic">x</span>\n',
+      'docs/sdk/README.md',
+    );
+    expect(html).toMatch(
+      /<span[^>]*style="color:#abc;font-style:italic"/i,
+    );
+  });
+
+  it('strips an invalid declaration even when paired with a valid one', () => {
+    // Multi-decl values must be validated declaration-by-
+    // declaration; a single bad entry in a `;`-separated list
+    // contaminates the whole attribute. Mutation guard: a future
+    // change that bypasses the per-decl loop and only checks the
+    // first decl would let `;background:url(/exfil)` through.
+    const html = renderMarkdown(
+      '<span style="color:#abc;background-image:url(/exfil)">x</span>\n',
+      'docs/sdk/README.md',
+    );
+    expect(html).not.toMatch(/<span[^>]*\sstyle=/);
+  });
+
+  it('strips 5- and 7-digit hex colour values (invalid CSS widths)', () => {
+    // CSS hex colours are exactly 3, 4, 6, or 8 digits. 5- and
+    // 7-digit values browsers ignore as malformed, but the
+    // allowlist nonetheless rejects them so the deployed HTML
+    // never carries CSS the browser cannot use.
+    for (const decl of ['color:#12345', 'color:#1234567']) {
+      const html = renderMarkdown(
+        `<span style="${decl}">x</span>\n`,
+        'docs/sdk/README.md',
+      );
+      expect(html, decl).not.toMatch(/<span[^>]*\sstyle=/);
+    }
+  });
+
+  it('keeps the legitimate Shiki span style (color:#…) intact', () => {
+    // The url() guard must NOT collateral-damage Shiki's own
+    // emitted `color:#XXXXXX` spans. This pins that the guard's
+    // false-positive rate is zero on the actual highlighter
+    // output.
+    const html = renderMarkdown(
+      "```tsx\nconst x = 1;\n```\n",
+      'docs/sdk/tasks/embed-react.md',
+    );
+    expect(html).toMatch(COLOUR_SPAN_RE);
+  });
 });

