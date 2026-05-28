@@ -304,6 +304,16 @@ fn render_song_body_into(
         |n| (n as usize).max(1),
     );
 
+    // Diagram orientation (#2572). Reader-view is the default string order
+    // per ADR-0026 — high pitch on top, matching tablature stave order.
+    // Sister-site: `crates/render-pdf/src/lib.rs` reads the same two keys.
+    let diagram_orientation = chordsketch_chordpro::chord_diagram::resolve_orientation(
+        config.get_path("diagrams.orientation").as_str(),
+    );
+    let diagram_string_order = chordsketch_chordpro::chord_diagram::resolve_horizontal_string_order(
+        config.get_path("diagrams.horizontal_string_order").as_str(),
+    );
+
     // Instrument for the auto-inject diagram block at end of song.
     // Set by {diagrams: guitar/ukulele/on}; cleared by {diagrams: off} / {no_diagrams}.
     // None means no auto-inject grid is rendered.
@@ -602,6 +612,8 @@ fn render_song_body_into(
                                     fmt_state: &fmt_state,
                                     show_diagrams,
                                     diagram_frets,
+                                    diagram_orientation,
+                                    diagram_string_order,
                                 },
                                 html,
                             );
@@ -669,7 +681,14 @@ fn render_song_body_into(
                             if let Some(buf) = chorus_buf.as_mut() {
                                 buf.push(line.clone());
                             }
-                            render_directive_inner(directive, show_diagrams, diagram_frets, html);
+                            render_directive_inner(
+                                directive,
+                                show_diagrams,
+                                diagram_frets,
+                                diagram_orientation,
+                                diagram_string_order,
+                                html,
+                            );
                         }
                     }
                     DirectiveKind::EndOfAbc if abc_buf.is_some() => {
@@ -691,7 +710,14 @@ fn render_song_body_into(
                             if let Some(buf) = chorus_buf.as_mut() {
                                 buf.push(line.clone());
                             }
-                            render_directive_inner(directive, show_diagrams, diagram_frets, html);
+                            render_directive_inner(
+                                directive,
+                                show_diagrams,
+                                diagram_frets,
+                                diagram_orientation,
+                                diagram_string_order,
+                                html,
+                            );
                         }
                     }
                     DirectiveKind::EndOfLy if ly_buf.is_some() => {
@@ -713,7 +739,14 @@ fn render_song_body_into(
                             if let Some(buf) = chorus_buf.as_mut() {
                                 buf.push(line.clone());
                             }
-                            render_directive_inner(directive, show_diagrams, diagram_frets, html);
+                            render_directive_inner(
+                                directive,
+                                show_diagrams,
+                                diagram_frets,
+                                diagram_orientation,
+                                diagram_string_order,
+                                html,
+                            );
                         }
                     }
                     DirectiveKind::EndOfMusicxml if musicxml_buf.is_some() => {
@@ -793,7 +826,14 @@ fn render_song_body_into(
                                 }
                             }
                         }
-                        render_directive_inner(directive, show_diagrams, diagram_frets, html);
+                        render_directive_inner(
+                            directive,
+                            show_diagrams,
+                            diagram_frets,
+                            diagram_orientation,
+                            diagram_string_order,
+                            html,
+                        );
                     }
                 }
             }
@@ -866,7 +906,13 @@ fn render_song_body_into(
                 html.push_str("<div class=\"chord-diagrams-grid\">\n");
                 for diagram in &diagrams {
                     html.push_str("<figure class=\"chord-diagram-container\">");
-                    html.push_str(&chordsketch_chordpro::chord_diagram::render_svg(diagram));
+                    html.push_str(
+                        &chordsketch_chordpro::chord_diagram::render_svg_with_orientation(
+                            diagram,
+                            diagram_orientation,
+                            diagram_string_order,
+                        ),
+                    );
                     html.push_str("</figure>\n");
                 }
                 html.push_str("</div>\n");
@@ -2178,10 +2224,13 @@ fn sanitize_tag_attrs(tag: &str) -> String {
 ///
 /// StartOfChorus, EndOfChorus, and Chorus are handled directly in
 /// `render_song` for chorus-recall state tracking.
+#[allow(clippy::too_many_arguments)]
 fn render_directive_inner(
     directive: &chordsketch_chordpro::ast::Directive,
     show_diagrams: bool,
     diagram_frets: usize,
+    diagram_orientation: chordsketch_chordpro::chord_diagram::Orientation,
+    diagram_string_order: chordsketch_chordpro::chord_diagram::HorizontalStringOrder,
     html: &mut String,
 ) {
     match &directive.kind {
@@ -2289,7 +2338,13 @@ fn render_directive_inner(
                     {
                         diagram.display_name = def.display.clone();
                         html.push_str("<figure class=\"chord-diagram-container\">");
-                        html.push_str(&chordsketch_chordpro::chord_diagram::render_svg(&diagram));
+                        html.push_str(
+                            &chordsketch_chordpro::chord_diagram::render_svg_with_orientation(
+                                &diagram,
+                                diagram_orientation,
+                                diagram_string_order,
+                            ),
+                        );
                         html.push_str("</figure>\n");
                     }
                 }
@@ -2851,6 +2906,8 @@ struct ChorusRecallCtx<'a> {
     fmt_state: &'a FormattingState,
     show_diagrams: bool,
     diagram_frets: usize,
+    diagram_orientation: chordsketch_chordpro::chord_diagram::Orientation,
+    diagram_string_order: chordsketch_chordpro::chord_diagram::HorizontalStringOrder,
 }
 
 fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, html: &mut String) {
@@ -2860,6 +2917,8 @@ fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, html:
     let fmt_state = ctx.fmt_state;
     let show_diagrams = ctx.show_diagrams;
     let diagram_frets = ctx.diagram_frets;
+    let diagram_orientation = ctx.diagram_orientation;
+    let diagram_string_order = ctx.diagram_string_order;
     html.push_str("<div class=\"chorus-recall\">\n");
     let display_label = match value {
         Some(v) if !v.is_empty() => format!("Chorus: {}", escape(v)),
@@ -2881,7 +2940,14 @@ fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, html:
                 local_fmt.apply(&d.kind, &d.value);
             }
             Line::Directive(d) if !d.kind.is_metadata() => {
-                render_directive_inner(d, show_diagrams, diagram_frets, html);
+                render_directive_inner(
+                    d,
+                    show_diagrams,
+                    diagram_frets,
+                    diagram_orientation,
+                    diagram_string_order,
+                    html,
+                );
             }
             _ => {}
         }
