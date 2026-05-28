@@ -294,6 +294,14 @@ describe('parseFenceHeaders (FENCE_OPEN_RE coverage)', () => {
     expect(parseFenceHeaders('Use `Returns` in prose.\n')).toEqual([]);
   });
 
+  it('does NOT match a fence opened with exactly two backticks or tildes', () => {
+    // Pins the `{3,}` lower bound. A mutation weakening to `{2,}`
+    // would treat ` ``tsx ` as a fence opener and would register
+    // a spurious lang from any 2-tick run starting a prose line.
+    expect(parseFenceHeaders('``tsx\nfoo\n``\n')).toEqual([]);
+    expect(parseFenceHeaders('~~tsx\nfoo\n~~\n')).toEqual([]);
+  });
+
   it('returns multiple langs across multiple fences in order', () => {
     const source = '```tsx\na\n```\n\n```bash\nb\n```\n\n~~~rust\nc\n~~~\n';
     expect(parseFenceHeaders(source)).toEqual(['tsx', 'bash', 'rust']);

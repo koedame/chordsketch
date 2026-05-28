@@ -3005,7 +3005,7 @@ mod sanitize_tag_attrs_tests {
     // CSS image functions that can load resources WITHOUT
     // containing the substring `url(`. Each entry pairs with an
     // equivalent adversarial test in
-    // `packages/playground/scripts/lib/docs-render.mjs`.
+    // `packages/playground/tests/docs-render.test.ts`.
     #[test]
     fn test_strips_style_with_image_set() {
         let tag = "<rect style=\"background-image: image-set('/exfil' 1x)\">";

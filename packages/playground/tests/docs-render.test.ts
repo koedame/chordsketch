@@ -375,6 +375,31 @@ describe('extractOutline depth filter', () => {
     const outline = extractOutline(source);
     expect(outline.map((e) => e.text)).toEqual(['Real', 'Other']);
   });
+
+  it('honours CommonMark closing-fence length parity (4-backtick block)', async () => {
+    // A 4-backtick fence may contain `` ``` `` as literal code
+    // because CommonMark requires the closing fence to be at
+    // least as long as the opening. A regex that closes a
+    // 4-backtick block on a 3-backtick line would over-strip,
+    // hiding a heading the rendered HTML actually contains. Pin
+    // the length-aware closing-fence behaviour.
+    const { extractOutline } = await import(
+      '../scripts/lib/docs-render.mjs'
+    );
+    const source = [
+      '## Real',
+      '',
+      '````tsx',
+      '```',
+      '## Not a heading',
+      '```',
+      '````',
+      '',
+      '## Other',
+    ].join('\n');
+    const outline = extractOutline(source);
+    expect(outline.map((e) => e.text)).toEqual(['Real', 'Other']);
+  });
 });
 
 describe('slugifyWithCounter fallback', () => {
@@ -458,6 +483,9 @@ describe('isSafeHref — adversarial parity with the Rust suite', () => {
     { label: 'soft-hyphen split', href: 'java\u00adscript:alert(1)' },
     { label: 'RTL-override split', href: 'java\u202escript:alert(1)' },
     { label: 'BOM split', href: 'java\ufeffscript:alert(1)' },
+    { label: 'Mongolian VS split', href: 'java\u180bscript:alert(1)' },
+    { label: 'variation-selector split', href: 'java\ufe0fscript:alert(1)' },
+    { label: 'lang-tag split', href: `java\u{E0041}script:alert(1)` },
     // The 30-char filter cap MUST apply to filtered characters, not
     // raw input — 50 invisible-format chars must not push
     // `javascript:` past the cap.

@@ -668,14 +668,15 @@ function escapeHtmlText(value) {
     .replace(/'/g, '&#39;');
 }
 
-// Build-time-only function; the docs corpus's longest fence
-// (measured at 743 bytes by walking every fence under `docs/sdk/`
-// — see ADR-0025 §"Decision" + §"Consequences") sits well under
-// this ceiling. The cap turns a runaway input (a machine-generated
-// doc file, a mis-rendered binary embedded in a fence) into a
-// build error instead of an OOM or pathological highlight run.
-// `chordsketch-chordpro` enforces analogous caps per
-// `.claude/rules/code-style.md` §"Resource Limits".
+// Build-time-only function; the docs corpus's longest fence body
+// (an ASCII architecture diagram in `docs/sdk/README.md`, measured
+// at 1395 bytes by walking every fence under `docs/sdk/` — see
+// ADR-0025 §"Decision" + §"Consequences") sits well under this
+// ceiling. Note: that fence carries no info-string lang, so it
+// reaches Shiki via the fallback path. The cap turns a runaway
+// input (a machine-generated doc file, a mis-rendered binary
+// embedded in a fence) into a build error instead of an OOM or
+// pathological highlight run.
 const MAX_CODE_BLOCK_BYTES = 256 * 1024;
 
 /**
@@ -759,15 +760,19 @@ export function renderMarkdown(source, sourcePath = '') {
 // on-page outline with a broken anchor (the heading does not reach
 // the rendered HTML, so the link 404-scrolls).
 //
-// CommonMark requires the closing fence to use the same character
-// (backtick or tilde) as the opening fence. Two regexes — one per
-// character — cleanly express that without backreference acrobatics.
-// Both opening and closing fences allow 0–3 leading spaces and a
-// trailing run of spaces/tabs (but not newlines).
+// CommonMark §4.5 requires the closing fence to (a) use the same
+// character (backtick or tilde) as the opening fence and (b) be at
+// least as long. Two regexes — one per character — express (a)
+// without backreference acrobatics across characters; within each
+// regex a backreference to the opening-run capture plus `\1*`
+// expresses (b) — the closing run is at least the opening length
+// plus zero-or-more additional fence chars. Both opening and
+// closing fences allow 0–3 leading spaces and a trailing run of
+// spaces/tabs (but not newlines).
 const BACKTICK_FENCE_RE =
-  /^ {0,3}`{3,}[\s\S]*?^ {0,3}`{3,}[^\S\n]*$/gm;
+  /^ {0,3}(`{3,})[\s\S]*?^ {0,3}\1`*[^\S\n]*$/gm;
 const TILDE_FENCE_RE =
-  /^ {0,3}~{3,}[\s\S]*?^ {0,3}~{3,}[^\S\n]*$/gm;
+  /^ {0,3}(~{3,})[\s\S]*?^ {0,3}\1~*[^\S\n]*$/gm;
 const HEADING_RE = /^(#+)\s+(.+)$/gm;
 export function extractOutline(source) {
   let stripped = source.replace(BACKTICK_FENCE_RE, (block) =>

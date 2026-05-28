@@ -120,10 +120,14 @@ the existing `marked` → `DOMPurify` pipeline at
   `<pre><code>`.
 - An input-size guard on `highlightCodeBlock` (256 KiB) turns a
   runaway fence into a build error rather than a pathological
-  highlight run. The docs corpus's longest fence is 743 bytes
-  (`docs/sdk/tasks/embed-react.md`, `tsx` block — measured by
-  walking every fence under `docs/sdk/` and recording the
-  largest UTF-8 byte length) so the ceiling is generous.
+  highlight run. The docs corpus's longest fence body is
+  1395 bytes (an ASCII architecture diagram in
+  `docs/sdk/README.md`, lang-less so it reaches Shiki via the
+  fallback path); the longest **highlighted** fence is 743 bytes
+  (`docs/sdk/tasks/embed-react.md`, `tsx` block). Both were
+  measured by walking every fence under `docs/sdk/` and recording
+  the largest UTF-8 byte length; the 256 KiB ceiling is generous
+  against both.
 
 The Zed extension's tree-sitter grammar is intentionally NOT
 integrated. The docs-site grammar reuse only spans the surfaces
@@ -239,7 +243,7 @@ code rendering. A light-mode toggle is out of scope for this ADR
   new wrapper attributes cannot leak into the deployed HTML.
 - The DOMPurify hook's `style`-narrowing branch is pinned by
   adversarial unit tests covering tag scoping (`<div>`, `<a>`,
-  `<p>`, SVG children) AND value scoping (13 vectors against the
+  `<p>`, SVG children) AND value scoping (14 vectors against the
   property:value allowlist: `url(...)`, `image(...)`,
   `image-set(...)`, `cross-fade(...)`, hex-escaped parens,
   `@import`, `var(--x)`, CSS comments, plus four
