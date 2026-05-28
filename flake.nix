@@ -20,8 +20,6 @@
         "aarch64-darwin"
       ];
 
-      # Evaluate `f pkgs` for each system in `systems`, with the
-      # crates.io-compliant User-Agent overlay applied.
       forEachSystem = f:
         nixpkgs.lib.genAttrs systems
           (system: f (import nixpkgs {
@@ -37,48 +35,98 @@
       # (https://crates.io/data-access) rejects requests whose
       # `User-Agent` does not uniquely identify the requester and
       # provide a means of contact, returning HTTP 403 with a
-      # "violation of our API data access policy" message. The
-      # default `curl/<version>` UA that nixpkgs `fetchurl` sends
-      # was tightened to reject some time around 2026-05, so every
+      # "violation of our API data access policy" message. By the
+      # 2026-05-23 nixpkgs pin, the default `curl/<version>` UA
+      # that `fetchurl`'s builder emits is rejected, so every
       # `nix build` fails at the first crate download
       # (`adobe-cmap-parser`) until we send an identifying UA.
       #
-      # `fetchurl` in modern nixpkgs is an attribute set with a
-      # `__functor` (making it callable) and an `extendDrvArgs`
-      # helper purpose-built for layering extra derivation
-      # arguments. Use the helper directly so all of fetchurl's
-      # other attributes (`override`, `overrideDerivation`,
-      # `__functionArgs`, etc.) remain intact — a plain `args:
-      # prev.fetchurl args` replacement would strip them and break
-      # downstream consumers that do attribute access on
-      # `pkgs.fetchurl`.
+      # `fetchurl` in modern nixpkgs is a functor-attrset built
+      # via `lib.extendMkDerivation` — callable via `__functor`
+      # but ALSO inspected as a set elsewhere in nixpkgs (`override`,
+      # `extendDrvArgs`, `resolveUrl`, ...). A plain `args:
+      # prev.fetchurl args` replacement strips those attributes
+      # and breaks downstream consumers that do attribute access
+      # on `pkgs.fetchurl`; the overlay below uses the same
+      # constructor to preserve the original shape.
+      #
+      # The UA carpet-bombs every `fetchurl` invocation, not only
+      # crates.io URLs. That's intentional: sending an
+      # identifying UA everywhere is more polite than the default
+      # `curl/<v>` and matches the posture of other build tools
+      # (Homebrew, Nix itself). Forks that build under their own
+      # name will send the chordsketch UA — acceptable for an OSS
+      # build artefact, no per-user identity leaks.
+      #
+      # The UA embeds `cliVersion` so it moves with the project.
+      # Side-effect: every CLI version bump changes the embedded
+      # `curlOptsList`, which changes every crate-fetch
+      # derivation's hash, which invalidates the nix binary
+      # cache for crate fetches on the version-bump build. This
+      # is acceptable at this project's release cadence; if it
+      # becomes painful, decouple the UA's identifier from the
+      # CLI version (e.g. read it from a separate `flake.nix`
+      # constant).
       cratesIoUserAgent =
         "chordsketch/${cliVersion} "
         + "(+https://github.com/koedame/chordsketch)";
 
-      identifiedFetchurlOverlay = final: prev: {
-        # Rebuild `fetchurl` via `lib.extendMkDerivation` (the
-        # constructor nixpkgs itself uses), wrapping the original
-        # `extendDrvArgs` so the resulting derivation args always
-        # carry an identifying `--user-agent` in `curlOptsList`.
-        # Preserves the original attribute-set shape that
-        # `lib/customisation.nix` and downstream `nixpkgs` code
-        # introspect on (`__functor`, `__functionArgs`,
-        # `constructDrv`, `extendDrvArgs`, `override`, ...).
-        fetchurl = final.lib.extendMkDerivation {
-          inherit (prev.fetchurl) constructDrv excludeDrvArgNames;
-          inheritFunctionArgs = false;
-          extendDrvArgs = finalAttrs: drvArgs:
-            let orig = prev.fetchurl.extendDrvArgs finalAttrs drvArgs;
-            in orig // {
-              curlOptsList =
-                (orig.curlOptsList or [ ])
-                ++ [ "--user-agent" cratesIoUserAgent ];
-            };
-        } // {
-          inherit (prev.fetchurl) resolveUrl;
+      # Assert the shape we depend on at evaluation time so a
+      # future nixpkgs refactor that renames `extendDrvArgs` etc.
+      # fails loudly instead of silently no-opping the overlay
+      # (silent failure → `nix build` would 403 again with no
+      # obvious cause). The asserts only evaluate when the
+      # overlay is applied, which happens for every output the
+      # flake produces.
+      assertFetchurlShape = fu:
+        assert (fu ? extendDrvArgs)
+          || throw "identifiedFetchurlOverlay: prev.fetchurl is missing `extendDrvArgs` — nixpkgs API may have changed";
+        assert (fu ? constructDrv)
+          || throw "identifiedFetchurlOverlay: prev.fetchurl is missing `constructDrv` — nixpkgs API may have changed";
+        assert (fu ? resolveUrl)
+          || throw "identifiedFetchurlOverlay: prev.fetchurl is missing `resolveUrl` — nixpkgs API may have changed";
+        fu;
+
+      identifiedFetchurlOverlay = final: prev:
+        let
+          fu = assertFetchurlShape prev.fetchurl;
+        in
+        {
+          # Rebuild `fetchurl` via `lib.extendMkDerivation` (the
+          # constructor nixpkgs itself uses) so the resulting
+          # functor-attrset has the same shape as the original;
+          # only `extendDrvArgs` is wrapped, to append our UA to
+          # `curlOptsList`. The builder's built-in
+          # `--user-agent "curl/<v> Nixpkgs/<v>"` flag is emitted
+          # BEFORE the user-supplied `curlOptsList`, so curl's
+          # last-flag-wins rule (see `man curl`) means our
+          # appended flag overrides the built-in one without
+          # needing to strip it.
+          fetchurl = final.lib.extendMkDerivation {
+            inherit (fu) constructDrv excludeDrvArgNames;
+            inheritFunctionArgs = false;
+            extendDrvArgs = finalAttrs: drvArgs:
+              let
+                orig = fu.extendDrvArgs finalAttrs drvArgs;
+                # Safe default: absent `curlOptsList` in `orig`
+                # means no pre-existing flags from the original
+                # extendDrvArgs result. If a caller already
+                # passed `--user-agent` in their own
+                # curlOptsList, our append still wins (curl uses
+                # the last `--user-agent` flag).
+                baseOpts = orig.curlOptsList or [ ];
+              in orig // {
+                curlOptsList =
+                  baseOpts ++ [ "--user-agent" cratesIoUserAgent ];
+              };
+          } // {
+            # `resolveUrl` is a non-standard attribute added by
+            # the downstream nixpkgs fetchurl wrapper (used by
+            # `mirror://` resolution); `extendMkDerivation` does
+            # not reconstruct it, so stitch it back in.
+            inherit (fu) resolveUrl;
+          };
         };
-      };
     in {
       packages = forEachSystem (pkgs: rec {
         # Build the `chordsketch` CLI from the Cargo workspace.
@@ -124,5 +172,38 @@
           ];
         };
       });
+
+      # `nix flake check`-discoverable assertions. Currently scoped to
+      # pinning the User-Agent overlay so a refactor that silently
+      # drops the `--user-agent` flag fails the check explicitly
+      # rather than relying on crates.io reproducing the 403 to
+      # surface the regression.
+      checks = forEachSystem (pkgs:
+        let
+          # Instantiate a representative fetchurl derivation; the
+          # `curlOptsList` attribute is computed eagerly by
+          # `extendDrvArgs` at evaluation time, so we can inspect
+          # it without performing a fetch.
+          probe = pkgs.fetchurl {
+            url = "https://example.invalid/probe.tar.gz";
+            # Any valid-shape sha256 works; we never fetch.
+            sha256 = pkgs.lib.fakeSha256;
+          };
+          opts = probe.curlOptsList or [ ];
+          hasUserAgent = pkgs.lib.elem "--user-agent" opts;
+          hasIdentifier =
+            pkgs.lib.any
+              (s: pkgs.lib.isString s
+                && pkgs.lib.hasInfix "chordsketch/" s)
+              opts;
+        in
+        {
+          fetchurl-ua-injected =
+            assert hasUserAgent
+              || throw "identifiedFetchurlOverlay: --user-agent flag missing from curlOptsList";
+            assert hasIdentifier
+              || throw "identifiedFetchurlOverlay: chordsketch/<v> identifier missing from curlOptsList";
+            pkgs.runCommand "fetchurl-ua-injected" { } "echo ok > $out";
+        });
     };
 }
