@@ -1,7 +1,7 @@
 # 0026. Horizontal chord diagram default string order
 
 - **Status**: Accepted
-- **Date**: 2026-05-29
+- **Date**: 2026-05-28
 
 ## Context
 

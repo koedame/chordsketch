@@ -271,7 +271,7 @@ pub enum Orientation {
 /// `#[non_exhaustive]` so future row-order conventions can be added without
 /// an API break.
 ///
-/// See [ADR-0026](../../../../docs/adr/0026-horizontal-string-order-default.md)
+/// See [ADR-0026](../../../../docs/adr/0026-horizontal-chord-diagram-default-string-order.md)
 /// for the default rationale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]

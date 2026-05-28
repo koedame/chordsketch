@@ -1429,7 +1429,6 @@ fn render_section_label(directive: &chordsketch_chordpro::ast::Directive, doc: &
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn render_directive(
     directive: &chordsketch_chordpro::ast::Directive,
     show_diagrams: bool,

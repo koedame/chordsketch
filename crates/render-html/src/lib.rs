@@ -2224,7 +2224,6 @@ fn sanitize_tag_attrs(tag: &str) -> String {
 ///
 /// StartOfChorus, EndOfChorus, and Chorus are handled directly in
 /// `render_song` for chorus-recall state tracking.
-#[allow(clippy::too_many_arguments)]
 fn render_directive_inner(
     directive: &chordsketch_chordpro::ast::Directive,
     show_diagrams: bool,
