@@ -8,7 +8,7 @@
   # The input is pinned to a specific nixpkgs commit and the resolved
   # metadata is recorded in flake.lock for fully reproducible builds.
   # When bumping nixpkgs, update this SHA and run `nix flake update`.
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/4c1018dae018162ec878d42fec712642d214fdfa"; # nixos-unstable 2026-04-09
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/64c08a7ca051951c8eae34e3e3cb1e202fe36786"; # nixos-unstable 2026-05-23
 
   outputs = { self, nixpkgs }:
     let
@@ -20,13 +20,65 @@
         "aarch64-darwin"
       ];
 
-      # Evaluate `f pkgs` for each system in `systems`.
+      # Evaluate `f pkgs` for each system in `systems`, with the
+      # crates.io-compliant User-Agent overlay applied.
       forEachSystem = f:
         nixpkgs.lib.genAttrs systems
-          (system: f (import nixpkgs { inherit system; }));
+          (system: f (import nixpkgs {
+            inherit system;
+            overlays = [ identifiedFetchurlOverlay ];
+          }));
 
       # Read version from the CLI crate so it stays in sync automatically.
       cliCargoToml = builtins.fromTOML (builtins.readFile ./crates/cli/Cargo.toml);
+      cliVersion = cliCargoToml.package.version;
+
+      # crates.io's data-access policy
+      # (https://crates.io/data-access) rejects requests whose
+      # `User-Agent` does not uniquely identify the requester and
+      # provide a means of contact, returning HTTP 403 with a
+      # "violation of our API data access policy" message. The
+      # default `curl/<version>` UA that nixpkgs `fetchurl` sends
+      # was tightened to reject some time around 2026-05, so every
+      # `nix build` fails at the first crate download
+      # (`adobe-cmap-parser`) until we send an identifying UA.
+      #
+      # `fetchurl` in modern nixpkgs is an attribute set with a
+      # `__functor` (making it callable) and an `extendDrvArgs`
+      # helper purpose-built for layering extra derivation
+      # arguments. Use the helper directly so all of fetchurl's
+      # other attributes (`override`, `overrideDerivation`,
+      # `__functionArgs`, etc.) remain intact — a plain `args:
+      # prev.fetchurl args` replacement would strip them and break
+      # downstream consumers that do attribute access on
+      # `pkgs.fetchurl`.
+      cratesIoUserAgent =
+        "chordsketch/${cliVersion} "
+        + "(+https://github.com/koedame/chordsketch)";
+
+      identifiedFetchurlOverlay = final: prev: {
+        # Rebuild `fetchurl` via `lib.extendMkDerivation` (the
+        # constructor nixpkgs itself uses), wrapping the original
+        # `extendDrvArgs` so the resulting derivation args always
+        # carry an identifying `--user-agent` in `curlOptsList`.
+        # Preserves the original attribute-set shape that
+        # `lib/customisation.nix` and downstream `nixpkgs` code
+        # introspect on (`__functor`, `__functionArgs`,
+        # `constructDrv`, `extendDrvArgs`, `override`, ...).
+        fetchurl = final.lib.extendMkDerivation {
+          inherit (prev.fetchurl) constructDrv excludeDrvArgNames;
+          inheritFunctionArgs = false;
+          extendDrvArgs = finalAttrs: drvArgs:
+            let orig = prev.fetchurl.extendDrvArgs finalAttrs drvArgs;
+            in orig // {
+              curlOptsList =
+                (orig.curlOptsList or [ ])
+                ++ [ "--user-agent" cratesIoUserAgent ];
+            };
+        } // {
+          inherit (prev.fetchurl) resolveUrl;
+        };
+      };
     in {
       packages = forEachSystem (pkgs: rec {
         # Build the `chordsketch` CLI from the Cargo workspace.
