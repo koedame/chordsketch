@@ -20,47 +20,13 @@
         "aarch64-darwin"
       ];
 
-      # Read version from the CLI crate so it stays in sync automatically.
-      cliCargoToml = builtins.fromTOML (builtins.readFile ./crates/cli/Cargo.toml);
-      cliVersion = cliCargoToml.package.version;
-
-      # crates.io's data-access policy (https://crates.io/data-access)
-      # rejects requests whose `User-Agent` does not uniquely identify
-      # the requester and provide a means of contact, returning HTTP
-      # 403 with a "violation of our API data access policy"
-      # message. The pinned nixpkgs (2026-04-09) sends only the
-      # default `curl/<version>` UA from `fetchurl`'s builder, which
-      # crates.io tightened to reject some time around 2026-05.
-      # `cargoLock.lockFile` below uses `fetchurl` for every crate
-      # tarball, so without this overlay every `nix build` fails at
-      # the first crate download.
-      #
-      # The overlay appends an identifying UA to every `fetchurl`
-      # invocation via `curlOptsList`. Affects all downloads in the
-      # nix store build (system fetches go through `fetchurlBoot`,
-      # which is unaffected), so the blast radius is bounded to
-      # source / artifact fetches the chordsketch derivation triggers.
-      cratesIoUserAgent =
-        "chordsketch/${cliVersion} "
-        + "(+https://github.com/koedame/chordsketch)";
-
-      identifiedFetchurlOverlay = final: prev: {
-        fetchurl = args:
-          prev.fetchurl (args // {
-            curlOptsList =
-              (args.curlOptsList or [ ])
-              ++ [ "--user-agent" cratesIoUserAgent ];
-          });
-      };
-
-      # Evaluate `f pkgs` for each system in `systems`, with the
-      # crates.io-compliant User-Agent overlay applied.
+      # Evaluate `f pkgs` for each system in `systems`.
       forEachSystem = f:
         nixpkgs.lib.genAttrs systems
-          (system: f (import nixpkgs {
-            inherit system;
-            overlays = [ identifiedFetchurlOverlay ];
-          }));
+          (system: f (import nixpkgs { inherit system; }));
+
+      # Read version from the CLI crate so it stays in sync automatically.
+      cliCargoToml = builtins.fromTOML (builtins.readFile ./crates/cli/Cargo.toml);
     in {
       packages = forEachSystem (pkgs: rec {
         # Build the `chordsketch` CLI from the Cargo workspace.
