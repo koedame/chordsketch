@@ -212,14 +212,15 @@ const DANGEROUS_URI_SCHEMES = [
 ];
 
 function isInvisibleFormatChar(code) {
-  // Covers (a) the canonical BIDI / format-control set that CSPP /
-  // CVE-2021-42574 (Trojan Source) recognises plus (b) Unicode
+  // Covers (a) the canonical BIDI / format-control set that
+  // CVE-2021-42574 (Trojan Source) recognises, (b) Unicode
   // variation selectors (U+FE00–U+FE0F, U+E0100–U+E01EF) and
-  // language-tag characters (U+E0000–U+E007F). The latter two
-  // ranges render invisibly and have been used in steganography
-  // and prompt-injection vectors against text-processing
-  // pipelines — neutralise them on every path that does not need
-  // them. No legitimate ChordPro / docs-source content uses these
+  // Mongolian variation selectors (U+180B–U+180D), and (c)
+  // language-tag characters (U+E0000–U+E007F). All of these
+  // render invisibly and have been used in steganography and
+  // prompt-injection vectors against text-processing pipelines.
+  // Neutralise them on every path that does not need them — no
+  // legitimate ChordPro / docs-source content uses these
   // codepoints.
   return (
     code === 0x00ad ||
@@ -230,6 +231,7 @@ function isInvisibleFormatChar(code) {
     code === 0x200f ||
     code === 0x2060 ||
     code === 0xfeff ||
+    (code >= 0x180b && code <= 0x180d) ||
     (code >= 0x202a && code <= 0x202e) ||
     (code >= 0x2066 && code <= 0x2069) ||
     (code >= 0xfe00 && code <= 0xfe0f) ||
@@ -440,9 +442,26 @@ const SHIKI_STYLE_TAGS = new Set(['PRE', 'CODE', 'SPAN']);
 // Match a single CSS declaration in the form `property: value`,
 // trimmed. Each branch is one property Shiki may emit; the value
 // patterns are deliberately strict (no parens, no backslashes, no
-// quotes, no whitespace except inside enumerated keywords).
-const SHIKI_STYLE_DECL_RE =
-  /^(?:color\s*:\s*#[0-9a-f]{3,8}|background-color\s*:\s*#[0-9a-f]{3,8}|font-style\s*:\s*(?:italic|normal|oblique)|font-weight\s*:\s*(?:bold|normal|lighter|bolder|[1-9]00)|text-decoration\s*:\s*(?:underline|none|line-through|overline))$/i;
+// quotes, no whitespace except inside enumerated keywords). The
+// hex-colour widths cover the four CSS-spec lengths (3, 4, 6, 8);
+// 5- and 7-digit hex values are CSS-malformed and never emitted by
+// any bundled Shiki theme. The `text-decoration` value allows a
+// space-separated combination so a token carrying both
+// `underline` and `line-through` bits (which Shiki's core renderer
+// joins with a space) survives the allowlist.
+const HEX_COLOUR_VALUE = /#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})/i;
+const TEXT_DECORATION_KW = /(?:underline|none|line-through|overline)/;
+const SHIKI_STYLE_DECL_RE = new RegExp(
+  `^(?:` +
+    `color\\s*:\\s*${HEX_COLOUR_VALUE.source}` +
+    `|background-color\\s*:\\s*${HEX_COLOUR_VALUE.source}` +
+    `|font-style\\s*:\\s*(?:italic|normal|oblique)` +
+    `|font-weight\\s*:\\s*(?:bold|normal|lighter|bolder|[1-9]00)` +
+    `|text-decoration\\s*:\\s*${TEXT_DECORATION_KW.source}` +
+    `(?:\\s+${TEXT_DECORATION_KW.source})*` +
+    `)$`,
+  'i',
+);
 const PURIFY_CONFIG = {
   USE_PROFILES: { html: true },
   ADD_ATTR: ['id', 'style'],
@@ -649,11 +668,13 @@ function escapeHtmlText(value) {
     .replace(/'/g, '&#39;');
 }
 
-// Build-time-only function; the docs corpus's longest fence is
-// ~1.5 KB. A generous ceiling here turns a runaway input (a
-// machine-generated doc file, a mis-rendered binary embedded in a
-// fence) into a build error instead of an OOM or pathological
-// highlight run. `chordsketch-chordpro` enforces analogous caps per
+// Build-time-only function; the docs corpus's longest fence
+// (measured at 743 bytes by walking every fence under `docs/sdk/`
+// — see ADR-0025 §"Decision" + §"Consequences") sits well under
+// this ceiling. The cap turns a runaway input (a machine-generated
+// doc file, a mis-rendered binary embedded in a fence) into a
+// build error instead of an OOM or pathological highlight run.
+// `chordsketch-chordpro` enforces analogous caps per
 // `.claude/rules/code-style.md` §"Resource Limits".
 const MAX_CODE_BLOCK_BYTES = 256 * 1024;
 
@@ -730,10 +751,29 @@ export function renderMarkdown(source, sourcePath = '') {
   return DOMPurify.sanitize(html, PURIFY_CONFIG);
 }
 
-const FENCE_RE = /^```[\s\S]*?^```/gm;
+// Strip CommonMark fenced code blocks before heading extraction.
+// Sister-site to `FENCE_OPEN_RE` in `build-docs-static.mjs`: any
+// fence shape that the build-time validator treats as a code block
+// MUST also be excised here, otherwise a `##  heading` line
+// embedded inside the fence body would silently appear in the
+// on-page outline with a broken anchor (the heading does not reach
+// the rendered HTML, so the link 404-scrolls).
+//
+// CommonMark requires the closing fence to use the same character
+// (backtick or tilde) as the opening fence. Two regexes — one per
+// character — cleanly express that without backreference acrobatics.
+// Both opening and closing fences allow 0–3 leading spaces and a
+// trailing run of spaces/tabs (but not newlines).
+const BACKTICK_FENCE_RE =
+  /^ {0,3}`{3,}[\s\S]*?^ {0,3}`{3,}[^\S\n]*$/gm;
+const TILDE_FENCE_RE =
+  /^ {0,3}~{3,}[\s\S]*?^ {0,3}~{3,}[^\S\n]*$/gm;
 const HEADING_RE = /^(#+)\s+(.+)$/gm;
 export function extractOutline(source) {
-  const stripped = source.replace(FENCE_RE, (block) =>
+  let stripped = source.replace(BACKTICK_FENCE_RE, (block) =>
+    block.replace(/[^\n]/g, ''),
+  );
+  stripped = stripped.replace(TILDE_FENCE_RE, (block) =>
     block.replace(/[^\n]/g, ''),
   );
   const outline = [];

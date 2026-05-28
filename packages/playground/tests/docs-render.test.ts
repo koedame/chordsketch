@@ -330,6 +330,51 @@ describe('extractOutline depth filter', () => {
       '3:Detail',
     ]);
   });
+
+  it('excludes headings nested inside a ~~~ tilde-fenced code block', async () => {
+    // Sister-site to the build-time `FENCE_OPEN_RE` validator: any
+    // fence shape the validator treats as a code block MUST also
+    // be stripped here, otherwise an embedded `## heading` line
+    // ships a phantom on-page-outline entry with a broken anchor.
+    const { extractOutline } = await import(
+      '../scripts/lib/docs-render.mjs'
+    );
+    const source = [
+      '## Real heading',
+      '',
+      '~~~tsx',
+      '## Not a heading',
+      'const x = 1;',
+      '~~~',
+      '',
+      '## Another real heading',
+    ].join('\n');
+    const outline = extractOutline(source);
+    expect(outline.map((e) => e.text)).toEqual([
+      'Real heading',
+      'Another real heading',
+    ]);
+  });
+
+  it('strips 0–3-space-indented backtick fences before outline extraction', async () => {
+    // CommonMark allows the opening fence to start with up to 3
+    // leading spaces. The validator covers the same indented shape;
+    // extractOutline must too.
+    const { extractOutline } = await import(
+      '../scripts/lib/docs-render.mjs'
+    );
+    const source = [
+      '## Real',
+      '',
+      '   ```tsx',
+      '## Not a heading',
+      '   ```',
+      '',
+      '## Other',
+    ].join('\n');
+    const outline = extractOutline(source);
+    expect(outline.map((e) => e.text)).toEqual(['Real', 'Other']);
+  });
 });
 
 describe('slugifyWithCounter fallback', () => {
@@ -562,6 +607,14 @@ describe('highlightCodeBlock', () => {
     expect(out).toBe('<pre><code>abc</code></pre>');
   });
 
+  it('strips Mongolian variation selectors (U+180B-U+180D)', () => {
+    // Same invisible-format-control class as the FE / E01 ranges;
+    // present in steganography payloads against text pipelines.
+    const input = `a\u{180B}b\u{180C}c\u{180D}d`;
+    const out = highlightCodeBlock(input, 'klingon');
+    expect(out).toBe('<pre><code>abcd</code></pre>');
+  });
+
   it('resolves the `ts` alias and produces shiki-wrapped output', () => {
     const html = highlightCodeBlock('const x: number = 1;', 'ts');
     expect(html.startsWith('<pre class="shiki')).toBe(true);
@@ -702,6 +755,10 @@ describe('renderMarkdown code-fence integration', () => {
       '<span style="--x:url(/exfil)">x</span>',
       // Comment-bypass attempt (CSS allows `/* */` between tokens).
       '<span style="background:url/* */(/exfil)">x</span>',
+      // `color:` is in the allowlist but only with a strict hex
+      // value; a `url(...)` payload smuggled into the `color`
+      // property must NOT bypass the property-level check.
+      '<span style="color:url(/exfil)">x</span>',
     ];
     // Match a real element opening tag with a style attribute
     // whose value contains a dangerous token. Escaped text (e.g.
@@ -709,7 +766,7 @@ describe('renderMarkdown code-fence integration', () => {
     // not pose a CSS exfil risk, so the regex anchors on `<word`
     // (literal `<`) — escaped `&lt;` would not match.
     const DANGEROUS_STYLE_RE =
-      /<\w+[^>]*\sstyle="[^"]*(?:url|image|@import|\\)[^"]*"/i;
+      /<\w+[^>]*\sstyle="[^"]*(?:url|image|cross-fade|@import|\\)[^"]*"/i;
     for (const v of vectors) {
       const html = renderMarkdown(`${v}\n`, 'docs/sdk/README.md');
       // Either the span survives without ANY style attribute, or
@@ -744,6 +801,7 @@ describe('renderMarkdown code-fence integration', () => {
     // here, not silently in deployed output.
     const survivors = [
       'color:#abc',
+      'color:#abcd',
       'color:#ABCDEF',
       'color:#abcdef12',
       'background-color:#000000',
@@ -752,6 +810,10 @@ describe('renderMarkdown code-fence integration', () => {
       'font-weight:bold',
       'font-weight:700',
       'text-decoration:underline',
+      // Shiki's core renderer joins multiple decoration bits with
+      // a space when a token carries both (e.g. underline +
+      // strikethrough). The allowlist must accept that.
+      'text-decoration:underline line-through',
     ];
     for (const decl of survivors) {
       const html = renderMarkdown(
@@ -761,6 +823,49 @@ describe('renderMarkdown code-fence integration', () => {
       expect(html, decl).toMatch(
         new RegExp(`<span[^>]*style="${decl.replace('#', '#')}"`, 'i'),
       );
+    }
+  });
+
+  it('preserves a multi-declaration Shiki style value (split path)', () => {
+    // Without a multi-decl positive case, a mutation that drops
+    // the `split(';')` in `isLegitimateShikiStyle` (treating the
+    // whole value as one declaration) is uncaught: every
+    // single-decl survivor still matches under both code paths,
+    // but a real Shiki output like `color:#fff;font-style:italic`
+    // would be stripped entirely. Pin the split path here.
+    const html = renderMarkdown(
+      '<span style="color:#abc;font-style:italic">x</span>\n',
+      'docs/sdk/README.md',
+    );
+    expect(html).toMatch(
+      /<span[^>]*style="color:#abc;font-style:italic"/i,
+    );
+  });
+
+  it('strips an invalid declaration even when paired with a valid one', () => {
+    // Multi-decl values must be validated declaration-by-
+    // declaration; a single bad entry in a `;`-separated list
+    // contaminates the whole attribute. Mutation guard: a future
+    // change that bypasses the per-decl loop and only checks the
+    // first decl would let `;background:url(/exfil)` through.
+    const html = renderMarkdown(
+      '<span style="color:#abc;background-image:url(/exfil)">x</span>\n',
+      'docs/sdk/README.md',
+    );
+    expect(html).not.toMatch(/<span[^>]*\sstyle=/);
+  });
+
+  it('strips 5- and 7-digit hex colour values (invalid CSS widths)', () => {
+    // CSS hex colours are exactly 3, 4, 6, or 8 digits. 5- and
+    // 7-digit values browsers ignore as malformed, but the
+    // allowlist nonetheless rejects them so the deployed HTML
+    // never carries CSS the browser cannot use.
+    for (const decl of ['color:#12345', 'color:#1234567']) {
+      const html = renderMarkdown(
+        `<span style="${decl}">x</span>\n`,
+        'docs/sdk/README.md',
+      );
+      expect(html, decl).not.toMatch(/<span[^>]*\sstyle=/);
     }
   });
 

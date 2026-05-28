@@ -10,6 +10,12 @@ export function pageHtml(args: {
   cssHref: string;
 }): string;
 
+/** Returns every fence-header lang found in the supplied markdown
+ *  source string. Exposed for unit tests that need to exercise the
+ *  fence regex against synthetic inputs (~~~ fences, indented
+ *  fences, closing-fence-followed-by-prose). */
+export function parseFenceHeaders(source: string): string[];
+
 /** Map of `lang` → list of `sourcePath`s that opened a fence with
  *  that header. Used by `assertEveryFenceLangIsLoaded` and exported
  *  for tests. */

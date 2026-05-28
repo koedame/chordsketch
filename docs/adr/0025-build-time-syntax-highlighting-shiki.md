@@ -96,11 +96,21 @@ the existing `marked` → `DOMPurify` pipeline at
 - DOMPurify's allowlist is widened to accept `style` on
   `<pre>` / `<code>` / `<span>` (three tags Shiki emits). The
   `afterSanitizeAttributes` hook narrows the allowance to those
-  three tags, and additionally strips any surviving `style`
-  whose value contains `url(` — DOMPurify treats `style` as
-  URI-safe and does not apply its URI regex to CSS values, so the
-  `url(` guard prevents authored markdown from smuggling
-  `background-image:url(/exfil)` into the deployed HTML.
+  three tags, then validates each `;`-separated declaration of
+  any surviving `style` value against a **fail-closed CSS
+  property:value allowlist** (`SHIKI_STYLE_DECL_RE`) covering the
+  full known repertoire of Shiki themes: `color:#…`,
+  `background-color:#…`, `font-style:{italic|normal|oblique}`,
+  `font-weight:{bold|normal|lighter|bolder|N00}`, and
+  `text-decoration:{underline|none|line-through|overline}` with
+  optional space-separated combinations. Anything else —
+  `url(...)`, `image-set(...)`, `image(...)`, `cross-fade(...)`,
+  CSS hex-escaped parens (`\28`), `@import`, `expression(...)`,
+  `behavior:`, `-moz-binding`, `var(--x)`, CSS comments — fails
+  to match and causes full-attribute strip. This prevents
+  authored markdown from smuggling `background-image:url(/exfil)`
+  or any of the analogous resource-loading CSS functions into the
+  deployed HTML.
 - Build-time validation: `build-docs-static.mjs`'s
   `assertEveryFenceLangIsLoaded` scans every fence header under
   `docs/sdk/` and throws if any lang does not resolve through
@@ -189,9 +199,12 @@ code rendering. A light-mode toggle is out of scope for this ADR
   failure. A doc author who adds ` ```yaml ``` ` without
   extending the lang roster gets an actionable error message
   pointing them to `docs-render.mjs`.
-- The DOMPurify `url(` guard closes a CSS-exfil vector that
-  DOMPurify alone does not handle (it treats `style` as URI-safe
-  and skips its URI regex on CSS values).
+- The fail-closed CSS property:value allowlist closes a class of
+  CSS-exfil vectors that DOMPurify alone does not handle:
+  DOMPurify treats `style` as URI-safe and skips its URI regex on
+  CSS values, so `url(...)`, `image(...)`, `image-set(...)`,
+  hex-escaped parens, and anything else outside the known Shiki
+  repertoire would otherwise have reached the deployed HTML.
 
 **Negative.**
 
@@ -225,11 +238,17 @@ code rendering. A light-mode toggle is out of scope for this ADR
   only) rather than a denylist, so future Shiki versions adding
   new wrapper attributes cannot leak into the deployed HTML.
 - The DOMPurify hook's `style`-narrowing branch is pinned by
-  adversarial unit tests for `<div>`, `<a>`, `<p>`, SVG children,
-  and four `url(...)`-vector patterns. The Playwright smoke
+  adversarial unit tests covering tag scoping (`<div>`, `<a>`,
+  `<p>`, SVG children) AND value scoping (13 vectors against the
+  property:value allowlist: `url(...)`, `image(...)`,
+  `image-set(...)`, `cross-fade(...)`, hex-escaped parens,
+  `@import`, `var(--x)`, CSS comments, plus four
+  unrecognised-property strip cases). The Playwright smoke
   asserts `<pre class="shiki">` has no surviving `style`
   attribute end-to-end, so a `stripPreWrapper` regression cannot
-  ship even if the unit suite is skipped.
+  ship even if the unit suite is skipped. A sister-site denylist
+  in `crates/render-html/src/lib.rs::sanitize_tag_attrs` provides
+  matching coverage for raw-SVG passthrough.
 
 ## Alternatives considered
 

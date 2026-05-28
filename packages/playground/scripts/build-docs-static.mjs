@@ -206,14 +206,28 @@ const FENCE_OPEN_RE =
  * and return a `lang → sourcePath[]` map. Both backtick and tilde
  * fences are matched per CommonMark §4.5 (Fenced code blocks).
  */
+/**
+ * Pure helper: returns every fence-header lang found in the supplied
+ * markdown source string. Exposed for unit tests that need to
+ * exercise FENCE_OPEN_RE against synthetic inputs (`~~~lang`,
+ * indented fences, closing-fence-followed-by-prose) without
+ * touching the disk-bound corpus walker.
+ */
+export function parseFenceHeaders(source) {
+  const out = [];
+  for (const match of source.matchAll(FENCE_OPEN_RE)) {
+    out.push(match[1]);
+  }
+  return out;
+}
+
 export function collectFenceLangs() {
   const usages = new Map(); // lang → [sourcePath, ...]
   for (const group of DOC_GROUPS) {
     for (const page of group.pages) {
       const sourceFile = resolve(REPO_ROOT, page.sourcePath);
       const source = readFileSync(sourceFile, 'utf8');
-      for (const match of source.matchAll(FENCE_OPEN_RE)) {
-        const lang = match[1];
+      for (const lang of parseFenceHeaders(source)) {
         const list = usages.get(lang) ?? [];
         if (!list.includes(page.sourcePath)) list.push(page.sourcePath);
         usages.set(lang, list);
@@ -227,9 +241,9 @@ export function collectFenceLangs() {
  * Throws when the supplied `lang → sourcePath[]` map contains any
  * fence header that does not resolve through `resolveShikiLang`.
  * Split out from `assertEveryFenceLangIsLoaded` so unit tests can
- * exercise the negative branch (mutation E in the round-1 review:
- * collapsing the predicate to `if (false)` had no failing test on
- * the live corpus).
+ * inject a synthetic map and exercise the negative branch
+ * directly — the integrated function passes on the live corpus by
+ * design, so the predicate itself would otherwise be untested.
  */
 export function validateFenceLangs(usages) {
   const missing = [];

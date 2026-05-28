@@ -28,7 +28,7 @@ npm test             # vitest (docs SSG + helpers)
 npm run typecheck    # tsc --noEmit
 npm run build        # vite build + Shiki-highlighted static docs
 npm run build:docs   # docs-only build (skips wasm-dependent entries)
-npm run dev:docs     # docs-only dev preview
+npm run dev:docs     # docs-only preview (static build, then `vite preview`)
 npm run test:e2e     # Playwright smoke (use playwright.docs.config.ts
                      # locally to skip wasm-dependent specs)
 ```

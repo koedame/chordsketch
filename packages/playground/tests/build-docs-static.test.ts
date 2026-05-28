@@ -16,6 +16,7 @@ import {
   findCssAssetUrl,
   hashRedirectShim,
   pageHtml,
+  parseFenceHeaders,
   validateFenceLangs,
 } from '../scripts/build-docs-static.mjs';
 
@@ -254,5 +255,47 @@ describe('assertEveryFenceLangIsLoaded', () => {
         (p: string) => p.startsWith('docs/sdk/') && p.endsWith('.md'),
       ),
     ).toBe(true);
+  });
+});
+
+describe('parseFenceHeaders (FENCE_OPEN_RE coverage)', () => {
+  it('matches backtick-fenced lang headers', () => {
+    expect(parseFenceHeaders('```tsx\nfoo\n```\n')).toEqual(['tsx']);
+  });
+
+  it('matches tilde-fenced lang headers (CommonMark §4.5)', () => {
+    // ~~~ is a valid fence delimiter and MUST be recognised — a
+    // future doc author using `~~~bash` for a recipe block must
+    // not ship un-highlighted with a green build.
+    expect(parseFenceHeaders('~~~bash\necho hi\n~~~\n')).toEqual(['bash']);
+  });
+
+  it('matches up to three leading spaces before the fence chars', () => {
+    // CommonMark allows 0–3 leading spaces on the opening fence.
+    // 4+ spaces makes it an indented code block (different
+    // construct) and MUST NOT be matched.
+    expect(parseFenceHeaders('   ```tsx\nfoo\n   ```\n')).toEqual(['tsx']);
+    expect(parseFenceHeaders('    ```tsx\nfoo\n    ```\n')).toEqual([]);
+  });
+
+  it('does NOT register prose after a closing fence as a fence lang', () => {
+    // Regression test for the round-2 bug where `\s*` between the
+    // fence chars and the lang let the regex consume the trailing
+    // newlines of a closing fence and match the first word of
+    // prose. The fix replaced `\s*` with `[ \t]*`.
+    const source = '```tsx\nfoo\n```\n\nReturns a song.\n';
+    expect(parseFenceHeaders(source)).toEqual(['tsx']);
+  });
+
+  it('ignores inline-code spans (single backticks)', () => {
+    // Single backticks are inline code, not fences. They MUST NOT
+    // contribute to the lang map. This is implicitly covered by
+    // the `{3,}` quantifier but worth pinning structurally.
+    expect(parseFenceHeaders('Use `Returns` in prose.\n')).toEqual([]);
+  });
+
+  it('returns multiple langs across multiple fences in order', () => {
+    const source = '```tsx\na\n```\n\n```bash\nb\n```\n\n~~~rust\nc\n~~~\n';
+    expect(parseFenceHeaders(source)).toEqual(['tsx', 'bash', 'rust']);
   });
 });
