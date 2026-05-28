@@ -16,6 +16,7 @@ import {
   findCssAssetUrl,
   hashRedirectShim,
   pageHtml,
+  validateFenceLangs,
 } from '../scripts/build-docs-static.mjs';
 
 const PLAYGROUND_ROOT = resolve(__dirname, '..');
@@ -173,6 +174,50 @@ describe('findCssAssetUrl', () => {
     }
     const url = findCssAssetUrl();
     expect(url).toMatch(/^\/chordsketch\/assets\/docs-[\w-]+\.css$/);
+  });
+});
+
+describe('validateFenceLangs', () => {
+  it('throws when an unsupported lang appears in the map (mutation-test anchor)', () => {
+    // Without this test the gate's core predicate
+    // (`if (resolveShikiLang(lang) === null)`) can be collapsed
+    // to `if (false)` and the build-time validator becomes a
+    // no-op — yet `assertEveryFenceLangIsLoaded` still passes on
+    // the live corpus. The synthetic input pins the predicate.
+    expect(() =>
+      validateFenceLangs(new Map([['klingon', ['docs/sdk/foo.md']]])),
+    ).toThrow(/klingon/);
+  });
+
+  it('mentions every offending source path in the error message', () => {
+    let err: unknown = null;
+    try {
+      validateFenceLangs(
+        new Map([
+          ['klingon', ['docs/sdk/a.md', 'docs/sdk/b.md']],
+          ['martian', ['docs/sdk/c.md']],
+        ]),
+      );
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Error);
+    const msg = (err as Error).message;
+    expect(msg).toContain('docs/sdk/a.md');
+    expect(msg).toContain('docs/sdk/b.md');
+    expect(msg).toContain('docs/sdk/c.md');
+    expect(msg).toContain('SHIKI_LANGS');
+  });
+
+  it('accepts a map where every lang resolves through Shiki', () => {
+    expect(() =>
+      validateFenceLangs(
+        new Map([
+          ['tsx', ['docs/sdk/tasks/embed-react.md']],
+          ['chordpro', ['docs/sdk/tasks/render.md']],
+        ]),
+      ),
+    ).not.toThrow();
   });
 });
 

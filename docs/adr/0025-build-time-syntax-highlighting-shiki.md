@@ -110,8 +110,10 @@ the existing `marked` → `DOMPurify` pipeline at
   `<pre><code>`.
 - An input-size guard on `highlightCodeBlock` (256 KiB) turns a
   runaway fence into a build error rather than a pathological
-  highlight run; the docs corpus's longest fence is ~1.5 KB so
-  the ceiling is generous.
+  highlight run. The docs corpus's longest fence is 743 bytes
+  (`docs/sdk/tasks/embed-react.md`, `tsx` block — measured by
+  walking every fence under `docs/sdk/` and recording the
+  largest UTF-8 byte length) so the ceiling is generous.
 
 The Zed extension's tree-sitter grammar is intentionally NOT
 integrated. The docs-site grammar reuse only spans the surfaces
@@ -206,10 +208,14 @@ code rendering. A light-mode toggle is out of scope for this ADR
   transparent today, but a future test framework that doesn't
   understand top-level await would not be able to import
   `docs-render.mjs` directly.
-- Per-fence highlighting at build time adds ~50ms per page to
-  `build-docs-static.mjs`. Acceptable for a 18-page corpus; if
-  the corpus exceeds ~200 pages, revisit (move highlighting to a
-  per-page Vite plugin that caches output by file hash).
+- `node scripts/build-docs-static.mjs` measured at ~1.4 s
+  wall-clock for the current 18-page / 64-fence corpus on a Linux
+  developer laptop (`/usr/bin/time` median across three runs),
+  dominated by Shiki grammar + theme initialisation rather than
+  per-fence work. Acceptable for the current corpus; if the
+  corpus grows toward ~200 pages, revisit by moving highlighting
+  to a per-page Vite plugin that caches highlighted HTML by file
+  hash.
 
 **Mitigations.**
 

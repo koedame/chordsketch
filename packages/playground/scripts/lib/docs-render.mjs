@@ -212,6 +212,15 @@ const DANGEROUS_URI_SCHEMES = [
 ];
 
 function isInvisibleFormatChar(code) {
+  // Covers (a) the canonical BIDI / format-control set that CSPP /
+  // CVE-2021-42574 (Trojan Source) recognises plus (b) Unicode
+  // variation selectors (U+FE00–U+FE0F, U+E0100–U+E01EF) and
+  // language-tag characters (U+E0000–U+E007F). The latter two
+  // ranges render invisibly and have been used in steganography
+  // and prompt-injection vectors against text-processing
+  // pipelines — neutralise them on every path that does not need
+  // them. No legitimate ChordPro / docs-source content uses these
+  // codepoints.
   return (
     code === 0x00ad ||
     code === 0x200b ||
@@ -222,7 +231,10 @@ function isInvisibleFormatChar(code) {
     code === 0x2060 ||
     code === 0xfeff ||
     (code >= 0x202a && code <= 0x202e) ||
-    (code >= 0x2066 && code <= 0x2069)
+    (code >= 0x2066 && code <= 0x2069) ||
+    (code >= 0xfe00 && code <= 0xfe0f) ||
+    (code >= 0xe0000 && code <= 0xe007f) ||
+    (code >= 0xe0100 && code <= 0xe01ef)
   );
 }
 function isAsciiWhitespace(c) {
@@ -399,25 +411,56 @@ export function rewriteHref(href, sourceDir) {
 // `style` is added to PURIFY_CONFIG.ADD_ATTR so Shiki's per-token
 // `<span style="color:#XXXXXX">` survives sanitisation. DOMPurify
 // 3.x treats `style` as a URI-safe attribute (see
-// DEFAULT_URI_SAFE_ATTRIBUTES in DOMPurify/src/attrs.ts), which means
-// the IS_ALLOWED_URI regex is NOT applied to the CSS value — so a
-// `style="background-image:url(/exfil)"` written into an authored
-// markdown source would otherwise survive into the deployed HTML
-// and fire a GitHub-Pages-origin request from every reader's
-// browser. We defend in two layers below: (1) restrict the
-// attribute to the three tags Shiki emits, (2) strip any surviving
-// `style` whose value contains `url(`, which Shiki never emits.
+// DEFAULT_URI_SAFE_ATTRIBUTES in DOMPurify/src/attrs.ts), which
+// means the IS_ALLOWED_URI regex is NOT applied to the CSS value —
+// so a `style="background-image:url(/exfil)"` written into an
+// authored markdown source would otherwise survive into the
+// deployed HTML and fire a GitHub-Pages-origin request from every
+// reader's browser.
+//
+// Defence strategy: fail-closed allowlist of CSS
+// property:value patterns Shiki actually emits. Anything else
+// (`url(...)`, `image-set(...)`, `image(...)`, CSS hex escapes
+// like `url\28...\29` that browsers normalise to `url(...)`,
+// `@import` smuggled via inline-style — which browsers ignore
+// but the allowlist catches anyway, CSS comments inside the value,
+// custom `var(--x)` references with payloads) does not match and
+// triggers full-attribute strip. The allowlist matches the full
+// known repertoire of Shiki themes (color, font-style,
+// font-weight, text-decoration). A future Shiki release adding a
+// new declaration will trip the unit tests (which assert legitimate
+// output survives) and force a deliberate widening here, not
+// silent regression of the security posture.
 //
 // USE_PROFILES.html intentionally excludes the svg and mathml
 // profiles (see DOMPurify/src/tags.ts) so the `<span>` allowance
 // does NOT propagate into an SVG/MathML subtree — a future change
 // that adds `svg: true` here MUST re-audit the style allowlist.
 const SHIKI_STYLE_TAGS = new Set(['PRE', 'CODE', 'SPAN']);
-const CSS_URL_RE = /url\s*\(/i;
+// Match a single CSS declaration in the form `property: value`,
+// trimmed. Each branch is one property Shiki may emit; the value
+// patterns are deliberately strict (no parens, no backslashes, no
+// quotes, no whitespace except inside enumerated keywords).
+const SHIKI_STYLE_DECL_RE =
+  /^(?:color\s*:\s*#[0-9a-f]{3,8}|background-color\s*:\s*#[0-9a-f]{3,8}|font-style\s*:\s*(?:italic|normal|oblique)|font-weight\s*:\s*(?:bold|normal|lighter|bolder|[1-9]00)|text-decoration\s*:\s*(?:underline|none|line-through|overline))$/i;
 const PURIFY_CONFIG = {
   USE_PROFILES: { html: true },
   ADD_ATTR: ['id', 'style'],
 };
+
+/** Fail-closed: returns true ONLY when every `;`-separated
+ *  declaration in the supplied style value matches the Shiki
+ *  property:value allowlist. Empty / whitespace-only values are
+ *  treated as legitimate (DOMPurify would have left them as-is). */
+function isLegitimateShikiStyle(value) {
+  if (value.trim() === '') return true;
+  for (const raw of value.split(';')) {
+    const decl = raw.trim();
+    if (decl === '') continue;
+    if (!SHIKI_STYLE_DECL_RE.test(decl)) return false;
+  }
+  return true;
+}
 
 // Module-scoped: JSDOM + DOMPurify construction is non-trivial and
 // both instances are safe to reuse across sanitize() calls (the hook
@@ -448,18 +491,16 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   // (`PRE` / `CODE` / `SPAN`). Custom elements and unknown tags are
   // intentionally outside SHIKI_STYLE_TAGS — their `style` is
   // stripped even if DOMPurify happens to pass the tag through.
+  // Even on the three allowed tags, the value is gated through the
+  // strict Shiki property:value allowlist; anything else (CSS
+  // `url(...)` / `image-set(...)` / hex-escaped parens /
+  // unrecognised properties) loses the entire attribute.
   const styleAttr = node.getAttribute('style');
   if (styleAttr !== null) {
-    if (!SHIKI_STYLE_TAGS.has(node.tagName)) {
-      node.removeAttribute('style');
-    } else if (CSS_URL_RE.test(styleAttr)) {
-      // Shiki only emits `color:#XXXXXX` / `font-style:italic` etc.
-      // — never `url(...)`. Any surviving `url(...)` reached this
-      // hook from an authored markdown source bypassing DOMPurify's
-      // URI check (which is skipped for URI-safe attributes); strip
-      // the whole attribute. Covers `background-image:url(/exfil)`,
-      // `url(javascript:...)`, `-moz-binding:url(...)`, and
-      // `behaviour:url(...)`.
+    if (
+      !SHIKI_STYLE_TAGS.has(node.tagName) ||
+      !isLegitimateShikiStyle(styleAttr)
+    ) {
       node.removeAttribute('style');
     }
   }
@@ -543,10 +584,10 @@ const SHIKI_LANG_ALIASES = new Map([
 const SHIKI_LOADED_LANGS = new Set(HIGHLIGHTER.getLoadedLanguages());
 
 // HAST `<pre>` properties to keep on Shiki output. Everything else
-// (Shiki's inline `style="background-color:..."`, `tabindex`, and
-// any future presentational attributes) is stripped so the
+// — Shiki's inline `style="background-color:..."`, `tabindex`, any
+// future string- or symbol-keyed property — is stripped so the
 // `.docs-prose pre` CSS rule keeps controlling background, padding,
-// and border-radius. Allowlist semantics — future Shiki versions
+// and border-radius. Allowlist semantics: future Shiki versions
 // adding new wrapper attrs cannot leak into the deployed HTML.
 const SHIKI_PRE_KEEP_PROPERTIES = new Set(['class']);
 const stripPreWrapper = {
@@ -567,6 +608,13 @@ const stripPreWrapper = {
       if (!SHIKI_PRE_KEEP_PROPERTIES.has(key)) {
         delete node.properties[key];
       }
+    }
+    // Object.keys() ignores symbol-keyed properties. Defensive: a
+    // future HAST node that smuggles a Symbol-keyed sentinel
+    // (private internal state, framework instrumentation, …) would
+    // otherwise bypass the allowlist intent — drop those too.
+    for (const sym of Object.getOwnPropertySymbols(node.properties)) {
+      delete node.properties[sym];
     }
   },
 };
@@ -629,6 +677,10 @@ const MAX_CODE_BLOCK_BYTES = 256 * 1024;
  * @throws {Error} when `code` exceeds `MAX_CODE_BLOCK_BYTES`.
  */
 export function highlightCodeBlock(code, lang) {
+  // Semantics: input MUST be `<= MAX_CODE_BLOCK_BYTES`. Inputs of
+  // exactly the cap size are accepted; the first rejected size is
+  // `MAX_CODE_BLOCK_BYTES + 1`. The boundary is pinned by a unit
+  // test on both sides so a mutation flipping `>` ↔ `>=` is caught.
   if (Buffer.byteLength(code, 'utf8') > MAX_CODE_BLOCK_BYTES) {
     throw new Error(
       `highlightCodeBlock input exceeds ${MAX_CODE_BLOCK_BYTES} bytes; ` +

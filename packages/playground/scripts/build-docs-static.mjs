@@ -188,18 +188,23 @@ function renderOnePage({ page, cssHref }) {
   return outFile;
 }
 
-// Match ` ```<lang> ` and ` ```<lang> {meta...} ` opening fences,
-// ignoring closing fences and indented fences.
-const FENCE_OPEN_RE = /^```([A-Za-z0-9_+\-]+)/gm;
+// CommonMark fence opening: 0–3 leading spaces, then a run of 3+
+// backticks OR 3+ tildes, then an optional info-string starting
+// with the lang. Horizontal whitespace (`[ \t]*`) between the fence
+// chars and the lang is allowed — but NOT newlines, otherwise a
+// closing fence followed by prose like ` ```\n\nReturns a song. `
+// would consume the newlines via `\s*` and match `Returns` as a
+// fence lang. Closing fences (no info string) are excluded by the
+// `([A-Za-z0-9_+\-]+)` capture requiring at least one identifier
+// character. The `m` flag anchors `^` at line start; the
+// character-class `+` is linear in input length (no ReDoS surface).
+const FENCE_OPEN_RE =
+  /^ {0,3}(?:`{3,}|~{3,})[ \t]*([A-Za-z0-9_+\-]+)/gm;
 
 /**
  * Walk every registered docs page, collect every fence-header lang,
- * and assert each one resolves through `resolveShikiLang`. The point
- * is to turn "silent fallback to plain `<pre><code>`" — which clears
- * unit tests and produces a green build but ships un-highlighted
- * blocks — into a loud build failure. New `.md` files or new fence
- * langs must extend `SHIKI_LANGS` / `SHIKI_LANG_ALIASES` in the same
- * commit.
+ * and return a `lang → sourcePath[]` map. Both backtick and tilde
+ * fences are matched per CommonMark §4.5 (Fenced code blocks).
  */
 export function collectFenceLangs() {
   const usages = new Map(); // lang → [sourcePath, ...]
@@ -218,8 +223,15 @@ export function collectFenceLangs() {
   return usages;
 }
 
-export function assertEveryFenceLangIsLoaded() {
-  const usages = collectFenceLangs();
+/**
+ * Throws when the supplied `lang → sourcePath[]` map contains any
+ * fence header that does not resolve through `resolveShikiLang`.
+ * Split out from `assertEveryFenceLangIsLoaded` so unit tests can
+ * exercise the negative branch (mutation E in the round-1 review:
+ * collapsing the predicate to `if (false)` had no failing test on
+ * the live corpus).
+ */
+export function validateFenceLangs(usages) {
   const missing = [];
   for (const [lang, sources] of usages) {
     if (resolveShikiLang(lang) === null) {
@@ -240,6 +252,17 @@ export function assertEveryFenceLangIsLoaded() {
         `loaded target) in packages/playground/scripts/lib/docs-render.mjs.`,
     );
   }
+}
+
+/**
+ * Build-time gate: scan every page, then validate every collected
+ * fence lang. Called from `main` so the build aborts before any
+ * HTML is written. Turns "silent fallback to plain `<pre><code>`"
+ * into a loud build failure.
+ */
+export function assertEveryFenceLangIsLoaded() {
+  const usages = collectFenceLangs();
+  validateFenceLangs(usages);
   return usages;
 }
 

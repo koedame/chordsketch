@@ -15,6 +15,12 @@ export function pageHtml(args: {
  *  for tests. */
 export function collectFenceLangs(): Map<string, string[]>;
 
+/** Throws when the supplied `lang → sourcePath[]` map contains a
+ *  fence header that does not resolve through `resolveShikiLang`.
+ *  Split out from `assertEveryFenceLangIsLoaded` so unit tests can
+ *  exercise the negative branch on a synthetic map. */
+export function validateFenceLangs(usages: Map<string, string[]>): void;
+
 /** Throws when any fence header in the docs corpus does not
  *  resolve through `resolveShikiLang`. Called from `main` so the
  *  build aborts before any HTML is written. */
