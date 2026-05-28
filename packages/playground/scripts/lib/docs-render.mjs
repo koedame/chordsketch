@@ -4,9 +4,14 @@
 // `.claude/rules/sanitizer-security.md` + `.claude/rules/fix-propagation.md`.
 // Any addition or removal MUST land in all three sites in the same PR.
 
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { Marked } from 'marked';
 import { JSDOM } from 'jsdom';
 import createDOMPurify from 'dompurify';
+import { createHighlighter } from 'shiki';
 
 const SITE_BASE = '/chordsketch/';
 export const DOCS_BASE = `${SITE_BASE}docs/`;
@@ -414,12 +419,115 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     node.setAttribute('target', '_blank');
     node.setAttribute('rel', 'noreferrer noopener');
   }
+  // `style` is enabled in PURIFY_CONFIG.ADD_ATTR only to let Shiki's
+  // per-token `<span style="color:...">` survive. DOMPurify's CSS
+  // sanitiser already strips URLs / expressions / behaviour, but
+  // restrict the attribute to the three tags Shiki emits so an
+  // unrelated `<div style="...">` in a future markdown file cannot
+  // ride the same allowlist.
+  const styleAttr = node.getAttribute('style');
+  if (styleAttr !== null && !SHIKI_STYLE_TAGS.has(node.tagName)) {
+    node.removeAttribute('style');
+  }
 });
+
+const SHIKI_STYLE_TAGS = new Set(['PRE', 'CODE', 'SPAN']);
 
 const PURIFY_CONFIG = {
   USE_PROFILES: { html: true },
-  ADD_ATTR: ['id'],
+  ADD_ATTR: ['id', 'style'],
 };
+
+// Shiki highlighter. Build-time only (the deployed pages carry zero
+// JS beyond the inline hash-redirect shim per ADR-0021); the
+// highlighter object is reused across every page render so we pay
+// grammar / theme load cost once. The ChordPro grammar is sister-site
+// to `syntaxes/chordpro.tmLanguage.json` — the same TextMate grammar
+// VS Code, Zed, and the JetBrains plugin ship for editor
+// highlighting, so on-page docs colour matches what readers see in
+// their editor.
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(HERE, '../../../..');
+const CHORDPRO_GRAMMAR = JSON.parse(
+  readFileSync(
+    resolve(REPO_ROOT, 'syntaxes/chordpro.tmLanguage.json'),
+    'utf8',
+  ),
+);
+// Match the corpus surveyed under `docs/sdk/` (` ``` ` fences) plus
+// the obvious near-aliases. New languages used in markdown MUST be
+// added here or the renderer falls back to plain `<pre><code>`.
+const SHIKI_LANGS = [
+  'bash',
+  'json',
+  'kotlin',
+  'python',
+  'ruby',
+  'rust',
+  'shell',
+  'swift',
+  'tsx',
+  'typescript',
+  { ...CHORDPRO_GRAMMAR, name: 'chordpro' },
+];
+const SHIKI_THEME = 'github-dark';
+const HIGHLIGHTER = await createHighlighter({
+  themes: [SHIKI_THEME],
+  langs: SHIKI_LANGS,
+});
+// `ts` is an alias for `typescript` in docs fences; Shiki's
+// bundled-languages alias map covers it for the dynamic loader but
+// not for a preloaded highlighter, so resolve aliases up-front.
+const SHIKI_LANG_ALIASES = new Map([
+  ['ts', 'typescript'],
+  ['js', 'javascript'],
+  ['sh', 'bash'],
+  ['shellscript', 'bash'],
+]);
+const SHIKI_LOADED_LANGS = new Set(HIGHLIGHTER.getLoadedLanguages());
+
+// Strip Shiki's wrapper-level inline `style` / `tabindex` so the
+// existing `.docs-prose pre` rule keeps controlling background,
+// padding, and border radius. Per-token `<span>` colours stay.
+const stripPreWrapper = {
+  pre(node) {
+    if (node.properties) {
+      delete node.properties.style;
+      delete node.properties.tabindex;
+    }
+  },
+};
+
+function resolveShikiLang(lang) {
+  if (!lang) return null;
+  const lower = lang.toLowerCase();
+  const aliased = SHIKI_LANG_ALIASES.get(lower) ?? lower;
+  return SHIKI_LOADED_LANGS.has(aliased) ? aliased : null;
+}
+
+function escapeHtmlText(value) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Build-time syntax highlight for a Markdown code fence. Falls back
+ *  to plain `<pre><code>` when the language is unknown so a
+ *  mis-tagged fence still renders. */
+export function highlightCodeBlock(code, lang) {
+  const resolved = resolveShikiLang(lang);
+  if (resolved === null) {
+    return `<pre><code>${escapeHtmlText(code)}</code></pre>`;
+  }
+  return HIGHLIGHTER.codeToHtml(code, {
+    lang: resolved,
+    theme: SHIKI_THEME,
+    transformers: [stripPreWrapper],
+  });
+}
 
 /** Parse Markdown to sanitised HTML; `sourcePath` may be empty for
  *  ad-hoc inputs (no relative-link rewriting then). */
@@ -442,6 +550,9 @@ export function renderMarkdown(source, sourcePath = '') {
           ? ` title="${escapeAttribute(token.title)}"`
           : '';
         return `<a href="${escapeAttribute(href)}"${titleAttr}>${innerHtml}</a>`;
+      },
+      code(token) {
+        return highlightCodeBlock(token.text, token.lang ?? '');
       },
     },
   });

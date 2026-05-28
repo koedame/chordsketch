@@ -69,4 +69,32 @@ test.describe('docs site (static)', () => {
       page.getByRole('heading', { level: 2, name: /^Recipe 1\b/ }),
     ).toBeVisible();
   });
+
+  test('code fences on a recipe page render with Shiki syntax highlighting', async ({
+    page,
+  }) => {
+    // Asserts the build-time highlighter is wired into the deployed
+    // pipeline per ADR-0021's zero-JS posture: every recipe block
+    // must reach the DOM as a `<pre class="shiki">` with per-token
+    // colour spans. A regression that silently fell back to plain
+    // `<pre><code>` would clear the unit suite (the highlighter
+    // module still loads) but show up here.
+    await page.goto('./docs/embed-react/');
+
+    const shikiBlocks = page.locator('pre.shiki');
+    await expect(shikiBlocks.first()).toBeVisible();
+    // Embed-react ships 12 fenced code blocks at the time of
+    // writing; assert a meaningful floor rather than the exact
+    // count so a future recipe addition / removal does not
+    // mechanically break the smoke.
+    expect(await shikiBlocks.count()).toBeGreaterThanOrEqual(5);
+
+    // Per-token colour spans are the load-bearing visual signal:
+    // without them, the block is plain text wearing a "shiki" class.
+    const colouredSpan = shikiBlocks
+      .first()
+      .locator('span[style*="color:"]')
+      .first();
+    await expect(colouredSpan).toBeVisible();
+  });
 });

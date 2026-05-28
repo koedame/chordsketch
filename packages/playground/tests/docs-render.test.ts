@@ -13,6 +13,7 @@ import {
   DOC_GROUPS,
   cleanUrlFor,
   extractOutline,
+  highlightCodeBlock,
   isExternalHttpHref,
   isSafeHref,
   renderMarkdown,
@@ -425,4 +426,79 @@ describe('isSafeHref — adversarial parity with the Rust suite', () => {
       expect(isSafeHref(href)).toBe(false);
     });
   }
+});
+
+describe('highlightCodeBlock', () => {
+  it('emits a shiki-wrapped pre + per-token coloured spans for a known language', () => {
+    const html = highlightCodeBlock(
+      "import { ChordSheet } from '@chordsketch/react';",
+      'tsx',
+    );
+    expect(html.startsWith('<pre class="shiki')).toBe(true);
+    // Per-token colour spans are the load-bearing visual signal of
+    // highlighting; without them the block degrades to plain text.
+    expect(html).toMatch(/<span style="color:#[0-9A-Fa-f]{3,8}">import<\/span>/);
+    expect(html).toContain('ChordSheet');
+    // Wrapper-level inline `style` / `tabindex` are stripped so the
+    // existing `.docs-prose pre` rule keeps controlling padding /
+    // background / border-radius.
+    expect(html).not.toMatch(/<pre[^>]*\sstyle=/);
+    expect(html).not.toMatch(/<pre[^>]*\stabindex=/);
+  });
+
+  it('highlights ChordPro using the in-repo TextMate grammar', () => {
+    // `syntaxes/chordpro.tmLanguage.json` scopes `{title` as a
+    // `keyword.control.directive.chordpro` and the value as a
+    // string. Both segments MUST land in distinct coloured spans —
+    // otherwise the grammar load silently fell back to plain text.
+    const html = highlightCodeBlock('{title: Demo}', 'chordpro');
+    expect(html.startsWith('<pre class="shiki')).toBe(true);
+    expect(html).toMatch(/<span style="color:#[0-9A-Fa-f]{3,8}">title<\/span>/);
+    expect(html).toMatch(/<span style="color:#[0-9A-Fa-f]{3,8}">Demo<\/span>/);
+  });
+
+  it('falls back to plain escaped <pre><code> for an unknown language', () => {
+    expect(highlightCodeBlock('a < b && c', 'klingon')).toBe(
+      '<pre><code>a &lt; b &amp;&amp; c</code></pre>',
+    );
+  });
+
+  it('falls back to plain escaped <pre><code> when no language is set', () => {
+    expect(highlightCodeBlock('plain', '')).toBe('<pre><code>plain</code></pre>');
+  });
+
+  it('resolves the `ts` alias to typescript', () => {
+    const html = highlightCodeBlock("const x: number = 1;", 'ts');
+    expect(html.startsWith('<pre class="shiki')).toBe(true);
+    expect(html).toMatch(/<span style="color:#[0-9A-Fa-f]{3,8}">const<\/span>/);
+  });
+});
+
+describe('renderMarkdown code-fence integration', () => {
+  it('runs Shiki on a fenced TSX block and survives DOMPurify with per-span colours intact', () => {
+    // DOMPurify's HTML profile strips `style` by default. The
+    // colour-span output is the integration evidence that the
+    // PURIFY_CONFIG allowance + the SHIKI_STYLE_TAGS guard hook are
+    // both wired in; without either, the spans would survive but
+    // their `style` would not.
+    const html = renderMarkdown(
+      "```tsx\nimport { x } from 'y';\n```\n",
+      'docs/sdk/tasks/embed-react.md',
+    );
+    expect(html).toMatch(/<pre class="shiki[^"]*"><code>/);
+    expect(html).toMatch(
+      /<span style="color:#[0-9A-Fa-f]{3,8}">import<\/span>/,
+    );
+  });
+
+  it('strips a stray <div style="..."> in inline HTML even though Shiki spans keep theirs', () => {
+    // The PURIFY_CONFIG allowlist widening for Shiki MUST NOT
+    // become a general `style=` allowance on every tag — the
+    // post-sanitize hook narrows the survivors to PRE / CODE / SPAN.
+    const html = renderMarkdown(
+      '<div style="background:red">payload</div>\n',
+      'docs/sdk/README.md',
+    );
+    expect(html).not.toContain('style="background:red"');
+  });
 });
