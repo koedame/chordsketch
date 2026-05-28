@@ -83,6 +83,8 @@
           || throw "identifiedFetchurlOverlay: prev.fetchurl is missing `extendDrvArgs` — nixpkgs API may have changed";
         assert (fu ? constructDrv)
           || throw "identifiedFetchurlOverlay: prev.fetchurl is missing `constructDrv` — nixpkgs API may have changed";
+        assert (fu ? excludeDrvArgNames)
+          || throw "identifiedFetchurlOverlay: prev.fetchurl is missing `excludeDrvArgNames` — nixpkgs API may have changed";
         assert (fu ? resolveUrl)
           || throw "identifiedFetchurlOverlay: prev.fetchurl is missing `resolveUrl` — nixpkgs API may have changed";
         fu;
