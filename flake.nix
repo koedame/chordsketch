@@ -44,17 +44,13 @@
         "chordsketch/${cliVersion} "
         + "(+https://github.com/koedame/chordsketch)";
 
-      # Preserve `fetchurl.override` and other attributes by wrapping
-      # via `lib.makeOverridable` rather than replacing the function
-      # outright (a plain lambda has no `.override`, which trips
-      # downstream consumers that introspect `pkgs.fetchurl`).
       identifiedFetchurlOverlay = final: prev: {
-        fetchurl = final.lib.makeOverridable (args:
+        fetchurl = args:
           prev.fetchurl (args // {
             curlOptsList =
               (args.curlOptsList or [ ])
               ++ [ "--user-agent" cratesIoUserAgent ];
-          }));
+          });
       };
 
       # Evaluate `f pkgs` for each system in `systems`, with the
