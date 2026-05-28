@@ -207,8 +207,32 @@ pub(crate) fn chord_diagram_svg_inner(
     instrument: &str,
     defines: &[(String, String)],
 ) -> std::result::Result<Option<String>, String> {
-    use chordsketch_chordpro::chord_diagram::{render_keyboard_svg, render_svg};
+    chord_diagram_svg_inner_with_orientation(chord, instrument, defines, None, None)
+}
+
+/// Variant of [`chord_diagram_svg_inner`] that accepts orientation +
+/// string-order options as strings — the wire-level shape exposed to wasm /
+/// NAPI / FFI consumers (`.claude/rules/fix-propagation.md` §Bindings).
+///
+/// `None` for either string falls back to the project default
+/// (vertical layout / reader-view string order). Unrecognised strings
+/// are silently treated as defaults — the same lenient behaviour as
+/// [`resolve_orientation`](chordsketch_chordpro::chord_diagram::resolve_orientation).
+pub(crate) fn chord_diagram_svg_inner_with_orientation(
+    chord: &str,
+    instrument: &str,
+    defines: &[(String, String)],
+    orientation: Option<&str>,
+    string_order: Option<&str>,
+) -> std::result::Result<Option<String>, String> {
+    use chordsketch_chordpro::chord_diagram::{
+        render_keyboard_svg, render_svg_with_orientation, resolve_horizontal_string_order,
+        resolve_orientation,
+    };
     use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
+
+    let orient = resolve_orientation(orientation);
+    let order = resolve_horizontal_string_order(string_order);
 
     match instrument.to_ascii_lowercase().as_str() {
         "piano" | "keyboard" | "keys" => {
@@ -226,6 +250,9 @@ pub(crate) fn chord_diagram_svg_inner(
             // slice for keyboards (same behaviour as before
             // this commit), and only the fretted branch
             // benefits from the new API.
+            //
+            // Keyboard diagrams have no orientation knob — both arguments
+            // are accepted but ignored here.
             let _ = defines;
             Ok(lookup_keyboard_voicing(chord, &[]).map(|v| render_keyboard_svg(&v)))
         }
@@ -235,7 +262,8 @@ pub(crate) fn chord_diagram_svg_inner(
             // when no `{chordfrets}` directive is set) so diagrams
             // produced by `<ChordDiagram>` visually match the
             // sheet output from `<ChordSheet>` for the same chord.
-            Ok(lookup_diagram(chord, defines, instrument, 5).map(|d| render_svg(&d)))
+            Ok(lookup_diagram(chord, defines, instrument, 5)
+                .map(|d| render_svg_with_orientation(&d, orient, order)))
         }
         other => Err(format!(
             "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""

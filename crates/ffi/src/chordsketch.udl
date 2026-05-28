@@ -122,6 +122,23 @@ namespace chordsketch {
     [Throws=ChordSketchError]
     string? chord_diagram_svg_with_defines(string chord, string instrument, sequence<ChordDefine> defines);
 
+    /// Like `chord_diagram_svg` but renders in the requested
+    /// orientation (#2572). `orientation` accepts `"vertical"`
+    /// (default) or `"horizontal"`; `string_order` accepts
+    /// `"reader"` (default — high pitch on top, see ADR-0026) or
+    /// `"player"`. `null` falls back to defaults; unrecognised
+    /// strings fall back silently. Sister-site to the wasm
+    /// `chordDiagramSvgWithOrientation` and NAPI
+    /// `chordDiagramSvgWithOrientation` exports per
+    /// `.claude/rules/fix-propagation.md` §Bindings.
+    [Throws=ChordSketchError]
+    string? chord_diagram_svg_with_orientation(string chord, string instrument, string? orientation, string? string_order);
+
+    /// Combination of `chord_diagram_svg_with_defines` and
+    /// `chord_diagram_svg_with_orientation` (#2572).
+    [Throws=ChordSketchError]
+    string? chord_diagram_svg_with_defines_orientation(string chord, string instrument, sequence<ChordDefine> defines, string? orientation, string? string_order);
+
     /// Convert a ChordPro source string into an `irealb://` URL
     /// (#2067 Phase 1).
     ///

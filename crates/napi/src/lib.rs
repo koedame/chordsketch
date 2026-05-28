@@ -230,8 +230,27 @@ pub(crate) fn chord_diagram_svg_inner(
     instrument: &str,
     defines: &[(String, String)],
 ) -> std::result::Result<Option<String>, String> {
-    use chordsketch_chordpro::chord_diagram::{render_keyboard_svg, render_svg};
+    chord_diagram_svg_inner_with_orientation(chord, instrument, defines, None, None)
+}
+
+/// Orientation-aware variant of [`chord_diagram_svg_inner`]. See the wasm
+/// sister site (`crates/wasm/src/lib.rs::chord_diagram_svg_inner_with_orientation`)
+/// for the wire-level shape and the lenient default behaviour.
+pub(crate) fn chord_diagram_svg_inner_with_orientation(
+    chord: &str,
+    instrument: &str,
+    defines: &[(String, String)],
+    orientation: Option<&str>,
+    string_order: Option<&str>,
+) -> std::result::Result<Option<String>, String> {
+    use chordsketch_chordpro::chord_diagram::{
+        render_keyboard_svg, render_svg_with_orientation, resolve_horizontal_string_order,
+        resolve_orientation,
+    };
     use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
+
+    let orient = resolve_orientation(orientation);
+    let order = resolve_horizontal_string_order(string_order);
 
     match instrument.to_ascii_lowercase().as_str() {
         "piano" | "keyboard" | "keys" => {
@@ -242,6 +261,9 @@ pub(crate) fn chord_diagram_svg_inner(
             // explicitly via `let _ = …;` to make the intentional
             // omission visible in the diff (mirrors wasm's
             // `chord_diagram_svg_inner`).
+            //
+            // Keyboard diagrams have no orientation knob — both arguments
+            // are accepted but ignored here.
             let _ = defines;
             Ok(lookup_keyboard_voicing(chord, &[]).map(|v| render_keyboard_svg(&v)))
         }
@@ -251,7 +273,8 @@ pub(crate) fn chord_diagram_svg_inner(
             // when no `{chordfrets}` directive is set), keeping
             // diagrams produced via NAPI visually consistent with
             // sheets rendered through the same binding.
-            Ok(lookup_diagram(chord, defines, instrument, 5).map(|d| render_svg(&d)))
+            Ok(lookup_diagram(chord, defines, instrument, 5)
+                .map(|d| render_svg_with_orientation(&d, orient, order)))
         }
         other => Err(format!(
             "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
@@ -1088,6 +1111,26 @@ mod tests {
             err.contains("unknown instrument") && err.contains("harmonica"),
             "error must name the offending instrument; got {err:?}"
         );
+    }
+
+    #[test]
+    fn chord_diagram_svg_inner_with_orientation_horizontal_marks_class() {
+        let svg =
+            chord_diagram_svg_inner_with_orientation("Am", "guitar", &[], Some("horizontal"), None)
+                .unwrap()
+                .expect("Am voicing should resolve for guitar");
+        assert!(svg.contains("chord-diagram-horizontal"));
+    }
+
+    #[test]
+    fn chord_diagram_svg_inner_with_orientation_defaults_match_legacy() {
+        let legacy = chord_diagram_svg_inner("Am", "guitar", &[])
+            .unwrap()
+            .unwrap();
+        let oriented = chord_diagram_svg_inner_with_orientation("Am", "guitar", &[], None, None)
+            .unwrap()
+            .unwrap();
+        assert_eq!(legacy, oriented);
     }
 
     #[test]

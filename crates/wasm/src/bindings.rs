@@ -37,10 +37,10 @@ use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    RenderOptions, chord_diagram_svg_inner, do_chord_typography, do_convert_chordpro_to_irealb,
-    do_convert_irealb_to_chordpro_text, do_parse_chordpro, do_parse_irealb, do_render_ireal_svg,
-    do_render_string, do_serialize_irealb, render_string_with_warnings_core, resolve_config_inner,
-    validate_inner,
+    RenderOptions, chord_diagram_svg_inner, chord_diagram_svg_inner_with_orientation,
+    do_chord_typography, do_convert_chordpro_to_irealb, do_convert_irealb_to_chordpro_text,
+    do_parse_chordpro, do_parse_irealb, do_render_ireal_svg, do_render_string, do_serialize_irealb,
+    render_string_with_warnings_core, resolve_config_inner, validate_inner,
 };
 
 // `do_render_bytes` / `render_bytes_with_warnings_core` /
@@ -703,6 +703,65 @@ pub fn chord_diagram_svg_with_defines(
             .map_err(|e| JsValue::from_str(&format!("invalid defines argument: {e}")))?
     };
     chord_diagram_svg_inner(chord, instrument, &defines_vec).map_err(|e| JsValue::from_str(&e))
+}
+
+/// Variant of [`chord_diagram_svg`] that takes diagram orientation +
+/// horizontal-string-order as optional strings.
+///
+/// `orientation` accepts `"vertical"` (default) or `"horizontal"`
+/// (case-insensitive). `stringOrder` accepts `"reader"` (default,
+/// high pitch on top — see ADR-0026) or `"player"`. `null` / `undefined` /
+/// unrecognised values silently fall back to defaults, matching
+/// `resolve_orientation` / `resolve_horizontal_string_order`.
+///
+/// # Errors
+///
+/// Same as [`chord_diagram_svg`].
+#[must_use = "callers must handle the unknown-instrument error"]
+#[wasm_bindgen(js_name = chordDiagramSvgWithOrientation)]
+pub fn chord_diagram_svg_with_orientation(
+    chord: &str,
+    instrument: &str,
+    orientation: Option<String>,
+    string_order: Option<String>,
+) -> Result<Option<String>, JsValue> {
+    chord_diagram_svg_inner_with_orientation(
+        chord,
+        instrument,
+        &[],
+        orientation.as_deref(),
+        string_order.as_deref(),
+    )
+    .map_err(|e| JsValue::from_str(&e))
+}
+
+/// Combination of [`chord_diagram_svg_with_defines`] and
+/// [`chord_diagram_svg_with_orientation`] — the full surface used by the
+/// React JSX walker when a song carries both `{define}` directives and a
+/// `{+config.diagrams.orientation}` override.
+#[must_use = "callers must handle the unknown-instrument error"]
+#[wasm_bindgen(js_name = chordDiagramSvgWithDefinesOrientation)]
+pub fn chord_diagram_svg_with_defines_orientation(
+    chord: &str,
+    instrument: &str,
+    defines: JsValue,
+    orientation: Option<String>,
+    string_order: Option<String>,
+) -> Result<Option<String>, JsValue> {
+    let defines_vec: Vec<(String, String)> = if defines.is_undefined() || defines.is_null() {
+        Vec::new()
+    } else {
+        serde_wasm_bindgen::from_value(defines)
+            .map_err(|e| JsValue::from_str(&format!("invalid defines argument: {e}")))?
+    };
+    chord_diagram_svg_inner_with_orientation(
+        chord,
+        instrument,
+        &defines_vec,
+        orientation.as_deref(),
+        string_order.as_deref(),
+    )
+    .map_err(|e| JsValue::from_str(&e))
 }
 
 /// Validate ChordPro input and return any parse errors as structured
