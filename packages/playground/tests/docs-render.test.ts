@@ -649,6 +649,16 @@ describe('highlightCodeBlock', () => {
     expect(html).toMatch(COLOUR_SPAN_RE);
   });
 
+  it('highlights `js` blocks via Shiki\'s auto-loaded tsx-dep grammar', () => {
+    // `js` is NOT in `SHIKI_LANG_ALIASES`, but Shiki auto-loads it
+    // as an embedded dependency of `tsx` so `resolveShikiLang('js')`
+    // returns `'js'` directly. Pin that resolution against a future
+    // Shiki upgrade that changes the tsx → js auto-load relationship.
+    const html = highlightCodeBlock('const x = 1;', 'js');
+    expect(html.startsWith('<pre class="shiki')).toBe(true);
+    expect(html).toMatch(COLOUR_SPAN_RE);
+  });
+
   it('resolves the `sh` alias to a loaded grammar', () => {
     const html = highlightCodeBlock('echo hello', 'sh');
     expect(html.startsWith('<pre class="shiki')).toBe(true);
