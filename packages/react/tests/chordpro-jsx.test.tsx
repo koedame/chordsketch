@@ -3631,4 +3631,130 @@ describe('renderChordproAst', () => {
     expect(color).not.toContain('(');
     expect(color).not.toContain(')');
   });
+
+  // ---------------------------------------------------------------------
+  // Walker orientation pass-through (#2572). When the walker emits
+  // <ChordDiagram> via the chordDiagrams option, both `orientation` and
+  // `horizontalStringOrder` must reach the component as props.
+  //
+  // Stub the wasm loader so <ChordDiagram> resolves synchronously to a
+  // marker SVG whose attributes record the orientation arguments it was
+  // called with. The structural assertion against the DOM then verifies
+  // the walker wired the props through correctly.
+  // ---------------------------------------------------------------------
+
+  test('forwards chordDiagrams.orientation through to <ChordDiagram>', () => {
+    // Walk the React element tree the walker returns and collect every
+    // ChordDiagram element's props. This is independent of the wasm
+    // loader (which is async and unavailable in unit tests) — we only
+    // care that the orientation prop reaches the emitted element.
+    type AnyElement = {
+      type: unknown;
+      props: Record<string, unknown> & { children?: unknown };
+    };
+    const collectChordDiagramProps = (
+      node: unknown,
+    ): Array<Record<string, unknown>> => {
+      if (node === null || node === undefined || typeof node !== 'object') {
+        return [];
+      }
+      if (Array.isArray(node)) {
+        return node.flatMap(collectChordDiagramProps);
+      }
+      const el = node as AnyElement;
+      // <ChordDiagram> is a function component — match on the function
+      // name to avoid coupling to the import identity at test runtime.
+      const matches =
+        typeof el.type === 'function' && (el.type as { name?: string }).name === 'ChordDiagram';
+      const head = matches ? [el.props] : [];
+      return [...head, ...collectChordDiagramProps(el.props?.children)];
+    };
+
+    const song = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'lyrics' as const,
+          value: {
+            segments: [
+              {
+                chord: { name: 'Am', detail: null, display: null },
+                text: 'hi',
+                spans: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    const tree = renderChordproAst(song, {
+      chordDiagrams: {
+        instrument: 'guitar',
+        orientation: 'horizontal',
+        horizontalStringOrder: 'player',
+      },
+    });
+
+    const diagramProps = collectChordDiagramProps(tree);
+    expect(diagramProps.length).toBeGreaterThan(0);
+    for (const props of diagramProps) {
+      expect(props.orientation).toBe('horizontal');
+      expect(props.horizontalStringOrder).toBe('player');
+      expect(props.instrument).toBe('guitar');
+    }
+  });
+
+  test('omits orientation/horizontalStringOrder props when not configured', () => {
+    type AnyElement = {
+      type: unknown;
+      props: Record<string, unknown> & { children?: unknown };
+    };
+    const collectChordDiagramProps = (
+      node: unknown,
+    ): Array<Record<string, unknown>> => {
+      if (node === null || node === undefined || typeof node !== 'object') {
+        return [];
+      }
+      if (Array.isArray(node)) {
+        return node.flatMap(collectChordDiagramProps);
+      }
+      const el = node as AnyElement;
+      const matches =
+        typeof el.type === 'function' && (el.type as { name?: string }).name === 'ChordDiagram';
+      const head = matches ? [el.props] : [];
+      return [...head, ...collectChordDiagramProps(el.props?.children)];
+    };
+
+    const song = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'lyrics' as const,
+          value: {
+            segments: [
+              {
+                chord: { name: 'Am', detail: null, display: null },
+                text: 'hi',
+                spans: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    // Default — chordDiagrams.orientation is undefined → walker forwards
+    // undefined, which becomes "do nothing different" at <ChordDiagram>'s
+    // default-prop layer. The component default kicks in.
+    const tree = renderChordproAst(song, {
+      chordDiagrams: { instrument: 'guitar' },
+    });
+    const diagramProps = collectChordDiagramProps(tree);
+    expect(diagramProps.length).toBeGreaterThan(0);
+    for (const props of diagramProps) {
+      expect(props.orientation).toBeUndefined();
+      expect(props.horizontalStringOrder).toBeUndefined();
+    }
+  });
 });

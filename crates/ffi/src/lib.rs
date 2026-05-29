@@ -499,15 +499,13 @@ pub fn chord_diagram_svg_with_defines_orientation(
     string_order: Option<String>,
 ) -> Result<Option<String>, ChordSketchError> {
     use chordsketch_chordpro::chord_diagram::{
-        render_keyboard_svg, render_svg_with_orientation, resolve_horizontal_string_order,
-        resolve_orientation,
+        render_keyboard_svg, render_svg_with_orientation, resolve_orientation,
     };
     use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
 
     let defines_pairs: Vec<(String, String)> =
         defines.into_iter().map(|d| (d.name, d.raw)).collect();
-    let orient = resolve_orientation(orientation.as_deref());
-    let order = resolve_horizontal_string_order(string_order.as_deref());
+    let resolved = resolve_orientation(orientation.as_deref(), string_order.as_deref());
 
     match instrument.to_ascii_lowercase().as_str() {
         "piano" | "keyboard" | "keys" => {
@@ -529,7 +527,7 @@ pub fn chord_diagram_svg_with_defines_orientation(
             // Swift / Kotlin / Ruby) visually consistent with
             // sheets rendered through the same binding.
             Ok(lookup_diagram(&chord, &defines_pairs, &instrument, 5)
-                .map(|d| render_svg_with_orientation(&d, orient, order)))
+                .map(|d| render_svg_with_orientation(&d, resolved)))
         }
         other => Err(ChordSketchError::InvalidConfig {
             reason: format!(

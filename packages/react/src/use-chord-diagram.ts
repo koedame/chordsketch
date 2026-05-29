@@ -146,6 +146,10 @@ export function useChordDiagram(
   const [error, setError] = useState<Error | null>(null);
 
   const rendererRef = useRef<DiagramRenderer | null>(null);
+  // Latches once per hook instance after the first stale-bundle warning
+  // so a chord-grid rendering N chords does not log N copies of the
+  // same message.
+  const staleBundleWarnedRef = useRef<boolean>(false);
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
 
@@ -170,10 +174,17 @@ export function useChordDiagram(
         const renderer = rendererRef.current;
         // Prefer the orientation-aware export when present; fall back to
         // the defines-aware export (pre-#2572 bundles) and ultimately to
-        // the plain export (pre-#2466 bundles). Older bundles silently
-        // drop the orientation knob — diagrams render in the legacy
-        // vertical layout, which is the same behaviour the caller would
-        // see if they omitted `orientation` entirely.
+        // the plain export (pre-#2466 bundles).
+        //
+        // When the caller asked for a non-default orientation but the
+        // loaded bundle does not expose the orientation export, the
+        // diagram falls back to the legacy vertical layout. That is
+        // graceful degradation, but a silent fallback would leave a
+        // developer wondering why `orientation="horizontal"` was
+        // ignored — emit a one-shot dev-mode warning so the staleness
+        // is auditable. The warning fires at most once per hook
+        // instance via `staleBundleWarnedRef`, so a repeated render of
+        // many chords does not flood the console.
         const definesArray = defines ? defines.map(([n, r]) => [n, r] as [string, string]) : [];
         let result: string | null | undefined;
         if (renderer.chordDiagramSvgWithDefinesOrientation) {
@@ -184,10 +195,25 @@ export function useChordDiagram(
             orientation ?? null,
             stringOrder ?? null,
           );
-        } else if (renderer.chordDiagramSvgWithDefines) {
-          result = renderer.chordDiagramSvgWithDefines(chord, instrument, definesArray);
         } else {
-          result = renderer.chord_diagram_svg(chord, instrument);
+          if (
+            !staleBundleWarnedRef.current &&
+            (orientation !== undefined || stringOrder !== undefined)
+          ) {
+            staleBundleWarnedRef.current = true;
+            // eslint-disable-next-line no-console
+            console.warn(
+              '[@chordsketch/react] useChordDiagram: the loaded @chordsketch/wasm bundle ' +
+                'does not expose chordDiagramSvgWithDefinesOrientation; rendering in the ' +
+                'legacy vertical layout. Update @chordsketch/wasm to honour the ' +
+                'orientation / horizontalStringOrder props.',
+            );
+          }
+          if (renderer.chordDiagramSvgWithDefines) {
+            result = renderer.chordDiagramSvgWithDefines(chord, instrument, definesArray);
+          } else {
+            result = renderer.chord_diagram_svg(chord, instrument);
+          }
         }
         if (cancelled) return;
         setSvg(result ?? null);

@@ -237,16 +237,108 @@ describe('<ChordDiagram> orientation pass-through (#2572)', () => {
       chord_diagram_svg: vi.fn(() => '<svg data-mode="legacy"></svg>'),
       chordDiagramSvgWithDefines: vi.fn(() => '<svg data-mode="defines"></svg>'),
     };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      render(
+        <ChordDiagram
+          chord="Am"
+          instrument="guitar"
+          orientation="horizontal"
+          wasmLoader={makeLoader(noOrientation as unknown as StubRenderer)}
+        />,
+      );
+      await waitFor(() => {
+        expect(noOrientation.chordDiagramSvgWithDefines).toHaveBeenCalledWith(
+          'Am',
+          'guitar',
+          [],
+        );
+      });
+      // The stale-bundle warning must fire exactly once so a chord-grid
+      // mounting N <ChordDiagram>s does not flood the console with N
+      // copies of the same message.
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0][0]).toMatch(
+        /does not expose chordDiagramSvgWithDefinesOrientation/,
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  test('does not warn when caller omits orientation (legacy callsite)', async () => {
+    const noOrientation = {
+      default: vi.fn(async () => undefined),
+      chord_diagram_svg: vi.fn(() => '<svg data-mode="legacy"></svg>'),
+      chordDiagramSvgWithDefines: vi.fn(() => '<svg data-mode="defines"></svg>'),
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      render(
+        <ChordDiagram
+          chord="Am"
+          instrument="guitar"
+          wasmLoader={makeLoader(noOrientation as unknown as StubRenderer)}
+        />,
+      );
+      await waitFor(() => {
+        expect(noOrientation.chordDiagramSvgWithDefines).toHaveBeenCalled();
+      });
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  test('passes orientation="vertical" through explicitly', async () => {
+    // Locks in the contract that orientation="vertical" routes through
+    // the orientation-aware export with the literal "vertical" string,
+    // not through the legacy export with no argument. Catches a
+    // refactor that interprets `undefined` and `"vertical"` as the
+    // same thing and drops the call to the orientation export.
+    const stub = makeOrientationStub();
     render(
       <ChordDiagram
         chord="Am"
         instrument="guitar"
-        orientation="horizontal"
-        wasmLoader={makeLoader(noOrientation as unknown as StubRenderer)}
+        orientation="vertical"
+        wasmLoader={makeLoader(stub as unknown as StubRenderer)}
       />,
     );
     await waitFor(() => {
-      expect(noOrientation.chordDiagramSvgWithDefines).toHaveBeenCalledWith('Am', 'guitar', []);
+      expect(stub.chordDiagramSvgWithDefinesOrientation).toHaveBeenCalledWith(
+        'Am',
+        'guitar',
+        [],
+        'vertical',
+        null,
+      );
+    });
+  });
+
+  test('passes horizontalStringOrder without orientation (Vertical absorbs the arg)', async () => {
+    // The Rust resolver treats `Vertical + player` as Vertical (the
+    // string_order argument is silently absorbed by the nested-enum
+    // construction). At the JS boundary we should still send the value
+    // so the wasm side controls the policy — verify the prop reaches
+    // the wasm export.
+    const stub = makeOrientationStub();
+    render(
+      <ChordDiagram
+        chord="Am"
+        instrument="guitar"
+        horizontalStringOrder="player"
+        wasmLoader={makeLoader(stub as unknown as StubRenderer)}
+      />,
+    );
+    await waitFor(() => {
+      expect(stub.chordDiagramSvgWithDefinesOrientation).toHaveBeenCalledWith(
+        'Am',
+        'guitar',
+        [],
+        null,
+        'player',
+      );
     });
   });
 });

@@ -117,8 +117,8 @@ namespace chordsketch {
     /// each carries a chord name and the raw `{define}` body
     /// (e.g. `"base-fret 1 frets 3 3 0 0 1 3"`). Mirrors the
     /// wasm `chordDiagramSvgWithDefines` and NAPI
-    /// `chordDiagramSvgWithDefines` exports per
-    /// `.claude/rules/fix-propagation.md` §Bindings.
+    /// `chordDiagramSvgWithDefines` exports so every binding
+    /// surface honours song-level `{define}` voicings the same way.
     [Throws=ChordSketchError]
     string? chord_diagram_svg_with_defines(string chord, string instrument, sequence<ChordDefine> defines);
 
@@ -127,10 +127,10 @@ namespace chordsketch {
     /// (default) or `"horizontal"`; `string_order` accepts
     /// `"reader"` (default — high pitch on top, see ADR-0026) or
     /// `"player"`. `null` falls back to defaults; unrecognised
-    /// strings fall back silently. Sister-site to the wasm
+    /// strings fall back silently. Mirrors the wasm
     /// `chordDiagramSvgWithOrientation` and NAPI
-    /// `chordDiagramSvgWithOrientation` exports per
-    /// `.claude/rules/fix-propagation.md` §Bindings.
+    /// `chordDiagramSvgWithOrientation` exports so every binding
+    /// surface exposes the same orientation knob.
     [Throws=ChordSketchError]
     string? chord_diagram_svg_with_orientation(string chord, string instrument, string? orientation, string? string_order);
 

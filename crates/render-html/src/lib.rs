@@ -307,12 +307,41 @@ fn render_song_body_into(
     // Diagram orientation (#2572). Reader-view is the default string order
     // per ADR-0026 — high pitch on top, matching tablature stave order.
     // Sister-site: `crates/render-pdf/src/lib.rs` reads the same two keys.
-    let diagram_orientation = chordsketch_chordpro::chord_diagram::resolve_orientation(
-        config.get_path("diagrams.orientation").as_str(),
-    );
-    let diagram_string_order = chordsketch_chordpro::chord_diagram::resolve_horizontal_string_order(
-        config.get_path("diagrams.horizontal_string_order").as_str(),
-    );
+    //
+    // Surface a warning when the user typo'd either value (non-empty raw
+    // string that doesn't parse to a known variant) so a misspelled
+    // `{+config.diagrams.orientation: horizonal}` does not silently render
+    // vertical.
+    let raw_orientation = config.get_path("diagrams.orientation").as_str();
+    let raw_string_order = config.get_path("diagrams.horizontal_string_order").as_str();
+    if let Some(s) = raw_orientation {
+        if !s.trim().is_empty()
+            && chordsketch_chordpro::chord_diagram::try_parse_orientation_value(Some(s)).is_none()
+        {
+            push_warning(
+                warnings,
+                format!(
+                    "diagrams.orientation: unrecognised value {s:?}; \
+                     using default (vertical)"
+                ),
+            );
+        }
+    }
+    if let Some(s) = raw_string_order {
+        if !s.trim().is_empty()
+            && chordsketch_chordpro::chord_diagram::try_parse_string_order_value(Some(s)).is_none()
+        {
+            push_warning(
+                warnings,
+                format!(
+                    "diagrams.horizontal_string_order: unrecognised value {s:?}; \
+                     using default (reader)"
+                ),
+            );
+        }
+    }
+    let diagram_orientation =
+        chordsketch_chordpro::chord_diagram::resolve_orientation(raw_orientation, raw_string_order);
 
     // Instrument for the auto-inject diagram block at end of song.
     // Set by {diagrams: guitar/ukulele/on}; cleared by {diagrams: off} / {no_diagrams}.
@@ -613,7 +642,6 @@ fn render_song_body_into(
                                     show_diagrams,
                                     diagram_frets,
                                     diagram_orientation,
-                                    diagram_string_order,
                                 },
                                 html,
                             );
@@ -686,7 +714,6 @@ fn render_song_body_into(
                                 show_diagrams,
                                 diagram_frets,
                                 diagram_orientation,
-                                diagram_string_order,
                                 html,
                             );
                         }
@@ -715,7 +742,6 @@ fn render_song_body_into(
                                 show_diagrams,
                                 diagram_frets,
                                 diagram_orientation,
-                                diagram_string_order,
                                 html,
                             );
                         }
@@ -744,7 +770,6 @@ fn render_song_body_into(
                                 show_diagrams,
                                 diagram_frets,
                                 diagram_orientation,
-                                diagram_string_order,
                                 html,
                             );
                         }
@@ -831,7 +856,6 @@ fn render_song_body_into(
                             show_diagrams,
                             diagram_frets,
                             diagram_orientation,
-                            diagram_string_order,
                             html,
                         );
                     }
@@ -910,7 +934,6 @@ fn render_song_body_into(
                         &chordsketch_chordpro::chord_diagram::render_svg_with_orientation(
                             diagram,
                             diagram_orientation,
-                            diagram_string_order,
                         ),
                     );
                     html.push_str("</figure>\n");
@@ -2229,7 +2252,6 @@ fn render_directive_inner(
     show_diagrams: bool,
     diagram_frets: usize,
     diagram_orientation: chordsketch_chordpro::chord_diagram::Orientation,
-    diagram_string_order: chordsketch_chordpro::chord_diagram::HorizontalStringOrder,
     html: &mut String,
 ) {
     match &directive.kind {
@@ -2341,7 +2363,6 @@ fn render_directive_inner(
                             &chordsketch_chordpro::chord_diagram::render_svg_with_orientation(
                                 &diagram,
                                 diagram_orientation,
-                                diagram_string_order,
                             ),
                         );
                         html.push_str("</figure>\n");
@@ -2906,7 +2927,6 @@ struct ChorusRecallCtx<'a> {
     show_diagrams: bool,
     diagram_frets: usize,
     diagram_orientation: chordsketch_chordpro::chord_diagram::Orientation,
-    diagram_string_order: chordsketch_chordpro::chord_diagram::HorizontalStringOrder,
 }
 
 fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, html: &mut String) {
@@ -2917,7 +2937,6 @@ fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, html:
     let show_diagrams = ctx.show_diagrams;
     let diagram_frets = ctx.diagram_frets;
     let diagram_orientation = ctx.diagram_orientation;
-    let diagram_string_order = ctx.diagram_string_order;
     html.push_str("<div class=\"chorus-recall\">\n");
     let display_label = match value {
         Some(v) if !v.is_empty() => format!("Chorus: {}", escape(v)),
@@ -2939,14 +2958,7 @@ fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, html:
                 local_fmt.apply(&d.kind, &d.value);
             }
             Line::Directive(d) if !d.kind.is_metadata() => {
-                render_directive_inner(
-                    d,
-                    show_diagrams,
-                    diagram_frets,
-                    diagram_orientation,
-                    diagram_string_order,
-                    html,
-                );
+                render_directive_inner(d, show_diagrams, diagram_frets, diagram_orientation, html);
             }
             _ => {}
         }
@@ -3309,6 +3321,75 @@ mod tests {
         assert!(
             seventh_out.contains("A7"),
             "extension must round-trip; got:\n{seventh_out}"
+        );
+    }
+
+    #[test]
+    fn unrecognised_diagrams_orientation_emits_warning_and_falls_back_to_vertical() {
+        // A typo'd `{+config.diagrams.orientation: horizonal}` must surface
+        // a warning so the user sees their value was ignored. The rendered
+        // HTML must not carry the `chord-diagram-horizontal` class.
+        let song = chordsketch_chordpro::parse(
+            "{title: t}\n{+config.diagrams.orientation: horizonal}\n{diagrams}\n[Am]Hi",
+        )
+        .unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("diagrams.orientation")
+                    && w.contains("horizonal")
+                    && w.contains("default")),
+            "expected a warning naming the bad value; got: {:?}",
+            result.warnings,
+        );
+        assert!(
+            !result.output.contains("chord-diagram-horizontal"),
+            "horizontal-mode class must not leak when the value is unrecognised",
+        );
+    }
+
+    #[test]
+    fn unrecognised_horizontal_string_order_emits_warning() {
+        // `string_order` validation parity with `orientation`. Default still
+        // takes effect; we only assert that the warning fires.
+        let song = chordsketch_chordpro::parse(
+            "{title: t}\n{+config.diagrams.orientation: horizontal}\n\
+             {+config.diagrams.horizontal_string_order: cantilever}\n{diagrams}\n[Am]Hi",
+        )
+        .unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("diagrams.horizontal_string_order")
+                    && w.contains("cantilever")),
+            "expected a warning naming the bad string_order value; got: {:?}",
+            result.warnings,
+        );
+        // Output still carries the horizontal class because orientation
+        // itself was valid.
+        assert!(result.output.contains("chord-diagram-horizontal"));
+    }
+
+    #[test]
+    fn empty_diagrams_orientation_emits_no_warning() {
+        // The lenient resolver treats `Some("")` the same as `None`. An
+        // explicit empty config value must not produce a noisy warning.
+        let song = chordsketch_chordpro::parse(
+            "{title: t}\n{+config.diagrams.orientation: }\n{diagrams}\n[Am]Hi",
+        )
+        .unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            !result
+                .warnings
+                .iter()
+                .any(|w| w.contains("diagrams.orientation")),
+            "empty value must not warn; got: {:?}",
+            result.warnings,
         );
     }
 

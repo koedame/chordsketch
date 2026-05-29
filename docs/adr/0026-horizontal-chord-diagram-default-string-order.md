@@ -80,9 +80,10 @@ decision lands on consistency-with-tab as the higher-value invariant.
 The chord-book corpus that informed this decision is not single-author
 or single-publisher. Reader-view appears (high string on top) in
 Yamaha's series of guitar chord references and Doremi Music
-Publishing's TAB-format method books (a representative sample includes
-their popular *J-POP コード進行ブック* line and the *はじめてのギター
-TAB譜* series). Player-view appears in some Rittor Music titles and a
+Publishing's TAB-format method books — representative titles include
+their *J-POP Chord Progression Book* line ("J-POP Koudo Shinkou
+Bukku") and the *First-Time Guitar TAB Score* series ("Hajimete no
+Guitar TAB-fu"). Player-view appears in some Rittor Music titles and a
 subset of band-score editions, particularly older catalogue entries
 predating the tab-stave normalisation that became standard from the
 late-1990s onward.
@@ -157,9 +158,10 @@ Negative / mitigations:
 - [`crates/chordpro/src/chord_diagram.rs`](../../crates/chordpro/src/chord_diagram.rs) —
   the `HorizontalStringOrder` enum and the `render_svg_with_orientation`
   function this ADR governs.
-- [`.claude/rules/fix-propagation.md`](../../.claude/rules/fix-propagation.md) —
-  the sister-site discipline this decision applies symmetrically across
-  every binding and renderer.
+- This decision applies symmetrically across every binding (wasm /
+  NAPI / FFI) and renderer (HTML / PDF / React JSX walker) — the
+  string-order default lives in one resolver (`resolve_horizontal_string_order`
+  in the crate above) so it cannot drift between surfaces.
 - **Watch signal** — a published survey of post-2020 Japanese chord
   book editions establishing a clear player-view majority would be
   cause to revisit. The tab-alignment rationale would also have to be
