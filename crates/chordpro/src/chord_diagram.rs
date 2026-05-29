@@ -574,8 +574,20 @@ fn render_svg_vertical_inner(data: &DiagramData) -> String {
 fn render_svg_horizontal_inner(data: &DiagramData, string_order: HorizontalStringOrder) -> String {
     let num_strings = data.strings;
     let num_frets = data.frets_shown;
-    let grid_w = num_frets as f32 * CELL_W;
-    let grid_h = (num_strings - 1) as f32 * CELL_H;
+    // Semantic aliases — the horizontal layout's fret axis is the SVG
+    // x-axis, so use `CELL_H` (the vertical layout's fret pitch, the
+    // larger of the two cell values) along that axis. Likewise the
+    // string axis is the SVG y-axis, so use `CELL_W` (the vertical
+    // layout's string-to-string spacing, the smaller value). Using the
+    // same constants with swapped meanings preserves the
+    // wider-than-tall fretboard aspect ratio that the vertical
+    // renderer already encodes — the diagram looks like a real
+    // fretboard rotated 90°, not a vertical diagram with the labels
+    // shuffled.
+    let fret_pitch = CELL_H;
+    let string_pitch = CELL_W;
+    let grid_w = num_frets as f32 * fret_pitch;
+    let grid_h = (num_strings - 1) as f32 * string_pitch;
     let total_w = grid_w + LEFT_MARGIN * 2.0;
     let total_h = grid_h + TOP_MARGIN + 20.0;
 
@@ -609,7 +621,7 @@ fn render_svg_horizontal_inner(data: &DiagramData, string_order: HorizontalStrin
         svg.push_str(&format!(
             "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" \
              font-family=\"sans-serif\" font-size=\"10\">{}</text>\n",
-            nut_x + CELL_W / 2.0,
+            nut_x + fret_pitch / 2.0,
             TOP_MARGIN - 4.0,
             data.base_fret
         ));
@@ -617,9 +629,9 @@ fn render_svg_horizontal_inner(data: &DiagramData, string_order: HorizontalStrin
 
     // Fretboard position-marker inlays — at the horizontal centre row. The
     // 12-fret marker becomes a double dot split along the **vertical**
-    // axis at `cy ± CELL_H * OCTAVE_DOUBLE_DOT_OFFSET`, the geometric
+    // axis at `cy ± string_pitch * OCTAVE_DOUBLE_DOT_OFFSET`, the geometric
     // mirror of the vertical layout's left/right split at
-    // `cx ± CELL_W * OCTAVE_DOUBLE_DOT_OFFSET`.
+    // `cx ± CELL_W * OCTAVE_DOUBLE_DOT_OFFSET` (in vertical mode CELL_W is the string pitch).
     let position_frets = position_marker_frets(num_strings);
     let center_y = TOP_MARGIN + grid_h / 2.0;
     for &marker_fret in position_frets {
@@ -630,15 +642,15 @@ fn render_svg_horizontal_inner(data: &DiagramData, string_order: HorizontalStrin
         if col < 1 || col > num_frets as i32 {
             continue;
         }
-        let x = nut_x + (col as f32 - 0.5) * CELL_W;
+        let x = nut_x + (col as f32 - 0.5) * fret_pitch;
         if marker_fret == 12 {
             svg.push_str(&format!(
                 "<circle cx=\"{x}\" cy=\"{cy1}\" r=\"{POSITION_DOT_RADIUS}\" \
                  fill=\"#D4D1D6\" class=\"position-marker\"/>\n\
                  <circle cx=\"{x}\" cy=\"{cy2}\" r=\"{POSITION_DOT_RADIUS}\" \
                  fill=\"#D4D1D6\" class=\"position-marker\"/>\n",
-                cy1 = center_y - CELL_H * OCTAVE_DOUBLE_DOT_OFFSET,
-                cy2 = center_y + CELL_H * OCTAVE_DOUBLE_DOT_OFFSET,
+                cy1 = center_y - string_pitch * OCTAVE_DOUBLE_DOT_OFFSET,
+                cy2 = center_y + string_pitch * OCTAVE_DOUBLE_DOT_OFFSET,
             ));
         } else {
             svg.push_str(&format!(
@@ -653,7 +665,7 @@ fn render_svg_horizontal_inner(data: &DiagramData, string_order: HorizontalStrin
     // marker placement below needs to know which physical string sits on
     // which row.
     for i in 0..num_strings {
-        let y = TOP_MARGIN + i as f32 * CELL_H;
+        let y = TOP_MARGIN + i as f32 * string_pitch;
         svg.push_str(&format!(
             "<line x1=\"{nut_x}\" y1=\"{y}\" x2=\"{}\" y2=\"{y}\" \
              stroke=\"black\" stroke-width=\"1\"/>\n",
@@ -663,7 +675,7 @@ fn render_svg_horizontal_inner(data: &DiagramData, string_order: HorizontalStrin
 
     // Vertical lines (frets)
     for j in 0..=num_frets {
-        let x = nut_x + j as f32 * CELL_W;
+        let x = nut_x + j as f32 * fret_pitch;
         svg.push_str(&format!(
             "<line x1=\"{x}\" y1=\"{TOP_MARGIN}\" x2=\"{x}\" y2=\"{}\" \
              stroke=\"black\" stroke-width=\"1\"/>\n",
@@ -685,7 +697,7 @@ fn render_svg_horizontal_inner(data: &DiagramData, string_order: HorizontalStrin
             HorizontalStringOrder::ReaderView => num_strings - 1 - i,
             HorizontalStringOrder::PlayerView => i,
         };
-        let y = TOP_MARGIN + row as f32 * CELL_H;
+        let y = TOP_MARGIN + row as f32 * string_pitch;
         if fret == -1 {
             // Muted (X) — to the left of the nut, one per string row.
             // `y + 3.0` is the same baseline-centring offset the vertical
@@ -706,7 +718,7 @@ fn render_svg_horizontal_inner(data: &DiagramData, string_order: HorizontalStrin
         } else {
             // Fretted dot — placed at the centre of its fret cell along the
             // string row.
-            let x = nut_x + (fret as f32 - 0.5) * CELL_W;
+            let x = nut_x + (fret as f32 - 0.5) * fret_pitch;
             svg.push_str(&format!(
                 "<circle cx=\"{x}\" cy=\"{y}\" r=\"{DOT_RADIUS}\" fill=\"black\"/>\n"
             ));
@@ -2457,12 +2469,14 @@ mod tests {
         );
         // The two octave dots must share an x-coordinate (vertical split)
         // and differ only in y. Look for two dots with the same cx and the
-        // characteristic ± CELL_H * 0.55 offset from the centre row
-        // (grid_h = 5 strings * 20 = 100; center_y = TOP_MARGIN + 50 = 80;
-        // CELL_H * 0.55 = 11; so cy1 = 69, cy2 = 91).
+        // characteristic ± string_pitch * 0.55 offset from the centre row.
+        // For 6-string guitar in horizontal mode the string axis uses
+        // string_pitch = CELL_W = 16:
+        //   grid_h = (6 - 1) * 16 = 80; center_y = TOP_MARGIN + 40 = 70;
+        //   16 * 0.55 = 8.8; so cy1 = 61.2, cy2 = 78.8.
         assert!(
-            svg.contains("cy=\"69\"") && svg.contains("cy=\"91\""),
-            "expected 12-fret double dot at cy=69 / cy=91; got: {svg}"
+            svg.contains("cy=\"61.2\"") && svg.contains("cy=\"78.8\""),
+            "expected 12-fret double dot at cy=61.2 / cy=78.8; got: {svg}"
         );
     }
 
@@ -2571,11 +2585,12 @@ mod tests {
             count, 3,
             "expected 1 single + 2 (double at 12); got svg: {svg}"
         );
-        // For ukulele: grid_h = (4 - 1) * CELL_H = 60, center_y = 30 + 30 = 60.
-        // CELL_H * 0.55 = 11 → cy1 = 49, cy2 = 71.
+        // For 4-string ukulele in horizontal mode: string_pitch = CELL_W = 16,
+        //   grid_h = (4 - 1) * 16 = 48; center_y = TOP_MARGIN + 24 = 54;
+        //   16 * 0.55 = 8.8; so cy1 = 45.2, cy2 = 62.8.
         assert!(
-            svg.contains("cy=\"49\"") && svg.contains("cy=\"71\""),
-            "expected 12-fret double dot at cy=49 / cy=71; got: {svg}",
+            svg.contains("cy=\"45.2\"") && svg.contains("cy=\"62.8\""),
+            "expected 12-fret double dot at cy=45.2 / cy=62.8; got: {svg}",
         );
     }
 
@@ -2647,6 +2662,51 @@ mod tests {
                 data.name,
             );
         }
+    }
+
+    #[test]
+    fn horizontal_aspect_is_wider_than_tall_vertical_is_taller_than_wide() {
+        // The horizontal renderer must use the SVG's wider dimension for
+        // the fret axis (otherwise the fretboard reads as a vertical
+        // diagram with its labels rearranged rather than a genuinely
+        // horizontal layout). Conversely, vertical must stay tall. The
+        // explicit `width` / `height` attributes pin the contract — a
+        // future change to the pitch constants that breaks the
+        // proportion will fail this test before any visual check.
+        let data = DiagramData {
+            name: "Am".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 0, 2, 2, 1, 0],
+            fingers: vec![],
+        };
+        let extract = |svg: &str, attr: &str| -> f32 {
+            let needle = format!("{attr}=\"");
+            let i = svg.find(&needle).unwrap() + needle.len();
+            let j = svg[i..].find('"').unwrap();
+            svg[i..i + j].parse().unwrap()
+        };
+
+        let vertical = render_svg_with_orientation(&data, Orientation::Vertical);
+        let v_w = extract(&vertical, "width");
+        let v_h = extract(&vertical, "height");
+        assert!(
+            v_h > v_w,
+            "vertical SVG must be taller than wide (got width={v_w}, height={v_h})",
+        );
+
+        let horizontal = render_svg_with_orientation(
+            &data,
+            Orientation::Horizontal(HorizontalStringOrder::ReaderView),
+        );
+        let h_w = extract(&horizontal, "width");
+        let h_h = extract(&horizontal, "height");
+        assert!(
+            h_w > h_h,
+            "horizontal SVG must be wider than tall (got width={h_w}, height={h_h})",
+        );
     }
 
     #[test]

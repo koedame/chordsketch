@@ -1939,12 +1939,20 @@ fn render_chord_diagram_pdf_horizontal(
 ) {
     use chordsketch_chordpro::chord_diagram::HorizontalStringOrder;
 
-    let cell_w: f32 = 10.0;
-    let cell_h: f32 = 12.0;
+    // Semantic axis pitches in horizontal mode (mirrors the SVG renderer):
+    // the fret axis is the wider dimension and the string axis is the
+    // tighter one. The vertical PDF renderer uses `cell_w=10` (string
+    // pitch) and `cell_h=12` (fret pitch); the horizontal layout keeps
+    // the same proportions by routing each dimension to the matching
+    // axis. Result is a wider-than-tall fretboard at the same physical
+    // scale as the vertical layout — a real fretboard rotated 90°, not
+    // a vertical diagram with the labels rearranged.
+    let fret_pitch: f32 = 12.0;
+    let string_pitch: f32 = 10.0;
     let num_strings = data.strings;
     let num_frets = data.frets_shown;
-    let grid_w = num_frets as f32 * cell_w;
-    let grid_h = (num_strings - 1) as f32 * cell_h;
+    let grid_w = num_frets as f32 * fret_pitch;
+    let grid_h = (num_strings - 1) as f32 * string_pitch;
     let total_h = grid_h + 25.0; // title + top markers + grid
 
     doc.ensure_space(total_h);
@@ -1967,14 +1975,14 @@ fn render_chord_diagram_pdf_horizontal(
     if data.base_fret == 1 {
         doc.line_at(nut_x, grid_top, nut_x, grid_bottom, 2.0);
     } else {
-        // Bare base-fret label above the first fret column. Mirrors the SVG
-        // renderer's `LEFT_MARGIN + CELL_W / 2.0` x-position.
+        // Bare base-fret label above the first fret column. Anchored at
+        // the midpoint of the first fret cell along the fret axis.
         let fret_label = format!("{}fr", data.base_fret);
         doc.text_at(
             &fret_label,
             Font::Helvetica,
             6.0,
-            nut_x + cell_w / 2.0 - 4.0,
+            nut_x + fret_pitch / 2.0 - 4.0,
             grid_top + 4.0,
         );
     }
@@ -1983,13 +1991,13 @@ fn render_chord_diagram_pdf_horizontal(
     // string_order — only the per-string marker placement below needs the
     // physical-string-to-row mapping.
     for i in 0..num_strings {
-        let y = grid_top - i as f32 * cell_h;
+        let y = grid_top - i as f32 * string_pitch;
         doc.line_at(nut_x, y, nut_x + grid_w, y, 0.5);
     }
 
     // Vertical lines (frets)
     for j in 0..=num_frets {
-        let x = nut_x + j as f32 * cell_w;
+        let x = nut_x + j as f32 * fret_pitch;
         doc.line_at(x, grid_top, x, grid_bottom, 0.5);
     }
 
@@ -2006,7 +2014,7 @@ fn render_chord_diagram_pdf_horizontal(
             // (the project's documented default per ADR-0026).
             _ => num_strings - 1 - i,
         };
-        let y = grid_top - row as f32 * cell_h;
+        let y = grid_top - row as f32 * string_pitch;
         if fret == -1 {
             // Muted: X to the left of nut, one per string row.
             doc.text_at("X", Font::Helvetica, 7.0, nut_x - 8.0, y - 2.5);
@@ -2015,7 +2023,7 @@ fn render_chord_diagram_pdf_horizontal(
             doc.stroked_circle_at(nut_x - 6.0, y, 2.5);
         } else {
             // Fretted: filled dot at the centre of its fret cell.
-            let x = nut_x + (fret as f32 - 0.5) * cell_w;
+            let x = nut_x + (fret as f32 - 0.5) * fret_pitch;
             doc.filled_circle_at(x, y, 3.0);
             if let Some(&finger) = data.fingers.get(i) {
                 if finger > 0 {
