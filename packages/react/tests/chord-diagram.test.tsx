@@ -227,12 +227,16 @@ describe('<ChordDiagram> orientation pass-through (#2572)', () => {
     // Older wasm bundles (pre-#2572) only ship
     // `chordDiagramSvgWithDefines`. The hook must degrade gracefully so
     // hosts pinning an older wasm bundle keep rendering — just without
-    // orientation honoured.
-    const stub = makeOrientationStub();
-    const noOrientation: typeof stub & {
-      chordDiagramSvgWithDefinesOrientation?: typeof stub.chordDiagramSvgWithDefinesOrientation;
-    } = { ...stub };
-    delete noOrientation.chordDiagramSvgWithDefinesOrientation;
+    // orientation honoured. Build the stub directly without the
+    // orientation field so the runtime structural check
+    // `renderer.chordDiagramSvgWithDefinesOrientation` returns falsy
+    // (this avoids `delete` on a non-optional field, which the
+    // package's strict TS config rejects with TS2790).
+    const noOrientation = {
+      default: vi.fn(async () => undefined),
+      chord_diagram_svg: vi.fn(() => '<svg data-mode="legacy"></svg>'),
+      chordDiagramSvgWithDefines: vi.fn(() => '<svg data-mode="defines"></svg>'),
+    };
     render(
       <ChordDiagram
         chord="Am"
