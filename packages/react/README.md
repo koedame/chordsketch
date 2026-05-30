@@ -415,17 +415,16 @@ export function Controls() {
 }
 ```
 
-The component renders a native `<input type="range">` slider and a
-signed current-value readout. The readout is an `<output>` with
-`aria-live="polite"` so screen readers announce changes; keyboard
-users get the native range input's built-in semantics (arrow keys,
-Home / End, PageUp / PageDown). The slider's default UI range is
-`±6` semitones — narrower than the feature ceiling
+The component renders a native `<select>` whose options list every
+semitone offset, highest-first (`+6 … 0 … -6`); keyboard and
+screen-reader support come from the native select. The default
+option range is `±6` semitones — narrower than the feature ceiling
 `TRANSPOSE_MIN` / `TRANSPOSE_MAX` (`±11`) — so hosts that want a
 wider range pass explicit `min` / `max` props (down to `-11` /
-up to `+11`). Values are clamped into `[min, max]` in both the
-controlled mode's `value` prop (display-side clamp) and via the
-hook's own `setValue`.
+up to `+11`). The controlled `value` is resolved to the nearest
+rendered option at render time (so an out-of-range or off-step
+value still selects a real option), and the hook's own `setValue`
+clamps into `[min, max]`.
 
 ### `useTranspose` — state helper for custom UIs
 
