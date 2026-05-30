@@ -395,7 +395,12 @@ const SAMPLES: ReadonlyArray<Sample> = [
   {
     id: 'amazing-grace',
     label: 'Amazing Grace',
-    source: withDiagramsOff(SAMPLE_CHORDPRO),
+    // The default sample renders with diagrams ON so the new
+    // orientation toggle in `<PreviewToolbar>` (#2572) produces a
+    // visible effect at first paint. Other samples below keep
+    // `withDiagramsOff` so the "small song, no diagrams" baseline
+    // case is still one click away in the sample picker.
+    source: SAMPLE_CHORDPRO,
   },
   {
     id: 'kitchen-sink',
@@ -535,6 +540,11 @@ function PlaygroundApp(): JSX.Element {
   const [sampleId, setSampleId] = useState<string>(DEFAULT_SAMPLE.id);
   const [warningsExpanded, setWarningsExpanded] = useState<boolean>(false);
   const [version, setVersion] = useState<string | null>(cachedVersion);
+  // Chord-diagram orientation knob (#2572). Default vertical so the
+  // first impression on the deployed playground matches the legacy
+  // behaviour; users opt into horizontal via the toolbar select.
+  const [diagramsOrientation, setDiagramsOrientation] =
+    useState<'vertical' | 'horizontal'>('vertical');
 
   const editorRef = useRef<ChordSourceAreaHandle | null>(null);
 
@@ -822,6 +832,8 @@ function PlaygroundApp(): JSX.Element {
               transpose={transpose}
               onTransposeChange={setTranspose}
               showExport={false}
+              chordDiagramsOrientation={diagramsOrientation}
+              onChordDiagramsOrientationChange={setDiagramsOrientation}
               /* `transposeMin/Max` left at the PreviewToolbar default
                  (±6) so the slider rail stays readable on narrow
                  preview panes. The feature ceiling of ±11 is still
@@ -833,6 +845,7 @@ function PlaygroundApp(): JSX.Element {
                 transpose={transpose}
                 format="html"
                 chordDiagramsInstrument="guitar"
+                chordDiagramsOrientation={diagramsOrientation}
                 activeSourceLine={caret?.line}
                 caretColumn={caret?.column}
                 caretLineLength={caret?.lineLength}

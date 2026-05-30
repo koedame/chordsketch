@@ -451,11 +451,52 @@ pub fn chord_diagram_svg_with_defines(
     instrument: String,
     defines: Vec<ChordDefine>,
 ) -> Result<Option<String>, ChordSketchError> {
-    use chordsketch_chordpro::chord_diagram::{render_keyboard_svg, render_svg};
+    chord_diagram_svg_with_defines_orientation(chord, instrument, defines, None)
+}
+
+/// Variant of [`chord_diagram_svg`] that accepts a diagram orientation as
+/// an optional string (#2572).
+///
+/// `orientation` accepts `"vertical"` (default) or `"horizontal"`
+/// (case-insensitive). Horizontal mode is reader-view only per
+/// ADR-0026. `None` and unrecognised strings fall back to the default,
+/// matching [`chordsketch_chordpro::chord_diagram::resolve_orientation`].
+///
+/// # Errors
+///
+/// Same as [`chord_diagram_svg`].
+#[must_use = "callers must handle the unknown-instrument error"]
+pub fn chord_diagram_svg_with_orientation(
+    chord: String,
+    instrument: String,
+    orientation: Option<String>,
+) -> Result<Option<String>, ChordSketchError> {
+    chord_diagram_svg_with_defines_orientation(chord, instrument, Vec::new(), orientation)
+}
+
+/// Combination of [`chord_diagram_svg_with_defines`] and
+/// [`chord_diagram_svg_with_orientation`] (#2572) — the full FFI surface
+/// used by Swift / Kotlin / Ruby / Python consumers that need both song-
+/// level `{define}` overrides and the orientation knob.
+///
+/// # Errors
+///
+/// Same as [`chord_diagram_svg_with_defines`].
+#[must_use = "callers must handle the unknown-instrument error"]
+pub fn chord_diagram_svg_with_defines_orientation(
+    chord: String,
+    instrument: String,
+    defines: Vec<ChordDefine>,
+    orientation: Option<String>,
+) -> Result<Option<String>, ChordSketchError> {
+    use chordsketch_chordpro::chord_diagram::{
+        render_keyboard_svg, render_svg_with_orientation, resolve_orientation,
+    };
     use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
 
     let defines_pairs: Vec<(String, String)> =
         defines.into_iter().map(|d| (d.name, d.raw)).collect();
+    let resolved = resolve_orientation(orientation.as_deref());
 
     match instrument.to_ascii_lowercase().as_str() {
         "piano" | "keyboard" | "keys" => {
@@ -464,6 +505,9 @@ pub fn chord_diagram_svg_with_defines(
             // either — match that gap here so the FFI behaviour
             // is at least consistent across bindings while keyboard
             // voicings remain a TODO.
+            //
+            // Keyboard diagrams have no orientation knob — the argument
+            // is accepted but ignored here.
             Ok(lookup_keyboard_voicing(&chord, &[]).map(|v| render_keyboard_svg(&v)))
         }
         "guitar" | "ukulele" | "uke" => {
@@ -473,7 +517,8 @@ pub fn chord_diagram_svg_with_defines(
             // diagrams produced via UniFFI bindings (Python /
             // Swift / Kotlin / Ruby) visually consistent with
             // sheets rendered through the same binding.
-            Ok(lookup_diagram(&chord, &defines_pairs, &instrument, 5).map(|d| render_svg(&d)))
+            Ok(lookup_diagram(&chord, &defines_pairs, &instrument, 5)
+                .map(|d| render_svg_with_orientation(&d, resolved)))
         }
         other => Err(ChordSketchError::InvalidConfig {
             reason: format!(
@@ -894,6 +939,69 @@ mod tests {
         // `"keyboard"` should route through the piano branch.
         let svg = chord_diagram_svg("C".to_string(), "keyboard".to_string()).unwrap();
         assert!(svg.is_some());
+    }
+
+    #[test]
+    fn chord_diagram_svg_with_orientation_horizontal_emits_horizontal_class() {
+        let svg = chord_diagram_svg_with_orientation(
+            "Am".to_string(),
+            "guitar".to_string(),
+            Some("horizontal".to_string()),
+        )
+        .unwrap()
+        .expect("Am voicing should exist for guitar");
+        assert!(
+            svg.contains("chord-diagram-horizontal"),
+            "expected horizontal-mode class marker; got: {svg}"
+        );
+    }
+
+    #[test]
+    fn chord_diagram_svg_with_orientation_defaults_to_vertical() {
+        // None orientation must match the legacy chord_diagram_svg output
+        // byte-for-byte so existing consumers see no change.
+        let legacy = chord_diagram_svg("Am".to_string(), "guitar".to_string())
+            .unwrap()
+            .unwrap();
+        let oriented =
+            chord_diagram_svg_with_orientation("Am".to_string(), "guitar".to_string(), None)
+                .unwrap()
+                .unwrap();
+        assert_eq!(legacy, oriented);
+    }
+
+    #[test]
+    fn chord_diagram_svg_with_orientation_unknown_orientation_falls_back() {
+        // Unrecognised strings degrade to vertical, matching the lenient
+        // resolve_orientation contract.
+        let oriented = chord_diagram_svg_with_orientation(
+            "Am".to_string(),
+            "guitar".to_string(),
+            Some("nonsense".to_string()),
+        )
+        .unwrap()
+        .unwrap();
+        assert!(!oriented.contains("chord-diagram-horizontal"));
+    }
+
+    #[test]
+    fn chord_diagram_svg_with_defines_orientation_passes_both_through() {
+        // Combined surface honours both the song-level define and the
+        // orientation knob.
+        let svg = chord_diagram_svg_with_defines_orientation(
+            "Bm".to_string(),
+            "guitar".to_string(),
+            vec![ChordDefine {
+                name: "Bm".to_string(),
+                raw: "base-fret 2 frets 1 3 4 4 3 1".to_string(),
+            }],
+            Some("horizontal".to_string()),
+        )
+        .unwrap()
+        .expect("custom Bm define should be resolved");
+        assert!(svg.contains("chord-diagram-horizontal"));
+        // base_fret > 1 in horizontal mode shows a bare integer label "2".
+        assert!(svg.contains(">2</text>"));
     }
 
     #[test]

@@ -765,6 +765,27 @@ fn render_song_into_doc(
         |n| (n as usize).max(1),
     );
 
+    // Diagram orientation (#2572). Horizontal mode is reader-view only
+    // per ADR-0026; the player-view alternative is not exposed as a
+    // config knob. Sister-site: `crates/render-html/src/lib.rs` reads
+    // the same key and emits the same warning.
+    let raw_orientation = config.get_path("diagrams.orientation").as_str();
+    if let Some(s) = raw_orientation {
+        if !s.trim().is_empty()
+            && chordsketch_chordpro::chord_diagram::try_parse_orientation_value(Some(s)).is_none()
+        {
+            push_warning(
+                warnings,
+                format!(
+                    "diagrams.orientation: unrecognised value {s:?}; \
+                     using default (vertical)"
+                ),
+            );
+        }
+    }
+    let diagram_orientation =
+        chordsketch_chordpro::chord_diagram::resolve_orientation(raw_orientation);
+
     validate_capo(&song.metadata, warnings);
     validate_multiple_capo(song, warnings);
     validate_strict_key(&song.metadata, config, warnings);
@@ -1038,6 +1059,7 @@ fn render_song_into_doc(
                                     fmt_state: &fmt_state,
                                     show_diagrams,
                                     diagram_frets,
+                                    diagram_orientation,
                                 },
                                 doc,
                             );
@@ -1098,7 +1120,7 @@ fn render_song_into_doc(
                             buf.push(line.clone());
                         }
                         in_verbatim_section = true;
-                        render_directive(d, show_diagrams, diagram_frets, doc);
+                        render_directive(d, show_diagrams, diagram_frets, diagram_orientation, doc);
                     }
                     DirectiveKind::EndOfTab
                     | DirectiveKind::EndOfGrid
@@ -1124,7 +1146,7 @@ fn render_song_into_doc(
                                 }
                             }
                         }
-                        render_directive(d, show_diagrams, diagram_frets, doc);
+                        render_directive(d, show_diagrams, diagram_frets, diagram_orientation, doc);
                     }
                 }
             }
@@ -1168,7 +1190,7 @@ fn render_song_into_doc(
                 if let Some(diagram) =
                     chordsketch_chordpro::lookup_diagram(&name, &defines, instrument, diagram_frets)
                 {
-                    render_chord_diagram_pdf(&diagram, doc);
+                    render_chord_diagram_pdf(&diagram, doc, diagram_orientation);
                 }
             }
         }
@@ -1402,6 +1424,7 @@ fn render_directive(
     directive: &chordsketch_chordpro::ast::Directive,
     show_diagrams: bool,
     diagram_frets: usize,
+    diagram_orientation: chordsketch_chordpro::chord_diagram::Orientation,
     doc: &mut PdfDocument,
 ) {
     if directive.kind == DirectiveKind::Define && show_diagrams {
@@ -1441,7 +1464,7 @@ fn render_directive(
                     )
                 {
                     diagram.display_name = def.display.clone();
-                    render_chord_diagram_pdf(&diagram, doc);
+                    render_chord_diagram_pdf(&diagram, doc, diagram_orientation);
                     return;
                 }
             }
@@ -1759,11 +1782,17 @@ fn compute_image_dimensions(
 /// Render a chord diagram directly into the PDF content stream.
 ///
 /// Uses PDF line/circle drawing operations to reproduce the chord grid,
-/// finger dots, open/muted string markers, and the chord name.
+/// finger dots, open/muted string markers, and the chord name. The
+/// `orientation` argument mirrors the SVG renderer's behaviour at
+/// `chordsketch_chordpro::chord_diagram::render_svg_with_orientation`, so a
+/// song that renders horizontally in HTML renders horizontally in PDF too.
 fn render_chord_diagram_pdf(
     data: &chordsketch_chordpro::chord_diagram::DiagramData,
     doc: &mut PdfDocument,
+    orientation: chordsketch_chordpro::chord_diagram::Orientation,
 ) {
+    use chordsketch_chordpro::chord_diagram::Orientation;
+
     // Guard: mirror render_svg bounds checks for strings and frets_shown.
     if data.strings < chordsketch_chordpro::chord_diagram::MIN_STRINGS
         || data.strings > chordsketch_chordpro::chord_diagram::MAX_STRINGS
@@ -1773,6 +1802,43 @@ fn render_chord_diagram_pdf(
         return;
     }
 
+    match orientation {
+        Orientation::Vertical => render_chord_diagram_pdf_vertical(data, doc),
+        Orientation::Horizontal => render_chord_diagram_pdf_horizontal(data, doc),
+        // `Orientation` is `#[non_exhaustive]` and lives in a different
+        // crate, so the wildcard is the only forward-compat shape the
+        // compiler accepts here. A future variant (e.g. `HorizontalLefty`)
+        // that this renderer has not yet learned about falls back to the
+        // safe legacy layout so the diagram still prints — but the silent
+        // fallback would be invisible in release builds with only a
+        // `debug_assert!`, so the wildcard also writes a stderr line that
+        // surfaces in both debug AND release builds. The `debug_assert!`
+        // additionally fails any test run that hits this arm, so a fellow
+        // renderer crate adding the variant without an explicit match arm
+        // fails CI rather than silently degrading.
+        other => {
+            eprintln!(
+                "chordsketch-render-pdf: unknown Orientation variant {other:?} \
+                 fell through to vertical layout; teach render_chord_diagram_pdf \
+                 about it",
+            );
+            debug_assert!(
+                false,
+                "render_chord_diagram_pdf: unknown Orientation variant {other:?} \
+                 fell through to vertical; teach this renderer about it",
+            );
+            render_chord_diagram_pdf_vertical(data, doc);
+        }
+    }
+}
+
+/// Vertical PDF chord-diagram layout (the legacy default). Nut on top, frets
+/// running downward. Coordinates are PDF-space (origin bottom-left, y
+/// increases upward).
+fn render_chord_diagram_pdf_vertical(
+    data: &chordsketch_chordpro::chord_diagram::DiagramData,
+    doc: &mut PdfDocument,
+) {
     // PDF cell dimensions in points (1 pt = 1/72 inch). Intentionally
     // smaller than the SVG renderer's 16x20 px because PDF targets printed
     // pages where diagrams sit alongside text and must be compact.
@@ -1840,6 +1906,114 @@ fn render_chord_diagram_pdf(
             let y = grid_top - (fret as f32 - 0.5) * cell_h;
             doc.filled_circle_at(x, y, 3.0);
             // Finger number inside the dot (if available and non-zero)
+            if let Some(&finger) = data.fingers.get(i) {
+                if finger > 0 {
+                    let label = finger.to_string();
+                    doc.white_text_at(&label, Font::Helvetica, 5.0, x - 1.5, y - 1.5);
+                }
+            }
+        }
+    }
+
+    doc.advance_y(total_h);
+    doc.newline(LINE_GAP);
+}
+
+/// Horizontal PDF chord-diagram layout (#2572). Nut on the left, frets
+/// running rightward. Mirrors the SVG horizontal renderer's geometry.
+///
+/// Reader-view only: high pitch on top, matching tablature stave order.
+/// See ADR-0026 for the rationale behind not exposing a row-order knob.
+fn render_chord_diagram_pdf_horizontal(
+    data: &chordsketch_chordpro::chord_diagram::DiagramData,
+    doc: &mut PdfDocument,
+) {
+    // Semantic axis pitches in horizontal mode (mirrors the SVG renderer):
+    // the fret axis is the wider dimension and the string axis is the
+    // tighter one. The vertical PDF renderer uses `cell_w=10` (string
+    // pitch) and `cell_h=12` (fret pitch); the horizontal layout keeps
+    // the same proportions by routing each dimension to the matching
+    // axis. Result is a wider-than-tall fretboard at the same physical
+    // scale as the vertical layout — a real fretboard rotated 90°, not
+    // a vertical diagram with the labels rearranged.
+    let fret_pitch: f32 = 12.0;
+    let string_pitch: f32 = 10.0;
+    let num_strings = data.strings;
+    let num_frets = data.frets_shown;
+    let grid_w = num_frets as f32 * fret_pitch;
+    let grid_h = (num_strings - 1) as f32 * string_pitch;
+    // 25 pt vertical budget = ~9 pt chord-name title + the 15-pt gap to
+    // grid_top; horizontal mode does NOT have a separate "top markers"
+    // band because position-marker inlays render inside the grid rows.
+    // (The vertical renderer above shares the same 25 pt constant for a
+    // different reason — title + base-fret label band — so the literal
+    // matches but the breakdown is different.)
+    let total_h = grid_h + 25.0;
+
+    doc.ensure_space(total_h);
+
+    let base_x = doc.margin_left();
+    let top_y = doc.y();
+
+    // Chord name (uses display override if present). Centred above the
+    // fretboard, same baseline rule as the vertical renderer.
+    doc.text_at(data.title(), Font::HelveticaBold, 9.0, base_x, top_y);
+
+    // Top of the grid sits 15 pt below the title (matches the vertical
+    // renderer's `grid_top` offset).
+    let grid_top = top_y - 15.0;
+    let grid_bottom = grid_top - grid_h;
+
+    // Nut (vertical line on the left when at the open position) or
+    // base-fret label above the leftmost fret cell when starting higher up.
+    let nut_x = base_x;
+    if data.base_fret == 1 {
+        doc.line_at(nut_x, grid_top, nut_x, grid_bottom, 2.0);
+    } else {
+        // Bare base-fret label above the first fret column. Anchored at
+        // the midpoint of the first fret cell along the fret axis.
+        let fret_label = format!("{}fr", data.base_fret);
+        doc.text_at(
+            &fret_label,
+            Font::Helvetica,
+            6.0,
+            nut_x + fret_pitch / 2.0 - 4.0,
+            grid_top + 4.0,
+        );
+    }
+
+    // Horizontal lines (strings).
+    for i in 0..num_strings {
+        let y = grid_top - i as f32 * string_pitch;
+        doc.line_at(nut_x, y, nut_x + grid_w, y, 0.5);
+    }
+
+    // Vertical lines (frets)
+    for j in 0..=num_frets {
+        let x = nut_x + j as f32 * fret_pitch;
+        doc.line_at(x, grid_top, x, grid_bottom, 0.5);
+    }
+
+    // Finger positions, open, and muted markers. ChordPro convention orders
+    // `data.frets` low-to-high (i=0 is the 6th string for guitar). Reader-
+    // view places the high pitch on top so the i-th string maps to row
+    // `num_strings - 1 - i`.
+    for (i, &fret) in data.frets.iter().enumerate() {
+        if i >= num_strings {
+            break;
+        }
+        let row = num_strings - 1 - i;
+        let y = grid_top - row as f32 * string_pitch;
+        if fret == -1 {
+            // Muted: X to the left of nut, one per string row.
+            doc.text_at("X", Font::Helvetica, 7.0, nut_x - 8.0, y - 2.5);
+        } else if fret == 0 {
+            // Open: circle to the left of nut, one per string row.
+            doc.stroked_circle_at(nut_x - 6.0, y, 2.5);
+        } else {
+            // Fretted: filled dot at the centre of its fret cell.
+            let x = nut_x + (fret as f32 - 0.5) * fret_pitch;
+            doc.filled_circle_at(x, y, 3.0);
             if let Some(&finger) = data.fingers.get(i) {
                 if finger > 0 {
                     let label = finger.to_string();
@@ -1987,6 +2161,7 @@ struct ChorusRecallCtx<'a> {
     fmt_state: &'a PdfFormattingState,
     show_diagrams: bool,
     diagram_frets: usize,
+    diagram_orientation: chordsketch_chordpro::chord_diagram::Orientation,
 }
 
 fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, doc: &mut PdfDocument) {
@@ -2014,7 +2189,13 @@ fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, doc: 
             Line::Comment(style, text) => render_comment(*style, text, doc),
             Line::Empty => doc.newline(LINE_GAP * 2.0),
             Line::Directive(d) if !d.kind.is_metadata() => {
-                render_directive(d, ctx.show_diagrams, ctx.diagram_frets, doc);
+                render_directive(
+                    d,
+                    ctx.show_diagrams,
+                    ctx.diagram_frets,
+                    ctx.diagram_orientation,
+                    doc,
+                );
             }
             _ => {}
         }
@@ -3691,6 +3872,75 @@ fn fmt_f32(v: f32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unrecognised_diagrams_orientation_emits_warning_in_pdf_renderer() {
+        // Sister test to render-html's
+        // `unrecognised_diagrams_orientation_emits_warning_and_falls_back_to_vertical`.
+        // PDF can't easily assert "no horizontal class" because the binary
+        // stream is opaque, but it can assert the warning surfaces — which
+        // is the user-visible signal that matters.
+        let song = chordsketch_chordpro::parse(
+            "{title: t}\n{+config.diagrams.orientation: horizonal}\n{diagrams}\n[Am]Hi",
+        )
+        .unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("diagrams.orientation")
+                    && w.contains("horizonal")
+                    && w.contains("default")),
+            "expected a warning naming the bad value; got: {:?}",
+            result.warnings,
+        );
+    }
+
+    #[test]
+    fn empty_diagrams_orientation_emits_no_warning_in_pdf_renderer() {
+        // Sister test to render-html's
+        // `empty_diagrams_orientation_emits_no_warning`. The lenient
+        // resolver treats `Some("")` the same as `None`; an explicit
+        // empty config value must not produce a noisy warning in the
+        // PDF renderer either.
+        let song = chordsketch_chordpro::parse(
+            "{title: t}\n{+config.diagrams.orientation: }\n{diagrams}\n[Am]Hi",
+        )
+        .unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            !result
+                .warnings
+                .iter()
+                .any(|w| w.contains("diagrams.orientation")),
+            "empty value must not warn; got: {:?}",
+            result.warnings,
+        );
+    }
+
+    #[test]
+    fn horizontal_string_order_config_key_is_ignored_in_pdf_renderer() {
+        // Sister test to render-html's
+        // `horizontal_string_order_config_key_is_ignored`. The
+        // `diagrams.horizontal_string_order` key was retired together
+        // with the player-view alternative — see ADR-0026. The PDF
+        // renderer must therefore NOT warn on the unknown key.
+        let song = chordsketch_chordpro::parse(
+            "{title: t}\n{+config.diagrams.orientation: horizontal}\n\
+             {+config.diagrams.horizontal_string_order: anything}\n{diagrams}\n[Am]Hi",
+        )
+        .unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            !result
+                .warnings
+                .iter()
+                .any(|w| w.contains("diagrams.horizontal_string_order")),
+            "horizontal_string_order key must not emit a warning; got: {:?}",
+            result.warnings,
+        );
+    }
 
     #[test]
     fn test_produces_valid_pdf() {
@@ -5467,7 +5717,11 @@ mod chord_diagram_pdf_tests {
             fingers: vec![],
         };
         let mut doc = PdfDocument::new();
-        render_chord_diagram_pdf(&data, &mut doc);
+        render_chord_diagram_pdf(
+            &data,
+            &mut doc,
+            chordsketch_chordpro::chord_diagram::Orientation::Vertical,
+        );
         // No panic = pass. The guard returned early.
     }
 
@@ -5483,7 +5737,11 @@ mod chord_diagram_pdf_tests {
             fingers: vec![],
         };
         let mut doc = PdfDocument::new();
-        render_chord_diagram_pdf(&data, &mut doc);
+        render_chord_diagram_pdf(
+            &data,
+            &mut doc,
+            chordsketch_chordpro::chord_diagram::Orientation::Vertical,
+        );
         // No panic = pass. The guard returned early.
     }
 
@@ -5499,7 +5757,11 @@ mod chord_diagram_pdf_tests {
             fingers: vec![],
         };
         let mut doc = PdfDocument::new();
-        render_chord_diagram_pdf(&data, &mut doc);
+        render_chord_diagram_pdf(
+            &data,
+            &mut doc,
+            chordsketch_chordpro::chord_diagram::Orientation::Vertical,
+        );
         // No panic = pass. The guard returned early.
     }
 
@@ -5515,7 +5777,11 @@ mod chord_diagram_pdf_tests {
             fingers: vec![],
         };
         let mut doc = PdfDocument::new();
-        render_chord_diagram_pdf(&data, &mut doc);
+        render_chord_diagram_pdf(
+            &data,
+            &mut doc,
+            chordsketch_chordpro::chord_diagram::Orientation::Vertical,
+        );
         // No panic = pass. The guard returned early.
     }
 
@@ -5531,7 +5797,11 @@ mod chord_diagram_pdf_tests {
             fingers: vec![],
         };
         let mut doc = PdfDocument::new();
-        render_chord_diagram_pdf(&data, &mut doc);
+        render_chord_diagram_pdf(
+            &data,
+            &mut doc,
+            chordsketch_chordpro::chord_diagram::Orientation::Vertical,
+        );
         // No panic = pass. The guard returned early.
     }
 

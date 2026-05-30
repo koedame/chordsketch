@@ -236,6 +236,39 @@ impl DiagramData {
 }
 
 // ---------------------------------------------------------------------------
+// Orientation
+// ---------------------------------------------------------------------------
+
+/// Layout orientation for fretted-instrument chord diagrams.
+///
+/// `Vertical` is the Western convention (nut on top, fretboard running
+/// downward) that ChordPro renderers have always emitted. `Horizontal` (nut
+/// on the left, fretboard running rightward) is the convention used in many
+/// Japanese tablature publications; see ADR-0026 for the corpus the decision
+/// referenced.
+///
+/// The horizontal layout is reader-view only — high pitch on top, matching
+/// the six-line tablature stave order so a reader fluent with tab parses
+/// the diagram with no mental flip. The historical player-view alternative
+/// (low pitch on top, mirroring what a right-handed player sees looking
+/// down at the instrument) is intentionally not offered as a knob; see
+/// ADR-0026 for the rationale.
+///
+/// The enum is `#[non_exhaustive]` so future layout variants (e.g.
+/// `HorizontalLefty` with the nut on the right) can be added without an
+/// API break.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum Orientation {
+    /// Vertical layout — nut on top, frets running downward. Default.
+    #[default]
+    Vertical,
+    /// Horizontal layout — nut on the left, frets running rightward,
+    /// high pitch on top.
+    Horizontal,
+}
+
+// ---------------------------------------------------------------------------
 // SVG rendering constants
 // ---------------------------------------------------------------------------
 
@@ -256,6 +289,20 @@ const OPEN_RADIUS: f32 = 4.0;
 /// finger-position dots so it sits behind the chord shape
 /// without competing for attention.
 const POSITION_DOT_RADIUS: f32 = 2.2;
+/// Distance from the nut at which open / muted single-string glyphs
+/// sit. In the vertical renderer this is the vertical offset
+/// `nut_y - 10.0` (above the nut); in the horizontal renderer it is
+/// the analogous horizontal offset `nut_x - 10.0` (left of the nut).
+/// Pinned at 10 SVG-pixels so glyphs clear the nut line + stroke
+/// width without colliding with the chord title text above.
+const NUT_MARGIN_GLYPH_OFFSET: f32 = 10.0;
+/// Fraction of `CELL_W` / `CELL_H` by which the 12-fret octave inlay's
+/// two dots offset from their cell centre. Slightly past the half-cell
+/// (0.50) so the gap reads as "two dots" rather than "one dot wider
+/// than usual" at typical viewing scales. The same factor is used in
+/// both the vertical (along the x-axis) and horizontal (along the
+/// y-axis) renderers so the visual weight stays consistent.
+const OCTAVE_DOUBLE_DOT_OFFSET: f32 = 0.55;
 
 /// Fretboard position-marker frets for the given instrument
 /// (number of strings). Western guitar (6 strings) has inlays
@@ -271,9 +318,44 @@ fn position_marker_frets(strings: usize) -> &'static [u8] {
     }
 }
 
-/// Render a chord diagram as an inline SVG string.
+/// Render a chord diagram as an inline SVG string in the default
+/// (vertical) orientation.
+///
+/// Equivalent to calling [`render_svg_with_orientation`] with
+/// `Orientation::Vertical` — kept for backward compatibility with every
+/// pre-existing caller.
 #[must_use]
 pub fn render_svg(data: &DiagramData) -> String {
+    render_svg_with_orientation(data, Orientation::Vertical)
+}
+
+/// Render a chord diagram as an inline SVG string in the specified
+/// orientation.
+///
+/// `Orientation::Horizontal` is reader-view only (high pitch on top); the
+/// variant is a unit case and carries no row-order parameter — see ADR-0026.
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::chord_diagram::{
+///     DiagramData, Orientation, render_svg_with_orientation,
+/// };
+///
+/// let data = DiagramData {
+///     name: "Am".to_string(),
+///     display_name: None,
+///     strings: 6,
+///     frets_shown: 5,
+///     base_fret: 1,
+///     frets: vec![-1, 0, 2, 2, 1, 0],
+///     fingers: vec![],
+/// };
+/// let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
+/// assert!(svg.contains("chord-diagram-horizontal"));
+/// ```
+#[must_use]
+pub fn render_svg_with_orientation(data: &DiagramData, orientation: Orientation) -> String {
     if data.strings < MIN_STRINGS
         || data.strings > MAX_STRINGS
         || data.frets_shown < MIN_FRETS_SHOWN
@@ -281,6 +363,16 @@ pub fn render_svg(data: &DiagramData) -> String {
     {
         return String::new();
     }
+    // Exhaustive inside the defining crate — `#[non_exhaustive]` only forces
+    // a wildcard on downstream consumers (see `render-pdf`). Adding a new
+    // `Orientation` variant fails compilation here until a layout is added.
+    match orientation {
+        Orientation::Vertical => render_svg_vertical_inner(data),
+        Orientation::Horizontal => render_svg_horizontal_inner(data),
+    }
+}
+
+fn render_svg_vertical_inner(data: &DiagramData) -> String {
     let num_strings = data.strings;
     let num_frets = data.frets_shown;
     let grid_w = (num_strings - 1) as f32 * CELL_W;
@@ -357,8 +449,8 @@ pub fn render_svg(data: &DiagramData) -> String {
                  fill=\"#D4D1D6\" class=\"position-marker\"/>\n\
                  <circle cx=\"{cx2}\" cy=\"{y}\" r=\"{POSITION_DOT_RADIUS}\" \
                  fill=\"#D4D1D6\" class=\"position-marker\"/>\n",
-                cx1 = center_x - CELL_W * 0.55,
-                cx2 = center_x + CELL_W * 0.55,
+                cx1 = center_x - CELL_W * OCTAVE_DOUBLE_DOT_OFFSET,
+                cx2 = center_x + CELL_W * OCTAVE_DOUBLE_DOT_OFFSET,
             ));
         } else {
             svg.push_str(&format!(
@@ -368,7 +460,6 @@ pub fn render_svg(data: &DiagramData) -> String {
         }
     }
 
-    // Vertical lines (strings)
     for i in 0..num_strings {
         let x = LEFT_MARGIN + i as f32 * CELL_W;
         svg.push_str(&format!(
@@ -378,7 +469,6 @@ pub fn render_svg(data: &DiagramData) -> String {
         ));
     }
 
-    // Horizontal lines (frets)
     for j in 0..=num_frets {
         let y = nut_y + j as f32 * CELL_H;
         svg.push_str(&format!(
@@ -396,14 +486,14 @@ pub fn render_svg(data: &DiagramData) -> String {
         let x = LEFT_MARGIN + i as f32 * CELL_W;
         if fret == -1 {
             // Muted (X)
-            let y = nut_y - 10.0;
+            let y = nut_y - NUT_MARGIN_GLYPH_OFFSET;
             svg.push_str(&format!(
                 "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" \
                  font-family=\"sans-serif\" font-size=\"10\">X</text>\n"
             ));
         } else if fret == 0 {
             // Open (O)
-            let y = nut_y - 10.0;
+            let y = nut_y - NUT_MARGIN_GLYPH_OFFSET;
             svg.push_str(&format!(
                 "<circle cx=\"{x}\" cy=\"{y}\" r=\"{OPEN_RADIUS}\" \
                  fill=\"none\" stroke=\"black\" stroke-width=\"1\"/>\n"
@@ -415,6 +505,177 @@ pub fn render_svg(data: &DiagramData) -> String {
                 "<circle cx=\"{x}\" cy=\"{y}\" r=\"{DOT_RADIUS}\" fill=\"black\"/>\n"
             ));
             // Finger number inside the dot (if available and non-zero)
+            if let Some(&finger) = data.fingers.get(i) {
+                if finger > 0 {
+                    svg.push_str(&format!(
+                        "<text x=\"{x}\" y=\"{}\" text-anchor=\"middle\" \
+                         font-family=\"sans-serif\" font-size=\"8\" \
+                         fill=\"white\">{finger}</text>\n",
+                        y + 3.0
+                    ));
+                }
+            }
+        }
+    }
+
+    svg.push_str("</svg>");
+    svg
+}
+
+/// Horizontal counterpart to [`render_svg_vertical_inner`]: nut on the left,
+/// fretboard running rightward, high pitch (1st string) on top. Reader-view
+/// only — see [`Orientation`] and ADR-0026 for why the player-view
+/// alternative is not exposed.
+///
+/// The geometric layout mirrors the vertical renderer so behaviour stays in
+/// lockstep — anything that changes in one (open/muted placement, 12-fret
+/// double-dot, base-fret label, finger numbers) must change in the other.
+fn render_svg_horizontal_inner(data: &DiagramData) -> String {
+    let num_strings = data.strings;
+    let num_frets = data.frets_shown;
+    // Semantic aliases — the horizontal layout's fret axis is the SVG
+    // x-axis, so use `CELL_H` (the vertical layout's fret pitch, the
+    // larger of the two cell values) along that axis. Likewise the
+    // string axis is the SVG y-axis, so use `CELL_W` (the vertical
+    // layout's string-to-string spacing, the smaller value). Using the
+    // same constants with swapped meanings preserves the
+    // wider-than-tall fretboard aspect ratio that the vertical
+    // renderer already encodes — the diagram looks like a real
+    // fretboard rotated 90°, not a vertical diagram with the labels
+    // shuffled.
+    let fret_pitch = CELL_H;
+    let string_pitch = CELL_W;
+    let grid_w = num_frets as f32 * fret_pitch;
+    let grid_h = (num_strings - 1) as f32 * string_pitch;
+    let total_w = grid_w + LEFT_MARGIN * 2.0;
+    let total_h = grid_h + TOP_MARGIN + 20.0;
+
+    let mut svg = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{total_w}\" height=\"{total_h}\" \
+         viewBox=\"0 0 {total_w} {total_h}\" class=\"chord-diagram chord-diagram-horizontal\">\n"
+    );
+
+    // Chord name (uses display override if present). Centred above the
+    // fretboard so the visual weight matches the vertical layout's title.
+    let name_x = LEFT_MARGIN + grid_w / 2.0;
+    svg.push_str(&format!(
+        "<text x=\"{name_x}\" y=\"15\" text-anchor=\"middle\" \
+         font-family=\"sans-serif\" font-size=\"14\" font-weight=\"bold\">{}</text>\n",
+        crate::escape::escape_xml(data.title())
+    ));
+
+    // Nut (vertical line on the left when at the open position) or the
+    // base-fret label above the leftmost fret cell when the diagram starts
+    // higher up the fretboard. The label sits above the first fret column
+    // (the horizontal equivalent of the vertical layout's left-of-row label
+    // position).
+    let nut_x = LEFT_MARGIN;
+    if data.base_fret == 1 {
+        svg.push_str(&format!(
+            "<line x1=\"{nut_x}\" y1=\"{TOP_MARGIN}\" x2=\"{nut_x}\" y2=\"{}\" \
+             stroke=\"black\" stroke-width=\"3\"/>\n",
+            TOP_MARGIN + grid_h
+        ));
+    } else {
+        svg.push_str(&format!(
+            "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" \
+             font-family=\"sans-serif\" font-size=\"10\">{}</text>\n",
+            nut_x + fret_pitch / 2.0,
+            TOP_MARGIN - 4.0,
+            data.base_fret
+        ));
+    }
+
+    // Fretboard position-marker inlays — at the horizontal centre row. The
+    // 12-fret marker becomes a double dot split along the **vertical**
+    // axis at `cy ± string_pitch * OCTAVE_DOUBLE_DOT_OFFSET`, the geometric
+    // mirror of the vertical layout's left/right split at
+    // `cx ± CELL_W * OCTAVE_DOUBLE_DOT_OFFSET` (in vertical mode CELL_W is the string pitch).
+    let position_frets = position_marker_frets(num_strings);
+    let center_y = TOP_MARGIN + grid_h / 2.0;
+    for &marker_fret in position_frets {
+        if (marker_fret as i32) < data.base_fret as i32 {
+            continue;
+        }
+        let col = (marker_fret as i32) - (data.base_fret as i32) + 1;
+        if col < 1 || col > num_frets as i32 {
+            continue;
+        }
+        let x = nut_x + (col as f32 - 0.5) * fret_pitch;
+        if marker_fret == 12 {
+            svg.push_str(&format!(
+                "<circle cx=\"{x}\" cy=\"{cy1}\" r=\"{POSITION_DOT_RADIUS}\" \
+                 fill=\"#D4D1D6\" class=\"position-marker\"/>\n\
+                 <circle cx=\"{x}\" cy=\"{cy2}\" r=\"{POSITION_DOT_RADIUS}\" \
+                 fill=\"#D4D1D6\" class=\"position-marker\"/>\n",
+                cy1 = center_y - string_pitch * OCTAVE_DOUBLE_DOT_OFFSET,
+                cy2 = center_y + string_pitch * OCTAVE_DOUBLE_DOT_OFFSET,
+            ));
+        } else {
+            svg.push_str(&format!(
+                "<circle cx=\"{x}\" cy=\"{center_y}\" r=\"{POSITION_DOT_RADIUS}\" \
+                 fill=\"#D4D1D6\" class=\"position-marker\"/>\n"
+            ));
+        }
+    }
+
+    // The string lines themselves are symmetric; what matters is that
+    // the per-string marker placement below maps each physical string
+    // index (`i`) to the matching visual row via `row = num_strings -
+    // 1 - i`, so the high-pitch string lands on the top row
+    // (reader-view, ADR-0026).
+    for i in 0..num_strings {
+        let y = TOP_MARGIN + i as f32 * string_pitch;
+        svg.push_str(&format!(
+            "<line x1=\"{nut_x}\" y1=\"{y}\" x2=\"{}\" y2=\"{y}\" \
+             stroke=\"black\" stroke-width=\"1\"/>\n",
+            nut_x + grid_w
+        ));
+    }
+
+    for j in 0..=num_frets {
+        let x = nut_x + j as f32 * fret_pitch;
+        svg.push_str(&format!(
+            "<line x1=\"{x}\" y1=\"{TOP_MARGIN}\" x2=\"{x}\" y2=\"{}\" \
+             stroke=\"black\" stroke-width=\"1\"/>\n",
+            TOP_MARGIN + grid_h
+        ));
+    }
+
+    // Finger positions, open, and muted markers. ChordPro convention orders
+    // `data.frets` from low pitch (index 0) to high pitch — i.e. 6th string
+    // (low E) first for guitar. Reader-view places the high pitch on top so
+    // the i-th string maps to row `num_strings - 1 - i`.
+    for (i, &fret) in data.frets.iter().enumerate() {
+        if i >= num_strings {
+            break;
+        }
+        let row = num_strings - 1 - i;
+        let y = TOP_MARGIN + row as f32 * string_pitch;
+        if fret == -1 {
+            // Muted (X) — to the left of the nut, one per string row.
+            // `y + 3.0` is the same baseline-centring offset the vertical
+            // renderer uses for finger-number text.
+            let x = nut_x - NUT_MARGIN_GLYPH_OFFSET;
+            svg.push_str(&format!(
+                "<text x=\"{x}\" y=\"{}\" text-anchor=\"middle\" \
+                 font-family=\"sans-serif\" font-size=\"10\">X</text>\n",
+                y + 3.0
+            ));
+        } else if fret == 0 {
+            // Open (O) — to the left of the nut, one per string row.
+            let x = nut_x - NUT_MARGIN_GLYPH_OFFSET;
+            svg.push_str(&format!(
+                "<circle cx=\"{x}\" cy=\"{y}\" r=\"{OPEN_RADIUS}\" \
+                 fill=\"none\" stroke=\"black\" stroke-width=\"1\"/>\n"
+            ));
+        } else {
+            // Fretted dot — placed at the centre of its fret cell along the
+            // string row.
+            let x = nut_x + (fret as f32 - 0.5) * fret_pitch;
+            svg.push_str(&format!(
+                "<circle cx=\"{x}\" cy=\"{y}\" r=\"{DOT_RADIUS}\" fill=\"black\"/>\n"
+            ));
             if let Some(&finger) = data.fingers.get(i) {
                 if finger > 0 {
                     svg.push_str(&format!(
@@ -456,6 +717,9 @@ pub fn render_svg(data: &DiagramData) -> String {
 /// Open strings are shown as `o`, muted strings as `x`, and fretted strings
 /// as an integer representing the **absolute** fret number
 /// (`base_fret + relative_fret - 1`).
+///
+/// [`Orientation`] has no effect on this output — the ASCII format is a
+/// single line and carries no rotated/flipped variant.
 #[must_use]
 pub fn render_ascii(data: &DiagramData) -> String {
     let title = data.title();
@@ -756,6 +1020,84 @@ pub fn resolve_diagrams_instrument(
         _ => default_instrument,
     };
     Some(instr.to_string())
+}
+
+/// Resolves the active [`Orientation`] from the `diagrams.orientation`
+/// config value.
+///
+/// Accepted (case-insensitive): `"vertical"` → [`Orientation::Vertical`],
+/// `"horizontal"` → [`Orientation::Horizontal`]. `None`, empty, or any
+/// unrecognised string falls back to [`Orientation::Vertical`].
+/// Inputs longer than [`MAX_RESOLVER_INPUT_LEN`] are rejected (returns
+/// the default) to bound the `to_ascii_lowercase` allocation on hostile
+/// binding input.
+///
+/// Use [`try_parse_orientation_value`] when the caller wants to surface
+/// a warning for typo'd values instead of silently falling back.
+///
+/// Shared by every renderer + binding so parsing stays in one place — a
+/// future orientation value (e.g. `"horizontal-lefty"`) lands here and
+/// propagates to every downstream surface automatically.
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::chord_diagram::{Orientation, resolve_orientation};
+///
+/// assert_eq!(resolve_orientation(None), Orientation::Vertical);
+/// assert_eq!(resolve_orientation(Some("vertical")), Orientation::Vertical);
+/// assert_eq!(resolve_orientation(Some("horizontal")), Orientation::Horizontal);
+/// assert_eq!(resolve_orientation(Some("HORIZONTAL")), Orientation::Horizontal);
+/// assert_eq!(resolve_orientation(Some("garbage")), Orientation::Vertical);
+/// ```
+#[must_use]
+pub fn resolve_orientation(orientation: Option<&str>) -> Orientation {
+    match try_parse_orientation_value(orientation) {
+        Some(OrientationKind::Horizontal) => Orientation::Horizontal,
+        // Vertical and any unrecognised / oversized / missing input — fall
+        // back to the documented default.
+        _ => Orientation::Vertical,
+    }
+}
+
+/// Largest accepted byte length for an orientation string before the
+/// resolver gives up and uses the default.
+///
+/// `to_ascii_lowercase` on an `&str` allocates a new buffer of the same
+/// byte length, so a GB-scale hostile input from a binding consumer
+/// would otherwise cost a GB-scale allocation. 64 bytes is generous for
+/// every valid value (`"horizontal"` is 10, `"vertical"` is 8) and any
+/// future variant slug.
+pub const MAX_RESOLVER_INPUT_LEN: usize = 64;
+
+/// Discriminant for [`try_parse_orientation_value`]. Mirrors the variants
+/// of [`Orientation`] verbatim today.
+///
+/// Public so renderer call sites can build a warning when the raw config
+/// string was non-empty but unparseable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum OrientationKind {
+    /// Matches `Orientation::Vertical`.
+    Vertical,
+    /// Matches `Orientation::Horizontal`.
+    Horizontal,
+}
+
+/// Strict parser for the `diagrams.orientation` value. Returns `None` for
+/// missing / empty / unrecognised / oversized input so callers can emit a
+/// warning before falling back via [`resolve_orientation`].
+#[must_use]
+pub fn try_parse_orientation_value(value: Option<&str>) -> Option<OrientationKind> {
+    let raw = value?.trim();
+    if raw.is_empty() || raw.len() > MAX_RESOLVER_INPUT_LEN {
+        return None;
+    }
+    match raw.to_ascii_lowercase().as_str() {
+        "vertical" => Some(OrientationKind::Vertical),
+        "horizontal" => Some(OrientationKind::Horizontal),
+        _ => None,
+    }
 }
 
 /// Returns the canonical (sharp-spelling) form of a chord name.
@@ -1752,5 +2094,414 @@ mod tests {
         let (keys_out, root_out) = normalise_keyboard_keys(&[], 60);
         assert!(keys_out.is_empty());
         assert_eq!(root_out, 60, "absolute root_key must not be shifted");
+    }
+
+    // -----------------------------------------------------------------------
+    // Horizontal orientation (#2572)
+    // -----------------------------------------------------------------------
+
+    /// Returns the SVG output for an Am open-position chord rendered in
+    /// horizontal mode (reader-view — high pitch on top, the only horizontal
+    /// layout the project ships per ADR-0026).
+    fn horizontal_am_svg() -> String {
+        let data = DiagramData {
+            name: "Am".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 0, 2, 2, 1, 0],
+            fingers: vec![],
+        };
+        render_svg_with_orientation(&data, Orientation::Horizontal)
+    }
+
+    #[test]
+    fn render_svg_vertical_default_matches_render_svg() {
+        // The render_svg() wrapper must produce byte-identical output to an
+        // explicit Vertical + default-string-order call. Any drift here means
+        // some existing caller would see a behaviour change.
+        let data = DiagramData {
+            name: "C".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 3, 2, 0, 1, 0],
+            fingers: vec![0, 3, 2, 0, 1, 0],
+        };
+        let via_wrapper = render_svg(&data);
+        let explicit = render_svg_with_orientation(&data, Orientation::Vertical);
+        assert_eq!(via_wrapper, explicit);
+    }
+
+    #[test]
+    fn horizontal_emits_horizontal_class_marker() {
+        let svg = horizontal_am_svg();
+        assert!(
+            svg.contains("class=\"chord-diagram chord-diagram-horizontal\""),
+            "expected horizontal-mode class marker; got: {svg}"
+        );
+    }
+
+    #[test]
+    fn horizontal_open_position_has_nut_as_vertical_line() {
+        // base_fret == 1 ⇒ nut is the leftmost vertical line, thick stroke.
+        // The vertical-renderer test asserts a horizontal nut line at
+        // `y1=TOP_MARGIN y2=TOP_MARGIN` with `stroke-width=\"3\"`; the
+        // horizontal-mode analogue is a vertical line at
+        // `x1=LEFT_MARGIN x2=LEFT_MARGIN`.
+        let svg = horizontal_am_svg();
+        assert!(
+            svg.contains("x1=\"20\" y1=\"30\" x2=\"20\""),
+            "expected vertical nut line anchored at LEFT_MARGIN/TOP_MARGIN; got: {svg}"
+        );
+        assert!(svg.contains("stroke-width=\"3\""));
+    }
+
+    #[test]
+    fn horizontal_base_fret_label_above_first_fret_when_high_position() {
+        // base_fret > 1 ⇒ no nut line, instead a fret-number label above the
+        // leftmost fret cell. Mirrors the vertical-mode bare-integer label at
+        // the left of the first fret row.
+        let data = DiagramData {
+            name: "Bm".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 7,
+            frets: vec![-1, 1, 3, 3, 2, 1],
+            fingers: vec![],
+        };
+        let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
+        assert!(
+            svg.contains(">7</text>"),
+            "expected bare base-fret label 7; got: {svg}"
+        );
+        // No thick nut line when starting above fret 1.
+        assert!(!svg.contains("stroke-width=\"3\""));
+    }
+
+    #[test]
+    fn horizontal_open_and_muted_markers_sit_left_of_nut() {
+        // Open / muted markers are placed at x = LEFT_MARGIN - 10 = 10 in
+        // horizontal mode (the analogue of the vertical mode's y = nut_y - 10
+        // placement above the nut).
+        let svg = horizontal_am_svg();
+        // "X" mute glyph at x=10 for the muted 6th string.
+        assert!(
+            svg.contains("<text x=\"10\""),
+            "expected muted-X glyph anchored at x=10; got: {svg}"
+        );
+        // Open-string circle at cx=10.
+        assert!(
+            svg.contains("<circle cx=\"10\""),
+            "expected open-string circle at cx=10; got: {svg}"
+        );
+    }
+
+    #[test]
+    fn horizontal_reader_view_places_high_string_on_top() {
+        // Reader-view (the only horizontal layout): in ChordPro's low-to-high
+        // `frets` ordering, index 5 (high E for guitar) sits on row 0 (top).
+        // For Am the open 1st string (i=5, fret=0) produces an open-circle on
+        // the top row at y = TOP_MARGIN = 30.
+        let svg = horizontal_am_svg();
+        assert!(
+            svg.contains("<circle cx=\"10\" cy=\"30\""),
+            "expected open marker for high E on top row (cy=30); got: {svg}"
+        );
+    }
+
+    #[test]
+    fn horizontal_position_marker_at_centre_row_when_visible() {
+        // A C chord at the nut (base_fret = 1, 5 visible frets) shows the
+        // fret-3 and fret-5 inlay dots — same as the vertical renderer. The
+        // horizontal-mode dots sit at the **centre row** (cy = center_y).
+        let data = DiagramData {
+            name: "C".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 3, 2, 0, 1, 0],
+            fingers: vec![],
+        };
+        let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
+        let count = svg.matches("class=\"position-marker\"").count();
+        // Inlay frets in [1..=5] for guitar = 3 and 5 → 2 markers (same as
+        // the vertical-mode count; just placed along the horizontal axis).
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn horizontal_twelfth_fret_double_dot_splits_vertically() {
+        // The 12-fret octave inlay must render as TWO dots split along the
+        // **vertical** axis in horizontal mode (the geometric mirror of the
+        // vertical renderer's horizontal split via cx ± CELL_W * 0.55).
+        let data = DiagramData {
+            name: "C".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 9, // visible frets 9..=13 include 12
+            frets: vec![-1; 6],
+            fingers: vec![],
+        };
+        let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
+        let count = svg.matches("class=\"position-marker\"").count();
+        // Visible inlay frets: 9 (single) + 12 (double) = 3 dots.
+        assert_eq!(
+            count, 3,
+            "expected 1 single + 2 (double at 12); got svg: {svg}"
+        );
+        // The two octave dots must share an x-coordinate (vertical split)
+        // and differ only in y. Look for two dots with the same cx and the
+        // characteristic ± string_pitch * 0.55 offset from the centre row.
+        // For 6-string guitar in horizontal mode the string axis uses
+        // string_pitch = CELL_W = 16:
+        //   grid_h = (6 - 1) * 16 = 80; center_y = TOP_MARGIN + 40 = 70;
+        //   16 * 0.55 = 8.8; so cy1 = 61.2, cy2 = 78.8.
+        assert!(
+            svg.contains("cy=\"61.2\"") && svg.contains("cy=\"78.8\""),
+            "expected 12-fret double dot at cy=61.2 / cy=78.8; got: {svg}"
+        );
+    }
+
+    #[test]
+    fn horizontal_render_ascii_unchanged_across_orientations() {
+        // render_ascii has no orientation knob — assert the rustdoc claim
+        // ("Orientation has no effect on this output") with byte identity.
+        let data = DiagramData {
+            name: "Am".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 0, 2, 2, 1, 0],
+            fingers: vec![],
+        };
+        let ascii = render_ascii(&data);
+        assert_eq!(ascii, "Am\nx o 2 2 1 o");
+    }
+
+    #[test]
+    fn horizontal_invalid_strings_returns_empty_like_vertical() {
+        // The bounds-check at the top of render_svg_with_orientation must
+        // fire for both orientations equally; horizontal mode does not bypass
+        // it.
+        let data = DiagramData {
+            name: "X".to_string(),
+            display_name: None,
+            strings: 1, // below MIN_STRINGS
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![0],
+            fingers: vec![],
+        };
+        assert!(render_svg_with_orientation(&data, Orientation::Horizontal).is_empty());
+    }
+
+    #[test]
+    fn orientation_default_is_vertical() {
+        // The Default for Orientation must stay Vertical so legacy call
+        // sites that pass `Orientation::default()` keep their existing
+        // behaviour.
+        assert_eq!(Orientation::default(), Orientation::Vertical);
+    }
+
+    #[test]
+    fn horizontal_renderer_honours_display_name_override() {
+        // Sister test to `test_render_svg_with_display_name` (vertical).
+        // Catches a future refactor that hardcodes `data.name` instead
+        // of `data.title()` in the horizontal path.
+        let data = DiagramData {
+            name: "Am".to_string(),
+            display_name: Some("A minor".to_string()),
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 0, 2, 2, 1, 0],
+            fingers: vec![],
+        };
+        let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
+        assert!(svg.contains("A minor"));
+        assert!(!svg.contains(">Am<"));
+    }
+
+    #[test]
+    fn horizontal_ukulele_twelfth_fret_double_dot() {
+        // Sister to `horizontal_twelfth_fret_double_dot_splits_vertically`
+        // for ukulele (4 strings; inlay frets are 3, 5, 7, 10, 12, 15 per
+        // `position_marker_frets`). Catches future regressions where the
+        // 4-string horizontal path silently loses the double-dot.
+        let data = DiagramData {
+            name: "C".to_string(),
+            display_name: None,
+            strings: 4,
+            frets_shown: 5,
+            base_fret: 9, // visible frets 9..=13 include 10 and 12
+            frets: vec![-1, -1, -1, -1],
+            fingers: vec![],
+        };
+        let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
+        let count = svg.matches("class=\"position-marker\"").count();
+        // Visible inlay frets: 10 (single) + 12 (double) = 3 dots.
+        assert_eq!(
+            count, 3,
+            "expected 1 single + 2 (double at 12); got svg: {svg}"
+        );
+        // For 4-string ukulele in horizontal mode: string_pitch = CELL_W = 16,
+        //   grid_h = (4 - 1) * 16 = 48; center_y = TOP_MARGIN + 24 = 54;
+        //   16 * 0.55 = 8.8; so cy1 = 45.2, cy2 = 62.8.
+        assert!(
+            svg.contains("cy=\"45.2\"") && svg.contains("cy=\"62.8\""),
+            "expected 12-fret double dot at cy=45.2 / cy=62.8; got: {svg}",
+        );
+    }
+
+    #[test]
+    fn render_svg_default_byte_identical_across_chord_shapes() {
+        // Stronger backward-compat than the single-chord
+        // `render_svg_vertical_default_matches_render_svg` — exercises
+        // the muted-X, open-O, and base_fret > 1 label code paths so a
+        // future refactor of `render_svg_vertical_inner` cannot silently
+        // change any of them without failing.
+        let shapes = [
+            // Open-position C with fingers.
+            DiagramData {
+                name: "C".to_string(),
+                display_name: None,
+                strings: 6,
+                frets_shown: 5,
+                base_fret: 1,
+                frets: vec![-1, 3, 2, 0, 1, 0],
+                fingers: vec![0, 3, 2, 0, 1, 0],
+            },
+            // All-muted (exercises only the X-glyph path).
+            DiagramData {
+                name: "X".to_string(),
+                display_name: None,
+                strings: 6,
+                frets_shown: 5,
+                base_fret: 1,
+                frets: vec![-1; 6],
+                fingers: vec![],
+            },
+            // All-open (exercises only the open-circle path).
+            DiagramData {
+                name: "Open".to_string(),
+                display_name: None,
+                strings: 6,
+                frets_shown: 5,
+                base_fret: 1,
+                frets: vec![0; 6],
+                fingers: vec![],
+            },
+            // Barre at base_fret > 1 (exercises the bare-fret label path).
+            DiagramData {
+                name: "Bm".to_string(),
+                display_name: None,
+                strings: 6,
+                frets_shown: 5,
+                base_fret: 7,
+                frets: vec![-1, 1, 3, 3, 2, 1],
+                fingers: vec![],
+            },
+            // Ukulele (exercises the 4-string branch).
+            DiagramData {
+                name: "C".to_string(),
+                display_name: None,
+                strings: 4,
+                frets_shown: 5,
+                base_fret: 1,
+                frets: vec![0, 0, 0, 3],
+                fingers: vec![],
+            },
+        ];
+        for data in &shapes {
+            let via_wrapper = render_svg(data);
+            let explicit = render_svg_with_orientation(data, Orientation::Vertical);
+            assert_eq!(
+                via_wrapper, explicit,
+                "render_svg() drifted from explicit Vertical for shape {:?}",
+                data.name,
+            );
+        }
+    }
+
+    #[test]
+    fn horizontal_aspect_is_wider_than_tall_vertical_is_taller_than_wide() {
+        // The horizontal renderer must use the SVG's wider dimension for
+        // the fret axis (otherwise the fretboard reads as a vertical
+        // diagram with its labels rearranged rather than a genuinely
+        // horizontal layout). Conversely, vertical must stay tall. The
+        // explicit `width` / `height` attributes pin the contract — a
+        // future change to the pitch constants that breaks the
+        // proportion will fail this test before any visual check.
+        let data = DiagramData {
+            name: "Am".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 0, 2, 2, 1, 0],
+            fingers: vec![],
+        };
+        let extract = |svg: &str, attr: &str| -> f32 {
+            let needle = format!("{attr}=\"");
+            let i = svg.find(&needle).unwrap() + needle.len();
+            let j = svg[i..].find('"').unwrap();
+            svg[i..i + j].parse().unwrap()
+        };
+
+        let vertical = render_svg_with_orientation(&data, Orientation::Vertical);
+        let v_w = extract(&vertical, "width");
+        let v_h = extract(&vertical, "height");
+        assert!(
+            v_h > v_w,
+            "vertical SVG must be taller than wide (got width={v_w}, height={v_h})",
+        );
+
+        let horizontal = render_svg_with_orientation(&data, Orientation::Horizontal);
+        let h_w = extract(&horizontal, "width");
+        let h_h = extract(&horizontal, "height");
+        assert!(
+            h_w > h_h,
+            "horizontal SVG must be wider than tall (got width={h_w}, height={h_h})",
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Resolver-edge cases (#2572) — bound the to_ascii_lowercase
+    // allocation and reject empty strings.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn resolve_orientation_rejects_oversized_input() {
+        // A multi-kilobyte string must not pay the to_ascii_lowercase
+        // cost; the resolver falls back to vertical without allocating
+        // the full buffer.
+        let big = "a".repeat(MAX_RESOLVER_INPUT_LEN + 1);
+        assert_eq!(resolve_orientation(Some(&big)), Orientation::Vertical);
+        assert_eq!(try_parse_orientation_value(Some(&big)), None);
+    }
+
+    #[test]
+    fn resolve_orientation_accepts_input_at_length_cap() {
+        // Boundary check: exactly MAX_RESOLVER_INPUT_LEN bytes is allowed.
+        let at_cap = "a".repeat(MAX_RESOLVER_INPUT_LEN);
+        assert_eq!(try_parse_orientation_value(Some(&at_cap)), None);
+        // "horizontal" (10 bytes) is well under the cap and still parses.
+        assert_eq!(
+            try_parse_orientation_value(Some("horizontal")),
+            Some(OrientationKind::Horizontal),
+        );
+    }
+
+    #[test]
+    fn resolve_orientation_empty_string_is_default() {
+        assert_eq!(resolve_orientation(Some("")), Orientation::Vertical);
+        assert_eq!(try_parse_orientation_value(Some("")), None);
     }
 }

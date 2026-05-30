@@ -1,0 +1,4 @@
+{title: Horizontal Chord Diagrams}
+{+config.diagrams.orientation: horizontal}
+{diagrams}
+[Am]Hello [G]world

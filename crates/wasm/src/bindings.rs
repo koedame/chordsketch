@@ -37,10 +37,10 @@ use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    RenderOptions, chord_diagram_svg_inner, do_chord_typography, do_convert_chordpro_to_irealb,
-    do_convert_irealb_to_chordpro_text, do_parse_chordpro, do_parse_irealb, do_render_ireal_svg,
-    do_render_string, do_serialize_irealb, render_string_with_warnings_core, resolve_config_inner,
-    validate_inner,
+    RenderOptions, chord_diagram_svg_inner, chord_diagram_svg_inner_with_orientation,
+    do_chord_typography, do_convert_chordpro_to_irealb, do_convert_irealb_to_chordpro_text,
+    do_parse_chordpro, do_parse_irealb, do_render_ireal_svg, do_render_string, do_serialize_irealb,
+    render_string_with_warnings_core, resolve_config_inner, validate_inner,
 };
 
 // `do_render_bytes` / `render_bytes_with_warnings_core` /
@@ -705,6 +705,62 @@ pub fn chord_diagram_svg_with_defines(
     chord_diagram_svg_inner(chord, instrument, &defines_vec).map_err(|e| JsValue::from_str(&e))
 }
 
+/// Variant of [`chord_diagram_svg`] that takes a diagram orientation as
+/// an optional string.
+///
+/// `orientation` accepts `"vertical"` (default) or `"horizontal"`
+/// (case-insensitive). Horizontal mode is reader-view only per
+/// ADR-0026. `null` / `undefined` / unrecognised values silently fall
+/// back to the default, matching `resolve_orientation`.
+///
+/// # Errors
+///
+/// Same as [`chord_diagram_svg`].
+#[must_use = "callers must handle the unknown-instrument error"]
+#[wasm_bindgen(js_name = chordDiagramSvgWithOrientation, skip_typescript)]
+pub fn chord_diagram_svg_with_orientation(
+    chord: &str,
+    instrument: &str,
+    orientation: Option<String>,
+) -> Result<Option<String>, JsValue> {
+    chord_diagram_svg_inner_with_orientation(chord, instrument, &[], orientation.as_deref())
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// Combination of [`chord_diagram_svg_with_defines`] and
+/// [`chord_diagram_svg_with_orientation`] — the full surface used by the
+/// React JSX walker when a song carries both `{define}` directives and a
+/// `{+config.diagrams.orientation}` override.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string when:
+///   * `instrument` is not one of `"guitar"` / `"ukulele"` / `"piano"`
+///     (or their aliases).
+///   * `defines` is not a deserialisable `[[string, string], …]` array.
+#[must_use = "callers must handle the unknown-instrument error"]
+#[wasm_bindgen(js_name = chordDiagramSvgWithDefinesOrientation, skip_typescript)]
+pub fn chord_diagram_svg_with_defines_orientation(
+    chord: &str,
+    instrument: &str,
+    defines: JsValue,
+    orientation: Option<String>,
+) -> Result<Option<String>, JsValue> {
+    let defines_vec: Vec<(String, String)> = if defines.is_undefined() || defines.is_null() {
+        Vec::new()
+    } else {
+        serde_wasm_bindgen::from_value(defines)
+            .map_err(|e| JsValue::from_str(&format!("invalid defines argument: {e}")))?
+    };
+    chord_diagram_svg_inner_with_orientation(
+        chord,
+        instrument,
+        &defines_vec,
+        orientation.as_deref(),
+    )
+    .map_err(|e| JsValue::from_str(&e))
+}
+
 /// Validate ChordPro input and return any parse errors as structured
 /// records.
 ///
@@ -753,6 +809,38 @@ export interface ValidationError {
  * Returns an empty array if the input is valid.
  */
 export function validate(input: string): ValidationError[];
+
+/**
+ * Layout orientation for the orientation-aware chord-diagram exports.
+ *
+ * `"horizontal"` renders the Japanese tablature layout (nut on the left,
+ * reader-view — high pitch on top); see ADR-0026. `null` / `undefined` /
+ * unrecognised strings fall back to `"vertical"`.
+ */
+export type ChordDiagramOrientation = "vertical" | "horizontal";
+
+/**
+ * Render a chord diagram in the requested orientation.
+ *
+ * Returns `null` when the chord is not in the built-in voicing database.
+ * Throws on unknown instrument.
+ */
+export function chordDiagramSvgWithOrientation(
+  chord: string,
+  instrument: string,
+  orientation?: ChordDiagramOrientation | null,
+): string | null;
+
+/**
+ * Render a chord diagram in the requested orientation, consulting song-level
+ * `{define}` voicings first. `defines` is an array of `[name, raw]` tuples.
+ */
+export function chordDiagramSvgWithDefinesOrientation(
+  chord: string,
+  instrument: string,
+  defines: Array<[string, string]>,
+  orientation?: ChordDiagramOrientation | null,
+): string | null;
 "#;
 
 /// Serializable shape returned by [`parse_chordpro_with_warnings`]

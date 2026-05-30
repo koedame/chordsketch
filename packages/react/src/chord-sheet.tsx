@@ -2,7 +2,10 @@ import type { HTMLAttributes, ReactNode } from 'react';
 
 import { renderChordproAst } from './chordpro-jsx';
 import type { ChordRepositionEvent } from './chord-source-edit';
-import type { ChordDiagramInstrument } from './use-chord-diagram';
+import type {
+  ChordDiagramInstrument,
+  ChordDiagramOrientation,
+} from './use-chord-diagram';
 import {
   type ChordRenderFormat,
   type ChordRenderOptions,
@@ -31,6 +34,22 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
    * specific instrument. Only consumed by `format="html"`.
    */
   chordDiagramsInstrument?: ChordDiagramInstrument;
+  /**
+   * Orientation forwarded to every `<ChordDiagram>` the walker
+   * emits when `chordDiagramsInstrument` is set. Defaults to
+   * `"vertical"` (Western convention, nut on top). Pass
+   * `"horizontal"` for the Japanese-tablature layout with nut on
+   * the left. Has no effect when `chordDiagramsInstrument` is
+   * omitted (no grid is rendered) or when `format !== "html"`
+   * (the text branch carries no SVG diagrams).
+   *
+   * Sister-site note: the React walker does not currently
+   * dispatch on `{+config.diagrams.orientation: ...}` directives
+   * in the source — pass orientation through this prop to opt in
+   * from a React host. The Rust HTML / PDF renderers do honour
+   * the source-level directive.
+   */
+  chordDiagramsOrientation?: ChordDiagramOrientation;
   /**
    * 1-indexed source line that should be highlighted in the
    * rendered preview. Forwarded to the AST walker
@@ -170,6 +189,7 @@ export function ChordSheet({
   wasmLoader,
   astWasmLoader,
   chordDiagramsInstrument,
+  chordDiagramsOrientation,
   activeSourceLine,
   caretColumn,
   caretLineLength,
@@ -203,6 +223,7 @@ export function ChordSheet({
       errorFallback={errorFallback}
       wasmLoader={astWasmLoader}
       chordDiagramsInstrument={chordDiagramsInstrument}
+      chordDiagramsOrientation={chordDiagramsOrientation}
       activeSourceLine={activeSourceLine}
       caretColumn={caretColumn}
       caretLineLength={caretLineLength}
@@ -262,6 +283,7 @@ function ChordSheetAstBranch({
   errorFallback,
   wasmLoader,
   chordDiagramsInstrument,
+  chordDiagramsOrientation,
   activeSourceLine,
   caretColumn,
   caretLineLength,
@@ -271,6 +293,7 @@ function ChordSheetAstBranch({
 }: BranchProps & {
   wasmLoader: ChordproWasmLoader | undefined;
   chordDiagramsInstrument: ChordDiagramInstrument | undefined;
+  chordDiagramsOrientation: ChordDiagramOrientation | undefined;
   activeSourceLine: number | undefined;
   caretColumn: number | undefined;
   caretLineLength: number | undefined;
@@ -306,7 +329,10 @@ function ChordSheetAstBranch({
           transposedKey,
           transposedKeyDirectives,
           chordDiagrams: chordDiagramsInstrument
-            ? { instrument: chordDiagramsInstrument }
+            ? {
+                instrument: chordDiagramsInstrument,
+                orientation: chordDiagramsOrientation,
+              }
             : null,
           activeSourceLine,
           caretColumn,

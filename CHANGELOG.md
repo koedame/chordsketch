@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Horizontal (left-nut) orientation for fretted-instrument chord
+  diagrams, alongside the existing vertical layout. Enable via the
+  `diagrams.orientation = "horizontal"` config key (honoured by the
+  Rust HTML and PDF renderers) or by passing
+  `orientation="horizontal"` to `@chordsketch/react`'s
+  `<ChordDiagram>` and `chordpro-jsx` walker option. Wasm / NAPI / FFI
+  binding surfaces expose the new
+  `chord_diagram_svg_with_orientation` and
+  `chord_diagram_svg_with_defines_orientation` exports for hosts that
+  need orientation control without going through the renderer config.
+  Horizontal mode is reader-view only (high pitch on top, matching
+  tablature stave order — see
+  [ADR-0026](docs/adr/0026-horizontal-chord-diagram-default-string-order.md));
+  the player-view layout is not exposed as a knob. ASCII output
+  (`render_ascii`) and keyboard diagrams have no orientation knob —
+  ASCII is a single line and the keyboard layout is already
+  horizontal by nature. (#2572)
+- `@chordsketch/react`: `chordDiagramsOrientation` prop on
+  `<ChordSheet>` and `<RendererPreview>` forwards the orientation
+  through to the auto-emitted diagrams grid, plus a Diagrams group
+  in `<PreviewToolbar>` (orientation `<select>` styled to the
+  design-system `.select` token set). `<ChordDiagram>` itself surfaces
+  the active orientation as a `data-orientation` attribute on its
+  wrapper so consumers and tests can observe it without parsing the
+  SVG. (#2572)
+
 ### Changed
 
 - **Breaking**: `{capo: N}` now transposes the rendered chord names

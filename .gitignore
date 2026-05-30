@@ -75,6 +75,11 @@ apps/desktop/src-tauri/gen/
 packages/playground/playwright-report/
 packages/playground/test-results/
 
+# vitest's failure-replay scratch dir (created by `npx vitest run`). The
+# JSON inside (`last-run.json`) is local-only state for the rerun-only
+# flag; nothing in CI consumes it.
+packages/react/test-results/
+
 # Python (used by scripts/ and CI helpers, not a runtime dep)
 __pycache__/
 *.pyc

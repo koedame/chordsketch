@@ -1,8 +1,11 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { ChordDiagram, useChordDiagram } from '../src/index';
-import type { ChordDiagramWasmLoader } from '../src/use-chord-diagram';
+import {
+  __resetStaleBundleWarnings,
+  type ChordDiagramWasmLoader,
+} from '../src/use-chord-diagram';
 
 interface StubRenderer {
   default: ReturnType<typeof vi.fn>;
@@ -148,5 +151,214 @@ describe('useChordDiagram', () => {
     await waitFor(() => expect(screen.getByTestId('out').textContent).toContain('data-chord="Am"'));
     rerender(<Harness chord="ZZZ7sus4" />);
     await waitFor(() => expect(screen.getByTestId('out').textContent).toBe('NONE'));
+  });
+});
+
+// Orientation pass-through (#2572) — the React surface adds two optional
+// props that should ultimately reach the wasm `chord_diagram_svg_*`
+// exports. We assert at the boundary rather than rendering the real SVG
+// because the stub renderer fully captures the contract.
+describe('<ChordDiagram> orientation pass-through (#2572)', () => {
+  // The stale-bundle warning latch lives at module scope so a chord grid
+  // mounting N <ChordDiagram>s logs the message exactly once. Reset it
+  // between tests so an earlier test's warning does not suppress a later
+  // test's assertion that the warning fires.
+  beforeEach(() => {
+    __resetStaleBundleWarnings();
+  });
+
+  function makeOrientationStub() {
+    return {
+      default: vi.fn(async () => undefined),
+      chord_diagram_svg: vi.fn(() => '<svg data-mode="legacy"></svg>'),
+      chordDiagramSvgWithDefines: vi.fn(() => '<svg data-mode="defines"></svg>'),
+      chordDiagramSvgWithDefinesOrientation: vi.fn(
+        (
+          _chord: string,
+          _instrument: string,
+          _defines: unknown,
+          orientation: string | null | undefined,
+        ) =>
+          `<svg data-mode="oriented" data-orientation="${orientation ?? 'null'}"></svg>`,
+      ),
+    };
+  }
+
+  test('passes orientation="horizontal" through to the wasm export', async () => {
+    const stub = makeOrientationStub();
+    const { container } = render(
+      <ChordDiagram
+        chord="Am"
+        instrument="guitar"
+        orientation="horizontal"
+        wasmLoader={makeLoader(stub as unknown as StubRenderer)}
+      />,
+    );
+    await waitFor(() => {
+      const svg = container.querySelector('.chordsketch-diagram svg');
+      expect(svg?.getAttribute('data-mode')).toBe('oriented');
+      expect(svg?.getAttribute('data-orientation')).toBe('horizontal');
+    });
+    expect(stub.chordDiagramSvgWithDefinesOrientation).toHaveBeenCalledWith(
+      'Am',
+      'guitar',
+      [],
+      'horizontal',
+    );
+    expect(stub.chordDiagramSvgWithDefines).not.toHaveBeenCalled();
+  });
+
+  test('falls back to the defines-only export when the orientation export is absent', async () => {
+    // Older wasm bundles (pre-#2572) only ship
+    // `chordDiagramSvgWithDefines`. The hook must degrade gracefully so
+    // hosts pinning an older wasm bundle keep rendering — just without
+    // orientation honoured. Build the stub directly without the
+    // orientation field so the runtime structural check
+    // `renderer.chordDiagramSvgWithDefinesOrientation` returns falsy
+    // (this avoids `delete` on a non-optional field, which the
+    // package's strict TS config rejects with TS2790).
+    const noOrientation = {
+      default: vi.fn(async () => undefined),
+      chord_diagram_svg: vi.fn(() => '<svg data-mode="legacy"></svg>'),
+      chordDiagramSvgWithDefines: vi.fn(() => '<svg data-mode="defines"></svg>'),
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      render(
+        <ChordDiagram
+          chord="Am"
+          instrument="guitar"
+          orientation="horizontal"
+          wasmLoader={makeLoader(noOrientation as unknown as StubRenderer)}
+        />,
+      );
+      await waitFor(() => {
+        expect(noOrientation.chordDiagramSvgWithDefines).toHaveBeenCalledWith(
+          'Am',
+          'guitar',
+          [],
+        );
+      });
+      // The stale-bundle warning must fire exactly once so a chord-grid
+      // mounting N <ChordDiagram>s does not flood the console with N
+      // copies of the same message.
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0][0]).toMatch(
+        /does not expose chordDiagramSvgWithDefinesOrientation/,
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  test('stale-bundle warning fires exactly once across N mounted <ChordDiagram>s', async () => {
+    // Per-instance latches let a chord grid render N copies of the same
+    // warning — pin the module-singleton contract here so a regression to
+    // a per-`useRef` latch would surface a noisy console.
+    const noOrientation = {
+      default: vi.fn(async () => undefined),
+      chord_diagram_svg: vi.fn(() => '<svg data-mode="legacy"></svg>'),
+      chordDiagramSvgWithDefines: vi.fn(() => '<svg data-mode="defines"></svg>'),
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      // Mount five independent <ChordDiagram>s, each with its own hook
+      // instance. Each uses a fresh stub renderer so the wasm-load step
+      // never races on a shared module ref.
+      render(
+        <>
+          {['Am', 'C', 'D', 'E', 'G'].map((chord) => (
+            <ChordDiagram
+              key={chord}
+              chord={chord}
+              instrument="guitar"
+              orientation="horizontal"
+              wasmLoader={makeLoader(noOrientation as unknown as StubRenderer)}
+            />
+          ))}
+        </>,
+      );
+      await waitFor(() => {
+        expect(noOrientation.chordDiagramSvgWithDefines.mock.calls.length).toBe(5);
+      });
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0][0]).toMatch(
+        /does not expose chordDiagramSvgWithDefinesOrientation/,
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  test('does not warn when caller omits orientation (legacy callsite)', async () => {
+    const noOrientation = {
+      default: vi.fn(async () => undefined),
+      chord_diagram_svg: vi.fn(() => '<svg data-mode="legacy"></svg>'),
+      chordDiagramSvgWithDefines: vi.fn(() => '<svg data-mode="defines"></svg>'),
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      render(
+        <ChordDiagram
+          chord="Am"
+          instrument="guitar"
+          wasmLoader={makeLoader(noOrientation as unknown as StubRenderer)}
+        />,
+      );
+      await waitFor(() => {
+        expect(noOrientation.chordDiagramSvgWithDefines).toHaveBeenCalled();
+      });
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  test('rejects the removed horizontalStringOrder prop at the type layer (ADR-0026)', () => {
+    // ADR-0026 pins horizontal mode to reader-view; the
+    // `horizontalStringOrder` prop the pre-merge iteration shipped is
+    // gone. The @ts-expect-error directive fails the test if the prop
+    // ever comes back without an explicit type update — a regression
+    // path that would otherwise quietly resurrect player-view through
+    // the React surface.
+    const stub = makeOrientationStub();
+    render(
+      <ChordDiagram
+        chord="Am"
+        instrument="guitar"
+        orientation="horizontal"
+        // @ts-expect-error -- horizontalStringOrder is intentionally not a prop (ADR-0026).
+        horizontalStringOrder="player"
+        wasmLoader={makeLoader(stub as unknown as StubRenderer)}
+      />,
+    );
+    // Runtime: any unknown extra prop is silently ignored by React, so
+    // there is nothing to assert here beyond the TS gate above. The
+    // test failing to compile is the actual contract being pinned.
+  });
+
+  test('passes orientation="vertical" through explicitly', async () => {
+    // Locks in the contract that orientation="vertical" routes through
+    // the orientation-aware export with the literal "vertical" string,
+    // not through the legacy export with no argument. Catches a
+    // refactor that interprets `undefined` and `"vertical"` as the
+    // same thing and drops the call to the orientation export.
+    const stub = makeOrientationStub();
+    render(
+      <ChordDiagram
+        chord="Am"
+        instrument="guitar"
+        orientation="vertical"
+        wasmLoader={makeLoader(stub as unknown as StubRenderer)}
+      />,
+    );
+    await waitFor(() => {
+      expect(stub.chordDiagramSvgWithDefinesOrientation).toHaveBeenCalledWith(
+        'Am',
+        'guitar',
+        [],
+        'vertical',
+      );
+    });
   });
 });

@@ -114,6 +114,9 @@ the
 | Function | Description | Return type |
 |---|---|---|
 | `chord_diagram_svg(chord, instrument)` | Render a chord diagram as inline SVG. `instrument` is case-insensitive: `"guitar"`, `"ukulele"` (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `null` when the chord is not in the built-in voicing database; throws on unknown instrument | `string \| null` (SVG markup) |
+| `chordDiagramSvgWithDefines(chord, instrument, defines)` | Same as above but consults song-level `{define}` voicings first. `defines` is an array of `[name, raw]` tuples (e.g. `[["Gsus4", "base-fret 1 frets 3 3 0 0 1 3"]]`). | `string \| null` |
+| `chordDiagramSvgWithOrientation(chord, instrument, orientation?)` | Orientation-aware variant. `orientation`: `"vertical"` (default) or `"horizontal"` (nut on the left, Japanese tablature convention). Horizontal mode is reader-view only (high pitch on top, matches tablature stave order); see ADR-0026. Unrecognised strings fall back to vertical. | `string \| null` |
+| `chordDiagramSvgWithDefinesOrientation(chord, instrument, defines, orientation?)` | Combined surface — accepts both song-level `{define}` voicings and the orientation knob. | `string \| null` |
 
 ### iReal Pro
 

@@ -1,0 +1,7 @@
+{title: Horizontal Ukulele Diagrams}
+{+config.diagrams.orientation: horizontal}
+{+config.diagrams.instrument: ukulele}
+{define: C base-fret 1 frets 0 0 0 3}
+{define: F base-fret 1 frets 2 0 1 0}
+{diagrams: uke}
+[C]Aloha [F]hello

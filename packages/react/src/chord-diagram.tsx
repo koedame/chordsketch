@@ -2,6 +2,7 @@ import type { HTMLAttributes, ReactNode } from 'react';
 
 import {
   type ChordDiagramInstrument,
+  type ChordDiagramOrientation,
   type ChordDiagramWasmLoader,
   useChordDiagram,
 } from './use-chord-diagram';
@@ -23,6 +24,13 @@ export interface ChordDiagramProps extends Omit<HTMLAttributes<HTMLDivElement>, 
    * `<section class="chord-diagrams">` block.
    */
   defines?: ReadonlyArray<readonly [string, string]>;
+  /**
+   * Diagram orientation (#2572). Defaults to `"vertical"` — nut on
+   * top, frets running downward. Pass `"horizontal"` for the
+   * Japanese-tablature convention with nut on the left and frets
+   * running rightward (reader-view, high pitch on top — see ADR-0026).
+   */
+  orientation?: ChordDiagramOrientation;
   /**
    * Optional node shown while the WASM module loads. Defaults to
    * a minimal `role="status"` placeholder.
@@ -100,6 +108,7 @@ export function ChordDiagram({
   chord,
   instrument = 'guitar',
   defines,
+  orientation,
   loadingFallback,
   notFoundFallback = defaultNotFoundFallback,
   errorFallback = defaultErrorFallback,
@@ -107,15 +116,26 @@ export function ChordDiagram({
   className,
   ...divProps
 }: ChordDiagramProps): JSX.Element {
-  const { svg, loading, error } = useChordDiagram(chord, instrument, wasmLoader, defines);
+  const { svg, loading, error } = useChordDiagram(
+    chord,
+    instrument,
+    wasmLoader,
+    defines,
+    orientation,
+  );
 
   const wrapperClass = ['chordsketch-diagram', className].filter(Boolean).join(' ');
+  // Surface the active orientation as a DOM attribute so consumers
+  // and tests can observe it without parsing the SVG. Omitted (not
+  // emitted as `data-orientation=""`) when the prop is unset so the
+  // default vertical case stays attribute-free.
+  const orientationAttr = orientation !== undefined ? { 'data-orientation': orientation } : {};
 
   if (error !== null && errorFallback !== null) {
     const node =
       typeof errorFallback === 'function' ? errorFallback(error) : errorFallback;
     return (
-      <div {...divProps} className={wrapperClass}>
+      <div {...divProps} {...orientationAttr} className={wrapperClass}>
         {node}
       </div>
     );
@@ -125,7 +145,7 @@ export function ChordDiagram({
     if (loading) {
       const node = loadingFallback ?? defaultLoadingFallback();
       return (
-        <div {...divProps} className={wrapperClass} aria-busy="true">
+        <div {...divProps} {...orientationAttr} className={wrapperClass} aria-busy="true">
           {node}
         </div>
       );
@@ -136,7 +156,7 @@ export function ChordDiagram({
         ? notFoundFallback(chord, instrument)
         : notFoundFallback;
     return (
-      <div {...divProps} className={wrapperClass}>
+      <div {...divProps} {...orientationAttr} className={wrapperClass}>
         {node}
       </div>
     );
@@ -145,6 +165,7 @@ export function ChordDiagram({
   return (
     <div
       {...divProps}
+      {...orientationAttr}
       className={wrapperClass}
       // Expose the diagram as a labelled image to assistive tech
       // (without this, the inline SVG's accessible name is the

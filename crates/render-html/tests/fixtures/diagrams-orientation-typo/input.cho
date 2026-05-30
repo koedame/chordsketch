@@ -1,0 +1,4 @@
+{title: Typo'd Orientation Falls Back To Vertical}
+{+config.diagrams.orientation: horizonal}
+{diagrams}
+[Am]Hello [G]world

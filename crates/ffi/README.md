@@ -131,6 +131,9 @@ for e in errors:
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `chord_diagram_svg(chord, instrument)` | `str \| None` (SVG markup) | Render a chord diagram as inline SVG. `instrument` is case-insensitive: `"guitar"`, `"ukulele"` (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `None` when the chord is not in the built-in voicing database; raises `ChordSketchError.InvalidConfig` on unknown instrument. |
+| `chord_diagram_svg_with_defines(chord, instrument, defines)` | `str \| None` | Same as `chord_diagram_svg` but consults song-level `{define}` voicings first. `defines` is a list of `(name, raw)` tuples. |
+| `chord_diagram_svg_with_orientation(chord, instrument, orientation=None)` | `str \| None` | Orientation-aware variant. `orientation`: `"vertical"` (default) or `"horizontal"` (nut on the left, Japanese tablature convention). Horizontal mode is reader-view only (high pitch on top, matches tablature stave order); see ADR-0026. Unrecognised strings fall back to vertical. |
+| `chord_diagram_svg_with_defines_orientation(chord, instrument, defines, orientation=None)` | `str \| None` | Combined surface — accepts both song-level `{define}` voicings and the orientation knob. |
 
 ### Utility
 

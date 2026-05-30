@@ -230,8 +230,28 @@ pub(crate) fn chord_diagram_svg_inner(
     instrument: &str,
     defines: &[(String, String)],
 ) -> std::result::Result<Option<String>, String> {
-    use chordsketch_chordpro::chord_diagram::{render_keyboard_svg, render_svg};
+    chord_diagram_svg_inner_with_orientation(chord, instrument, defines, None)
+}
+
+/// Orientation-aware variant of [`chord_diagram_svg_inner`].
+///
+/// `orientation` is passed as `Option<&str>` so the JS surface can
+/// transmit `null` / `undefined` and the resolver picks the project
+/// default (vertical layout). Unrecognised strings are silently
+/// treated as the default to match the behaviour of
+/// [`chordsketch_chordpro::chord_diagram::resolve_orientation`].
+pub(crate) fn chord_diagram_svg_inner_with_orientation(
+    chord: &str,
+    instrument: &str,
+    defines: &[(String, String)],
+    orientation: Option<&str>,
+) -> std::result::Result<Option<String>, String> {
+    use chordsketch_chordpro::chord_diagram::{
+        render_keyboard_svg, render_svg_with_orientation, resolve_orientation,
+    };
     use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
+
+    let resolved = resolve_orientation(orientation);
 
     match instrument.to_ascii_lowercase().as_str() {
         "piano" | "keyboard" | "keys" => {
@@ -242,6 +262,9 @@ pub(crate) fn chord_diagram_svg_inner(
             // explicitly via `let _ = …;` to make the intentional
             // omission visible in the diff (mirrors wasm's
             // `chord_diagram_svg_inner`).
+            //
+            // Keyboard diagrams have no orientation knob — both arguments
+            // are accepted but ignored here.
             let _ = defines;
             Ok(lookup_keyboard_voicing(chord, &[]).map(|v| render_keyboard_svg(&v)))
         }
@@ -251,7 +274,8 @@ pub(crate) fn chord_diagram_svg_inner(
             // when no `{chordfrets}` directive is set), keeping
             // diagrams produced via NAPI visually consistent with
             // sheets rendered through the same binding.
-            Ok(lookup_diagram(chord, defines, instrument, 5).map(|d| render_svg(&d)))
+            Ok(lookup_diagram(chord, defines, instrument, 5)
+                .map(|d| render_svg_with_orientation(&d, resolved)))
         }
         other => Err(format!(
             "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
@@ -1089,6 +1113,47 @@ mod tests {
             "error must name the offending instrument; got {err:?}"
         );
     }
+
+    #[test]
+    fn chord_diagram_svg_inner_with_orientation_horizontal_marks_class() {
+        let svg = chord_diagram_svg_inner_with_orientation("Am", "guitar", &[], Some("horizontal"))
+            .unwrap()
+            .expect("Am voicing should resolve for guitar");
+        assert!(svg.contains("chord-diagram-horizontal"));
+    }
+
+    #[test]
+    fn chord_diagram_svg_inner_with_orientation_defaults_match_legacy() {
+        let legacy = chord_diagram_svg_inner("Am", "guitar", &[])
+            .unwrap()
+            .unwrap();
+        let oriented = chord_diagram_svg_inner_with_orientation("Am", "guitar", &[], None)
+            .unwrap()
+            .unwrap();
+        assert_eq!(legacy, oriented);
+    }
+
+    #[test]
+    fn chord_diagram_svg_inner_with_orientation_unknown_orientation_falls_back() {
+        // Sister to the wasm + ffi test of the same name: unrecognised
+        // orientation strings degrade to vertical (lenient resolver
+        // contract).
+        let oriented =
+            chord_diagram_svg_inner_with_orientation("Am", "guitar", &[], Some("nonsense"))
+                .unwrap()
+                .unwrap();
+        assert!(!oriented.contains("chord-diagram-horizontal"));
+    }
+    // Note: the `#[napi]`-decorated public thunks
+    // (`chord_diagram_svg_with_orientation`,
+    // `chord_diagram_svg_with_defines_orientation`) cannot be exercised
+    // here because the napi-sys symbols (`napi_reference_unref`,
+    // `napi_delete_reference`) are only resolved by Node.js — `cargo
+    // test` fails to link. Public-ABI coverage lives in
+    // `crates/napi/__tests__/public-api.test.js`, which runs through
+    // the actual Node-API binding and pins the same `js_name`,
+    // argument order, and `Option<String>` deserialisation contract
+    // the internal-helper tests above cannot reach.
 
     #[test]
     fn test_chord_diagram_svg_inner_instrument_lookup_is_case_insensitive() {

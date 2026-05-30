@@ -137,6 +137,55 @@ describe("NAPI public API surface", () => {
     );
   });
 
+  // chordDiagramSvgWithOrientation + chordDiagramSvgWithDefinesOrientation
+  // (#2572). Public-ABI coverage that the `#[napi]` thunks expose the
+  // right `js_name`, accept the orientation as an optional 3rd / 4th
+  // argument, and route through `resolve_orientation`. The Rust-side
+  // unit tests in `crates/napi/src/lib.rs` only exercise the internal
+  // `_inner_with_orientation` helper — these tests pin the actual JS
+  // ABI a Node consumer hits. Sister-site coverage parity with the FFI
+  // crate's native tests for `chord_diagram_svg_with_orientation`.
+
+  test("chordDiagramSvgWithOrientation horizontal marks the class", () => {
+    const svg = m.chordDiagramSvgWithOrientation("Am", "guitar", "horizontal");
+    expect(typeof svg).toBe("string");
+    expect(svg).toContain("chord-diagram-horizontal");
+  });
+
+  test("chordDiagramSvgWithOrientation null orientation matches chordDiagramSvg bytes", () => {
+    // The pre-#2572 `chordDiagramSvg` and the new orientation thunk
+    // called with no orientation MUST produce byte-identical output —
+    // any drift breaks the "graceful degradation" contract the React
+    // hook relies on.
+    const legacy = m.chordDiagramSvg("Am", "guitar");
+    const oriented = m.chordDiagramSvgWithOrientation("Am", "guitar", null);
+    expect(oriented).toBe(legacy);
+  });
+
+  test("chordDiagramSvgWithOrientation unrecognised value falls back to vertical", () => {
+    // Lenient resolver contract: typo'd / unknown orientation strings
+    // silently degrade to the default. The user-visible warning lives
+    // at the config-parse layer (`{+config.diagrams.orientation: …}`),
+    // not here.
+    const oriented = m.chordDiagramSvgWithOrientation("Am", "guitar", "diagonal");
+    expect(typeof oriented).toBe("string");
+    expect(oriented).not.toContain("chord-diagram-horizontal");
+  });
+
+  test("chordDiagramSvgWithDefinesOrientation forwards both args at the 4-argument boundary", () => {
+    // Pins the JS-call shape: (chord, instrument, defines, orientation).
+    // A regression that swapped `defines` and `orientation` would
+    // mis-deserialize the array and either throw or render vertical.
+    const svg = m.chordDiagramSvgWithDefinesOrientation(
+      "Bm",
+      "guitar",
+      [["Bm", "base-fret 2 frets 1 3 4 4 3 1"]],
+      "horizontal",
+    );
+    expect(typeof svg).toBe("string");
+    expect(svg).toContain("chord-diagram-horizontal");
+  });
+
   test("validate() pins flat_map shape across `{new_song}` boundaries", () => {
     // Two `{new_song}`-separated segments each with an unclosed chord
     // produce errors from BOTH segments via
