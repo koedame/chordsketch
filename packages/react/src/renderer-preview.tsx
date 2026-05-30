@@ -3,7 +3,10 @@ import type { HTMLAttributes, ReactNode } from 'react';
 import { ChordSheet } from './chord-sheet';
 import { PdfExport } from './pdf-export';
 import type { ChordRepositionEvent } from './chord-source-edit';
-import type { ChordDiagramInstrument } from './use-chord-diagram';
+import type {
+  ChordDiagramInstrument,
+  ChordDiagramOrientation,
+} from './use-chord-diagram';
 import { type ChordRenderFormat, type ChordWasmLoader } from './use-chord-render';
 
 /** Preview format selectable in {@link RendererPreview}. */
@@ -38,6 +41,15 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
    * renderer does.
    */
   chordDiagramsInstrument?: ChordDiagramInstrument;
+  /**
+   * Orientation forwarded to {@link ChordSheet}, which threads it
+   * through to every emitted `<ChordDiagram>`. Defaults to
+   * `"vertical"`; pass `"horizontal"` for the Japanese-tablature
+   * layout (reader-view, high pitch on top — see ADR-0026). Has no
+   * effect when `chordDiagramsInstrument` is omitted or when
+   * `format !== "html"`.
+   */
+  chordDiagramsOrientation?: ChordDiagramOrientation;
   /**
    * 1-indexed source line that should be highlighted in the
    * rendered preview. Forwarded to {@link ChordSheet}'s
@@ -115,6 +127,7 @@ export function RendererPreview({
   format,
   pdfFilename = 'chordsketch-output.pdf',
   chordDiagramsInstrument,
+  chordDiagramsOrientation,
   activeSourceLine,
   caretColumn,
   caretLineLength,
@@ -152,6 +165,7 @@ export function RendererPreview({
       transpose={transpose}
       config={config}
       chordDiagramsInstrument={chordDiagramsInstrument}
+      chordDiagramsOrientation={chordDiagramsOrientation}
       activeSourceLine={activeSourceLine}
       caretColumn={caretColumn}
       caretLineLength={caretLineLength}

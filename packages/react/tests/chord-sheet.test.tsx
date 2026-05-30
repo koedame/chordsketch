@@ -351,4 +351,118 @@ describe('<ChordSheet>', () => {
     expect(loader).toHaveBeenCalledTimes(1);
     expect(stub.default).toHaveBeenCalledTimes(1);
   });
+
+  // ---------------------------------------------------------------------
+  // chordDiagrams orientation pass-through (#2572). The walker option
+  // path was the only way to opt into horizontal mode pre-fix; the new
+  // `chordDiagramsOrientation` prop exposes the same knob to host
+  // hierarchies that compose via <ChordSheet> / <RendererPreview>
+  // instead of calling the walker directly. The AST stub above carries
+  // no chord block, so the emitted diagrams grid is empty; the prop's
+  // contract is asserted by inspecting the walker option construction
+  // directly.
+  // ---------------------------------------------------------------------
+
+  test('forwards chordDiagramsOrientation to the walker option', async () => {
+    // Build a richer AST so the walker actually emits a diagrams grid
+    // and we can read the <ChordDiagram> orientation props back from
+    // the DOM. The stub returns this AST instead of `astFor(src)`.
+    const songAst = JSON.stringify({
+      metadata: {
+        title: null,
+        subtitles: [],
+        artists: [],
+        composers: [],
+        lyricists: [],
+        album: null,
+        year: null,
+        key: null,
+        tempo: null,
+        time: null,
+        capo: null,
+        sortTitle: null,
+        sortArtist: null,
+        arrangers: [],
+        copyright: null,
+        duration: null,
+        tags: [],
+        custom: [],
+      },
+      lines: [
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              {
+                chord: { name: 'Am', detail: null, display: null },
+                text: 'hi',
+                spans: [],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const stub: StubRenderer = {
+      ...makeStub(),
+      parseChordproWithWarnings: vi.fn(() => ({
+        ast: songAst,
+        warnings: [],
+        transposedKey: undefined,
+      })),
+    };
+
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(stub)}
+        chordDiagramsInstrument="guitar"
+        chordDiagramsOrientation="horizontal"
+      />,
+    );
+
+    // Wait until the walker has emitted at least one diagram figure.
+    await waitFor(() => {
+      const cells = container.querySelectorAll('.chord-diagrams-grid .chord-diagram-container');
+      expect(cells.length).toBeGreaterThan(0);
+    });
+
+    // The <ChordDiagram> wrapper carries aria-label="${chord} chord
+    // diagram (${instrument})"; assert the figure mounted (the SVG
+    // itself is provided by an async wasm path we don't load in the
+    // test). What we actually want to lock in is that the orientation
+    // prop reached <ChordDiagram>. The wrapper exposes the active
+    // orientation as `data-orientation` so the assertion does not have
+    // to inspect the (asynchronously-loaded) SVG payload — a
+    // regression that drops the prop on the way from <ChordSheet> to
+    // the walker to <ChordDiagram> surfaces as a missing attribute.
+    const fig = container.querySelector('.chord-diagrams-grid .chord-diagram-container');
+    expect(fig).not.toBeNull();
+    const diagramWrappers = container.querySelectorAll(
+      '.chord-diagrams-grid .chordsketch-diagram',
+    );
+    expect(diagramWrappers.length).toBeGreaterThan(0);
+    diagramWrappers.forEach((wrapper) => {
+      expect(wrapper.getAttribute('data-orientation')).toBe('horizontal');
+    });
+  });
+
+  test('omits chordDiagrams option when chordDiagramsInstrument is unset', async () => {
+    // Pinning the existing behaviour: passing orientation alone without
+    // chordDiagramsInstrument must NOT cause the walker to emit a grid.
+    const stub = makeStub();
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(stub)}
+        chordDiagramsOrientation="horizontal"
+      />,
+    );
+    await waitFor(() => {
+      // The walker rendered SOMETHING (or at least mounted) — assert
+      // grid stays absent.
+      expect(stub.parseChordproWithWarnings).toHaveBeenCalled();
+    });
+    expect(container.querySelector('.chord-diagrams-grid')).toBeNull();
+  });
 });

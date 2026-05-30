@@ -1,0 +1,5 @@
+{title: Orientation Is Ignored by Text Renderer}
+{+config.diagrams.orientation: horizontal}
+{+config.diagrams.horizontal_string_order: player}
+{diagrams}
+[Am]Hello [G]world

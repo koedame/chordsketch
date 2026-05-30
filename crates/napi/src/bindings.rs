@@ -35,11 +35,12 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
 use crate::{
-    chord_diagram_svg_inner, do_convert_chordpro_to_irealb, do_convert_irealb_to_chordpro_text,
-    do_parse_irealb, do_render_bytes, do_render_ireal_pdf, do_render_ireal_png,
-    do_render_ireal_svg, do_render_pdf_with_warnings, do_render_string,
-    do_render_string_with_warnings, do_serialize_irealb, render_html_css_with_options_inner,
-    resolve_options_inner, validate_defines_pairs, validate_inner,
+    chord_diagram_svg_inner, chord_diagram_svg_inner_with_orientation,
+    do_convert_chordpro_to_irealb, do_convert_irealb_to_chordpro_text, do_parse_irealb,
+    do_render_bytes, do_render_ireal_pdf, do_render_ireal_png, do_render_ireal_svg,
+    do_render_pdf_with_warnings, do_render_string, do_render_string_with_warnings,
+    do_serialize_irealb, render_html_css_with_options_inner, resolve_options_inner,
+    validate_defines_pairs, validate_inner,
 };
 
 /// Render options matching the WASM package API.
@@ -500,6 +501,48 @@ pub fn chord_diagram_svg_with_defines(
     let pairs =
         validate_defines_pairs(defines).map_err(|msg| Error::new(Status::InvalidArg, msg))?;
     chord_diagram_svg_inner(&chord, &instrument, &pairs)
+        .map_err(|msg| Error::new(Status::InvalidArg, msg))
+}
+
+/// Variant of [`chord_diagram_svg`] that takes a diagram orientation as
+/// an optional string (#2572).
+///
+/// `orientation` accepts `"vertical"` (default) or `"horizontal"`
+/// (case-insensitive). Horizontal mode is reader-view only per
+/// ADR-0026. `None` and unrecognised values fall back to the default.
+///
+/// # Errors
+///
+/// Returns a napi `Error` with status `InvalidArg` when `instrument` is
+/// not one of the supported values.
+#[must_use = "callers must handle the unknown-instrument error"]
+#[napi(js_name = "chordDiagramSvgWithOrientation")]
+pub fn chord_diagram_svg_with_orientation(
+    chord: String,
+    instrument: String,
+    orientation: Option<String>,
+) -> Result<Option<String>> {
+    chord_diagram_svg_inner_with_orientation(&chord, &instrument, &[], orientation.as_deref())
+        .map_err(|msg| Error::new(Status::InvalidArg, msg))
+}
+
+/// Combination of [`chord_diagram_svg_with_defines`] and
+/// [`chord_diagram_svg_with_orientation`] (#2572).
+///
+/// # Errors
+///
+/// Same as [`chord_diagram_svg_with_defines`].
+#[must_use = "callers must handle the unknown-instrument error"]
+#[napi(js_name = "chordDiagramSvgWithDefinesOrientation")]
+pub fn chord_diagram_svg_with_defines_orientation(
+    chord: String,
+    instrument: String,
+    defines: Vec<Vec<String>>,
+    orientation: Option<String>,
+) -> Result<Option<String>> {
+    let pairs =
+        validate_defines_pairs(defines).map_err(|msg| Error::new(Status::InvalidArg, msg))?;
+    chord_diagram_svg_inner_with_orientation(&chord, &instrument, &pairs, orientation.as_deref())
         .map_err(|msg| Error::new(Status::InvalidArg, msg))
 }
 

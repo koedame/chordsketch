@@ -22,7 +22,8 @@ PNG / PDF, and bidirectional ChordPro ↔ iReal Pro conversion.
 - Chord transposition
 - Configuration file system (chordsketch.json)
 - Inline markup (bold, italic, etc.)
-- Chord diagrams and extended `{define}` directives
+- Chord diagrams (vertical or horizontal / left-nut orientation for
+  Japanese tablature publishing) and extended `{define}` directives
 - Section environments (verse, chorus, tab, grid, custom)
 - Delegate environments (ABC, Lilypond, SVG, textblock)
 - Conditional directive selectors (instrument, user)
