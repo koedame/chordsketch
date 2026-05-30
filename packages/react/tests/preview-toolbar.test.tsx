@@ -207,4 +207,108 @@ describe('<PreviewToolbar>', () => {
     expect(screen.getByRole('group', { name: 'Additional actions' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
   });
+
+  // ---------------------------------------------------------------------
+  // Chord-diagrams orientation group (#2572). The group is opt-in via
+  // the `onChordDiagramsOrientationChange` handler — hosts that don't
+  // want the controls pay no extra DOM. The string-order select only
+  // appears when orientation is "horizontal", keeping the toolbar
+  // narrow in the default state.
+  // ---------------------------------------------------------------------
+
+  test('Diagrams group is hidden when no orientation handler is provided', () => {
+    render(
+      <PreviewToolbar
+        source={SAMPLE}
+        onSourceChange={vi.fn()}
+        transpose={0}
+        onTransposeChange={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('group', { name: 'Chord diagrams' })).toBeNull();
+  });
+
+  test('Diagrams group renders + reports orientation changes', () => {
+    const onOrient = vi.fn();
+    render(
+      <PreviewToolbar
+        source={SAMPLE}
+        onSourceChange={vi.fn()}
+        transpose={0}
+        onTransposeChange={vi.fn()}
+        chordDiagramsOrientation="vertical"
+        onChordDiagramsOrientationChange={onOrient}
+      />,
+    );
+    const group = screen.getByRole('group', { name: 'Chord diagrams' });
+    expect(group).toBeTruthy();
+    const orientSelect = group.querySelector<HTMLSelectElement>(
+      '.chordsketch-preview-toolbar__diagrams-orientation',
+    );
+    expect(orientSelect).not.toBeNull();
+    expect(orientSelect!.value).toBe('vertical');
+    // Toggling to horizontal must call the handler with the right
+    // literal — locks in the contract the playground / desktop hosts
+    // expect.
+    orientSelect!.value = 'horizontal';
+    orientSelect!.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(onOrient).toHaveBeenCalledWith('horizontal');
+  });
+
+  test('horizontal-string-order select appears only when orientation is horizontal', () => {
+    const onOrient = vi.fn();
+    const onOrder = vi.fn();
+    const { rerender, container } = render(
+      <PreviewToolbar
+        source={SAMPLE}
+        onSourceChange={vi.fn()}
+        transpose={0}
+        onTransposeChange={vi.fn()}
+        chordDiagramsOrientation="vertical"
+        onChordDiagramsOrientationChange={onOrient}
+        chordDiagramsHorizontalStringOrder="reader"
+        onChordDiagramsHorizontalStringOrderChange={onOrder}
+      />,
+    );
+    // Vertical: only the orientation select is rendered.
+    expect(
+      container.querySelector('.chordsketch-preview-toolbar__diagrams-string-order'),
+    ).toBeNull();
+    // Horizontal: both selects render.
+    rerender(
+      <PreviewToolbar
+        source={SAMPLE}
+        onSourceChange={vi.fn()}
+        transpose={0}
+        onTransposeChange={vi.fn()}
+        chordDiagramsOrientation="horizontal"
+        onChordDiagramsOrientationChange={onOrient}
+        chordDiagramsHorizontalStringOrder="reader"
+        onChordDiagramsHorizontalStringOrderChange={onOrder}
+      />,
+    );
+    const orderSelect = container.querySelector<HTMLSelectElement>(
+      '.chordsketch-preview-toolbar__diagrams-string-order',
+    );
+    expect(orderSelect).not.toBeNull();
+    expect(orderSelect!.value).toBe('reader');
+    orderSelect!.value = 'player';
+    orderSelect!.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(onOrder).toHaveBeenCalledWith('player');
+  });
+
+  test('showChordDiagrams=false force-hides the group even with a handler', () => {
+    render(
+      <PreviewToolbar
+        source={SAMPLE}
+        onSourceChange={vi.fn()}
+        transpose={0}
+        onTransposeChange={vi.fn()}
+        chordDiagramsOrientation="horizontal"
+        onChordDiagramsOrientationChange={vi.fn()}
+        showChordDiagrams={false}
+      />,
+    );
+    expect(screen.queryByRole('group', { name: 'Chord diagrams' })).toBeNull();
+  });
 });
