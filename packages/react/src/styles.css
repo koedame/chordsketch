@@ -575,6 +575,68 @@
   opacity: 0.7;
 }
 
+/* Diagrams group label matches the ChordPro editor's control-label
+ * pattern (#2572) so the toolbar's font weight + colour stay on the
+ * same axis as the design-system form controls — the `__label`
+ * default above only covers the legacy slider groups (Transpose /
+ * Capo), which paint their own group typography. */
+.chordsketch-preview-toolbar__group--diagrams
+  .chordsketch-preview-toolbar__label {
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--cs-text-secondary);
+  letter-spacing: 0;
+  opacity: 1;
+}
+
+/* Diagrams orientation `<select>` styling. Mirrors
+ * `chordsketch-chord-pro-editor__select` so the toolbar's
+ * orientation toggle reuses the same design-system tokens
+ * (`--cs-border-strong`, `--cs-crimson-500` focus, `--cs-font-jp`)
+ * the rest of the React surface follows. The bare browser default
+ * the pre-#2572 toolbar shipped did not match either the
+ * design-system reference (`design-system/preview/components-forms.html`
+ * `.select` rule) or the existing `<ChordProEditor>` /
+ * `<IrealBarGrid>` selects. */
+.chordsketch-preview-toolbar__diagrams-orientation {
+  height: 32px;
+  padding: 0 1.75rem 0 0.75rem;
+  background-color: var(--cs-surface);
+  /* Single-source inline caret so the select doesn't fall back to
+   * the platform-native arrow that would not honour the design
+   * tokens. The 24×24 viewBox + currentColor stroke matches the
+   * `<PdfExport>` icon weight visually. */
+  background-image: url(
+    "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238A8790' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>"
+  );
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  color: var(--cs-text-primary);
+  border: 1px solid var(--cs-border-strong);
+  border-radius: 4px;
+  font-family: var(--cs-font-jp);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+  transition: border-color var(--cs-dur-1) var(--cs-ease-out),
+    box-shadow var(--cs-dur-1) var(--cs-ease-out);
+}
+
+.chordsketch-preview-toolbar__diagrams-orientation:hover {
+  border-color: var(--cs-ink-500);
+}
+
+.chordsketch-preview-toolbar__diagrams-orientation:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500);
+  box-shadow: var(--cs-focus-ring);
+}
+
 .chordsketch-preview-toolbar__export {
   display: inline-flex;
   align-items: center;

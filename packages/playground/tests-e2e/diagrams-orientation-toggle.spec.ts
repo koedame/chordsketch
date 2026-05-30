@@ -32,6 +32,31 @@ test('diagrams orientation toggle flips the rendered SVG class end-to-end', asyn
     '.chordsketch-preview-toolbar__diagrams-orientation',
   );
   await orientSelect.waitFor();
+
+  // Design-system check: the orientation select must pick up the
+  // package's design-system tokens, not fall back to the bare
+  // browser-native control. Assert (a) the native-arrow `appearance`
+  // is suppressed so the custom caret shows, and (b) the border is
+  // crimson on focus (focus-ring token). Locks in the rule that the
+  // toolbar matches `chordsketch-chord-pro-editor__select` / the
+  // design-system `.select` reference (#2572 follow-up).
+  const tokenSnapshot = await orientSelect.evaluate((el) => {
+    const cs = window.getComputedStyle(el);
+    return {
+      appearance: cs.appearance || (cs as { webkitAppearance?: string }).webkitAppearance,
+      borderColor: cs.borderColor,
+      borderRadius: cs.borderRadius,
+      height: cs.height,
+    };
+  });
+  expect(tokenSnapshot.appearance).toBe('none');
+  // 4px radius matches the editor select. A raw browser default
+  // would be 0 (Chromium native select renders square corners).
+  expect(tokenSnapshot.borderRadius).toBe('4px');
+  // 32px height matches the editor select. Native select height is
+  // user-agent dependent and would not be 32px.
+  expect(tokenSnapshot.height).toBe('32px');
+
   await orientSelect.selectOption('horizontal');
 
   await expect
