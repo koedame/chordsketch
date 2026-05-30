@@ -540,13 +540,11 @@ function PlaygroundApp(): JSX.Element {
   const [sampleId, setSampleId] = useState<string>(DEFAULT_SAMPLE.id);
   const [warningsExpanded, setWarningsExpanded] = useState<boolean>(false);
   const [version, setVersion] = useState<string | null>(cachedVersion);
-  // Chord-diagram orientation knobs (#2572). Default vertical so the
+  // Chord-diagram orientation knob (#2572). Default vertical so the
   // first impression on the deployed playground matches the legacy
   // behaviour; users opt into horizontal via the toolbar select.
   const [diagramsOrientation, setDiagramsOrientation] =
     useState<'vertical' | 'horizontal'>('vertical');
-  const [diagramsStringOrder, setDiagramsStringOrder] =
-    useState<'reader' | 'player'>('reader');
 
   const editorRef = useRef<ChordSourceAreaHandle | null>(null);
 
@@ -836,8 +834,6 @@ function PlaygroundApp(): JSX.Element {
               showExport={false}
               chordDiagramsOrientation={diagramsOrientation}
               onChordDiagramsOrientationChange={setDiagramsOrientation}
-              chordDiagramsHorizontalStringOrder={diagramsStringOrder}
-              onChordDiagramsHorizontalStringOrderChange={setDiagramsStringOrder}
               /* `transposeMin/Max` left at the PreviewToolbar default
                  (±6) so the slider rail stays readable on narrow
                  preview panes. The feature ceiling of ±11 is still
@@ -850,7 +846,6 @@ function PlaygroundApp(): JSX.Element {
                 format="html"
                 chordDiagramsInstrument="guitar"
                 chordDiagramsOrientation={diagramsOrientation}
-                chordDiagramsHorizontalStringOrder={diagramsStringOrder}
                 activeSourceLine={caret?.line}
                 caretColumn={caret?.column}
                 caretLineLength={caret?.lineLength}

@@ -304,16 +304,14 @@ fn render_song_body_into(
         |n| (n as usize).max(1),
     );
 
-    // Diagram orientation (#2572). Reader-view is the default string order
-    // per ADR-0026 — high pitch on top, matching tablature stave order.
-    // Sister-site: `crates/render-pdf/src/lib.rs` reads the same two keys.
-    //
-    // Surface a warning when the user typo'd either value (non-empty raw
-    // string that doesn't parse to a known variant) so a misspelled
-    // `{+config.diagrams.orientation: horizonal}` does not silently render
-    // vertical.
+    // Diagram orientation (#2572). Horizontal mode is reader-view only
+    // per ADR-0026; the player-view alternative is not exposed as a
+    // config knob. Sister-site: `crates/render-pdf/src/lib.rs` reads the
+    // same key. Surface a warning when the user typo'd the value (non-
+    // empty raw string that doesn't parse to a known variant) so a
+    // misspelled `{+config.diagrams.orientation: horizonal}` does not
+    // silently render vertical.
     let raw_orientation = config.get_path("diagrams.orientation").as_str();
-    let raw_string_order = config.get_path("diagrams.horizontal_string_order").as_str();
     if let Some(s) = raw_orientation {
         if !s.trim().is_empty()
             && chordsketch_chordpro::chord_diagram::try_parse_orientation_value(Some(s)).is_none()
@@ -327,21 +325,8 @@ fn render_song_body_into(
             );
         }
     }
-    if let Some(s) = raw_string_order {
-        if !s.trim().is_empty()
-            && chordsketch_chordpro::chord_diagram::try_parse_string_order_value(Some(s)).is_none()
-        {
-            push_warning(
-                warnings,
-                format!(
-                    "diagrams.horizontal_string_order: unrecognised value {s:?}; \
-                     using default (reader)"
-                ),
-            );
-        }
-    }
     let diagram_orientation =
-        chordsketch_chordpro::chord_diagram::resolve_orientation(raw_orientation, raw_string_order);
+        chordsketch_chordpro::chord_diagram::resolve_orientation(raw_orientation);
 
     // Instrument for the auto-inject diagram block at end of song.
     // Set by {diagrams: guitar/ukulele/on}; cleared by {diagrams: off} / {no_diagrams}.
@@ -3351,22 +3336,23 @@ mod tests {
     }
 
     #[test]
-    fn unrecognised_horizontal_string_order_emits_warning() {
-        // `string_order` validation parity with `orientation`. Default still
-        // takes effect; we only assert that the warning fires.
+    fn horizontal_string_order_config_key_is_ignored() {
+        // The `diagrams.horizontal_string_order` config key was retired
+        // along with the player-view alternative — see ADR-0026.
+        // Setting it must not warn (nothing reads it) and the
+        // orientation directive itself still takes effect.
         let song = chordsketch_chordpro::parse(
             "{title: t}\n{+config.diagrams.orientation: horizontal}\n\
-             {+config.diagrams.horizontal_string_order: cantilever}\n{diagrams}\n[Am]Hi",
+             {+config.diagrams.horizontal_string_order: anything}\n{diagrams}\n[Am]Hi",
         )
         .unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
-            result
+            !result
                 .warnings
                 .iter()
-                .any(|w| w.contains("diagrams.horizontal_string_order")
-                    && w.contains("cantilever")),
-            "expected a warning naming the bad string_order value; got: {:?}",
+                .any(|w| w.contains("diagrams.horizontal_string_order")),
+            "horizontal_string_order key must not emit a warning; got: {:?}",
             result.warnings,
         );
         // Output still carries the horizontal class because orientation

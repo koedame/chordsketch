@@ -705,14 +705,13 @@ pub fn chord_diagram_svg_with_defines(
     chord_diagram_svg_inner(chord, instrument, &defines_vec).map_err(|e| JsValue::from_str(&e))
 }
 
-/// Variant of [`chord_diagram_svg`] that takes diagram orientation +
-/// horizontal-string-order as optional strings.
+/// Variant of [`chord_diagram_svg`] that takes a diagram orientation as
+/// an optional string.
 ///
 /// `orientation` accepts `"vertical"` (default) or `"horizontal"`
-/// (case-insensitive). `stringOrder` accepts `"reader"` (default,
-/// high pitch on top — see ADR-0026) or `"player"`. `null` / `undefined` /
-/// unrecognised values silently fall back to defaults, matching
-/// `resolve_orientation` / `resolve_horizontal_string_order`.
+/// (case-insensitive). Horizontal mode is reader-view only per
+/// ADR-0026. `null` / `undefined` / unrecognised values silently fall
+/// back to the default, matching `resolve_orientation`.
 ///
 /// # Errors
 ///
@@ -723,16 +722,9 @@ pub fn chord_diagram_svg_with_orientation(
     chord: &str,
     instrument: &str,
     orientation: Option<String>,
-    string_order: Option<String>,
 ) -> Result<Option<String>, JsValue> {
-    chord_diagram_svg_inner_with_orientation(
-        chord,
-        instrument,
-        &[],
-        orientation.as_deref(),
-        string_order.as_deref(),
-    )
-    .map_err(|e| JsValue::from_str(&e))
+    chord_diagram_svg_inner_with_orientation(chord, instrument, &[], orientation.as_deref())
+        .map_err(|e| JsValue::from_str(&e))
 }
 
 /// Combination of [`chord_diagram_svg_with_defines`] and
@@ -753,7 +745,6 @@ pub fn chord_diagram_svg_with_defines_orientation(
     instrument: &str,
     defines: JsValue,
     orientation: Option<String>,
-    string_order: Option<String>,
 ) -> Result<Option<String>, JsValue> {
     let defines_vec: Vec<(String, String)> = if defines.is_undefined() || defines.is_null() {
         Vec::new()
@@ -766,7 +757,6 @@ pub fn chord_diagram_svg_with_defines_orientation(
         instrument,
         &defines_vec,
         orientation.as_deref(),
-        string_order.as_deref(),
     )
     .map_err(|e| JsValue::from_str(&e))
 }

@@ -4,7 +4,6 @@ import { ChordSheet } from './chord-sheet';
 import { PdfExport } from './pdf-export';
 import type { ChordRepositionEvent } from './chord-source-edit';
 import type {
-  ChordDiagramHorizontalStringOrder,
   ChordDiagramInstrument,
   ChordDiagramOrientation,
 } from './use-chord-diagram';
@@ -46,17 +45,11 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
    * Orientation forwarded to {@link ChordSheet}, which threads it
    * through to every emitted `<ChordDiagram>`. Defaults to
    * `"vertical"`; pass `"horizontal"` for the Japanese-tablature
-   * layout. Has no effect when `chordDiagramsInstrument` is omitted
-   * or when `format !== "html"`.
+   * layout (reader-view, high pitch on top — see ADR-0026). Has no
+   * effect when `chordDiagramsInstrument` is omitted or when
+   * `format !== "html"`.
    */
   chordDiagramsOrientation?: ChordDiagramOrientation;
-  /**
-   * Row order for horizontal-orientation diagrams (default
-   * `"reader"` — high pitch on top per ADR-0026). Pass `"player"`
-   * for low-pitch-on-top. Ignored when
-   * `chordDiagramsOrientation` is `"vertical"`.
-   */
-  chordDiagramsHorizontalStringOrder?: ChordDiagramHorizontalStringOrder;
   /**
    * 1-indexed source line that should be highlighted in the
    * rendered preview. Forwarded to {@link ChordSheet}'s
@@ -135,7 +128,6 @@ export function RendererPreview({
   pdfFilename = 'chordsketch-output.pdf',
   chordDiagramsInstrument,
   chordDiagramsOrientation,
-  chordDiagramsHorizontalStringOrder,
   activeSourceLine,
   caretColumn,
   caretLineLength,
@@ -174,7 +166,6 @@ export function RendererPreview({
       config={config}
       chordDiagramsInstrument={chordDiagramsInstrument}
       chordDiagramsOrientation={chordDiagramsOrientation}
-      chordDiagramsHorizontalStringOrder={chordDiagramsHorizontalStringOrder}
       activeSourceLine={activeSourceLine}
       caretColumn={caretColumn}
       caretLineLength={caretLineLength}

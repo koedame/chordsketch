@@ -151,8 +151,8 @@ for (const { line, column, message } of errors) {
 |----------|---------|-------------|
 | `chordDiagramSvg(chord, instrument)` | `string \| null` (SVG markup) | Render a chord diagram as inline SVG. `instrument` is case-insensitive: `"guitar"`, `"ukulele"` (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `null` when the chord is not in the built-in voicing database; throws on unknown instrument. |
 | `chordDiagramSvgWithDefines(chord, instrument, defines)` | `string \| null` | Like `chordDiagramSvg` but consults song-level `{define}` voicings first. `defines` is an array of `[name, raw]` tuples (e.g. `[["Gsus4", "base-fret 1 frets 3 3 0 0 1 3"]]`). |
-| `chordDiagramSvgWithOrientation(chord, instrument, orientation?, stringOrder?)` | `string \| null` | Orientation-aware variant. `orientation`: `"vertical"` (default) or `"horizontal"` (nut on the left, Japanese tablature convention). `stringOrder`: `"reader"` (default — high pitch on top, matches tablature stave order) or `"player"` (low pitch on top — what a right-handed player sees). Unrecognised strings fall back to the defaults. |
-| `chordDiagramSvgWithDefinesOrientation(chord, instrument, defines, orientation?, stringOrder?)` | `string \| null` | Combined surface — accepts both song-level `{define}` voicings and the orientation knob. |
+| `chordDiagramSvgWithOrientation(chord, instrument, orientation?)` | `string \| null` | Orientation-aware variant. `orientation`: `"vertical"` (default) or `"horizontal"` (nut on the left, Japanese tablature convention). Horizontal mode is reader-view only (high pitch on top, matches tablature stave order); see ADR-0026. Unrecognised strings fall back to vertical. |
+| `chordDiagramSvgWithDefinesOrientation(chord, instrument, defines, orientation?)` | `string \| null` | Combined surface — accepts both song-level `{define}` voicings and the orientation knob. |
 
 ### Utility
 

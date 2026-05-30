@@ -255,46 +255,24 @@ describe('<PreviewToolbar>', () => {
     expect(onOrient).toHaveBeenCalledWith('horizontal');
   });
 
-  test('horizontal-string-order select appears only when orientation is horizontal', () => {
-    const onOrient = vi.fn();
-    const onOrder = vi.fn();
-    const { rerender, container } = render(
-      <PreviewToolbar
-        source={SAMPLE}
-        onSourceChange={vi.fn()}
-        transpose={0}
-        onTransposeChange={vi.fn()}
-        chordDiagramsOrientation="vertical"
-        onChordDiagramsOrientationChange={onOrient}
-        chordDiagramsHorizontalStringOrder="reader"
-        onChordDiagramsHorizontalStringOrderChange={onOrder}
-      />,
-    );
-    // Vertical: only the orientation select is rendered.
-    expect(
-      container.querySelector('.chordsketch-preview-toolbar__diagrams-string-order'),
-    ).toBeNull();
-    // Horizontal: both selects render.
-    rerender(
+  test('no string-order select is rendered (horizontal is reader-view only)', () => {
+    // ADR-0026 pins horizontal mode to reader-view; the toolbar must
+    // not surface a string-order knob. Locks in the simplification
+    // landed alongside #2572 — a previous iteration shipped a
+    // player-view escape hatch the maintainer chose to remove.
+    const { container } = render(
       <PreviewToolbar
         source={SAMPLE}
         onSourceChange={vi.fn()}
         transpose={0}
         onTransposeChange={vi.fn()}
         chordDiagramsOrientation="horizontal"
-        onChordDiagramsOrientationChange={onOrient}
-        chordDiagramsHorizontalStringOrder="reader"
-        onChordDiagramsHorizontalStringOrderChange={onOrder}
+        onChordDiagramsOrientationChange={vi.fn()}
       />,
     );
-    const orderSelect = container.querySelector<HTMLSelectElement>(
-      '.chordsketch-preview-toolbar__diagrams-string-order',
-    );
-    expect(orderSelect).not.toBeNull();
-    expect(orderSelect!.value).toBe('reader');
-    orderSelect!.value = 'player';
-    orderSelect!.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(onOrder).toHaveBeenCalledWith('player');
+    expect(
+      container.querySelector('.chordsketch-preview-toolbar__diagrams-string-order'),
+    ).toBeNull();
   });
 
   test('showChordDiagrams=false force-hides the group even with a handler', () => {

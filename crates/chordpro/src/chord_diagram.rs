@@ -244,62 +244,27 @@ impl DiagramData {
 /// `Vertical` is the Western convention (nut on top, fretboard running
 /// downward) that ChordPro renderers have always emitted. `Horizontal` is the
 /// dominant convention in Japanese tablature publications (nut on the left,
-/// fretboard running rightward), where the diagram mirrors the visual
-/// orientation of the instrument as held by a right-handed player.
+/// fretboard running rightward).
 ///
-/// `Horizontal` carries its [`HorizontalStringOrder`] inline so the
-/// "string-order is only meaningful when horizontal" invariant is encoded
-/// in the type — there is no way to construct a `Vertical` value that
-/// silently carries a string-order intent.
+/// The horizontal layout is reader-view only — high pitch on top, matching
+/// the six-line tablature stave order so a reader fluent with tab parses
+/// the diagram with no mental flip. The historical player-view alternative
+/// (low pitch on top, mirroring what a right-handed player sees looking
+/// down at the instrument) is intentionally not offered as a knob; see
+/// ADR-0026 for the rationale.
 ///
-/// The enum is `#[non_exhaustive]` so a future `HorizontalLefty` variant (nut
-/// on the right, for left-handed players) can be added without an API break.
+/// The enum is `#[non_exhaustive]` so future layout variants (e.g.
+/// `HorizontalLefty` with the nut on the right) can be added without an
+/// API break.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub enum Orientation {
     /// Vertical layout — nut on top, frets running downward. Default.
     #[default]
     Vertical,
-    /// Horizontal layout — nut on the left, frets running rightward.
-    /// Carries the row order so callers cannot construct a horizontal
-    /// diagram without an explicit string-order choice.
-    Horizontal(HorizontalStringOrder),
-}
-
-impl Orientation {
-    /// Constructs a horizontal orientation with the project default string
-    /// order ([`HorizontalStringOrder::ReaderView`], per ADR-0026).
-    ///
-    /// Useful at call sites that want horizontal mode without restating the
-    /// row-order default.
-    #[must_use]
-    pub fn horizontal() -> Self {
-        Orientation::Horizontal(HorizontalStringOrder::default())
-    }
-}
-
-/// String-row order for horizontal-orientation diagrams.
-///
-/// Reader-view matches the six-line tablature stave order (top row = 1st
-/// string, high E for guitar), so anyone fluent with tab reads the diagram
-/// without a mental flip. Player-view matches what a right-handed player sees
-/// looking down at the instrument (top row = 6th string, low E for guitar);
-/// it appears in some Japanese chord books.
-///
-/// Only meaningful when wrapped by [`Orientation::Horizontal`]. The enum is
-/// `#[non_exhaustive]` so future row-order conventions can be added without
-/// an API break.
-///
-/// See [ADR-0026](../../../../docs/adr/0026-horizontal-chord-diagram-default-string-order.md)
-/// for the default rationale.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[non_exhaustive]
-pub enum HorizontalStringOrder {
-    /// Low pitch on top — what a right-handed player sees looking down.
-    PlayerView,
-    /// High pitch on top — matches tablature stave order. Default.
-    #[default]
-    ReaderView,
+    /// Horizontal layout — nut on the left, frets running rightward,
+    /// high pitch on top.
+    Horizontal,
 }
 
 // ---------------------------------------------------------------------------
@@ -367,15 +332,14 @@ pub fn render_svg(data: &DiagramData) -> String {
 /// orientation.
 ///
 /// In horizontal mode the row-order is carried by the
-/// [`Orientation::Horizontal`] variant; vertical mode has no row-order
-/// knob because the ChordPro convention (low pitch on the left, high
-/// pitch on the right) is fixed.
+/// [`Orientation::Horizontal`] variant; horizontal mode is reader-view
+/// only — see ADR-0026.
 ///
 /// # Examples
 ///
 /// ```
 /// use chordsketch_chordpro::chord_diagram::{
-///     DiagramData, HorizontalStringOrder, Orientation, render_svg_with_orientation,
+///     DiagramData, Orientation, render_svg_with_orientation,
 /// };
 ///
 /// let data = DiagramData {
@@ -387,10 +351,7 @@ pub fn render_svg(data: &DiagramData) -> String {
 ///     frets: vec![-1, 0, 2, 2, 1, 0],
 ///     fingers: vec![],
 /// };
-/// let svg = render_svg_with_orientation(
-///     &data,
-///     Orientation::Horizontal(HorizontalStringOrder::ReaderView),
-/// );
+/// let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
 /// assert!(svg.contains("chord-diagram-horizontal"));
 /// ```
 #[must_use]
@@ -403,8 +364,11 @@ pub fn render_svg_with_orientation(data: &DiagramData, orientation: Orientation)
         return String::new();
     }
     match orientation {
-        Orientation::Vertical => render_svg_vertical_inner(data),
-        Orientation::Horizontal(string_order) => render_svg_horizontal_inner(data, string_order),
+        Orientation::Horizontal => render_svg_horizontal_inner(data),
+        // Vertical and any future variant fall back to the legacy layout.
+        // The non_exhaustive marker (variants added later) is the only
+        // reason a wildcard is needed inside the defining crate.
+        _ => render_svg_vertical_inner(data),
     }
 }
 
@@ -561,17 +525,14 @@ fn render_svg_vertical_inner(data: &DiagramData) -> String {
 }
 
 /// Horizontal counterpart to [`render_svg_vertical_inner`]: nut on the left,
-/// fretboard running rightward. The geometric layout mirrors the vertical
-/// renderer so behaviour stays in lockstep — anything that changes in one
-/// (open/muted placement, 12-fret double-dot, base-fret label, finger
-/// numbers) must change in the other.
+/// fretboard running rightward, high pitch (1st string) on top. Reader-view
+/// only — see [`Orientation`] and ADR-0026 for why the player-view
+/// alternative is not exposed.
 ///
-/// `string_order` picks which string is on top:
-/// - [`HorizontalStringOrder::ReaderView`] (default): high pitch (1st string)
-///   on top — matches tablature stave order.
-/// - [`HorizontalStringOrder::PlayerView`]: low pitch (6th string) on top —
-///   what a right-handed player sees looking down at the instrument.
-fn render_svg_horizontal_inner(data: &DiagramData, string_order: HorizontalStringOrder) -> String {
+/// The geometric layout mirrors the vertical renderer so behaviour stays in
+/// lockstep — anything that changes in one (open/muted placement, 12-fret
+/// double-dot, base-fret label, finger numbers) must change in the other.
+fn render_svg_horizontal_inner(data: &DiagramData) -> String {
     let num_strings = data.strings;
     let num_frets = data.frets_shown;
     // Semantic aliases — the horizontal layout's fret axis is the SVG
@@ -660,10 +621,9 @@ fn render_svg_horizontal_inner(data: &DiagramData, string_order: HorizontalStrin
         }
     }
 
-    // Horizontal lines (strings). Row index is the same regardless of
-    // string_order — the lines themselves are symmetric; only the per-string
-    // marker placement below needs to know which physical string sits on
-    // which row.
+    // Horizontal lines (strings). The lines themselves are symmetric;
+    // the per-string marker placement below maps each physical string
+    // index to a visual row.
     for i in 0..num_strings {
         let y = TOP_MARGIN + i as f32 * string_pitch;
         svg.push_str(&format!(
@@ -685,18 +645,13 @@ fn render_svg_horizontal_inner(data: &DiagramData, string_order: HorizontalStrin
 
     // Finger positions, open, and muted markers. ChordPro convention orders
     // `data.frets` from low pitch (index 0) to high pitch — i.e. 6th string
-    // (low E) first for guitar. The string_order knob picks which physical
-    // string sits on which visual row:
-    //   ReaderView: high pitch on top ⇒ row = num_strings - 1 - i
-    //   PlayerView: low pitch on top  ⇒ row = i
+    // (low E) first for guitar. Reader-view places the high pitch on top so
+    // the i-th string maps to row `num_strings - 1 - i`.
     for (i, &fret) in data.frets.iter().enumerate() {
         if i >= num_strings {
             break;
         }
-        let row = match string_order {
-            HorizontalStringOrder::ReaderView => num_strings - 1 - i,
-            HorizontalStringOrder::PlayerView => i,
-        };
+        let row = num_strings - 1 - i;
         let y = TOP_MARGIN + row as f32 * string_pitch;
         if fret == -1 {
             // Muted (X) — to the left of the nut, one per string row.
@@ -1068,25 +1023,18 @@ pub fn resolve_diagrams_instrument(
     Some(instr.to_string())
 }
 
-/// Resolves the active [`Orientation`] from the `diagrams.orientation` and
-/// `diagrams.horizontal_string_order` config values.
+/// Resolves the active [`Orientation`] from the `diagrams.orientation`
+/// config value.
 ///
-/// Accepted `orientation` (case-insensitive): `"vertical"` →
-/// [`Orientation::Vertical`], `"horizontal"` → [`Orientation::Horizontal`].
-/// Accepted `string_order` (case-insensitive): `"reader"` →
-/// [`HorizontalStringOrder::ReaderView`] (default, per ADR-0026),
-/// `"player"` → [`HorizontalStringOrder::PlayerView`]. The composite shape
-/// makes the "string-order only applies to horizontal" invariant unsayable
-/// — a caller cannot ask for `Vertical` while also pinning a string order.
+/// Accepted (case-insensitive): `"vertical"` → [`Orientation::Vertical`],
+/// `"horizontal"` → [`Orientation::Horizontal`]. `None`, empty, or any
+/// unrecognised string falls back to [`Orientation::Vertical`].
+/// Inputs longer than [`MAX_RESOLVER_INPUT_LEN`] are rejected (returns
+/// the default) to bound the `to_ascii_lowercase` allocation on hostile
+/// binding input.
 ///
-/// `None` for either input falls back to the project default; unrecognised
-/// strings also fall back to the default. Inputs longer than
-/// `MAX_RESOLVER_INPUT_LEN` are rejected (returns the default) to bound
-/// the `to_ascii_lowercase` allocation on hostile binding input.
-///
-/// Use [`try_parse_orientation_value`] / [`try_parse_string_order_value`]
-/// when the caller wants to surface a warning for typo'd values instead
-/// of silently falling back.
+/// Use [`try_parse_orientation_value`] when the caller wants to surface
+/// a warning for typo'd values instead of silently falling back.
 ///
 /// Shared by every renderer + binding so parsing stays in one place — a
 /// future orientation value (e.g. `"horizontal-lefty"`) lands here and
@@ -1095,44 +1043,26 @@ pub fn resolve_diagrams_instrument(
 /// # Examples
 ///
 /// ```
-/// use chordsketch_chordpro::chord_diagram::{
-///     HorizontalStringOrder, Orientation, resolve_orientation,
-/// };
+/// use chordsketch_chordpro::chord_diagram::{Orientation, resolve_orientation};
 ///
-/// assert_eq!(resolve_orientation(None, None), Orientation::Vertical);
-/// assert_eq!(
-///     resolve_orientation(Some("vertical"), Some("player")),
-///     Orientation::Vertical,
-///     "string_order is ignored when orientation is vertical",
-/// );
-/// assert_eq!(
-///     resolve_orientation(Some("horizontal"), None),
-///     Orientation::Horizontal(HorizontalStringOrder::ReaderView),
-/// );
-/// assert_eq!(
-///     resolve_orientation(Some("HORIZONTAL"), Some("PLAYER")),
-///     Orientation::Horizontal(HorizontalStringOrder::PlayerView),
-/// );
-/// assert_eq!(
-///     resolve_orientation(Some("garbage"), Some("garbage")),
-///     Orientation::Vertical,
-/// );
+/// assert_eq!(resolve_orientation(None), Orientation::Vertical);
+/// assert_eq!(resolve_orientation(Some("vertical")), Orientation::Vertical);
+/// assert_eq!(resolve_orientation(Some("horizontal")), Orientation::Horizontal);
+/// assert_eq!(resolve_orientation(Some("HORIZONTAL")), Orientation::Horizontal);
+/// assert_eq!(resolve_orientation(Some("garbage")), Orientation::Vertical);
 /// ```
 #[must_use]
-pub fn resolve_orientation(orientation: Option<&str>, string_order: Option<&str>) -> Orientation {
+pub fn resolve_orientation(orientation: Option<&str>) -> Orientation {
     match try_parse_orientation_value(orientation) {
-        Some(OrientationKind::Horizontal) => {
-            let order = try_parse_string_order_value(string_order).unwrap_or_default();
-            Orientation::Horizontal(order)
-        }
+        Some(OrientationKind::Horizontal) => Orientation::Horizontal,
         // Vertical and any unrecognised / oversized / missing input — fall
         // back to the documented default.
-        Some(OrientationKind::Vertical) | None => Orientation::Vertical,
+        _ => Orientation::Vertical,
     }
 }
 
-/// Largest accepted byte length for an orientation / string-order string
-/// before the resolver gives up and uses the default.
+/// Largest accepted byte length for an orientation string before the
+/// resolver gives up and uses the default.
 ///
 /// `to_ascii_lowercase` on an `&str` allocates a new buffer of the same
 /// byte length, so a GB-scale hostile input from a binding consumer
@@ -1142,8 +1072,7 @@ pub fn resolve_orientation(orientation: Option<&str>, string_order: Option<&str>
 pub const MAX_RESOLVER_INPUT_LEN: usize = 64;
 
 /// Discriminant for [`try_parse_orientation_value`]. Mirrors the variants
-/// of [`Orientation`] but without the nested [`HorizontalStringOrder`],
-/// so the caller can compose its own resolution.
+/// of [`Orientation`] verbatim today.
 ///
 /// Public so renderer call sites can build a warning when the raw config
 /// string was non-empty but unparseable.
@@ -1152,8 +1081,7 @@ pub const MAX_RESOLVER_INPUT_LEN: usize = 64;
 pub enum OrientationKind {
     /// Matches `Orientation::Vertical`.
     Vertical,
-    /// Matches `Orientation::Horizontal(_)` — string order is the
-    /// caller's responsibility.
+    /// Matches `Orientation::Horizontal`.
     Horizontal,
 }
 
@@ -1171,72 +1099,6 @@ pub fn try_parse_orientation_value(value: Option<&str>) -> Option<OrientationKin
         "horizontal" => Some(OrientationKind::Horizontal),
         _ => None,
     }
-}
-
-/// Strict parser for the `diagrams.horizontal_string_order` value. Returns
-/// `None` for missing / empty / unrecognised / oversized input so callers
-/// can emit a warning before falling back via [`resolve_orientation`].
-#[must_use]
-pub fn try_parse_string_order_value(value: Option<&str>) -> Option<HorizontalStringOrder> {
-    let raw = value?.trim();
-    if raw.is_empty() || raw.len() > MAX_RESOLVER_INPUT_LEN {
-        return None;
-    }
-    match raw.to_ascii_lowercase().as_str() {
-        "reader" => Some(HorizontalStringOrder::ReaderView),
-        "player" => Some(HorizontalStringOrder::PlayerView),
-        _ => None,
-    }
-}
-
-/// Resolves the active [`HorizontalStringOrder`] from a
-/// `diagrams.horizontal_string_order` config value, ignoring the
-/// orientation context. Most callers want [`resolve_orientation`]
-/// instead — this helper exists for the binding layer that constructs
-/// the two halves separately before composing.
-///
-/// Accepted values (case-insensitive): `"reader"` →
-/// [`HorizontalStringOrder::ReaderView`] (high pitch on top, default),
-/// `"player"` → [`HorizontalStringOrder::PlayerView`] (low pitch on top).
-/// `None`, empty, or any unrecognised string falls back to the project
-/// default (`ReaderView`) — see ADR-0026 for the rationale.
-///
-/// # Examples
-///
-/// ```
-/// use chordsketch_chordpro::chord_diagram::{
-///     HorizontalStringOrder, resolve_horizontal_string_order,
-/// };
-///
-/// assert_eq!(
-///     resolve_horizontal_string_order(None),
-///     HorizontalStringOrder::ReaderView,
-/// );
-/// assert_eq!(
-///     resolve_horizontal_string_order(Some("reader")),
-///     HorizontalStringOrder::ReaderView,
-/// );
-/// assert_eq!(
-///     resolve_horizontal_string_order(Some("player")),
-///     HorizontalStringOrder::PlayerView,
-/// );
-/// assert_eq!(
-///     resolve_horizontal_string_order(Some("PLAYER")),
-///     HorizontalStringOrder::PlayerView,
-/// );
-/// assert_eq!(
-///     resolve_horizontal_string_order(Some("")),
-///     HorizontalStringOrder::ReaderView,
-///     "empty string falls back like None",
-/// );
-/// assert_eq!(
-///     resolve_horizontal_string_order(Some("garbage")),
-///     HorizontalStringOrder::ReaderView,
-/// );
-/// ```
-#[must_use]
-pub fn resolve_horizontal_string_order(value: Option<&str>) -> HorizontalStringOrder {
-    try_parse_string_order_value(value).unwrap_or_default()
 }
 
 /// Returns the canonical (sharp-spelling) form of a chord name.
@@ -2252,10 +2114,7 @@ mod tests {
             frets: vec![-1, 0, 2, 2, 1, 0],
             fingers: vec![],
         };
-        render_svg_with_orientation(
-            &data,
-            Orientation::Horizontal(HorizontalStringOrder::ReaderView),
-        )
+        render_svg_with_orientation(&data, Orientation::Horizontal)
     }
 
     #[test]
@@ -2315,10 +2174,7 @@ mod tests {
             frets: vec![-1, 1, 3, 3, 2, 1],
             fingers: vec![],
         };
-        let svg = render_svg_with_orientation(
-            &data,
-            Orientation::Horizontal(HorizontalStringOrder::ReaderView),
-        );
+        let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
         assert!(
             svg.contains(">7</text>"),
             "expected bare base-fret label 7; got: {svg}"
@@ -2359,67 +2215,6 @@ mod tests {
     }
 
     #[test]
-    fn horizontal_player_view_places_low_string_on_top() {
-        // PlayerView: index 0 (low E for guitar) sits on row 0 (top). For Am
-        // the muted 6th string (i=0, fret=-1) produces an X glyph on the top
-        // row at y = TOP_MARGIN + 3 = 33 (the +3 is the baseline-centring
-        // offset). The actual y attribute is the text baseline, so we look
-        // for an X at y="33".
-        let data = DiagramData {
-            name: "Am".to_string(),
-            display_name: None,
-            strings: 6,
-            frets_shown: 5,
-            base_fret: 1,
-            frets: vec![-1, 0, 2, 2, 1, 0],
-            fingers: vec![],
-        };
-        let svg = render_svg_with_orientation(
-            &data,
-            Orientation::Horizontal(HorizontalStringOrder::PlayerView),
-        );
-        assert!(
-            svg.contains("<text x=\"10\" y=\"33\""),
-            "expected muted-X for low E on top row (y=33); got: {svg}"
-        );
-    }
-
-    #[test]
-    fn horizontal_string_order_inverts_row_layout() {
-        // Same chord, two orderings: every visible marker the reader-view
-        // emits at row R must appear at row (num_strings - 1 - R) in
-        // player-view.
-        let data = DiagramData {
-            name: "C".to_string(),
-            display_name: None,
-            strings: 6,
-            frets_shown: 5,
-            base_fret: 1,
-            frets: vec![-1, 3, 2, 0, 1, 0],
-            fingers: vec![],
-        };
-        let reader = render_svg_with_orientation(
-            &data,
-            Orientation::Horizontal(HorizontalStringOrder::ReaderView),
-        );
-        let player = render_svg_with_orientation(
-            &data,
-            Orientation::Horizontal(HorizontalStringOrder::PlayerView),
-        );
-        assert_ne!(
-            reader, player,
-            "string_order knob must change the rendered SVG"
-        );
-        // The two SVGs must have the same length — same number of strings,
-        // same markers, just on different rows.
-        assert_eq!(
-            reader.len(),
-            player.len(),
-            "reader/player SVG must have identical length (only y-coords flip)"
-        );
-    }
-
-    #[test]
     fn horizontal_position_marker_at_centre_row_when_visible() {
         // A C chord at the nut (base_fret = 1, 5 visible frets) shows the
         // fret-3 and fret-5 inlay dots — same as the vertical renderer. The
@@ -2433,10 +2228,7 @@ mod tests {
             frets: vec![-1, 3, 2, 0, 1, 0],
             fingers: vec![],
         };
-        let svg = render_svg_with_orientation(
-            &data,
-            Orientation::Horizontal(HorizontalStringOrder::ReaderView),
-        );
+        let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
         let count = svg.matches("class=\"position-marker\"").count();
         // Inlay frets in [1..=5] for guitar = 3 and 5 → 2 markers (same as
         // the vertical-mode count; just placed along the horizontal axis).
@@ -2457,10 +2249,7 @@ mod tests {
             frets: vec![-1; 6],
             fingers: vec![],
         };
-        let svg = render_svg_with_orientation(
-            &data,
-            Orientation::Horizontal(HorizontalStringOrder::ReaderView),
-        );
+        let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
         let count = svg.matches("class=\"position-marker\"").count();
         // Visible inlay frets: 9 (single) + 12 (double) = 3 dots.
         assert_eq!(
@@ -2511,13 +2300,7 @@ mod tests {
             frets: vec![0],
             fingers: vec![],
         };
-        assert!(
-            render_svg_with_orientation(
-                &data,
-                Orientation::Horizontal(HorizontalStringOrder::default())
-            )
-            .is_empty()
-        );
+        assert!(render_svg_with_orientation(&data, Orientation::Horizontal).is_empty());
     }
 
     #[test]
@@ -2526,16 +2309,6 @@ mod tests {
         // sites that pass `Orientation::default()` keep their existing
         // behaviour.
         assert_eq!(Orientation::default(), Orientation::Vertical);
-    }
-
-    #[test]
-    fn horizontal_string_order_default_is_reader_view() {
-        // Reader-view (high pitch on top, tablature stave order) is the
-        // project's chosen default — see ADR-0026.
-        assert_eq!(
-            HorizontalStringOrder::default(),
-            HorizontalStringOrder::ReaderView
-        );
     }
 
     #[test]
@@ -2552,10 +2325,7 @@ mod tests {
             frets: vec![-1, 0, 2, 2, 1, 0],
             fingers: vec![],
         };
-        let svg = render_svg_with_orientation(
-            &data,
-            Orientation::Horizontal(HorizontalStringOrder::ReaderView),
-        );
+        let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
         assert!(svg.contains("A minor"));
         assert!(!svg.contains(">Am<"));
     }
@@ -2575,10 +2345,7 @@ mod tests {
             frets: vec![-1, -1, -1, -1],
             fingers: vec![],
         };
-        let svg = render_svg_with_orientation(
-            &data,
-            Orientation::Horizontal(HorizontalStringOrder::ReaderView),
-        );
+        let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
         let count = svg.matches("class=\"position-marker\"").count();
         // Visible inlay frets: 10 (single) + 12 (double) = 3 dots.
         assert_eq!(
@@ -2697,27 +2464,12 @@ mod tests {
             "vertical SVG must be taller than wide (got width={v_w}, height={v_h})",
         );
 
-        let horizontal = render_svg_with_orientation(
-            &data,
-            Orientation::Horizontal(HorizontalStringOrder::ReaderView),
-        );
+        let horizontal = render_svg_with_orientation(&data, Orientation::Horizontal);
         let h_w = extract(&horizontal, "width");
         let h_h = extract(&horizontal, "height");
         assert!(
             h_w > h_h,
             "horizontal SVG must be wider than tall (got width={h_w}, height={h_h})",
-        );
-    }
-
-    #[test]
-    fn orientation_horizontal_constructor_uses_reader_view_default() {
-        // The `Orientation::horizontal()` helper is the recommended way
-        // to spell "horizontal with the project default row order" —
-        // keep it pinned to ReaderView per ADR-0026 so a future change
-        // requires deliberate consensus.
-        assert_eq!(
-            Orientation::horizontal(),
-            Orientation::Horizontal(HorizontalStringOrder::ReaderView),
         );
     }
 
@@ -2732,17 +2484,15 @@ mod tests {
         // cost; the resolver falls back to vertical without allocating
         // the full buffer.
         let big = "a".repeat(MAX_RESOLVER_INPUT_LEN + 1);
-        assert_eq!(resolve_orientation(Some(&big), None), Orientation::Vertical,);
+        assert_eq!(resolve_orientation(Some(&big)), Orientation::Vertical);
         assert_eq!(try_parse_orientation_value(Some(&big)), None);
-        let big_so = "a".repeat(MAX_RESOLVER_INPUT_LEN + 1);
-        assert_eq!(try_parse_string_order_value(Some(&big_so)), None);
     }
 
     #[test]
     fn resolve_orientation_accepts_input_at_length_cap() {
         // Boundary check: exactly MAX_RESOLVER_INPUT_LEN bytes is allowed.
         let at_cap = "a".repeat(MAX_RESOLVER_INPUT_LEN);
-        assert_eq!(try_parse_orientation_value(Some(&at_cap)), None,);
+        assert_eq!(try_parse_orientation_value(Some(&at_cap)), None);
         // "horizontal" (10 bytes) is well under the cap and still parses.
         assert_eq!(
             try_parse_orientation_value(Some("horizontal")),
@@ -2752,23 +2502,7 @@ mod tests {
 
     #[test]
     fn resolve_orientation_empty_string_is_default() {
-        assert_eq!(
-            resolve_orientation(Some(""), Some("")),
-            Orientation::Vertical,
-        );
+        assert_eq!(resolve_orientation(Some("")), Orientation::Vertical);
         assert_eq!(try_parse_orientation_value(Some("")), None);
-        assert_eq!(try_parse_string_order_value(Some("")), None);
-    }
-
-    #[test]
-    fn resolve_orientation_vertical_with_player_string_order_stays_vertical() {
-        // The composite resolver makes the "string_order is meaningless
-        // when vertical" invariant compile-time — but the contract has
-        // to be re-asserted at runtime since the bindings produce the
-        // two halves separately.
-        assert_eq!(
-            resolve_orientation(Some("vertical"), Some("player")),
-            Orientation::Vertical,
-        );
     }
 }

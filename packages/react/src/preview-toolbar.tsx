@@ -10,7 +10,6 @@ import {
 import type { WasmLoader } from './use-pdf-export';
 import { CAPO_MAX, CAPO_MIN } from './chord-source-edit';
 import type {
-  ChordDiagramHorizontalStringOrder,
   ChordDiagramOrientation,
 } from './use-chord-diagram';
 
@@ -63,17 +62,6 @@ export interface PreviewToolbarProps
   chordDiagramsOrientation?: ChordDiagramOrientation;
   /** Fires when the user picks a new orientation in the Diagrams group. */
   onChordDiagramsOrientationChange?: (next: ChordDiagramOrientation) => void;
-  /**
-   * Current row order for horizontal-orientation diagrams. Only the
-   * Reader/Player select fires onChange; this is the controlled
-   * value the select renders. Ignored when the host omits
-   * `onChordDiagramsHorizontalStringOrderChange`.
-   */
-  chordDiagramsHorizontalStringOrder?: ChordDiagramHorizontalStringOrder;
-  /** Fires when the user picks a new horizontal-mode row order. */
-  onChordDiagramsHorizontalStringOrderChange?: (
-    next: ChordDiagramHorizontalStringOrder,
-  ) => void;
   /**
    * Force-show / force-hide the Diagrams group. Defaults to true
    * when `onChordDiagramsOrientationChange` is provided, false
@@ -157,8 +145,6 @@ export function PreviewToolbar({
   wasmLoader,
   chordDiagramsOrientation,
   onChordDiagramsOrientationChange,
-  chordDiagramsHorizontalStringOrder,
-  onChordDiagramsHorizontalStringOrderChange,
   showChordDiagrams,
   trailing,
   className,
@@ -170,8 +156,6 @@ export function PreviewToolbar({
     onChordDiagramsOrientationChange !== undefined;
   const effectiveOrientation: ChordDiagramOrientation =
     chordDiagramsOrientation ?? 'vertical';
-  const effectiveStringOrder: ChordDiagramHorizontalStringOrder =
-    chordDiagramsHorizontalStringOrder ?? 'reader';
   const wrapperClass = [
     'chordsketch-preview-toolbar',
     'pane-toolbar',
@@ -242,22 +226,6 @@ export function PreviewToolbar({
             <option value="vertical">Vertical (nut top)</option>
             <option value="horizontal">Horizontal (nut left)</option>
           </select>
-          {effectiveOrientation === 'horizontal'
-          && onChordDiagramsHorizontalStringOrderChange !== undefined ? (
-            <select
-              className="chordsketch-preview-toolbar__diagrams-string-order"
-              value={effectiveStringOrder}
-              aria-label="Horizontal string order"
-              onChange={(e) =>
-                onChordDiagramsHorizontalStringOrderChange(
-                  e.target.value as ChordDiagramHorizontalStringOrder,
-                )
-              }
-            >
-              <option value="reader">Reader-view (high pitch top)</option>
-              <option value="player">Player-view (low pitch top)</option>
-            </select>
-          ) : null}
         </div>
       ) : null}
       {showExport ? (

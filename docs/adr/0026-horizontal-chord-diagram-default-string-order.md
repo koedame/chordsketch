@@ -1,7 +1,7 @@
-# 0026. Horizontal chord diagram default string order
+# 0026. Horizontal chord diagram is reader-view only
 
 - **Status**: Accepted
-- **Date**: 2026-05-28
+- **Date**: 2026-05-30
 
 ## Context
 
@@ -25,15 +25,24 @@ publishers do not agree on a single convention:
   the top line. Tablature is the dominant notation surface in mainstream
   Japanese guitar method books and TAB-driven chord references.
 
-Both layouts appear in widely-circulated publications. A single
-default has to be chosen for `<ChordDiagram orientation="horizontal" />`
-to be useful out of the box, and that choice is the project-wide
-convention publishers will see unless they explicitly opt out.
+Both layouts appear in widely-circulated publications. An initial
+iteration of #2572 shipped reader-view as a default and exposed
+player-view via a `diagrams.horizontal_string_order = "player"` config
+key plus a `horizontalStringOrder` prop on `<ChordDiagram>` and a
+toolbar dropdown in the React `<PreviewToolbar>`. The maintainer then
+chose to remove player-view entirely rather than ship the escape
+hatch — the per-knob complexity (two enum variants, every binding
+surface threading the second argument, a toolbar select that only
+appears in horizontal mode, an extra prop on three React components,
+docs and tests covering both variants) outweighed the value of
+supporting both conventions.
 
 ## Decision
 
-The default `HorizontalStringOrder` for horizontal-orientation diagrams
-is **`ReaderView`** — high pitch on top.
+`Orientation::Horizontal` is a **unit variant** rendered exclusively in
+reader-view (high pitch on top). There is no `HorizontalStringOrder`
+enum, no `diagrams.horizontal_string_order` config key, no
+`horizontalStringOrder` prop, and no string-order toolbar select.
 
 This applies symmetrically across every surface that renders
 fretted-instrument chord diagrams:
@@ -41,19 +50,17 @@ fretted-instrument chord diagrams:
 - The Rust SVG renderer (`crates/chordpro/src/chord_diagram.rs::render_svg_with_orientation`).
 - The Rust PDF renderer (`crates/render-pdf/src/lib.rs::render_chord_diagram_pdf_horizontal`).
 - The wasm / NAPI / FFI binding exports (`chord_diagram_svg_with_orientation`,
-  `chord_diagram_svg_with_defines_orientation`).
-- The React `<ChordDiagram>` component and the `chordpro-jsx` JSX walker.
+  `chord_diagram_svg_with_defines_orientation`) — each takes a single
+  `orientation` string, no companion string-order argument.
+- The React `<ChordDiagram>` component, the `chordpro-jsx` JSX walker,
+  `<ChordSheet>`, `<RendererPreview>`, and `<PreviewToolbar>` —
+  `orientation` is the only diagram-row prop.
 
-Publishers wanting player-view set the config key
-`diagrams.horizontal_string_order = "player"` (or pass
-`horizontalStringOrder="player"` on the React component / walker
-option). The configuration surface stays symmetric — neither layout is
-hidden, only the unconfigured default is pinned.
-
-The `HorizontalStringOrder` enum is `#[non_exhaustive]` from day one so
-future row-order conventions (e.g. a lefty horizontal layout, or
-notation-specific orderings introduced by future publications) can be
-added without an API break.
+The `Orientation` enum stays `#[non_exhaustive]` so future row-order
+conventions (e.g. a lefty horizontal layout) can be added without an
+API break. A future variant would be a new top-level enum case
+(`Orientation::HorizontalLefty`, etc.), not a parameter on the existing
+`Horizontal` variant.
 
 ## Rationale
 
@@ -64,18 +71,22 @@ ChordSketch's primary readership reaches chord diagrams in tab-driven
 contexts (TAB scores, chord books with tab snippets, the
 `{start_of_tab}` directive elsewhere in the same file). The standard
 six-line tab stave places the 1st string at the top line and the 6th
-string at the bottom — a fixed convention published every TAB-bearing
-guitar method book in mainstream circulation reinforces. Aligning the
+string at the bottom — a fixed convention every TAB-bearing guitar
+method book in mainstream circulation reinforces. Aligning the
 horizontal chord diagram with that ordering means a reader does not
 flip their string-to-row mapping between the inline diagram and the
 TAB they consult three lines down on the same page.
 
-The player-view ordering is internally consistent too — it matches what
-a player physically sees — but the "what the player sees" frame fights
-the tab convention whenever the same page also carries TAB notation,
-which is the dominant context this renderer ships into. The trade-off
-the issue's design proposal raised acknowledges this tension; the
-decision lands on consistency-with-tab as the higher-value invariant.
+Given that asymmetry, exposing player-view as an opt-in second
+variant carries asymmetric costs: it forces every binding ABI
+(wasm / NAPI / FFI) to thread a second argument through, every React
+component in the chain to accept and forward a second prop, every
+test to cover both shapes, and every host (the playground, hosts
+embedding `<PreviewToolbar>`) to wire a second toggle. The dominant
+context the renderer ships into rewards a single canonical layout,
+and a publisher genuinely needing player-view can localise at the
+consumer layer (e.g. flip the SVG via CSS `transform: scaleY(-1)`)
+without the project shipping a second code path.
 
 The chord-book corpus that informed this decision is not single-author
 or single-publisher. Reader-view appears (high string on top) in
@@ -88,12 +99,13 @@ subset of band-score editions, particularly older catalogue entries
 predating the tab-stave normalisation that became standard from the
 late-1990s onward.
 
-A formal corpus survey was out of scope for this decision; the criterion
-the decision turned on was the tab-stave alignment, not a head-count of
-published editions. Future evidence that flips the publisher-share view
-would be a watch signal to revisit (see "References" below) but does
-not by itself reverse the decision — the tab-alignment rationale would
-have to weaken too.
+A formal corpus survey was out of scope for this decision; the
+criterion the decision turned on was the tab-stave alignment plus
+the per-knob complexity cost, not a head-count of published editions.
+Future evidence that flips the publisher-share view would be a watch
+signal to revisit (see "References" below) but does not by itself
+reverse the decision — the tab-alignment rationale would have to
+weaken too.
 
 ## Consequences
 
@@ -102,51 +114,61 @@ Positive:
 - A reader who knows the tab stave can read horizontal diagrams without
   a mental flip. The string-to-row mapping is fixed across the diagram
   and any TAB notation the same page carries.
-- The default fits the publishing context the horizontal mode was
-  introduced for, so `diagrams.horizontal_string_order` is a setting
-  most consumers never need to touch.
-- The `#[non_exhaustive]` marker on `HorizontalStringOrder` preserves
-  the option to add a `HorizontalLefty` (or other) variant later
-  without bumping the public API surface — left-handed-player support
-  has no API blocker as a result.
+- The API stays narrow: `Orientation` has two unit variants
+  (`Vertical`, `Horizontal`), every binding surface takes a single
+  `orientation` argument, and every React surface takes a single
+  `orientation` prop. No string-order argument threads through the
+  pipeline.
+- The toolbar surface is one select, not two. The playground and any
+  embedding host pays one knob's worth of UI weight.
+- The `#[non_exhaustive]` marker on `Orientation` preserves the option
+  to add new variants later — left-handed-player support has no API
+  blocker as a result; it would land as a separate top-level variant.
 
 Negative / mitigations:
 
-- Publishers targeting the player-view convention have to set
-  `diagrams.horizontal_string_order = "player"` explicitly. Mitigation:
-  the config key is documented under `diagrams.*` alongside `frets`
-  and `orientation`; a one-line setting is a low cost.
-- A reader habituated to the player-view layout in a specific catalogue
-  may initially read a reader-view diagram as flipped. Mitigation: the
-  per-string open / muted markers (`X` for muted, `O` for open) at the
-  left of the nut make the diagram self-orienting even before the
-  reader internalises the stave convention.
+- Publishers targeting the player-view convention cannot configure
+  their way into it from the chordsketch API. Mitigation: consumer-side
+  CSS / SVG post-processing (`transform: scaleY(-1)` on the diagram
+  group) achieves the same visual result without the project shipping a
+  second code path. The escape hatch lives at the rendering boundary
+  the consumer already owns.
+- An earlier iteration of #2572 shipped the player-view config key and
+  prop in pre-merge commits. Removing them is a backward-incompatible
+  change for anyone who pinned a pre-merge revision. Mitigation: #2572
+  has not shipped in any tagged release, so the affected population is
+  the empty set.
 - Choosing a default puts the project in the position of disagreeing
   with some published editions. Mitigation: ADR-0026 records the
-  decision in writing so a future contributor proposing the opposite
-  default sees the rationale on the table rather than relitigating it
+  decision in writing so a future contributor proposing player-view
+  support sees the rationale on the table rather than relitigating it
   from scratch.
 
 ## Alternatives considered
 
-1. **Player-view default (low pitch on top)**. Rejected because it
+1. **Ship both layouts via a `HorizontalStringOrder` knob, reader-view
+   default**. Initial implementation shape. Rejected because the
+   per-binding API surface area, the toolbar dropdown, and the
+   per-component prop chain cost more in long-term maintenance than the
+   value of supporting both conventions warrants.
+
+2. **Player-view default (no escape hatch)**. Rejected because it
    conflicts with the six-line tab stave a reader most often consults
    alongside the chord diagram on the same page. The
    "what the player sees" frame is internally consistent but
    tab-misaligned in the dominant context, and tab-alignment is the
    stronger invariant for this renderer's readership.
 
-2. **Required configuration — no default**. Rejected because it breaks
+3. **Required configuration — no default**. Rejected because it breaks
    the out-of-the-box ergonomic of
    `<ChordDiagram orientation="horizontal" />`, adds noise to every
    horizontal-mode rendering call across every binding surface, and
-   forces every consumer (including the most common case — a publisher
-   picking the project default) to ship a configuration line. The
-   ergonomic cost is high; the benefit (forced explicit choice) is
-   purchasable with a one-line clarification in the docstring, which
-   ADR-0026 also writes down.
+   forces every consumer to ship a configuration line. The ergonomic
+   cost is high; the benefit (forced explicit choice) is purchasable
+   with a one-line clarification in the docstring, which ADR-0026 also
+   writes down.
 
-3. **Match the issue body's proposal verbatim (player-view)**. Rejected
+4. **Match the issue body's proposal verbatim (player-view)**. Rejected
    per the rationale above — the issue body was useful as a design
    brief but the tab-alignment argument did not surface there, and the
    decision changed once it did.
@@ -156,14 +178,16 @@ Negative / mitigations:
 - Issue [#2572](https://github.com/koedame/chordsketch/issues/2572) —
   the feature request that introduced horizontal orientation.
 - [`crates/chordpro/src/chord_diagram.rs`](../../crates/chordpro/src/chord_diagram.rs) —
-  the `HorizontalStringOrder` enum and the `render_svg_with_orientation`
+  the `Orientation` enum and the `render_svg_with_orientation`
   function this ADR governs.
 - This decision applies symmetrically across every binding (wasm /
   NAPI / FFI) and renderer (HTML / PDF / React JSX walker) — the
-  string-order default lives in one resolver (`resolve_horizontal_string_order`
-  in the crate above) so it cannot drift between surfaces.
+  orientation resolution lives in one helper (`resolve_orientation` in
+  the crate above) so it cannot drift between surfaces.
 - **Watch signal** — a published survey of post-2020 Japanese chord
   book editions establishing a clear player-view majority would be
   cause to revisit. The tab-alignment rationale would also have to be
   re-examined (e.g. if the dominant notation surface stops being the
-  six-line tab stave for some catalogue subset).
+  six-line tab stave for some catalogue subset). A subsequent ADR
+  would re-add a `HorizontalLefty` (or similar) variant rather than
+  reintroduce the per-knob string-order argument.

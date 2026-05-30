@@ -355,15 +355,15 @@ describe('<ChordSheet>', () => {
   // ---------------------------------------------------------------------
   // chordDiagrams orientation pass-through (#2572). The walker option
   // path was the only way to opt into horizontal mode pre-fix; the new
-  // `chordDiagramsOrientation` / `chordDiagramsHorizontalStringOrder`
-  // props expose the same knob to host hierarchies that compose via
-  // <ChordSheet> / <RendererPreview> instead of calling the walker
-  // directly. The AST stub above carries no chord block, so the
-  // emitted diagrams grid is empty; the props' contract is asserted by
-  // inspecting the walker option construction directly.
+  // `chordDiagramsOrientation` prop exposes the same knob to host
+  // hierarchies that compose via <ChordSheet> / <RendererPreview>
+  // instead of calling the walker directly. The AST stub above carries
+  // no chord block, so the emitted diagrams grid is empty; the prop's
+  // contract is asserted by inspecting the walker option construction
+  // directly.
   // ---------------------------------------------------------------------
 
-  test('forwards chordDiagramsOrientation + horizontalStringOrder to the walker option', async () => {
+  test('forwards chordDiagramsOrientation to the walker option', async () => {
     // Build a richer AST so the walker actually emits a diagrams grid
     // and we can read the <ChordDiagram> orientation props back from
     // the DOM. The stub returns this AST instead of `astFor(src)`.
@@ -418,7 +418,6 @@ describe('<ChordSheet>', () => {
         astWasmLoader={makeAstLoader(stub)}
         chordDiagramsInstrument="guitar"
         chordDiagramsOrientation="horizontal"
-        chordDiagramsHorizontalStringOrder="player"
       />,
     );
 
@@ -451,7 +450,6 @@ describe('<ChordSheet>', () => {
         source="[Am]hi"
         astWasmLoader={makeAstLoader(stub)}
         chordDiagramsOrientation="horizontal"
-        chordDiagramsHorizontalStringOrder="player"
       />,
     );
     await waitFor(() => {

@@ -55,7 +55,6 @@ import type {
   ChordproTextSpan,
 } from './chordpro-ast';
 import type {
-  ChordDiagramHorizontalStringOrder,
   ChordDiagramInstrument,
   ChordDiagramOrientation,
 } from './use-chord-diagram';
@@ -2414,12 +2413,6 @@ export interface RenderChordproAstOptions {
      * which the walker does not currently dispatch on.
      */
     orientation?: ChordDiagramOrientation;
-    /**
-     * String-row order for horizontal-orientation diagrams.
-     * Defaults to `"reader"` (high pitch on top — see ADR-0026).
-     * Ignored when `orientation` is `"vertical"`.
-     */
-    horizontalStringOrder?: ChordDiagramHorizontalStringOrder;
   } | null;
   /**
    * 1-indexed source line that the consumer's editor caret is
@@ -4087,7 +4080,6 @@ export function renderChordproAst(
                   instrument={instrument}
                   defines={defines}
                   orientation={chordDiagramsOpts.orientation}
-                  horizontalStringOrder={chordDiagramsOpts.horizontalStringOrder}
                 />
               </figure>
             ))}

@@ -3634,13 +3634,14 @@ describe('renderChordproAst', () => {
 
   // ---------------------------------------------------------------------
   // Walker orientation pass-through (#2572). When the walker emits
-  // <ChordDiagram> via the chordDiagrams option, both `orientation` and
-  // `horizontalStringOrder` must reach the component as props.
+  // <ChordDiagram> via the chordDiagrams option, `orientation` must
+  // reach the component as a prop. Horizontal mode is reader-view only
+  // per ADR-0026, so there is no separate string-order knob.
   //
   // Stub the wasm loader so <ChordDiagram> resolves synchronously to a
-  // marker SVG whose attributes record the orientation arguments it was
+  // marker SVG whose attributes record the orientation argument it was
   // called with. The structural assertion against the DOM then verifies
-  // the walker wired the props through correctly.
+  // the walker wired the prop through correctly.
   // ---------------------------------------------------------------------
 
   test('forwards chordDiagrams.orientation through to <ChordDiagram>', () => {
@@ -3692,7 +3693,6 @@ describe('renderChordproAst', () => {
       chordDiagrams: {
         instrument: 'guitar',
         orientation: 'horizontal',
-        horizontalStringOrder: 'player',
       },
     });
 
@@ -3700,12 +3700,11 @@ describe('renderChordproAst', () => {
     expect(diagramProps.length).toBeGreaterThan(0);
     for (const props of diagramProps) {
       expect(props.orientation).toBe('horizontal');
-      expect(props.horizontalStringOrder).toBe('player');
       expect(props.instrument).toBe('guitar');
     }
   });
 
-  test('omits orientation/horizontalStringOrder props when not configured', () => {
+  test('omits orientation prop when not configured', () => {
     type AnyElement = {
       type: unknown;
       props: Record<string, unknown> & { children?: unknown };
@@ -3754,7 +3753,6 @@ describe('renderChordproAst', () => {
     expect(diagramProps.length).toBeGreaterThan(0);
     for (const props of diagramProps) {
       expect(props.orientation).toBeUndefined();
-      expect(props.horizontalStringOrder).toBeUndefined();
     }
   });
 });

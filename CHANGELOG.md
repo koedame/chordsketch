@@ -19,12 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `chord_diagram_svg_with_orientation` and
   `chord_diagram_svg_with_defines_orientation` exports for hosts that
   need orientation control without going through the renderer config.
-  The default string-row order for horizontal diagrams is
-  reader-view (high pitch on top, matching tablature stave order —
-  see [ADR-0026](docs/adr/0026-horizontal-chord-diagram-default-string-order.md));
-  set `diagrams.horizontal_string_order = "player"` (or pass
-  `horizontalStringOrder="player"`) for the
-  what-a-right-handed-player-sees layout. ASCII output
+  Horizontal mode is reader-view only (high pitch on top, matching
+  tablature stave order — see
+  [ADR-0026](docs/adr/0026-horizontal-chord-diagram-default-string-order.md));
+  the player-view layout is not exposed as a knob. ASCII output
   (`render_ascii`) and keyboard diagrams have no orientation knob —
   ASCII is a single line and the keyboard layout is already
   horizontal by nature. (#2572)

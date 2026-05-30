@@ -42,19 +42,11 @@ test('diagrams orientation toggle flips the rendered SVG class end-to-end', asyn
     )
     .toContain('chord-diagram-horizontal');
 
-  // The horizontal-only string-order select appears once orientation
-  // is horizontal — flipping it must not throw or revert the
-  // orientation.
-  const stringOrderSelect = page.locator(
-    '.chordsketch-preview-toolbar__diagrams-string-order',
-  );
-  await stringOrderSelect.waitFor();
-  await stringOrderSelect.selectOption('player');
-  await expect
-    .poll(async () =>
-      page.locator('svg.chord-diagram').first().getAttribute('class'),
-    )
-    .toContain('chord-diagram-horizontal');
+  // Horizontal mode is reader-view only per ADR-0026 — the toolbar
+  // must not surface a string-order select.
+  await expect(
+    page.locator('.chordsketch-preview-toolbar__diagrams-string-order'),
+  ).toHaveCount(0);
 
   // Switching back to vertical drops the horizontal class — the
   // round-trip contract pins that the toggle is bidirectional.

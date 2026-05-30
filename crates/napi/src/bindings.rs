@@ -504,13 +504,12 @@ pub fn chord_diagram_svg_with_defines(
         .map_err(|msg| Error::new(Status::InvalidArg, msg))
 }
 
-/// Variant of [`chord_diagram_svg`] that takes orientation +
-/// horizontal-string-order as optional strings (#2572).
+/// Variant of [`chord_diagram_svg`] that takes a diagram orientation as
+/// an optional string (#2572).
 ///
 /// `orientation` accepts `"vertical"` (default) or `"horizontal"`
-/// (case-insensitive). `stringOrder` accepts `"reader"` (default,
-/// high pitch on top — see ADR-0026) or `"player"`. `None` and
-/// unrecognised values fall back to defaults.
+/// (case-insensitive). Horizontal mode is reader-view only per
+/// ADR-0026. `None` and unrecognised values fall back to the default.
 ///
 /// # Errors
 ///
@@ -522,16 +521,9 @@ pub fn chord_diagram_svg_with_orientation(
     chord: String,
     instrument: String,
     orientation: Option<String>,
-    string_order: Option<String>,
 ) -> Result<Option<String>> {
-    chord_diagram_svg_inner_with_orientation(
-        &chord,
-        &instrument,
-        &[],
-        orientation.as_deref(),
-        string_order.as_deref(),
-    )
-    .map_err(|msg| Error::new(Status::InvalidArg, msg))
+    chord_diagram_svg_inner_with_orientation(&chord, &instrument, &[], orientation.as_deref())
+        .map_err(|msg| Error::new(Status::InvalidArg, msg))
 }
 
 /// Combination of [`chord_diagram_svg_with_defines`] and
@@ -547,18 +539,11 @@ pub fn chord_diagram_svg_with_defines_orientation(
     instrument: String,
     defines: Vec<Vec<String>>,
     orientation: Option<String>,
-    string_order: Option<String>,
 ) -> Result<Option<String>> {
     let pairs =
         validate_defines_pairs(defines).map_err(|msg| Error::new(Status::InvalidArg, msg))?;
-    chord_diagram_svg_inner_with_orientation(
-        &chord,
-        &instrument,
-        &pairs,
-        orientation.as_deref(),
-        string_order.as_deref(),
-    )
-    .map_err(|msg| Error::new(Status::InvalidArg, msg))
+    chord_diagram_svg_inner_with_orientation(&chord, &instrument, &pairs, orientation.as_deref())
+        .map_err(|msg| Error::new(Status::InvalidArg, msg))
 }
 
 /// Structured result for ChordPro ↔ iReal Pro conversions

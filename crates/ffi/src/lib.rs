@@ -451,17 +451,16 @@ pub fn chord_diagram_svg_with_defines(
     instrument: String,
     defines: Vec<ChordDefine>,
 ) -> Result<Option<String>, ChordSketchError> {
-    chord_diagram_svg_with_defines_orientation(chord, instrument, defines, None, None)
+    chord_diagram_svg_with_defines_orientation(chord, instrument, defines, None)
 }
 
-/// Variant of [`chord_diagram_svg`] that accepts diagram orientation +
-/// horizontal-string-order as optional strings (#2572).
+/// Variant of [`chord_diagram_svg`] that accepts a diagram orientation as
+/// an optional string (#2572).
 ///
 /// `orientation` accepts `"vertical"` (default) or `"horizontal"`
-/// (case-insensitive). `string_order` accepts `"reader"` (default,
-/// high pitch on top — see ADR-0026) or `"player"`. `None` and
-/// unrecognised strings fall back to defaults, matching
-/// [`chordsketch_chordpro::chord_diagram::resolve_orientation`].
+/// (case-insensitive). Horizontal mode is reader-view only per
+/// ADR-0026. `None` and unrecognised strings fall back to the default,
+/// matching [`chordsketch_chordpro::chord_diagram::resolve_orientation`].
 ///
 /// # Errors
 ///
@@ -471,15 +470,8 @@ pub fn chord_diagram_svg_with_orientation(
     chord: String,
     instrument: String,
     orientation: Option<String>,
-    string_order: Option<String>,
 ) -> Result<Option<String>, ChordSketchError> {
-    chord_diagram_svg_with_defines_orientation(
-        chord,
-        instrument,
-        Vec::new(),
-        orientation,
-        string_order,
-    )
+    chord_diagram_svg_with_defines_orientation(chord, instrument, Vec::new(), orientation)
 }
 
 /// Combination of [`chord_diagram_svg_with_defines`] and
@@ -496,7 +488,6 @@ pub fn chord_diagram_svg_with_defines_orientation(
     instrument: String,
     defines: Vec<ChordDefine>,
     orientation: Option<String>,
-    string_order: Option<String>,
 ) -> Result<Option<String>, ChordSketchError> {
     use chordsketch_chordpro::chord_diagram::{
         render_keyboard_svg, render_svg_with_orientation, resolve_orientation,
@@ -505,7 +496,7 @@ pub fn chord_diagram_svg_with_defines_orientation(
 
     let defines_pairs: Vec<(String, String)> =
         defines.into_iter().map(|d| (d.name, d.raw)).collect();
-    let resolved = resolve_orientation(orientation.as_deref(), string_order.as_deref());
+    let resolved = resolve_orientation(orientation.as_deref());
 
     match instrument.to_ascii_lowercase().as_str() {
         "piano" | "keyboard" | "keys" => {
@@ -515,8 +506,8 @@ pub fn chord_diagram_svg_with_defines_orientation(
             // is at least consistent across bindings while keyboard
             // voicings remain a TODO.
             //
-            // Keyboard diagrams have no orientation knob — both arguments
-            // are accepted but ignored here.
+            // Keyboard diagrams have no orientation knob — the argument
+            // is accepted but ignored here.
             Ok(lookup_keyboard_voicing(&chord, &[]).map(|v| render_keyboard_svg(&v)))
         }
         "guitar" | "ukulele" | "uke" => {
@@ -956,7 +947,6 @@ mod tests {
             "Am".to_string(),
             "guitar".to_string(),
             Some("horizontal".to_string()),
-            None,
         )
         .unwrap()
         .expect("Am voicing should exist for guitar");
@@ -974,7 +964,7 @@ mod tests {
             .unwrap()
             .unwrap();
         let oriented =
-            chord_diagram_svg_with_orientation("Am".to_string(), "guitar".to_string(), None, None)
+            chord_diagram_svg_with_orientation("Am".to_string(), "guitar".to_string(), None)
                 .unwrap()
                 .unwrap();
         assert_eq!(legacy, oriented);
@@ -988,7 +978,6 @@ mod tests {
             "Am".to_string(),
             "guitar".to_string(),
             Some("nonsense".to_string()),
-            None,
         )
         .unwrap()
         .unwrap();
@@ -1007,7 +996,6 @@ mod tests {
                 raw: "base-fret 2 frets 1 3 4 4 3 1".to_string(),
             }],
             Some("horizontal".to_string()),
-            Some("player".to_string()),
         )
         .unwrap()
         .expect("custom Bm define should be resolved");

@@ -6,7 +6,6 @@ import packageJson from '../package.json' with { type: 'json' };
 export { ChordDiagram, type ChordDiagramProps } from './chord-diagram';
 export {
   useChordDiagram,
-  type ChordDiagramHorizontalStringOrder,
   type ChordDiagramInstrument,
   type ChordDiagramOrientation,
   type ChordDiagramResult,

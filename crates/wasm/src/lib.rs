@@ -207,31 +207,30 @@ pub(crate) fn chord_diagram_svg_inner(
     instrument: &str,
     defines: &[(String, String)],
 ) -> std::result::Result<Option<String>, String> {
-    chord_diagram_svg_inner_with_orientation(chord, instrument, defines, None, None)
+    chord_diagram_svg_inner_with_orientation(chord, instrument, defines, None)
 }
 
-/// Variant of [`chord_diagram_svg_inner`] that accepts orientation +
-/// string-order options as strings — the wire-level shape exposed to
-/// wasm / NAPI / FFI consumers so every binding surface honours the
-/// same orientation knob.
+/// Variant of [`chord_diagram_svg_inner`] that accepts a diagram
+/// orientation as a string — the wire-level shape exposed to wasm /
+/// NAPI / FFI consumers so every binding surface honours the same
+/// orientation knob.
 ///
-/// `None` for either string falls back to the project default
-/// (vertical layout / reader-view string order). Unrecognised strings
-/// are silently treated as defaults — the same lenient behaviour as
+/// `None` falls back to the project default (vertical layout).
+/// Unrecognised strings are silently treated as the default —
+/// the same lenient behaviour as
 /// [`resolve_orientation`](chordsketch_chordpro::chord_diagram::resolve_orientation).
 pub(crate) fn chord_diagram_svg_inner_with_orientation(
     chord: &str,
     instrument: &str,
     defines: &[(String, String)],
     orientation: Option<&str>,
-    string_order: Option<&str>,
 ) -> std::result::Result<Option<String>, String> {
     use chordsketch_chordpro::chord_diagram::{
         render_keyboard_svg, render_svg_with_orientation, resolve_orientation,
     };
     use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
 
-    let resolved = resolve_orientation(orientation, string_order);
+    let resolved = resolve_orientation(orientation);
 
     match instrument.to_ascii_lowercase().as_str() {
         "piano" | "keyboard" | "keys" => {
@@ -250,8 +249,8 @@ pub(crate) fn chord_diagram_svg_inner_with_orientation(
             // this commit), and only the fretted branch
             // benefits from the new API.
             //
-            // Keyboard diagrams have no orientation knob — both arguments
-            // are accepted but ignored here.
+            // Keyboard diagrams have no orientation knob — the
+            // argument is accepted but ignored here.
             let _ = defines;
             Ok(lookup_keyboard_voicing(chord, &[]).map(|v| render_keyboard_svg(&v)))
         }
@@ -1662,10 +1661,9 @@ mod tests {
 
     #[test]
     fn chord_diagram_svg_inner_with_orientation_horizontal_marks_class() {
-        let svg =
-            chord_diagram_svg_inner_with_orientation("Am", "guitar", &[], Some("horizontal"), None)
-                .unwrap()
-                .expect("Am voicing should resolve for guitar");
+        let svg = chord_diagram_svg_inner_with_orientation("Am", "guitar", &[], Some("horizontal"))
+            .unwrap()
+            .expect("Am voicing should resolve for guitar");
         assert!(svg.contains("chord-diagram-horizontal"));
     }
 
@@ -1677,7 +1675,7 @@ mod tests {
         let legacy = chord_diagram_svg_inner("Am", "guitar", &[])
             .unwrap()
             .unwrap();
-        let oriented = chord_diagram_svg_inner_with_orientation("Am", "guitar", &[], None, None)
+        let oriented = chord_diagram_svg_inner_with_orientation("Am", "guitar", &[], None)
             .unwrap()
             .unwrap();
         assert_eq!(legacy, oriented);
@@ -1689,40 +1687,10 @@ mod tests {
         // unrecognised orientation strings degrade to vertical, matching
         // the lenient resolve_orientation contract.
         let oriented =
-            chord_diagram_svg_inner_with_orientation("Am", "guitar", &[], Some("nonsense"), None)
+            chord_diagram_svg_inner_with_orientation("Am", "guitar", &[], Some("nonsense"))
                 .unwrap()
                 .unwrap();
         assert!(!oriented.contains("chord-diagram-horizontal"));
-    }
-
-    #[test]
-    fn chord_diagram_svg_inner_with_orientation_player_view_inverts_row_layout() {
-        // Player-view (low pitch on top) and reader-view (default, high
-        // pitch on top) must produce different SVG for the same chord —
-        // catches a future regression where the wasm path silently
-        // ignores the string_order argument.
-        let reader = chord_diagram_svg_inner_with_orientation(
-            "Am",
-            "guitar",
-            &[],
-            Some("horizontal"),
-            Some("reader"),
-        )
-        .unwrap()
-        .unwrap();
-        let player = chord_diagram_svg_inner_with_orientation(
-            "Am",
-            "guitar",
-            &[],
-            Some("horizontal"),
-            Some("player"),
-        )
-        .unwrap()
-        .unwrap();
-        assert_ne!(
-            reader, player,
-            "string_order must influence the horizontal-mode SVG"
-        );
     }
 }
 

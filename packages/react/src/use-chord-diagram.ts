@@ -34,34 +34,21 @@ interface DiagramRenderer {
   ) => string | null | undefined;
   /**
    * Variant honouring the horizontal-orientation knob added in
-   * #2572. `orientation` and `stringOrder` accept the same string
-   * values the Rust `resolve_orientation` /
-   * `resolve_horizontal_string_order` helpers do; `null` /
-   * `undefined` falls back to defaults (vertical / reader-view).
+   * #2572. `orientation` accepts the same string values the Rust
+   * `resolve_orientation` helper does; `null` / `undefined` falls
+   * back to the default (vertical layout). Horizontal mode is
+   * reader-view only — see ADR-0026.
    */
   chordDiagramSvgWithDefinesOrientation?: (
     chord: string,
     instrument: string,
     defines: Array<[string, string]>,
     orientation: string | null | undefined,
-    stringOrder: string | null | undefined,
   ) => string | null | undefined;
 }
 
 /** Diagram orientation accepted by {@link useChordDiagram}. */
 export type ChordDiagramOrientation = 'vertical' | 'horizontal';
-
-/**
- * Row order for horizontal-orientation diagrams.
- *
- * - `'reader'` — high pitch on top, matches tablature stave order
- *   (the default per ADR-0026).
- * - `'player'` — low pitch on top, mirrors what a right-handed
- *   player sees looking down at the instrument.
- *
- * Has no effect when {@link ChordDiagramOrientation} is `'vertical'`.
- */
-export type ChordDiagramHorizontalStringOrder = 'reader' | 'player';
 
 /** Supported instrument families for chord diagram lookup. */
 export type ChordDiagramInstrument =
@@ -139,7 +126,6 @@ export function useChordDiagram(
   loader: ChordDiagramWasmLoader = defaultLoader,
   defines?: ReadonlyArray<readonly [string, string]>,
   orientation?: ChordDiagramOrientation,
-  stringOrder?: ChordDiagramHorizontalStringOrder,
 ): ChordDiagramResult {
   const [svg, setSvg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -193,20 +179,16 @@ export function useChordDiagram(
             instrument,
             definesArray,
             orientation ?? null,
-            stringOrder ?? null,
           );
         } else {
-          if (
-            !staleBundleWarnedRef.current &&
-            (orientation !== undefined || stringOrder !== undefined)
-          ) {
+          if (!staleBundleWarnedRef.current && orientation !== undefined) {
             staleBundleWarnedRef.current = true;
             // eslint-disable-next-line no-console
             console.warn(
               '[@chordsketch/react] useChordDiagram: the loaded @chordsketch/wasm bundle ' +
                 'does not expose chordDiagramSvgWithDefinesOrientation; rendering in the ' +
                 'legacy vertical layout. Update @chordsketch/wasm to honour the ' +
-                'orientation / horizontalStringOrder props.',
+                'orientation prop.',
             );
           }
           if (renderer.chordDiagramSvgWithDefines) {
@@ -241,7 +223,7 @@ export function useChordDiagram(
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chord, instrument, definesKey, orientation, stringOrder]);
+  }, [chord, instrument, definesKey, orientation]);
 
   return { svg, loading, error };
 }

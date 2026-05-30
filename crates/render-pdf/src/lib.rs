@@ -765,11 +765,11 @@ fn render_song_into_doc(
         |n| (n as usize).max(1),
     );
 
-    // Diagram orientation (#2572). Reader-view is the default string order
-    // per ADR-0026. Sister-site: `crates/render-html/src/lib.rs` reads the
-    // same two keys and emits the same warnings.
+    // Diagram orientation (#2572). Horizontal mode is reader-view only
+    // per ADR-0026; the player-view alternative is not exposed as a
+    // config knob. Sister-site: `crates/render-html/src/lib.rs` reads
+    // the same key and emits the same warning.
     let raw_orientation = config.get_path("diagrams.orientation").as_str();
-    let raw_string_order = config.get_path("diagrams.horizontal_string_order").as_str();
     if let Some(s) = raw_orientation {
         if !s.trim().is_empty()
             && chordsketch_chordpro::chord_diagram::try_parse_orientation_value(Some(s)).is_none()
@@ -783,21 +783,8 @@ fn render_song_into_doc(
             );
         }
     }
-    if let Some(s) = raw_string_order {
-        if !s.trim().is_empty()
-            && chordsketch_chordpro::chord_diagram::try_parse_string_order_value(Some(s)).is_none()
-        {
-            push_warning(
-                warnings,
-                format!(
-                    "diagrams.horizontal_string_order: unrecognised value {s:?}; \
-                     using default (reader)"
-                ),
-            );
-        }
-    }
     let diagram_orientation =
-        chordsketch_chordpro::chord_diagram::resolve_orientation(raw_orientation, raw_string_order);
+        chordsketch_chordpro::chord_diagram::resolve_orientation(raw_orientation);
 
     validate_capo(&song.metadata, warnings);
     validate_multiple_capo(song, warnings);
@@ -1817,9 +1804,7 @@ fn render_chord_diagram_pdf(
 
     match orientation {
         Orientation::Vertical => render_chord_diagram_pdf_vertical(data, doc),
-        Orientation::Horizontal(string_order) => {
-            render_chord_diagram_pdf_horizontal(data, doc, string_order);
-        }
+        Orientation::Horizontal => render_chord_diagram_pdf_horizontal(data, doc),
         // `Orientation` is `#[non_exhaustive]`: a future upstream variant
         // (e.g. `HorizontalLefty`) that this renderer has not yet learned
         // about reaches here. Fall back to the safe legacy layout so the
@@ -1927,18 +1912,12 @@ fn render_chord_diagram_pdf_vertical(
 /// Horizontal PDF chord-diagram layout (#2572). Nut on the left, frets
 /// running rightward. Mirrors the SVG horizontal renderer's geometry.
 ///
-/// String-order picks which physical string sits on which visual row:
-/// - [`HorizontalStringOrder::ReaderView`] (default): high pitch on top —
-///   matches tablature stave order.
-/// - [`HorizontalStringOrder::PlayerView`]: low pitch on top — what a
-///   right-handed player sees looking down at the instrument.
+/// Reader-view only: high pitch on top, matching tablature stave order.
+/// See ADR-0026 for the rationale behind not exposing a row-order knob.
 fn render_chord_diagram_pdf_horizontal(
     data: &chordsketch_chordpro::chord_diagram::DiagramData,
     doc: &mut PdfDocument,
-    string_order: chordsketch_chordpro::chord_diagram::HorizontalStringOrder,
 ) {
-    use chordsketch_chordpro::chord_diagram::HorizontalStringOrder;
-
     // Semantic axis pitches in horizontal mode (mirrors the SVG renderer):
     // the fret axis is the wider dimension and the string axis is the
     // tighter one. The vertical PDF renderer uses `cell_w=10` (string
@@ -1987,9 +1966,7 @@ fn render_chord_diagram_pdf_horizontal(
         );
     }
 
-    // Horizontal lines (strings). Row index is the same regardless of
-    // string_order — only the per-string marker placement below needs the
-    // physical-string-to-row mapping.
+    // Horizontal lines (strings).
     for i in 0..num_strings {
         let y = grid_top - i as f32 * string_pitch;
         doc.line_at(nut_x, y, nut_x + grid_w, y, 0.5);
@@ -2002,18 +1979,14 @@ fn render_chord_diagram_pdf_horizontal(
     }
 
     // Finger positions, open, and muted markers. ChordPro convention orders
-    // `data.frets` low-to-high. See chord_diagram.rs for the row-mapping
-    // table.
+    // `data.frets` low-to-high (i=0 is the 6th string for guitar). Reader-
+    // view places the high pitch on top so the i-th string maps to row
+    // `num_strings - 1 - i`.
     for (i, &fret) in data.frets.iter().enumerate() {
         if i >= num_strings {
             break;
         }
-        let row = match string_order {
-            HorizontalStringOrder::PlayerView => i,
-            // ReaderView and any future variant default to high-pitch-on-top
-            // (the project's documented default per ADR-0026).
-            _ => num_strings - 1 - i,
-        };
+        let row = num_strings - 1 - i;
         let y = grid_top - row as f32 * string_pitch;
         if fret == -1 {
             // Muted: X to the left of nut, one per string row.
@@ -3909,20 +3882,24 @@ mod tests {
     }
 
     #[test]
-    fn unrecognised_horizontal_string_order_emits_warning_in_pdf_renderer() {
+    fn horizontal_string_order_config_key_is_ignored_in_pdf_renderer() {
+        // Sister test to render-html's
+        // `horizontal_string_order_config_key_is_ignored`. The
+        // `diagrams.horizontal_string_order` key was retired together
+        // with the player-view alternative — see ADR-0026. The PDF
+        // renderer must therefore NOT warn on the unknown key.
         let song = chordsketch_chordpro::parse(
             "{title: t}\n{+config.diagrams.orientation: horizontal}\n\
-             {+config.diagrams.horizontal_string_order: cantilever}\n{diagrams}\n[Am]Hi",
+             {+config.diagrams.horizontal_string_order: anything}\n{diagrams}\n[Am]Hi",
         )
         .unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
-            result
+            !result
                 .warnings
                 .iter()
-                .any(|w| w.contains("diagrams.horizontal_string_order")
-                    && w.contains("cantilever")),
-            "expected a warning naming the bad string_order value; got: {:?}",
+                .any(|w| w.contains("diagrams.horizontal_string_order")),
+            "horizontal_string_order key must not emit a warning; got: {:?}",
             result.warnings,
         );
     }

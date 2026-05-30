@@ -3,7 +3,6 @@ import type { HTMLAttributes, ReactNode } from 'react';
 import { renderChordproAst } from './chordpro-jsx';
 import type { ChordRepositionEvent } from './chord-source-edit';
 import type {
-  ChordDiagramHorizontalStringOrder,
   ChordDiagramInstrument,
   ChordDiagramOrientation,
 } from './use-chord-diagram';
@@ -51,15 +50,6 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
    * the source-level directive.
    */
   chordDiagramsOrientation?: ChordDiagramOrientation;
-  /**
-   * Row order for horizontal-orientation diagrams. Defaults to
-   * `"reader"` (high pitch on top — matches tablature stave
-   * order, per ADR-0026). Pass `"player"` to mirror what a
-   * right-handed player sees looking down at the instrument.
-   * Ignored when `chordDiagramsOrientation` is `"vertical"` (or
-   * omitted).
-   */
-  chordDiagramsHorizontalStringOrder?: ChordDiagramHorizontalStringOrder;
   /**
    * 1-indexed source line that should be highlighted in the
    * rendered preview. Forwarded to the AST walker
@@ -200,7 +190,6 @@ export function ChordSheet({
   astWasmLoader,
   chordDiagramsInstrument,
   chordDiagramsOrientation,
-  chordDiagramsHorizontalStringOrder,
   activeSourceLine,
   caretColumn,
   caretLineLength,
@@ -235,7 +224,6 @@ export function ChordSheet({
       wasmLoader={astWasmLoader}
       chordDiagramsInstrument={chordDiagramsInstrument}
       chordDiagramsOrientation={chordDiagramsOrientation}
-      chordDiagramsHorizontalStringOrder={chordDiagramsHorizontalStringOrder}
       activeSourceLine={activeSourceLine}
       caretColumn={caretColumn}
       caretLineLength={caretLineLength}
@@ -296,7 +284,6 @@ function ChordSheetAstBranch({
   wasmLoader,
   chordDiagramsInstrument,
   chordDiagramsOrientation,
-  chordDiagramsHorizontalStringOrder,
   activeSourceLine,
   caretColumn,
   caretLineLength,
@@ -307,7 +294,6 @@ function ChordSheetAstBranch({
   wasmLoader: ChordproWasmLoader | undefined;
   chordDiagramsInstrument: ChordDiagramInstrument | undefined;
   chordDiagramsOrientation: ChordDiagramOrientation | undefined;
-  chordDiagramsHorizontalStringOrder: ChordDiagramHorizontalStringOrder | undefined;
   activeSourceLine: number | undefined;
   caretColumn: number | undefined;
   caretLineLength: number | undefined;
@@ -346,7 +332,6 @@ function ChordSheetAstBranch({
             ? {
                 instrument: chordDiagramsInstrument,
                 orientation: chordDiagramsOrientation,
-                horizontalStringOrder: chordDiagramsHorizontalStringOrder,
               }
             : null,
           activeSourceLine,
