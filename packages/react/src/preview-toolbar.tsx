@@ -32,7 +32,7 @@ export interface PreviewToolbarProps
   /**
    * Minimum transpose offset. Defaults to
    * {@link TRANSPOSE_DEFAULT_MIN} (`-6`) — the same default the
-   * standalone `<Transpose>` slider uses. Hosts that need the
+   * standalone `<Transpose>` select uses. Hosts that need the
    * wider feature range (`±11`) pass it explicitly.
    */
   transposeMin?: number;
@@ -195,7 +195,7 @@ export function PreviewToolbar({
           label="Capo"
           /* Thread the active transpose offset through so the
              ★ best-capo markers shift with the host's
-             `<Transpose>` slider — best-capo recommendations
+             `<Transpose>` select — best-capo recommendations
              are computed against the *transposed* chord roots. */
           transpose={transpose}
         />

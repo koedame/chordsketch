@@ -794,7 +794,7 @@ function PlaygroundApp(): JSX.Element {
               <p className="eyebrow">Preview · HTML</p>
               <span className="meta">{previewMeta}</span>
               {/* Export PDF lives in the pane header (right-aligned
-                  via `.pane-head__export`) so the slider toolbar
+                  via `.pane-head__export`) so the performance toolbar
                   underneath only carries the two transposition
                   controls. */}
               <PdfExport
@@ -835,7 +835,7 @@ function PlaygroundApp(): JSX.Element {
               chordDiagramsOrientation={diagramsOrientation}
               onChordDiagramsOrientationChange={setDiagramsOrientation}
               /* `transposeMin/Max` left at the PreviewToolbar default
-                 (±6) so the slider rail stays readable on narrow
+                 (±6) so the option list stays compact on narrow
                  preview panes. The feature ceiling of ±11 is still
                  reachable by hosts that pass an explicit override. */
             />

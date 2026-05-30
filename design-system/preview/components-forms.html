@@ -27,18 +27,40 @@ a { color: inherit; }
 .field .help { font-size: var(--fs-13); color: var(--text-secondary); }
 .field .err { font-size: var(--fs-13); color: var(--danger-fg); }
 
-.input, .textarea, .select {
+.input, .textarea {
   width: 100%; padding: 0 var(--sp-3); height: 36px;
   border: 1px solid var(--border-strong); border-radius: var(--r-2);
   background: var(--surface); font: 400 var(--fs-14)/1 var(--font-jp); color: var(--text-primary);
   transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
 }
 .textarea { height: auto; padding: var(--sp-3); line-height: 1.6; resize: vertical; min-height: 96px; font-family: var(--font-jp); }
-.input:hover, .textarea:hover, .select:hover { border-color: var(--text-secondary); }
-.input:focus, .textarea:focus, .select:focus { outline: none; border-color: var(--crimson-500); box-shadow: var(--focus-ring); }
+.input:hover, .textarea:hover { border-color: var(--text-secondary); }
+.input:focus, .textarea:focus { outline: none; border-color: var(--crimson-500); box-shadow: var(--focus-ring); }
 .input.error { border-color: var(--danger-fg); }
-.input:disabled, .textarea:disabled, .select:disabled { background: var(--ink-50); color: var(--text-tertiary); cursor: not-allowed; }
+.input:disabled, .textarea:disabled { background: var(--ink-50); color: var(--text-tertiary); cursor: not-allowed; }
 .input::placeholder { color: var(--text-tertiary); }
+
+/* Select — white surface with a `--border-strong` hairline,
+   `--r-2` corners, and an inline chevrons-up-down caret (lucide)
+   replacing the platform-native arrow. Matches the playground's
+   `.chordsketch-app__select`: hover darkens the border only;
+   focus uses the canonical crimson `--focus-ring`. */
+.select {
+  width: 100%; height: 36px;
+  padding: 0 var(--sp-8) 0 var(--sp-3);
+  border: 1px solid var(--border-strong); border-radius: var(--r-2);
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2367646D' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m7 15 5 5 5-5'/><path d='m7 9 5-5 5 5'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right var(--sp-3) center;
+  font: 400 var(--fs-14)/1 var(--font-jp); color: var(--text-primary);
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+.select:hover { border-color: var(--text-secondary); }
+.select:focus { outline: none; border-color: var(--crimson-500); box-shadow: var(--focus-ring); }
+.select:disabled { background-color: var(--ink-50); color: var(--text-tertiary); cursor: not-allowed; }
 
 /* Segmented */
 .segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--r-2); overflow: hidden; }

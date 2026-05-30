@@ -308,9 +308,9 @@ a {
   gap: 0.25rem;
   padding: 0 0.75rem;
   border-right: 1px solid var(--cs-border, #E8E6EA);
-  /* `min-height` instead of `height` — slider tool-groups
-   * (Transpose / Capo) need to grow taller than a row of buttons
-   * to accommodate their tick labels (#2560). */
+  /* `min-height` rather than `height` so a tool-group row flexes to
+   * its tallest control (button or select) without a hard cap that
+   * would clip a taller future control. */
   min-height: 28px;
 }
 
@@ -325,16 +325,6 @@ a {
   letter-spacing: 0;
   color: var(--cs-text-tertiary, #8A8790);
   margin-right: 0.5rem;
-}
-
-.tool-group .transpose-value {
-  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
-  font-size: 0.8125rem;
-  padding: 0 0.5rem;
-  min-width: 28px;
-  text-align: center;
-  color: var(--cs-text-primary, #0A0A0B);
-  font-feature-settings: "tnum" 1;
 }
 
 .segmented {
@@ -1254,7 +1244,7 @@ a {
   height: 28px;
   padding: 0 28px 0 0.75rem;
   background: var(--cs-surface, #FFFFFF)
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%2367646D' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2367646D' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m7 15 5 5 5-5'/><path d='m7 9 5-5 5 5'/></svg>")
     no-repeat right 8px center;
   color: var(--cs-text-primary, #0A0A0B);
   border: 1px solid var(--cs-border-strong, #D4D1D6);

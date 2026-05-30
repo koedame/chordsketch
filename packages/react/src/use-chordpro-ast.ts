@@ -34,8 +34,8 @@ export interface ChordproParseOptions {
    * (`-128..=127`); values outside that range are rejected at
    * deserialisation time and surface as a parse error on the
    * hook's `error` state. Callers driving the value through the
-   * `<Transpose>` slider stay well inside the range because the
-   * slider clamps via its `min` / `max` props.
+   * `<Transpose>` select stay well inside the range because the
+   * select only offers options bounded by its `min` / `max` props.
    */
   transpose?: number;
   /**

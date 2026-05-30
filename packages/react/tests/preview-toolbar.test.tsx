@@ -159,7 +159,7 @@ describe('<PreviewToolbar>', () => {
     expect(screen.getByRole('group', { name: 'Capo' })).toBeTruthy();
   });
 
-  test('Transpose slider reflects the host value and uses the ±6 default range', () => {
+  test('Transpose select reflects the host value and uses the ±6 default range', () => {
     render(
       <PreviewToolbar
         source={SAMPLE}
@@ -168,13 +168,15 @@ describe('<PreviewToolbar>', () => {
         onTransposeChange={vi.fn()}
       />,
     );
-    const slider = screen.getByRole('slider', { name: 'Transpose' }) as HTMLInputElement;
-    expect(slider.value).toBe('-6');
+    const select = screen.getByRole('combobox', { name: 'Transpose' }) as HTMLSelectElement;
+    expect(select.value).toBe('-6');
     // PreviewToolbar passes TRANSPOSE_DEFAULT_MIN/MAX (±6) so the
-    // slider stays readable on narrow preview panes. Hosts widening
-    // to the feature ceiling (±11) pass transposeMin/Max explicitly.
-    expect(slider.min).toBe('-6');
-    expect(slider.max).toBe('6');
+    // option list stays compact on narrow preview panes. Hosts
+    // widening to the feature ceiling (±11) pass transposeMin/Max
+    // explicitly.
+    const options = Array.from(select.options);
+    expect(options[0].value).toBe('6');
+    expect(options[options.length - 1].value).toBe('-6');
   });
 
   test('Capo group writes {capo} into source via onSourceChange', () => {
@@ -187,8 +189,8 @@ describe('<PreviewToolbar>', () => {
         onTransposeChange={vi.fn()}
       />,
     );
-    const capoSlider = screen.getByRole('slider', { name: 'Capo' }) as HTMLInputElement;
-    fireEvent.change(capoSlider, { target: { value: '1' } });
+    const capoSelect = screen.getByRole('combobox', { name: 'Capo' }) as HTMLSelectElement;
+    fireEvent.change(capoSelect, { target: { value: '1' } });
     expect(onSourceChange).toHaveBeenCalledWith(
       '{title: Demo}\n{key: G}\n{capo: 1}\n[C]Hello',
     );

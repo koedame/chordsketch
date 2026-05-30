@@ -53,28 +53,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `{capo}` directive before rendering, or pass `cli_transpose +
   capo` explicitly, to recover the pre-change output. (#2560)
 - `@chordsketch/react`: `<Capo>` and `<Transpose>` switch from
-  `− / + / Reset` buttons to a native `<input type="range">`
-  slider with a current-value readout. Keyboard support now comes
-  from the native range input (arrow keys, Home / End, PageUp /
-  PageDown); the legacy `+ / = / − / _ / 0` wrapper-level
-  shortcuts are removed. `<Capo>` accepts a new `bestPositions`
-  prop that paints ★ markers at the "easiest capo position" tied
-  set — pair with the new `computeBestCapoPositions` helper.
-  `<Transpose>`'s default UI range narrows to `±6` (down from
+  `− / + / Reset` buttons to a native `<select>` dropdown, styled
+  to match the rest of the design-system selects (white surface,
+  `--border-strong` hairline, inline chevrons-up-down caret).
+  Keyboard and screen-reader support come from the native select;
+  the legacy `+ / = / − / _ / 0` wrapper-level shortcuts are
+  removed. Options are listed highest-first (`<Transpose>`
+  `+6 … -6`, `<Capo>` `12 … 0`). `<Capo>` accepts a new
+  `bestPositions` prop that flags ★ on the "easiest capo position"
+  options — pair with the new `computeBestCapoPositions` helper.
+  `<Transpose>`'s default option range narrows to `±6` (down from
   `±11`); the feature ceiling `TRANSPOSE_MIN` / `TRANSPOSE_MAX`
   remains `±11` and hosts can pass explicit `min` / `max` to
-  widen the slider. **Breaking**: the `resetValue` prop is
-  removed from both `<Capo>` and `<Transpose>` — there is no
-  longer a Reset button, and the native slider's Home key (or a
-  controlled `onChange(0)` from the host) covers the same
-  ergonomics. (#2560)
-- `@chordsketch/react`: the `<Capo>` slider's host-supplied
-  `value` (controlled mode) and the source-derived `{capo: N}`
-  (source-pair mode) are now clamped into `[min, max]` at render
-  time as well as at change time, so a host that passes
-  `value=10` with default `max=12` sees the slider thumb and the
-  `<output>` readout agree on the displayed value. Same change
-  applied to `<Transpose>`. (#2560)
+  widen it. **Breaking**: the `resetValue` prop is removed from
+  both `<Capo>` and `<Transpose>` — there is no longer a Reset
+  button; a controlled `onChange(0)` from the host covers the
+  same ergonomics. (#2560)
+- `@chordsketch/react`: the `<Capo>` host-supplied `value`
+  (controlled mode) and the source-derived `{capo: N}`
+  (source-pair mode) are resolved to the nearest rendered
+  `<option>` at render time, so an out-of-range or off-grid value
+  (e.g. `value=10` with default `max=12`, or an off-step value)
+  selects a real option instead of leaving the control showing
+  the wrong fret. Same change applied to `<Transpose>`. (#2560)
 - `@chordsketch/react`: `<Capo>`'s `aria-describedby` id is now
   generated via React 18's `useId()` instead of `Math.random()`,
   so server-rendered hosts (Next.js, Remix) no longer hit
@@ -96,7 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (and the matching `BEST_CAPO_MAX` constant /
   `BestCapoResult` type) — computes the capo positions tied for
   the lowest accidental-glyph count from a parsed song, driving
-  `<Capo>`'s ★ slider markers. Mirrors the canonical-spelling
+  `<Capo>`'s ★ option flags. Mirrors the canonical-spelling
   pipeline from `chordsketch_chordpro::transpose::canonical_key_spelling`
   on the React side so no extra wasm function is needed. (#2560)
 - `chordsketch_chordpro::transpose::effective_transpose(file, cli,

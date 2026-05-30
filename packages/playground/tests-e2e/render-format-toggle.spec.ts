@@ -15,9 +15,9 @@
 //
 // Selectors target the React playground (#2454 / #2475):
 // `.chordsketch-preview .song` is the AST → JSX root, and chord
-// labels live inside `.chord-block .chord` spans. As of #2560 the
-// transpose control is a native `<input type="range">` slider with
-// the accessible name "Transpose".
+// labels live inside `.chord-block .chord` spans. The transpose
+// control is a native `<select>` with the accessible name
+// "Transpose" (combobox role), its options listed highest-first.
 
 import { expect, test } from '@playwright/test';
 
@@ -51,7 +51,7 @@ test.describe('playground render inline path', () => {
     const initial = await chordTexts(page);
     expect(initial.length).toBeGreaterThan(0);
 
-    await page.getByRole('slider', { name: 'Transpose' }).fill('1');
+    await page.getByRole('combobox', { name: 'Transpose' }).selectOption('1');
     await expect
       .poll(async () => (await chordTexts(page)).join('|'))
       .not.toBe(initial.join('|'));
@@ -65,13 +65,13 @@ test.describe('playground render inline path', () => {
   }) => {
     await page.goto('./chordpro/');
     await expect(page.locator('.chordsketch-preview .song')).toBeVisible();
-    const transposeSlider = page.getByRole('slider', { name: 'Transpose' });
+    const transposeSelect = page.getByRole('combobox', { name: 'Transpose' });
 
     const seen = new Set<string>();
     seen.add((await chordTexts(page)).join('|'));
     let last = (await chordTexts(page)).join('|');
     for (let i = 1; i <= 4; i++) {
-      await transposeSlider.fill(String(i));
+      await transposeSelect.selectOption(String(i));
       await expect.poll(async () => (await chordTexts(page)).join('|')).not.toBe(last);
       last = (await chordTexts(page)).join('|');
       seen.add(last);

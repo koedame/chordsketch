@@ -201,13 +201,30 @@
   font: 500 0.8125rem/1.4 var(--font-jp);
   height: 32px;
   padding: 0 0.625rem;
-  border: 1px solid var(--ink-300);
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
-  background: var(--ink-0);
+  background-color: var(--ink-0);
   color: var(--ink-1000);
   min-width: 0;
   transition: border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
     box-shadow 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Select-only chrome: the chevrons-up-down caret + `appearance` reset
+ * + right padding belong on the `<select>` alone — the text / number
+ * inputs that share the base rule above keep their native affordances
+ * (no dropdown arrow, no reset of the number spinners). */
+.irealb-editor__select {
+  padding: 0 1.75rem 0 0.625rem;
+  /* Inline chevrons-up-down caret — unifies with the design-system
+   * selects / `@chordsketch/react`'s `.chordsketch-*__select`. */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2367646D' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m7 15 5 5 5-5'/><path d='m7 9 5-5 5 5'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
 }
 
 .irealb-editor__input:hover,
