@@ -162,4 +162,17 @@ describe('<Transpose>', () => {
     render(<Transpose value={0} onChange={vi.fn()} min={6} max={-6} />);
     expect(Array.from(getSelect().options)).toHaveLength(0);
   });
+
+  test('changing the select to a programmatic out-of-range value clamps the emitted value', () => {
+    // A test driver (or unusual browser automation) may fire a change
+    // event with a value that is not among the rendered options.
+    // `handleSelectChange` still applies `clamp` before forwarding to
+    // `onChange`, so the emitted value always stays within [min, max].
+    const onChange = vi.fn();
+    render(<Transpose value={0} onChange={onChange} />);
+    fireEvent.change(getSelect(), { target: { value: '99' } });
+    expect(onChange).toHaveBeenLastCalledWith(6);
+    fireEvent.change(getSelect(), { target: { value: '-99' } });
+    expect(onChange).toHaveBeenLastCalledWith(-6);
+  });
 });

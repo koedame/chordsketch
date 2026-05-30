@@ -211,4 +211,15 @@ describe('<Capo>', () => {
     const opt5 = Array.from(getSelect().options).find((o) => o.value === '5');
     expect(opt5?.textContent).toBe('Fret 5 ★');
   });
+
+  test('changing the select to a programmatic out-of-range value clamps the emitted value', () => {
+    // A test driver (or unusual browser automation) may fire a change
+    // event with a value outside [min, max]. `emit` still applies
+    // `clamp` before forwarding, so `onChange` always receives a
+    // value within bounds.
+    const onChange = vi.fn();
+    render(<Capo value={0} onChange={onChange} min={0} max={5} />);
+    fireEvent.change(getSelect(), { target: { value: '9' } });
+    expect(onChange).toHaveBeenLastCalledWith(5);
+  });
 });
