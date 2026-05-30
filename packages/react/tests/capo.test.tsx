@@ -212,14 +212,16 @@ describe('<Capo>', () => {
     expect(opt5?.textContent).toBe('Fret 5 ★');
   });
 
-  test('changing the select to a programmatic out-of-range value clamps the emitted value', () => {
-    // A test driver (or unusual browser automation) may fire a change
-    // event with a value outside [min, max]. `emit` still applies
-    // `clamp` before forwarding, so `onChange` always receives a
-    // value within bounds.
+  test('a programmatic out-of-range select change is coerced away and does not emit', () => {
+    // A native <select> can only hold one of its rendered option
+    // values. Firing a change with a value outside [min, max] (a test
+    // driver / unusual automation) makes the browser — and jsdom —
+    // reset the value to '' (selectedIndex -1), which the change
+    // handler parses as NaN and ignores. The option set is the
+    // boundary, so onChange never receives an out-of-range value.
     const onChange = vi.fn();
     render(<Capo value={0} onChange={onChange} min={0} max={5} />);
     fireEvent.change(getSelect(), { target: { value: '9' } });
-    expect(onChange).toHaveBeenLastCalledWith(5);
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

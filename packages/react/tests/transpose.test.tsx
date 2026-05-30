@@ -163,16 +163,16 @@ describe('<Transpose>', () => {
     expect(Array.from(getSelect().options)).toHaveLength(0);
   });
 
-  test('changing the select to a programmatic out-of-range value clamps the emitted value', () => {
-    // A test driver (or unusual browser automation) may fire a change
-    // event with a value that is not among the rendered options.
-    // `handleSelectChange` still applies `clamp` before forwarding to
-    // `onChange`, so the emitted value always stays within [min, max].
+  test('a programmatic out-of-range select change is coerced away and does not emit', () => {
+    // A native <select> can only hold one of its rendered option
+    // values. Firing a change with a value that is not an option (a
+    // test driver / unusual automation) makes the browser — and
+    // jsdom — reset the value to '' (selectedIndex -1), which the
+    // change handler parses as NaN and ignores. The option set is the
+    // boundary, so onChange never receives an out-of-range value.
     const onChange = vi.fn();
     render(<Transpose value={0} onChange={onChange} />);
     fireEvent.change(getSelect(), { target: { value: '99' } });
-    expect(onChange).toHaveBeenLastCalledWith(6);
-    fireEvent.change(getSelect(), { target: { value: '-99' } });
-    expect(onChange).toHaveBeenLastCalledWith(-6);
+    expect(onChange).not.toHaveBeenCalled();
   });
 });
