@@ -5,9 +5,9 @@
 // `-c` semitones. The "best capo" picker enumerates `c ∈ [0..=12]`,
 // counts how many accidental glyphs would appear in the chord-root
 // labels at each `c`, and returns the set of positions tied for the
-// minimum. The slider in `<Capo>` paints a ★ marker at each tied
-// position so the user can see at a glance which capo fret produces
-// the simplest spelling.
+// minimum. The `<Capo>` select flags a ★ on each tied option so
+// the user can see at a glance which capo fret produces the
+// simplest spelling.
 //
 // Mirrors `canonical_key_spelling` in
 // `crates/chordpro/src/transpose.rs`: black keys spell as flats
@@ -29,7 +29,7 @@ import type {
  * Inclusive upper bound for the candidate capo positions
  * `computeBestCapoPositions` enumerates. Re-exports `CAPO_MAX` from
  * `chord-source-edit.ts` so the search range stays in lockstep with
- * the slider's physical range — if `CAPO_MAX` widens to support a
+ * the `<Capo>` select's option range — if `CAPO_MAX` widens to support a
  * longer guitar neck, the best-capo picker enumerates the new
  * positions automatically.
  */

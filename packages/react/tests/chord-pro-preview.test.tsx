@@ -122,7 +122,7 @@ describe('<ChordProPreview>', () => {
     expect(select.value).toBe('pdf');
   });
 
-  test('uncontrolled transpose: slider changes fire internal updates', () => {
+  test('uncontrolled transpose: select changes fire internal updates', () => {
     render(
       <ChordProPreview
         source="src"
@@ -130,12 +130,12 @@ describe('<ChordProPreview>', () => {
         wasmLoader={makeLoader(makeStub())}
       />,
     );
-    const slider = screen.getByRole('slider', { name: 'Transpose' });
-    fireEvent.change(slider, { target: { value: '1' } });
-    // The Transpose readout displays the current value; the
-    // component should now show +1.
-    const output = screen.getByRole('status');
-    expect(output.textContent).toContain('+1');
+    const select = screen.getByRole('combobox', { name: 'Transpose' }) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: '1' } });
+    // The Transpose select reflects the current value; the
+    // component should now show +1 on the selected option.
+    expect(select.value).toBe('1');
+    expect(select.selectedOptions[0]?.textContent).toContain('+1');
   });
 
   test('controlled transpose: host owns state via onTransposeChange', () => {
@@ -155,8 +155,8 @@ describe('<ChordProPreview>', () => {
       );
     }
     render(<Controlled />);
-    const slider = screen.getByRole('slider', { name: 'Transpose' });
-    fireEvent.change(slider, { target: { value: '1' } });
+    const select = screen.getByRole('combobox', { name: 'Transpose' });
+    fireEvent.change(select, { target: { value: '1' } });
     expect(onTransposeChange).toHaveBeenCalledWith(1);
   });
 
@@ -173,7 +173,7 @@ describe('<ChordProPreview>', () => {
     ).toBeTruthy();
   });
 
-  test('transposeMin / transposeMax bound the transpose slider', () => {
+  test('transposeMin / transposeMax bound the transpose select option range', () => {
     function Controlled() {
       const [t, setT] = useState(0);
       return (
@@ -188,14 +188,14 @@ describe('<ChordProPreview>', () => {
       );
     }
     render(<Controlled />);
-    const slider = screen.getByRole('slider', { name: 'Transpose' }) as HTMLInputElement;
-    expect(slider.min).toBe('-3');
-    expect(slider.max).toBe('3');
-    // A programmatic value beyond max clamps to max.
-    fireEvent.change(slider, { target: { value: '9' } });
-    const output = screen.getByRole('status');
-    expect(output.textContent).toContain('+3');
-    expect(slider.value).toBe('3');
+    const select = screen.getByRole('combobox', { name: 'Transpose' }) as HTMLSelectElement;
+    const options = Array.from(select.options);
+    expect(options[0].value).toBe('3');
+    expect(options[options.length - 1].value).toBe('-3');
+    // Selecting the max bound updates the value and the displayed option text.
+    fireEvent.change(select, { target: { value: '3' } });
+    expect(select.value).toBe('3');
+    expect(select.selectedOptions[0]?.textContent).toContain('+3');
   });
 
   test('format outside `formats` falls back to the first allowed format and warns in dev', () => {
@@ -231,8 +231,8 @@ describe('<ChordProPreview>', () => {
 
   test('incoming controlled transpose is clamped against [transposeMin, transposeMax]', () => {
     // Caller passes `transpose=15` but `transposeMax=5` — the
-    // displayed readout and forwarded value must clamp to 5, not
-    // render the out-of-range value.
+    // selected option must clamp to 5, not render the out-of-range
+    // value.
     render(
       <ChordProPreview
         source="src"
@@ -242,8 +242,9 @@ describe('<ChordProPreview>', () => {
         wasmLoader={makeLoader(makeStub())}
       />,
     );
-    const output = screen.getByRole('status');
-    expect(output.textContent).toContain('+5');
+    const select = screen.getByRole('combobox', { name: 'Transpose' }) as HTMLSelectElement;
+    expect(select.value).toBe('5');
+    expect(select.selectedOptions[0]?.textContent).toContain('+5');
   });
 
   test('transposeMin > transposeMax: dev warning fires and bounds are swapped', () => {
@@ -271,13 +272,12 @@ describe('<ChordProPreview>', () => {
       // would render the button disabled at 0 (since 0 >= 5 would
       // be true under the un-swapped check? actually 0 < 5 means it
       // would stay enabled — pivot to the down direction).
-      // Assert the slider is actionable: dragging the slider
-      // down should drop the readout to -1, confirming the
-      // swapped bounds did not pin the value at 0.
-      const slider = screen.getByRole('slider', { name: 'Transpose' });
-      fireEvent.change(slider, { target: { value: '-1' } });
-      const output = screen.getByRole('status');
-      expect(output.textContent).toContain('-1');
+      // Assert the select is actionable: picking -1 should drop the
+      // value to -1, confirming the swapped bounds did not pin it at
+      // 0 (an un-swapped `[5, -5]` range would have no -1 option).
+      const select = screen.getByRole('combobox', { name: 'Transpose' }) as HTMLSelectElement;
+      fireEvent.change(select, { target: { value: '-1' } });
+      expect(select.value).toBe('-1');
     } finally {
       err.mockRestore();
     }
@@ -427,7 +427,7 @@ describe('<ChordProPreview>', () => {
     expect(screen.getByRole('group', { name: 'Transpose' })).toBeTruthy();
   });
 
-  test('performance toolbar transpose slider routes through onTransposeChange', () => {
+  test('performance toolbar transpose select routes through onTransposeChange', () => {
     const onTransposeChange = vi.fn();
     render(
       <ChordProPreview
@@ -441,7 +441,7 @@ describe('<ChordProPreview>', () => {
       />,
     );
     fireEvent.change(
-      screen.getByRole('slider', { name: 'Transpose' }),
+      screen.getByRole('combobox', { name: 'Transpose' }),
       { target: { value: '1' } },
     );
     expect(onTransposeChange).toHaveBeenCalledWith(1);

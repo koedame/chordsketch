@@ -3,16 +3,13 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { Transpose, useTranspose } from '../src/index';
 
-function getSlider(): HTMLInputElement {
-  return screen.getByRole('slider', { name: 'Transpose' }) as HTMLInputElement;
+function getSelect(): HTMLSelectElement {
+  return screen.getByRole('combobox', { name: 'Transpose' }) as HTMLSelectElement;
 }
 
-// The tick rail renders the same numerals (e.g. `0`, `+3`) as the
-// readout, so plain text queries match more than once. Target the
-// `<output>` element directly when asserting on the displayed value.
-function getReadoutText(): string {
-  const out = document.querySelector('.chordsketch-transpose__value');
-  return out?.textContent ?? '';
+// Text shown on the currently-selected option.
+function getSelectedText(): string {
+  return getSelect().selectedOptions[0]?.textContent ?? '';
 }
 
 describe('useTranspose', () => {
@@ -76,61 +73,54 @@ describe('useTranspose', () => {
 });
 
 describe('<Transpose>', () => {
-  test('renders the controlled value as a range slider with default ±6 bounds', () => {
+  test('renders the controlled value as a select with default ±6 options', () => {
     render(<Transpose value={3} onChange={vi.fn()} />);
-    expect(screen.getByRole('group', { name: 'Transpose' })).toBeTruthy();
-    const slider = getSlider();
-    expect(slider.type).toBe('range');
-    expect(slider.min).toBe('-6');
-    expect(slider.max).toBe('6');
-    expect(slider.value).toBe('3');
+    const select = getSelect();
+    expect(select.value).toBe('3');
+    const options = Array.from(select.options);
+    expect(options).toHaveLength(13); // +6..-6 inclusive
+    // Highest offset first: + at the top, − at the bottom.
+    expect(options[0].value).toBe('6');
+    expect(options[options.length - 1].value).toBe('-6');
   });
 
-  test('renders the readout with a + sign for positive values', () => {
+  test('selected option shows a + sign for positive values', () => {
     render(<Transpose value={3} onChange={vi.fn()} />);
-    expect(getReadoutText()).toBe('+3');
+    expect(getSelectedText()).toBe('+3');
   });
 
-  test('renders without a + for zero and a − for negatives', () => {
+  test('selected option drops the + for zero and shows − for negatives', () => {
     const { rerender } = render(<Transpose value={0} onChange={vi.fn()} />);
-    expect(getReadoutText()).toBe('0');
+    expect(getSelectedText()).toBe('0');
     rerender(<Transpose value={-2} onChange={vi.fn()} />);
-    expect(getReadoutText()).toBe('-2');
+    expect(getSelectedText()).toBe('-2');
   });
 
-  test('changing the slider emits the parsed value', () => {
+  test('changing the select emits the parsed value', () => {
     const onChange = vi.fn();
     render(<Transpose value={0} onChange={onChange} />);
-    fireEvent.change(getSlider(), { target: { value: '4' } });
+    fireEvent.change(getSelect(), { target: { value: '4' } });
     expect(onChange).toHaveBeenLastCalledWith(4);
-    fireEvent.change(getSlider(), { target: { value: '-3' } });
+    fireEvent.change(getSelect(), { target: { value: '-3' } });
     expect(onChange).toHaveBeenLastCalledWith(-3);
   });
 
-  test('clamps programmatic values outside min/max to the bound', () => {
-    const onChange = vi.fn();
-    render(<Transpose value={0} onChange={onChange} />);
-    fireEvent.change(getSlider(), { target: { value: '99' } });
-    expect(onChange).toHaveBeenLastCalledWith(6);
-    fireEvent.change(getSlider(), { target: { value: '-99' } });
-    expect(onChange).toHaveBeenLastCalledWith(-6);
-  });
-
-  test('explicit min/max props widen past the default ±6 cap', () => {
+  test('explicit min/max props widen the option range past the default ±6 cap', () => {
     render(<Transpose value={0} onChange={vi.fn()} min={-11} max={11} />);
-    const slider = getSlider();
-    expect(slider.min).toBe('-11');
-    expect(slider.max).toBe('11');
+    const options = Array.from(getSelect().options);
+    expect(options).toHaveLength(23); // +11..-11 inclusive
+    expect(options[0].value).toBe('11');
+    expect(options[options.length - 1].value).toBe('-11');
   });
 
   test('forwards unknown props to the wrapper div', () => {
     render(<Transpose value={0} onChange={vi.fn()} data-testid="t" className="custom" />);
-    const group = screen.getByTestId('t');
-    expect(group.className).toContain('chordsketch-transpose');
-    expect(group.className).toContain('custom');
+    const wrapper = screen.getByTestId('t');
+    expect(wrapper.className).toContain('chordsketch-transpose');
+    expect(wrapper.className).toContain('custom');
   });
 
-  test('custom formatValue controls the indicator text', () => {
+  test('custom formatValue controls the option text', () => {
     render(
       <Transpose
         value={2}
@@ -138,15 +128,51 @@ describe('<Transpose>', () => {
         formatValue={(v) => `${v} st`}
       />,
     );
-    expect(getReadoutText()).toBe('2 st');
+    expect(getSelectedText()).toBe('2 st');
   });
 
-  test('clamps an out-of-range value prop in the readout (display path)', () => {
-    // Host passes `value=15` with default `max=6`: the native
-    // range input clamps the thumb to `+6` visually, but the
-    // `<output>` would otherwise show `+15` and disagree with
-    // the thumb. Pin the render-time clamp.
+  test('clamps an out-of-range value prop so the selection stays in range', () => {
+    // Host passes `value=15` with default `max=6`: the render-time
+    // clamp pins the selected option to `+6` (the select has no
+    // `15` option to land on).
     render(<Transpose value={15} onChange={vi.fn()} />);
-    expect(getReadoutText()).toBe('+6');
+    expect(getSelect().value).toBe('6');
+    expect(getSelectedText()).toBe('+6');
+  });
+
+  test('step=2 generates every-other-semitone options in descending order', () => {
+    render(<Transpose value={0} onChange={vi.fn()} min={-6} max={6} step={2} />);
+    const values = Array.from(getSelect().options).map((o) => o.value);
+    expect(values).toEqual(['6', '4', '2', '0', '-2', '-4', '-6']);
+  });
+
+  test('an off-grid value snaps to the nearest rendered option (step=2)', () => {
+    // `value=3` is in range but not on the every-2 grid. The select
+    // has no `3` option, so the control must snap to the nearest one
+    // (`2` or `4`) rather than silently showing `+6` (selectedIndex 0).
+    render(<Transpose value={3} onChange={vi.fn()} min={-6} max={6} step={2} />);
+    const selected = Number.parseInt(getSelect().value, 10);
+    expect([2, 4]).toContain(selected);
+    // Whatever it snaps to must be an option that actually exists.
+    const values = Array.from(getSelect().options).map((o) => o.value);
+    expect(values).toContain(getSelect().value);
+  });
+
+  test('renders no options when max < min', () => {
+    render(<Transpose value={0} onChange={vi.fn()} min={6} max={-6} />);
+    expect(Array.from(getSelect().options)).toHaveLength(0);
+  });
+
+  test('a programmatic out-of-range select change is coerced away and does not emit', () => {
+    // A native <select> can only hold one of its rendered option
+    // values. Firing a change with a value that is not an option (a
+    // test driver / unusual automation) makes the browser — and
+    // jsdom — reset the value to '' (selectedIndex -1), which the
+    // change handler parses as NaN and ignores. The option set is the
+    // boundary, so onChange never receives an out-of-range value.
+    const onChange = vi.fn();
+    render(<Transpose value={0} onChange={onChange} />);
+    fireEvent.change(getSelect(), { target: { value: '99' } });
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

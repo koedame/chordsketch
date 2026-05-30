@@ -54,9 +54,10 @@ test('diagrams orientation toggle flips the rendered SVG class end-to-end', asyn
   // 4px radius matches the editor select. A raw browser default
   // would be 0 (Chromium native select renders square corners).
   expect(tokenSnapshot.borderRadius).toBe('4px');
-  // 32px height matches the editor select. Native select height is
-  // user-agent dependent and would not be 32px.
-  expect(tokenSnapshot.height).toBe('32px');
+  // 28px height matches the unified toolbar selects (and the
+  // playground's `.chordsketch-app__select`). Native select height is
+  // user-agent dependent and would not be 28px.
+  expect(tokenSnapshot.height).toBe('28px');
 
   await orientSelect.selectOption('horizontal');
 

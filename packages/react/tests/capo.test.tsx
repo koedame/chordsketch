@@ -4,33 +4,33 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { Capo } from '../src/index';
 
-function getSlider(): HTMLInputElement {
-  return screen.getByRole('slider', { name: 'Capo' }) as HTMLInputElement;
+function getSelect(): HTMLSelectElement {
+  return screen.getByRole('combobox', { name: 'Capo' }) as HTMLSelectElement;
+}
+
+function bestCapoOptionValues(): string[] {
+  return Array.from(document.querySelectorAll('option[data-best-capo]')).map((o) =>
+    o.getAttribute('data-best-capo') ?? '',
+  );
 }
 
 describe('<Capo>', () => {
-  test('renders the controlled value as a range slider', () => {
+  test('renders the controlled value as a select with 0..12 options', () => {
     render(<Capo value={3} onChange={vi.fn()} />);
-    expect(screen.getByRole('group', { name: 'Capo' })).toBeTruthy();
-    const slider = getSlider();
-    expect(slider.type).toBe('range');
-    expect(slider.min).toBe('0');
-    expect(slider.max).toBe('12');
-    expect(slider.value).toBe('3');
+    const select = getSelect();
+    expect(select.value).toBe('3');
+    const options = Array.from(select.options);
+    expect(options).toHaveLength(13); // 12..0 inclusive
+    // Highest fret first: 12 at the top, 0 at the bottom.
+    expect(options[0].value).toBe('12');
+    expect(options[options.length - 1].value).toBe('0');
   });
 
-  test('changing the slider emits the parsed value in controlled mode', () => {
+  test('changing the select emits the parsed value in controlled mode', () => {
     const onChange = vi.fn();
     render(<Capo value={0} onChange={onChange} />);
-    fireEvent.change(getSlider(), { target: { value: '7' } });
+    fireEvent.change(getSelect(), { target: { value: '7' } });
     expect(onChange).toHaveBeenLastCalledWith(7);
-  });
-
-  test('clamps a programmatic value outside min/max to the bound', () => {
-    const onChange = vi.fn();
-    render(<Capo value={0} onChange={onChange} min={0} max={5} />);
-    fireEvent.change(getSlider(), { target: { value: '9' } });
-    expect(onChange).toHaveBeenLastCalledWith(5);
   });
 
   test('source-pair mode reads {capo} from the source string', () => {
@@ -41,10 +41,10 @@ describe('<Capo>', () => {
         onSourceChange={onSourceChange}
       />,
     );
-    expect(getSlider().value).toBe('5');
+    expect(getSelect().value).toBe('5');
   });
 
-  test('source-pair mode rewrites the directive on slider change', () => {
+  test('source-pair mode rewrites the directive on select change', () => {
     function Host(): JSX.Element {
       const [source, setSource] = useState('{title: Demo}\n[C]Hello');
       return (
@@ -56,12 +56,12 @@ describe('<Capo>', () => {
     }
 
     render(<Host />);
-    expect(getSlider().value).toBe('0');
-    fireEvent.change(getSlider(), { target: { value: '1' } });
+    expect(getSelect().value).toBe('0');
+    fireEvent.change(getSelect(), { target: { value: '1' } });
     expect(screen.getByTestId('src').textContent).toBe(
       '{title: Demo}\n{capo: 1}\n[C]Hello',
     );
-    expect(getSlider().value).toBe('1');
+    expect(getSelect().value).toBe('1');
   });
 
   test('source-pair mode fires onCapoChange alongside onSourceChange', () => {
@@ -74,42 +74,44 @@ describe('<Capo>', () => {
         onCapoChange={onCapoChange}
       />,
     );
-    fireEvent.change(getSlider(), { target: { value: '3' } });
+    fireEvent.change(getSelect(), { target: { value: '3' } });
     expect(onSourceChange).toHaveBeenCalledWith(
       '{title: Demo}\n{capo: 3}\n[C]Hello',
     );
     expect(onCapoChange).toHaveBeenLastCalledWith(3);
   });
 
-  test('honours custom min/max bounds', () => {
+  test('honours custom min/max bounds in the option range', () => {
     render(<Capo value={3} onChange={vi.fn()} min={0} max={3} />);
-    const slider = getSlider();
-    expect(slider.min).toBe('0');
-    expect(slider.max).toBe('3');
+    const options = Array.from(getSelect().options);
+    expect(options).toHaveLength(4); // 3..0 inclusive
+    expect(options[0].value).toBe('3');
+    expect(options[options.length - 1].value).toBe('0');
   });
 
-  test('renders ★ markers for each bestPositions entry inside the range', () => {
+  test('flags ★ on each bestPositions option inside the range', () => {
     render(
       <Capo value={0} onChange={vi.fn()} bestPositions={[0, 5, 7, 99]} />,
     );
-    const markers = document.querySelectorAll('.chordsketch-capo__marker');
-    expect(markers.length).toBe(3);
-    const positions = Array.from(markers).map((m) =>
-      m.getAttribute('data-best-capo'),
-    );
-    expect(positions).toEqual(['0', '5', '7']);
+    // Options render highest-first, so the flagged ones appear in
+    // descending DOM order.
+    expect(bestCapoOptionValues()).toEqual(['7', '5', '0']);
+    // The ★ glyph is appended to the flagged option's visible text.
+    const opt5 = Array.from(getSelect().options).find((o) => o.value === '5');
+    expect(opt5?.textContent).toContain('★');
   });
 
-  test('omits the ★ marker block when bestPositions is empty', () => {
+  test('flags no option when bestPositions is empty', () => {
     render(<Capo value={0} onChange={vi.fn()} bestPositions={[]} />);
-    expect(document.querySelector('.chordsketch-capo__markers')).toBeNull();
+    expect(bestCapoOptionValues()).toEqual([]);
+    expect(document.querySelector('.chordsketch-capo__sr-only')).toBeNull();
   });
 
   test('rejects NaN, Infinity, and non-integer entries from bestPositions', () => {
     // NaN slips through `pos < min || pos > max` because every NaN
     // comparison evaluates to false. Without the `Number.isInteger`
-    // guard the marker span would render with `left: NaN%`. Test
-    // the full set of pathological inputs in one shot.
+    // guard a `data-best-capo="NaN"` option would render. Test the
+    // full set of pathological inputs in one shot.
     render(
       <Capo
         value={0}
@@ -117,27 +119,109 @@ describe('<Capo>', () => {
         bestPositions={[Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 3.5, 4]}
       />,
     );
-    const markers = document.querySelectorAll('.chordsketch-capo__marker');
-    expect(markers.length).toBe(1);
-    expect(markers[0]?.getAttribute('data-best-capo')).toBe('4');
+    expect(bestCapoOptionValues()).toEqual(['4']);
   });
 
-  test('exposes the slider value via the visible readout', () => {
-    // The tick rail now labels every step, so a plain `getByText('4')`
-    // would match the tick label as well as the `<output>` readout.
-    // Target the `<output>` element directly.
+  test('reflects the controlled value as the select value', () => {
     render(<Capo value={4} onChange={vi.fn()} />);
-    const out = document.querySelector('.chordsketch-capo__value');
-    expect(out?.textContent).toBe('4');
+    expect(getSelect().value).toBe('4');
   });
 
-  test('clamps an out-of-range value prop in the readout (display path)', () => {
-    // Host passing `value=15` with `max=12`: the native range
-    // input clamps the thumb visually, but the `<output>` would
-    // otherwise display the raw 15 and disagree with the thumb.
-    // Pin the render-time clamp.
+  test('clamps an out-of-range value prop so the selection stays in range', () => {
+    // Host passing `value=15` with `max=12`: the render-time clamp
+    // pins the selection to `12` (no `15` option exists to land on).
     render(<Capo value={15} onChange={vi.fn()} min={0} max={12} />);
-    const out = document.querySelector('.chordsketch-capo__value');
-    expect(out?.textContent).toBe('12');
+    expect(getSelect().value).toBe('12');
+  });
+
+  test('step=2 generates every-other-fret options in descending order', () => {
+    render(<Capo value={0} onChange={vi.fn()} min={0} max={12} step={2} />);
+    const values = Array.from(getSelect().options).map((o) => o.value);
+    expect(values).toEqual(['12', '10', '8', '6', '4', '2', '0']);
+  });
+
+  test('an off-grid value snaps to the nearest rendered option (step=2)', () => {
+    // `value=3` is in range but off the every-2 grid; snap to 2 or 4
+    // rather than silently showing the first option.
+    render(<Capo value={3} onChange={vi.fn()} min={0} max={12} step={2} />);
+    const selected = Number.parseInt(getSelect().value, 10);
+    expect([2, 4]).toContain(selected);
+    const values = Array.from(getSelect().options).map((o) => o.value);
+    expect(values).toContain(getSelect().value);
+  });
+
+  test('an unambiguously-nearest option is selected when value is off-grid (step=3)', () => {
+    // options are 12,9,6,3,0; value=5 is distance 1 from 6 and 2 from
+    // 3 — must snap to 6, not the first option.
+    render(<Capo value={5} onChange={vi.fn()} min={0} max={12} step={3} />);
+    expect(getSelect().value).toBe('6');
+  });
+
+  test('source-pair mode snaps an off-grid {capo} directive to the nearest option', () => {
+    render(
+      <Capo
+        source={'{title: Demo}\n{capo: 3}\n[C]Hello'}
+        onSourceChange={vi.fn()}
+        step={2}
+      />,
+    );
+    const selected = Number.parseInt(getSelect().value, 10);
+    expect([2, 4]).toContain(selected);
+    const values = Array.from(getSelect().options).map((o) => o.value);
+    expect(values).toContain(getSelect().value);
+  });
+
+  test('each flagged option carries data-best-capo equal to its own value', () => {
+    render(<Capo value={0} onChange={vi.fn()} bestPositions={[5, 7]} />);
+    const flagged = Array.from(document.querySelectorAll('option[data-best-capo]'));
+    expect(flagged.length).toBe(2);
+    for (const opt of flagged) {
+      expect(opt.getAttribute('data-best-capo')).toBe(opt.getAttribute('value'));
+    }
+  });
+
+  test('renders no options when max < min', () => {
+    render(<Capo value={0} onChange={vi.fn()} min={12} max={0} />);
+    expect(Array.from(getSelect().options)).toHaveLength(0);
+  });
+
+  test('sr-only description is plural when multiple best positions are flagged', () => {
+    render(<Capo value={0} onChange={vi.fn()} bestPositions={[3, 5]} />);
+    expect(
+      document.querySelector('.chordsketch-capo__sr-only')?.textContent,
+    ).toContain('positions');
+  });
+
+  test('sr-only description is singular when exactly one best position is flagged', () => {
+    render(<Capo value={0} onChange={vi.fn()} bestPositions={[5]} />);
+    const text = document.querySelector('.chordsketch-capo__sr-only')?.textContent ?? '';
+    expect(text).toContain('position');
+    expect(text).not.toContain('positions');
+  });
+
+  test('custom formatValue combines with the ★ suffix on a flagged option', () => {
+    render(
+      <Capo
+        value={0}
+        onChange={vi.fn()}
+        bestPositions={[5]}
+        formatValue={(v) => `Fret ${v}`}
+      />,
+    );
+    const opt5 = Array.from(getSelect().options).find((o) => o.value === '5');
+    expect(opt5?.textContent).toBe('Fret 5 ★');
+  });
+
+  test('a programmatic out-of-range select change is coerced away and does not emit', () => {
+    // A native <select> can only hold one of its rendered option
+    // values. Firing a change with a value outside [min, max] (a test
+    // driver / unusual automation) makes the browser — and jsdom —
+    // reset the value to '' (selectedIndex -1), which the change
+    // handler parses as NaN and ignores. The option set is the
+    // boundary, so onChange never receives an out-of-range value.
+    const onChange = vi.fn();
+    render(<Capo value={0} onChange={onChange} min={0} max={5} />);
+    fireEvent.change(getSelect(), { target: { value: '9' } });
+    expect(onChange).not.toHaveBeenCalled();
   });
 });
