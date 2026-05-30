@@ -19,13 +19,14 @@ test('diagrams orientation toggle flips the rendered SVG class end-to-end', asyn
   await page.locator('svg.chord-diagram').first().waitFor({ timeout: 20_000 });
 
   // Default orientation is vertical — the horizontal-mode class must
-  // not be present at first paint.
+  // not be present at first paint. Assert the exact class so a
+  // regression that flips the default to horizontal (an ADR-0026
+  // violation) cannot pass via partial `toContain` match.
   const initialClass = await page
     .locator('svg.chord-diagram')
     .first()
     .getAttribute('class');
-  expect(initialClass).toContain('chord-diagram');
-  expect(initialClass).not.toContain('chord-diagram-horizontal');
+  expect(initialClass).toBe('chord-diagram');
 
   // Flip the orientation toolbar dropdown to horizontal.
   const orientSelect = page.locator(

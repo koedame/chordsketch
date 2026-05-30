@@ -1144,6 +1144,16 @@ mod tests {
                 .unwrap();
         assert!(!oriented.contains("chord-diagram-horizontal"));
     }
+    // Note: the `#[napi]`-decorated public thunks
+    // (`chord_diagram_svg_with_orientation`,
+    // `chord_diagram_svg_with_defines_orientation`) cannot be exercised
+    // here because the napi-sys symbols (`napi_reference_unref`,
+    // `napi_delete_reference`) are only resolved by Node.js — `cargo
+    // test` fails to link. Public-ABI coverage lives in
+    // `crates/napi/__tests__/public-api.test.js`, which runs through
+    // the actual Node-API binding and pins the same `js_name`,
+    // argument order, and `Option<String>` deserialisation contract
+    // the internal-helper tests above cannot reach.
 
     #[test]
     fn test_chord_diagram_svg_inner_instrument_lookup_is_case_insensitive() {

@@ -717,7 +717,7 @@ pub fn chord_diagram_svg_with_defines(
 ///
 /// Same as [`chord_diagram_svg`].
 #[must_use = "callers must handle the unknown-instrument error"]
-#[wasm_bindgen(js_name = chordDiagramSvgWithOrientation)]
+#[wasm_bindgen(js_name = chordDiagramSvgWithOrientation, skip_typescript)]
 pub fn chord_diagram_svg_with_orientation(
     chord: &str,
     instrument: &str,
@@ -739,7 +739,7 @@ pub fn chord_diagram_svg_with_orientation(
 ///     (or their aliases).
 ///   * `defines` is not a deserialisable `[[string, string], …]` array.
 #[must_use = "callers must handle the unknown-instrument error"]
-#[wasm_bindgen(js_name = chordDiagramSvgWithDefinesOrientation)]
+#[wasm_bindgen(js_name = chordDiagramSvgWithDefinesOrientation, skip_typescript)]
 pub fn chord_diagram_svg_with_defines_orientation(
     chord: &str,
     instrument: &str,
@@ -809,6 +809,38 @@ export interface ValidationError {
  * Returns an empty array if the input is valid.
  */
 export function validate(input: string): ValidationError[];
+
+/**
+ * Layout orientation for the orientation-aware chord-diagram exports.
+ *
+ * `"horizontal"` renders the Japanese tablature layout (nut on the left,
+ * reader-view — high pitch on top); see ADR-0026. `null` / `undefined` /
+ * unrecognised strings fall back to `"vertical"`.
+ */
+export type ChordDiagramOrientation = "vertical" | "horizontal";
+
+/**
+ * Render a chord diagram in the requested orientation.
+ *
+ * Returns `null` when the chord is not in the built-in voicing database.
+ * Throws on unknown instrument.
+ */
+export function chordDiagramSvgWithOrientation(
+  chord: string,
+  instrument: string,
+  orientation?: ChordDiagramOrientation | null,
+): string | null;
+
+/**
+ * Render a chord diagram in the requested orientation, consulting song-level
+ * `{define}` voicings first. `defines` is an array of `[name, raw]` tuples.
+ */
+export function chordDiagramSvgWithDefinesOrientation(
+  chord: string,
+  instrument: string,
+  defines: Array<[string, string]>,
+  orientation?: ChordDiagramOrientation | null,
+): string | null;
 "#;
 
 /// Serializable shape returned by [`parse_chordpro_with_warnings`]

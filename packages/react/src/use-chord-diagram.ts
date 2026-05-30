@@ -38,17 +38,35 @@ interface DiagramRenderer {
    * `resolve_orientation` helper does; `null` / `undefined` falls
    * back to the default (vertical layout). Horizontal mode is
    * reader-view only — see ADR-0026.
+   *
+   * Typed as `ChordDiagramOrientation | null | undefined` so callers
+   * that construct their own stub renderer cannot accidentally pass
+   * arbitrary strings — the wasm side caps at
+   * `MAX_RESOLVER_INPUT_LEN` regardless, but the narrower TS type
+   * catches mistakes at the consumer-package boundary.
    */
   chordDiagramSvgWithDefinesOrientation?: (
     chord: string,
     instrument: string,
     defines: Array<[string, string]>,
-    orientation: string | null | undefined,
+    orientation: ChordDiagramOrientation | null | undefined,
   ) => string | null | undefined;
 }
 
 /** Diagram orientation accepted by {@link useChordDiagram}. */
 export type ChordDiagramOrientation = 'vertical' | 'horizontal';
+
+/**
+ * Mirror of the Rust-side `MAX_RESOLVER_INPUT_LEN` (64 bytes) — see
+ * `crates/chordpro/src/chord_diagram.rs`. The wasm boundary applies
+ * the same cap inside `resolve_orientation`, so this JS-side check is
+ * defense-in-depth: it clears wildly oversized strings before they
+ * cross the wasm ABI rather than relying solely on the Rust side. The
+ * `ChordDiagramOrientation` type already constrains TS callers to the
+ * two short literals; this guard catches hostile direct callers that
+ * cast around the type.
+ */
+const MAX_ORIENTATION_INPUT_LEN = 64;
 
 /** Supported instrument families for chord diagram lookup. */
 export type ChordDiagramInstrument =
@@ -104,6 +122,20 @@ export type ChordDiagramWasmLoader = () => Promise<DiagramRenderer>;
 const defaultLoader: ChordDiagramWasmLoader = () =>
   import('@chordsketch/wasm') as unknown as Promise<DiagramRenderer>;
 
+// Module-level latch for the stale-bundle warning. Each `<ChordDiagram>`
+// instance creates its own `useChordDiagram` hook, so a per-`useRef`
+// latch would let a chord-grid mounting N components emit N copies of
+// the same message. Hoisting the latch out of the hook makes the
+// "warn at most once per page load" contract actually hold across the
+// component tree. A `Set<string>` keyed on the warning text lets future
+// stale-bundle paths add distinct messages without sharing a single
+// boolean. Exported for tests to reset between cases.
+const staleBundleWarnings = new Set<string>();
+/** @internal Test-only — reset the module-level stale-bundle warning latch. */
+export function __resetStaleBundleWarnings(): void {
+  staleBundleWarnings.clear();
+}
+
 /**
  * Look up an SVG chord diagram for `(chord, instrument)` via
  * `@chordsketch/wasm`. The WASM module is loaded lazily and
@@ -132,10 +164,6 @@ export function useChordDiagram(
   const [error, setError] = useState<Error | null>(null);
 
   const rendererRef = useRef<DiagramRenderer | null>(null);
-  // Latches once per hook instance after the first stale-bundle warning
-  // so a chord-grid rendering N chords does not log N copies of the
-  // same message.
-  const staleBundleWarnedRef = useRef<boolean>(false);
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
 
@@ -168,21 +196,35 @@ export function useChordDiagram(
         // graceful degradation, but a silent fallback would leave a
         // developer wondering why `orientation="horizontal"` was
         // ignored — emit a one-shot dev-mode warning so the staleness
-        // is auditable. The warning fires at most once per hook
-        // instance via `staleBundleWarnedRef`, so a repeated render of
-        // many chords does not flood the console.
+        // is auditable. The warning is latched on the module-level
+        // `staleBundleWarnings` set, so a chord grid mounting N
+        // `<ChordDiagram>` instances logs the message exactly once
+        // across the whole page rather than once per instance.
         const definesArray = defines ? defines.map(([n, r]) => [n, r] as [string, string]) : [];
         let result: string | null | undefined;
         if (renderer.chordDiagramSvgWithDefinesOrientation) {
+          // Clear oversized orientation strings before crossing the
+          // wasm ABI — see `MAX_ORIENTATION_INPUT_LEN`. A hostile
+          // direct caller that bypasses the TS `ChordDiagramOrientation`
+          // constraint with `as` cannot force the wasm side into an
+          // allocation it would otherwise reject.
+          const safeOrientation =
+            typeof orientation === 'string' && orientation.length > MAX_ORIENTATION_INPUT_LEN
+              ? null
+              : (orientation ?? null);
           result = renderer.chordDiagramSvgWithDefinesOrientation(
             chord,
             instrument,
             definesArray,
-            orientation ?? null,
+            safeOrientation,
           );
         } else {
-          if (!staleBundleWarnedRef.current && orientation !== undefined) {
-            staleBundleWarnedRef.current = true;
+          const staleOrientationKey = 'orientation-export-missing';
+          if (
+            orientation !== undefined &&
+            !staleBundleWarnings.has(staleOrientationKey)
+          ) {
+            staleBundleWarnings.add(staleOrientationKey);
             // eslint-disable-next-line no-console
             console.warn(
               '[@chordsketch/react] useChordDiagram: the loaded @chordsketch/wasm bundle ' +

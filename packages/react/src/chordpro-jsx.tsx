@@ -2537,6 +2537,14 @@ function collectChordNames(song: ChordproSong): string[] {
  * `Song::fretted_defines()` accessor — the rest of the value
  * (`base-fret 1 frets …`) is the diagram spec, the first word
  * is the chord name.
+ *
+ * Sister-site note (renderer-parity.md): the walker currently emits
+ * the end-of-song chord-diagrams grid section, NOT a per-`{define}`
+ * inline diagram on each directive — unlike the Rust HTML renderer
+ * which paints both. When per-`{define}` inline emission is added
+ * here, the call site MUST forward `chordDiagramsOpts.orientation`
+ * to the inline `<ChordDiagram>` to maintain orientation parity with
+ * the end-of-song grid (and with the Rust HTML output).
  */
 function collectDefines(song: ChordproSong): Array<[string, string]> {
   const out: Array<[string, string]> = [];

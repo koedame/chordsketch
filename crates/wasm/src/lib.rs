@@ -1705,10 +1705,12 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use super::bindings::{
-        chord_diagram_svg, chord_diagram_svg_with_defines, parse_irealb, render_html,
-        render_html_with_options, render_html_with_warnings, render_html_with_warnings_and_options,
-        render_ireal_svg, render_text, render_text_with_options, render_text_with_warnings,
-        render_text_with_warnings_and_options, serialize_irealb, start, validate, version,
+        chord_diagram_svg, chord_diagram_svg_with_defines,
+        chord_diagram_svg_with_defines_orientation, chord_diagram_svg_with_orientation,
+        parse_irealb, render_html, render_html_with_options, render_html_with_warnings,
+        render_html_with_warnings_and_options, render_ireal_svg, render_text,
+        render_text_with_options, render_text_with_warnings, render_text_with_warnings_and_options,
+        serialize_irealb, start, validate, version,
     };
 
     #[cfg(feature = "png-pdf")]
@@ -2355,5 +2357,73 @@ mod wasm_tests {
     fn render_ireal_pdf_invalid_url_errors() {
         let result = render_ireal_pdf("not a url");
         assert!(result.is_err(), "expected JsValue Err for invalid URL");
+    }
+
+    // -- chordDiagramSvgWith{Orientation,DefinesOrientation} ABI thunks ---
+    //
+    // The internal `chord_diagram_svg_inner_with_orientation` helper is
+    // tested under native `cargo test`; these wasm_bindgen_test entries
+    // exercise the `#[wasm_bindgen]` thunks themselves so a regression
+    // that mis-spells the `js_name` attribute, drops the
+    // `Option<String>` orientation argument, or swaps argument order on
+    // the public ABI surface fails through the actual JS boundary
+    // rather than only the internal helper.
+
+    #[wasm_bindgen_test]
+    fn chord_diagram_svg_with_orientation_horizontal_marks_class() {
+        let svg =
+            chord_diagram_svg_with_orientation("Am", "guitar", Some("horizontal".to_string()))
+                .expect("Am+guitar is known to the voicing database")
+                .expect("Am voicing should resolve for guitar");
+        assert!(svg.contains("chord-diagram-horizontal"));
+    }
+
+    #[wasm_bindgen_test]
+    fn chord_diagram_svg_with_orientation_none_matches_legacy_bytes() {
+        let legacy = chord_diagram_svg("Am", "guitar").unwrap().unwrap();
+        let oriented = chord_diagram_svg_with_orientation("Am", "guitar", None)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            legacy, oriented,
+            "the public wasm orientation thunk with None must produce byte-identical \
+             output to chord_diagram_svg so pre-#2572 callers see no drift",
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn chord_diagram_svg_with_orientation_unknown_falls_back() {
+        let oriented =
+            chord_diagram_svg_with_orientation("Am", "guitar", Some("diagonal".to_string()))
+                .unwrap()
+                .unwrap();
+        assert!(
+            !oriented.contains("chord-diagram-horizontal"),
+            "unrecognised orientation must degrade to vertical (lenient resolver contract)",
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn chord_diagram_svg_with_defines_orientation_forwards_both_args() {
+        // Cover the combined surface: a song-level `{define}` override
+        // for Bm at fret 2 plus horizontal orientation. Pins the
+        // 4-argument JS order — a regression that swapped `defines` and
+        // `orientation` on the JS-name binding would surface here, while
+        // the internal-helper tests would not catch it because they
+        // bypass the JsValue deserialisation path.
+        let defines = js_sys::Array::new();
+        let pair = js_sys::Array::new();
+        pair.push(&JsValue::from_str("Bm"));
+        pair.push(&JsValue::from_str("base-fret 2 frets 1 3 4 4 3 1"));
+        defines.push(&pair);
+        let svg = chord_diagram_svg_with_defines_orientation(
+            "Bm",
+            "guitar",
+            defines.into(),
+            Some("horizontal".to_string()),
+        )
+        .expect("Bm with user-supplied voicing should not error")
+        .expect("Bm voicing should resolve via the define");
+        assert!(svg.contains("chord-diagram-horizontal"));
     }
 }

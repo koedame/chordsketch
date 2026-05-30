@@ -125,12 +125,17 @@ export function ChordDiagram({
   );
 
   const wrapperClass = ['chordsketch-diagram', className].filter(Boolean).join(' ');
+  // Surface the active orientation as a DOM attribute so consumers
+  // and tests can observe it without parsing the SVG. Omitted (not
+  // emitted as `data-orientation=""`) when the prop is unset so the
+  // default vertical case stays attribute-free.
+  const orientationAttr = orientation !== undefined ? { 'data-orientation': orientation } : {};
 
   if (error !== null && errorFallback !== null) {
     const node =
       typeof errorFallback === 'function' ? errorFallback(error) : errorFallback;
     return (
-      <div {...divProps} className={wrapperClass}>
+      <div {...divProps} {...orientationAttr} className={wrapperClass}>
         {node}
       </div>
     );
@@ -140,7 +145,7 @@ export function ChordDiagram({
     if (loading) {
       const node = loadingFallback ?? defaultLoadingFallback();
       return (
-        <div {...divProps} className={wrapperClass} aria-busy="true">
+        <div {...divProps} {...orientationAttr} className={wrapperClass} aria-busy="true">
           {node}
         </div>
       );
@@ -151,7 +156,7 @@ export function ChordDiagram({
         ? notFoundFallback(chord, instrument)
         : notFoundFallback;
     return (
-      <div {...divProps} className={wrapperClass}>
+      <div {...divProps} {...orientationAttr} className={wrapperClass}>
         {node}
       </div>
     );
@@ -160,6 +165,7 @@ export function ChordDiagram({
   return (
     <div
       {...divProps}
+      {...orientationAttr}
       className={wrapperClass}
       // Expose the diagram as a labelled image to assistive tech
       // (without this, the inline SVG's accessible name is the

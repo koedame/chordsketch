@@ -88,24 +88,13 @@ and a publisher genuinely needing player-view can localise at the
 consumer layer (e.g. flip the SVG via CSS `transform: scaleY(-1)`)
 without the project shipping a second code path.
 
-The chord-book corpus that informed this decision is not single-author
-or single-publisher. Reader-view appears (high string on top) in
-Yamaha's series of guitar chord references and Doremi Music
-Publishing's TAB-format method books — representative titles include
-their *J-POP Chord Progression Book* line ("J-POP Koudo Shinkou
-Bukku") and the *First-Time Guitar TAB Score* series ("Hajimete no
-Guitar TAB-fu"). Player-view appears in some Rittor Music titles and a
-subset of band-score editions, particularly older catalogue entries
-predating the tab-stave normalisation that became standard from the
-late-1990s onward.
-
-A formal corpus survey was out of scope for this decision; the
-criterion the decision turned on was the tab-stave alignment plus
-the per-knob complexity cost, not a head-count of published editions.
-Future evidence that flips the publisher-share view would be a watch
-signal to revisit (see "References" below) but does not by itself
-reverse the decision — the tab-alignment rationale would have to
-weaken too.
+Both layouts appear in widely-circulated Japanese chord books. A
+formal corpus survey was out of scope for this decision; the criterion
+the decision turned on was the tab-stave alignment plus the per-knob
+complexity cost, not a head-count of published editions. Future
+evidence that flips the publisher-share view would be a watch signal
+to revisit (see "References" below) but does not by itself reverse the
+decision — the tab-alignment rationale would have to weaken too.
 
 ## Consequences
 
@@ -184,7 +173,7 @@ Negative / mitigations:
   NAPI / FFI) and renderer (HTML / PDF / React JSX walker) — the
   orientation resolution lives in one helper (`resolve_orientation` in
   the crate above) so it cannot drift between surfaces.
-- **Watch signal** — a published survey of post-2020 Japanese chord
+- **Watch signal**: a published survey of post-2020 Japanese chord
   book editions establishing a clear player-view majority would be
   cause to revisit. The tab-alignment rationale would also have to be
   re-examined (e.g. if the dominant notation surface stops being the

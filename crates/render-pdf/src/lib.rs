@@ -1805,13 +1805,23 @@ fn render_chord_diagram_pdf(
     match orientation {
         Orientation::Vertical => render_chord_diagram_pdf_vertical(data, doc),
         Orientation::Horizontal => render_chord_diagram_pdf_horizontal(data, doc),
-        // `Orientation` is `#[non_exhaustive]`: a future upstream variant
-        // (e.g. `HorizontalLefty`) that this renderer has not yet learned
-        // about reaches here. Fall back to the safe legacy layout so the
-        // diagram still prints, and emit a debug assertion so test runs
-        // surface the omission instead of silently rendering vertical for
-        // a horizontal-like variant.
+        // `Orientation` is `#[non_exhaustive]` and lives in a different
+        // crate, so the wildcard is the only forward-compat shape the
+        // compiler accepts here. A future variant (e.g. `HorizontalLefty`)
+        // that this renderer has not yet learned about falls back to the
+        // safe legacy layout so the diagram still prints — but the silent
+        // fallback would be invisible in release builds with only a
+        // `debug_assert!`, so the wildcard also writes a stderr line that
+        // surfaces in both debug AND release builds. The `debug_assert!`
+        // additionally fails any test run that hits this arm, so a fellow
+        // renderer crate adding the variant without an explicit match arm
+        // fails CI rather than silently degrading.
         other => {
+            eprintln!(
+                "chordsketch-render-pdf: unknown Orientation variant {other:?} \
+                 fell through to vertical layout; teach render_chord_diagram_pdf \
+                 about it",
+            );
             debug_assert!(
                 false,
                 "render_chord_diagram_pdf: unknown Orientation variant {other:?} \
@@ -1932,7 +1942,13 @@ fn render_chord_diagram_pdf_horizontal(
     let num_frets = data.frets_shown;
     let grid_w = num_frets as f32 * fret_pitch;
     let grid_h = (num_strings - 1) as f32 * string_pitch;
-    let total_h = grid_h + 25.0; // title + top markers + grid
+    // 25 pt vertical budget = ~9 pt chord-name title + the 15-pt gap to
+    // grid_top; horizontal mode does NOT have a separate "top markers"
+    // band because position-marker inlays render inside the grid rows.
+    // (The vertical renderer above shares the same 25 pt constant for a
+    // different reason — title + base-fret label band — so the literal
+    // matches but the breakdown is different.)
+    let total_h = grid_h + 25.0;
 
     doc.ensure_space(total_h);
 
@@ -3877,6 +3893,28 @@ mod tests {
                     && w.contains("horizonal")
                     && w.contains("default")),
             "expected a warning naming the bad value; got: {:?}",
+            result.warnings,
+        );
+    }
+
+    #[test]
+    fn empty_diagrams_orientation_emits_no_warning_in_pdf_renderer() {
+        // Sister test to render-html's
+        // `empty_diagrams_orientation_emits_no_warning`. The lenient
+        // resolver treats `Some("")` the same as `None`; an explicit
+        // empty config value must not produce a noisy warning in the
+        // PDF renderer either.
+        let song = chordsketch_chordpro::parse(
+            "{title: t}\n{+config.diagrams.orientation: }\n{diagrams}\n[Am]Hi",
+        )
+        .unwrap();
+        let result = render_song_with_warnings(&song, 0, &Config::defaults());
+        assert!(
+            !result
+                .warnings
+                .iter()
+                .any(|w| w.contains("diagrams.orientation")),
+            "empty value must not warn; got: {:?}",
             result.warnings,
         );
     }

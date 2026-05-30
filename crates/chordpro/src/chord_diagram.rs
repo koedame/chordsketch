@@ -242,9 +242,10 @@ impl DiagramData {
 /// Layout orientation for fretted-instrument chord diagrams.
 ///
 /// `Vertical` is the Western convention (nut on top, fretboard running
-/// downward) that ChordPro renderers have always emitted. `Horizontal` is the
-/// dominant convention in Japanese tablature publications (nut on the left,
-/// fretboard running rightward).
+/// downward) that ChordPro renderers have always emitted. `Horizontal` (nut
+/// on the left, fretboard running rightward) is the convention used in many
+/// Japanese tablature publications; see ADR-0026 for the corpus the decision
+/// referenced.
 ///
 /// The horizontal layout is reader-view only — high pitch on top, matching
 /// the six-line tablature stave order so a reader fluent with tab parses
@@ -331,9 +332,8 @@ pub fn render_svg(data: &DiagramData) -> String {
 /// Render a chord diagram as an inline SVG string in the specified
 /// orientation.
 ///
-/// In horizontal mode the row-order is carried by the
-/// [`Orientation::Horizontal`] variant; horizontal mode is reader-view
-/// only — see ADR-0026.
+/// `Orientation::Horizontal` is reader-view only (high pitch on top); the
+/// variant is a unit case and carries no row-order parameter — see ADR-0026.
 ///
 /// # Examples
 ///
@@ -363,12 +363,12 @@ pub fn render_svg_with_orientation(data: &DiagramData, orientation: Orientation)
     {
         return String::new();
     }
+    // Exhaustive inside the defining crate — `#[non_exhaustive]` only forces
+    // a wildcard on downstream consumers (see `render-pdf`). Adding a new
+    // `Orientation` variant fails compilation here until a layout is added.
     match orientation {
+        Orientation::Vertical => render_svg_vertical_inner(data),
         Orientation::Horizontal => render_svg_horizontal_inner(data),
-        // Vertical and any future variant fall back to the legacy layout.
-        // The non_exhaustive marker (variants added later) is the only
-        // reason a wildcard is needed inside the defining crate.
-        _ => render_svg_vertical_inner(data),
     }
 }
 
@@ -460,7 +460,6 @@ fn render_svg_vertical_inner(data: &DiagramData) -> String {
         }
     }
 
-    // Vertical lines (strings)
     for i in 0..num_strings {
         let x = LEFT_MARGIN + i as f32 * CELL_W;
         svg.push_str(&format!(
@@ -470,7 +469,6 @@ fn render_svg_vertical_inner(data: &DiagramData) -> String {
         ));
     }
 
-    // Horizontal lines (frets)
     for j in 0..=num_frets {
         let y = nut_y + j as f32 * CELL_H;
         svg.push_str(&format!(
@@ -621,9 +619,11 @@ fn render_svg_horizontal_inner(data: &DiagramData) -> String {
         }
     }
 
-    // Horizontal lines (strings). The lines themselves are symmetric;
+    // The string lines themselves are symmetric; what matters is that
     // the per-string marker placement below maps each physical string
-    // index to a visual row.
+    // index (`i`) to the matching visual row via `row = num_strings -
+    // 1 - i`, so the high-pitch string lands on the top row
+    // (reader-view, ADR-0026).
     for i in 0..num_strings {
         let y = TOP_MARGIN + i as f32 * string_pitch;
         svg.push_str(&format!(
@@ -633,7 +633,6 @@ fn render_svg_horizontal_inner(data: &DiagramData) -> String {
         ));
     }
 
-    // Vertical lines (frets)
     for j in 0..=num_frets {
         let x = nut_x + j as f32 * fret_pitch;
         svg.push_str(&format!(
@@ -2102,8 +2101,8 @@ mod tests {
     // -----------------------------------------------------------------------
 
     /// Returns the SVG output for an Am open-position chord rendered in
-    /// horizontal mode with the project's default string order
-    /// (`ReaderView`).
+    /// horizontal mode (reader-view — high pitch on top, the only horizontal
+    /// layout the project ships per ADR-0026).
     fn horizontal_am_svg() -> String {
         let data = DiagramData {
             name: "Am".to_string(),
@@ -2203,10 +2202,10 @@ mod tests {
 
     #[test]
     fn horizontal_reader_view_places_high_string_on_top() {
-        // ReaderView (default): in ChordPro's low-to-high `frets` ordering,
-        // index 5 (high E for guitar) sits on row 0 (top). For Am the open
-        // 1st string (i=5, fret=0) produces an open-circle on the top row at
-        // y = TOP_MARGIN = 30.
+        // Reader-view (the only horizontal layout): in ChordPro's low-to-high
+        // `frets` ordering, index 5 (high E for guitar) sits on row 0 (top).
+        // For Am the open 1st string (i=5, fret=0) produces an open-circle on
+        // the top row at y = TOP_MARGIN = 30.
         let svg = horizontal_am_svg();
         assert!(
             svg.contains("<circle cx=\"10\" cy=\"30\""),

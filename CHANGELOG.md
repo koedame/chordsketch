@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`render_ascii`) and keyboard diagrams have no orientation knob —
   ASCII is a single line and the keyboard layout is already
   horizontal by nature. (#2572)
+- `@chordsketch/react`: `chordDiagramsOrientation` prop on
+  `<ChordSheet>` and `<RendererPreview>` forwards the orientation
+  through to the auto-emitted diagrams grid, plus a Diagrams group
+  in `<PreviewToolbar>` (orientation `<select>` styled to the
+  design-system `.select` token set). `<ChordDiagram>` itself surfaces
+  the active orientation as a `data-orientation` attribute on its
+  wrapper so consumers and tests can observe it without parsing the
+  SVG. (#2572)
 
 ### Changed
 

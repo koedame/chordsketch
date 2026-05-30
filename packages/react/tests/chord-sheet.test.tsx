@@ -431,14 +431,20 @@ describe('<ChordSheet>', () => {
     // diagram (${instrument})"; assert the figure mounted (the SVG
     // itself is provided by an async wasm path we don't load in the
     // test). What we actually want to lock in is that the orientation
-    // props reach <ChordDiagram> — assert via the component's wrapper
-    // aria-busy state plus its rendered fallback text path.
+    // prop reached <ChordDiagram>. The wrapper exposes the active
+    // orientation as `data-orientation` so the assertion does not have
+    // to inspect the (asynchronously-loaded) SVG payload — a
+    // regression that drops the prop on the way from <ChordSheet> to
+    // the walker to <ChordDiagram> surfaces as a missing attribute.
     const fig = container.querySelector('.chord-diagrams-grid .chord-diagram-container');
     expect(fig).not.toBeNull();
-    // Loading state of the <ChordDiagram> child confirms the orientation
-    // props were accepted (would otherwise throw a TS / runtime error).
-    const status = container.querySelector('.chordsketch-diagram__loading');
-    expect(status?.textContent ?? '').toMatch(/loading/i);
+    const diagramWrappers = container.querySelectorAll(
+      '.chord-diagrams-grid .chordsketch-diagram',
+    );
+    expect(diagramWrappers.length).toBeGreaterThan(0);
+    diagramWrappers.forEach((wrapper) => {
+      expect(wrapper.getAttribute('data-orientation')).toBe('horizontal');
+    });
   });
 
   test('omits chordDiagrams option when chordDiagramsInstrument is unset', async () => {
