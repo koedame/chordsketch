@@ -1652,6 +1652,7 @@ function ChordCell(props: {
   // Stable ID required for the aria-describedby / id pairing below.
   const tooltipId = useId();
 
+
   if (mode === 'hover') {
     return (
       <span
