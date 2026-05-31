@@ -104,3 +104,4 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0024](0024-scheduled-dependabot-merge.md) | Scheduled unattended Dependabot review-and-merge, all bump types (extends ADR-0013 clause 1) | Accepted (2026-05-25) |
 | [0025](0025-build-time-syntax-highlighting-shiki.md) | Build-time syntax highlighting for the docs site uses Shiki (preserves ADR-0021 zero-JS posture; reuses in-repo ChordPro TextMate grammar) | Accepted (2026-05-28) |
 | [0026](0026-horizontal-chord-diagram-default-string-order.md) | Horizontal chord diagrams render reader-view only (high pitch on top, matches tablature stave order); player-view is not supported | Accepted (2026-05-30) |
+| [0027](0027-inline-hover-compact-chord-diagrams.md) | Inline / hover chord diagrams use a dedicated compact layout (chordsketch `{diagrams: inline}` / `{diagrams: hover}` extension; not a CSS scale) | Accepted (2026-05-31) |
