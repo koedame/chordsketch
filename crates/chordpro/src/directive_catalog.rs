@@ -661,7 +661,7 @@ mod tests {
     }
 
     #[test]
-    fn diagrams_enum_includes_inline_and_hover_extension_values() {
+    fn diagrams_enum_includes_section_inline_and_hover_values() {
         let values = directive_value_options("diagrams").expect("diagrams is an enum directive");
         for expected in [
             "on", "off", "guitar", "ukulele", "piano", "inline", "hover", "section",
