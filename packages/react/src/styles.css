@@ -1302,6 +1302,19 @@
   flex-wrap: wrap;
   margin: 0.1em 0;
 }
+/* Inline diagrams (ADR-0027): bottom-align the chord-blocks within a
+   line so every `.lyrics` row lines up on the same baseline no matter
+   how tall the compact diagram stacked above a chord-bearing block
+   is. A chord-less block has only a `.lyrics` row; with the default
+   (effectively top) cross-axis alignment its lyric floats up level
+   with the diagrams instead of the lyric baseline row. Scoped to
+   `inline` mode only (the walker adds `line--inline-diagrams` when
+   `diagrams.mode === 'inline'`) so regular chord-name and hover
+   layouts — whose chord row is only ~1em tall — keep their existing
+   layout and snapshots. */
+.chordsketch-sheet__content .line--inline-diagrams {
+  align-items: flex-end;
+}
 .chordsketch-sheet__content .chord-block {
   display: inline-flex;
   flex-direction: column;
@@ -1561,12 +1574,34 @@
   left: 0;
   z-index: 20;
   display: none;
+  /* Shrink-wrap the diagram instead of inheriting the trigger's
+     inline width. The trigger (`.chord-has-diagram`) is only as wide
+     as the chord name (~10px), and `position: absolute` makes this
+     popover's containing block that same narrow span. Without an
+     explicit width the inner `<svg>` collapses to the 10px line box —
+     the diagram renders at ~0px. `width: max-content` lets the
+     popover size to the SVG's own intrinsic `width`/`height`
+     attributes (120×160 for the full-size diagram). */
+  width: max-content;
   margin-bottom: 4px;
   padding: 4px;
   background: var(--cs-surface, #ffffff);
   border: 1px solid var(--cs-border, #d4d1d6);
   border-radius: var(--cs-r-2, 4px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+/* The popover's inner SVG keeps its intrinsic px size (the Rust
+   renderer emits `width`/`height` attributes). The shared
+   `.chordsketch-diagram svg` rule below caps every diagram svg at
+   `max-width: 100%`; inside this absolutely-positioned popover that
+   `100%` resolves against the ~10px trigger box and crushes the
+   diagram to ~0px. Lift the cap here (and pin `width: auto` so the svg
+   uses its emitted attribute width) so the popover always paints the
+   full-size 120×160 diagram. `display: block` / `height: auto` are
+   already supplied by `.chordsketch-diagram svg`. */
+.chordsketch-sheet__content .chord-diagram-popover svg {
+  max-width: none;
+  width: auto;
 }
 /* Reveal on mouse hover AND keyboard focus (`:focus` on the span itself
    and `:focus-within` for focus moving into the popover). */
