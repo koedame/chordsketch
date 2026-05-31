@@ -24,6 +24,8 @@ import {
   setCapoInSource,
   type ChordRepositionEvent,
   type ChordSourceAreaHandle,
+  loadChordproCatalog,
+  type DirectiveCatalogEntry,
 } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
@@ -736,19 +738,18 @@ function PlaygroundApp(): JSX.Element {
                   <option value="" disabled>
                     + Directive
                   </option>
-                  <option value="{title: }">title</option>
-                  <option value="{subtitle: }">subtitle</option>
-                  <option value="{artist: }">artist</option>
-                  <option value="{composer: }">composer</option>
-                  <option value="{key: }">key</option>
-                  <option value="{tempo: }">tempo</option>
-                  <option value="{time: }">time</option>
-                  <option value="{capo: }">capo</option>
-                  <option value="{comment: }">comment</option>
-                  <option value="{comment_italic: }">comment_italic</option>
-                  <option value="{comment_box: }">comment_box</option>
-                  <option value="{define: }">define</option>
-                  <option value="{image: }">image</option>
+                  {directiveCatalog.map((directive) => (
+                    <option
+                      key={directive.name}
+                      value={
+                        directive.valueKind === 'none'
+                          ? `{${directive.name}}`
+                          : `{${directive.name}: }`
+                      }
+                    >
+                      {directive.name}
+                    </option>
+                  ))}
                 </select>
                 <select
                   className="chordsketch-app__select insert-picker"

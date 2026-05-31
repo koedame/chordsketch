@@ -317,7 +317,12 @@ pub(crate) struct ValidationErrorPayload {
 ///
 /// `value_kind` is `"none"` / `"freeform"` / `"enum"`; `values` is the
 /// allowed set when `value_kind == "enum"`, empty otherwise.
+///
+/// Serialised camelCase (`valueKind`) to match the `DirectiveInfo`
+/// TypeScript shape declared in `bindings.rs` and consumed by the React
+/// completion source + playground picker.
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct DirectiveInfoPayload {
     pub(crate) name: String,
     pub(crate) aliases: Vec<String>,
