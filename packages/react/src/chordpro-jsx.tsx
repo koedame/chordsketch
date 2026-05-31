@@ -1560,6 +1560,9 @@ function renderLyricsLine(
     sourceLine: number;
     onChordReposition: (event: ChordRepositionEvent) => void;
   } | null = null,
+  /** Inline / hover diagram config (ADR-0027); `null` keeps the
+   * plain chord-name rendering. */
+  diagrams: LyricsDiagramConfig | null = null,
 ): JSX.Element {
   return (
     <LyricsLine
@@ -1570,6 +1573,7 @@ function renderLyricsLine(
       caret={caret}
       reposition={reposition}
       className="line"
+      diagrams={diagrams}
     />
   );
 }
@@ -1590,6 +1594,104 @@ interface LyricsLineProps {
   /** 1-indexed source line decoration applied to the root `.line`
    * div by `pushElement` for the editor↔preview caret-sync wire. */
   'data-source-line'?: number;
+  /** Inline / hover diagram config (ADR-0027). `null` / `'section'`
+   * keeps the plain chord-name rendering. */
+  diagrams?: LyricsDiagramConfig | null;
+}
+
+/**
+ * Inline / hover diagram config threaded to {@link LyricsLine} so the
+ * chord-block renderer can show compact diagrams above the lyrics
+ * (ADR-0027). Resolved once on the walk context and passed per line.
+ */
+interface LyricsDiagramConfig {
+  mode: DiagramsMode;
+  instrument: ChordDiagramInstrument;
+  orientation: ChordDiagramOrientation | undefined;
+  defines: ReadonlyArray<readonly [string, string]> | undefined;
+}
+
+/**
+ * Renders the chord cell above a lyric segment when diagrams are shown
+ * inline / hover (ADR-0027). A component (not a bare JSX fragment) so the
+ * `useChordDiagram` hook inside `<ChordDiagram>` runs per chord — the
+ * walker cannot call hooks inside its segment `.map`.
+ *
+ * - `inline`: the compact diagram replaces the chord name. The
+ *   not-found / loading / error fallbacks are the chord-name node, so an
+ *   unknown chord (or a not-yet-loaded diagram) still shows its name —
+ *   the name is never lost.
+ * - `hover`: the chord name stays visible and the compact diagram is a
+ *   popover revealed on hover / keyboard focus (the reveal is CSS in
+ *   `styles.css`, keyed on `:hover` / `:focus` / `:focus-within`).
+ */
+function ChordCell(props: {
+  mode: 'inline' | 'hover';
+  chord: ChordproChord;
+  marker: ReactNode;
+  chordStyle: CSSProperties | null;
+  dragProps: Record<string, unknown> | undefined;
+  instrument: ChordDiagramInstrument;
+  orientation: ChordDiagramOrientation | undefined;
+  defines: ReadonlyArray<readonly [string, string]> | undefined;
+}): JSX.Element {
+  const { mode, chord, marker, chordStyle, dragProps, instrument, orientation, defines } =
+    props;
+  // The wasm voicing lookup keys on the plain chord name (same source
+  // the end-of-song grid uses), NOT the unicode-accidental display form.
+  const chordName = chord.display ?? chord.name;
+  const nameNode = (
+    <>
+      {marker}
+      {renderChord(chord)}
+    </>
+  );
+
+  if (mode === 'hover') {
+    return (
+      <span
+        className="chord chord-has-diagram"
+        style={chordStyle ?? undefined}
+        tabIndex={0}
+        {...(dragProps ?? {})}
+      >
+        {nameNode}
+        <ChordDiagram
+          chord={chordName}
+          instrument={instrument}
+          orientation={orientation}
+          defines={defines}
+          compact
+          className="chord-diagram-popover"
+          role="tooltip"
+          notFoundFallback={null}
+          loadingFallback={null}
+          errorFallback={null}
+        />
+      </span>
+    );
+  }
+
+  // inline: the compact diagram stands in for the chord name.
+  return (
+    <span
+      className="chord chord-block-inline-diagram"
+      style={chordStyle ?? undefined}
+      {...(dragProps ?? {})}
+    >
+      <ChordDiagram
+        chord={chordName}
+        instrument={instrument}
+        orientation={orientation}
+        defines={defines}
+        compact
+        className="chord-block-diagram"
+        notFoundFallback={nameNode}
+        loadingFallback={nameNode}
+        errorFallback={() => nameNode}
+      />
+    </span>
+  );
 }
 
 interface DropTarget {
@@ -1626,6 +1728,7 @@ function LyricsLine({
   reposition,
   className,
   'data-source-line': dataSourceLine,
+  diagrams,
 }: LyricsLineProps): JSX.Element {
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   // Pre-walk segments to record per-chord source columns and
@@ -1785,14 +1888,31 @@ function LyricsLine({
         return (
           <span key={i} className="chord-block">
             {segment.chord ? (
-              <span
-                className="chord"
-                style={chordStyle ?? undefined}
-                {...(chordDragProps ?? {})}
-              >
-                {chordMarker}
-                {renderChord(segment.chord)}
-              </span>
+              diagrams &&
+              (diagrams.mode === 'inline' || diagrams.mode === 'hover') ? (
+                // chordsketch inline / hover diagram above the lyric
+                // (ADR-0027). `<ChordCell>` is a component so its
+                // `useChordDiagram` hook can run per chord.
+                <ChordCell
+                  mode={diagrams.mode}
+                  chord={segment.chord}
+                  marker={chordMarker}
+                  chordStyle={chordStyle}
+                  dragProps={chordDragProps ?? undefined}
+                  instrument={diagrams.instrument}
+                  orientation={diagrams.orientation}
+                  defines={diagrams.defines}
+                />
+              ) : (
+                <span
+                  className="chord"
+                  style={chordStyle ?? undefined}
+                  {...(chordDragProps ?? {})}
+                >
+                  {chordMarker}
+                  {renderChord(segment.chord)}
+                </span>
+              )
             ) : lineHasChords ? (
               <span
                 className="chord"
@@ -2485,10 +2605,22 @@ export type DiagramsPosition = 'bottom' | 'top' | 'right' | 'below';
  * until reset", and a single section is emitted at song end with
  * the last value that won).
  */
+/**
+ * How chord diagrams are surfaced — a chordsketch extension to the
+ * `{diagrams}` directive (ADR-0027). Mirrors the Rust `DiagramsMode`.
+ * `'section'` (default) is the end-of-song grid; `'inline'` replaces
+ * each chord name above a lyric with its compact diagram; `'hover'`
+ * keeps the name and reveals the compact diagram on hover / focus.
+ */
+type DiagramsMode = 'section' | 'inline' | 'hover';
+
 interface DiagramsState {
   visible: boolean;
   position: DiagramsPosition;
   instrument?: ChordDiagramInstrument;
+  /** Surfacing mode (ADR-0027), orthogonal to instrument / position
+   * so `{diagrams: inline}` and `{diagrams: guitar}` compose. */
+  mode: DiagramsMode;
 }
 
 // Collect unique chord names used in lyrics, plus any chord
@@ -2740,6 +2872,10 @@ const DIAGRAMS_POSITIONS = new Set<DiagramsPosition>([
   'right',
   'below',
 ]);
+// Mode keywords recognised on a `{diagrams: …}` value (chordsketch
+// extension, ADR-0027). Kept separate from instrument / position so a
+// value matches exactly one facet; `section` restores the default grid.
+const DIAGRAMS_MODES = new Set<DiagramsMode>(['section', 'inline', 'hover']);
 
 // Translate AST-stored instrument shorthand to the canonical
 // `ChordDiagramInstrument` value. Mirrors the equivalent map in
@@ -2778,7 +2914,11 @@ function diagramsValueAsInstrument(
 // followed by `{diagrams: piano}` keeps both — position `top`,
 // instrument `piano`).
 function resolveDiagramsState(song: ChordproSong): DiagramsState {
-  const state: DiagramsState = { visible: true, position: 'bottom' };
+  const state: DiagramsState = {
+    visible: true,
+    position: 'bottom',
+    mode: 'section',
+  };
   for (const line of song.lines) {
     if (line.kind !== 'directive') continue;
     const kind = line.value.kind;
@@ -2804,6 +2944,13 @@ function resolveDiagramsState(song: ChordproSong): DiagramsState {
     state.visible = true;
     if (DIAGRAMS_POSITIONS.has(value as DiagramsPosition)) {
       state.position = value as DiagramsPosition;
+      continue;
+    }
+    if (DIAGRAMS_MODES.has(value as DiagramsMode)) {
+      // chordsketch extension (ADR-0027): `inline` / `hover` choose how
+      // diagrams are surfaced (`section` restores the default grid).
+      // Orthogonal to instrument / position, so it sets only `mode`.
+      state.mode = value as DiagramsMode;
       continue;
     }
     const instr = diagramsValueAsInstrument(value);
@@ -3339,6 +3486,27 @@ interface WalkContext {
    * `.lyrics` becomes a drop target.
    */
   onChordReposition?: (event: ChordRepositionEvent) => void;
+  /**
+   * Diagram state (visibility / mode / instrument / position) resolved
+   * once over the whole song. The per-line chord-block renderer reads
+   * this to decide inline / hover rendering above the lyrics (ADR-0027),
+   * and the end-of-song grid reuses it. `null` when `chordDiagrams` is
+   * not enabled.
+   */
+  diagramsState?: DiagramsState | null;
+  /**
+   * Per-`{define}` chord voicings collected once so inline / hover
+   * diagrams honour user-defined shapes (mirrors the end-of-song grid).
+   */
+  diagramDefines?: ReadonlyArray<readonly [string, string]>;
+  /**
+   * Consumer-supplied default instrument / orientation for diagrams,
+   * copied from `options.chordDiagrams` so the per-line chord-block
+   * renderer (which only has `ctx`, not `options`) can fall back to
+   * them for inline / hover diagrams (ADR-0027).
+   */
+  chordDiagramsInstrument?: ChordDiagramInstrument;
+  chordDiagramsOrientation?: ChordDiagramOrientation;
 }
 
 /**
@@ -3914,6 +4082,17 @@ function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {
           lyricsOverride,
           placement,
           repositionCtx,
+          ctx.diagramsState && ctx.diagramsState.visible
+            ? {
+                mode: ctx.diagramsState.mode,
+                instrument:
+                  ctx.diagramsState.instrument ??
+                  ctx.chordDiagramsInstrument ??
+                  'guitar',
+                orientation: ctx.chordDiagramsOrientation,
+                defines: ctx.diagramDefines,
+              }
+            : null,
         ),
         sourceLine,
         null,
@@ -3988,6 +4167,10 @@ export function renderChordproAst(
         : null,
     transposedKeyDirectives: options.transposedKeyDirectives ?? {},
     onChordReposition: options.onChordReposition,
+    diagramsState: options.chordDiagrams ? resolveDiagramsState(song) : null,
+    diagramDefines: options.chordDiagrams ? collectDefines(song) : undefined,
+    chordDiagramsInstrument: options.chordDiagrams?.instrument,
+    chordDiagramsOrientation: options.chordDiagrams?.orientation,
   };
   // Emit header first so metadata lands above the body even when
   // the source has metadata directives interleaved with lines.
@@ -4044,7 +4227,10 @@ export function renderChordproAst(
   // `resolveDiagramsState` walks the lines once; capture it here so
   // the song-class modifier below shares the same state object
   // without re-walking.
-  const diagramsState = options.chordDiagrams ? resolveDiagramsState(song) : null;
+  // Reuse the state already resolved onto `ctx` before the body walk so
+  // the per-line chord-block renderer (inline / hover) and this
+  // end-of-song grid share one state object.
+  const diagramsState = ctx.diagramsState ?? null;
   // `right` requires a different DOM shape (two-column flex with
   // the body wrapped in a single flow container) so the diagram
   // column sits beside the body without forcing the body's line
@@ -4052,7 +4238,15 @@ export function renderChordproAst(
   // here so the rendering branch downstream can wrap the body.
   let rightSection: ReactNode = null;
   let bottomSection: ReactNode = null;
-  if (diagramsState?.visible && options.chordDiagrams) {
+  // The end-of-song grid is the `section` mode (default). In the
+  // `inline` / `hover` chordsketch modes (ADR-0027) the diagrams are
+  // shown above the lyrics by the chord-block renderer instead, so the
+  // grid is suppressed here.
+  if (
+    diagramsState?.visible &&
+    diagramsState.mode === 'section' &&
+    options.chordDiagrams
+  ) {
     const chordDiagramsOpts = options.chordDiagrams;
     const names = collectChordNames(song);
     if (names.length > 0) {
