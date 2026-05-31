@@ -550,6 +550,26 @@ function PlaygroundApp(): JSX.Element {
 
   const editorRef = useRef<ChordSourceAreaHandle | null>(null);
 
+  // Directive picker options, sourced from the shared @chordsketch/wasm
+  // catalog (ADR-0028) so the list stays complete and never drifts from
+  // what the parser, editor completion, and LSP recognise.
+  const [directiveCatalog, setDirectiveCatalog] = useState<
+    DirectiveCatalogEntry[]
+  >([]);
+  useEffect(() => {
+    let cancelled = false;
+    loadChordproCatalog()
+      .then((catalog) => {
+        if (!cancelled) setDirectiveCatalog(catalog.listDirectives());
+      })
+      .catch(() => {
+        // wasm unavailable: leave the picker with only its placeholder.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     if (version !== null) return;
     void wasmReady.then(() => {
