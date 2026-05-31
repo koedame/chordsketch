@@ -51,6 +51,21 @@ interface DiagramRenderer {
     defines: Array<[string, string]>,
     orientation: ChordDiagramOrientation | null | undefined,
   ) => string | null | undefined;
+  /**
+   * Compact-size variant honouring the chordsketch `{diagrams: inline}`
+   * / `{diagrams: hover}` modes. Same arguments as
+   * `chordDiagramSvgWithDefinesOrientation` but returns the smaller
+   * above-a-lyric layout (geometry shrunk, glyphs kept legible — see
+   * the Rust `DiagramSize::Compact`). Absent on `@chordsketch/wasm`
+   * bundles predating the compact export, so callers must
+   * feature-detect and fall back to the regular export.
+   */
+  chordDiagramSvgWithDefinesOrientationCompact?: (
+    chord: string,
+    instrument: string,
+    defines: Array<[string, string]>,
+    orientation: ChordDiagramOrientation | null | undefined,
+  ) => string | null | undefined;
 }
 
 /** Diagram orientation accepted by {@link useChordDiagram}. */
@@ -158,6 +173,7 @@ export function useChordDiagram(
   loader: ChordDiagramWasmLoader = defaultLoader,
   defines?: ReadonlyArray<readonly [string, string]>,
   orientation?: ChordDiagramOrientation,
+  compact?: boolean,
 ): ChordDiagramResult {
   const [svg, setSvg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -201,17 +217,44 @@ export function useChordDiagram(
         // `<ChordDiagram>` instances logs the message exactly once
         // across the whole page rather than once per instance.
         const definesArray = defines ? defines.map(([n, r]) => [n, r] as [string, string]) : [];
+        // Clear oversized orientation strings before crossing the
+        // wasm ABI — see `MAX_ORIENTATION_INPUT_LEN`. A hostile
+        // direct caller that bypasses the TS `ChordDiagramOrientation`
+        // constraint with `as` cannot force the wasm side into an
+        // allocation it would otherwise reject.
+        const safeOrientation =
+          typeof orientation === 'string' && orientation.length > MAX_ORIENTATION_INPUT_LEN
+            ? null
+            : (orientation ?? null);
         let result: string | null | undefined;
-        if (renderer.chordDiagramSvgWithDefinesOrientation) {
-          // Clear oversized orientation strings before crossing the
-          // wasm ABI — see `MAX_ORIENTATION_INPUT_LEN`. A hostile
-          // direct caller that bypasses the TS `ChordDiagramOrientation`
-          // constraint with `as` cannot force the wasm side into an
-          // allocation it would otherwise reject.
-          const safeOrientation =
-            typeof orientation === 'string' && orientation.length > MAX_ORIENTATION_INPUT_LEN
-              ? null
-              : (orientation ?? null);
+        if (compact && renderer.chordDiagramSvgWithDefinesOrientationCompact) {
+          // Compact above-a-lyric layout (`{diagrams: inline}` /
+          // `{diagrams: hover}`). Only reachable when the loaded bundle
+          // exposes the compact export.
+          result = renderer.chordDiagramSvgWithDefinesOrientationCompact(
+            chord,
+            instrument,
+            definesArray,
+            safeOrientation,
+          );
+        } else if (renderer.chordDiagramSvgWithDefinesOrientation) {
+          // `compact` requested but the loaded bundle predates the
+          // compact export: degrade to the regular-size diagram rather
+          // than throwing, and warn once so the staleness is auditable
+          // (same latch policy as the orientation fallback below).
+          if (compact) {
+            const staleCompactKey = 'compact-export-missing';
+            if (!staleBundleWarnings.has(staleCompactKey)) {
+              staleBundleWarnings.add(staleCompactKey);
+              // eslint-disable-next-line no-console
+              console.warn(
+                '[@chordsketch/react] useChordDiagram: the loaded @chordsketch/wasm bundle ' +
+                  'does not expose chordDiagramSvgWithDefinesOrientationCompact; rendering the ' +
+                  'regular (full-size) diagram. Update @chordsketch/wasm to honour the ' +
+                  'compact prop.',
+              );
+            }
+          }
           result = renderer.chordDiagramSvgWithDefinesOrientation(
             chord,
             instrument,
@@ -265,7 +308,7 @@ export function useChordDiagram(
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chord, instrument, definesKey, orientation]);
+  }, [chord, instrument, definesKey, orientation, compact]);
 
   return { svg, loading, error };
 }

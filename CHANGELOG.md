@@ -34,6 +34,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the active orientation as a `data-orientation` attribute on its
   wrapper so consumers and tests can observe it without parsing the
   SVG. (#2572)
+- `{diagrams: inline}` and `{diagrams: hover}` chordsketch-only modes
+  render compact chord diagrams directly above each lyric line rather
+  than in the end-of-song diagram grid. `inline` replaces the chord
+  name with the compact diagram; `hover` keeps the chord name as text
+  and reveals the compact diagram on mouse hover or keyboard focus.
+  The compact layout uses a separate geometry (not a CSS `scale()`) to
+  keep the chord-name title and glyph text legible at smaller size.
+  (#2585)
+- Shared directive catalog (`directive_catalog.rs`) powers directive-name
+  and directive-value completion in the LSP / VS Code extension and the
+  web CodeMirror editor from a single source, replacing the previous
+  hand-maintained copies. The catalog is exposed via the wasm
+  `listDirectives()` and `directiveValueOptions()` exports so every
+  editing surface reads the same list. (#2585)
 
 ### Changed
 

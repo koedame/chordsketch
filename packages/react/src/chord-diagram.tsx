@@ -32,6 +32,17 @@ export interface ChordDiagramProps extends Omit<HTMLAttributes<HTMLDivElement>, 
    */
   orientation?: ChordDiagramOrientation;
   /**
+   * Render the compact above-a-lyric layout (a chordsketch extension
+   * used by the `{diagrams: inline}` / `{diagrams: hover}` modes).
+   * Defaults to `false` (the full-size diagram). The compact SVG keeps
+   * the chord-name title and finger glyphs legible while shrinking the
+   * grid geometry, and carries a `chord-diagram-compact` /
+   * `keyboard-diagram-compact` class on its root for CSS targeting.
+   * Falls back to the regular size on `@chordsketch/wasm` bundles that
+   * predate the compact export.
+   */
+  compact?: boolean;
+  /**
    * Optional node shown while the WASM module loads. Defaults to
    * a minimal `role="status"` placeholder.
    */
@@ -109,6 +120,7 @@ export function ChordDiagram({
   instrument = 'guitar',
   defines,
   orientation,
+  compact,
   loadingFallback,
   notFoundFallback = defaultNotFoundFallback,
   errorFallback = defaultErrorFallback,
@@ -122,9 +134,12 @@ export function ChordDiagram({
     wasmLoader,
     defines,
     orientation,
+    compact,
   );
 
-  const wrapperClass = ['chordsketch-diagram', className].filter(Boolean).join(' ');
+  const wrapperClass = ['chordsketch-diagram', compact && 'chordsketch-diagram--compact', className]
+    .filter(Boolean)
+    .join(' ');
   // Surface the active orientation as a DOM attribute so consumers
   // and tests can observe it without parsing the SVG. Omitted (not
   // emitted as `data-orientation=""`) when the prop is unset so the

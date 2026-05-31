@@ -87,6 +87,21 @@ export {
   type ChordSourceAreaProps,
 } from './chord-source-area';
 export { chordProLanguage, chordProTagTable } from './chordpro-language';
+
+// ChordPro directive + directive-value completion (ADR-0028). The
+// `<ChordSourceArea>` wires `chordProCompletionSource` into CodeMirror
+// automatically; `loadChordproCatalog` is exposed so other consumers
+// (e.g. an "Insert directive" picker) can drive their directive list from
+// the same shared `@chordsketch/wasm` catalog the editor + LSP use.
+export {
+  chordProCompletionSource,
+  loadChordproCatalog,
+  detectChordproCompletion,
+  type ChordproCatalog,
+  type ChordproCatalogLoader,
+  type ChordproCompletionContext,
+  type DirectiveCatalogEntry,
+} from './chordpro-completion';
 export { SplitLayout, type SplitLayoutProps } from './split-layout';
 export {
   RendererPreview,
