@@ -4062,3 +4062,19 @@ describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
     expect(hover.container.querySelector('.chord-diagrams')).toBeNull();
     expect(hover.container.querySelector('.song__body')).toBeNull();
 
+    // Section mode: a chord IS present, so the end-of-song grid emits
+    // (position defaults to `bottom`). The wrapper MUST carry the
+    // `song song--diagrams-bottom` modifier AND wrap the body in a
+    // single `.song__body` flex child so only the body wrapper + the
+    // grid section feel the column-flex (chips inside flow inline).
+    const section = render(
+      renderChordproAst(mixedSegmentSong('section'), { chordDiagrams: { instrument: 'guitar' } }),
+    );
+    const sectionSong = section.container.querySelector('.song');
+    expect(sectionSong?.className).toBe('song song--diagrams-bottom');
+    expect(section.container.querySelector('.song__body')).not.toBeNull();
+    // Sanity: the grid that justifies the modifier really is present.
+    expect(section.container.querySelector('.chord-diagrams')).not.toBeNull();
+  });
+});
+
