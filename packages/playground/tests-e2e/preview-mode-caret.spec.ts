@@ -21,12 +21,12 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Place the caret on a lyric line so the preview has a body element
 // mapped to that source line to highlight, and a lyric caret position
-// for the marker. Clicking inside `.cm-content` drives CodeMirror's
+// for the marker. Clicking a `.cm-line` element drives CodeMirror's
 // selection, which fires the playground's `onCaretChange` relay.
 async function focusLyricCaret(page: Page): Promise<void> {
   const lyric = page
-    .locator('.cm-editor .cm-content')
-    .getByText('sweet', { exact: false });
+    .locator('.cm-editor .cm-line')
+    .filter({ hasText: 'sweet' });
   // The default sample has exactly one "sweet"; assert it so the helper
   // fails loudly rather than silently clicking the wrong line should the
   // sample ever gain a second occurrence.
