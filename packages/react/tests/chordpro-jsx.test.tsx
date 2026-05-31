@@ -3903,4 +3903,178 @@ describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
     expect(container.querySelector('.chord-block-inline-diagram')).toBeNull();
     expect(container.querySelector('.chord-diagrams')).toBeNull();
   });
+
+  // A song with a chord-bearing segment followed by a chord-LESS
+  // segment on the same line, plus `{key}` / `{tempo}` directives and
+  // a `{diagrams: …}` mode. Exercises the inline-diagram baseline-
+  // alignment hook, the meta-inline chip-className invariant, and the
+  // `song--diagrams-*` wrapper gate.
+  function mixedSegmentSong(diagramsValue: string): ChordproSong {
+    return {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'directive',
+          value: { name: 'key', value: 'G', kind: { tag: 'key' }, selector: null },
+        },
+        {
+          kind: 'directive',
+          value: { name: 'tempo', value: '120', kind: { tag: 'tempo' }, selector: null },
+        },
+        {
+          kind: 'directive',
+          value: {
+            name: 'diagrams',
+            value: diagramsValue,
+            kind: { tag: 'diagrams' },
+            selector: null,
+          },
+        },
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              { chord: { name: 'C', detail: null, display: null }, text: 'Hello ', spans: [] },
+              { chord: null, text: 'world', spans: [] },
+            ],
+          },
+        },
+      ],
+    };
+  }
+
+  test('when diagrams mode is inline, then the lyrics line carries the line--inline-diagrams baseline hook (only in inline)', () => {
+    // In inline mode the compact diagram makes the chord row ~40px
+    // tall, so a chord-LESS block's lyric floats up to the top of the
+    // row instead of sitting on the lyric baseline next to the
+    // chord-bearing block's lyric. The fix bottom-aligns the line's
+    // flex items via `.line--inline-diagrams`.
+    //
+    // jsdom has no layout engine, so this only proves the structural
+    // hook (the CSS selector) is emitted in inline mode and withheld
+    // elsewhere. The ACTUAL baseline alignment is verified in a real
+    // browser by `tests-e2e/diagrams-inline-hover.spec.ts`.
+    const inline = render(
+      renderChordproAst(mixedSegmentSong('inline'), { chordDiagrams: { instrument: 'guitar' } }),
+    );
+    const inlineLine = inline.container.querySelector('div.line');
+    expect(inlineLine).not.toBeNull();
+    expect(inlineLine?.classList.contains('line--inline-diagrams')).toBe(true);
+    // The line still carries the compact diagram cell (chord-bearing
+    // block) AND the chord-less block whose lyric must align.
+    expect(inlineLine?.querySelector('.chord-block-inline-diagram')).not.toBeNull();
+    expect(inline.container.textContent).toContain('world');
+
+    // Regular (section) mode must NOT get the modifier — gating the
+    // bottom-alignment to inline keeps regular/hover layout (and their
+    // snapshots) unchanged.
+    const section = render(
+      renderChordproAst(mixedSegmentSong('section'), { chordDiagrams: { instrument: 'guitar' } }),
+    );
+    expect(
+      section.container.querySelector('div.line')?.classList.contains('line--inline-diagrams'),
+    ).toBe(false);
+
+    // Hover mode keeps the chord NAME as the trigger (same ~1em height
+    // as regular), so it does NOT need — and must not get — the hook.
+    const hover = render(
+      renderChordproAst(mixedSegmentSong('hover'), { chordDiagrams: { instrument: 'guitar' } }),
+    );
+    expect(
+      hover.container.querySelector('div.line')?.classList.contains('line--inline-diagrams'),
+    ).toBe(false);
+  });
+
+  test('when the diagram mode changes, then the {key} / {tempo} meta-inline chip classNames stay mode-independent', () => {
+    // The reported regression was that `{diagrams: inline}` restyled the
+    // top-level `{key}` / `{tempo}` chips (stacked / full-width). The
+    // ROOT CAUSE — a stray `song--diagrams-bottom` wrapper flipping the
+    // article to a flex column — is pinned by the next test, and the
+    // VISUAL effect (chip width) is verified in a real browser by
+    // `tests-e2e/diagrams-inline-hover.spec.ts`.
+    //
+    // This test guards a narrower, walker-level invariant that neither
+    // of those covers: the chips themselves must be emitted with the
+    // same className regardless of diagram mode — a future walker branch
+    // that added a mode-dependent class directly to a chip would slip
+    // past the wrapper-class test. It deliberately does NOT claim to
+    // prove the chips "render identically" (jsdom can't measure layout).
+    const inline = render(
+      renderChordproAst(mixedSegmentSong('inline'), { chordDiagrams: { instrument: 'guitar' } }),
+    );
+    const section = render(
+      renderChordproAst(mixedSegmentSong('section'), { chordDiagrams: { instrument: 'guitar' } }),
+    );
+    const chipClasses = (root: HTMLElement): string[] =>
+      Array.from(root.querySelectorAll('.meta-inline')).map((el) => (el as HTMLElement).className);
+    const sectionChips = chipClasses(section.container);
+    // Both modes surface the {key} and {tempo} markers.
+    expect(sectionChips.length).toBe(2);
+    expect(chipClasses(inline.container)).toEqual(sectionChips);
+    // Each chip's className is byte-identical across modes.
+    const keyChip = (root: HTMLElement): string =>
+      (root.querySelector('.meta-inline--key') as HTMLElement).className;
+    expect(keyChip(inline.container)).toBe(keyChip(section.container));
+    const tempoChip = (root: HTMLElement): string =>
+      (root.querySelector('.meta-inline--tempo') as HTMLElement).className;
+    expect(tempoChip(inline.container)).toBe(tempoChip(section.container));
+  });
+
+  test('when diagrams mode is inline or hover, then the song--diagrams-* wrapper modifier is withheld (it fires only when the end-of-song grid is emitted)', () => {
+    // Bug 1 root cause: the wrapper class carried
+    // `song--diagrams-${position}` whenever diagrams were *visible*,
+    // and `position` defaults to `bottom`. So `{diagrams: inline}` and
+    // `{diagrams: hover}` — which suppress the end-of-song grid and
+    // emit NO wrapper sibling — still flipped the article to
+    // `.song--diagrams-bottom` (display:flex / column). With no grid
+    // sibling and no `.song__body` wrapper, every body child (lines,
+    // sections, and the top-level `{key}` / `{tempo}` `.meta-inline`
+    // chips) became an independent flex-column item and stacked /
+    // stretched to full width. jsdom has no layout engine so it can't
+    // measure the stacking, but the WRONG WRAPPER CLASS that causes it
+    // is structurally observable — this test pins the invariant
+    // "position modifier ⇔ grid present" that the className alone never
+    // expressed.
+    //
+    // Inline mode: no grid, so the wrapper must be plain `.song`
+    // (block flow). NOT `song--diagrams-bottom`.
+    const inline = render(
+      renderChordproAst(mixedSegmentSong('inline'), { chordDiagrams: { instrument: 'guitar' } }),
+    );
+    const inlineSong = inline.container.querySelector('.song');
+    expect(inlineSong).not.toBeNull();
+    expect(inlineSong?.className).toBe('song');
+    // Defensive: no `song--diagrams-*` modifier of any position leaks
+    // into inline mode (guards a future `position` directive in an
+    // inline song from re-introducing the bug under a different
+    // suffix).
+    expect(inlineSong?.className).not.toMatch(/\bsong--diagrams-/);
+    // The inline body has no end-of-song grid and no `.song__body`
+    // wrapper — both are section-mode-only.
+    expect(inline.container.querySelector('.chord-diagrams')).toBeNull();
+    expect(inline.container.querySelector('.song__body')).toBeNull();
+
+    // Hover mode: same as inline — grid suppressed, plain `.song`.
+    const hover = render(
+      renderChordproAst(mixedSegmentSong('hover'), { chordDiagrams: { instrument: 'guitar' } }),
+    );
+    expect(hover.container.querySelector('.song')?.className).toBe('song');
+    expect(hover.container.querySelector('.chord-diagrams')).toBeNull();
+    expect(hover.container.querySelector('.song__body')).toBeNull();
+
+    // Section mode: a chord IS present, so the end-of-song grid emits
+    // (position defaults to `bottom`). The wrapper MUST carry the
+    // `song song--diagrams-bottom` modifier AND wrap the body in a
+    // single `.song__body` flex child so only the body wrapper + the
+    // grid section feel the column-flex (chips inside flow inline).
+    const section = render(
+      renderChordproAst(mixedSegmentSong('section'), { chordDiagrams: { instrument: 'guitar' } }),
+    );
+    const sectionSong = section.container.querySelector('.song');
+    expect(sectionSong?.className).toBe('song song--diagrams-bottom');
+    expect(section.container.querySelector('.song__body')).not.toBeNull();
+    // Sanity: the grid that justifies the modifier really is present.
+    expect(section.container.querySelector('.chord-diagrams')).not.toBeNull();
+  });
 });
+
