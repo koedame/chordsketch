@@ -1,16 +1,17 @@
 //! LSP completion support for ChordPro files.
 //!
 //! Completion items are built from static, compile-time data — no external
-//! files or network access. The three completion contexts are:
+//! files or network access. The four completion contexts are:
 //!
-//! - **Directive name**: inside `{...}` before or at the `:`
+//! - **Directive name**: inside `{...}` before the `:`
+//! - **Directive value**: after the `:` of an enum-valued directive (e.g. `{diagrams: }`)
 //! - **Chord name**: inside `[...]`
 //! - **Metadata key**: inside `{meta: ...}` after the space
 //!
 //! Context detection works by scanning the line text up to the cursor column
 //! and finding the innermost open delimiter.
 
-use chordsketch_chordpro::directive_catalog::{self, DirectiveValueKind};
+use chordsketch_chordpro::directive_catalog;
 use tower_lsp::lsp_types::{
     CompletionItem, CompletionItemKind, Documentation, MarkupContent, MarkupKind,
 };
@@ -225,7 +226,6 @@ pub fn directive_value_items(directive: &str, prefix: &str) -> Vec<CompletionIte
     let Some(values) = directive_catalog::directive_value_options(directive) else {
         return Vec::new();
     };
-    let _ = DirectiveValueKind::None; // keep the import meaningful for readers
     values
         .iter()
         .filter(|v| v.starts_with(prefix))

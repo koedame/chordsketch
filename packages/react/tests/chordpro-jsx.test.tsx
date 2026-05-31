@@ -3818,7 +3818,12 @@ describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
     // Keyboard-reachable trigger (the popover reveal is CSS :focus).
     expect(trigger?.getAttribute('tabindex')).toBe('0');
     expect(trigger?.textContent).toContain('C');
-    expect(container.querySelector('.chord-diagram-popover')).not.toBeNull();
+    const popover = container.querySelector('.chord-diagram-popover');
+    expect(popover).not.toBeNull();
+    // aria-describedby / id linkage for assistive technology (useId).
+    const tooltipId = trigger?.getAttribute('aria-describedby');
+    expect(tooltipId).toBeTruthy();
+    expect(popover?.getAttribute('id')).toBe(tooltipId);
     expect(container.querySelector('.chord-block-inline-diagram')).toBeNull();
     expect(container.querySelector('.chord-diagrams')).toBeNull();
   });

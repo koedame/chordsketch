@@ -24,7 +24,7 @@
 // `DANGEROUS_URI_SCHEMES` here in the same PR per
 // `.claude/rules/sanitizer-security.md` §"Security Asymmetry".
 
-import { Fragment, cloneElement, isValidElement, useMemo, useState } from 'react';
+import { Fragment, cloneElement, isValidElement, useId, useMemo, useState } from 'react';
 import type { CSSProperties, DragEvent as ReactDragEvent, JSX, ReactNode } from 'react';
 
 import { ChordDiagram } from './chord-diagram';
@@ -1647,16 +1647,21 @@ function ChordCell(props: {
     </>
   );
 
+  // Stable ID required for the aria-describedby / id pairing below.
+  const tooltipId = useId();
+
   if (mode === 'hover') {
     return (
       <span
         className="chord chord-has-diagram"
         style={chordStyle ?? undefined}
         tabIndex={0}
+        aria-describedby={tooltipId}
         {...(dragProps ?? {})}
       >
         {nameNode}
         <ChordDiagram
+          id={tooltipId}
           chord={chordName}
           instrument={instrument}
           orientation={orientation}
