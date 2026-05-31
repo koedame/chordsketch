@@ -1850,7 +1850,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn do_list_directives_covers_catalog_and_marks_enum_values() {
         let list = do_list_directives();
