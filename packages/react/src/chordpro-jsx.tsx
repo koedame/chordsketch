@@ -1637,8 +1637,10 @@ function ChordCell(props: {
 }): JSX.Element {
   const { mode, chord, marker, chordStyle, dragProps, instrument, orientation, defines } =
     props;
-  // The wasm voicing lookup keys on the plain chord name (same source
-  // the end-of-song grid uses), NOT the unicode-accidental display form.
+  // The wasm voicing lookup keys on the {define} display override when
+  // present, falling back to the raw chord name — the same expression
+  // collectChordNames uses for the end-of-song grid. The
+  // unicodeAccidentals() / renderChord formatting is NOT applied here.
   const chordName = chord.display ?? chord.name;
   const nameNode = (
     <>

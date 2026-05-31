@@ -3002,4 +3002,103 @@ mod tests {
         assert_eq!(resolve_orientation(Some("")), Orientation::Vertical);
         assert_eq!(try_parse_orientation_value(Some("")), None);
     }
+
+    // -----------------------------------------------------------------------
+    // DiagramsMode resolver edge cases (finding #5a)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn resolve_diagrams_mode_rejects_oversized_input() {
+        let big = "a".repeat(MAX_RESOLVER_INPUT_LEN + 1);
+        assert_eq!(try_parse_diagrams_mode(Some(&big)), None);
+        assert_eq!(resolve_diagrams_mode(Some(&big)), DiagramsMode::Section);
+    }
+
+    #[test]
+    fn resolve_diagrams_mode_empty_string_falls_back_to_section() {
+        assert_eq!(try_parse_diagrams_mode(Some("")), None);
+        assert_eq!(resolve_diagrams_mode(Some("")), DiagramsMode::Section);
+    }
+
+    // -----------------------------------------------------------------------
+    // Compact diagram class coverage in the CORE crate (finding #5b)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn compact_vertical_guitar_carries_compact_class_not_horizontal() {
+        let data = DiagramData {
+            name: "Am".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 0, 2, 2, 1, 0],
+            fingers: vec![],
+        };
+        let svg = render_svg_with_options(&data, Orientation::Vertical, DiagramSize::Compact);
+        assert!(
+            svg.contains("chord-diagram-compact"),
+            "compact vertical guitar must carry chord-diagram-compact class; got: {svg}"
+        );
+        assert!(
+            !svg.contains("chord-diagram-horizontal"),
+            "compact vertical must not carry horizontal class; got: {svg}"
+        );
+    }
+
+    #[test]
+    fn compact_ukulele_carries_compact_class() {
+        let data = DiagramData {
+            name: "C".to_string(),
+            display_name: None,
+            strings: 4,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![0, 0, 0, 3],
+            fingers: vec![],
+        };
+        let svg = render_svg_with_options(&data, Orientation::Vertical, DiagramSize::Compact);
+        assert!(
+            svg.contains("chord-diagram-compact"),
+            "compact ukulele (4-string) must carry chord-diagram-compact class; got: {svg}"
+        );
+    }
+
+    #[test]
+    fn compact_keyboard_carries_compact_class() {
+        let v = KeyboardVoicing {
+            name: "C".to_string(),
+            display_name: None,
+            keys: vec![60, 64, 67],
+            root_key: 60,
+        };
+        let svg = render_keyboard_svg_with_size(&v, DiagramSize::Compact);
+        assert!(
+            svg.contains("keyboard-diagram-compact"),
+            "compact keyboard must carry keyboard-diagram-compact class; got: {svg}"
+        );
+    }
+
+    #[test]
+    fn render_svg_with_options_regular_vertical_byte_identical_to_with_orientation() {
+        // Back-compat pin: render_svg_with_options(data, Vertical, Regular)
+        // must be byte-identical to render_svg_with_orientation(data, Vertical).
+        let data = DiagramData {
+            name: "Am".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 0, 2, 2, 1, 0],
+            fingers: vec![],
+        };
+        let via_with_orientation = render_svg_with_orientation(&data, Orientation::Vertical);
+        let via_with_options =
+            render_svg_with_options(&data, Orientation::Vertical, DiagramSize::Regular);
+        assert_eq!(
+            via_with_orientation, via_with_options,
+            "render_svg_with_options(Vertical, Regular) must be byte-identical to \
+             render_svg_with_orientation(Vertical)"
+        );
+    }
 }

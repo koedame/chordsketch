@@ -65,15 +65,21 @@ export const loadChordproCatalog: ChordproCatalogLoader = async () => {
   };
 };
 
-/** Characters that may appear in a directive name (matches the parser). */
+/**
+ * Conservative superset of the characters seen in catalog directive names;
+ * used as `validFor` so CodeMirror keeps the popup open as the user types.
+ * Not a formal parser char-class.
+ */
 const DIRECTIVE_NAME_RE = /^[A-Za-z0-9_+.-]*$/;
 /** Characters that may appear in a completable directive value token. */
 const DIRECTIVE_VALUE_RE = /^[A-Za-z0-9_-]*$/;
 
 /**
  * Resolved completion context from the text before the caret on one line.
- * `from` is the 0-based offset (within `textBefore`) where the replaceable
- * token starts. `null` means "no ChordPro completion here".
+ * `from` is a 0-based offset from the start of the containing line
+ * (`line.text`); the CompletionSource adds `line.from` to get the
+ * document-absolute offset CodeMirror needs. `null` means "no ChordPro
+ * completion here".
  */
 export type ChordproCompletionContext =
   | { kind: 'directive'; prefix: string; from: number }

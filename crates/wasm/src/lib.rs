@@ -1828,6 +1828,28 @@ mod tests {
 
     // ---- directive catalog exports (ADR-0028) ----
 
+    // If this set changes, update the DirectiveInfo `valueKind` union in
+    // crates/wasm/src/bindings.rs (DIRECTIVE_CATALOG_TS) and
+    // packages/react/src/chordpro-completion.ts in lockstep.
+    #[test]
+    fn do_list_directives_value_kind_is_one_of_the_known_set() {
+        use std::collections::BTreeSet;
+        let kinds: BTreeSet<String> = do_list_directives()
+            .iter()
+            .map(|d| d.value_kind.clone())
+            .collect();
+        let expected: BTreeSet<String> = ["none", "freeform", "enum"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(
+            kinds, expected,
+            "value_kind strings must be exactly {{\"none\", \"freeform\", \"enum\"}}; \
+             update the DirectiveInfo `valueKind` union in bindings.rs and \
+             chordpro-completion.ts if this set changes"
+        );
+    }
+
     #[test]
     fn do_list_directives_covers_catalog_and_marks_enum_values() {
         let list = do_list_directives();

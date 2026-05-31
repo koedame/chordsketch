@@ -94,6 +94,66 @@ describe('detectChordproCompletion', () => {
   it('returns null when the value already contains a space (free text)', () => {
     expect(detectChordproCompletion('{title: My Song')).toBeNull();
   });
+
+  it('two leading spaces after colon: from accounts for both spaces', () => {
+    // '{diagrams:  inl' — two spaces between the colon and 'inl'.
+    // The single-space case is '{diagrams: inl' → from=11 (tested above).
+    // With two spaces: afterOpen = 'diagrams:  inl', colon=8,
+    // rawValue = '  inl', valueStart=2, so from = lastOpen+1 + colon+1 + valueStart
+    //   = 0+1 + 8+1 + 2 = 12.
+    const result = detectChordproCompletion('{diagrams:  inl');
+    expect(result).toEqual({
+      kind: 'value',
+      directive: 'diagrams',
+      prefix: 'inl',
+      from: 12,
+    });
+  });
+
+  it('value-less directive alias returns null after its colon', async () => {
+    // 'new_song' has valueKind='none'; its alias 'ns' also has no enum values.
+    // After '{ns: ', chordProCompletionSource must return null because
+    // directiveValueOptions('ns') returns null for non-enum directives.
+    const result = await complete('{ns: ');
+    expect(result).toBeNull();
+  });
+});
+
+// If the Rust-side known set changes, update the union in
+// crates/wasm/src/bindings.rs (DIRECTIVE_CATALOG_TS) and in
+// DirectiveCatalogEntry['valueKind'] above, in lockstep.
+// Mirrors: crates/wasm/src/lib.rs::do_list_directives_value_kind_is_one_of_the_known_set
+describe('valueKind union stays in lockstep with the wasm catalog (none/freeform/enum)', () => {
+  it('the three known literal strings are the complete set', () => {
+    // This array is the canonical enumeration. Adding a 4th kind here
+    // requires updating the DirectiveCatalogEntry valueKind union above AND
+    // the Rust test in crates/wasm/src/lib.rs.
+    const KNOWN: ReadonlyArray<DirectiveCatalogEntry['valueKind']> = [
+      'none',
+      'freeform',
+      'enum',
+    ];
+    expect(KNOWN).toEqual(['none', 'freeform', 'enum']);
+  });
+
+  it('a none-valued directive entry round-trips through the completion source', () => {
+    const entry = CATALOG.find((d) => d.valueKind === 'none');
+    expect(entry).toBeDefined();
+    // value-less directives must have an empty values array
+    expect(entry?.values).toHaveLength(0);
+  });
+
+  it('a freeform-valued directive entry round-trips through the completion source', () => {
+    const entry = CATALOG.find((d) => d.valueKind === 'freeform');
+    expect(entry).toBeDefined();
+    expect(entry?.values).toHaveLength(0);
+  });
+
+  it('an enum-valued directive entry round-trips through the completion source', () => {
+    const entry = CATALOG.find((d) => d.valueKind === 'enum');
+    expect(entry).toBeDefined();
+    expect((entry?.values.length ?? 0)).toBeGreaterThan(0);
+  });
 });
 
 describe('chordProCompletionSource', () => {
