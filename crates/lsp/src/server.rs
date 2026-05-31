@@ -27,7 +27,8 @@ use tower_lsp::lsp_types::{
 use tower_lsp::{Client, LanguageServer};
 
 use crate::completion::{
-    CompletionContext, chord_items, detect_context, directive_items, meta_key_items,
+    CompletionContext, chord_items, detect_context, directive_items, directive_value_items,
+    meta_key_items,
 };
 use crate::convert::parse_error_to_diagnostic;
 use crate::encoding::{
@@ -232,6 +233,9 @@ impl LanguageServer for Backend {
         let items = match detect_context(&line_owned, col) {
             CompletionContext::DirectiveName { prefix } => directive_items(&prefix),
             CompletionContext::MetadataKey { prefix } => meta_key_items(&prefix),
+            CompletionContext::DirectiveValue { directive, prefix } => {
+                directive_value_items(&directive, &prefix)
+            }
             CompletionContext::ChordName { prefix } => chord_items(&prefix),
             CompletionContext::None => return Ok(None),
         };

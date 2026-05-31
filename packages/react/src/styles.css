@@ -1533,6 +1533,49 @@
    The wrapper class `song--diagrams-<position>` on `.song` is the
    modifier the consumer's CSS can hook into for layout shifts
    that need to reach the wrapper itself (notably `right`). */
+/* ---- Inline / hover chord diagrams (ADR-0027) ----
+   `{diagrams: inline}` replaces each chord name above a lyric with its
+   compact diagram; `{diagrams: hover}` keeps the name and reveals the
+   compact diagram on hover / keyboard focus. */
+
+/* Inline: the compact diagram sits in the chord slot above the lyric.
+   The SVG carries its own width / height, so let it block-flow. */
+.chordsketch-sheet__content .chord-block-inline-diagram {
+  line-height: 1;
+}
+.chordsketch-sheet__content .chord-block-inline-diagram .chordsketch-diagram,
+.chordsketch-sheet__content .chord-block-inline-diagram .chord-diagram {
+  display: block;
+}
+
+/* Hover: the chord name stays as the trigger; the diagram is a popover.
+   `.chord-has-diagram` is the focusable chord span (tabIndex=0). */
+.chordsketch-sheet__content .chord-has-diagram {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+.chordsketch-sheet__content .chord-diagram-popover {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  z-index: 20;
+  display: none;
+  margin-bottom: 4px;
+  padding: 4px;
+  background: var(--cs-surface, #ffffff);
+  border: 1px solid var(--cs-border, #d4d1d6);
+  border-radius: var(--cs-r-2, 4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+/* Reveal on mouse hover AND keyboard focus (`:focus` on the span itself
+   and `:focus-within` for focus moving into the popover). */
+.chordsketch-sheet__content .chord-has-diagram:hover .chord-diagram-popover,
+.chordsketch-sheet__content .chord-has-diagram:focus .chord-diagram-popover,
+.chordsketch-sheet__content .chord-has-diagram:focus-within .chord-diagram-popover {
+  display: block;
+}
+
 .chordsketch-sheet__content .chord-diagrams {
   margin-top: 1.5rem;
 }

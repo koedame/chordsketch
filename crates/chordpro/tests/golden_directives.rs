@@ -592,3 +592,38 @@ fn page_control_directives_golden_test() {
         }
     }
 }
+
+#[test]
+fn diagrams_directive_value_extensions_golden_test() {
+    // chordsketch extension: `inline` / `hover` ride on the standard
+    // `{diagrams}` directive as plain values, so the parser classifies the
+    // line as `DirectiveKind::Diagrams` and preserves the value verbatim
+    // for the renderer's mode facet to interpret. No new directive kind or
+    // syntax is introduced — this golden pins that contract so a future
+    // parser change cannot silently drop or rewrite the value.
+    let cases = [
+        ("{diagrams: inline}", "inline"),
+        ("{diagrams: hover}", "hover"),
+        ("{diagrams: section}", "section"),
+    ];
+    for (input, expected_value) in cases {
+        let song = parse(input).expect("parse failed");
+        let Line::Directive(ref d) = song.lines[0] else {
+            panic!(
+                "expected a directive for {input:?}, got: {:?}",
+                song.lines[0]
+            );
+        };
+        assert_eq!(
+            d.kind,
+            DirectiveKind::Diagrams,
+            "{input:?} should classify as Diagrams"
+        );
+        assert_eq!(d.name, "diagrams");
+        assert_eq!(
+            d.value.as_deref(),
+            Some(expected_value),
+            "{input:?} should preserve its value verbatim"
+        );
+    }
+}

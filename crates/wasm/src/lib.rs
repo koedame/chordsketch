@@ -225,12 +225,37 @@ pub(crate) fn chord_diagram_svg_inner_with_orientation(
     defines: &[(String, String)],
     orientation: Option<&str>,
 ) -> std::result::Result<Option<String>, String> {
+    chord_diagram_svg_inner_with_options(chord, instrument, defines, orientation, false)
+}
+
+/// Variant of [`chord_diagram_svg_inner_with_orientation`] that also takes
+/// the chordsketch compact-size flag.
+///
+/// `compact == true` selects [`DiagramSize::Compact`] — the smaller
+/// above-a-lyric layout used by the `{diagrams: inline}` / `{diagrams:
+/// hover}` modes — for both fretted and keyboard diagrams. `false`
+/// reproduces the regular-size output exactly. `compact` is a plain bool
+/// here (rather than the core `DiagramSize` enum) to keep this wire-shape
+/// layer dependency-light, matching the already-stringly `orientation`
+/// argument; it is mapped to `DiagramSize` immediately below.
+pub(crate) fn chord_diagram_svg_inner_with_options(
+    chord: &str,
+    instrument: &str,
+    defines: &[(String, String)],
+    orientation: Option<&str>,
+    compact: bool,
+) -> std::result::Result<Option<String>, String> {
     use chordsketch_chordpro::chord_diagram::{
-        render_keyboard_svg, render_svg_with_orientation, resolve_orientation,
+        DiagramSize, render_keyboard_svg_with_size, render_svg_with_options, resolve_orientation,
     };
     use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
 
     let resolved = resolve_orientation(orientation);
+    let size = if compact {
+        DiagramSize::Compact
+    } else {
+        DiagramSize::Regular
+    };
 
     match instrument.to_ascii_lowercase().as_str() {
         "piano" | "keyboard" | "keys" => {
@@ -252,7 +277,10 @@ pub(crate) fn chord_diagram_svg_inner_with_orientation(
             // Keyboard diagrams have no orientation knob — the
             // argument is accepted but ignored here.
             let _ = defines;
-            Ok(lookup_keyboard_voicing(chord, &[]).map(|v| render_keyboard_svg(&v)))
+            Ok(
+                lookup_keyboard_voicing(chord, &[])
+                    .map(|v| render_keyboard_svg_with_size(&v, size)),
+            )
         }
         "guitar" | "ukulele" | "uke" => {
             // `frets_shown = 5` matches the default ChordPro HTML
@@ -261,7 +289,7 @@ pub(crate) fn chord_diagram_svg_inner_with_orientation(
             // produced by `<ChordDiagram>` visually match the
             // sheet output from `<ChordSheet>` for the same chord.
             Ok(lookup_diagram(chord, defines, instrument, 5)
-                .map(|d| render_svg_with_orientation(&d, resolved)))
+                .map(|d| render_svg_with_options(&d, resolved, size)))
         }
         other => Err(format!(
             "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
@@ -280,6 +308,59 @@ pub(crate) struct ValidationErrorPayload {
     pub(crate) line: u32,
     pub(crate) column: u32,
     pub(crate) message: String,
+}
+
+/// Serializable directive-catalog entry exposed to JS via
+/// [`bindings::list_directives`]. Mirrors
+/// `chordsketch_chordpro::directive_catalog::DirectiveInfo`, flattened for
+/// the `serde_wasm_bindgen` boundary (the core crate stays serde-free).
+///
+/// `value_kind` is `"none"` / `"freeform"` / `"enum"`; `values` is the
+/// allowed set when `value_kind == "enum"`, empty otherwise.
+///
+/// Serialised camelCase (`valueKind`) to match the `DirectiveInfo`
+/// TypeScript shape declared in `bindings.rs` and consumed by the React
+/// completion source + playground picker.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DirectiveInfoPayload {
+    pub(crate) name: String,
+    pub(crate) aliases: Vec<String>,
+    pub(crate) value_kind: String,
+    pub(crate) values: Vec<String>,
+    pub(crate) summary: String,
+}
+
+/// Maps the core directive catalog into the serializable payload shape.
+/// Native helper shared by the wasm wrapper and unit tests.
+pub(crate) fn do_list_directives() -> Vec<DirectiveInfoPayload> {
+    use chordsketch_chordpro::directive_catalog::{self, DirectiveValueKind};
+    directive_catalog::directives()
+        .iter()
+        .map(|d| {
+            let (value_kind, values) = match d.value {
+                DirectiveValueKind::None => ("none", Vec::new()),
+                DirectiveValueKind::FreeForm => ("freeform", Vec::new()),
+                DirectiveValueKind::Enum(vs) => {
+                    ("enum", vs.iter().map(|v| (*v).to_string()).collect())
+                }
+            };
+            DirectiveInfoPayload {
+                name: d.name.to_string(),
+                aliases: d.aliases.iter().map(|a| (*a).to_string()).collect(),
+                value_kind: value_kind.to_string(),
+                values,
+                summary: d.summary.to_string(),
+            }
+        })
+        .collect()
+}
+
+/// Returns the allowed value set for an enum-valued directive (alias-aware),
+/// or `None` for free-form / value-less directives and unknown names.
+pub(crate) fn do_directive_value_options(name: &str) -> Option<Vec<String>> {
+    chordsketch_chordpro::directive_catalog::directive_value_options(name)
+        .map(|vs| vs.iter().map(|v| (*v).to_string()).collect())
 }
 
 /// Shared inner helper used by both the wasm-bindgen wrapper and native
@@ -1691,6 +1772,114 @@ mod tests {
                 .unwrap()
                 .unwrap();
         assert!(!oriented.contains("chord-diagram-horizontal"));
+    }
+
+    // -----------------------------------------------------------------------
+    // chord_diagram_svg_inner_with_options — the compact-size flag the
+    // chordsketch `{diagrams: inline}` / `{diagrams: hover}` modes use.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn chord_diagram_svg_inner_compact_marks_class() {
+        let svg = chord_diagram_svg_inner_with_options("Am", "guitar", &[], None, true)
+            .unwrap()
+            .expect("Am voicing should resolve for guitar");
+        assert!(svg.contains("chord-diagram-compact"));
+    }
+
+    #[test]
+    fn chord_diagram_svg_inner_compact_false_matches_orientation_path() {
+        // compact=false must reproduce the regular orientation-aware output
+        // exactly, so the new flag is additive for existing callers.
+        let regular = chord_diagram_svg_inner_with_orientation("Am", "guitar", &[], None)
+            .unwrap()
+            .unwrap();
+        let via_options = chord_diagram_svg_inner_with_options("Am", "guitar", &[], None, false)
+            .unwrap()
+            .unwrap();
+        assert_eq!(regular, via_options);
+    }
+
+    #[test]
+    fn chord_diagram_svg_inner_compact_keyboard_marks_class() {
+        let svg = chord_diagram_svg_inner_with_options("C", "piano", &[], None, true)
+            .unwrap()
+            .expect("C voicing should resolve for piano");
+        assert!(svg.contains("keyboard-diagram-compact"));
+    }
+
+    #[test]
+    fn chord_diagram_svg_inner_compact_horizontal_marks_both_classes() {
+        let svg =
+            chord_diagram_svg_inner_with_options("Am", "guitar", &[], Some("horizontal"), true)
+                .unwrap()
+                .unwrap();
+        assert!(svg.contains("chord-diagram-horizontal"));
+        assert!(svg.contains("chord-diagram-compact"));
+    }
+
+    #[test]
+    fn chord_diagram_svg_inner_compact_unknown_chord_returns_none() {
+        let result =
+            chord_diagram_svg_inner_with_options("XYZ-not-a-chord", "guitar", &[], None, true)
+                .unwrap();
+        assert!(result.is_none());
+    }
+
+    // ---- directive catalog exports (ADR-0028) ----
+
+    // If this set changes, update the DirectiveInfo `valueKind` union in
+    // crates/wasm/src/bindings.rs (DIRECTIVE_CATALOG_TS) and
+    // packages/react/src/chordpro-completion.ts in lockstep.
+    #[test]
+    fn do_list_directives_value_kind_is_one_of_the_known_set() {
+        use std::collections::BTreeSet;
+        let kinds: BTreeSet<String> = do_list_directives()
+            .iter()
+            .map(|d| d.value_kind.clone())
+            .collect();
+        let expected: BTreeSet<String> = ["none", "freeform", "enum"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(
+            kinds, expected,
+            "value_kind strings must be exactly {{\"none\", \"freeform\", \"enum\"}}; \
+             update the DirectiveInfo `valueKind` union in bindings.rs and \
+             chordpro-completion.ts if this set changes"
+        );
+    }
+
+    #[test]
+    fn do_list_directives_covers_catalog_and_marks_enum_values() {
+        let list = do_list_directives();
+        assert!(
+            list.len() >= 70,
+            "expected the full catalog, got {}",
+            list.len()
+        );
+        let diagrams = list
+            .iter()
+            .find(|d| d.name == "diagrams")
+            .expect("diagrams entry present");
+        assert_eq!(diagrams.value_kind, "enum");
+        assert!(diagrams.values.iter().any(|v| v == "inline"));
+        assert!(diagrams.values.iter().any(|v| v == "hover"));
+        let title = list.iter().find(|d| d.name == "title").unwrap();
+        assert_eq!(title.value_kind, "freeform");
+        assert!(title.values.is_empty());
+    }
+
+    #[test]
+    fn do_directive_value_options_is_enum_only_and_alias_aware() {
+        assert!(
+            do_directive_value_options("diagrams")
+                .unwrap()
+                .contains(&"inline".to_string())
+        );
+        assert!(do_directive_value_options("soc").is_none()); // alias of start_of_chorus (free-form)
+        assert!(do_directive_value_options("title").is_none());
+        assert!(do_directive_value_options("not-a-directive").is_none());
     }
 }
 

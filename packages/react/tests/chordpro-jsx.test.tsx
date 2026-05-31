@@ -3756,3 +3756,151 @@ describe('renderChordproAst', () => {
     }
   });
 });
+describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
+  // A song with N `{diagrams: …}` directive lines + one chord-bearing
+  // lyric line. The `<ChordDiagram>` mounted by inline / hover lazily
+  // loads wasm asynchronously; like the existing grid tests we assert
+  // only the SYNCHRONOUS wrapper structure (classes / fallbacks), never
+  // the resolved SVG.
+  function songWithDiagramsValues(
+    ...values: Array<string | null>
+  ): ChordproSong {
+    return {
+      metadata: EMPTY_META,
+      lines: [
+        ...values.map((value) => ({
+          kind: 'directive' as const,
+          value: {
+            name: 'diagrams',
+            value,
+            kind: { tag: 'diagrams' as const },
+            selector: null,
+          },
+        })),
+        {
+          kind: 'lyrics' as const,
+          value: {
+            segments: [
+              {
+                chord: { name: 'C', detail: null, display: null },
+                text: 'Do',
+                spans: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+  }
+
+  test('{diagrams: inline} replaces the chord name with a compact diagram cell above the lyric', () => {
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValues('inline'), {
+        chordDiagrams: { instrument: 'guitar' },
+      }),
+    );
+    expect(container.querySelector('.chord-block-inline-diagram')).not.toBeNull();
+    expect(container.querySelector('.lyrics')?.textContent).toContain('Do');
+    // The chord name survives (loading / not-found fallback).
+    expect(container.querySelector('.chord-block')?.textContent).toContain('C');
+    // The end-of-song grid is suppressed in inline mode.
+    expect(container.querySelector('.chord-diagrams')).toBeNull();
+  });
+
+  test('{diagrams: hover} keeps the chord name and adds a focusable popover trigger', () => {
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValues('hover'), {
+        chordDiagrams: { instrument: 'guitar' },
+      }),
+    );
+    const trigger = container.querySelector('.chord-has-diagram');
+    expect(trigger).not.toBeNull();
+    // Keyboard-reachable trigger (the popover reveal is CSS :focus).
+    expect(trigger?.getAttribute('tabindex')).toBe('0');
+    expect(trigger?.textContent).toContain('C');
+    const popover = container.querySelector('.chord-diagram-popover');
+    expect(popover).not.toBeNull();
+    // aria-describedby / id linkage for assistive technology (useId).
+    const tooltipId = trigger?.getAttribute('aria-describedby');
+    expect(tooltipId).toBeTruthy();
+    expect(popover?.getAttribute('id')).toBe(tooltipId);
+    expect(container.querySelector('.chord-block-inline-diagram')).toBeNull();
+    expect(container.querySelector('.chord-diagrams')).toBeNull();
+  });
+
+  test('default (section) mode renders the end-of-song grid, not inline cells', () => {
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValues(null), {
+        chordDiagrams: { instrument: 'guitar' },
+      }),
+    );
+    expect(container.querySelector('.chord-diagrams')).not.toBeNull();
+    expect(container.querySelector('.chord-block-inline-diagram')).toBeNull();
+    expect(container.querySelector('.chord-has-diagram')).toBeNull();
+  });
+
+  test('{diagrams: off} after {diagrams: inline} suppresses inline diagrams (last-wins visibility)', () => {
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValues('inline', 'off'), {
+        chordDiagrams: { instrument: 'guitar' },
+      }),
+    );
+    expect(container.querySelector('.chord-block-inline-diagram')).toBeNull();
+    expect(container.querySelector('.chord-diagrams')).toBeNull();
+    expect(container.querySelector('.chord')?.textContent).toContain('C');
+  });
+
+  test('{diagrams: inline} and {diagrams: guitar} compose (mode + instrument are independent facets)', () => {
+    const { container } = render(
+      // No instrument option — {diagrams: guitar} supplies it and
+      // {diagrams: inline} supplies the mode.
+      renderChordproAst(songWithDiagramsValues('inline', 'guitar'), {
+        chordDiagrams: {},
+      }),
+    );
+    expect(container.querySelector('.chord-block-inline-diagram')).not.toBeNull();
+    expect(container.querySelector('.chord-diagrams')).toBeNull();
+  });
+
+  test('{diagrams: section} after {diagrams: inline} restores the end-of-song grid', () => {
+    // `section` is the default mode; writing it explicitly after `inline`
+    // must revert to the end-of-song diagram grid (last-wins), so a user
+    // who set `{diagrams: inline}` can switch back without removing the
+    // first directive.
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValues('inline', 'section'), {
+        chordDiagrams: { instrument: 'guitar' },
+      }),
+    );
+    // End-of-song grid is restored.
+    expect(container.querySelector('.chord-diagrams')).not.toBeNull();
+    // Inline diagram cells are absent — section mode suppresses them.
+    expect(container.querySelector('.chord-block-inline-diagram')).toBeNull();
+  });
+
+  test('{diagrams: hover} with instrument: piano renders the hover popover', () => {
+    // Mirrors the existing guitar hover test; exercises the piano branch
+    // of the instrument-selection path so diagrams mode + non-guitar
+    // instrument compose correctly.
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValues('hover'), {
+        chordDiagrams: { instrument: 'piano' },
+      }),
+    );
+    const trigger = container.querySelector('.chord-has-diagram');
+    expect(trigger).not.toBeNull();
+    // Keyboard-reachable trigger (the popover reveal is CSS :focus).
+    expect(trigger?.getAttribute('tabindex')).toBe('0');
+    expect(trigger?.textContent).toContain('C');
+    // Popover container must be present.
+    const popover = container.querySelector('.chord-diagram-popover');
+    expect(popover).not.toBeNull();
+    // aria-describedby / id linkage for assistive technology.
+    const tooltipId = trigger?.getAttribute('aria-describedby');
+    expect(tooltipId).toBeTruthy();
+    expect(popover?.getAttribute('id')).toBe(tooltipId);
+    // Inline diagram cells and end-of-song grid are absent in hover mode.
+    expect(container.querySelector('.chord-block-inline-diagram')).toBeNull();
+    expect(container.querySelector('.chord-diagrams')).toBeNull();
+  });
+});

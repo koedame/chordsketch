@@ -37,8 +37,9 @@ use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    RenderOptions, chord_diagram_svg_inner, chord_diagram_svg_inner_with_orientation,
-    do_chord_typography, do_convert_chordpro_to_irealb, do_convert_irealb_to_chordpro_text,
+    RenderOptions, chord_diagram_svg_inner, chord_diagram_svg_inner_with_options,
+    chord_diagram_svg_inner_with_orientation, do_chord_typography, do_convert_chordpro_to_irealb,
+    do_convert_irealb_to_chordpro_text, do_directive_value_options, do_list_directives,
     do_parse_chordpro, do_parse_irealb, do_render_ireal_svg, do_render_string, do_serialize_irealb,
     render_string_with_warnings_core, resolve_config_inner, validate_inner,
 };
@@ -761,6 +762,46 @@ pub fn chord_diagram_svg_with_defines_orientation(
     .map_err(|e| JsValue::from_str(&e))
 }
 
+/// Compact-size counterpart of [`chord_diagram_svg_with_defines_orientation`]
+/// — the chordsketch extension surface used by the React JSX walker when a
+/// song carries `{diagrams: inline}` / `{diagrams: hover}`.
+///
+/// Renders the smaller above-a-lyric layout (`DiagramSize::Compact`
+/// in the core) while honouring the same `{define}` voicings and
+/// orientation knob as the regular export. The compact SVG carries an
+/// extra `chord-diagram-compact` (or `keyboard-diagram-compact`) class on
+/// its root element.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string when:
+///   * `instrument` is not one of `"guitar"` / `"ukulele"` / `"piano"`
+///     (or their aliases).
+///   * `defines` is not a deserialisable `[[string, string], …]` array.
+#[must_use = "callers must handle the unknown-instrument error"]
+#[wasm_bindgen(js_name = chordDiagramSvgWithDefinesOrientationCompact, skip_typescript)]
+pub fn chord_diagram_svg_with_defines_orientation_compact(
+    chord: &str,
+    instrument: &str,
+    defines: JsValue,
+    orientation: Option<String>,
+) -> Result<Option<String>, JsValue> {
+    let defines_vec: Vec<(String, String)> = if defines.is_undefined() || defines.is_null() {
+        Vec::new()
+    } else {
+        serde_wasm_bindgen::from_value(defines)
+            .map_err(|e| JsValue::from_str(&format!("invalid defines argument: {e}")))?
+    };
+    chord_diagram_svg_inner_with_options(
+        chord,
+        instrument,
+        &defines_vec,
+        orientation.as_deref(),
+        true,
+    )
+    .map_err(|e| JsValue::from_str(&e))
+}
+
 /// Validate ChordPro input and return any parse errors as structured
 /// records.
 ///
@@ -841,6 +882,95 @@ export function chordDiagramSvgWithDefinesOrientation(
   defines: Array<[string, string]>,
   orientation?: ChordDiagramOrientation | null,
 ): string | null;
+
+/**
+ * Compact-size variant of {@link chordDiagramSvgWithDefinesOrientation} — a
+ * chordsketch extension for diagrams shown directly above a lyric line (the
+ * `{diagrams: inline}` / `{diagrams: hover}` modes). The geometry is smaller
+ * but the chord-name title and finger glyphs stay legible (not a CSS scale).
+ * The returned SVG carries an extra `chord-diagram-compact` (fretted) or
+ * `keyboard-diagram-compact` (piano) class on its root element.
+ *
+ * Returns `null` when the chord is not in the built-in voicing database.
+ * Throws on unknown instrument.
+ */
+export function chordDiagramSvgWithDefinesOrientationCompact(
+  chord: string,
+  instrument: string,
+  defines: Array<[string, string]>,
+  orientation?: ChordDiagramOrientation | null,
+): string | null;
+"#;
+
+/// Return the ChordPro directive catalog as a JS array of `DirectiveInfo`
+/// objects (ADR-0028).
+///
+/// Each entry carries the directive's canonical `name`, its `aliases`, the
+/// `valueKind` (`"none"` / `"freeform"` / `"enum"`), the allowed `values`
+/// (non-empty only for `"enum"`), and a one-line `summary`. The web
+/// editor's completion source and the playground's directive picker both
+/// consume this so they offer the same directive set the LSP does, sourced
+/// from the single catalog in `chordsketch_chordpro::directive_catalog`.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string only if serialisation fails — a
+/// defensive path callers can treat as infallible in normal use.
+#[wasm_bindgen(js_name = listDirectives, skip_typescript)]
+pub fn list_directives() -> Result<JsValue, JsValue> {
+    serde_wasm_bindgen::to_value(&do_list_directives())
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Return the allowed value set for an enum-valued directive (alias-aware),
+/// or `null` for free-form / value-less directives and unknown names
+/// (ADR-0028).
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string only if serialisation fails.
+#[wasm_bindgen(js_name = directiveValueOptions, skip_typescript)]
+pub fn directive_value_options(name: &str) -> Result<JsValue, JsValue> {
+    serde_wasm_bindgen::to_value(&do_directive_value_options(name))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+#[wasm_bindgen(typescript_custom_section)]
+const DIRECTIVE_CATALOG_TS: &'static str = r#"
+/**
+ * A single directive-catalog entry returned by {@link listDirectives}
+ * (ADR-0028). The web editor's completion source and the playground's
+ * directive picker drive their directive lists off this shared catalog so
+ * they offer the same set the LSP / VS Code completion does.
+ */
+export interface DirectiveInfo {
+  /** Canonical directive name (e.g. `"diagrams"`, `"title"`). */
+  name: string;
+  /** Recognised aliases for the directive (e.g. `["t"]` for `title`). */
+  aliases: string[];
+  /**
+   * Shape of the directive's value:
+   * - `"none"`     — value-less (`{new_song}`);
+   * - `"freeform"` — free text (`{title: ...}`);
+   * - `"enum"`     — a fixed set, surfaced in `values`.
+   */
+  valueKind: "none" | "freeform" | "enum";
+  /** Allowed values when `valueKind === "enum"`; empty otherwise. */
+  values: string[];
+  /** One-line human-readable summary of the directive. */
+  summary: string;
+}
+
+/**
+ * Return the ChordPro directive catalog as an array of {@link DirectiveInfo}.
+ */
+export function listDirectives(): DirectiveInfo[];
+
+/**
+ * Return the allowed value set for an enum-valued directive (alias-aware),
+ * or `null` for free-form / value-less directives and unknown names.
+ */
+export function directiveValueOptions(name: string): string[] | null;
 "#;
 
 /// Serializable shape returned by [`parse_chordpro_with_warnings`]
