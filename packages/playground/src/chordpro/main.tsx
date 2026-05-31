@@ -846,9 +846,15 @@ function PlaygroundApp(): JSX.Element {
                 format="html"
                 chordDiagramsInstrument="guitar"
                 chordDiagramsOrientation={diagramsOrientation}
-                activeSourceLine={caret?.line}
-                caretColumn={caret?.column}
-                caretLineLength={caret?.lineLength}
+                /* The active-line highlight and caret marker only make
+                   sense in split view, where the editor sits beside the
+                   preview. In preview-only view the editor is unmounted,
+                   so the overlay would point at a caret the user cannot
+                   see — withhold the caret props so the rendered sheet
+                   stays clean. */
+                activeSourceLine={view === 'split' ? caret?.line : undefined}
+                caretColumn={view === 'split' ? caret?.column : undefined}
+                caretLineLength={view === 'split' ? caret?.lineLength : undefined}
                 onChordReposition={handleChordReposition}
               />
             </div>
