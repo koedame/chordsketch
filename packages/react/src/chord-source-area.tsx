@@ -1,6 +1,7 @@
 import type { HTMLAttributes } from 'react';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
+import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
 import {
   defaultKeymap,
   history,
@@ -24,6 +25,7 @@ import {
   placeholder as placeholderExtension,
 } from '@codemirror/view';
 
+import { chordProCompletionSource } from './chordpro-completion';
 import { chordProLanguage, chordProTagTable } from './chordpro-language';
 
 /** Imperative handle exposed via `ref` from {@link ChordSourceArea}. */
@@ -386,7 +388,12 @@ export const ChordSourceArea = forwardRef<ChordSourceAreaHandle, ChordSourceArea
         chordProLanguage,
         syntaxHighlighting(designSystemHighlight),
         designSystemTheme,
+        // ChordPro directive + directive-value completion, sourced from the
+        // shared `@chordsketch/wasm` catalog so the web editor offers the
+        // same set as the LSP / VS Code (ADR-0028).
+        autocompletion({ override: [chordProCompletionSource()] }),
         keymap.of([
+          ...completionKeymap,
           ...defaultKeymap,
           ...historyKeymap,
           ...searchKeymap,
