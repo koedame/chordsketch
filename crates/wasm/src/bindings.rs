@@ -37,10 +37,11 @@ use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    RenderOptions, chord_diagram_svg_inner, chord_diagram_svg_inner_with_orientation,
-    do_chord_typography, do_convert_chordpro_to_irealb, do_convert_irealb_to_chordpro_text,
-    do_parse_chordpro, do_parse_irealb, do_render_ireal_svg, do_render_string, do_serialize_irealb,
-    render_string_with_warnings_core, resolve_config_inner, validate_inner,
+    RenderOptions, chord_diagram_svg_inner, chord_diagram_svg_inner_with_options,
+    chord_diagram_svg_inner_with_orientation, do_chord_typography, do_convert_chordpro_to_irealb,
+    do_convert_irealb_to_chordpro_text, do_parse_chordpro, do_parse_irealb, do_render_ireal_svg,
+    do_render_string, do_serialize_irealb, render_string_with_warnings_core, resolve_config_inner,
+    validate_inner,
 };
 
 // `do_render_bytes` / `render_bytes_with_warnings_core` /
@@ -761,6 +762,46 @@ pub fn chord_diagram_svg_with_defines_orientation(
     .map_err(|e| JsValue::from_str(&e))
 }
 
+/// Compact-size counterpart of [`chord_diagram_svg_with_defines_orientation`]
+/// — the chordsketch extension surface used by the React JSX walker when a
+/// song carries `{diagrams: inline}` / `{diagrams: hover}`.
+///
+/// Renders the smaller above-a-lyric layout ([`DiagramSize::Compact`]
+/// in the core) while honouring the same `{define}` voicings and
+/// orientation knob as the regular export. The compact SVG carries an
+/// extra `chord-diagram-compact` (or `keyboard-diagram-compact`) class on
+/// its root element.
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string when:
+///   * `instrument` is not one of `"guitar"` / `"ukulele"` / `"piano"`
+///     (or their aliases).
+///   * `defines` is not a deserialisable `[[string, string], …]` array.
+#[must_use = "callers must handle the unknown-instrument error"]
+#[wasm_bindgen(js_name = chordDiagramSvgWithDefinesOrientationCompact, skip_typescript)]
+pub fn chord_diagram_svg_with_defines_orientation_compact(
+    chord: &str,
+    instrument: &str,
+    defines: JsValue,
+    orientation: Option<String>,
+) -> Result<Option<String>, JsValue> {
+    let defines_vec: Vec<(String, String)> = if defines.is_undefined() || defines.is_null() {
+        Vec::new()
+    } else {
+        serde_wasm_bindgen::from_value(defines)
+            .map_err(|e| JsValue::from_str(&format!("invalid defines argument: {e}")))?
+    };
+    chord_diagram_svg_inner_with_options(
+        chord,
+        instrument,
+        &defines_vec,
+        orientation.as_deref(),
+        true,
+    )
+    .map_err(|e| JsValue::from_str(&e))
+}
+
 /// Validate ChordPro input and return any parse errors as structured
 /// records.
 ///
@@ -836,6 +877,24 @@ export function chordDiagramSvgWithOrientation(
  * `{define}` voicings first. `defines` is an array of `[name, raw]` tuples.
  */
 export function chordDiagramSvgWithDefinesOrientation(
+  chord: string,
+  instrument: string,
+  defines: Array<[string, string]>,
+  orientation?: ChordDiagramOrientation | null,
+): string | null;
+
+/**
+ * Compact-size variant of {@link chordDiagramSvgWithDefinesOrientation} — a
+ * chordsketch extension for diagrams shown directly above a lyric line (the
+ * `{diagrams: inline}` / `{diagrams: hover}` modes). The geometry is smaller
+ * but the chord-name title and finger glyphs stay legible (not a CSS scale).
+ * The returned SVG carries an extra `chord-diagram-compact` (fretted) or
+ * `keyboard-diagram-compact` (piano) class on its root element.
+ *
+ * Returns `null` when the chord is not in the built-in voicing database.
+ * Throws on unknown instrument.
+ */
+export function chordDiagramSvgWithDefinesOrientationCompact(
   chord: string,
   instrument: string,
   defines: Array<[string, string]>,

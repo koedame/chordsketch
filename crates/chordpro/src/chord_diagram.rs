@@ -268,6 +268,30 @@ pub enum Orientation {
     Horizontal,
 }
 
+/// Physical size of a rendered chord diagram.
+///
+/// `Regular` is the original full-size diagram suited to the
+/// end-of-song diagram grid. `Compact` is a chordsketch extension
+/// laid out for sitting directly above a lyric line (the
+/// `{diagrams: inline}` / `{diagrams: hover}` modes): the grid
+/// geometry is shrunk substantially while the chord-name title and
+/// the finger / open / muted glyphs are kept near their legibility
+/// floor — a separate layout rather than a CSS `transform: scale()`,
+/// which would shrink the text into illegibility along with the
+/// geometry.
+///
+/// The enum is `#[non_exhaustive]` so a future intermediate size can
+/// be added without an API break, mirroring [`Orientation`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum DiagramSize {
+    /// Full-size diagram — the original layout. Default.
+    #[default]
+    Regular,
+    /// Compact layout for diagrams shown above a lyric line.
+    Compact,
+}
+
 // ---------------------------------------------------------------------------
 // SVG rendering constants
 // ---------------------------------------------------------------------------
@@ -303,6 +327,129 @@ const NUT_MARGIN_GLYPH_OFFSET: f32 = 10.0;
 /// both the vertical (along the x-axis) and horizontal (along the
 /// y-axis) renderers so the visual weight stays consistent.
 const OCTAVE_DOUBLE_DOT_OFFSET: f32 = 0.55;
+
+/// All size-dependent measurements for one fretted-diagram render pass.
+///
+/// The vertical and horizontal renderers read every geometry value and
+/// font size from this struct instead of the module-level constants
+/// directly, so the only difference between a [`DiagramSize::Regular`] and
+/// a [`DiagramSize::Compact`] render is which constructor
+/// ([`regular`](Self::regular) / [`compact`](Self::compact)) built the
+/// metrics. This keeps the two size variants from forking into duplicate
+/// renderer functions — a geometry fix lands once and applies to both
+/// sizes (cf. `.claude/rules/fix-propagation.md`).
+///
+/// `regular()` reproduces the historical hard-coded values verbatim; the
+/// `render_svg_default_byte_identical_across_chord_shapes` test pins that
+/// the regular output is byte-for-byte unchanged by this indirection.
+#[derive(Debug, Clone, Copy)]
+struct DiagramMetrics {
+    /// String-to-string spacing (SVG x-axis in vertical mode).
+    cell_w: f32,
+    /// Fret pitch (SVG y-axis in vertical mode).
+    cell_h: f32,
+    /// Space above the nut for the title + open/muted glyph row.
+    top_margin: f32,
+    /// Side gutter on each edge.
+    left_margin: f32,
+    /// Padding below the grid in the vertical layout.
+    bottom_pad_vertical: f32,
+    /// Padding below the grid in the horizontal layout.
+    bottom_pad_horizontal: f32,
+    /// Filled finger-position dot radius.
+    dot_radius: f32,
+    /// Open-string ring radius.
+    open_radius: f32,
+    /// Faint fretboard-inlay dot radius.
+    position_dot_radius: f32,
+    /// Distance from the nut at which open / muted glyphs sit.
+    nut_margin_glyph_offset: f32,
+    /// Chord-name title font size.
+    title_font: f32,
+    /// Baseline y of the chord-name title text.
+    title_baseline: f32,
+    /// Font size for the base-fret label and the muted-string `X` glyph.
+    label_font: f32,
+    /// Font size for finger numbers inside the dots.
+    finger_font: f32,
+    /// Baseline-centring offset added to a marker's centre y when drawing
+    /// text on/near it (the historical `+ 3.0`).
+    text_v_center: f32,
+    /// Nut line stroke width.
+    nut_stroke: f32,
+    /// String / fret line stroke width.
+    line_stroke: f32,
+    /// Extra CSS class appended to the root `<svg>` `class` attribute
+    /// (empty for regular, `" chord-diagram-compact"` for compact).
+    class_extra: &'static str,
+}
+
+impl DiagramMetrics {
+    /// Full-size metrics — byte-for-byte the historical layout.
+    const fn regular() -> Self {
+        Self {
+            cell_w: CELL_W,
+            cell_h: CELL_H,
+            top_margin: TOP_MARGIN,
+            left_margin: LEFT_MARGIN,
+            bottom_pad_vertical: 30.0,
+            bottom_pad_horizontal: 20.0,
+            dot_radius: DOT_RADIUS,
+            open_radius: OPEN_RADIUS,
+            position_dot_radius: POSITION_DOT_RADIUS,
+            nut_margin_glyph_offset: NUT_MARGIN_GLYPH_OFFSET,
+            title_font: 14.0,
+            title_baseline: 15.0,
+            label_font: 10.0,
+            finger_font: 8.0,
+            text_v_center: 3.0,
+            nut_stroke: 3.0,
+            line_stroke: 1.0,
+            class_extra: "",
+        }
+    }
+
+    /// Compact metrics for diagrams shown directly above a lyric line
+    /// (the `{diagrams: inline}` / `{diagrams: hover}` chordsketch modes).
+    ///
+    /// Grid geometry shrinks to roughly 0.55x of regular, but the glyph
+    /// fonts shrink only to ~0.8x and never below a legibility floor
+    /// (title 11, fingers 7). That divergence is the whole reason a
+    /// compact layout exists rather than a CSS `transform: scale()`,
+    /// which would shrink the text into illegibility along with the
+    /// geometry. `top_margin` is kept generous enough (22) that the
+    /// title and the open/muted glyph row do not collide.
+    const fn compact() -> Self {
+        Self {
+            cell_w: 9.0,
+            cell_h: 11.0,
+            top_margin: 22.0,
+            left_margin: 9.0,
+            bottom_pad_vertical: 10.0,
+            bottom_pad_horizontal: 8.0,
+            dot_radius: 3.2,
+            open_radius: 2.6,
+            position_dot_radius: 1.4,
+            nut_margin_glyph_offset: 5.0,
+            title_font: 11.0,
+            title_baseline: 9.0,
+            label_font: 8.0,
+            finger_font: 7.0,
+            text_v_center: 2.4,
+            nut_stroke: 2.0,
+            line_stroke: 0.75,
+            class_extra: " chord-diagram-compact",
+        }
+    }
+
+    /// Metrics for the requested [`DiagramSize`].
+    const fn for_size(size: DiagramSize) -> Self {
+        match size {
+            DiagramSize::Regular => Self::regular(),
+            DiagramSize::Compact => Self::compact(),
+        }
+    }
+}
 
 /// Fretboard position-marker frets for the given instrument
 /// (number of strings). Western guitar (6 strings) has inlays
@@ -356,6 +503,47 @@ pub fn render_svg(data: &DiagramData) -> String {
 /// ```
 #[must_use]
 pub fn render_svg_with_orientation(data: &DiagramData, orientation: Orientation) -> String {
+    render_svg_with_options(data, orientation, DiagramSize::Regular)
+}
+
+/// Render a chord diagram as an inline SVG string with explicit
+/// orientation and [size](DiagramSize).
+///
+/// [`render_svg`] and [`render_svg_with_orientation`] are thin wrappers
+/// that call this with [`DiagramSize::Regular`]; pass
+/// [`DiagramSize::Compact`] for the smaller above-a-lyric layout used by
+/// the `{diagrams: inline}` / `{diagrams: hover}` modes. The compact SVG
+/// carries an extra `chord-diagram-compact` class on its root element so
+/// consumers can target it from CSS.
+///
+/// Returns an empty string when `data.strings` or `data.frets_shown` is
+/// outside the valid range (same guard as the other entry points).
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::chord_diagram::{
+///     DiagramData, DiagramSize, Orientation, render_svg_with_options,
+/// };
+///
+/// let data = DiagramData {
+///     name: "Am".to_string(),
+///     display_name: None,
+///     strings: 6,
+///     frets_shown: 5,
+///     base_fret: 1,
+///     frets: vec![-1, 0, 2, 2, 1, 0],
+///     fingers: vec![],
+/// };
+/// let svg = render_svg_with_options(&data, Orientation::Vertical, DiagramSize::Compact);
+/// assert!(svg.contains("chord-diagram-compact"));
+/// ```
+#[must_use]
+pub fn render_svg_with_options(
+    data: &DiagramData,
+    orientation: Orientation,
+    size: DiagramSize,
+) -> String {
     if data.strings < MIN_STRINGS
         || data.strings > MAX_STRINGS
         || data.frets_shown < MIN_FRETS_SHOWN
@@ -363,33 +551,59 @@ pub fn render_svg_with_orientation(data: &DiagramData, orientation: Orientation)
     {
         return String::new();
     }
+    let metrics = DiagramMetrics::for_size(size);
     // Exhaustive inside the defining crate — `#[non_exhaustive]` only forces
     // a wildcard on downstream consumers (see `render-pdf`). Adding a new
     // `Orientation` variant fails compilation here until a layout is added.
     match orientation {
-        Orientation::Vertical => render_svg_vertical_inner(data),
-        Orientation::Horizontal => render_svg_horizontal_inner(data),
+        Orientation::Vertical => render_svg_vertical_inner(data, &metrics),
+        Orientation::Horizontal => render_svg_horizontal_inner(data, &metrics),
     }
 }
 
-fn render_svg_vertical_inner(data: &DiagramData) -> String {
+fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
+    // Bind every metric to a local so the SVG format strings can
+    // inline-capture them by name (`{cell_w}` etc.). With
+    // `DiagramMetrics::regular()` these reproduce the historical literals
+    // exactly — guarded by `render_svg_default_byte_identical_across_chord_shapes`.
+    let DiagramMetrics {
+        cell_w,
+        cell_h,
+        top_margin,
+        left_margin,
+        bottom_pad_vertical,
+        dot_radius,
+        open_radius,
+        position_dot_radius,
+        nut_margin_glyph_offset,
+        title_font,
+        title_baseline,
+        label_font,
+        finger_font,
+        text_v_center,
+        nut_stroke,
+        line_stroke,
+        class_extra,
+        ..
+    } = *m;
+
     let num_strings = data.strings;
     let num_frets = data.frets_shown;
-    let grid_w = (num_strings - 1) as f32 * CELL_W;
-    let grid_h = num_frets as f32 * CELL_H;
-    let total_w = grid_w + LEFT_MARGIN * 2.0;
-    let total_h = grid_h + TOP_MARGIN + 30.0;
+    let grid_w = (num_strings - 1) as f32 * cell_w;
+    let grid_h = num_frets as f32 * cell_h;
+    let total_w = grid_w + left_margin * 2.0;
+    let total_h = grid_h + top_margin + bottom_pad_vertical;
 
     let mut svg = format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{total_w}\" height=\"{total_h}\" \
-         viewBox=\"0 0 {total_w} {total_h}\" class=\"chord-diagram\">\n"
+         viewBox=\"0 0 {total_w} {total_h}\" class=\"chord-diagram{class_extra}\">\n"
     );
 
     // Chord name (uses display override if present)
-    let name_x = LEFT_MARGIN + grid_w / 2.0;
+    let name_x = left_margin + grid_w / 2.0;
     svg.push_str(&format!(
-        "<text x=\"{name_x}\" y=\"15\" text-anchor=\"middle\" \
-         font-family=\"sans-serif\" font-size=\"14\" font-weight=\"bold\">{}</text>\n",
+        "<text x=\"{name_x}\" y=\"{title_baseline}\" text-anchor=\"middle\" \
+         font-family=\"sans-serif\" font-size=\"{title_font}\" font-weight=\"bold\">{}</text>\n",
         crate::escape::escape_xml(data.title())
     ));
 
@@ -398,19 +612,19 @@ fn render_svg_vertical_inner(data: &DiagramData) -> String {
     // suffix) — the position marker dots below already imply
     // "this is fret N on a real fretboard", so the bare integer
     // is enough.
-    let nut_y = TOP_MARGIN;
+    let nut_y = top_margin;
     if data.base_fret == 1 {
         svg.push_str(&format!(
-            "<line x1=\"{LEFT_MARGIN}\" y1=\"{nut_y}\" x2=\"{}\" y2=\"{nut_y}\" \
-             stroke=\"black\" stroke-width=\"3\"/>\n",
-            LEFT_MARGIN + grid_w
+            "<line x1=\"{left_margin}\" y1=\"{nut_y}\" x2=\"{}\" y2=\"{nut_y}\" \
+             stroke=\"black\" stroke-width=\"{nut_stroke}\"/>\n",
+            left_margin + grid_w
         ));
     } else {
         svg.push_str(&format!(
             "<text x=\"{}\" y=\"{}\" text-anchor=\"end\" \
-             font-family=\"sans-serif\" font-size=\"10\">{}</text>\n",
-            LEFT_MARGIN - 4.0,
-            nut_y + CELL_H / 2.0 + 3.0,
+             font-family=\"sans-serif\" font-size=\"{label_font}\">{}</text>\n",
+            left_margin - 4.0,
+            nut_y + cell_h / 2.0 + text_v_center,
             data.base_fret
         ));
     }
@@ -424,7 +638,7 @@ fn render_svg_vertical_inner(data: &DiagramData) -> String {
     // ukulele). The octave fret (12) gets a double dot on both
     // instruments to match real fretboard markers.
     let position_frets = position_marker_frets(num_strings);
-    let center_x = LEFT_MARGIN + grid_w / 2.0;
+    let center_x = left_margin + grid_w / 2.0;
     for &marker_fret in position_frets {
         // `marker_fret` is the absolute fret number on the real
         // fretboard. Convert to a row within the diagram by
@@ -440,41 +654,41 @@ fn render_svg_vertical_inner(data: &DiagramData) -> String {
         if row < 1 || row > num_frets as i32 {
             continue;
         }
-        let y = nut_y + (row as f32 - 0.5) * CELL_H;
+        let y = nut_y + (row as f32 - 0.5) * cell_h;
         if marker_fret == 12 {
             // Octave: double dot. Place on either side of the
             // diagram's horizontal centre.
             svg.push_str(&format!(
-                "<circle cx=\"{cx1}\" cy=\"{y}\" r=\"{POSITION_DOT_RADIUS}\" \
+                "<circle cx=\"{cx1}\" cy=\"{y}\" r=\"{position_dot_radius}\" \
                  fill=\"#D4D1D6\" class=\"position-marker\"/>\n\
-                 <circle cx=\"{cx2}\" cy=\"{y}\" r=\"{POSITION_DOT_RADIUS}\" \
+                 <circle cx=\"{cx2}\" cy=\"{y}\" r=\"{position_dot_radius}\" \
                  fill=\"#D4D1D6\" class=\"position-marker\"/>\n",
-                cx1 = center_x - CELL_W * OCTAVE_DOUBLE_DOT_OFFSET,
-                cx2 = center_x + CELL_W * OCTAVE_DOUBLE_DOT_OFFSET,
+                cx1 = center_x - cell_w * OCTAVE_DOUBLE_DOT_OFFSET,
+                cx2 = center_x + cell_w * OCTAVE_DOUBLE_DOT_OFFSET,
             ));
         } else {
             svg.push_str(&format!(
-                "<circle cx=\"{center_x}\" cy=\"{y}\" r=\"{POSITION_DOT_RADIUS}\" \
+                "<circle cx=\"{center_x}\" cy=\"{y}\" r=\"{position_dot_radius}\" \
                  fill=\"#D4D1D6\" class=\"position-marker\"/>\n"
             ));
         }
     }
 
     for i in 0..num_strings {
-        let x = LEFT_MARGIN + i as f32 * CELL_W;
+        let x = left_margin + i as f32 * cell_w;
         svg.push_str(&format!(
             "<line x1=\"{x}\" y1=\"{nut_y}\" x2=\"{x}\" y2=\"{}\" \
-             stroke=\"black\" stroke-width=\"1\"/>\n",
+             stroke=\"black\" stroke-width=\"{line_stroke}\"/>\n",
             nut_y + grid_h
         ));
     }
 
     for j in 0..=num_frets {
-        let y = nut_y + j as f32 * CELL_H;
+        let y = nut_y + j as f32 * cell_h;
         svg.push_str(&format!(
-            "<line x1=\"{LEFT_MARGIN}\" y1=\"{y}\" x2=\"{}\" y2=\"{y}\" \
-             stroke=\"black\" stroke-width=\"1\"/>\n",
-            LEFT_MARGIN + grid_w
+            "<line x1=\"{left_margin}\" y1=\"{y}\" x2=\"{}\" y2=\"{y}\" \
+             stroke=\"black\" stroke-width=\"{line_stroke}\"/>\n",
+            left_margin + grid_w
         ));
     }
 
@@ -483,35 +697,35 @@ fn render_svg_vertical_inner(data: &DiagramData) -> String {
         if i >= num_strings {
             break;
         }
-        let x = LEFT_MARGIN + i as f32 * CELL_W;
+        let x = left_margin + i as f32 * cell_w;
         if fret == -1 {
             // Muted (X)
-            let y = nut_y - NUT_MARGIN_GLYPH_OFFSET;
+            let y = nut_y - nut_margin_glyph_offset;
             svg.push_str(&format!(
                 "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" \
-                 font-family=\"sans-serif\" font-size=\"10\">X</text>\n"
+                 font-family=\"sans-serif\" font-size=\"{label_font}\">X</text>\n"
             ));
         } else if fret == 0 {
             // Open (O)
-            let y = nut_y - NUT_MARGIN_GLYPH_OFFSET;
+            let y = nut_y - nut_margin_glyph_offset;
             svg.push_str(&format!(
-                "<circle cx=\"{x}\" cy=\"{y}\" r=\"{OPEN_RADIUS}\" \
-                 fill=\"none\" stroke=\"black\" stroke-width=\"1\"/>\n"
+                "<circle cx=\"{x}\" cy=\"{y}\" r=\"{open_radius}\" \
+                 fill=\"none\" stroke=\"black\" stroke-width=\"{line_stroke}\"/>\n"
             ));
         } else {
             // Fretted dot
-            let y = nut_y + (fret as f32 - 0.5) * CELL_H;
+            let y = nut_y + (fret as f32 - 0.5) * cell_h;
             svg.push_str(&format!(
-                "<circle cx=\"{x}\" cy=\"{y}\" r=\"{DOT_RADIUS}\" fill=\"black\"/>\n"
+                "<circle cx=\"{x}\" cy=\"{y}\" r=\"{dot_radius}\" fill=\"black\"/>\n"
             ));
             // Finger number inside the dot (if available and non-zero)
             if let Some(&finger) = data.fingers.get(i) {
                 if finger > 0 {
                     svg.push_str(&format!(
                         "<text x=\"{x}\" y=\"{}\" text-anchor=\"middle\" \
-                         font-family=\"sans-serif\" font-size=\"8\" \
+                         font-family=\"sans-serif\" font-size=\"{finger_font}\" \
                          fill=\"white\">{finger}</text>\n",
-                        y + 3.0
+                        y + text_v_center
                     ));
                 }
             }
@@ -530,37 +744,61 @@ fn render_svg_vertical_inner(data: &DiagramData) -> String {
 /// The geometric layout mirrors the vertical renderer so behaviour stays in
 /// lockstep — anything that changes in one (open/muted placement, 12-fret
 /// double-dot, base-fret label, finger numbers) must change in the other.
-fn render_svg_horizontal_inner(data: &DiagramData) -> String {
+fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
+    // See `render_svg_vertical_inner` for why every metric is bound to a
+    // local. `regular()` reproduces the historical literals byte-for-byte.
+    let DiagramMetrics {
+        cell_w,
+        cell_h,
+        top_margin,
+        left_margin,
+        bottom_pad_horizontal,
+        dot_radius,
+        open_radius,
+        position_dot_radius,
+        nut_margin_glyph_offset,
+        title_font,
+        title_baseline,
+        label_font,
+        finger_font,
+        text_v_center,
+        nut_stroke,
+        line_stroke,
+        class_extra,
+        ..
+    } = *m;
+
     let num_strings = data.strings;
     let num_frets = data.frets_shown;
     // Semantic aliases — the horizontal layout's fret axis is the SVG
-    // x-axis, so use `CELL_H` (the vertical layout's fret pitch, the
+    // x-axis, so use `cell_h` (the vertical layout's fret pitch, the
     // larger of the two cell values) along that axis. Likewise the
-    // string axis is the SVG y-axis, so use `CELL_W` (the vertical
+    // string axis is the SVG y-axis, so use `cell_w` (the vertical
     // layout's string-to-string spacing, the smaller value). Using the
-    // same constants with swapped meanings preserves the
+    // same metrics with swapped meanings preserves the
     // wider-than-tall fretboard aspect ratio that the vertical
     // renderer already encodes — the diagram looks like a real
     // fretboard rotated 90°, not a vertical diagram with the labels
     // shuffled.
-    let fret_pitch = CELL_H;
-    let string_pitch = CELL_W;
+    let fret_pitch = cell_h;
+    let string_pitch = cell_w;
     let grid_w = num_frets as f32 * fret_pitch;
     let grid_h = (num_strings - 1) as f32 * string_pitch;
-    let total_w = grid_w + LEFT_MARGIN * 2.0;
-    let total_h = grid_h + TOP_MARGIN + 20.0;
+    let total_w = grid_w + left_margin * 2.0;
+    let total_h = grid_h + top_margin + bottom_pad_horizontal;
 
     let mut svg = format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{total_w}\" height=\"{total_h}\" \
-         viewBox=\"0 0 {total_w} {total_h}\" class=\"chord-diagram chord-diagram-horizontal\">\n"
+         viewBox=\"0 0 {total_w} {total_h}\" \
+         class=\"chord-diagram chord-diagram-horizontal{class_extra}\">\n"
     );
 
     // Chord name (uses display override if present). Centred above the
     // fretboard so the visual weight matches the vertical layout's title.
-    let name_x = LEFT_MARGIN + grid_w / 2.0;
+    let name_x = left_margin + grid_w / 2.0;
     svg.push_str(&format!(
-        "<text x=\"{name_x}\" y=\"15\" text-anchor=\"middle\" \
-         font-family=\"sans-serif\" font-size=\"14\" font-weight=\"bold\">{}</text>\n",
+        "<text x=\"{name_x}\" y=\"{title_baseline}\" text-anchor=\"middle\" \
+         font-family=\"sans-serif\" font-size=\"{title_font}\" font-weight=\"bold\">{}</text>\n",
         crate::escape::escape_xml(data.title())
     ));
 
@@ -569,19 +807,19 @@ fn render_svg_horizontal_inner(data: &DiagramData) -> String {
     // higher up the fretboard. The label sits above the first fret column
     // (the horizontal equivalent of the vertical layout's left-of-row label
     // position).
-    let nut_x = LEFT_MARGIN;
+    let nut_x = left_margin;
     if data.base_fret == 1 {
         svg.push_str(&format!(
-            "<line x1=\"{nut_x}\" y1=\"{TOP_MARGIN}\" x2=\"{nut_x}\" y2=\"{}\" \
-             stroke=\"black\" stroke-width=\"3\"/>\n",
-            TOP_MARGIN + grid_h
+            "<line x1=\"{nut_x}\" y1=\"{top_margin}\" x2=\"{nut_x}\" y2=\"{}\" \
+             stroke=\"black\" stroke-width=\"{nut_stroke}\"/>\n",
+            top_margin + grid_h
         ));
     } else {
         svg.push_str(&format!(
             "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" \
-             font-family=\"sans-serif\" font-size=\"10\">{}</text>\n",
+             font-family=\"sans-serif\" font-size=\"{label_font}\">{}</text>\n",
             nut_x + fret_pitch / 2.0,
-            TOP_MARGIN - 4.0,
+            top_margin - 4.0,
             data.base_fret
         ));
     }
@@ -590,9 +828,9 @@ fn render_svg_horizontal_inner(data: &DiagramData) -> String {
     // 12-fret marker becomes a double dot split along the **vertical**
     // axis at `cy ± string_pitch * OCTAVE_DOUBLE_DOT_OFFSET`, the geometric
     // mirror of the vertical layout's left/right split at
-    // `cx ± CELL_W * OCTAVE_DOUBLE_DOT_OFFSET` (in vertical mode CELL_W is the string pitch).
+    // `cx ± cell_w * OCTAVE_DOUBLE_DOT_OFFSET` (in vertical mode cell_w is the string pitch).
     let position_frets = position_marker_frets(num_strings);
-    let center_y = TOP_MARGIN + grid_h / 2.0;
+    let center_y = top_margin + grid_h / 2.0;
     for &marker_fret in position_frets {
         if (marker_fret as i32) < data.base_fret as i32 {
             continue;
@@ -604,16 +842,16 @@ fn render_svg_horizontal_inner(data: &DiagramData) -> String {
         let x = nut_x + (col as f32 - 0.5) * fret_pitch;
         if marker_fret == 12 {
             svg.push_str(&format!(
-                "<circle cx=\"{x}\" cy=\"{cy1}\" r=\"{POSITION_DOT_RADIUS}\" \
+                "<circle cx=\"{x}\" cy=\"{cy1}\" r=\"{position_dot_radius}\" \
                  fill=\"#D4D1D6\" class=\"position-marker\"/>\n\
-                 <circle cx=\"{x}\" cy=\"{cy2}\" r=\"{POSITION_DOT_RADIUS}\" \
+                 <circle cx=\"{x}\" cy=\"{cy2}\" r=\"{position_dot_radius}\" \
                  fill=\"#D4D1D6\" class=\"position-marker\"/>\n",
                 cy1 = center_y - string_pitch * OCTAVE_DOUBLE_DOT_OFFSET,
                 cy2 = center_y + string_pitch * OCTAVE_DOUBLE_DOT_OFFSET,
             ));
         } else {
             svg.push_str(&format!(
-                "<circle cx=\"{x}\" cy=\"{center_y}\" r=\"{POSITION_DOT_RADIUS}\" \
+                "<circle cx=\"{x}\" cy=\"{center_y}\" r=\"{position_dot_radius}\" \
                  fill=\"#D4D1D6\" class=\"position-marker\"/>\n"
             ));
         }
@@ -625,10 +863,10 @@ fn render_svg_horizontal_inner(data: &DiagramData) -> String {
     // 1 - i`, so the high-pitch string lands on the top row
     // (reader-view, ADR-0026).
     for i in 0..num_strings {
-        let y = TOP_MARGIN + i as f32 * string_pitch;
+        let y = top_margin + i as f32 * string_pitch;
         svg.push_str(&format!(
             "<line x1=\"{nut_x}\" y1=\"{y}\" x2=\"{}\" y2=\"{y}\" \
-             stroke=\"black\" stroke-width=\"1\"/>\n",
+             stroke=\"black\" stroke-width=\"{line_stroke}\"/>\n",
             nut_x + grid_w
         ));
     }
@@ -636,9 +874,9 @@ fn render_svg_horizontal_inner(data: &DiagramData) -> String {
     for j in 0..=num_frets {
         let x = nut_x + j as f32 * fret_pitch;
         svg.push_str(&format!(
-            "<line x1=\"{x}\" y1=\"{TOP_MARGIN}\" x2=\"{x}\" y2=\"{}\" \
-             stroke=\"black\" stroke-width=\"1\"/>\n",
-            TOP_MARGIN + grid_h
+            "<line x1=\"{x}\" y1=\"{top_margin}\" x2=\"{x}\" y2=\"{}\" \
+             stroke=\"black\" stroke-width=\"{line_stroke}\"/>\n",
+            top_margin + grid_h
         ));
     }
 
@@ -651,38 +889,38 @@ fn render_svg_horizontal_inner(data: &DiagramData) -> String {
             break;
         }
         let row = num_strings - 1 - i;
-        let y = TOP_MARGIN + row as f32 * string_pitch;
+        let y = top_margin + row as f32 * string_pitch;
         if fret == -1 {
             // Muted (X) — to the left of the nut, one per string row.
-            // `y + 3.0` is the same baseline-centring offset the vertical
-            // renderer uses for finger-number text.
-            let x = nut_x - NUT_MARGIN_GLYPH_OFFSET;
+            // `y + text_v_center` is the same baseline-centring offset the
+            // vertical renderer uses for finger-number text.
+            let x = nut_x - nut_margin_glyph_offset;
             svg.push_str(&format!(
                 "<text x=\"{x}\" y=\"{}\" text-anchor=\"middle\" \
-                 font-family=\"sans-serif\" font-size=\"10\">X</text>\n",
-                y + 3.0
+                 font-family=\"sans-serif\" font-size=\"{label_font}\">X</text>\n",
+                y + text_v_center
             ));
         } else if fret == 0 {
             // Open (O) — to the left of the nut, one per string row.
-            let x = nut_x - NUT_MARGIN_GLYPH_OFFSET;
+            let x = nut_x - nut_margin_glyph_offset;
             svg.push_str(&format!(
-                "<circle cx=\"{x}\" cy=\"{y}\" r=\"{OPEN_RADIUS}\" \
-                 fill=\"none\" stroke=\"black\" stroke-width=\"1\"/>\n"
+                "<circle cx=\"{x}\" cy=\"{y}\" r=\"{open_radius}\" \
+                 fill=\"none\" stroke=\"black\" stroke-width=\"{line_stroke}\"/>\n"
             ));
         } else {
             // Fretted dot — placed at the centre of its fret cell along the
             // string row.
             let x = nut_x + (fret as f32 - 0.5) * fret_pitch;
             svg.push_str(&format!(
-                "<circle cx=\"{x}\" cy=\"{y}\" r=\"{DOT_RADIUS}\" fill=\"black\"/>\n"
+                "<circle cx=\"{x}\" cy=\"{y}\" r=\"{dot_radius}\" fill=\"black\"/>\n"
             ));
             if let Some(&finger) = data.fingers.get(i) {
                 if finger > 0 {
                     svg.push_str(&format!(
                         "<text x=\"{x}\" y=\"{}\" text-anchor=\"middle\" \
-                         font-family=\"sans-serif\" font-size=\"8\" \
+                         font-family=\"sans-serif\" font-size=\"{finger_font}\" \
                          fill=\"white\">{finger}</text>\n",
-                        y + 3.0
+                        y + text_v_center
                     ));
                 }
             }
@@ -837,6 +1075,108 @@ const BLACK_KEY_POSITIONS: [(u8, f32); 5] = [
     (10, 85.0), // A# (between A and B: 90 − 4.5 ≈ 85)
 ];
 
+/// White-key boundary multiples (in white-key widths) at which each black
+/// key is centred: C# at 1, D# at 2, F# at 4, G# at 5, A# at 6. Used to
+/// derive the compact black-key x-offsets from the compact white-key
+/// width — the regular [`BLACK_KEY_POSITIONS`] is kept as hand-rounded
+/// literals for byte-for-byte backward compatibility, so the two are NOT
+/// computed from a shared formula.
+const BLACK_KEY_BOUNDARY_MULTIPLES: [(u8, f32); 5] =
+    [(1, 1.0), (3, 2.0), (6, 4.0), (8, 5.0), (10, 6.0)];
+
+/// All size-dependent measurements for one keyboard-diagram render pass.
+///
+/// Like [`DiagramMetrics`] for fretted diagrams, this lets the keyboard
+/// renderer support [`DiagramSize::Compact`] without forking into a
+/// duplicate function. [`regular`](Self::regular) reproduces the
+/// historical literals (and reuses the existing position arrays) so the
+/// regular keyboard SVG is unchanged.
+#[derive(Debug, Clone)]
+struct KeyboardMetrics {
+    white_w: f32,
+    white_h: f32,
+    black_w: f32,
+    black_h: f32,
+    top_pad: f32,
+    side_pad: f32,
+    bottom_pad: f32,
+    title_font: f32,
+    title_baseline: f32,
+    white_positions: [(u8, f32); 7],
+    black_positions: [(u8, f32); 5],
+    class_extra: &'static str,
+}
+
+impl KeyboardMetrics {
+    /// Full-size keyboard metrics — the historical layout.
+    fn regular() -> Self {
+        Self {
+            white_w: KBD_WHITE_W,
+            white_h: KBD_WHITE_H,
+            black_w: KBD_BLACK_W,
+            black_h: KBD_BLACK_H,
+            top_pad: KBD_TOP_PAD,
+            side_pad: KBD_SIDE_PAD,
+            bottom_pad: 8.0,
+            title_font: 14.0,
+            title_baseline: 15.0,
+            white_positions: WHITE_KEY_POSITIONS,
+            black_positions: BLACK_KEY_POSITIONS,
+            class_extra: "",
+        }
+    }
+
+    /// Compact keyboard metrics for diagrams shown above a lyric line.
+    ///
+    /// Key geometry shrinks; the title font holds at 11 (the same
+    /// legibility floor the fretted compact layout uses). Black-key
+    /// offsets are recomputed from the compact white-key width via
+    /// [`BLACK_KEY_BOUNDARY_MULTIPLES`] — scaling the regular absolute
+    /// px offsets would misalign the black keys.
+    fn compact() -> Self {
+        let white_w = 9.0;
+        let black_w = 5.5;
+        let white_positions = [
+            (0u8, 0.0 * white_w),
+            (2, 1.0 * white_w),
+            (4, 2.0 * white_w),
+            (5, 3.0 * white_w),
+            (7, 4.0 * white_w),
+            (9, 5.0 * white_w),
+            (11, 6.0 * white_w),
+        ];
+        let mut black_positions = [(0u8, 0.0f32); 5];
+        let mut i = 0;
+        while i < BLACK_KEY_BOUNDARY_MULTIPLES.len() {
+            let (semitone, mult) = BLACK_KEY_BOUNDARY_MULTIPLES[i];
+            // Centre the black key on the white-key boundary.
+            black_positions[i] = (semitone, mult * white_w - black_w / 2.0);
+            i += 1;
+        }
+        Self {
+            white_w,
+            white_h: 34.0,
+            black_w,
+            black_h: 20.0,
+            top_pad: 18.0,
+            side_pad: 5.0,
+            bottom_pad: 6.0,
+            title_font: 11.0,
+            title_baseline: 9.0,
+            white_positions,
+            black_positions,
+            class_extra: " keyboard-diagram-compact",
+        }
+    }
+
+    fn for_size(size: DiagramSize) -> Self {
+        match size {
+            DiagramSize::Regular => Self::regular(),
+            DiagramSize::Compact => Self::compact(),
+        }
+    }
+}
+
 /// Normalise `keys` and `root_key` for display.
 ///
 /// When all keys are in 0–11 (pitch classes), shifts them to octave 4
@@ -896,9 +1236,42 @@ pub fn normalise_keyboard_keys(keys: &[u8], root_key: u8) -> (Vec<u8>, u8) {
 /// ```
 #[must_use]
 pub fn render_keyboard_svg(voicing: &KeyboardVoicing) -> String {
+    render_keyboard_svg_with_size(voicing, DiagramSize::Regular)
+}
+
+/// Render a keyboard chord diagram with an explicit [size](DiagramSize).
+///
+/// [`render_keyboard_svg`] is a thin wrapper that calls this with
+/// [`DiagramSize::Regular`]; pass [`DiagramSize::Compact`] for the smaller
+/// above-a-lyric layout used by the `{diagrams: inline}` / `{diagrams:
+/// hover}` modes. The compact SVG carries an extra
+/// `keyboard-diagram-compact` class on its root element.
+///
+/// Returns an empty string when `voicing.keys` is empty.
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::chord_diagram::{
+///     DiagramSize, KeyboardVoicing, render_keyboard_svg_with_size,
+/// };
+///
+/// let v = KeyboardVoicing {
+///     name: "Am".to_string(),
+///     display_name: None,
+///     keys: vec![69, 72, 76],
+///     root_key: 69,
+/// };
+/// let svg = render_keyboard_svg_with_size(&v, DiagramSize::Compact);
+/// assert!(svg.contains("keyboard-diagram-compact"));
+/// ```
+#[must_use]
+pub fn render_keyboard_svg_with_size(voicing: &KeyboardVoicing, size: DiagramSize) -> String {
     if voicing.keys.is_empty() {
         return String::new();
     }
+
+    let m = KeyboardMetrics::for_size(size);
 
     let (keys, root) = normalise_keyboard_keys(&voicing.keys, voicing.root_key);
 
@@ -912,28 +1285,38 @@ pub fn render_keyboard_svg(voicing: &KeyboardVoicing) -> String {
     let num_octaves = ((end_octave - start_octave) + 1).clamp(2, 3) as usize;
     let start_midi = (start_octave * 12) as u8;
 
-    let kbd_w = num_octaves as f32 * 7.0 * KBD_WHITE_W;
-    let total_w = kbd_w + KBD_SIDE_PAD * 2.0;
-    let total_h = KBD_TOP_PAD + KBD_WHITE_H + 8.0;
+    let octave_w = 7.0 * m.white_w;
+    let kbd_w = num_octaves as f32 * octave_w;
+    let total_w = kbd_w + m.side_pad * 2.0;
+    let total_h = m.top_pad + m.white_h + m.bottom_pad;
 
+    let class_extra = m.class_extra;
     let mut svg = format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{total_w}\" height=\"{total_h}\" \
-         viewBox=\"0 0 {total_w} {total_h}\" class=\"keyboard-diagram\">\n"
+         viewBox=\"0 0 {total_w} {total_h}\" class=\"keyboard-diagram{class_extra}\">\n"
     );
 
     // Chord name label
     let name_x = total_w / 2.0;
+    let title_font = m.title_font;
+    let title_baseline = m.title_baseline;
     svg.push_str(&format!(
-        "<text x=\"{name_x}\" y=\"15\" text-anchor=\"middle\" \
-         font-family=\"sans-serif\" font-size=\"14\" font-weight=\"bold\">{}</text>\n",
+        "<text x=\"{name_x}\" y=\"{title_baseline}\" text-anchor=\"middle\" \
+         font-family=\"sans-serif\" font-size=\"{title_font}\" font-weight=\"bold\">{}</text>\n",
         crate::escape::escape_xml(voicing.title())
     ));
+
+    let top_pad = m.top_pad;
+    let white_w = m.white_w;
+    let white_h = m.white_h;
+    let black_w = m.black_w;
+    let black_h = m.black_h;
 
     // --- Draw white keys first (black keys are drawn on top) ---
     for oct in 0..num_octaves {
         let oct_midi = start_midi.saturating_add((oct * 12) as u8);
-        let oct_x = KBD_SIDE_PAD + oct as f32 * 7.0 * KBD_WHITE_W;
-        for (semitone, x_off) in WHITE_KEY_POSITIONS {
+        let oct_x = m.side_pad + oct as f32 * octave_w;
+        for (semitone, x_off) in m.white_positions {
             let midi = oct_midi.saturating_add(semitone);
             let x = oct_x + x_off;
             let highlighted = keys.contains(&midi);
@@ -946,8 +1329,8 @@ pub fn render_keyboard_svg(voicing: &KeyboardVoicing) -> String {
                 "white"
             };
             svg.push_str(&format!(
-                "<rect x=\"{x}\" y=\"{KBD_TOP_PAD}\" width=\"{KBD_WHITE_W}\" \
-                 height=\"{KBD_WHITE_H}\" fill=\"{fill}\" stroke=\"black\" \
+                "<rect x=\"{x}\" y=\"{top_pad}\" width=\"{white_w}\" \
+                 height=\"{white_h}\" fill=\"{fill}\" stroke=\"black\" \
                  stroke-width=\"0.5\"/>\n"
             ));
         }
@@ -956,8 +1339,8 @@ pub fn render_keyboard_svg(voicing: &KeyboardVoicing) -> String {
     // --- Draw black keys on top ---
     for oct in 0..num_octaves {
         let oct_midi = start_midi.saturating_add((oct * 12) as u8);
-        let oct_x = KBD_SIDE_PAD + oct as f32 * 7.0 * KBD_WHITE_W;
-        for (semitone, x_off) in BLACK_KEY_POSITIONS {
+        let oct_x = m.side_pad + oct as f32 * octave_w;
+        for (semitone, x_off) in m.black_positions {
             let midi = oct_midi.saturating_add(semitone);
             let x = oct_x + x_off;
             let highlighted = keys.contains(&midi);
@@ -970,8 +1353,8 @@ pub fn render_keyboard_svg(voicing: &KeyboardVoicing) -> String {
                 "#222" // normal black key
             };
             svg.push_str(&format!(
-                "<rect x=\"{x}\" y=\"{KBD_TOP_PAD}\" width=\"{KBD_BLACK_W}\" \
-                 height=\"{KBD_BLACK_H}\" fill=\"{fill}\" stroke=\"black\" \
+                "<rect x=\"{x}\" y=\"{top_pad}\" width=\"{black_w}\" \
+                 height=\"{black_h}\" fill=\"{fill}\" stroke=\"black\" \
                  stroke-width=\"0.5\"/>\n"
             ));
         }
@@ -1097,6 +1480,121 @@ pub fn try_parse_orientation_value(value: Option<&str>) -> Option<OrientationKin
         "vertical" => Some(OrientationKind::Vertical),
         "horizontal" => Some(OrientationKind::Horizontal),
         _ => None,
+    }
+}
+
+/// How chord diagrams are surfaced for a song — a chordsketch extension to
+/// the `{diagrams}` directive.
+///
+/// `{diagrams: inline}` / `{diagrams: hover}` are NOT part of the ChordPro
+/// spec (which only defines on/off + instrument + position); they are a
+/// chordsketch-only facet that controls *where* diagrams appear relative
+/// to the chords above the lyrics, orthogonal to the instrument and
+/// position facets a value may also carry.
+///
+/// - [`Section`](Self::Section) (default) — the existing end-of-song
+///   diagram grid. Unchanged behaviour.
+/// - [`Inline`](Self::Inline) — each chord name above a lyric is replaced
+///   by its compact diagram (the diagram still shows the chord name).
+/// - [`Hover`](Self::Hover) — the chord name stays as text and the compact
+///   diagram is revealed on hover / keyboard focus.
+///
+/// `#[non_exhaustive]` so a future surfacing mode can be added without an
+/// API break, mirroring [`Orientation`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum DiagramsMode {
+    /// End-of-song diagram grid (the spec-standard placement). Default.
+    #[default]
+    Section,
+    /// Compact diagram replaces the chord name above each lyric.
+    Inline,
+    /// Compact diagram revealed on hover / focus over the chord name.
+    Hover,
+}
+
+/// Discriminant returned by [`try_parse_diagrams_mode`]. Mirrors the
+/// variants of [`DiagramsMode`] verbatim today.
+///
+/// Public so renderer call sites can distinguish "value was a recognised
+/// mode keyword" from "value was something else (instrument / position /
+/// typo)" — only the mode keywords (`inline` / `hover` / `section`) yield
+/// `Some`, so a `{diagrams: guitar}` line correctly returns `None` here
+/// and is handled by the instrument facet instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum DiagramsModeKind {
+    /// Matches `DiagramsMode::Section`.
+    Section,
+    /// Matches `DiagramsMode::Inline`.
+    Inline,
+    /// Matches `DiagramsMode::Hover`.
+    Hover,
+}
+
+/// Strict parser for the chordsketch `{diagrams}` *mode* facet. Returns
+/// `None` for missing / empty / oversized input **and** for any value that
+/// is not one of the mode keywords (`section` / `inline` / `hover`) — so a
+/// `{diagrams: guitar}` (instrument) or `{diagrams: top}` (position) value
+/// returns `None` and is left for the instrument / position facets to
+/// interpret.
+///
+/// Bounds the `to_ascii_lowercase` allocation at [`MAX_RESOLVER_INPUT_LEN`]
+/// for the same reason [`try_parse_orientation_value`] does.
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::chord_diagram::{DiagramsModeKind, try_parse_diagrams_mode};
+///
+/// assert_eq!(try_parse_diagrams_mode(Some("inline")), Some(DiagramsModeKind::Inline));
+/// assert_eq!(try_parse_diagrams_mode(Some("HOVER")), Some(DiagramsModeKind::Hover));
+/// assert_eq!(try_parse_diagrams_mode(Some("section")), Some(DiagramsModeKind::Section));
+/// assert_eq!(try_parse_diagrams_mode(Some("guitar")), None);
+/// assert_eq!(try_parse_diagrams_mode(None), None);
+/// ```
+#[must_use]
+pub fn try_parse_diagrams_mode(value: Option<&str>) -> Option<DiagramsModeKind> {
+    let raw = value?.trim();
+    if raw.is_empty() || raw.len() > MAX_RESOLVER_INPUT_LEN {
+        return None;
+    }
+    match raw.to_ascii_lowercase().as_str() {
+        "section" => Some(DiagramsModeKind::Section),
+        "inline" => Some(DiagramsModeKind::Inline),
+        "hover" => Some(DiagramsModeKind::Hover),
+        _ => None,
+    }
+}
+
+/// Resolves the chordsketch `{diagrams}` mode facet, falling back to
+/// [`DiagramsMode::Section`] for missing / empty / unrecognised input.
+///
+/// Use [`try_parse_diagrams_mode`] when the caller needs to distinguish a
+/// recognised mode keyword from a non-mode value (instrument / position).
+///
+/// Shared by every renderer + binding so the mode parsing stays in one
+/// place — a future mode keyword lands here and propagates to every
+/// downstream surface automatically.
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::chord_diagram::{DiagramsMode, resolve_diagrams_mode};
+///
+/// assert_eq!(resolve_diagrams_mode(None), DiagramsMode::Section);
+/// assert_eq!(resolve_diagrams_mode(Some("inline")), DiagramsMode::Inline);
+/// assert_eq!(resolve_diagrams_mode(Some("hover")), DiagramsMode::Hover);
+/// assert_eq!(resolve_diagrams_mode(Some("guitar")), DiagramsMode::Section);
+/// ```
+#[must_use]
+pub fn resolve_diagrams_mode(value: Option<&str>) -> DiagramsMode {
+    match try_parse_diagrams_mode(value) {
+        Some(DiagramsModeKind::Inline) => DiagramsMode::Inline,
+        Some(DiagramsModeKind::Hover) => DiagramsMode::Hover,
+        // Section, and any unrecognised / oversized / missing input — fall
+        // back to the documented default.
+        _ => DiagramsMode::Section,
     }
 }
 
