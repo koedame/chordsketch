@@ -1621,9 +1621,13 @@ interface LyricsDiagramConfig {
  *   not-found / loading / error fallbacks are the chord-name node, so an
  *   unknown chord (or a not-yet-loaded diagram) still shows its name —
  *   the name is never lost.
- * - `hover`: the chord name stays visible and the compact diagram is a
+ * - `hover`: the chord name stays visible and the full-size diagram is a
  *   popover revealed on hover / keyboard focus (the reveal is CSS in
- *   `styles.css`, keyed on `:hover` / `:focus` / `:focus-within`).
+ *   `styles.css`, keyed on `:hover` / `:focus` / `:focus-within`). The
+ *   popover floats free of the line, so it is NOT compact — a compact
+ *   SVG there renders too small to read. Only `inline` mode keeps
+ *   `compact`, because there the diagram sits in the chord slot above
+ *   the lyric where vertical space is tight.
  */
 function ChordCell(props: {
   mode: 'inline' | 'hover';
@@ -1669,7 +1673,6 @@ function ChordCell(props: {
           instrument={instrument}
           orientation={orientation}
           defines={defines}
-          compact
           className="chord-diagram-popover"
           role="tooltip"
           notFoundFallback={null}
@@ -1849,9 +1852,24 @@ function LyricsLine({
   // `.lyrics` sub-element below.
   const lineMarker =
     caret && caret.row === 'line' ? renderMarker(caret.lineRatio) : null;
+  // Layout contract for inline diagrams (ADR-0027): the chord-block
+  // flex items must bottom-align so every `.lyrics` row sits on the
+  // same baseline regardless of the (tall) compact diagram stacked
+  // above the chord-bearing blocks. Without this, a chord-less block
+  // — which has only a `.lyrics` row and no diagram above it — keeps
+  // the line's default top alignment and its lyric floats up level
+  // with the diagrams instead of the lyric row. The `align-items:
+  // flex-end` is applied via the `.line--inline-diagrams` CSS rule,
+  // gated to `inline` mode so regular and hover layouts (whose chord
+  // row is only ~1em tall) are unaffected. Appended to the base
+  // className the component already builds so the `line line--active`
+  // / `data-source-line` decoration `pushElement` clones in survives.
+  const baseClassName = className ?? 'line';
+  const rootClassName =
+    diagrams?.mode === 'inline' ? `${baseClassName} line--inline-diagrams` : baseClassName;
   return (
     <div
-      className={className ?? 'line'}
+      className={rootClassName}
       data-source-line={dataSourceLine}
       onDragOver={handleLineDragOver}
       onDragLeave={handleLineDragLeave}
@@ -4337,9 +4355,24 @@ export function renderChordproAst(
   // body wrapped in `.song__body` (see below); the other
   // modifiers (`top` / `bottom` / `below`) only need the section
   // to carry `data-position` and the wrapper class.
-  const songClass = diagramsState?.visible
-    ? `song song--diagrams-${diagramsState.position}`
-    : 'song';
+  //
+  // The modifier is meaningful ONLY when the end-of-song diagram grid
+  // is actually emitted — i.e. `section` mode (the grid is gated on
+  // `mode === 'section'` above). Every `song--diagrams-*` rule in the
+  // stylesheet exists to position that grid section (`-bottom` pins it
+  // with `margin-top: auto` under a column-flex parent; `-right` lays
+  // it out as a sticky two-column flex). In `inline` / `hover` mode
+  // there is no grid and no wrapper sibling, so applying the modifier
+  // would flip `.song` to `display: flex; flex-direction: column` with
+  // a single child group — turning every body element (lines, sections,
+  // and the top-level `{key}` / `{tempo}` `.meta-inline` chips) into an
+  // independent flex-column item that stacks vertically / stretches to
+  // full width. `position` defaults to `bottom`, so without this gate
+  // an inline/hover song silently picks up `song--diagrams-bottom`.
+  const songClass =
+    diagramsState?.visible && diagramsState.mode === 'section'
+      ? `song song--diagrams-${diagramsState.position}`
+      : 'song';
 
   if (rightSection !== null) {
     // Right-column layout. `.song__body` is a single flex item
