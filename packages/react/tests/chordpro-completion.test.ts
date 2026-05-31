@@ -124,16 +124,20 @@ describe('detectChordproCompletion', () => {
 // DirectiveCatalogEntry['valueKind'] above, in lockstep.
 // Mirrors: crates/wasm/src/lib.rs::do_list_directives_value_kind_is_one_of_the_known_set
 describe('valueKind union stays in lockstep with the wasm catalog (none/freeform/enum)', () => {
-  it('the three known literal strings are the complete set', () => {
-    // This array is the canonical enumeration. Adding a 4th kind here
-    // requires updating the DirectiveCatalogEntry valueKind union above AND
-    // the Rust test in crates/wasm/src/lib.rs.
+  it('every stub catalog entry has a valueKind in the known set', () => {
+    // The TypeScript type annotation ReadonlyArray<DirectiveCatalogEntry['valueKind']>
+    // is the compile-time guard (tsc --noEmit rejects any value outside the union).
+    // The runtime guard for the *real* catalog is the Rust test
+    // `do_list_directives_value_kind_is_one_of_the_known_set` in
+    // crates/wasm/src/lib.rs. This test verifies the mock fixture is consistent.
     const KNOWN: ReadonlyArray<DirectiveCatalogEntry['valueKind']> = [
       'none',
       'freeform',
       'enum',
     ];
-    expect(KNOWN).toEqual(['none', 'freeform', 'enum']);
+    for (const entry of CATALOG) {
+      expect(KNOWN).toContain(entry.valueKind);
+    }
   });
 
   it('a none-valued directive entry round-trips through the completion source', () => {
