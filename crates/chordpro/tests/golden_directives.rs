@@ -609,7 +609,10 @@ fn diagrams_directive_value_extensions_golden_test() {
     for (input, expected_value) in cases {
         let song = parse(input).expect("parse failed");
         let Line::Directive(ref d) = song.lines[0] else {
-            panic!("expected a directive for {input:?}, got: {:?}", song.lines[0]);
+            panic!(
+                "expected a directive for {input:?}, got: {:?}",
+                song.lines[0]
+            );
         };
         assert_eq!(
             d.kind,

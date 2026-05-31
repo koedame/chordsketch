@@ -310,6 +310,54 @@ pub(crate) struct ValidationErrorPayload {
     pub(crate) message: String,
 }
 
+/// Serializable directive-catalog entry exposed to JS via
+/// [`bindings::list_directives`]. Mirrors
+/// `chordsketch_chordpro::directive_catalog::DirectiveInfo`, flattened for
+/// the `serde_wasm_bindgen` boundary (the core crate stays serde-free).
+///
+/// `value_kind` is `"none"` / `"freeform"` / `"enum"`; `values` is the
+/// allowed set when `value_kind == "enum"`, empty otherwise.
+#[derive(Serialize)]
+pub(crate) struct DirectiveInfoPayload {
+    pub(crate) name: String,
+    pub(crate) aliases: Vec<String>,
+    pub(crate) value_kind: String,
+    pub(crate) values: Vec<String>,
+    pub(crate) summary: String,
+}
+
+/// Maps the core directive catalog into the serializable payload shape.
+/// Native helper shared by the wasm wrapper and unit tests.
+pub(crate) fn do_list_directives() -> Vec<DirectiveInfoPayload> {
+    use chordsketch_chordpro::directive_catalog::{self, DirectiveValueKind};
+    directive_catalog::directives()
+        .iter()
+        .map(|d| {
+            let (value_kind, values) = match d.value {
+                DirectiveValueKind::None => ("none", Vec::new()),
+                DirectiveValueKind::FreeForm => ("freeform", Vec::new()),
+                DirectiveValueKind::Enum(vs) => {
+                    ("enum", vs.iter().map(|v| (*v).to_string()).collect())
+                }
+            };
+            DirectiveInfoPayload {
+                name: d.name.to_string(),
+                aliases: d.aliases.iter().map(|a| (*a).to_string()).collect(),
+                value_kind: value_kind.to_string(),
+                values,
+                summary: d.summary.to_string(),
+            }
+        })
+        .collect()
+}
+
+/// Returns the allowed value set for an enum-valued directive (alias-aware),
+/// or `None` for free-form / value-less directives and unknown names.
+pub(crate) fn do_directive_value_options(name: &str) -> Option<Vec<String>> {
+    chordsketch_chordpro::directive_catalog::directive_value_options(name)
+        .map(|vs| vs.iter().map(|v| (*v).to_string()).collect())
+}
+
 /// Shared inner helper used by both the wasm-bindgen wrapper and native
 /// unit tests. Keeping this free of any wasm-bindgen imports means
 /// `cargo test -p chordsketch-wasm` runs without hitting the "cannot
@@ -1771,6 +1819,40 @@ mod tests {
             chord_diagram_svg_inner_with_options("XYZ-not-a-chord", "guitar", &[], None, true)
                 .unwrap();
         assert!(result.is_none());
+    }
+
+    // ---- directive catalog exports (ADR-0028) ----
+
+    #[test]
+    fn do_list_directives_covers_catalog_and_marks_enum_values() {
+        let list = do_list_directives();
+        assert!(
+            list.len() >= 70,
+            "expected the full catalog, got {}",
+            list.len()
+        );
+        let diagrams = list
+            .iter()
+            .find(|d| d.name == "diagrams")
+            .expect("diagrams entry present");
+        assert_eq!(diagrams.value_kind, "enum");
+        assert!(diagrams.values.iter().any(|v| v == "inline"));
+        assert!(diagrams.values.iter().any(|v| v == "hover"));
+        let title = list.iter().find(|d| d.name == "title").unwrap();
+        assert_eq!(title.value_kind, "freeform");
+        assert!(title.values.is_empty());
+    }
+
+    #[test]
+    fn do_directive_value_options_is_enum_only_and_alias_aware() {
+        assert!(
+            do_directive_value_options("diagrams")
+                .unwrap()
+                .contains(&"inline".to_string())
+        );
+        assert!(do_directive_value_options("soc").is_none()); // alias of start_of_chorus (free-form)
+        assert!(do_directive_value_options("title").is_none());
+        assert!(do_directive_value_options("not-a-directive").is_none());
     }
 }
 

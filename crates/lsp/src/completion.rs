@@ -10,6 +10,7 @@
 //! Context detection works by scanning the line text up to the cursor column
 //! and finding the innermost open delimiter.
 
+use chordsketch_chordpro::directive_catalog::{self, DirectiveValueKind};
 use tower_lsp::lsp_types::{
     CompletionItem, CompletionItemKind, Documentation, MarkupContent, MarkupKind,
 };
@@ -28,6 +29,14 @@ pub enum CompletionContext {
     },
     /// After `{meta: `: complete known metadata keys.
     MetadataKey { prefix: String },
+    /// After `{<directive>: ` for a directive whose value is a fixed set
+    /// (e.g. `{diagrams: }`): complete that directive's allowed values.
+    DirectiveValue {
+        /// Canonical directive name (lowercased).
+        directive: String,
+        /// Value characters typed so far (lowercased prefix).
+        prefix: String,
+    },
     /// Inside `[...]`: complete chord names.
     ChordName { prefix: String },
     /// Not inside a recognized completion context.
@@ -113,7 +122,15 @@ pub fn detect_context(line: &str, col: usize) -> CompletionContext {
             if directive_name == "meta" {
                 return CompletionContext::MetadataKey { prefix };
             }
-            // Other directive values — no completion implemented yet.
+            // Directives whose value is a fixed set (e.g. `{diagrams: }`)
+            // complete their allowed values; free-form / value-less
+            // directives still offer nothing (ADR-0028).
+            if directive_catalog::directive_value_options(&directive_name).is_some() {
+                return CompletionContext::DirectiveValue {
+                    directive: directive_name,
+                    prefix,
+                };
+            }
             return CompletionContext::None;
         }
         // Before the colon: completing the directive name.
@@ -133,105 +150,6 @@ pub fn detect_context(line: &str, col: usize) -> CompletionContext {
 // ---------------------------------------------------------------------------
 // Static completion data
 // ---------------------------------------------------------------------------
-
-/// All canonical ChordPro directive names with optional alias info.
-///
-/// Each entry is `(canonical_name, alias_note)` where `alias_note` is
-/// `Some("alias: soc")` for directives that have short aliases.
-const DIRECTIVES: &[(&str, Option<&str>)] = &[
-    // Metadata
-    ("title", Some("alias: t")),
-    ("subtitle", Some("alias: st")),
-    ("artist", None),
-    ("composer", None),
-    ("lyricist", None),
-    ("album", None),
-    ("year", None),
-    ("key", None),
-    ("tempo", None),
-    ("time", None),
-    ("capo", None),
-    ("sorttitle", None),
-    ("sortartist", None),
-    ("arranger", None),
-    ("copyright", None),
-    ("duration", None),
-    ("tag", None),
-    // Transpose
-    ("transpose", None),
-    // Song boundary
-    ("new_song", Some("alias: ns")),
-    // Formatting / comment
-    ("comment", Some("alias: c")),
-    ("comment_italic", Some("alias: ci")),
-    ("comment_box", Some("alias: cb")),
-    // Environments
-    ("start_of_chorus", Some("alias: soc")),
-    ("end_of_chorus", Some("alias: eoc")),
-    ("start_of_verse", Some("alias: sov")),
-    ("end_of_verse", Some("alias: eov")),
-    ("start_of_bridge", Some("alias: sob")),
-    ("end_of_bridge", Some("alias: eob")),
-    ("start_of_tab", Some("alias: sot")),
-    ("end_of_tab", Some("alias: eot")),
-    ("start_of_grid", Some("alias: sog")),
-    ("end_of_grid", Some("alias: eog")),
-    ("start_of_abc", None),
-    ("end_of_abc", None),
-    ("start_of_ly", None),
-    ("end_of_ly", None),
-    ("start_of_svg", None),
-    ("end_of_svg", None),
-    ("start_of_textblock", None),
-    ("end_of_textblock", None),
-    // Recall
-    ("chorus", None),
-    // Page control
-    ("new_page", Some("alias: np")),
-    ("new_physical_page", Some("alias: npp")),
-    ("column_break", Some("alias: colb")),
-    ("columns", Some("alias: col")),
-    // Font/size/color (inline)
-    ("textfont", Some("alias: tf")),
-    ("textsize", Some("alias: ts")),
-    ("textcolour", Some("alias: tc")),
-    ("chordfont", Some("alias: cf")),
-    ("chordsize", Some("alias: cs")),
-    ("chordcolour", Some("alias: cc")),
-    ("tabfont", None),
-    ("tabsize", None),
-    ("tabcolour", None),
-    // Font/size/color (title-level)
-    ("titlefont", None),
-    ("titlesize", None),
-    ("titlecolour", None),
-    ("chorusfont", None),
-    ("chorussize", None),
-    ("choruscolour", None),
-    ("footerfont", None),
-    ("footersize", None),
-    ("footercolour", None),
-    ("headerfont", None),
-    ("headersize", None),
-    ("headercolour", None),
-    ("labelfont", None),
-    ("labelsize", None),
-    ("labelcolour", None),
-    ("gridfont", None),
-    ("gridsize", None),
-    ("gridcolour", None),
-    ("tocfont", None),
-    ("tocsize", None),
-    ("toccolour", None),
-    // Chord definitions
-    ("define", None),
-    ("chord", None),
-    ("diagrams", None),
-    // Generic metadata
-    ("meta", None),
-    // Image
-    ("image", None),
-];
 
 /// Common `{meta: KEY}` keys.
 const META_KEYS: &[&str] = &[
@@ -271,19 +189,50 @@ const SUFFIXES: &[&str] = &[
 // ---------------------------------------------------------------------------
 
 /// Returns directive name completion items matching `prefix`.
+///
+/// Sourced from the shared `chordsketch_chordpro::directive_catalog` so the
+/// LSP, the web editor, and the playground all offer the same directive set
+/// (ADR-0028) — no hand-maintained copy to drift.
 #[must_use]
 pub fn directive_items(prefix: &str) -> Vec<CompletionItem> {
-    DIRECTIVES
+    directive_catalog::directives()
         .iter()
-        .filter(|(name, _)| name.starts_with(prefix))
-        .map(|(name, alias)| {
-            let detail = alias.map(ToString::to_string);
+        .filter(|d| d.name.starts_with(prefix))
+        .map(|d| {
+            // Surface the first short alias (if any) in `detail`, matching
+            // the prior "alias: soc" hint shape.
+            let detail = d.aliases.first().map(|a| format!("alias: {a}"));
             CompletionItem {
-                label: name.to_string(),
+                label: d.name.to_string(),
                 kind: Some(CompletionItemKind::KEYWORD),
                 detail,
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::PlainText,
+                    value: d.summary.to_string(),
+                })),
                 ..Default::default()
             }
+        })
+        .collect()
+}
+
+/// Returns value completion items for an enum-valued directive (e.g.
+/// `{diagrams: }`), filtered by `prefix`. Empty for free-form / value-less
+/// directives and unknown names. Backed by the shared directive catalog
+/// (ADR-0028).
+#[must_use]
+pub fn directive_value_items(directive: &str, prefix: &str) -> Vec<CompletionItem> {
+    let Some(values) = directive_catalog::directive_value_options(directive) else {
+        return Vec::new();
+    };
+    let _ = DirectiveValueKind::None; // keep the import meaningful for readers
+    values
+        .iter()
+        .filter(|v| v.starts_with(prefix))
+        .map(|v| CompletionItem {
+            label: (*v).to_string(),
+            kind: Some(CompletionItemKind::VALUE),
+            ..Default::default()
         })
         .collect()
 }
@@ -556,8 +505,59 @@ mod tests {
 
     #[test]
     fn context_directive_value_non_meta_is_none() {
-        // Inside a directive value that is not `meta` — no completion.
+        // A FREE-FORM directive value (e.g. `{title: …}`) still offers no
+        // completion — only enum-valued directives do (ADR-0028).
         let ctx = detect_context("{title: My", 10);
         assert_eq!(ctx, CompletionContext::None);
+    }
+
+    #[test]
+    fn context_enum_directive_value_completes() {
+        // `{diagrams: }` is enum-valued, so the cursor after the colon is a
+        // DirectiveValue context carrying the directive name + typed prefix.
+        let ctx = detect_context("{diagrams: ", 11);
+        assert_eq!(
+            ctx,
+            CompletionContext::DirectiveValue {
+                directive: "diagrams".to_string(),
+                prefix: String::new(),
+            }
+        );
+        let ctx2 = detect_context("{diagrams: in", 13);
+        assert_eq!(
+            ctx2,
+            CompletionContext::DirectiveValue {
+                directive: "diagrams".to_string(),
+                prefix: "in".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn directive_value_items_offers_diagrams_values() {
+        let items = directive_value_items("diagrams", "");
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        assert!(labels.contains(&"inline"));
+        assert!(labels.contains(&"hover"));
+        assert!(labels.contains(&"off"));
+        // Prefix filtering narrows the set.
+        let inl = directive_value_items("diagrams", "in");
+        assert!(inl.iter().all(|i| i.label.starts_with("in")));
+        assert!(inl.iter().any(|i| i.label == "inline"));
+    }
+
+    #[test]
+    fn directive_value_items_empty_for_free_form() {
+        assert!(directive_value_items("title", "").is_empty());
+        assert!(directive_value_items("not-a-directive", "").is_empty());
+    }
+
+    #[test]
+    fn directive_items_still_includes_previously_missing_directives() {
+        // The catalog fixed the hand-list's gaps — these must now appear.
+        let labels: Vec<String> = directive_items("").into_iter().map(|i| i.label).collect();
+        for name in ["highlight", "no_diagrams", "pagetype", "start_of_musicxml"] {
+            assert!(labels.contains(&name.to_string()), "missing {name}");
+        }
     }
 }
