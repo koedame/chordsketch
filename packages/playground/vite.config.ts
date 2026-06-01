@@ -52,6 +52,10 @@ export default defineConfig({
       // alias so Vite resolves it correctly.
       '@chordsketch/react/styles.css': resolve(here, '../react/src/styles.css'),
       '@chordsketch/react': resolve(here, '../react/src/index.ts'),
+      // Wasm-free design-system primitives (#2587, ADR-0029). Same
+      // alias pattern; longer specifier first (Vite first-match).
+      '@chordsketch/react-ui/styles.css': resolve(here, '../react-ui/src/styles.css'),
+      '@chordsketch/react-ui': resolve(here, '../react-ui/src/index.ts'),
       // iReal Pro bar-grid editor — used by the /irealpro/ route as
       // the source pane's editor adapter. Longer specifier first
       // (Vite alias resolution is first-match).
@@ -78,6 +82,7 @@ export default defineConfig({
         resolve(here, '../npm'),
         resolve(here, '../npm-export'),
         resolve(here, '../react'),
+        resolve(here, '../react-ui'),
         resolve(here, '../ui-irealb-editor'),
       ],
     },
