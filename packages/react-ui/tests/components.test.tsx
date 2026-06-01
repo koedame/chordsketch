@@ -46,6 +46,11 @@ describe('Button', () => {
     expect(screen.getByRole('button', { name: 'Saving' }).getAttribute('aria-busy')).toBe('true');
   });
 
+  test('sets aria-busy on link variant when loading', () => {
+    render(<Button as="a" href="/save" isLoading>Saving</Button>);
+    expect(screen.getByRole('link', { name: 'Saving' }).getAttribute('aria-busy')).toBe('true');
+  });
+
   test('defaults to type="button" to avoid accidental form submission', () => {
     render(<Button>Click</Button>);
     expect(screen.getByRole('button', { name: 'Click' }).getAttribute('type')).toBe('button');
