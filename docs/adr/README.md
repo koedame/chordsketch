@@ -106,3 +106,4 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0026](0026-horizontal-chord-diagram-default-string-order.md) | Horizontal chord diagrams render reader-view only (high pitch on top, matches tablature stave order); player-view is not supported | Accepted (2026-05-30) |
 | [0027](0027-inline-hover-compact-chord-diagrams.md) | Inline / hover chord diagrams use a dedicated compact layout (chordsketch `{diagrams: inline}` / `{diagrams: hover}` extension; not a CSS scale) | Accepted (2026-05-31) |
 | [0028](0028-shared-directive-catalog.md) | Shared directive catalog in `chordsketch-chordpro` is the single source of truth for directive-name + value completion across LSP / web / playground | Accepted (2026-05-31) |
+| [0029](0029-react-ui-primitives-package.md) | Design-system React primitives live in a wasm-free `@chordsketch/react-ui`; `@chordsketch/react` stays domain-only and does not re-export them | Accepted (2026-06-01) |
