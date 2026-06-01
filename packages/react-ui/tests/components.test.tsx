@@ -3,7 +3,7 @@ import { describe, expect, test } from 'vitest';
 import { Button } from '../src/button';
 import { Badge, Pill } from '../src/badge';
 import { Card } from '../src/card';
-import { Checkbox, Input, Segmented } from '../src/form';
+import { Checkbox, Field, Input, Radio, Segmented, Switch } from '../src/form';
 
 describe('Button', () => {
   test('composes btn + variant + size classes', () => {
@@ -39,6 +39,16 @@ describe('Button', () => {
     const el = screen.getByRole('button', { name: 'Saving' });
     expect(el.querySelector('.spinner')).not.toBeNull();
     expect((el as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test('sets aria-busy when loading', () => {
+    render(<Button isLoading>Saving</Button>);
+    expect(screen.getByRole('button', { name: 'Saving' }).getAttribute('aria-busy')).toBe('true');
+  });
+
+  test('defaults to type="button" to avoid accidental form submission', () => {
+    render(<Button>Click</Button>);
+    expect(screen.getByRole('button', { name: 'Click' }).getAttribute('type')).toBe('button');
   });
 
   test('adds btn-icon for icon-only buttons', () => {
@@ -92,6 +102,38 @@ describe('Form', () => {
     const { container } = render(<Checkbox label="Show lyrics" defaultChecked />);
     expect(container.querySelector('input[type="checkbox"]')).not.toBeNull();
     expect(container.querySelector('.box')).not.toBeNull();
+  });
+
+  test('Field renders error text and hides help', () => {
+    const { container } = render(
+      <Field label="Email" htmlFor="email" help="Use your work address" error="Invalid email">
+        <input id="email" />
+      </Field>,
+    );
+    expect(container.querySelector('.err')?.textContent).toBe('Invalid email');
+    expect(container.querySelector('.help')).toBeNull();
+  });
+
+  test('Field renders help text when no error', () => {
+    const { container } = render(
+      <Field label="Email" htmlFor="email" help="Use your work address">
+        <input id="email" />
+      </Field>,
+    );
+    expect(container.querySelector('.help')?.textContent).toBe('Use your work address');
+    expect(container.querySelector('.err')).toBeNull();
+  });
+
+  test('Radio renders a radio input and a custom box', () => {
+    const { container } = render(<Radio label="Option A" name="opt" value="a" />);
+    expect(container.querySelector('input[type="radio"]')).not.toBeNull();
+    expect(container.querySelector('.box')).not.toBeNull();
+  });
+
+  test('Switch renders a checkbox input and a track', () => {
+    const { container } = render(<Switch label="Dark mode" />);
+    expect(container.querySelector('input[type="checkbox"]')).not.toBeNull();
+    expect(container.querySelector('.track')).not.toBeNull();
   });
 
   test('Segmented marks the selected option as pressed', () => {
