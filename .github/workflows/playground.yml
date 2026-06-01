@@ -69,6 +69,10 @@ jobs:
         working-directory: packages/ui-irealb-editor
         run: npm ci
 
+      - name: Install react-ui dependencies
+        working-directory: packages/react-ui
+        run: npm ci
+
       - name: Typecheck (tsc --noEmit)
         # `packages/playground/src/wasm.d.ts` declares an ambient
         # module for `@chordsketch/wasm` covering every export the
