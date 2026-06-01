@@ -1,7 +1,7 @@
 # 0029. Design-system React primitives live in a wasm-free `@chordsketch/react-ui` package; `@chordsketch/react` does not re-export them
 
 - **Status**: Accepted
-- **Date**: 2026-06-02
+- **Date**: 2026-06-01
 
 ## Context
 
@@ -229,5 +229,5 @@ it for v1.0 rather than after.
   canonical-class JSX to migrate onto the primitives.
 - `docs/releasing.md`, `.github/workflows/react.yml` — the publish
   checklist and build/verify workflow pattern the new package mirrors.
-- Tracking issue: #TBD (assigned when the issue is filed; the branch and
+- Tracking issue: #2587 (implementing `@chordsketch/react-ui`; branch and
   PR follow the `issue-{number}-{short-description}` convention).
