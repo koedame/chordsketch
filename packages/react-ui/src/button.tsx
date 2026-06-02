@@ -12,8 +12,19 @@ interface ButtonBaseProps {
   isLoading?: boolean;
 }
 
+// Anchor-only attributes (href, target, download, …) that do not exist on a
+// <button>. Forbidden on the button arm below so they cannot silently land on
+// a <button> when `as` is omitted — closing the TypeScript union
+// excess-property gap (microsoft/TypeScript#14094) at the type level.
+type AnchorOnlyProps = Omit<
+  React.AnchorHTMLAttributes<HTMLAnchorElement>,
+  keyof React.ButtonHTMLAttributes<HTMLButtonElement>
+>;
+
 export type ButtonProps =
-  | (ButtonBaseProps & { as?: 'button' } & React.ButtonHTMLAttributes<HTMLButtonElement>)
+  | (ButtonBaseProps & { as?: 'button' } & React.ButtonHTMLAttributes<HTMLButtonElement> & {
+      [K in keyof AnchorOnlyProps]?: never;
+    })
   | (ButtonBaseProps & { as: 'a' } & React.AnchorHTMLAttributes<HTMLAnchorElement>);
 
 function buttonClassName(
@@ -30,7 +41,10 @@ function buttonClassName(
 /**
  * Design-system button primitive. Composes the canonical `.btn` class
  * vocabulary from `design-system/DESIGN.md` §6. Renders a `<button>` by
- * default, or an `<a>` when `as="a"` (for link-styled actions).
+ * default, or an `<a>` when `as="a"` (for link-styled actions). Anchor
+ * attributes such as `href` require `as="a"` (a type error on the button
+ * form). When `as="a"` and `isLoading`, navigation is suppressed and the
+ * link is marked `aria-disabled`.
  */
 export function Button(props: ButtonProps): React.ReactElement {
   const { variant = 'secondary', size = 'md', iconOnly = false, isLoading = false } = props;
@@ -51,10 +65,20 @@ export function Button(props: ButtonProps): React.ReactElement {
       as: _as,
       className: _className,
       children: _children,
+      onClick,
       ...anchorProps
     } = props;
     return (
-      <a className={cls} aria-busy={isLoading || undefined} {...anchorProps}>
+      // A loading link is non-interactive: `aria-disabled` communicates that to
+      // assistive tech, and the handler suppresses navigation (an <a> has no
+      // native `disabled`).
+      <a
+        className={cls}
+        aria-busy={isLoading || undefined}
+        aria-disabled={isLoading || undefined}
+        onClick={isLoading ? (event) => event.preventDefault() : onClick}
+        {...anchorProps}
+      >
         {content}
       </a>
     );

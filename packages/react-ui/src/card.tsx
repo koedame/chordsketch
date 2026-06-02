@@ -8,17 +8,22 @@ const VARIANT_CLASS: Record<CardVariant, string> = {
   featured: 'featured-card',
 };
 
-export interface CardProps extends React.HTMLAttributes<HTMLElement> {
-  variant?: CardVariant;
-  /** For the `song` variant: apply the crimson `featured` accent border. */
-  featured?: boolean;
-}
+export type CardProps = React.HTMLAttributes<HTMLElement> &
+  (
+    | {
+        variant?: 'song';
+        /** Apply the crimson accent border. Only valid on the `song` variant. */
+        featured?: boolean;
+      }
+    | { variant: 'setlist' | 'featured'; featured?: never }
+  );
 
 /**
  * Design-system card container (`design-system/DESIGN.md` §6). Renders an
  * `<article>` with the canonical card class for the chosen variant; the
  * inner structure (`.artist`, `.meta`, `.footer`, `.stats`, …) is composed
- * by the caller per the design-system markup.
+ * by the caller per the design-system markup. `featured` is accepted only on
+ * the `song` variant (a type error on `setlist` / `featured`).
  */
 export function Card({
   variant = 'song',

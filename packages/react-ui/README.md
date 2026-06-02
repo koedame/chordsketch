@@ -14,7 +14,7 @@ Wasm-free React design-system primitives for [ChordSketch](https://github.com/ko
 npm install @chordsketch/react-ui
 ```
 
-Replace `VERSION` with the latest published version where a version is shown. The package ships a single stylesheet that you import once at your app root.
+The package ships a single stylesheet — import it once at your app root (see Quick start).
 
 ## Quick start
 

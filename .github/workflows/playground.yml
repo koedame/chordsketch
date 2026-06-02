@@ -69,7 +69,7 @@ jobs:
         working-directory: packages/ui-irealb-editor
         run: npm ci
 
-      - name: Install react-ui dependencies
+      - name: Install @chordsketch/react-ui dependencies
         working-directory: packages/react-ui
         run: npm ci
 

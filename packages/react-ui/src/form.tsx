@@ -36,14 +36,14 @@ export function Field({
 }
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  /** Apply the `.error` border treatment. */
-  error?: boolean;
+  /** Mark the field invalid: applies the `.error` border and sets `aria-invalid`. */
+  invalid?: boolean;
 }
 
 /** Text input primitive (`.input`). */
-export function Input({ error = false, className, ...rest }: InputProps): React.ReactElement {
-  const cls = ['input', error ? 'error' : '', className ?? ''].filter(Boolean).join(' ');
-  return <input className={cls} {...rest} />;
+export function Input({ invalid = false, className, ...rest }: InputProps): React.ReactElement {
+  const cls = ['input', invalid ? 'error' : '', className ?? ''].filter(Boolean).join(' ');
+  return <input className={cls} aria-invalid={invalid || undefined} {...rest} />;
 }
 
 export type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>;

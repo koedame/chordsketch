@@ -179,6 +179,10 @@
   border-radius: var(--cs-r-full);
   animation: cs-spin 0.8s linear infinite;
 }
+/* Keyframe names are GLOBAL identifiers (unlike the scoped `--cs-*` tokens),
+ * so the canonical `spin` from design-system/preview/components-buttons.html
+ * is namespaced to `cs-spin` here to avoid colliding with a host page's own
+ * `@keyframes spin`. Same defensive-namespacing intent as the `--cs-*` tokens. */
 @keyframes cs-spin { to { transform: rotate(1turn); } }
 
 /* ------------------------------------------------------------------
