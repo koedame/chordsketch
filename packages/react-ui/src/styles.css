@@ -1,0 +1,358 @@
+/*
+ * @chordsketch/react-ui — design-system primitive stylesheet.
+ *
+ * These rules are the React binding of the framework-agnostic
+ * design system. The class vocabulary (`.btn`, `.song-card`,
+ * `.badge`, `.input`, …) and the CSS below are transcribed from the
+ * canonical reference in `design-system/preview/components-*.html`;
+ * `design-system/DESIGN.md` / `design-system/tokens.css` remain the
+ * source of truth (ADR-0029 §5/§6).
+ *
+ * Design-system tokens are exposed under the `--cs-*` namespace,
+ * matching `@chordsketch/react`'s stylesheet. The namespace is local
+ * to this package's selectors: every primitive root carries the full
+ * token set so the primitives render correctly wherever this
+ * stylesheet is loaded, without depending on (or being overridden by)
+ * a host's own `:root` tokens. Values mirror `design-system/tokens.css`.
+ */
+.btn,
+.song-card,
+.setlist,
+.featured-card,
+.badge,
+.pill,
+.field,
+.input,
+.textarea,
+.select,
+.segmented,
+.check,
+.radio,
+.switch {
+  /* Crimson — the only accent. */
+  --cs-crimson-50: #FDF2F5;
+  --cs-crimson-100: #FBE1E8;
+  --cs-crimson-300: #EC8AA3;
+  --cs-crimson-500: #BD1642;
+  --cs-crimson-600: #A30F37;
+  --cs-crimson-700: #87092C;
+  --cs-crimson-900: #480418;
+  --cs-crimson: var(--cs-crimson-500);
+  --cs-fg-on-crimson: #FFFFFF;
+
+  /* Ink — warm neutrals. */
+  --cs-ink-0: #FFFFFF;
+  --cs-ink-50: #FAFAF7;
+  --cs-ink-100: #F6F4F7;
+  --cs-ink-200: #E8E6EA;
+  --cs-ink-300: #D4D1D6;
+  --cs-ink-500: #8A8790;
+  --cs-ink-600: #67646D;
+  --cs-ink-700: #44424A;
+  --cs-ink-1000: #0A0A0B;
+
+  /* Surface / border / text aliases. */
+  --cs-canvas: var(--cs-ink-50);
+  --cs-surface: var(--cs-ink-0);
+  --cs-surface-hover: var(--cs-ink-100);
+  --cs-border: var(--cs-ink-200);
+  --cs-border-strong: var(--cs-ink-300);
+  --cs-text-primary: var(--cs-ink-1000);
+  --cs-text-strong: var(--cs-ink-700);
+  --cs-text-secondary: var(--cs-ink-600);
+  --cs-text-tertiary: var(--cs-ink-500);
+
+  /* Semantic. */
+  --cs-success-surface: #E8F3EC;
+  --cs-success-fg: #1A6B3A;
+  --cs-warning-surface: #FBF1D9;
+  --cs-warning-fg: #8A5A07;
+  --cs-danger-surface: #FBE1E8;
+  --cs-danger-fg: #A30F37;
+  --cs-info-surface: #E6EEF7;
+  --cs-info-fg: #1F4F8A;
+
+  /* Focus. */
+  --cs-focus-ring: 0 0 0 2px var(--cs-ink-0), 0 0 0 4px var(--cs-crimson-500);
+
+  /* Typography families. */
+  --cs-font-jp: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --cs-font-latin: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --cs-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Type scale. */
+  --cs-fs-12: 0.75rem;
+  --cs-fs-13: 0.8125rem;
+  --cs-fs-14: 0.875rem;
+  --cs-fs-16: 1rem;
+  --cs-fs-18: 1.125rem;
+  --cs-fs-24: 1.5rem;
+
+  /* 4pt spacing scale. */
+  --cs-sp-1: 0.25rem;
+  --cs-sp-2: 0.5rem;
+  --cs-sp-3: 0.75rem;
+  --cs-sp-4: 1rem;
+  --cs-sp-5: 1.25rem;
+  --cs-sp-6: 1.5rem;
+  --cs-sp-8: 2rem;
+
+  /* Radius. */
+  --cs-r-1: 2px;
+  --cs-r-2: 4px;
+  --cs-r-3: 8px;
+  --cs-r-full: 9999px;
+
+  /* Elevation. */
+  --cs-e-1: 0 1px 2px rgba(10, 10, 11, 0.04);
+
+  /* Motion. */
+  --cs-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --cs-dur-1: 120ms;
+  --cs-dur-2: 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .song-card,
+  .setlist,
+  .featured-card,
+  .badge,
+  .pill,
+  .field,
+  .input,
+  .textarea,
+  .select,
+  .segmented,
+  .check,
+  .radio,
+  .switch {
+    --cs-dur-1: 0ms;
+    --cs-dur-2: 0ms;
+  }
+}
+
+/* ------------------------------------------------------------------
+ * Button — design-system/preview/components-buttons.html
+ * ------------------------------------------------------------------ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cs-sp-2);
+  height: 36px;
+  padding: 0 var(--cs-sp-4);
+  border-radius: var(--cs-r-2);
+  border: 1px solid transparent;
+  font: 500 var(--cs-fs-14)/1 var(--cs-font-jp);
+  cursor: pointer;
+  transition: background var(--cs-dur-1) var(--cs-ease-out), border-color var(--cs-dur-1) var(--cs-ease-out);
+  text-decoration: none;
+}
+.btn:focus-visible { outline: none; box-shadow: var(--cs-focus-ring); }
+.btn:disabled,
+.btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
+.btn-sm { height: 28px; padding: 0 var(--cs-sp-3); font-size: var(--cs-fs-13); }
+.btn-md { height: 36px; }
+.btn-lg { height: 44px; padding: 0 var(--cs-sp-5); font-size: var(--cs-fs-16); }
+.btn-icon { padding: 0; width: 36px; justify-content: center; }
+.btn-sm.btn-icon { width: 28px; }
+.btn-lg.btn-icon { width: 44px; }
+
+.btn-primary { background: var(--cs-crimson-500); color: var(--cs-fg-on-crimson); }
+.btn-primary:hover:not(:disabled) { background: var(--cs-crimson-600); }
+.btn-primary:active { background: var(--cs-crimson-700); }
+
+.btn-secondary { background: var(--cs-surface); color: var(--cs-text-primary); border-color: var(--cs-border-strong); }
+.btn-secondary:hover:not(:disabled) { background: var(--cs-ink-100); }
+
+.btn-ghost { background: transparent; color: var(--cs-text-secondary); }
+.btn-ghost:hover:not(:disabled) { background: var(--cs-ink-100); color: var(--cs-text-primary); }
+
+.btn-danger { background: var(--cs-danger-fg); color: var(--cs-fg-on-crimson); }
+.btn-danger:hover:not(:disabled) { background: var(--cs-crimson-700); }
+
+.btn .spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--cs-r-full);
+  animation: cs-spin 0.8s linear infinite;
+}
+/* Keyframe names are GLOBAL identifiers (unlike the scoped `--cs-*` tokens),
+ * so the canonical `spin` from design-system/preview/components-buttons.html
+ * is namespaced to `cs-spin` here to avoid colliding with a host page's own
+ * `@keyframes spin`. Same defensive-namespacing intent as the `--cs-*` tokens. */
+@keyframes cs-spin { to { transform: rotate(1turn); } }
+
+/* ------------------------------------------------------------------
+ * Cards — design-system/preview/components-cards.html
+ * ------------------------------------------------------------------ */
+.song-card {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-r-3);
+  padding: var(--cs-sp-5);
+  transition: border-color var(--cs-dur-2) var(--cs-ease-out), transform var(--cs-dur-2) var(--cs-ease-out), box-shadow var(--cs-dur-2) var(--cs-ease-out);
+  cursor: pointer;
+}
+.song-card:hover { border-color: var(--cs-border-strong); transform: translateY(-1px); box-shadow: var(--cs-e-1); }
+.song-card.featured { border-color: var(--cs-crimson-500); }
+.song-card .artist { font-family: var(--cs-font-latin); font-weight: 500; font-size: var(--cs-fs-13); color: var(--cs-text-secondary); margin: 0 0 var(--cs-sp-2); }
+.song-card h3 { font-family: var(--cs-font-jp); font-weight: 700; font-size: var(--cs-fs-18); line-height: 1.4; letter-spacing: -0.01em; margin: 0 0 var(--cs-sp-4); }
+.song-card .meta { display: flex; gap: var(--cs-sp-3); flex-wrap: wrap; font-family: var(--cs-font-mono); font-size: var(--cs-fs-12); color: var(--cs-text-secondary); margin-bottom: var(--cs-sp-4); font-variant-numeric: tabular-nums; }
+.song-card .footer { display: flex; align-items: center; justify-content: space-between; padding-top: var(--cs-sp-3); border-top: 1px solid var(--cs-border); }
+.song-card time { font-family: var(--cs-font-latin); font-weight: 500; font-size: var(--cs-fs-12); color: var(--cs-text-tertiary); font-variant-numeric: tabular-nums; }
+
+.setlist {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-r-3);
+  padding: var(--cs-sp-5);
+  display: flex;
+  flex-direction: column;
+}
+.setlist h3 { font-family: var(--cs-font-jp); font-weight: 700; font-size: var(--cs-fs-18); margin: 0 0 var(--cs-sp-2); letter-spacing: -0.01em; }
+.setlist .desc { color: var(--cs-text-secondary); font-size: var(--cs-fs-14); margin: 0 0 var(--cs-sp-5); }
+.setlist .stats { display: flex; gap: var(--cs-sp-6); padding: var(--cs-sp-3) 0; border-top: 1px solid var(--cs-border); border-bottom: 1px solid var(--cs-border); margin-bottom: var(--cs-sp-4); }
+.setlist .stat { display: flex; flex-direction: column; gap: var(--cs-sp-1); }
+.setlist .stat .num { font-family: var(--cs-font-mono); font-weight: 600; font-size: var(--cs-fs-24); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.setlist .stat .label { font-family: var(--cs-font-latin); font-weight: 600; font-size: var(--cs-fs-12); letter-spacing: 0; color: var(--cs-text-tertiary); }
+.setlist time { font-family: var(--cs-font-mono); font-size: var(--cs-fs-12); color: var(--cs-text-tertiary); margin-top: auto; }
+
+.featured-card {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-crimson-500);
+  border-radius: var(--cs-r-3);
+  padding: var(--cs-sp-6) var(--cs-sp-5);
+}
+.featured-card .eyebrow { margin: 0 0 var(--cs-sp-1); color: var(--cs-text-secondary); }
+.featured-card h3 { font-family: var(--cs-font-jp); font-weight: 700; font-size: var(--cs-fs-24); margin: 0 0 var(--cs-sp-2); letter-spacing: -0.01em; }
+.featured-card p { color: var(--cs-text-secondary); margin: 0 0 var(--cs-sp-5); font-size: var(--cs-fs-14); }
+
+/* ------------------------------------------------------------------
+ * Badges & pills — design-system/preview/components-badges.html
+ * ------------------------------------------------------------------ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cs-sp-1);
+  padding: 2px var(--cs-sp-2);
+  border-radius: var(--cs-r-1);
+  font-family: var(--cs-font-mono);
+  font-weight: 600;
+  font-size: var(--cs-fs-12);
+  letter-spacing: 0.02em;
+}
+.badge.dot::before { content: ""; width: 6px; height: 6px; border-radius: var(--cs-r-full); background: currentColor; }
+.badge.success { background: var(--cs-success-surface); color: var(--cs-success-fg); }
+.badge.warning { background: var(--cs-warning-surface); color: var(--cs-warning-fg); }
+.badge.danger { background: var(--cs-danger-surface); color: var(--cs-danger-fg); }
+.badge.info { background: var(--cs-info-surface); color: var(--cs-info-fg); }
+.badge.crimson { background: var(--cs-crimson-50); color: var(--cs-crimson-700); }
+.badge.muted { background: var(--cs-ink-100); color: var(--cs-text-secondary); }
+.badge.key { background: var(--cs-ink-1000); color: var(--cs-ink-0); padding: 2px var(--cs-sp-2); }
+.badge.key.crimson-fill { background: var(--cs-crimson-500); color: var(--cs-fg-on-crimson); }
+.badge.format { background: var(--cs-ink-100); color: var(--cs-text-strong); border: 1px solid var(--cs-border); }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--cs-sp-1) var(--cs-sp-3);
+  border: 1px solid var(--cs-border-strong);
+  border-radius: var(--cs-r-full);
+  background: var(--cs-surface);
+  font: 500 var(--cs-fs-13)/1 var(--cs-font-jp);
+  color: var(--cs-text-secondary);
+}
+.pill.solid { background: var(--cs-ink-1000); color: var(--cs-ink-0); border-color: var(--cs-ink-1000); }
+
+/* ------------------------------------------------------------------
+ * Form controls — design-system/preview/components-forms.html
+ * ------------------------------------------------------------------ */
+.field { display: flex; flex-direction: column; gap: var(--cs-sp-2); }
+.field > label { font-family: var(--cs-font-jp); font-weight: 500; font-size: var(--cs-fs-14); color: var(--cs-text-primary); }
+.field .help { font-size: var(--cs-fs-13); color: var(--cs-text-secondary); }
+.field .err { font-size: var(--cs-fs-13); color: var(--cs-danger-fg); }
+
+.input,
+.textarea {
+  width: 100%;
+  padding: 0 var(--cs-sp-3);
+  height: 36px;
+  border: 1px solid var(--cs-border-strong);
+  border-radius: var(--cs-r-2);
+  background: var(--cs-surface);
+  font: 400 var(--cs-fs-14)/1 var(--cs-font-jp);
+  color: var(--cs-text-primary);
+  transition: border-color var(--cs-dur-1) var(--cs-ease-out), box-shadow var(--cs-dur-1) var(--cs-ease-out);
+}
+.textarea { height: auto; padding: var(--cs-sp-3); line-height: 1.6; resize: vertical; min-height: 96px; font-family: var(--cs-font-jp); }
+.input:hover,
+.textarea:hover { border-color: var(--cs-text-secondary); }
+.input:focus,
+.textarea:focus { outline: none; border-color: var(--cs-crimson-500); box-shadow: var(--cs-focus-ring); }
+.input.error { border-color: var(--cs-danger-fg); }
+.input:disabled,
+.textarea:disabled { background: var(--cs-ink-50); color: var(--cs-text-tertiary); cursor: not-allowed; }
+.input::placeholder { color: var(--cs-text-tertiary); }
+
+.select {
+  width: 100%;
+  height: 36px;
+  padding: 0 var(--cs-sp-8) 0 var(--cs-sp-3);
+  border: 1px solid var(--cs-border-strong);
+  border-radius: var(--cs-r-2);
+  background-color: var(--cs-surface);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2367646D' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m7 15 5 5 5-5'/><path d='m7 9 5-5 5 5'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right var(--cs-sp-3) center;
+  font: 400 var(--cs-fs-14)/1 var(--cs-font-jp);
+  color: var(--cs-text-primary);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+  transition: background-color var(--cs-dur-1) var(--cs-ease-out), border-color var(--cs-dur-1) var(--cs-ease-out), box-shadow var(--cs-dur-1) var(--cs-ease-out);
+}
+.select:hover { border-color: var(--cs-text-secondary); }
+.select:focus { outline: none; border-color: var(--cs-crimson-500); box-shadow: var(--cs-focus-ring); }
+.select:disabled { background-color: var(--cs-ink-50); color: var(--cs-text-tertiary); cursor: not-allowed; }
+
+.segmented { display: inline-flex; border: 1px solid var(--cs-border-strong); border-radius: var(--cs-r-2); overflow: hidden; }
+.segmented button { background: var(--cs-surface); border: 0; padding: 0 var(--cs-sp-4); height: 36px; font: 500 var(--cs-fs-14)/1 var(--cs-font-jp); color: var(--cs-text-secondary); cursor: pointer; border-right: 1px solid var(--cs-border); }
+.segmented button:last-child { border-right: 0; }
+.segmented button[aria-pressed="true"] { background: var(--cs-ink-1000); color: var(--cs-ink-0); }
+.segmented button:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--cs-crimson-500); position: relative; z-index: 1; }
+
+.check,
+.radio { display: inline-flex; align-items: center; gap: var(--cs-sp-2); cursor: pointer; user-select: none; font-size: var(--cs-fs-14); }
+.check input,
+.radio input { position: absolute; opacity: 0; pointer-events: none; }
+.check .box,
+.radio .box {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--cs-border-strong);
+  background: var(--cs-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--cs-dur-1) var(--cs-ease-out), border-color var(--cs-dur-1) var(--cs-ease-out);
+}
+.check .box { border-radius: var(--cs-r-1); }
+.radio .box { border-radius: var(--cs-r-full); }
+.check input:checked + .box,
+.radio input:checked + .box { background: var(--cs-crimson-500); border-color: var(--cs-crimson-500); }
+.check input:checked + .box::before { content: ""; width: 10px; height: 6px; border-left: 2px solid var(--cs-ink-0); border-bottom: 2px solid var(--cs-ink-0); transform: rotate(-45deg) translate(1px, -1px); }
+.radio input:checked + .box::before { content: ""; width: 6px; height: 6px; border-radius: var(--cs-r-full); background: var(--cs-ink-0); }
+.check input:focus-visible + .box,
+.radio input:focus-visible + .box { box-shadow: var(--cs-focus-ring); outline: none; }
+
+.switch { display: inline-flex; align-items: center; gap: var(--cs-sp-3); cursor: pointer; font-size: var(--cs-fs-14); }
+.switch input { position: absolute; opacity: 0; pointer-events: none; }
+.switch .track { width: 36px; height: 20px; border-radius: var(--cs-r-full); background: var(--cs-ink-300); position: relative; transition: background var(--cs-dur-1) var(--cs-ease-out); }
+.switch .track::before { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: var(--cs-r-full); background: var(--cs-ink-0); transition: transform var(--cs-dur-2) var(--cs-ease-out); box-shadow: var(--cs-e-1); }
+.switch input:checked + .track { background: var(--cs-crimson-500); }
+.switch input:checked + .track::before { transform: translateX(16px); }
+.switch input:focus-visible + .track { box-shadow: var(--cs-focus-ring); }
