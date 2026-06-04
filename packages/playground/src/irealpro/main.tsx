@@ -17,6 +17,8 @@ import init, {
   version as wasmVersion,
 } from '@chordsketch/wasm';
 import '@chordsketch/react/styles.css';
+import { Button } from '@chordsketch/react-ui';
+import '@chordsketch/react-ui/styles.css';
 
 import '../playground.css';
 import { IrealChart } from './chart';
@@ -389,11 +391,13 @@ function PlaygroundApp(): JSX.Element {
               ))}
             </select>
           </label>
-          <a className="btn btn-ghost btn-sm" href="../docs/">
+          <Button as="a" variant="ghost" size="sm" href="../docs/">
             Docs
-          </a>
-          <a
-            className="btn btn-ghost btn-sm"
+          </Button>
+          <Button
+            as="a"
+            variant="ghost"
+            size="sm"
             href="https://github.com/koedame/chordsketch"
             target="_blank"
             rel="noreferrer noopener"
@@ -410,7 +414,7 @@ function PlaygroundApp(): JSX.Element {
               <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2.04c-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.69 1.24 3.34.95.1-.74.4-1.24.72-1.53-2.55-.29-5.23-1.27-5.23-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.16 1.18a10.93 10.93 0 0 1 5.74 0c2.2-1.49 3.16-1.18 3.16-1.18.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.06.78 2.13v3.16c0 .31.21.67.8.56C20.71 21.39 24 17.08 24 12 24 5.65 18.85.5 12 .5z" />
             </svg>
             View source
-          </a>
+          </Button>
         </div>
       </header>
 
@@ -419,14 +423,15 @@ function PlaygroundApp(): JSX.Element {
           <section className="url-card" aria-label="iRealb URL editor">
             <header className="url-card__head">
               <span className="url-card__label">irealb URL</span>
-              <button
+              <Button
                 type="button"
-                className="btn btn-secondary btn-sm"
+                variant="secondary"
+                size="sm"
                 onClick={handleCopyUrl}
                 aria-live="polite"
               >
                 {urlCopied ? 'Copied' : 'Copy'}
-              </button>
+              </Button>
             </header>
             <textarea
               className="url-card__textarea"

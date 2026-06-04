@@ -226,65 +226,11 @@ a {
 }
 
 /* ----------------------------------------------------------------
- * Buttons (`.btn` + variants) — same vocabulary as the reference.
+ * Buttons: `.btn` + variants are now provided by the
+ * @chordsketch/react-ui `<Button>` primitive (ADR-0029, #2587). The
+ * route entries import `@chordsketch/react-ui/styles.css`, so the
+ * playground no longer carries its own copy of the button rules.
  * ---------------------------------------------------------------- */
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  height: 36px;
-  padding: 0 1rem;
-  border-radius: 4px;
-  border: 1px solid transparent;
-  /* Latin-priority font stack — button labels are English /
-     symbols, and `--cs-font-jp` (Noto Sans JP) has a larger
-     vertical line-box than `--cs-font-latin` (Inter), which
-     shifted Latin glyphs visually downward inside a fixed-height
-     `.btn` even though `align-items: center` + `line-height: 1`
-     should have nominally centred them. Latin stack restores the
-     baseline. */
-  font: 500 0.875rem/1 var(--cs-font-latin, "Inter", system-ui, sans-serif);
-  cursor: pointer;
-  transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  text-decoration: none;
-}
-
-.btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--cs-ink-0, #FFFFFF), 0 0 0 4px var(--cs-crimson-500, #BD1642);
-}
-
-.btn-secondary {
-  background: var(--cs-surface, #FFFFFF);
-  color: var(--cs-text-primary, #0A0A0B);
-  border-color: var(--cs-border-strong, #D4D1D6);
-}
-.btn-secondary:hover {
-  background: var(--cs-ink-100, #F6F4F7);
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--cs-text-secondary, #67646D);
-}
-.btn-ghost:hover {
-  background: var(--cs-ink-100, #F6F4F7);
-  color: var(--cs-text-primary, #0A0A0B);
-}
-
-.btn-icon {
-  padding: 0;
-  width: 36px;
-  justify-content: center;
-}
-
-.btn-sm {
-  height: 28px;
-  padding: 0 0.75rem;
-  font-size: 0.8125rem;
-}
 
 /* ----------------------------------------------------------------
  * Toolbar — eyebrow-labelled tool-groups separated by hairline

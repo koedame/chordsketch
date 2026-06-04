@@ -111,6 +111,15 @@ jobs:
         run: npm ci
         working-directory: packages/ui-irealb-editor
 
+      - name: Install @chordsketch/react-ui dependencies
+        # `npm ci` populates the wasm-free primitives package's devDeps
+        # so the playground's `tsc` can resolve the transitive `react`
+        # imports inside `../react-ui/src/*.tsx` (pulled in via tsconfig
+        # paths / include). The playground aliases this package to its
+        # source, so no `npm run build` is needed here.
+        run: npm ci
+        working-directory: packages/react-ui
+
       - name: Build playground (production bundle the smoke serves)
         run: npm run build
         working-directory: packages/playground
