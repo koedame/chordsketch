@@ -1,6 +1,6 @@
 # ChordSketch — Design System
 
-**Version 1.0** · English-primary UI · Light theme · Editorial / Professional
+**Version 1.1** · English-primary UI · Light theme · Editorial / Professional
 
 ChordSketch is a library of chord sheets with lyrics for **ChordPro** and
 **iReal Pro**. A tool for amateurs through professionals to search, edit,
@@ -159,6 +159,48 @@ Token aliases in `tokens.css`:
   1080px (guides).
 - **Grid** — 12 columns, 24px gutter.
 
+### 4.1 Stack — the vertical-flow primitive
+
+Vertical spacing between stacked elements is owned by the
+**container**, never by the children. This is the one spacing model:
+it replaces per-child `margin-bottom` and the brittle margin-collapse
+that pattern leans on, and it removes the defensive `margin: 0`
+re-declarations that creep in when a child's own outer spacing is
+uncertain.
+
+`.stack` is a column flexbox whose `gap` is set by `--stack-gap`
+(default `--sp-4`); its direct children carry no outer block margin —
+the primitive zeroes `margin-block` on them, so it is correct with or
+without a global reset. Pick a rhythm with the numbered modifiers,
+which map 1:1 onto the space scale — one modifier per `--sp-*` step:
+
+| Class | `--stack-gap` |   | Class | `--stack-gap` |
+|---|---|---|---|---|
+| `.stack` | `--sp-4` (default) |   | `.stack-8`  | `--sp-8`  |
+| `.stack-1` | `--sp-1` |   | `.stack-10` | `--sp-10` |
+| `.stack-2` | `--sp-2` |   | `.stack-12` | `--sp-12` |
+| `.stack-3` | `--sp-3` |   | `.stack-16` | `--sp-16` |
+| `.stack-4` | `--sp-4` |   | `.stack-20` | `--sp-20` |
+| `.stack-5` | `--sp-5` |   | `.stack-24` | `--sp-24` |
+| `.stack-6` | `--sp-6` |   | `.stack-32` | `--sp-32` |
+
+```css
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-gap, var(--sp-4));
+}
+.stack > * { margin-block: 0; }
+.stack-1  { --stack-gap: var(--sp-1); }
+/* … one modifier per --sp-* step … */
+.stack-32 { --stack-gap: var(--sp-32); }
+```
+
+**Mixed rhythm = nested stacks.** Each stack level is internally
+uniform; vary the rhythm by nesting — e.g. a tight `.stack-2` heading
+group (title + lede) inside a looser `.stack-8` page. For a dynamic or
+off-scale gap, set `--stack-gap` directly instead of using a modifier.
+
 ---
 
 ## 5. Motion
@@ -288,6 +330,7 @@ layout in either place.
 | `ui_kits/web/editor.html` | Full-screen sample — ChordPro split editor (source + live preview) |
 | `ui_kits/web/editor-irealb.html` | Full-screen sample — iReal Pro bar-grid editor with metadata header and bar inspector |
 | `preview/index.html` | Component preview index |
+| `preview/layout-stack.html` | Stack — vertical-flow primitive (default gap, modifiers, nesting) |
 | `preview/components-buttons.html` | Buttons — variants, sizes, icon-only, disabled, loading |
 | `preview/components-forms.html` | Inputs, textarea, select, segmented, check, radio, switch |
 | `preview/components-cards.html` | Song / setlist / accent cards |
@@ -310,3 +353,8 @@ layout in either place.
   JetBrains Mono / Roboto / Source Serif 4 / Bravura Text. Source
   Serif 4 is restricted to chart-rendering surfaces (iReal Pro); UI
   text remains sans-serif and monospace.
+- **v1.1** — Added the `.stack` vertical-flow layout primitive (§4.1):
+  container-owned spacing via `--stack-gap`, numbered modifiers mapping
+  1:1 onto the `--sp-*` scale, nesting for mixed rhythm. Replaces
+  per-child `margin-bottom` / margin-collapse as the spacing model. No
+  new tokens.

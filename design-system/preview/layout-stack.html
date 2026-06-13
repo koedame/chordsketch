@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stack — ChordSketch Layout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="../tokens.css">
+<style>
+* { box-sizing: border-box; } html, body { margin: 0; }
+body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875; color: var(--text-primary); background: var(--canvas); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+.container { max-width: 960px; margin: 0 auto; padding: var(--sp-12) var(--sp-6); }
+.preview-back { font-family: var(--font-latin); font-size: var(--fs-12); font-weight: 600; letter-spacing: 0; color: var(--text-secondary); text-decoration: none; }
+.preview-back:hover { color: var(--text-primary); }
+.eyebrow { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); margin: var(--sp-8) 0 var(--sp-2); }
+.preview-h1 { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-36); line-height: 1.111; letter-spacing: -0.02em; margin: 0 0 var(--sp-3); }
+.preview-deck { color: var(--text-secondary); margin: 0 0 var(--sp-12); max-width: 56ch; }
+.group { margin-bottom: var(--sp-12); }
+.group h2 { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); margin: 0 0 var(--sp-4); }
+.note { color: var(--text-secondary); font-size: var(--fs-14); margin: 0 0 var(--sp-4); max-width: 64ch; }
+.note code, code.inline { font-family: var(--font-mono); font-size: var(--fs-13); background: var(--ink-100); padding: 1px var(--sp-1); border-radius: var(--r-1); }
+
+/* ----- The primitive under preview (DESIGN.md §4.1) ----- */
+.stack { display: flex; flex-direction: column; gap: var(--stack-gap, var(--sp-4)); }
+.stack > * { margin-block: 0; }
+.stack-1  { --stack-gap: var(--sp-1); }
+.stack-2  { --stack-gap: var(--sp-2); }
+.stack-3  { --stack-gap: var(--sp-3); }
+.stack-4  { --stack-gap: var(--sp-4); }
+.stack-5  { --stack-gap: var(--sp-5); }
+.stack-6  { --stack-gap: var(--sp-6); }
+.stack-8  { --stack-gap: var(--sp-8); }
+.stack-10 { --stack-gap: var(--sp-10); }
+.stack-12 { --stack-gap: var(--sp-12); }
+.stack-16 { --stack-gap: var(--sp-16); }
+.stack-20 { --stack-gap: var(--sp-20); }
+.stack-24 { --stack-gap: var(--sp-24); }
+.stack-32 { --stack-gap: var(--sp-32); }
+
+/* ----- preview-only visual aids ----- */
+.demo-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-2); padding: var(--sp-3) var(--sp-4); font-family: var(--font-mono); font-size: var(--fs-13); color: var(--text-secondary); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--sp-6); align-items: start; }
+.col-label { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-tertiary); margin: 0 0 var(--sp-2); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); padding: var(--sp-6); }
+.card h3 { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-18); letter-spacing: -0.01em; }
+.card p { color: var(--text-secondary); font-size: var(--fs-14); }
+</style>
+</head>
+<body>
+<main class="container">
+  <a href="index.html" class="preview-back">← Components</a>
+  <p class="eyebrow">Layout · §4.1</p>
+  <h1 class="preview-h1">Stack</h1>
+  <p class="preview-deck">The vertical-flow primitive. Spacing between stacked elements is owned by the container via <code class="inline">--stack-gap</code>, never by per-child <code class="inline">margin-bottom</code>. Numbered modifiers map 1:1 onto the <code class="inline">--sp-*</code> scale; mixed rhythm is expressed by nesting.</p>
+
+  <section class="group">
+    <h2>Default · <code>.stack</code> (gap = --sp-4)</h2>
+    <div class="stack">
+      <div class="demo-box">.stack child</div>
+      <div class="demo-box">.stack child</div>
+      <div class="demo-box">.stack child</div>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Modifiers · one per scale step</h2>
+    <p class="note">Each modifier sets <code>--stack-gap</code> to the matching <code>--sp-*</code> token. Three steps shown side by side so the rhythm difference is visible.</p>
+    <div class="cols">
+      <div>
+        <p class="col-label">.stack-2 — --sp-2 (8px)</p>
+        <div class="stack stack-2">
+          <div class="demo-box">item</div><div class="demo-box">item</div><div class="demo-box">item</div>
+        </div>
+      </div>
+      <div>
+        <p class="col-label">.stack-6 — --sp-6 (24px)</p>
+        <div class="stack stack-6">
+          <div class="demo-box">item</div><div class="demo-box">item</div><div class="demo-box">item</div>
+        </div>
+      </div>
+      <div>
+        <p class="col-label">.stack-10 — --sp-10 (40px)</p>
+        <div class="stack stack-10">
+          <div class="demo-box">item</div><div class="demo-box">item</div><div class="demo-box">item</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Mixed rhythm · nested stacks</h2>
+    <p class="note">A tight <code>.stack-2</code> heading group (title + lede) inside a looser <code>.stack-8</code> page. Each level is internally uniform — no per-child margins anywhere.</p>
+    <div class="stack stack-8">
+      <div class="stack stack-2">
+        <p class="preview-h1">Page title</p>
+        <p class="note">Lede sits --sp-2 under the title; the sections below sit --sp-8 apart.</p>
+      </div>
+      <div class="card stack stack-2">
+        <p class="eyebrow">Section</p>
+        <h3>First section</h3>
+      </div>
+      <div class="card stack stack-2">
+        <p class="eyebrow">Section</p>
+        <h3>Second section</h3>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Children own no margin</h2>
+    <p class="note">A <code>.stack-4</code> wrapping native <code>&lt;h3&gt;</code> / <code>&lt;p&gt;</code> with no margin rules of their own. The primitive zeroes <code>margin-block</code> on direct children, so the only vertical spacing is the gap — correct with or without a global reset.</p>
+    <div class="stack stack-4 card">
+      <h3>Heading with default UA margin</h3>
+      <p>This paragraph and the heading above are spaced only by the stack gap (--sp-4); the user-agent margins on <code class="inline">h3</code> / <code class="inline">p</code> are neutralised by the primitive.</p>
+      <p>A second paragraph, evenly --sp-4 below.</p>
+    </div>
+  </section>
+</main>
+</body>
+</html>
