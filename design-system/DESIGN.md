@@ -1,6 +1,6 @@
 # ChordSketch — Design System
 
-**Version 1.0** · English-primary UI · Light theme · Editorial / Professional
+**Version 1.1** · English-primary UI · Light theme · Editorial / Professional
 
 ChordSketch is a library of chord sheets with lyrics for **ChordPro** and
 **iReal Pro**. A tool for amateurs through professionals to search, edit,
