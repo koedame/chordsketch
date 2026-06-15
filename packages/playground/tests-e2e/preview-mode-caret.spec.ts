@@ -96,6 +96,40 @@ test.describe('playground pane visibility', () => {
     expect(errors).toEqual([]);
   });
 
+  test('preview-only view disables chord drag-and-drop repositioning', async ({
+    page,
+  }) => {
+    const errors = trackPageErrors(page);
+    await page.goto('./chordpro/');
+    await expect(page.locator('.cm-editor')).toBeVisible();
+
+    // Drag-and-drop chord repositioning is an editing gesture: a drop
+    // rewrites the ChordPro source the editor shows. In split view the
+    // editor is mounted, so the preview's `.chord` spans are drag
+    // sources (`draggable="true"`). Assert the affordance is present
+    // first so the absence asserted after the switch is a real
+    // regression signal, not a vacuous pass.
+    const preview = page.locator('.pane.preview');
+    await expect(preview.locator('.chord[draggable="true"]').first()).toBeVisible();
+
+    await page.getByRole('button', { name: 'Preview' }).click();
+
+    // Editor is gone; the rendered sheet is still there as a read-only
+    // display surface...
+    await expect(page.locator('.cm-editor')).toHaveCount(0);
+    await expect(preview).toContainText('sweet');
+    // ...but no chord may be draggable — preview-only is display-only,
+    // so a drop cannot silently rewrite source the user cannot see.
+    await expect(preview.locator('[draggable="true"]')).toHaveCount(0);
+
+    // Returning to split restores the drag affordance — the suppression
+    // is scoped to the view, not a permanent teardown.
+    await page.getByRole('button', { name: 'Split' }).click();
+    await expect(preview.locator('.chord[draggable="true"]').first()).toBeVisible();
+
+    expect(errors).toEqual([]);
+  });
+
   test('source-only view unmounts the preview pane entirely', async ({
     page,
   }) => {
