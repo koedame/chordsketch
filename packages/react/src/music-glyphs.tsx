@@ -644,11 +644,20 @@ export function MetronomeGlyph({
   bpm,
   className,
   style,
+  'aria-hidden': ariaHidden,
 }: {
   /** Beats per minute, parsed from the `{tempo}` directive. */
   bpm: number;
   className?: string;
   style?: CSSProperties;
+  /**
+   * Pass `true` when the glyph is embedded inside an interactive
+   * ancestor (e.g. `<MetronomeButton>`) that already carries its own
+   * accessible label. Suppresses the SVG's `role="img"` presence in
+   * the AT tree so screen readers do not announce the image
+   * separately from the surrounding control.
+   */
+  'aria-hidden'?: boolean;
 }): JSX.Element {
   const safeBpm = Number.isFinite(bpm) && bpm > 0 ? bpm : 60;
   // Half-cycle duration in seconds — the time the rod takes to
@@ -689,8 +698,9 @@ export function MetronomeGlyph({
       height={18}
       className={['music-glyph', 'music-glyph--metronome', className].filter(Boolean).join(' ')}
       style={cssVars}
-      role="img"
-      aria-label={`Metronome at ${safeBpm} BPM`}
+      role={ariaHidden ? undefined : 'img'}
+      aria-hidden={ariaHidden ?? undefined}
+      aria-label={ariaHidden ? undefined : `Metronome at ${safeBpm} BPM`}
     >
       {/* Triangular body — narrow top, wide base. */}
       <path

@@ -37,11 +37,11 @@ import { ChordDiagram } from './chord-diagram';
 declare const process: { env: { NODE_ENV?: string } };
 import {
   KeySignatureGlyph,
-  MetronomeGlyph,
   RoleIcon,
   TimeSignatureGlyph,
   tempoMarkingFor,
 } from './music-glyphs';
+import { MetronomeButton } from './metronome-button';
 import type {
   ChordproChord,
   ChordproDirective,
@@ -3994,7 +3994,7 @@ function handleDirective(
       // it in parens so the reader sees both numeric and
       // descriptive tempos at a glance.
       <span key={key} className="meta-inline meta-inline--tempo">
-        <MetronomeGlyph bpm={safeBpm} className="meta-inline__glyph" />
+        <MetronomeButton bpm={safeBpm} />
         <span className="meta-inline__value">
           {bpmRaw} BPM
           {tempoMarkingFor(safeBpm) != null ? (
