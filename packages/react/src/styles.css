@@ -1387,6 +1387,69 @@
   cursor: grabbing;
 }
 
+/* Click-to-focus + nudge controls (#2614). When chord
+   repositioning is enabled each real chord is a toggle button;
+   tapping it selects the chord and reveals a small ◀ / ▶ toolbar
+   so it can be moved one lyric character at a time — the
+   touch-friendly complement to drag-to-reposition. */
+.chordsketch-sheet__content .chord[role='button'] {
+  cursor: pointer;
+}
+.chordsketch-sheet__content .chord--selected {
+  outline: 2px solid var(--cs-crimson-500, #bd1642);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+/* The chord-block becomes the positioning context for the
+   absolutely-positioned toolbar only while a chord inside it is
+   selected, so unselected blocks keep static flow. */
+.chordsketch-sheet__content .chord-block--selected {
+  position: relative;
+}
+.chordsketch-sheet__content .chord-nudge {
+  position: absolute;
+  /* Sit above the chord row. */
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 3px;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--cs-surface, #fff);
+  border: 1px solid var(--cs-crimson-500, #bd1642);
+  border-radius: 6px;
+  box-shadow: var(--cs-elevation-popover, 0 2px 6px rgba(0, 0, 0, 0.18));
+  z-index: 5;
+  white-space: nowrap;
+  user-select: none;
+}
+.chordsketch-sheet__content .chord-nudge__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Touch-friendly target — the feature exists for taps where a
+     precise drag is hard (#2614). */
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--cs-crimson-500, #bd1642);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.chordsketch-sheet__content .chord-nudge__btn:hover:not(:disabled) {
+  background: var(--cs-crimson-50, rgba(189, 22, 66, 0.1));
+}
+.chordsketch-sheet__content .chord-nudge__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 /* Per-character span inside a `.lyrics` row. Plain wrapper so
    the renderer can highlight a single character with a drop-
    target outline; styling otherwise inherits from `.lyrics`. */

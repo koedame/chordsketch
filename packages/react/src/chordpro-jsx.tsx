@@ -24,8 +24,24 @@
 // `DANGEROUS_URI_SCHEMES` here in the same PR per
 // `.claude/rules/sanitizer-security.md` §"Security Asymmetry".
 
-import { Fragment, cloneElement, isValidElement, useId, useMemo, useState } from 'react';
-import type { CSSProperties, DragEvent as ReactDragEvent, JSX, ReactNode } from 'react';
+import {
+  Fragment,
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type {
+  CSSProperties,
+  DragEvent as ReactDragEvent,
+  JSX,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+} from 'react';
 
 import { ChordDiagram } from './chord-diagram';
 
@@ -58,6 +74,10 @@ import type {
   ChordDiagramInstrument,
   ChordDiagramOrientation,
 } from './use-chord-diagram';
+import {
+  findChordByOffsetOrdinal,
+  nudgeChordPosition,
+} from './chord-source-edit';
 import type { ChordRepositionEvent } from './chord-source-edit';
 
 // ---- Sanitiser helpers --------------------------------------------
@@ -1544,6 +1564,58 @@ export function caretPlacement(
 
 // ---- Lyrics line ---------------------------------------------------
 
+/**
+ * Identifies the chord currently selected for the click-to-focus +
+ * nudge interaction (#2614). The selection is deliberately
+ * decoupled from DOM focus: a nudge mutates the ChordPro source,
+ * which re-parses and re-renders the line, removing and recreating
+ * the chord span. Tying selection to the span's blur would drop it
+ * on every nudge. Instead the selection is controlled state that
+ * survives the re-render, and DOM focus is driven programmatically
+ * from it.
+ *
+ * `nonce` is a monotonic user-action counter bumped on every
+ * select / nudge. The auto-focus effect (in {@link LyricsLine})
+ * re-focuses the chord span only when the nonce changes, so an
+ * incidental re-render — e.g. the user typing elsewhere in the
+ * document — never steals DOM focus into the preview.
+ */
+export interface ChordSelection {
+  /** 1-indexed source line of the selected chord. */
+  line: number;
+  /** 0-indexed lyrics offset (lyric characters before the chord's
+   * `[` bracket). */
+  offset: number;
+  /** Index among chords sharing `offset` on `line`, left-to-right.
+   * Disambiguates stacked chords like `[A][B]word`. */
+  ordinal: number;
+  /** Monotonic user-action counter; see the interface doc. */
+  nonce: number;
+}
+
+/**
+ * Drag-and-drop + click-to-nudge context threaded to each
+ * chord-bearing lyrics line. Carries the per-line source number,
+ * the reposition callback the consumer wires, and the shared
+ * selection state used by the nudge interaction.
+ */
+interface ChordRepositionContext {
+  sourceLine: number;
+  onChordReposition: (event: ChordRepositionEvent) => void;
+  /** Click-to-focus + nudge wiring (#2614). `null` when the
+   * consumer wired only drag-and-drop (`onChordReposition` without
+   * selection state) — drag works, but chords are not clickable
+   * toggle buttons and no nudge controls appear. `<ChordSheet>`
+   * always provides this when `onChordReposition` is set. */
+  nudge: {
+    /** Current selection (may belong to a different line, or be
+     * `null` when nothing is selected). */
+    selected: ChordSelection | null;
+    /** Replace the selection. `null` clears it. */
+    setSelected: (next: ChordSelection | null) => void;
+  } | null;
+}
+
 function renderLyricsLine(
   line: ChordproLyricsLine,
   key: number,
@@ -1555,11 +1627,8 @@ function renderLyricsLine(
   lyricsOverride: CSSProperties | null = null,
   /** Caret placement for the in-preview marker. */
   caret: CaretPlacement | null = null,
-  /** Chord drag-and-drop context. */
-  reposition: {
-    sourceLine: number;
-    onChordReposition: (event: ChordRepositionEvent) => void;
-  } | null = null,
+  /** Chord drag-and-drop + click-to-nudge context. */
+  reposition: ChordRepositionContext | null = null,
   /** Inline / hover diagram config (ADR-0027); `null` keeps the
    * plain chord-name rendering. */
   diagrams: LyricsDiagramConfig | null = null,
@@ -1583,10 +1652,7 @@ interface LyricsLineProps {
   fmt: FormattingState;
   lyricsOverride: CSSProperties | null;
   caret: CaretPlacement | null;
-  reposition: {
-    sourceLine: number;
-    onChordReposition: (event: ChordRepositionEvent) => void;
-  } | null;
+  reposition: ChordRepositionContext | null;
   /** Class name applied to the root `.line` div. `pushElement`
    * threads `line line--active` here when the line matches
    * `activeSourceLine`; otherwise the caller passes `"line"`. */
@@ -1765,6 +1831,148 @@ function LyricsLine({
     return layout;
   }, [line.segments]);
 
+  // ---- Click-to-focus + nudge state (#2614) ----------------------
+  // Chord-bearing segments in left-to-right order, paired with the
+  // lyrics offset of each chord. This is the coordinate space the
+  // nudge math (`chord-source-edit`) operates in.
+  const chordSegments = useMemo(() => {
+    const out: Array<{ segmentIdx: number; offset: number }> = [];
+    line.segments.forEach((seg, i) => {
+      if (seg.chord) out.push({ segmentIdx: i, offset: segmentLayout[i].lyricsOffsetStart });
+    });
+    return out;
+  }, [line.segments, segmentLayout]);
+  const chordOffsets = useMemo(() => chordSegments.map((c) => c.offset), [chordSegments]);
+  const totalLyrics = useMemo(
+    () => line.segments.reduce((n, s) => n + s.text.length, 0),
+    [line.segments],
+  );
+
+  const nudgeCtx = reposition?.nudge ?? null;
+  const selected = nudgeCtx?.selected ?? null;
+  const isSelectedLine =
+    reposition != null && selected != null && selected.line === reposition.sourceLine;
+  // Re-locate the selected chord on every render: a nudge mutates
+  // the source, which re-parses into different segments, so the
+  // chord's segment index is NOT stable — only its (offset, ordinal)
+  // identity is. `-1` means the selection no longer resolves (e.g.
+  // the source was edited out from under a stale selection); the
+  // line then renders no controls.
+  const focusedChordIdx =
+    isSelectedLine && selected != null
+      ? findChordByOffsetOrdinal(chordOffsets, selected.offset, selected.ordinal)
+      : -1;
+  const focusedSegmentIdx = focusedChordIdx >= 0 ? chordSegments[focusedChordIdx].segmentIdx : -1;
+  // Availability depends only on the line bounds, so the empty
+  // `otherOffsets` argument (used solely for the destination
+  // ordinal) is fine here.
+  const canNudgeLeft =
+    focusedChordIdx >= 0 &&
+    selected != null &&
+    nudgeChordPosition(selected.offset, [], totalLyrics, -1) !== null;
+  const canNudgeRight =
+    focusedChordIdx >= 0 &&
+    selected != null &&
+    nudgeChordPosition(selected.offset, [], totalLyrics, 1) !== null;
+
+  // DOM focus is driven programmatically from the selection so it
+  // survives the nudge re-render (the old chord span is destroyed
+  // and a new one created at the moved position). The ref points at
+  // whichever chord span is currently selected; the effect focuses
+  // it when the selection nonce advances (a user select / nudge)
+  // and the segment has resolved — never on an incidental re-render.
+  const focusedSpanRef = useRef<HTMLSpanElement | null>(null);
+  const handledNonceRef = useRef<number>(-1);
+  useEffect(() => {
+    if (!isSelectedLine || selected == null || focusedSegmentIdx < 0) return;
+    if (selected.nonce === handledNonceRef.current) return;
+    handledNonceRef.current = selected.nonce;
+    focusedSpanRef.current?.focus();
+  }, [isSelectedLine, focusedSegmentIdx, selected]);
+
+  // Toggle the selection for the chord in `segmentIdx`. Clicking
+  // the already-selected chord clears the selection.
+  const toggleSelect = (segmentIdx: number): void => {
+    if (!reposition || !nudgeCtx) return;
+    const offset = segmentLayout[segmentIdx].lyricsOffsetStart;
+    let ordinal = 0;
+    for (const c of chordSegments) {
+      if (c.segmentIdx === segmentIdx) break;
+      if (c.offset === offset) ordinal++;
+    }
+    const cur = nudgeCtx.selected;
+    const isSame =
+      cur != null &&
+      cur.line === reposition.sourceLine &&
+      cur.offset === offset &&
+      cur.ordinal === ordinal;
+    nudgeCtx.setSelected(
+      isSame
+        ? null
+        : {
+            line: reposition.sourceLine,
+            offset,
+            ordinal,
+            nonce: (cur?.nonce ?? 0) + 1,
+          },
+    );
+  };
+
+  // Move the selected chord one lyric character in `direction`.
+  // Reuses the drag-and-drop `onChordReposition` pipeline so the
+  // source mutation goes through the exact same `applyChordReposition`
+  // path, then advances the selection to the chord's new position so
+  // it stays selected for the next tap / key press.
+  const nudge = (direction: -1 | 1): void => {
+    if (!reposition || !nudgeCtx || focusedChordIdx < 0 || selected == null) return;
+    const otherOffsets = chordOffsets.filter((_, idx) => idx !== focusedChordIdx);
+    const dest = nudgeChordPosition(selected.offset, otherOffsets, totalLyrics, direction);
+    if (!dest) return;
+    const moved = chordSegments[focusedChordIdx];
+    const seg = line.segments[moved.segmentIdx];
+    const layout = segmentLayout[moved.segmentIdx];
+    reposition.onChordReposition({
+      fromLine: reposition.sourceLine,
+      fromColumn: layout.chordSourceColumn,
+      fromLength: layout.chordBracketLength,
+      toLine: reposition.sourceLine,
+      toLyricsOffset: dest.offset,
+      chord: seg.chord?.name ?? '',
+      copy: false,
+    });
+    nudgeCtx.setSelected({
+      line: reposition.sourceLine,
+      offset: dest.offset,
+      ordinal: dest.ordinal,
+      nonce: selected.nonce + 1,
+    });
+  };
+
+  // Keyboard control for a chord span. Enter / Space toggles the
+  // selection of that chord; once selected, ArrowLeft / ArrowRight
+  // nudge it and Escape clears the selection.
+  const chordKeyHandler =
+    (segmentIdx: number) => (event: ReactKeyboardEvent<HTMLSpanElement>): void => {
+      if (!reposition || !nudgeCtx) return;
+      const { key } = event;
+      if (key === 'Enter' || key === ' ' || key === 'Spacebar') {
+        event.preventDefault();
+        toggleSelect(segmentIdx);
+        return;
+      }
+      if (segmentIdx !== focusedSegmentIdx) return;
+      if (key === 'ArrowLeft') {
+        event.preventDefault();
+        nudge(-1);
+      } else if (key === 'ArrowRight') {
+        event.preventDefault();
+        nudge(1);
+      } else if (key === 'Escape') {
+        event.preventDefault();
+        nudgeCtx.setSelected(null);
+      }
+    };
+
   const lineHasChords = line.segments.some((s) => s.chord !== null);
   const chordStyle = elementStyleToCss(fmt.chord);
   const textStyle = lyricsOverride ?? elementStyleToCss(fmt.text);
@@ -1910,14 +2118,48 @@ function LyricsLine({
           dropTarget && dropTarget.segmentIdx === i
             ? dropTarget.charOffset
             : null;
+        // Click-to-focus + nudge wiring (#2614). Every real chord
+        // span becomes a toggle button that selects the chord; the
+        // selected one shows the ◀ / ▶ nudge controls and takes the
+        // auto-focus ref + keyboard handler. Off unless the consumer
+        // wired `onChordReposition`.
+        const isRealChord = segment.chord != null;
+        const isFocusedChord =
+          reposition != null && isRealChord && i === focusedSegmentIdx;
+        const chordInteractiveProps =
+          reposition && nudgeCtx && isRealChord
+            ? {
+                tabIndex: 0,
+                role: 'button' as const,
+                'aria-pressed': isFocusedChord,
+                onClick: (e: ReactMouseEvent) => {
+                  e.stopPropagation();
+                  toggleSelect(i);
+                },
+                onKeyDown: chordKeyHandler(i),
+              }
+            : null;
         return (
-          <span key={i} className="chord-block">
+          <span
+            key={i}
+            className={isFocusedChord ? 'chord-block chord-block--selected' : 'chord-block'}
+          >
             {segment.chord ? (
               diagrams &&
               (diagrams.mode === 'inline' || diagrams.mode === 'hover') ? (
                 // chordsketch inline / hover diagram above the lyric
                 // (ADR-0027). `<ChordCell>` is a component so its
                 // `useChordDiagram` hook can run per chord.
+                //
+                // The click-to-nudge controls (#2614) are NOT wired
+                // into this branch: in inline / hover diagram mode the
+                // chord cell is dedicated to the diagram interaction
+                // (the inline diagram replaces the name; the hover
+                // popover claims focus / hover), so a nudge toolbar
+                // there would collide with it. Drag-to-reposition still
+                // works here. This is a deliberate interaction
+                // limitation, not a renderer-parity gap — the nudge UI
+                // is React-only and has no Rust-renderer sibling.
                 <ChordCell
                   mode={diagrams.mode}
                   chord={segment.chord}
@@ -1930,9 +2172,11 @@ function LyricsLine({
                 />
               ) : (
                 <span
-                  className="chord"
+                  className={isFocusedChord ? 'chord chord--selected' : 'chord'}
                   style={chordStyle ?? undefined}
+                  ref={isFocusedChord ? focusedSpanRef : undefined}
                   {...(chordDragProps ?? {})}
+                  {...(chordInteractiveProps ?? {})}
                 >
                   {chordMarker}
                   {renderChord(segment.chord)}
@@ -1951,10 +2195,75 @@ function LyricsLine({
             <span className="lyrics" style={textStyle ?? undefined}>
               {renderLyricsTextWithChars(segment, caretCharOffset, dropCharOffset)}
             </span>
+            {isFocusedChord ? (
+              <NudgeControls
+                chordName={segment.chord?.name ?? ''}
+                canLeft={canNudgeLeft}
+                canRight={canNudgeRight}
+                onNudge={nudge}
+              />
+            ) : null}
           </span>
         );
       })}
     </div>
+  );
+}
+
+/**
+ * The ◀ / ▶ toolbar shown next to the selected chord (#2614).
+ * Each press nudges the chord one lyric character via the `onNudge`
+ * callback. Rendered as a sibling of the chord span inside the
+ * `.chord-block` (not a child of the chord's `role="button"` span,
+ * which must not contain interactive descendants) and positioned
+ * by CSS above the chord.
+ *
+ * The buttons stop their click from bubbling to the chord toggle
+ * (which would deselect) and cancel any drag the press might start,
+ * so tapping a button only nudges.
+ */
+function NudgeControls(props: {
+  chordName: string;
+  canLeft: boolean;
+  canRight: boolean;
+  onNudge: (direction: -1 | 1) => void;
+}): JSX.Element {
+  const { chordName, canLeft, canRight, onNudge } = props;
+  const stopDrag = (e: ReactMouseEvent): void => e.stopPropagation();
+  const cancelDrag = (e: ReactDragEvent): void => e.preventDefault();
+  return (
+    <span className="chord-nudge" role="group" aria-label={`Move chord ${chordName}`}>
+      <button
+        type="button"
+        className="chord-nudge__btn chord-nudge__btn--left"
+        aria-label={`Move chord ${chordName} left`}
+        disabled={!canLeft}
+        draggable={false}
+        onMouseDown={stopDrag}
+        onDragStart={cancelDrag}
+        onClick={(e) => {
+          e.stopPropagation();
+          onNudge(-1);
+        }}
+      >
+        <span aria-hidden="true">‹</span>
+      </button>
+      <button
+        type="button"
+        className="chord-nudge__btn chord-nudge__btn--right"
+        aria-label={`Move chord ${chordName} right`}
+        disabled={!canRight}
+        draggable={false}
+        onMouseDown={stopDrag}
+        onDragStart={cancelDrag}
+        onClick={(e) => {
+          e.stopPropagation();
+          onNudge(1);
+        }}
+      >
+        <span aria-hidden="true">›</span>
+      </button>
+    </span>
   );
 }
 
@@ -2613,6 +2922,24 @@ export interface RenderChordproAstOptions {
    * elements take no drop handlers.
    */
   onChordReposition?: (event: ChordRepositionEvent) => void;
+  /**
+   * Click-to-focus + nudge selection state (#2614). When provided
+   * alongside {@link onChordReposition}, each rendered `.chord`
+   * becomes a toggle button: clicking (tapping) it selects the
+   * chord and reveals ◀ / ▶ controls plus ArrowLeft / ArrowRight
+   * keyboard support that move the chord one lyric character at a
+   * time. The nudge reuses the `onChordReposition` pipeline, so the
+   * consumer mutates source exactly as it does for drag-and-drop.
+   *
+   * `<ChordSheet>` manages this state internally; direct
+   * `renderChordproAst` callers that want the nudge interaction must
+   * own a `useState<ChordSelection | null>` and pass both halves.
+   * Omitting `setChordSelection` leaves drag-and-drop working but
+   * disables click-to-nudge.
+   */
+  chordSelection?: ChordSelection | null;
+  /** Setter paired with {@link chordSelection}; see its docs. */
+  setChordSelection?: (next: ChordSelection | null) => void;
 }
 
 /**
@@ -3512,6 +3839,14 @@ interface WalkContext {
    */
   onChordReposition?: (event: ChordRepositionEvent) => void;
   /**
+   * Click-to-focus + nudge selection state + setter (#2614),
+   * forwarded from `RenderChordproAstOptions`. Both must be present
+   * for the nudge interaction; `setChordSelection` undefined leaves
+   * drag-and-drop working but disables click-to-nudge.
+   */
+  chordSelection?: ChordSelection | null;
+  setChordSelection?: (next: ChordSelection | null) => void;
+  /**
    * Diagram state (visibility / mode / instrument / position) resolved
    * once over the whole song. The per-line chord-block renderer reads
    * this to decide inline / hover rendering above the lyrics (ADR-0027),
@@ -4096,7 +4431,16 @@ function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {
       // via `cloneElement` — the component forwards those onto
       // its root `.line` div.
       const repositionCtx = ctx.onChordReposition
-        ? { sourceLine, onChordReposition: ctx.onChordReposition }
+        ? {
+            sourceLine,
+            onChordReposition: ctx.onChordReposition,
+            nudge: ctx.setChordSelection
+              ? {
+                  selected: ctx.chordSelection ?? null,
+                  setSelected: ctx.setChordSelection,
+                }
+              : null,
+          }
         : null;
       pushElement(
         ctx,
@@ -4192,6 +4536,8 @@ export function renderChordproAst(
         : null,
     transposedKeyDirectives: options.transposedKeyDirectives ?? {},
     onChordReposition: options.onChordReposition,
+    chordSelection: options.chordSelection,
+    setChordSelection: options.setChordSelection,
     diagramsState: options.chordDiagrams ? resolveDiagramsState(song) : null,
     diagramDefines: options.chordDiagrams ? collectDefines(song) : undefined,
     chordDiagramsInstrument: options.chordDiagrams?.instrument,
