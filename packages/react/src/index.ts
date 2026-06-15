@@ -147,6 +147,9 @@ export {
   applyChordReposition,
   buildChordName,
   buildChordNudge,
+  capoTransposeOffset,
+  chordLayoutForLine,
+  chordSourceEditableUnderTranspose,
   chordSuffixFromQuality,
   findChordByOffsetOrdinal,
   lyricsOffsetToSourceColumn,
@@ -163,6 +166,7 @@ export {
   type ChordRepositionResult,
   type ChordTypePreset,
   type NudgedChordPosition,
+  type SegmentLayout,
 } from './chord-source-edit';
 
 // Chord-editor inspector (#2622). The floating, design-system-styled
