@@ -51,6 +51,13 @@ const CAPO_DIRECTIVE_RE = /\{capo:\s*(-?\d+)\s*\}\s*\n?/;
 // inside the lyrics.
 const CAPO_ANCHOR_RE = /^(\{(?:title|subtitle|artist|key|tempo|time)[^}]*\}\s*\n)+/;
 
+/** Characters that would corrupt the ChordPro source structure when
+ * interpolated into a `[chord]` token. Shared by every chord-writing
+ * helper so the editor surface cannot inject directives / brackets /
+ * line breaks. `/` is intentionally allowed — it is the slash-chord
+ * separator. */
+const CHORD_FORBIDDEN_RE = /[[\]{}<>\n\r]/;
+
 function clampInt(n: number, min: number, max: number): number {
   if (Number.isNaN(n)) return min;
   if (n < min) return min;
@@ -608,13 +615,6 @@ export function buildChordNudge(params: {
 // token from those parts and splice it back over the original
 // `[chord]` at a known source position — the same source-as-truth
 // model the reposition pipeline uses (no parallel chord state).
-
-/** Characters that would corrupt the ChordPro source structure when
- * interpolated into a `[chord]` token. Shared by every chord-writing
- * helper so the editor surface cannot inject directives / brackets /
- * line breaks. `/` is intentionally allowed — it is the slash-chord
- * separator. */
-const CHORD_FORBIDDEN_RE = /[[\]{}<>\n\r]/;
 
 /** A chord-type preset offered as a chip in the editor. `text` is the
  * ChordPro suffix written after the root (+ accidental) — e.g. `"m7"`
