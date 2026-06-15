@@ -382,8 +382,10 @@ struct DiagramMetrics {
     /// Extra CSS class appended to the root `<svg>` `class` attribute
     /// (empty for regular, `" chord-diagram-compact"` for compact).
     class_extra: &'static str,
-    /// Whether to draw a fret-number label at every fret line across the
-    /// visible window (the absolute fret number `base_fret - 1 + j`).
+    /// Whether to draw a fret-number label centred in every visible fret
+    /// cell — the absolute fret number a finger presses there
+    /// (`base_fret - 1 + j` for cell `j ∈ 1..=frets_shown`). The open/nut
+    /// position carries no number.
     ///
     /// `true` for the regular size — the full axis subsumes the legacy
     /// single base-fret label. `false` for the compact size, which keeps
@@ -653,20 +655,21 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
         ));
     }
 
-    // Fret-number axis: label every fret line in the visible window with its
-    // absolute fret number (`base_fret - 1 + j`), so fret line 0 is the
-    // nut/open position (labelled 0 when the diagram starts at the nut). The
-    // labels sit left of the grid; `text-anchor="end"` fixes their right edge
-    // at `left_margin - 4`, so 1- and 2-digit numbers align without any
-    // width math (unlike the PDF renderer, whose left-anchored text engine
-    // has to subtract an estimated glyph width). They stay inside the
-    // existing left margin, so the diagram's bounding box is unchanged. A
-    // `fret-number` class is emitted so consumers can restyle or hide the
-    // axis via CSS.
+    // Fret-number axis: label every visible fret CELL with the absolute fret
+    // number a finger presses there (`base_fret - 1 + j` for cell
+    // `j ∈ 1..=frets_shown`), centred on the cell — not on the fret lines, so
+    // the open/nut position carries no number (it is already shown by the nut
+    // line + open-string markers). The labels sit left of the grid;
+    // `text-anchor="end"` fixes their right edge at `left_margin - 4`, so 1-
+    // and 2-digit numbers align without any width math (unlike the PDF
+    // renderer, whose left-anchored text engine has to subtract an estimated
+    // glyph width). They stay inside the existing left margin, so the
+    // diagram's bounding box is unchanged. A `fret-number` class is emitted so
+    // consumers can restyle or hide the axis via CSS.
     if show_fret_numbers {
-        for j in 0..=num_frets {
+        for j in 1..=num_frets {
             let fret_number = data.base_fret as i32 - 1 + j as i32;
-            let y = nut_y + j as f32 * cell_h + text_v_center;
+            let y = nut_y + (j as f32 - 0.5) * cell_h + text_v_center;
             svg.push_str(&format!(
                 "<text x=\"{}\" y=\"{y}\" text-anchor=\"end\" \
                  font-family=\"sans-serif\" font-size=\"{label_font}\" \
@@ -875,16 +878,17 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
         ));
     }
 
-    // Fret-number axis: label every fret line in the visible window with its
-    // absolute fret number (`base_fret - 1 + j`) below the grid, matching the
-    // conventional `0 1 2 3` strip beneath a horizontal fretboard. The labels
-    // sit inside the existing bottom padding so the diagram's bounding box is
-    // unchanged; the `fret-number` class lets consumers restyle/hide them.
+    // Fret-number axis: label every visible fret CELL below the grid with the
+    // absolute fret number a finger presses there (`base_fret - 1 + j` for
+    // cell `j ∈ 1..=frets_shown`), centred on the cell — not on the fret
+    // lines, so the open/nut column carries no number. The labels sit inside
+    // the existing bottom padding so the diagram's bounding box is unchanged;
+    // the `fret-number` class lets consumers restyle/hide them.
     if show_fret_numbers {
         let label_y = top_margin + grid_h + label_font;
-        for j in 0..=num_frets {
+        for j in 1..=num_frets {
             let fret_number = data.base_fret as i32 - 1 + j as i32;
-            let x = nut_x + j as f32 * fret_pitch;
+            let x = nut_x + (j as f32 - 0.5) * fret_pitch;
             svg.push_str(&format!(
                 "<text x=\"{x}\" y=\"{label_y}\" text-anchor=\"middle\" \
                  font-family=\"sans-serif\" font-size=\"{label_font}\" \
@@ -3172,8 +3176,10 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Fret-number axis (#2602) — every fret line in the visible window is
-    // labelled with its absolute fret number across both orientations.
+    // Fret-number axis (#2602, #2616) — every visible fret CELL is labelled
+    // with the absolute fret number a finger presses there (`base_fret - 1 + j`
+    // for cell `j ∈ 1..=frets_shown`), centred on the cell, across both
+    // orientations. The open/nut position carries no number.
     // -----------------------------------------------------------------------
 
     fn open_c() -> DiagramData {
@@ -3189,13 +3195,18 @@ mod tests {
     }
 
     #[test]
-    fn fret_number_axis_vertical_open_position_labels_zero_through_frets_shown() {
-        // base_fret == 1 with 5 visible frets → fret lines 0..=5 are each
-        // labelled with their absolute fret number, the nut being 0.
+    fn fret_number_axis_vertical_open_position_labels_press_positions() {
+        // base_fret == 1 with 5 visible frets → the five fret CELLS are
+        // labelled 1..=5 (press positions). The open/nut carries no number, so
+        // there is no `0` and exactly `frets_shown` labels.
         let svg = render_svg_with_orientation(&open_c(), Orientation::Vertical);
         let count = svg.matches("class=\"fret-number\"").count();
-        assert_eq!(count, 6, "expected 6 fret-line labels (0..=5); got: {svg}");
-        for n in 0..=5 {
+        assert_eq!(count, 5, "expected 5 fret-cell labels (1..=5); got: {svg}");
+        assert!(
+            !svg.contains("class=\"fret-number\">0</text>"),
+            "open/nut position must not be labelled 0; got: {svg}"
+        );
+        for n in 1..=5 {
             assert!(
                 svg.contains(&format!("class=\"fret-number\">{n}</text>")),
                 "expected fret-number label {n}; got: {svg}"
@@ -3205,28 +3216,30 @@ mod tests {
 
     #[test]
     fn fret_number_axis_horizontal_open_position_sits_below_grid() {
-        // Horizontal axis runs along the bottom of the grid (the `0 1 2 3`
-        // strip under a horizontal fretboard). Labels are centred on each
-        // fret line and middle-anchored.
+        // Horizontal axis runs along the bottom of the grid, one label centred
+        // in each fret cell (middle-anchored). The open/nut column carries no
+        // number.
         let svg = render_svg_with_orientation(&open_c(), Orientation::Horizontal);
         let count = svg.matches("class=\"fret-number\"").count();
-        assert_eq!(count, 6, "expected 6 fret-line labels (0..=5); got: {svg}");
-        // The leftmost label (0) is centred on the nut column at x = LEFT_MARGIN.
+        assert_eq!(count, 5, "expected 5 fret-cell labels (1..=5); got: {svg}");
+        // The first cell's label (1) is centred at x = LEFT_MARGIN + fret_pitch/2
+        // = 20 + 10 = 30.
         assert!(
             svg.contains(
-                "<text x=\"20\" y=\"120\" text-anchor=\"middle\" \
-                 font-family=\"sans-serif\" font-size=\"10\" class=\"fret-number\">0</text>"
+                "<text x=\"30\" y=\"120\" text-anchor=\"middle\" \
+                 font-family=\"sans-serif\" font-size=\"10\" class=\"fret-number\">1</text>"
             ),
-            "expected nut-column label 0 at x=20 y=120; got: {svg}"
+            "expected first-cell label 1 centred at x=30 y=120; got: {svg}"
         );
     }
 
     #[test]
     fn fret_number_axis_offset_by_base_fret() {
-        // A barre window starting at base_fret 7 labels the fret WIRES it
-        // spans: line 0 is the wire behind the window (6), and the visible
-        // frets 7..=11 follow. The single legacy base-fret label is gone —
-        // the axis subsumes it — so `7` appears exactly once.
+        // A barre window starting at base_fret 7 labels the frets its CELLS
+        // span (the press positions 7..=11) — there is no `6` (that would be
+        // the wire behind the window, not a press position). The single legacy
+        // base-fret label is gone — the axis subsumes it — so `7` appears
+        // exactly once.
         let data = DiagramData {
             name: "Bm".to_string(),
             display_name: None,
@@ -3238,12 +3251,17 @@ mod tests {
         };
         for orientation in [Orientation::Vertical, Orientation::Horizontal] {
             let svg = render_svg_with_orientation(&data, orientation);
-            for n in 6..=11 {
+            for n in 7..=11 {
                 assert!(
                     svg.contains(&format!("class=\"fret-number\">{n}</text>")),
                     "expected fret-number label {n} for {orientation:?}; got: {svg}"
                 );
             }
+            assert!(
+                !svg.contains("class=\"fret-number\">6</text>"),
+                "the wire behind the window (6) is not a press position for \
+                 {orientation:?}; got: {svg}"
+            );
             assert_eq!(
                 svg.matches("class=\"fret-number\">7</text>").count(),
                 1,
