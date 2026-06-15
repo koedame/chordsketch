@@ -520,6 +520,18 @@
   gap: var(--cs-sp-1, 0.25rem);
   margin: 0.15em 0.3em 0.15em 0;
   padding: 0 var(--cs-sp-2, 0.5rem);
+  /* Declare the box model explicitly so the chip's resolved height
+     does not depend on the element type the walker emits. The
+     `{tempo}` chip is a `<button>` (`<MetronomeButton>`), whose UA
+     default is `border-box`, while the `{key}` / `{time}` chips are
+     `<span>` (`content-box`). Without this line, `min-height: 1.6rem`
+     + the 1px border made the button ~2px shorter than the spans, so
+     the pills differed in height and their `vertical-align: middle`
+     midpoints did not align. `border-box` makes `min-height` include
+     the border for every variant, so all three chips are exactly
+     1.6rem tall. Kept in lockstep with the Rust HTML renderer's
+     embedded `.meta-inline` rule (`crates/render-html/src/lib.rs`). */
+  box-sizing: border-box;
   min-height: 1.6rem;
   border-radius: var(--cs-r-1, 2px);
   background-color: var(--cs-ink-100, #f6f4f7);
