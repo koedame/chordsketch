@@ -63,6 +63,36 @@ pub fn start() {
     console_error_panic_hook::set_once();
 }
 
+/// Serialize `value` to a `JsValue`, encoding Rust maps
+/// (`BTreeMap` / `HashMap`) as **plain JS objects** (`{ k: v }`)
+/// rather than `serde_wasm_bindgen`'s default ES `Map`.
+///
+/// Every React / TS consumer of this surface indexes map fields
+/// with `obj[key]` — e.g. `transposedKeyDirectives[keyName]` in
+/// `packages/react/src/chordpro-jsx.tsx`. Object-bracket access
+/// returns `undefined` on an ES `Map`, which silently dropped the
+/// transposed pairing for every non-primary `{key:}` directive: a
+/// multi-`{key}` song that was transposed showed the
+/// "Original → Playing" pair for only the song-primary key and
+/// left every other `{key:}` chip unpaired (the bug this helper
+/// fixes). The unit tests never caught it because they hand-build
+/// the map as a plain JS object literal, stubbing the real wasm
+/// boundary.
+///
+/// The flag is behaviour-preserving for map-free payloads (Vecs,
+/// Options, structs are serialized identically either way), so
+/// every JS-object-returning entry point routes through this
+/// helper to keep the surface uniform and to stop the footgun from
+/// silently reappearing the next time a map field is added.
+fn to_js_value<T>(value: &T) -> Result<JsValue, JsValue>
+where
+    T: Serialize + ?Sized,
+{
+    value
+        .serialize(&serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
 /// JS `console.warn` binding, used by [`crate::flush_warnings`] to
 /// surface render warnings (transpose saturation, chorus recall
 /// limits, deny-listed metadata overrides) to developers in the
@@ -391,7 +421,7 @@ fn render_string_with_warnings_inner(
     let (output, warnings) = render_string_with_warnings_core(input, &opts, render_fn)
         .map_err(|e| JsValue::from_str(&e))?;
     let payload = StringWithWarnings { output, warnings };
-    serde_wasm_bindgen::to_value(&payload).map_err(|e| JsValue::from_str(&e.to_string()))
+    to_js_value(&payload)
 }
 
 /// Bytes-returning render that captures warnings and returns a JS
@@ -823,8 +853,7 @@ pub fn chord_diagram_svg_with_defines_orientation_compact(
 // same `ValidationError[]` shape the NAPI binding already provides.
 #[wasm_bindgen(js_name = validate, skip_typescript)]
 pub fn validate(input: &str) -> Result<JsValue, JsValue> {
-    serde_wasm_bindgen::to_value(&validate_inner(input))
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    to_js_value(&validate_inner(input))
 }
 
 #[wasm_bindgen(typescript_custom_section)]
@@ -918,8 +947,7 @@ export function chordDiagramSvgWithDefinesOrientationCompact(
 /// defensive path callers can treat as infallible in normal use.
 #[wasm_bindgen(js_name = listDirectives, skip_typescript)]
 pub fn list_directives() -> Result<JsValue, JsValue> {
-    serde_wasm_bindgen::to_value(&do_list_directives())
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    to_js_value(&do_list_directives())
 }
 
 /// Return the allowed value set for an enum-valued directive (alias-aware),
@@ -931,8 +959,7 @@ pub fn list_directives() -> Result<JsValue, JsValue> {
 /// Returns a `JsValue` error string only if serialisation fails.
 #[wasm_bindgen(js_name = directiveValueOptions, skip_typescript)]
 pub fn directive_value_options(name: &str) -> Result<JsValue, JsValue> {
-    serde_wasm_bindgen::to_value(&do_directive_value_options(name))
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    to_js_value(&do_directive_value_options(name))
 }
 
 #[wasm_bindgen(typescript_custom_section)]
@@ -1075,13 +1102,12 @@ pub fn parse_chordpro_with_options(input: &str, options: JsValue) -> Result<Stri
 pub fn parse_chordpro_with_warnings(input: &str) -> Result<JsValue, JsValue> {
     let (ast, warnings, transposed_key, transposed_key_directives) =
         do_parse_chordpro(input, None).map_err(|e| JsValue::from_str(&e))?;
-    serde_wasm_bindgen::to_value(&ParseChordproResult {
+    to_js_value(&ParseChordproResult {
         ast,
         warnings,
         transposed_key,
         transposed_key_directives,
     })
-    .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Same as [`parse_chordpro_with_warnings`] but threads the
@@ -1097,13 +1123,12 @@ pub fn parse_chordpro_with_warnings_and_options(
     let opts = deserialize_options(options)?;
     let (ast, warnings, transposed_key, transposed_key_directives) =
         do_parse_chordpro(input, Some(&opts)).map_err(|e| JsValue::from_str(&e))?;
-    serde_wasm_bindgen::to_value(&ParseChordproResult {
+    to_js_value(&ParseChordproResult {
         ast,
         warnings,
         transposed_key,
         transposed_key_directives,
     })
-    .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Convert a ChordPro source string into an `irealb://` URL
@@ -1121,7 +1146,7 @@ pub fn parse_chordpro_with_warnings_and_options(
 #[wasm_bindgen(js_name = convertChordproToIrealb)]
 pub fn convert_chordpro_to_irealb(input: &str) -> Result<JsValue, JsValue> {
     let payload = do_convert_chordpro_to_irealb(input).map_err(|e| JsValue::from_str(&e))?;
-    serde_wasm_bindgen::to_value(&payload).map_err(|e| JsValue::from_str(&e.to_string()))
+    to_js_value(&payload)
 }
 
 /// Convert an `irealb://` URL into rendered ChordPro text
@@ -1139,7 +1164,7 @@ pub fn convert_chordpro_to_irealb(input: &str) -> Result<JsValue, JsValue> {
 #[wasm_bindgen(js_name = convertIrealbToChordproText)]
 pub fn convert_irealb_to_chordpro_text(input: &str) -> Result<JsValue, JsValue> {
     let payload = do_convert_irealb_to_chordpro_text(input).map_err(|e| JsValue::from_str(&e))?;
-    serde_wasm_bindgen::to_value(&payload).map_err(|e| JsValue::from_str(&e.to_string()))
+    to_js_value(&payload)
 }
 
 /// Render an `irealb://` URL as an iReal Pro-style SVG chart
