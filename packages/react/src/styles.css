@@ -780,6 +780,23 @@
 .chordsketch-sheet__content button.meta-inline--interactive.is-playing .meta-inline__value {
   color: inherit;
 }
+/* While the metronome is actually playing, hold the decorative
+   beat-dot LED static. The dot is a DISCRETE per-beat flash on the
+   always-on `cs-metronome-beat` CSS clock, which cannot lock to the
+   Web Audio metronome, so during playback it drifts against the real
+   audible tick and reads as a stuttering off-beat double-tick.
+   The CONTINUOUS cues — the pendulum swing (`cs-metronome-swing`) and
+   the frame pulse (`cs-tempo-frame`) — are deliberately left running:
+   their motion is ambient rather than a discrete tick, so the same
+   clock drift is imperceptible and they keep signalling the running
+   tempo. (Do NOT extend this freeze to those two on a "they drift
+   too" reading — the discrete-vs-continuous distinction is the whole
+   point.) The resting full-opacity dot matches the reduced-motion
+   treatment. */
+.chordsketch-sheet__content button.meta-inline--interactive.is-playing .music-glyph--metronome__beat {
+  animation: none;
+  opacity: 1;
+}
 @keyframes cs-tempo-frame {
   0%,
   100% {
