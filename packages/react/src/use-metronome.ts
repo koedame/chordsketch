@@ -56,6 +56,14 @@ export interface UseMetronomeResult {
   stop: () => void;
   /** Stop if currently playing, otherwise start at `bpm`. */
   toggle: (bpm: number) => void;
+  /**
+   * Synchronous "is the scheduler running?" read, backed by the
+   * internal timer rather than the async `isPlaying` state. Use this
+   * (not `isPlaying`) when deciding inside an effect/callback whether
+   * to re-arm, so the decision is not made against a stale render's
+   * state after the page-level coordinator stopped this instance.
+   */
+  isRunning: () => boolean;
 }
 
 type AudioContextCtor = new () => AudioContext;
@@ -254,6 +262,8 @@ export function useMetronome(): UseMetronomeResult {
     [scheduleTick],
   );
 
+  const isRunning = useCallback(() => timerRef.current !== null, []);
+
   const toggle = useCallback(
     (bpm: number) => {
       // `timerRef` is the single source of truth for "running" — it
@@ -299,5 +309,5 @@ export function useMetronome(): UseMetronomeResult {
     };
   }, []);
 
-  return { isPlaying, supported, start, stop, toggle };
+  return { isPlaying, supported, start, stop, toggle, isRunning };
 }

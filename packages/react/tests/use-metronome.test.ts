@@ -132,6 +132,26 @@ describe('useMetronome', () => {
     expect(ctx.oscillators.length).toBe(afterStop);
   });
 
+  test('isRunning reflects the synchronous timer state', () => {
+    const { result } = renderHook(() => useMetronome());
+    expect(result.current.isRunning()).toBe(false);
+    act(() => result.current.start(120));
+    expect(result.current.isRunning()).toBe(true);
+    act(() => result.current.stop());
+    expect(result.current.isRunning()).toBe(false);
+  });
+
+  test('isRunning goes false on the instance the coordinator stops', () => {
+    const first = renderHook(() => useMetronome());
+    const second = renderHook(() => useMetronome());
+    act(() => first.result.current.start(120));
+    act(() => second.result.current.start(90));
+    // The coordinator stopped `first`; its synchronous timer state
+    // must agree even before any re-render flushes.
+    expect(first.result.current.isRunning()).toBe(false);
+    expect(second.result.current.isRunning()).toBe(true);
+  });
+
   test('toggle starts then stops', () => {
     const { result } = renderHook(() => useMetronome());
     act(() => result.current.toggle(90));

@@ -40,10 +40,15 @@ export function MetronomeButton({ bpm, className }: MetronomeButtonProps): JSX.E
   // running, re-arm at the new tempo. The guard runs every render
   // (no dep array) but only re-arms on an actual change, so play /
   // stop toggles — which do not change `bpm` — are left untouched.
+  // Gate on the synchronous `isRunning()` (not the async `isPlaying`
+  // state): if the page-level coordinator stopped this instance in
+  // the same pass that the tempo edit re-rendered it, `isPlaying`
+  // could still read stale `true` and resurrect a metronome the user
+  // just silenced.
   useEffect(() => {
     if (prevBpmRef.current !== bpm) {
       prevBpmRef.current = bpm;
-      if (metronome.isPlaying) {
+      if (metronome.isRunning()) {
         metronome.start(bpm);
       }
     }
