@@ -1,6 +1,8 @@
+import { useEffect, useRef, useState } from 'react';
 import type { HTMLAttributes, ReactNode } from 'react';
 
 import { renderChordproAst } from './chordpro-jsx';
+import type { ChordSelection } from './chordpro-jsx';
 import type { ChordRepositionEvent } from './chord-source-edit';
 import type {
   ChordDiagramInstrument,
@@ -306,6 +308,47 @@ function ChordSheetAstBranch({
   );
   const errorNode = error !== null && errorFallback !== null ? errorFallback(error) : null;
 
+  // Click-to-focus + nudge selection state (#2614). Owned here so it
+  // survives the re-render a nudge triggers (the nudge mutates source,
+  // which re-parses the AST and recreates the chord span); the walker
+  // re-locates the selected chord by its (offset, ordinal) identity.
+  // Only meaningful when `onChordReposition` is wired — otherwise the
+  // chords never become interactive, so the state simply stays null.
+  const [chordSelection, setChordSelection] = useState<ChordSelection | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  // Clear the selection when the user presses down anywhere that is
+  // not a chord / nudge control belonging to THIS sheet. Clicking a
+  // chord re-selects via that chord's own handler, so we keep the
+  // selection only for presses on this sheet's own `.chord` /
+  // `.chord-nudge`; presses elsewhere — empty space, the editor, or
+  // even another sheet instance's chords — clear it. Scoped to when a
+  // selection is active so there is no idle global listener.
+  useEffect(() => {
+    if (chordSelection == null) return;
+    const onPointerDown = (event: PointerEvent): void => {
+      const node = event.target as Node | null;
+      // Resolve to the nearest Element: a pointer event's target can be
+      // a non-Element node (e.g. the chord name's Text node) which has
+      // no `closest`, and treating that as "outside" would clear the
+      // selection the instant the user presses on the chord glyph.
+      const el =
+        node instanceof Element ? node : (node?.parentElement ?? null);
+      const root = contentRef.current;
+      if (
+        root != null &&
+        el != null &&
+        root.contains(el) &&
+        el.closest('.chord, .chord-nudge')
+      ) {
+        return;
+      }
+      setChordSelection(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [chordSelection]);
+
   if (ast === null) {
     return (
       <div {...divProps} className={wrapperClass} aria-busy={loading || undefined}>
@@ -324,7 +367,7 @@ function ChordSheetAstBranch({
   return (
     <div {...divProps} className={wrapperClass} aria-busy={loading || undefined}>
       {errorNode}
-      <div className="chordsketch-sheet__content">
+      <div className="chordsketch-sheet__content" ref={contentRef}>
         {renderChordproAst(ast, {
           transposedKey,
           transposedKeyDirectives,
@@ -338,6 +381,8 @@ function ChordSheetAstBranch({
           caretColumn,
           caretLineLength,
           onChordReposition,
+          chordSelection,
+          setChordSelection,
         })}
       </div>
     </div>

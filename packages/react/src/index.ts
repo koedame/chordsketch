@@ -60,7 +60,7 @@ export {
 // `format="html"` branch — exposed at the package boundary so
 // custom consumers can drive their own React tree off the same
 // AST without the `<ChordSheet>` shell.
-export { renderChordproAst } from './chordpro-jsx';
+export { renderChordproAst, type ChordSelection } from './chordpro-jsx';
 export {
   useChordproAst,
   type ChordproAstResult,
@@ -142,11 +142,15 @@ export {
   TRANSPOSE_MAX,
   TRANSPOSE_MIN,
   applyChordReposition,
+  findChordByOffsetOrdinal,
   lyricsOffsetToSourceColumn,
+  nudgeChordPosition,
   readCapo,
   setCapoInSource,
+  sourceColumnToLyricsOffset,
   type ChordRepositionEvent,
   type ChordRepositionResult,
+  type NudgedChordPosition,
 } from './chord-source-edit';
 
 // iReal Pro surface (#2473 / #2505 / #2527 / ADR-0020). Mirrors the

@@ -582,6 +582,9 @@ shorthand (no Unicode translation; the SVG renderer handles that).
 | `renderChordproAst` | Atom | Function | AST → JSX walker (powers `<ChordSheet format="html">`). |
 | `applyChordReposition` | Atom | Function | Apply a drag-to-reposition event to a ChordPro source. |
 | `lyricsOffsetToSourceColumn` | Atom | Function | Lyrics-offset → source-column helper for drag UX. |
+| `sourceColumnToLyricsOffset` | Atom | Function | Source-column → lyrics-offset helper (inverse of the above). |
+| `nudgeChordPosition` | Atom | Function | Destination offset/ordinal for a one-step chord nudge. |
+| `findChordByOffsetOrdinal` | Atom | Function | Re-locate a selected chord by `(offset, ordinal)` after a nudge re-render. |
 | `useDebounced` | Atom | Hook | General-purpose debouncer used by `<ChordTextarea>`. |
 | `<MetronomeButton>` | Atom | Component | Clickable `{tempo}` metronome icon; ticks audibly at the BPM (speaker cursor on hover). |
 | `useMetronome` | Atom | Hook | Web Audio metronome state (`start` / `stop` / `toggle` / `isRunning` / `isPlaying` / `supported`). |

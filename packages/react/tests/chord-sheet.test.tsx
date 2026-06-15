@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { ChordSheet } from '../src/index';
@@ -445,6 +445,142 @@ describe('<ChordSheet>', () => {
     diagramWrappers.forEach((wrapper) => {
       expect(wrapper.getAttribute('data-orientation')).toBe('horizontal');
     });
+  });
+
+  // ---------------------------------------------------------------------
+  // Click-to-focus + nudge (#2614). End-to-end through <ChordSheet>:
+  // the selection state + outside-click clearing live in the AST branch
+  // component, which the renderChordproAst-level tests can't exercise.
+  // ---------------------------------------------------------------------
+
+  // A stub returning a single chord-bearing line `[Am]hi`.
+  function chordStub(): StubRenderer {
+    const songAst = JSON.stringify({
+      metadata: {
+        title: null,
+        subtitles: [],
+        artists: [],
+        composers: [],
+        lyricists: [],
+        album: null,
+        year: null,
+        key: null,
+        tempo: null,
+        time: null,
+        capo: null,
+        sortTitle: null,
+        sortArtist: null,
+        arrangers: [],
+        copyright: null,
+        duration: null,
+        tags: [],
+        custom: [],
+      },
+      lines: [
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              { chord: { name: 'Am', detail: null, display: null }, text: 'hi', spans: [] },
+            ],
+          },
+        },
+      ],
+    });
+    return {
+      ...makeStub(),
+      parseChordproWithWarnings: vi.fn(() => ({
+        ast: songAst,
+        warnings: [],
+        transposedKey: undefined,
+      })),
+    };
+  }
+
+  test('onChordReposition enables click-to-focus nudge controls', async () => {
+    const onChordReposition = vi.fn();
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={onChordReposition}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+    });
+    // No controls until the chord is clicked.
+    expect(container.querySelector('.chord-nudge')).toBeNull();
+    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+    // Controls appear; the right button moves Am one char into "hi".
+    expect(container.querySelector('.chord-nudge')).not.toBeNull();
+    fireEvent.click(container.querySelector('.chord-nudge__btn--right') as HTMLElement);
+    expect(onChordReposition).toHaveBeenCalledTimes(1);
+    expect(onChordReposition.mock.calls[0][0]).toMatchObject({
+      fromLine: 1,
+      toLine: 1,
+      toLyricsOffset: 1,
+      chord: 'Am',
+      copy: false,
+    });
+  });
+
+  test('pressing down outside the sheet clears the chord selection', async () => {
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+    });
+    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+    expect(container.querySelector('.chord-nudge')).not.toBeNull();
+    // Pointer down on the document body (outside any chord) clears it.
+    fireEvent.pointerDown(document.body);
+    expect(container.querySelector('.chord-nudge')).toBeNull();
+  });
+
+  test('pressing on the chord glyph (text node) does not clear the selection', async () => {
+    // A pointer event can target the chord name's Text node, which has
+    // no `closest`. The outside-click listener must resolve to the
+    // nearest Element before testing membership, otherwise pressing the
+    // glyph would clear the selection it is trying to act on.
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+    });
+    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+    expect(container.querySelector('.chord-nudge')).not.toBeNull();
+    // The chord name renders as a direct Text-node child of `.chord`.
+    const chordSpan = container.querySelector('.chord--selected') as HTMLElement;
+    const textNode = Array.from(chordSpan.childNodes).find(
+      (n) => n.nodeType === Node.TEXT_NODE,
+    );
+    expect(textNode).toBeDefined();
+    fireEvent.pointerDown(textNode as Node);
+    // Selection survives — the press resolved to the `.chord` element.
+    expect(container.querySelector('.chord-nudge')).not.toBeNull();
+  });
+
+  test('chords stay inert when onChordReposition is not provided', async () => {
+    const { container } = render(
+      <ChordSheet source="[Am]hi" astWasmLoader={makeAstLoader(chordStub())} />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector('.chord')).not.toBeNull();
+    });
+    const chord = container.querySelector('.chord') as HTMLElement;
+    expect(chord.getAttribute('role')).toBeNull();
+    expect(chord.getAttribute('draggable')).toBeNull();
   });
 
   test('omits chordDiagrams option when chordDiagramsInstrument is unset', async () => {

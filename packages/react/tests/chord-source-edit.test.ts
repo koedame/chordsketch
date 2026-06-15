@@ -6,9 +6,12 @@ import {
   TRANSPOSE_MAX,
   TRANSPOSE_MIN,
   applyChordReposition,
+  findChordByOffsetOrdinal,
   lyricsOffsetToSourceColumn,
+  nudgeChordPosition,
   readCapo,
   setCapoInSource,
+  sourceColumnToLyricsOffset,
 } from '../src/chord-source-edit';
 
 describe('lyricsOffsetToSourceColumn', () => {
@@ -333,5 +336,167 @@ describe('setCapoInSource', () => {
     for (const value of [0, 1, 5, 7, 12]) {
       expect(readCapo(setCapoInSource(source, value))).toBe(value);
     }
+  });
+});
+
+describe('sourceColumnToLyricsOffset', () => {
+  test('chord-less line: column === lyrics offset', () => {
+    expect(sourceColumnToLyricsOffset('Hello world', 0)).toBe(0);
+    expect(sourceColumnToLyricsOffset('Hello world', 3)).toBe(3);
+    expect(sourceColumnToLyricsOffset('Hello world', 11)).toBe(11);
+  });
+
+  test('clamps out-of-range columns', () => {
+    expect(sourceColumnToLyricsOffset('hi', 99)).toBe(2);
+    expect(sourceColumnToLyricsOffset('hi', -5)).toBe(0);
+  });
+
+  test('chord bracket is zero-width to the lyrics offset', () => {
+    // `[Am]Hello` — a column at the chord's `[` (col 0) precedes no
+    // lyric, so offset 0.
+    expect(sourceColumnToLyricsOffset('[Am]Hello', 0)).toBe(0);
+    // Column 4 is the start of "Hello", still 0 lyrics consumed.
+    expect(sourceColumnToLyricsOffset('[Am]Hello', 4)).toBe(0);
+    // Column 7 is between "Hel" and "lo" → 3 lyric chars before it.
+    expect(sourceColumnToLyricsOffset('[Am]Hello', 7)).toBe(3);
+  });
+
+  test('is the inverse of lyricsOffsetToSourceColumn for in-range offsets', () => {
+    const line = '[Am]Hel[G]lo world';
+    for (let offset = 0; offset <= 11; offset++) {
+      const col = lyricsOffsetToSourceColumn(line, offset);
+      // Round-trips back to the same offset (brackets are skipped on
+      // the way out, so the column lands at a lyric boundary).
+      expect(sourceColumnToLyricsOffset(line, col)).toBe(offset);
+    }
+  });
+
+  test('malformed (unterminated) bracket counts as lyrics within range', () => {
+    // No closing `]` before the column → characters count as lyrics
+    // rather than throwing.
+    expect(sourceColumnToLyricsOffset('[Am Hello', 5)).toBe(5);
+  });
+});
+
+describe('nudgeChordPosition', () => {
+  test('moves right one lyric character', () => {
+    expect(nudgeChordPosition(0, [], 5, 1)).toEqual({ offset: 1, ordinal: 0 });
+  });
+
+  test('moves left one lyric character', () => {
+    expect(nudgeChordPosition(3, [], 5, -1)).toEqual({ offset: 2, ordinal: 0 });
+  });
+
+  test('returns null at the left edge (cannot move before offset 0)', () => {
+    expect(nudgeChordPosition(0, [], 5, -1)).toBeNull();
+  });
+
+  test('returns null at the right edge (cannot move past line end)', () => {
+    // A trailing chord legitimately sits at offset === totalLyrics,
+    // so moving right from there is out of bounds.
+    expect(nudgeChordPosition(5, [], 5, 1)).toBeNull();
+  });
+
+  test('allows landing exactly on the line-end offset', () => {
+    expect(nudgeChordPosition(4, [], 5, 1)).toEqual({ offset: 5, ordinal: 0 });
+  });
+
+  test('destination ordinal counts chords already at the destination offset', () => {
+    // Two other chords sit at offset 2; the moved chord lands AFTER
+    // them (lyricsOffsetToSourceColumn skips leading brackets), so its
+    // ordinal among same-offset chords is 2.
+    expect(nudgeChordPosition(1, [2, 2, 4], 5, 1)).toEqual({ offset: 2, ordinal: 2 });
+  });
+});
+
+describe('findChordByOffsetOrdinal', () => {
+  test('finds the single chord at an offset', () => {
+    expect(findChordByOffsetOrdinal([0, 3, 5], 3, 0)).toBe(1);
+  });
+
+  test('disambiguates stacked chords by ordinal', () => {
+    // Three chords share offset 2 ([A][B][C]word). ordinal picks which.
+    expect(findChordByOffsetOrdinal([2, 2, 2, 5], 2, 0)).toBe(0);
+    expect(findChordByOffsetOrdinal([2, 2, 2, 5], 2, 1)).toBe(1);
+    expect(findChordByOffsetOrdinal([2, 2, 2, 5], 2, 2)).toBe(2);
+  });
+
+  test('returns -1 when the selection no longer resolves', () => {
+    expect(findChordByOffsetOrdinal([0, 3], 3, 1)).toBe(-1);
+    expect(findChordByOffsetOrdinal([0, 3], 9, 0)).toBe(-1);
+  });
+});
+
+describe('nudge integration: nudgeChordPosition + applyChordReposition', () => {
+  // Helper mirroring how the React walker turns a nudge into a
+  // ChordRepositionEvent + applies it to the source. Proves the pure
+  // offset math composes with the source transform end to end.
+  function nudgeSource(
+    source: string,
+    fromLine: number,
+    fromColumn: number,
+    chordName: string,
+    currentOffset: number,
+    otherOffsets: number[],
+    totalLyrics: number,
+    direction: -1 | 1,
+  ): string | null {
+    const dest = nudgeChordPosition(currentOffset, otherOffsets, totalLyrics, direction);
+    if (!dest) return null;
+    const { text } = applyChordReposition(source, {
+      fromLine,
+      fromColumn,
+      fromLength: chordName.length + 2,
+      toLine: fromLine,
+      toLyricsOffset: dest.offset,
+      chord: chordName,
+      copy: false,
+    });
+    return text;
+  }
+
+  test('nudging a leading chord right moves it one character into the lyric', () => {
+    // `[Am]Hello`: Am at column 0, offset 0, line has 5 lyric chars.
+    expect(nudgeSource('[Am]Hello', 1, 0, 'Am', 0, [], 5, 1)).toBe('H[Am]ello');
+  });
+
+  test('nudging a mid-lyric chord left moves it one character back', () => {
+    // `H[Am]ello`: Am at column 1, offset 1.
+    expect(nudgeSource('H[Am]ello', 1, 1, 'Am', 1, [], 5, -1)).toBe('[Am]Hello');
+  });
+
+  test('nudging right onto an occupied offset lands after the existing chord', () => {
+    // `[A]H[B]ello`: move A (col 0, offset 0) right to offset 1, where
+    // B already sits. A re-inserts after B → `[B]` then `[A]` at the
+    // same lyric position is NOT the case here (different offsets);
+    // verify the source transform: removing [A] gives `H[B]ello`,
+    // inserting [A] at offset 1 lands after [B].
+    expect(nudgeSource('[A]H[B]ello', 1, 0, 'A', 0, [1], 5, 1)).toBe('H[B][A]ello');
+  });
+
+  test('repeated right nudges walk the chord across the lyric', () => {
+    let src = '[Am]Hello';
+    let offset = 0;
+    let col = 0;
+    for (let step = 1; step <= 3; step++) {
+      const dest = nudgeChordPosition(offset, [], 5, 1);
+      expect(dest).not.toBeNull();
+      const { text } = applyChordReposition(src, {
+        fromLine: 1,
+        fromColumn: col,
+        fromLength: 4,
+        toLine: 1,
+        toLyricsOffset: dest!.offset,
+        chord: 'Am',
+        copy: false,
+      });
+      src = text;
+      offset = dest!.offset;
+      // After re-insertion the new column is offset + (chars consumed
+      // by lyrics before it); recompute via the helper.
+      col = lyricsOffsetToSourceColumn(src.replace('[Am]', ''), offset);
+    }
+    // Am started before "H", three right steps → before the second "l".
+    expect(src).toBe('Hel[Am]lo');
   });
 });
