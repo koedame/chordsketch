@@ -532,6 +532,10 @@ function ChordSheetAstBranch({
             accidental={resolvedChord.parts.accidental}
             suffix={resolvedChord.parts.suffix}
             bass={resolvedChord.parts.bass}
+            // `[]` for otherOffsets: availability depends only on
+            // the line bounds; otherOffsets is used solely to compute
+            // the destination ordinal (not the null/non-null result),
+            // so an empty list is fine for the can-move check.
             canLeft={
               nudgeChordPosition(resolvedChord.currentOffset, [], resolvedChord.totalLyrics, -1) !==
               null
