@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -151,5 +155,33 @@ describe('<MetronomeButton>', () => {
     const glyph = chip.querySelector('.music-glyph--metronome');
     expect(glyph?.getAttribute('aria-hidden')).toBe('true');
     expect(glyph?.getAttribute('role')).toBeNull();
+  });
+
+  // The interactive tempo chip is a `<button>` while the `{key}` /
+  // `{time}` chips (and this chip's own non-interactive fallback) are
+  // `<span>`. A `<button>` defaults to `box-sizing: border-box` and a
+  // `<span>` to `content-box`, so without an explicit declaration on
+  // `.meta-inline` the `min-height: 1.6rem` + 1px border made the
+  // button ~2px shorter than the spans, misaligning the pills (#2624).
+  // The fix pins `box-sizing: border-box` on `.meta-inline` itself so
+  // every variant computes the same height regardless of element type.
+  // Assert it against the stylesheet source — the height delta is a
+  // layout property jsdom does not compute, so the DOM-level tests
+  // above cannot catch a regression here.
+  test('`.meta-inline` pins box-sizing so span and button chips share a height (#2624)', () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    // Strip CSS comments first — the explanatory comment inside the
+    // rule mentions `{key}` / `{tempo}` / `{time}`, whose braces would
+    // otherwise terminate the `[^}]` rule-block match prematurely.
+    const css = readFileSync(resolve(here, '../src/styles.css'), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      '',
+    );
+    // The base `.meta-inline` rule (not a `--variant` modifier) must
+    // carry `box-sizing: border-box`. Match the rule block and assert
+    // the declaration lives inside it.
+    const rule = css.match(/\.chordsketch-sheet__content \.meta-inline \{[^}]*\}/);
+    expect(rule).not.toBeNull();
+    expect(rule?.[0]).toContain('box-sizing: border-box;');
   });
 });
