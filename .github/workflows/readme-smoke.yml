@@ -472,6 +472,21 @@ jobs:
           # becomes the stable default, the README install instructions
           # must add a `brew trust koedame/tap` line (tracked in #2606).
           brew trust koedame/tap
+          # Homebrew 6.0 (tagged on the master this job tracks) makes the
+          # Linux build sandbox mandatory and requires a rootless `bwrap`
+          # (Bubblewrap) on PATH. GitHub's ubuntu runner ships neither,
+          # and Homebrew cannot install the `bubblewrap` formula to
+          # satisfy it because that install itself would need the sandbox
+          # — a bootstrap deadlock ("Bubblewrap is required to use the
+          # Linux sandbox but was not found"). Disable the Linux sandbox,
+          # exactly as Homebrew's own error recommends as the final
+          # workaround. This is safe here: the sandbox guards against
+          # malicious formula build scripts, and we are installing our
+          # own trusted formula (which built fine before Homebrew 6.0).
+          # Like the trust gate above, this enforcement is bleeding-edge
+          # only, so the README's documented `brew install chordsketch`
+          # is unaffected for end users on released Homebrew.
+          export HOMEBREW_NO_SANDBOX_LINUX=1
           brew install chordsketch
           chordsketch --version
 
