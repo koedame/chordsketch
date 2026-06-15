@@ -74,8 +74,8 @@ import type {
   ChordDiagramOrientation,
 } from './use-chord-diagram';
 import {
+  buildChordNudge,
   findChordByOffsetOrdinal,
-  nudgeChordPosition,
 } from './chord-source-edit';
 import type { ChordRepositionEvent } from './chord-source-edit';
 
@@ -1862,17 +1862,6 @@ function LyricsLine({
       ? findChordByOffsetOrdinal(chordOffsets, selected.offset, selected.ordinal)
       : -1;
   const focusedSegmentIdx = focusedChordIdx >= 0 ? chordSegments[focusedChordIdx].segmentIdx : -1;
-  // Availability depends only on the line bounds, so the empty
-  // `otherOffsets` argument (used solely for the destination
-  // ordinal) is fine here.
-  const canNudgeLeft =
-    focusedChordIdx >= 0 &&
-    selected != null &&
-    nudgeChordPosition(selected.offset, [], totalLyrics, -1) !== null;
-  const canNudgeRight =
-    focusedChordIdx >= 0 &&
-    selected != null &&
-    nudgeChordPosition(selected.offset, [], totalLyrics, 1) !== null;
 
   // DOM focus is driven programmatically from the selection so it
   // survives the nudge re-render (the old chord span is destroyed
@@ -1947,24 +1936,25 @@ function LyricsLine({
     // repeat; a normal tap (interval ≫ one render cycle) never does.
     if (!reposition || !nudgeCtx || focusedChordIdx < 0 || selected == null) return;
     const otherOffsets = chordOffsets.filter((_, idx) => idx !== focusedChordIdx);
-    const dest = nudgeChordPosition(selected.offset, otherOffsets, totalLyrics, direction);
-    if (!dest) return;
     const moved = chordSegments[focusedChordIdx];
     const seg = line.segments[moved.segmentIdx];
     const layout = segmentLayout[moved.segmentIdx];
-    reposition.onChordReposition({
-      fromLine: reposition.sourceLine,
-      fromColumn: layout.chordSourceColumn,
-      fromLength: layout.chordBracketLength,
-      toLine: reposition.sourceLine,
-      toLyricsOffset: dest.offset,
-      chord: seg.chord?.name ?? '',
-      copy: false,
+    const result = buildChordNudge({
+      sourceLine: reposition.sourceLine,
+      chordName: seg.chord?.name ?? '',
+      sourceColumn: layout.chordSourceColumn,
+      bracketLength: layout.chordBracketLength,
+      currentOffset: selected.offset,
+      otherOffsets,
+      totalLyrics,
+      direction,
     });
+    if (!result) return;
+    reposition.onChordReposition(result.event);
     nudgeCtx.setSelected({
       line: reposition.sourceLine,
-      offset: dest.offset,
-      ordinal: dest.ordinal,
+      offset: result.offset,
+      ordinal: result.ordinal,
       nonce: selected.nonce + 1,
     });
   };
@@ -2139,11 +2129,13 @@ function LyricsLine({
           dropTarget && dropTarget.segmentIdx === i
             ? dropTarget.charOffset
             : null;
-        // Click-to-focus + nudge wiring (#2614). Every real chord
-        // span becomes a toggle button that selects the chord; the
-        // selected one shows the ◀ / ▶ nudge controls and takes the
-        // auto-focus ref + keyboard handler. Off unless the consumer
-        // wired `onChordReposition`.
+        // Click-to-focus + nudge wiring (#2614 / #2622). Every real
+        // chord span becomes a toggle button that selects the chord;
+        // the selected one paints as a solid crimson badge, takes the
+        // auto-focus ref + keyboard handler, and opens the left-docked
+        // chord-editor inspector (rendered by the host, not here — see
+        // `ChordSheet`). Off unless the consumer wired
+        // `onChordReposition` + `setChordSelection`.
         const isRealChord = segment.chord != null;
         const isFocusedChord =
           reposition != null && isRealChord && i === focusedSegmentIdx;
@@ -2161,10 +2153,7 @@ function LyricsLine({
               }
             : null;
         return (
-          <span
-            key={i}
-            className={isFocusedChord ? 'chord-block chord-block--selected' : 'chord-block'}
-          >
+          <span key={i} className="chord-block">
             {segment.chord ? (
               diagrams &&
               (diagrams.mode === 'inline' || diagrams.mode === 'hover') ? (
@@ -2216,14 +2205,6 @@ function LyricsLine({
             <span className="lyrics" style={textStyle ?? undefined}>
               {renderLyricsTextWithChars(segment, caretCharOffset, dropCharOffset)}
             </span>
-            {isFocusedChord ? (
-              <NudgeControls
-                chordName={segment.chord?.name ?? ''}
-                canLeft={canNudgeLeft}
-                canRight={canNudgeRight}
-                onNudge={nudge}
-              />
-            ) : null}
           </span>
         );
       })}
@@ -2232,62 +2213,6 @@ function LyricsLine({
 }
 
 /**
- * The ◀ / ▶ toolbar shown next to the selected chord (#2614).
- * Each press nudges the chord one lyric character via the `onNudge`
- * callback. Rendered as a sibling of the chord span inside the
- * `.chord-block` (not a child of the chord's `role="button"` span,
- * which must not contain interactive descendants) and positioned
- * by CSS above the chord.
- *
- * The buttons stop their click from bubbling to the chord toggle
- * (which would deselect) and cancel any drag the press might start,
- * so tapping a button only nudges.
- */
-function NudgeControls(props: {
-  chordName: string;
-  canLeft: boolean;
-  canRight: boolean;
-  onNudge: (direction: -1 | 1) => void;
-}): JSX.Element {
-  const { chordName, canLeft, canRight, onNudge } = props;
-  const stopDrag = (e: ReactMouseEvent): void => e.stopPropagation();
-  const cancelDrag = (e: ReactDragEvent): void => e.preventDefault();
-  return (
-    <span className="chord-nudge" role="group" aria-label={`Move chord ${chordName}`}>
-      <button
-        type="button"
-        className="chord-nudge__btn chord-nudge__btn--left"
-        aria-label={`Move chord ${chordName} left`}
-        disabled={!canLeft}
-        draggable={false}
-        onMouseDown={stopDrag}
-        onDragStart={cancelDrag}
-        onClick={(e) => {
-          e.stopPropagation();
-          onNudge(-1);
-        }}
-      >
-        <span aria-hidden="true">‹</span>
-      </button>
-      <button
-        type="button"
-        className="chord-nudge__btn chord-nudge__btn--right"
-        aria-label={`Move chord ${chordName} right`}
-        disabled={!canRight}
-        draggable={false}
-        onMouseDown={stopDrag}
-        onDragStart={cancelDrag}
-        onClick={(e) => {
-          e.stopPropagation();
-          onNudge(1);
-        }}
-      >
-        <span aria-hidden="true">›</span>
-      </button>
-    </span>
-  );
-}
-
 /**
  * From a dragover/drop event, locate which chord-block segment
  * the pointer is over and the character offset (in lyric

@@ -398,6 +398,11 @@
   line-height: 1.6875;
   color: var(--cs-ink-1000, #0a0a0b);
   padding: 2em 1.5em;
+  /* Positioning anchor for the left-docked chord-editor inspector
+     (#2622). The inspector is `position: absolute` against this
+     wrapper so it floats at the content's top-left and does NOT track
+     the selected chord's position. */
+  position: relative;
 }
 
 /* `.song` is the AST walker's root container. It carries no
@@ -1454,72 +1459,256 @@
   cursor: grabbing;
 }
 
-/* Click-to-focus + nudge controls (#2614). When chord
+/* Click-to-focus chord editing (#2614 / #2622). When chord
    repositioning is enabled each real chord is a toggle button;
-   tapping it selects the chord and reveals a small ◀ / ▶ toolbar
-   so it can be moved one lyric character at a time — the
-   touch-friendly complement to drag-to-reposition. */
+   tapping it selects the chord, which paints it as a solid crimson
+   badge and opens the left-docked chord-editor inspector. */
 .chordsketch-sheet__content .chord[role='button'] {
   cursor: pointer;
 }
+/* Active chord — solid crimson badge (the confirmed treatment).
+   The chord name inverts to white on a filled crimson chip so the
+   selected chord reads unambiguously as "the one being edited". */
 .chordsketch-sheet__content .chord--selected {
-  outline: 2px solid var(--cs-crimson-500, #bd1642);
-  outline-offset: 1px;
-  border-radius: 3px;
+  background: var(--cs-crimson-500, #bd1642);
+  color: var(--cs-fg-on-crimson, #fff);
+  border-radius: var(--cs-r-2, 4px);
+  padding: 1px 5px;
+  /* Keep the chip from nudging the lyric baseline as it appears. */
+  box-shadow: var(--cs-e-1, 0 1px 2px rgba(10, 10, 11, 0.04));
 }
-/* The chord-block becomes the positioning context for the
-   absolutely-positioned toolbar only while a chord inside it is
-   selected, so unselected blocks keep static flow. */
-.chordsketch-sheet__content .chord-block--selected {
-  position: relative;
+.chordsketch-sheet__content .chord--selected:focus-visible {
+  outline: none;
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #bd1642);
 }
-.chordsketch-sheet__content .chord-nudge {
+
+/* ---- Left-docked chord-editor inspector (#2622) ---------------- */
+/* Floating, non-modal panel anchored to the top-left of the preview
+   content. Does NOT track the selected chord — it stays put while the
+   user edits root / type / bass and steps the chord left / right. */
+.chordsketch-sheet__content .chordsketch-sheet__cins {
   position: absolute;
-  /* Sit above the chord row. */
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-bottom: 3px;
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
+  left: var(--cs-sp-4, 1rem);
+  top: var(--cs-sp-4, 1rem);
+  z-index: 6;
+  width: 17rem;
+  max-width: calc(100% - 2rem);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-sp-4, 1rem);
+  padding: var(--cs-sp-4, 1rem);
   background: var(--cs-surface, #fff);
-  border: 1px solid var(--cs-crimson-500, #bd1642);
-  border-radius: 6px;
-  box-shadow: var(--cs-elevation-popover, 0 2px 6px rgba(0, 0, 0, 0.18));
-  z-index: 5;
-  white-space: nowrap;
-  user-select: none;
+  border: 1px solid var(--cs-border-strong, #d4d1d6);
+  border-radius: var(--cs-r-3, 8px);
+  box-shadow: var(--cs-e-2, 0 4px 12px rgba(10, 10, 11, 0.08));
+  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+  animation: chordsketch-cins-pop var(--cs-dur-2, 200ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1));
 }
-.chordsketch-sheet__content .chord-nudge__btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  /* Touch-friendly target — the feature exists for taps where a
-     precise drag is hard (#2614). */
-  min-width: 1.75rem;
-  min-height: 1.75rem;
-  padding: 0;
-  font-size: 1.125rem;
+@keyframes chordsketch-cins-pop {
+  from { opacity: 0; transform: translateY(4px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chordsketch-sheet__content .chordsketch-sheet__cins { animation: none; }
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cs-sp-2, 0.5rem);
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-eyebrow {
+  font-size: 0.625rem;
   font-weight: 700;
-  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cs-text-tertiary, #8a8790);
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-name {
+  font-family: var(--cs-font-chord, "Roboto", system-ui, sans-serif);
+  font-weight: 900;
+  font-size: 1.75rem;
+  line-height: 1.1;
   color: var(--cs-crimson-500, #bd1642);
-  background: transparent;
-  border: none;
-  border-radius: 4px;
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-close {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--cs-border, #e8e6ea);
+  background: var(--cs-surface, #fff);
+  border-radius: var(--cs-r-2, 4px);
+  color: var(--cs-text-secondary, #67646d);
+  font-size: 1rem;
+  line-height: 1;
   cursor: pointer;
 }
-.chordsketch-sheet__content .chord-nudge__btn:hover:not(:disabled) {
-  background: var(--cs-crimson-50, rgba(189, 22, 66, 0.1));
+.chordsketch-sheet__content .chordsketch-sheet__cins-close:hover {
+  background: var(--cs-surface-hover, #f6f4f7);
 }
-.chordsketch-sheet__content .chord-nudge__btn:disabled {
+.chordsketch-sheet__content .chordsketch-sheet__cins-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-sp-2, 0.5rem);
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--cs-text-strong, #44424a);
+}
+/* segmented (root / accidental) */
+.chordsketch-sheet__content .chordsketch-sheet__cins-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  background: var(--cs-ink-100, #f6f4f7);
+  border: 1px solid var(--cs-border, #e8e6ea);
+  border-radius: var(--cs-r-2, 4px);
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-seg button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  border-radius: var(--cs-r-1, 2px);
+  padding: 4px 8px;
+  min-width: 30px;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cs-text-secondary, #67646d);
+  cursor: pointer;
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-seg button[aria-pressed='true'] {
+  background: var(--cs-surface, #fff);
+  color: var(--cs-crimson-600, #a30f37);
+  box-shadow: var(--cs-e-1, 0 1px 2px rgba(10, 10, 11, 0.04));
+}
+/* type chips */
+.chordsketch-sheet__content .chordsketch-sheet__cins-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-chip {
+  appearance: none;
+  border: 1px solid var(--cs-border-strong, #d4d1d6);
+  background: var(--cs-surface, #fff);
+  border-radius: var(--cs-r-full, 9999px);
+  padding: 4px 10px;
+  font-family: var(--cs-font-chord, "Roboto", system-ui, sans-serif);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cs-text-strong, #44424a);
+  cursor: pointer;
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-chip:hover {
+  background: var(--cs-surface-hover, #f6f4f7);
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-chip[aria-pressed='true'] {
+  background: var(--cs-crimson-500, #bd1642);
+  border-color: var(--cs-crimson-500, #bd1642);
+  color: var(--cs-fg-on-crimson, #fff);
+}
+/* inputs */
+.chordsketch-sheet__content .chordsketch-sheet__cins-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--cs-sp-2, 0.5rem);
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-sp-1, 0.25rem);
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-input {
+  width: 100%;
+  height: 32px;
+  border: 1px solid var(--cs-border-strong, #d4d1d6);
+  border-radius: var(--cs-r-2, 4px);
+  background: var(--cs-surface, #fff);
+  padding: 0 var(--cs-sp-2, 0.5rem);
+  font-family: var(--cs-font-chord, "Roboto", system-ui, sans-serif);
+  font-size: 0.875rem;
+  color: var(--cs-text-primary, #0a0a0b);
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-input:focus-visible {
+  outline: none;
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #bd1642);
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-divider {
+  height: 1px;
+  background: var(--cs-border, #e8e6ea);
+  margin: 0 calc(var(--cs-sp-4, 1rem) * -1);
+}
+/* move row (relocated nudge) */
+.chordsketch-sheet__content .chordsketch-sheet__cins-move {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-sp-2, 0.5rem);
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-movebtn {
+  flex: 1;
+  height: 34px;
+  border: 1px solid var(--cs-border-strong, #d4d1d6);
+  background: var(--cs-surface, #fff);
+  border-radius: var(--cs-r-2, 4px);
+  font-size: 1rem;
+  color: var(--cs-text-strong, #44424a);
+  cursor: pointer;
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-movebtn:hover:not(:disabled) {
+  background: var(--cs-surface-hover, #f6f4f7);
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-movebtn:disabled {
   opacity: 0.35;
   cursor: default;
 }
-.chordsketch-sheet__content .chord-nudge__btn:focus-visible {
-  outline: 2px solid var(--cs-crimson-500, #bd1642);
-  outline-offset: 1px;
-  border-radius: 4px;
+.chordsketch-sheet__content .chordsketch-sheet__cins-movelbl {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--cs-text-secondary, #67646d);
+  white-space: nowrap;
+}
+/* footer */
+.chordsketch-sheet__content .chordsketch-sheet__cins-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-remove {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: var(--cs-r-2, 4px);
+  padding: var(--cs-sp-2, 0.5rem) var(--cs-sp-3, 0.75rem);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cs-crimson-600, #a30f37);
+  cursor: pointer;
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-remove:hover {
+  background: var(--cs-crimson-50, #fdf2f5);
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-done {
+  appearance: none;
+  border: 1px solid var(--cs-border-strong, #d4d1d6);
+  background: var(--cs-surface, #fff);
+  border-radius: var(--cs-r-2, 4px);
+  padding: var(--cs-sp-2, 0.5rem) var(--cs-sp-3, 0.75rem);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cs-text-strong, #44424a);
+  cursor: pointer;
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins-done:hover {
+  background: var(--cs-surface-hover, #f6f4f7);
+}
+.chordsketch-sheet__content .chordsketch-sheet__cins :focus-visible {
+  outline: none;
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #bd1642);
+  border-radius: var(--cs-r-2, 4px);
 }
 
 /* Per-character span inside a `.lyrics` row. Plain wrapper so

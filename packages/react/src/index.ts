@@ -139,19 +139,37 @@ export {
 export {
   CAPO_MAX,
   CAPO_MIN,
+  CHORD_TYPE_PRESETS,
   TRANSPOSE_MAX,
   TRANSPOSE_MIN,
+  applyChordDelete,
+  applyChordEdit,
   applyChordReposition,
+  buildChordName,
+  buildChordNudge,
+  chordSuffixFromQuality,
   findChordByOffsetOrdinal,
   lyricsOffsetToSourceColumn,
   nudgeChordPosition,
   readCapo,
   setCapoInSource,
   sourceColumnToLyricsOffset,
+  type ChordDeleteTarget,
+  type ChordEditEvent,
+  type ChordNudgeResult,
+  type ChordParts,
+  type ChordQualityName,
   type ChordRepositionEvent,
   type ChordRepositionResult,
+  type ChordTypePreset,
   type NudgedChordPosition,
 } from './chord-source-edit';
+
+// Chord-editor inspector (#2622). The floating, design-system-styled
+// panel `<ChordSheet>` opens when a chord is selected and `onChordEdit`
+// is wired. Exposed so hosts that render the AST directly can mount it
+// themselves.
+export { ChordInspector, type ChordInspectorProps } from './chord-inspector';
 
 // iReal Pro surface (#2473 / #2505 / #2527 / ADR-0020). Mirrors the
 // ChordPro surface in shape: Tier 1 atom (`<IrealBarGrid>`) +
