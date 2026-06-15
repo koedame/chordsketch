@@ -362,10 +362,11 @@ fn write_flat(s: &mut String, cx: f32, cy: f32) {
 /// A static beat dot sits in the top-left corner *inside* the
 /// existing viewBox (so the icon height is unchanged) and pulses
 /// flash-then-decay once per beat. Its blink shares the same
-/// `--cs-metronome-period` as the swing, so the dot is at full
-/// brightness exactly when the rod reaches an extreme (the
-/// audible tick). The dot is a sibling of the pendulum group, so
-/// it does NOT swing — only its opacity animates.
+/// `--cs-metronome-period` as the swing, and a `-period/2`
+/// `animation-delay` phase-shifts the flash so the dot is at full
+/// brightness when the rod passes through the center (vertical),
+/// not at the extremes. The dot is a sibling of the pendulum
+/// group, so it does NOT swing — only its opacity animates.
 #[must_use]
 pub fn metronome_svg(bpm_raw: &str) -> String {
     let bpm: f32 = bpm_raw.trim().parse::<f32>().unwrap_or(60.0);
