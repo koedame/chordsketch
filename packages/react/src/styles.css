@@ -685,13 +685,16 @@
 
 /* Beat dot — a static LED in the top-left corner that flashes
    once per beat. It shares `--cs-metronome-period` with the
-   swing, so it reaches full brightness exactly when the rod
-   hits an extreme (the audible tick), then decays before the
-   next beat. `ease-out` shapes the decay; the keyframe holds a
-   brief peak (0–8%) for a crisp "pop". Non-`alternate` so each
-   beat re-triggers the flash from full brightness. */
+   swing, and a `-period/2` `animation-delay` phase-shifts the
+   flash so it reaches full brightness when the rod passes
+   through the center (vertical), not at the extremes, then
+   decays before the next beat. `ease-out` shapes the decay; the
+   keyframe holds a brief peak (0–8%) for a crisp "pop".
+   Non-`alternate` so each beat re-triggers the flash from full
+   brightness. */
 .chordsketch-sheet__content .music-glyph--metronome__beat {
   animation: cs-metronome-beat var(--cs-metronome-period, 1s) ease-out infinite;
+  animation-delay: calc(var(--cs-metronome-period, 1s) * -0.5);
 }
 @keyframes cs-metronome-beat {
   0% {

@@ -296,19 +296,24 @@ describe('<MetronomeGlyph>', () => {
 
   // Phase-sync invariant (sister-site to the render-html assertion
   // in `crates/render-html/src/lib.rs`): the beat blink and the
-  // pendulum swing MUST both be driven by `--cs-metronome-period`.
-  // That shared property is what guarantees the flash peaks exactly
-  // when the rod reaches an extreme (the tick). The blink lives in
+  // pendulum swing MUST both be driven by `--cs-metronome-period`,
+  // and a `-period/2` animation-delay phase-shifts the flash to the
+  // rod's center crossing (not its extremes). The blink lives in
   // styles.css (not inline), so assert it against the stylesheet
   // source rather than the rendered DOM. A regression that gives the
-  // beat a hardcoded duration would desync the flash from the tick
-  // without failing the DOM-level tests above.
+  // beat a hardcoded duration would desync the flash from the swing,
+  // and one that drops the delay would move the flash back to the
+  // extremes — neither would fail the DOM-level tests above.
   test('beat blink and swing share --cs-metronome-period in styles.css', () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const css = readFileSync(resolve(here, '../src/styles.css'), 'utf8');
     expect(css).toContain('@keyframes cs-metronome-beat');
     expect(css).toMatch(
       /\.music-glyph--metronome__beat\s*\{\s*animation:\s*cs-metronome-beat var\(--cs-metronome-period/,
+    );
+    // The `-period/2` delay that puts the flash on the center crossing.
+    expect(css).toMatch(
+      /\.music-glyph--metronome__beat\s*\{[^}]*animation-delay:\s*calc\(var\(--cs-metronome-period, 1s\) \* -0\.5\)/,
     );
     expect(css).toMatch(
       /\.music-glyph--metronome__pendulum\s*\{[^}]*animation:\s*cs-metronome-swing var\(--cs-metronome-period/,
