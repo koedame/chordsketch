@@ -543,6 +543,34 @@ describe('<ChordSheet>', () => {
     expect(container.querySelector('.chord-nudge')).toBeNull();
   });
 
+  test('pressing on the chord glyph (text node) does not clear the selection', async () => {
+    // A pointer event can target the chord name's Text node, which has
+    // no `closest`. The outside-click listener must resolve to the
+    // nearest Element before testing membership, otherwise pressing the
+    // glyph would clear the selection it is trying to act on.
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+    });
+    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+    expect(container.querySelector('.chord-nudge')).not.toBeNull();
+    // The chord name renders as a direct Text-node child of `.chord`.
+    const chordSpan = container.querySelector('.chord--selected') as HTMLElement;
+    const textNode = Array.from(chordSpan.childNodes).find(
+      (n) => n.nodeType === Node.TEXT_NODE,
+    );
+    expect(textNode).toBeDefined();
+    fireEvent.pointerDown(textNode as Node);
+    // Selection survives — the press resolved to the `.chord` element.
+    expect(container.querySelector('.chord-nudge')).not.toBeNull();
+  });
+
   test('chords stay inert when onChordReposition is not provided', async () => {
     const { container } = render(
       <ChordSheet source="[Am]hi" astWasmLoader={makeAstLoader(chordStub())} />,

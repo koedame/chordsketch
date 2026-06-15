@@ -3897,6 +3897,33 @@ describe('renderChordproAst click-to-focus + nudge (#2614)', () => {
     });
   });
 
+  test('reselecting a chord after deselect restores DOM focus (nonce reset)', () => {
+    // jsdom's fireEvent.click does NOT natively focus the element, so
+    // any DOM focus the chord span gains here came from the
+    // programmatic auto-focus effect. This guards the nonce-reset fix:
+    // after a full deselect the per-selection nonce restarts at 1, and
+    // without resetting the handled-nonce the reselect would match the
+    // stale handled value and skip the refocus. To isolate the
+    // programmatic refocus we explicitly drop DOM focus between the
+    // deselect and the reselect (simulating focus moving elsewhere),
+    // since the chord's DOM node otherwise survives the deselect and
+    // keeps focus on its own.
+    const { container } = render(<Harness ast={twoChordAst()} onReposition={vi.fn()} />);
+    const chord = () => container.querySelector(".chord[role='button']") as HTMLElement;
+    fireEvent.click(chord());
+    const selected = container.querySelector('.chord--selected') as HTMLElement;
+    expect(document.activeElement).toBe(selected);
+    // Deselect via Escape, then move DOM focus away.
+    fireEvent.keyDown(selected, { key: 'Escape' });
+    expect(container.querySelector('.chord-nudge')).toBeNull();
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).not.toBe(chord());
+    // Reselect the same chord — the effect must refocus it despite the
+    // per-selection nonce restarting at 1.
+    fireEvent.click(chord());
+    expect(document.activeElement).toBe(container.querySelector('.chord--selected'));
+  });
+
   test('Enter selects a chord via the keyboard', () => {
     const { container } = render(<Harness ast={twoChordAst()} onReposition={vi.fn()} />);
     const chord = container.querySelector('.chord') as HTMLElement;

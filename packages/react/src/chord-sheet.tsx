@@ -327,13 +327,19 @@ function ChordSheetAstBranch({
   useEffect(() => {
     if (chordSelection == null) return;
     const onPointerDown = (event: PointerEvent): void => {
-      const target = event.target as Node | null;
+      const node = event.target as Node | null;
+      // Resolve to the nearest Element: a pointer event's target can be
+      // a non-Element node (e.g. the chord name's Text node) which has
+      // no `closest`, and treating that as "outside" would clear the
+      // selection the instant the user presses on the chord glyph.
+      const el =
+        node instanceof Element ? node : (node?.parentElement ?? null);
       const root = contentRef.current;
       if (
         root != null &&
-        target != null &&
-        root.contains(target) &&
-        (target as HTMLElement).closest?.('.chord, .chord-nudge')
+        el != null &&
+        root.contains(el) &&
+        el.closest('.chord, .chord-nudge')
       ) {
         return;
       }

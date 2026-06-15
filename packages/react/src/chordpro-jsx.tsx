@@ -1884,7 +1884,21 @@ function LyricsLine({
   const focusedSpanRef = useRef<HTMLSpanElement | null>(null);
   const handledNonceRef = useRef<number>(-1);
   useEffect(() => {
-    if (!isSelectedLine || selected == null || focusedSegmentIdx < 0) return;
+    // When this line is not (or no longer) the selected line, reset
+    // the handled-nonce so a FUTURE selection of this line refocuses
+    // even if its nonce repeats a previously-handled value — the
+    // per-selection nonce restarts at 1 after a full deselect
+    // (`cur` is null in `toggleSelect`), so without this reset a
+    // select → deselect → reselect-the-same-chord cycle could match
+    // the stale handled value and skip the programmatic refocus.
+    // Do NOT reset while the segment is merely unresolved mid-reparse
+    // (isSelectedLine true, focusedSegmentIdx < 0) — that transient
+    // must still refocus once the new AST lands.
+    if (!isSelectedLine) {
+      handledNonceRef.current = -1;
+      return;
+    }
+    if (selected == null || focusedSegmentIdx < 0) return;
     if (selected.nonce === handledNonceRef.current) return;
     handledNonceRef.current = selected.nonce;
     focusedSpanRef.current?.focus();
@@ -1924,6 +1938,14 @@ function LyricsLine({
   // path, then advances the selection to the chord's new position so
   // it stays selected for the next tap / key press.
   const nudge = (direction: -1 | 1): void => {
+    // `focusedChordIdx < 0` guards the brief window after a nudge when
+    // the selection has advanced but the source has not finished
+    // re-parsing (the host applies `onChordReposition` → new source →
+    // async AST). Dropping the press here is deliberate and safe:
+    // the move's `fromColumn` / `fromLength` are read from the CURRENT
+    // (stale) AST, so acting before the re-parse lands would target
+    // the wrong source span. A held arrow key may therefore skip a
+    // repeat; a normal tap (interval ≫ one render cycle) never does.
     if (!reposition || !nudgeCtx || focusedChordIdx < 0 || selected == null) return;
     const otherOffsets = chordOffsets.filter((_, idx) => idx !== focusedChordIdx);
     const dest = nudgeChordPosition(selected.offset, otherOffsets, totalLyrics, direction);
