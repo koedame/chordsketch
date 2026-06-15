@@ -620,6 +620,66 @@ describe('<ChordSheet>', () => {
     expect(right.disabled).toBe(false);
   });
 
+  test('edits use the RAW source name, not a transposed detail', async () => {
+    // Guards transpose-safety: under a non-zero transpose the AST chord
+    // exposes the transposed pitch via `detail`, but `chord.name` stays
+    // the raw source token. Editing must rewrite the raw chord. Here the
+    // raw name is "Am" while detail claims root B (as if transposed +2);
+    // picking the "7" chip must write "A7" (raw root A), never "B7".
+    const transposedDetailAst = JSON.stringify({
+      metadata: JSON.parse(astFor('x')).metadata,
+      lines: [
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              {
+                chord: {
+                  name: 'Am',
+                  display: 'Bm',
+                  detail: {
+                    root: 'B',
+                    rootAccidental: null,
+                    quality: 'minor',
+                    extension: null,
+                    bassNote: null,
+                  },
+                },
+                text: 'hi',
+                spans: [],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const stub: StubRenderer = {
+      ...makeStub(),
+      parseChordproWithWarnings: vi.fn(() => ({
+        ast: transposedDetailAst,
+        warnings: [],
+        transposedKey: undefined,
+      })),
+    };
+    const onChordEdit = vi.fn();
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(stub)}
+        onChordReposition={vi.fn()}
+        onChordEdit={onChordEdit}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+    });
+    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+    const chips = container.querySelectorAll('.chordsketch-sheet__cins-chip');
+    const seven = Array.from(chips).find((c) => c.textContent === '7') as HTMLButtonElement;
+    fireEvent.click(seven);
+    expect(onChordEdit.mock.calls[0][0].chord).toBe('A7');
+  });
+
   test('the inspector "Remove chord" button fires onChordDelete and deselects', async () => {
     const onChordDelete = vi.fn();
     const { container } = render(

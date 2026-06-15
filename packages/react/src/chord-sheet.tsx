@@ -8,7 +8,6 @@ import type { ChordproChord, ChordproSong } from './chordpro-ast';
 import {
   buildChordName,
   buildChordNudge,
-  chordSuffixFromQuality,
   findChordByOffsetOrdinal,
   nudgeChordPosition,
 } from './chord-source-edit';
@@ -197,14 +196,13 @@ interface ResolvedChord {
   totalLyrics: number;
 }
 
-function accidentalChar(a: 'sharp' | 'flat' | null | undefined): '' | '#' | 'b' {
-  return a === 'sharp' ? '#' : a === 'flat' ? 'b' : '';
-}
-
-/** Best-effort split of a raw chord name into editor parts when the
- * parser produced no structured `detail` (lenient / non-standard
- * chords). Keeps the chord round-trippable: `root + accidental +
- * suffix (+ /bass)` reassembles the original name. */
+/** Split a raw chord name into editor parts. Used for ALL chords (not
+ * just detail-less ones): the source carries the RAW name (`chord.name`),
+ * whereas a transposed render exposes the transposed pitch via
+ * `chord.detail` / `chord.display`. Editing must rewrite the raw source
+ * chord, so deriving parts from the raw name keeps editing correct even
+ * under a non-zero transpose. The split is round-trippable —
+ * `root + accidental + suffix (+ /bass)` reassembles the original name. */
 function partsFromRawName(name: string): ResolvedChord['parts'] {
   const slash = name.indexOf('/');
   const head = slash >= 0 ? name.slice(0, slash) : name;
@@ -260,17 +258,9 @@ function resolveSelectedChord(ast: ChordproSong, selection: ChordSelection): Res
   const idx = findChordByOffsetOrdinal(offsets, selection.offset, selection.ordinal);
   if (idx < 0) return null;
   const target = chords[idx];
-  const detail = target.chord.detail;
-  const parts: ResolvedChord['parts'] = detail
-    ? {
-        root: detail.root,
-        accidental: accidentalChar(detail.rootAccidental),
-        suffix: chordSuffixFromQuality(detail.quality, detail.extension),
-        bass: detail.bassNote
-          ? `${detail.bassNote.note}${accidentalChar(detail.bassNote.accidental)}`
-          : '',
-      }
-    : partsFromRawName(target.chord.name ?? '');
+  // Derive parts from the RAW name (transpose-safe — see
+  // partsFromRawName). `detail` is intentionally not used here.
+  const parts = partsFromRawName(target.chord.name ?? '');
   return {
     chordName: target.chord.name ?? '',
     parts,
