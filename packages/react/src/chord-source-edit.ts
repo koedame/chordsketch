@@ -5,7 +5,19 @@
  * user did (drag from line A column X → drop at line B
  * lyrics-offset Y); the consumer applies the event to the
  * ChordPro source string via `applyChordReposition` and
- * dispatches the result into its editor. The capo helpers
+ * dispatches the result into its editor.
+ *
+ * The same `ChordRepositionEvent` pipeline backs the
+ * click-to-focus + nudge interaction (#2614): tapping a chord
+ * selects it, and the ◀ / ▶ buttons (or the keyboard arrow
+ * keys) move it one lyric character at a time. The pure offset
+ * math for that gesture lives here — {@link nudgeChordPosition}
+ * computes the destination lyrics offset + disambiguation
+ * ordinal, {@link findChordByOffsetOrdinal} re-locates the
+ * selected chord after a re-render, and
+ * {@link sourceColumnToLyricsOffset} is the inverse of
+ * {@link lyricsOffsetToSourceColumn} — so the interaction logic
+ * has unit coverage independent of the DOM. The capo helpers
  * (`readCapo` / `setCapoInSource`) round-trip a `{capo: N}`
  * directive through the source so the `<Capo>` control stays
  * a thin wrapper over the document — no parallel state.
@@ -273,4 +285,117 @@ export function applyChordReposition(
   caretOffset += targetColumn + insertBracket.length;
 
   return { text: lines.join('\n'), caretOffset };
+}
+
+/**
+ * Map a 0-indexed source column on a ChordPro line back to the
+ * lyrics-character offset at that column — the inverse of
+ * {@link lyricsOffsetToSourceColumn}.
+ *
+ * Counts the visible lyric characters strictly before `column`,
+ * treating chord brackets (`[...]`) as zero-width (consistent
+ * with the lyrics-offset convention used throughout this
+ * module). A `column` that points at a `[` therefore yields the
+ * offset of the chord that opens there — i.e. the number of
+ * lyric characters preceding it.
+ *
+ * `column` is clamped to `[0, line.length]`. A bracket that
+ * straddles `column` (an unterminated `[`, or `column` landing
+ * inside `[...]`) counts the characters consumed up to `column`
+ * as lyrics, which keeps the function total for malformed input
+ * rather than throwing.
+ */
+export function sourceColumnToLyricsOffset(line: string, column: number): number {
+  const limit = Math.max(0, Math.min(column, line.length));
+  let lyricsCount = 0;
+  let i = 0;
+  while (i < limit) {
+    if (line[i] === '[') {
+      const close = line.indexOf(']', i);
+      // A bracket that closes before `limit` is skipped whole
+      // (zero-width). One that is unterminated or extends past
+      // `limit` cannot be a complete chord within the counted
+      // range, so fall through and count its characters as
+      // lyrics — mirrors lyricsOffsetToSourceColumn's malformed-
+      // bracket bail-out.
+      if (close !== -1 && close < limit) {
+        i = close + 1;
+        continue;
+      }
+    }
+    lyricsCount++;
+    i++;
+  }
+  return lyricsCount;
+}
+
+/** Destination of a single-step chord nudge, returned by
+ * {@link nudgeChordPosition}. */
+export interface NudgedChordPosition {
+  /** New 0-indexed lyrics offset for the moved chord. */
+  offset: number;
+  /** Index of the moved chord among chords sharing `offset` on
+   * the destination line, in left-to-right order. The nudged
+   * chord always lands AFTER any chord already at `offset` (see
+   * {@link lyricsOffsetToSourceColumn}, which skips leading
+   * brackets), so this equals the count of other chords already
+   * at `offset`. Used to disambiguate stacked chords like
+   * `[A][B]word` when re-locating the selection after the move. */
+  ordinal: number;
+}
+
+/**
+ * Compute where a chord lands when nudged one lyric character in
+ * `direction`, for the click-to-focus + arrow-key interaction
+ * (#2614).
+ *
+ * @param currentOffset the chord's current 0-indexed lyrics
+ *   offset (lyric characters before its `[` bracket).
+ * @param otherOffsets the lyrics offsets of every OTHER chord on
+ *   the same line (the moved chord excluded). Used only to
+ *   compute the destination ordinal.
+ * @param totalLyrics the total visible lyric characters on the
+ *   line. A chord may legitimately sit at `offset === totalLyrics`
+ *   (a trailing chord after the last lyric), so that bound is
+ *   inclusive.
+ * @param direction `-1` to move left, `+1` to move right.
+ * @returns the destination offset + ordinal, or `null` when the
+ *   move would push the chord off either end of the line (the
+ *   caller disables the corresponding button).
+ */
+export function nudgeChordPosition(
+  currentOffset: number,
+  otherOffsets: readonly number[],
+  totalLyrics: number,
+  direction: -1 | 1,
+): NudgedChordPosition | null {
+  const offset = currentOffset + direction;
+  if (offset < 0 || offset > totalLyrics) return null;
+  const ordinal = otherOffsets.reduce((n, o) => (o === offset ? n + 1 : n), 0);
+  return { offset, ordinal };
+}
+
+/**
+ * Find the index, into a line's left-to-right list of chord
+ * lyrics offsets, of the chord identified by `(offset, ordinal)`
+ * — the `ordinal`-th chord (0-indexed) whose offset equals
+ * `offset`.
+ *
+ * Returns `-1` when no such chord exists, e.g. when the source
+ * changed out from under a stale selection. Callers treat `-1`
+ * as "selection no longer resolves" and render no controls.
+ */
+export function findChordByOffsetOrdinal(
+  offsets: readonly number[],
+  offset: number,
+  ordinal: number,
+): number {
+  let seen = 0;
+  for (let i = 0; i < offsets.length; i++) {
+    if (offsets[i] === offset) {
+      if (seen === ordinal) return i;
+      seen++;
+    }
+  }
+  return -1;
 }

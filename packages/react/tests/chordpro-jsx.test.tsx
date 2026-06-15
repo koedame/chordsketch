@@ -1,8 +1,11 @@
 import { fireEvent, render } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { renderChordproAst } from '../src/chordpro-jsx';
+import type { ChordSelection } from '../src/chordpro-jsx';
 import type { ChordproSong } from '../src/chordpro-ast';
+import type { ChordRepositionEvent } from '../src/chord-source-edit';
 
 // Empty metadata helper — every metadata field has to be present
 // to satisfy the strict ChordproMetadata shape, even on tests that
@@ -3756,6 +3759,259 @@ describe('renderChordproAst', () => {
     }
   });
 });
+describe('renderChordproAst click-to-focus + nudge (#2614)', () => {
+  // Harness that owns the selection state the way <ChordSheet>
+  // does, so clicking / keying a chord re-renders with the updated
+  // selection and the nudge controls appear. The AST is fixed
+  // (onReposition is a spy; we assert the emitted event rather than
+  // re-parsing a mutated source), which is enough to cover the UI
+  // wiring and event contract — the source transform itself is
+  // covered by the chord-source-edit unit tests.
+  function Harness({
+    ast,
+    onReposition,
+  }: {
+    ast: ChordproSong;
+    onReposition: (event: ChordRepositionEvent) => void;
+  }): JSX.Element {
+    const [selected, setSelected] = useState<ChordSelection | null>(null);
+    return (
+      <>
+        {renderChordproAst(ast, {
+          onChordReposition: onReposition,
+          chordSelection: selected,
+          setChordSelection: setSelected,
+        })}
+      </>
+    );
+  }
+
+  // `[Am]Hello [G]World` — Am at offset 0, G at offset 6, 11 lyric
+  // chars total.
+  function twoChordAst(): ChordproSong {
+    return {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              { chord: { name: 'Am', detail: null, display: null }, text: 'Hello ', spans: [] },
+              { chord: { name: 'G', detail: null, display: null }, text: 'World', spans: [] },
+            ],
+          },
+        },
+      ],
+    };
+  }
+
+  test('no nudge controls until a chord is clicked', () => {
+    const { container } = render(<Harness ast={twoChordAst()} onReposition={vi.fn()} />);
+    expect(container.querySelector('.chord-nudge')).toBeNull();
+    // Chords are toggle buttons when the feature is fully wired.
+    const chord = container.querySelector('.chord') as HTMLElement;
+    expect(chord.getAttribute('role')).toBe('button');
+    expect(chord.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  test('clicking a chord selects it and reveals two nudge buttons', () => {
+    const { container } = render(<Harness ast={twoChordAst()} onReposition={vi.fn()} />);
+    const chord = container.querySelector('.chord') as HTMLElement;
+    fireEvent.click(chord);
+    const nudge = container.querySelector('.chord-nudge');
+    expect(nudge).not.toBeNull();
+    expect(nudge?.querySelectorAll('button').length).toBe(2);
+    // The selected chord reflects aria-pressed.
+    const selectedChord = container.querySelector('.chord--selected') as HTMLElement;
+    expect(selectedChord.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  test('right button emits a reposition event moving the chord one lyric char', () => {
+    const onReposition = vi.fn();
+    const { container } = render(<Harness ast={twoChordAst()} onReposition={onReposition} />);
+    // Select Am (offset 0).
+    fireEvent.click(container.querySelector('.chord') as HTMLElement);
+    const right = container.querySelector('.chord-nudge__btn--right') as HTMLElement;
+    fireEvent.click(right);
+    expect(onReposition).toHaveBeenCalledTimes(1);
+    expect(onReposition.mock.calls[0][0]).toMatchObject({
+      fromLine: 1,
+      fromColumn: 0,
+      fromLength: 4,
+      toLine: 1,
+      toLyricsOffset: 1,
+      chord: 'Am',
+      copy: false,
+    });
+  });
+
+  test('left button is disabled for a chord at the line start', () => {
+    const { container } = render(<Harness ast={twoChordAst()} onReposition={vi.fn()} />);
+    fireEvent.click(container.querySelector('.chord') as HTMLElement);
+    const left = container.querySelector('.chord-nudge__btn--left') as HTMLButtonElement;
+    const right = container.querySelector('.chord-nudge__btn--right') as HTMLButtonElement;
+    expect(left.disabled).toBe(true);
+    expect(right.disabled).toBe(false);
+  });
+
+  test('right button is disabled for a trailing chord at the line end', () => {
+    // `Hi[Am]` — Am at offset 2 === totalLyrics, so it cannot move right.
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              { chord: null, text: 'Hi', spans: [] },
+              { chord: { name: 'Am', detail: null, display: null }, text: '', spans: [] },
+            ],
+          },
+        },
+      ],
+    };
+    const { container } = render(<Harness ast={ast} onReposition={vi.fn()} />);
+    // The real chord is the second .chord span (first is the trailing
+    // segment's — actually the chord-less leading segment has no chord
+    // span on a chord-bearing line unless lineHasChords; click the
+    // role=button chord).
+    const chordButton = container.querySelector(".chord[role='button']") as HTMLElement;
+    fireEvent.click(chordButton);
+    const left = container.querySelector('.chord-nudge__btn--left') as HTMLButtonElement;
+    const right = container.querySelector('.chord-nudge__btn--right') as HTMLButtonElement;
+    expect(right.disabled).toBe(true);
+    expect(left.disabled).toBe(false);
+  });
+
+  test('ArrowRight on the selected chord emits a reposition event', () => {
+    const onReposition = vi.fn();
+    const { container } = render(<Harness ast={twoChordAst()} onReposition={onReposition} />);
+    const chord = container.querySelector('.chord') as HTMLElement;
+    fireEvent.click(chord);
+    const selectedChord = container.querySelector('.chord--selected') as HTMLElement;
+    fireEvent.keyDown(selectedChord, { key: 'ArrowRight' });
+    expect(onReposition).toHaveBeenCalledTimes(1);
+    expect(onReposition.mock.calls[0][0]).toMatchObject({
+      toLyricsOffset: 1,
+      chord: 'Am',
+    });
+  });
+
+  test('reselecting a chord after deselect restores DOM focus (nonce reset)', () => {
+    // jsdom's fireEvent.click does NOT natively focus the element, so
+    // any DOM focus the chord span gains here came from the
+    // programmatic auto-focus effect. This guards the nonce-reset fix:
+    // after a full deselect the per-selection nonce restarts at 1, and
+    // without resetting the handled-nonce the reselect would match the
+    // stale handled value and skip the refocus. To isolate the
+    // programmatic refocus we explicitly drop DOM focus between the
+    // deselect and the reselect (simulating focus moving elsewhere),
+    // since the chord's DOM node otherwise survives the deselect and
+    // keeps focus on its own.
+    const { container } = render(<Harness ast={twoChordAst()} onReposition={vi.fn()} />);
+    const chord = () => container.querySelector(".chord[role='button']") as HTMLElement;
+    fireEvent.click(chord());
+    const selected = container.querySelector('.chord--selected') as HTMLElement;
+    expect(document.activeElement).toBe(selected);
+    // Deselect via Escape, then move DOM focus away.
+    fireEvent.keyDown(selected, { key: 'Escape' });
+    expect(container.querySelector('.chord-nudge')).toBeNull();
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).not.toBe(chord());
+    // Reselect the same chord — the effect must refocus it despite the
+    // per-selection nonce restarting at 1.
+    fireEvent.click(chord());
+    expect(document.activeElement).toBe(container.querySelector('.chord--selected'));
+  });
+
+  test('Enter selects a chord via the keyboard', () => {
+    const { container } = render(<Harness ast={twoChordAst()} onReposition={vi.fn()} />);
+    const chord = container.querySelector('.chord') as HTMLElement;
+    fireEvent.keyDown(chord, { key: 'Enter' });
+    expect(container.querySelector('.chord-nudge')).not.toBeNull();
+  });
+
+  test('Escape clears the selection', () => {
+    const { container } = render(<Harness ast={twoChordAst()} onReposition={vi.fn()} />);
+    fireEvent.click(container.querySelector('.chord') as HTMLElement);
+    const selectedChord = container.querySelector('.chord--selected') as HTMLElement;
+    fireEvent.keyDown(selectedChord, { key: 'Escape' });
+    expect(container.querySelector('.chord-nudge')).toBeNull();
+  });
+
+  test('clicking the selected chord again toggles the selection off', () => {
+    const { container } = render(<Harness ast={twoChordAst()} onReposition={vi.fn()} />);
+    const chord = container.querySelector('.chord') as HTMLElement;
+    fireEvent.click(chord);
+    expect(container.querySelector('.chord-nudge')).not.toBeNull();
+    // Click the (now selected) chord again.
+    fireEvent.click(container.querySelector('.chord--selected') as HTMLElement);
+    expect(container.querySelector('.chord-nudge')).toBeNull();
+  });
+
+  test('nudge advances the selection (does not clear it) and bumps the nonce', () => {
+    // Controlled render: a fixed selection + spy setter so we can
+    // assert exactly what the nudge writes back — proving the button
+    // moves the selection forward rather than the chord toggle
+    // clearing it. (The stateful Harness can't show this because its
+    // AST is not re-parsed, so the moved-to offset resolves to no
+    // chord and the controls naturally disappear.)
+    const onReposition = vi.fn();
+    const setChordSelection = vi.fn();
+    const { container } = render(
+      renderChordproAst(twoChordAst(), {
+        onChordReposition: onReposition,
+        chordSelection: { line: 1, offset: 0, ordinal: 0, nonce: 3 },
+        setChordSelection,
+      }),
+    );
+    const right = container.querySelector('.chord-nudge__btn--right') as HTMLElement;
+    fireEvent.click(right);
+    expect(onReposition).toHaveBeenCalledTimes(1);
+    expect(setChordSelection).toHaveBeenCalledTimes(1);
+    // Non-null move to offset 1, nonce advanced — NOT a deselect.
+    expect(setChordSelection.mock.calls[0][0]).toEqual({
+      line: 1,
+      offset: 1,
+      ordinal: 0,
+      nonce: 4,
+    });
+  });
+
+  test('clicking a chord writes the selection with an advanced nonce', () => {
+    // Controlled render proving the toggle's write shape: selecting G
+    // (offset 6) from a clean state.
+    const setChordSelection = vi.fn();
+    const { container } = render(
+      renderChordproAst(twoChordAst(), {
+        onChordReposition: vi.fn(),
+        chordSelection: null,
+        setChordSelection,
+      }),
+    );
+    const chords = container.querySelectorAll(".chord[role='button']");
+    fireEvent.click(chords[1] as HTMLElement); // G
+    expect(setChordSelection).toHaveBeenCalledWith({
+      line: 1,
+      offset: 6,
+      ordinal: 0,
+      nonce: 1,
+    });
+  });
+
+  test('without setChordSelection, chords are not toggle buttons (drag-only)', () => {
+    const { container } = render(
+      renderChordproAst(twoChordAst(), { onChordReposition: vi.fn() }),
+    );
+    const chord = container.querySelector('.chord') as HTMLElement;
+    // Drag still wired…
+    expect(chord.getAttribute('draggable')).toBe('true');
+    // …but no click-to-nudge toggle semantics.
+    expect(chord.getAttribute('role')).toBeNull();
+    expect(container.querySelector('.chord-nudge')).toBeNull();
+  });
+});
+
 describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
   // A song with N `{diagrams: …}` directive lines + one chord-bearing
   // lyric line. The `<ChordDiagram>` mounted by inline / hover lazily
