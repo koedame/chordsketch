@@ -651,28 +651,16 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
         crate::escape::escape_xml(data.title())
     ));
 
-    // Nut (open position) or, for the compact size only, a single bare
-    // base-fret label (no "fr" suffix). The regular size labels the base
-    // fret as part of the full fret-number axis drawn below, so it needs no
-    // standalone label here; the position-marker dots already imply "this is
-    // fret N on a real fretboard".
+    // Nut (open position). Both sizes draw the full fret-number axis
+    // (`show_fret_numbers` is `true` for regular and compact), so the
+    // base-fret label is always covered by the axis; no standalone label
+    // is needed. The nut line itself is drawn only at fret 1.
     let nut_y = top_margin;
     if data.base_fret == 1 {
         svg.push_str(&format!(
             "<line x1=\"{left_margin}\" y1=\"{nut_y}\" x2=\"{}\" y2=\"{nut_y}\" \
              stroke=\"black\" stroke-width=\"{nut_stroke}\"/>\n",
             left_margin + grid_w
-        ));
-    } else if !show_fret_numbers {
-        // Compact size keeps the legacy single base-fret label. The regular
-        // size draws the full fret-number axis below, which already labels
-        // the first visible fret, so the standalone label would duplicate it.
-        svg.push_str(&format!(
-            "<text x=\"{}\" y=\"{}\" text-anchor=\"end\" \
-             font-family=\"sans-serif\" font-size=\"{label_font}\">{}</text>\n",
-            left_margin - 4.0,
-            nut_y + cell_h / 2.0 + text_v_center,
-            data.base_fret
         ));
     }
 
@@ -875,28 +863,17 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
         crate::escape::escape_xml(data.title())
     ));
 
-    // Nut (vertical line on the left at the open position) or, for the
-    // compact size only, a single base-fret label above the leftmost fret
-    // cell. The regular size labels the base fret as part of the full
-    // fret-number axis drawn below the grid, so it needs no standalone label
-    // here.
+    // Nut (vertical line on the left at the open position). Both sizes draw
+    // the full fret-number axis (`show_fret_numbers` is `true` for regular
+    // and compact), so the base-fret label is always covered by the axis;
+    // no standalone label is needed. The nut line itself is drawn only at
+    // fret 1.
     let nut_x = left_margin;
     if data.base_fret == 1 {
         svg.push_str(&format!(
             "<line x1=\"{nut_x}\" y1=\"{top_margin}\" x2=\"{nut_x}\" y2=\"{}\" \
              stroke=\"black\" stroke-width=\"{nut_stroke}\"/>\n",
             top_margin + grid_h
-        ));
-    } else if !show_fret_numbers {
-        // Compact size keeps the legacy single base-fret label above the
-        // first fret column. The regular size draws the full fret-number axis
-        // below the grid, which already labels the first visible fret.
-        svg.push_str(&format!(
-            "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" \
-             font-family=\"sans-serif\" font-size=\"{label_font}\">{}</text>\n",
-            nut_x + fret_pitch / 2.0,
-            top_margin - 4.0,
-            data.base_fret
         ));
     }
 
@@ -3371,6 +3348,25 @@ mod tests {
         assert!(
             h_ys.iter().all(|&y| y <= 130.0),
             "horizontal fret-number labels overflow the frame: {h_ys:?}"
+        );
+        // Compact size: left_margin widened from 9 → 11 to fit 2-digit labels.
+        // Verify the compact bounding box is as expected and that every
+        // fret-number label baseline stays inside the declared frame.
+        let cv = render_svg_with_options(&data, Orientation::Vertical, DiagramSize::Compact);
+        assert_eq!(extract(&cv, "width"), 67.0);
+        assert_eq!(extract(&cv, "height"), 87.0);
+        let cv_ys = label_ys(&cv);
+        assert!(
+            cv_ys.iter().all(|&y| y <= 87.0),
+            "compact vertical fret-number labels overflow the frame: {cv_ys:?}"
+        );
+        let ch = render_svg_with_options(&data, Orientation::Horizontal, DiagramSize::Compact);
+        assert_eq!(extract(&ch, "width"), 77.0);
+        assert_eq!(extract(&ch, "height"), 75.0);
+        let ch_ys = label_ys(&ch);
+        assert!(
+            ch_ys.iter().all(|&y| y <= 75.0),
+            "compact horizontal fret-number labels overflow the frame: {ch_ys:?}"
         );
     }
 
