@@ -453,6 +453,25 @@ jobs:
         run: |
           set -euo pipefail
           brew tap koedame/tap
+          # Homebrew's tap-trust feature (gated by
+          # HOMEBREW_REQUIRE_TAP_TRUST, shipped on the bleeding-edge
+          # setup-homebrew@master this job pins) refuses to load
+          # formulae from a third-party tap until the tap is explicitly
+          # trusted, failing with "Refusing to load formula ... from
+          # untrusted tap". Trust our own tap so the documented
+          # `brew install` below runs. `brew trust` is non-interactive
+          # under CI (Homebrew auto-detects CI=true), so it records the
+          # trust without prompting.
+          #
+          # The enforcement is NOT yet the stable default — upstream
+          # users must opt in via `export HOMEBREW_REQUIRE_TAP_TRUST=1`
+          # (https://github.com/Homebrew/brew/issues/22551) — so the
+          # README's user-facing `brew install chordsketch` still works
+          # on released Homebrew without this step, and the README is
+          # intentionally left unchanged. Watch signal: when tap-trust
+          # becomes the stable default, the README install instructions
+          # must add a `brew trust koedame/tap` line (tracked in #2606).
+          brew trust koedame/tap
           brew install chordsketch
           chordsketch --version
 
