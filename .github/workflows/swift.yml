@@ -79,7 +79,7 @@ jobs:
           - target: aarch64-apple-ios-sim
           - target: x86_64-apple-ios
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ inputs.tag || github.ref }}
 
@@ -122,7 +122,7 @@ jobs:
     needs: [build-target]
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           # When triggered via workflow_dispatch with a tag input, build
           # from that tag rather than the workflow's default ref. This
@@ -308,7 +308,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         # Needed so the composite action at
         # `.github/actions/validate-release-tag` is present on disk.
         # actions/download-artifact below places the xcframework zip
