@@ -664,10 +664,12 @@ export function metronomePeriodCss(bpm: number): string {
  * A static beat dot sits in the top-left corner *inside* the
  * existing viewBox (so the icon height is unchanged) and pulses
  * flash-then-decay once per beat. Its blink shares the same
- * `--cs-metronome-period` as the swing, so the dot is at full
- * brightness exactly when the rod reaches an extreme (the
- * audible tick). The dot is a sibling of the pendulum group, so
- * it does NOT swing — only its opacity animates.
+ * `--cs-metronome-period` as the swing, and a `-period/2`
+ * `animation-delay` (applied in the stylesheet) phase-shifts the
+ * flash so the dot is at full brightness when the rod passes
+ * through the center (vertical), not at the extremes. The dot is
+ * a sibling of the pendulum group, so it does NOT swing — only
+ * its opacity animates.
  *
  * The animation is gated on
  * `@media (prefers-reduced-motion: reduce)` so users who opt out

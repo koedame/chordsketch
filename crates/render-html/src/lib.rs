@@ -1258,7 +1258,7 @@ h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-w
 .music-glyph--time__bar { display: block; width: 0.9em; height: 1.5px; margin: 0.05em 0; background-color: currentColor; border-radius: 1px; flex-shrink: 0; }
 .music-glyph--metronome__pendulum { transform-origin: 9px 19px; animation: cs-metronome-swing var(--cs-metronome-period, 1s) cubic-bezier(0.55, 0, 0.45, 1) infinite alternate; }
 @keyframes cs-metronome-swing { from { transform: rotate(-28deg); } to { transform: rotate(28deg); } }
-.music-glyph--metronome__beat { animation: cs-metronome-beat var(--cs-metronome-period, 1s) ease-out infinite; }
+.music-glyph--metronome__beat { animation: cs-metronome-beat var(--cs-metronome-period, 1s) ease-out infinite; animation-delay: calc(var(--cs-metronome-period, 1s) * -0.5); }
 @keyframes cs-metronome-beat { 0% { opacity: 1; } 8% { opacity: 1; } 60% { opacity: 0.12; } 100% { opacity: 0.12; } }
 @media (prefers-reduced-motion: reduce) { .music-glyph--metronome__pendulum { animation: none; transform: rotate(0deg); } .music-glyph--metronome__beat { animation: none; opacity: 1; } }
 .line { display: flex; flex-wrap: __LINE_FLEX_WRAP__; margin: 0.1em 0; }
@@ -4556,15 +4556,23 @@ Verse text\n\
         );
         // Phase-sync invariant: the beat blink MUST be driven by the
         // same `--cs-metronome-period` custom property as the swing,
-        // so the flash peak coincides with the rod reaching an
-        // extreme on every beat. A regression that hardcodes the
-        // beat's animation duration would silently desync the flash
-        // from the tick without tripping the presence checks above.
+        // so the flash stays locked to the swing on every beat. A
+        // regression that hardcodes the beat's animation duration
+        // would silently desync the flash without tripping the
+        // presence checks above.
         assert!(
             html.contains(
                 ".music-glyph--metronome__beat { animation: cs-metronome-beat var(--cs-metronome-period"
             ),
             "beat blink must reuse --cs-metronome-period for phase sync; got: {html}"
+        );
+        // Center-crossing phase: a `-period/2` animation-delay shifts
+        // the flash peak from the rod's extremes to its center
+        // crossing. A regression that drops the delay would move the
+        // flash back to the extremes.
+        assert!(
+            html.contains("animation-delay: calc(var(--cs-metronome-period, 1s) * -0.5)"),
+            "beat flash must be phase-shifted to the center crossing; got: {html}"
         );
     }
 
