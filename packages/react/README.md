@@ -583,6 +583,8 @@ shorthand (no Unicode translation; the SVG renderer handles that).
 | `applyChordReposition` | Atom | Function | Apply a drag-to-reposition event to a ChordPro source. |
 | `lyricsOffsetToSourceColumn` | Atom | Function | Lyrics-offset → source-column helper for drag UX. |
 | `useDebounced` | Atom | Hook | General-purpose debouncer used by `<ChordTextarea>`. |
+| `<MetronomeButton>` | Atom | Component | Clickable `{tempo}` metronome icon; ticks audibly at the BPM (speaker cursor on hover). |
+| `useMetronome` | Atom | Hook | Web Audio metronome state (`start` / `stop` / `toggle` / `isPlaying` / `supported`). |
 | `<IrealBarGrid>` | Atom | Component | Header form + interactive bar grid + URL round-trip for iReal Pro. |
 | `<IrealPreview>` | Atom | Component | iReal Pro SVG preview via `renderIrealSvg`. |
 | `<IrealProEditor>` | Composed editor | Component | All-in-one iReal Pro editor + preview shell. |

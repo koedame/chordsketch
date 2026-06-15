@@ -689,6 +689,45 @@
   }
 }
 
+/* Clickable metronome trigger inside the `{tempo}` chip. The icon
+   plays an audible metronome at the directive's BPM on click (see
+   `<MetronomeButton>` / `useMetronome`). The button is a bare
+   wrapper around the glyph — no chrome of its own — so the chip
+   layout is identical to the non-interactive (SSR / unsupported)
+   fallback that renders the glyph directly.
+
+   On hover the cursor becomes a speaker glyph so the affordance is
+   discoverable; `pointer` is the fallback for browsers that reject
+   the custom cursor (e.g. an image larger than the platform limit).
+   The speaker SVG is inlined as a data URI with a white outline so
+   it stays legible on both light and dark sheets; `%23` is the
+   percent-encoding of `#` required inside a CSS `url()`. */
+.chordsketch-sheet__content .meta-inline__metronome-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  line-height: 0;
+  border-radius: 3px;
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3 9v6h4l5 4V5L7 9z' fill='%23000' stroke='%23fff' stroke-width='1.5' stroke-linejoin='round'/%3E%3Cpath d='M15.5 8.5a5 5 0 0 1 0 7' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M18 6a8.5 8.5 0 0 1 0 12' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M15.5 8.5a5 5 0 0 1 0 7' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3Cpath d='M18 6a8.5 8.5 0 0 1 0 12' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E")
+      3 12,
+    pointer;
+}
+.chordsketch-sheet__content .meta-inline__metronome-button:focus-visible {
+  outline: 2px solid var(--cs-accent-500, #bd1642);
+  outline-offset: 1px;
+}
+/* Active (ticking) state — tint the glyph with the brand accent so
+   the playing metronome is visually distinct from an idle one. */
+.chordsketch-sheet__content .meta-inline__metronome-button.is-playing {
+  color: var(--cs-accent-500, #bd1642);
+}
+
 /* Attribution role icons — small SVGs inline with the
    "by Artist" / "Music X" / "Lyrics Y" / tag rows. Inherit the
    text colour so they pick up the surrounding tier's tone. */
