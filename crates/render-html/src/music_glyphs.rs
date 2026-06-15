@@ -383,7 +383,6 @@ pub fn metronome_svg(bpm_raw: &str) -> String {
     let period = (60.0 / safe_bpm).clamp(0.05, 5.0);
 
     // Use the validated numeric BPM in the accessible name —
-    // Use the validated numeric BPM in the accessible name —
     // not the raw `bpm_raw` string — so a `{tempo: <script>}`
     // payload doesn't reach screen readers AND so a future
     // refactor that moves the string into a non-escaping
