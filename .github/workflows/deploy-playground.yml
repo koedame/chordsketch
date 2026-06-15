@@ -4,7 +4,19 @@ on:
   push:
     branches: [main]
     paths:
-      - 'crates/wasm/**'
+      # The playground ships the wasm bundle built from `crates/wasm`, which
+      # transitively depends on `chordsketch-chordpro` and every renderer
+      # crate. A behaviour change in any of those (e.g. chord-diagram
+      # rendering in `crates/chordpro`) changes the wasm output the deployed
+      # playground serves, but watching only `crates/wasm/**` would not
+      # redeploy and the live playground would go silently stale (issue
+      # #2608: PR #2605's fret-number axis lived in `crates/chordpro` and
+      # never reached the deployed site). Watch every crate so a transitive
+      # change can never leave the deployed playground stale; the extra
+      # redeploys for wasm-irrelevant crates (CLI / LSP / FFI / …) are cheap
+      # and idempotent, and self-maintaining beats an explicit dep list that
+      # the next `crates/wasm` dependency addition would silently outdate.
+      - 'crates/**'
       - 'packages/playground/**'
       - 'packages/npm/**'
       - 'packages/npm-export/**'
