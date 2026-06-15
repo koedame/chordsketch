@@ -1975,8 +1975,9 @@ fn render_chord_diagram_pdf_horizontal(
     let grid_top = top_y - 15.0;
     let grid_bottom = grid_top - grid_h;
 
-    // Nut (vertical line on the left when at the open position) or
-    // base-fret label above the leftmost fret cell when starting higher up.
+    // Nut (vertical line on the left when at the open position). When
+    // starting above fret 1 the fret-number axis below the grid already
+    // labels the first visible fret — no separate label is drawn.
     let nut_x = base_x;
     if data.base_fret == 1 {
         doc.line_at(nut_x, grid_top, nut_x, grid_bottom, 2.0);

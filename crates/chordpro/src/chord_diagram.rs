@@ -1750,8 +1750,8 @@ mod tests {
             fingers: vec![],
         };
         let svg = render_svg(&data);
-        // Bare fret-number label (no `fr` suffix) for diagrams
-        // that start above fret 1.
+        // The fret-number axis labels the first visible cell with 7
+        // (the press-position fret number, no `fr` suffix).
         assert!(svg.contains(">7</text>"));
         assert!(!svg.contains("7fr"));
     }
@@ -2731,10 +2731,11 @@ mod tests {
     }
 
     #[test]
-    fn horizontal_base_fret_label_above_first_fret_when_high_position() {
-        // base_fret > 1 ⇒ no nut line, instead a fret-number label above the
-        // leftmost fret cell. Mirrors the vertical-mode bare-integer label at
-        // the left of the first fret row.
+    fn horizontal_no_nut_line_when_high_position_axis_carries_base_fret() {
+        // base_fret > 1 ⇒ no thick nut line; the fret-number axis labels all
+        // visible cells, so the base fret (7 here) appears as the first axis
+        // label below the grid — not as a standalone label above the first
+        // fret cell.
         let data = DiagramData {
             name: "Bm".to_string(),
             display_name: None,
@@ -2747,7 +2748,7 @@ mod tests {
         let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
         assert!(
             svg.contains(">7</text>"),
-            "expected bare base-fret label 7; got: {svg}"
+            "expected axis label 7 for the first fret cell; got: {svg}"
         );
         // No thick nut line when starting above fret 1.
         assert!(!svg.contains("stroke-width=\"3\""));
