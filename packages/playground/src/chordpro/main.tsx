@@ -881,7 +881,17 @@ function PlaygroundApp(): JSX.Element {
                 activeSourceLine={view === 'split' ? caret?.line : undefined}
                 caretColumn={view === 'split' ? caret?.column : undefined}
                 caretLineLength={view === 'split' ? caret?.lineLength : undefined}
-                onChordReposition={handleChordReposition}
+                /* Chord drag-and-drop repositioning is an editing
+                   gesture: a drop mutates the ChordPro source the
+                   editor displays. Preview-only view is a read-only
+                   display mode with the editor unmounted, so a drop
+                   there would silently rewrite source the user cannot
+                   see. Gate the callback on split view (matching the
+                   caret props above) so omitting it leaves every
+                   `.chord` span non-draggable in preview-only mode. */
+                onChordReposition={
+                  view === 'split' ? handleChordReposition : undefined
+                }
               />
             </div>
           </section>
