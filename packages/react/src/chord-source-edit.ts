@@ -512,7 +512,7 @@ export const CHORD_TYPE_PRESETS: readonly ChordTypePreset[] = [
   { id: 'm7b5', label: 'm7♭5', text: 'm7b5' },
   { id: 'dim7', label: 'dim7', text: 'dim7' },
   { id: '7b5', label: '7♭5', text: '7b5' },
-  { id: 'aug7', label: '7♯5', text: '7#5' },
+  { id: '7s5', label: '7♯5', text: '7#5' },
   // Extended
   { id: '9', label: '9', text: '9' },
   { id: 'maj9', label: 'maj9', text: 'maj9' },

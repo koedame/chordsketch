@@ -531,7 +531,7 @@ describe('chordSuffixFromQuality', () => {
   test('the expanded jazz tension / quality set is present (#2630)', () => {
     const suffixes = new Set(CHORD_TYPE_PRESETS.map((p) => p.text));
     // Extended + altered families added in #2630.
-    for (const t of ['maj9', 'm9', '11', 'm11', '13', 'm13', 'add11', '7b9', '7#9', '7#11', '7b13', '7alt', '69', 'm6', 'mMaj7', '7sus4', '9sus4']) {
+    for (const t of ['7b5', '7#5', 'maj9', 'm9', '11', 'm11', '13', 'm13', 'add11', '7b9', '7#9', '7#11', '7b13', '7alt', '69', 'm6', 'mMaj7', '7sus4', '9sus4']) {
       expect(suffixes.has(t)).toBe(true);
     }
   });
