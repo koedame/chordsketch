@@ -398,10 +398,11 @@
   line-height: 1.6875;
   color: var(--cs-ink-1000, #0a0a0b);
   padding: 2em 1.5em;
-  /* Positioning anchor for the left-docked chord-editor inspector
-     (#2622). The inspector is `position: absolute` against this
-     wrapper so it floats at the content's top-left and does NOT track
-     the selected chord's position. */
+  /* Positioning anchor + sticky containing block for the bottom-docked
+     chord-editor inspector (#2622, re-docked in #2630). The inspector is
+     `position: sticky; bottom` and rendered as this wrapper's last flow
+     child, so it pins to the bottom of the scrollport while the content
+     is in view and does NOT track (or cover) the selected chord. */
   position: relative;
 }
 
@@ -1487,12 +1488,26 @@
    content. Does NOT track the selected chord — it stays put while the
    user edits root / type / bass and steps the chord left / right. */
 .chordsketch-sheet__content .chordsketch-sheet__cins {
-  position: absolute;
-  left: var(--cs-sp-4, 1rem);
-  top: var(--cs-sp-4, 1rem);
+  /* Bottom-docked sheet (#2630): the pre-#2630 `position: absolute;
+     left/top` overlay sat at the content's top-left and covered the
+     lyrics / chord being edited. A `position: sticky; bottom` element,
+     rendered as the LAST flow child of `.chordsketch-sheet__content`,
+     pins to the bottom of the scrollport while the content is in view —
+     so the panel stays reachable as the user scrolls but never tracks
+     (or covers) the selected chord, which the parent scrolls into view
+     above the dock. */
+  position: sticky;
+  bottom: var(--cs-sp-4, 1rem);
   z-index: 6;
-  width: 17rem;
-  max-width: calc(100% - 2rem);
+  /* Centred reading-column cap on wide panes; full width on narrow. */
+  width: 100%;
+  max-width: 34rem;
+  margin-inline: auto;
+  margin-top: var(--cs-sp-4, 1rem);
+  /* Cap height so a long chip list scrolls internally instead of
+     filling the viewport and re-covering the content. */
+  max-height: min(60vh, 32rem);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--cs-sp-4, 1rem);
@@ -1500,12 +1515,12 @@
   background: var(--cs-surface, #fff);
   border: 1px solid var(--cs-border-strong, #d4d1d6);
   border-radius: var(--cs-r-3, 8px);
-  box-shadow: var(--cs-e-2, 0 4px 12px rgba(10, 10, 11, 0.08));
+  box-shadow: var(--cs-e-3, 0 10px 30px rgba(10, 10, 11, 0.16));
   font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
   animation: chordsketch-cins-pop var(--cs-dur-2, 200ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1));
 }
 @keyframes chordsketch-cins-pop {
-  from { opacity: 0; transform: translateY(4px) scale(0.99); }
+  from { opacity: 0; transform: translateY(12px) scale(0.99); }
   to { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1588,6 +1603,14 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  /* The expanded jazz preset set (#2630) is long; cap the chip area to
+     a few rows and scroll within it so the docked sheet stays compact
+     and Root / inputs / move / footer remain visible without scrolling
+     the whole panel. */
+  max-height: 8.5rem;
+  overflow-y: auto;
+  /* Room for the scrollbar so the rightmost chips aren't clipped. */
+  padding-right: 2px;
 }
 .chordsketch-sheet__content .chordsketch-sheet__cins-chip {
   appearance: none;

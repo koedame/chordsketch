@@ -527,6 +527,29 @@ describe('chordSuffixFromQuality', () => {
     expect(suffixes.has('m7')).toBe(true);
     expect(suffixes.has('maj7')).toBe(true);
   });
+
+  test('the expanded jazz tension / quality set is present (#2630)', () => {
+    const suffixes = new Set(CHORD_TYPE_PRESETS.map((p) => p.text));
+    // Extended + altered families added in #2630.
+    for (const t of ['maj9', 'm9', '11', 'm11', '13', 'm13', 'add11', '7b9', '7#9', '7#11', '7b13', '7alt', '69', 'm6', 'mMaj7', '7sus4', '9sus4']) {
+      expect(suffixes.has(t)).toBe(true);
+    }
+  });
+
+  test('every preset text builds a valid chord token (no forbidden / structural chars)', () => {
+    // A chip selection feeds `text` straight into buildChordName as the
+    // suffix; if any preset carried a `/` or a structural char the edit
+    // would throw and silently drop. Guards the `69` (not `6/9`) choice.
+    for (const preset of CHORD_TYPE_PRESETS) {
+      expect(() => buildChordName({ root: 'C', suffix: preset.text })).not.toThrow();
+      expect(buildChordName({ root: 'C', suffix: preset.text })).toBe(`C${preset.text}`);
+    }
+  });
+
+  test('preset ids are unique', () => {
+    const ids = CHORD_TYPE_PRESETS.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
 });
 
 describe('buildChordName', () => {
