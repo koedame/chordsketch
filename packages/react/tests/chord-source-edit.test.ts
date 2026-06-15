@@ -643,3 +643,40 @@ describe('applyChordDelete', () => {
     );
   });
 });
+
+describe('applyChordEdit / applyChordDelete — expected-token guard', () => {
+  test('applyChordEdit no-ops when the live span no longer matches `expected`', () => {
+    // Stale event: source already advanced from `[C]` to `[Cm]`, but the
+    // event still carries the old span (col 0, len 3) + expected 'C'.
+    const { text } = applyChordEdit('[Cm]hi', {
+      line: 1,
+      fromColumn: 0,
+      fromLength: 3,
+      chord: 'C7',
+      expected: 'C',
+    });
+    // Source unchanged — no `[C7]]hi` corruption.
+    expect(text).toBe('[Cm]hi');
+  });
+
+  test('applyChordEdit applies when `expected` matches the live span', () => {
+    const { text } = applyChordEdit('[C]hi', {
+      line: 1,
+      fromColumn: 0,
+      fromLength: 3,
+      chord: 'C7',
+      expected: 'C',
+    });
+    expect(text).toBe('[C7]hi');
+  });
+
+  test('applyChordDelete no-ops on a stale `expected`', () => {
+    const { text } = applyChordDelete('[Cm]hi', {
+      line: 1,
+      fromColumn: 0,
+      fromLength: 3,
+      expected: 'C',
+    });
+    expect(text).toBe('[Cm]hi');
+  });
+});

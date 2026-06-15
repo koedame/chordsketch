@@ -599,6 +599,13 @@ export interface ChordEditEvent {
   /** New chord token body (without brackets), e.g. `"Am7"`. Build it
    * with {@link buildChordName}. */
   chord: string;
+  /** Optional optimistic-concurrency guard: the chord token body
+   * expected at the target span. When provided, the edit is a no-op
+   * (source returned unchanged) if the current source there is not
+   * `[expected]` — this prevents a stale event (built against an
+   * older source that has not finished re-parsing) from splicing at
+   * the wrong span. Omit to skip the check. */
+  expected?: string;
 }
 
 /**
@@ -633,6 +640,18 @@ export function applyChordEdit(source: string, evt: ChordEditEvent): ChordReposi
         `exceeds line length ${lineText.length}`,
     );
   }
+  // Optimistic-concurrency guard: if the caller told us what token to
+  // expect at the span and the live source no longer matches (a stale
+  // event from an edit whose re-parse hasn't landed), no-op instead of
+  // splicing at the wrong place. Caret stays at the target column.
+  if (
+    evt.expected !== undefined &&
+    lineText.slice(evt.fromColumn, evt.fromColumn + evt.fromLength) !== `[${evt.expected}]`
+  ) {
+    let caret = 0;
+    for (let i = 0; i < lineIdx; i++) caret += lines[i].length + 1;
+    return { text: source, caretOffset: caret + evt.fromColumn };
+  }
   const insertBracket = `[${evt.chord}]`;
   lines[lineIdx] =
     lineText.slice(0, evt.fromColumn) + insertBracket + lineText.slice(evt.fromColumn + evt.fromLength);
@@ -654,6 +673,10 @@ export interface ChordDeleteTarget {
   fromColumn: number;
   /** Source-column span of `[chord]`, including both brackets. */
   fromLength: number;
+  /** Optional optimistic-concurrency guard — see
+   * {@link ChordEditEvent.expected}. When the live source at the span
+   * is not `[expected]`, the delete is a no-op. */
+  expected?: string;
 }
 
 /**
@@ -679,6 +702,14 @@ export function applyChordDelete(
       `delete range [${evt.fromColumn}, ${evt.fromColumn + evt.fromLength}) ` +
         `exceeds line length ${lineText.length}`,
     );
+  }
+  if (
+    evt.expected !== undefined &&
+    lineText.slice(evt.fromColumn, evt.fromColumn + evt.fromLength) !== `[${evt.expected}]`
+  ) {
+    let caret = 0;
+    for (let i = 0; i < lineIdx; i++) caret += lines[i].length + 1;
+    return { text: source, caretOffset: caret + evt.fromColumn };
   }
   lines[lineIdx] = lineText.slice(0, evt.fromColumn) + lineText.slice(evt.fromColumn + evt.fromLength);
 

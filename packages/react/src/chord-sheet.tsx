@@ -10,6 +10,7 @@ import {
   buildChordNudge,
   findChordByOffsetOrdinal,
   nudgeChordPosition,
+  readCapo,
 } from './chord-source-edit';
 import type {
   ChordDeleteTarget,
@@ -116,6 +117,12 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
    * `applyChordEdit` (exported from this package). Omit to render the
    * inspector read-only / without the edit controls taking effect.
    *
+   * Disabled (along with selection / drag) while an effective transpose
+   * is active (a non-zero `transpose`, or a `{capo}` in the source):
+   * the rendered chords are then the transposed spelling, not the raw
+   * source, so source-coordinate editing would corrupt the song. Clear
+   * the transpose / capo to edit.
+   *
    * Only consumed by `format="html"`.
    */
   onChordEdit?: (event: ChordEditEvent) => void;
@@ -208,7 +215,12 @@ function partsFromRawName(name: string): ResolvedChord['parts'] {
   const head = slash >= 0 ? name.slice(0, slash) : name;
   const bass = slash >= 0 ? name.slice(slash + 1) : '';
   const hasRoot = /^[A-G]/.test(head);
-  const root = hasRoot ? head[0] : 'C';
+  // Rootless / non-standard names (e.g. `N.C.`) yield an empty root so
+  // a stray chip click → buildChordName(empty root) throws and the
+  // edit is dropped, rather than defaulting to `C` and corrupting the
+  // token. The chord stays selectable (badge + move), just not
+  // root/type-editable until the user sets a root.
+  const root = hasRoot ? head[0] : '';
   let rest = hasRoot ? head.slice(1) : head;
   let accidental: '' | '#' | 'b' = '';
   if (rest[0] === '#') {
@@ -490,6 +502,27 @@ function ChordSheetAstBranch({
     [ast, chordSelection],
   );
 
+  // Source-coordinate editing (selection / drag / nudge / inspector)
+  // is only valid when the chords the walker renders match the raw
+  // source. The wasm parse path transposes the AST in place — folding
+  // any `{capo: N}` into the effective transpose (ADR-0023) — so under
+  // a non-zero effective transpose `chord.name` is the TRANSPOSED
+  // spelling, and editing by source coordinates would write the wrong
+  // chord / miscompute columns. Gate the whole interaction off in that
+  // case (it would otherwise silently corrupt the song). `effective =
+  // transpose − capo`; coincidental cancellation (e.g. transpose +2 with
+  // `{capo: 2}`) is genuinely a no-op transpose, so editing is safe.
+  const sourceEditable = (transpose ?? 0) - readCapo(source) === 0;
+  const repositionCb = sourceEditable ? onChordReposition : undefined;
+  const editCb = sourceEditable ? onChordEdit : undefined;
+  const deleteCb = sourceEditable ? onChordDelete : undefined;
+  // Drop a stale selection if the user applies a transpose / capo while
+  // a chord is selected, so no badge / inspector lingers on a chord the
+  // user can no longer safely edit.
+  useEffect(() => {
+    if (!sourceEditable && chordSelection != null) setChordSelection(null);
+  }, [sourceEditable, chordSelection]);
+
   if (ast === null) {
     return (
       <div {...divProps} className={wrapperClass} aria-busy={loading || undefined}>
@@ -521,11 +554,11 @@ function ChordSheetAstBranch({
           activeSourceLine,
           caretColumn,
           caretLineLength,
-          onChordReposition,
-          chordSelection,
-          setChordSelection,
+          onChordReposition: repositionCb,
+          chordSelection: repositionCb ? chordSelection : null,
+          setChordSelection: repositionCb ? setChordSelection : undefined,
         })}
-        {resolvedChord && onChordEdit ? (
+        {resolvedChord && editCb ? (
           <ChordInspector
             chordName={resolvedChord.chordName}
             root={resolvedChord.parts.root}
@@ -549,15 +582,17 @@ function ChordSheetAstBranch({
               try {
                 chord = buildChordName(parts);
               } catch {
-                // Invalid parts (the inspector only ever produces valid
-                // ones); ignore rather than corrupt the source.
+                // Invalid parts (e.g. a rootless chord whose root is
+                // empty — buildChordName throws); ignore rather than
+                // corrupt the source.
                 return;
               }
-              onChordEdit({
+              editCb({
                 line: resolvedChord.sourceLine,
                 fromColumn: resolvedChord.sourceColumn,
                 fromLength: resolvedChord.bracketLength,
                 chord,
+                expected: resolvedChord.chordName,
               });
             }}
             onNudge={(direction) => {
@@ -571,8 +606,8 @@ function ChordSheetAstBranch({
                 totalLyrics: resolvedChord.totalLyrics,
                 direction,
               });
-              if (!result || !onChordReposition) return;
-              onChordReposition(result.event);
+              if (!result || !repositionCb) return;
+              repositionCb(result.event);
               setChordSelection((prev) => ({
                 line: resolvedChord.sourceLine,
                 offset: result.offset,
@@ -581,12 +616,13 @@ function ChordSheetAstBranch({
               }));
             }}
             onRemove={
-              onChordDelete
+              deleteCb
                 ? () => {
-                    onChordDelete({
+                    deleteCb({
                       line: resolvedChord.sourceLine,
                       fromColumn: resolvedChord.sourceColumn,
                       fromLength: resolvedChord.bracketLength,
+                      expected: resolvedChord.chordName,
                     });
                     setChordSelection(null);
                   }

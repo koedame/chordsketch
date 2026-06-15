@@ -487,13 +487,14 @@ describe('<ChordSheet>', () => {
         },
       ],
     });
+    const result = { ast: songAst, warnings: [], transposedKey: undefined };
     return {
       ...makeStub(),
-      parseChordproWithWarnings: vi.fn(() => ({
-        ast: songAst,
-        warnings: [],
-        transposedKey: undefined,
-      })),
+      // Both parse entries return the chord-bearing AST so the stub
+      // works whether or not transpose / config options are passed
+      // (the AST branch uses the options entry when transpose is set).
+      parseChordproWithWarnings: vi.fn(() => result),
+      parseChordproWithWarningsAndOptions: vi.fn(() => result),
     };
   }
 
@@ -566,6 +567,7 @@ describe('<ChordSheet>', () => {
       fromColumn: 0,
       fromLength: 4,
       chord: 'A7',
+      expected: 'Am',
     });
   });
 
@@ -699,7 +701,12 @@ describe('<ChordSheet>', () => {
       '.chordsketch-sheet__cins-remove',
     ) as HTMLButtonElement;
     fireEvent.click(remove);
-    expect(onChordDelete).toHaveBeenCalledWith({ line: 1, fromColumn: 0, fromLength: 4 });
+    expect(onChordDelete).toHaveBeenCalledWith({
+      line: 1,
+      fromColumn: 0,
+      fromLength: 4,
+      expected: 'Am',
+    });
     expect(container.querySelector('.chordsketch-sheet__cins')).toBeNull();
   });
 
@@ -786,6 +793,61 @@ describe('<ChordSheet>', () => {
     fireEvent.pointerDown(textNode as Node);
     // Selection survives — the press resolved to the `.chord` element.
     expect(container.querySelector('.chord--selected')).not.toBeNull();
+  });
+
+  test('a non-zero transpose disables chord selection + the inspector', async () => {
+    // The transposed AST carries transposed chord names, so source-
+    // coordinate editing is unsafe and must be gated off.
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        transpose={2}
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={vi.fn()}
+        onChordEdit={vi.fn()}
+        onChordDelete={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector('.chord')).not.toBeNull();
+    });
+    // Chords are not selectable; no badge / inspector / role=button.
+    expect(container.querySelector(".chord[role='button']")).toBeNull();
+    fireEvent.click(container.querySelector('.chord') as HTMLElement);
+    expect(container.querySelector('.chordsketch-sheet__cins')).toBeNull();
+    expect(container.querySelector('.chord--selected')).toBeNull();
+  });
+
+  test('a {capo} in the source disables editing (capo folds into transpose)', async () => {
+    const { container } = render(
+      <ChordSheet
+        source={'{capo: 2}\n[Am]hi'}
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={vi.fn()}
+        onChordEdit={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector('.chord')).not.toBeNull();
+    });
+    expect(container.querySelector(".chord[role='button']")).toBeNull();
+  });
+
+  test('transpose that cancels the capo (net zero) keeps editing enabled', async () => {
+    // transpose +2 with {capo: 2} → effective 0 → names == source → safe.
+    const { container } = render(
+      <ChordSheet
+        source={'{capo: 2}\n[Am]hi'}
+        transpose={2}
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={vi.fn()}
+        onChordEdit={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector('.chord')).not.toBeNull();
+    });
+    expect(container.querySelector(".chord[role='button']")).not.toBeNull();
   });
 
   test('chords stay inert when onChordReposition is not provided', async () => {
