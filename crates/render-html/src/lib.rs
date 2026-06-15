@@ -1245,7 +1245,7 @@ h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-w
 .meta--params { display: flex; flex-wrap: wrap; gap: 0.4em; margin: 0.2em 0 0.8em; }
 .meta__chip { display: inline-block; padding: 0.15em 0.6em; border: 1px solid #D4D1D6; border-radius: 4px; background-color: #FAFAFA; color: #2A262E; font-family: \"JetBrains Mono\", ui-monospace, monospace; font-size: 0.8125rem; font-weight: 500; line-height: 1.4; font-feature-settings: \"tnum\" 1; }
 .meta--supplementary { font-size: 0.75rem; color: #A8A4AD; margin-bottom: 0.4em; }
-.meta-inline { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0.15em 0.3em 0.15em 0; padding: 0 0.5rem; min-height: 1.6rem; border-radius: 2px; background-color: #F6F4F7; border: 1px solid #E8E6EA; font-family: \"JetBrains Mono\", ui-monospace, monospace; font-size: 0.75rem; color: #44424A; line-height: 1.2; letter-spacing: 0.02em; font-feature-settings: \"tnum\" 1; vertical-align: middle; }
+.meta-inline { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0.15em 0.3em 0.15em 0; padding: 0 0.5rem; box-sizing: border-box; min-height: 1.6rem; border-radius: 2px; background-color: #F6F4F7; border: 1px solid #E8E6EA; font-family: \"JetBrains Mono\", ui-monospace, monospace; font-size: 0.75rem; color: #44424A; line-height: 1.2; letter-spacing: 0.02em; font-feature-settings: \"tnum\" 1; vertical-align: middle; }
 .meta-inline__label { color: #8A8790; font-weight: 500; }
 .meta-inline__value { color: #0A0A0B; font-weight: 600; }
 .meta-inline__marking { color: #8A8790; font-weight: 400; font-style: italic; }
@@ -4607,6 +4607,42 @@ Verse text\n\
         assert!(
             !html.contains("<span class=\"meta-inline__value\">6/8</span>"),
             "redundant text value should not be emitted alongside the icon; got: {html}"
+        );
+    }
+
+    /// The inline `.meta-inline` chip must pin its box model
+    /// explicitly so the three directive variants line up at the
+    /// same height. On the React surface the `{tempo}` chip is a
+    /// `<button>` (UA default `border-box`) while `{key}` / `{time}`
+    /// are `<span>` (`content-box`); without an explicit
+    /// `box-sizing`, `min-height` + the 1px border made the button
+    /// ~2px shorter, so the pills misaligned (#2624). This renderer
+    /// only emits spans, but its embedded `.meta-inline` rule is the
+    /// sister-site to the React stylesheet (`renderer-parity.md`) and
+    /// must carry the same declaration so the two HTML surfaces stay
+    /// in lockstep.
+    #[test]
+    fn test_meta_inline_chip_pins_box_sizing() {
+        let html = render("{key: D}\n[D]hi");
+        assert!(
+            html.contains(".meta-inline { display: inline-flex;"),
+            "expected the embedded .meta-inline rule; got: {html}"
+        );
+        // The declaration must sit inside the `.meta-inline` rule
+        // block (before its closing brace), not merely anywhere in
+        // the document.
+        let rule_start = html
+            .find(".meta-inline { display: inline-flex;")
+            .expect("meta-inline rule present");
+        let rule_end = html[rule_start..]
+            .find('}')
+            .map(|offset| rule_start + offset)
+            .expect("meta-inline rule is brace-terminated");
+        assert!(
+            html[rule_start..rule_end].contains("box-sizing: border-box;"),
+            "the .meta-inline rule must pin box-sizing: border-box so the span and button \
+             chip variants compute the same height; got: {}",
+            &html[rule_start..rule_end]
         );
     }
 
