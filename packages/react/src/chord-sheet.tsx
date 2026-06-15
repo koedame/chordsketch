@@ -523,6 +523,30 @@ function ChordSheetAstBranch({
     if (!sourceEditable && chordSelection != null) setChordSelection(null);
   }, [sourceEditable, chordSelection]);
 
+  // Keep the selected chord visible above the bottom-docked inspector
+  // (#2630). The dock pins to the bottom of the scrollport, so a chord
+  // near the bottom would otherwise sit under it. When the selection
+  // changes — a new chord, or a nudge that relocates it — scroll the
+  // active `.chord--selected` badge to the centre of the scrollport,
+  // above the dock. Keyed on `chordSelection`, which is stable across
+  // in-place text edits (they keep the same (line, offset, ordinal)
+  // coordinates), so typing in the inspector does not re-scroll.
+  useEffect(() => {
+    if (!sourceEditable || chordSelection == null) return;
+    const root = contentRef.current;
+    if (root == null) return;
+    const raf = requestAnimationFrame(() => {
+      const target = root.querySelector('.chord--selected');
+      if (target == null || typeof target.scrollIntoView !== 'function') return;
+      const reduce =
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      target.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [chordSelection, sourceEditable]);
+
   if (ast === null) {
     return (
       <div {...divProps} className={wrapperClass} aria-busy={loading || undefined}>
