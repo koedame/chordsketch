@@ -561,6 +561,13 @@ pub fn render_svg_with_options(
         || data.strings > MAX_STRINGS
         || data.frets_shown < MIN_FRETS_SHOWN
         || data.frets_shown > MAX_FRETS_SHOWN
+        // `base_fret` is a public field, so a directly-constructed
+        // `DiagramData` can carry an out-of-range value the parser would
+        // have clamped. Reject it here the same way `strings` / `frets_shown`
+        // are rejected, so the fret-number axis cannot emit a negative label
+        // (`base_fret - 1` for `base_fret == 0`) or an absurd one.
+        || data.base_fret < 1
+        || data.base_fret > MAX_BASE_FRET
     {
         return String::new();
     }
@@ -621,11 +628,11 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
         crate::escape::escape_xml(data.title())
     ));
 
-    // Nut or base-fret indicator. When the diagram starts above
-    // fret 1 we label it with just the fret number (no "fr"
-    // suffix) — the position marker dots below already imply
-    // "this is fret N on a real fretboard", so the bare integer
-    // is enough.
+    // Nut (open position) or, for the compact size only, a single bare
+    // base-fret label (no "fr" suffix). The regular size labels the base
+    // fret as part of the full fret-number axis drawn below, so it needs no
+    // standalone label here; the position-marker dots already imply "this is
+    // fret N on a real fretboard".
     let nut_y = top_margin;
     if data.base_fret == 1 {
         svg.push_str(&format!(
@@ -649,9 +656,13 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
     // Fret-number axis: label every fret line in the visible window with its
     // absolute fret number (`base_fret - 1 + j`), so fret line 0 is the
     // nut/open position (labelled 0 when the diagram starts at the nut). The
-    // labels sit left of the grid, right-anchored inside the existing left
-    // margin, so the diagram's bounding box is unchanged. A `fret-number`
-    // class is emitted so consumers can restyle or hide the axis via CSS.
+    // labels sit left of the grid; `text-anchor="end"` fixes their right edge
+    // at `left_margin - 4`, so 1- and 2-digit numbers align without any
+    // width math (unlike the PDF renderer, whose left-anchored text engine
+    // has to subtract an estimated glyph width). They stay inside the
+    // existing left margin, so the diagram's bounding box is unchanged. A
+    // `fret-number` class is emitted so consumers can restyle or hide the
+    // axis via CSS.
     if show_fret_numbers {
         for j in 0..=num_frets {
             let fret_number = data.base_fret as i32 - 1 + j as i32;
@@ -839,11 +850,11 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
         crate::escape::escape_xml(data.title())
     ));
 
-    // Nut (vertical line on the left when at the open position) or the
-    // base-fret label above the leftmost fret cell when the diagram starts
-    // higher up the fretboard. The label sits above the first fret column
-    // (the horizontal equivalent of the vertical layout's left-of-row label
-    // position).
+    // Nut (vertical line on the left at the open position) or, for the
+    // compact size only, a single base-fret label above the leftmost fret
+    // cell. The regular size labels the base fret as part of the full
+    // fret-number axis drawn below the grid, so it needs no standalone label
+    // here.
     let nut_x = left_margin;
     if data.base_fret == 1 {
         svg.push_str(&format!(
@@ -3279,12 +3290,64 @@ mod tests {
             let j = svg[i..].find('"').unwrap();
             svg[i..i + j].parse().unwrap()
         };
+        // Every fret-number label's baseline y must fall inside the declared
+        // height, so a future margin/font tweak that pushes a label past the
+        // frame fails here rather than only being caught by eye.
+        let label_ys = |svg: &str| -> Vec<f32> {
+            svg.lines()
+                .filter(|l| l.contains("class=\"fret-number\""))
+                .map(|l| {
+                    let needle = "y=\"";
+                    let i = l.find(needle).unwrap() + needle.len();
+                    let j = l[i..].find('"').unwrap();
+                    l[i..i + j].parse().unwrap()
+                })
+                .collect()
+        };
         let data = open_c();
         let v = render_svg_with_orientation(&data, Orientation::Vertical);
         assert_eq!(extract(&v, "width"), 120.0);
         assert_eq!(extract(&v, "height"), 160.0);
+        assert!(
+            label_ys(&v).iter().all(|&y| y <= 160.0),
+            "vertical fret-number labels overflow the frame: {:?}",
+            label_ys(&v)
+        );
         let h = render_svg_with_orientation(&data, Orientation::Horizontal);
         assert_eq!(extract(&h, "width"), 140.0);
         assert_eq!(extract(&h, "height"), 130.0);
+        assert!(
+            label_ys(&h).iter().all(|&y| y <= 130.0),
+            "horizontal fret-number labels overflow the frame: {:?}",
+            label_ys(&h)
+        );
+    }
+
+    #[test]
+    fn render_rejects_out_of_range_base_fret() {
+        // `base_fret` is a public field, so a direct caller can supply a
+        // value the parser would have clamped. `base_fret == 0` would make
+        // the axis emit a `-1` label; an over-MAX value an absurd one. Both
+        // must be rejected (empty string) like out-of-range strings /
+        // frets_shown, in both orientations and both sizes.
+        for bad in [0, MAX_BASE_FRET + 1] {
+            let data = DiagramData {
+                name: "X".to_string(),
+                display_name: None,
+                strings: 6,
+                frets_shown: 5,
+                base_fret: bad,
+                frets: vec![-1, 0, 2, 2, 1, 0],
+                fingers: vec![],
+            };
+            for orientation in [Orientation::Vertical, Orientation::Horizontal] {
+                for size in [DiagramSize::Regular, DiagramSize::Compact] {
+                    assert!(
+                        render_svg_with_options(&data, orientation, size).is_empty(),
+                        "base_fret={bad} must render empty for {orientation:?}/{size:?}"
+                    );
+                }
+            }
+        }
     }
 }
