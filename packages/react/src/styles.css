@@ -1449,6 +1449,11 @@
   opacity: 0.35;
   cursor: default;
 }
+.chordsketch-sheet__content .chord-nudge__btn:focus-visible {
+  outline: 2px solid var(--cs-crimson-500, #bd1642);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
 
 /* Per-character span inside a `.lyrics` row. Plain wrapper so
    the renderer can highlight a single character with a drop-

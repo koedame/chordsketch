@@ -1977,7 +1977,7 @@ function LyricsLine({
     (segmentIdx: number) => (event: ReactKeyboardEvent<HTMLSpanElement>): void => {
       if (!reposition || !nudgeCtx) return;
       const { key } = event;
-      if (key === 'Enter' || key === ' ' || key === 'Spacebar') {
+      if (key === 'Enter' || key === ' ') {
         event.preventDefault();
         toggleSelect(segmentIdx);
         return;
