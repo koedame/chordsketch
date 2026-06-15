@@ -1,9 +1,10 @@
 # 0030. Chord diagrams label the full visible fret range by default
 
 - **Status**: Accepted — labelling position superseded by
-  [ADR-0031](0031-chord-diagram-fret-numbers-at-cell-centres.md) (fret numbers
-  now sit at fret-cell centres / press positions, not on fret lines; the rest
-  of this ADR still stands)
+  [ADR-0031](0031-chord-diagram-fret-numbers-at-cell-centres.md) (fret-cell
+  centres / press positions); compact carve-out superseded by
+  [ADR-0032](0032-compact-diagrams-show-fret-number-axis.md) (compact now draws
+  the axis). The rest of this ADR still stands.
 - **Date**: 2026-06-15
 
 ## Context

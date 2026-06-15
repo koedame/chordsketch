@@ -370,6 +370,14 @@ struct DiagramMetrics {
     title_baseline: f32,
     /// Font size for the base-fret label and the muted-string `X` glyph.
     label_font: f32,
+    /// Font size for the per-cell fret-number axis labels. Separate from
+    /// [`label_font`](Self::label_font) so the compact size can use a smaller
+    /// font that fits its narrow gutter without shrinking the muted-`X` glyph.
+    fret_label_font: f32,
+    /// Gap (SVG px) subtracted from `left_margin` to place a vertical
+    /// fret-number label's right edge anchor (`left_margin - fret_label_gap`).
+    /// Smaller for the compact size so 2-digit labels fit its narrow margin.
+    fret_label_gap: f32,
     /// Font size for finger numbers inside the dots.
     finger_font: f32,
     /// Baseline-centring offset added to a marker's centre y when drawing
@@ -387,10 +395,11 @@ struct DiagramMetrics {
     /// (`base_fret - 1 + j` for cell `j ∈ 1..=frets_shown`). The open/nut
     /// position carries no number.
     ///
-    /// `true` for the regular size — the full axis subsumes the legacy
-    /// single base-fret label. `false` for the compact size, which keeps
-    /// the minimal single base-fret label so the above-a-lyric layout
-    /// stays uncluttered (see [`DiagramSize::Compact`]).
+    /// `true` for both sizes — the full axis subsumes the legacy single
+    /// base-fret label. The compact size draws it with a smaller
+    /// [`fret_label_font`](Self::fret_label_font) so the inline / hover
+    /// diagrams show the same press-position numbers as the regular size
+    /// (see [`DiagramSize::Compact`]).
     show_fret_numbers: bool,
 }
 
@@ -411,6 +420,10 @@ impl DiagramMetrics {
             title_font: 14.0,
             title_baseline: 15.0,
             label_font: 10.0,
+            // Regular keeps the historical axis font/gap (= label_font, 4.0) so
+            // its output stays byte-for-byte identical.
+            fret_label_font: 10.0,
+            fret_label_gap: 4.0,
             finger_font: 8.0,
             text_v_center: 3.0,
             nut_stroke: 3.0,
@@ -435,7 +448,10 @@ impl DiagramMetrics {
             cell_w: 9.0,
             cell_h: 11.0,
             top_margin: 22.0,
-            left_margin: 9.0,
+            // Left gutter widened from 9 to 11 so a 2-digit fret-number label
+            // (font 6, right-anchored at left_margin - fret_label_gap) clears
+            // the left edge of the viewBox.
+            left_margin: 11.0,
             bottom_pad_vertical: 10.0,
             bottom_pad_horizontal: 8.0,
             dot_radius: 3.2,
@@ -445,15 +461,19 @@ impl DiagramMetrics {
             title_font: 11.0,
             title_baseline: 9.0,
             label_font: 8.0,
+            // Smaller axis font + gap than label_font so the per-cell
+            // fret numbers fit the compact diagram's narrow gutter and
+            // bottom padding without enlarging the inline layout further.
+            fret_label_font: 6.0,
+            fret_label_gap: 2.0,
             finger_font: 7.0,
             text_v_center: 2.4,
             nut_stroke: 2.0,
             line_stroke: 0.75,
             class_extra: " chord-diagram-compact",
-            // Compact diagrams sit directly above a lyric line where a full
-            // fret-number axis would add clutter and height; keep the legacy
-            // single base-fret label instead.
-            show_fret_numbers: false,
+            // Inline / hover diagrams show the same press-position fret numbers
+            // as the regular size, drawn with the smaller fret_label_font.
+            show_fret_numbers: true,
         }
     }
 
@@ -601,6 +621,7 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
         title_font,
         title_baseline,
         label_font,
+        fret_label_font,
         finger_font,
         text_v_center,
         nut_stroke,
@@ -672,9 +693,9 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
             let y = nut_y + (j as f32 - 0.5) * cell_h + text_v_center;
             svg.push_str(&format!(
                 "<text x=\"{}\" y=\"{y}\" text-anchor=\"end\" \
-                 font-family=\"sans-serif\" font-size=\"{label_font}\" \
+                 font-family=\"sans-serif\" font-size=\"{fret_label_font}\" \
                  class=\"fret-number\">{fret_number}</text>\n",
-                left_margin - 4.0,
+                left_margin - m.fret_label_gap,
             ));
         }
     }
@@ -810,6 +831,7 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
         title_font,
         title_baseline,
         label_font,
+        fret_label_font,
         finger_font,
         text_v_center,
         nut_stroke,
@@ -885,13 +907,13 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
     // the existing bottom padding so the diagram's bounding box is unchanged;
     // the `fret-number` class lets consumers restyle/hide them.
     if show_fret_numbers {
-        let label_y = top_margin + grid_h + label_font;
+        let label_y = top_margin + grid_h + fret_label_font;
         for j in 1..=num_frets {
             let fret_number = data.base_fret as i32 - 1 + j as i32;
             let x = nut_x + (j as f32 - 0.5) * fret_pitch;
             svg.push_str(&format!(
                 "<text x=\"{x}\" y=\"{label_y}\" text-anchor=\"middle\" \
-                 font-family=\"sans-serif\" font-size=\"{label_font}\" \
+                 font-family=\"sans-serif\" font-size=\"{fret_label_font}\" \
                  class=\"fret-number\">{fret_number}</text>\n"
             ));
         }
@@ -3272,10 +3294,13 @@ mod tests {
     }
 
     #[test]
-    fn fret_number_axis_omitted_in_compact_but_base_label_kept() {
-        // Compact diagrams (above-a-lyric) suppress the full axis to stay
-        // uncluttered, but must keep the legacy single base-fret label so a
-        // high-position compact diagram still shows where it sits.
+    fn compact_diagrams_show_press_position_axis_with_smaller_font() {
+        // Inline / hover (compact) diagrams show the same per-cell
+        // press-position fret numbers as the regular size (#2618), drawn with
+        // the smaller compact `fret_label_font` (6) so they fit the narrow
+        // inline layout. The legacy single base-fret label is gone — the axis
+        // covers it — and a 2-digit label (base_fret 7 → cells 7..=11) must
+        // still render.
         let data = DiagramData {
             name: "Bm".to_string(),
             display_name: None,
@@ -3287,13 +3312,20 @@ mod tests {
         };
         for orientation in [Orientation::Vertical, Orientation::Horizontal] {
             let svg = render_svg_with_options(&data, orientation, DiagramSize::Compact);
-            assert!(
-                !svg.contains("class=\"fret-number\""),
-                "compact must not draw the full fret-number axis for {orientation:?}; got: {svg}"
+            assert_eq!(
+                svg.matches("class=\"fret-number\"").count(),
+                5,
+                "compact must draw the per-cell axis (cells 7..=11) for {orientation:?}; got: {svg}"
             );
+            for n in 7..=11 {
+                assert!(
+                    svg.contains(&format!("class=\"fret-number\">{n}</text>")),
+                    "compact must label cell {n} for {orientation:?}; got: {svg}"
+                );
+            }
             assert!(
-                svg.contains(">7</text>"),
-                "compact must keep the single base-fret label 7 for {orientation:?}; got: {svg}"
+                svg.contains("font-size=\"6\" class=\"fret-number\""),
+                "compact axis must use the smaller fret_label_font (6); got: {svg}"
             );
         }
     }
