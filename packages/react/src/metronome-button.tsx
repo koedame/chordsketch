@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
 
 import { MetronomeGlyph } from './music-glyphs';
@@ -29,10 +29,25 @@ export interface MetronomeButtonProps {
 export function MetronomeButton({ bpm, className }: MetronomeButtonProps): JSX.Element {
   const metronome = useMetronome();
   const [interactive, setInteractive] = useState(false);
+  const prevBpmRef = useRef(bpm);
 
   useEffect(() => {
     setInteractive(metronome.supported);
   }, [metronome.supported]);
+
+  // Keep the audible beat in sync with live edits to the `{tempo}`
+  // directive: if the BPM prop changes while the metronome is
+  // running, re-arm at the new tempo. The guard runs every render
+  // (no dep array) but only re-arms on an actual change, so play /
+  // stop toggles — which do not change `bpm` — are left untouched.
+  useEffect(() => {
+    if (prevBpmRef.current !== bpm) {
+      prevBpmRef.current = bpm;
+      if (metronome.isPlaying) {
+        metronome.start(bpm);
+      }
+    }
+  });
 
   const glyphClass = ['meta-inline__glyph', className].filter(Boolean).join(' ');
 
