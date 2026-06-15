@@ -8,9 +8,10 @@ import type { ChordproChord, ChordproSong } from './chordpro-ast';
 import {
   buildChordName,
   buildChordNudge,
+  chordLayoutForLine,
+  chordSourceEditableUnderTranspose,
   findChordByOffsetOrdinal,
   nudgeChordPosition,
-  readCapo,
 } from './chord-source-edit';
 import type {
   ChordDeleteTarget,
@@ -245,27 +246,26 @@ function resolveSelectedChord(ast: ChordproSong, selection: ChordSelection): Res
   const line = ast.lines[selection.line - 1];
   if (!line || line.kind !== 'lyrics') return null;
   const segments = line.value.segments;
-  let srcCol = 0;
-  let lyricsCount = 0;
+  // Shared layout helper — single source of truth for the chord
+  // coordinate space (the JSX walker uses the same helper for drag /
+  // nudge targeting, so the two cannot drift). See chordLayoutForLine.
+  const { layout, totalLyrics: lyricsCount } = chordLayoutForLine(segments);
   const chords: Array<{
     sourceColumn: number;
     bracketLength: number;
     offset: number;
     chord: ChordproChord;
   }> = [];
-  for (const seg of segments) {
-    const bracketLen = seg.chord ? (seg.chord.name?.length ?? 0) + 2 : 0;
+  segments.forEach((seg, i) => {
     if (seg.chord) {
       chords.push({
-        sourceColumn: srcCol,
-        bracketLength: bracketLen,
-        offset: lyricsCount,
+        sourceColumn: layout[i].sourceColumn,
+        bracketLength: layout[i].bracketLength,
+        offset: layout[i].lyricsOffsetStart,
         chord: seg.chord,
       });
     }
-    srcCol += bracketLen + seg.text.length;
-    lyricsCount += seg.text.length;
-  }
+  });
   const offsets = chords.map((c) => c.offset);
   const idx = findChordByOffsetOrdinal(offsets, selection.offset, selection.ordinal);
   if (idx < 0) return null;
@@ -508,11 +508,11 @@ function ChordSheetAstBranch({
   // any `{capo: N}` into the effective transpose (ADR-0023) — so under
   // a non-zero effective transpose `chord.name` is the TRANSPOSED
   // spelling, and editing by source coordinates would write the wrong
-  // chord / miscompute columns. Gate the whole interaction off in that
-  // case (it would otherwise silently corrupt the song). `effective =
-  // transpose − capo`; coincidental cancellation (e.g. transpose +2 with
-  // `{capo: 2}`) is genuinely a no-op transpose, so editing is safe.
-  const sourceEditable = (transpose ?? 0) - readCapo(source) === 0;
+  // chord / miscompute columns. The gate mirrors the core's
+  // `effective_transpose` capo semantics exactly (1..=24 accept-or-zero,
+  // NOT the `<Capo>` control's 0..=12 display clamp), so a hand-edited
+  // `{capo: 18}` cannot fool the gate into editing a transposed AST.
+  const sourceEditable = chordSourceEditableUnderTranspose(source, transpose);
   const repositionCb = sourceEditable ? onChordReposition : undefined;
   const editCb = sourceEditable ? onChordEdit : undefined;
   const deleteCb = sourceEditable ? onChordDelete : undefined;

@@ -51,6 +51,13 @@ const CAPO_DIRECTIVE_RE = /\{capo:\s*(-?\d+)\s*\}\s*\n?/;
 // inside the lyrics.
 const CAPO_ANCHOR_RE = /^(\{(?:title|subtitle|artist|key|tempo|time)[^}]*\}\s*\n)+/;
 
+/** Characters that would corrupt the ChordPro source structure when
+ * interpolated into a `[chord]` token. Shared by every chord-writing
+ * helper so the editor surface cannot inject directives / brackets /
+ * line breaks. `/` is intentionally allowed — it is the slash-chord
+ * separator. */
+const CHORD_FORBIDDEN_RE = /[[\]{}<>\n\r]/;
+
 function clampInt(n: number, min: number, max: number): number {
   if (Number.isNaN(n)) return min;
   if (n < min) return min;
@@ -78,6 +85,56 @@ export function readCapo(source: string): number {
   const n = parseInt(match[1], 10);
   if (!Number.isFinite(n) || n < 0) return CAPO_MIN;
   return clampInt(n, CAPO_MIN, CAPO_MAX);
+}
+
+/**
+ * Read the capo value the **core renderer / parser** folds into the
+ * effective transpose for `source`, mirroring
+ * `Metadata::capo_validated` (`crates/chordpro/src/ast.rs`): only a
+ * `{capo: N}` with `N ∈ 1..=24` contributes; anything else (absent,
+ * out of range, non-integer, negative) contributes `0`.
+ *
+ * This is deliberately NOT {@link readCapo}: that helper clamps into
+ * `[CAPO_MIN, CAPO_MAX]` (0..=12) so the `<Capo>` control never shows a
+ * value its `+` / `−` buttons cannot emit. Reusing that display clamp
+ * for the edit-safety gate is a bug — a hand-edited `{capo: 18}` would
+ * clamp to `12` here while the core transposes the AST by `18`, so the
+ * gate would (wrongly) think the rendered chords still match the raw
+ * source and enable source-coordinate editing on a transposed AST,
+ * corrupting the song. The gate must mirror the core's `1..=24`
+ * accept-or-zero semantics exactly, with no clamping.
+ *
+ * @see chordSourceEditableUnderTranspose for the gate that consumes this.
+ */
+export function capoTransposeOffset(source: string): number {
+  const match = source.match(CAPO_DIRECTIVE_RE);
+  if (!match) return 0;
+  const n = parseInt(match[1], 10);
+  if (!Number.isInteger(n) || n < 1 || n > 24) return 0;
+  return n;
+}
+
+/**
+ * Whether source-coordinate chord editing is safe for `source` under a
+ * given CLI `transpose`. Editing rewrites the raw `[chord]` tokens by
+ * source column, but the wasm parse path transposes the AST in place —
+ * folding `{capo}` into the effective transpose (ADR-0023) — so under a
+ * non-zero **effective** transpose the rendered chord names are the
+ * transposed spelling, not the raw source, and editing by source
+ * coordinates would corrupt the song.
+ *
+ * Effective transpose mirrors the core's `effective_transpose(0, cli,
+ * capo)`: `cli_transpose − capoTransposeOffset(source)`. Editing is safe
+ * exactly when that is `0` (including coincidental cancellation such as
+ * `transpose +2` with `{capo: 2}`, a genuine no-op transpose). The file
+ * `{transpose}` directive is intentionally excluded because the wasm
+ * parse path itself does not fold it (see `do_parse_chordpro`).
+ */
+export function chordSourceEditableUnderTranspose(
+  source: string,
+  transpose: number | undefined,
+): boolean {
+  return (transpose ?? 0) - capoTransposeOffset(source) === 0;
 }
 
 /**
@@ -144,6 +201,16 @@ export interface ChordRepositionEvent {
   /** Copy vs move semantics. `true` keeps the original bracket
    * in place; `false` removes it. */
   copy: boolean;
+  /** Optional optimistic-concurrency guard for the `from` span,
+   * mirroring {@link ChordEditEvent.expected}. When provided on a
+   * move (`copy: false`), the reposition is a no-op (source returned
+   * unchanged) if the live source at `[fromColumn, fromColumn +
+   * fromLength)` is not `[expected]`. This prevents a stale or
+   * drifted span (e.g. a column miscomputed across an escaped
+   * special — see {@link chordLayoutForLine}) from removing the
+   * wrong bracket and corrupting the song. Omitted on copies (no
+   * removal happens) and ignored then. */
+  expected?: string;
 }
 
 /** Return value of {@link applyChordReposition}. */
@@ -235,7 +302,12 @@ export function applyChordReposition(
   if (typeof evt.chord !== 'string' || evt.chord.length === 0) {
     throw new Error('chord must be a non-empty string');
   }
-  if (/[\[\]{}<\n\r]/.test(evt.chord)) {
+  // Shared structural denylist with buildChordName / applyChordEdit /
+  // applyChordDelete (one constant for every chord-writing helper, so a
+  // future denylist change cannot reach only some of them — the
+  // sister-site divergence `.claude/rules/fix-propagation.md` warns
+  // about; previously this site inlined a near-copy that omitted `>`).
+  if (CHORD_FORBIDDEN_RE.test(evt.chord)) {
     throw new Error(
       `chord ${JSON.stringify(evt.chord)} contains forbidden character ` +
         '(brackets, braces, angle bracket, newline / carriage return)',
@@ -259,6 +331,19 @@ export function applyChordReposition(
         `from range [${evt.fromColumn}, ${evt.fromColumn + evt.fromLength}) ` +
           `exceeds line length ${lineText.length}`,
       );
+    }
+    // Optimistic-concurrency guard (parity with applyChordEdit /
+    // applyChordDelete): if the caller told us which token to expect at
+    // the `from` span and the live source no longer matches — a stale
+    // event, or a column drifted across an escaped special — no-op
+    // instead of removing the wrong bracket and corrupting the song.
+    if (
+      evt.expected !== undefined &&
+      lineText.slice(evt.fromColumn, evt.fromColumn + evt.fromLength) !== `[${evt.expected}]`
+    ) {
+      let caret = 0;
+      for (let i = 0; i < lineIdx; i++) caret += lines[i].length + 1;
+      return { text: source, caretOffset: caret + evt.fromColumn };
     }
     lines[lineIdx] =
       lineText.slice(0, evt.fromColumn) + lineText.slice(evt.fromColumn + evt.fromLength);
@@ -327,6 +412,65 @@ export function sourceColumnToLyricsOffset(line: string, column: number): number
     i++;
   }
   return lyricsCount;
+}
+
+/** One entry of {@link chordLayoutForLine}, parallel to the input
+ * segment list (one per segment, in order). */
+export interface SegmentLayout {
+  /** 0-indexed source column of this segment's `[` opening bracket
+   * (only meaningful when the segment carries a chord). */
+  sourceColumn: number;
+  /** Source-column span of this segment's `[chord]` including both
+   * brackets (`name.length + 2`), or `0` when the segment has no
+   * chord. */
+  bracketLength: number;
+  /** 0-indexed lyrics offset at which this segment's text begins —
+   * i.e. the lyrics offset of the segment's chord, if any. */
+  lyricsOffsetStart: number;
+}
+
+/** Minimal structural shape of a parsed lyrics segment, kept local so
+ * this module stays free of an AST-type import. */
+interface LayoutSegment {
+  text: string;
+  chord?: { name?: string | null } | null;
+}
+
+/**
+ * Compute the source-column / lyrics-offset layout of a lyrics line's
+ * segments — the single source of truth for the chord-coordinate space
+ * shared by the JSX walker (drag / nudge / drop targeting) and
+ * `resolveSelectedChord` (inspector selection → source coordinates).
+ *
+ * Both surfaces previously walked `line.segments` with byte-identical
+ * accumulation; keeping two copies risked silent desync (a future
+ * change to bracket-length math applied to one and not the other would
+ * resolve the wrong chord — exactly the sister-site hazard
+ * `.claude/rules/fix-propagation.md` warns about). This is also the one
+ * place a future fix for escaped-special column drift (see #2634) must
+ * land: the reconstruction below derives columns from post-lex
+ * `seg.text`, which has lost the backslash of an escaped `\[` / `\]` /
+ * `\{` etc., so a chord after such an escape gets a column that is too
+ * small. Edit / delete / reposition all guard against the resulting
+ * stale span via their `expected` token, so a drift produces a safe
+ * no-op rather than corruption until the AST carries real source spans.
+ *
+ * @returns one {@link SegmentLayout} per input segment (same order) and
+ *   the line's total visible lyric-character count.
+ */
+export function chordLayoutForLine(
+  segments: ReadonlyArray<LayoutSegment>,
+): { layout: SegmentLayout[]; totalLyrics: number } {
+  const layout: SegmentLayout[] = [];
+  let sourceColumn = 0;
+  let lyricsOffset = 0;
+  for (const seg of segments) {
+    const bracketLength = seg.chord ? (seg.chord.name?.length ?? 0) + 2 : 0;
+    layout.push({ sourceColumn, bracketLength, lyricsOffsetStart: lyricsOffset });
+    sourceColumn += bracketLength + seg.text.length;
+    lyricsOffset += seg.text.length;
+  }
+  return { layout, totalLyrics: lyricsOffset };
 }
 
 /** Destination of a single-step chord nudge, returned by
@@ -453,6 +597,11 @@ export function buildChordNudge(params: {
       toLyricsOffset: dest.offset,
       chord: params.chordName,
       copy: false,
+      // A nudge moves a chord in place, so the token at the `from`
+      // span is exactly the chord being moved — guard the removal
+      // against that, so a stale / drifted span no-ops instead of
+      // corrupting (parity with the edit / delete guards).
+      expected: params.chordName,
     },
     offset: dest.offset,
     ordinal: dest.ordinal,
@@ -466,13 +615,6 @@ export function buildChordNudge(params: {
 // token from those parts and splice it back over the original
 // `[chord]` at a known source position — the same source-as-truth
 // model the reposition pipeline uses (no parallel chord state).
-
-/** Characters that would corrupt the ChordPro source structure when
- * interpolated into a `[chord]` token. Shared by every chord-writing
- * helper so the editor surface cannot inject directives / brackets /
- * line breaks. `/` is intentionally allowed — it is the slash-chord
- * separator. */
-const CHORD_FORBIDDEN_RE = /[[\]{}<>\n\r]/;
 
 /** A chord-type preset offered as a chip in the editor. `text` is the
  * ChordPro suffix written after the root (+ accidental) — e.g. `"m7"`
@@ -491,6 +633,20 @@ export interface ChordTypePreset {
  * its root). The set is deliberately small and common; arbitrary
  * qualities remain reachable through the free-form suffix field.
  */
+// Sister surface: the iReal Pro chord editor's `QUALITY_OPTIONS`
+// (`ireal-bar-grid-popover.tsx`). The two lists are INTENTIONALLY not
+// identical and are NOT bound by `.claude/rules/fix-propagation.md`'s
+// "keep sister sites in lockstep": iReal models quality as a closed
+// `IrealChordQuality['kind']` enum (a finite set the iReal AST can
+// represent), whereas a ChordPro chord is free-form text, so this list
+// is an open palette of common shorthands the user can extend via the
+// free-form suffix field. New entries here do NOT require a matching
+// `QUALITY_OPTIONS` entry and vice versa.
+//
+// `id` is a stable React key / test selector only (never emitted into
+// the chord text); it avoids `#` and `/` (spelled `s` / written as the
+// `69` text) so it is safe as a DOM id / attribute selector. `text` is
+// the literal ChordPro suffix written after the root (+ accidental).
 export const CHORD_TYPE_PRESETS: readonly ChordTypePreset[] = [
   // Triads / basics
   { id: 'maj', label: 'maj', text: '' },
@@ -547,8 +703,12 @@ export type ChordQualityName = 'major' | 'minor' | 'diminished' | 'augmented';
  * `(minor, "7")` → `"m7"`, `(major, "maj7")` → `"maj7"`,
  * `(diminished, null)` → `"dim"`, `(major, null)` → `""`.
  *
- * The editor uses it to pre-select the matching {@link CHORD_TYPE_PRESETS}
- * chip and to seed the free-form suffix field from the selected chord.
+ * Standalone quality→suffix utility exposed for external hosts that
+ * resolve a chord from a parser quality + extension split. The bundled
+ * inspector does NOT use it — it derives parts from the raw chord name
+ * via `partsFromRawName` so editing stays transpose-safe (it must never
+ * read the transposed `chord.detail`). Kept as public API for consumers
+ * driving the editor from a structured chord rather than a raw name.
  */
 export function chordSuffixFromQuality(
   quality: ChordQualityName,
