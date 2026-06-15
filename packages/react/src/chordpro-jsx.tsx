@@ -39,7 +39,6 @@ import {
   KeySignatureGlyph,
   RoleIcon,
   TimeSignatureGlyph,
-  tempoMarkingFor,
 } from './music-glyphs';
 import { MetronomeButton } from './metronome-button';
 import type {
@@ -3986,22 +3985,22 @@ function handleDirective(
     const safeBpm = Number.isFinite(bpm) && bpm > 0 ? bpm : 60;
     pushElement(
       ctx,
-      // The metronome glyph carries the meaning of the marker
-      // on its own — "Tempo:" duplicates the icon's signal and
-      // crowds the chip, so we drop the textual label and keep
-      // only the BPM value. When the BPM matches a conventional
-      // Italian tempo marking (Allegro, Andante, …) we append
-      // it in parens so the reader sees both numeric and
-      // descriptive tempos at a glance.
-      <span key={key} className="meta-inline meta-inline--tempo">
-        <MetronomeButton bpm={safeBpm} />
-        <span className="meta-inline__value">
-          {bpmRaw} BPM
-          {tempoMarkingFor(safeBpm) != null ? (
-            <span className="meta-inline__marking">{` (${tempoMarkingFor(safeBpm)})`}</span>
-          ) : null}
-        </span>
-      </span>,
+      // The whole chip is the interactive metronome control: clicking
+      // anywhere on it plays an audible metronome at the BPM, and the
+      // frame pulses while playing. `<MetronomeButton>` renders the
+      // chip root itself (a `<button>` when Web Audio is available, a
+      // plain `<span>` otherwise) so `pushElement` decorates it with
+      // `data-source-line` / `line--active` via the forwarded props.
+      // The metronome glyph carries the marker's meaning on its own —
+      // no "Tempo:" label — and the conventional Italian marking
+      // (Allegro, Andante, …) is appended in parens when the BPM
+      // matches one.
+      <MetronomeButton
+        key={key}
+        bpm={safeBpm}
+        bpmRaw={bpmRaw}
+        className="meta-inline meta-inline--tempo"
+      />,
       key, // source-line for `line--active` decoration
     );
     return;

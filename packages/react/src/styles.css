@@ -689,12 +689,12 @@
   }
 }
 
-/* Clickable metronome trigger inside the `{tempo}` chip. The icon
-   plays an audible metronome at the directive's BPM on click (see
-   `<MetronomeButton>` / `useMetronome`). The button is a bare
-   wrapper around the glyph — no chrome of its own — so the chip
-   layout is identical to the non-interactive (SSR / unsupported)
-   fallback that renders the glyph directly.
+/* Interactive `{tempo}` chip. The ENTIRE pill is the click target
+   (not just the metronome icon): clicking anywhere on it toggles an
+   audible metronome at the directive's BPM (see `<MetronomeButton>` /
+   `useMetronome`). The chip is rendered as a `<button>` that keeps
+   the `.meta-inline` pill styling, so this rule only resets the
+   native button chrome.
 
    On hover the cursor becomes a speaker glyph so the affordance is
    discoverable; `pointer` is the fallback for browsers that reject
@@ -702,30 +702,53 @@
    The speaker SVG is inlined as a data URI with a white outline so
    it stays legible on both light and dark sheets; `%23` is the
    percent-encoding of `#` required inside a CSS `url()`. */
-.chordsketch-sheet__content .meta-inline__metronome-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  margin: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  line-height: 0;
-  border-radius: 3px;
+.chordsketch-sheet__content button.meta-inline--interactive {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
   cursor:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3 9v6h4l5 4V5L7 9z' fill='%23000' stroke='%23fff' stroke-width='1.5' stroke-linejoin='round'/%3E%3Cpath d='M15.5 8.5a5 5 0 0 1 0 7' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M18 6a8.5 8.5 0 0 1 0 12' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M15.5 8.5a5 5 0 0 1 0 7' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3Cpath d='M18 6a8.5 8.5 0 0 1 0 12' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E")
       3 12,
     pointer;
 }
-.chordsketch-sheet__content .meta-inline__metronome-button:focus-visible {
+.chordsketch-sheet__content button.meta-inline--interactive:focus-visible {
   outline: 2px solid var(--cs-accent-500, #bd1642);
   outline-offset: 1px;
 }
-/* Active (ticking) state — tint the glyph with the brand accent so
-   the playing metronome is visually distinct from an idle one. */
-.chordsketch-sheet__content .meta-inline__metronome-button.is-playing {
-  color: var(--cs-accent-500, #bd1642);
+/* Playing state — the chip's frame colour pulses once per beat so it
+   is obvious at a glance that the metronome is running. The pulse
+   period is the beat (`--cs-metronome-period`, set inline from the
+   BPM), so the frame breathes in time with the tempo, and the value
+   text picks up the accent. */
+.chordsketch-sheet__content button.meta-inline--interactive.is-playing {
+  color: var(--cs-accent-600, #a30f37);
+  border-color: var(--cs-accent-500, #bd1642);
+  animation: cs-tempo-frame var(--cs-metronome-period, 1s) ease-in-out infinite;
+}
+.chordsketch-sheet__content button.meta-inline--interactive.is-playing .meta-inline__value {
+  color: inherit;
+}
+@keyframes cs-tempo-frame {
+  0%,
+  100% {
+    border-color: var(--cs-accent-300, #ec8aa3);
+    box-shadow: 0 0 0 0 rgba(189, 22, 66, 0);
+  }
+  50% {
+    border-color: var(--cs-accent-500, #bd1642);
+    box-shadow: 0 0 0 2px rgba(189, 22, 66, 0.28);
+  }
+}
+/* Reduced-motion: no pulse, but keep a static accent frame + glow so
+   the playing state is still unmistakable. */
+@media (prefers-reduced-motion: reduce) {
+  .chordsketch-sheet__content button.meta-inline--interactive.is-playing {
+    animation: none;
+    border-color: var(--cs-accent-500, #bd1642);
+    box-shadow: 0 0 0 2px rgba(189, 22, 66, 0.22);
+  }
 }
 
 /* Attribution role icons — small SVGs inline with the
