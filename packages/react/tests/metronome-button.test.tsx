@@ -58,7 +58,13 @@ describe('<MetronomeButton>', () => {
     expect(button?.getAttribute('aria-pressed')).toBe('false');
     expect(button?.getAttribute('aria-label')).toBe('Play metronome at 120 BPM');
     // The decorative glyph is preserved inside the control.
-    expect(button?.querySelector('.music-glyph--metronome')).not.toBeNull();
+    const glyph = button?.querySelector('.music-glyph--metronome');
+    expect(glyph).not.toBeNull();
+    // The SVG is hidden from AT — the button's aria-label already
+    // provides the full accessible name; a redundant role="img"
+    // would cause screen readers to announce the image separately.
+    expect(glyph?.getAttribute('aria-hidden')).toBe('true');
+    expect(glyph?.getAttribute('role')).toBeNull();
   });
 
   test('toggles aria-pressed and label on click', () => {

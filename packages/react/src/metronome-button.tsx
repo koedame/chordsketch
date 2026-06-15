@@ -78,7 +78,11 @@ export function MetronomeButton({ bpm, className }: MetronomeButtonProps): JSX.E
       title={label}
       onClick={() => metronome.toggle(bpm)}
     >
-      <MetronomeGlyph bpm={bpm} className={glyphClass} />
+      {/* The button already supplies a complete accessible label via
+          aria-label; hide the SVG from AT so screen readers do not
+          announce "image: Metronome at N BPM" separately when
+          browsing inside the button. */}
+      <MetronomeGlyph bpm={bpm} className={glyphClass} aria-hidden />
     </button>
   );
 }

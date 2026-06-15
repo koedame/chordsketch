@@ -112,9 +112,13 @@ function getSharedContext(): AudioContext | null {
 }
 
 /**
- * Reset the module-level shared audio state. **Test-only** — not
- * re-exported from the package index. Lets each test start from a
- * clean singleton after swapping the `window.AudioContext` stub.
+ * Reset the module-level shared audio state.
+ *
+ * **Test-only** — not re-exported from the package index. Lets each
+ * test start from a clean singleton after swapping the
+ * `window.AudioContext` stub.
+ *
+ * @internal
  */
 export function resetMetronomeSharedStateForTests(): void {
   sharedContext = null;
