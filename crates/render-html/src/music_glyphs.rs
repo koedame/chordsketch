@@ -349,14 +349,23 @@ fn write_flat(s: &mut String, cx: f32, cy: f32) {
 /// Emit an inline SVG mini metronome glyph with the pendulum
 /// animation duration derived from `bpm`. The `--cs-metronome-
 /// period` CSS custom property is set on the root `<svg>` so
-/// the stylesheet's `@keyframes cs-metronome-swing` rule (in
-/// the embedded `<style>` block) reads it without runtime JS.
+/// the stylesheet's `@keyframes cs-metronome-swing` and
+/// `@keyframes cs-metronome-beat` rules (in the embedded
+/// `<style>` block) read it without runtime JS.
 ///
 /// Geometry: the rod is modelled as an INVERTED pendulum mounted
 /// on a pivot at `(9, 19)` near the base of the triangular body,
 /// with the weight bead near the top of the rod — a real
 /// mechanical Wittner metronome, not a hanging-clock pendulum.
 /// The pivot point is fixed; the rod sweeps wiper-style.
+///
+/// A static beat dot sits in the top-left corner *inside* the
+/// existing viewBox (so the icon height is unchanged) and pulses
+/// flash-then-decay once per beat. Its blink shares the same
+/// `--cs-metronome-period` as the swing, so the dot is at full
+/// brightness exactly when the rod reaches an extreme (the
+/// audible tick). The dot is a sibling of the pendulum group, so
+/// it does NOT swing — only its opacity animates.
 #[must_use]
 pub fn metronome_svg(bpm_raw: &str) -> String {
     let bpm: f32 = bpm_raw.trim().parse::<f32>().unwrap_or(60.0);
@@ -373,7 +382,6 @@ pub fn metronome_svg(bpm_raw: &str) -> String {
     // metronome's audible rhythm.
     let period = (60.0 / safe_bpm).clamp(0.05, 5.0);
 
-    // Use the validated numeric BPM in the accessible name —
     // Use the validated numeric BPM in the accessible name —
     // not the raw `bpm_raw` string — so a `{tempo: <script>}`
     // payload doesn't reach screen readers AND so a future
@@ -400,6 +408,8 @@ pub fn metronome_svg(bpm_raw: &str) -> String {
         "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 4 18 18\" \
          width=\"18\" height=\"18\" class=\"music-glyph music-glyph--metronome\" \
          style=\"--cs-metronome-period:{:.3}s\" role=\"img\" aria-label=\"{}\">\
+         <circle class=\"music-glyph--metronome__beat\" cx=\"2.4\" cy=\"6.2\" \
+         r=\"1.5\" fill=\"currentColor\"/>\
          <path d=\"M 3 21 L 15 21 L 12.5 5 L 5.5 5 Z\" fill=\"none\" \
          stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linejoin=\"round\"/>\
          <circle cx=\"9\" cy=\"19\" r=\"0.7\" fill=\"currentColor\"/>\
@@ -625,6 +635,33 @@ mod tests {
         assert!(
             svg.contains("<line x1=\"9\" y1=\"19\" x2=\"9\" y2=\"7\""),
             "rod must extend upward from base pivot; got: {svg}"
+        );
+    }
+
+    #[test]
+    fn metronome_svg_emits_beat_dot() {
+        let svg = metronome_svg("120");
+        // The beat dot is present, sits in the top-left corner, and
+        // carries the `__beat` class the stylesheet animates.
+        assert!(
+            svg.contains(
+                "<circle class=\"music-glyph--metronome__beat\" cx=\"2.4\" cy=\"6.2\" r=\"1.5\""
+            ),
+            "expected top-left beat dot circle; got: {svg}"
+        );
+        // The beat dot must be a SIBLING of the pendulum group, not
+        // inside it — otherwise it would swing with the rod instead
+        // of staying put. Assert the dot appears before the
+        // pendulum group's opening tag.
+        let beat = svg
+            .find("music-glyph--metronome__beat")
+            .expect("beat dot present");
+        let pendulum = svg
+            .find("music-glyph--metronome__pendulum")
+            .expect("pendulum group present");
+        assert!(
+            beat < pendulum,
+            "beat dot must be emitted outside (before) the pendulum group; got: {svg}"
         );
     }
 
