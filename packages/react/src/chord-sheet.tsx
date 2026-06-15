@@ -1,9 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { HTMLAttributes, ReactNode } from 'react';
 
+import { ChordInspector } from './chord-inspector';
 import { renderChordproAst } from './chordpro-jsx';
 import type { ChordSelection } from './chordpro-jsx';
-import type { ChordRepositionEvent } from './chord-source-edit';
+import type { ChordproChord, ChordproSong } from './chordpro-ast';
+import {
+  buildChordName,
+  buildChordNudge,
+  findChordByOffsetOrdinal,
+  nudgeChordPosition,
+  readCapo,
+} from './chord-source-edit';
+import type {
+  ChordDeleteTarget,
+  ChordEditEvent,
+  ChordParts,
+  ChordRepositionEvent,
+} from './chord-source-edit';
 import type {
   ChordDiagramInstrument,
   ChordDiagramOrientation,
@@ -95,6 +109,32 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
    */
   onChordReposition?: (event: ChordRepositionEvent) => void;
   /**
+   * Optional callback enabling in-place chord editing via the
+   * left-docked inspector (#2622). When set (alongside
+   * `onChordReposition`, which enables selection), clicking a chord
+   * opens an editor for its root / accidental / type / bass; each
+   * change emits a {@link ChordEditEvent} the consumer applies with
+   * `applyChordEdit` (exported from this package). Omit to render the
+   * inspector read-only / without the edit controls taking effect.
+   *
+   * Disabled (along with selection / drag) while an effective transpose
+   * is active (a non-zero `transpose`, or a `{capo}` in the source):
+   * the rendered chords are then the transposed spelling, not the raw
+   * source, so source-coordinate editing would corrupt the song. Clear
+   * the transpose / capo to edit.
+   *
+   * Only consumed by `format="html"`.
+   */
+  onChordEdit?: (event: ChordEditEvent) => void;
+  /**
+   * Optional callback enabling the inspector's "Remove chord" action
+   * (#2622). Receives the chord token's source coordinates; apply it
+   * with `applyChordDelete`. Omit to hide the remove button.
+   *
+   * Only consumed by `format="html"`.
+   */
+  onChordDelete?: (target: ChordDeleteTarget) => void;
+  /**
    * Configuration preset name (e.g. `"guitar"`, `"ukulele"`) or an
    * inline RRJSON configuration string.
    */
@@ -148,6 +188,103 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
   astWasmLoader?: ChordproWasmLoader;
 }
 
+/** The selected chord resolved out of the AST into the coordinates +
+ * parts the inspector needs. `null` when the selection no longer maps
+ * to a chord (e.g. the source was edited out from under it). */
+interface ResolvedChord {
+  /** Raw chord name for the inspector header. */
+  chordName: string;
+  parts: { root: string; accidental: '' | '#' | 'b'; suffix: string; bass: string };
+  sourceLine: number;
+  sourceColumn: number;
+  bracketLength: number;
+  currentOffset: number;
+  otherOffsets: number[];
+  totalLyrics: number;
+}
+
+/** Split a raw chord name into editor parts. Used for ALL chords (not
+ * just detail-less ones): the source carries the RAW name (`chord.name`),
+ * whereas a transposed render exposes the transposed pitch via
+ * `chord.detail` / `chord.display`. Editing must rewrite the raw source
+ * chord, so deriving parts from the raw name keeps editing correct even
+ * under a non-zero transpose. The split is round-trippable —
+ * `root + accidental + suffix (+ /bass)` reassembles the original name. */
+function partsFromRawName(name: string): ResolvedChord['parts'] {
+  const slash = name.indexOf('/');
+  const head = slash >= 0 ? name.slice(0, slash) : name;
+  const bass = slash >= 0 ? name.slice(slash + 1) : '';
+  const hasRoot = /^[A-G]/.test(head);
+  // Rootless / non-standard names (e.g. `N.C.`) yield an empty root so
+  // a stray chip click → buildChordName(empty root) throws and the
+  // edit is dropped, rather than defaulting to `C` and corrupting the
+  // token. The chord stays selectable (badge + move), just not
+  // root/type-editable until the user sets a root.
+  const root = hasRoot ? head[0] : '';
+  let rest = hasRoot ? head.slice(1) : head;
+  let accidental: '' | '#' | 'b' = '';
+  if (rest[0] === '#') {
+    accidental = '#';
+    rest = rest.slice(1);
+  } else if (rest[0] === 'b') {
+    accidental = 'b';
+    rest = rest.slice(1);
+  }
+  return { root, accidental, suffix: rest, bass };
+}
+
+/**
+ * Resolve the current {@link ChordSelection} against the AST into the
+ * selected chord's source coordinates + editable parts. Recomputes the
+ * selected line's chord layout (source columns + lyrics offsets) the
+ * same way the JSX walker does, then locates the chord by its
+ * `(offset, ordinal)` identity. Returns `null` when the line is not a
+ * lyrics line or the selection no longer resolves.
+ */
+function resolveSelectedChord(ast: ChordproSong, selection: ChordSelection): ResolvedChord | null {
+  const line = ast.lines[selection.line - 1];
+  if (!line || line.kind !== 'lyrics') return null;
+  const segments = line.value.segments;
+  let srcCol = 0;
+  let lyricsCount = 0;
+  const chords: Array<{
+    sourceColumn: number;
+    bracketLength: number;
+    offset: number;
+    chord: ChordproChord;
+  }> = [];
+  for (const seg of segments) {
+    const bracketLen = seg.chord ? (seg.chord.name?.length ?? 0) + 2 : 0;
+    if (seg.chord) {
+      chords.push({
+        sourceColumn: srcCol,
+        bracketLength: bracketLen,
+        offset: lyricsCount,
+        chord: seg.chord,
+      });
+    }
+    srcCol += bracketLen + seg.text.length;
+    lyricsCount += seg.text.length;
+  }
+  const offsets = chords.map((c) => c.offset);
+  const idx = findChordByOffsetOrdinal(offsets, selection.offset, selection.ordinal);
+  if (idx < 0) return null;
+  const target = chords[idx];
+  // Derive parts from the RAW name (transpose-safe — see
+  // partsFromRawName). `detail` is intentionally not used here.
+  const parts = partsFromRawName(target.chord.name ?? '');
+  return {
+    chordName: target.chord.name ?? '',
+    parts,
+    sourceLine: selection.line,
+    sourceColumn: target.sourceColumn,
+    bracketLength: target.bracketLength,
+    currentOffset: target.offset,
+    otherOffsets: offsets.filter((_, i) => i !== idx),
+    totalLyrics: lyricsCount,
+  };
+}
+
 function defaultErrorFallback(error: Error): ReactNode {
   return (
     <div role="alert" className="chordsketch-sheet__error">
@@ -196,6 +333,8 @@ export function ChordSheet({
   caretColumn,
   caretLineLength,
   onChordReposition,
+  onChordEdit,
+  onChordDelete,
   className,
   ...divProps
 }: ChordSheetProps): JSX.Element {
@@ -230,6 +369,8 @@ export function ChordSheet({
       caretColumn={caretColumn}
       caretLineLength={caretLineLength}
       onChordReposition={onChordReposition}
+      onChordEdit={onChordEdit}
+      onChordDelete={onChordDelete}
       wrapperClass={wrapperClass}
       divProps={divProps}
     />
@@ -290,6 +431,8 @@ function ChordSheetAstBranch({
   caretColumn,
   caretLineLength,
   onChordReposition,
+  onChordEdit,
+  onChordDelete,
   wrapperClass,
   divProps,
 }: BranchProps & {
@@ -300,6 +443,8 @@ function ChordSheetAstBranch({
   caretColumn: number | undefined;
   caretLineLength: number | undefined;
   onChordReposition: ((event: ChordRepositionEvent) => void) | undefined;
+  onChordEdit: ((event: ChordEditEvent) => void) | undefined;
+  onChordDelete: ((target: ChordDeleteTarget) => void) | undefined;
 }): JSX.Element {
   const { ast, loading, error, transposedKey, transposedKeyDirectives } = useChordproAst(
     source,
@@ -339,7 +484,7 @@ function ChordSheetAstBranch({
         root != null &&
         el != null &&
         root.contains(el) &&
-        el.closest('.chord, .chord-nudge')
+        el.closest('.chord, .chordsketch-sheet__cins')
       ) {
         return;
       }
@@ -348,6 +493,35 @@ function ChordSheetAstBranch({
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [chordSelection]);
+
+  // Resolve the selection into the selected chord's coordinates + parts
+  // for the inspector. Recomputed whenever the AST (a re-parse after an
+  // edit / nudge) or the selection changes.
+  const resolvedChord = useMemo(
+    () => (ast && chordSelection ? resolveSelectedChord(ast, chordSelection) : null),
+    [ast, chordSelection],
+  );
+
+  // Source-coordinate editing (selection / drag / nudge / inspector)
+  // is only valid when the chords the walker renders match the raw
+  // source. The wasm parse path transposes the AST in place — folding
+  // any `{capo: N}` into the effective transpose (ADR-0023) — so under
+  // a non-zero effective transpose `chord.name` is the TRANSPOSED
+  // spelling, and editing by source coordinates would write the wrong
+  // chord / miscompute columns. Gate the whole interaction off in that
+  // case (it would otherwise silently corrupt the song). `effective =
+  // transpose − capo`; coincidental cancellation (e.g. transpose +2 with
+  // `{capo: 2}`) is genuinely a no-op transpose, so editing is safe.
+  const sourceEditable = (transpose ?? 0) - readCapo(source) === 0;
+  const repositionCb = sourceEditable ? onChordReposition : undefined;
+  const editCb = sourceEditable ? onChordEdit : undefined;
+  const deleteCb = sourceEditable ? onChordDelete : undefined;
+  // Drop a stale selection if the user applies a transpose / capo while
+  // a chord is selected, so no badge / inspector lingers on a chord the
+  // user can no longer safely edit.
+  useEffect(() => {
+    if (!sourceEditable && chordSelection != null) setChordSelection(null);
+  }, [sourceEditable, chordSelection]);
 
   if (ast === null) {
     return (
@@ -380,10 +554,83 @@ function ChordSheetAstBranch({
           activeSourceLine,
           caretColumn,
           caretLineLength,
-          onChordReposition,
-          chordSelection,
-          setChordSelection,
+          onChordReposition: repositionCb,
+          chordSelection: repositionCb ? chordSelection : null,
+          setChordSelection: repositionCb ? setChordSelection : undefined,
         })}
+        {resolvedChord && editCb ? (
+          <ChordInspector
+            chordName={resolvedChord.chordName}
+            root={resolvedChord.parts.root}
+            accidental={resolvedChord.parts.accidental}
+            suffix={resolvedChord.parts.suffix}
+            bass={resolvedChord.parts.bass}
+            // `[]` for otherOffsets: availability depends only on
+            // the line bounds; otherOffsets is used solely to compute
+            // the destination ordinal (not the null/non-null result),
+            // so an empty list is fine for the can-move check.
+            canLeft={
+              nudgeChordPosition(resolvedChord.currentOffset, [], resolvedChord.totalLyrics, -1) !==
+              null
+            }
+            canRight={
+              nudgeChordPosition(resolvedChord.currentOffset, [], resolvedChord.totalLyrics, 1) !==
+              null
+            }
+            onChange={(parts: ChordParts) => {
+              let chord: string;
+              try {
+                chord = buildChordName(parts);
+              } catch {
+                // Invalid parts (e.g. a rootless chord whose root is
+                // empty — buildChordName throws); ignore rather than
+                // corrupt the source.
+                return;
+              }
+              editCb({
+                line: resolvedChord.sourceLine,
+                fromColumn: resolvedChord.sourceColumn,
+                fromLength: resolvedChord.bracketLength,
+                chord,
+                expected: resolvedChord.chordName,
+              });
+            }}
+            onNudge={(direction) => {
+              const result = buildChordNudge({
+                sourceLine: resolvedChord.sourceLine,
+                chordName: resolvedChord.chordName,
+                sourceColumn: resolvedChord.sourceColumn,
+                bracketLength: resolvedChord.bracketLength,
+                currentOffset: resolvedChord.currentOffset,
+                otherOffsets: resolvedChord.otherOffsets,
+                totalLyrics: resolvedChord.totalLyrics,
+                direction,
+              });
+              if (!result || !repositionCb) return;
+              repositionCb(result.event);
+              setChordSelection((prev) => ({
+                line: resolvedChord.sourceLine,
+                offset: result.offset,
+                ordinal: result.ordinal,
+                nonce: (prev?.nonce ?? 0) + 1,
+              }));
+            }}
+            onRemove={
+              deleteCb
+                ? () => {
+                    deleteCb({
+                      line: resolvedChord.sourceLine,
+                      fromColumn: resolvedChord.sourceColumn,
+                      fromLength: resolvedChord.bracketLength,
+                      expected: resolvedChord.chordName,
+                    });
+                    setChordSelection(null);
+                  }
+                : undefined
+            }
+            onClose={() => setChordSelection(null)}
+          />
+        ) : null}
       </div>
     </div>
   );
