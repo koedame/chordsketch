@@ -679,4 +679,14 @@ describe('applyChordEdit / applyChordDelete — expected-token guard', () => {
     });
     expect(text).toBe('[Cm]hi');
   });
+
+  test('applyChordDelete applies when `expected` matches the live span', () => {
+    const { text } = applyChordDelete('[Am]hi', {
+      line: 1,
+      fromColumn: 0,
+      fromLength: 4,
+      expected: 'Am',
+    });
+    expect(text).toBe('hi');
+  });
 });
