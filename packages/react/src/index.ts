@@ -45,6 +45,16 @@ export {
   type UseTransposeResult,
 } from './use-transpose';
 export { useDebounced } from './use-debounced';
+export {
+  MetronomeButton,
+  type MetronomeButtonProps,
+} from './metronome-button';
+export {
+  useMetronome,
+  METRONOME_MIN_BPM,
+  METRONOME_MAX_BPM,
+  type UseMetronomeResult,
+} from './use-metronome';
 
 // AST → JSX walker (#2475 / ADR-0017). Powers `<ChordSheet>`'s
 // `format="html"` branch — exposed at the package boundary so
