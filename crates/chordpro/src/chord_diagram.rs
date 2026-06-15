@@ -382,6 +382,14 @@ struct DiagramMetrics {
     /// Extra CSS class appended to the root `<svg>` `class` attribute
     /// (empty for regular, `" chord-diagram-compact"` for compact).
     class_extra: &'static str,
+    /// Whether to draw a fret-number label at every fret line across the
+    /// visible window (the absolute fret number `base_fret - 1 + j`).
+    ///
+    /// `true` for the regular size — the full axis subsumes the legacy
+    /// single base-fret label. `false` for the compact size, which keeps
+    /// the minimal single base-fret label so the above-a-lyric layout
+    /// stays uncluttered (see [`DiagramSize::Compact`]).
+    show_fret_numbers: bool,
 }
 
 impl DiagramMetrics {
@@ -406,6 +414,7 @@ impl DiagramMetrics {
             nut_stroke: 3.0,
             line_stroke: 1.0,
             class_extra: "",
+            show_fret_numbers: true,
         }
     }
 
@@ -439,6 +448,10 @@ impl DiagramMetrics {
             nut_stroke: 2.0,
             line_stroke: 0.75,
             class_extra: " chord-diagram-compact",
+            // Compact diagrams sit directly above a lyric line where a full
+            // fret-number axis would add clutter and height; keep the legacy
+            // single base-fret label instead.
+            show_fret_numbers: false,
         }
     }
 
@@ -584,6 +597,7 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
         nut_stroke,
         line_stroke,
         class_extra,
+        show_fret_numbers,
         ..
     } = *m;
 
@@ -619,7 +633,10 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
              stroke=\"black\" stroke-width=\"{nut_stroke}\"/>\n",
             left_margin + grid_w
         ));
-    } else {
+    } else if !show_fret_numbers {
+        // Compact size keeps the legacy single base-fret label. The regular
+        // size draws the full fret-number axis below, which already labels
+        // the first visible fret, so the standalone label would duplicate it.
         svg.push_str(&format!(
             "<text x=\"{}\" y=\"{}\" text-anchor=\"end\" \
              font-family=\"sans-serif\" font-size=\"{label_font}\">{}</text>\n",
@@ -627,6 +644,25 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
             nut_y + cell_h / 2.0 + text_v_center,
             data.base_fret
         ));
+    }
+
+    // Fret-number axis: label every fret line in the visible window with its
+    // absolute fret number (`base_fret - 1 + j`), so fret line 0 is the
+    // nut/open position (labelled 0 when the diagram starts at the nut). The
+    // labels sit left of the grid, right-anchored inside the existing left
+    // margin, so the diagram's bounding box is unchanged. A `fret-number`
+    // class is emitted so consumers can restyle or hide the axis via CSS.
+    if show_fret_numbers {
+        for j in 0..=num_frets {
+            let fret_number = data.base_fret as i32 - 1 + j as i32;
+            let y = nut_y + j as f32 * cell_h + text_v_center;
+            svg.push_str(&format!(
+                "<text x=\"{}\" y=\"{y}\" text-anchor=\"end\" \
+                 font-family=\"sans-serif\" font-size=\"{label_font}\" \
+                 class=\"fret-number\">{fret_number}</text>\n",
+                left_margin - 4.0,
+            ));
+        }
     }
 
     // Fretboard position-marker inlays (faint dots between the
@@ -765,6 +801,7 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
         nut_stroke,
         line_stroke,
         class_extra,
+        show_fret_numbers,
         ..
     } = *m;
 
@@ -814,7 +851,10 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
              stroke=\"black\" stroke-width=\"{nut_stroke}\"/>\n",
             top_margin + grid_h
         ));
-    } else {
+    } else if !show_fret_numbers {
+        // Compact size keeps the legacy single base-fret label above the
+        // first fret column. The regular size draws the full fret-number axis
+        // below the grid, which already labels the first visible fret.
         svg.push_str(&format!(
             "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" \
              font-family=\"sans-serif\" font-size=\"{label_font}\">{}</text>\n",
@@ -822,6 +862,24 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
             top_margin - 4.0,
             data.base_fret
         ));
+    }
+
+    // Fret-number axis: label every fret line in the visible window with its
+    // absolute fret number (`base_fret - 1 + j`) below the grid, matching the
+    // conventional `0 1 2 3` strip beneath a horizontal fretboard. The labels
+    // sit inside the existing bottom padding so the diagram's bounding box is
+    // unchanged; the `fret-number` class lets consumers restyle/hide them.
+    if show_fret_numbers {
+        let label_y = top_margin + grid_h + label_font;
+        for j in 0..=num_frets {
+            let fret_number = data.base_fret as i32 - 1 + j as i32;
+            let x = nut_x + j as f32 * fret_pitch;
+            svg.push_str(&format!(
+                "<text x=\"{x}\" y=\"{label_y}\" text-anchor=\"middle\" \
+                 font-family=\"sans-serif\" font-size=\"{label_font}\" \
+                 class=\"fret-number\">{fret_number}</text>\n"
+            ));
+        }
     }
 
     // Fretboard position-marker inlays — at the horizontal centre row. The
@@ -3100,5 +3158,133 @@ mod tests {
             "render_svg_with_options(Vertical, Regular) must be byte-identical to \
              render_svg_with_orientation(Vertical)"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Fret-number axis (#2602) — every fret line in the visible window is
+    // labelled with its absolute fret number across both orientations.
+    // -----------------------------------------------------------------------
+
+    fn open_c() -> DiagramData {
+        DiagramData {
+            name: "C".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 3, 2, 0, 1, 0],
+            fingers: vec![],
+        }
+    }
+
+    #[test]
+    fn fret_number_axis_vertical_open_position_labels_zero_through_frets_shown() {
+        // base_fret == 1 with 5 visible frets → fret lines 0..=5 are each
+        // labelled with their absolute fret number, the nut being 0.
+        let svg = render_svg_with_orientation(&open_c(), Orientation::Vertical);
+        let count = svg.matches("class=\"fret-number\"").count();
+        assert_eq!(count, 6, "expected 6 fret-line labels (0..=5); got: {svg}");
+        for n in 0..=5 {
+            assert!(
+                svg.contains(&format!("class=\"fret-number\">{n}</text>")),
+                "expected fret-number label {n}; got: {svg}"
+            );
+        }
+    }
+
+    #[test]
+    fn fret_number_axis_horizontal_open_position_sits_below_grid() {
+        // Horizontal axis runs along the bottom of the grid (the `0 1 2 3`
+        // strip under a horizontal fretboard). Labels are centred on each
+        // fret line and middle-anchored.
+        let svg = render_svg_with_orientation(&open_c(), Orientation::Horizontal);
+        let count = svg.matches("class=\"fret-number\"").count();
+        assert_eq!(count, 6, "expected 6 fret-line labels (0..=5); got: {svg}");
+        // The leftmost label (0) is centred on the nut column at x = LEFT_MARGIN.
+        assert!(
+            svg.contains(
+                "<text x=\"20\" y=\"120\" text-anchor=\"middle\" \
+                 font-family=\"sans-serif\" font-size=\"10\" class=\"fret-number\">0</text>"
+            ),
+            "expected nut-column label 0 at x=20 y=120; got: {svg}"
+        );
+    }
+
+    #[test]
+    fn fret_number_axis_offset_by_base_fret() {
+        // A barre window starting at base_fret 7 labels the fret WIRES it
+        // spans: line 0 is the wire behind the window (6), and the visible
+        // frets 7..=11 follow. The single legacy base-fret label is gone —
+        // the axis subsumes it — so `7` appears exactly once.
+        let data = DiagramData {
+            name: "Bm".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 7,
+            frets: vec![-1, 1, 3, 3, 2, 1],
+            fingers: vec![],
+        };
+        for orientation in [Orientation::Vertical, Orientation::Horizontal] {
+            let svg = render_svg_with_orientation(&data, orientation);
+            for n in 6..=11 {
+                assert!(
+                    svg.contains(&format!("class=\"fret-number\">{n}</text>")),
+                    "expected fret-number label {n} for {orientation:?}; got: {svg}"
+                );
+            }
+            assert_eq!(
+                svg.matches("class=\"fret-number\">7</text>").count(),
+                1,
+                "base-fret 7 must be labelled exactly once for {orientation:?}; got: {svg}"
+            );
+        }
+    }
+
+    #[test]
+    fn fret_number_axis_omitted_in_compact_but_base_label_kept() {
+        // Compact diagrams (above-a-lyric) suppress the full axis to stay
+        // uncluttered, but must keep the legacy single base-fret label so a
+        // high-position compact diagram still shows where it sits.
+        let data = DiagramData {
+            name: "Bm".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 7,
+            frets: vec![-1, 1, 3, 3, 2, 1],
+            fingers: vec![],
+        };
+        for orientation in [Orientation::Vertical, Orientation::Horizontal] {
+            let svg = render_svg_with_options(&data, orientation, DiagramSize::Compact);
+            assert!(
+                !svg.contains("class=\"fret-number\""),
+                "compact must not draw the full fret-number axis for {orientation:?}; got: {svg}"
+            );
+            assert!(
+                svg.contains(">7</text>"),
+                "compact must keep the single base-fret label 7 for {orientation:?}; got: {svg}"
+            );
+        }
+    }
+
+    #[test]
+    fn fret_number_axis_does_not_grow_the_bounding_box() {
+        // The axis is laid out inside the existing margins / bottom padding,
+        // so adding it must not change either SVG's width or height. These
+        // are the historical dimensions for a 6-string, 5-fret diagram.
+        let extract = |svg: &str, attr: &str| -> f32 {
+            let needle = format!("{attr}=\"");
+            let i = svg.find(&needle).unwrap() + needle.len();
+            let j = svg[i..].find('"').unwrap();
+            svg[i..i + j].parse().unwrap()
+        };
+        let data = open_c();
+        let v = render_svg_with_orientation(&data, Orientation::Vertical);
+        assert_eq!(extract(&v, "width"), 120.0);
+        assert_eq!(extract(&v, "height"), 160.0);
+        let h = render_svg_with_orientation(&data, Orientation::Horizontal);
+        assert_eq!(extract(&h, "width"), 140.0);
+        assert_eq!(extract(&h, "height"), 130.0);
     }
 }
