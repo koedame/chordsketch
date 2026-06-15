@@ -62,7 +62,9 @@ describe('<MetronomeButton>', () => {
     expect(button.classList.contains('meta-inline--tempo')).toBe(true);
     expect(button.getAttribute('type')).toBe('button');
     expect(button.getAttribute('aria-pressed')).toBe('false');
-    expect(button.getAttribute('aria-label')).toBe('Play metronome at 120 BPM');
+    // The Italian marking is folded into the label so AT still hears
+    // it (the button's aria-label overrides the inner readout text).
+    expect(button.getAttribute('aria-label')).toBe('Play metronome at 120 BPM, Allegro');
     // The readout lives inside the button (so clicking the text also
     // toggles), and the glyph is hidden from AT (button names itself).
     expect(button.textContent).toContain('120 BPM');
@@ -84,13 +86,13 @@ describe('<MetronomeButton>', () => {
 
     fireEvent.click(button);
     expect(button.getAttribute('aria-pressed')).toBe('true');
-    expect(button.getAttribute('aria-label')).toBe('Stop metronome (120 BPM)');
+    expect(button.getAttribute('aria-label')).toBe('Stop metronome (120 BPM, Allegro)');
     // `is-playing` is what the stylesheet keys the animated frame on.
     expect(button.classList.contains('is-playing')).toBe(true);
 
     fireEvent.click(button);
     expect(button.getAttribute('aria-pressed')).toBe('false');
-    expect(button.getAttribute('aria-label')).toBe('Play metronome at 120 BPM');
+    expect(button.getAttribute('aria-label')).toBe('Play metronome at 120 BPM, Allegro');
     expect(button.classList.contains('is-playing')).toBe(false);
   });
 
@@ -118,7 +120,7 @@ describe('<MetronomeButton>', () => {
       <MetronomeButton bpm={90} bpmRaw="90" className="meta-inline meta-inline--tempo" />,
     );
     expect(button.getAttribute('aria-pressed')).toBe('true');
-    expect(button.getAttribute('aria-label')).toBe('Stop metronome (90 BPM)');
+    expect(button.getAttribute('aria-label')).toBe('Stop metronome (90 BPM, Andante)');
     expect(button.style.getPropertyValue('--cs-metronome-period')).toBe('0.667s');
   });
 
@@ -131,7 +133,7 @@ describe('<MetronomeButton>', () => {
       <MetronomeButton bpm={90} bpmRaw="90" className="meta-inline meta-inline--tempo" />,
     );
     expect(button.getAttribute('aria-pressed')).toBe('false');
-    expect(button.getAttribute('aria-label')).toBe('Play metronome at 90 BPM');
+    expect(button.getAttribute('aria-label')).toBe('Play metronome at 90 BPM, Andante');
   });
 
   test('falls back to a static, non-interactive chip when Web Audio is unavailable', () => {
@@ -144,8 +146,10 @@ describe('<MetronomeButton>', () => {
     expect(chip).not.toBeNull();
     expect(chip.tagName).toBe('SPAN');
     expect(chip.textContent).toContain('120 BPM');
-    // The standalone glyph keeps its accessible label (no button name).
+    // The visible readout carries the tempo, so the glyph is hidden
+    // from AT to avoid announcing the BPM twice.
     const glyph = chip.querySelector('.music-glyph--metronome');
-    expect(glyph?.getAttribute('role')).toBe('img');
+    expect(glyph?.getAttribute('aria-hidden')).toBe('true');
+    expect(glyph?.getAttribute('role')).toBeNull();
   });
 });

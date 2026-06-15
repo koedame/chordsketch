@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, JSX } from 'react';
 
-import { MetronomeGlyph, tempoMarkingFor } from './music-glyphs';
+import { MetronomeGlyph, metronomePeriodCss, tempoMarkingFor } from './music-glyphs';
 import { useMetronome } from './use-metronome';
 
 /** Props for {@link MetronomeButton}. */
@@ -88,28 +88,31 @@ export function MetronomeButton({
   );
 
   if (!interactive) {
-    // Non-interactive fallback: the glyph keeps its own `role="img"`
-    // + label since there is no surrounding button to name it.
+    // Non-interactive fallback: the BPM + marking are carried by the
+    // visible `value` text, so the glyph is decorative — hide it from
+    // AT to avoid announcing the tempo twice ("Metronome at N BPM"
+    // then "N BPM (marking)").
     return (
       <span className={className} data-source-line={dataSourceLine}>
-        <MetronomeGlyph bpm={bpm} className="meta-inline__glyph" />
+        <MetronomeGlyph bpm={bpm} className="meta-inline__glyph" aria-hidden />
         {value}
       </span>
     );
   }
 
+  // Fold the Italian marking into the label so AT users still hear it
+  // — the button's aria-label overrides the inner readout text, which
+  // is the only other place the marking is exposed.
+  const tempoText = marking != null ? `${bpm} BPM, ${marking}` : `${bpm} BPM`;
   const label = metronome.isPlaying
-    ? `Stop metronome (${bpm} BPM)`
-    : `Play metronome at ${bpm} BPM`;
-  // Beat duration in seconds, clamped to a sane range so a typo'd
-  // `{tempo: 99999}` doesn't strobe the frame and `{tempo: 0.001}`
-  // doesn't freeze it. Mirrors `MetronomeGlyph`'s pendulum clamp so
-  // the frame pulse and the pendulum swing share one tempo.
-  const period = Math.max(0.05, Math.min(5, 60 / (bpm > 0 ? bpm : 60)));
+    ? `Stop metronome (${tempoText})`
+    : `Play metronome at ${tempoText}`;
+  // The frame-pulse period (shared clamp with the pendulum swing) is
+  // published as a CSS custom property the `cs-tempo-frame` keyframes
+  // consume. The cast keeps CSSProperties happy (custom props aren't
+  // typed).
   const style: CSSProperties = {
-    // CSS custom property consumed by the `cs-tempo-frame` keyframes.
-    // The cast keeps CSSProperties happy (custom props aren't typed).
-    ['--cs-metronome-period' as string]: `${period.toFixed(3)}s`,
+    ['--cs-metronome-period' as string]: metronomePeriodCss(bpm),
   };
 
   return (

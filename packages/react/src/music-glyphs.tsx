@@ -623,6 +623,31 @@ export function tempoMarkingFor(bpm: number): string | null {
   return 'Prestissimo';
 }
 
+// ---- Metronome timing -------------------------------------------
+
+/**
+ * Seconds-per-beat for a BPM, clamped to a sane range so a typo'd
+ * `{tempo: 99999}` doesn't strobe and `{tempo: 0.001}` doesn't
+ * freeze. A non-finite / non-positive BPM falls back to 60.
+ *
+ * Single source of truth for the metronome's animation tempo: both
+ * `MetronomeGlyph` (pendulum swing) and `<MetronomeButton>` (frame
+ * pulse) derive their `--cs-metronome-period` from it, so the two
+ * animations cannot drift out of sync.
+ */
+export function metronomePeriodSeconds(bpm: number): number {
+  const safe = Number.isFinite(bpm) && bpm > 0 ? bpm : 60;
+  return Math.max(0.05, Math.min(5, 60 / safe));
+}
+
+/**
+ * {@link metronomePeriodSeconds} formatted as the CSS `<time>` value
+ * for the `--cs-metronome-period` custom property (e.g. `"0.500s"`).
+ */
+export function metronomePeriodCss(bpm: number): string {
+  return `${metronomePeriodSeconds(bpm).toFixed(3)}s`;
+}
+
 // ---- Metronome glyph --------------------------------------------
 
 /**
@@ -660,20 +685,16 @@ export function MetronomeGlyph({
   'aria-hidden'?: boolean;
 }): JSX.Element {
   const safeBpm = Number.isFinite(bpm) && bpm > 0 ? bpm : 60;
-  // Half-cycle duration in seconds — the time the rod takes to
-  // travel from one extreme to the other. With
-  // `animation-direction: alternate` this is the
-  // `animation-duration`. The full back-and-forth cycle is
-  // `2 * period` seconds. Two ticks per cycle ⇒ one tick every
-  // `period` seconds ⇒ exactly `bpm` ticks per minute.
-  // Clamp to a sane range so a typo'd `{tempo: 99999}` doesn't
-  // strobe and `{tempo: 0.001}` doesn't freeze.
-  const period = Math.max(0.05, Math.min(5, 60 / safeBpm));
+  // Half-cycle duration the keyframes consume: the rod travels from
+  // one extreme to the other in one `--cs-metronome-period`, so with
+  // `animation-direction: alternate` it reaches the opposite extreme
+  // every `60/bpm` seconds — one tick per beat. The clamp lives in
+  // `metronomePeriodSeconds` (shared with `<MetronomeButton>`).
   const cssVars: CSSProperties = {
     ...(style ?? {}),
-    // CSS custom property the keyframes consume. The cast keeps
-    // CSSProperties happy (custom properties are not in its type).
-    ['--cs-metronome-period' as string]: `${period.toFixed(3)}s`,
+    // The cast keeps CSSProperties happy (custom properties are not
+    // in its type).
+    ['--cs-metronome-period' as string]: metronomePeriodCss(bpm),
   };
 
   // The SVG models a mechanical (Wittner-style) metronome: the
