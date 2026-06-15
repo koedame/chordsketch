@@ -1,6 +1,8 @@
 # 0031. Chord-diagram fret numbers label fret-cell centres (press positions)
 
-- **Status**: Accepted
+- **Status**: Accepted — compact carve-out superseded by
+  [ADR-0032](0032-compact-diagrams-show-fret-number-axis.md) (compact now draws
+  the press-position axis); the rest still stands
 - **Date**: 2026-06-15
 - **Supersedes**: the labelling-position sub-decision of
   [ADR-0030](0030-chord-diagram-fret-number-axis.md) (the rest of ADR-0030 —
