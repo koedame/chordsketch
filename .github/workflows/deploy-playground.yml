@@ -20,6 +20,18 @@ on:
       - 'packages/playground/**'
       - 'packages/npm/**'
       - 'packages/npm-export/**'
+      # The playground build pulls these workspace packages directly from
+      # their SOURCE via Vite aliases (see `packages/playground/
+      # vite.config.ts`: `@chordsketch/react` → `../react/src`, etc.), not
+      # from a published/built copy. A change under any of them therefore
+      # changes the bundle the deployed site serves, so — by the same
+      # reasoning as the `crates/**` block above — they must be watched or
+      # the live playground goes silently stale (PR #2633's
+      # `packages/react/src/styles.css` metronome change merged without a
+      # redeploy because none of these were listed; issue #2636).
+      - 'packages/react/**'
+      - 'packages/react-ui/**'
+      - 'packages/ui-irealb-editor/**'
       # The docs SSG reads `docs/sdk/**` from disk at build time (see
       # `packages/playground/scripts/build-docs-static.mjs`), so Markdown
       # edits under that tree must trigger a redeploy or the deployed
