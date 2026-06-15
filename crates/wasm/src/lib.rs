@@ -1896,7 +1896,8 @@ mod wasm_tests {
     use super::bindings::{
         chord_diagram_svg, chord_diagram_svg_with_defines,
         chord_diagram_svg_with_defines_orientation, chord_diagram_svg_with_orientation,
-        parse_irealb, render_html, render_html_with_options, render_html_with_warnings,
+        parse_chordpro_with_warnings, parse_chordpro_with_warnings_and_options, parse_irealb,
+        render_html, render_html_with_options, render_html_with_warnings,
         render_html_with_warnings_and_options, render_ireal_svg, render_text,
         render_text_with_options, render_text_with_warnings, render_text_with_warnings_and_options,
         serialize_irealb, start, validate, version,
@@ -1908,11 +1909,80 @@ mod wasm_tests {
         render_pdf_with_warnings, render_pdf_with_warnings_and_options,
     };
 
-    use js_sys::{Array, Reflect};
+    use js_sys::{Array, Map, Reflect};
     use wasm_bindgen::{JsCast, JsValue};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     const MINIMAL_INPUT: &str = "{title: Test}\n[C]Hello";
+
+    /// Regression for the multi-`{key}` transpose bug: every
+    /// `{key:}` directive in a transposed song must reach JS in the
+    /// `transposedKeyDirectives` field as a **plain object**, not an
+    /// ES `Map`.
+    ///
+    /// `serde_wasm_bindgen` serializes Rust maps as ES `Map` by
+    /// default, but the React JSX walker reads
+    /// `transposedKeyDirectives[keyName]` with plain-object bracket
+    /// access — which returns `undefined` on a `Map`. The symptom
+    /// was that a multi-`{key}` song showed the "Original → Playing"
+    /// pair for only the song-primary key (the one that still
+    /// resolved via the `soundingKey` fallback) and left every
+    /// other `{key:}` chip unpaired. The native unit tests in this
+    /// crate never caught it because they call `do_parse_chordpro`
+    /// directly and the React unit tests hand-build the map as a
+    /// plain JS object literal — only the real wasm boundary, under
+    /// `wasm-pack test --node`, exercises the serialization. See the
+    /// `to_js_value` helper in `bindings.rs`.
+    #[wasm_bindgen_test]
+    fn parse_chordpro_transposed_key_directives_is_plain_object() {
+        let opts = js_sys::Object::new();
+        Reflect::set(&opts, &"transpose".into(), &JsValue::from(2)).unwrap();
+        let v =
+            parse_chordpro_with_warnings_and_options("{key: G}\n[G]a\n{key: D}\n[D]b", opts.into())
+                .unwrap();
+        let map = Reflect::get(&v, &"transposedKeyDirectives".into()).unwrap();
+        assert!(
+            map.is_object(),
+            "transposedKeyDirectives must be a JS object (got {map:?})"
+        );
+        assert!(
+            !map.is_instance_of::<Map>(),
+            "transposedKeyDirectives must NOT be an ES Map — the React walker \
+             indexes it with object-bracket access, which is undefined on a Map"
+        );
+        // `Reflect::get` mirrors the `obj[key]` access the walker
+        // performs. Every transposed `{key:}` value must resolve:
+        // G + 2 = A, D + 2 = E.
+        let g = Reflect::get(&map, &"G".into()).unwrap();
+        assert_eq!(
+            g.as_string().as_deref(),
+            Some("A"),
+            "transposedKeyDirectives['G'] must be A"
+        );
+        let d = Reflect::get(&map, &"D".into()).unwrap();
+        assert_eq!(
+            d.as_string().as_deref(),
+            Some("E"),
+            "transposedKeyDirectives['D'] must be E (the mid-song key the \
+             Map-vs-object bug silently dropped)"
+        );
+    }
+
+    /// Same guarantee for the no-options entry point. The lean
+    /// `@chordsketch/wasm` bundle's `parseChordproWithWarnings`
+    /// never carries a transpose offset, so the map is empty and the
+    /// field is omitted entirely — assert it is absent (or, if
+    /// present, still a plain object) rather than an ES `Map`.
+    #[wasm_bindgen_test]
+    fn parse_chordpro_with_warnings_no_transpose_omits_key_directives() {
+        let v = parse_chordpro_with_warnings("{key: G}\n[G]a\n{key: D}\n[D]b").unwrap();
+        let map = Reflect::get(&v, &"transposedKeyDirectives".into()).unwrap();
+        // No transpose → no pairs to surface → field omitted.
+        assert!(
+            map.is_undefined(),
+            "transposedKeyDirectives must be omitted with no transpose (got {map:?})"
+        );
+    }
 
     /// `render_html_with_options` accepts a real JS object and produces
     /// HTML containing the rendered title. Exercises the
