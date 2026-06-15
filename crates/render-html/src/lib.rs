@@ -4554,6 +4554,18 @@ Verse text\n\
             html.contains("@keyframes cs-metronome-beat"),
             "expected beat keyframe in embedded stylesheet; got: {html}"
         );
+        // Phase-sync invariant: the beat blink MUST be driven by the
+        // same `--cs-metronome-period` custom property as the swing,
+        // so the flash peak coincides with the rod reaching an
+        // extreme on every beat. A regression that hardcodes the
+        // beat's animation duration would silently desync the flash
+        // from the tick without tripping the presence checks above.
+        assert!(
+            html.contains(
+                ".music-glyph--metronome__beat { animation: cs-metronome-beat var(--cs-metronome-period"
+            ),
+            "beat blink must reuse --cs-metronome-period for phase sync; got: {html}"
+        );
     }
 
     #[test]
