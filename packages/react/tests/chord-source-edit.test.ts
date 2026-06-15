@@ -10,6 +10,10 @@ import {
   applyChordEdit,
   applyChordReposition,
   buildChordName,
+  buildChordNudge,
+  capoTransposeOffset,
+  chordLayoutForLine,
+  chordSourceEditableUnderTranspose,
   chordSuffixFromQuality,
   findChordByOffsetOrdinal,
   lyricsOffsetToSourceColumn,
@@ -711,5 +715,160 @@ describe('applyChordEdit / applyChordDelete — expected-token guard', () => {
       expected: 'Am',
     });
     expect(text).toBe('hi');
+  });
+});
+
+describe('capoTransposeOffset (mirrors core capo_validated 1..=24)', () => {
+  test('returns 0 when no {capo} directive is present', () => {
+    expect(capoTransposeOffset('{title: T}\nLa la')).toBe(0);
+  });
+
+  test('returns the value verbatim for 1..=24 (NO display clamp to 12)', () => {
+    expect(capoTransposeOffset('{capo: 1}\n')).toBe(1);
+    expect(capoTransposeOffset('{capo: 12}\n')).toBe(12);
+    // The bug this guards: readCapo clamps 13..24 down to 12; the gate
+    // must use the real value the core transposes by.
+    expect(capoTransposeOffset('{capo: 13}\n')).toBe(13);
+    expect(capoTransposeOffset('{capo: 24}\n')).toBe(24);
+    expect(readCapo('{capo: 18}\n')).toBe(12); // sanity: readCapo DOES clamp
+    expect(capoTransposeOffset('{capo: 18}\n')).toBe(18); // gate does not
+  });
+
+  test('returns 0 for out-of-range / malformed / negative (core treats as unset)', () => {
+    expect(capoTransposeOffset('{capo: 0}\n')).toBe(0);
+    expect(capoTransposeOffset('{capo: 25}\n')).toBe(0);
+    expect(capoTransposeOffset('{capo: 300}\n')).toBe(0);
+    expect(capoTransposeOffset('{capo: -3}\n')).toBe(0);
+  });
+});
+
+describe('chordSourceEditableUnderTranspose', () => {
+  test('editable when effective transpose is zero', () => {
+    expect(chordSourceEditableUnderTranspose('La la', 0)).toBe(true);
+    expect(chordSourceEditableUnderTranspose('La la', undefined)).toBe(true);
+    // Coincidental cancellation is a genuine no-op transpose.
+    expect(chordSourceEditableUnderTranspose('{capo: 2}\nLa', 2)).toBe(true);
+  });
+
+  test('NOT editable when a transpose or capo shifts the rendered chords', () => {
+    expect(chordSourceEditableUnderTranspose('La la', 3)).toBe(false);
+    expect(chordSourceEditableUnderTranspose('{capo: 5}\nLa', 0)).toBe(false);
+  });
+
+  test('regression: capo 13..24 is not clamped, so the gate stays correct', () => {
+    // Pre-fix, readCapo(13)=12 made `12 - 12 === 0` → editing enabled on
+    // a transposed AST (core effective = 12 - 13 = -1). Must be false now.
+    expect(chordSourceEditableUnderTranspose('{capo: 13}\nLa', 12)).toBe(false);
+    // And the genuine no-op at capo 18 / transpose 18 stays editable.
+    expect(chordSourceEditableUnderTranspose('{capo: 18}\nLa', 18)).toBe(true);
+  });
+});
+
+describe('chordLayoutForLine', () => {
+  test('chord-less line: every segment column equals its lyrics offset', () => {
+    const { layout, totalLyrics } = chordLayoutForLine([{ text: 'Hello' }]);
+    expect(layout).toEqual([{ sourceColumn: 0, bracketLength: 0, lyricsOffsetStart: 0 }]);
+    expect(totalLyrics).toBe(5);
+  });
+
+  test('accounts for bracket width when accumulating source columns', () => {
+    // Source: `[C]do[Am]re` → seg0 {C,"do"}, seg1 {Am,"re"}.
+    const { layout, totalLyrics } = chordLayoutForLine([
+      { text: 'do', chord: { name: 'C' } },
+      { text: 're', chord: { name: 'Am' } },
+    ]);
+    expect(layout).toEqual([
+      { sourceColumn: 0, bracketLength: 3, lyricsOffsetStart: 0 }, // [C]
+      { sourceColumn: 5, bracketLength: 4, lyricsOffsetStart: 2 }, // [Am] after `[C]do`
+    ]);
+    expect(totalLyrics).toBe(4);
+  });
+
+  test('matches the column applyChordEdit expects (round-trips with the editor)', () => {
+    const segs = [{ text: 'hi', chord: { name: 'Am' } }];
+    const { layout } = chordLayoutForLine(segs);
+    const source = '[Am]hi';
+    expect(source.slice(layout[0].sourceColumn, layout[0].sourceColumn + layout[0].bracketLength)).toBe(
+      '[Am]',
+    );
+  });
+});
+
+describe('applyChordReposition — expected-token guard (parity with edit/delete)', () => {
+  test('move no-ops when the live `from` span no longer matches `expected`', () => {
+    // Stale/drifted span: source has `[C]` at col 0 but the event expects `[Am]`.
+    const before = '[C]hi';
+    const { text } = applyChordReposition(before, {
+      fromLine: 1,
+      fromColumn: 0,
+      fromLength: 4,
+      toLine: 1,
+      toLyricsOffset: 2,
+      chord: 'Am',
+      copy: false,
+      expected: 'Am',
+    });
+    expect(text).toBe(before); // unchanged — no corruption
+  });
+
+  test('move applies when `expected` matches the live span', () => {
+    const { text } = applyChordReposition('[Am]hi', {
+      fromLine: 1,
+      fromColumn: 0,
+      fromLength: 4,
+      toLine: 1,
+      toLyricsOffset: 2,
+      chord: 'Am',
+      copy: false,
+      expected: 'Am',
+    });
+    expect(text).toBe('hi[Am]');
+  });
+
+  test('copy ignores `expected` (nothing is removed)', () => {
+    const { text } = applyChordReposition('hi', {
+      fromLine: 1,
+      fromColumn: 0,
+      fromLength: 4,
+      toLine: 1,
+      toLyricsOffset: 0,
+      chord: 'Am',
+      copy: true,
+      expected: 'whatever',
+    });
+    expect(text).toBe('[Am]hi');
+  });
+
+  test('shares the structural denylist with the other writers (rejects `>`)', () => {
+    // Pre-fix, applyChordReposition inlined a denylist that omitted `>`.
+    expect(() =>
+      applyChordReposition('hi', {
+        fromLine: 1,
+        fromColumn: 0,
+        fromLength: 0,
+        toLine: 1,
+        toLyricsOffset: 0,
+        chord: 'A>',
+        copy: true,
+      }),
+    ).toThrow(/forbidden/);
+  });
+});
+
+describe('buildChordNudge sets the expected-token guard on its move event', () => {
+  test('expected equals the moved chord name', () => {
+    const result = buildChordNudge({
+      sourceLine: 1,
+      chordName: 'Am7',
+      sourceColumn: 0,
+      bracketLength: 5,
+      currentOffset: 0,
+      otherOffsets: [],
+      totalLyrics: 4,
+      direction: 1,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.event.expected).toBe('Am7');
+    expect(result!.event.copy).toBe(false);
   });
 });

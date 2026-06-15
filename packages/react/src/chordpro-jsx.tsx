@@ -75,6 +75,7 @@ import type {
 } from './use-chord-diagram';
 import {
   buildChordNudge,
+  chordLayoutForLine,
   findChordByOffsetOrdinal,
 } from './chord-source-edit';
 import type { ChordRepositionEvent } from './chord-source-edit';
@@ -1809,26 +1810,19 @@ function LyricsLine({
   // Pre-walk segments to record per-chord source columns and
   // per-segment lyrics-offset starts. Memoised so dragover-driven
   // re-renders don't re-walk on every event.
-  const segmentLayout = useMemo(() => {
-    const layout: Array<{
-      chordSourceColumn: number;
-      chordBracketLength: number;
-      lyricsOffsetStart: number;
-    }> = [];
-    let srcCol = 0;
-    let lyricsCount = 0;
-    for (const seg of line.segments) {
-      const bracketLen = seg.chord ? (seg.chord.name?.length ?? 0) + 2 : 0;
-      layout.push({
-        chordSourceColumn: srcCol,
-        chordBracketLength: bracketLen,
-        lyricsOffsetStart: lyricsCount,
-      });
-      srcCol += bracketLen + seg.text.length;
-      lyricsCount += seg.text.length;
-    }
-    return layout;
-  }, [line.segments]);
+  const segmentLayout = useMemo(
+    () =>
+      // Single source of truth for the chord coordinate space, shared
+      // with `resolveSelectedChord` (chord-sheet) so the two cannot
+      // drift — see chordLayoutForLine. Mapped to this component's
+      // existing field names to keep downstream call sites unchanged.
+      chordLayoutForLine(line.segments).layout.map((l) => ({
+        chordSourceColumn: l.sourceColumn,
+        chordBracketLength: l.bracketLength,
+        lyricsOffsetStart: l.lyricsOffsetStart,
+      })),
+    [line.segments],
+  );
 
   // ---- Click-to-focus + nudge state (#2614) ----------------------
   // Chord-bearing segments in left-to-right order, paired with the
@@ -2060,6 +2054,10 @@ function LyricsLine({
           toLyricsOffset: segLayout.lyricsOffsetStart + target.charOffset,
           chord: payload.chord,
           copy: event.altKey,
+          // Guard the move's removal against the dragged chord's own
+          // token, so a stale / drifted `from` span no-ops instead of
+          // corrupting (copy removes nothing, so no guard needed).
+          expected: event.altKey ? undefined : payload.chord,
         });
       }
     : undefined;
@@ -2337,6 +2335,9 @@ function buildLyricsDropProps(
         toLyricsOffset: lyricsOffsetStart + charOffset,
         chord: payload.chord,
         copy: event.altKey,
+        // Guard the move's removal against the dragged chord's own
+        // token (copy removes nothing, so no guard needed).
+        expected: event.altKey ? undefined : payload.chord,
       });
     },
   };

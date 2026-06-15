@@ -599,6 +599,54 @@ describe('<ChordSheet>', () => {
     });
   });
 
+  test('selecting a chord scrolls it into view; typing in the inspector does not re-scroll (#2631)', async () => {
+    // jsdom does not implement scrollIntoView; define it as a spy so the
+    // effect's `typeof … === 'function'` guard passes and we can count
+    // calls. Restore afterwards so the global stays clean for other tests.
+    const original = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
+    const spy = vi.fn();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      writable: true,
+      value: spy,
+    });
+    try {
+      const { container } = render(
+        <ChordSheet
+          source="[Am]hi"
+          astWasmLoader={makeAstLoader(chordStub())}
+          onChordReposition={vi.fn()}
+          onChordEdit={vi.fn()}
+        />,
+      );
+      await waitFor(() => {
+        expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+      });
+      // No selection yet → the effect early-returns, nothing scrolled.
+      expect(spy).not.toHaveBeenCalled();
+
+      fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+      // Selection set → the selected badge is scrolled into view (rAF).
+      await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+      const selected = container.querySelector('.chord--selected');
+      expect(spy.mock.instances[0]).toBe(selected);
+      expect(spy.mock.calls[0][0]).toMatchObject({ block: 'center' });
+
+      // Typing in the free-form suffix field is an in-place edit: the
+      // selection coordinates (line, offset, ordinal) are unchanged, so
+      // the scroll effect (keyed on chordSelection) must NOT re-fire.
+      const input = container.querySelector(
+        '.chordsketch-sheet__cins-row2 .chordsketch-sheet__cins-input',
+      ) as HTMLInputElement;
+      fireEvent.change(input, { target: { value: 'm7' } });
+      await Promise.resolve();
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      if (original) Object.defineProperty(Element.prototype, 'scrollIntoView', original);
+      else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+
   test('the inspector ◀ button is disabled for a chord at the line start', async () => {
     const { container } = render(
       <ChordSheet
