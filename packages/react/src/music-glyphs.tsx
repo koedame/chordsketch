@@ -636,6 +636,14 @@ export function tempoMarkingFor(bpm: number): string | null {
  * the rod arrives at the opposite extreme every `60/bpm`
  * seconds — exactly one beat at the requested BPM.
  *
+ * A static beat dot sits in the top-left corner *inside* the
+ * existing viewBox (so the icon height is unchanged) and pulses
+ * flash-then-decay once per beat. Its blink shares the same
+ * `--cs-metronome-period` as the swing, so the dot is at full
+ * brightness exactly when the rod reaches an extreme (the
+ * audible tick). The dot is a sibling of the pendulum group, so
+ * it does NOT swing — only its opacity animates.
+ *
  * The animation is gated on
  * `@media (prefers-reduced-motion: reduce)` so users who opt out
  * of motion see a static icon.
@@ -702,6 +710,12 @@ export function MetronomeGlyph({
       aria-hidden={ariaHidden ?? undefined}
       aria-label={ariaHidden ? undefined : `Metronome at ${safeBpm} BPM`}
     >
+      {/* Beat dot — static, top-left corner inside the existing
+          viewBox so the icon height is unchanged. A sibling of the
+          pendulum group (NOT inside it), so it stays put while only
+          its opacity animates (flash → decay) via the
+          `cs-metronome-beat` keyframe in the stylesheet. */}
+      <circle className="music-glyph--metronome__beat" cx={2.4} cy={6.2} r={1.5} fill="currentColor" />
       {/* Triangular body — narrow top, wide base. */}
       <path
         d="M 3 21 L 15 21 L 12.5 5 L 5.5 5 Z"
