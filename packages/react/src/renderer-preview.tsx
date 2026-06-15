@@ -2,7 +2,11 @@ import type { HTMLAttributes, ReactNode } from 'react';
 
 import { ChordSheet } from './chord-sheet';
 import { PdfExport } from './pdf-export';
-import type { ChordRepositionEvent } from './chord-source-edit';
+import type {
+  ChordDeleteTarget,
+  ChordEditEvent,
+  ChordRepositionEvent,
+} from './chord-source-edit';
 import type {
   ChordDiagramInstrument,
   ChordDiagramOrientation,
@@ -69,6 +73,17 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
    */
   onChordReposition?: (event: ChordRepositionEvent) => void;
   /**
+   * Optional in-place chord-edit callback (#2622). Forwarded to
+   * {@link ChordSheet}; see `ChordSheetProps.onChordEdit`. Enables the
+   * left-docked chord-editor inspector. Only consumed by `format="html"`.
+   */
+  onChordEdit?: (event: ChordEditEvent) => void;
+  /**
+   * Optional chord-delete callback (#2622). Forwarded to
+   * {@link ChordSheet}; see `ChordSheetProps.onChordDelete`.
+   */
+  onChordDelete?: (target: ChordDeleteTarget) => void;
+  /**
    * Optional content rendered while the wasm runtime is initialising.
    *
    * Only honoured by the inline `html` / `text` branches — the
@@ -132,6 +147,8 @@ export function RendererPreview({
   caretColumn,
   caretLineLength,
   onChordReposition,
+  onChordEdit,
+  onChordDelete,
   loadingFallback,
   errorFallback,
   wasmLoader,
@@ -170,6 +187,8 @@ export function RendererPreview({
       caretColumn={caretColumn}
       caretLineLength={caretLineLength}
       onChordReposition={onChordReposition}
+      onChordEdit={onChordEdit}
+      onChordDelete={onChordDelete}
       loadingFallback={loadingFallback}
       errorFallback={errorFallback}
       wasmLoader={wasmLoader}

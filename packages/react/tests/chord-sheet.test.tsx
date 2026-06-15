@@ -497,7 +497,10 @@ describe('<ChordSheet>', () => {
     };
   }
 
-  test('onChordReposition enables click-to-focus nudge controls', async () => {
+  test('onChordReposition enables click-to-select + keyboard nudge', async () => {
+    // Without onChordEdit, clicking selects (solid badge) and keyboard
+    // arrows nudge, but the editor inspector is not shown (it is the
+    // chord EDITOR, gated on onChordEdit).
     const onChordReposition = vi.fn();
     const { container } = render(
       <ChordSheet
@@ -509,12 +512,18 @@ describe('<ChordSheet>', () => {
     await waitFor(() => {
       expect(container.querySelector(".chord[role='button']")).not.toBeNull();
     });
-    // No controls until the chord is clicked.
-    expect(container.querySelector('.chord-nudge')).toBeNull();
-    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
-    // Controls appear; the right button moves Am one char into "hi".
-    expect(container.querySelector('.chord-nudge')).not.toBeNull();
-    fireEvent.click(container.querySelector('.chord-nudge__btn--right') as HTMLElement);
+    expect(container.querySelector('.chord--selected')).toBeNull();
+    expect(container.querySelector('.chordsketch-sheet__cins')).toBeNull();
+    const chord = container.querySelector(".chord[role='button']") as HTMLElement;
+    fireEvent.click(chord);
+    // Selected badge, but no inspector (no onChordEdit wired).
+    expect(container.querySelector('.chord--selected')).not.toBeNull();
+    expect(container.querySelector('.chordsketch-sheet__cins')).toBeNull();
+    // Keyboard ArrowRight moves Am one char into "hi".
+    fireEvent.keyDown(
+      container.querySelector('.chord--selected') as HTMLElement,
+      { key: 'ArrowRight' },
+    );
     expect(onChordReposition).toHaveBeenCalledTimes(1);
     expect(onChordReposition.mock.calls[0][0]).toMatchObject({
       fromLine: 1,
@@ -525,22 +534,170 @@ describe('<ChordSheet>', () => {
     });
   });
 
-  test('pressing down outside the sheet clears the chord selection', async () => {
+  test('onChordEdit opens the inspector; a type chip emits a ChordEditEvent', async () => {
+    const onChordReposition = vi.fn();
+    const onChordEdit = vi.fn();
     const { container } = render(
       <ChordSheet
         source="[Am]hi"
         astWasmLoader={makeAstLoader(chordStub())}
-        onChordReposition={vi.fn()}
+        onChordReposition={onChordReposition}
+        onChordEdit={onChordEdit}
       />,
     );
     await waitFor(() => {
       expect(container.querySelector(".chord[role='button']")).not.toBeNull();
     });
     fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
-    expect(container.querySelector('.chord-nudge')).not.toBeNull();
+    // Inspector appears with the selected chord in the header.
+    expect(container.querySelector('.chordsketch-sheet__cins')).not.toBeNull();
+    expect(container.querySelector('.chordsketch-sheet__cins-name')?.textContent).toBe('Am');
+    // A type chip emits a ChordEditEvent rewriting the chord at its
+    // source position. Am is detail-less in the stub, so the editor
+    // falls back to raw-name parts (root A, suffix "m"); picking "7"
+    // writes "A7" over the original [Am].
+    const chips = container.querySelectorAll('.chordsketch-sheet__cins-chip');
+    const seven = Array.from(chips).find((c) => c.textContent === '7') as HTMLButtonElement;
+    expect(seven).toBeDefined();
+    fireEvent.click(seven);
+    expect(onChordEdit).toHaveBeenCalledTimes(1);
+    expect(onChordEdit.mock.calls[0][0]).toEqual({
+      line: 1,
+      fromColumn: 0,
+      fromLength: 4,
+      chord: 'A7',
+    });
+  });
+
+  test('the inspector ▶ button moves the chord via the reposition pipeline', async () => {
+    const onChordReposition = vi.fn();
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={onChordReposition}
+        onChordEdit={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+    });
+    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+    const right = container.querySelector(
+      '.chordsketch-sheet__cins-move button[aria-label="Move chord right"]',
+    ) as HTMLButtonElement;
+    fireEvent.click(right);
+    expect(onChordReposition).toHaveBeenCalledTimes(1);
+    expect(onChordReposition.mock.calls[0][0]).toMatchObject({
+      fromLine: 1,
+      toLine: 1,
+      toLyricsOffset: 1,
+      chord: 'Am',
+      copy: false,
+    });
+  });
+
+  test('the inspector ◀ button is disabled for a chord at the line start', async () => {
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={vi.fn()}
+        onChordEdit={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+    });
+    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+    const left = container.querySelector(
+      '.chordsketch-sheet__cins-move button[aria-label="Move chord left"]',
+    ) as HTMLButtonElement;
+    const right = container.querySelector(
+      '.chordsketch-sheet__cins-move button[aria-label="Move chord right"]',
+    ) as HTMLButtonElement;
+    expect(left.disabled).toBe(true);
+    expect(right.disabled).toBe(false);
+  });
+
+  test('the inspector "Remove chord" button fires onChordDelete and deselects', async () => {
+    const onChordDelete = vi.fn();
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={vi.fn()}
+        onChordEdit={vi.fn()}
+        onChordDelete={onChordDelete}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+    });
+    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+    const remove = container.querySelector(
+      '.chordsketch-sheet__cins-remove',
+    ) as HTMLButtonElement;
+    fireEvent.click(remove);
+    expect(onChordDelete).toHaveBeenCalledWith({ line: 1, fromColumn: 0, fromLength: 4 });
+    expect(container.querySelector('.chordsketch-sheet__cins')).toBeNull();
+  });
+
+  test('the inspector "Remove" button is hidden when onChordDelete is not wired', async () => {
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={vi.fn()}
+        onChordEdit={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+    });
+    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+    expect(container.querySelector('.chordsketch-sheet__cins')).not.toBeNull();
+    expect(container.querySelector('.chordsketch-sheet__cins-remove')).toBeNull();
+  });
+
+  test('pressing down outside the sheet clears the chord selection', async () => {
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={vi.fn()}
+        onChordEdit={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+    });
+    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+    expect(container.querySelector('.chordsketch-sheet__cins')).not.toBeNull();
     // Pointer down on the document body (outside any chord) clears it.
     fireEvent.pointerDown(document.body);
-    expect(container.querySelector('.chord-nudge')).toBeNull();
+    expect(container.querySelector('.chordsketch-sheet__cins')).toBeNull();
+  });
+
+  test('pressing inside the inspector keeps the selection', async () => {
+    // The outside-click listener must exclude the inspector itself, or
+    // interacting with its controls would deselect mid-edit.
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={vi.fn()}
+        onChordEdit={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+    });
+    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+    const inspector = container.querySelector('.chordsketch-sheet__cins') as HTMLElement;
+    expect(inspector).not.toBeNull();
+    fireEvent.pointerDown(inspector);
+    expect(container.querySelector('.chordsketch-sheet__cins')).not.toBeNull();
   });
 
   test('pressing on the chord glyph (text node) does not clear the selection', async () => {
@@ -559,7 +716,7 @@ describe('<ChordSheet>', () => {
       expect(container.querySelector(".chord[role='button']")).not.toBeNull();
     });
     fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
-    expect(container.querySelector('.chord-nudge')).not.toBeNull();
+    expect(container.querySelector('.chord--selected')).not.toBeNull();
     // The chord name renders as a direct Text-node child of `.chord`.
     const chordSpan = container.querySelector('.chord--selected') as HTMLElement;
     const textNode = Array.from(chordSpan.childNodes).find(
@@ -568,7 +725,7 @@ describe('<ChordSheet>', () => {
     expect(textNode).toBeDefined();
     fireEvent.pointerDown(textNode as Node);
     // Selection survives — the press resolved to the `.chord` element.
-    expect(container.querySelector('.chord-nudge')).not.toBeNull();
+    expect(container.querySelector('.chord--selected')).not.toBeNull();
   });
 
   test('chords stay inert when onChordReposition is not provided', async () => {

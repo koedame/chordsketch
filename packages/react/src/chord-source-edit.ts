@@ -399,3 +399,294 @@ export function findChordByOffsetOrdinal(
   }
   return -1;
 }
+
+/** Result of {@link buildChordNudge}: the reposition event to fire plus
+ * the chord's new `(offset, ordinal)` so the caller can advance the
+ * selection to track the moved chord. */
+export interface ChordNudgeResult {
+  event: ChordRepositionEvent;
+  offset: number;
+  ordinal: number;
+}
+
+/**
+ * Build the reposition event + advanced selection coordinates for
+ * moving one chord one lyric character in `direction`. Shared by the
+ * keyboard arrow path (in the JSX walker) and the inspector's ◀ / ▶
+ * buttons so both produce identical moves (one source of nudge logic).
+ *
+ * Returns `null` when the move is out of bounds (the caller disables
+ * the control / drops the key press).
+ */
+export function buildChordNudge(params: {
+  /** 1-indexed source line the chord lives on (move is same-line). */
+  sourceLine: number;
+  /** Chord name written back into the source, e.g. `"Am7"`. */
+  chordName: string;
+  /** 0-indexed source column of the chord's `[`. */
+  sourceColumn: number;
+  /** Source-column span of `[chord]` (`name.length + 2`). */
+  bracketLength: number;
+  /** The chord's current lyrics offset. */
+  currentOffset: number;
+  /** Lyrics offsets of every OTHER chord on the line (for the
+   * destination ordinal). */
+  otherOffsets: readonly number[];
+  /** Total visible lyric characters on the line. */
+  totalLyrics: number;
+  /** `-1` left, `+1` right. */
+  direction: -1 | 1;
+}): ChordNudgeResult | null {
+  const dest = nudgeChordPosition(
+    params.currentOffset,
+    params.otherOffsets,
+    params.totalLyrics,
+    params.direction,
+  );
+  if (!dest) return null;
+  return {
+    event: {
+      fromLine: params.sourceLine,
+      fromColumn: params.sourceColumn,
+      fromLength: params.bracketLength,
+      toLine: params.sourceLine,
+      toLyricsOffset: dest.offset,
+      chord: params.chordName,
+      copy: false,
+    },
+    offset: dest.offset,
+    ordinal: dest.ordinal,
+  };
+}
+
+// ---- Chord editing (#2622) -----------------------------------------
+// The click-to-focus inspector (#2614 follow-up) edits the selected
+// chord in place: root, accidental, type (quality + extension), and an
+// optional slash bass. The pure helpers below build the ChordPro chord
+// token from those parts and splice it back over the original
+// `[chord]` at a known source position — the same source-as-truth
+// model the reposition pipeline uses (no parallel chord state).
+
+/** Characters that would corrupt the ChordPro source structure when
+ * interpolated into a `[chord]` token. Shared by every chord-writing
+ * helper so the editor surface cannot inject directives / brackets /
+ * line breaks. `/` is intentionally allowed — it is the slash-chord
+ * separator. */
+const CHORD_FORBIDDEN_RE = /[[\]{}<>\n\r]/;
+
+/** A chord-type preset offered as a chip in the editor. `text` is the
+ * ChordPro suffix written after the root (+ accidental) — e.g. `"m7"`
+ * for A minor 7 → `Am7`. `id` is a stable key; `label` is the chip
+ * face (may contain display accidentals like `♭`). */
+export interface ChordTypePreset {
+  id: string;
+  label: string;
+  text: string;
+}
+
+/**
+ * The curated chord-type presets the editor chips expose, in display
+ * order. Each maps to the canonical ChordPro suffix the parser
+ * round-trips. `maj` is the empty suffix (a bare major triad is just
+ * its root). The set is deliberately small and common; arbitrary
+ * qualities remain reachable through the free-form suffix field.
+ */
+export const CHORD_TYPE_PRESETS: readonly ChordTypePreset[] = [
+  { id: 'maj', label: 'maj', text: '' },
+  { id: 'min', label: 'min', text: 'm' },
+  { id: '7', label: '7', text: '7' },
+  { id: 'maj7', label: 'maj7', text: 'maj7' },
+  { id: 'm7', label: 'm7', text: 'm7' },
+  { id: 'm7b5', label: 'm7♭5', text: 'm7b5' },
+  { id: 'dim', label: 'dim', text: 'dim' },
+  { id: 'dim7', label: 'dim7', text: 'dim7' },
+  { id: 'aug', label: 'aug', text: 'aug' },
+  { id: 'sus2', label: 'sus2', text: 'sus2' },
+  { id: 'sus4', label: 'sus4', text: 'sus4' },
+  { id: '6', label: '6', text: '6' },
+  { id: '9', label: '9', text: '9' },
+  { id: 'add9', label: 'add9', text: 'add9' },
+];
+
+/** Quality enum values mirrored from `ChordproChordQuality` — kept as a
+ * plain string union so this module stays free of an AST-type import. */
+export type ChordQualityName = 'major' | 'minor' | 'diminished' | 'augmented';
+
+/**
+ * Reconstruct the chord suffix (the text after the root + accidental,
+ * before any `/bass`) from a parsed quality + extension. This is the
+ * inverse of how the parser splits a chord, so it round-trips: e.g.
+ * `(minor, "7")` → `"m7"`, `(major, "maj7")` → `"maj7"`,
+ * `(diminished, null)` → `"dim"`, `(major, null)` → `""`.
+ *
+ * The editor uses it to pre-select the matching {@link CHORD_TYPE_PRESETS}
+ * chip and to seed the free-form suffix field from the selected chord.
+ */
+export function chordSuffixFromQuality(
+  quality: ChordQualityName,
+  extension: string | null,
+): string {
+  const base =
+    quality === 'minor'
+      ? 'm'
+      : quality === 'diminished'
+        ? 'dim'
+        : quality === 'augmented'
+          ? 'aug'
+          : ''; // major
+  return `${base}${extension ?? ''}`;
+}
+
+/** The component parts the chord editor manipulates. */
+export interface ChordParts {
+  /** Root note letter `A`–`G` (uppercase). */
+  root: string;
+  /** Root accidental: `''` (natural), `'#'` (sharp), or `'b'` (flat). */
+  accidental?: '' | '#' | 'b';
+  /** Quality + extension suffix written after the root, e.g. `'m7'`,
+   * `'maj7'`, `'sus4'`. Empty for a bare major triad. */
+  suffix?: string;
+  /** Optional slash-bass token (without the leading `/`), e.g. `'G'`,
+   * `'F#'`. Empty / omitted = no slash. */
+  bass?: string;
+}
+
+/**
+ * Build a ChordPro chord token body (the text that goes inside the
+ * `[...]`, without the brackets) from its parts.
+ *
+ * `root + accidental + suffix + (bass ? "/" + bass : "")`.
+ *
+ * Throws if the root is not a single `A`–`G` letter, if the accidental
+ * is not one of `''` / `'#'` / `'b'`, or if `suffix` / `bass` contain a
+ * character that would break the ChordPro source structure (brackets,
+ * braces, angle brackets, slash inside the suffix, newlines). The throw
+ * is defense-in-depth — the editor UI only ever produces valid parts —
+ * mirroring {@link applyChordReposition}'s chord-name guard.
+ */
+export function buildChordName(parts: ChordParts): string {
+  const { root } = parts;
+  if (typeof root !== 'string' || !/^[A-G]$/.test(root)) {
+    throw new Error(`chord root must be a single A-G letter, got ${JSON.stringify(root)}`);
+  }
+  const accidental = parts.accidental ?? '';
+  if (accidental !== '' && accidental !== '#' && accidental !== 'b') {
+    throw new Error(`chord accidental must be '', '#', or 'b', got ${JSON.stringify(accidental)}`);
+  }
+  const suffix = parts.suffix ?? '';
+  // The suffix sits before the slash, so it must not itself contain a
+  // `/` (that would create a spurious bass split) on top of the shared
+  // structural denylist.
+  if (CHORD_FORBIDDEN_RE.test(suffix) || suffix.includes('/')) {
+    throw new Error(`chord suffix ${JSON.stringify(suffix)} contains a forbidden character`);
+  }
+  const bass = parts.bass ?? '';
+  if (CHORD_FORBIDDEN_RE.test(bass) || bass.includes('/')) {
+    throw new Error(`chord bass ${JSON.stringify(bass)} contains a forbidden character`);
+  }
+  return `${root}${accidental}${suffix}${bass ? `/${bass}` : ''}`;
+}
+
+/** Describes an in-place chord edit in source-coordinate terms. */
+export interface ChordEditEvent {
+  /** 1-indexed source line of the chord being edited. */
+  line: number;
+  /** 0-indexed source column of the original `[` opening bracket. */
+  fromColumn: number;
+  /** Source-column span of the original `[chord]`, including both
+   * brackets (`oldName.length + 2`). */
+  fromLength: number;
+  /** New chord token body (without brackets), e.g. `"Am7"`. Build it
+   * with {@link buildChordName}. */
+  chord: string;
+}
+
+/**
+ * Apply an in-place chord edit: replace the `[chord]` token at
+ * `(line, fromColumn)` spanning `fromLength` columns with
+ * `[evt.chord]`, returning the updated source plus a caret offset
+ * pointing just past the rewritten bracket.
+ *
+ * Throws if `line` / the column span is out of range, or if
+ * `evt.chord` is empty or contains a structurally dangerous character
+ * (same guard as {@link applyChordReposition}).
+ */
+export function applyChordEdit(source: string, evt: ChordEditEvent): ChordRepositionResult {
+  if (typeof evt.chord !== 'string' || evt.chord.length === 0) {
+    throw new Error('chord must be a non-empty string');
+  }
+  if (CHORD_FORBIDDEN_RE.test(evt.chord)) {
+    throw new Error(
+      `chord ${JSON.stringify(evt.chord)} contains forbidden character ` +
+        '(brackets, braces, angle bracket, newline / carriage return)',
+    );
+  }
+  const lines = source.split('\n');
+  const lineIdx = evt.line - 1;
+  if (lineIdx < 0 || lineIdx >= lines.length) {
+    throw new Error(`line ${evt.line} out of range (lines: ${lines.length})`);
+  }
+  const lineText = lines[lineIdx];
+  if (evt.fromColumn < 0 || evt.fromColumn + evt.fromLength > lineText.length) {
+    throw new Error(
+      `edit range [${evt.fromColumn}, ${evt.fromColumn + evt.fromLength}) ` +
+        `exceeds line length ${lineText.length}`,
+    );
+  }
+  const insertBracket = `[${evt.chord}]`;
+  lines[lineIdx] =
+    lineText.slice(0, evt.fromColumn) + insertBracket + lineText.slice(evt.fromColumn + evt.fromLength);
+
+  let caretOffset = 0;
+  for (let i = 0; i < lineIdx; i++) {
+    caretOffset += lines[i].length + 1; // +1 for the `\n`
+  }
+  caretOffset += evt.fromColumn + insertBracket.length;
+
+  return { text: lines.join('\n'), caretOffset };
+}
+
+/** Identifies a chord token to delete, in source coordinates. */
+export interface ChordDeleteTarget {
+  /** 1-indexed source line. */
+  line: number;
+  /** 0-indexed source column of the `[` opening bracket. */
+  fromColumn: number;
+  /** Source-column span of `[chord]`, including both brackets. */
+  fromLength: number;
+}
+
+/**
+ * Delete the `[chord]` token at `(line, fromColumn)` spanning
+ * `fromLength` columns, returning the updated source plus a caret
+ * offset at the deletion point. The lyric text the chord annotated is
+ * left untouched; only the bracketed chord is removed.
+ *
+ * Throws if `line` or the column span is out of range.
+ */
+export function applyChordDelete(
+  source: string,
+  evt: ChordDeleteTarget,
+): ChordRepositionResult {
+  const lines = source.split('\n');
+  const lineIdx = evt.line - 1;
+  if (lineIdx < 0 || lineIdx >= lines.length) {
+    throw new Error(`line ${evt.line} out of range (lines: ${lines.length})`);
+  }
+  const lineText = lines[lineIdx];
+  if (evt.fromColumn < 0 || evt.fromColumn + evt.fromLength > lineText.length) {
+    throw new Error(
+      `delete range [${evt.fromColumn}, ${evt.fromColumn + evt.fromLength}) ` +
+        `exceeds line length ${lineText.length}`,
+    );
+  }
+  lines[lineIdx] = lineText.slice(0, evt.fromColumn) + lineText.slice(evt.fromColumn + evt.fromLength);
+
+  let caretOffset = 0;
+  for (let i = 0; i < lineIdx; i++) {
+    caretOffset += lines[i].length + 1;
+  }
+  caretOffset += evt.fromColumn;
+
+  return { text: lines.join('\n'), caretOffset };
+}

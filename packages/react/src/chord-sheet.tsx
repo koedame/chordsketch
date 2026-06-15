@@ -1,9 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { HTMLAttributes, ReactNode } from 'react';
 
+import { ChordInspector } from './chord-inspector';
 import { renderChordproAst } from './chordpro-jsx';
 import type { ChordSelection } from './chordpro-jsx';
-import type { ChordRepositionEvent } from './chord-source-edit';
+import type { ChordproChord, ChordproSong } from './chordpro-ast';
+import {
+  buildChordName,
+  buildChordNudge,
+  chordSuffixFromQuality,
+  findChordByOffsetOrdinal,
+  nudgeChordPosition,
+} from './chord-source-edit';
+import type {
+  ChordDeleteTarget,
+  ChordEditEvent,
+  ChordParts,
+  ChordRepositionEvent,
+} from './chord-source-edit';
 import type {
   ChordDiagramInstrument,
   ChordDiagramOrientation,
@@ -95,6 +109,26 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
    */
   onChordReposition?: (event: ChordRepositionEvent) => void;
   /**
+   * Optional callback enabling in-place chord editing via the
+   * left-docked inspector (#2622). When set (alongside
+   * `onChordReposition`, which enables selection), clicking a chord
+   * opens an editor for its root / accidental / type / bass; each
+   * change emits a {@link ChordEditEvent} the consumer applies with
+   * `applyChordEdit` (exported from this package). Omit to render the
+   * inspector read-only / without the edit controls taking effect.
+   *
+   * Only consumed by `format="html"`.
+   */
+  onChordEdit?: (event: ChordEditEvent) => void;
+  /**
+   * Optional callback enabling the inspector's "Remove chord" action
+   * (#2622). Receives the chord token's source coordinates; apply it
+   * with `applyChordDelete`. Omit to hide the remove button.
+   *
+   * Only consumed by `format="html"`.
+   */
+  onChordDelete?: (target: ChordDeleteTarget) => void;
+  /**
    * Configuration preset name (e.g. `"guitar"`, `"ukulele"`) or an
    * inline RRJSON configuration string.
    */
@@ -148,6 +182,107 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
   astWasmLoader?: ChordproWasmLoader;
 }
 
+/** The selected chord resolved out of the AST into the coordinates +
+ * parts the inspector needs. `null` when the selection no longer maps
+ * to a chord (e.g. the source was edited out from under it). */
+interface ResolvedChord {
+  /** Raw chord name for the inspector header. */
+  chordName: string;
+  parts: { root: string; accidental: '' | '#' | 'b'; suffix: string; bass: string };
+  sourceLine: number;
+  sourceColumn: number;
+  bracketLength: number;
+  currentOffset: number;
+  otherOffsets: number[];
+  totalLyrics: number;
+}
+
+function accidentalChar(a: 'sharp' | 'flat' | null | undefined): '' | '#' | 'b' {
+  return a === 'sharp' ? '#' : a === 'flat' ? 'b' : '';
+}
+
+/** Best-effort split of a raw chord name into editor parts when the
+ * parser produced no structured `detail` (lenient / non-standard
+ * chords). Keeps the chord round-trippable: `root + accidental +
+ * suffix (+ /bass)` reassembles the original name. */
+function partsFromRawName(name: string): ResolvedChord['parts'] {
+  const slash = name.indexOf('/');
+  const head = slash >= 0 ? name.slice(0, slash) : name;
+  const bass = slash >= 0 ? name.slice(slash + 1) : '';
+  const hasRoot = /^[A-G]/.test(head);
+  const root = hasRoot ? head[0] : 'C';
+  let rest = hasRoot ? head.slice(1) : head;
+  let accidental: '' | '#' | 'b' = '';
+  if (rest[0] === '#') {
+    accidental = '#';
+    rest = rest.slice(1);
+  } else if (rest[0] === 'b') {
+    accidental = 'b';
+    rest = rest.slice(1);
+  }
+  return { root, accidental, suffix: rest, bass };
+}
+
+/**
+ * Resolve the current {@link ChordSelection} against the AST into the
+ * selected chord's source coordinates + editable parts. Recomputes the
+ * selected line's chord layout (source columns + lyrics offsets) the
+ * same way the JSX walker does, then locates the chord by its
+ * `(offset, ordinal)` identity. Returns `null` when the line is not a
+ * lyrics line or the selection no longer resolves.
+ */
+function resolveSelectedChord(ast: ChordproSong, selection: ChordSelection): ResolvedChord | null {
+  const line = ast.lines[selection.line - 1];
+  if (!line || line.kind !== 'lyrics') return null;
+  const segments = line.value.segments;
+  let srcCol = 0;
+  let lyricsCount = 0;
+  const chords: Array<{
+    sourceColumn: number;
+    bracketLength: number;
+    offset: number;
+    chord: ChordproChord;
+  }> = [];
+  for (const seg of segments) {
+    const bracketLen = seg.chord ? (seg.chord.name?.length ?? 0) + 2 : 0;
+    if (seg.chord) {
+      chords.push({
+        sourceColumn: srcCol,
+        bracketLength: bracketLen,
+        offset: lyricsCount,
+        chord: seg.chord,
+      });
+    }
+    srcCol += bracketLen + seg.text.length;
+    lyricsCount += seg.text.length;
+  }
+  const offsets = chords.map((c) => c.offset);
+  const idx = findChordByOffsetOrdinal(offsets, selection.offset, selection.ordinal);
+  if (idx < 0) return null;
+  const target = chords[idx];
+  const detail = target.chord.detail;
+  const parts: ResolvedChord['parts'] = detail
+    ? {
+        root: detail.root,
+        accidental: accidentalChar(detail.rootAccidental),
+        suffix: chordSuffixFromQuality(detail.quality, detail.extension),
+        bass: detail.bassNote
+          ? `${detail.bassNote.note}${accidentalChar(detail.bassNote.accidental)}`
+          : '',
+      }
+    : partsFromRawName(target.chord.name ?? '');
+  return {
+    chordName: target.chord.name ?? '',
+    parts,
+    sourceLine: selection.line,
+    sourceColumn: target.sourceColumn,
+    bracketLength: target.bracketLength,
+    currentOffset: target.offset,
+    otherOffsets: offsets.filter((_, i) => i !== idx),
+    totalLyrics: lyricsCount,
+  };
+}
+
 function defaultErrorFallback(error: Error): ReactNode {
   return (
     <div role="alert" className="chordsketch-sheet__error">
@@ -196,6 +331,8 @@ export function ChordSheet({
   caretColumn,
   caretLineLength,
   onChordReposition,
+  onChordEdit,
+  onChordDelete,
   className,
   ...divProps
 }: ChordSheetProps): JSX.Element {
@@ -230,6 +367,8 @@ export function ChordSheet({
       caretColumn={caretColumn}
       caretLineLength={caretLineLength}
       onChordReposition={onChordReposition}
+      onChordEdit={onChordEdit}
+      onChordDelete={onChordDelete}
       wrapperClass={wrapperClass}
       divProps={divProps}
     />
@@ -290,6 +429,8 @@ function ChordSheetAstBranch({
   caretColumn,
   caretLineLength,
   onChordReposition,
+  onChordEdit,
+  onChordDelete,
   wrapperClass,
   divProps,
 }: BranchProps & {
@@ -300,6 +441,8 @@ function ChordSheetAstBranch({
   caretColumn: number | undefined;
   caretLineLength: number | undefined;
   onChordReposition: ((event: ChordRepositionEvent) => void) | undefined;
+  onChordEdit: ((event: ChordEditEvent) => void) | undefined;
+  onChordDelete: ((target: ChordDeleteTarget) => void) | undefined;
 }): JSX.Element {
   const { ast, loading, error, transposedKey, transposedKeyDirectives } = useChordproAst(
     source,
@@ -339,7 +482,7 @@ function ChordSheetAstBranch({
         root != null &&
         el != null &&
         root.contains(el) &&
-        el.closest('.chord, .chord-nudge')
+        el.closest('.chord, .chordsketch-sheet__cins')
       ) {
         return;
       }
@@ -348,6 +491,14 @@ function ChordSheetAstBranch({
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [chordSelection]);
+
+  // Resolve the selection into the selected chord's coordinates + parts
+  // for the inspector. Recomputed whenever the AST (a re-parse after an
+  // edit / nudge) or the selection changes.
+  const resolvedChord = useMemo(
+    () => (ast && chordSelection ? resolveSelectedChord(ast, chordSelection) : null),
+    [ast, chordSelection],
+  );
 
   if (ast === null) {
     return (
@@ -384,6 +535,72 @@ function ChordSheetAstBranch({
           chordSelection,
           setChordSelection,
         })}
+        {resolvedChord && onChordEdit ? (
+          <ChordInspector
+            chordName={resolvedChord.chordName}
+            root={resolvedChord.parts.root}
+            accidental={resolvedChord.parts.accidental}
+            suffix={resolvedChord.parts.suffix}
+            bass={resolvedChord.parts.bass}
+            canLeft={
+              nudgeChordPosition(resolvedChord.currentOffset, [], resolvedChord.totalLyrics, -1) !==
+              null
+            }
+            canRight={
+              nudgeChordPosition(resolvedChord.currentOffset, [], resolvedChord.totalLyrics, 1) !==
+              null
+            }
+            onChange={(parts: ChordParts) => {
+              let chord: string;
+              try {
+                chord = buildChordName(parts);
+              } catch {
+                // Invalid parts (the inspector only ever produces valid
+                // ones); ignore rather than corrupt the source.
+                return;
+              }
+              onChordEdit({
+                line: resolvedChord.sourceLine,
+                fromColumn: resolvedChord.sourceColumn,
+                fromLength: resolvedChord.bracketLength,
+                chord,
+              });
+            }}
+            onNudge={(direction) => {
+              const result = buildChordNudge({
+                sourceLine: resolvedChord.sourceLine,
+                chordName: resolvedChord.chordName,
+                sourceColumn: resolvedChord.sourceColumn,
+                bracketLength: resolvedChord.bracketLength,
+                currentOffset: resolvedChord.currentOffset,
+                otherOffsets: resolvedChord.otherOffsets,
+                totalLyrics: resolvedChord.totalLyrics,
+                direction,
+              });
+              if (!result || !onChordReposition) return;
+              onChordReposition(result.event);
+              setChordSelection((prev) => ({
+                line: resolvedChord.sourceLine,
+                offset: result.offset,
+                ordinal: result.ordinal,
+                nonce: (prev?.nonce ?? 0) + 1,
+              }));
+            }}
+            onRemove={
+              onChordDelete
+                ? () => {
+                    onChordDelete({
+                      line: resolvedChord.sourceLine,
+                      fromColumn: resolvedChord.sourceColumn,
+                      fromLength: resolvedChord.bracketLength,
+                    });
+                    setChordSelection(null);
+                  }
+                : undefined
+            }
+            onClose={() => setChordSelection(null)}
+          />
+        ) : null}
       </div>
     </div>
   );

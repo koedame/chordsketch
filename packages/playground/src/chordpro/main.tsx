@@ -20,9 +20,13 @@ import {
   RendererPreview,
   ChordSourceArea,
   applyChordReposition,
+  applyChordEdit,
+  applyChordDelete,
   readCapo,
   setCapoInSource,
   type ChordRepositionEvent,
+  type ChordEditEvent,
+  type ChordDeleteTarget,
   type ChordSourceAreaHandle,
   loadChordproCatalog,
   type DirectiveCatalogEntry,
@@ -635,6 +639,35 @@ function PlaygroundApp(): JSX.Element {
     });
   }, []);
 
+  // In-place chord edit (#2622): the left-docked inspector emits a
+  // ChordEditEvent (source coordinates + new chord token); apply it the
+  // same functional-updater way as reposition so concurrent edits read
+  // the latest source, and restore the caret after the new chord.
+  const handleChordEdit = useCallback((event: ChordEditEvent) => {
+    setSource((current) => {
+      try {
+        const { text, caretOffset } = applyChordEdit(current, event);
+        queueMicrotask(() => editorRef.current?.setCaret(caretOffset));
+        return text;
+      } catch {
+        return current;
+      }
+    });
+  }, []);
+
+  // Chord delete (#2622): remove the [chord] token the inspector targets.
+  const handleChordDelete = useCallback((target: ChordDeleteTarget) => {
+    setSource((current) => {
+      try {
+        const { text, caretOffset } = applyChordDelete(current, target);
+        queueMicrotask(() => editorRef.current?.setCaret(caretOffset));
+        return text;
+      } catch {
+        return current;
+      }
+    });
+  }, []);
+
   // Capo source change: use the functional-updater form of `setSource`
   // so rapid consecutive Capo clicks always read the latest state, not
   // the stale `source` prop captured by the render cycle that set up the
@@ -892,6 +925,11 @@ function PlaygroundApp(): JSX.Element {
                 onChordReposition={
                   view === 'split' ? handleChordReposition : undefined
                 }
+                /* Chord editing (#2622): the inspector edits/deletes the
+                   ChordPro source, so — like reposition — gate it on
+                   split view where the editor is mounted and visible. */
+                onChordEdit={view === 'split' ? handleChordEdit : undefined}
+                onChordDelete={view === 'split' ? handleChordDelete : undefined}
               />
             </div>
           </section>

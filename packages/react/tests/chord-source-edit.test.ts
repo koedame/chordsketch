@@ -5,7 +5,12 @@ import {
   CAPO_MIN,
   TRANSPOSE_MAX,
   TRANSPOSE_MIN,
+  CHORD_TYPE_PRESETS,
+  applyChordDelete,
+  applyChordEdit,
   applyChordReposition,
+  buildChordName,
+  chordSuffixFromQuality,
   findChordByOffsetOrdinal,
   lyricsOffsetToSourceColumn,
   nudgeChordPosition,
@@ -498,5 +503,143 @@ describe('nudge integration: nudgeChordPosition + applyChordReposition', () => {
     }
     // Am started before "H", three right steps → before the second "l".
     expect(src).toBe('Hel[Am]lo');
+  });
+});
+
+describe('chordSuffixFromQuality', () => {
+  test('round-trips parser quality + extension splits', () => {
+    expect(chordSuffixFromQuality('major', null)).toBe('');
+    expect(chordSuffixFromQuality('minor', null)).toBe('m');
+    expect(chordSuffixFromQuality('diminished', null)).toBe('dim');
+    expect(chordSuffixFromQuality('augmented', null)).toBe('aug');
+    expect(chordSuffixFromQuality('minor', '7')).toBe('m7');
+    expect(chordSuffixFromQuality('major', 'maj7')).toBe('maj7');
+    expect(chordSuffixFromQuality('minor', '7b5')).toBe('m7b5');
+    expect(chordSuffixFromQuality('major', 'sus4')).toBe('sus4');
+  });
+
+  test('every suffix-only preset is reachable from a quality+extension split', () => {
+    // Sanity: the presets the chips expose are all valid suffix strings
+    // the parser could produce (so a chip selection round-trips).
+    const suffixes = new Set(CHORD_TYPE_PRESETS.map((p) => p.text));
+    expect(suffixes.has('')).toBe(true); // maj
+    expect(suffixes.has('m')).toBe(true); // min
+    expect(suffixes.has('m7')).toBe(true);
+    expect(suffixes.has('maj7')).toBe(true);
+  });
+});
+
+describe('buildChordName', () => {
+  test('assembles root + accidental + suffix + bass', () => {
+    expect(buildChordName({ root: 'A' })).toBe('A');
+    expect(buildChordName({ root: 'A', suffix: 'm' })).toBe('Am');
+    expect(buildChordName({ root: 'A', accidental: '#', suffix: 'm7' })).toBe('A#m7');
+    expect(buildChordName({ root: 'B', accidental: 'b', suffix: 'maj7' })).toBe('Bbmaj7');
+    expect(buildChordName({ root: 'G', suffix: '7', bass: 'B' })).toBe('G7/B');
+    expect(buildChordName({ root: 'C', bass: 'E' })).toBe('C/E');
+  });
+
+  test('rejects a bad root', () => {
+    expect(() => buildChordName({ root: 'H' })).toThrow(/root/);
+    expect(() => buildChordName({ root: 'Am' })).toThrow(/root/);
+    expect(() => buildChordName({ root: '' })).toThrow(/root/);
+  });
+
+  test('rejects a bad accidental', () => {
+    // @ts-expect-error — exercising the runtime guard with an invalid value
+    expect(() => buildChordName({ root: 'C', accidental: 'x' })).toThrow(/accidental/);
+  });
+
+  test.each([
+    ['m[7'], ['m]7'], ['m{7'], ['m}7'], ['m<7'], ['m\n7'], ['m/7'],
+  ])('rejects a suffix containing a structural character (%s)', (suffix) => {
+    expect(() => buildChordName({ root: 'C', suffix })).toThrow(/suffix/);
+  });
+
+  test('rejects a bass containing a slash or structural character', () => {
+    expect(() => buildChordName({ root: 'C', bass: 'E/G' })).toThrow(/bass/);
+    expect(() => buildChordName({ root: 'C', bass: 'E]' })).toThrow(/bass/);
+  });
+});
+
+describe('applyChordEdit', () => {
+  test('replaces the chord token in place and reports caret after it', () => {
+    // `[Am]Hello` — edit Am (col 0, len 4) → Amaj7.
+    const { text, caretOffset } = applyChordEdit('[Am]Hello', {
+      line: 1,
+      fromColumn: 0,
+      fromLength: 4,
+      chord: 'Amaj7',
+    });
+    expect(text).toBe('[Amaj7]Hello');
+    expect(caretOffset).toBe('[Amaj7]'.length); // 7
+  });
+
+  test('edits a mid-line chord on the correct line, leaving others intact', () => {
+    // line 2: `He[G]llo` — edit G (col 2, len 3) → G7.
+    const before = 'first\nHe[G]llo';
+    const { text, caretOffset } = applyChordEdit(before, {
+      line: 2,
+      fromColumn: 2,
+      fromLength: 3,
+      chord: 'G7',
+    });
+    expect(text).toBe('first\nHe[G7]llo');
+    // line1 "first"(5)+\n = 6, + col 2 ("He") + "[G7]"(4) = 12.
+    expect(caretOffset).toBe(12);
+  });
+
+  test('round-trips buildChordName output through applyChordEdit', () => {
+    const chord = buildChordName({ root: 'D', accidental: 'b', suffix: 'm7', bass: 'F' });
+    expect(chord).toBe('Dbm7/F');
+    const { text } = applyChordEdit('[Am]x', { line: 1, fromColumn: 0, fromLength: 4, chord });
+    expect(text).toBe('[Dbm7/F]x');
+  });
+
+  test('throws on out-of-range line / span and on a forbidden chord', () => {
+    expect(() =>
+      applyChordEdit('a', { line: 5, fromColumn: 0, fromLength: 1, chord: 'C' }),
+    ).toThrow(/line 5 out of range/);
+    expect(() =>
+      applyChordEdit('[Am]', { line: 1, fromColumn: 0, fromLength: 99, chord: 'C' }),
+    ).toThrow(/exceeds line length/);
+    expect(() =>
+      applyChordEdit('[Am]', { line: 1, fromColumn: 0, fromLength: 4, chord: '' }),
+    ).toThrow(/non-empty/);
+    expect(() =>
+      applyChordEdit('[Am]', { line: 1, fromColumn: 0, fromLength: 4, chord: 'C}evil' }),
+    ).toThrow(/forbidden character/);
+  });
+});
+
+describe('applyChordDelete', () => {
+  test('removes the chord token, keeping the lyric', () => {
+    const { text, caretOffset } = applyChordDelete('[Am]Hello', {
+      line: 1,
+      fromColumn: 0,
+      fromLength: 4,
+    });
+    expect(text).toBe('Hello');
+    expect(caretOffset).toBe(0);
+  });
+
+  test('removes a mid-line chord on the correct line', () => {
+    const { text, caretOffset } = applyChordDelete('first\nHe[G]llo', {
+      line: 2,
+      fromColumn: 2,
+      fromLength: 3,
+    });
+    expect(text).toBe('first\nHello');
+    // "first"(5)+\n=6, +2 = 8
+    expect(caretOffset).toBe(8);
+  });
+
+  test('throws on out-of-range line / span', () => {
+    expect(() => applyChordDelete('a', { line: 9, fromColumn: 0, fromLength: 1 })).toThrow(
+      /out of range/,
+    );
+    expect(() => applyChordDelete('[Am]', { line: 1, fromColumn: 0, fromLength: 99 })).toThrow(
+      /exceeds line length/,
+    );
   });
 });
