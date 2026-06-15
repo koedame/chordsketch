@@ -451,8 +451,7 @@ fn render_bytes_with_warnings_inner(
     let obj = js_sys::Object::new();
     let arr = js_sys::Uint8Array::from(bytes.as_slice());
     js_sys::Reflect::set(&obj, &JsValue::from_str("output"), &arr.into())?;
-    let warnings_js =
-        serde_wasm_bindgen::to_value(&warnings).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let warnings_js = to_js_value(&warnings)?;
     js_sys::Reflect::set(&obj, &JsValue::from_str("warnings"), &warnings_js)?;
     Ok(obj.into())
 }
@@ -478,11 +477,10 @@ fn render_bytes_with_warnings_inner(
         output: Vec<u8>,
         warnings: Vec<String>,
     }
-    serde_wasm_bindgen::to_value(&BytesWithWarnings {
+    to_js_value(&BytesWithWarnings {
         output: bytes,
         warnings,
     })
-    .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Render ChordPro input as HTML and return `{ output, warnings }`.
