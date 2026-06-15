@@ -269,6 +269,24 @@ describe('<MetronomeGlyph>', () => {
       'Metronome at 120 BPM',
     );
   });
+
+  // The beat dot is a sibling of the pendulum group so it stays
+  // put (only its opacity animates) while the rod swings. If a
+  // regression nests it inside `.music-glyph--metronome__pendulum`
+  // it would swing with the rod, breaking the "static LED" intent.
+  test('emits a static top-left beat dot outside the swinging pendulum group', () => {
+    const { container } = render(<MetronomeGlyph bpm={120} />);
+    const svg = container.querySelector('svg.music-glyph--metronome');
+    const beat = svg?.querySelector('circle.music-glyph--metronome__beat');
+    expect(beat).not.toBeNull();
+    // Top-left corner inside the existing viewBox.
+    expect(beat?.getAttribute('cx')).toBe('2.4');
+    expect(beat?.getAttribute('cy')).toBe('6.2');
+    // The dot must NOT be a descendant of the pendulum group.
+    expect(
+      svg?.querySelector('.music-glyph--metronome__pendulum .music-glyph--metronome__beat'),
+    ).toBeNull();
+  });
 });
 
 describe('<TimeSignatureGlyph>', () => {
