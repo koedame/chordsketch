@@ -1872,18 +1872,19 @@ fn render_chord_diagram_pdf_vertical(
         doc.line_at(base_x, grid_top, base_x + grid_w, grid_top, 2.0);
     }
 
-    // Fret-number axis: label every fret line in the visible window with its
-    // absolute fret number (`base_fret - 1 + j`), matching the SVG renderer.
+    // Fret-number axis: label every visible fret CELL with the absolute fret
+    // number a finger presses there (`base_fret - 1 + j` for cell
+    // `j ∈ 1..=frets_shown`), centred on the cell — matching the SVG renderer.
     // Right-aligned in the left margin (clamped to x >= 0 to stay on-page) so
     // 1- and 2-digit numbers sit a consistent gap from the grid.
-    for j in 0..=num_frets {
+    for j in 1..=num_frets {
         let fret_number = data.base_fret as i32 - 1 + j as i32;
         let label = fret_number.to_string();
         // Approx Helvetica digit advance at font size 6 (~0.556 em).
         let label_w = label.len() as f32 * 6.0 * 0.556;
         let label_x = (base_x - 3.0 - label_w).max(0.0);
-        let y = grid_top - j as f32 * cell_h;
-        // Baseline-centre the label on the fret line.
+        let y = grid_top - (j as f32 - 0.5) * cell_h;
+        // Baseline-centre the label on the cell row.
         doc.text_at(&label, Font::Helvetica, 6.0, label_x, y - 2.0);
     }
 
@@ -1974,23 +1975,24 @@ fn render_chord_diagram_pdf_horizontal(
     let grid_top = top_y - 15.0;
     let grid_bottom = grid_top - grid_h;
 
-    // Nut (vertical line on the left when at the open position) or
-    // base-fret label above the leftmost fret cell when starting higher up.
+    // Nut (vertical line on the left when at the open position). When
+    // starting above fret 1 the fret-number axis below the grid already
+    // labels the first visible fret — no separate label is drawn.
     let nut_x = base_x;
     if data.base_fret == 1 {
         doc.line_at(nut_x, grid_top, nut_x, grid_bottom, 2.0);
     }
 
-    // Fret-number axis: label every fret line in the visible window with its
-    // absolute fret number (`base_fret - 1 + j`) below the grid, matching the
-    // SVG renderer's `0 1 2 3` strip beneath a horizontal fretboard. Centred
-    // on each fret line within the existing bottom budget of `total_h`.
-    for j in 0..=num_frets {
+    // Fret-number axis: label every visible fret CELL below the grid with the
+    // absolute fret number a finger presses there (`base_fret - 1 + j` for
+    // cell `j ∈ 1..=frets_shown`), centred on the cell — matching the SVG
+    // renderer. Sits within the existing bottom budget of `total_h`.
+    for j in 1..=num_frets {
         let fret_number = data.base_fret as i32 - 1 + j as i32;
         let label = fret_number.to_string();
         // Approx Helvetica digit advance at font size 6 (~0.556 em).
         let label_w = label.len() as f32 * 6.0 * 0.556;
-        let x = nut_x + j as f32 * fret_pitch - label_w / 2.0;
+        let x = nut_x + (j as f32 - 0.5) * fret_pitch - label_w / 2.0;
         doc.text_at(&label, Font::Helvetica, 6.0, x, grid_bottom - 7.0);
     }
 
@@ -5630,23 +5632,28 @@ mod chord_diagram_pdf_tests {
 
     #[test]
     fn diagram_pdf_renders_full_fret_number_axis_and_drops_legacy_label() {
-        // #2602: a high-position barre (base-fret 7, 5 visible frets) labels
-        // every fret line 6..=11 along the axis, in both orientations, and the
-        // legacy "{N}fr" single label is gone (the axis subsumes it). The PDF
-        // content stream is uncompressed, so the `(N) Tj` text operators are
-        // directly assertable.
+        // #2602/#2616: a high-position barre (base-fret 7, 5 visible frets)
+        // labels each fret CELL with its press-position fret number 7..=11, in
+        // both orientations. There is no `6` (the wire behind the window is not
+        // a press position), and the legacy "{N}fr" single label is gone (the
+        // axis subsumes it). The PDF content stream is uncompressed, so the
+        // `(N) Tj` text operators are directly assertable.
         for cfg in ["", "{+config.diagrams.orientation: horizontal}\n"] {
             let input =
                 format!("{cfg}{{define: Bm base-fret 7 frets x 1 3 3 2 1}}\n{{diagrams}}\n[Bm]Hi");
             let song = chordsketch_chordpro::parse(&input).unwrap();
             let bytes = render_song(&song);
             let content = String::from_utf8_lossy(&bytes);
-            for n in 6..=11 {
+            for n in 7..=11 {
                 assert!(
                     content.contains(&format!("({n}) Tj")),
                     "expected fret-axis label {n} for cfg={cfg:?}"
                 );
             }
+            assert!(
+                !content.contains("(6) Tj"),
+                "wire-behind-window 6 is not a press position for cfg={cfg:?}"
+            );
             assert!(
                 !content.contains("fr) Tj"),
                 "legacy '{{N}}fr' base-fret label must be gone for cfg={cfg:?}"
