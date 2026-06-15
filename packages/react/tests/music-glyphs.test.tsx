@@ -10,6 +10,8 @@ import {
   MetronomeGlyph,
   TimeSignatureGlyph,
   keySignatureFor,
+  metronomePeriodCss,
+  metronomePeriodSeconds,
   relativeMajor,
   tempoMarkingFor,
 } from '../src/music-glyphs';
@@ -315,6 +317,28 @@ describe('<MetronomeGlyph>', () => {
     expect(css).toMatch(
       /prefers-reduced-motion: reduce[\s\S]*\.music-glyph--metronome__beat\s*\{\s*animation:\s*none;\s*opacity:\s*1;/,
     );
+  });
+});
+
+describe('metronomePeriodSeconds / metronomePeriodCss', () => {
+  test('one beat per second-derived period for common tempos', () => {
+    expect(metronomePeriodSeconds(120)).toBeCloseTo(0.5, 6);
+    expect(metronomePeriodSeconds(60)).toBeCloseTo(1, 6);
+    expect(metronomePeriodCss(120)).toBe('0.500s');
+    expect(metronomePeriodCss(90)).toBe('0.667s');
+  });
+
+  test('clamps absurd tempos so the animation neither strobes nor freezes', () => {
+    // Fast end clamps to 0.05s; slow end clamps to 5s.
+    expect(metronomePeriodSeconds(99999)).toBe(0.05);
+    expect(metronomePeriodSeconds(0.001)).toBe(5);
+  });
+
+  test('falls back to 60 BPM for non-finite / non-positive input', () => {
+    expect(metronomePeriodSeconds(Number.NaN)).toBeCloseTo(1, 6);
+    expect(metronomePeriodSeconds(0)).toBeCloseTo(1, 6);
+    expect(metronomePeriodSeconds(-120)).toBeCloseTo(1, 6);
+    expect(metronomePeriodSeconds(Number.POSITIVE_INFINITY)).toBeCloseTo(1, 6);
   });
 });
 
