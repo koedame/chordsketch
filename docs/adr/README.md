@@ -107,3 +107,4 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0027](0027-inline-hover-compact-chord-diagrams.md) | Inline / hover chord diagrams use a dedicated compact layout (chordsketch `{diagrams: inline}` / `{diagrams: hover}` extension; not a CSS scale) | Accepted (2026-05-31) |
 | [0028](0028-shared-directive-catalog.md) | Shared directive catalog in `chordsketch-chordpro` is the single source of truth for directive-name + value completion across LSP / web / playground | Accepted (2026-05-31) |
 | [0029](0029-react-ui-primitives-package.md) | Design-system React primitives live in a wasm-free `@chordsketch/react-ui`; `@chordsketch/react` stays domain-only and does not re-export them | Accepted (2026-06-01) |
+| [0030](0030-chord-diagram-fret-number-axis.md) | Chord diagrams label the full visible fret range (`0 1 2 3 …`) by default across SVG / HTML / PDF; the axis subsumes the legacy single base-fret label, compact keeps it | Accepted (2026-06-15) |

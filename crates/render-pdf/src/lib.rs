@@ -1793,11 +1793,15 @@ fn render_chord_diagram_pdf(
 ) {
     use chordsketch_chordpro::chord_diagram::Orientation;
 
-    // Guard: mirror render_svg bounds checks for strings and frets_shown.
+    // Guard: mirror render_svg bounds checks for strings, frets_shown, and
+    // base_fret (a public field a direct caller can set out of range, which
+    // would otherwise produce a negative or absurd fret-axis label).
     if data.strings < chordsketch_chordpro::chord_diagram::MIN_STRINGS
         || data.strings > chordsketch_chordpro::chord_diagram::MAX_STRINGS
         || data.frets_shown < chordsketch_chordpro::chord_diagram::MIN_FRETS_SHOWN
         || data.frets_shown > chordsketch_chordpro::chord_diagram::MAX_FRETS_SHOWN
+        || data.base_fret < 1
+        || data.base_fret > chordsketch_chordpro::chord_diagram::MAX_BASE_FRET
     {
         return;
     }
@@ -1861,20 +1865,26 @@ fn render_chord_diagram_pdf_vertical(
 
     let grid_top = top_y - 15.0; // below the name
 
-    // Nut line (thick for open position)
+    // Nut line (thick for open position). When the diagram starts above
+    // fret 1 the full fret-number axis below already labels the first
+    // visible fret, so no separate base-fret label is drawn.
     if data.base_fret == 1 {
         doc.line_at(base_x, grid_top, base_x + grid_w, grid_top, 2.0);
-    } else {
-        // Show fret number, clamping x to >= 0 to prevent off-page rendering.
-        let fret_label = format!("{}fr", data.base_fret);
-        let fret_label_x = (base_x - 16.0).max(0.0);
-        doc.text_at(
-            &fret_label,
-            Font::Helvetica,
-            6.0,
-            fret_label_x,
-            grid_top - cell_h / 2.0,
-        );
+    }
+
+    // Fret-number axis: label every fret line in the visible window with its
+    // absolute fret number (`base_fret - 1 + j`), matching the SVG renderer.
+    // Right-aligned in the left margin (clamped to x >= 0 to stay on-page) so
+    // 1- and 2-digit numbers sit a consistent gap from the grid.
+    for j in 0..=num_frets {
+        let fret_number = data.base_fret as i32 - 1 + j as i32;
+        let label = fret_number.to_string();
+        // Approx Helvetica digit advance at font size 6 (~0.556 em).
+        let label_w = label.len() as f32 * 6.0 * 0.556;
+        let label_x = (base_x - 3.0 - label_w).max(0.0);
+        let y = grid_top - j as f32 * cell_h;
+        // Baseline-centre the label on the fret line.
+        doc.text_at(&label, Font::Helvetica, 6.0, label_x, y - 2.0);
     }
 
     // Vertical lines (strings)
@@ -1969,17 +1979,19 @@ fn render_chord_diagram_pdf_horizontal(
     let nut_x = base_x;
     if data.base_fret == 1 {
         doc.line_at(nut_x, grid_top, nut_x, grid_bottom, 2.0);
-    } else {
-        // Bare base-fret label above the first fret column. Anchored at
-        // the midpoint of the first fret cell along the fret axis.
-        let fret_label = format!("{}fr", data.base_fret);
-        doc.text_at(
-            &fret_label,
-            Font::Helvetica,
-            6.0,
-            nut_x + fret_pitch / 2.0 - 4.0,
-            grid_top + 4.0,
-        );
+    }
+
+    // Fret-number axis: label every fret line in the visible window with its
+    // absolute fret number (`base_fret - 1 + j`) below the grid, matching the
+    // SVG renderer's `0 1 2 3` strip beneath a horizontal fretboard. Centred
+    // on each fret line within the existing bottom budget of `total_h`.
+    for j in 0..=num_frets {
+        let fret_number = data.base_fret as i32 - 1 + j as i32;
+        let label = fret_number.to_string();
+        // Approx Helvetica digit advance at font size 6 (~0.556 em).
+        let label_w = label.len() as f32 * 6.0 * 0.556;
+        let x = nut_x + j as f32 * fret_pitch - label_w / 2.0;
+        doc.text_at(&label, Font::Helvetica, 6.0, x, grid_bottom - 7.0);
     }
 
     // Horizontal lines (strings).
@@ -5614,6 +5626,68 @@ mod chord_diagram_pdf_tests {
         assert!(content.contains("Am"));
         // Should contain circle drawing operations (Bezier curves)
         assert!(content.contains(" c "));
+    }
+
+    #[test]
+    fn diagram_pdf_renders_full_fret_number_axis_and_drops_legacy_label() {
+        // #2602: a high-position barre (base-fret 7, 5 visible frets) labels
+        // every fret line 6..=11 along the axis, in both orientations, and the
+        // legacy "{N}fr" single label is gone (the axis subsumes it). The PDF
+        // content stream is uncompressed, so the `(N) Tj` text operators are
+        // directly assertable.
+        for cfg in ["", "{+config.diagrams.orientation: horizontal}\n"] {
+            let input =
+                format!("{cfg}{{define: Bm base-fret 7 frets x 1 3 3 2 1}}\n{{diagrams}}\n[Bm]Hi");
+            let song = chordsketch_chordpro::parse(&input).unwrap();
+            let bytes = render_song(&song);
+            let content = String::from_utf8_lossy(&bytes);
+            for n in 6..=11 {
+                assert!(
+                    content.contains(&format!("({n}) Tj")),
+                    "expected fret-axis label {n} for cfg={cfg:?}"
+                );
+            }
+            assert!(
+                !content.contains("fr) Tj"),
+                "legacy '{{N}}fr' base-fret label must be gone for cfg={cfg:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn pdf_diagram_rejects_out_of_range_base_fret() {
+        // Sister to the SVG renderer's `render_rejects_out_of_range_base_fret`.
+        // `base_fret` is a public field; an out-of-range value must draw
+        // nothing (early return) rather than emit a negative/absurd fret-axis
+        // label. The cursor y is the observable: the guard returns before
+        // `advance_y`, so it stays put.
+        use chordsketch_chordpro::chord_diagram::{DiagramData, MAX_BASE_FRET, Orientation};
+        let make = |base_fret: u32| DiagramData {
+            name: "X".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret,
+            frets: vec![-1, 0, 2, 2, 1, 0],
+            fingers: vec![],
+        };
+        for bad in [0u32, MAX_BASE_FRET + 1] {
+            for orientation in [Orientation::Vertical, Orientation::Horizontal] {
+                let mut doc = PdfDocument::new();
+                let y_before = doc.y();
+                render_chord_diagram_pdf(&make(bad), &mut doc, orientation);
+                assert_eq!(
+                    doc.y(),
+                    y_before,
+                    "out-of-range base_fret {bad} must draw nothing ({orientation:?})"
+                );
+            }
+        }
+        // Sanity: a valid base_fret DOES advance the cursor.
+        let mut doc = PdfDocument::new();
+        let y_before = doc.y();
+        render_chord_diagram_pdf(&make(1), &mut doc, Orientation::Vertical);
+        assert_ne!(doc.y(), y_before, "valid diagram must advance the cursor");
     }
 
     #[test]
