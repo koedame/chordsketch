@@ -492,20 +492,48 @@ export interface ChordTypePreset {
  * qualities remain reachable through the free-form suffix field.
  */
 export const CHORD_TYPE_PRESETS: readonly ChordTypePreset[] = [
+  // Triads / basics
   { id: 'maj', label: 'maj', text: '' },
   { id: 'min', label: 'min', text: 'm' },
+  { id: '5', label: '5', text: '5' },
+  { id: 'aug', label: 'aug', text: 'aug' },
+  { id: 'dim', label: 'dim', text: 'dim' },
+  // Sixth family
+  { id: '6', label: '6', text: '6' },
+  { id: 'm6', label: 'm6', text: 'm6' },
+  // `6/9` is written `69` so the suffix carries no `/` (which the
+  // source-edit guard reserves for the slash-bass split).
+  { id: '69', label: '6/9', text: '69' },
+  // Sevenths
   { id: '7', label: '7', text: '7' },
   { id: 'maj7', label: 'maj7', text: 'maj7' },
   { id: 'm7', label: 'm7', text: 'm7' },
+  { id: 'mMaj7', label: 'mMaj7', text: 'mMaj7' },
   { id: 'm7b5', label: 'm7♭5', text: 'm7b5' },
-  { id: 'dim', label: 'dim', text: 'dim' },
   { id: 'dim7', label: 'dim7', text: 'dim7' },
-  { id: 'aug', label: 'aug', text: 'aug' },
+  { id: '7b5', label: '7♭5', text: '7b5' },
+  { id: '7s5', label: '7♯5', text: '7#5' },
+  // Extended
+  { id: '9', label: '9', text: '9' },
+  { id: 'maj9', label: 'maj9', text: 'maj9' },
+  { id: 'm9', label: 'm9', text: 'm9' },
+  { id: '11', label: '11', text: '11' },
+  { id: 'm11', label: 'm11', text: 'm11' },
+  { id: '13', label: '13', text: '13' },
+  { id: 'm13', label: 'm13', text: 'm13' },
+  { id: 'add9', label: 'add9', text: 'add9' },
+  { id: 'add11', label: 'add11', text: 'add11' },
+  // Altered dominants
+  { id: '7b9', label: '7♭9', text: '7b9' },
+  { id: '7s9', label: '7♯9', text: '7#9' },
+  { id: '7s11', label: '7♯11', text: '7#11' },
+  { id: '7b13', label: '7♭13', text: '7b13' },
+  { id: 'alt', label: 'alt', text: '7alt' },
+  // Suspended
   { id: 'sus2', label: 'sus2', text: 'sus2' },
   { id: 'sus4', label: 'sus4', text: 'sus4' },
-  { id: '6', label: '6', text: '6' },
-  { id: '9', label: '9', text: '9' },
-  { id: 'add9', label: 'add9', text: 'add9' },
+  { id: '7sus4', label: '7sus4', text: '7sus4' },
+  { id: '9sus4', label: '9sus4', text: '9sus4' },
 ];
 
 /** Quality enum values mirrored from `ChordproChordQuality` — kept as a

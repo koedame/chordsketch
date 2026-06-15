@@ -1,7 +1,10 @@
 // Floating chord-editor inspector for the ChordPro preview (#2622).
 //
-// A left-docked, non-modal panel that appears when a chord is selected
-// in the preview. It edits the selected chord's root, accidental, type
+// A bottom-docked, non-modal panel that appears when a chord is selected
+// in the preview (#2630 moved it from a top-left overlay to a bottom
+// sheet so it no longer covers the lyrics / chord being edited; the
+// parent scrolls the selected chord into view above the dock). It edits
+// the selected chord's root, accidental, type
 // (a quality+extension preset or free-form suffix), and optional slash
 // bass, and hosts the relocated ◀ / ▶ "move one lyric character"
 // controls plus delete. It is the ChordPro sibling of the iReal Pro
