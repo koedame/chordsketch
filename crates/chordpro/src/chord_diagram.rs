@@ -3308,18 +3308,18 @@ mod tests {
         let v = render_svg_with_orientation(&data, Orientation::Vertical);
         assert_eq!(extract(&v, "width"), 120.0);
         assert_eq!(extract(&v, "height"), 160.0);
+        let v_ys = label_ys(&v);
         assert!(
-            label_ys(&v).iter().all(|&y| y <= 160.0),
-            "vertical fret-number labels overflow the frame: {:?}",
-            label_ys(&v)
+            v_ys.iter().all(|&y| y <= 160.0),
+            "vertical fret-number labels overflow the frame: {v_ys:?}"
         );
         let h = render_svg_with_orientation(&data, Orientation::Horizontal);
         assert_eq!(extract(&h, "width"), 140.0);
         assert_eq!(extract(&h, "height"), 130.0);
+        let h_ys = label_ys(&h);
         assert!(
-            label_ys(&h).iter().all(|&y| y <= 130.0),
-            "horizontal fret-number labels overflow the frame: {:?}",
-            label_ys(&h)
+            h_ys.iter().all(|&y| y <= 130.0),
+            "horizontal fret-number labels overflow the frame: {h_ys:?}"
         );
     }
 
