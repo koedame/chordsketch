@@ -370,6 +370,14 @@ struct DiagramMetrics {
     title_baseline: f32,
     /// Font size for the base-fret label and the muted-string `X` glyph.
     label_font: f32,
+    /// Font size for the per-cell fret-number axis labels. Separate from
+    /// [`label_font`](Self::label_font) so the compact size can use a smaller
+    /// font that fits its narrow gutter without shrinking the muted-`X` glyph.
+    fret_label_font: f32,
+    /// Gap (SVG px) subtracted from `left_margin` to place a vertical
+    /// fret-number label's right edge anchor (`left_margin - fret_label_gap`).
+    /// Smaller for the compact size so 2-digit labels fit its narrow margin.
+    fret_label_gap: f32,
     /// Font size for finger numbers inside the dots.
     finger_font: f32,
     /// Baseline-centring offset added to a marker's centre y when drawing
@@ -387,10 +395,11 @@ struct DiagramMetrics {
     /// (`base_fret - 1 + j` for cell `j ∈ 1..=frets_shown`). The open/nut
     /// position carries no number.
     ///
-    /// `true` for the regular size — the full axis subsumes the legacy
-    /// single base-fret label. `false` for the compact size, which keeps
-    /// the minimal single base-fret label so the above-a-lyric layout
-    /// stays uncluttered (see [`DiagramSize::Compact`]).
+    /// `true` for both sizes — the full axis subsumes the legacy single
+    /// base-fret label. The compact size draws it with a smaller
+    /// [`fret_label_font`](Self::fret_label_font) so the inline / hover
+    /// diagrams show the same press-position numbers as the regular size
+    /// (see [`DiagramSize::Compact`]).
     show_fret_numbers: bool,
 }
 
@@ -411,6 +420,10 @@ impl DiagramMetrics {
             title_font: 14.0,
             title_baseline: 15.0,
             label_font: 10.0,
+            // Regular keeps the historical axis font/gap (= label_font, 4.0) so
+            // its output stays byte-for-byte identical.
+            fret_label_font: 10.0,
+            fret_label_gap: 4.0,
             finger_font: 8.0,
             text_v_center: 3.0,
             nut_stroke: 3.0,
@@ -435,7 +448,10 @@ impl DiagramMetrics {
             cell_w: 9.0,
             cell_h: 11.0,
             top_margin: 22.0,
-            left_margin: 9.0,
+            // Left gutter widened from 9 to 11 so a 2-digit fret-number label
+            // (font 6, right-anchored at left_margin - fret_label_gap) clears
+            // the left edge of the viewBox.
+            left_margin: 11.0,
             bottom_pad_vertical: 10.0,
             bottom_pad_horizontal: 8.0,
             dot_radius: 3.2,
@@ -445,15 +461,19 @@ impl DiagramMetrics {
             title_font: 11.0,
             title_baseline: 9.0,
             label_font: 8.0,
+            // Smaller axis font + gap than label_font so the per-cell
+            // fret numbers fit the compact diagram's narrow gutter and
+            // bottom padding without enlarging the inline layout further.
+            fret_label_font: 6.0,
+            fret_label_gap: 2.0,
             finger_font: 7.0,
             text_v_center: 2.4,
             nut_stroke: 2.0,
             line_stroke: 0.75,
             class_extra: " chord-diagram-compact",
-            // Compact diagrams sit directly above a lyric line where a full
-            // fret-number axis would add clutter and height; keep the legacy
-            // single base-fret label instead.
-            show_fret_numbers: false,
+            // Inline / hover diagrams show the same press-position fret numbers
+            // as the regular size, drawn with the smaller fret_label_font.
+            show_fret_numbers: true,
         }
     }
 
@@ -601,6 +621,7 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
         title_font,
         title_baseline,
         label_font,
+        fret_label_font,
         finger_font,
         text_v_center,
         nut_stroke,
@@ -630,28 +651,16 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
         crate::escape::escape_xml(data.title())
     ));
 
-    // Nut (open position) or, for the compact size only, a single bare
-    // base-fret label (no "fr" suffix). The regular size labels the base
-    // fret as part of the full fret-number axis drawn below, so it needs no
-    // standalone label here; the position-marker dots already imply "this is
-    // fret N on a real fretboard".
+    // Nut (open position). Both sizes draw the full fret-number axis
+    // (`show_fret_numbers` is `true` for regular and compact), so the
+    // base-fret label is always covered by the axis; no standalone label
+    // is needed. The nut line itself is drawn only at fret 1.
     let nut_y = top_margin;
     if data.base_fret == 1 {
         svg.push_str(&format!(
             "<line x1=\"{left_margin}\" y1=\"{nut_y}\" x2=\"{}\" y2=\"{nut_y}\" \
              stroke=\"black\" stroke-width=\"{nut_stroke}\"/>\n",
             left_margin + grid_w
-        ));
-    } else if !show_fret_numbers {
-        // Compact size keeps the legacy single base-fret label. The regular
-        // size draws the full fret-number axis below, which already labels
-        // the first visible fret, so the standalone label would duplicate it.
-        svg.push_str(&format!(
-            "<text x=\"{}\" y=\"{}\" text-anchor=\"end\" \
-             font-family=\"sans-serif\" font-size=\"{label_font}\">{}</text>\n",
-            left_margin - 4.0,
-            nut_y + cell_h / 2.0 + text_v_center,
-            data.base_fret
         ));
     }
 
@@ -672,9 +681,9 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
             let y = nut_y + (j as f32 - 0.5) * cell_h + text_v_center;
             svg.push_str(&format!(
                 "<text x=\"{}\" y=\"{y}\" text-anchor=\"end\" \
-                 font-family=\"sans-serif\" font-size=\"{label_font}\" \
+                 font-family=\"sans-serif\" font-size=\"{fret_label_font}\" \
                  class=\"fret-number\">{fret_number}</text>\n",
-                left_margin - 4.0,
+                left_margin - m.fret_label_gap,
             ));
         }
     }
@@ -810,6 +819,7 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
         title_font,
         title_baseline,
         label_font,
+        fret_label_font,
         finger_font,
         text_v_center,
         nut_stroke,
@@ -853,28 +863,17 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
         crate::escape::escape_xml(data.title())
     ));
 
-    // Nut (vertical line on the left at the open position) or, for the
-    // compact size only, a single base-fret label above the leftmost fret
-    // cell. The regular size labels the base fret as part of the full
-    // fret-number axis drawn below the grid, so it needs no standalone label
-    // here.
+    // Nut (vertical line on the left at the open position). Both sizes draw
+    // the full fret-number axis (`show_fret_numbers` is `true` for regular
+    // and compact), so the base-fret label is always covered by the axis;
+    // no standalone label is needed. The nut line itself is drawn only at
+    // fret 1.
     let nut_x = left_margin;
     if data.base_fret == 1 {
         svg.push_str(&format!(
             "<line x1=\"{nut_x}\" y1=\"{top_margin}\" x2=\"{nut_x}\" y2=\"{}\" \
              stroke=\"black\" stroke-width=\"{nut_stroke}\"/>\n",
             top_margin + grid_h
-        ));
-    } else if !show_fret_numbers {
-        // Compact size keeps the legacy single base-fret label above the
-        // first fret column. The regular size draws the full fret-number axis
-        // below the grid, which already labels the first visible fret.
-        svg.push_str(&format!(
-            "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" \
-             font-family=\"sans-serif\" font-size=\"{label_font}\">{}</text>\n",
-            nut_x + fret_pitch / 2.0,
-            top_margin - 4.0,
-            data.base_fret
         ));
     }
 
@@ -885,13 +884,13 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
     // the existing bottom padding so the diagram's bounding box is unchanged;
     // the `fret-number` class lets consumers restyle/hide them.
     if show_fret_numbers {
-        let label_y = top_margin + grid_h + label_font;
+        let label_y = top_margin + grid_h + fret_label_font;
         for j in 1..=num_frets {
             let fret_number = data.base_fret as i32 - 1 + j as i32;
             let x = nut_x + (j as f32 - 0.5) * fret_pitch;
             svg.push_str(&format!(
                 "<text x=\"{x}\" y=\"{label_y}\" text-anchor=\"middle\" \
-                 font-family=\"sans-serif\" font-size=\"{label_font}\" \
+                 font-family=\"sans-serif\" font-size=\"{fret_label_font}\" \
                  class=\"fret-number\">{fret_number}</text>\n"
             ));
         }
@@ -3272,10 +3271,13 @@ mod tests {
     }
 
     #[test]
-    fn fret_number_axis_omitted_in_compact_but_base_label_kept() {
-        // Compact diagrams (above-a-lyric) suppress the full axis to stay
-        // uncluttered, but must keep the legacy single base-fret label so a
-        // high-position compact diagram still shows where it sits.
+    fn compact_diagrams_show_press_position_axis_with_smaller_font() {
+        // Inline / hover (compact) diagrams show the same per-cell
+        // press-position fret numbers as the regular size (#2618), drawn with
+        // the smaller compact `fret_label_font` (6) so they fit the narrow
+        // inline layout. The legacy single base-fret label is gone — the axis
+        // covers it — and a 2-digit label (base_fret 7 → cells 7..=11) must
+        // still render.
         let data = DiagramData {
             name: "Bm".to_string(),
             display_name: None,
@@ -3287,13 +3289,20 @@ mod tests {
         };
         for orientation in [Orientation::Vertical, Orientation::Horizontal] {
             let svg = render_svg_with_options(&data, orientation, DiagramSize::Compact);
-            assert!(
-                !svg.contains("class=\"fret-number\""),
-                "compact must not draw the full fret-number axis for {orientation:?}; got: {svg}"
+            assert_eq!(
+                svg.matches("class=\"fret-number\"").count(),
+                5,
+                "compact must draw the per-cell axis (cells 7..=11) for {orientation:?}; got: {svg}"
             );
+            for n in 7..=11 {
+                assert!(
+                    svg.contains(&format!("class=\"fret-number\">{n}</text>")),
+                    "compact must label cell {n} for {orientation:?}; got: {svg}"
+                );
+            }
             assert!(
-                svg.contains(">7</text>"),
-                "compact must keep the single base-fret label 7 for {orientation:?}; got: {svg}"
+                svg.contains("font-size=\"6\" class=\"fret-number\""),
+                "compact axis must use the smaller fret_label_font (6); got: {svg}"
             );
         }
     }
@@ -3339,6 +3348,25 @@ mod tests {
         assert!(
             h_ys.iter().all(|&y| y <= 130.0),
             "horizontal fret-number labels overflow the frame: {h_ys:?}"
+        );
+        // Compact size: left_margin widened from 9 → 11 to fit 2-digit labels.
+        // Verify the compact bounding box is as expected and that every
+        // fret-number label baseline stays inside the declared frame.
+        let cv = render_svg_with_options(&data, Orientation::Vertical, DiagramSize::Compact);
+        assert_eq!(extract(&cv, "width"), 67.0);
+        assert_eq!(extract(&cv, "height"), 87.0);
+        let cv_ys = label_ys(&cv);
+        assert!(
+            cv_ys.iter().all(|&y| y <= 87.0),
+            "compact vertical fret-number labels overflow the frame: {cv_ys:?}"
+        );
+        let ch = render_svg_with_options(&data, Orientation::Horizontal, DiagramSize::Compact);
+        assert_eq!(extract(&ch, "width"), 77.0);
+        assert_eq!(extract(&ch, "height"), 75.0);
+        let ch_ys = label_ys(&ch);
+        assert!(
+            ch_ys.iter().all(|&y| y <= 75.0),
+            "compact horizontal fret-number labels overflow the frame: {ch_ys:?}"
         );
     }
 
