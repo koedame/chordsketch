@@ -544,6 +544,47 @@ export function findChordByOffsetOrdinal(
   return -1;
 }
 
+/**
+ * Compute the disambiguation ordinal a chord occupies after a
+ * drag-and-drop reposition lands it at `destinationOffset` on the
+ * destination line — so the consumer can keep the dropped chord selected
+ * (parity with the nudge path, which advances the selection to the moved
+ * chord via {@link buildChordNudge}'s returned `ordinal`).
+ *
+ * The dropped chord always lands AFTER any chords already sitting at
+ * `destinationOffset` — {@link lyricsOffsetToSourceColumn} skips leading
+ * `[...]` brackets at the target lyric position — so its ordinal is the
+ * count of OTHER chords sharing that offset in the re-parsed source.
+ *
+ * Moving a chord shifts only bracket columns, never the zero-width lyrics
+ * offsets of the other chords, so this count can be taken against the
+ * pre-move layout. The only adjustment is the dragged chord itself: on a
+ * same-line move it is removed from the destination line before the
+ * re-insert, so it must be excluded from the count via `removedIndex`. On
+ * a cross-line move or a copy nothing is removed from the destination
+ * line, so every current chord there counts (`removedIndex < 0`).
+ *
+ * @param destinationOffset the lyrics offset the chord lands at (the
+ *   event's `toLyricsOffset`, expected within `[0, totalLyrics]`).
+ * @param destinationChordOffsets lyrics offsets of every chord currently
+ *   on the destination line (pre-move layout), in source order.
+ * @param removedIndex index into `destinationChordOffsets` of the dragged
+ *   chord when the move removes it from the destination line (same-line
+ *   move); `-1` for a cross-line move or a copy.
+ */
+export function repositionedChordOrdinal(
+  destinationOffset: number,
+  destinationChordOffsets: readonly number[],
+  removedIndex: number,
+): number {
+  let ordinal = 0;
+  for (let i = 0; i < destinationChordOffsets.length; i++) {
+    if (i === removedIndex) continue;
+    if (destinationChordOffsets[i] === destinationOffset) ordinal++;
+  }
+  return ordinal;
+}
+
 /** Result of {@link buildChordNudge}: the reposition event to fire plus
  * the chord's new `(offset, ordinal)` so the caller can advance the
  * selection to track the moved chord. */

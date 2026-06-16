@@ -159,6 +159,7 @@ export {
   nudgeChordPosition,
   partsFromRawName,
   readCapo,
+  repositionedChordOrdinal,
   setCapoInSource,
   sourceColumnToLyricsOffset,
   type CaretChordMatch,

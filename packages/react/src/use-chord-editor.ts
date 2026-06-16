@@ -262,7 +262,16 @@ export function useChordEditor({
   const onChordReposition = useCallback(
     (event: ChordRepositionEvent) => {
       const result = applyChordReposition(source, event);
-      commit(result);
+      // Keep the moved / copied chord selected: land the caret just
+      // inside its new `[chord]` bracket so the caret-driven selection
+      // re-resolves onto it (parity with the nudge / insert paths, and
+      // with the standalone <ChordSheet> walker which advances its own
+      // selection on drop). `result.caretOffset` points just past the
+      // bracket; back up over `]` + the name to land right after `[`.
+      // On an optimistic-concurrency no-op the source is unchanged, so
+      // the deferred caret effect never fires and this offset is unused.
+      const target = result.caretOffset - (event.chord.length + 2) + 1;
+      commit(result, target);
     },
     [source, commit],
   );
