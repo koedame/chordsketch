@@ -112,6 +112,21 @@ describe('useChordEditor', () => {
     expect(currentSource).toBe('Almost [Bbm7]heaven');
   });
 
+  test('the caret restore fires once per edit and does not re-fire on a later caret move', () => {
+    mount();
+    caretTo(1); // select `[G]`
+    act(() => {
+      latest.inspectorProps.onChange({ root: 'G', accidental: '', suffix: '7', bass: '' });
+    });
+    expect(currentSource).toBe('[G7]Almost [Bbm7]heaven');
+    const callsAfterEdit = setCaretSpy.mock.calls.length;
+    // Subsequent caret-only moves must not replay the consumed pending
+    // caret (the tagged-pending guard clears it after applying).
+    caretTo(8);
+    caretTo(2);
+    expect(setCaretSpy.mock.calls.length).toBe(callsAfterEdit);
+  });
+
   test('under an active transpose, editing is gated: idle + note, no Insert', () => {
     mount(SOURCE, 2); // CLI transpose +2, no capo -> not source-editable
     caretTo(1); // would be `[G]` but the gate blocks resolution

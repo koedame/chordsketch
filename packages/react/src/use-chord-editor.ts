@@ -155,16 +155,27 @@ export function useChordEditor({
   // Restore the caret after a source mutation. Deferred to an effect on
   // `source` so the editor's controlled-value sync (a child effect, run
   // before this parent effect) has updated the document first.
-  const pendingCaretRef = useRef<number | null>(null);
+  //
+  // The pending caret is tagged with the exact source text it targets,
+  // so a commit that turns out to be a no-op (an optimistic-concurrency
+  // guard mismatch returns the SAME source string, the host's setState
+  // bails, and this effect never fires) cannot leak its stale offset
+  // onto a later, unrelated source change (e.g. the user typing): the
+  // effect applies the caret only when `source` actually became the
+  // committed text, and otherwise drops the stale request.
+  const pendingCaretRef = useRef<{ text: string; offset: number } | null>(null);
   useEffect(() => {
-    if (pendingCaretRef.current == null) return;
-    editorRef.current?.setCaret(pendingCaretRef.current);
+    const pending = pendingCaretRef.current;
+    if (pending == null) return;
+    if (pending.text === source) {
+      editorRef.current?.setCaret(pending.offset);
+    }
     pendingCaretRef.current = null;
   }, [source, editorRef]);
 
   const commit = useCallback(
     (result: ChordRepositionResult, caretTarget?: number) => {
-      pendingCaretRef.current = caretTarget ?? result.caretOffset;
+      pendingCaretRef.current = { text: result.text, offset: caretTarget ?? result.caretOffset };
       onSourceChange(result.text);
     },
     [onSourceChange],
@@ -277,6 +288,13 @@ export function useChordEditor({
   const onChordSelectionChange = useCallback(
     (selection: ChordSelection | null) => {
       if (!selection) return;
+      // If a source-mutating commit is in flight (e.g. the preview's
+      // keyboard nudge fires onChordReposition then this in the same
+      // tick), its caret restoration is already queued against the NEW
+      // source — don't fight it with a caret move computed from the
+      // still-stale `source` here. The click path has no pending commit,
+      // so it falls through and moves the caret as intended.
+      if (pendingCaretRef.current != null) return;
       const offset = chordSelectionCaretOffset(source, selection);
       if (offset == null) return;
       // Move the editor caret just inside the clicked chord's bracket;
