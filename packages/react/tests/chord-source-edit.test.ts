@@ -8,6 +8,7 @@ import {
   CHORD_TYPE_PRESETS,
   applyChordDelete,
   applyChordEdit,
+  applyChordInsert,
   applyChordReposition,
   buildChordName,
   buildChordNudge,
@@ -15,9 +16,11 @@ import {
   chordLayoutForLine,
   chordSourceEditableUnderTranspose,
   chordSuffixFromQuality,
+  findChordAtCaret,
   findChordByOffsetOrdinal,
   lyricsOffsetToSourceColumn,
   nudgeChordPosition,
+  partsFromRawName,
   readCapo,
   setCapoInSource,
   sourceColumnToLyricsOffset,
@@ -870,5 +873,138 @@ describe('buildChordNudge sets the expected-token guard on its move event', () =
     expect(result).not.toBeNull();
     expect(result!.event.expected).toBe('Am7');
     expect(result!.event.copy).toBe(false);
+  });
+});
+
+describe('partsFromRawName', () => {
+  test('splits root / accidental / suffix / bass and round-trips', () => {
+    expect(partsFromRawName('Bbm7/F')).toEqual({
+      root: 'B',
+      accidental: 'b',
+      suffix: 'm7',
+      bass: 'F',
+    });
+    expect(buildChordName(partsFromRawName('Bbm7/F'))).toBe('Bbm7/F');
+  });
+
+  test('bare major triad has empty accidental + suffix', () => {
+    expect(partsFromRawName('G')).toEqual({ root: 'G', accidental: '', suffix: '', bass: '' });
+  });
+
+  test('sharp root + slash bass', () => {
+    expect(partsFromRawName('F#7/A#')).toEqual({
+      root: 'F',
+      accidental: '#',
+      suffix: '7',
+      bass: 'A#',
+    });
+  });
+
+  test('rootless / non-standard name yields empty root (un-editable, not corrupted)', () => {
+    expect(partsFromRawName('N.C.')).toEqual({
+      root: '',
+      accidental: '',
+      suffix: 'N.C.',
+      bass: '',
+    });
+    // buildChordName rejects an empty root, so a stray edit is dropped
+    // rather than defaulting the root and corrupting the token.
+    expect(() => buildChordName(partsFromRawName('N.C.'))).toThrow();
+  });
+});
+
+describe('findChordAtCaret', () => {
+  // Source: line 0 is a directive, line 1 has the chords. Absolute
+  // offset of line 1 is `"{title: T}".length + 1` = 11.
+  const source = '{title: T}\n[G]Almost [Bbm7]heaven';
+  const line1Start = source.indexOf('\n') + 1; // 11
+
+  test('caret inside a bracket selects that chord', () => {
+    // Caret inside `[Bbm7]` (on the "b" of the body).
+    const at = source.indexOf('Bbm7');
+    const match = findChordAtCaret(source, at);
+    expect(match).not.toBeNull();
+    expect(match!.chordName).toBe('Bbm7');
+    expect(match!.line).toBe(2);
+    expect(match!.sourceColumn).toBe('[G]Almost '.length);
+    expect(match!.bracketLength).toBe('[Bbm7]'.length);
+    expect(match!.parts).toEqual({ root: 'B', accidental: 'b', suffix: 'm7', bass: '' });
+    // "Almost " = 7 lyric chars before the 2nd chord.
+    expect(match!.offset).toBe(7);
+    expect(match!.ordinal).toBe(0);
+    expect(match!.otherOffsets).toEqual([0]);
+    expect(match!.totalLyrics).toBe('Almost heaven'.length);
+  });
+
+  test('caret on the opening bracket selects the chord', () => {
+    const match = findChordAtCaret(source, line1Start); // column 0 = `[` of [G]
+    expect(match).not.toBeNull();
+    expect(match!.chordName).toBe('G');
+    expect(match!.offset).toBe(0);
+  });
+
+  test('caret in the lyrics (not on a chord) returns null', () => {
+    const at = source.indexOf('Almost'); // just after `]` of [G], on the lyric
+    expect(findChordAtCaret(source, at)).toBeNull();
+  });
+
+  test('caret on a directive line returns null', () => {
+    expect(findChordAtCaret(source, 3)).toBeNull();
+  });
+
+  test('stacked chords [A][B]: caret at the `][` boundary selects the right chord', () => {
+    const stacked = '[A][B]word';
+    // `]` of [A] is at col 2; col 3 is the `[` of [B].
+    const right = findChordAtCaret(stacked, 3);
+    expect(right).not.toBeNull();
+    expect(right!.chordName).toBe('B');
+    expect(right!.ordinal).toBe(1); // 2nd chord sharing lyrics offset 0
+    expect(right!.offset).toBe(0);
+    // Inside [A].
+    const left = findChordAtCaret(stacked, 1);
+    expect(left!.chordName).toBe('A');
+    expect(left!.ordinal).toBe(0);
+  });
+
+  test('out-of-range caret offset clamps and does not throw', () => {
+    expect(findChordAtCaret(source, 9999)).toBeNull();
+    expect(findChordAtCaret(source, -5)).toBeNull();
+  });
+});
+
+describe('applyChordInsert', () => {
+  test('inserts a new [chord] at the caret column', () => {
+    const source = 'Almost heaven';
+    const result = applyChordInsert(source, { line: 1, column: 7, chord: 'Bbm7' });
+    expect(result.text).toBe('Almost [Bbm7]heaven');
+    // Caret lands just past the inserted bracket.
+    expect(result.caretOffset).toBe('Almost [Bbm7]'.length);
+  });
+
+  test('clamps a past-end column to the line end', () => {
+    const result = applyChordInsert('hi', { line: 1, column: 99, chord: 'C' });
+    expect(result.text).toBe('hi[C]');
+  });
+
+  test('snaps out of an existing bracket so it cannot split a token', () => {
+    // Caret column 2 is strictly inside `[Am]` (between A and m).
+    const result = applyChordInsert('[Am]word', { line: 1, column: 2, chord: 'C' });
+    // Insertion snaps to just after `]` of [Am].
+    expect(result.text).toBe('[Am][C]word');
+  });
+
+  test('inserts on the correct line in a multi-line source', () => {
+    const source = '{title: T}\nAlmost heaven';
+    const result = applyChordInsert(source, { line: 2, column: 0, chord: 'G' });
+    expect(result.text).toBe('{title: T}\n[G]Almost heaven');
+  });
+
+  test('rejects a structurally dangerous chord body', () => {
+    expect(() => applyChordInsert('hi', { line: 1, column: 0, chord: 'A]B' })).toThrow();
+    expect(() => applyChordInsert('hi', { line: 1, column: 0, chord: '' })).toThrow();
+  });
+
+  test('throws on an out-of-range line', () => {
+    expect(() => applyChordInsert('hi', { line: 5, column: 0, chord: 'C' })).toThrow();
   });
 });
