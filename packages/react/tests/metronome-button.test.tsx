@@ -186,25 +186,27 @@ describe('<MetronomeButton>', () => {
   });
 
   // While the metronome is playing, the decorative beat-dot LED must
-  // stop blinking: it is a discrete per-beat flash on an independent
-  // CSS clock that drifts against the real audible tick (the
+  // be extinguished (not just frozen): it is a discrete per-beat flash
+  // on an independent CSS clock that drifts against the real audible
+  // tick, so once the real beat is audible the dot is turned off
+  // entirely rather than left as a static lit indicator (the
   // continuous swing / frame pulse stay running — see the stylesheet
   // comment). The animation is a CSS property jsdom does not compute,
   // so assert it against the stylesheet source like the box-sizing
   // test above.
-  test('holds the beat-dot LED static while playing', () => {
+  test('extinguishes the beat-dot LED while playing', () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const css = readFileSync(resolve(here, '../src/styles.css'), 'utf8').replace(
       /\/\*[\s\S]*?\*\//g,
       '',
     );
     // The playing-state rule that targets the beat dot must turn its
-    // animation off and rest it at full opacity.
+    // animation off and set it fully transparent (extinguished).
     const rule = css.match(
       /button\.meta-inline--interactive\.is-playing \.music-glyph--metronome__beat \{[^}]*\}/,
     );
     expect(rule).not.toBeNull();
     expect(rule?.[0]).toContain('animation: none;');
-    expect(rule?.[0]).toContain('opacity: 1;');
+    expect(rule?.[0]).toContain('opacity: 0;');
   });
 });
