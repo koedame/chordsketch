@@ -780,22 +780,29 @@
 .chordsketch-sheet__content button.meta-inline--interactive.is-playing .meta-inline__value {
   color: inherit;
 }
-/* While the metronome is actually playing, hold the decorative
-   beat-dot LED static. The dot is a DISCRETE per-beat flash on the
+/* While the metronome is actually playing, extinguish the decorative
+   beat-dot LED entirely. The dot is a DISCRETE per-beat flash on the
    always-on `cs-metronome-beat` CSS clock, which cannot lock to the
    Web Audio metronome, so during playback it drifts against the real
-   audible tick and reads as a stuttering off-beat double-tick.
+   audible tick and reads as a stuttering off-beat double-tick. Once
+   the user is hearing the real beat, the dot has no honest job left —
+   so it is turned off (`opacity: 0`) rather than frozen lit, which
+   would leave a static indicator implying a per-beat cue it no longer
+   carries.
    The CONTINUOUS cues — the pendulum swing (`cs-metronome-swing`) and
    the frame pulse (`cs-tempo-frame`) — are deliberately left running:
    their motion is ambient rather than a discrete tick, so the same
    clock drift is imperceptible and they keep signalling the running
-   tempo. (Do NOT extend this freeze to those two on a "they drift
-   too" reading — the discrete-vs-continuous distinction is the whole
-   point.) The resting full-opacity dot matches the reduced-motion
-   treatment. */
+   tempo. (Do NOT extend this to those two on a "they drift too"
+   reading — the discrete-vs-continuous distinction is the whole
+   point.) `opacity: 0` keeps the SVG circle in layout, so the glyph's
+   size is unchanged; the dot reappears (idle blink, or reduced-motion
+   static) the moment playback stops. This rule sits outside the
+   reduced-motion media block and outranks it on specificity, so the
+   dot is off during playback regardless of the motion preference. */
 .chordsketch-sheet__content button.meta-inline--interactive.is-playing .music-glyph--metronome__beat {
   animation: none;
-  opacity: 1;
+  opacity: 0;
 }
 @keyframes cs-tempo-frame {
   0%,
