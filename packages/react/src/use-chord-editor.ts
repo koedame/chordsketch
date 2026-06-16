@@ -331,9 +331,11 @@ export function useChordEditor({
     canRight,
     onChange,
     onNudge,
-    // Insert needs a caret to target; offer it only once the editor has
-    // reported a caret position and editing is not gated.
-    onInsert: editable && caret != null ? onInsert : undefined,
+    // Insert builds a NEW chord at the caret, so it belongs to the idle
+    // state only — when the caret is ON a chord the footer offers Remove
+    // instead (inserting there would duplicate the selected chord). Needs
+    // a caret to target and editing not gated.
+    onInsert: editable && caret != null && caretChord == null ? onInsert : undefined,
     onRemove: caretChord != null ? onRemove : undefined,
     note: editable ? undefined : 'Clear transpose / capo to edit chords.',
   };

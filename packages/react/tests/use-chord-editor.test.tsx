@@ -62,10 +62,16 @@ describe('useChordEditor', () => {
     expect(latest.inspectorProps.selected).toBe(true);
     expect(latest.inspectorProps.chordName).toBe('G');
     expect(latest.chordSelection).toMatchObject({ line: 1, offset: 0, ordinal: 0 });
-    // Caret in the lyrics deselects.
+    // Insert is idle-only: while a chord is selected the footer offers
+    // Remove, not Insert (#2646).
+    expect(latest.inspectorProps.onInsert).toBeUndefined();
+    expect(latest.inspectorProps.onRemove).toBeTypeOf('function');
+    // Caret in the lyrics deselects — and Insert becomes available again.
     caretTo(5); // inside "Almost"
     expect(latest.inspectorProps.selected).toBe(false);
     expect(latest.chordSelection).toBeNull();
+    expect(latest.inspectorProps.onInsert).toBeTypeOf('function');
+    expect(latest.inspectorProps.onRemove).toBeUndefined();
   });
 
   test('editing the selected chord rewrites it in source and keeps it selected', () => {
