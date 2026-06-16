@@ -588,6 +588,20 @@ function ChordSheetAstBranch({
   // `{capo: 18}` cannot fool the gate into editing a transposed AST.
   const sourceEditable = chordSourceEditableUnderTranspose(source, transpose);
   const repositionCb = sourceEditable ? onChordReposition : undefined;
+  // When audio is on, audition the moved chord on EVERY reposition the
+  // preview drives — drag-drop AND the keyboard arrow-nudge both route
+  // through the walker's `onChordReposition` — so a move sounds the same
+  // whether it came from the preview or the in-pane panel ◀/▶ (which
+  // calls this handler too). Mirrors the controlled `useChordEditor`
+  // surface, which already auditions on reposition. The walker still
+  // plays click / Enter / Space activations itself, so those do not
+  // route here and cannot double-fire.
+  const repositionCbWithAudio = repositionCb
+    ? (event: ChordRepositionEvent) => {
+        repositionCb(event);
+        chordAudioConfig?.play(event.chord);
+      }
+    : undefined;
   const editCb = sourceEditable ? onChordEdit : undefined;
   const deleteCb = sourceEditable ? onChordDelete : undefined;
   // Drop a stale selection if the user applies a transpose / capo while
@@ -656,7 +670,7 @@ function ChordSheetAstBranch({
           activeSourceLine,
           caretColumn,
           caretLineLength,
-          onChordReposition: repositionCb,
+          onChordReposition: repositionCbWithAudio,
           chordSelection: repositionCb ? chordSelection : null,
           setChordSelection: repositionCb ? selectChord : undefined,
           chordAudio: chordAudioConfig,
@@ -717,12 +731,11 @@ function ChordSheetAstBranch({
               totalLyrics: resolvedChord.totalLyrics,
               direction,
             });
-            if (!result || !repositionCb) return;
-            repositionCb(result.event);
-            // Re-audition the moved chord when audio is on (#2652
-            // follow-up) so a panel ◀/▶ move gives the same audible
-            // feedback as an edit.
-            chordAudioConfig?.play(resolvedChord.chordName);
+            if (!result || !repositionCbWithAudio) return;
+            // Route through the audition wrapper so a panel ◀/▶ move
+            // sounds the chord exactly like a preview drag / arrow-nudge
+            // (single source of move-audition — no double play).
+            repositionCbWithAudio(result.event);
             setInternalSelection((prev) => ({
               line: resolvedChord.sourceLine,
               offset: result.offset,

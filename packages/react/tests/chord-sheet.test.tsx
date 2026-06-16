@@ -1123,4 +1123,36 @@ describe('<ChordSheet>', () => {
     fireEvent.click(container.querySelector('.chord--audio') as HTMLElement);
     expect(play).toHaveBeenCalledWith('Am');
   });
+
+  test('audio: a preview keyboard arrow-nudge auditions the moved chord (parity with the panel ◀/▶)', async () => {
+    // Regression for the standalone-mode gap: the in-pane panel ◀/▶
+    // auditioned a move but the preview arrow-key nudge did not, so the
+    // same operation sounded inconsistently. Both now route through one
+    // audition wrapper.
+    const play = vi.fn();
+    const onChordReposition = vi.fn();
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        chordAudio={{ enabled: true, play }}
+        astWasmLoader={makeAstLoader(chordNamedStub('Am'))}
+        onChordReposition={onChordReposition}
+        onChordEdit={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(container.querySelector('.chord--audio')).not.toBeNull(),
+    );
+    // Click selects + plays once.
+    fireEvent.click(container.querySelector('.chord--audio') as HTMLElement);
+    expect(play).toHaveBeenCalledTimes(1);
+    // ArrowRight on the now-selected chord nudges it one lyric step and
+    // must audition the move.
+    const selected = container.querySelector('.chord--selected') as HTMLElement;
+    expect(selected).not.toBeNull();
+    fireEvent.keyDown(selected, { key: 'ArrowRight' });
+    expect(onChordReposition).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(play).toHaveBeenLastCalledWith('Am');
+  });
 });
