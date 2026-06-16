@@ -328,6 +328,7 @@ layout in either place.
 | `ui_kits/web/library.html` | Full-screen sample — library |
 | `ui_kits/web/viewer.html` | Full-screen sample — chord sheet viewer |
 | `ui_kits/web/editor.html` | Full-screen sample — ChordPro split editor (source + live preview) |
+| `ui_kits/web/editor-chord-footer.html` | Full-screen sample — ChordPro split editor with the lifted, caret-driven chord-editor footer spanning both panes (`@chordsketch/react` `<ChordInspector>` + `useChordEditor`, #2644) |
 | `ui_kits/web/editor-irealb.html` | Full-screen sample — iReal Pro bar-grid editor with metadata header and bar inspector |
 | `preview/index.html` | Component preview index |
 | `preview/layout-stack.html` | Stack — vertical-flow primitive (default gap, modifiers, nesting) |
