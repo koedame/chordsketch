@@ -35,6 +35,7 @@ import {
   useState,
 } from 'react';
 import type {
+  AnimationEvent as ReactAnimationEvent,
   CSSProperties,
   DragEvent as ReactDragEvent,
   JSX,
@@ -1594,6 +1595,39 @@ export interface ChordSelection {
 }
 
 /**
+ * Chord-audio (#2650) wiring threaded to each chord-bearing lyrics line.
+ * When {@link ChordAudioConfig.enabled} is `true`, every rendered
+ * `.chord` becomes a play button: clicking / Enter / Space sounds the
+ * chord via {@link ChordAudioConfig.play}.
+ *
+ * Audio mode takes precedence over the click-to-nudge selection
+ * interaction (a chord cannot be both a "select to edit" target and a
+ * "tap to hear" target at once), matching the toolbar-toggle UX where
+ * the user opts into audio mode explicitly.
+ */
+export interface ChordAudioConfig {
+  /** Whether chord-audio mode is active. */
+  enabled: boolean;
+  /** Sound the given raw chord name (e.g. `"Am7"`, `"C/G"`). */
+  play: (chordName: string) => void;
+}
+
+/**
+ * Briefly flash a `.chord--ringing` class on a played chord element so
+ * the tap gets visual feedback. The class is added imperatively (the
+ * walker is stateless per chord) and removed on `animationend`; a forced
+ * reflow between remove and re-add restarts the CSS animation when the
+ * same chord is tapped again before the previous pulse finishes.
+ */
+function pulseChordElement(el: HTMLElement): void {
+  el.classList.remove('chord--ringing');
+  // Reading offsetWidth forces a synchronous reflow so the re-added
+  // class starts a fresh animation rather than being coalesced away.
+  void el.offsetWidth;
+  el.classList.add('chord--ringing');
+}
+
+/**
  * Drag-and-drop + click-to-nudge context threaded to each
  * chord-bearing lyrics line. Carries the per-line source number,
  * the reposition callback the consumer wires, and the shared
@@ -1632,6 +1666,8 @@ function renderLyricsLine(
   /** Inline / hover diagram config (ADR-0027); `null` keeps the
    * plain chord-name rendering. */
   diagrams: LyricsDiagramConfig | null = null,
+  /** Chord-audio config (#2650); `null` keeps chords inert. */
+  chordAudio: ChordAudioConfig | null = null,
 ): JSX.Element {
   return (
     <LyricsLine
@@ -1643,6 +1679,7 @@ function renderLyricsLine(
       reposition={reposition}
       className="line"
       diagrams={diagrams}
+      chordAudio={chordAudio}
     />
   );
 }
@@ -1663,6 +1700,8 @@ interface LyricsLineProps {
   /** Inline / hover diagram config (ADR-0027). `null` / `'section'`
    * keeps the plain chord-name rendering. */
   diagrams?: LyricsDiagramConfig | null;
+  /** Chord-audio config (#2650). `null` keeps chords inert. */
+  chordAudio?: ChordAudioConfig | null;
 }
 
 /**
@@ -1805,6 +1844,7 @@ function LyricsLine({
   className,
   'data-source-line': dataSourceLine,
   diagrams,
+  chordAudio,
 }: LyricsLineProps): JSX.Element {
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   // Pre-walk segments to record per-chord source columns and
@@ -2098,8 +2138,11 @@ function LyricsLine({
             ? renderMarker(caret.withinRatio)
             : null;
         const segLayout = segmentLayout[i];
+        // In chord-audio mode the chord is a play button, not a drag
+        // handle — suppress drag wiring so a tap-to-hear gesture is not
+        // also a drag-to-reposition gesture (#2650).
         const chordDragProps =
-          reposition && segment.chord
+          reposition && segment.chord && !(chordAudio?.enabled)
             ? buildChordDragProps(
                 segment.chord,
                 segLayout.chordSourceColumn,
@@ -2137,8 +2180,38 @@ function LyricsLine({
         const isRealChord = segment.chord != null;
         const isFocusedChord =
           reposition != null && isRealChord && i === focusedSegmentIdx;
-        const chordInteractiveProps =
-          reposition && nudgeCtx && isRealChord
+        // Chord-audio mode (#2650) turns each chord into a play button.
+        // It takes precedence over the click-to-nudge selection so a
+        // chord is never both "tap to edit" and "tap to hear" at once —
+        // the user opts into audio mode via the toolbar toggle.
+        const audioEnabled = Boolean(chordAudio?.enabled) && isRealChord;
+        const playChord = (e: ReactMouseEvent | ReactKeyboardEvent) => {
+          chordAudio?.play(segment.chord?.name ?? '');
+          pulseChordElement(e.currentTarget as HTMLElement);
+        };
+        const chordInteractiveProps = audioEnabled
+          ? {
+              tabIndex: 0,
+              role: 'button' as const,
+              'aria-label': `Play chord ${segment.chord?.name ?? ''}`,
+              'data-chord': segment.chord?.name ?? '',
+              onClick: (e: ReactMouseEvent) => {
+                e.stopPropagation();
+                playChord(e);
+              },
+              onKeyDown: (e: ReactKeyboardEvent) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  playChord(e);
+                }
+              },
+              onAnimationEnd: (e: ReactAnimationEvent) => {
+                (e.currentTarget as HTMLElement).classList.remove(
+                  'chord--ringing',
+                );
+              },
+            }
+          : reposition && nudgeCtx && isRealChord
             ? {
                 tabIndex: 0,
                 role: 'button' as const,
@@ -2180,7 +2253,13 @@ function LyricsLine({
                 />
               ) : (
                 <span
-                  className={isFocusedChord ? 'chord chord--selected' : 'chord'}
+                  className={
+                    audioEnabled
+                      ? 'chord chord--audio'
+                      : isFocusedChord
+                        ? 'chord chord--selected'
+                        : 'chord'
+                  }
                   style={chordStyle ?? undefined}
                   ref={isFocusedChord ? focusedSpanRef : undefined}
                   {...(chordDragProps ?? {})}
@@ -2887,6 +2966,14 @@ export interface RenderChordproAstOptions {
   chordSelection?: ChordSelection | null;
   /** Setter paired with {@link chordSelection}; see its docs. */
   setChordSelection?: (next: ChordSelection | null) => void;
+  /**
+   * Chord-audio config (#2650). When `enabled`, each rendered `.chord`
+   * becomes a play button that sounds the chord via `play`. Audio mode
+   * takes precedence over the click-to-nudge selection. `<ChordSheet>`
+   * wires this from its own `useChordAudio` hook when `chordAudio` is
+   * set; direct `renderChordproAst` callers supply their own.
+   */
+  chordAudio?: ChordAudioConfig | null;
 }
 
 /**
@@ -3793,6 +3880,9 @@ interface WalkContext {
    */
   chordSelection?: ChordSelection | null;
   setChordSelection?: (next: ChordSelection | null) => void;
+  /** Chord-audio config (#2650), forwarded from
+   * `RenderChordproAstOptions`. `null` keeps chords inert. */
+  chordAudio?: ChordAudioConfig | null;
   /**
    * Diagram state (visibility / mode / instrument / position) resolved
    * once over the whole song. The per-line chord-block renderer reads
@@ -4409,6 +4499,7 @@ function renderLine(ctx: WalkContext, line: ChordproLine, key: number): void {
                 defines: ctx.diagramDefines,
               }
             : null,
+          ctx.chordAudio,
         ),
         sourceLine,
         null,
@@ -4485,6 +4576,7 @@ export function renderChordproAst(
     onChordReposition: options.onChordReposition,
     chordSelection: options.chordSelection,
     setChordSelection: options.setChordSelection,
+    chordAudio: options.chordAudio ?? null,
     diagramsState: options.chordDiagrams ? resolveDiagramsState(song) : null,
     diagramDefines: options.chordDiagrams ? collectDefines(song) : undefined,
     chordDiagramsInstrument: options.chordDiagrams?.instrument,

@@ -549,6 +549,11 @@ function PlaygroundApp(): JSX.Element {
   // behaviour; users opt into horizontal via the toolbar select.
   const [diagramsOrientation, setDiagramsOrientation] =
     useState<'vertical' | 'horizontal'>('vertical');
+  // Chord-audio mode (#2650): when on, clicking a chord in the preview
+  // plays it as a block chord via Web Audio. Off by default so the
+  // preview's first impression stays the read/edit surface; the user
+  // opts in via the toolbar toggle.
+  const [chordAudio, setChordAudio] = useState<boolean>(false);
 
   const editorRef = useRef<ChordSourceAreaHandle | null>(null);
 
@@ -859,6 +864,8 @@ function PlaygroundApp(): JSX.Element {
               showExport={false}
               chordDiagramsOrientation={diagramsOrientation}
               onChordDiagramsOrientationChange={setDiagramsOrientation}
+              chordAudioEnabled={chordAudio}
+              onChordAudioToggle={setChordAudio}
               /* `transposeMin/Max` left at the PreviewToolbar default
                  (±6) so the option list stays compact on narrow
                  preview panes. The feature ceiling of ±11 is still
@@ -871,6 +878,10 @@ function PlaygroundApp(): JSX.Element {
                 format="html"
                 chordDiagramsInstrument="guitar"
                 chordDiagramsOrientation={diagramsOrientation}
+                /* Chord-audio mode (#2650): clicking a chord plays it.
+                   Active in every view so preview-only users can audition
+                   chords too. */
+                chordAudio={chordAudio}
                 /* The active-line highlight and caret marker only make
                    sense in split view, where the editor sits beside the
                    preview. In preview-only view the editor is unmounted,

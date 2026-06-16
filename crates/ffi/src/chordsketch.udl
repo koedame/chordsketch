@@ -138,6 +138,16 @@ namespace chordsketch {
     [Throws=ChordSketchError]
     string? chord_diagram_svg_with_defines_orientation(string chord, string instrument, sequence<ChordDefine> defines, string? orientation);
 
+    /// Constituent pitches of a chord as MIDI note numbers, for
+    /// driving an audio synth (#2650). Mirrors the wasm `chordPitches`
+    /// and NAPI `chordPitches` exports.
+    ///
+    /// Returns ascending, de-duplicated MIDI note numbers describing a
+    /// block voicing (root, third, fifth, plus any extension / altered
+    /// / added tones, with a slash bass dropped one octave below the
+    /// root), or `null` when `chord` is not parseable as a chord.
+    sequence<u8>? chord_pitches(string chord);
+
     /// Convert a ChordPro source string into an `irealb://` URL
     /// (#2067 Phase 1).
     ///

@@ -280,6 +280,190 @@ pub fn canonicalize_detail(detail: &ChordDetail, force_common: bool, flats: bool
 }
 
 // ---------------------------------------------------------------------------
+// Constituent pitches (MIDI note numbers)
+// ---------------------------------------------------------------------------
+
+/// MIDI note number the block voicing places the chord root on (C3).
+///
+/// Chord tones are stacked above this root; a slash bass is dropped one
+/// octave below it. Choosing C3 keeps the common pop/folk vocabulary in
+/// a comfortable mid-register for a simple oscillator synth: the lowest
+/// tone produced is the slash bass at `36..=47` (C2..B2) and the highest
+/// extension (a 13th, +21 semitones, on a root of B3 = 59) reaches 80
+/// (G#5), well within the MIDI range.
+const VOICING_ROOT_MIDI: u8 = 48;
+
+/// Computes the constituent pitches of a chord as MIDI note numbers.
+///
+/// Returns `None` when `chord_name` is not parseable as a chord (the same
+/// inputs [`parse_chord`] rejects). Otherwise returns the chord's block
+/// voicing — root, third, fifth, plus any extension / altered / added
+/// tones implied by the chord quality and extension — as ascending,
+/// de-duplicated MIDI note numbers. Slash chords prepend the bass note one
+/// octave below the root.
+///
+/// This is the musical-theory source of truth shared by every consumer
+/// that needs to *sound* a chord (the wasm / napi / ffi bindings drive the
+/// React chord-audio surface from it). It is deliberately independent of
+/// the fretted / keyboard voicing database in
+/// [`voicings`](crate::voicings): those map a chord to one *instrument's*
+/// fingering, whereas this maps a chord to its abstract constituent
+/// pitches, so it covers every parseable chord rather than only the
+/// shapes the diagram tables enumerate.
+///
+/// The register is fixed (root at C3); callers that want a different
+/// octave transpose the returned notes themselves.
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::chord::chord_pitches;
+///
+/// // C major triad: C3, E3, G3.
+/// assert_eq!(chord_pitches("C"), Some(vec![48, 52, 55]));
+/// // A minor triad: A3, C4, E4.
+/// assert_eq!(chord_pitches("Am"), Some(vec![57, 60, 64]));
+/// // Slash chord drops the bass an octave below the root.
+/// assert_eq!(chord_pitches("C/G"), Some(vec![43, 48, 52, 55]));
+/// // Unparseable input yields None.
+/// assert_eq!(chord_pitches("xyz"), None);
+/// ```
+#[must_use]
+pub fn chord_pitches(chord_name: &str) -> Option<Vec<u8>> {
+    let detail = parse_chord(chord_name)?;
+    let root_pc = root_semitone(detail.root, detail.root_accidental);
+    let root_midi = VOICING_ROOT_MIDI + root_pc; // 48..=59
+
+    let mut pitches: Vec<u8> =
+        chord_interval_semitones(detail.quality, detail.extension.as_deref().unwrap_or(""))
+            .into_iter()
+            .map(|iv| root_midi + iv)
+            .collect();
+
+    if let Some((bass, bass_acc)) = detail.bass_note {
+        let bass_pc = root_semitone(bass, bass_acc);
+        // One octave below the root's base octave, so the bass is always
+        // the lowest sounding note (root_midi is at least 48; the bass is
+        // at most 47).
+        let bass_midi = (VOICING_ROOT_MIDI - 12) + bass_pc; // 36..=47
+        pitches.push(bass_midi);
+    }
+
+    pitches.sort_unstable();
+    pitches.dedup();
+    Some(pitches)
+}
+
+/// Maps a chord quality + extension string to the semitone intervals (from
+/// the root) of its constituent tones, including the root itself (`0`).
+///
+/// The extension grammar is the lenient one [`parse_quality_and_extension`]
+/// produces (e.g. `"7"`, `"maj7"`, `"sus4"`, `"add9"`, `"7sus4"`, `"7b5"`,
+/// `"9"`, `"13"`). Unrecognised extensions fall back to the bare triad
+/// rather than guessing — a documented, audible-but-safe degradation, not a
+/// silent wrong chord.
+fn chord_interval_semitones(quality: ChordQuality, ext: &str) -> Vec<u8> {
+    // Triad: (third, fifth) intervals above the root.
+    let (mut third, mut fifth): (u8, u8) = match quality {
+        ChordQuality::Major => (4, 7),
+        ChordQuality::Minor => (3, 7),
+        ChordQuality::Diminished => (3, 6),
+        ChordQuality::Augmented => (4, 8),
+    };
+
+    // Power chord ("C5"): root + fifth, no third.
+    if ext == "5" {
+        return vec![0, fifth];
+    }
+
+    // `sus` replaces the third with a 2nd or 4th.
+    if ext.contains("sus2") {
+        third = 2;
+    } else if ext.contains("sus4") || ext == "sus" {
+        third = 5;
+    }
+
+    // Altered fifth.
+    if ext.contains("b5") {
+        fifth = 6;
+    } else if ext.contains("#5") {
+        fifth = 8;
+    }
+
+    let mut extras: Vec<u8> = Vec::new();
+
+    if let Some(rest) = ext.strip_prefix("add") {
+        // Add-tone chord (e.g. "add9"): triad plus the added degree, no
+        // seventh.
+        if let Some(semi) = degree_to_semitone(rest) {
+            extras.push(semi);
+        }
+    } else {
+        let has13 = ext.contains("13");
+        let has11 = ext.contains("11");
+        let has9 = ext.contains('9');
+        let has_seventh = ext.contains('7') || has9 || has11 || has13;
+        // A "maj"-prefixed extension carrying a seventh-or-higher degree
+        // (maj7 / maj9 / maj13), or the "M7" / "Δ" shorthands, calls for a
+        // major seventh; bare "maj" (just `ChordQuality::Major`) does not.
+        let major_seventh =
+            (ext.starts_with("maj") && has_seventh) || ext.contains("M7") || ext.contains('Δ');
+        // A diminished chord with a seventh is fully diminished (bb7).
+        let dim_seventh = quality == ChordQuality::Diminished && ext.starts_with('7');
+
+        if dim_seventh {
+            extras.push(9);
+        } else if major_seventh {
+            extras.push(11);
+            if has9 {
+                extras.push(14);
+            }
+            if has11 {
+                extras.push(17);
+            }
+            if has13 {
+                extras.push(21);
+            }
+        } else if has_seventh {
+            extras.push(10);
+            if has9 || has11 || has13 {
+                extras.push(14);
+            }
+            if has11 || has13 {
+                extras.push(17);
+            }
+            if has13 {
+                extras.push(21);
+            }
+        }
+
+        // A sixth (e.g. "C6", "Am6") adds the major sixth — not a seventh.
+        if ext.contains('6') {
+            extras.push(9);
+        }
+    }
+
+    let mut notes = vec![0u8, third, fifth];
+    notes.append(&mut extras);
+    notes
+}
+
+/// Maps an extension degree token (the tail of an `add` chord, e.g. `"9"`)
+/// to its semitone interval above the root. Returns `None` for tokens that
+/// are not recognised added degrees.
+fn degree_to_semitone(degree: &str) -> Option<u8> {
+    match degree {
+        "2" => Some(2),
+        "4" => Some(5),
+        "6" => Some(9),
+        "9" => Some(14),
+        "11" => Some(17),
+        "13" => Some(21),
+        _ => None,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Parser
 // ---------------------------------------------------------------------------
 
@@ -1043,5 +1227,141 @@ mod tests {
         // the minor-shift is applied; pin it so a future regression in the
         // arithmetic surfaces here.
         assert_eq!(canon("Em", true, false), "Em");
+    }
+
+    // -- chord_pitches (#2650) -----------------------------------------------
+
+    #[test]
+    fn pitches_major_triad() {
+        // C major: C3, E3, G3.
+        assert_eq!(chord_pitches("C"), Some(vec![48, 52, 55]));
+        // G major rooted at G3 (pc 7 → 55): G3, B3, D4.
+        assert_eq!(chord_pitches("G"), Some(vec![55, 59, 62]));
+    }
+
+    #[test]
+    fn pitches_minor_triad() {
+        // A minor: A3, C4, E4.
+        assert_eq!(chord_pitches("Am"), Some(vec![57, 60, 64]));
+        // E minor: E3, G3, B3.
+        assert_eq!(chord_pitches("Em"), Some(vec![52, 55, 59]));
+    }
+
+    #[test]
+    fn pitches_diminished_and_augmented() {
+        // B diminished: B3, D4, F4 — root pc 11 → 59.
+        assert_eq!(chord_pitches("Bdim"), Some(vec![59, 62, 65]));
+        // C augmented: C3, E3, G#3.
+        assert_eq!(chord_pitches("Caug"), Some(vec![48, 52, 56]));
+        assert_eq!(chord_pitches("C+"), Some(vec![48, 52, 56]));
+    }
+
+    #[test]
+    fn pitches_dominant_and_minor_seventh() {
+        // G7: G3, B3, D4, F4.
+        assert_eq!(chord_pitches("G7"), Some(vec![55, 59, 62, 65]));
+        // Am7: A3, C4, E4, G4.
+        assert_eq!(chord_pitches("Am7"), Some(vec![57, 60, 64, 67]));
+    }
+
+    #[test]
+    fn pitches_major_seventh_distinct_from_dominant() {
+        // Cmaj7 has a major seventh (B3 = 59), not the dominant Bb3 (58).
+        assert_eq!(chord_pitches("Cmaj7"), Some(vec![48, 52, 55, 59]));
+        // Bare "Cmaj" is just the major triad — no seventh added.
+        assert_eq!(chord_pitches("Cmaj"), Some(vec![48, 52, 55]));
+        // Minor-major seventh ("Cmmaj7"): minor triad + major seventh.
+        assert_eq!(chord_pitches("Cmmaj7"), Some(vec![48, 51, 55, 59]));
+    }
+
+    #[test]
+    fn pitches_diminished_seventh() {
+        // Cdim7 is fully diminished: C3, Eb3, Gb3, Bbb3 (= A3, 57).
+        assert_eq!(chord_pitches("Cdim7"), Some(vec![48, 51, 54, 57]));
+    }
+
+    #[test]
+    fn pitches_half_diminished_via_m7b5() {
+        // Cm7b5: minor third, flat fifth, minor seventh.
+        assert_eq!(chord_pitches("Cm7b5"), Some(vec![48, 51, 54, 58]));
+    }
+
+    #[test]
+    fn pitches_sus_replaces_third() {
+        // Csus4: root, perfect fourth, fifth (no third).
+        assert_eq!(chord_pitches("Csus4"), Some(vec![48, 53, 55]));
+        // Csus2: root, major second, fifth.
+        assert_eq!(chord_pitches("Csus2"), Some(vec![48, 50, 55]));
+        // C7sus4: sus4 triad plus a dominant seventh.
+        assert_eq!(chord_pitches("C7sus4"), Some(vec![48, 53, 55, 58]));
+    }
+
+    #[test]
+    fn pitches_add_tone_has_no_seventh() {
+        // Cadd9 is the triad plus a 9th (D4 = 62), with NO seventh.
+        assert_eq!(chord_pitches("Cadd9"), Some(vec![48, 52, 55, 62]));
+    }
+
+    #[test]
+    fn pitches_sixth_adds_major_sixth_not_seventh() {
+        // C6: triad plus the major sixth (A3 = 57).
+        assert_eq!(chord_pitches("C6"), Some(vec![48, 52, 55, 57]));
+        // Am6: minor triad plus the major sixth (F#4 = 66).
+        assert_eq!(chord_pitches("Am6"), Some(vec![57, 60, 64, 66]));
+    }
+
+    #[test]
+    fn pitches_ninth_chord_includes_seventh_and_ninth() {
+        // G9: dominant seventh plus the ninth.
+        assert_eq!(chord_pitches("G9"), Some(vec![55, 59, 62, 65, 69]));
+    }
+
+    #[test]
+    fn pitches_power_chord_omits_third() {
+        // C5: root and fifth only.
+        assert_eq!(chord_pitches("C5"), Some(vec![48, 55]));
+    }
+
+    #[test]
+    fn pitches_slash_bass_is_lowest_note() {
+        // C/G: triad with the bass G dropped an octave below the root.
+        assert_eq!(chord_pitches("C/G"), Some(vec![43, 48, 52, 55]));
+        // Am7/G: the bass is below all chord tones and de-duplication keeps
+        // the (distinct) low G even though the chord has its own G4.
+        assert_eq!(chord_pitches("Am7/G"), Some(vec![43, 57, 60, 64, 67]));
+    }
+
+    #[test]
+    fn pitches_accidental_roots() {
+        // Bb major: Bb3 (pc 10 → 58), D4, F4.
+        assert_eq!(chord_pitches("Bb"), Some(vec![58, 62, 65]));
+        // F#m: F#3 (pc 6 → 54), A3, C#4.
+        assert_eq!(chord_pitches("F#m"), Some(vec![54, 57, 61]));
+    }
+
+    #[test]
+    fn pitches_unparseable_returns_none() {
+        assert_eq!(chord_pitches(""), None);
+        assert_eq!(chord_pitches("xyz"), None);
+        assert_eq!(chord_pitches("H"), None);
+        assert_eq!(chord_pitches("G/"), None);
+    }
+
+    #[test]
+    fn pitches_are_sorted_and_deduplicated() {
+        for name in ["C", "Am7", "Cmaj7", "G9", "C/G", "Cdim7", "F#m", "Bb13"] {
+            let pitches = chord_pitches(name).unwrap();
+            let mut sorted = pitches.clone();
+            sorted.sort_unstable();
+            assert_eq!(pitches, sorted, "{name} pitches must be ascending");
+            let mut deduped = sorted.clone();
+            deduped.dedup();
+            assert_eq!(pitches, deduped, "{name} pitches must be unique");
+            assert!(!pitches.is_empty(), "{name} must yield at least one pitch");
+            assert!(
+                pitches.iter().all(|&p| p < 128),
+                "{name} pitches must be valid MIDI notes"
+            );
+        }
     }
 }
