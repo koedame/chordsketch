@@ -4,6 +4,8 @@ import type { HTMLAttributes, ReactNode } from 'react';
 import { ChordInspector } from './chord-inspector';
 import { renderChordproAst, unicodeAccidentals } from './chordpro-jsx';
 import type { ChordSelection } from './chordpro-jsx';
+import { useChordAudio } from './use-chord-audio';
+import type { ChordAudioWasmLoader } from './use-chord-audio';
 import type { ChordproChord, ChordproSong } from './chordpro-ast';
 import {
   buildChordName,
@@ -153,6 +155,26 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
   /** Setter paired with {@link chordSelection}; presence switches
    * ChordSheet into controlled-selection mode — see its docs. */
   onChordSelectionChange?: (selection: ChordSelection | null) => void;
+  /**
+   * Enable chord-audio mode (#2650). When `true`, every rendered chord
+   * becomes a play button: clicking (or Enter / Space) sounds the chord
+   * as a block chord via the Web Audio API. Audio mode takes precedence
+   * over the click-to-nudge selection / drag interactions, matching the
+   * toolbar-toggle UX where the user opts into audio explicitly.
+   *
+   * Degrades gracefully: when the environment has no Web Audio support
+   * (SSR, or a browser without `AudioContext`), the flag has no effect
+   * and chords stay inert. Only consumed by `format="html"`.
+   */
+  chordAudio?: boolean;
+  /**
+   * Test-only WASM loader override for the chord-audio hook. Production
+   * callers never supply this — the default lazy-loads
+   * `@chordsketch/wasm` for the `chordPitches` export.
+   *
+   * @internal
+   */
+  chordAudioLoader?: ChordAudioWasmLoader;
   /**
    * Configuration preset name (e.g. `"guitar"`, `"ukulele"`) or an
    * inline RRJSON configuration string.
@@ -325,6 +347,8 @@ export function ChordSheet({
   onChordDelete,
   chordSelection,
   onChordSelectionChange,
+  chordAudio,
+  chordAudioLoader,
   className,
   ...divProps
 }: ChordSheetProps): JSX.Element {
@@ -363,6 +387,8 @@ export function ChordSheet({
       onChordDelete={onChordDelete}
       controlledSelection={chordSelection}
       onChordSelectionChange={onChordSelectionChange}
+      chordAudio={chordAudio}
+      chordAudioLoader={chordAudioLoader}
       wrapperClass={wrapperClass}
       divProps={divProps}
     />
@@ -427,6 +453,8 @@ function ChordSheetAstBranch({
   onChordDelete,
   controlledSelection,
   onChordSelectionChange,
+  chordAudio,
+  chordAudioLoader,
   wrapperClass,
   divProps,
 }: BranchProps & {
@@ -441,6 +469,8 @@ function ChordSheetAstBranch({
   onChordDelete: ((target: ChordDeleteTarget) => void) | undefined;
   controlledSelection: ChordSelection | null | undefined;
   onChordSelectionChange: ((selection: ChordSelection | null) => void) | undefined;
+  chordAudio: boolean | undefined;
+  chordAudioLoader: ChordAudioWasmLoader | undefined;
 }): JSX.Element {
   const { ast, loading, error, transposedKey, transposedKeyDirectives } = useChordproAst(
     source,
@@ -448,6 +478,14 @@ function ChordSheetAstBranch({
     wasmLoader,
   );
   const errorNode = error !== null && errorFallback !== null ? errorFallback(error) : null;
+
+  // Chord-audio mode (#2650). The hook is always instantiated (rules of
+  // hooks) but only wired into the walker when the consumer opted in via
+  // the `chordAudio` prop AND the environment supports Web Audio — so on
+  // SSR / unsupported browsers chords stay inert instead of dead buttons.
+  const audio = useChordAudio(chordAudioLoader, Boolean(chordAudio));
+  const chordAudioConfig =
+    chordAudio && audio.supported ? { enabled: true, play: audio.play } : null;
 
   // Click-to-focus + nudge selection state (#2614). Owned here so it
   // survives the re-render a nudge triggers (the nudge mutates source,
@@ -602,6 +640,7 @@ function ChordSheetAstBranch({
           onChordReposition: repositionCb,
           chordSelection: repositionCb ? chordSelection : null,
           setChordSelection: repositionCb ? selectChord : undefined,
+          chordAudio: chordAudioConfig,
         })}
       </div>
       {!controlled && resolvedChord && editCb ? (

@@ -117,6 +117,7 @@ the
 | `chordDiagramSvgWithDefines(chord, instrument, defines)` | Same as above but consults song-level `{define}` voicings first. `defines` is an array of `[name, raw]` tuples (e.g. `[["Gsus4", "base-fret 1 frets 3 3 0 0 1 3"]]`). | `string \| null` |
 | `chordDiagramSvgWithOrientation(chord, instrument, orientation?)` | Orientation-aware variant. `orientation`: `"vertical"` (default) or `"horizontal"` (nut on the left, Japanese tablature convention). Horizontal mode is reader-view only (high pitch on top, matches tablature stave order); see ADR-0026. Unrecognised strings fall back to vertical. | `string \| null` |
 | `chordDiagramSvgWithDefinesOrientation(chord, instrument, defines, orientation?)` | Combined surface — accepts both song-level `{define}` voicings and the orientation knob. | `string \| null` |
+| `chordPitches(chord)` | Constituent pitches of a chord as MIDI note numbers, for driving an audio synth. Returns a block voicing (root, third, fifth, plus any extension / altered / added tones, with a slash bass an octave below). `undefined` when the chord is not parseable. | `Uint8Array \| undefined` |
 
 ### iReal Pro
 

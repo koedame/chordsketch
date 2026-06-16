@@ -297,6 +297,20 @@ pub(crate) fn chord_diagram_svg_inner_with_options(
     }
 }
 
+/// Pure-Rust core of [`bindings::chord_pitches`]. Returns the chord's
+/// constituent MIDI note numbers, or `None` when `chord` is not parseable.
+///
+/// A thin pass-through to [`chordsketch_chordpro::chord_pitches`] kept here
+/// (rather than calling the core directly from the binding) so the native
+/// test suite covers the binding's surface without the wasm runtime, per
+/// the crate-layout note above. Sister-site to the NAPI
+/// `chord_pitches_inner` and the FFI binding's `chord_pitches`
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+#[must_use]
+pub(crate) fn chord_pitches_inner(chord: &str) -> Option<Vec<u8>> {
+    chordsketch_chordpro::chord_pitches(chord)
+}
+
 /// A single validation issue reported by [`bindings::validate`].
 ///
 /// Serialised to a plain JS `{line, column, message}` object via
@@ -1544,6 +1558,21 @@ mod tests {
     fn test_chord_diagram_svg_inner_unknown_chord_returns_none() {
         let result = chord_diagram_svg_inner("XYZ-not-a-chord", "guitar", &[]).unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_chord_pitches_inner_known_chord_returns_midi_notes() {
+        // Passthrough to the core; pin a representative chord so a
+        // regression in the wiring (wrong arg, swapped return) is caught
+        // here without the wasm runtime.
+        assert_eq!(chord_pitches_inner("C"), Some(vec![48, 52, 55]));
+        assert_eq!(chord_pitches_inner("Am7"), Some(vec![57, 60, 64, 67]));
+    }
+
+    #[test]
+    fn test_chord_pitches_inner_unparseable_returns_none() {
+        assert_eq!(chord_pitches_inner("XYZ-not-a-chord"), None);
+        assert_eq!(chord_pitches_inner(""), None);
     }
 
     #[test]

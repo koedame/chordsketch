@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import {
+  getAudioContextCtor,
+  getSharedAudioContext,
+  resetSharedAudioContextForTests,
+  scheduleVoice,
+} from './audio-context';
+
 /**
  * Lowest / highest BPM the metronome will tick at. Values outside
  * this range are clamped rather than rejected so a typo'd
@@ -66,62 +73,33 @@ export interface UseMetronomeResult {
   isRunning: () => boolean;
 }
 
-type AudioContextCtor = new () => AudioContext;
-
 /** Per-instance handle the module-level coordinator can stop. */
 interface MetronomeController {
   stop: () => void;
 }
 
-// ---- Page-level shared audio resources -------------------------
-// A page should use a single AudioContext: browsers cap concurrent
-// contexts, and a song with several `{tempo}` chips would otherwise
-// spawn one context per chip. A module-level coordinator also
-// guarantees that starting one metronome stops any other so two
-// chips never tick over each other. The context is created lazily
-// on the first user gesture and lives for the page lifetime (the
-// recommended Web Audio pattern — it is suspended, not closed, when
-// idle, so it is cheap to keep around).
+// ---- Page-level single-active coordination ---------------------
+// The shared `AudioContext` itself lives in `audio-context.ts` so it
+// is reused across every audio hook in the package. A module-level
+// coordinator here additionally guarantees that starting one
+// metronome stops any other, so two `{tempo}` chips never tick over
+// each other.
 
-let sharedContext: AudioContext | null = null;
 let activeController: MetronomeController | null = null;
-
-/**
- * Resolve the platform `AudioContext` constructor, tolerating the
- * legacy `webkitAudioContext` prefix. Returns `null` under SSR or
- * when neither is present so callers can branch on support.
- */
-function getAudioContextCtor(): AudioContextCtor | null {
-  if (typeof window === 'undefined') return null;
-  const w = window as typeof window & {
-    webkitAudioContext?: AudioContextCtor;
-  };
-  return w.AudioContext ?? w.webkitAudioContext ?? null;
-}
-
-/**
- * Lazily create (or reuse) the shared `AudioContext`. Returns `null`
- * when Web Audio is unavailable.
- */
-function getSharedContext(): AudioContext | null {
-  if (sharedContext && sharedContext.state !== 'closed') return sharedContext;
-  const Ctor = getAudioContextCtor();
-  if (!Ctor) return null;
-  sharedContext = new Ctor();
-  return sharedContext;
-}
 
 /**
  * Reset the module-level shared audio state.
  *
  * **Test-only** — not re-exported from the package index. Lets each
  * test start from a clean singleton after swapping the
- * `window.AudioContext` stub.
+ * `window.AudioContext` stub. Resets both the shared `AudioContext`
+ * (owned by `audio-context.ts`) and the metronome's single-active
+ * coordinator.
  *
  * @internal
  */
 export function resetMetronomeSharedStateForTests(): void {
-  sharedContext = null;
+  resetSharedAudioContextForTests();
   activeController = null;
 }
 
@@ -166,30 +144,20 @@ export function useMetronome(): UseMetronomeResult {
   const supported = useMemo(() => getAudioContextCtor() !== null, []);
 
   const scheduleTick = useCallback((ctx: AudioContext, time: number) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(TICK_FREQUENCY_HZ, time);
-    // Percussive envelope: jump to peak at the tick onset, then
-    // decay exponentially toward (but never to) zero — Web Audio's
-    // `exponentialRampToValueAtTime` rejects a 0 target.
-    gain.gain.setValueAtTime(TICK_PEAK_GAIN, time);
-    gain.gain.exponentialRampToValueAtTime(0.0001, time + TICK_DURATION_S);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(time);
-    osc.stop(time + TICK_DURATION_S);
-    const tracked = oscillatorsRef.current;
-    tracked.add(osc);
-    osc.onended = () => {
-      tracked.delete(osc);
-      try {
-        osc.disconnect();
-        gain.disconnect();
-      } catch {
-        // Nodes may already be disconnected if `stop` raced ahead.
-      }
-    };
+    // Percussive square-wave blip: `attack: 0` jumps to the peak at the
+    // tick onset, then decays over `TICK_DURATION_S`; `tail: 0` stops the
+    // oscillator exactly at the decay end so the click stays tight. The
+    // shared `scheduleVoice` tracks the node in `oscillatorsRef` and wires
+    // the same `onended` cleanup `useChordAudio` relies on.
+    scheduleVoice(ctx, oscillatorsRef.current, {
+      type: 'square',
+      frequency: TICK_FREQUENCY_HZ,
+      startTime: time,
+      attack: 0,
+      release: TICK_DURATION_S,
+      peak: TICK_PEAK_GAIN,
+      tail: 0,
+    });
   }, []);
 
   const stop = useCallback(() => {
@@ -217,7 +185,7 @@ export function useMetronome(): UseMetronomeResult {
 
   const start = useCallback(
     (bpm: number) => {
-      const ctx = getSharedContext();
+      const ctx = getSharedAudioContext();
       if (!ctx) return;
       // A context left 'suspended' by the autoplay policy stays
       // silent until resumed; the `start` call is the authorising

@@ -233,6 +233,19 @@ pub(crate) fn chord_diagram_svg_inner(
     chord_diagram_svg_inner_with_orientation(chord, instrument, defines, None)
 }
 
+/// Pure-Rust core of [`bindings::chord_pitches`]. Returns the chord's
+/// constituent MIDI note numbers, or `None` when `chord` is not parseable.
+///
+/// Thin pass-through to [`chordsketch_chordpro::chord_pitches`]; kept here
+/// so the native test suite covers the binding's surface without the
+/// Node-API runtime. Sister-site to the wasm `chord_pitches_inner` and the
+/// FFI binding's `chord_pitches` (`.claude/rules/fix-propagation.md`
+/// §Bindings).
+#[must_use]
+pub(crate) fn chord_pitches_inner(chord: &str) -> Option<Vec<u8>> {
+    chordsketch_chordpro::chord_pitches(chord)
+}
+
 /// Orientation-aware variant of [`chord_diagram_svg_inner`].
 ///
 /// `orientation` is passed as `Option<&str>` so the JS surface can
@@ -1076,6 +1089,18 @@ mod tests {
         let svg = chord_diagram_svg_inner("C", "guitar", &[]).unwrap();
         let svg = svg.expect("guitar C must have a built-in diagram");
         assert!(svg.contains("<svg"));
+    }
+
+    #[test]
+    fn test_chord_pitches_inner_known_chord_returns_midi_notes() {
+        assert_eq!(chord_pitches_inner("C"), Some(vec![48, 52, 55]));
+        assert_eq!(chord_pitches_inner("Am7"), Some(vec![57, 60, 64, 67]));
+    }
+
+    #[test]
+    fn test_chord_pitches_inner_unparseable_returns_none() {
+        assert_eq!(chord_pitches_inner("XYZ-not-a-chord"), None);
+        assert_eq!(chord_pitches_inner(""), None);
     }
 
     #[test]

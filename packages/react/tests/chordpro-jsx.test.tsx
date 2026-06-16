@@ -4348,5 +4348,110 @@ describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
     // Sanity: the grid that justifies the modifier really is present.
     expect(section.container.querySelector('.chord-diagrams')).not.toBeNull();
   });
+
+  // ---- Chord audio (#2650) ---------------------------------------
+
+  const chordLineSong = (): ChordproSong => ({
+    metadata: EMPTY_META,
+    lines: [
+      {
+        kind: 'lyrics',
+        value: {
+          segments: [
+            {
+              chord: { name: 'Am7', detail: null, display: null },
+              text: 'hello',
+              spans: [],
+            },
+          ],
+        },
+      },
+    ],
+  });
+
+  test('chord-audio mode makes the chord a play button that calls play with the raw name', () => {
+    const play = vi.fn();
+    const { container } = render(
+      renderChordproAst(chordLineSong(), {
+        chordAudio: { enabled: true, play },
+      }),
+    );
+    const chord = container.querySelector('.chord--audio') as HTMLElement;
+    expect(chord).not.toBeNull();
+    expect(chord.getAttribute('role')).toBe('button');
+    expect(chord.getAttribute('aria-label')).toBe('Play chord Am7');
+    expect(chord.getAttribute('data-chord')).toBe('Am7');
+    expect(chord.tabIndex).toBe(0);
+
+    fireEvent.click(chord);
+    expect(play).toHaveBeenCalledWith('Am7');
+
+    // Enter / Space activate from the keyboard; an unrelated key does not.
+    fireEvent.keyDown(chord, { key: 'Enter' });
+    fireEvent.keyDown(chord, { key: ' ' });
+    fireEvent.keyDown(chord, { key: 'a' });
+    expect(play).toHaveBeenCalledTimes(3);
+  });
+
+  test('chords stay inert when chord-audio is disabled or absent', () => {
+    const play = vi.fn();
+    const disabled = render(
+      renderChordproAst(chordLineSong(), {
+        chordAudio: { enabled: false, play },
+      }),
+    );
+    expect(disabled.container.querySelector('.chord--audio')).toBeNull();
+    const chord = disabled.container.querySelector('.chord') as HTMLElement;
+    fireEvent.click(chord);
+    expect(play).not.toHaveBeenCalled();
+
+    const absent = render(renderChordproAst(chordLineSong()));
+    expect(absent.container.querySelector('.chord--audio')).toBeNull();
+  });
+
+  test('chord--ringing class is NOT added under prefers-reduced-motion (prevents stuck highlight)', () => {
+    // Regression test for the bug where `animation: none` from the
+    // reduced-motion media query prevents `animationend` from firing,
+    // which would leave .chord--ringing (crimson background) on the
+    // element permanently after any click.
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (query: string) => ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }),
+    });
+
+    try {
+      const play = vi.fn();
+      const { container } = render(
+        renderChordproAst(chordLineSong(), {
+          chordAudio: { enabled: true, play },
+        }),
+      );
+      const chord = container.querySelector('.chord--audio') as HTMLElement;
+      expect(chord).not.toBeNull();
+
+      fireEvent.click(chord);
+
+      // play() was invoked (audio still plays) but the ringing class was
+      // NOT added — pulseChordElement exits early under reduced motion so
+      // the stuck-highlight bug cannot occur.
+      expect(play).toHaveBeenCalledWith('Am7');
+      expect(chord.classList.contains('chord--ringing')).toBe(false);
+    } finally {
+      Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: originalMatchMedia,
+      });
+    }
+  });
 });
 

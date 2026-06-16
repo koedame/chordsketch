@@ -35,7 +35,7 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
 use crate::{
-    chord_diagram_svg_inner, chord_diagram_svg_inner_with_orientation,
+    chord_diagram_svg_inner, chord_diagram_svg_inner_with_orientation, chord_pitches_inner,
     do_convert_chordpro_to_irealb, do_convert_irealb_to_chordpro_text, do_parse_irealb,
     do_render_bytes, do_render_ireal_pdf, do_render_ireal_png, do_render_ireal_svg,
     do_render_pdf_with_warnings, do_render_string, do_render_string_with_warnings,
@@ -502,6 +502,23 @@ pub fn chord_diagram_svg_with_defines(
         validate_defines_pairs(defines).map_err(|msg| Error::new(Status::InvalidArg, msg))?;
     chord_diagram_svg_inner(&chord, &instrument, &pairs)
         .map_err(|msg| Error::new(Status::InvalidArg, msg))
+}
+
+/// Constituent pitches of a chord as MIDI note numbers, for driving an
+/// audio synth (#2650).
+///
+/// Returns a `Buffer` of ascending, de-duplicated MIDI note numbers
+/// describing a block voicing (root, third, fifth, plus any extension /
+/// altered / added tones, with a slash bass dropped one octave below the
+/// root), or `null` when `chord` is not parseable as a chord.
+///
+/// Thin wrapper over the pure-Rust `chord_pitches_inner`. Sister-site to
+/// the wasm `chordPitches` export and the FFI `chord_pitches` function
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+#[must_use]
+#[napi(js_name = "chordPitches")]
+pub fn chord_pitches(chord: String) -> Option<Buffer> {
+    chord_pitches_inner(&chord).map(Buffer::from)
 }
 
 /// Variant of [`chord_diagram_svg`] that takes a diagram orientation as

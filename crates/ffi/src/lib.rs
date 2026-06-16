@@ -396,6 +396,19 @@ pub fn version() -> String {
     chordsketch_chordpro::version().to_string()
 }
 
+/// Constituent pitches of a chord as MIDI note numbers, for driving an
+/// audio synth (#2650). Mirrors the wasm `chordPitches` and NAPI
+/// `chordPitches` exports (`.claude/rules/fix-propagation.md` §Bindings).
+///
+/// Returns ascending, de-duplicated MIDI note numbers describing a block
+/// voicing (root, third, fifth, plus any extension / altered / added
+/// tones, with a slash bass dropped one octave below the root), or `None`
+/// when `chord` is not parseable as a chord.
+#[must_use]
+pub fn chord_pitches(chord: String) -> Option<Vec<u8>> {
+    chordsketch_chordpro::chord_pitches(&chord)
+}
+
 /// Look up an SVG chord diagram for the given chord name and
 /// instrument. Mirrors the WASM `chord_diagram_svg` export
 /// added in #2164 and the NAPI `chordDiagramSvg` export added
@@ -1342,5 +1355,17 @@ mod tests {
             matches!(result, Err(ChordSketchError::ConversionFailed { .. })),
             "expected ConversionFailed; got {result:?}"
         );
+    }
+
+    #[test]
+    fn test_chord_pitches_known_chord_returns_midi_notes() {
+        assert_eq!(chord_pitches("C".to_string()), Some(vec![48, 52, 55]));
+        assert_eq!(chord_pitches("Am7".to_string()), Some(vec![57, 60, 64, 67]));
+    }
+
+    #[test]
+    fn test_chord_pitches_unparseable_returns_none() {
+        assert_eq!(chord_pitches("XYZ-not-a-chord".to_string()), None);
+        assert_eq!(chord_pitches(String::new()), None);
     }
 }
