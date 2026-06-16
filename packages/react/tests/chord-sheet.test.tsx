@@ -88,6 +88,48 @@ function makeAstLoader(stub: StubRenderer): ChordproWasmLoader {
   return vi.fn(async () => stub as unknown as Awaited<ReturnType<ChordproWasmLoader>>);
 }
 
+// A stub returning a single chord-bearing line whose chord has the
+// given raw name (e.g. `"Bb"`), so a test can assert how the inspector
+// renders that name.
+function chordNamedStub(name: string): StubRenderer {
+  const songAst = JSON.stringify({
+    metadata: {
+      title: null,
+      subtitles: [],
+      artists: [],
+      composers: [],
+      lyricists: [],
+      album: null,
+      year: null,
+      key: null,
+      tempo: null,
+      time: null,
+      capo: null,
+      sortTitle: null,
+      sortArtist: null,
+      arrangers: [],
+      copyright: null,
+      duration: null,
+      tags: [],
+      custom: [],
+    },
+    lines: [
+      {
+        kind: 'lyrics',
+        value: {
+          segments: [{ chord: { name, detail: null, display: null }, text: 'hi', spans: [] }],
+        },
+      },
+    ],
+  });
+  const result = { ast: songAst, warnings: [], transposedKey: undefined };
+  return {
+    ...makeStub(),
+    parseChordproWithWarnings: vi.fn(() => result),
+    parseChordproWithWarningsAndOptions: vi.fn(() => result),
+  };
+}
+
 describe('<ChordSheet>', () => {
   test('renders HTML output via parseChordpro when no options are set', async () => {
     const stub = makeStub();
@@ -453,50 +495,11 @@ describe('<ChordSheet>', () => {
   // component, which the renderChordproAst-level tests can't exercise.
   // ---------------------------------------------------------------------
 
-  // A stub returning a single chord-bearing line `[Am]hi`.
-  function chordStub(): StubRenderer {
-    const songAst = JSON.stringify({
-      metadata: {
-        title: null,
-        subtitles: [],
-        artists: [],
-        composers: [],
-        lyricists: [],
-        album: null,
-        year: null,
-        key: null,
-        tempo: null,
-        time: null,
-        capo: null,
-        sortTitle: null,
-        sortArtist: null,
-        arrangers: [],
-        copyright: null,
-        duration: null,
-        tags: [],
-        custom: [],
-      },
-      lines: [
-        {
-          kind: 'lyrics',
-          value: {
-            segments: [
-              { chord: { name: 'Am', detail: null, display: null }, text: 'hi', spans: [] },
-            ],
-          },
-        },
-      ],
-    });
-    const result = { ast: songAst, warnings: [], transposedKey: undefined };
-    return {
-      ...makeStub(),
-      // Both parse entries return the chord-bearing AST so the stub
-      // works whether or not transpose / config options are passed
-      // (the AST branch uses the options entry when transpose is set).
-      parseChordproWithWarnings: vi.fn(() => result),
-      parseChordproWithWarningsAndOptions: vi.fn(() => result),
-    };
-  }
+  // A stub returning a single chord-bearing line `[Am]hi` — the
+  // `chordNamedStub('Am')` case (both parse entries return the same
+  // chord-bearing AST so the stub works whether or not transpose /
+  // config options are passed).
+  const chordStub = (): StubRenderer => chordNamedStub('Am');
 
   test('onChordReposition enables click-to-select + keyboard nudge', async () => {
     // Without onChordEdit, clicking selects (solid badge) and keyboard
@@ -927,5 +930,45 @@ describe('<ChordSheet>', () => {
       expect(stub.parseChordproWithWarnings).toHaveBeenCalled();
     });
     expect(container.querySelector('.chord-diagrams-grid')).toBeNull();
+  });
+
+  test('inspector header shows the chord with Unicode accidentals (B♭, not Bb) (#2638)', async () => {
+    const { container } = render(
+      <ChordSheet
+        source="[Bb]hi"
+        astWasmLoader={makeAstLoader(chordNamedStub('Bb'))}
+        onChordReposition={vi.fn()}
+        onChordEdit={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+    });
+    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+    // Header title matches the rendered chord (♭), not the raw ASCII `b`.
+    expect(container.querySelector('.chordsketch-sheet__cins-name')?.textContent).toBe('B♭');
+  });
+
+  test('inspector is a footer SIBLING of the song content, not inside it (#2638)', async () => {
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={vi.fn()}
+        onChordEdit={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+    });
+    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+    const wrapper = container.querySelector('.chordsketch-sheet');
+    const content = container.querySelector('.chordsketch-sheet__content');
+    const inspector = container.querySelector('.chordsketch-sheet__cins');
+    expect(inspector).not.toBeNull();
+    // Footer panel: within the sheet wrapper, but NOT inside the
+    // scrolling song content (so it sits below the song, not over it).
+    expect(wrapper?.contains(inspector ?? null)).toBe(true);
+    expect(content?.contains(inspector ?? null)).toBe(false);
   });
 });

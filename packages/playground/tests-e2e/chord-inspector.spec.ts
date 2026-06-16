@@ -1,5 +1,5 @@
 // Smoke coverage for the chord-editor inspector mount path in the
-// ChordPro playground (#2622 / #2626 / #2630).
+// ChordPro playground (#2622 / #2626 / #2630 / #2638).
 //
 // Per `.claude/rules/playground-smoke.md`, a new React component mount
 // site reached only at runtime in a real browser needs an end-to-end
@@ -7,9 +7,12 @@
 // only thing proving the inspector actually mounts in the deployed
 // bundle is loading the page and selecting a chord. The pre-#2630
 // inspector was a top-left overlay that covered the lyrics; #2630
-// re-docked it to the bottom, so this spec also asserts the rendered
-// lyrics stay visible while the inspector is open (the "does not cover
-// content" contract) and that the expanded jazz-tension chips shipped.
+// re-docked it to the bottom; #2638 made it a full-width FOOTER panel
+// (a sibling of `.chordsketch-sheet__content`, not a card inside it)
+// and stopped the selected-chord badge from reflowing the line. This
+// spec asserts the inspector mounts, the lyrics stay visible, the
+// footer is NOT inside the scroll content, selecting a chord does not
+// reflow its neighbours, and the expanded jazz-tension chips shipped.
 //
 // Assertions are structural (selectors / visibility), and every test
 // registers a `pageerror` listener asserting `[]` so a JS exception
@@ -77,6 +80,55 @@ test.describe('chord-editor inspector (ChordPro playground)', () => {
     // edit pipeline; the editor source should now contain a `maj9` chord.
     await maj9.click();
     await expect(page.locator('.cm-editor')).toContainText('maj9');
+
+    expect(errors).toEqual([]);
+  });
+
+  test('selecting a chord does not reflow its neighbours (#2638)', async ({ page }) => {
+    const errors = trackPageErrors(page);
+    await page.goto('./chordpro/');
+    await expect(page.locator('.cm-editor')).toBeVisible();
+
+    const preview = page.locator('.pane.preview');
+    const chords = preview.locator(".chord[role='button']");
+    // The first sample line is `[G]Amazing [G7]grace …`, so chord 0 (G)
+    // and chord 1 (G7) sit on the same line with G7 to the right of G.
+    // Selecting G paints the solid badge; if the badge grew G's box the
+    // way the pre-#2638 padding did, G7 would shift right. The badge now
+    // offsets its padding with an equal negative margin, so G7's x must
+    // not move. x is scroll-invariant (the preview only scrolls
+    // vertically), so this isolates horizontal reflow from the
+    // scroll-into-view the selection also triggers.
+    const second = chords.nth(1);
+    const beforeX = (await second.boundingBox())?.x ?? 0;
+
+    await chords.nth(0).click();
+    await expect(preview.locator('.chord--selected')).toBeVisible();
+
+    const afterX = (await second.boundingBox())?.x ?? 0;
+    // Sub-pixel tolerance; the pre-fix reflow was ~10px.
+    expect(Math.abs(afterX - beforeX)).toBeLessThan(1.5);
+
+    expect(errors).toEqual([]);
+  });
+
+  test('the inspector is a footer below the song, not a card inside the scroll content (#2638)', async ({
+    page,
+  }) => {
+    const errors = trackPageErrors(page);
+    await page.goto('./chordpro/');
+    await expect(page.locator('.cm-editor')).toBeVisible();
+
+    const preview = page.locator('.pane.preview');
+    await preview.locator(".chord[role='button']").first().click();
+    await expect(preview.locator('.chordsketch-sheet__cins')).toBeVisible();
+
+    // The footer is a sibling of `.chordsketch-sheet__content`, NOT a
+    // descendant of it — so it sits below the scrolling song rather than
+    // floating over it as the pre-#2638 dock did.
+    await expect(
+      preview.locator('.chordsketch-sheet__content .chordsketch-sheet__cins'),
+    ).toHaveCount(0);
 
     expect(errors).toEqual([]);
   });

@@ -1,10 +1,11 @@
-// Floating chord-editor inspector for the ChordPro preview (#2622).
+// Footer chord-editor inspector for the ChordPro preview (#2622).
 //
-// A bottom-docked, non-modal panel that appears when a chord is selected
-// in the preview (#2630 moved it from a top-left overlay to a bottom
-// sheet so it no longer covers the lyrics / chord being edited; the
-// parent scrolls the selected chord into view above the dock). It edits
-// the selected chord's root, accidental, type
+// A non-modal panel that appears when a chord is selected in the
+// preview. #2630 moved it from a top-left overlay to a bottom sheet; for
+// #2638 it became a full-width footer below the song (a sibling of
+// `.chordsketch-sheet__content`, not a card floating over it), and the
+// parent scrolls the selected chord into view above it. It edits the
+// selected chord's root, accidental, type
 // (a quality+extension preset or free-form suffix), and optional slash
 // bass, and hosts the relocated ◀ / ▶ "move one lyric character"
 // controls plus delete. It is the ChordPro sibling of the iReal Pro
@@ -34,8 +35,16 @@ const ACCIDENTALS: ReadonlyArray<{ value: '' | '#' | 'b'; label: string; aria: s
 /** Props for {@link ChordInspector}. Controlled: the parent supplies the
  * current parts + bounds and receives every edit through the callbacks. */
 export interface ChordInspectorProps {
-  /** The selected chord's display name for the header, e.g. `"Am7"`. */
+  /** The selected chord's RAW name (as it appears in source), e.g.
+   * `"Bbm7"`. Used as the header fallback when {@link displayName} is
+   * omitted. */
   chordName: string;
+  /** The selected chord's display name with Unicode accidentals (e.g.
+   * `"B♭m7"`), matching how the renderer paints the chord. Shown in the
+   * header so the editor's title agrees with the preview instead of
+   * showing the raw ASCII `b` / `#`. Falls back to {@link chordName}
+   * when omitted. */
+  displayName?: string;
   /** Current root letter `A`–`G`. */
   root: string;
   /** Current root accidental. */
@@ -68,7 +77,10 @@ export interface ChordInspectorProps {
  * open — so it does not trap focus; Escape closes it.
  */
 export function ChordInspector(props: ChordInspectorProps): JSX.Element {
-  const { chordName, root, accidental, suffix, bass, canLeft, canRight } = props;
+  const { chordName, displayName, root, accidental, suffix, bass, canLeft, canRight } = props;
+  // Header / aria title: prefer the Unicode-accidental display name so
+  // the editor's title matches the rendered chord (B♭, not Bb).
+  const titleName = displayName ?? chordName;
 
   const emit = (patch: Partial<ChordParts>): void => {
     props.onChange({ root, accidental, suffix, bass, ...patch });
@@ -85,13 +97,13 @@ export function ChordInspector(props: ChordInspectorProps): JSX.Element {
     <div
       className="chordsketch-sheet__cins"
       role="group"
-      aria-label={`Edit chord ${chordName || '(empty)'}`}
+      aria-label={`Edit chord ${titleName || '(empty)'}`}
       onKeyDown={onKeyDown}
     >
       <div className="chordsketch-sheet__cins-head">
         <div>
           <div className="chordsketch-sheet__cins-eyebrow">Editing chord</div>
-          <div className="chordsketch-sheet__cins-name">{chordName || '—'}</div>
+          <div className="chordsketch-sheet__cins-name">{titleName || '—'}</div>
         </div>
         <button
           type="button"

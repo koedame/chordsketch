@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ChordproSong } from './chordpro-ast';
 
@@ -61,11 +61,14 @@ export interface ChordproParseOptions {
 /** Result state returned by {@link useChordproAst}. */
 export interface ChordproAstResult {
   /**
-   * Parsed AST. `null` while WASM is initialising or while the
-   * parse is in flight.
+   * Parsed AST. `null` only while the wasm module is initialising
+   * (or when `skip` is set). Once the module is loaded the AST is
+   * derived synchronously from `source`, so it is never a render
+   * behind the current input.
    */
   ast: ChordproSong | null;
-  /** `true` while WASM is loading or the parse is in flight. */
+  /** `true` only while the wasm module is loading. Parsing itself is
+   * synchronous, so there is no per-parse in-flight window. */
   loading: boolean;
   /**
    * The most recent parse error (WASM init failure, JSON shape
@@ -146,107 +149,132 @@ export function useChordproAst(
   options: ChordproParseOptions = {},
   loader: ChordproWasmLoader = defaultLoader,
 ): ChordproAstResult {
-  const [ast, setAst] = useState<ChordproSong | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const [warnings, setWarnings] = useState<string[]>([]);
-  const [transposedKey, setTransposedKey] = useState<string | null>(null);
-  const [transposedKeyDirectives, setTransposedKeyDirectives] = useState<
-    Record<string, string>
-  >({});
-  // Bumping `retryNonce` forces the effect to re-fire even when
-  // (`source`, `transpose`, `config`) are unchanged — the hook
-  // surface for consumers that hit a transient WASM-init failure
-  // and want to recover without an input change.
+  const { transpose, config, skip = false } = options;
+
+  // The wasm module is loaded once (async); after that, parsing is a
+  // synchronous call. The AST is therefore DERIVED synchronously from
+  // `(parser, source, transpose, config)` in the `useMemo` below rather
+  // than written into state from an async effect. This is what keeps
+  // `source` and `ast` updating in the SAME render: a source change
+  // (e.g. a chord nudge) never leaves the AST a tick behind, which used
+  // to unmount/remount selection-dependent UI for one frame — the chord
+  // inspector flicker (#2638).
+  const [parser, setParser] = useState<ChordproParser | null>(null);
+  const [initError, setInitError] = useState<Error | null>(null);
+  // Bumping `retryNonce` re-fires the load effect after a transient
+  // WASM-init failure even though `(source, transpose, config)` are
+  // unchanged.
   const [retryNonce, setRetryNonce] = useState(0);
 
-  const parserRef = useRef<ChordproParser | null>(null);
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
 
-  const { transpose, config, skip = false } = options;
-
   useEffect(() => {
-    if (skip) {
-      // Caller is signalling the AST will not be consumed — keep
-      // the hook idle so the wasm module is not fetched. Reset
-      // `loading` to `false` so consumers can still inspect the
-      // (`null`) `ast` state without thinking work is in flight.
-      setLoading(false);
-      return;
-    }
+    if (skip || parser !== null) return;
     let cancelled = false;
-
-    const run = async (): Promise<void> => {
-      setLoading(true);
+    void (async () => {
       try {
-        if (parserRef.current === null) {
-          let mod: ChordproParser;
-          try {
-            mod = await loaderRef.current();
-            await mod.default();
-          } catch (initErr) {
-            // WASM init failures (network drop, MIME mismatch,
-            // integrity check) are a different defect class
-            // than parse errors — they can recover on retry,
-            // and they should NOT poison `parserRef`. Log so
-            // the failure is visible in devtools regardless of
-            // whether the consumer renders `error`, then
-            // surface it through the same `error` channel.
-            if (typeof console !== 'undefined') {
-              console.error(
-                '[@chordsketch/react] useChordproAst: failed to load @chordsketch/wasm',
-                initErr,
-              );
-            }
-            throw initErr;
-          }
-          parserRef.current = mod;
-          if (cancelled) return;
-        }
-        const parser = parserRef.current;
-        const hasOptions = transpose !== undefined || config !== undefined;
-        const result = hasOptions
-          ? parser.parseChordproWithWarningsAndOptions(source, { transpose, config })
-          : parser.parseChordproWithWarnings(source);
-        const parsed = JSON.parse(result.ast) as ChordproSong;
+        const mod = await loaderRef.current();
+        await mod.default();
         if (cancelled) return;
-        setAst(parsed);
-        setWarnings(result.warnings);
-        setTransposedKey(result.transposedKey ?? null);
-        setTransposedKeyDirectives(result.transposedKeyDirectives ?? {});
-        setError(null);
+        setParser(() => mod);
+        setInitError(null);
       } catch (e) {
-        if (cancelled) return;
-        const err = e instanceof Error ? e : new Error(String(e));
-        setError(err);
-        // Keep the previous `ast` and `warnings` so half-typed
-        // edits do not blank the preview — consumers render
-        // `error` alongside the stale tree if they want to
-        // surface the issue. Init failures keep `parserRef`
-        // null so the next `run()` re-imports the module
-        // (manual retry via `retry()` or an input change).
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
+        // WASM init failures (network drop, MIME mismatch, integrity
+        // check) recover on retry and must NOT poison `parser`. Log so
+        // the failure is visible in devtools regardless of whether the
+        // consumer renders `error`, then surface it through `error`.
+        if (typeof console !== 'undefined') {
+          console.error(
+            '[@chordsketch/react] useChordproAst: failed to load @chordsketch/wasm',
+            e,
+          );
         }
+        if (!cancelled) setInitError(e instanceof Error ? e : new Error(String(e)));
       }
-    };
-
-    void run();
-
+    })();
     return () => {
       cancelled = true;
     };
-    // `loader` intentionally excluded — see `use-chord-render.ts`
-    // for the identical pattern + rationale (inline loaders would
+    // `loader` intentionally excluded — see `use-chord-render.ts` for
+    // the identical pattern + rationale (inline loaders would
     // invalidate the effect every render).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, transpose, config, retryNonce, skip]);
+  }, [skip, parser, retryNonce]);
+
+  // Last successfully-committed parse, retained so a transient invalid
+  // edit (or a parse throw) does not blank the preview — consumers
+  // render `error` alongside the stale tree if they want to surface the
+  // issue. It is written ONLY from a post-commit effect (below), never
+  // during render: the `useMemo` factory stays pure so an abandoned
+  // concurrent render (a transition React discards) can never pollute
+  // the cache with an AST that was never committed.
+  const lastGoodRef = useRef<{
+    ast: ChordproSong;
+    warnings: string[];
+    transposedKey: string | null;
+    transposedKeyDirectives: Record<string, string>;
+  } | null>(null);
+
+  const { ast, warnings, transposedKey, transposedKeyDirectives, parseError } = useMemo(() => {
+    if (skip || parser === null) {
+      return {
+        ast: null as ChordproSong | null,
+        warnings: [] as string[],
+        transposedKey: null as string | null,
+        transposedKeyDirectives: {} as Record<string, string>,
+        parseError: null as Error | null,
+      };
+    }
+    try {
+      const hasOptions = transpose !== undefined || config !== undefined;
+      const result = hasOptions
+        ? parser.parseChordproWithWarningsAndOptions(source, { transpose, config })
+        : parser.parseChordproWithWarnings(source);
+      return {
+        ast: JSON.parse(result.ast) as ChordproSong,
+        warnings: result.warnings,
+        transposedKey: result.transposedKey ?? null,
+        transposedKeyDirectives: result.transposedKeyDirectives ?? {},
+        parseError: null as Error | null,
+      };
+    } catch (e) {
+      // Fall back to the last committed good parse so the preview does
+      // not blank on a half-typed edit.
+      const prev = lastGoodRef.current;
+      return {
+        ast: prev?.ast ?? null,
+        warnings: prev?.warnings ?? [],
+        transposedKey: prev?.transposedKey ?? null,
+        transposedKeyDirectives: prev?.transposedKeyDirectives ?? {},
+        parseError: e instanceof Error ? e : new Error(String(e)),
+      };
+    }
+  }, [parser, source, transpose, config, skip]);
+
+  // Remember the last good parse AFTER commit. Running this in an effect
+  // (not in the memo) keeps the cache consistent with what was actually
+  // committed, even if React renders-then-abandons a memo for a source
+  // that never paints.
+  useEffect(() => {
+    if (parseError === null && ast !== null) {
+      lastGoodRef.current = { ast, warnings, transposedKey, transposedKeyDirectives };
+    }
+  }, [ast, warnings, transposedKey, transposedKeyDirectives, parseError]);
 
   const retry = useCallback(() => {
+    // Drop the parser so the load effect re-imports the module, and
+    // bump the nonce so the effect re-fires even when `parser` is
+    // already null (a load that failed before ever setting it).
+    setParser(null);
+    setInitError(null);
     setRetryNonce((n) => n + 1);
   }, []);
+
+  // `loading` is true only while the wasm module itself is loading;
+  // parsing is synchronous, so there is no per-parse in-flight window.
+  const loading = !skip && parser === null && initError === null;
+  const error = initError ?? parseError;
 
   return {
     ast,
