@@ -184,51 +184,14 @@ body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875
   </footer>
 </div>
 
-<p class="mock-cap">New chord (caret in the lyrics) — build &amp; insert</p>
+<p class="mock-cap">No chord selected (caret in the lyrics) — edit-only hint</p>
 <div class="app" style="height: auto;">
+  <!-- The footer is edit-only: when no chord is selected it shows a hint,
+       not editing controls. Inserting a new chord is handled elsewhere. -->
   <section class="cins" aria-label="Chord editor (idle)">
     <div class="cins__id">
-      <span class="cins__eyebrow">New chord</span>
-      <span class="cins__hint">Move the caret onto a chord to edit it, or build one here and insert it at the caret.</span>
-    </div>
-    <div class="cins__group">
-      <span class="cins__label">Root</span>
-      <div class="cins__rowc">
-        <div class="cins__seg" role="group" aria-label="Root">
-          <button aria-pressed="true">C</button><button>D</button><button>E</button><button>F</button><button>G</button><button>A</button><button>B</button>
-        </div>
-        <div class="cins__seg" role="group" aria-label="Accidental">
-          <button aria-pressed="true" aria-label="Natural">♮</button><button aria-label="Sharp">♯</button><button aria-label="Flat">♭</button>
-        </div>
-      </div>
-    </div>
-    <div class="cins__group cins__group--type">
-      <span class="cins__label">Type</span>
-      <div class="cins__chips" role="group" aria-label="Chord type">
-        <button class="cins__chip" aria-pressed="true">maj</button><button class="cins__chip">min</button><button class="cins__chip">7</button>
-        <button class="cins__chip">maj7</button><button class="cins__chip">m7</button><button class="cins__chip">m7♭5</button>
-        <button class="cins__chip">dim7</button><button class="cins__chip">6</button><button class="cins__chip">9</button>
-        <button class="cins__chip">sus4</button><button class="cins__chip">add9</button>
-      </div>
-    </div>
-    <div class="cins__group">
-      <span class="cins__label">Quality / ext.</span>
-      <div class="cins__rowc">
-        <input class="cins__input" placeholder="m7, sus4…" aria-label="Quality / extension">
-        <span class="cins__slash">/</span>
-        <input class="cins__input" style="width:4rem" placeholder="Bass" aria-label="Slash bass">
-      </div>
-    </div>
-    <div class="cins__group">
-      <span class="cins__label">Move one step</span>
-      <div class="cins__rowc">
-        <button class="cins__btn" disabled aria-label="Move chord left">◀</button>
-        <button class="cins__btn" disabled aria-label="Move chord right">▶</button>
-      </div>
-    </div>
-    <div class="cins__spacer"></div>
-    <div class="cins__actions">
-      <button class="cins__insert">Insert chord</button>
+      <span class="cins__eyebrow">No chord selected</span>
+      <span class="cins__hint">Click a chord in the preview, or move the caret onto one in the editor, to edit it.</span>
     </div>
   </section>
 </div>

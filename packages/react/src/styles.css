@@ -1564,11 +1564,6 @@
   line-height: 1.1;
   color: var(--cs-crimson-500, #bd1642);
 }
-.chordsketch-sheet__cins-note {
-  margin-top: 2px;
-  font-size: 0.75rem;
-  color: var(--cs-text-secondary, #67646d);
-}
 .chordsketch-sheet__cins-close {
   width: 28px;
   height: 28px;
@@ -1734,22 +1729,13 @@
 .chordsketch-sheet__cins-remove:hover {
   background: var(--cs-crimson-50, #fdf2f5);
 }
-/* Insert action — the primary, crimson-filled button (#2644). */
-.chordsketch-sheet__cins-insert {
-  appearance: none;
-  border: 1px solid var(--cs-crimson-500, #bd1642);
-  background: var(--cs-crimson-500, #bd1642);
-  border-radius: var(--cs-r-2, 4px);
-  padding: var(--cs-sp-2, 0.5rem) var(--cs-sp-4, 1rem);
-  font: inherit;
+/* Idle state — the edit-only footer shows a hint when no chord is
+   selected (#2648). */
+.chordsketch-sheet__cins-idle-hint {
+  margin-top: 2px;
   font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--cs-fg-on-crimson, #fff);
-  cursor: pointer;
-}
-.chordsketch-sheet__cins-insert:hover {
-  background: var(--cs-crimson-600, #a30f37);
-  border-color: var(--cs-crimson-600, #a30f37);
+  color: var(--cs-text-secondary, #67646d);
+  max-width: 48ch;
 }
 .chordsketch-sheet__cins :focus-visible {
   outline: none;

@@ -1103,6 +1103,34 @@ describe('renderChordproAst', () => {
     expect(container.querySelector('.caret-marker')).toBeNull();
   });
 
+  test('caret-marker suppressed while a chord is selected (#2648)', () => {
+    // The caret is on the chord (caretColumn would place a marker), but a
+    // chordSelection is active — the selected-chord badge already marks
+    // the spot, so the blinking marker is suppressed to avoid fighting it.
+    const { container } = render(
+      renderChordproAst(
+        {
+          metadata: EMPTY_META,
+          lines: [
+            {
+              kind: 'lyrics',
+              value: {
+                segments: [{ chord: { name: 'C', detail: null, display: null }, text: 'hi', spans: [] }],
+              },
+            },
+          ],
+        },
+        {
+          activeSourceLine: 1,
+          caretColumn: 1,
+          caretLineLength: 5,
+          chordSelection: { line: 1, offset: 0, ordinal: 0, nonce: 1 },
+        },
+      ),
+    );
+    expect(container.querySelector('.caret-marker')).toBeNull();
+  });
+
   test('caret-marker ratio clamps to 0..1 on overrun', () => {
     const { container } = render(
       renderChordproAst(

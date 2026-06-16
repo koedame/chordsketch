@@ -4450,6 +4450,15 @@ export function renderChordproAst(
   song: ChordproSong,
   options: RenderChordproAstOptions = {},
 ): JSX.Element {
+  // While a chord is selected, suppress the preview caret-marker: the
+  // selected-chord badge already marks the position, and the marker's
+  // blink animation otherwise fights the badge's styling (#2648). The
+  // selection only exists when the caret is on a chord, so dropping the
+  // marker then loses nothing — it returns the moment the caret moves
+  // back into the lyrics and the selection clears.
+  const caretSuppressed = options.chordSelection != null;
+  const effectiveCaretColumn = caretSuppressed ? undefined : options.caretColumn;
+  const effectiveCaretLineLength = caretSuppressed ? undefined : options.caretLineLength;
   const ctx: WalkContext = {
     section: null,
     out: [],
@@ -4459,18 +4468,18 @@ export function renderChordproAst(
     savedFmt: null,
     activeSourceLine: options.activeSourceLine,
     caretRatio:
-      options.caretColumn !== undefined && options.caretLineLength !== undefined
+      effectiveCaretColumn !== undefined && effectiveCaretLineLength !== undefined
         ? // Clamp to 0..1 so a column that overruns the reported
           // line length (e.g. caret at end-of-line trailing
           // whitespace stripped by the AST) doesn't push the
           // marker past the right edge.
           Math.min(
             1,
-            Math.max(0, options.caretColumn / Math.max(1, options.caretLineLength)),
+            Math.max(0, effectiveCaretColumn / Math.max(1, effectiveCaretLineLength)),
           )
         : undefined,
-    caretColumn: options.caretColumn,
-    caretLineLength: options.caretLineLength,
+    caretColumn: effectiveCaretColumn,
+    caretLineLength: effectiveCaretLineLength,
     primaryKey: song.metadata.key,
     // `transposedKey` is the host-computed sounding key for the
     // song-primary written key. Only treat it as a real
