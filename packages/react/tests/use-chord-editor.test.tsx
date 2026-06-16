@@ -337,4 +337,28 @@ describe('useChordEditor chord-audio', () => {
     const ctx = FakeAudioContext.instances[0]!;
     expect(ctx.oscillators).toHaveLength(3);
   });
+
+  test('onChordReposition does NOT audition (the preview wrapper owns that path — no double play)', async () => {
+    // Regression: the preview drag-drop / arrow-nudge routes through
+    // `<ChordSheet>`'s single audition wrapper, which both applies this
+    // callback AND plays. If this callback also played, controlled mode
+    // would double-fire. So `onChordReposition` must stay silent.
+    await mountWithAudioLoaded();
+    act(() => {
+      latest.onChordReposition({
+        fromLine: 1,
+        fromColumn: 0,
+        fromLength: 3,
+        toLine: 1,
+        toLyricsOffset: 3,
+        chord: 'G',
+        copy: false,
+        expected: 'G',
+      });
+    });
+    // The source moved, but no chord was sounded from here.
+    expect(currentSource).not.toBe(SOURCE);
+    const ctx = FakeAudioContext.instances[0];
+    expect(ctx?.oscillators ?? []).toHaveLength(0);
+  });
 });

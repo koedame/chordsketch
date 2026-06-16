@@ -328,15 +328,17 @@ export function useChordEditor({
       // on drop). On an optimistic-concurrency no-op the source is
       // unchanged, so the deferred caret effect never fires.
       commit(result, caretInsideWrittenBracket(result, event.chord));
-      // Re-audition the moved / copied chord when audio is on. This is
-      // the preview's drag-drop + keyboard-nudge path (the walker routes
-      // arrow-key nudges through here), so it stays consistent with the
-      // panel ◀/▶ buttons. The walker plays click / Enter / Space
-      // activations itself via the shared config, so those do not
-      // double-fire here.
-      auditionChord(event.chord);
+      // NOTE: do NOT audition here. This is the preview-driven
+      // drag-drop / arrow-nudge path, and `<ChordSheet>` already wraps
+      // the preview's `onChordReposition` in a single audition wrapper
+      // (`repositionCbWithAudio`) that plays through the shared config.
+      // Auditioning here too would double-fire (the wrapper calls THIS
+      // callback and then plays) — the regression the additive redesign's
+      // first pass introduced in controlled mode. The panel ◀/▶
+      // (`onNudge`) and retype (`onChange`) paths DO audition because
+      // they bypass the walker / wrapper entirely.
     },
-    [source, commit, auditionChord],
+    [source, commit],
   );
 
   const onChordSelectionChange = useCallback(
