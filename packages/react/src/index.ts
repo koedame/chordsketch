@@ -149,6 +149,7 @@ export {
   buildChordName,
   buildChordNudge,
   capoTransposeOffset,
+  caretInsideWrittenBracket,
   chordLayoutForLine,
   chordSelectionCaretOffset,
   chordSourceEditableUnderTranspose,

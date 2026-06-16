@@ -13,6 +13,7 @@ import {
   buildChordName,
   buildChordNudge,
   capoTransposeOffset,
+  caretInsideWrittenBracket,
   chordLayoutForLine,
   chordSelectionCaretOffset,
   chordSourceEditableUnderTranspose,
@@ -857,6 +858,33 @@ describe('applyChordReposition — expected-token guard (parity with edit/delete
         copy: true,
       }),
     ).toThrow(/forbidden/);
+  });
+});
+
+describe('caretInsideWrittenBracket', () => {
+  test('lands just after the `[` of a repositioned chord', () => {
+    // `[Am]hi` → move Am to the end → `hi[Am]`; caretOffset points past
+    // the `]` (6). The inside-bracket caret must be just after `[` (3).
+    const result = applyChordReposition('[Am]hi', {
+      fromLine: 1,
+      fromColumn: 0,
+      fromLength: 4,
+      toLine: 1,
+      toLyricsOffset: 2,
+      chord: 'Am',
+      copy: false,
+      expected: 'Am',
+    });
+    expect(result.text).toBe('hi[Am]');
+    expect(result.caretOffset).toBe(6); // just past `]`
+    expect(caretInsideWrittenBracket(result, 'Am')).toBe(3); // just after `[`
+  });
+
+  test('lands just after the `[` of a freshly inserted chord', () => {
+    // Insert `[G]` at column 2 of `hi` → `hi[G]`; caret inside → 3.
+    const result = applyChordInsert('hi', { line: 1, column: 2, chord: 'G' });
+    expect(result.text).toBe('hi[G]');
+    expect(caretInsideWrittenBracket(result, 'G')).toBe(3);
   });
 });
 
