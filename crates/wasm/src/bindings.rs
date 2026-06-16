@@ -830,6 +830,24 @@ pub fn chord_diagram_svg_with_defines_orientation_compact(
     .map_err(|e| JsValue::from_str(&e))
 }
 
+/// Constituent pitches of a chord as MIDI note numbers, for driving an
+/// audio synth (the React `useChordAudio` chord-playback surface, #2650).
+///
+/// Returns `undefined` when `chord` is not parseable as a chord; otherwise
+/// a `Uint8Array` of ascending, de-duplicated MIDI note numbers describing
+/// a block voicing (root, third, fifth, plus any extension / altered /
+/// added tones, with a slash bass dropped one octave below the root).
+///
+/// Thin wrapper over [`chordsketch_chordpro::chord_pitches`] via the
+/// pure-Rust `chord_pitches_inner`. Sister-site to the NAPI
+/// `chordPitches` export and the FFI `chord_pitches` function
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+#[wasm_bindgen(js_name = chordPitches)]
+#[must_use]
+pub fn chord_pitches(chord: &str) -> Option<Vec<u8>> {
+    crate::chord_pitches_inner(chord)
+}
+
 /// Validate ChordPro input and return any parse errors as structured
 /// records.
 ///

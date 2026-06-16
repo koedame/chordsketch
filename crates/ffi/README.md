@@ -134,6 +134,7 @@ for e in errors:
 | `chord_diagram_svg_with_defines(chord, instrument, defines)` | `str \| None` | Same as `chord_diagram_svg` but consults song-level `{define}` voicings first. `defines` is a list of `(name, raw)` tuples. |
 | `chord_diagram_svg_with_orientation(chord, instrument, orientation=None)` | `str \| None` | Orientation-aware variant. `orientation`: `"vertical"` (default) or `"horizontal"` (nut on the left, Japanese tablature convention). Horizontal mode is reader-view only (high pitch on top, matches tablature stave order); see ADR-0026. Unrecognised strings fall back to vertical. |
 | `chord_diagram_svg_with_defines_orientation(chord, instrument, defines, orientation=None)` | `str \| None` | Combined surface — accepts both song-level `{define}` voicings and the orientation knob. |
+| `chord_pitches(chord)` | `list[int] \| None` | Constituent pitches of a chord as MIDI note numbers, for driving an audio synth. Returns a block voicing (root, third, fifth, plus any extension / altered / added tones, with a slash bass an octave below); `None` when the chord is not parseable. |
 
 ### Utility
 

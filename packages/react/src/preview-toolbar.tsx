@@ -68,6 +68,24 @@ export interface PreviewToolbarProps
    * otherwise. Pass an explicit value to override the auto-default.
    */
   showChordDiagrams?: boolean;
+  /**
+   * Current chord-audio mode state (#2650). Enables the Audio group
+   * when paired with `onChordAudioToggle`. Omit (or pass without the
+   * handler) to hide the group entirely — hosts that don't want a chord
+   * playback control pay no extra DOM.
+   */
+  chordAudioEnabled?: boolean;
+  /**
+   * Fires with the next desired state when the user clicks the Audio
+   * toggle. The host owns the boolean and forwards it to
+   * `<ChordSheet chordAudio={…}>`.
+   */
+  onChordAudioToggle?: (next: boolean) => void;
+  /**
+   * Force-show / force-hide the Audio group. Defaults to `true` when
+   * `onChordAudioToggle` is provided, `false` otherwise.
+   */
+  showChordAudio?: boolean;
   /** Filename for the PDF download. Defaults to `chordsketch-output.pdf`. */
   exportFilename?: string;
   /**
@@ -87,6 +105,25 @@ export interface PreviewToolbarProps
    */
   trailing?: ReactNode;
 }
+
+const AUDIO_ICON = (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+  </svg>
+);
 
 const EXPORT_ICON = (
   <svg
@@ -146,6 +183,9 @@ export function PreviewToolbar({
   chordDiagramsOrientation,
   onChordDiagramsOrientationChange,
   showChordDiagrams,
+  chordAudioEnabled,
+  onChordAudioToggle,
+  showChordAudio,
   trailing,
   className,
   ...divProps
@@ -154,6 +194,8 @@ export function PreviewToolbar({
   const diagramsEnabled =
     (showChordDiagrams ?? onChordDiagramsOrientationChange !== undefined) &&
     onChordDiagramsOrientationChange !== undefined;
+  const audioEnabled =
+    (showChordAudio ?? onChordAudioToggle !== undefined) && onChordAudioToggle !== undefined;
   const effectiveOrientation: ChordDiagramOrientation =
     chordDiagramsOrientation ?? 'vertical';
   const wrapperClass = [
@@ -226,6 +268,31 @@ export function PreviewToolbar({
             <option value="vertical">Vertical (nut top)</option>
             <option value="horizontal">Horizontal (nut left)</option>
           </select>
+        </div>
+      ) : null}
+      {audioEnabled ? (
+        <div
+          className="chordsketch-preview-toolbar__group tool-group chordsketch-preview-toolbar__group--audio"
+          role="group"
+          aria-label="Chord audio"
+        >
+          <span
+            className="chordsketch-preview-toolbar__label label"
+            aria-hidden="true"
+          >
+            Audio
+          </span>
+          <button
+            type="button"
+            className="chordsketch-preview-toolbar__audio-toggle btn btn-secondary btn-sm"
+            aria-pressed={Boolean(chordAudioEnabled)}
+            aria-label="Play chords on click"
+            title="Play chords on click"
+            onClick={() => onChordAudioToggle!(!chordAudioEnabled)}
+          >
+            {AUDIO_ICON}
+            <span>Chord audio</span>
+          </button>
         </div>
       ) : null}
       {showExport ? (

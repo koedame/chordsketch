@@ -143,6 +143,54 @@ describe('<PreviewToolbar>', () => {
     expect(screen.getByRole('group', { name: 'Transpose' })).toBeTruthy();
   });
 
+  test('Audio group is hidden by default and shown when onChordAudioToggle is provided', () => {
+    const { rerender } = render(
+      <PreviewToolbar source={SAMPLE} transpose={0} onTransposeChange={vi.fn()} />,
+    );
+    expect(screen.queryByRole('group', { name: 'Chord audio' })).toBeNull();
+
+    rerender(
+      <PreviewToolbar
+        source={SAMPLE}
+        transpose={0}
+        onTransposeChange={vi.fn()}
+        onChordAudioToggle={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('group', { name: 'Chord audio' })).toBeTruthy();
+  });
+
+  test('Audio toggle reflects state and reports the next value on click', () => {
+    const onChordAudioToggle = vi.fn();
+    const { rerender } = render(
+      <PreviewToolbar
+        source={SAMPLE}
+        transpose={0}
+        onTransposeChange={vi.fn()}
+        chordAudioEnabled={false}
+        onChordAudioToggle={onChordAudioToggle}
+      />,
+    );
+    const toggle = screen.getByRole('button', { name: 'Play chords on click' });
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(toggle);
+    expect(onChordAudioToggle).toHaveBeenCalledWith(true);
+
+    rerender(
+      <PreviewToolbar
+        source={SAMPLE}
+        transpose={0}
+        onTransposeChange={vi.fn()}
+        chordAudioEnabled
+        onChordAudioToggle={onChordAudioToggle}
+      />,
+    );
+    const pressed = screen.getByRole('button', { name: 'Play chords on click' });
+    expect(pressed.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(pressed);
+    expect(onChordAudioToggle).toHaveBeenLastCalledWith(false);
+  });
+
   test('per-group opt-out: showTranspose/showExport=false', () => {
     render(
       <PreviewToolbar

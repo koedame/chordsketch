@@ -4,6 +4,8 @@ import { describe, expect, test, vi } from 'vitest';
 import { ChordSheet } from '../src/index';
 import type { ChordWasmLoader } from '../src/use-chord-render';
 import type { ChordproWasmLoader } from '../src/use-chordpro-ast';
+import { resetSharedAudioContextForTests } from '../src/audio-context';
+import type { ChordAudioWasmLoader } from '../src/use-chord-audio';
 
 // Stub renderer surface — covers BOTH the AST → JSX path
 // (parseChordproWithWarnings* used by `format="html"`
@@ -970,5 +972,94 @@ describe('<ChordSheet>', () => {
     // scrolling song content (so it sits below the song, not over it).
     expect(wrapper?.contains(inspector ?? null)).toBe(true);
     expect(content?.contains(inspector ?? null)).toBe(false);
+  });
+
+  // ---- Chord audio (#2650) ---------------------------------------
+
+  // Minimal Web Audio stand-in; the hook only needs the constructor to
+  // exist for `supported` and a no-op graph for `play`.
+  class FakeAudioContext {
+    state = 'running';
+    currentTime = 0;
+    destination = {};
+    resume = vi.fn(() => Promise.resolve());
+    createOscillator = vi.fn(() => ({
+      type: '',
+      onended: null,
+      frequency: { setValueAtTime: vi.fn() },
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+    }));
+    createGain = vi.fn(() => ({
+      gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    }));
+  }
+
+  const chordAudioLoader: ChordAudioWasmLoader = () =>
+    Promise.resolve({
+      default: () => Promise.resolve(),
+      chordPitches: (chord: string) =>
+        chord === 'Am' ? new Uint8Array([57, 60, 64]) : undefined,
+    });
+
+  test('chordAudio prop turns chords into play buttons when Web Audio is supported', async () => {
+    const original = (globalThis as { AudioContext?: unknown }).AudioContext;
+    (window as unknown as { AudioContext: unknown }).AudioContext = FakeAudioContext;
+    resetSharedAudioContextForTests();
+    try {
+      const { container } = render(
+        <ChordSheet
+          source="[Am]hi"
+          chordAudio
+          chordAudioLoader={chordAudioLoader}
+          astWasmLoader={makeAstLoader(chordNamedStub('Am'))}
+        />,
+      );
+      await waitFor(() =>
+        expect(container.querySelector('.chord--audio')).not.toBeNull(),
+      );
+      const chord = container.querySelector('.chord--audio') as HTMLElement;
+      expect(chord.getAttribute('role')).toBe('button');
+      expect(chord.getAttribute('aria-label')).toBe('Play chord Am');
+      // Clicking must not throw even before the wasm module resolves.
+      fireEvent.click(chord);
+    } finally {
+      if (original === undefined) {
+        delete (window as unknown as { AudioContext?: unknown }).AudioContext;
+      } else {
+        (window as unknown as { AudioContext: unknown }).AudioContext = original;
+      }
+      resetSharedAudioContextForTests();
+    }
+  });
+
+  test('chordAudio degrades to inert chords without Web Audio support', async () => {
+    const original = (globalThis as { AudioContext?: unknown }).AudioContext;
+    delete (window as unknown as { AudioContext?: unknown }).AudioContext;
+    resetSharedAudioContextForTests();
+    try {
+      const { container } = render(
+        <ChordSheet
+          source="[Am]hi"
+          chordAudio
+          chordAudioLoader={chordAudioLoader}
+          astWasmLoader={makeAstLoader(chordNamedStub('Am'))}
+        />,
+      );
+      await waitFor(() =>
+        expect(container.querySelector('.chord')).not.toBeNull(),
+      );
+      // No Web Audio ⇒ audio mode is suppressed; chords stay plain.
+      expect(container.querySelector('.chord--audio')).toBeNull();
+    } finally {
+      if (original !== undefined) {
+        (window as unknown as { AudioContext: unknown }).AudioContext = original;
+      }
+      resetSharedAudioContextForTests();
+    }
   });
 });

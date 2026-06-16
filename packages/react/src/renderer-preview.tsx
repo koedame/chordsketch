@@ -2,6 +2,7 @@ import type { HTMLAttributes, ReactNode } from 'react';
 
 import { ChordSheet } from './chord-sheet';
 import type { ChordSelection } from './chordpro-jsx';
+import type { ChordAudioWasmLoader } from './use-chord-audio';
 import { PdfExport } from './pdf-export';
 import type {
   ChordDeleteTarget,
@@ -95,6 +96,20 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
   /** Setter paired with {@link chordSelection}; see its docs. */
   onChordSelectionChange?: (selection: ChordSelection | null) => void;
   /**
+   * Enable chord-audio mode (#2650). Forwarded to {@link ChordSheet};
+   * see `ChordSheetProps.chordAudio`. When `true`, each chord becomes a
+   * play button (Web Audio block chord). Only consumed by
+   * `format="html"`; degrades to inert chords without Web Audio support.
+   */
+  chordAudio?: boolean;
+  /**
+   * Test-only WASM loader override for the chord-audio hook. Forwarded
+   * to {@link ChordSheet}; production callers never supply this.
+   *
+   * @internal
+   */
+  chordAudioLoader?: ChordAudioWasmLoader;
+  /**
    * Optional content rendered while the wasm runtime is initialising.
    *
    * Only honoured by the inline `html` / `text` branches — the
@@ -162,6 +177,8 @@ export function RendererPreview({
   onChordDelete,
   chordSelection,
   onChordSelectionChange,
+  chordAudio,
+  chordAudioLoader,
   loadingFallback,
   errorFallback,
   wasmLoader,
@@ -204,6 +221,8 @@ export function RendererPreview({
       onChordDelete={onChordDelete}
       chordSelection={chordSelection}
       onChordSelectionChange={onChordSelectionChange}
+      chordAudio={chordAudio}
+      chordAudioLoader={chordAudioLoader}
       loadingFallback={loadingFallback}
       errorFallback={errorFallback}
       wasmLoader={wasmLoader}

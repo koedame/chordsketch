@@ -55,12 +55,24 @@ export {
   METRONOME_MAX_BPM,
   type UseMetronomeResult,
 } from './use-metronome';
+// Chord-audio playback (#2650). `useChordAudio` turns a chord name into
+// sound via the core `chordPitches` export; `<ChordSheet chordAudio>`
+// and `<PreviewToolbar onChordAudioToggle>` wire the toolbar-toggle UX.
+export {
+  useChordAudio,
+  type UseChordAudioResult,
+  type ChordAudioWasmLoader,
+} from './use-chord-audio';
 
 // AST → JSX walker (#2475 / ADR-0017). Powers `<ChordSheet>`'s
 // `format="html"` branch — exposed at the package boundary so
 // custom consumers can drive their own React tree off the same
 // AST without the `<ChordSheet>` shell.
-export { renderChordproAst, type ChordSelection } from './chordpro-jsx';
+export {
+  renderChordproAst,
+  type ChordSelection,
+  type ChordAudioConfig,
+} from './chordpro-jsx';
 export {
   useChordproAst,
   type ChordproAstResult,
