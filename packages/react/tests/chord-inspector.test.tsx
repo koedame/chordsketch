@@ -127,7 +127,7 @@ describe('<ChordInspector>', () => {
     expect(queryByText('Done')).toBeNull();
   });
 
-  test('idle mode (selected=false): "New chord" header, move/remove disabled', () => {
+  test('idle mode (selected=false) renders an edit-only hint, no controls', () => {
     const { container, getByText } = setup({
       selected: false,
       onRemove: undefined,
@@ -135,44 +135,29 @@ describe('<ChordInspector>', () => {
     });
     const cins = container.querySelector('.chordsketch-sheet__cins') as HTMLElement;
     expect(cins.getAttribute('data-mode')).toBe('idle');
-    expect(getByText('New chord')).toBeTruthy();
-    // Move buttons are disabled regardless of canLeft/canRight in idle.
-    const left = container.querySelector('button[aria-label="Move chord left"]') as HTMLButtonElement;
-    const right = container.querySelector(
-      'button[aria-label="Move chord right"]',
-    ) as HTMLButtonElement;
-    expect(left.disabled).toBe(true);
-    expect(right.disabled).toBe(true);
-    // No Remove in idle (nothing selected to remove).
+    expect(getByText('No chord selected')).toBeTruthy();
+    expect(container.querySelector('.chordsketch-sheet__cins-idle-hint')).not.toBeNull();
+    // Edit-only: idle renders none of the editing controls.
+    expect(container.querySelector('.chordsketch-sheet__cins-seg')).toBeNull();
+    expect(container.querySelector('button[aria-label="Move chord left"]')).toBeNull();
     expect(container.querySelector('.chordsketch-sheet__cins-remove')).toBeNull();
   });
 
-  test('Insert button fires onInsert; absent when onInsert is omitted', () => {
-    const onInsert = vi.fn();
-    const { container, rerender } = setup({ onInsert });
-    const insert = container.querySelector('.chordsketch-sheet__cins-insert') as HTMLButtonElement;
-    expect(insert).not.toBeNull();
-    fireEvent.click(insert);
-    expect(onInsert).toHaveBeenCalledTimes(1);
-
-    rerender(
-      <ChordInspector
-        chordName="Am7"
-        root="A"
-        accidental=""
-        suffix="m7"
-        bass=""
-        canLeft
-        canRight
-        onChange={vi.fn()}
-        onNudge={vi.fn()}
-      />,
-    );
+  test('there is no "Insert chord" button — the footer is edit-only (#2648)', () => {
+    // Selected state: Remove present, never an Insert button.
+    const { container, queryByText } = setup();
+    expect(queryByText('Insert chord')).toBeNull();
     expect(container.querySelector('.chordsketch-sheet__cins-insert')).toBeNull();
+    expect(container.querySelector('.chordsketch-sheet__cins-remove')).not.toBeNull();
   });
 
-  test('note is rendered when provided (e.g. transpose-gated state)', () => {
-    const { getByText } = setup({ note: 'Clear transpose / capo to edit chords.' });
+  test('the gated-editing note is shown in the idle state', () => {
+    const { getByText } = setup({
+      selected: false,
+      onRemove: undefined,
+      onClose: undefined,
+      note: 'Clear transpose / capo to edit chords.',
+    });
     expect(getByText('Clear transpose / capo to edit chords.')).toBeTruthy();
   });
 

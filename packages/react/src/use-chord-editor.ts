@@ -22,7 +22,6 @@ import type { ChordSelection } from './chordpro-jsx';
 import {
   applyChordDelete,
   applyChordEdit,
-  applyChordInsert,
   applyChordReposition,
   buildChordName,
   buildChordNudge,
@@ -79,9 +78,6 @@ export interface UseChordEditor {
   inspectorProps: ChordInspectorProps;
 }
 
-/** Default draft chord shown in the idle footer (a bare C major). */
-const DEFAULT_DRAFT: Required<ChordParts> = { root: 'C', accidental: '', suffix: '', bass: '' };
-
 /** Absolute 0-indexed offset of the start of 1-indexed `line` in
  * `source`. */
 function lineBaseOffset(source: string, line: number): number {
@@ -115,7 +111,6 @@ export function useChordEditor({
   editorRef,
 }: UseChordEditorParams): UseChordEditor {
   const [caret, setCaret] = useState<CaretPosition | null>(null);
-  const [draft, setDraft] = useState<Required<ChordParts>>(DEFAULT_DRAFT);
   const onCaretChange = useCallback((next: CaretPosition) => setCaret(next), []);
 
   // Source-coordinate editing is only safe when the rendered chords
@@ -181,8 +176,9 @@ export function useChordEditor({
     [onSourceChange],
   );
 
-  // The parts the footer currently shows: the selected chord's, or the
-  // draft being built for insertion.
+  // The parts the footer shows while a chord is selected. In the idle
+  // state the footer renders only a hint (no editable chord), so these
+  // placeholder values are unused.
   const parts: Required<ChordParts> = caretChord
     ? {
         root: caretChord.parts.root,
@@ -190,21 +186,14 @@ export function useChordEditor({
         suffix: caretChord.parts.suffix,
         bass: caretChord.parts.bass,
       }
-    : draft;
+    : { root: '', accidental: '', suffix: '', bass: '' };
 
   const onChange = useCallback(
     (next: ChordParts) => {
-      if (!caretChord) {
-        // Idle: update the draft chord used by Insert.
-        setDraft({
-          root: next.root,
-          accidental: next.accidental ?? '',
-          suffix: next.suffix ?? '',
-          bass: next.bass ?? '',
-        });
-        return;
-      }
-      // Selected: rewrite the chord in place.
+      // Edit-only footer: there is nothing to change unless a chord is
+      // selected (the idle state renders no controls).
+      if (!caretChord) return;
+      // Rewrite the chord in place.
       let chord: string;
       try {
         chord = buildChordName(next);
@@ -235,22 +224,6 @@ export function useChordEditor({
     },
     [caretChord, source, commit],
   );
-
-  const onInsert = useCallback(() => {
-    if (caret == null) return;
-    let chord: string;
-    try {
-      chord = buildChordName(parts);
-    } catch {
-      return;
-    }
-    const result = applyChordInsert(source, { line: caret.line, column: caret.column, chord });
-    // Land the caret inside the freshly inserted bracket so it becomes
-    // the selected chord (ready to tweak). `result.caretOffset` points
-    // just past the bracket; back up to just after its `[`.
-    const target = result.caretOffset - (chord.length + 2) + 1;
-    commit(result, target);
-  }, [caret, parts, source, commit]);
 
   const onNudge = useCallback(
     (direction: -1 | 1) => {
@@ -331,11 +304,6 @@ export function useChordEditor({
     canRight,
     onChange,
     onNudge,
-    // Insert builds a NEW chord at the caret, so it belongs to the idle
-    // state only — when the caret is ON a chord the footer offers Remove
-    // instead (inserting there would duplicate the selected chord). Needs
-    // a caret to target and editing not gated.
-    onInsert: editable && caret != null && caretChord == null ? onInsert : undefined,
     onRemove: caretChord != null ? onRemove : undefined,
     note: editable ? undefined : 'Clear transpose / capo to edit chords.',
   };

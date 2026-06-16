@@ -48,12 +48,12 @@ function caretTo(column: number): void {
 }
 
 describe('useChordEditor', () => {
-  test('idle before the caret reports a position: no selection, no Insert', () => {
+  test('idle before the caret reports a position: no selection, no Remove', () => {
     mount();
     expect(latest.inspectorProps.selected).toBe(false);
     expect(latest.chordSelection).toBeNull();
-    // Insert needs a caret to target.
-    expect(latest.inspectorProps.onInsert).toBeUndefined();
+    // Edit-only footer: nothing to remove until a chord is selected.
+    expect(latest.inspectorProps.onRemove).toBeUndefined();
   });
 
   test('a caret on a chord selects it and reflects its parts', () => {
@@ -62,15 +62,12 @@ describe('useChordEditor', () => {
     expect(latest.inspectorProps.selected).toBe(true);
     expect(latest.inspectorProps.chordName).toBe('G');
     expect(latest.chordSelection).toMatchObject({ line: 1, offset: 0, ordinal: 0 });
-    // Insert is idle-only: while a chord is selected the footer offers
-    // Remove, not Insert (#2646).
-    expect(latest.inspectorProps.onInsert).toBeUndefined();
+    // Remove is offered only while a chord is selected (edit-only footer).
     expect(latest.inspectorProps.onRemove).toBeTypeOf('function');
-    // Caret in the lyrics deselects — and Insert becomes available again.
+    // Caret in the lyrics deselects.
     caretTo(5); // inside "Almost"
     expect(latest.inspectorProps.selected).toBe(false);
     expect(latest.chordSelection).toBeNull();
-    expect(latest.inspectorProps.onInsert).toBeTypeOf('function');
     expect(latest.inspectorProps.onRemove).toBeUndefined();
   });
 
@@ -83,21 +80,6 @@ describe('useChordEditor', () => {
     expect(currentSource).toBe('[G7]Almost [Bbm7]heaven');
     // Caret restored just inside the rewritten bracket (col 1).
     expect(setCaretSpy).toHaveBeenLastCalledWith(1);
-  });
-
-  test('building a chord in idle and inserting writes it at the caret', () => {
-    mount();
-    caretTo(5); // idle, in "Almost"
-    act(() => {
-      // Build C + dim7 -> Cdim7 (draft).
-      latest.inspectorProps.onChange({ root: 'C', accidental: '', suffix: 'dim7', bass: '' });
-    });
-    // Insert is now available (caret present, editable).
-    expect(latest.inspectorProps.onInsert).toBeTypeOf('function');
-    act(() => {
-      latest.inspectorProps.onInsert?.();
-    });
-    expect(currentSource).toBe('[G]Al[Cdim7]most [Bbm7]heaven');
   });
 
   test('clicking a preview chord moves the editor caret onto it', () => {
@@ -157,12 +139,12 @@ describe('useChordEditor', () => {
     expect(setCaretSpy.mock.calls.length).toBeGreaterThan(callsBefore);
   });
 
-  test('under an active transpose, editing is gated: idle + note, no Insert', () => {
+  test('under an active transpose, editing is gated: idle state + note', () => {
     mount(SOURCE, 2); // CLI transpose +2, no capo -> not source-editable
     caretTo(1); // would be `[G]` but the gate blocks resolution
     expect(latest.inspectorProps.selected).toBe(false);
     expect(latest.chordSelection).toBeNull();
-    expect(latest.inspectorProps.onInsert).toBeUndefined();
+    expect(latest.inspectorProps.onRemove).toBeUndefined();
     expect(latest.inspectorProps.note).toMatch(/transpose/i);
   });
 });

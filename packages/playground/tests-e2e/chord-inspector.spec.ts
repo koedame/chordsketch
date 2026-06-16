@@ -99,27 +99,23 @@ test.describe('chord-editor footer (ChordPro playground)', () => {
     expect(errors).toEqual([]);
   });
 
-  test('building a chord and inserting it writes it to source at the caret', async ({
+  test('the footer is edit-only: idle shows a hint, no editing controls or Insert', async ({
     page,
   }) => {
     const errors = trackPageErrors(page);
     await page.goto('./chordpro/');
     await expect(page.locator('.cm-editor')).toBeVisible();
 
-    // Place the caret off any chord (document end) so the footer is in
-    // idle "New chord" mode and the Insert action targets the caret. A
-    // caret after a `]` (or anywhere in the lyrics) is not "on a chord".
+    // Place the caret off any chord (document end) so the footer is idle.
     await page.locator('.cm-content').click();
     await page.keyboard.press('ControlOrMeta+End');
     const idle = page.locator(`${FOOTER} .chordsketch-sheet__cins[data-mode='idle']`);
     await expect(idle).toBeVisible();
 
-    // Build a chord the sample does not already contain (default root C +
-    // the `dim7` type chip -> `Cdim7`), then insert it.
-    await page.locator(`${FOOTER} .chordsketch-sheet__cins-chip`, { hasText: /^dim7$/ }).click();
-    await page.getByRole('button', { name: 'Insert chord' }).click();
-
-    await expect(page.locator('.cm-editor')).toContainText('Cdim7');
+    // Edit-only: idle renders a hint and none of the editing controls.
+    await expect(idle.locator('.chordsketch-sheet__cins-idle-hint')).toBeVisible();
+    await expect(page.locator(`${FOOTER} .chordsketch-sheet__cins-chip`)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Insert chord' })).toHaveCount(0);
 
     expect(errors).toEqual([]);
   });
