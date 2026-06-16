@@ -1258,8 +1258,8 @@ h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-w
 .music-glyph--time__bar { display: block; width: 0.9em; height: 1.5px; margin: 0.05em 0; background-color: currentColor; border-radius: 1px; flex-shrink: 0; }
 .music-glyph--metronome__pendulum { transform-origin: 9px 19px; animation: cs-metronome-swing var(--cs-metronome-period, 1s) cubic-bezier(0.55, 0, 0.45, 1) infinite alternate; }
 @keyframes cs-metronome-swing { from { transform: rotate(-28deg); } to { transform: rotate(28deg); } }
-.music-glyph--metronome__beat { animation: cs-metronome-beat var(--cs-metronome-period, 1s) ease-out infinite; animation-delay: calc(var(--cs-metronome-period, 1s) * -0.5); }
-@keyframes cs-metronome-beat { 0% { opacity: 1; } 8% { opacity: 1; } 60% { opacity: 0.12; } 100% { opacity: 0.12; } }
+.music-glyph--metronome__beat { animation: cs-metronome-beat var(--cs-metronome-period, 1s) step-end infinite; animation-delay: calc(var(--cs-metronome-period, 1s) * -0.5); }
+@keyframes cs-metronome-beat { 0% { opacity: 1; } 12% { opacity: 0; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .music-glyph--metronome__pendulum { animation: none; transform: rotate(0deg); } .music-glyph--metronome__beat { animation: none; opacity: 1; } }
 .line { display: flex; flex-wrap: __LINE_FLEX_WRAP__; margin: 0.1em 0; }
 .chord-block { display: inline-flex; flex-direction: column; align-items: flex-start; }
@@ -4573,6 +4573,21 @@ Verse text\n\
         assert!(
             html.contains("animation-delay: calc(var(--cs-metronome-period, 1s) * -0.5)"),
             "beat flash must be phase-shifted to the center crossing; got: {html}"
+        );
+        // Crisp on/off blink (no fade): `step-end` makes every keyframe
+        // boundary an instantaneous jump, and the keyframe snaps from
+        // full opacity to 0 with no interpolated dim resting state. A
+        // regression to an eased fade would reintroduce the decaying
+        // glow this blink deliberately avoids.
+        assert!(
+            html.contains("var(--cs-metronome-period, 1s) step-end infinite"),
+            "beat blink must use step-end for an instant on/off snap; got: {html}"
+        );
+        assert!(
+            html.contains(
+                "@keyframes cs-metronome-beat { 0% { opacity: 1; } 12% { opacity: 0; } 100% { opacity: 0; } }"
+            ),
+            "beat keyframe must snap from full opacity to 0 with no fade; got: {html}"
         );
     }
 
