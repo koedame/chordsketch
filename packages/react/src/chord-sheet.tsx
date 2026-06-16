@@ -12,6 +12,7 @@ import {
   chordSourceEditableUnderTranspose,
   findChordByOffsetOrdinal,
   nudgeChordPosition,
+  partsFromRawName,
 } from './chord-source-edit';
 import type {
   ChordDeleteTarget,
@@ -136,6 +137,23 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
    */
   onChordDelete?: (target: ChordDeleteTarget) => void;
   /**
+   * Controlled chord-selection (#2644). When `onChordSelectionChange`
+   * is supplied, the shell owns the selection: `chordSelection` drives
+   * the `.chord--selected` badge, clicking a chord reports the new
+   * selection via `onChordSelectionChange` (instead of mutating internal
+   * state), and ChordSheet does NOT render its own footer inspector —
+   * the shell renders a lifted, full-width footer below the editor +
+   * preview instead. Omit `onChordSelectionChange` for the standalone
+   * behaviour: ChordSheet owns the selection internally and renders its
+   * own footer inspector when a chord is clicked.
+   *
+   * Only consumed by `format="html"`.
+   */
+  chordSelection?: ChordSelection | null;
+  /** Setter paired with {@link chordSelection}; presence switches
+   * ChordSheet into controlled-selection mode — see its docs. */
+  onChordSelectionChange?: (selection: ChordSelection | null) => void;
+  /**
    * Configuration preset name (e.g. `"guitar"`, `"ukulele"`) or an
    * inline RRJSON configuration string.
    */
@@ -202,36 +220,6 @@ interface ResolvedChord {
   currentOffset: number;
   otherOffsets: number[];
   totalLyrics: number;
-}
-
-/** Split a raw chord name into editor parts. Used for ALL chords (not
- * just detail-less ones): the source carries the RAW name (`chord.name`),
- * whereas a transposed render exposes the transposed pitch via
- * `chord.detail` / `chord.display`. Editing must rewrite the raw source
- * chord, so deriving parts from the raw name keeps editing correct even
- * under a non-zero transpose. The split is round-trippable —
- * `root + accidental + suffix (+ /bass)` reassembles the original name. */
-function partsFromRawName(name: string): ResolvedChord['parts'] {
-  const slash = name.indexOf('/');
-  const head = slash >= 0 ? name.slice(0, slash) : name;
-  const bass = slash >= 0 ? name.slice(slash + 1) : '';
-  const hasRoot = /^[A-G]/.test(head);
-  // Rootless / non-standard names (e.g. `N.C.`) yield an empty root so
-  // a stray chip click → buildChordName(empty root) throws and the
-  // edit is dropped, rather than defaulting to `C` and corrupting the
-  // token. The chord stays selectable (badge + move), just not
-  // root/type-editable until the user sets a root.
-  const root = hasRoot ? head[0] : '';
-  let rest = hasRoot ? head.slice(1) : head;
-  let accidental: '' | '#' | 'b' = '';
-  if (rest[0] === '#') {
-    accidental = '#';
-    rest = rest.slice(1);
-  } else if (rest[0] === 'b') {
-    accidental = 'b';
-    rest = rest.slice(1);
-  }
-  return { root, accidental, suffix: rest, bass };
 }
 
 /**
@@ -335,6 +323,8 @@ export function ChordSheet({
   onChordReposition,
   onChordEdit,
   onChordDelete,
+  chordSelection,
+  onChordSelectionChange,
   className,
   ...divProps
 }: ChordSheetProps): JSX.Element {
@@ -371,6 +361,8 @@ export function ChordSheet({
       onChordReposition={onChordReposition}
       onChordEdit={onChordEdit}
       onChordDelete={onChordDelete}
+      controlledSelection={chordSelection}
+      onChordSelectionChange={onChordSelectionChange}
       wrapperClass={wrapperClass}
       divProps={divProps}
     />
@@ -433,6 +425,8 @@ function ChordSheetAstBranch({
   onChordReposition,
   onChordEdit,
   onChordDelete,
+  controlledSelection,
+  onChordSelectionChange,
   wrapperClass,
   divProps,
 }: BranchProps & {
@@ -445,6 +439,8 @@ function ChordSheetAstBranch({
   onChordReposition: ((event: ChordRepositionEvent) => void) | undefined;
   onChordEdit: ((event: ChordEditEvent) => void) | undefined;
   onChordDelete: ((target: ChordDeleteTarget) => void) | undefined;
+  controlledSelection: ChordSelection | null | undefined;
+  onChordSelectionChange: ((selection: ChordSelection | null) => void) | undefined;
 }): JSX.Element {
   const { ast, loading, error, transposedKey, transposedKeyDirectives } = useChordproAst(
     source,
@@ -459,7 +455,18 @@ function ChordSheetAstBranch({
   // re-locates the selected chord by its (offset, ordinal) identity.
   // Only meaningful when `onChordReposition` is wired — otherwise the
   // chords never become interactive, so the state simply stays null.
-  const [chordSelection, setChordSelection] = useState<ChordSelection | null>(null);
+  //
+  // Controlled mode (#2644): when the shell supplies
+  // `onChordSelectionChange`, it owns the selection (driven by the
+  // editor caret) and renders the lifted full-width footer. ChordSheet
+  // then only paints the `.chord--selected` badge from
+  // `controlledSelection` and reports chord clicks upward — it renders
+  // no in-pane inspector, and the outside-click / scroll-into-view
+  // bookkeeping below (which exist for the in-pane dock) is skipped.
+  const controlled = onChordSelectionChange !== undefined;
+  const [internalSelection, setInternalSelection] = useState<ChordSelection | null>(null);
+  const chordSelection = controlled ? (controlledSelection ?? null) : internalSelection;
+  const selectChord = controlled ? onChordSelectionChange : setInternalSelection;
   const contentRef = useRef<HTMLDivElement | null>(null);
   // Per-instance root spanning both the song content and the footer
   // inspector (which is a sibling of `__content`, not inside it). Used
@@ -475,7 +482,9 @@ function ChordSheetAstBranch({
   // even another sheet instance's chords — clear it. Scoped to when a
   // selection is active so there is no idle global listener.
   useEffect(() => {
-    if (chordSelection == null) return;
+    // Controlled mode: the shell owns the selection (caret-driven), so
+    // there is no in-pane outside-click clear to manage here.
+    if (controlled || chordSelection == null) return;
     const onPointerDown = (event: PointerEvent): void => {
       const node = event.target as Node | null;
       // Resolve to the nearest Element: a pointer event's target can be
@@ -496,11 +505,11 @@ function ChordSheetAstBranch({
       ) {
         return;
       }
-      setChordSelection(null);
+      setInternalSelection(null);
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [chordSelection]);
+  }, [controlled, chordSelection]);
 
   // Resolve the selection into the selected chord's coordinates + parts
   // for the inspector. Recomputed whenever the AST (a re-parse after an
@@ -526,10 +535,11 @@ function ChordSheetAstBranch({
   const deleteCb = sourceEditable ? onChordDelete : undefined;
   // Drop a stale selection if the user applies a transpose / capo while
   // a chord is selected, so no badge / inspector lingers on a chord the
-  // user can no longer safely edit.
+  // user can no longer safely edit. In controlled mode the shell owns
+  // this (it derives the selection from the caret under the same gate).
   useEffect(() => {
-    if (!sourceEditable && chordSelection != null) setChordSelection(null);
-  }, [sourceEditable, chordSelection]);
+    if (!controlled && !sourceEditable && chordSelection != null) setInternalSelection(null);
+  }, [controlled, sourceEditable, chordSelection]);
 
   // Keep the selected chord visible above the bottom-docked inspector
   // (#2630). The dock pins to the bottom of the scrollport, so a chord
@@ -540,7 +550,10 @@ function ChordSheetAstBranch({
   // in-place text edits (they keep the same (line, offset, ordinal)
   // coordinates), so typing in the inspector does not re-scroll.
   useEffect(() => {
-    if (!sourceEditable || chordSelection == null) return;
+    // In-pane dock only — controlled mode renders the footer outside the
+    // sheet (below the editor + preview), so there is nothing to scroll
+    // a chord above here.
+    if (controlled || !sourceEditable || chordSelection == null) return;
     const root = contentRef.current;
     if (root == null) return;
     const raf = requestAnimationFrame(() => {
@@ -553,7 +566,7 @@ function ChordSheetAstBranch({
       target.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
     });
     return () => cancelAnimationFrame(raf);
-  }, [chordSelection, sourceEditable]);
+  }, [controlled, chordSelection, sourceEditable]);
 
   if (ast === null) {
     return (
@@ -588,10 +601,10 @@ function ChordSheetAstBranch({
           caretLineLength,
           onChordReposition: repositionCb,
           chordSelection: repositionCb ? chordSelection : null,
-          setChordSelection: repositionCb ? setChordSelection : undefined,
+          setChordSelection: repositionCb ? selectChord : undefined,
         })}
       </div>
-      {resolvedChord && editCb ? (
+      {!controlled && resolvedChord && editCb ? (
         <ChordInspector
           chordName={resolvedChord.chordName}
           // Header shows the chord with Unicode accidentals (B♭, not
@@ -645,7 +658,7 @@ function ChordSheetAstBranch({
             });
             if (!result || !repositionCb) return;
             repositionCb(result.event);
-            setChordSelection((prev) => ({
+            setInternalSelection((prev) => ({
               line: resolvedChord.sourceLine,
               offset: result.offset,
               ordinal: result.ordinal,
@@ -661,11 +674,11 @@ function ChordSheetAstBranch({
                     fromLength: resolvedChord.bracketLength,
                     expected: resolvedChord.chordName,
                   });
-                  setChordSelection(null);
+                  setInternalSelection(null);
                 }
               : undefined
           }
-          onClose={() => setChordSelection(null)}
+          onClose={() => setInternalSelection(null)}
         />
       ) : null}
     </div>

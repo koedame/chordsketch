@@ -14,6 +14,7 @@ import {
   buildChordNudge,
   capoTransposeOffset,
   chordLayoutForLine,
+  chordSelectionCaretOffset,
   chordSourceEditableUnderTranspose,
   chordSuffixFromQuality,
   findChordAtCaret,
@@ -1006,5 +1007,30 @@ describe('applyChordInsert', () => {
 
   test('throws on an out-of-range line', () => {
     expect(() => applyChordInsert('hi', { line: 5, column: 0, chord: 'C' })).toThrow();
+  });
+});
+
+describe('chordSelectionCaretOffset', () => {
+  const source = '{title: T}\n[G]Almost [Bbm7]heaven';
+
+  test('round-trips with findChordAtCaret', () => {
+    const at = source.indexOf('Bbm7');
+    const match = findChordAtCaret(source, at)!;
+    const offset = chordSelectionCaretOffset(source, match);
+    expect(offset).not.toBeNull();
+    // The resolved offset points at the chord's `[`, which is itself a
+    // caret position on the chord — findChordAtCaret re-resolves it.
+    expect(findChordAtCaret(source, offset!)!.chordName).toBe('Bbm7');
+  });
+
+  test('resolves stacked chords by ordinal', () => {
+    const stacked = '[A][B]word';
+    expect(chordSelectionCaretOffset(stacked, { line: 1, offset: 0, ordinal: 0 })).toBe(0);
+    expect(chordSelectionCaretOffset(stacked, { line: 1, offset: 0, ordinal: 1 })).toBe(3);
+  });
+
+  test('returns null for a selection that no longer maps to a chord', () => {
+    expect(chordSelectionCaretOffset(source, { line: 2, offset: 0, ordinal: 5 })).toBeNull();
+    expect(chordSelectionCaretOffset(source, { line: 9, offset: 0, ordinal: 0 })).toBeNull();
   });
 });

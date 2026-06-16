@@ -1036,6 +1036,34 @@ export function findChordAtCaret(source: string, caretOffset: number): CaretChor
   };
 }
 
+/**
+ * Resolve a chord selection — `(line, offset, ordinal)` as the JSX
+ * walker / `findChordAtCaret` produce it — back to the absolute
+ * 0-indexed source offset of that chord's `[` opening bracket.
+ *
+ * Used by the shell-level editor to move the editor caret onto a chord
+ * the user clicked in the preview, so the single caret-driven selection
+ * path then re-resolves it. Returns `null` when the selection no longer
+ * maps to a chord (e.g. the source changed out from under a stale
+ * click). Scans the raw source line (not the post-lex AST layout), so
+ * the offset points at the real bracket column.
+ */
+export function chordSelectionCaretOffset(
+  source: string,
+  selection: { line: number; offset: number; ordinal: number },
+): number | null {
+  const lines = source.split('\n');
+  const lineIdx = selection.line - 1;
+  if (lineIdx < 0 || lineIdx >= lines.length) return null;
+  const { tokens } = scanLineChords(lines[lineIdx]);
+  const atOffset = tokens.filter((t) => t.lyricsOffset === selection.offset);
+  const target = atOffset[selection.ordinal];
+  if (!target) return null;
+  let base = 0;
+  for (let i = 0; i < lineIdx; i++) base += lines[i].length + 1;
+  return base + target.colStart;
+}
+
 /** Describes inserting a brand-new `[chord]` token at the caret. */
 export interface ChordInsertEvent {
   /** 1-indexed source line to insert on. */
