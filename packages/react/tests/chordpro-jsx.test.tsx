@@ -5,6 +5,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { renderChordproAst } from '../src/chordpro-jsx';
 import type { ChordSelection } from '../src/chordpro-jsx';
 import type { ChordproSong } from '../src/chordpro-ast';
+import { repositionedChordOrdinal } from '../src/chord-source-edit';
 import type { ChordRepositionEvent } from '../src/chord-source-edit';
 
 // Empty metadata helper — every metadata field has to be present
@@ -1025,6 +1026,73 @@ describe('renderChordproAst', () => {
     expect(highlighted?.closest('.chord-block')).toBe(blocks[1]);
     fireEvent.drop(targetChord, { dataTransfer: dt, clientX: 100, clientY: 5 });
     expect(repo).toHaveBeenCalledTimes(1);
+  });
+
+  // After a drop the moved chord must become the selection, so it
+  // stays focused / editable without a second click — parity with the
+  // keyboard nudge, which already advances the selection. The walker
+  // reports the moved chord's new (offset, ordinal) via
+  // `setChordSelection`; the host re-parses and re-locates it by that
+  // identity. (Selection wiring requires both `chordSelection` and
+  // `setChordSelection`; with only `onChordReposition` the chords are
+  // drag-only and nothing is reported.)
+  test('dropping a chord reports its new position as the selection', () => {
+    const repo = vi.fn();
+    const setSelected = vi.fn();
+    const ast: ChordproSong = {
+      metadata: EMPTY_META,
+      lines: [
+        {
+          kind: 'lyrics',
+          value: {
+            segments: [
+              { chord: { name: 'Am', detail: null, display: null }, text: 'Hello', spans: [] },
+              { chord: { name: 'G', detail: null, display: null }, text: 'World', spans: [] },
+            ],
+          },
+        },
+      ],
+    };
+    const { container } = render(
+      renderChordproAst(ast, {
+        onChordReposition: repo,
+        chordSelection: null,
+        setChordSelection: setSelected,
+      }),
+    );
+    const blocks = container.querySelectorAll('.chord-block');
+    const targetLyrics = blocks[1].querySelector('.lyrics') as HTMLElement;
+    const dtStore = new Map<string, string>();
+    dtStore.set(
+      'application/x-chordsketch-chord',
+      JSON.stringify({ fromLine: 1, fromColumn: 0, fromLength: 4, chord: 'Am' }),
+    );
+    const dt = {
+      types: [...dtStore.keys()],
+      getData: (k: string) => dtStore.get(k) ?? '',
+      setData: (k: string, v: string) => dtStore.set(k, v),
+      dropEffect: 'none' as DataTransfer['dropEffect'],
+      effectAllowed: 'all' as DataTransfer['effectAllowed'],
+    };
+    fireEvent.drop(targetLyrics, { dataTransfer: dt, clientX: 100, clientY: 50 });
+    expect(repo).toHaveBeenCalledTimes(1);
+    expect(setSelected).toHaveBeenCalledTimes(1);
+    // The reported selection must land exactly where the chord was
+    // repositioned to — the (line, offset) of the emitted event — so a
+    // re-parse re-locates it as the selection. Derived from the event
+    // (not a hard-coded jsdom pointer offset) so the assertion stays
+    // robust to caret-from-point quirks. Same-line move of Am (index 0
+    // among the line's chords at offsets [0, 5]); ordinal via the same
+    // helper the walker uses.
+    const repoEvent = repo.mock.calls[0][0];
+    expect(repoEvent.toLine).toBe(1);
+    expect(repoEvent.copy).toBeFalsy();
+    expect(setSelected.mock.calls[0][0]).toEqual({
+      line: repoEvent.toLine,
+      offset: repoEvent.toLyricsOffset,
+      ordinal: repositionedChordOrdinal(repoEvent.toLyricsOffset, [0, 5], 0),
+      nonce: 1,
+    });
   });
 
   // Multi-segment chord-bearing line — the marker must land in

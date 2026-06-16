@@ -139,6 +139,55 @@ describe('useChordEditor', () => {
     expect(setCaretSpy.mock.calls.length).toBeGreaterThan(callsBefore);
   });
 
+  test('repositioning a chord lands the caret inside the moved bracket so it stays selected', () => {
+    mount();
+    // Move `[G]` (col 0, len 3) three lyric characters into "Almost".
+    act(() => {
+      latest.onChordReposition({
+        fromLine: 1,
+        fromColumn: 0,
+        fromLength: 3,
+        toLine: 1,
+        toLyricsOffset: 3,
+        chord: 'G',
+        copy: false,
+        expected: 'G',
+      });
+    });
+    // Source rewritten: G removed from col 0, re-inserted inside "Almost".
+    expect(currentSource).toBe('Alm[G]ost [Bbm7]heaven');
+    // The caret lands just after the moved bracket's `[` (col 4), NOT
+    // after its `]` (col 6) — the latter would sit in the lyrics and
+    // deselect the chord. This is the post-drop "keep it selected" fix.
+    expect(setCaretSpy).toHaveBeenLastCalledWith(4);
+    // And the caret-driven selection re-resolves onto the moved chord
+    // once the editor reports the restored caret.
+    caretTo(4);
+    expect(latest.inspectorProps.selected).toBe(true);
+    expect(latest.chordSelection).toMatchObject({ line: 1, offset: 3, ordinal: 0 });
+  });
+
+  test('a reposition that no-ops on the expected-token guard does not move the caret', () => {
+    mount();
+    // `expected` does not match the token at the `from` span, so
+    // applyChordReposition returns the source unchanged; the deferred
+    // caret restore must not fire (React bails on the equal setState).
+    act(() => {
+      latest.onChordReposition({
+        fromLine: 1,
+        fromColumn: 0,
+        fromLength: 3,
+        toLine: 1,
+        toLyricsOffset: 3,
+        chord: 'G',
+        copy: false,
+        expected: 'Wrong',
+      });
+    });
+    expect(currentSource).toBe(SOURCE);
+    expect(setCaretSpy).not.toHaveBeenCalled();
+  });
+
   test('under an active transpose, editing is gated: idle state + note', () => {
     mount(SOURCE, 2); // CLI transpose +2, no capo -> not source-editable
     caretTo(1); // would be `[G]` but the gate blocks resolution

@@ -13,6 +13,7 @@ import {
   buildChordName,
   buildChordNudge,
   capoTransposeOffset,
+  caretInsideWrittenBracket,
   chordLayoutForLine,
   chordSelectionCaretOffset,
   chordSourceEditableUnderTranspose,
@@ -23,6 +24,7 @@ import {
   nudgeChordPosition,
   partsFromRawName,
   readCapo,
+  repositionedChordOrdinal,
   setCapoInSource,
   sourceColumnToLyricsOffset,
 } from '../src/chord-source-edit';
@@ -859,6 +861,33 @@ describe('applyChordReposition — expected-token guard (parity with edit/delete
   });
 });
 
+describe('caretInsideWrittenBracket', () => {
+  test('lands just after the `[` of a repositioned chord', () => {
+    // `[Am]hi` → move Am to the end → `hi[Am]`; caretOffset points past
+    // the `]` (6). The inside-bracket caret must be just after `[` (3).
+    const result = applyChordReposition('[Am]hi', {
+      fromLine: 1,
+      fromColumn: 0,
+      fromLength: 4,
+      toLine: 1,
+      toLyricsOffset: 2,
+      chord: 'Am',
+      copy: false,
+      expected: 'Am',
+    });
+    expect(result.text).toBe('hi[Am]');
+    expect(result.caretOffset).toBe(6); // just past `]`
+    expect(caretInsideWrittenBracket(result, 'Am')).toBe(3); // just after `[`
+  });
+
+  test('lands just after the `[` of a freshly inserted chord', () => {
+    // Insert `[G]` at column 2 of `hi` → `hi[G]`; caret inside → 3.
+    const result = applyChordInsert('hi', { line: 1, column: 2, chord: 'G' });
+    expect(result.text).toBe('hi[G]');
+    expect(caretInsideWrittenBracket(result, 'G')).toBe(3);
+  });
+});
+
 describe('buildChordNudge sets the expected-token guard on its move event', () => {
   test('expected equals the moved chord name', () => {
     const result = buildChordNudge({
@@ -874,6 +903,31 @@ describe('buildChordNudge sets the expected-token guard on its move event', () =
     expect(result).not.toBeNull();
     expect(result!.event.expected).toBe('Am7');
     expect(result!.event.copy).toBe(false);
+  });
+});
+
+describe('repositionedChordOrdinal', () => {
+  // Destination line `[Am]Hello [G]World` — chords at offsets 0 and 6.
+  test('cross-line move / copy counts every chord at the offset', () => {
+    // Nothing removed from the destination line (removedIndex = -1):
+    // dropping a third chord at offset 0 lands after the existing one.
+    expect(repositionedChordOrdinal(0, [0, 6], -1)).toBe(1);
+    // Offset with no existing chord → ordinal 0.
+    expect(repositionedChordOrdinal(3, [0, 6], -1)).toBe(0);
+    // Stacked chords `[A][B][C]word` all at offset 0 → a fourth lands 3rd.
+    expect(repositionedChordOrdinal(0, [0, 0, 0], -1)).toBe(3);
+  });
+
+  test('same-line move excludes the dragged chord from the count', () => {
+    // Dragging the chord at index 0 (offset 0) to offset 6: it is removed
+    // from the destination line first, so only the chord already at 6
+    // counts → the moved chord lands after it (ordinal 1).
+    expect(repositionedChordOrdinal(6, [0, 6], 0)).toBe(1);
+    // Dragging the chord at offset 6 (index 1) back to offset 0: the
+    // chord at 0 stays, so the moved chord lands after it (ordinal 1).
+    expect(repositionedChordOrdinal(0, [0, 6], 1)).toBe(1);
+    // Moving a chord to an offset only it occupied → ordinal 0.
+    expect(repositionedChordOrdinal(0, [0], 0)).toBe(0);
   });
 });
 
