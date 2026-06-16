@@ -1734,10 +1734,6 @@
 .chordsketch-sheet__cins-remove:hover {
   background: var(--cs-crimson-50, #fdf2f5);
 }
-.chordsketch-sheet__cins-remove:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
 /* Insert action — the primary, crimson-filled button (#2644). */
 .chordsketch-sheet__cins-insert {
   appearance: none;

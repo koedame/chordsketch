@@ -599,13 +599,18 @@ function PlaygroundApp(): JSX.Element {
   });
 
   // Relay the editor caret into BOTH the preview marker (activeSourceLine
-  // / caretColumn) and the chord-editor hook.
+  // / caretColumn) and the chord-editor hook. Depend on
+  // `chordEditor.onCaretChange` (stable — defined with useCallback([]))
+  // rather than on the `chordEditor` object itself (re-created every
+  // render), so this callback stays stable and does not re-render
+  // ChordSourceArea on every source change.
+  const { onCaretChange: chordEditorOnCaretChange } = chordEditor;
   const handleCaretChange = useCallback(
     (next: { line: number; column: number; lineLength: number }) => {
       setCaret(next);
-      chordEditor.onCaretChange(next);
+      chordEditorOnCaretChange(next);
     },
-    [chordEditor],
+    [chordEditorOnCaretChange],
   );
 
   const stats = useMemo(() => computeStats(source), [source]);

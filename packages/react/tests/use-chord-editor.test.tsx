@@ -127,6 +127,30 @@ describe('useChordEditor', () => {
     expect(setCaretSpy.mock.calls.length).toBe(callsAfterEdit);
   });
 
+  test('a no-op edit (re-clicking an already-selected chip) does not leak pendingCaretRef', () => {
+    // Regression for the case where buildChordName(next) === caretChord.chordName.
+    // Before the fix, applyChordEdit would return the same source string, React
+    // would bail on setState, the source-change effect would never fire, and
+    // pendingCaretRef.current would never be cleared — blocking
+    // onChordSelectionChange from moving the caret on the next preview chord click.
+    mount();
+    caretTo(1); // select `[G]`
+    const callsBefore = setCaretSpy.mock.calls.length;
+    act(() => {
+      // Same parts as the existing chord — G major, no accidental, no suffix.
+      latest.inspectorProps.onChange({ root: 'G', accidental: '', suffix: '', bass: '' });
+    });
+    // Source must not change (the guard bails early).
+    expect(currentSource).toBe(SOURCE);
+    // onChordSelectionChange must still work after the no-op — it would silently
+    // return early if pendingCaretRef were set.
+    act(() => {
+      latest.onChordSelectionChange({ line: 1, offset: 7, ordinal: 0, nonce: 1 });
+    });
+    // The click moved the caret to Bbm7 (offset 10 → col 11 inside bracket).
+    expect(setCaretSpy.mock.calls.length).toBeGreaterThan(callsBefore);
+  });
+
   test('under an active transpose, editing is gated: idle + note, no Insert', () => {
     mount(SOURCE, 2); // CLI transpose +2, no capo -> not source-editable
     caretTo(1); // would be `[G]` but the gate blocks resolution

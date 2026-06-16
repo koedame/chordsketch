@@ -213,6 +213,14 @@ export function useChordEditor({
         // drop the edit rather than corrupt the source.
         return;
       }
+      // Guard: if the chip click produces the same chord name that is
+      // already in the source (e.g. the user re-clicks the selected root
+      // chip), bail before calling commit. `applyChordEdit` would return
+      // the same source string, React would bail on the setState, the
+      // source-change effect would never fire, and `pendingCaretRef`
+      // would never be cleared — blocking `onChordSelectionChange` from
+      // moving the editor caret on the next preview chord click.
+      if (chord === caretChord.chordName) return;
       const result = applyChordEdit(source, {
         line: caretChord.line,
         fromColumn: caretChord.sourceColumn,
