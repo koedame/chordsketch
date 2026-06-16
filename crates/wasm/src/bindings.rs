@@ -839,7 +839,7 @@ pub fn chord_diagram_svg_with_defines_orientation_compact(
 /// added tones, with a slash bass dropped one octave below the root).
 ///
 /// Thin wrapper over [`chordsketch_chordpro::chord_pitches`] via the
-/// pure-Rust [`crate::chord_pitches_inner`]. Sister-site to the NAPI
+/// pure-Rust `chord_pitches_inner`. Sister-site to the NAPI
 /// `chordPitches` export and the FFI `chord_pitches` function
 /// (`.claude/rules/fix-propagation.md` §Bindings).
 #[wasm_bindgen(js_name = chordPitches)]

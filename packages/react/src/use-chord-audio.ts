@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
-import { getAudioContextCtor, getSharedAudioContext } from './audio-context';
+import {
+  getAudioContextCtor,
+  getSharedAudioContext,
+  scheduleVoice,
+} from './audio-context';
 
 // ---- Voicing / envelope tuning ---------------------------------
 // A block chord is several oscillators started at once. The total
@@ -81,9 +85,11 @@ export interface UseChordAudioResult {
  * MIDI note numbers into sound, sharing the page-level `AudioContext`
  * with {@link useMetronome} via `audio-context.ts`.
  *
- * The wasm module is preloaded on mount so {@link UseChordAudioResult.play}
- * can run synchronously inside the click / keydown gesture that browser
- * autoplay policies require.
+ * The wasm module is preloaded so {@link UseChordAudioResult.play} can run
+ * synchronously inside the click / keydown gesture that browser autoplay
+ * policies require. Pass `enabled = false` to defer that import until the
+ * consumer actually turns chord audio on (the hook is still called
+ * unconditionally, per the rules of hooks).
  *
  * @example
  * ```tsx
@@ -97,6 +103,7 @@ export interface UseChordAudioResult {
  */
 export function useChordAudio(
   loader: ChordAudioWasmLoader = defaultLoader,
+  enabled = true,
 ): UseChordAudioResult {
   const supported = useMemo(() => getAudioContextCtor() !== null, []);
 
@@ -113,10 +120,12 @@ export function useChordAudio(
   const voicesRef = useRef<Set<OscillatorNode>>(new Set());
 
   // Preload the wasm module so `play` can resolve pitches synchronously
-  // inside the user gesture. If the load fails, `moduleRef` stays null
-  // and `play` is a no-op rather than throwing.
+  // inside the user gesture. Gated on `enabled` so a `<ChordSheet>` that
+  // never turns chord audio on does not pay the import; the load fires
+  // the first time a consumer enables the feature. If the load fails,
+  // `moduleRef` stays null and `play` is a no-op rather than throwing.
   useEffect(() => {
-    if (!supported) return undefined;
+    if (!supported || !enabled) return undefined;
     let cancelled = false;
     void (async () => {
       try {
@@ -130,7 +139,7 @@ export function useChordAudio(
     return () => {
       cancelled = true;
     };
-  }, [supported]);
+  }, [supported, enabled]);
 
   const stop = useCallback(() => {
     for (const osc of voicesRef.current) {
@@ -166,32 +175,21 @@ export function useChordAudio(
       stop();
 
       const now = ctx.currentTime;
+      // Divide the peak across the voices so a six-note chord does not
+      // clip; a soft attack avoids a click and the long release lets the
+      // chord ring. The shared `scheduleVoice` owns the node graph +
+      // cleanup (sister to the metronome's tick scheduling).
       const perVoice = PEAK_GAIN / pitches.length;
-      const tracked = voicesRef.current;
       for (const midi of pitches) {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(midiToFreq(midi), now);
-        // Soft attack then exponential decay toward (but not to) zero —
-        // Web Audio's exponentialRampToValueAtTime rejects a 0 target.
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.exponentialRampToValueAtTime(perVoice, now + ATTACK_S);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + RELEASE_S);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now);
-        osc.stop(now + RELEASE_S + 0.05);
-        tracked.add(osc);
-        osc.onended = () => {
-          tracked.delete(osc);
-          try {
-            osc.disconnect();
-            gain.disconnect();
-          } catch {
-            // Nodes may already be disconnected if `stop` raced ahead.
-          }
-        };
+        scheduleVoice(ctx, voicesRef.current, {
+          type: 'triangle',
+          frequency: midiToFreq(midi),
+          startTime: now,
+          attack: ATTACK_S,
+          release: RELEASE_S,
+          peak: perVoice,
+          tail: 0.05,
+        });
       }
     },
     [stop],

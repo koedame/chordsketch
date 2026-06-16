@@ -52,3 +52,74 @@ export function getSharedAudioContext(): AudioContext | null {
 export function resetSharedAudioContextForTests(): void {
   sharedContext = null;
 }
+
+/** Parameters describing a single scheduled oscillator voice. */
+export interface VoiceSpec {
+  /** Oscillator waveform. */
+  type: OscillatorType;
+  /** Frequency in Hz. */
+  frequency: number;
+  /** Audio-clock time (seconds) at which the voice starts. */
+  startTime: number;
+  /**
+   * Attack time in seconds. `0` jumps straight to {@link VoiceSpec.peak}
+   * at onset (a percussive click); a positive value ramps up to the peak,
+   * avoiding the click a hard onset would make.
+   */
+  attack: number;
+  /** Seconds from {@link VoiceSpec.startTime} to the decay-to-silence end. */
+  release: number;
+  /** Peak gain for this voice. */
+  peak: number;
+  /**
+   * Extra seconds held after {@link VoiceSpec.release} before the
+   * oscillator is stopped. `0` stops exactly at the release end (the
+   * metronome's tight click); a small tail lets a sustained voice's
+   * exponential tail finish inaudibly.
+   */
+  tail: number;
+}
+
+/**
+ * Schedule a single oscillator + gain voice on `ctx` per `spec`, register
+ * it in `tracked`, and wire `onended` cleanup (remove from `tracked`,
+ * disconnect the nodes). Shared by `useMetronome` and `useChordAudio` so
+ * the envelope shape, node graph, and cleanup race-handling live in one
+ * place rather than being duplicated across both hooks.
+ *
+ * The gain envelope uses `exponentialRampToValueAtTime` toward a tiny
+ * non-zero floor (Web Audio rejects a `0` target).
+ */
+export function scheduleVoice(
+  ctx: AudioContext,
+  tracked: Set<OscillatorNode>,
+  spec: VoiceSpec,
+): void {
+  const { type, frequency, startTime, attack, release, peak, tail } = spec;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(frequency, startTime);
+  if (attack > 0) {
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.exponentialRampToValueAtTime(peak, startTime + attack);
+  } else {
+    // Percussive onset: jump to the peak immediately.
+    gain.gain.setValueAtTime(peak, startTime);
+  }
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + release);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(startTime);
+  osc.stop(startTime + release + tail);
+  tracked.add(osc);
+  osc.onended = () => {
+    tracked.delete(osc);
+    try {
+      osc.disconnect();
+      gain.disconnect();
+    } catch {
+      // Nodes may already be disconnected if a stop() raced ahead.
+    }
+  };
+}

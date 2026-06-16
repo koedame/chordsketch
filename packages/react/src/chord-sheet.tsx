@@ -483,7 +483,7 @@ function ChordSheetAstBranch({
   // hooks) but only wired into the walker when the consumer opted in via
   // the `chordAudio` prop AND the environment supports Web Audio — so on
   // SSR / unsupported browsers chords stay inert instead of dead buttons.
-  const audio = useChordAudio(chordAudioLoader);
+  const audio = useChordAudio(chordAudioLoader, Boolean(chordAudio));
   const chordAudioConfig =
     chordAudio && audio.supported ? { enabled: true, play: audio.play } : null;
 

@@ -491,23 +491,6 @@ pub fn chord_diagram_svg(chord: String, instrument: String) -> Result<Option<Str
 ///
 /// Returns a napi `Error` with status `InvalidArg` when
 /// `instrument` is not one of the supported values.
-/// Constituent pitches of a chord as MIDI note numbers, for driving an
-/// audio synth (#2650).
-///
-/// Returns a `Buffer` of ascending, de-duplicated MIDI note numbers
-/// describing a block voicing (root, third, fifth, plus any extension /
-/// altered / added tones, with a slash bass dropped one octave below the
-/// root), or `null` when `chord` is not parseable as a chord.
-///
-/// Thin wrapper over [`crate::chord_pitches_inner`]. Sister-site to the
-/// wasm `chordPitches` export and the FFI `chord_pitches` function
-/// (`.claude/rules/fix-propagation.md` §Bindings).
-#[must_use]
-#[napi(js_name = "chordPitches")]
-pub fn chord_pitches(chord: String) -> Option<Buffer> {
-    chord_pitches_inner(&chord).map(Buffer::from)
-}
-
 #[must_use = "callers must handle the unknown-instrument error"]
 #[napi(js_name = "chordDiagramSvgWithDefines")]
 pub fn chord_diagram_svg_with_defines(
@@ -519,6 +502,23 @@ pub fn chord_diagram_svg_with_defines(
         validate_defines_pairs(defines).map_err(|msg| Error::new(Status::InvalidArg, msg))?;
     chord_diagram_svg_inner(&chord, &instrument, &pairs)
         .map_err(|msg| Error::new(Status::InvalidArg, msg))
+}
+
+/// Constituent pitches of a chord as MIDI note numbers, for driving an
+/// audio synth (#2650).
+///
+/// Returns a `Buffer` of ascending, de-duplicated MIDI note numbers
+/// describing a block voicing (root, third, fifth, plus any extension /
+/// altered / added tones, with a slash bass dropped one octave below the
+/// root), or `null` when `chord` is not parseable as a chord.
+///
+/// Thin wrapper over the pure-Rust `chord_pitches_inner`. Sister-site to
+/// the wasm `chordPitches` export and the FFI `chord_pitches` function
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+#[must_use]
+#[napi(js_name = "chordPitches")]
+pub fn chord_pitches(chord: String) -> Option<Buffer> {
+    chord_pitches_inner(&chord).map(Buffer::from)
 }
 
 /// Variant of [`chord_diagram_svg`] that takes a diagram orientation as

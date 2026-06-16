@@ -402,30 +402,31 @@ fn chord_interval_semitones(quality: ChordQuality, ext: &str) -> Vec<u8> {
         let has13 = ext.contains("13");
         let has11 = ext.contains("11");
         let has9 = ext.contains('9');
-        let has_seventh = ext.contains('7') || has9 || has11 || has13;
-        // A "maj"-prefixed extension carrying a seventh-or-higher degree
-        // (maj7 / maj9 / maj13), or the "M7" / "Δ" shorthands, calls for a
+        let has_six = ext.contains('6');
+        // A 9th / 11th / 13th implies a seventh — EXCEPT in a "6/9" chord
+        // (written `69`), where the 6 marks an added-tone chord carrying the
+        // 6th and 9th but no seventh.
+        let has_seventh = ext.contains('7') || ((has9 || has11 || has13) && !has_six);
+        // "maj7" / "maj9" / "maj13" (or the "M7" / "Δ" shorthands) call for a
         // major seventh; bare "maj" (just `ChordQuality::Major`) does not.
         let major_seventh =
             (ext.starts_with("maj") && has_seventh) || ext.contains("M7") || ext.contains('Δ');
-        // A diminished chord with a seventh is fully diminished (bb7).
-        let dim_seventh = quality == ChordQuality::Diminished && ext.starts_with('7');
+        // A diminished chord that carries a seventh is fully diminished (bb7).
+        let dim_seventh = quality == ChordQuality::Diminished && has_seventh;
 
-        if dim_seventh {
-            extras.push(9);
-        } else if major_seventh {
-            extras.push(11);
-            if has9 {
-                extras.push(14);
-            }
-            if has11 {
-                extras.push(17);
-            }
-            if has13 {
-                extras.push(21);
-            }
-        } else if has_seventh {
-            extras.push(10);
+        if has_seventh {
+            // Seventh quality: diminished bb7 (9), major 7th (11), or the
+            // dominant / minor 7th (10). The upper-extension ladder is shared
+            // across all three — a 13th implies the 9th and 11th below it, so
+            // maj13 and the dominant 13 are voiced consistently.
+            let seventh = if dim_seventh {
+                9
+            } else if major_seventh {
+                11
+            } else {
+                10
+            };
+            extras.push(seventh);
             if has9 || has11 || has13 {
                 extras.push(14);
             }
@@ -435,10 +436,14 @@ fn chord_interval_semitones(quality: ChordQuality, ext: &str) -> Vec<u8> {
             if has13 {
                 extras.push(21);
             }
+        } else if has9 {
+            // Reachable only for a "6/9" chord (the `has_six` guard above
+            // suppresses the implied seventh): add the 9th alongside the 6th.
+            extras.push(14);
         }
 
-        // A sixth (e.g. "C6", "Am6") adds the major sixth — not a seventh.
-        if ext.contains('6') {
+        // A sixth (e.g. "C6", "Am6", "C69") adds the major sixth.
+        if has_six {
             extras.push(9);
         }
     }
@@ -1320,6 +1325,65 @@ mod tests {
     fn pitches_power_chord_omits_third() {
         // C5: root and fifth only.
         assert_eq!(chord_pitches("C5"), Some(vec![48, 55]));
+    }
+
+    #[test]
+    fn pitches_extended_dominant_stacks_lower_tones() {
+        // G11 / C13 stack the 9th and 11th below the named degree.
+        // G11: G3 B3 D4 F4 A4 C5.
+        assert_eq!(chord_pitches("G11"), Some(vec![55, 59, 62, 65, 69, 72]));
+        // C13: C3 E3 G3 Bb3 D4 F4 A4.
+        assert_eq!(chord_pitches("C13"), Some(vec![48, 52, 55, 58, 62, 65, 69]));
+    }
+
+    #[test]
+    fn pitches_major_extended_match_dominant_stacking() {
+        // Regression guard: maj9 / maj11 / maj13 must stack the same lower
+        // extension tones the dominant equivalents do (only the seventh
+        // differs: major 7th = 11 semitones, not the dominant's 10).
+        // Cmaj9: C3 E3 G3 B3 D4.
+        assert_eq!(chord_pitches("Cmaj9"), Some(vec![48, 52, 55, 59, 62]));
+        // Cmaj11: adds the 11th (F4) AND the 9th (D4) below it.
+        assert_eq!(chord_pitches("Cmaj11"), Some(vec![48, 52, 55, 59, 62, 65]));
+        // Cmaj13: adds the 13th (A4), 11th (F4), and 9th (D4).
+        assert_eq!(
+            chord_pitches("Cmaj13"),
+            Some(vec![48, 52, 55, 59, 62, 65, 69])
+        );
+    }
+
+    #[test]
+    fn pitches_six_nine_chord_has_no_seventh() {
+        // C69 (6/9): root, third, fifth, major sixth, ninth — and NO seventh.
+        // C3 E3 G3 A3 D4.
+        assert_eq!(chord_pitches("C69"), Some(vec![48, 52, 55, 57, 62]));
+        // Minor 6/9 keeps the minor third.
+        assert_eq!(chord_pitches("Cm69"), Some(vec![48, 51, 55, 57, 62]));
+    }
+
+    #[test]
+    fn pitches_altered_fifth() {
+        // C7#5: augmented dominant seventh — raised fifth (G#3) + b7 (Bb3).
+        assert_eq!(chord_pitches("C7#5"), Some(vec![48, 52, 56, 58]));
+    }
+
+    #[test]
+    fn pitches_bare_sus_is_sus4() {
+        // "Csus" with no number defaults to a suspended fourth.
+        assert_eq!(chord_pitches("Csus"), Some(vec![48, 53, 55]));
+    }
+
+    #[test]
+    fn pitches_add_degrees() {
+        // The full degree → semitone map exercised through add chords.
+        assert_eq!(chord_pitches("Cadd2"), Some(vec![48, 50, 52, 55])); // +2
+        assert_eq!(chord_pitches("Cadd4"), Some(vec![48, 52, 53, 55])); // +5
+        assert_eq!(chord_pitches("Cadd6"), Some(vec![48, 52, 55, 57])); // +9
+        assert_eq!(chord_pitches("Cadd11"), Some(vec![48, 52, 55, 65])); // +17
+        assert_eq!(chord_pitches("Cadd13"), Some(vec![48, 52, 55, 69])); // +21
+        // An unrecognised added degree contributes no extra tone (the
+        // documented bare-triad fallback), leaving the plain triad.
+        assert_eq!(chord_pitches("Caddx"), Some(vec![48, 52, 55]));
     }
 
     #[test]

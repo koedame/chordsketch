@@ -4,6 +4,7 @@ import {
   getAudioContextCtor,
   getSharedAudioContext,
   resetSharedAudioContextForTests,
+  scheduleVoice,
 } from './audio-context';
 
 /**
@@ -143,30 +144,20 @@ export function useMetronome(): UseMetronomeResult {
   const supported = useMemo(() => getAudioContextCtor() !== null, []);
 
   const scheduleTick = useCallback((ctx: AudioContext, time: number) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(TICK_FREQUENCY_HZ, time);
-    // Percussive envelope: jump to peak at the tick onset, then
-    // decay exponentially toward (but never to) zero — Web Audio's
-    // `exponentialRampToValueAtTime` rejects a 0 target.
-    gain.gain.setValueAtTime(TICK_PEAK_GAIN, time);
-    gain.gain.exponentialRampToValueAtTime(0.0001, time + TICK_DURATION_S);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(time);
-    osc.stop(time + TICK_DURATION_S);
-    const tracked = oscillatorsRef.current;
-    tracked.add(osc);
-    osc.onended = () => {
-      tracked.delete(osc);
-      try {
-        osc.disconnect();
-        gain.disconnect();
-      } catch {
-        // Nodes may already be disconnected if `stop` raced ahead.
-      }
-    };
+    // Percussive square-wave blip: `attack: 0` jumps to the peak at the
+    // tick onset, then decays over `TICK_DURATION_S`; `tail: 0` stops the
+    // oscillator exactly at the decay end so the click stays tight. The
+    // shared `scheduleVoice` tracks the node in `oscillatorsRef` and wires
+    // the same `onended` cleanup `useChordAudio` relies on.
+    scheduleVoice(ctx, oscillatorsRef.current, {
+      type: 'square',
+      frequency: TICK_FREQUENCY_HZ,
+      startTime: time,
+      attack: 0,
+      release: TICK_DURATION_S,
+      peak: TICK_PEAK_GAIN,
+      tail: 0,
+    });
   }, []);
 
   const stop = useCallback(() => {
