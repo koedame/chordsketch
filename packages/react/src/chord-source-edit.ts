@@ -853,6 +853,285 @@ export function applyChordEdit(source: string, evt: ChordEditEvent): ChordReposi
   return { text: lines.join('\n'), caretOffset };
 }
 
+/**
+ * Split a raw ChordPro chord name (as it appears between the brackets in
+ * source, e.g. `"Bbm7/F"`) into the editor parts {@link ChordParts}
+ * carries: root letter, accidental, quality+extension suffix, and an
+ * optional slash bass.
+ *
+ * The split is the inverse of {@link buildChordName}, so
+ * `root + accidental + suffix (+ "/" + bass)` round-trips back to the
+ * original name. It operates on the RAW source name — never on a
+ * transposed `chord.detail` / `chord.display` — so editing stays
+ * transpose-safe (a non-zero effective transpose rewrites the rendered
+ * spelling but the source token is unchanged).
+ *
+ * Rootless or non-standard names (e.g. `N.C.`) yield an empty `root`,
+ * which {@link buildChordName} rejects — so a stray edit on such a token
+ * is dropped rather than corrupting it by defaulting the root to `C`.
+ * The chord stays selectable (badge / move / delete), just not
+ * root/type-editable until the user sets a root.
+ */
+export function partsFromRawName(
+  name: string,
+): { root: string; accidental: '' | '#' | 'b'; suffix: string; bass: string } {
+  const slash = name.indexOf('/');
+  const head = slash >= 0 ? name.slice(0, slash) : name;
+  const bass = slash >= 0 ? name.slice(slash + 1) : '';
+  const hasRoot = /^[A-G]/.test(head);
+  const root = hasRoot ? head[0] : '';
+  let rest = hasRoot ? head.slice(1) : head;
+  let accidental: '' | '#' | 'b' = '';
+  if (rest[0] === '#') {
+    accidental = '#';
+    rest = rest.slice(1);
+  } else if (rest[0] === 'b') {
+    accidental = 'b';
+    rest = rest.slice(1);
+  }
+  return { root, accidental, suffix: rest, bass };
+}
+
+/**
+ * A `[chord]` token resolved out of the raw source by the editor caret —
+ * everything the shell-level chord editor needs to (a) drive a
+ * selection (`line` / `offset` / `ordinal`) and (b) feed the in-place
+ * edit / nudge / delete helpers ({@link applyChordEdit},
+ * {@link buildChordNudge}, {@link applyChordDelete}). Mirrors the
+ * coordinate set those helpers consume so the caret path and the
+ * preview-click path resolve to the same shape.
+ */
+export interface CaretChordMatch {
+  /** 1-indexed source line the chord lives on. */
+  line: number;
+  /** 0-indexed source column of the chord's `[` opening bracket. */
+  sourceColumn: number;
+  /** Source-column span of `[chord]` including both brackets
+   * (= `chordName.length + 2`). */
+  bracketLength: number;
+  /** Raw chord name without brackets, e.g. `"Bbm7"`. */
+  chordName: string;
+  /** Editable parts split from {@link chordName} via
+   * {@link partsFromRawName}. */
+  parts: { root: string; accidental: '' | '#' | 'b'; suffix: string; bass: string };
+  /** The chord's 0-indexed lyrics offset (lyric characters before its
+   * `[`), i.e. the selection's `offset`. */
+  offset: number;
+  /** Index of this chord among the chords on the line that share
+   * `offset`, left to right — the selection's `ordinal`, disambiguating
+   * stacked chords like `[A][B]word`. */
+  ordinal: number;
+  /** Lyrics offsets of every OTHER chord on the line (the matched chord
+   * excluded), in source order — feeds {@link buildChordNudge}'s
+   * destination-ordinal math. */
+  otherOffsets: number[];
+  /** Total visible lyric characters on the line. */
+  totalLyrics: number;
+}
+
+/** One `[chord]` token found while scanning a raw source line. */
+interface LineChordToken {
+  colStart: number;
+  colClose: number;
+  name: string;
+  lyricsOffset: number;
+}
+
+/**
+ * Scan a single raw source line left to right, returning every
+ * `[chord]` token with its column span, body, and zero-width lyrics
+ * offset (lyric characters before its `[`). Chord brackets do not count
+ * toward the lyrics offset — consistent with the convention used
+ * throughout this module. An unterminated `[` ends the scan (the
+ * remainder is treated as lyrics), so the function is total for
+ * malformed input.
+ */
+function scanLineChords(line: string): { tokens: LineChordToken[]; totalLyrics: number } {
+  const tokens: LineChordToken[] = [];
+  let lyricsCount = 0;
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === '[') {
+      const close = line.indexOf(']', i);
+      if (close === -1) {
+        // Unterminated bracket — treat the rest as lyrics.
+        lyricsCount += line.length - i;
+        return { tokens, totalLyrics: lyricsCount };
+      }
+      tokens.push({
+        colStart: i,
+        colClose: close,
+        name: line.slice(i + 1, close),
+        lyricsOffset: lyricsCount,
+      });
+      i = close + 1;
+      continue;
+    }
+    lyricsCount++;
+    i++;
+  }
+  return { tokens, totalLyrics: lyricsCount };
+}
+
+/**
+ * Resolve the `[chord]` token under the editor caret into the
+ * coordinates + parts the shell-level chord editor needs.
+ *
+ * `caretOffset` is the absolute 0-indexed character offset of the caret
+ * into `source` (clamped into range). The caret is "on" a chord exactly
+ * when it sits within that chord's bracket span `[colStart, colClose]` —
+ * anywhere from the `[` to the `]` inclusive. A caret immediately after
+ * the `]` is in the lyrics, not on the chord (so building + inserting a
+ * new chord at the lyric start stays reachable). Adjacent stacked chords
+ * (`[A][B]`) are unambiguous: the `][` boundary column equals the
+ * right-hand chord's `[`, so it selects the right-hand chord.
+ *
+ * Returns `null` when the caret is not on any chord (e.g. it is in the
+ * lyrics, on a directive line, or the line has no chords) — the shell
+ * treats that as "no selection" and shows the idle editor.
+ */
+export function findChordAtCaret(source: string, caretOffset: number): CaretChordMatch | null {
+  const clamped = Math.max(0, Math.min(caretOffset, source.length));
+  const lines = source.split('\n');
+  // Locate (lineIdx, column) for the absolute offset. Each line consumes
+  // `length + 1` characters (the trailing `\n`); a caret exactly on a
+  // newline is attributed to the end of the line it terminates.
+  let lineIdx = 0;
+  let consumed = 0;
+  while (lineIdx < lines.length) {
+    const lineLen = lines[lineIdx].length;
+    if (clamped <= consumed + lineLen) break;
+    consumed += lineLen + 1;
+    lineIdx++;
+  }
+  if (lineIdx >= lines.length) return null;
+  const lineText = lines[lineIdx];
+  const column = clamped - consumed;
+
+  const { tokens, totalLyrics } = scanLineChords(lineText);
+  if (tokens.length === 0) return null;
+
+  // Caret within a bracket span `[colStart, colClose]` (inclusive of
+  // both brackets). A caret after the `]` falls through to the lyrics
+  // (null) so inserting a new chord there stays reachable.
+  const matchIdx = tokens.findIndex((t) => column >= t.colStart && column <= t.colClose);
+  if (matchIdx < 0) return null;
+
+  const target = tokens[matchIdx];
+  const ordinal = tokens
+    .slice(0, matchIdx)
+    .reduce((n, t) => (t.lyricsOffset === target.lyricsOffset ? n + 1 : n), 0);
+  const otherOffsets = tokens.filter((_, i) => i !== matchIdx).map((t) => t.lyricsOffset);
+
+  return {
+    line: lineIdx + 1,
+    sourceColumn: target.colStart,
+    bracketLength: target.colClose - target.colStart + 1,
+    chordName: target.name,
+    parts: partsFromRawName(target.name),
+    offset: target.lyricsOffset,
+    ordinal,
+    otherOffsets,
+    totalLyrics,
+  };
+}
+
+/**
+ * Resolve a chord selection — `(line, offset, ordinal)` as the JSX
+ * walker / `findChordAtCaret` produce it — back to the absolute
+ * 0-indexed source offset of that chord's `[` opening bracket.
+ *
+ * Used by the shell-level editor to move the editor caret onto a chord
+ * the user clicked in the preview, so the single caret-driven selection
+ * path then re-resolves it. Returns `null` when the selection no longer
+ * maps to a chord (e.g. the source changed out from under a stale
+ * click). Scans the raw source line (not the post-lex AST layout), so
+ * the offset points at the real bracket column.
+ */
+export function chordSelectionCaretOffset(
+  source: string,
+  selection: { line: number; offset: number; ordinal: number },
+): number | null {
+  const lines = source.split('\n');
+  const lineIdx = selection.line - 1;
+  if (lineIdx < 0 || lineIdx >= lines.length) return null;
+  const { tokens } = scanLineChords(lines[lineIdx]);
+  const atOffset = tokens.filter((t) => t.lyricsOffset === selection.offset);
+  const target = atOffset[selection.ordinal];
+  if (!target) return null;
+  let base = 0;
+  for (let i = 0; i < lineIdx; i++) base += lines[i].length + 1;
+  return base + target.colStart;
+}
+
+/** Describes inserting a brand-new `[chord]` token at the caret. */
+export interface ChordInsertEvent {
+  /** 1-indexed source line to insert on. */
+  line: number;
+  /** 0-indexed source column to insert the `[chord]` bracket at
+   * (typically the editor caret column). Clamped into
+   * `[0, lineLength]`. If it lands strictly inside an existing
+   * `[...]` token, the insertion snaps to just after that token's `]`
+   * so a fresh chord can never split an existing bracket. */
+  column: number;
+  /** Chord body without brackets, e.g. `"Am7"`. Build it with
+   * {@link buildChordName}. */
+  chord: string;
+}
+
+/**
+ * Insert a new `[chord]` token into the source at `(line, column)`,
+ * returning the updated source plus a caret offset pointing just past
+ * the inserted bracket (so the editor caret lands at the natural "I just
+ * inserted here" position).
+ *
+ * Unlike {@link applyChordReposition}, this neither removes an existing
+ * bracket nor re-derives the column from a lyrics offset — it splices a
+ * literal `[chord]` at the caret column, snapping out of any bracket the
+ * caret happens to sit inside (see {@link ChordInsertEvent.column}).
+ *
+ * Throws if `line` is out of range or `evt.chord` is empty / contains a
+ * structurally dangerous character (same guard as
+ * {@link applyChordReposition}).
+ */
+export function applyChordInsert(source: string, evt: ChordInsertEvent): ChordRepositionResult {
+  if (typeof evt.chord !== 'string' || evt.chord.length === 0) {
+    throw new Error('chord must be a non-empty string');
+  }
+  if (CHORD_FORBIDDEN_RE.test(evt.chord)) {
+    throw new Error(
+      `chord ${JSON.stringify(evt.chord)} contains forbidden character ` +
+        '(brackets, braces, angle bracket, newline / carriage return)',
+    );
+  }
+  const lines = source.split('\n');
+  const lineIdx = evt.line - 1;
+  if (lineIdx < 0 || lineIdx >= lines.length) {
+    throw new Error(`line ${evt.line} out of range (lines: ${lines.length})`);
+  }
+  const lineText = lines[lineIdx];
+  let column = Math.max(0, Math.min(evt.column, lineText.length));
+  // Snap out of any `[...]` the caret sits strictly inside, so a new
+  // chord is never spliced into the middle of an existing token.
+  const { tokens } = scanLineChords(lineText);
+  for (const t of tokens) {
+    if (column > t.colStart && column <= t.colClose) {
+      column = t.colClose + 1;
+      break;
+    }
+  }
+  const insertBracket = `[${evt.chord}]`;
+  lines[lineIdx] = lineText.slice(0, column) + insertBracket + lineText.slice(column);
+
+  let caretOffset = 0;
+  for (let i = 0; i < lineIdx; i++) {
+    caretOffset += lines[i].length + 1; // +1 for the `\n`
+  }
+  caretOffset += column + insertBracket.length;
+
+  return { text: lines.join('\n'), caretOffset };
+}
+
 /** Identifies a chord token to delete, in source coordinates. */
 export interface ChordDeleteTarget {
   /** 1-indexed source line. */

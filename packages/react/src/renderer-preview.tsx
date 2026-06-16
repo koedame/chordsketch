@@ -1,6 +1,7 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 
 import { ChordSheet } from './chord-sheet';
+import type { ChordSelection } from './chordpro-jsx';
 import { PdfExport } from './pdf-export';
 import type {
   ChordDeleteTarget,
@@ -84,6 +85,16 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
    */
   onChordDelete?: (target: ChordDeleteTarget) => void;
   /**
+   * Controlled chord-selection (#2644). Forwarded to {@link ChordSheet};
+   * see `ChordSheetProps.chordSelection` / `onChordSelectionChange`.
+   * Supply `onChordSelectionChange` to put the sheet in
+   * controlled-selection mode (shell owns the selection + renders a
+   * lifted footer). Only consumed by `format="html"`.
+   */
+  chordSelection?: ChordSelection | null;
+  /** Setter paired with {@link chordSelection}; see its docs. */
+  onChordSelectionChange?: (selection: ChordSelection | null) => void;
+  /**
    * Optional content rendered while the wasm runtime is initialising.
    *
    * Only honoured by the inline `html` / `text` branches — the
@@ -149,6 +160,8 @@ export function RendererPreview({
   onChordReposition,
   onChordEdit,
   onChordDelete,
+  chordSelection,
+  onChordSelectionChange,
   loadingFallback,
   errorFallback,
   wasmLoader,
@@ -189,6 +202,8 @@ export function RendererPreview({
       onChordReposition={onChordReposition}
       onChordEdit={onChordEdit}
       onChordDelete={onChordDelete}
+      chordSelection={chordSelection}
+      onChordSelectionChange={onChordSelectionChange}
       loadingFallback={loadingFallback}
       errorFallback={errorFallback}
       wasmLoader={wasmLoader}

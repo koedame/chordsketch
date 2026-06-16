@@ -1505,39 +1505,36 @@
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #bd1642);
 }
 
-/* ---- Footer chord-editor inspector (#2622) --------------------- */
-/* Non-modal footer panel below the preview (see the rule below for the
-   sibling-of-`__content` structure). Does NOT track the selected chord
-   — it stays put while the user edits root / type / bass and steps the
-   chord left / right. */
-.chordsketch-sheet .chordsketch-sheet__cins {
-  /* Footer panel (#2638): rendered as a sibling AFTER
-     `.chordsketch-sheet__content` (not inside it), so it is a
-     full-width band below the song rather than a centred card floating
-     over it — the pre-#2638 dock read as a modal. `position: sticky;
-     bottom: 0` pins it to the bottom of the preview scrollport so it
-     stays reachable as the song scrolls, while the selected chord is
-     scrolled into view above it. Being a flow sibling, it reserves its
-     own height, so the last song line is always reachable above it. */
-  position: sticky;
-  bottom: 0;
-  z-index: 6;
-  width: 100%;
-  /* Cap height so a long chip list scrolls internally instead of
-     filling the viewport and re-covering the content. */
-  max-height: min(55vh, 30rem);
-  overflow-y: auto;
+/* ---- Chord-editor footer (#2622, #2644) ----------------------- */
+/* The design-system-styled chord editor panel. The component rules are
+   ancestor-agnostic so the SAME markup renders in two contexts:
+     - in-pane: a sibling of `.chordsketch-sheet__content`, docked to the
+       bottom of the preview scrollport (the `.chordsketch-sheet` rule
+       below adds the sticky dock + rise animation);
+     - lifted: a shell-level full-width footer spanning the editor +
+       preview (`.chordsketch-chord-pro-editor__chord-footer`, #2644),
+       which lays the clusters out horizontally. */
+.chordsketch-sheet__cins {
   display: flex;
   flex-direction: column;
   gap: var(--cs-sp-4, 1rem);
   padding: var(--cs-sp-4, 1rem) var(--cs-sp-6, 1.5rem);
   background: var(--cs-surface, #fff);
-  /* Footer divider + upward lift, not an all-round card border/shadow. */
-  border: 0;
-  border-top: 1px solid var(--cs-border-strong, #d4d1d6);
-  border-radius: 0;
-  box-shadow: 0 -8px 24px rgba(10, 10, 11, 0.1);
   font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
+}
+/* In-pane dock specifics (#2638): sticky to the preview scrollport,
+   height-capped so a long panel scrolls internally, with an upward
+   lift + a rise-in animation. The lifted footer (#2644) does NOT get
+   these — it is a flow band below the split, not a dock. */
+.chordsketch-sheet .chordsketch-sheet__cins {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  width: 100%;
+  max-height: min(55vh, 30rem);
+  overflow-y: auto;
+  border-top: 1px solid var(--cs-border-strong, #d4d1d6);
+  box-shadow: 0 -8px 24px rgba(10, 10, 11, 0.1);
   animation: chordsketch-cins-rise var(--cs-dur-2, 200ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1));
 }
 @keyframes chordsketch-cins-rise {
@@ -1547,27 +1544,32 @@
 @media (prefers-reduced-motion: reduce) {
   .chordsketch-sheet .chordsketch-sheet__cins { animation: none; }
 }
-.chordsketch-sheet .chordsketch-sheet__cins-head {
+.chordsketch-sheet__cins-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--cs-sp-2, 0.5rem);
 }
-.chordsketch-sheet .chordsketch-sheet__cins-eyebrow {
+.chordsketch-sheet__cins-eyebrow {
   font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--cs-text-tertiary, #8a8790);
 }
-.chordsketch-sheet .chordsketch-sheet__cins-name {
+.chordsketch-sheet__cins-name {
   font-family: var(--cs-font-chord, "Roboto", system-ui, sans-serif);
   font-weight: 900;
   font-size: 1.75rem;
   line-height: 1.1;
   color: var(--cs-crimson-500, #bd1642);
 }
-.chordsketch-sheet .chordsketch-sheet__cins-close {
+.chordsketch-sheet__cins-note {
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--cs-text-secondary, #67646d);
+}
+.chordsketch-sheet__cins-close {
   width: 28px;
   height: 28px;
   border: 1px solid var(--cs-border, #e8e6ea);
@@ -1578,21 +1580,21 @@
   line-height: 1;
   cursor: pointer;
 }
-.chordsketch-sheet .chordsketch-sheet__cins-close:hover {
+.chordsketch-sheet__cins-close:hover {
   background: var(--cs-surface-hover, #f6f4f7);
 }
-.chordsketch-sheet .chordsketch-sheet__cins-group {
+.chordsketch-sheet__cins-group {
   display: flex;
   flex-direction: column;
   gap: var(--cs-sp-2, 0.5rem);
 }
-.chordsketch-sheet .chordsketch-sheet__cins-label {
+.chordsketch-sheet__cins-label {
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--cs-text-strong, #44424a);
 }
 /* segmented (root / accidental) */
-.chordsketch-sheet .chordsketch-sheet__cins-seg {
+.chordsketch-sheet__cins-seg {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 2px;
@@ -1601,7 +1603,7 @@
   border: 1px solid var(--cs-border, #e8e6ea);
   border-radius: var(--cs-r-2, 4px);
 }
-.chordsketch-sheet .chordsketch-sheet__cins-seg button {
+.chordsketch-sheet__cins-seg button {
   appearance: none;
   border: 0;
   background: transparent;
@@ -1614,26 +1616,22 @@
   color: var(--cs-text-secondary, #67646d);
   cursor: pointer;
 }
-.chordsketch-sheet .chordsketch-sheet__cins-seg button[aria-pressed='true'] {
+.chordsketch-sheet__cins-seg button[aria-pressed='true'] {
   background: var(--cs-surface, #fff);
   color: var(--cs-crimson-600, #a30f37);
   box-shadow: var(--cs-e-1, 0 1px 2px rgba(10, 10, 11, 0.04));
 }
 /* type chips */
-.chordsketch-sheet .chordsketch-sheet__cins-chips {
+.chordsketch-sheet__cins-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  /* The expanded jazz preset set (#2630) is long; cap the chip area to
-     a few rows and scroll within it so the docked sheet stays compact
-     and Root / inputs / move / footer remain visible without scrolling
-     the whole panel. */
-  max-height: 8.5rem;
-  overflow-y: auto;
-  /* Room for the scrollbar so the rightmost chips aren't clipped. */
-  padding-right: 2px;
+  /* The full preset set wraps to as many rows as it needs — no
+     scroll-to-see-them cap (#2644). The in-pane dock scrolls the whole
+     panel internally (max-height on `.chordsketch-sheet__cins`) when it
+     runs long; the lifted footer simply grows to fit. */
 }
-.chordsketch-sheet .chordsketch-sheet__cins-chip {
+.chordsketch-sheet__cins-chip {
   appearance: none;
   border: 1px solid var(--cs-border-strong, #d4d1d6);
   background: var(--cs-surface, #fff);
@@ -1645,26 +1643,26 @@
   color: var(--cs-text-strong, #44424a);
   cursor: pointer;
 }
-.chordsketch-sheet .chordsketch-sheet__cins-chip:hover {
+.chordsketch-sheet__cins-chip:hover {
   background: var(--cs-surface-hover, #f6f4f7);
 }
-.chordsketch-sheet .chordsketch-sheet__cins-chip[aria-pressed='true'] {
+.chordsketch-sheet__cins-chip[aria-pressed='true'] {
   background: var(--cs-crimson-500, #bd1642);
   border-color: var(--cs-crimson-500, #bd1642);
   color: var(--cs-fg-on-crimson, #fff);
 }
 /* inputs */
-.chordsketch-sheet .chordsketch-sheet__cins-row2 {
+.chordsketch-sheet__cins-row2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--cs-sp-2, 0.5rem);
 }
-.chordsketch-sheet .chordsketch-sheet__cins-field {
+.chordsketch-sheet__cins-field {
   display: flex;
   flex-direction: column;
   gap: var(--cs-sp-1, 0.25rem);
 }
-.chordsketch-sheet .chordsketch-sheet__cins-input {
+.chordsketch-sheet__cins-input {
   width: 100%;
   height: 32px;
   border: 1px solid var(--cs-border-strong, #d4d1d6);
@@ -1675,11 +1673,11 @@
   font-size: 0.875rem;
   color: var(--cs-text-primary, #0a0a0b);
 }
-.chordsketch-sheet .chordsketch-sheet__cins-input:focus-visible {
+.chordsketch-sheet__cins-input:focus-visible {
   outline: none;
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #bd1642);
 }
-.chordsketch-sheet .chordsketch-sheet__cins-divider {
+.chordsketch-sheet__cins-divider {
   height: 1px;
   background: var(--cs-border, #e8e6ea);
   /* Full-bleed: must match the panel's horizontal padding (--cs-sp-6)
@@ -1687,12 +1685,12 @@
   margin: 0 calc(var(--cs-sp-6, 1.5rem) * -1);
 }
 /* move row (relocated nudge) */
-.chordsketch-sheet .chordsketch-sheet__cins-move {
+.chordsketch-sheet__cins-move {
   display: flex;
   align-items: center;
   gap: var(--cs-sp-2, 0.5rem);
 }
-.chordsketch-sheet .chordsketch-sheet__cins-movebtn {
+.chordsketch-sheet__cins-movebtn {
   flex: 1;
   height: 34px;
   border: 1px solid var(--cs-border-strong, #d4d1d6);
@@ -1702,26 +1700,26 @@
   color: var(--cs-text-strong, #44424a);
   cursor: pointer;
 }
-.chordsketch-sheet .chordsketch-sheet__cins-movebtn:hover:not(:disabled) {
+.chordsketch-sheet__cins-movebtn:hover:not(:disabled) {
   background: var(--cs-surface-hover, #f6f4f7);
 }
-.chordsketch-sheet .chordsketch-sheet__cins-movebtn:disabled {
+.chordsketch-sheet__cins-movebtn:disabled {
   opacity: 0.35;
   cursor: default;
 }
-.chordsketch-sheet .chordsketch-sheet__cins-movelbl {
+.chordsketch-sheet__cins-movelbl {
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--cs-text-secondary, #67646d);
   white-space: nowrap;
 }
 /* footer */
-.chordsketch-sheet .chordsketch-sheet__cins-footer {
+.chordsketch-sheet__cins-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-.chordsketch-sheet .chordsketch-sheet__cins-remove {
+.chordsketch-sheet__cins-remove {
   appearance: none;
   border: 1px solid transparent;
   background: transparent;
@@ -1733,28 +1731,87 @@
   color: var(--cs-crimson-600, #a30f37);
   cursor: pointer;
 }
-.chordsketch-sheet .chordsketch-sheet__cins-remove:hover {
+.chordsketch-sheet__cins-remove:hover {
   background: var(--cs-crimson-50, #fdf2f5);
 }
-.chordsketch-sheet .chordsketch-sheet__cins-done {
+/* Insert action — the primary, crimson-filled button (#2644). */
+.chordsketch-sheet__cins-insert {
   appearance: none;
-  border: 1px solid var(--cs-border-strong, #d4d1d6);
-  background: var(--cs-surface, #fff);
+  border: 1px solid var(--cs-crimson-500, #bd1642);
+  background: var(--cs-crimson-500, #bd1642);
   border-radius: var(--cs-r-2, 4px);
-  padding: var(--cs-sp-2, 0.5rem) var(--cs-sp-3, 0.75rem);
+  padding: var(--cs-sp-2, 0.5rem) var(--cs-sp-4, 1rem);
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--cs-text-strong, #44424a);
+  color: var(--cs-fg-on-crimson, #fff);
   cursor: pointer;
 }
-.chordsketch-sheet .chordsketch-sheet__cins-done:hover {
-  background: var(--cs-surface-hover, #f6f4f7);
+.chordsketch-sheet__cins-insert:hover {
+  background: var(--cs-crimson-600, #a30f37);
+  border-color: var(--cs-crimson-600, #a30f37);
 }
-.chordsketch-sheet .chordsketch-sheet__cins :focus-visible {
+.chordsketch-sheet__cins :focus-visible {
   outline: none;
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #bd1642);
   border-radius: var(--cs-r-2, 4px);
+}
+
+/* ---- Lifted chord-editor footer (#2644) ----------------------- */
+/* The shell-level full-width band below the editor + preview split.
+   Carries the divider + upward lift the in-pane dock used to own, and
+   re-flows the inspector clusters horizontally (the in-pane dock stacks
+   them vertically in the narrow preview pane). */
+.chordsketch-chord-pro-editor__chord-footer {
+  flex: none;
+  border-top: 1px solid var(--cs-border-strong, #d4d1d6);
+  background: var(--cs-surface, #fff);
+  box-shadow: 0 -8px 24px rgba(10, 10, 11, 0.05);
+}
+.chordsketch-chord-pro-editor__chord-footer .chordsketch-sheet__cins {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--cs-sp-3, 0.75rem) var(--cs-sp-5, 1.25rem);
+  /* Reserve a stable minimum so the footer does not jump in height
+     between its idle and selected states. */
+  min-height: 84px;
+}
+/* Identity block: a left-hand column, not a full-width header row. */
+.chordsketch-chord-pro-editor__chord-footer .chordsketch-sheet__cins-head {
+  flex-direction: column;
+  align-self: stretch;
+  justify-content: center;
+  gap: 2px;
+  padding-right: var(--cs-sp-4, 1rem);
+  border-right: 1px solid var(--cs-border, #e8e6ea);
+}
+/* Type cluster grows and wraps its chips inline; never scrolls. */
+.chordsketch-chord-pro-editor__chord-footer .chordsketch-sheet__cins-group--type {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+/* The full-bleed divider only makes sense in the vertical stack. */
+.chordsketch-chord-pro-editor__chord-footer .chordsketch-sheet__cins-divider {
+  display: none;
+}
+/* Quality / bass inputs sit inline rather than as a 2-column grid. */
+.chordsketch-chord-pro-editor__chord-footer .chordsketch-sheet__cins-row2 {
+  display: flex;
+  gap: var(--cs-sp-2, 0.5rem);
+}
+.chordsketch-chord-pro-editor__chord-footer .chordsketch-sheet__cins-input {
+  width: 5.5rem;
+}
+/* Actions hug the right edge of the row. */
+.chordsketch-chord-pro-editor__chord-footer .chordsketch-sheet__cins-footer {
+  margin-left: auto;
+  gap: var(--cs-sp-2, 0.5rem);
+}
+/* Hide the empty placeholder span the footer renders when there is no
+   Remove button (idle), so it does not add a gap before Insert. */
+.chordsketch-chord-pro-editor__chord-footer .chordsketch-sheet__cins-footer > span:empty {
+  display: none;
 }
 
 /* Per-character span inside a `.lyrics` row. Plain wrapper so

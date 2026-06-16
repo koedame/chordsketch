@@ -1,6 +1,12 @@
 import type { ChangeEvent, HTMLAttributes, ReactNode } from 'react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
+import type { ChordSelection } from './chordpro-jsx';
+import type {
+  ChordDeleteTarget,
+  ChordEditEvent,
+  ChordRepositionEvent,
+} from './chord-source-edit';
 import { PreviewToolbar } from './preview-toolbar';
 import { RendererPreview, type PreviewFormat } from './renderer-preview';
 import { Transpose } from './transpose';
@@ -95,6 +101,22 @@ export interface ChordProPreviewProps
   /** Forwarded to the underlying {@link RendererPreview}. */
   chordDiagramsInstrument?: ChordDiagramInstrument;
   /**
+   * Editor↔preview caret sync + chord-editing passthrough (#2644),
+   * forwarded verbatim to the underlying {@link RendererPreview} →
+   * {@link ChordSheet}. A shell (e.g. {@link ChordProEditor}) wires
+   * these to drive the lifted chord-editor footer from the editor
+   * caret. See `ChordSheetProps` for the per-prop semantics. All only
+   * consumed by `format="html"`.
+   */
+  activeSourceLine?: number;
+  caretColumn?: number;
+  caretLineLength?: number;
+  onChordReposition?: (event: ChordRepositionEvent) => void;
+  onChordEdit?: (event: ChordEditEvent) => void;
+  onChordDelete?: (target: ChordDeleteTarget) => void;
+  chordSelection?: ChordSelection | null;
+  onChordSelectionChange?: (selection: ChordSelection | null) => void;
+  /**
    * Test-only WASM loader override for the inline (`html` / `text`)
    * formats. Production callers never need to supply this.
    *
@@ -148,6 +170,14 @@ export function ChordProPreview({
   toolbar = 'transpose-only',
   onSourceChange,
   pdfExportFilename,
+  activeSourceLine,
+  caretColumn,
+  caretLineLength,
+  onChordReposition,
+  onChordEdit,
+  onChordDelete,
+  chordSelection,
+  onChordSelectionChange,
   wasmLoader,
   className,
   ...divProps
@@ -347,6 +377,14 @@ export function ChordProPreview({
           loadingFallback={loadingFallback}
           errorFallback={errorFallback}
           chordDiagramsInstrument={chordDiagramsInstrument}
+          activeSourceLine={activeSourceLine}
+          caretColumn={caretColumn}
+          caretLineLength={caretLineLength}
+          onChordReposition={onChordReposition}
+          onChordEdit={onChordEdit}
+          onChordDelete={onChordDelete}
+          chordSelection={chordSelection}
+          onChordSelectionChange={onChordSelectionChange}
           wasmLoader={wasmLoader}
         />
       </div>

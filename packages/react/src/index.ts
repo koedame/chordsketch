@@ -144,21 +144,27 @@ export {
   TRANSPOSE_MIN,
   applyChordDelete,
   applyChordEdit,
+  applyChordInsert,
   applyChordReposition,
   buildChordName,
   buildChordNudge,
   capoTransposeOffset,
   chordLayoutForLine,
+  chordSelectionCaretOffset,
   chordSourceEditableUnderTranspose,
   chordSuffixFromQuality,
+  findChordAtCaret,
   findChordByOffsetOrdinal,
   lyricsOffsetToSourceColumn,
   nudgeChordPosition,
+  partsFromRawName,
   readCapo,
   setCapoInSource,
   sourceColumnToLyricsOffset,
+  type CaretChordMatch,
   type ChordDeleteTarget,
   type ChordEditEvent,
+  type ChordInsertEvent,
   type ChordNudgeResult,
   type ChordParts,
   type ChordQualityName,
@@ -169,11 +175,18 @@ export {
   type SegmentLayout,
 } from './chord-source-edit';
 
-// Chord-editor inspector (#2622). The floating, design-system-styled
-// panel `<ChordSheet>` opens when a chord is selected and `onChordEdit`
-// is wired. Exposed so hosts that render the AST directly can mount it
-// themselves.
+// Chord-editor footer (#2622, #2644). The design-system-styled panel
+// that edits the chord under the caret / selection — rendered in-pane by
+// `<ChordSheet>` (uncontrolled) or lifted to a shell-level full-width
+// footer (controlled) by `<ChordProEditor>` / the playground via
+// `useChordEditor`. Exposed so hosts that render the AST directly can
+// mount it themselves.
 export { ChordInspector, type ChordInspectorProps } from './chord-inspector';
+export {
+  useChordEditor,
+  type UseChordEditor,
+  type UseChordEditorParams,
+} from './use-chord-editor';
 
 // iReal Pro surface (#2473 / #2505 / #2527 / ADR-0020). Mirrors the
 // ChordPro surface in shape: Tier 1 atom (`<IrealBarGrid>`) +
