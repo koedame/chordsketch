@@ -121,4 +121,68 @@ describe('<ChordInspector>', () => {
     const { container } = setup({ onRemove: undefined });
     expect(container.querySelector('.chordsketch-sheet__cins-remove')).toBeNull();
   });
+
+  test('there is no longer a "Done" button (#2644)', () => {
+    const { queryByText } = setup();
+    expect(queryByText('Done')).toBeNull();
+  });
+
+  test('idle mode (selected=false): "New chord" header, move/remove disabled', () => {
+    const { container, getByText } = setup({
+      selected: false,
+      onRemove: undefined,
+      onClose: undefined,
+    });
+    const cins = container.querySelector('.chordsketch-sheet__cins') as HTMLElement;
+    expect(cins.getAttribute('data-mode')).toBe('idle');
+    expect(getByText('New chord')).toBeTruthy();
+    // Move buttons are disabled regardless of canLeft/canRight in idle.
+    const left = container.querySelector('button[aria-label="Move chord left"]') as HTMLButtonElement;
+    const right = container.querySelector(
+      'button[aria-label="Move chord right"]',
+    ) as HTMLButtonElement;
+    expect(left.disabled).toBe(true);
+    expect(right.disabled).toBe(true);
+    // No Remove in idle (nothing selected to remove).
+    expect(container.querySelector('.chordsketch-sheet__cins-remove')).toBeNull();
+  });
+
+  test('Insert button fires onInsert; absent when onInsert is omitted', () => {
+    const onInsert = vi.fn();
+    const { container, rerender } = setup({ onInsert });
+    const insert = container.querySelector('.chordsketch-sheet__cins-insert') as HTMLButtonElement;
+    expect(insert).not.toBeNull();
+    fireEvent.click(insert);
+    expect(onInsert).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <ChordInspector
+        chordName="Am7"
+        root="A"
+        accidental=""
+        suffix="m7"
+        bass=""
+        canLeft
+        canRight
+        onChange={vi.fn()}
+        onNudge={vi.fn()}
+      />,
+    );
+    expect(container.querySelector('.chordsketch-sheet__cins-insert')).toBeNull();
+  });
+
+  test('note is rendered when provided (e.g. transpose-gated state)', () => {
+    const { getByText } = setup({ note: 'Clear transpose / capo to edit chords.' });
+    expect(getByText('Clear transpose / capo to edit chords.')).toBeTruthy();
+  });
+
+  test('without onClose there is no close button and Escape is a no-op', () => {
+    const onClose = vi.fn();
+    const { container } = setup({ onClose: undefined });
+    expect(container.querySelector('.chordsketch-sheet__cins-close')).toBeNull();
+    fireEvent.keyDown(container.querySelector('.chordsketch-sheet__cins') as HTMLElement, {
+      key: 'Escape',
+    });
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
