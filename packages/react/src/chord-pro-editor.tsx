@@ -1,10 +1,12 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { ChordInspector } from './chord-inspector';
 import { ChordProPreview } from './chord-pro-preview';
-import { ChordSourceArea } from './chord-source-area';
+import { ChordSourceArea, type ChordSourceAreaHandle } from './chord-source-area';
 import type { PreviewFormat } from './renderer-preview';
 import { SplitLayout } from './split-layout';
+import { useChordEditor } from './use-chord-editor';
 import type { ChordWasmLoader } from './use-chord-render';
 
 // Minimal `process.env.NODE_ENV` typing so we do not pull in
@@ -133,13 +135,37 @@ export function ChordProEditor({
     [isSourceControlled, onSourceChange],
   );
 
+  // Transpose — controlled vs uncontrolled, tracked here (not only in
+  // `<ChordProPreview>`) so the chord-editor gate below sees the current
+  // offset. We pass the resolved value down as a controlled prop.
+  const [internalTranspose, setInternalTranspose] = useState(defaultTranspose);
+  const isTransposeControlled = transposeProp !== undefined;
+  const transpose = isTransposeControlled ? transposeProp : internalTranspose;
+  const handleTransposeChange = useCallback(
+    (next: number) => {
+      if (!isTransposeControlled) setInternalTranspose(next);
+      onTransposeChange?.(next);
+    },
+    [isTransposeControlled, onTransposeChange],
+  );
+
+  // Caret-driven chord-editor footer (#2644). The hook resolves the
+  // chord under the editor caret, drives the preview's selection badge,
+  // and applies edit / insert / move / delete to the source.
+  const editorRef = useRef<ChordSourceAreaHandle | null>(null);
+  const chordEditor = useChordEditor({
+    source,
+    onSourceChange: handleSourceChange,
+    transpose,
+    editorRef,
+  });
+
   // L4: dev-only controlled/uncontrolled flip warnings for source,
   // format, and transpose. `<ChordProPreview>` already warns for its
   // own `format` / `transpose` axes, but the warnings there mention
   // `<ChordProPreview>` — adding the editor-scoped checks keeps the
   // diagnostic pointing at the surface the caller actually touched.
   const isFormatControlled = formatProp !== undefined;
-  const isTransposeControlled = transposeProp !== undefined;
   const wasSourceControlledRef = useRef(isSourceControlled);
   const wasFormatControlledRef = useRef(isFormatControlled);
   const wasTransposeControlledRef = useRef(isTransposeControlled);
@@ -223,8 +249,10 @@ export function ChordProEditor({
         className="chordsketch-chord-pro-editor__split"
         start={
           <ChordSourceArea
+            ref={editorRef}
             value={source}
             onChange={handleSourceChange}
+            onCaretChange={chordEditor.onCaretChange}
             placeholder="Paste your ChordPro here…"
           />
         }
@@ -235,14 +263,21 @@ export function ChordProEditor({
             format={formatProp}
             defaultFormat={defaultFormat}
             onFormatChange={onFormatChange}
-            transpose={transposeProp}
-            defaultTranspose={defaultTranspose}
-            onTransposeChange={onTransposeChange}
+            transpose={transpose}
+            onTransposeChange={handleTransposeChange}
             pdfFilename={pdfFilename}
+            chordSelection={chordEditor.chordSelection}
+            onChordSelectionChange={chordEditor.onChordSelectionChange}
+            onChordReposition={chordEditor.onChordReposition}
             wasmLoader={wasmLoader}
           />
         }
       />
+
+      {/* Full-width chord-editor footer spanning both panes (#2644). */}
+      <div className="chordsketch-chord-pro-editor__chord-footer">
+        <ChordInspector {...chordEditor.inspectorProps} />
+      </div>
     </div>
   );
 }

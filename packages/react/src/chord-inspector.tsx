@@ -95,6 +95,10 @@ export interface ChordInspectorProps {
    * the caret-driven shell has no separate "deselect" (the user moves
    * the caret off the chord), so it does not pass this. */
   onClose?: () => void;
+  /** Optional hint shown in the header, e.g. when source-coordinate
+   * editing is gated by an active transpose / capo so the controls are
+   * inert. */
+  note?: string;
 }
 
 /**
@@ -147,6 +151,9 @@ export function ChordInspector(props: ChordInspectorProps): JSX.Element {
         <div>
           <div className="chordsketch-sheet__cins-eyebrow">{eyebrow}</div>
           <div className="chordsketch-sheet__cins-name">{titleName || '—'}</div>
+          {props.note ? (
+            <div className="chordsketch-sheet__cins-note">{props.note}</div>
+          ) : null}
         </div>
         {props.onClose ? (
           <button
