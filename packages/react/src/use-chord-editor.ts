@@ -2,8 +2,9 @@
 //
 // Drives the full-width chord-editor footer that spans the editor +
 // preview from the EDITOR CARET, so the chord under the caret is
-// selected automatically and a new chord can be built and inserted at
-// the caret. The two surfaces that own a ChordPro source editor —
+// selected automatically and edited in place (the footer is edit-only;
+// inserting a new chord is handled by a separate surface). The two
+// surfaces that own a ChordPro source editor —
 // `<ChordProEditor>` (Tier 3) and the playground — both consume this
 // hook so the coordination logic lives in one place rather than being
 // re-derived per host (see `.claude/rules/playground-is-a-sample.md`).

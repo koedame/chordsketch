@@ -1,25 +1,26 @@
 // Chord-editor footer for the ChordPro surface (#2622, #2630, #2638,
-// #2644).
+// #2644, #2648).
 //
-// A non-modal panel that edits the chord under the caret / selection. It
-// began as a top-left overlay (#2630 moved it to a bottom sheet; #2638
+// A non-modal, edit-only panel for the chord under the caret / selection.
+// It began as a top-left overlay (#2630 moved it to a bottom sheet; #2638
 // made it a full-width footer below the song). #2644 lifted it to a
 // shell-level bar spanning the editor + preview, driven by the editor
-// caret, and gave it two states:
+// caret. It has two states:
 //
 //   - SELECTED ("Editing chord"): the caret sits on a `[chord]` (or a
 //     rendered chord was clicked). Root / accidental / type / suffix /
 //     bass changes rewrite that chord in place; ◀ / ▶ move it one lyric
 //     character; "Remove chord" deletes it.
-//   - IDLE ("New chord"): the caret is in the lyrics. The same controls
-//     build a draft chord; "Insert chord" places it at the caret. Move /
-//     remove are disabled (there is no chord to move or remove).
+//   - IDLE ("No chord selected"): the caret is in the lyrics. The footer
+//     shows only a hint — it is edit-only, so it offers no controls when
+//     nothing is selected (#2648). Inserting a new chord is handled by a
+//     separate surface.
 //
 // It is purely presentational — the parent owns the chord parts and the
 // source mutation (via `chord-source-edit`'s `buildChordName` /
-// `applyChordEdit` / `applyChordInsert` / `applyChordDelete`), so there
-// is no parallel chord state here. It is the ChordPro sibling of the
-// iReal Pro `<IrealBarPopover>` chord-row editor.
+// `applyChordEdit` / `applyChordDelete`), so there is no parallel chord
+// state here. It is the ChordPro sibling of the iReal Pro
+// `<IrealBarPopover>` chord-row editor.
 
 import type { JSX, KeyboardEvent as ReactKeyboardEvent } from 'react';
 
@@ -72,7 +73,8 @@ export interface ChordInspectorProps {
    * empty for no slash. */
   bass: string;
   /** Whether the selected chord can move one lyric character left /
-   * right. Ignored in idle mode (the move buttons are disabled). */
+   * right. Only consulted in the selected state — the idle state renders
+   * no move buttons. */
   canLeft: boolean;
   canRight: boolean;
   /** Fired with the full updated parts on any root / accidental / type /
@@ -91,9 +93,10 @@ export interface ChordInspectorProps {
    * the caret-driven shell has no separate "deselect" (the user moves
    * the caret off the chord), so it does not pass this. */
   onClose?: () => void;
-  /** Optional hint shown in the header, e.g. when source-coordinate
-   * editing is gated by an active transpose / capo so the controls are
-   * inert. */
+  /** Optional hint shown in place of the default idle message, e.g. when
+   * source-coordinate editing is gated by an active transpose / capo.
+   * Only rendered in the idle state (when {@link selected} is false); a
+   * `note` passed alongside `selected: true` is not shown. */
   note?: string;
 }
 
