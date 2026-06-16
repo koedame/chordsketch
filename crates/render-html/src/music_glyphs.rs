@@ -360,13 +360,13 @@ fn write_flat(s: &mut String, cx: f32, cy: f32) {
 /// The pivot point is fixed; the rod sweeps wiper-style.
 ///
 /// A static beat dot sits in the top-left corner *inside* the
-/// existing viewBox (so the icon height is unchanged) and pulses
-/// flash-then-decay once per beat. Its blink shares the same
-/// `--cs-metronome-period` as the swing, and a `-period/2`
-/// `animation-delay` phase-shifts the flash so the dot is at full
-/// brightness when the rod passes through the center (vertical),
-/// not at the extremes. The dot is a sibling of the pendulum
-/// group, so it does NOT swing — only its opacity animates.
+/// existing viewBox (so the icon height is unchanged) and blinks
+/// crisply on/off once per beat (no fade). Its blink shares the
+/// same `--cs-metronome-period` as the swing, and a `-period/2`
+/// `animation-delay` phase-shifts the flash so the dot switches on
+/// when the rod passes through the center (vertical), not at the
+/// extremes. The dot is a sibling of the pendulum group, so it
+/// does NOT swing — only its opacity animates.
 #[must_use]
 pub fn metronome_svg(bpm_raw: &str) -> String {
     let bpm: f32 = bpm_raw.trim().parse::<f32>().unwrap_or(60.0);
