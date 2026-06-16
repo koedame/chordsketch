@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { HTMLAttributes, ReactNode } from 'react';
 
 import { ChordInspector } from './chord-inspector';
-import { renderChordproAst } from './chordpro-jsx';
+import { renderChordproAst, unicodeAccidentals } from './chordpro-jsx';
 import type { ChordSelection } from './chordpro-jsx';
 import type { ChordproChord, ChordproSong } from './chordpro-ast';
 import {
@@ -461,6 +461,11 @@ function ChordSheetAstBranch({
   // chords never become interactive, so the state simply stays null.
   const [chordSelection, setChordSelection] = useState<ChordSelection | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
+  // Per-instance root spanning both the song content and the footer
+  // inspector (which is a sibling of `__content`, not inside it). Used
+  // by the outside-click handler so clicking inside this sheet's
+  // inspector does not count as "outside" and clear the selection.
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   // Clear the selection when the user presses down anywhere that is
   // not a chord / nudge control belonging to THIS sheet. Clicking a
@@ -479,7 +484,10 @@ function ChordSheetAstBranch({
       // selection the instant the user presses on the chord glyph.
       const el =
         node instanceof Element ? node : (node?.parentElement ?? null);
-      const root = contentRef.current;
+      // Scope to THIS sheet's subtree (chords in `__content` + the
+      // sibling inspector footer), so a press on a chord or anywhere in
+      // the inspector keeps the selection; anything else clears it.
+      const root = wrapperRef.current;
       if (
         root != null &&
         el != null &&
@@ -563,7 +571,7 @@ function ChordSheetAstBranch({
   // `transposedKey` plumbed through from `parseChordproWithWarnings*`
   // drives the "Original Key X · Play Key Y" header path.
   return (
-    <div {...divProps} className={wrapperClass} aria-busy={loading || undefined}>
+    <div {...divProps} ref={wrapperRef} className={wrapperClass} aria-busy={loading || undefined}>
       {errorNode}
       <div className="chordsketch-sheet__content" ref={contentRef}>
         {renderChordproAst(ast, {
@@ -582,80 +590,84 @@ function ChordSheetAstBranch({
           chordSelection: repositionCb ? chordSelection : null,
           setChordSelection: repositionCb ? setChordSelection : undefined,
         })}
-        {resolvedChord && editCb ? (
-          <ChordInspector
-            chordName={resolvedChord.chordName}
-            root={resolvedChord.parts.root}
-            accidental={resolvedChord.parts.accidental}
-            suffix={resolvedChord.parts.suffix}
-            bass={resolvedChord.parts.bass}
-            // `[]` for otherOffsets: availability depends only on
-            // the line bounds; otherOffsets is used solely to compute
-            // the destination ordinal (not the null/non-null result),
-            // so an empty list is fine for the can-move check.
-            canLeft={
-              nudgeChordPosition(resolvedChord.currentOffset, [], resolvedChord.totalLyrics, -1) !==
-              null
-            }
-            canRight={
-              nudgeChordPosition(resolvedChord.currentOffset, [], resolvedChord.totalLyrics, 1) !==
-              null
-            }
-            onChange={(parts: ChordParts) => {
-              let chord: string;
-              try {
-                chord = buildChordName(parts);
-              } catch {
-                // Invalid parts (e.g. a rootless chord whose root is
-                // empty — buildChordName throws); ignore rather than
-                // corrupt the source.
-                return;
-              }
-              editCb({
-                line: resolvedChord.sourceLine,
-                fromColumn: resolvedChord.sourceColumn,
-                fromLength: resolvedChord.bracketLength,
-                chord,
-                expected: resolvedChord.chordName,
-              });
-            }}
-            onNudge={(direction) => {
-              const result = buildChordNudge({
-                sourceLine: resolvedChord.sourceLine,
-                chordName: resolvedChord.chordName,
-                sourceColumn: resolvedChord.sourceColumn,
-                bracketLength: resolvedChord.bracketLength,
-                currentOffset: resolvedChord.currentOffset,
-                otherOffsets: resolvedChord.otherOffsets,
-                totalLyrics: resolvedChord.totalLyrics,
-                direction,
-              });
-              if (!result || !repositionCb) return;
-              repositionCb(result.event);
-              setChordSelection((prev) => ({
-                line: resolvedChord.sourceLine,
-                offset: result.offset,
-                ordinal: result.ordinal,
-                nonce: (prev?.nonce ?? 0) + 1,
-              }));
-            }}
-            onRemove={
-              deleteCb
-                ? () => {
-                    deleteCb({
-                      line: resolvedChord.sourceLine,
-                      fromColumn: resolvedChord.sourceColumn,
-                      fromLength: resolvedChord.bracketLength,
-                      expected: resolvedChord.chordName,
-                    });
-                    setChordSelection(null);
-                  }
-                : undefined
-            }
-            onClose={() => setChordSelection(null)}
-          />
-        ) : null}
       </div>
+      {resolvedChord && editCb ? (
+        <ChordInspector
+          chordName={resolvedChord.chordName}
+          // Header shows the chord with Unicode accidentals (B♭, not
+          // Bb) so the editor title matches the rendered chord, while
+          // `chordName` stays raw for the source-edit `expected` guard.
+          displayName={unicodeAccidentals(resolvedChord.chordName)}
+          root={resolvedChord.parts.root}
+          accidental={resolvedChord.parts.accidental}
+          suffix={resolvedChord.parts.suffix}
+          bass={resolvedChord.parts.bass}
+          // `[]` for otherOffsets: availability depends only on
+          // the line bounds; otherOffsets is used solely to compute
+          // the destination ordinal (not the null/non-null result),
+          // so an empty list is fine for the can-move check.
+          canLeft={
+            nudgeChordPosition(resolvedChord.currentOffset, [], resolvedChord.totalLyrics, -1) !==
+            null
+          }
+          canRight={
+            nudgeChordPosition(resolvedChord.currentOffset, [], resolvedChord.totalLyrics, 1) !==
+            null
+          }
+          onChange={(parts: ChordParts) => {
+            let chord: string;
+            try {
+              chord = buildChordName(parts);
+            } catch {
+              // Invalid parts (e.g. a rootless chord whose root is
+              // empty — buildChordName throws); ignore rather than
+              // corrupt the source.
+              return;
+            }
+            editCb({
+              line: resolvedChord.sourceLine,
+              fromColumn: resolvedChord.sourceColumn,
+              fromLength: resolvedChord.bracketLength,
+              chord,
+              expected: resolvedChord.chordName,
+            });
+          }}
+          onNudge={(direction) => {
+            const result = buildChordNudge({
+              sourceLine: resolvedChord.sourceLine,
+              chordName: resolvedChord.chordName,
+              sourceColumn: resolvedChord.sourceColumn,
+              bracketLength: resolvedChord.bracketLength,
+              currentOffset: resolvedChord.currentOffset,
+              otherOffsets: resolvedChord.otherOffsets,
+              totalLyrics: resolvedChord.totalLyrics,
+              direction,
+            });
+            if (!result || !repositionCb) return;
+            repositionCb(result.event);
+            setChordSelection((prev) => ({
+              line: resolvedChord.sourceLine,
+              offset: result.offset,
+              ordinal: result.ordinal,
+              nonce: (prev?.nonce ?? 0) + 1,
+            }));
+          }}
+          onRemove={
+            deleteCb
+              ? () => {
+                  deleteCb({
+                    line: resolvedChord.sourceLine,
+                    fromColumn: resolvedChord.sourceColumn,
+                    fromLength: resolvedChord.bracketLength,
+                    expected: resolvedChord.chordName,
+                  });
+                  setChordSelection(null);
+                }
+              : undefined
+          }
+          onClose={() => setChordSelection(null)}
+        />
+      ) : null}
     </div>
   );
 }
