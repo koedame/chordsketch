@@ -2280,7 +2280,11 @@ function LyricsLine({
             'aria-pressed': isFocusedChord,
             ...(audioEnabled
               ? {
-                  'aria-label': `Play chord ${segment.chord?.name ?? ''}`,
+                  // Combined select+play control: the label names BOTH
+                  // actions so the accessible name does not describe only
+                  // playback while `aria-pressed` tracks selection — the
+                  // two affordances are fused on one element here.
+                  'aria-label': `Edit and play chord ${segment.chord?.name ?? ''}`,
                   'data-chord': segment.chord?.name ?? '',
                   onAnimationEnd: clearRinging,
                 }

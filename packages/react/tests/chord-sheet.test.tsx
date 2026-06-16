@@ -1082,10 +1082,11 @@ describe('<ChordSheet>', () => {
         expect(container.querySelector('.chord--audio')).not.toBeNull(),
       );
       const chord = container.querySelector('.chord--audio') as HTMLElement;
-      // Both affordances present: the play label AND the selection toggle.
+      // Both affordances present: the combined label names edit + play,
+      // and aria-pressed tracks selection.
       expect(chord.getAttribute('role')).toBe('button');
       expect(chord.getAttribute('aria-pressed')).toBe('false');
-      expect(chord.getAttribute('aria-label')).toBe('Play chord Am');
+      expect(chord.getAttribute('aria-label')).toBe('Edit and play chord Am');
       // Drag is no longer suppressed in audio mode.
       expect(chord.getAttribute('draggable')).toBe('true');
 

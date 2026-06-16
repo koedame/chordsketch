@@ -4486,7 +4486,10 @@ describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
     expect(chord.classList.contains('chord--audio')).toBe(true);
     expect(chord.getAttribute('role')).toBe('button');
     expect(chord.getAttribute('aria-pressed')).toBe('false');
-    expect(chord.getAttribute('aria-label')).toBe('Play chord Am7');
+    // Combined control: the label names both actions so the accessible
+    // name does not describe only playback while aria-pressed tracks
+    // selection.
+    expect(chord.getAttribute('aria-label')).toBe('Edit and play chord Am7');
     expect(chord.getAttribute('data-chord')).toBe('Am7');
 
     fireEvent.click(chord);

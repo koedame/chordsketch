@@ -49,7 +49,10 @@ test.describe('chord-audio toggle on the ChordPro preview', () => {
 
     const firstChord = audioChords.first();
     await expect(firstChord).toHaveAttribute('role', 'button');
-    await expect(firstChord).toHaveAttribute('aria-label', /^Play chord /);
+    // Default split view wires selection too, so the chord is a combined
+    // edit+play control ("Edit and play chord …"); a preview-only host
+    // would label it "Play chord …". Match either.
+    await expect(firstChord).toHaveAttribute('aria-label', /play chord /i);
 
     // Clicking a chord (a real user gesture, so the autoplay-gated
     // AudioContext may run) must not raise an uncaught exception even if
