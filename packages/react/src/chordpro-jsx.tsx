@@ -1618,8 +1618,20 @@ export interface ChordAudioConfig {
  * walker is stateless per chord) and removed on `animationend`; a forced
  * reflow between remove and re-add restarts the CSS animation when the
  * same chord is tapped again before the previous pulse finishes.
+ *
+ * When `prefers-reduced-motion: reduce` is active the function exits
+ * early rather than adding the class — the CSS suppresses the animation
+ * (`animation: none`) and `animationend` never fires, which would leave
+ * the class (crimson background, white text) on the element permanently.
  */
 function pulseChordElement(el: HTMLElement): void {
+  // Skip the visual pulse when the user prefers reduced motion. The audio
+  // still plays; only the animation feedback is suppressed. Without this
+  // guard, `animationend` never fires under `animation: none`, so the
+  // `.chord--ringing` highlight would stick on the element indefinitely.
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    return;
+  }
   el.classList.remove('chord--ringing');
   // Reading offsetWidth forces a synchronous reflow so the re-added
   // class starts a fresh animation rather than being coalesced away.

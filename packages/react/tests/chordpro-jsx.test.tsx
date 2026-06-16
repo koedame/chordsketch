@@ -4312,5 +4312,50 @@ describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
     const absent = render(renderChordproAst(chordLineSong()));
     expect(absent.container.querySelector('.chord--audio')).toBeNull();
   });
+
+  test('chord--ringing class is NOT added under prefers-reduced-motion (prevents stuck highlight)', () => {
+    // Regression test for the bug where `animation: none` from the
+    // reduced-motion media query prevents `animationend` from firing,
+    // which would leave .chord--ringing (crimson background) on the
+    // element permanently after any click.
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (query: string) => ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }),
+    });
+
+    try {
+      const play = vi.fn();
+      const { container } = render(
+        renderChordproAst(chordLineSong(), {
+          chordAudio: { enabled: true, play },
+        }),
+      );
+      const chord = container.querySelector('.chord--audio') as HTMLElement;
+      expect(chord).not.toBeNull();
+
+      fireEvent.click(chord);
+
+      // play() was invoked (audio still plays) but the ringing class was
+      // NOT added — pulseChordElement exits early under reduced motion so
+      // the stuck-highlight bug cannot occur.
+      expect(play).toHaveBeenCalledWith('Am7');
+      expect(chord.classList.contains('chord--ringing')).toBe(false);
+    } finally {
+      Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: originalMatchMedia,
+      });
+    }
+  });
 });
 
