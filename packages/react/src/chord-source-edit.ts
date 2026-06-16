@@ -225,6 +225,31 @@ export interface ChordRepositionResult {
 }
 
 /**
+ * Caret offset landing just inside the `[` of the `[chord]` bracket an
+ * apply-helper ({@link applyChordReposition} / {@link applyChordInsert})
+ * just wrote. Those helpers return {@link ChordRepositionResult.caretOffset}
+ * pointing just PAST the bracket (`… + insertBracket.length`); this backs up
+ * over `]` and the chord name to the position right after `[`.
+ *
+ * Editor surfaces use it to keep the just-moved / just-inserted chord
+ * selected: the caret-driven selection re-resolves onto a chord only while
+ * the caret sits inside its brackets — a caret past the `]` lands in the
+ * lyrics and deselects it. Kept beside the helpers it inverts so the
+ * forward and reverse caret conventions cannot drift apart (a single
+ * change to where the apply-helpers place `caretOffset` updates both).
+ *
+ * @param chordName the chord body written between the brackets (without
+ *   the brackets), e.g. `"Am7"` — its length plus the two brackets is the
+ *   span backed over.
+ */
+export function caretInsideWrittenBracket(
+  result: ChordRepositionResult,
+  chordName: string,
+): number {
+  return result.caretOffset - (chordName.length + 2) + 1;
+}
+
+/**
  * Map a lyrics-character offset on a ChordPro source line to
  * the source column where a new `[chord]` should be inserted.
  *
@@ -515,8 +540,21 @@ export function nudgeChordPosition(
 ): NudgedChordPosition | null {
   const offset = currentOffset + direction;
   if (offset < 0 || offset > totalLyrics) return null;
-  const ordinal = otherOffsets.reduce((n, o) => (o === offset ? n + 1 : n), 0);
-  return { offset, ordinal };
+  return { offset, ordinal: ordinalAtOffset(offset, otherOffsets) };
+}
+
+/**
+ * Count the chords whose lyrics offset equals `offset` — the
+ * disambiguation ordinal a chord inserted there receives, since a
+ * freshly written `[chord]` always lands AFTER any chords already at
+ * the offset ({@link lyricsOffsetToSourceColumn} skips leading
+ * brackets). Single source of the "ordinal = chords already at this
+ * offset" rule shared by {@link nudgeChordPosition} and
+ * {@link repositionedChordOrdinal}; `offsets` must already exclude the
+ * chord being placed.
+ */
+function ordinalAtOffset(offset: number, offsets: readonly number[]): number {
+  return offsets.reduce((n, o) => (o === offset ? n + 1 : n), 0);
 }
 
 /**
@@ -542,6 +580,48 @@ export function findChordByOffsetOrdinal(
     }
   }
   return -1;
+}
+
+/**
+ * Compute the disambiguation ordinal a chord occupies after a
+ * drag-and-drop reposition lands it at `destinationOffset` on the
+ * destination line — so the consumer can keep the dropped chord selected
+ * (parity with the nudge path, which advances the selection to the moved
+ * chord via {@link buildChordNudge}'s returned `ordinal`).
+ *
+ * The dropped chord always lands AFTER any chords already sitting at
+ * `destinationOffset` — {@link lyricsOffsetToSourceColumn} skips leading
+ * `[...]` brackets at the target lyric position — so its ordinal is the
+ * count of OTHER chords sharing that offset in the re-parsed source.
+ *
+ * Moving a chord shifts only bracket columns, never the zero-width lyrics
+ * offsets of the other chords, so this count can be taken against the
+ * pre-move layout. The only adjustment is the dragged chord itself: on a
+ * same-line move it is removed from the destination line before the
+ * re-insert, so it must be excluded from the count via `removedIndex`. On
+ * a cross-line move or a copy nothing is removed from the destination
+ * line, so every current chord there counts (`removedIndex < 0`).
+ *
+ * @param destinationOffset the lyrics offset the chord lands at (the
+ *   event's `toLyricsOffset`, expected within `[0, totalLyrics]`).
+ * @param destinationChordOffsets lyrics offsets of every chord currently
+ *   on the destination line (pre-move layout), in source order.
+ * @param removedIndex index into `destinationChordOffsets` of the dragged
+ *   chord when the move removes it from the destination line (same-line
+ *   move); `-1` for a cross-line move or a copy.
+ */
+export function repositionedChordOrdinal(
+  destinationOffset: number,
+  destinationChordOffsets: readonly number[],
+  removedIndex: number,
+): number {
+  // Exclude the dragged chord on a same-line move, then count the
+  // remaining chords at the offset — the shared ordinal rule.
+  const others =
+    removedIndex < 0
+      ? destinationChordOffsets
+      : destinationChordOffsets.filter((_, i) => i !== removedIndex);
+  return ordinalAtOffset(destinationOffset, others);
 }
 
 /** Result of {@link buildChordNudge}: the reposition event to fire plus

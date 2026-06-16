@@ -279,6 +279,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `@chordsketch/react`: dragging a chord in the `<ChordSheet>`
+  preview and dropping it now leaves the moved chord **selected**, so
+  it can be nudged or edited without a second click — matching the
+  keyboard-nudge gesture, which already advanced the selection. The
+  standalone walker reports the moved chord's new
+  `(line, offset, ordinal)` after the drop; the controlled
+  `useChordEditor` path lands the editor caret inside the moved
+  bracket (which also fixes the preview keyboard nudge dropping the
+  selection in that mode). New pure helper `repositionedChordOrdinal`
+  backs the disambiguation-ordinal math. (#2651)
+
 - **Inline `{key}` directive now follows the active transpose
   offset across all three Rust renderers, preserving modal
   qualifiers, extensions, and slash-bass notes (#2522).** Before

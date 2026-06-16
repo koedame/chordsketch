@@ -26,6 +26,7 @@ import {
   applyChordReposition,
   buildChordName,
   buildChordNudge,
+  caretInsideWrittenBracket,
   chordSelectionCaretOffset,
   chordSourceEditableUnderTranspose,
   findChordAtCaret,
@@ -242,8 +243,7 @@ export function useChordEditor({
       if (!nudge) return;
       const result = applyChordReposition(source, nudge.event);
       // Keep the moved chord selected: caret inside its new bracket.
-      const target = result.caretOffset - (caretChord.chordName.length + 2) + 1;
-      commit(result, target);
+      commit(result, caretInsideWrittenBracket(result, caretChord.chordName));
     },
     [caretChord, source, commit],
   );
@@ -262,7 +262,13 @@ export function useChordEditor({
   const onChordReposition = useCallback(
     (event: ChordRepositionEvent) => {
       const result = applyChordReposition(source, event);
-      commit(result);
+      // Keep the moved / copied chord selected: land the caret just
+      // inside its new `[chord]` bracket so the caret-driven selection
+      // re-resolves onto it (parity with the nudge path, and with the
+      // standalone <ChordSheet> walker which advances its own selection
+      // on drop). On an optimistic-concurrency no-op the source is
+      // unchanged, so the deferred caret effect never fires.
+      commit(result, caretInsideWrittenBracket(result, event.chord));
     },
     [source, commit],
   );

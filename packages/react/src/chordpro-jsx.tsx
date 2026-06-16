@@ -77,6 +77,7 @@ import {
   buildChordNudge,
   chordLayoutForLine,
   findChordByOffsetOrdinal,
+  repositionedChordOrdinal,
 } from './chord-source-edit';
 import type { ChordRepositionEvent } from './chord-source-edit';
 
@@ -2046,12 +2047,21 @@ function LyricsLine({
         setDropTarget(null);
         if (!target) return;
         const segLayout = segmentLayout[target.segmentIdx];
+        // The chord lands at this lyrics offset. Clamp to the line's
+        // total so a drop past the last character resolves to the same
+        // trailing offset `applyChordReposition` snaps it to — keeping
+        // the post-drop selection on the chord rather than at a phantom
+        // offset that would fail to re-resolve.
+        const toLyricsOffset = Math.min(
+          segLayout.lyricsOffsetStart + target.charOffset,
+          totalLyrics,
+        );
         reposition.onChordReposition({
           fromLine: payload.fromLine,
           fromColumn: payload.fromColumn,
           fromLength: payload.fromLength,
           toLine: reposition.sourceLine,
-          toLyricsOffset: segLayout.lyricsOffsetStart + target.charOffset,
+          toLyricsOffset,
           chord: payload.chord,
           copy: event.altKey,
           // Guard the move's removal against the dragged chord's own
@@ -2059,6 +2069,30 @@ function LyricsLine({
           // corrupting (copy removes nothing, so no guard needed).
           expected: event.altKey ? undefined : payload.chord,
         });
+        // Keep the dropped chord selected (parity with the keyboard
+        // nudge, which advances the selection to the moved chord). The
+        // consumer applies `onChordReposition` → new source → re-parse;
+        // the walker then re-locates this chord by its (offset, ordinal)
+        // identity. A copy or a cross-line move removes nothing from this
+        // (destination) line, so every current chord at the offset
+        // counts; a same-line move excludes the dragged chord, located
+        // by its source column. `nudgeCtx` is absent in drag-only mode
+        // (no selection state wired) — then there is nothing to select.
+        if (nudgeCtx) {
+          const isSameLineMove = !event.altKey && payload.fromLine === reposition.sourceLine;
+          const removedIndex = isSameLineMove
+            ? chordSegments.findIndex(
+                (c) => segmentLayout[c.segmentIdx].chordSourceColumn === payload.fromColumn,
+              )
+            : -1;
+          const ordinal = repositionedChordOrdinal(toLyricsOffset, chordOffsets, removedIndex);
+          nudgeCtx.setSelected({
+            line: reposition.sourceLine,
+            offset: toLyricsOffset,
+            ordinal,
+            nonce: (selected?.nonce ?? 0) + 1,
+          });
+        }
       }
     : undefined;
 
@@ -2211,7 +2245,6 @@ function LyricsLine({
 }
 
 /**
-/**
  * From a dragover/drop event, locate which chord-block segment
  * the pointer is over and the character offset (in lyric
  * coordinates) within that segment. Walks up from
@@ -2279,66 +2312,6 @@ function buildChordDragProps(
     onDragStart: (event) => {
       event.dataTransfer.setData(CHORD_DRAG_MIME, JSON.stringify(payload));
       event.dataTransfer.effectAllowed = 'copyMove';
-    },
-  };
-}
-
-/**
- * Build the `onDragOver` / `onDrop` props for a `.lyrics` span.
- * `onDragOver` gates drops to our own chord drags (no OS-file
- * drags / cross-tab text drags) and reflects the Alt-modifier
- * in the cursor; `onDrop` reads the dragged payload, maps the
- * pointer position to a character offset inside the segment's
- * text, and fires `onChordReposition` with absolute
- * coordinates.
- */
-function buildLyricsDropProps(
-  onChordReposition: (event: ChordRepositionEvent) => void,
-  destinationLine: number,
-  lyricsOffsetStart: number,
-  segmentTextLength: number,
-): {
-  onDragOver: (event: ReactDragEvent<HTMLSpanElement>) => void;
-  onDrop: (event: ReactDragEvent<HTMLSpanElement>) => void;
-} {
-  return {
-    onDragOver: (event) => {
-      if (!event.dataTransfer.types.includes(CHORD_DRAG_MIME)) return;
-      event.preventDefault();
-      event.dataTransfer.dropEffect = event.altKey ? 'copy' : 'move';
-    },
-    onDrop: (event) => {
-      const raw = event.dataTransfer.getData(CHORD_DRAG_MIME);
-      if (!raw) return;
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        return;
-      }
-      // Schema gate — see `isValidChordDragPayload` doc-comment.
-      if (!isValidChordDragPayload(parsed)) return;
-      const payload = parsed;
-      event.preventDefault();
-      const target = event.currentTarget;
-      const charOffset = pointerToLyricCharOffset(
-        target,
-        event.clientX,
-        event.clientY,
-        segmentTextLength,
-      );
-      onChordReposition({
-        fromLine: payload.fromLine,
-        fromColumn: payload.fromColumn,
-        fromLength: payload.fromLength,
-        toLine: destinationLine,
-        toLyricsOffset: lyricsOffsetStart + charOffset,
-        chord: payload.chord,
-        copy: event.altKey,
-        // Guard the move's removal against the dragged chord's own
-        // token (copy removes nothing, so no guard needed).
-        expected: event.altKey ? undefined : payload.chord,
-      });
     },
   };
 }
