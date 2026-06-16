@@ -398,12 +398,6 @@
   line-height: 1.6875;
   color: var(--cs-ink-1000, #0a0a0b);
   padding: 2em 1.5em;
-  /* Positioning anchor + sticky containing block for the bottom-docked
-     chord-editor inspector (#2622, re-docked in #2630). The inspector is
-     `position: sticky; bottom` and rendered as this wrapper's last flow
-     child, so it pins to the bottom of the scrollport while the content
-     is in view and does NOT track (or cover) the selected chord. */
-  position: relative;
 }
 
 /* `.song` is the AST walker's root container. It carries no
@@ -1487,7 +1481,7 @@
 /* Click-to-focus chord editing (#2614 / #2622). When chord
    repositioning is enabled each real chord is a toggle button;
    tapping it selects the chord, which paints it as a solid crimson
-   badge and opens the left-docked chord-editor inspector. */
+   badge and opens the footer chord-editor inspector. */
 .chordsketch-sheet__content .chord[role='button'] {
   cursor: pointer;
 }
@@ -1498,8 +1492,14 @@
   background: var(--cs-crimson-500, #bd1642);
   color: var(--cs-fg-on-crimson, #fff);
   border-radius: var(--cs-r-2, 4px);
-  padding: 1px 5px;
-  /* Keep the chip from nudging the lyric baseline as it appears. */
+  /* The badge needs padding for breathing room, but padding would grow
+     the chord's box and reflow the lyric line + shift neighbouring
+     chords the moment one is selected (#2638). An equal negative margin
+     cancels the padding's layout effect: the border-box paints the chip
+     while the margin-box stays exactly the unselected chord's size, so
+     selecting never moves anything. */
+  padding: 2px 5px;
+  margin: -2px -5px;
   box-shadow: var(--cs-e-1, 0 1px 2px rgba(10, 10, 11, 0.04));
 }
 .chordsketch-sheet__content .chord--selected:focus-visible {
@@ -1507,70 +1507,69 @@
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #bd1642);
 }
 
-/* ---- Left-docked chord-editor inspector (#2622) ---------------- */
-/* Floating, non-modal panel anchored to the top-left of the preview
-   content. Does NOT track the selected chord — it stays put while the
-   user edits root / type / bass and steps the chord left / right. */
-.chordsketch-sheet__content .chordsketch-sheet__cins {
-  /* Bottom-docked sheet (#2630): the pre-#2630 `position: absolute;
-     left/top` overlay sat at the content's top-left and covered the
-     lyrics / chord being edited. A `position: sticky; bottom` element,
-     rendered as the LAST flow child of `.chordsketch-sheet__content`,
-     pins to the bottom of the scrollport while the content is in view —
-     so the panel stays reachable as the user scrolls but never tracks
-     (or covers) the selected chord, which the parent scrolls into view
-     above the dock. */
+/* ---- Footer chord-editor inspector (#2622) --------------------- */
+/* Non-modal footer panel below the preview (see the rule below for the
+   sibling-of-`__content` structure). Does NOT track the selected chord
+   — it stays put while the user edits root / type / bass and steps the
+   chord left / right. */
+.chordsketch-sheet .chordsketch-sheet__cins {
+  /* Footer panel (#2638): rendered as a sibling AFTER
+     `.chordsketch-sheet__content` (not inside it), so it is a
+     full-width band below the song rather than a centred card floating
+     over it — the pre-#2638 dock read as a modal. `position: sticky;
+     bottom: 0` pins it to the bottom of the preview scrollport so it
+     stays reachable as the song scrolls, while the selected chord is
+     scrolled into view above it. Being a flow sibling, it reserves its
+     own height, so the last song line is always reachable above it. */
   position: sticky;
-  bottom: var(--cs-sp-4, 1rem);
+  bottom: 0;
   z-index: 6;
-  /* Centred reading-column cap on wide panes; full width on narrow. */
   width: 100%;
-  max-width: 34rem;
-  margin-inline: auto;
-  margin-top: var(--cs-sp-4, 1rem);
   /* Cap height so a long chip list scrolls internally instead of
      filling the viewport and re-covering the content. */
-  max-height: min(60vh, 32rem);
+  max-height: min(55vh, 30rem);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--cs-sp-4, 1rem);
-  padding: var(--cs-sp-4, 1rem);
+  padding: var(--cs-sp-4, 1rem) var(--cs-sp-6, 1.5rem);
   background: var(--cs-surface, #fff);
-  border: 1px solid var(--cs-border-strong, #d4d1d6);
-  border-radius: var(--cs-r-3, 8px);
-  box-shadow: var(--cs-e-3, 0 10px 30px rgba(10, 10, 11, 0.16));
+  /* Footer divider + upward lift, not an all-round card border/shadow. */
+  border: 0;
+  border-top: 1px solid var(--cs-border-strong, #d4d1d6);
+  border-radius: 0;
+  box-shadow: 0 -8px 24px rgba(10, 10, 11, 0.1);
   font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
-  animation: chordsketch-cins-pop var(--cs-dur-2, 200ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1));
+  animation: chordsketch-cins-rise var(--cs-dur-2, 200ms) var(--cs-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1));
 }
-@keyframes chordsketch-cins-pop {
-  from { opacity: 0; transform: translateY(12px) scale(0.99); }
+@keyframes chordsketch-cins-rise {
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .chordsketch-sheet__content .chordsketch-sheet__cins { animation: none; }
+  .chordsketch-sheet .chordsketch-sheet__cins { animation: none; }
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-head {
+.chordsketch-sheet .chordsketch-sheet__cins-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--cs-sp-2, 0.5rem);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-eyebrow {
+.chordsketch-sheet .chordsketch-sheet__cins-eyebrow {
   font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--cs-text-tertiary, #8a8790);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-name {
+.chordsketch-sheet .chordsketch-sheet__cins-name {
   font-family: var(--cs-font-chord, "Roboto", system-ui, sans-serif);
   font-weight: 900;
   font-size: 1.75rem;
   line-height: 1.1;
   color: var(--cs-crimson-500, #bd1642);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-close {
+.chordsketch-sheet .chordsketch-sheet__cins-close {
   width: 28px;
   height: 28px;
   border: 1px solid var(--cs-border, #e8e6ea);
@@ -1581,21 +1580,21 @@
   line-height: 1;
   cursor: pointer;
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-close:hover {
+.chordsketch-sheet .chordsketch-sheet__cins-close:hover {
   background: var(--cs-surface-hover, #f6f4f7);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-group {
+.chordsketch-sheet .chordsketch-sheet__cins-group {
   display: flex;
   flex-direction: column;
   gap: var(--cs-sp-2, 0.5rem);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-label {
+.chordsketch-sheet .chordsketch-sheet__cins-label {
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--cs-text-strong, #44424a);
 }
 /* segmented (root / accidental) */
-.chordsketch-sheet__content .chordsketch-sheet__cins-seg {
+.chordsketch-sheet .chordsketch-sheet__cins-seg {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 2px;
@@ -1604,7 +1603,7 @@
   border: 1px solid var(--cs-border, #e8e6ea);
   border-radius: var(--cs-r-2, 4px);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-seg button {
+.chordsketch-sheet .chordsketch-sheet__cins-seg button {
   appearance: none;
   border: 0;
   background: transparent;
@@ -1617,13 +1616,13 @@
   color: var(--cs-text-secondary, #67646d);
   cursor: pointer;
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-seg button[aria-pressed='true'] {
+.chordsketch-sheet .chordsketch-sheet__cins-seg button[aria-pressed='true'] {
   background: var(--cs-surface, #fff);
   color: var(--cs-crimson-600, #a30f37);
   box-shadow: var(--cs-e-1, 0 1px 2px rgba(10, 10, 11, 0.04));
 }
 /* type chips */
-.chordsketch-sheet__content .chordsketch-sheet__cins-chips {
+.chordsketch-sheet .chordsketch-sheet__cins-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -1636,7 +1635,7 @@
   /* Room for the scrollbar so the rightmost chips aren't clipped. */
   padding-right: 2px;
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-chip {
+.chordsketch-sheet .chordsketch-sheet__cins-chip {
   appearance: none;
   border: 1px solid var(--cs-border-strong, #d4d1d6);
   background: var(--cs-surface, #fff);
@@ -1648,26 +1647,26 @@
   color: var(--cs-text-strong, #44424a);
   cursor: pointer;
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-chip:hover {
+.chordsketch-sheet .chordsketch-sheet__cins-chip:hover {
   background: var(--cs-surface-hover, #f6f4f7);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-chip[aria-pressed='true'] {
+.chordsketch-sheet .chordsketch-sheet__cins-chip[aria-pressed='true'] {
   background: var(--cs-crimson-500, #bd1642);
   border-color: var(--cs-crimson-500, #bd1642);
   color: var(--cs-fg-on-crimson, #fff);
 }
 /* inputs */
-.chordsketch-sheet__content .chordsketch-sheet__cins-row2 {
+.chordsketch-sheet .chordsketch-sheet__cins-row2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--cs-sp-2, 0.5rem);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-field {
+.chordsketch-sheet .chordsketch-sheet__cins-field {
   display: flex;
   flex-direction: column;
   gap: var(--cs-sp-1, 0.25rem);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-input {
+.chordsketch-sheet .chordsketch-sheet__cins-input {
   width: 100%;
   height: 32px;
   border: 1px solid var(--cs-border-strong, #d4d1d6);
@@ -1678,22 +1677,24 @@
   font-size: 0.875rem;
   color: var(--cs-text-primary, #0a0a0b);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-input:focus-visible {
+.chordsketch-sheet .chordsketch-sheet__cins-input:focus-visible {
   outline: none;
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #bd1642);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-divider {
+.chordsketch-sheet .chordsketch-sheet__cins-divider {
   height: 1px;
   background: var(--cs-border, #e8e6ea);
-  margin: 0 calc(var(--cs-sp-4, 1rem) * -1);
+  /* Full-bleed: must match the panel's horizontal padding (--cs-sp-6)
+     so the divider reaches both edges of the footer. */
+  margin: 0 calc(var(--cs-sp-6, 1.5rem) * -1);
 }
 /* move row (relocated nudge) */
-.chordsketch-sheet__content .chordsketch-sheet__cins-move {
+.chordsketch-sheet .chordsketch-sheet__cins-move {
   display: flex;
   align-items: center;
   gap: var(--cs-sp-2, 0.5rem);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-movebtn {
+.chordsketch-sheet .chordsketch-sheet__cins-movebtn {
   flex: 1;
   height: 34px;
   border: 1px solid var(--cs-border-strong, #d4d1d6);
@@ -1703,26 +1704,26 @@
   color: var(--cs-text-strong, #44424a);
   cursor: pointer;
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-movebtn:hover:not(:disabled) {
+.chordsketch-sheet .chordsketch-sheet__cins-movebtn:hover:not(:disabled) {
   background: var(--cs-surface-hover, #f6f4f7);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-movebtn:disabled {
+.chordsketch-sheet .chordsketch-sheet__cins-movebtn:disabled {
   opacity: 0.35;
   cursor: default;
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-movelbl {
+.chordsketch-sheet .chordsketch-sheet__cins-movelbl {
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--cs-text-secondary, #67646d);
   white-space: nowrap;
 }
 /* footer */
-.chordsketch-sheet__content .chordsketch-sheet__cins-footer {
+.chordsketch-sheet .chordsketch-sheet__cins-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-remove {
+.chordsketch-sheet .chordsketch-sheet__cins-remove {
   appearance: none;
   border: 1px solid transparent;
   background: transparent;
@@ -1734,10 +1735,10 @@
   color: var(--cs-crimson-600, #a30f37);
   cursor: pointer;
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-remove:hover {
+.chordsketch-sheet .chordsketch-sheet__cins-remove:hover {
   background: var(--cs-crimson-50, #fdf2f5);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-done {
+.chordsketch-sheet .chordsketch-sheet__cins-done {
   appearance: none;
   border: 1px solid var(--cs-border-strong, #d4d1d6);
   background: var(--cs-surface, #fff);
@@ -1749,10 +1750,10 @@
   color: var(--cs-text-strong, #44424a);
   cursor: pointer;
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins-done:hover {
+.chordsketch-sheet .chordsketch-sheet__cins-done:hover {
   background: var(--cs-surface-hover, #f6f4f7);
 }
-.chordsketch-sheet__content .chordsketch-sheet__cins :focus-visible {
+.chordsketch-sheet .chordsketch-sheet__cins :focus-visible {
   outline: none;
   box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #bd1642);
   border-radius: var(--cs-r-2, 4px);
