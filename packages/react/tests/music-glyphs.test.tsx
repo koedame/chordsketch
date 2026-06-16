@@ -322,6 +322,17 @@ describe('<MetronomeGlyph>', () => {
     expect(css).toMatch(
       /prefers-reduced-motion: reduce[\s\S]*\.music-glyph--metronome__beat\s*\{\s*animation:\s*none;\s*opacity:\s*1;/,
     );
+    // Crisp on/off blink (no fade): the beat dot uses `step-end`
+    // timing so every keyframe boundary is an instantaneous jump,
+    // and the keyframe snaps from full opacity to 0 with no
+    // interpolated dim resting state. A regression to an eased fade
+    // (e.g. `ease-out` decaying to a 0.12 glow) would fail here.
+    expect(css).toMatch(
+      /\.music-glyph--metronome__beat\s*\{\s*animation:\s*cs-metronome-beat var\(--cs-metronome-period, 1s\) step-end infinite;/,
+    );
+    expect(css).toMatch(
+      /@keyframes cs-metronome-beat\s*\{\s*0%\s*\{\s*opacity:\s*1;\s*\}\s*12%\s*\{\s*opacity:\s*0;\s*\}\s*100%\s*\{\s*opacity:\s*0;\s*\}\s*\}/,
+    );
   });
 });
 

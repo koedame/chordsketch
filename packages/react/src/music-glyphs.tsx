@@ -662,14 +662,14 @@ export function metronomePeriodCss(bpm: number): string {
  * seconds — exactly one beat at the requested BPM.
  *
  * A static beat dot sits in the top-left corner *inside* the
- * existing viewBox (so the icon height is unchanged) and pulses
- * flash-then-decay once per beat. Its blink shares the same
- * `--cs-metronome-period` as the swing, and a `-period/2`
+ * existing viewBox (so the icon height is unchanged) and blinks
+ * crisply on/off once per beat (no fade). Its blink shares the
+ * same `--cs-metronome-period` as the swing, and a `-period/2`
  * `animation-delay` (applied in the stylesheet) phase-shifts the
- * flash so the dot is at full brightness when the rod passes
- * through the center (vertical), not at the extremes. The dot is
- * a sibling of the pendulum group, so it does NOT swing — only
- * its opacity animates.
+ * flash so the dot switches on when the rod passes through the
+ * center (vertical), not at the extremes. The dot is a sibling of
+ * the pendulum group, so it does NOT swing — only its opacity
+ * animates.
  *
  * The animation is gated on
  * `@media (prefers-reduced-motion: reduce)` so users who opt out
@@ -736,7 +736,7 @@ export function MetronomeGlyph({
       {/* Beat dot — static, top-left corner inside the existing
           viewBox so the icon height is unchanged. A sibling of the
           pendulum group (NOT inside it), so it stays put while only
-          its opacity animates (flash → decay) via the
+          its opacity animates (a crisp on/off blink) via the
           `cs-metronome-beat` keyframe in the stylesheet. */}
       <circle className="music-glyph--metronome__beat" cx={2.4} cy={6.2} r={1.5} fill="currentColor" />
       {/* Triangular body — narrow top, wide base. */}
