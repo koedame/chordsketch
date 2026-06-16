@@ -19,14 +19,10 @@ import {
   PdfExport,
   RendererPreview,
   ChordSourceArea,
-  applyChordReposition,
-  applyChordEdit,
-  applyChordDelete,
+  ChordInspector,
+  useChordEditor,
   readCapo,
   setCapoInSource,
-  type ChordRepositionEvent,
-  type ChordEditEvent,
-  type ChordDeleteTarget,
   type ChordSourceAreaHandle,
   loadChordproCatalog,
   type DirectiveCatalogEntry,
@@ -591,6 +587,32 @@ function PlaygroundApp(): JSX.Element {
     setSource(next);
   }, []);
 
+  // Caret-driven chord-editor footer (#2644). The hook owns the
+  // edit / insert / move / delete source mutations and the preview's
+  // controlled selection — the playground is a thin consumer (see
+  // `.claude/rules/playground-is-a-sample.md`).
+  const chordEditor = useChordEditor({
+    source,
+    onSourceChange: handleSourceChange,
+    transpose,
+    editorRef,
+  });
+
+  // Relay the editor caret into BOTH the preview marker (activeSourceLine
+  // / caretColumn) and the chord-editor hook. Depend on
+  // `chordEditor.onCaretChange` (stable — defined with useCallback([]))
+  // rather than on the `chordEditor` object itself (re-created every
+  // render), so this callback stays stable and does not re-render
+  // ChordSourceArea on every source change.
+  const { onCaretChange: chordEditorOnCaretChange } = chordEditor;
+  const handleCaretChange = useCallback(
+    (next: { line: number; column: number; lineLength: number }) => {
+      setCaret(next);
+      chordEditorOnCaretChange(next);
+    },
+    [chordEditorOnCaretChange],
+  );
+
   const stats = useMemo(() => computeStats(source), [source]);
 
   const warnings = useMemo<Warning[]>(() => runValidate(source), [source]);
@@ -610,62 +632,6 @@ function PlaygroundApp(): JSX.Element {
 
   const insert = useCallback((text: string, selectInside = true) => {
     editorRef.current?.insertAtCursor(text, selectInside);
-  }, []);
-
-  // Drag-and-drop chord reposition: turn the AST-coordinate
-  // event emitted by `<RendererPreview>`'s preview into a
-  // ChordPro source mutation, push it through `setSource` so
-  // React's controlled value re-syncs the editor, and restore
-  // the editor caret to the natural "I just dropped here" spot.
-  // Functional `setSource` is required because the drop event
-  // can fire while the user is still typing — capturing
-  // `source` in the closure would risk stale-source edits.
-  const handleChordReposition = useCallback((event: ChordRepositionEvent) => {
-    setSource((current) => {
-      try {
-        const { text, caretOffset } = applyChordReposition(current, event);
-        // Defer the caret move to a microtask so it lands AFTER
-        // the controlled-value sync effect has fed the new doc
-        // back into CodeMirror — otherwise the caret would be
-        // clamped against the pre-mutation doc length and
-        // snap to a meaningless position.
-        queueMicrotask(() => editorRef.current?.setCaret(caretOffset));
-        return text;
-      } catch {
-        // Out-of-range coordinates land here. Leave the source
-        // unchanged rather than corrupting it.
-        return current;
-      }
-    });
-  }, []);
-
-  // In-place chord edit (#2622): the left-docked inspector emits a
-  // ChordEditEvent (source coordinates + new chord token); apply it the
-  // same functional-updater way as reposition so concurrent edits read
-  // the latest source, and restore the caret after the new chord.
-  const handleChordEdit = useCallback((event: ChordEditEvent) => {
-    setSource((current) => {
-      try {
-        const { text, caretOffset } = applyChordEdit(current, event);
-        queueMicrotask(() => editorRef.current?.setCaret(caretOffset));
-        return text;
-      } catch {
-        return current;
-      }
-    });
-  }, []);
-
-  // Chord delete (#2622): remove the [chord] token the inspector targets.
-  const handleChordDelete = useCallback((target: ChordDeleteTarget) => {
-    setSource((current) => {
-      try {
-        const { text, caretOffset } = applyChordDelete(current, target);
-        queueMicrotask(() => editorRef.current?.setCaret(caretOffset));
-        return text;
-      } catch {
-        return current;
-      }
-    });
   }, []);
 
   // Capo source change: use the functional-updater form of `setSource`
@@ -841,7 +807,7 @@ function PlaygroundApp(): JSX.Element {
                 ref={editorRef}
                 value={source}
                 onChange={handleSourceChange}
-                onCaretChange={setCaret}
+                onCaretChange={handleCaretChange}
                 placeholder="Paste your ChordPro here…"
               />
             </div>
@@ -914,27 +880,37 @@ function PlaygroundApp(): JSX.Element {
                 activeSourceLine={view === 'split' ? caret?.line : undefined}
                 caretColumn={view === 'split' ? caret?.column : undefined}
                 caretLineLength={view === 'split' ? caret?.lineLength : undefined}
-                /* Chord drag-and-drop repositioning is an editing
-                   gesture: a drop mutates the ChordPro source the
-                   editor displays. Preview-only view is a read-only
-                   display mode with the editor unmounted, so a drop
-                   there would silently rewrite source the user cannot
-                   see. Gate the callback on split view (matching the
-                   caret props above) so omitting it leaves every
-                   `.chord` span non-draggable in preview-only mode. */
-                onChordReposition={
-                  view === 'split' ? handleChordReposition : undefined
+                /* Controlled chord-selection (#2644): in split view the
+                   shell owns the selection (driven by the editor caret)
+                   and renders the lifted full-width footer below the
+                   panes. The preview paints the `.chord--selected` badge
+                   from `chordSelection`, reports clicks via
+                   `onChordSelectionChange` (which moves the editor
+                   caret), and applies drag-drops via `onChordReposition`.
+                   Preview-only view is read-only with the editor
+                   unmounted, so the props are withheld — every `.chord`
+                   stays non-interactive there. */
+                chordSelection={view === 'split' ? chordEditor.chordSelection : undefined}
+                onChordSelectionChange={
+                  view === 'split' ? chordEditor.onChordSelectionChange : undefined
                 }
-                /* Chord editing (#2622): the inspector edits/deletes the
-                   ChordPro source, so — like reposition — gate it on
-                   split view where the editor is mounted and visible. */
-                onChordEdit={view === 'split' ? handleChordEdit : undefined}
-                onChordDelete={view === 'split' ? handleChordDelete : undefined}
+                onChordReposition={
+                  view === 'split' ? chordEditor.onChordReposition : undefined
+                }
               />
             </div>
           </section>
         )}
       </main>
+
+      {/* Lifted chord-editor footer (#2644): a full-width band spanning
+          the editor + preview, below the split and above the status bar.
+          Shown in split view, where both panes are visible. */}
+      {view === 'split' && (
+        <div className="chordsketch-chord-pro-editor__chord-footer">
+          <ChordInspector {...chordEditor.inspectorProps} />
+        </div>
+      )}
 
       <footer className="status" role="status" aria-live="polite">
         <button

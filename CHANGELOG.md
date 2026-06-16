@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `@chordsketch/react` v0.4.0: the ChordPro chord editor is now a
+  full-width footer that spans the editor + preview, driven by the
+  editor caret. The chord under the caret is selected automatically; a
+  new chord can be built and inserted at the caret ("Insert chord").
+  `<ChordProEditor>` and the playground render the lifted footer below
+  the split via the new `useChordEditor` hook; `<ChordSheet>` gains a
+  controlled-selection mode (`chordSelection` / `onChordSelectionChange`)
+  and keeps its in-pane inspector for standalone use. New source helpers
+  `findChordAtCaret`, `applyChordInsert`, `chordSelectionCaretOffset`,
+  and `partsFromRawName` back the caret-driven editing. Source-coordinate
+  editing stays gated under an effective transpose / capo (ADR-0023).
+  (#2644)
 - Horizontal (left-nut) orientation for fretted-instrument chord
   diagrams, alongside the existing vertical layout. Enable via the
   `diagrams.orientation = "horizontal"` config key (honoured by the
