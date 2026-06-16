@@ -1,9 +1,11 @@
-import { act, render } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import { useRef, useState } from 'react';
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { ChordSourceAreaHandle } from '../src/chord-source-area';
 import { useChordEditor, type UseChordEditor } from '../src/use-chord-editor';
+import type { ChordAudioWasmLoader } from '../src/use-chord-audio';
+import { resetSharedAudioContextForTests } from '../src/audio-context';
 
 // The hook drives a controlled source: `onSourceChange` feeds the parent
 // state, which re-renders the hook with the new source (mirroring how
@@ -17,7 +19,17 @@ let latest: UseChordEditor;
 let currentSource: string;
 let setCaretSpy: ReturnType<typeof vi.fn>;
 
-function Harness({ initial, transpose }: { initial: string; transpose?: number }): null {
+function Harness({
+  initial,
+  transpose,
+  chordAudio,
+  chordAudioLoader,
+}: {
+  initial: string;
+  transpose?: number;
+  chordAudio?: boolean;
+  chordAudioLoader?: ChordAudioWasmLoader;
+}): null {
   const [source, setSource] = useState(initial);
   currentSource = source;
   const ref = useRef<ChordSourceAreaHandle | null>(null);
@@ -31,7 +43,14 @@ function Harness({ initial, transpose }: { initial: string; transpose?: number }
       setCaret: setCaretSpy,
     };
   }
-  latest = useChordEditor({ source, onSourceChange: setSource, transpose, editorRef: ref });
+  latest = useChordEditor({
+    source,
+    onSourceChange: setSource,
+    transpose,
+    editorRef: ref,
+    chordAudio,
+    chordAudioLoader,
+  });
   return null;
 }
 
@@ -195,5 +214,127 @@ describe('useChordEditor', () => {
     expect(latest.chordSelection).toBeNull();
     expect(latest.inspectorProps.onRemove).toBeUndefined();
     expect(latest.inspectorProps.note).toMatch(/transpose/i);
+  });
+});
+
+// ---- Chord-audio integration (#2652 follow-up) --------------------
+// The hook owns a single audio instance so a panel-driven mutation
+// auditions the chord through the SAME instance the host forwards to the
+// preview. jsdom has no Web Audio API, so a minimal fake records the
+// oscillators `play` creates; the wasm `chordPitches` loader is stubbed.
+
+describe('useChordEditor chord-audio', () => {
+  class FakeOscillator {
+    type = '';
+    onended: (() => void) | null = null;
+    frequency = { setValueAtTime: vi.fn() };
+    connect = vi.fn();
+    disconnect = vi.fn();
+    start = vi.fn();
+    stop = vi.fn();
+  }
+  class FakeAudioContext {
+    static instances: FakeAudioContext[] = [];
+    state: 'suspended' | 'running' | 'closed' = 'running';
+    currentTime = 0;
+    destination = {};
+    oscillators: FakeOscillator[] = [];
+    resume = vi.fn(() => Promise.resolve());
+    createOscillator = vi.fn(() => {
+      const osc = new FakeOscillator();
+      this.oscillators.push(osc);
+      return osc;
+    });
+    createGain = vi.fn(() => ({
+      gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    }));
+    constructor() {
+      FakeAudioContext.instances.push(this);
+    }
+  }
+
+  // `[G]` → a real triad, `[G7]` → a 4-note voicing so a retype produces
+  // a distinguishable oscillator count.
+  const loadCalls = vi.fn();
+  const makeLoader = (): ChordAudioWasmLoader => () => {
+    loadCalls();
+    return Promise.resolve({
+      default: () => Promise.resolve(),
+      chordPitches: (chord: string): Uint8Array | undefined => {
+        if (chord === 'G') return new Uint8Array([55, 59, 62]);
+        if (chord === 'G7') return new Uint8Array([55, 59, 62, 65]);
+        return undefined;
+      },
+    });
+  };
+
+  const originalAudioContext = (globalThis as { AudioContext?: unknown }).AudioContext;
+
+  beforeEach(() => {
+    FakeAudioContext.instances = [];
+    loadCalls.mockClear();
+    resetSharedAudioContextForTests();
+    (window as unknown as { AudioContext: unknown }).AudioContext = FakeAudioContext;
+  });
+
+  afterEach(() => {
+    resetSharedAudioContextForTests();
+    if (originalAudioContext === undefined) {
+      delete (window as unknown as { AudioContext?: unknown }).AudioContext;
+    } else {
+      (window as unknown as { AudioContext: unknown }).AudioContext = originalAudioContext;
+    }
+  });
+
+  /** Mount with audio on and wait for the wasm preload to resolve so a
+   * synchronous `play` inside an edit can read the pitch module. */
+  async function mountWithAudioLoaded() {
+    setCaretSpy = vi.fn();
+    const loader = makeLoader();
+    render(<Harness initial={SOURCE} chordAudio chordAudioLoader={loader} />);
+    await waitFor(() => expect(loadCalls).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+
+  test('exposes a non-null chordAudio config when audio is on and supported', () => {
+    setCaretSpy = vi.fn();
+    render(<Harness initial={SOURCE} chordAudio chordAudioLoader={makeLoader()} />);
+    expect(latest.chordAudio).not.toBeNull();
+    expect(latest.chordAudio?.enabled).toBe(true);
+    expect(latest.chordAudio?.play).toBeTypeOf('function');
+  });
+
+  test('chordAudio config is null when the feature is off', () => {
+    setCaretSpy = vi.fn();
+    render(<Harness initial={SOURCE} chordAudioLoader={makeLoader()} />);
+    expect(latest.chordAudio).toBeNull();
+  });
+
+  test('editing a chord in the panel auditions the new chord', async () => {
+    await mountWithAudioLoaded();
+    caretTo(1); // select `[G]`
+    act(() => {
+      latest.inspectorProps.onChange({ root: 'G', accidental: '', suffix: '7', bass: '' });
+    });
+    // The retype rewrote the source AND sounded the new chord (G7 → 4
+    // oscillators).
+    expect(currentSource).toBe('[G7]Almost [Bbm7]heaven');
+    const ctx = FakeAudioContext.instances[0]!;
+    expect(ctx.oscillators).toHaveLength(4);
+  });
+
+  test('moving a chord with the panel buttons re-auditions it', async () => {
+    await mountWithAudioLoaded();
+    caretTo(1); // select `[G]`
+    act(() => {
+      latest.inspectorProps.onNudge(1);
+    });
+    // `[G]` (3-note voicing) re-sounded on the move.
+    const ctx = FakeAudioContext.instances[0]!;
+    expect(ctx.oscillators).toHaveLength(3);
   });
 });

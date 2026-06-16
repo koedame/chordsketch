@@ -1597,14 +1597,15 @@ export interface ChordSelection {
 
 /**
  * Chord-audio (#2650) wiring threaded to each chord-bearing lyrics line.
- * When {@link ChordAudioConfig.enabled} is `true`, every rendered
- * `.chord` becomes a play button: clicking / Enter / Space sounds the
- * chord via {@link ChordAudioConfig.play}.
+ * When {@link ChordAudioConfig.enabled} is `true`, activating a rendered
+ * `.chord` (click / Enter / Space) sounds the chord via
+ * {@link ChordAudioConfig.play}.
  *
- * Audio mode takes precedence over the click-to-nudge selection
- * interaction (a chord cannot be both a "select to edit" target and a
- * "tap to hear" target at once), matching the toolbar-toggle UX where
- * the user opts into audio mode explicitly.
+ * Audio is additive, not a separate mode: it layers playback on top of
+ * whatever interaction is already wired. With a selection consumer
+ * present, clicking a chord both sounds it AND selects it for editing —
+ * the editing panel stays usable while audio is on. With no selection
+ * consumer (e.g. a preview-only host), the chord is a pure play button.
  */
 export interface ChordAudioConfig {
   /** Whether chord-audio mode is active. */
@@ -2184,11 +2185,14 @@ function LyricsLine({
             ? renderMarker(caret.withinRatio)
             : null;
         const segLayout = segmentLayout[i];
-        // In chord-audio mode the chord is a play button, not a drag
-        // handle — suppress drag wiring so a tap-to-hear gesture is not
-        // also a drag-to-reposition gesture (#2650).
+        // Chord-audio is additive (#2650 follow-up): it no longer
+        // suppresses drag, so a chord stays draggable-to-reposition
+        // while audio is on. Drag (a `dragstart` gesture) and the
+        // tap-to-hear click are distinct events — the same coexistence
+        // the selection interaction already relies on — so they do not
+        // collide.
         const chordDragProps =
-          reposition && segment.chord && !(chordAudio?.enabled)
+          reposition && segment.chord
             ? buildChordDragProps(
                 segment.chord,
                 segLayout.chordSourceColumn,
@@ -2226,49 +2230,94 @@ function LyricsLine({
         const isRealChord = segment.chord != null;
         const isFocusedChord =
           reposition != null && isRealChord && i === focusedSegmentIdx;
-        // Chord-audio mode (#2650) turns each chord into a play button.
-        // It takes precedence over the click-to-nudge selection so a
-        // chord is never both "tap to edit" and "tap to hear" at once —
-        // the user opts into audio mode via the toolbar toggle.
+        // Chord-audio (#2650) is ADDITIVE, not a separate mode: when the
+        // consumer turns it on, chord playback layers on top of whatever
+        // interaction is already wired (selection / drag / nudge) rather
+        // than replacing it. So with audio on, clicking a chord both
+        // sounds it AND selects it for editing — the editing panel stays
+        // usable while audio plays (#2652 follow-up). When no selection
+        // is wired (e.g. a preview-only host), the chord is a pure play
+        // button.
         const audioEnabled = Boolean(chordAudio?.enabled) && isRealChord;
-        const playChord = (e: ReactMouseEvent | ReactKeyboardEvent) => {
+        const selectionEnabled = reposition != null && nudgeCtx != null && isRealChord;
+        const playChord = (el: HTMLElement): void => {
           chordAudio?.play(segment.chord?.name ?? '');
-          pulseChordElement(e.currentTarget as HTMLElement);
+          pulseChordElement(el);
         };
-        const chordInteractiveProps = audioEnabled
-          ? {
-              tabIndex: 0,
-              role: 'button' as const,
-              'aria-label': `Play chord ${segment.chord?.name ?? ''}`,
-              'data-chord': segment.chord?.name ?? '',
-              onClick: (e: ReactMouseEvent) => {
-                e.stopPropagation();
-                playChord(e);
-              },
-              onKeyDown: (e: ReactKeyboardEvent) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  playChord(e);
-                }
-              },
-              onAnimationEnd: (e: ReactAnimationEvent) => {
-                (e.currentTarget as HTMLElement).classList.remove(
-                  'chord--ringing',
-                );
-              },
+        const clearRinging = (e: ReactAnimationEvent): void => {
+          (e.currentTarget as HTMLElement).classList.remove('chord--ringing');
+        };
+        let chordInteractiveProps:
+          | {
+              tabIndex: number;
+              role: 'button';
+              'aria-pressed'?: boolean;
+              'aria-label'?: string;
+              'data-chord'?: string;
+              onClick: (e: ReactMouseEvent) => void;
+              onKeyDown: (e: ReactKeyboardEvent) => void;
+              onAnimationEnd?: (e: ReactAnimationEvent) => void;
             }
-          : reposition && nudgeCtx && isRealChord
-            ? {
-                tabIndex: 0,
-                role: 'button' as const,
-                'aria-pressed': isFocusedChord,
-                onClick: (e: ReactMouseEvent) => {
-                  e.stopPropagation();
-                  toggleSelect(i);
-                },
-                onKeyDown: chordKeyHandler(i),
+          | null = null;
+        if (selectionEnabled) {
+          // Selection is the primary interaction; audio (when on) is a
+          // side effect of activating the chord, plus a descriptive
+          // label + the `data-chord` hook + ring cleanup the audio path
+          // needs.
+          //
+          // Visual feedback in this combined mode is the crimson SELECTED
+          // badge, not the audio-only scale-pulse: activating the chord
+          // mutates the selection, so React re-renders the span with a
+          // new `className` and overwrites the imperatively-added
+          // `.chord--ringing` before it paints. The badge is itself
+          // crimson, so the click still reads as "this chord fired". The
+          // `onAnimationEnd` cleanup stays wired as a harmless safety for
+          // the audio-only-style ring should a render ever NOT change the
+          // class string.
+          chordInteractiveProps = {
+            tabIndex: 0,
+            role: 'button',
+            'aria-pressed': isFocusedChord,
+            ...(audioEnabled
+              ? {
+                  'aria-label': `Play chord ${segment.chord?.name ?? ''}`,
+                  'data-chord': segment.chord?.name ?? '',
+                  onAnimationEnd: clearRinging,
+                }
+              : {}),
+            onClick: (e: ReactMouseEvent) => {
+              e.stopPropagation();
+              if (audioEnabled) playChord(e.currentTarget as HTMLElement);
+              toggleSelect(i);
+            },
+            onKeyDown: (e: ReactKeyboardEvent) => {
+              if (audioEnabled && (e.key === 'Enter' || e.key === ' ')) {
+                playChord(e.currentTarget as HTMLElement);
               }
-            : null;
+              chordKeyHandler(i)(e as ReactKeyboardEvent<HTMLSpanElement>);
+            },
+          };
+        } else if (audioEnabled) {
+          // Audio-only (no selection wired): the chord is a pure play
+          // button.
+          chordInteractiveProps = {
+            tabIndex: 0,
+            role: 'button',
+            'aria-label': `Play chord ${segment.chord?.name ?? ''}`,
+            'data-chord': segment.chord?.name ?? '',
+            onClick: (e: ReactMouseEvent) => {
+              e.stopPropagation();
+              playChord(e.currentTarget as HTMLElement);
+            },
+            onKeyDown: (e: ReactKeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                playChord(e.currentTarget as HTMLElement);
+              }
+            },
+            onAnimationEnd: clearRinging,
+          };
+        }
         return (
           <span key={i} className="chord-block">
             {segment.chord ? (
@@ -2300,11 +2349,16 @@ function LyricsLine({
               ) : (
                 <span
                   className={
-                    audioEnabled
-                      ? 'chord chord--audio'
-                      : isFocusedChord
-                        ? 'chord chord--selected'
-                        : 'chord'
+                    // Audio + selection are additive, so a chord can be
+                    // both (crimson badge from `--selected`, play
+                    // affordance from `--audio`).
+                    [
+                      'chord',
+                      isFocusedChord ? 'chord--selected' : '',
+                      audioEnabled ? 'chord--audio' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
                   }
                   style={chordStyle ?? undefined}
                   ref={isFocusedChord ? focusedSpanRef : undefined}

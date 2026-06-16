@@ -19,7 +19,9 @@ import type { RefObject } from 'react';
 
 import type { ChordInspectorProps } from './chord-inspector';
 import { unicodeAccidentals } from './chordpro-jsx';
-import type { ChordSelection } from './chordpro-jsx';
+import type { ChordAudioConfig, ChordSelection } from './chordpro-jsx';
+import { useChordAudio } from './use-chord-audio';
+import type { ChordAudioWasmLoader } from './use-chord-audio';
 import {
   applyChordDelete,
   applyChordEdit,
@@ -58,6 +60,28 @@ export interface UseChordEditorParams {
    * after a mutation and to move it onto a chord clicked in the
    * preview. */
   editorRef: RefObject<ChordSourceAreaHandle | null>;
+  /**
+   * Enable chord-audio playback (#2650). When `true`, the hook owns a
+   * single {@link useChordAudio} instance and:
+   * - exposes a {@link ChordAudioConfig} via {@link UseChordEditor.chordAudio}
+   *   for the host to forward to the preview (`<RendererPreview chordAudio>`)
+   *   so a preview chord click sounds through this same instance, and
+   * - sounds the chord on every panel-driven mutation (retype / move /
+   *   the preview keyboard-nudge + drag paths it owns).
+   *
+   * Routing both surfaces through one instance keeps a click-then-edit
+   * sequence from stacking two independent voice managers. Defaults to
+   * `false` — hosts without an audio toggle pay nothing. Degrades to a
+   * `null` config under SSR / browsers without Web Audio.
+   */
+  chordAudio?: boolean;
+  /**
+   * Test-only WASM loader override for the chord-audio hook. Production
+   * callers never supply this.
+   *
+   * @internal
+   */
+  chordAudioLoader?: ChordAudioWasmLoader;
 }
 
 /** Everything a shell needs to render the lifted footer + wire the
@@ -74,6 +98,12 @@ export interface UseChordEditor {
   /** Reposition callback to pass to the preview — enables chord
    * interactivity (selection / drag) and applies drops to the source. */
   onChordReposition: (event: ChordRepositionEvent) => void;
+  /** Chord-audio config to forward to the preview
+   * (`<RendererPreview chordAudio>`), or `null` when audio is off /
+   * unsupported. Wiring the preview to THIS config (rather than a bare
+   * `true`) shares one audio instance between preview-click playback and
+   * the panel-edit playback this hook performs. */
+  chordAudio: ChordAudioConfig | null;
   /** Props to spread onto `<ChordInspector>`, or `null` to omit the
    * footer entirely (never returned today — the footer stays visible,
    * showing an idle / gated state instead). */
@@ -111,9 +141,32 @@ export function useChordEditor({
   onSourceChange,
   transpose = 0,
   editorRef,
+  chordAudio = false,
+  chordAudioLoader,
 }: UseChordEditorParams): UseChordEditor {
   const [caret, setCaret] = useState<CaretPosition | null>(null);
   const onCaretChange = useCallback((next: CaretPosition) => setCaret(next), []);
+
+  // Single chord-audio instance shared by the preview (via the exposed
+  // `chordAudio` config) and the panel-edit playback below, so a
+  // click-then-edit sequence does not stack two voice managers. The hook
+  // is always called (rules of hooks); it only preloads wasm when audio
+  // is on and supported. `audio.play` / `audio.supported` are stable, so
+  // the memo keeps a stable config identity — the host can forward it to
+  // the preview without forcing a re-render on every keystroke.
+  const audio = useChordAudio(chordAudioLoader, chordAudio);
+  const chordAudioConfig = useMemo<ChordAudioConfig | null>(
+    () => (chordAudio && audio.supported ? { enabled: true, play: audio.play } : null),
+    [chordAudio, audio.supported, audio.play],
+  );
+  // Sound a chord through the shared instance when audio is on; a no-op
+  // otherwise. Centralised so every panel mutation auditions uniformly.
+  const auditionChord = useCallback(
+    (name: string) => {
+      chordAudioConfig?.play(name);
+    },
+    [chordAudioConfig],
+  );
 
   // Source-coordinate editing is only safe when the rendered chords
   // match the raw source — i.e. no effective transpose / capo (ADR-0023,
@@ -223,8 +276,11 @@ export function useChordEditor({
       // selected (a caret just after `]` would deselect it).
       const target = lineBaseOffset(source, caretChord.line) + caretChord.sourceColumn + 1;
       commit(result, target);
+      // Audition the new chord when audio is on (#2652 follow-up): every
+      // panel change sounds the chord it produced.
+      auditionChord(chord);
     },
-    [caretChord, source, commit],
+    [caretChord, source, commit, auditionChord],
   );
 
   const onNudge = useCallback(
@@ -244,8 +300,11 @@ export function useChordEditor({
       const result = applyChordReposition(source, nudge.event);
       // Keep the moved chord selected: caret inside its new bracket.
       commit(result, caretInsideWrittenBracket(result, caretChord.chordName));
+      // Re-audition the moved chord (same name, new position) for
+      // consistent feedback with a retype.
+      auditionChord(caretChord.chordName);
     },
-    [caretChord, source, commit],
+    [caretChord, source, commit, auditionChord],
   );
 
   const onRemove = useCallback(() => {
@@ -269,8 +328,15 @@ export function useChordEditor({
       // on drop). On an optimistic-concurrency no-op the source is
       // unchanged, so the deferred caret effect never fires.
       commit(result, caretInsideWrittenBracket(result, event.chord));
+      // Re-audition the moved / copied chord when audio is on. This is
+      // the preview's drag-drop + keyboard-nudge path (the walker routes
+      // arrow-key nudges through here), so it stays consistent with the
+      // panel ◀/▶ buttons. The walker plays click / Enter / Space
+      // activations itself via the shared config, so those do not
+      // double-fire here.
+      auditionChord(event.chord);
     },
-    [source, commit],
+    [source, commit, auditionChord],
   );
 
   const onChordSelectionChange = useCallback(
@@ -320,6 +386,7 @@ export function useChordEditor({
     chordSelection,
     onChordSelectionChange,
     onChordReposition,
+    chordAudio: chordAudioConfig,
     inspectorProps,
   };
 }
