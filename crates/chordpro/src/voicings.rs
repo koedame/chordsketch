@@ -1561,12 +1561,22 @@ pub fn lookup_diagram(
             frets_shown,
         );
     }
-    // 2. Built-in database.
-    match instrument.to_ascii_lowercase().as_str() {
+    // 2. Built-in curated database.
+    let curated = match instrument.to_ascii_lowercase().as_str() {
         "ukulele" | "uke" => ukulele_voicing(chord_name),
         "charango" => charango_voicing(chord_name),
         _ => guitar_voicing(chord_name),
+    };
+    if curated.is_some() {
+        return curated;
     }
+
+    // 3. Algorithmic synthesis. The curated tables cover only a few chord
+    //    families; any other parseable chord is voiced by searching the
+    //    fretboard from its pitch-class content, so the chord-type palette's
+    //    diagram coverage stays at 100% with no per-type data to maintain
+    //    (see `.claude/rules/chord-diagram-coverage.md`).
+    crate::voicing_synth::synth_fretted_voicing(chord_name, instrument, frets_shown)
 }
 
 // ---------------------------------------------------------------------------
@@ -1997,8 +2007,15 @@ pub fn lookup_keyboard_voicing(
             });
         }
     }
-    // 2. Built-in database.
-    keyboard_voicing(chord_name)
+    // 2. Built-in curated database.
+    if let Some(v) = keyboard_voicing(chord_name) {
+        return Some(v);
+    }
+
+    // 3. Algorithmic synthesis from the chord's pitch-class content, so the
+    //    chord-type palette's keyboard-diagram coverage stays at 100%
+    //    (see `.claude/rules/chord-diagram-coverage.md`).
+    crate::voicing_synth::synth_keyboard_voicing(chord_name)
 }
 
 // ---------------------------------------------------------------------------
@@ -2457,5 +2474,129 @@ mod tests {
         // Charango voicings have 5 strings, guitar has 6.
         let v = lookup_diagram("A", &[], "lute", 5).expect("fallback to guitar");
         assert_eq!(v.strings, 6, "unknown instrument must fall back to guitar");
+    }
+
+    // -- Chord-type palette diagram coverage ---------------------------------
+    //
+    // Enforces `.claude/rules/chord-diagram-coverage.md`: every chord type the
+    // editor's chord-type palette can produce MUST yield a valid diagram on
+    // every instrument, for every root. This is the mechanical guard the rule
+    // points to — adding a chip to `CHORD_TYPE_PRESETS`
+    // (`packages/react/src/chord-source-edit.ts`) without keeping coverage at
+    // 100% fails here.
+
+    /// The chord-type suffixes offered by the React editor's chord-type
+    /// palette. SISTER LIST: the `text` field of every entry in
+    /// `CHORD_TYPE_PRESETS`
+    /// (`packages/react/src/chord-source-edit.ts`). When that palette gains or
+    /// loses a chip, mirror the change here (and vice versa) so this coverage
+    /// guard stays aligned with the UI it protects.
+    const PALETTE_SUFFIXES: &[&str] = &[
+        "", "m", "5", "aug", "dim", "6", "m6", "69", "7", "maj7", "m7", "mMaj7", "m7b5", "dim7",
+        "7b5", "7#5", "9", "maj9", "m9", "11", "m11", "13", "m13", "add9", "add11", "7b9", "7#9",
+        "7#11", "7b13", "7alt", "sus2", "sus4", "7sus4", "9sus4",
+    ];
+
+    /// The twelve chromatic roots (sharp spelling).
+    const ROOTS: &[&str] = &[
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+    ];
+
+    fn pc_mask(pcs: &[u8]) -> u16 {
+        pcs.iter().fold(0u16, |m, &pc| m | (1u16 << (pc % 12)))
+    }
+
+    /// Whether a chord has a hand-authored entry in the curated table for an
+    /// instrument (as opposed to being synthesised). Curated upstream data may
+    /// intentionally use rootless / reduced voicings, so the strict musical
+    /// checks below apply only to the synthesiser's output — the new code path
+    /// — while curated entries are required only to exist.
+    fn is_curated(name: &str, instrument: &str) -> bool {
+        match instrument {
+            "ukulele" | "uke" => ukulele_voicing(name),
+            "charango" => charango_voicing(name),
+            _ => guitar_voicing(name),
+        }
+        .is_some()
+    }
+
+    /// Asserts a fretted diagram exists for `name` on `instrument`. When the
+    /// diagram was synthesised (not curated), additionally asserts it sounds
+    /// only chord tones, contains every essential tone, and sounds the bass.
+    fn assert_fretted_valid(name: &str, instrument: &str) {
+        let data = lookup_diagram(name, &[], instrument, 5)
+            .unwrap_or_else(|| panic!("no {instrument} diagram for {name}"));
+        if is_curated(name, instrument) {
+            return;
+        }
+        let tones = crate::chord::chord_tones(name).unwrap();
+        let target = pc_mask(&tones.pitch_classes);
+        let essential = pc_mask(&tones.essential);
+        let sounded = crate::voicing_synth::sounded_pitch_classes(&data, instrument);
+        let sounded_mask = pc_mask(&sounded);
+
+        for &pc in &sounded {
+            assert!(
+                target & (1u16 << pc) != 0,
+                "{name} ({instrument}): sounds non-chord tone {pc} (frets {:?}, base {})",
+                data.frets,
+                data.base_fret,
+            );
+        }
+        assert!(
+            essential & !sounded_mask == 0,
+            "{name} ({instrument}): missing essential tone(s); have {sounded:?}, essential mask {essential:012b}",
+        );
+        assert!(
+            sounded_mask & (1u16 << tones.bass_pc) != 0,
+            "{name} ({instrument}): bass {} not sounded",
+            tones.bass_pc,
+        );
+    }
+
+    #[test]
+    fn palette_chord_types_have_fretted_diagrams_for_every_root() {
+        for &suffix in PALETTE_SUFFIXES {
+            for &root in ROOTS {
+                let name = format!("{root}{suffix}");
+                for instrument in ["guitar", "ukulele", "charango"] {
+                    assert_fretted_valid(&name, instrument);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn palette_chord_types_have_keyboard_diagrams_for_every_root() {
+        for &suffix in PALETTE_SUFFIXES {
+            for &root in ROOTS {
+                let name = format!("{root}{suffix}");
+                let v = lookup_keyboard_voicing(&name, &[])
+                    .unwrap_or_else(|| panic!("no keyboard diagram for {name}"));
+                if keyboard_voicing(&name).is_some() {
+                    // Curated keyboard voicing: required only to exist.
+                    continue;
+                }
+                let tones = crate::chord::chord_tones(&name).unwrap();
+                let target = pc_mask(&tones.pitch_classes);
+                let mut root_present = false;
+                for &k in &v.keys {
+                    let pc = k % 12;
+                    assert!(
+                        target & (1u16 << pc) != 0,
+                        "{name} (keyboard): key {k} (pc {pc}) is not a chord tone",
+                    );
+                    if pc == tones.root_pc {
+                        root_present = true;
+                    }
+                }
+                assert!(root_present, "{name} (keyboard): root not present in keys");
+                assert_eq!(
+                    v.root_key % 12,
+                    tones.root_pc,
+                    "{name} (keyboard): root_key must spell the root",
+                );
+            }
+        }
     }
 }
