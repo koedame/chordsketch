@@ -1803,7 +1803,7 @@
 .chordsketch-chord-pro-editor__chord-footer .chordsketch-sheet__cins {
   flex-direction: row;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: var(--cs-sp-3, 0.75rem) var(--cs-sp-5, 1.25rem);
   /* Reserve a stable minimum so the footer does not jump in height
      between its idle and selected states. */
