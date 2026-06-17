@@ -746,6 +746,45 @@ mod tests {
         assert_eq!(key_to_fifths("G7"), (0, "major"));
     }
 
+    #[test]
+    fn key_to_fifths_covers_every_circle_of_fifths_root() {
+        // Exercise every `(root, accidental)` arm so the root→fifths table is
+        // pinned (flat-side roots, the sharp-side naturals, F#/C#) and the
+        // parsed-but-unmapped `_ => 0` arm (e.g. an enharmonic G# / D# root the
+        // table does not carry) is covered.
+        let expected = [
+            ("Cb", -7),
+            ("Gb", -6),
+            ("Db", -5),
+            ("Ab", -4),
+            ("Eb", -3),
+            ("Bb", -2),
+            ("F", -1),
+            ("C", 0),
+            ("G", 1),
+            ("D", 2),
+            ("A", 3),
+            ("E", 4),
+            ("B", 5),
+            ("F#", 6),
+            ("C#", 7),
+        ];
+        for (key, fifths) in expected {
+            assert_eq!(key_to_fifths(key), (fifths, "major"), "major key {key}");
+            // The minor of the same root reuses the same fifths value (this
+            // crate's root-based convention) with the minor mode.
+            assert_eq!(
+                key_to_fifths(&format!("{key}m")),
+                (fifths, "minor"),
+                "minor key {key}m"
+            );
+        }
+        // A parsed key whose root the table does not map (G# / D# enharmonics)
+        // hits the `_ => 0` arm.
+        assert_eq!(key_to_fifths("G#"), (0, "major"));
+        assert_eq!(key_to_fifths("D#m"), (0, "minor"));
+    }
+
     /// Regression test: section label must appear on the first measure of the
     /// section it names, not on the last measure of the preceding section.
     ///
