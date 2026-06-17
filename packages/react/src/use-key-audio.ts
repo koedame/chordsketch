@@ -20,7 +20,9 @@ const NOTE_RELEASE_S = 0.34; // each scale note decays past the next onset
 const NOTE_PEAK_GAIN = 0.2;
 const NOTE_TAIL_S = 0.05;
 // Pause between the last scale note's onset and the triad strum.
-const SCALE_TO_CHORD_GAP_S = 0.12;
+// Doubled from 0.12 to give a clearer breath before the "jara-n"
+// lands (#2660).
+const SCALE_TO_CHORD_GAP_S = 0.24;
 // Per-note delay across the triad so it reads as a strum, not a stab.
 const STRUM_OFFSET_S = 0.035;
 const CHORD_ATTACK_S = 0.008;
