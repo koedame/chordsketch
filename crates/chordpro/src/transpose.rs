@@ -345,17 +345,17 @@ pub fn transpose(song: &Song, semitones: i8) -> Song {
 /// preserve the modal qualifier and the slash-bass (every Rust
 /// renderer's inline `{key:}` marker does, per #2522).
 ///
-/// Returns `None` when the song key is not a well-formed key per the strict
-/// [`crate::key::parse_key`] grammar, **or** when it is a modal key — callers
-/// fall back to displaying the authored value verbatim and untransposed, so a
-/// malformed `{key}` is never silently shifted on a guessed quality and a mode
-/// is never silently flattened to a major label.
+/// Returns `None` when the song key is not a key per [`crate::key::parse_key`]
+/// (a chord extension like `{key: G7}`, a non-note root), **or** when it is a
+/// modal key — callers fall back to displaying the authored value verbatim and
+/// untransposed, so a non-key `{key}` is never silently shifted on a guessed
+/// quality and a mode is never silently flattened to a major label.
 #[must_use]
 pub fn canonical_transposed_key(song_key: Option<&str>, semitones: i8) -> Option<String> {
-    // The strict parser is the single source of truth: a well-formed key is
-    // lowered straight to a `ChordDetail` (no second permissive parse), and a
-    // malformed value ({key: G minor}, {key: G7}, …) returns None so the
-    // caller renders it as authored instead of transposing a guessed quality.
+    // `parse_key` is the single source of truth: a recognised key is lowered
+    // straight to a `ChordDetail` (no second permissive parse), and a non-key
+    // value ({key: G7}, {key: H}, …) returns None so the caller renders it as
+    // authored instead of transposing a guessed quality.
     let key = crate::key::parse_key(song_key?)?;
     // A bare major/minor label can't carry a mode; defer to the authored value
     // (the `_with_style` variant is the one that preserves `C dorian` → `D
@@ -393,18 +393,18 @@ pub fn canonical_transposed_key(song_key: Option<&str>, semitones: i8) -> Option
 /// token) and the slash `/bass` (transposed alongside the root).
 /// Minor keys append `m` after the accidental.
 ///
-/// Returns `None` when the value is not a well-formed key per the strict
-/// [`crate::key::parse_key`] grammar — same contract as
-/// [`canonical_transposed_key`]. A modal qualifier (`C dorian`) and a
-/// slash-bass (`G/B`) are well-formed and preserved; a malformed value
-/// (`G minor`, `G7`) returns `None` so the caller shows it verbatim.
+/// Returns `None` when the value is not a key per [`crate::key::parse_key`] —
+/// same contract as [`canonical_transposed_key`] minus the modal exclusion. A
+/// lenient minor spelling (`G minor`), a modal qualifier (`C dorian`), and a
+/// slash-bass (`G/B`) are all keys and preserved; a non-key value (`G7`, `H`)
+/// returns `None` so the caller shows it verbatim.
 #[must_use]
 pub fn canonical_transposed_key_with_style(
     song_key: Option<&str>,
     semitones: i8,
     prefer_flat: bool,
 ) -> Option<String> {
-    // Single strict parse → `ChordDetail` (see `canonical_transposed_key`);
+    // Single parse → `ChordDetail` (see `canonical_transposed_key`);
     // no second permissive parse, so the two parsers cannot drift.
     let detail = crate::key::parse_key(song_key?)?.to_chord_detail();
     let transposed = transpose_detail_with_style(&detail, semitones, prefer_flat);

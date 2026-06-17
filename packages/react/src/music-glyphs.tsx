@@ -79,25 +79,45 @@ export function keySignatureFor(
 
   // Lenient key grammar — sister-site to the Rust
   // `chordsketch_chordpro::parse_key` (ADR-0034). An uppercase root, an
-  // optional accidental, an optional `/bass` (ignored for the signature), and
-  // a quality qualifier matched case-insensitively and space-tolerantly:
-  //   minor ← m | mi | min | minor | -      major ← <empty> | maj | major
+  // optional accidental, an optional `/bass`, and a quality qualifier:
+  //   minor ← m | - | (mi | min | minor, case-insensitive)
+  //   major ← <empty> | M | (maj | major, case-insensitive)
+  // The single-letter marker is case-sensitive (lead-sheet convention
+  // `Cm` = minor, `CM` = major); the words and modes are case-insensitive.
   // A church-mode qualifier (`C dorian`) has no single conventional key
   // signature here, so it yields `null` (staff-only glyph), as do chord
-  // extensions (`G7`), a lowercase root, and any other non-key value.
-  const head = ascii.includes('/') ? ascii.slice(0, ascii.indexOf('/')) : ascii;
+  // extensions (`G7`), a lowercase root, a malformed slash-bass, and any
+  // other non-key value.
+  let head = ascii;
+  if (ascii.includes('/')) {
+    // Validate the slash-bass exactly as Rust `parse_key` does (note + optional
+    // accidental, nothing trailing); a malformed bass (`G/`, `G/H`, `G/Bextra`)
+    // makes the whole value not a key, so there is no signature — matching the
+    // Rust HTML/PDF glyph (which returns None) rather than drawing one anyway.
+    const slash = ascii.indexOf('/');
+    head = ascii.slice(0, slash);
+    const bass = ascii.slice(slash + 1).trim();
+    if (!/^[A-G][b#]?$/.test(bass)) return null;
+  }
   const rootMatch = /^([A-G])([b#]?)(.*)$/.exec(head);
   if (!rootMatch) return null;
   const root = rootMatch[1]!;
   const accidental = rootMatch[2] ?? '';
-  const qualifier = rootMatch[3]!.trim().toLowerCase();
+  const qualifierRaw = rootMatch[3]!.trim();
   let isMinor: boolean;
-  if (qualifier === '' || qualifier === 'maj' || qualifier === 'major') {
-    isMinor = false;
-  } else if (['m', 'mi', 'min', 'minor', '-'].includes(qualifier)) {
+  if (qualifierRaw === 'm' || qualifierRaw === '-') {
     isMinor = true;
+  } else if (qualifierRaw === 'M') {
+    isMinor = false;
   } else {
-    return null; // church mode, chord extension, or unknown → no signature
+    const qualifier = qualifierRaw.toLowerCase();
+    if (qualifier === '' || qualifier === 'maj' || qualifier === 'major') {
+      isMinor = false;
+    } else if (qualifier === 'mi' || qualifier === 'min' || qualifier === 'minor') {
+      isMinor = true;
+    } else {
+      return null; // church mode, chord extension, or unknown → no signature
+    }
   }
 
   // Sharps / flats table (Wikipedia: "Key signature"). Direct

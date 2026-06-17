@@ -541,9 +541,11 @@ pub(crate) fn do_parse_chordpro(
     // is the React surface's equivalent entry point.
     chordsketch_chordpro::render_result::validate_capo(&song.metadata, &mut warnings);
     // Mirror the Rust renderers' validate_keys invocation so the React preview
-    // surfaces the same "{key} value … is not a valid key" diagnostic for
-    // malformed key notation (issue #2665, renderer-parity.md §Validation
-    // Parity). Malformed keys render verbatim and untransposed on every surface.
+    // surfaces the same "{key} value … is not a valid key" diagnostic
+    // (renderer-parity.md §Validation Parity). Per ADR-0034 the lenient key
+    // spellings (`G minor`, `Gmin`, …) are accepted and canonicalised above, so
+    // this warns only for values that are not keys at all (chord extensions
+    // like `{key: G7}`, non-note roots like `{key: H}`), which render verbatim.
     chordsketch_chordpro::render_result::validate_keys(&song.metadata, &mut warnings);
     // The wasm path has no `{+config.settings.transpose}` extraction
     // (renderers fold that in via `Config::song_transpose_delta`

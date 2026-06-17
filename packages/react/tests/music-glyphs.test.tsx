@@ -95,9 +95,26 @@ describe('keySignatureFor', () => {
     expect(keySignatureFor('E major')?.count).toBe(4);
   });
 
+  test('single-letter marker is case-sensitive (m=minor, M=major)', () => {
+    // Lead-sheet convention, mirroring Rust `parse_key`: `Cm` is C minor but
+    // `CM` is C major (not minor).
+    expect(keySignatureFor('Cm')).toEqual({ count: 3, type: 'flat' }); // C minor
+    expect(keySignatureFor('CM')).toEqual({ count: 0, type: 'natural' }); // C major
+    expect(keySignatureFor('GM')).toEqual({ count: 1, type: 'sharp' }); // G major
+  });
+
   test('a slash-bass key is looked up by its tonic', () => {
     // The bass note does not change the key signature (#2665).
     expect(keySignatureFor('G/B')).toEqual({ count: 1, type: 'sharp' });
+  });
+
+  test('returns null for a malformed slash-bass (ADR-0034 parity)', () => {
+    // Rust `parse_key` validates the bass, so a malformed bass is not a key
+    // and draws no signature — the TS sister-site must agree (no glyph) rather
+    // than ignoring the bass and drawing a tonic signature.
+    expect(keySignatureFor('G/')).toBeNull();
+    expect(keySignatureFor('G/H')).toBeNull();
+    expect(keySignatureFor('G/Bextra')).toBeNull();
   });
 
   test('returns null for unparseable input', () => {

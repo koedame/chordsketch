@@ -19,11 +19,13 @@
 //! form every render surface shows. A valid `{key}` value is one of:
 //!
 //! - **Tonal key**: a root note `A`–`G`, an optional accidental (`#` / `b`),
-//!   an optional quality qualifier, and an optional `/bass` note. The
-//!   qualifier is matched case-insensitively and tolerates a single internal
-//!   space: minor ← `m` / `mi` / `min` / `minor` / `-`; major ← *(empty)* /
-//!   `maj` / `major`. Examples: `C`, `Gm`, `G minor`, `Gminor`, `G min`,
-//!   `G major` (→ `G`), `Cmin` (→ `Cm`), `G/B`.
+//!   an optional quality qualifier, and an optional `/bass` note. The qualifier
+//!   tolerates a single internal space; the spelled-out words are matched
+//!   case-insensitively, but the single-letter marker is case-sensitive (the
+//!   lead-sheet convention `Cm` = minor, `CM` = major): minor ← `m` / `-` /
+//!   `mi` / `min` / `minor`; major ← *(empty)* / `M` / `maj` / `major`.
+//!   Examples: `C`, `Gm`, `G minor`, `Gminor`, `G min`, `G major` (→ `G`),
+//!   `CM` (→ `C`), `Cmin` (→ `Cm`), `G/B`.
 //! - **Modal key**: a root + optional accidental + one of the seven
 //!   church-mode names (`ionian`, `dorian`, `phrygian`, `lydian`,
 //!   `mixolydian`, `aeolian`, `locrian`), case-insensitive. Examples:
@@ -116,7 +118,7 @@ pub enum KeyMode {
 /// A structurally-validated ChordPro `{key}` value.
 ///
 /// Produced only by [`parse_key`]; an instance is a guarantee that the source
-/// matched the [canonical grammar](self#canonical-grammar).
+/// matched the [grammar](self#grammar).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Key {
     /// The tonic note letter.
@@ -143,10 +145,10 @@ impl Key {
 
     /// Lower this validated key into a [`ChordDetail`] so the transpose /
     /// display machinery (which operates on `ChordDetail`) can drive directly
-    /// off the strict parse rather than re-parsing the raw string with the
-    /// permissive [`crate::chord::parse_chord`]. Keeping a single parse is the
-    /// "single source of truth" the strict parser exists for (ADR-0033): a
-    /// minor key becomes [`ChordQuality::Minor`], a modal qualifier becomes the
+    /// off this parse rather than re-parsing the raw string with the permissive
+    /// [`crate::chord::parse_chord`]. Keeping a single parse is the "single
+    /// source of truth" this module exists for (ADR-0033 / ADR-0034): a minor
+    /// key becomes [`ChordQuality::Minor`], a modal qualifier becomes the
     /// canonical `" <mode>"` extension text (preserved verbatim on transpose
     /// because it is not a transposable theory token), and the slash-bass
     /// carries through.
@@ -263,26 +265,35 @@ pub fn parse_key(value: &str) -> Option<Key> {
     // permissive, so the common human spellings are all accepted and
     // normalised to one canonical structure. Trimming `rest` collapses the
     // space / no-space distinction (`Gm` / `G m` / `G minor` / `Gminor` all
-    // reduce to the same word), and the compare is case-insensitive.
+    // reduce to the same token).
     //
-    //   minor  ← m | mi | min | minor | -
-    //   major  ← <empty> | maj | major
-    //   modal  ← one of the seven church modes
+    //   minor  ← m | - | (mi | min | minor, case-insensitive)
+    //   major  ← <empty> | M | (maj | major, case-insensitive)
+    //   modal  ← one of the seven church modes (case-insensitive)
     //
-    // A chord extension on a key (`G7`, `Gm7`, `Gsus4`) is NOT a key — those
-    // fall through to `None` and the caller renders the value verbatim.
-    let qualifier = rest.trim().to_ascii_lowercase();
-    let mode = match qualifier.as_str() {
-        "" | "maj" | "major" => KeyMode::Major,
-        "m" | "mi" | "min" | "minor" | "-" => KeyMode::Minor,
-        other => {
-            let church = ChurchMode::from_lowercase(other)?;
-            // A modal key cannot also carry a slash-bass.
-            if bass.is_some() {
-                return None;
+    // The spelled-out words and modes are matched case-insensitively, but the
+    // SINGLE-letter marker is case-sensitive on purpose: by the lead-sheet
+    // convention a lowercase `m` is minor and an uppercase `M` is major
+    // (`Cm` = C minor, `CM` = C major). Lowercasing it unconditionally would
+    // turn `{key: CM}` into C minor — the wrong quality. A chord extension on
+    // a key (`G7`, `Gm7`, `Gsus4`) is NOT a key — those fall through to `None`
+    // and the caller renders the value verbatim.
+    let qualifier = rest.trim();
+    let mode = match qualifier {
+        "m" | "-" => KeyMode::Minor,
+        "M" => KeyMode::Major,
+        _ => match qualifier.to_ascii_lowercase().as_str() {
+            "" | "maj" | "major" => KeyMode::Major,
+            "mi" | "min" | "minor" => KeyMode::Minor,
+            other => {
+                let church = ChurchMode::from_lowercase(other)?;
+                // A modal key cannot also carry a slash-bass.
+                if bass.is_some() {
+                    return None;
+                }
+                KeyMode::Mode(church)
             }
-            KeyMode::Mode(church)
-        }
+        },
     };
 
     Some(Key {
@@ -340,6 +351,21 @@ mod tests {
             assert_eq!(k(spelling).to_string(), "G", "canonical of {spelling}");
         }
         assert_eq!(k("Cminor").to_string(), "Cm");
+    }
+
+    #[test]
+    fn single_letter_quality_marker_is_case_sensitive() {
+        // Lead-sheet convention: lowercase `m` = minor, uppercase `M` = major.
+        assert_eq!(k("Cm").mode, KeyMode::Minor);
+        assert_eq!(k("Cm").to_string(), "Cm");
+        assert_eq!(k("CM").mode, KeyMode::Major); // NOT minor
+        assert_eq!(k("CM").to_string(), "C");
+        assert_eq!(k("C M").mode, KeyMode::Major);
+        assert_eq!(k("F#M").to_string(), "F#");
+        // The spelled-out words stay case-insensitive.
+        assert_eq!(k("C MINOR").mode, KeyMode::Minor);
+        assert_eq!(k("C Major").mode, KeyMode::Major);
+        assert_eq!(k("CMIN").mode, KeyMode::Minor);
     }
 
     #[test]
