@@ -52,16 +52,23 @@ const MAX_POSITION: i32 = 12;
 /// `pub(crate)` for the same reason as [`SPAN`].
 pub(crate) const MAX_FINGERS: i64 = 4;
 
-// Scoring weights for [`evaluate`], in descending magnitude. Only the *ordering*
-// of these magnitudes is load-bearing — the search returns the highest-scoring
-// assignment, so what matters is that a higher-priority term can never be
-// outweighed by the sum of every lower-priority term across the values they can
-// take. They are named (rather than inlined) so a future tweak to one weight is
-// reviewed against the others instead of buried as a bare literal.
+// Scoring weights for [`evaluate`], in descending magnitude — these only order
+// *already-valid* voicings (every scored candidate has already passed the
+// hard-required essential-tone, bass, and ≤`MAX_FINGERS` gates, so scoring can
+// never drop an essential tone or the bass). What the weights trade off against
+// each other is the inclusion of *droppable* tones versus playability: the
+// position/finger/span penalties are deliberately large enough that the search
+// will give up a non-essential tone reachable only high up the neck in favour of
+// a lower, easier shape — which is the intended call. They are named (rather than
+// inlined) so a future tweak to one weight is reviewed against the others
+// instead of buried as a bare literal.
 
-/// Reward per distinct chord tone sounded. An order of magnitude above every
-/// penalty so a richer voicing always wins and a non-essential extra tone is
-/// never traded away for a cheaper-to-fret shape.
+/// Reward per distinct chord tone sounded — the dominant per-tone term, well
+/// above the per-string rewards (`W_OPEN` / `W_SOUNDED`) and the `W_FRET_SUM`
+/// tie-breaker so those can never buy back a covered tone. It does NOT dominate
+/// the *sum* of the position/finger/span penalties, so a droppable tone
+/// reachable only high on the neck may still lose to a lower, more playable
+/// shape (essential tones are protected earlier, by the hard gates, not here).
 const W_COVERED: i64 = 10_000;
 /// Penalty per finger. Outranks the per-string rewards so the search prefers
 /// the simplest shape that voices the chord over a denser barre.
