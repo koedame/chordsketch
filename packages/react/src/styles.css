@@ -424,19 +424,6 @@
   border-color: var(--cs-crimson-600, #a30f37);
 }
 
-/* Explicit On/Off badge — a non-colour-dependent state signal so the
- * control is unambiguous for colour-blind users and at a glance. */
-.chordsketch-preview-toolbar__audio-state {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  padding: 0.1rem 0.35rem;
-  border: 1px solid currentColor;
-  border-radius: var(--cs-r-full, 9999px);
-}
-
 .chordsketch-sheet {
   font-family: inherit;
 }
