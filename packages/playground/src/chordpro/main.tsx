@@ -601,6 +601,11 @@ function PlaygroundApp(): JSX.Element {
     onSourceChange: handleSourceChange,
     transpose,
     editorRef,
+    // Chord-audio (#2650): the hook owns one shared audio instance so a
+    // preview chord click AND a footer-panel edit both sound through the
+    // same voice manager (#2652 follow-up). The toolbar toggle drives the
+    // boolean below.
+    chordAudio,
   });
 
   // Relay the editor caret into BOTH the preview marker (activeSourceLine
@@ -878,10 +883,13 @@ function PlaygroundApp(): JSX.Element {
                 format="html"
                 chordDiagramsInstrument="guitar"
                 chordDiagramsOrientation={diagramsOrientation}
-                /* Chord-audio mode (#2650): clicking a chord plays it.
-                   Active in every view so preview-only users can audition
-                   chords too. */
-                chordAudio={chordAudio}
+                /* Chord-audio (#2650): clicking a chord plays it AND
+                   selects it for editing (audio is additive — #2652
+                   follow-up). Forward the shared config from
+                   `useChordEditor` so preview clicks and footer-panel
+                   edits sound through one instance. Active in every view
+                   so preview-only users can audition chords too. */
+                chordAudio={chordEditor.chordAudio}
                 /* The active-line highlight and caret marker only make
                    sense in split view, where the editor sits beside the
                    preview. In preview-only view the editor is unmounted,
