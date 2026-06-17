@@ -8,28 +8,33 @@
 //! routes through [`parse_key`] so the four subsystems can never disagree on a
 //! key's major / minor / modal classification.
 //!
-//! See [ADR-0033](../../../docs/adr/0033-canonical-key-directive-notation.md)
-//! for the canonical-notation decision this module enforces.
+//! See [ADR-0034](../../../docs/adr/0034-lenient-key-input-canonical-render.md)
+//! (which supersedes ADR-0033's strict-input clause) for the
+//! lenient-input / canonical-render decision this module enforces.
 //!
-//! # Canonical grammar
+//! # Grammar
 //!
-//! A valid `{key}` value is one of:
+//! Input is **lenient** — the editor accepts the common human key spellings —
+//! but [`Key`]'s [`Display`](core::fmt::Display) is the single **canonical**
+//! form every render surface shows. A valid `{key}` value is one of:
 //!
 //! - **Tonal key**: a root note `A`–`G`, an optional accidental (`#` / `b`),
-//!   an optional minor marker, and an optional `/bass` note. The canonical
-//!   minor marker is `m`; the ChordPro spec's aliases `mi`, `min`, and `-`
-//!   are accepted and normalised to `m`. Examples: `C`, `Gm`, `F#m`, `Bb`,
-//!   `Cmin` (→ `Cm`), `G/B`.
-//! - **Modal key**: a root note + optional accidental, a single space, and
-//!   one of the seven church-mode names (`ionian`, `dorian`, `phrygian`,
-//!   `lydian`, `mixolydian`, `aeolian`, `locrian`), case-insensitive.
-//!   Examples: `C dorian`, `F# mixolydian`.
+//!   an optional quality qualifier, and an optional `/bass` note. The
+//!   qualifier is matched case-insensitively and tolerates a single internal
+//!   space: minor ← `m` / `mi` / `min` / `minor` / `-`; major ← *(empty)* /
+//!   `maj` / `major`. Examples: `C`, `Gm`, `G minor`, `Gminor`, `G min`,
+//!   `G major` (→ `G`), `Cmin` (→ `Cm`), `G/B`.
+//! - **Modal key**: a root + optional accidental + one of the seven
+//!   church-mode names (`ionian`, `dorian`, `phrygian`, `lydian`,
+//!   `mixolydian`, `aeolian`, `locrian`), case-insensitive. Examples:
+//!   `C dorian`, `F# mixolydian`.
 //!
-//! Everything else is **invalid** and yields `None`, including:
-//! - spelled-out qualities (`Gminor`, `Gmajor`),
-//! - a space before a non-mode word (`G m`, `G minor`, `G major`),
-//! - chord extensions on a key (`G7`, `Cmaj7`) — a key is a tonal centre,
-//!   not a chord.
+//! Canonical [`Display`](core::fmt::Display): minor → `Gm`, major → `G`,
+//! modal → `G dorian`, with the slash-bass preserved.
+//!
+//! A chord extension on a key (`G7`, `Gm7`, `Cmaj7`, `Gsus4`) is **not** a key
+//! — a key is a tonal centre, not a chord — and yields `None`, as does a value
+//! with no note-letter root. Callers render those verbatim.
 
 use crate::chord::{Accidental, ChordDetail, ChordQuality, Note};
 
@@ -207,12 +212,13 @@ fn take_root(
     Some((root, accidental))
 }
 
-/// Parse a ChordPro `{key}` directive value strictly.
+/// Parse a ChordPro `{key}` directive value leniently into its canonical
+/// [`Key`] (see the [module docs](self#grammar)).
 ///
-/// Returns `Some(Key)` only for the [canonical grammar](self#canonical-grammar);
-/// every malformed value (`G m`, `Gminor`, `G minor`, `G7`, …) returns `None`.
-/// Surrounding whitespace is tolerated, but no internal whitespace is allowed
-/// except the single space that introduces a modal qualifier.
+/// Accepts the common human key spellings (`Gm` / `G m` / `G minor` /
+/// `Gminor` / `G min`, `G` / `G major`, `C dorian`, `G/B`) and normalises
+/// them; a chord extension on a key (`G7`, `Gm7`) or a value with no
+/// note-letter root returns `None` so the caller renders it verbatim.
 #[must_use]
 pub fn parse_key(value: &str) -> Option<Key> {
     // Normalise the spellings a displayed / authored key can legitimately use
@@ -253,29 +259,30 @@ pub fn parse_key(value: &str) -> Option<Key> {
     let (root, accidental) = take_root(&mut chars)?;
     let rest: String = chars.collect();
 
-    // Modal key: a single space (the qualifier scan only reaches here when the
-    // remainder begins with whitespace) followed by exactly one church-mode
-    // word. A modal key cannot also carry a slash-bass.
-    if rest.starts_with(char::is_whitespace) {
-        if bass.is_some() {
-            return None;
+    // Match the quality / mode qualifier leniently (ADR-0034): the editor is
+    // permissive, so the common human spellings are all accepted and
+    // normalised to one canonical structure. Trimming `rest` collapses the
+    // space / no-space distinction (`Gm` / `G m` / `G minor` / `Gminor` all
+    // reduce to the same word), and the compare is case-insensitive.
+    //
+    //   minor  ← m | mi | min | minor | -
+    //   major  ← <empty> | maj | major
+    //   modal  ← one of the seven church modes
+    //
+    // A chord extension on a key (`G7`, `Gm7`, `Gsus4`) is NOT a key — those
+    // fall through to `None` and the caller renders the value verbatim.
+    let qualifier = rest.trim().to_ascii_lowercase();
+    let mode = match qualifier.as_str() {
+        "" | "maj" | "major" => KeyMode::Major,
+        "m" | "mi" | "min" | "minor" | "-" => KeyMode::Minor,
+        other => {
+            let church = ChurchMode::from_lowercase(other)?;
+            // A modal key cannot also carry a slash-bass.
+            if bass.is_some() {
+                return None;
+            }
+            KeyMode::Mode(church)
         }
-        let mode_word = rest.trim();
-        let mode = ChurchMode::from_lowercase(&mode_word.to_ascii_lowercase())?;
-        return Some(Key {
-            root,
-            accidental,
-            mode: KeyMode::Mode(mode),
-            bass: None,
-        });
-    }
-
-    // Tonal key: the remainder must be empty (major) or exactly one minor
-    // marker. Anything else — spelled-out words, chord extensions — is invalid.
-    let mode = match rest.as_str() {
-        "" => KeyMode::Major,
-        "m" | "mi" | "min" | "-" => KeyMode::Minor,
-        _ => return None,
     };
 
     Some(Key {
@@ -317,21 +324,22 @@ mod tests {
     }
 
     #[test]
-    fn the_four_user_forms_are_disambiguated() {
-        // The canonical form.
-        assert_eq!(k("Gm").mode, KeyMode::Minor);
-        assert_eq!(k("Gm").to_string(), "Gm");
-        // The three malformed forms are rejected outright.
-        assert_eq!(parse_key("G m"), None);
-        assert_eq!(parse_key("Gminor"), None);
-        assert_eq!(parse_key("G minor"), None);
+    fn the_four_user_forms_all_normalise_to_canonical_minor() {
+        // ADR-0034: the editor is lenient, so all four spellings parse as the
+        // SAME minor key and canonicalise to `Gm` (the rendered form).
+        for spelling in ["Gm", "G m", "Gminor", "G minor", "G min", "Gmi", "G-"] {
+            assert_eq!(k(spelling).mode, KeyMode::Minor, "mode of {spelling}");
+            assert_eq!(k(spelling).to_string(), "Gm", "canonical of {spelling}");
+        }
     }
 
     #[test]
-    fn spelled_out_qualities_rejected() {
-        assert_eq!(parse_key("Gmajor"), None);
-        assert_eq!(parse_key("G major"), None);
-        assert_eq!(parse_key("Cminor"), None);
+    fn spelled_out_major_normalises() {
+        for spelling in ["G", "Gmaj", "G maj", "G major", "Gmajor"] {
+            assert_eq!(k(spelling).mode, KeyMode::Major, "mode of {spelling}");
+            assert_eq!(k(spelling).to_string(), "G", "canonical of {spelling}");
+        }
+        assert_eq!(k("Cminor").to_string(), "Cm");
     }
 
     #[test]
@@ -383,9 +391,12 @@ mod tests {
     }
 
     #[test]
-    fn unknown_mode_word_rejected() {
+    fn unknown_qualifier_word_rejected() {
+        // Not a quality marker and not a mode → not a key (rendered verbatim).
         assert_eq!(parse_key("C blues"), None);
-        assert_eq!(parse_key("G m"), None); // a space before "m" is not a mode
+        assert_eq!(parse_key("G augmented"), None);
+        // `G m` IS a key now (lenient minor, ADR-0034) — guarded elsewhere.
+        assert_eq!(k("G m").mode, KeyMode::Minor);
     }
 
     #[test]

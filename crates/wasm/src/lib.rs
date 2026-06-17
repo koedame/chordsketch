@@ -445,6 +445,42 @@ pub(crate) type ParseChordproPayload = (
     std::collections::BTreeMap<String, String>,
 );
 
+/// Normalise every `{key}` directive value — and the `metadata.key` / `keys`
+/// views — to its canonical spelling for the React AST (ADR-0034). Recognised
+/// human key spellings (`G minor`, `Gmin`, `C Dorian`, …) collapse to their
+/// canonical form (`Gm`, `Gm`, `C dorian`); values that are not keys (chord
+/// extensions, no note-letter root) are left untouched so the JSX walker
+/// renders them verbatim. The editor textarea is unaffected — only the AST the
+/// preview renders from is normalised.
+fn canonicalize_key_directives(song: &mut chordsketch_chordpro::ast::Song) {
+    use chordsketch_chordpro::ast::{DirectiveKind, Line};
+    fn canon(v: &str) -> Option<String> {
+        chordsketch_chordpro::parse_key(v).map(|k| k.to_string())
+    }
+    for line in &mut song.lines {
+        if let Line::Directive(directive) = line {
+            let is_key = match &directive.kind {
+                DirectiveKind::Key => true,
+                DirectiveKind::Meta(name) => name.eq_ignore_ascii_case("key"),
+                _ => false,
+            };
+            if is_key {
+                if let Some(canonical) = directive.value.as_deref().and_then(canon) {
+                    directive.value = Some(canonical);
+                }
+            }
+        }
+    }
+    if let Some(canonical) = song.metadata.key.as_deref().and_then(canon) {
+        song.metadata.key = Some(canonical);
+    }
+    for entry in &mut song.metadata.keys {
+        if let Some(canonical) = canon(entry) {
+            *entry = canonical;
+        }
+    }
+}
+
 /// Run the ChordPro source → AST JSON pipeline; native helper used
 /// by the wasm wrapper and Rust unit tests. The pipeline:
 ///
@@ -478,7 +514,16 @@ pub(crate) fn do_parse_chordpro(
     // without aborting the render.
     let mut warnings: Vec<String> = parse_result.errors.iter().map(|w| format!("{w}")).collect();
 
-    let song = parse_result.song;
+    let mut song = parse_result.song;
+    // Render the canonical key on the React surface too (ADR-0034): the editor
+    // textarea keeps whatever the user typed, but the AST the JSX walker
+    // renders from carries the canonical spelling, so a `{key: G minor}` chip
+    // shows `Gm` (and a transposed chip its canonical transposed value). Only
+    // the displayed AST is normalised here — recognised key spellings collapse
+    // to `Gm` / `G` / `C dorian`; values that aren't keys (chord extensions,
+    // no note root) are left verbatim. Done before the transpose + map build
+    // below so every downstream key surface (header, per-directive map) agrees.
+    canonicalize_key_directives(&mut song);
     let cli_transpose = options.map(|o| o.transpose).unwrap_or(0);
     // ADR-0023: fold `{capo: N}` into the transpose offset so the
     // React JSX walker (which renders from the transposed AST it
@@ -1247,50 +1292,51 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_chordpro_malformed_key_warns_and_is_not_transposed() {
-        // Issue #2665: a malformed `{key}` value is rejected by the strict
-        // grammar, so the React parse path surfaces a validation warning and
-        // does NOT emit a transposed counterpart (the walker falls back to the
-        // authored value, shown verbatim).
+    fn test_parse_chordpro_non_key_warns_and_is_not_transposed() {
+        // ADR-0034: a value that is not a key at all (a chord extension) still
+        // warns on the React parse path and emits no transposed counterpart;
+        // the AST keeps it verbatim for the walker.
         let opts = RenderOptions {
             transpose: 2,
             config: None,
         };
-        let (_json, warnings, transposed_key, transposed_key_directives) =
-            do_parse_chordpro("{key: G minor}\n[Gm]Hello", Some(&opts)).unwrap();
+        let (json, warnings, transposed_key, transposed_key_directives) =
+            do_parse_chordpro("{key: G7}\n[Gm]Hello", Some(&opts)).unwrap();
         assert!(
             warnings.iter().any(|w| w.contains("not a valid key")),
-            "malformed `G minor` must emit a validation warning; got: {warnings:?}"
+            "non-key `G7` must emit a validation warning; got: {warnings:?}"
         );
-        assert_eq!(
-            transposed_key, None,
-            "a malformed key has no transposed counterpart; got: {transposed_key:?}"
-        );
+        assert_eq!(transposed_key, None);
+        assert!(transposed_key_directives.is_empty());
+        // Verbatim in the AST (not canonicalised, since it isn't a key).
         assert!(
-            transposed_key_directives.is_empty(),
-            "a malformed key must not appear in the transposed map; got: {transposed_key_directives:?}"
+            json.contains("\"key\":\"G7\""),
+            "non-key value stays verbatim in the AST; got: {json}"
         );
     }
 
     #[test]
-    fn test_parse_chordpro_canonical_minor_key_transposes_without_warning() {
-        // The canonical `Gm` is accepted and transposes; sister to the
-        // malformed case above.
+    fn test_parse_chordpro_lenient_key_is_canonicalised_and_transposed() {
+        // ADR-0034: the editor accepts `G minor`, but the AST the React walker
+        // renders from carries the canonical `Gm` (no warning), and the
+        // transposed counterpart is the canonical `Am`.
         let opts = RenderOptions {
             transpose: 2,
             config: None,
         };
-        let (_json, warnings, transposed_key, _directives) =
-            do_parse_chordpro("{key: Gm}\n[Gm]Hello", Some(&opts)).unwrap();
+        let (json, warnings, transposed_key, directives) =
+            do_parse_chordpro("{key: G minor}\n[Gm]Hello", Some(&opts)).unwrap();
         assert!(
             !warnings.iter().any(|w| w.contains("not a valid key")),
-            "canonical Gm must not warn; got: {warnings:?}"
+            "`G minor` is a recognised key and must not warn; got: {warnings:?}"
         );
-        assert_eq!(
-            transposed_key.as_deref(),
-            Some("Am"),
-            "Gm at +2 should land on Am"
+        assert!(
+            json.contains("\"key\":\"Gm\""),
+            "the React AST must carry the canonical `Gm`, not `G minor`; got: {json}"
         );
+        assert_eq!(transposed_key.as_deref(), Some("Am"));
+        // The per-directive map is keyed by the canonical authored value.
+        assert_eq!(directives.get("Gm").map(String::as_str), Some("Am"));
     }
 
     #[test]

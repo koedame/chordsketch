@@ -77,21 +77,28 @@ export function keySignatureFor(
     .replace(/[ 　]/g, ' ')
     .trim();
 
-  // Strict key grammar — sister-site to the Rust
-  // `chordsketch_chordpro::parse_key` / `crates/render-html/src/music_glyphs.rs`
-  // (issue #2665). A tonal key is an uppercase root, an optional accidental,
-  // an optional *attached* minor marker (`m` / `mi` / `min` / `-`), and an
-  // optional `/bass` (ignored for the signature). Malformed spellings — a
-  // spelled-out word (`E minor`), a space before the marker (`E m`), or a
-  // lowercase root — do not match and yield `null`, exactly as the Rust
-  // parser rejects them. Modal keys (`C dorian`) also fail to match here, so
-  // they fall back to the staff-only glyph (a mode has no single conventional
-  // key signature in this table).
-  const m = /^([A-G])([b#]?)(m|mi|min|-)?(?:\/[A-G][b#]?)?$/.exec(ascii);
-  if (!m) return null;
-  const root = m[1]!;
-  const accidental = m[2] ?? '';
-  const isMinor = !!m[3];
+  // Lenient key grammar — sister-site to the Rust
+  // `chordsketch_chordpro::parse_key` (ADR-0034). An uppercase root, an
+  // optional accidental, an optional `/bass` (ignored for the signature), and
+  // a quality qualifier matched case-insensitively and space-tolerantly:
+  //   minor ← m | mi | min | minor | -      major ← <empty> | maj | major
+  // A church-mode qualifier (`C dorian`) has no single conventional key
+  // signature here, so it yields `null` (staff-only glyph), as do chord
+  // extensions (`G7`), a lowercase root, and any other non-key value.
+  const head = ascii.includes('/') ? ascii.slice(0, ascii.indexOf('/')) : ascii;
+  const rootMatch = /^([A-G])([b#]?)(.*)$/.exec(head);
+  if (!rootMatch) return null;
+  const root = rootMatch[1]!;
+  const accidental = rootMatch[2] ?? '';
+  const qualifier = rootMatch[3]!.trim().toLowerCase();
+  let isMinor: boolean;
+  if (qualifier === '' || qualifier === 'maj' || qualifier === 'major') {
+    isMinor = false;
+  } else if (['m', 'mi', 'min', 'minor', '-'].includes(qualifier)) {
+    isMinor = true;
+  } else {
+    return null; // church mode, chord extension, or unknown → no signature
+  }
 
   // Sharps / flats table (Wikipedia: "Key signature"). Direct
   // lookups for both major AND minor keys — minor keys map to the

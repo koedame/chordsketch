@@ -78,14 +78,21 @@ describe('keySignatureFor', () => {
     expect(sig?.type).toBe(type);
   });
 
-  test('accepts unicode ♯ / ♭ accidentals and attached minor markers', () => {
+  test('accepts unicode ♯ / ♭ accidentals and lenient minor spellings', () => {
     expect(keySignatureFor('F♯')?.count).toBe(6);
     expect(keySignatureFor('B♭')?.count).toBe(2);
-    // Strict, attached minor markers (sister-site to Rust `parse_key`, #2665).
+    // Lenient minor spellings all resolve to the same signature (sister-site
+    // to Rust `parse_key`, ADR-0034): attached markers, the spelled-out word,
+    // and a space before the marker.
     expect(keySignatureFor('Em')?.count).toBe(1);
     expect(keySignatureFor('Emi')?.count).toBe(1); // `mi` alias
     expect(keySignatureFor('Emin')?.count).toBe(1);
     expect(keySignatureFor('E-')?.count).toBe(1);
+    expect(keySignatureFor('E minor')?.count).toBe(1);
+    expect(keySignatureFor('E m')?.count).toBe(1);
+    expect(keySignatureFor('Eminor')?.count).toBe(1);
+    // Spelled-out major resolves to the major signature.
+    expect(keySignatureFor('E major')?.count).toBe(4);
   });
 
   test('a slash-bass key is looked up by its tonic', () => {
@@ -99,16 +106,13 @@ describe('keySignatureFor', () => {
     expect(keySignatureFor('H')).toBeNull(); // German "B" — out of scope
   });
 
-  test('returns null for malformed key notation (#2665)', () => {
-    // A space before the marker, a spelled-out word, or a lowercase root is
-    // not a valid key — the strict grammar rejects them, so there is no
-    // signature (matching the Rust `parse_key` sister-site).
-    expect(keySignatureFor('E minor')).toBeNull();
-    expect(keySignatureFor('E m')).toBeNull();
-    expect(keySignatureFor('Eminor')).toBeNull();
-    expect(keySignatureFor('e min')).toBeNull();
-    // A modal key has no single conventional signature here.
-    expect(keySignatureFor('C dorian')).toBeNull();
+  test('returns null for non-key values (ADR-0034)', () => {
+    // A lowercase root is not a key; a chord extension is not a key; a church
+    // mode has no single conventional signature — all yield null (staff-only),
+    // matching the Rust `parse_key` sister-site.
+    expect(keySignatureFor('e min')).toBeNull(); // lowercase root
+    expect(keySignatureFor('G7')).toBeNull(); // chord extension
+    expect(keySignatureFor('C dorian')).toBeNull(); // mode
   });
 });
 

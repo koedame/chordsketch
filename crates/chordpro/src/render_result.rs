@@ -138,16 +138,17 @@ pub fn validate_strict_key(metadata: &Metadata, config: &Config, warnings: &mut 
 }
 
 /// Validate every `{key}` directive value at the render boundary and push a
-/// warning for any value that is not a well-formed key per the strict
-/// [`crate::key::parse_key`] grammar (issue #2665).
+/// warning for any value [`crate::key::parse_key`] does not recognise as a key
+/// (issue #2665; relaxed by ADR-0034).
 ///
-/// The strict grammar admits a tonal key (root + optional accidental +
-/// optional `m` / `mi` / `min` / `-` minor marker + optional `/bass`) and a
-/// modal key (root + space + one of the seven church modes). Malformed values
-/// such as `{key: G m}`, `{key: Gminor}`, `{key: G minor}`, and extension-keys
-/// like `{key: G7}` are rejected; every renderer degrades the same way
-/// (renders the value verbatim, untransposed, with no key-signature glyph and
-/// no audition) and emits this warning so the user learns the canonical form.
+/// The parser is **lenient** (ADR-0034): the common human key spellings —
+/// `Gm` / `G m` / `G minor` / `Gminor` / `G min`, `G` / `G major`, and the
+/// church modes — are all recognised and render in their canonical form, so
+/// they do NOT warn. The warning fires only for values that are not keys at
+/// all: a chord extension on a key (`{key: G7}`, `{key: Gm7}`), a non-note
+/// root (`{key: H}`), or other garbage. Those render verbatim (no
+/// key-signature glyph, no audition), and this warning tells the user the
+/// value wasn't understood as a key.
 ///
 /// Walks [`Metadata::keys`] so mid-song `{key}` changes are validated too, not
 /// only the last-wins [`Metadata::key`]. Renderers call this helper alongside
@@ -388,41 +389,49 @@ mod tests {
     // -- validate_keys (issue #2665) --------------------------------------
 
     #[test]
-    fn test_validate_keys_accepts_canonical_and_modal_and_slash() {
+    fn test_validate_keys_accepts_canonical_lenient_and_modal_and_slash() {
         let mut v = Vec::<String>::new();
         let md = Metadata {
             keys: vec![
+                // Canonical, lenient spellings, major words, modal, slash — all
+                // recognised as keys (ADR-0034), so none warn.
                 "C".into(),
                 "Gm".into(),
                 "F#m".into(),
                 "Cmin".into(),
+                "G minor".into(),
+                "G m".into(),
+                "Gminor".into(),
+                "G major".into(),
                 "C dorian".into(),
                 "G/B".into(),
             ],
             ..Metadata::default()
         };
         validate_keys(&md, &mut v);
-        assert!(v.is_empty(), "well-formed keys must not warn; got {v:?}");
+        assert!(v.is_empty(), "recognised keys must not warn; got {v:?}");
     }
 
     #[test]
-    fn test_validate_keys_warns_for_each_malformed_form() {
+    fn test_validate_keys_warns_only_for_non_keys() {
+        // After ADR-0034 the editor is lenient: only values that are not keys
+        // at all — chord extensions, non-note roots, garbage — still warn.
         let mut v = Vec::<String>::new();
         let md = Metadata {
-            keys: vec!["G m".into(), "Gminor".into(), "G minor".into(), "G7".into()],
+            keys: vec!["G7".into(), "H".into(), "Cmaj7".into()],
             ..Metadata::default()
         };
         validate_keys(&md, &mut v);
-        assert_eq!(v.len(), 4, "one warning per malformed key; got {v:?}");
-        assert!(v[0].contains("\"G m\"") && v[0].contains("not a valid key"));
-        assert!(v[2].contains("\"G minor\""));
+        assert_eq!(v.len(), 3, "one warning per non-key; got {v:?}");
+        assert!(v[0].contains("\"G7\"") && v[0].contains("not a valid key"));
+        assert!(v[1].contains("\"H\""));
     }
 
     #[test]
     fn test_validate_keys_message_suggests_canonical_form() {
         let mut v = Vec::<String>::new();
         let md = Metadata {
-            keys: vec!["G minor".into()],
+            keys: vec!["G7".into()],
             ..Metadata::default()
         };
         validate_keys(&md, &mut v);

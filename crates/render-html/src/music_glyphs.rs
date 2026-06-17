@@ -535,19 +535,21 @@ mod tests {
     }
 
     #[test]
-    fn key_signature_unicode_and_strict_minor_markers() {
+    fn key_signature_unicode_and_lenient_markers() {
         // Unicode ♯ / ♭ are normalised to ASCII.
         assert_eq!(key_signature_for("F♯"), Some((6, KeySigType::Sharp)));
         assert_eq!(key_signature_for("B♭"), Some((2, KeySigType::Flat)));
         // Strict minor markers (`m`, `min`) resolve to the minor signature.
         assert_eq!(key_signature_for("Em"), Some((1, KeySigType::Sharp)));
         assert_eq!(key_signature_for("Emin"), Some((1, KeySigType::Sharp)));
-        // Malformed spellings — a spelled-out word, a space before the marker,
-        // a lowercase root — are not valid keys and carry no signature
-        // (issue #2665); the strict key grammar rejects them.
-        assert_eq!(key_signature_for("E minor"), None);
+        // Lenient spellings now resolve to the same signature (ADR-0034): a
+        // spelled-out word and a space before the marker are accepted.
+        assert_eq!(key_signature_for("E minor"), Some((1, KeySigType::Sharp)));
+        assert_eq!(key_signature_for("E m"), Some((1, KeySigType::Sharp)));
+        assert_eq!(key_signature_for("E major"), Some((4, KeySigType::Sharp)));
+        // A lowercase root is still not a key; a church mode has no signature.
         assert_eq!(key_signature_for("e min"), None);
-        assert_eq!(key_signature_for("E m"), None);
+        assert_eq!(key_signature_for("C dorian"), None);
     }
 
     #[test]
