@@ -2552,6 +2552,21 @@ mod tests {
             "{name} ({instrument}): bass {} not sounded",
             tones.bass_pc,
         );
+        // A synthesised shape must be fretable by a human hand: at most four
+        // fingers, within a four-fret span.
+        let (fingers, span) = crate::voicing_synth::diagram_playability(&data);
+        assert!(
+            fingers <= 4,
+            "{name} ({instrument}): needs {fingers} fingers (frets {:?}, base {})",
+            data.frets,
+            data.base_fret,
+        );
+        assert!(
+            span <= 3,
+            "{name} ({instrument}): fret span {span} exceeds 3 (frets {:?}, base {})",
+            data.frets,
+            data.base_fret,
+        );
     }
 
     #[test]

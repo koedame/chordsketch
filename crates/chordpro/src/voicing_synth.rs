@@ -45,6 +45,10 @@ const SPAN: i32 = 3;
 /// enough to voice every chord in at least one position.
 const MAX_POSITION: i32 = 12;
 
+/// The most fingers a fretting hand has. A voicing estimated to need more than
+/// this is rejected as unplayable, no matter how many chord tones it sounds.
+const MAX_FINGERS: i64 = 4;
+
 /// Returns the absolute-MIDI open-string tuning for an instrument name, in the
 /// diagram's string order. Unknown instruments fall back to guitar, matching
 /// [`crate::voicings::lookup_diagram`]'s dispatch.
@@ -60,6 +64,35 @@ pub(crate) fn instrument_tuning(instrument: &str) -> &'static [i32] {
 /// Builds a 12-bit pitch-class mask (`bit p` set ⇔ pitch class `p` present).
 fn pc_mask(pcs: &[u8]) -> u16 {
     pcs.iter().fold(0u16, |m, &pc| m | (1u16 << (pc % 12)))
+}
+
+/// Estimates the minimum number of fingers a fret assignment needs.
+///
+/// Each fretted string (`fret > 0`) costs one finger, with one saving: an
+/// index-finger barre across the lowest fretted fret collapses the strings
+/// sharing that fret into a single finger. The barre is only credited when no
+/// open string is sounded — a barre lies across every string at that fret, so
+/// it is incompatible with an open string ringing above it. Upper-fret partial
+/// barres (a ring- or pinky-finger barre) are deliberately NOT credited: they
+/// are real but advanced, so ignoring them biases the search toward the
+/// simpler, more reliably playable shape a learner can actually fret. `0` for
+/// an all-open / all-muted assignment.
+fn fingers_needed(chosen: &[i32]) -> i64 {
+    let fretted = chosen.iter().filter(|&&f| f > 0).count() as i64;
+    if fretted == 0 {
+        return 0;
+    }
+    let has_open = chosen.contains(&0);
+    let min_fret = chosen.iter().copied().filter(|&f| f > 0).min().unwrap_or(0);
+    let at_min = chosen.iter().filter(|&&f| f == min_fret).count() as i64;
+    // An index barre at the lowest fret turns its `at_min` strings into one
+    // finger, saving `at_min - 1` — but only when no open string forbids it.
+    let barre_save = if !has_open && at_min >= 2 {
+        at_min - 1
+    } else {
+        0
+    };
+    fretted - barre_save
 }
 
 /// Synthesises a fretboard voicing for `chord_name` on `instrument`, or `None`
@@ -236,17 +269,35 @@ fn evaluate(chosen: &[i32], ctx: &SearchCtx) -> Option<i64> {
     let gaps = chosen[first..=last].iter().filter(|&&f| f < 0).count() as i64;
     let covered = i64::from(sounded_mask.count_ones());
 
+    // Reject anything a hand cannot fret. A guitar chord is limited to four
+    // fingers; a voicing that needs more is not a realistic shape no matter how
+    // many chord tones it sounds, so it is discarded rather than scored.
+    let fingers = fingers_needed(chosen);
+    if fingers > MAX_FINGERS {
+        return None;
+    }
+
+    // Fret span of the fretted notes — a wide span is a finger stretch, so
+    // compact shapes are preferred among otherwise-equal voicings.
+    let max_fret = chosen.iter().copied().filter(|&f| f > 0).max().unwrap_or(0);
+    let min_fret = chosen.iter().copied().filter(|&f| f > 0).min().unwrap_or(0);
+    let span = i64::from(max_fret - min_fret);
+
     // Scoring priorities, in descending weight:
     //  1. Cover as many distinct chord tones as possible (a richer voicing).
-    //  2. Sit as low on the neck as possible — open/first-position shapes are
-    //     what a learner reads off a diagram, so position is weighted heavily
-    //     above "sound one more string".
-    //  3. Prefer ringing open strings, then a few extra sounded strings.
-    //  4. Avoid interior muted gaps and high frets.
-    // Position outranks the per-string rewards so the search does not climb to
-    // a full six-string barre when a simpler open shape voices the same chord.
+    //  2. Use as few fingers as possible — a four-finger shape is the ceiling
+    //     (enforced above), but easier shapes read better and play better.
+    //  3. Sit as low on the neck as possible — open / first-position shapes are
+    //     what a learner reads off a diagram.
+    //  4. Prefer ringing open strings, then a few extra sounded strings.
+    //  5. Avoid interior muted gaps and high frets.
+    // Position and finger count outrank the per-string rewards so the search
+    // does not climb to a hard six-string barre when a simpler shape voices the
+    // same chord.
     Some(
-        covered * 10_000 - i64::from(position) * 800 + open * 150 + sounded * 100
+        covered * 10_000 - fingers * 700 - span * 400 - i64::from(position) * 500
+            + open * 150
+            + sounded * 60
             - gaps * 300
             - fret_sum * 10,
     )
@@ -339,6 +390,39 @@ pub(crate) fn sounded_pitch_classes(data: &DiagramData, instrument: &str) -> Vec
     pcs
 }
 
+/// Decodes a rendered diagram back to absolute fret numbers (muted `-1`, open
+/// `0`, fretted `n`), reversing the [`to_diagram`] `base_fret` encoding. Shared
+/// by the playability checks below and the coverage test in [`crate::voicings`].
+#[cfg(test)]
+#[must_use]
+pub(crate) fn absolute_frets(data: &DiagramData) -> Vec<i32> {
+    data.frets
+        .iter()
+        .map(|&raw| {
+            if raw <= 0 {
+                raw
+            } else {
+                raw + data.base_fret as i32 - 1
+            }
+        })
+        .collect()
+}
+
+/// The `(fingers, fret_span)` a rendered diagram requires — the playability
+/// metrics the synthesiser bounds (`fingers ≤ MAX_FINGERS`, `span ≤ SPAN`).
+#[cfg(test)]
+#[must_use]
+pub(crate) fn diagram_playability(data: &DiagramData) -> (i64, i64) {
+    let abs = absolute_frets(data);
+    let fingers = fingers_needed(&abs);
+    let fretted: Vec<i32> = abs.iter().copied().filter(|&f| f > 0).collect();
+    let span = match (fretted.iter().min(), fretted.iter().max()) {
+        (Some(lo), Some(hi)) => i64::from(hi - lo),
+        _ => 0,
+    };
+    (fingers, span)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -393,6 +477,36 @@ mod tests {
     fn synthesises_basic_triads_on_guitar() {
         for chord in ["C", "Am", "Gdim", "Faug", "Csus4", "Dsus2", "C5"] {
             assert_valid(chord, "guitar");
+        }
+    }
+
+    #[test]
+    fn synthesised_voicings_are_fingerable() {
+        // The dense extended / altered chords that used to synthesise five- and
+        // six-finger shapes must now come out as something a hand can fret:
+        // at most four fingers, within a four-fret span.
+        let chords = [
+            "C9", "C11", "C13", "Cm11", "Cm13", "C7#9", "C7alt", "Eb9", "A11", "B13", "F11", "F13",
+            "Bmaj9", "Gm7b5", "F7#11", "G7b13", "Ebm13", "F7#9",
+        ];
+        for chord in chords {
+            for instrument in ["guitar", "ukulele", "charango"] {
+                let data = synth_fretted_voicing(chord, instrument, 5)
+                    .unwrap_or_else(|| panic!("no voicing for {chord} ({instrument})"));
+                let (fingers, span) = diagram_playability(&data);
+                assert!(
+                    fingers <= MAX_FINGERS,
+                    "{chord} ({instrument}): needs {fingers} fingers (frets {:?}, base {})",
+                    data.frets,
+                    data.base_fret,
+                );
+                assert!(
+                    span <= SPAN as i64,
+                    "{chord} ({instrument}): fret span {span} exceeds {SPAN} (frets {:?}, base {})",
+                    data.frets,
+                    data.base_fret,
+                );
+            }
         }
     }
 
