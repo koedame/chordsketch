@@ -4,7 +4,7 @@ import {
   getAudioContextCtor,
   getSharedAudioContext,
   resetSharedAudioContextForTests,
-  scheduleVoice,
+  scheduleWoodblockTick,
   stopVoices,
 } from './audio-context';
 
@@ -28,11 +28,11 @@ export const METRONOME_MAX_BPM = 400;
  */
 const DEFAULT_BPM = 60;
 
-// Audio tick shape. A short percussive square-wave blip reads as a
-// metronome "click" without shipping an audio sample asset.
-const TICK_FREQUENCY_HZ = 1000;
-const TICK_DURATION_S = 0.04;
-const TICK_PEAK_GAIN = 0.3;
+// The audible tick is a synthesized woodblock click owned by
+// `audio-context.ts` (`scheduleWoodblockTick`): a band-pass-filtered
+// white-noise transient plus a short pitched body, sample-free and
+// uniform on every beat (no downbeat accent — the metronome does not
+// track beats). See that module for the tick's timbre constants.
 
 // Lookahead scheduler tuning (after Chris Wilson's "A Tale of Two
 // Clocks"). `setInterval` only needs to wake often enough to keep
@@ -135,30 +135,23 @@ export function useMetronome(): UseMetronomeResult {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const nextTickRef = useRef(0);
   const bpmRef = useRef(DEFAULT_BPM);
-  // Oscillators already scheduled on the audio clock but not yet
+  // Tick source nodes already scheduled on the audio clock but not yet
   // played. Tracked so `stop` can silence ticks queued up to
   // `SCHEDULE_AHEAD_S` into the future instead of leaving trailing
-  // clicks after the user stops.
-  const oscillatorsRef = useRef<Set<OscillatorNode>>(new Set());
+  // clicks after the user stops. Each woodblock tick contributes both an
+  // oscillator (the pitched body) and a buffer source (the noise
+  // transient), so the set holds the `AudioScheduledSourceNode` base type.
+  const voicesRef = useRef<Set<AudioScheduledSourceNode>>(new Set());
   const controllerRef = useRef<MetronomeController | null>(null);
 
   const supported = useMemo(() => getAudioContextCtor() !== null, []);
 
   const scheduleTick = useCallback((ctx: AudioContext, time: number) => {
-    // Percussive square-wave blip: `attack: 0` jumps to the peak at the
-    // tick onset, then decays over `TICK_DURATION_S`; `tail: 0` stops the
-    // oscillator exactly at the decay end so the click stays tight. The
-    // shared `scheduleVoice` tracks the node in `oscillatorsRef` and wires
-    // the same `onended` cleanup `useChordAudio` relies on.
-    scheduleVoice(ctx, oscillatorsRef.current, {
-      type: 'square',
-      frequency: TICK_FREQUENCY_HZ,
-      startTime: time,
-      attack: 0,
-      release: TICK_DURATION_S,
-      peak: TICK_PEAK_GAIN,
-      tail: 0,
-    });
+    // Synthesized woodblock click at `time`. The shared
+    // `scheduleWoodblockTick` tracks both of the click's source nodes in
+    // `voicesRef` and wires the same `onended` cleanup `useChordAudio`
+    // relies on.
+    scheduleWoodblockTick(ctx, voicesRef.current, time);
   }, []);
 
   const stop = useCallback(() => {
@@ -168,7 +161,7 @@ export function useMetronome(): UseMetronomeResult {
     }
     // Cancel ticks already queued on the audio clock so no trailing
     // click sounds after the user stops (shared stop-and-clear helper).
-    stopVoices(oscillatorsRef.current);
+    stopVoices(voicesRef.current);
     if (activeController === controllerRef.current) {
       activeController = null;
     }
@@ -199,7 +192,7 @@ export function useMetronome(): UseMetronomeResult {
       if (timerRef.current !== null) {
         clearInterval(timerRef.current);
       }
-      stopVoices(oscillatorsRef.current);
+      stopVoices(voicesRef.current);
 
       nextTickRef.current = ctx.currentTime;
       const scheduler = () => {
@@ -252,7 +245,7 @@ export function useMetronome(): UseMetronomeResult {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
-      stopVoices(oscillatorsRef.current);
+      stopVoices(voicesRef.current);
       if (activeController === controllerRef.current) {
         activeController = null;
       }

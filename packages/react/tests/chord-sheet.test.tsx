@@ -6,6 +6,7 @@ import type { ChordWasmLoader } from '../src/use-chord-render';
 import type { ChordproWasmLoader } from '../src/use-chordpro-ast';
 import { resetSharedAudioContextForTests } from '../src/audio-context';
 import type { ChordAudioWasmLoader } from '../src/use-chord-audio';
+import { FakeAudioContext } from './fake-audio-context';
 
 // Stub renderer surface — covers BOTH the AST → JSX path
 // (parseChordproWithWarnings* used by `format="html"`
@@ -1125,28 +1126,9 @@ describe('<ChordSheet>', () => {
 
   // ---- Chord audio (#2650) ---------------------------------------
 
-  // Minimal Web Audio stand-in; the hook only needs the constructor to
-  // exist for `supported` and a no-op graph for `play`.
-  class FakeAudioContext {
-    state = 'running';
-    currentTime = 0;
-    destination = {};
-    resume = vi.fn(() => Promise.resolve());
-    createOscillator = vi.fn(() => ({
-      type: '',
-      onended: null,
-      frequency: { setValueAtTime: vi.fn() },
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-      start: vi.fn(),
-      stop: vi.fn(),
-    }));
-    createGain = vi.fn(() => ({
-      gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-    }));
-  }
+  // Web Audio stand-in: the shared minimal fake (`./fake-audio-context`);
+  // the hook only needs the constructor for `supported` and a graph that
+  // records `play`'s calls without making sound.
 
   const chordAudioLoader: ChordAudioWasmLoader = () =>
     Promise.resolve({

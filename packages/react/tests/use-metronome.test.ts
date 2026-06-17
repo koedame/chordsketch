@@ -7,56 +7,14 @@ import {
   resetMetronomeSharedStateForTests,
   useMetronome,
 } from '../src/use-metronome';
+import { FakeAudioContext } from './fake-audio-context';
 
-// ---- Web Audio API stand-ins -----------------------------------
-// jsdom ships no Web Audio API, so the hook is exercised against a
-// minimal fake that records the graph operations the scheduler
-// performs. `instances` lets a test reach the exact context the
-// hook created so it can drive `currentTime` forward.
-
-class FakeOscillator {
-  type = '';
-  onended: (() => void) | null = null;
-  frequency = { setValueAtTime: vi.fn() };
-  connect = vi.fn();
-  disconnect = vi.fn();
-  start = vi.fn();
-  stop = vi.fn();
-}
-
-class FakeGain {
-  gain = {
-    setValueAtTime: vi.fn(),
-    exponentialRampToValueAtTime: vi.fn(),
-  };
-  connect = vi.fn();
-  disconnect = vi.fn();
-}
-
-class FakeAudioContext {
-  static instances: FakeAudioContext[] = [];
-  state: 'suspended' | 'running' | 'closed' = 'running';
-  currentTime = 0;
-  destination = {};
-  oscillators: FakeOscillator[] = [];
-  resume = vi.fn(() => {
-    this.state = 'running';
-    return Promise.resolve();
-  });
-  close = vi.fn(() => {
-    this.state = 'closed';
-    return Promise.resolve();
-  });
-  createOscillator = vi.fn(() => {
-    const osc = new FakeOscillator();
-    this.oscillators.push(osc);
-    return osc;
-  });
-  createGain = vi.fn(() => new FakeGain());
-  constructor() {
-    FakeAudioContext.instances.push(this);
-  }
-}
+// jsdom ships no Web Audio API, so the hook is exercised against the
+// shared minimal fake (`./fake-audio-context`) that records the graph
+// operations the scheduler performs. `instances` lets a test reach the
+// exact context the hook created so it can drive `currentTime` forward.
+// Each woodblock tick (#2668) schedules a pitched body oscillator AND a
+// noise buffer source, so the per-tick source count is two.
 
 const originalAudioContext = (globalThis as { AudioContext?: unknown }).AudioContext;
 
@@ -97,6 +55,31 @@ describe('useMetronome', () => {
     expect(osc.stop).toHaveBeenCalled();
   });
 
+  test('each tick is a woodblock: a noise transient plus a pitched body', () => {
+    const { result } = renderHook(() => useMetronome());
+    act(() => result.current.start(120));
+    const ctx = FakeAudioContext.instances[0]!;
+    // Every tick contributes exactly one pitched-body oscillator and one
+    // band-pass-filtered noise source (#2668), so the two counts match.
+    expect(ctx.bufferSources.length).toBeGreaterThanOrEqual(1);
+    expect(ctx.oscillators.length).toBe(ctx.bufferSources.length);
+    // The noise source plays the shared per-context noise buffer, routed
+    // through a band-pass filter (the wooden "attack").
+    for (const noise of ctx.bufferSources) {
+      expect(noise.buffer).not.toBeNull();
+      expect(noise.start).toHaveBeenCalled();
+      expect(noise.stop).toHaveBeenCalled();
+    }
+    // No downbeat accent: every tick's pitched body uses the same
+    // frequency, so the clicks are identical regardless of beat position.
+    const bodyFreqs = ctx.oscillators.map(
+      (o) => o.frequency.setValueAtTime.mock.calls[0]?.[0] as number,
+    );
+    for (const f of bodyFreqs) {
+      expect(f).toBe(bodyFreqs[0]);
+    }
+  });
+
   test('continues scheduling ticks as the audio clock advances', () => {
     const { result } = renderHook(() => useMetronome());
     act(() => result.current.start(120));
@@ -115,21 +98,25 @@ describe('useMetronome', () => {
     const { result } = renderHook(() => useMetronome());
     act(() => result.current.start(120));
     const ctx = FakeAudioContext.instances[0]!;
-    const queued = [...ctx.oscillators];
+    const queuedOscillators = [...ctx.oscillators];
+    const queuedNoise = [...ctx.bufferSources];
     act(() => result.current.stop());
     expect(result.current.isPlaying).toBe(false);
-    // Every queued oscillator is cancelled by stop() — once with the
-    // scheduled stop-time in scheduleTick, once with no arg in stop().
-    for (const osc of queued) {
-      expect(osc.stop.mock.calls.length).toBeGreaterThanOrEqual(2);
+    // Every queued source — both the pitched body and the noise
+    // transient — is cancelled by stop(): once with the scheduled
+    // stop-time in scheduleWoodblockTick, once with no arg in stop().
+    for (const source of [...queuedOscillators, ...queuedNoise]) {
+      expect(source.stop.mock.calls.length).toBeGreaterThanOrEqual(2);
     }
-    const afterStop = ctx.oscillators.length;
+    const afterStopOscillators = ctx.oscillators.length;
+    const afterStopNoise = ctx.bufferSources.length;
     act(() => {
       ctx.currentTime = 5;
       vi.advanceTimersByTime(100);
     });
     // No further ticks once the timer is cleared.
-    expect(ctx.oscillators.length).toBe(afterStop);
+    expect(ctx.oscillators.length).toBe(afterStopOscillators);
+    expect(ctx.bufferSources.length).toBe(afterStopNoise);
   });
 
   test('isRunning reflects the synchronous timer state', () => {

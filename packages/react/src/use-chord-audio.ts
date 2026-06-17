@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import {
   getAudioContextCtor,
+  getPianoWave,
   getSharedAudioContext,
   midiToFreq,
   scheduleVoice,
@@ -10,12 +11,14 @@ import {
 import { usePitchModule } from './use-pitch-module';
 
 // ---- Voicing / envelope tuning ---------------------------------
-// A block chord is several oscillators started at once. The total
-// peak gain is divided across the voices so a six-note chord does not
-// clip; a short attack avoids the click a hard onset would make, and a
-// long exponential release lets the chord ring and decay naturally.
-const ATTACK_S = 0.008;
-const RELEASE_S = 1.4;
+// A block chord is several voices started at once, each sounding with
+// the shared piano `PeriodicWave` (#2668). The total peak gain is
+// divided across the voices so a six-note chord does not clip; a short
+// attack avoids the click a hard onset would make, and a long
+// exponential, no-sustain release lets the struck chord ring and decay
+// like a piano.
+const ATTACK_S = 0.006;
+const RELEASE_S = 2.6;
 const PEAK_GAIN = 0.22;
 
 /**
@@ -113,9 +116,9 @@ export function useChordAudio(
   // tapped repeatedly is computed once.
   const pitchCacheRef = useRef<Map<string, number[]>>(new Map());
 
-  // Oscillators currently scheduled / sounding, tracked so `stop` (and
+  // Voices currently scheduled / sounding, tracked so `stop` (and
   // unmount) can silence them and a retrigger does not stack voices.
-  const voicesRef = useRef<Set<OscillatorNode>>(new Set());
+  const voicesRef = useRef<Set<AudioScheduledSourceNode>>(new Set());
 
   const stop = useCallback(() => {
     stopVoices(voicesRef.current);
@@ -146,12 +149,14 @@ export function useChordAudio(
       const now = ctx.currentTime;
       // Divide the peak across the voices so a six-note chord does not
       // clip; a soft attack avoids a click and the long release lets the
-      // chord ring. The shared `scheduleVoice` owns the node graph +
-      // cleanup (sister to the metronome's tick scheduling).
+      // chord ring. Each voice sounds with the shared piano timbre. The
+      // shared `scheduleVoice` owns the node graph + cleanup (sister to
+      // the key audition and the metronome's tick scheduling).
+      const wave = getPianoWave(ctx);
       const perVoice = PEAK_GAIN / pitches.length;
       for (const midi of pitches) {
         scheduleVoice(ctx, voicesRef.current, {
-          type: 'triangle',
+          type: wave,
           frequency: midiToFreq(midi),
           startTime: now,
           attack: ATTACK_S,
