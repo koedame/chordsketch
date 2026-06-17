@@ -5,6 +5,7 @@ import {
   getSharedAudioContext,
   resetSharedAudioContextForTests,
   scheduleVoice,
+  stopVoices,
 } from './audio-context';
 
 /**
@@ -166,17 +167,8 @@ export function useMetronome(): UseMetronomeResult {
       timerRef.current = null;
     }
     // Cancel ticks already queued on the audio clock so no trailing
-    // click sounds after the user stops. A no-arg `stop()` cancels a
-    // not-yet-started oscillator outright and cuts a sounding one
-    // immediately.
-    for (const osc of oscillatorsRef.current) {
-      try {
-        osc.stop();
-      } catch {
-        // Already stopped/ended — nothing to cancel.
-      }
-    }
-    oscillatorsRef.current.clear();
+    // click sounds after the user stops (shared stop-and-clear helper).
+    stopVoices(oscillatorsRef.current);
     if (activeController === controllerRef.current) {
       activeController = null;
     }
@@ -207,14 +199,7 @@ export function useMetronome(): UseMetronomeResult {
       if (timerRef.current !== null) {
         clearInterval(timerRef.current);
       }
-      for (const osc of oscillatorsRef.current) {
-        try {
-          osc.stop();
-        } catch {
-          // Already stopped/ended.
-        }
-      }
-      oscillatorsRef.current.clear();
+      stopVoices(oscillatorsRef.current);
 
       nextTickRef.current = ctx.currentTime;
       const scheduler = () => {
@@ -267,14 +252,7 @@ export function useMetronome(): UseMetronomeResult {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
-      for (const osc of oscillatorsRef.current) {
-        try {
-          osc.stop();
-        } catch {
-          // Already stopped/ended.
-        }
-      }
-      oscillatorsRef.current.clear();
+      stopVoices(oscillatorsRef.current);
       if (activeController === controllerRef.current) {
         activeController = null;
       }

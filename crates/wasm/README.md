@@ -118,6 +118,8 @@ the
 | `chordDiagramSvgWithOrientation(chord, instrument, orientation?)` | Orientation-aware variant. `orientation`: `"vertical"` (default) or `"horizontal"` (nut on the left, Japanese tablature convention). Horizontal mode is reader-view only (high pitch on top, matches tablature stave order); see ADR-0026. Unrecognised strings fall back to vertical. | `string \| null` |
 | `chordDiagramSvgWithDefinesOrientation(chord, instrument, defines, orientation?)` | Combined surface — accepts both song-level `{define}` voicings and the orientation knob. | `string \| null` |
 | `chordPitches(chord)` | Constituent pitches of a chord as MIDI note numbers, for driving an audio synth. Returns a block voicing (root, third, fifth, plus any extension / altered / added tones, with a slash bass an octave below). `undefined` when the chord is not parseable. | `Uint8Array \| undefined` |
+| `keyScalePitches(key)` | Ascending one-octave scale of a musical key as MIDI note numbers — the movable-do "do re mi fa sol la ti do". Major keys yield the major scale; minor keys the natural-minor scale. `undefined` when the key is not parseable. | `Uint8Array \| undefined` |
+| `keyTonicTriad(key)` | Tonic triad of a musical key as MIDI note numbers (the "do mi sol" chord). Major / minor per the key; extensions on the spelling are ignored. `undefined` when the key is not parseable. | `Uint8Array \| undefined` |
 
 ### iReal Pro
 
