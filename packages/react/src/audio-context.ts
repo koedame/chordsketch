@@ -223,7 +223,7 @@ function finalizeSource(
  * non-zero floor (Web Audio rejects a `0` target).
  */
 export function scheduleVoice(
-  ctx: AudioContext,
+  ctx: BaseAudioContext,
   tracked: Set<AudioScheduledSourceNode>,
   spec: VoiceSpec,
 ): void {
@@ -265,7 +265,7 @@ export function scheduleVoice(
  * than an oscillator.
  */
 export function scheduleWoodblockTick(
-  ctx: AudioContext,
+  ctx: BaseAudioContext,
   tracked: Set<AudioScheduledSourceNode>,
   startTime: number,
 ): void {
@@ -314,6 +314,12 @@ export function scheduleWoodblockTick(
  * `OscillatorNode`s (pitch voices, woodblock body) and
  * `AudioBufferSourceNode`s (the woodblock noise transient); both satisfy
  * `AudioScheduledSourceNode`, so one helper silences either kind.
+ *
+ * The eager `clear()` and the later-firing per-source `onended`
+ * (`tracked.delete(source)`, wired by {@link finalizeSource}) cannot
+ * cross-delete: `delete` keys on the node's own identity, so a stopped
+ * voice's late `onended` only ever removes itself, never a voice a fresh
+ * `play()` added to the reused set afterwards.
  */
 export function stopVoices(tracked: Set<AudioScheduledSourceNode>): void {
   for (const source of tracked) {

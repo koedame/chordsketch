@@ -85,6 +85,8 @@ export class FakeAudioContext {
   destination = {};
   oscillators: FakeOscillator[] = [];
   bufferSources: FakeBufferSource[] = [];
+  biquadFilters: FakeBiquadFilter[] = [];
+  gains: FakeGain[] = [];
   periodicWaves: FakePeriodicWave[] = [];
   resume = vi.fn(() => {
     this.state = 'running';
@@ -99,13 +101,21 @@ export class FakeAudioContext {
     this.oscillators.push(osc);
     return osc;
   });
-  createGain = vi.fn(() => new FakeGain());
+  createGain = vi.fn(() => {
+    const gain = new FakeGain();
+    this.gains.push(gain);
+    return gain;
+  });
   createBufferSource = vi.fn(() => {
     const src = new FakeBufferSource();
     this.bufferSources.push(src);
     return src;
   });
-  createBiquadFilter = vi.fn(() => new FakeBiquadFilter());
+  createBiquadFilter = vi.fn(() => {
+    const filter = new FakeBiquadFilter();
+    this.biquadFilters.push(filter);
+    return filter;
+  });
   createBuffer = vi.fn((_channels: number, length: number) => new FakeAudioBuffer(length));
   createPeriodicWave = vi.fn(() => {
     const wave = new FakePeriodicWave();
