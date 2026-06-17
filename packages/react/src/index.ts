@@ -63,6 +63,19 @@ export {
   type UseChordAudioResult,
   type ChordAudioWasmLoader,
 } from './use-chord-audio';
+// Key-audition playback (#2658). `useKeyAudio` plays a key's scale +
+// tonic triad (major or minor) via the core `keyScalePitches` /
+// `keyTonicTriad` exports; `<KeySignatureButton>` is the interactive
+// `{key}` chip the AST walker emits — clicking it auditions the key.
+export {
+  useKeyAudio,
+  type UseKeyAudioResult,
+  type KeyAudioWasmLoader,
+} from './use-key-audio';
+export {
+  KeySignatureButton,
+  type KeySignatureButtonProps,
+} from './key-signature-button';
 
 // AST → JSX walker (#2475 / ADR-0017). Powers `<ChordSheet>`'s
 // `format="html"` branch — exposed at the package boundary so

@@ -317,7 +317,7 @@ const VOICING_ROOT_MIDI: u8 = 48;
 /// # Examples
 ///
 /// ```
-/// use chordsketch_chordpro::chord::chord_pitches;
+/// use chordsketch_chordpro::chord_pitches;
 ///
 /// // C major triad: C3, E3, G3.
 /// assert_eq!(chord_pitches("C"), Some(vec![48, 52, 55]));
@@ -353,6 +353,118 @@ pub fn chord_pitches(chord_name: &str) -> Option<Vec<u8>> {
     pitches.sort_unstable();
     pitches.dedup();
     Some(pitches)
+}
+
+// ---------------------------------------------------------------------------
+// Key audition (scale + tonic triad)
+// ---------------------------------------------------------------------------
+
+/// Ascending semitone offsets, from the tonic, of the eight movable-do
+/// scale degrees of a **major** key — do, re, mi, fa, sol, la, ti, do
+/// (the seven degrees plus the octave).
+const MAJOR_SCALE_SEMITONES: [u8; 8] = [0, 2, 4, 5, 7, 9, 11, 12];
+
+/// Ascending semitone offsets, from the tonic, of the eight movable-do
+/// scale degrees of a **natural-minor** key — do, re, me, fa, sol, le,
+/// te, do.
+const MINOR_SCALE_SEMITONES: [u8; 8] = [0, 2, 3, 5, 7, 8, 10, 12];
+
+/// Parses a ChordPro `{key}` value into its tonic pitch class
+/// (`0` = C … `11` = B) and whether the key is minor.
+///
+/// The value is parsed with [`parse_chord`], so any chord-like spelling
+/// is accepted (`"C"`, `"Am"`, `"Bb"`, `"F#m"`, even `"Cmaj7"`). Only the
+/// root and whether the quality is minor matter for the key — extensions,
+/// added tones, and altered fifths are ignored. A minor quality selects
+/// the natural-minor scale and a minor tonic triad; every other quality
+/// (major, diminished, augmented) selects the major scale and a major
+/// tonic triad, because a ChordPro key is conventionally major or minor
+/// and those are the only two modes an audition needs.
+///
+/// Returns `None` when `key` is not parseable as a chord.
+fn parse_key_tonic(key: &str) -> Option<(u8, bool)> {
+    let detail = parse_chord(key)?;
+    let root_pc = root_semitone(detail.root, detail.root_accidental);
+    let is_minor = detail.quality == ChordQuality::Minor;
+    Some((root_pc, is_minor))
+}
+
+/// Computes the ascending one-octave scale of a musical key as MIDI note
+/// numbers, for auditioning the key by ear — the movable-do "do re mi fa
+/// sol la ti do".
+///
+/// `key` is a ChordPro `{key}` value (`"C"`, `"Am"`, `"Bb"`, `"F#m"`, …).
+/// Major keys yield the major scale; minor keys yield the natural-minor
+/// scale (see `parse_key_tonic`). The eight returned notes are the seven
+/// scale degrees plus the octave, with the tonic placed at the same
+/// C3-based register [`chord_pitches`] uses so a scale and a chord
+/// auditioned together share one register.
+///
+/// This is the musical-theory source of truth for the key-audition
+/// surface (the wasm / napi / ffi bindings drive the React key-audio
+/// control from it); the *sequencing* of the audition — play the scale,
+/// then strum the triad — is a presentation concern owned by the
+/// consumer, not encoded here.
+///
+/// Returns `None` when `key` is not parseable as a chord.
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::key_scale_pitches;
+///
+/// // C major: C3 D3 E3 F3 G3 A3 B3 C4.
+/// assert_eq!(key_scale_pitches("C"), Some(vec![48, 50, 52, 53, 55, 57, 59, 60]));
+/// // A minor: A3 B3 C4 D4 E4 F4 G4 A4 (natural minor).
+/// assert_eq!(key_scale_pitches("Am"), Some(vec![57, 59, 60, 62, 64, 65, 67, 69]));
+/// // Unparseable input yields None.
+/// assert_eq!(key_scale_pitches("xyz"), None);
+/// ```
+#[must_use]
+pub fn key_scale_pitches(key: &str) -> Option<Vec<u8>> {
+    let (root_pc, is_minor) = parse_key_tonic(key)?;
+    let root_midi = VOICING_ROOT_MIDI + root_pc; // 48..=59
+    let steps = if is_minor {
+        MINOR_SCALE_SEMITONES
+    } else {
+        MAJOR_SCALE_SEMITONES
+    };
+    // root_midi <= 59 and the largest step is 12, so the octave note is at
+    // most 71 — comfortably inside the u8 / MIDI range.
+    Some(steps.iter().map(|s| root_midi + s).collect())
+}
+
+/// Computes the tonic triad of a musical key as MIDI note numbers — the
+/// "do mi sol" block chord strummed after the scale in a key audition.
+///
+/// Major keys yield a major triad (root, major third, perfect fifth);
+/// minor keys yield a minor triad (root, minor third, perfect fifth). The
+/// root sits at the same C3-based register as [`key_scale_pitches`] and
+/// [`chord_pitches`], so for a bare major / minor key this is identical to
+/// `chord_pitches(key)` — but unlike `chord_pitches` it ignores any
+/// extension on the key spelling (`"Cmaj7"` still yields a plain C major
+/// triad), because the *key's* tonic chord is always a triad.
+///
+/// Returns `None` when `key` is not parseable as a chord.
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::key_tonic_triad;
+///
+/// // C major triad: C3 E3 G3.
+/// assert_eq!(key_tonic_triad("C"), Some(vec![48, 52, 55]));
+/// // A minor triad: A3 C4 E4.
+/// assert_eq!(key_tonic_triad("Am"), Some(vec![57, 60, 64]));
+/// // Unparseable input yields None.
+/// assert_eq!(key_tonic_triad("xyz"), None);
+/// ```
+#[must_use]
+pub fn key_tonic_triad(key: &str) -> Option<Vec<u8>> {
+    let (root_pc, is_minor) = parse_key_tonic(key)?;
+    let root_midi = VOICING_ROOT_MIDI + root_pc; // 48..=59
+    let third = if is_minor { 3 } else { 4 };
+    Some(vec![root_midi, root_midi + third, root_midi + 7])
 }
 
 /// The constituent intervals of a chord, split into the full tone set and
@@ -1587,6 +1699,101 @@ mod tests {
                 pitches.iter().all(|&p| p < 128),
                 "{name} pitches must be valid MIDI notes"
             );
+        }
+    }
+
+    // -- key audition (scale + tonic triad) ----------------------------------
+
+    #[test]
+    fn key_scale_major_movable_do() {
+        // C major: C3 D3 E3 F3 G3 A3 B3 C4 — the canonical "do re mi …".
+        assert_eq!(
+            key_scale_pitches("C"),
+            Some(vec![48, 50, 52, 53, 55, 57, 59, 60])
+        );
+        // G major rooted at G3 (pc 7 → 55): the F is sharpened (F#4 = 66).
+        assert_eq!(
+            key_scale_pitches("G"),
+            Some(vec![55, 57, 59, 60, 62, 64, 66, 67])
+        );
+    }
+
+    #[test]
+    fn key_scale_minor_natural() {
+        // A minor: A3 B3 C4 D4 E4 F4 G4 A4 — natural minor, no raised 7th.
+        assert_eq!(
+            key_scale_pitches("Am"),
+            Some(vec![57, 59, 60, 62, 64, 65, 67, 69])
+        );
+        // E minor rooted at E3 (pc 4 → 52).
+        assert_eq!(
+            key_scale_pitches("Em"),
+            Some(vec![52, 54, 55, 57, 59, 60, 62, 64])
+        );
+    }
+
+    #[test]
+    fn key_scale_accidental_roots() {
+        // Bb major rooted at Bb3 (pc 10 → 58).
+        assert_eq!(
+            key_scale_pitches("Bb"),
+            Some(vec![58, 60, 62, 63, 65, 67, 69, 70])
+        );
+        // F#m rooted at F#3 (pc 6 → 54), natural-minor steps.
+        assert_eq!(
+            key_scale_pitches("F#m"),
+            Some(vec![54, 56, 57, 59, 61, 62, 64, 66])
+        );
+    }
+
+    #[test]
+    fn key_scale_ignores_extensions_for_mode() {
+        // The key's mode is major/minor only — a "maj7" spelling still
+        // sounds the plain major scale, and an "m7" the natural minor.
+        assert_eq!(key_scale_pitches("Cmaj7"), key_scale_pitches("C"));
+        assert_eq!(key_scale_pitches("Am7"), key_scale_pitches("Am"));
+    }
+
+    #[test]
+    fn key_tonic_triad_major_and_minor() {
+        // The tonic triad equals the bare-triad chord for a simple key.
+        assert_eq!(key_tonic_triad("C"), Some(vec![48, 52, 55])); // C E G
+        assert_eq!(key_tonic_triad("Am"), Some(vec![57, 60, 64])); // A C E
+        assert_eq!(key_tonic_triad("Bb"), Some(vec![58, 62, 65])); // Bb D F
+        assert_eq!(key_tonic_triad("F#m"), Some(vec![54, 57, 61])); // F# A C#
+    }
+
+    #[test]
+    fn key_tonic_triad_ignores_extension() {
+        // Unlike chord_pitches, the key's tonic chord is always a triad —
+        // a "maj7" / "m7" key spelling drops the seventh.
+        assert_eq!(key_tonic_triad("Cmaj7"), Some(vec![48, 52, 55]));
+        assert_eq!(key_tonic_triad("Am7"), Some(vec![57, 60, 64]));
+    }
+
+    #[test]
+    fn key_audition_unparseable_returns_none() {
+        for bad in ["", "xyz", "H", "G/"] {
+            assert_eq!(key_scale_pitches(bad), None, "{bad} scale must be None");
+            assert_eq!(key_tonic_triad(bad), None, "{bad} triad must be None");
+        }
+    }
+
+    #[test]
+    fn key_scale_is_ascending_and_in_midi_range() {
+        for name in ["C", "G", "Am", "Em", "Bb", "F#m", "C#m", "Db"] {
+            let scale = key_scale_pitches(name).unwrap();
+            assert_eq!(scale.len(), 8, "{name} scale must have eight degrees");
+            assert!(
+                scale.windows(2).all(|w| w[0] < w[1]),
+                "{name} scale must be strictly ascending"
+            );
+            assert!(
+                scale.iter().all(|&p| p < 128),
+                "{name} scale must be valid MIDI notes"
+            );
+            // The tonic and the octave bracket exactly twelve semitones.
+            assert_eq!(scale[7] - scale[0], 12, "{name} must span one octave");
         }
     }
 }

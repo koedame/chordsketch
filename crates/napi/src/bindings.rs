@@ -39,8 +39,9 @@ use crate::{
     do_convert_chordpro_to_irealb, do_convert_irealb_to_chordpro_text, do_parse_irealb,
     do_render_bytes, do_render_ireal_pdf, do_render_ireal_png, do_render_ireal_svg,
     do_render_pdf_with_warnings, do_render_string, do_render_string_with_warnings,
-    do_serialize_irealb, render_html_css_with_options_inner, resolve_options_inner,
-    validate_defines_pairs, validate_inner,
+    do_serialize_irealb, key_scale_pitches_inner, key_tonic_triad_inner,
+    render_html_css_with_options_inner, resolve_options_inner, validate_defines_pairs,
+    validate_inner,
 };
 
 /// Render options matching the WASM package API.
@@ -519,6 +520,41 @@ pub fn chord_diagram_svg_with_defines(
 #[napi(js_name = "chordPitches")]
 pub fn chord_pitches(chord: String) -> Option<Buffer> {
     chord_pitches_inner(&chord).map(Buffer::from)
+}
+
+/// Ascending one-octave scale of a musical key as MIDI note numbers, for
+/// auditioning the key by ear — the movable-do "do re mi fa sol la ti do"
+/// (#2658).
+///
+/// `key` is a ChordPro `{key}` value (`"C"`, `"Am"`, `"Bb"`, `"F#m"`, …).
+/// Major keys yield the major scale; minor keys the natural-minor scale.
+/// Returns a `Buffer` of eight ascending MIDI note numbers, or `null` when
+/// `key` is not parseable as a chord.
+///
+/// Thin wrapper over the pure-Rust `key_scale_pitches_inner`. Sister-site
+/// to the wasm `keyScalePitches` export and the FFI `key_scale_pitches`
+/// function (`.claude/rules/fix-propagation.md` §Bindings).
+#[must_use]
+#[napi(js_name = "keyScalePitches")]
+pub fn key_scale_pitches(key: String) -> Option<Buffer> {
+    key_scale_pitches_inner(&key).map(Buffer::from)
+}
+
+/// Tonic triad of a musical key as MIDI note numbers — the "do mi sol"
+/// chord strummed after the scale in a key audition (#2658).
+///
+/// Major keys yield a major triad, minor keys a minor triad. Any extension
+/// on the key spelling (`"Cmaj7"`) is ignored — the key's tonic chord is
+/// always a triad. Returns a `Buffer` of three ascending MIDI note
+/// numbers, or `null` when `key` is not parseable as a chord.
+///
+/// Thin wrapper over the pure-Rust `key_tonic_triad_inner`. Sister-site to
+/// the wasm `keyTonicTriad` export and the FFI `key_tonic_triad` function
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+#[must_use]
+#[napi(js_name = "keyTonicTriad")]
+pub fn key_tonic_triad(key: String) -> Option<Buffer> {
+    key_tonic_triad_inner(&key).map(Buffer::from)
 }
 
 /// Variant of [`chord_diagram_svg`] that takes a diagram orientation as

@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Key audition: clicking the `{key}` chip in the React preview plays the
+  key by ear — the movable-do scale "do re mi fa sol la ti do" followed
+  by the tonic triad strummed. Major and minor keys are both supported.
+  Like the `{tempo}` metronome chip, the `{key}` chip is always
+  interactive when Web Audio is available (no toggle) and degrades to a
+  static chip under SSR / browsers without `AudioContext`; when a
+  transpose is active it auditions the sounding key. Backed by the new
+  `keyScalePitches` / `keyTonicTriad` core exports (and their wasm / napi
+  / ffi bindings) plus the `useKeyAudio` hook and `<KeySignatureButton>`
+  in `@chordsketch/react`. (#2658)
 - `@chordsketch/react` v0.4.0: the ChordPro chord editor is now a
   full-width footer that spans the editor + preview, driven by the
   editor caret. The chord under the caret is selected automatically and

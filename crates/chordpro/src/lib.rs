@@ -31,7 +31,7 @@ pub mod voicings;
 pub use abc_importer::convert_abc;
 pub use chord::{
     Accidental, ChordDetail, ChordQuality, ChordTones, Note, chord_pitches, chord_tones,
-    parse_chord,
+    key_scale_pitches, key_tonic_triad, parse_chord,
 };
 pub use chord_diagram::{canonical_chord_name, resolve_diagrams_instrument};
 // Aliased as `format_chordpro` to avoid ambiguity with the `format!` macro at
