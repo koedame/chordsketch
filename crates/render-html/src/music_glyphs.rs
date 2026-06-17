@@ -80,14 +80,16 @@ const FLAT_ORDER: &[(&str, f32)] = &[
 ];
 
 /// Look up a key-signature size and direction for a ChordPro
-/// `{key}` value. Accepts both major (`G`, `Bb`, `F#`) and minor
-/// (`Em`, `E minor`, `f# min`) spellings; unicode ♯ / ♭ are
-/// normalised to ASCII. Returns `None` for an unparseable input
-/// OR for a parseable key whose lookup table has no entry, so
-/// callers can render the marker without an icon. Callers that
-/// need to distinguish the two None cases (e.g. to emit a warning
-/// on a parseable-but-missing-from-table input) should use
-/// [`key_signature_for_with_diagnostics`].
+/// `{key}` value. Accepts the strict key grammar
+/// (`chordsketch_chordpro::parse_key`): major (`G`, `Bb`, `F#`) and
+/// minor (`Em`, `F#m`, `Cmin`) tonal keys; unicode ♯ / ♭ are
+/// normalised to ASCII first. Modal keys (`C dorian`) and malformed
+/// values (`E minor`, `e min`) have no key signature here. Returns
+/// `None` for an unparseable input OR for a parseable key whose
+/// lookup table has no entry, so callers can render the marker
+/// without an icon. Callers that need to distinguish the two None
+/// cases (e.g. to emit a warning on a parseable-but-missing-from-table
+/// input) should use [`key_signature_for_with_diagnostics`].
 #[must_use]
 pub fn key_signature_for(key: &str) -> Option<(usize, KeySigType)> {
     match key_signature_for_with_diagnostics(key) {
@@ -104,50 +106,28 @@ pub fn key_signature_for(key: &str) -> Option<(usize, KeySigType)> {
 /// passed a modal `{key}` value (#2526).
 #[must_use]
 pub fn key_signature_for_with_diagnostics(key: &str) -> KeySignatureLookup {
-    let trimmed = key.trim();
-    if trimmed.is_empty() {
-        return KeySignatureLookup::Unparseable;
-    }
-    // Normalise unicode accidentals to ASCII so `F♯` and `F#`
-    // hit the same table entry. NBSP / ideographic spaces fold
-    // to plain ASCII spaces in the same pass.
-    let mut ascii = String::with_capacity(trimmed.len());
-    for ch in trimmed.chars() {
-        match ch {
-            '\u{266D}' => ascii.push('b'),
-            '\u{266F}' => ascii.push('#'),
-            '\u{00A0}' | '\u{3000}' => ascii.push(' '),
-            other => ascii.push(other),
-        }
-    }
-    let ascii = ascii.trim();
-
-    // Parse `<root>[b|#]( m | min | minor)?` case-insensitively.
-    let mut chars = ascii.chars();
-    let Some(root_ch) = chars.next() else {
+    // Delegate the grammar — and the Unicode ♯ / ♭ + exotic-space normalisation
+    // — to the single strict key parser (`chordsketch_chordpro::parse_key`) so
+    // the glyph agrees with the displayed key, the transpose re-spelling, and
+    // the audition on what a key is, rather than carrying its own copy of the
+    // grammar (which used to accept `C minor` / `C m` as minor while the chord
+    // parser read them as major, issue #2665) or its own accidental folding.
+    // A modal key (`C dorian`) has no conventional single key signature here,
+    // so it falls back to the staff-only glyph.
+    let Some(parsed) = chordsketch_chordpro::parse_key(key) else {
         return KeySignatureLookup::Unparseable;
     };
-    let root = root_ch.to_ascii_uppercase();
-    if !('A'..='G').contains(&root) {
-        return KeySignatureLookup::Unparseable;
+    let is_minor = match parsed.mode {
+        chordsketch_chordpro::KeyMode::Major => false,
+        chordsketch_chordpro::KeyMode::Minor => true,
+        chordsketch_chordpro::KeyMode::Mode(_) => return KeySignatureLookup::Unparseable,
+    };
+    // The slash-bass (if any) does not affect a key signature; look up by the
+    // tonic only.
+    let mut note = parsed.root.to_string();
+    if let Some(acc) = parsed.accidental {
+        note.push_str(&acc.to_string());
     }
-    let mut accidental = String::new();
-    let rest: String = chars.collect();
-    let mut rest_chars = rest.chars().peekable();
-    if let Some(&c) = rest_chars.peek() {
-        if c == 'b' || c == '#' {
-            accidental.push(c);
-            rest_chars.next();
-        }
-    }
-    let suffix: String = rest_chars.collect();
-    let suffix_trim = suffix.trim().to_ascii_lowercase();
-    let is_minor = matches!(suffix_trim.as_str(), "m" | "min" | "minor");
-    if !is_minor && !suffix_trim.is_empty() {
-        return KeySignatureLookup::Unparseable;
-    }
-
-    let note = format!("{root}{accidental}");
 
     // Direct lookup tables (see TS sister-site for rationale).
     let major: &[(&str, (usize, KeySigType))] = &[
@@ -555,13 +535,19 @@ mod tests {
     }
 
     #[test]
-    fn key_signature_unicode_and_spaces() {
+    fn key_signature_unicode_and_strict_minor_markers() {
         // Unicode ♯ / ♭ are normalised to ASCII.
         assert_eq!(key_signature_for("F♯"), Some((6, KeySigType::Sharp)));
         assert_eq!(key_signature_for("B♭"), Some((2, KeySigType::Flat)));
-        // Whitespace + verbose minor suffix.
-        assert_eq!(key_signature_for("E minor"), Some((1, KeySigType::Sharp)));
-        assert_eq!(key_signature_for("e MIN"), Some((1, KeySigType::Sharp)));
+        // Strict minor markers (`m`, `min`) resolve to the minor signature.
+        assert_eq!(key_signature_for("Em"), Some((1, KeySigType::Sharp)));
+        assert_eq!(key_signature_for("Emin"), Some((1, KeySigType::Sharp)));
+        // Malformed spellings — a spelled-out word, a space before the marker,
+        // a lowercase root — are not valid keys and carry no signature
+        // (issue #2665); the strict key grammar rejects them.
+        assert_eq!(key_signature_for("E minor"), None);
+        assert_eq!(key_signature_for("e min"), None);
+        assert_eq!(key_signature_for("E m"), None);
     }
 
     #[test]

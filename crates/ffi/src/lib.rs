@@ -428,10 +428,11 @@ pub fn key_scale_pitches(key: String) -> Option<Vec<u8>> {
 /// wasm `keyTonicTriad` and NAPI `keyTonicTriad` exports
 /// (`.claude/rules/fix-propagation.md` §Bindings).
 ///
-/// Major keys yield a major triad, minor keys a minor triad. Any extension
-/// on the key spelling (`"Cmaj7"`) is ignored — the key's tonic chord is
-/// always a triad. Returns three ascending MIDI note numbers, or `None`
-/// when `key` is not parseable as a chord.
+/// Major keys yield a major triad, minor keys a minor triad. A key is a
+/// tonal centre, not a chord: the strict key grammar (issue #2665) rejects
+/// an extension on a key (`"Cmaj7"`) outright rather than reducing it.
+/// Returns three ascending MIDI note numbers, or `None` when `key` is not a
+/// well-formed key.
 #[must_use]
 pub fn key_tonic_triad(key: String) -> Option<Vec<u8>> {
     chordsketch_chordpro::key_tonic_triad(&key)
@@ -1414,8 +1415,9 @@ mod tests {
     fn test_key_tonic_triad_passthrough() {
         assert_eq!(key_tonic_triad("C".to_string()), Some(vec![48, 52, 55]));
         assert_eq!(key_tonic_triad("Am".to_string()), Some(vec![57, 60, 64]));
-        // Extension dropped — the key's tonic chord is always a triad.
-        assert_eq!(key_tonic_triad("Cmaj7".to_string()), Some(vec![48, 52, 55]));
+        // A key is a tonal centre, not a chord: the strict key grammar
+        // (issue #2665) rejects an extension on a key rather than reducing it.
+        assert_eq!(key_tonic_triad("Cmaj7".to_string()), None);
         assert_eq!(key_tonic_triad(String::new()), None);
     }
 }

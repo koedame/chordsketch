@@ -29,7 +29,8 @@ use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::escape::escape_xml as escape;
 use chordsketch_chordpro::inline_markup::{SpanAttributes, TextSpan};
 use chordsketch_chordpro::render_result::{
-    RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
+    RenderResult, push_warning, validate_capo, validate_keys, validate_multiple_capo,
+    validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
 use chordsketch_chordpro::transpose::{
@@ -267,6 +268,7 @@ fn render_song_body_into(
     html.push_str("<article class=\"song\">\n");
 
     validate_capo(&song.metadata, warnings);
+    validate_keys(&song.metadata, warnings);
     validate_multiple_capo(song, warnings);
     validate_strict_key(&song.metadata, config, warnings);
     render_metadata(&song.metadata, html);
@@ -3286,12 +3288,13 @@ mod tests {
             "modal qualifier must round-trip; got:\n{modal_out}"
         );
 
-        // Word `minor` (parsed into extension because of the space).
+        // Malformed: word `minor` is not a valid key (issue #2665) — rendered
+        // verbatim and untransposed instead of guessing a quality.
         let bb_minor = chordsketch_chordpro::parse("{key: Bb minor}\n[Bb]hi").unwrap();
         let bb_minor_out = render_song_with_transpose(&bb_minor, 2, &Config::defaults());
         assert!(
-            bb_minor_out.contains("C minor"),
-            "spelled-out `minor` must round-trip; got:\n{bb_minor_out}"
+            bb_minor_out.contains("Bb minor"),
+            "malformed `Bb minor` must render verbatim, untransposed; got:\n{bb_minor_out}"
         );
 
         // Slash bass transposes alongside the root.
@@ -3302,12 +3305,13 @@ mod tests {
             "slash-bass must transpose alongside the root; got:\n{slash_out}"
         );
 
-        // Extension preserved.
+        // Malformed: an extension on a key (`G7`) is rejected — a key is a
+        // tonal centre, not a chord (issue #2665) — so it renders verbatim.
         let seventh = chordsketch_chordpro::parse("{key: G7}\n[G]hi").unwrap();
         let seventh_out = render_song_with_transpose(&seventh, 2, &Config::defaults());
         assert!(
-            seventh_out.contains("A7"),
-            "extension must round-trip; got:\n{seventh_out}"
+            seventh_out.contains("G7"),
+            "extension-key `G7` must render verbatim, untransposed; got:\n{seventh_out}"
         );
     }
 

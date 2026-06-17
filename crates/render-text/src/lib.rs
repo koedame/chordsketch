@@ -7,7 +7,8 @@ use chordsketch_chordpro::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, S
 use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::notation::NotationKind;
 use chordsketch_chordpro::render_result::{
-    RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
+    RenderResult, push_warning, validate_capo, validate_keys, validate_multiple_capo,
+    validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
 use chordsketch_chordpro::transpose::{
@@ -151,6 +152,7 @@ fn render_song_impl(
     let mut auto_diagrams_instrument: Option<String> = None;
 
     validate_capo(&song.metadata, warnings);
+    validate_keys(&song.metadata, warnings);
     validate_multiple_capo(song, warnings);
     validate_strict_key(&song.metadata, _config, warnings);
     render_metadata(&song.metadata, &mut output);
@@ -1050,16 +1052,18 @@ mod tests {
             "modal qualifier must round-trip on transpose; got:\n{modal_out}"
         );
 
-        // "minor" written out as a word (the space prevents the
-        // chord parser's `min` prefix match, so it lands in the
-        // extension field). The minor *modality* is therefore in
-        // the extension text, not the ChordQuality enum — but the
-        // user sees the right text either way.
+        // Malformed: "minor" written out as a word is NOT a valid key
+        // (issue #2665). The strict key grammar rejects it, so it is
+        // rendered verbatim and untransposed rather than guessing a quality
+        // (the old lenient parser read it as a B-flat *major* chord with a
+        // junk extension and displayed "C minor" on transpose).
+        // (The accidental is typeset with the Unicode ♭ glyph, but the value
+        // is otherwise verbatim and the root is NOT shifted off Bb.)
         let bb_minor = chordsketch_chordpro::parse("{key: Bb minor}\n[Bb]hi").unwrap();
         let bb_minor_out = render_song_with_transpose(&bb_minor, 2, &Config::defaults());
         assert!(
-            bb_minor_out.contains("[Key: C minor]"),
-            "spelled-out `minor` must round-trip; got:\n{bb_minor_out}"
+            bb_minor_out.contains("[Key: B\u{266D} minor]"),
+            "malformed `Bb minor` must render verbatim, untransposed; got:\n{bb_minor_out}"
         );
 
         // Slash bass: the bass note transposes in lockstep with the
@@ -1071,12 +1075,14 @@ mod tests {
             "slash-bass must transpose alongside the root; got:\n{slash_out}"
         );
 
-        // Extension (`7`, `maj7`, `sus4`, …) preserved verbatim.
+        // Malformed: a chord extension on a key (`G7`) is rejected by the
+        // strict grammar — a key is a tonal centre, not a chord — so it is
+        // rendered verbatim and untransposed (issue #2665).
         let seventh = chordsketch_chordpro::parse("{key: G7}\n[G]hi").unwrap();
         let seventh_out = render_song_with_transpose(&seventh, 2, &Config::defaults());
         assert!(
-            seventh_out.contains("[Key: A7]"),
-            "extension must round-trip on transpose; got:\n{seventh_out}"
+            seventh_out.contains("[Key: G7]"),
+            "extension-key `G7` must render verbatim, untransposed; got:\n{seventh_out}"
         );
 
         // Compact-form minor (`Em`) uses ChordQuality::Minor — the
@@ -1105,6 +1111,45 @@ mod tests {
             bb_up_two.contains("[Key: C]"),
             "Bb at +2 lands on C; got:\n{bb_up_two}"
         );
+    }
+
+    /// Issue #2665: the four ways a user might write a G-minor key are no
+    /// longer judged differently. Only the canonical `Gm` is accepted (and
+    /// transposes); `G m`, `Gminor`, and `G minor` are rejected, render
+    /// verbatim and untransposed, and each emits a validation warning.
+    #[test]
+    fn malformed_key_notations_warn_and_render_verbatim() {
+        use chordsketch_chordpro::config::Config;
+
+        // Canonical: transposes to Am at +2, no warning.
+        let canonical = chordsketch_chordpro::parse("{key: Gm}\n[Gm]hi").unwrap();
+        let canonical_res = render_song_with_warnings(&canonical, 2, &Config::defaults());
+        assert!(
+            canonical_res.output.contains("[Key: Am]"),
+            "canonical Gm must transpose to Am at +2; got:\n{}",
+            canonical_res.output
+        );
+        assert!(
+            canonical_res.warnings.is_empty(),
+            "canonical Gm must not warn; got {:?}",
+            canonical_res.warnings
+        );
+
+        // The three malformed forms: verbatim, untransposed, with a warning.
+        for bad in ["G m", "Gminor", "G minor"] {
+            let song = chordsketch_chordpro::parse(&format!("{{key: {bad}}}\n[Gm]hi")).unwrap();
+            let res = render_song_with_warnings(&song, 2, &Config::defaults());
+            assert!(
+                res.output.contains(&format!("[Key: {bad}]")),
+                "malformed `{bad}` must render verbatim, untransposed; got:\n{}",
+                res.output
+            );
+            assert!(
+                res.warnings.iter().any(|w| w.contains("not a valid key")),
+                "malformed `{bad}` must emit a validation warning; got {:?}",
+                res.warnings
+            );
+        }
     }
 
     /// Closes #2522 (MEDIUM-3 from the silent-failure audit):

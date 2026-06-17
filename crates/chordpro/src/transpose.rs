@@ -335,28 +335,39 @@ pub fn transpose(song: &Song, semitones: i8) -> Song {
 /// [`transposed_key_prefers_flat`]), use
 /// [`canonical_transposed_key_with_style`].
 ///
-/// The chord parser is permissive about trailing text — `{key: C
-/// dorian}` parses as a C-major chord with extension `" dorian"`
-/// and `{key: G/B}` parses as a G chord with bass note `B`. This
-/// function emits the transposed root + accidental + minor flag
-/// ONLY; the modal qualifier and the slash-bass are dropped on
-/// output, which silently changes the rendered text. Use
+/// This "simple" variant emits a bare major / minor key label
+/// (transposed root + accidental + minor flag) and so cannot
+/// represent a mode or a slash-bass. It therefore returns `None`
+/// for a modal `{key}` (e.g. `{key: C dorian}`) rather than
+/// fabricating a misleading bare-major label like `D` — callers
+/// fall back to the authored value. Use
 /// [`canonical_transposed_key_with_style`] when you need to
-/// preserve those trailing structural details (every Rust
+/// preserve the modal qualifier and the slash-bass (every Rust
 /// renderer's inline `{key:}` marker does, per #2522).
 ///
-/// Returns `None` when the song key isn't a chord token at all
-/// (the value doesn't start with a note letter C / D / E / F / G
-/// / A / B).
+/// Returns `None` when the song key is not a well-formed key per the strict
+/// [`crate::key::parse_key`] grammar, **or** when it is a modal key — callers
+/// fall back to displaying the authored value verbatim and untransposed, so a
+/// malformed `{key}` is never silently shifted on a guessed quality and a mode
+/// is never silently flattened to a major label.
 #[must_use]
 pub fn canonical_transposed_key(song_key: Option<&str>, semitones: i8) -> Option<String> {
-    let key_str = song_key?;
-    let chord = crate::ast::Chord::new(key_str);
-    let detail = chord.detail.as_ref()?;
+    // The strict parser is the single source of truth: a well-formed key is
+    // lowered straight to a `ChordDetail` (no second permissive parse), and a
+    // malformed value ({key: G minor}, {key: G7}, …) returns None so the
+    // caller renders it as authored instead of transposing a guessed quality.
+    let key = crate::key::parse_key(song_key?)?;
+    // A bare major/minor label can't carry a mode; defer to the authored value
+    // (the `_with_style` variant is the one that preserves `C dorian` → `D
+    // dorian`).
+    if matches!(key.mode, crate::key::KeyMode::Mode(_)) {
+        return None;
+    }
+    let detail = key.to_chord_detail();
     let transposed = transpose_detail_with_style(
-        detail,
+        &detail,
         semitones,
-        key_prefers_flat_for_song(detail, semitones),
+        key_prefers_flat_for_song(&detail, semitones),
     );
     Some(canonical_key_string(&transposed))
 }
@@ -376,26 +387,27 @@ pub fn canonical_transposed_key(song_key: Option<&str>, semitones: i8) -> Option
 ///
 /// This is the strictly-superset variant of
 /// [`canonical_transposed_key`] used by every Rust renderer when
-/// rendering the inline `{key:}` marker. The chord parser is
-/// permissive about trailing text, so this preserves what the
-/// simpler helper drops: `extension` (modal qualifier text after
-/// the root, kept verbatim because it's not a transposable music
-/// theory token) and the slash `/bass` (transposed alongside the
-/// root). Minor keys append `m` after the accidental.
+/// rendering the inline `{key:}` marker. It preserves what the
+/// simpler helper drops: the modal qualifier (`" <mode>"` extension
+/// text, kept verbatim because it's not a transposable music-theory
+/// token) and the slash `/bass` (transposed alongside the root).
+/// Minor keys append `m` after the accidental.
 ///
-/// Returns `None` only when the value doesn't start with a note
-/// letter at all — same parseability contract as
-/// [`canonical_transposed_key`].
+/// Returns `None` when the value is not a well-formed key per the strict
+/// [`crate::key::parse_key`] grammar — same contract as
+/// [`canonical_transposed_key`]. A modal qualifier (`C dorian`) and a
+/// slash-bass (`G/B`) are well-formed and preserved; a malformed value
+/// (`G minor`, `G7`) returns `None` so the caller shows it verbatim.
 #[must_use]
 pub fn canonical_transposed_key_with_style(
     song_key: Option<&str>,
     semitones: i8,
     prefer_flat: bool,
 ) -> Option<String> {
-    let key_str = song_key?;
-    let chord = crate::ast::Chord::new(key_str);
-    let detail = chord.detail.as_ref()?;
-    let transposed = transpose_detail_with_style(detail, semitones, prefer_flat);
+    // Single strict parse → `ChordDetail` (see `canonical_transposed_key`);
+    // no second permissive parse, so the two parsers cannot drift.
+    let detail = crate::key::parse_key(song_key?)?.to_chord_detail();
+    let transposed = transpose_detail_with_style(&detail, semitones, prefer_flat);
     Some(transposed_key_display_string(&transposed))
 }
 
@@ -520,15 +532,16 @@ pub fn transposed_key_prefers_flat(metadata: &crate::ast::Metadata, semitones: i
     let Some(key_str) = metadata.key.as_deref() else {
         return false;
     };
-    let chord = crate::ast::Chord::new(key_str);
-    let Some(detail) = &chord.detail else {
+    // Route through the strict key parser so the flat/sharp decision agrees
+    // with the displayed key, the glyph, and the audition on what a key is.
+    // Malformed keys fall back to sharp-side (the historical default).
+    let Some(key) = crate::key::parse_key(key_str) else {
         return false;
     };
-    let root_semitone = note_to_semitone(detail.root, detail.root_accidental);
+    let root_semitone = note_to_semitone(key.root, key.accidental);
     let new_semitone = shift_semitone(root_semitone, semitones);
     let (new_root, new_acc) = canonical_key_spelling(new_semitone);
-    let is_minor = detail.quality == ChordQuality::Minor;
-    key_prefers_flat(new_root, new_acc, is_minor)
+    key_prefers_flat(new_root, new_acc, key.is_minor())
 }
 
 /// Transpose every chord in a lyrics line using a fixed
@@ -908,6 +921,44 @@ mod tests {
         assert_eq!(
             canonical_transposed_key(Some("F#m"), 1).as_deref(),
             Some("Gm")
+        );
+    }
+
+    #[test]
+    fn canonical_transposed_key_minor_aliases_stay_minor() {
+        // Issue #2665 / correctness review finding #1: the spec minor aliases
+        // (`mi`, `min`, `-`) must transpose as MINOR, not silently collapse to
+        // a major label. `Gmin` / `Gmi` / `G-` at +2 all land on `Am`.
+        for alias in ["Gm", "Gmi", "Gmin", "G-"] {
+            assert_eq!(
+                canonical_transposed_key(Some(alias), 2).as_deref(),
+                Some("Am"),
+                "alias {alias} must transpose as minor"
+            );
+        }
+    }
+
+    #[test]
+    fn canonical_transposed_key_returns_none_for_modal_keys() {
+        // A bare major/minor label can't carry a mode, so the simple variant
+        // defers to the authored value rather than fabricating a misleading
+        // major label (`D`) for `C dorian` (#2665, correctness review #3).
+        assert_eq!(canonical_transposed_key(Some("C dorian"), 2), None);
+        // The `_with_style` variant DOES preserve the mode.
+        assert_eq!(
+            canonical_transposed_key_with_style(Some("C dorian"), 2, false).as_deref(),
+            Some("D dorian")
+        );
+    }
+
+    #[test]
+    fn canonical_transposed_key_rejects_malformed_keys() {
+        // Malformed keys are not transposed at all (caller shows verbatim).
+        assert_eq!(canonical_transposed_key(Some("G minor"), 2), None);
+        assert_eq!(canonical_transposed_key(Some("G7"), 2), None);
+        assert_eq!(
+            canonical_transposed_key_with_style(Some("G m"), 2, false),
+            None
         );
     }
 
