@@ -2874,9 +2874,10 @@ export interface RenderChordproAstOptions {
    */
   transposedKey?: string | null;
   /**
-   * Per-directive transposed-key map keyed by the authored
-   * `{key:}` directive value (e.g. `{ G: "A", D: "E" }` for a
-   * song with both directives transposed +2). Plumbed in from
+   * Per-directive transposed-key map keyed by the **canonical**
+   * `{key:}` directive value (ADR-0035 spelled-out form, e.g.
+   * `{ "G major": "A major", "D major": "E major" }` for a song
+   * with both directives transposed +2). Plumbed in from
    * `useChordproAst`'s `transposedKeyDirectives`, which is
    * sourced from the wasm `ParseChordproResult` (#2525).
    *
@@ -3892,9 +3893,10 @@ interface WalkContext {
    */
   soundingKey: string | null;
   /**
-   * Per-directive transposed-key map keyed by the authored
-   * `{key:}` directive value (e.g. `{ G: "A", D: "E" }` for a
-   * song with both directives transposed +2). Sister-site to the
+   * Per-directive transposed-key map keyed by the **canonical**
+   * `{key:}` directive value (ADR-0035 spelled-out form, e.g.
+   * `{ "G major": "A major", "D major": "E major" }` for a song
+   * with both directives transposed +2). Sister-site to the
    * Rust renderers' inline `canonical_transposed_key_with_style`
    * calls per `{key:}` directive — without this channel the
    * walker only knew the song-primary's transposition and fell
