@@ -39,11 +39,54 @@ const CHARANGO_TUNING: &[i32] = &[67, 72, 64, 69, 76];
 
 /// Number of visible fret rows beyond the anchor fret the search spans (a
 /// four-fret window — the practical stretch of a hand without repositioning).
-const SPAN: i32 = 3;
+/// `pub(crate)` so the coverage tests in [`crate::voicings`] assert against the
+/// same bound the synthesiser enforces rather than a hardcoded copy.
+pub(crate) const SPAN: i32 = 3;
 
 /// Highest anchor fret the search considers. Twelve frets is one full octave,
 /// enough to voice every chord in at least one position.
 const MAX_POSITION: i32 = 12;
+
+/// The most fingers a fretting hand has. A voicing estimated to need more than
+/// this is rejected as unplayable, no matter how many chord tones it sounds.
+/// `pub(crate)` for the same reason as [`SPAN`].
+pub(crate) const MAX_FINGERS: i64 = 4;
+
+// Scoring weights for [`evaluate`], in descending magnitude — these only order
+// *already-valid* voicings (every scored candidate has already passed the
+// hard-required essential-tone, bass, and ≤`MAX_FINGERS` gates, so scoring can
+// never drop an essential tone or the bass). What the weights trade off against
+// each other is the inclusion of *droppable* tones versus playability: the
+// position/finger/span penalties are deliberately large enough that the search
+// will give up a non-essential tone reachable only high up the neck in favour of
+// a lower, easier shape — which is the intended call. They are named (rather than
+// inlined) so a future tweak to one weight is reviewed against the others
+// instead of buried as a bare literal.
+
+/// Reward per distinct chord tone sounded — the dominant per-tone term, well
+/// above the per-string rewards (`W_OPEN` / `W_SOUNDED`) and the `W_FRET_SUM`
+/// tie-breaker so those can never buy back a covered tone. It does NOT dominate
+/// the *sum* of the position/finger/span penalties, so a droppable tone
+/// reachable only high on the neck may still lose to a lower, more playable
+/// shape (essential tones are protected earlier, by the hard gates, not here).
+const W_COVERED: i64 = 10_000;
+/// Penalty per finger. Outranks the per-string rewards so the search prefers
+/// the simplest shape that voices the chord over a denser barre.
+const W_FINGERS: i64 = 700;
+/// Penalty per fret of span — biases toward compact, low-stretch shapes.
+const W_SPAN: i64 = 400;
+/// Penalty per anchor-fret position — open / first-position shapes are what a
+/// learner reads off a diagram.
+const W_POSITION: i64 = 500;
+/// Reward per ringing open string.
+const W_OPEN: i64 = 150;
+/// Reward per sounded (non-muted) string.
+const W_SOUNDED: i64 = 60;
+/// Penalty per interior muted gap (hard to mute cleanly, reads poorly).
+const W_GAP: i64 = 300;
+/// Penalty per fret summed across fretted strings — a light tie-breaker pulling
+/// otherwise-equal shapes toward lower frets.
+const W_FRET_SUM: i64 = 10;
 
 /// Returns the absolute-MIDI open-string tuning for an instrument name, in the
 /// diagram's string order. Unknown instruments fall back to guitar, matching
@@ -60,6 +103,61 @@ pub(crate) fn instrument_tuning(instrument: &str) -> &'static [i32] {
 /// Builds a 12-bit pitch-class mask (`bit p` set ⇔ pitch class `p` present).
 fn pc_mask(pcs: &[u8]) -> u16 {
     pcs.iter().fold(0u16, |m, &pc| m | (1u16 << (pc % 12)))
+}
+
+/// The lowest and highest *fretted* (`fret > 0`) positions in an assignment, or
+/// `None` when no string is fretted. Open (`0`) and muted (`< 0`) strings are
+/// ignored, so `high - low` is the fret span a hand must cover. The single
+/// source of truth for the fretted range used by [`fingers_needed`],
+/// [`fret_span`], and (through them) the search scorer and playability checks,
+/// so those callers cannot drift apart.
+fn fretted_extent(chosen: &[i32]) -> Option<(i32, i32)> {
+    let mut lo = i32::MAX;
+    let mut hi = i32::MIN;
+    for &f in chosen {
+        if f > 0 {
+            lo = lo.min(f);
+            hi = hi.max(f);
+        }
+    }
+    (lo <= hi).then_some((lo, hi))
+}
+
+/// Fret span (`highest − lowest` fretted position) of an assignment; `0` when
+/// fewer than two distinct fretted frets are present.
+fn fret_span(chosen: &[i32]) -> i64 {
+    match fretted_extent(chosen) {
+        Some((lo, hi)) => i64::from(hi - lo),
+        None => 0,
+    }
+}
+
+/// Estimates the minimum number of fingers a fret assignment needs.
+///
+/// Each fretted string (`fret > 0`) costs one finger, with one saving: an
+/// index-finger barre across the lowest fretted fret collapses the strings
+/// sharing that fret into a single finger. The barre is only credited when no
+/// open string is sounded — a barre lies across every string at that fret, so
+/// it is incompatible with an open string ringing above it. Upper-fret partial
+/// barres (a ring- or pinky-finger barre) are deliberately NOT credited: they
+/// are real but advanced, so ignoring them biases the search toward the
+/// simpler, more reliably playable shape a learner can actually fret. `0` for
+/// an all-open / all-muted assignment.
+fn fingers_needed(chosen: &[i32]) -> i64 {
+    let Some((min_fret, _)) = fretted_extent(chosen) else {
+        return 0;
+    };
+    let fretted = chosen.iter().filter(|&&f| f > 0).count() as i64;
+    let has_open = chosen.contains(&0);
+    let at_min = chosen.iter().filter(|&&f| f == min_fret).count() as i64;
+    // An index barre at the lowest fret turns its `at_min` strings into one
+    // finger, saving `at_min - 1` — but only when no open string forbids it.
+    let barre_save = if !has_open && at_min >= 2 {
+        at_min - 1
+    } else {
+        0
+    };
+    fretted - barre_save
 }
 
 /// Synthesises a fretboard voicing for `chord_name` on `instrument`, or `None`
@@ -236,19 +334,42 @@ fn evaluate(chosen: &[i32], ctx: &SearchCtx) -> Option<i64> {
     let gaps = chosen[first..=last].iter().filter(|&&f| f < 0).count() as i64;
     let covered = i64::from(sounded_mask.count_ones());
 
-    // Scoring priorities, in descending weight:
+    // Reject anything a hand cannot fret. A guitar chord is limited to four
+    // fingers; a voicing that needs more is not a realistic shape no matter how
+    // many chord tones it sounds, so it is discarded rather than scored.
+    let fingers = fingers_needed(chosen);
+    if fingers > MAX_FINGERS {
+        return None;
+    }
+
+    // Fret span of the fretted notes — a wide span is a finger stretch, so
+    // compact shapes are preferred among otherwise-equal voicings. Computed by
+    // the same helper the playability checks use, so the bound asserted in tests
+    // and the bound rewarded here cannot diverge.
+    let span = fret_span(chosen);
+
+    // Scoring priorities, in descending weight (see the `W_*` constants):
     //  1. Cover as many distinct chord tones as possible (a richer voicing).
-    //  2. Sit as low on the neck as possible — open/first-position shapes are
-    //     what a learner reads off a diagram, so position is weighted heavily
-    //     above "sound one more string".
-    //  3. Prefer ringing open strings, then a few extra sounded strings.
-    //  4. Avoid interior muted gaps and high frets.
-    // Position outranks the per-string rewards so the search does not climb to
-    // a full six-string barre when a simpler open shape voices the same chord.
+    //  2. Use as few fingers as possible — a four-finger shape is the ceiling
+    //     (enforced above), but easier shapes read better and play better.
+    //  3. Sit as low on the neck as possible — open / first-position shapes are
+    //     what a learner reads off a diagram.
+    //  4. Keep the fret span compact — a narrow shape is less of a stretch.
+    //  5. Avoid interior muted gaps (hard to mute cleanly, reads poorly).
+    //  6. Prefer ringing open strings, then a few extra sounded strings.
+    //  7. Minimise total fret distance as a final tie-breaker.
+    // Position and finger count outrank the per-string rewards so the search
+    // does not climb to a hard six-string barre when a simpler shape voices the
+    // same chord.
     Some(
-        covered * 10_000 - i64::from(position) * 800 + open * 150 + sounded * 100
-            - gaps * 300
-            - fret_sum * 10,
+        covered * W_COVERED
+            - fingers * W_FINGERS
+            - span * W_SPAN
+            - i64::from(position) * W_POSITION
+            + open * W_OPEN
+            + sounded * W_SOUNDED
+            - gaps * W_GAP
+            - fret_sum * W_FRET_SUM,
     )
 }
 
@@ -339,6 +460,33 @@ pub(crate) fn sounded_pitch_classes(data: &DiagramData, instrument: &str) -> Vec
     pcs
 }
 
+/// Decodes a rendered diagram back to absolute fret numbers (muted `-1`, open
+/// `0`, fretted `n`), reversing the [`to_diagram`] `base_fret` encoding. Shared
+/// by the playability checks below and the coverage test in [`crate::voicings`].
+#[cfg(test)]
+#[must_use]
+pub(crate) fn absolute_frets(data: &DiagramData) -> Vec<i32> {
+    data.frets
+        .iter()
+        .map(|&raw| {
+            if raw <= 0 {
+                raw
+            } else {
+                raw + data.base_fret as i32 - 1
+            }
+        })
+        .collect()
+}
+
+/// The `(fingers, fret_span)` a rendered diagram requires — the playability
+/// metrics the synthesiser bounds (`fingers ≤ MAX_FINGERS`, `span ≤ SPAN`).
+#[cfg(test)]
+#[must_use]
+pub(crate) fn diagram_playability(data: &DiagramData) -> (i64, i64) {
+    let abs = absolute_frets(data);
+    (fingers_needed(&abs), fret_span(&abs))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -393,6 +541,43 @@ mod tests {
     fn synthesises_basic_triads_on_guitar() {
         for chord in ["C", "Am", "Gdim", "Faug", "Csus4", "Dsus2", "C5"] {
             assert_valid(chord, "guitar");
+        }
+    }
+
+    #[test]
+    fn synthesised_voicings_are_fingerable() {
+        // The dense extended / altered chords that used to synthesise five- and
+        // six-finger shapes must now come out as something a hand can fret:
+        // at most four fingers, within a four-fret span.
+        //
+        // This calls `synth_fretted_voicing` directly, so it exercises the
+        // *synthesiser* regardless of curation. The exhaustive palette test in
+        // `crate::voicings` asserts the same bound, but it routes through
+        // `lookup_diagram` and skips playability for chords a curated table
+        // happens to cover — so if one of these chords later gains a curated
+        // entry, this test keeps the synthesiser itself under the bound.
+        let chords = [
+            "C9", "C11", "C13", "Cm11", "Cm13", "C7#9", "C7alt", "Eb9", "A11", "B13", "F11", "F13",
+            "Bmaj9", "Gm7b5", "F7#11", "G7b13", "Ebm13", "F7#9",
+        ];
+        for chord in chords {
+            for instrument in ["guitar", "ukulele", "charango"] {
+                let data = synth_fretted_voicing(chord, instrument, 5)
+                    .unwrap_or_else(|| panic!("no voicing for {chord} ({instrument})"));
+                let (fingers, span) = diagram_playability(&data);
+                assert!(
+                    fingers <= MAX_FINGERS,
+                    "{chord} ({instrument}): needs {fingers} fingers (frets {:?}, base {})",
+                    data.frets,
+                    data.base_fret,
+                );
+                assert!(
+                    span <= SPAN as i64,
+                    "{chord} ({instrument}): fret span {span} exceeds {SPAN} (frets {:?}, base {})",
+                    data.frets,
+                    data.base_fret,
+                );
+            }
         }
     }
 

@@ -2552,6 +2552,24 @@ mod tests {
             "{name} ({instrument}): bass {} not sounded",
             tones.bass_pc,
         );
+        // A synthesised shape must be fretable by a human hand: at most
+        // `MAX_FINGERS` fingers, within a `SPAN`-fret reach. Assert against the
+        // synthesiser's own constants so this sister test cannot drift from the
+        // bound the synthesiser actually enforces.
+        let (fingers, span) = crate::voicing_synth::diagram_playability(&data);
+        assert!(
+            fingers <= crate::voicing_synth::MAX_FINGERS,
+            "{name} ({instrument}): needs {fingers} fingers (frets {:?}, base {})",
+            data.frets,
+            data.base_fret,
+        );
+        assert!(
+            span <= i64::from(crate::voicing_synth::SPAN),
+            "{name} ({instrument}): fret span {span} exceeds {} (frets {:?}, base {})",
+            crate::voicing_synth::SPAN,
+            data.frets,
+            data.base_fret,
+        );
     }
 
     #[test]
