@@ -871,11 +871,11 @@ pub fn key_scale_pitches(key: &str) -> Option<Vec<u8>> {
 /// Tonic triad of a musical key as MIDI note numbers — the "do mi sol"
 /// chord strummed after the scale in a key audition.
 ///
-/// Major keys yield a major triad, minor keys a minor triad. Unlike
-/// [`chord_pitches`], any extension on the key spelling (`"Cmaj7"`) is
-/// ignored — the key's tonic chord is always a triad. Returns `undefined`
-/// when `key` is not parseable as a chord; otherwise a `Uint8Array` of
-/// three ascending MIDI note numbers.
+/// Major keys yield a major triad, minor keys a minor triad. A key is a
+/// tonal centre, not a chord: the strict key grammar (issue #2665) rejects
+/// an extension on a key (`"Cmaj7"`) outright rather than reducing it.
+/// Returns `undefined` when `key` is not a well-formed key; otherwise a
+/// `Uint8Array` of three ascending MIDI note numbers.
 ///
 /// Thin wrapper over [`chordsketch_chordpro::key_tonic_triad`] via the
 /// pure-Rust `key_tonic_triad_inner`. Sister-site to the NAPI

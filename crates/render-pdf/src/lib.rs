@@ -18,7 +18,8 @@ use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::inline_markup::TextSpan;
 use chordsketch_chordpro::notation::NotationKind;
 use chordsketch_chordpro::render_result::{
-    RenderResult, push_warning, validate_capo, validate_multiple_capo, validate_strict_key,
+    RenderResult, push_warning, validate_capo, validate_keys, validate_multiple_capo,
+    validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
 use chordsketch_chordpro::transpose::{
@@ -787,6 +788,7 @@ fn render_song_into_doc(
         chordsketch_chordpro::chord_diagram::resolve_orientation(raw_orientation);
 
     validate_capo(&song.metadata, warnings);
+    validate_keys(&song.metadata, warnings);
     validate_multiple_capo(song, warnings);
     validate_strict_key(&song.metadata, config, warnings);
 
@@ -4535,10 +4537,11 @@ mod transpose_tests {
         );
     }
 
-    /// Closes #2522 HIGH-2 (silent-failure audit): modal qualifiers,
-    /// extensions, and slash-bass notes MUST be preserved when the
-    /// inline `Key:` marker is transposed. Sister-site to render-text
-    /// and render-html.
+    /// Closes #2522 HIGH-2 (silent-failure audit): modal qualifiers and
+    /// slash-bass notes MUST be preserved when the inline `Key:` marker is
+    /// transposed. Per issue #2665 a malformed key (spelled-out `minor`, a
+    /// chord extension) is instead rendered verbatim and untransposed.
+    /// Sister-site to render-text and render-html.
     #[test]
     fn test_inline_key_marker_preserves_modal_extension_and_bass() {
         // Modal qualifier preserved.
@@ -4550,20 +4553,29 @@ mod transpose_tests {
             "modal qualifier must round-trip"
         );
 
-        // Word `minor` preserved.
+        // Malformed: word `minor` is not a valid key (issue #2665) — rendered
+        // verbatim and untransposed. The PDF text stream positions the
+        // accidental glyph separately from the rest of the run, so the
+        // verbatim value is asserted by its parts: the untransposed root
+        // `Bb` (the `[Bb]` chord on the next line transposes to `C` at +2, so
+        // a surviving `Bb` can only come from the key marker) and the word
+        // `minor` — and crucially NOT the old transposed `C minor` result.
         let bb_minor = chordsketch_chordpro::parse("{key: Bb minor}\n[Bb]hi").unwrap();
         let bb_minor_out = render_song_with_transpose(&bb_minor, 2, &Config::defaults());
         let bb_minor_content = String::from_utf8_lossy(&bb_minor_out);
         assert!(
-            bb_minor_content.contains("C minor"),
-            "spelled-out `minor` must round-trip"
+            bb_minor_content.contains("Bb") && bb_minor_content.contains("minor"),
+            "malformed `Bb minor` must render verbatim (untransposed root Bb + word minor)"
         );
 
-        // Extension preserved.
+        // Malformed: an extension on a key (`G7`) is rejected — renders verbatim.
         let seventh = chordsketch_chordpro::parse("{key: G7}\n[G]hi").unwrap();
         let seventh_out = render_song_with_transpose(&seventh, 2, &Config::defaults());
         let seventh_content = String::from_utf8_lossy(&seventh_out);
-        assert!(seventh_content.contains("A7"), "extension must round-trip");
+        assert!(
+            seventh_content.contains("G7"),
+            "extension-key `G7` must render verbatim, untransposed"
+        );
     }
 
     #[test]

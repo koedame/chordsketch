@@ -345,12 +345,17 @@ pub fn transpose(song: &Song, semitones: i8) -> Song {
 /// preserve those trailing structural details (every Rust
 /// renderer's inline `{key:}` marker does, per #2522).
 ///
-/// Returns `None` when the song key isn't a chord token at all
-/// (the value doesn't start with a note letter C / D / E / F / G
-/// / A / B).
+/// Returns `None` when the song key is not a well-formed key per the strict
+/// [`crate::key::parse_key`] grammar — callers fall back to displaying the
+/// authored value verbatim and untransposed, so a malformed `{key}` is never
+/// silently shifted on a guessed quality.
 #[must_use]
 pub fn canonical_transposed_key(song_key: Option<&str>, semitones: i8) -> Option<String> {
     let key_str = song_key?;
+    // Strict validity gate: only transpose well-formed keys. A malformed value
+    // ({key: G minor}, {key: G7}, …) returns None so the caller renders it as
+    // authored instead of transposing a guessed quality.
+    crate::key::parse_key(key_str)?;
     let chord = crate::ast::Chord::new(key_str);
     let detail = chord.detail.as_ref()?;
     let transposed = transpose_detail_with_style(
@@ -383,9 +388,11 @@ pub fn canonical_transposed_key(song_key: Option<&str>, semitones: i8) -> Option
 /// theory token) and the slash `/bass` (transposed alongside the
 /// root). Minor keys append `m` after the accidental.
 ///
-/// Returns `None` only when the value doesn't start with a note
-/// letter at all — same parseability contract as
-/// [`canonical_transposed_key`].
+/// Returns `None` when the value is not a well-formed key per the strict
+/// [`crate::key::parse_key`] grammar — same contract as
+/// [`canonical_transposed_key`]. A modal qualifier (`C dorian`) and a
+/// slash-bass (`G/B`) are well-formed and preserved; a malformed value
+/// (`G minor`, `G7`) returns `None` so the caller shows it verbatim.
 #[must_use]
 pub fn canonical_transposed_key_with_style(
     song_key: Option<&str>,
@@ -393,6 +400,11 @@ pub fn canonical_transposed_key_with_style(
     prefer_flat: bool,
 ) -> Option<String> {
     let key_str = song_key?;
+    // Strict validity gate (see `canonical_transposed_key`). For well-formed
+    // keys the permissive `parse_chord` below produces the same root / minor /
+    // modal-extension / slash-bass structure the strict parser validated, so
+    // the existing transpose-and-respell path is reused.
+    crate::key::parse_key(key_str)?;
     let chord = crate::ast::Chord::new(key_str);
     let detail = chord.detail.as_ref()?;
     let transposed = transpose_detail_with_style(detail, semitones, prefer_flat);
@@ -520,15 +532,16 @@ pub fn transposed_key_prefers_flat(metadata: &crate::ast::Metadata, semitones: i
     let Some(key_str) = metadata.key.as_deref() else {
         return false;
     };
-    let chord = crate::ast::Chord::new(key_str);
-    let Some(detail) = &chord.detail else {
+    // Route through the strict key parser so the flat/sharp decision agrees
+    // with the displayed key, the glyph, and the audition on what a key is.
+    // Malformed keys fall back to sharp-side (the historical default).
+    let Some(key) = crate::key::parse_key(key_str) else {
         return false;
     };
-    let root_semitone = note_to_semitone(detail.root, detail.root_accidental);
+    let root_semitone = note_to_semitone(key.root, key.accidental);
     let new_semitone = shift_semitone(root_semitone, semitones);
     let (new_root, new_acc) = canonical_key_spelling(new_semitone);
-    let is_minor = detail.quality == ChordQuality::Minor;
-    key_prefers_flat(new_root, new_acc, is_minor)
+    key_prefers_flat(new_root, new_acc, key.is_minor())
 }
 
 /// Transpose every chord in a lyrics line using a fixed

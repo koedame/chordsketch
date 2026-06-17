@@ -137,6 +137,36 @@ pub fn validate_strict_key(metadata: &Metadata, config: &Config, warnings: &mut 
     }
 }
 
+/// Validate every `{key}` directive value at the render boundary and push a
+/// warning for any value that is not a well-formed key per the strict
+/// [`crate::key::parse_key`] grammar (issue #2665).
+///
+/// The strict grammar admits a tonal key (root + optional accidental +
+/// optional `m` / `mi` / `min` / `-` minor marker + optional `/bass`) and a
+/// modal key (root + space + one of the seven church modes). Malformed values
+/// such as `{key: G m}`, `{key: Gminor}`, `{key: G minor}`, and extension-keys
+/// like `{key: G7}` are rejected; every renderer degrades the same way
+/// (renders the value verbatim, untransposed, with no key-signature glyph and
+/// no audition) and emits this warning so the user learns the canonical form.
+///
+/// Walks [`Metadata::keys`] so mid-song `{key}` changes are validated too, not
+/// only the last-wins [`Metadata::key`]. Renderers call this helper alongside
+/// [`validate_capo`] so the message is byte-identical across output formats.
+pub fn validate_keys(metadata: &Metadata, warnings: &mut Vec<String>) {
+    for raw in &metadata.keys {
+        if crate::key::parse_key(raw).is_none() {
+            push_warning(
+                warnings,
+                format!(
+                    "{{key}} value {raw:?} is not a valid key (expected e.g. \"Gm\" for \
+                     minor, \"G\" for major, or \"G dorian\" for a mode); rendered \
+                     verbatim, untransposed"
+                ),
+            );
+        }
+    }
+}
+
 /// Result of a render operation, containing both the rendered output
 /// and any warnings produced during rendering.
 ///
@@ -353,6 +383,52 @@ mod tests {
         let song = parse_song("{capo: 1}\n{capo: 2}\n{capo: 3}");
         validate_multiple_capo(&song, &mut v);
         assert_eq!(v.len(), 1);
+    }
+
+    // -- validate_keys (issue #2665) --------------------------------------
+
+    #[test]
+    fn test_validate_keys_accepts_canonical_and_modal_and_slash() {
+        let mut v = Vec::<String>::new();
+        let md = Metadata {
+            keys: vec![
+                "C".into(),
+                "Gm".into(),
+                "F#m".into(),
+                "Cmin".into(),
+                "C dorian".into(),
+                "G/B".into(),
+            ],
+            ..Metadata::default()
+        };
+        validate_keys(&md, &mut v);
+        assert!(v.is_empty(), "well-formed keys must not warn; got {v:?}");
+    }
+
+    #[test]
+    fn test_validate_keys_warns_for_each_malformed_form() {
+        let mut v = Vec::<String>::new();
+        let md = Metadata {
+            keys: vec!["G m".into(), "Gminor".into(), "G minor".into(), "G7".into()],
+            ..Metadata::default()
+        };
+        validate_keys(&md, &mut v);
+        assert_eq!(v.len(), 4, "one warning per malformed key; got {v:?}");
+        assert!(v[0].contains("\"G m\"") && v[0].contains("not a valid key"));
+        assert!(v[2].contains("\"G minor\""));
+    }
+
+    #[test]
+    fn test_validate_keys_message_suggests_canonical_form() {
+        let mut v = Vec::<String>::new();
+        let md = Metadata {
+            keys: vec!["G minor".into()],
+            ..Metadata::default()
+        };
+        validate_keys(&md, &mut v);
+        assert_eq!(v.len(), 1);
+        // The message names the canonical alternatives so the user can fix it.
+        assert!(v[0].contains("Gm") && v[0].contains("dorian"));
     }
 
     #[test]

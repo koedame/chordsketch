@@ -33,7 +33,7 @@ pub enum Note {
 
 impl Note {
     /// Parses a single character into a `Note`, if valid.
-    fn from_char(c: char) -> Option<Self> {
+    pub(crate) fn from_char(c: char) -> Option<Self> {
         match c {
             'C' => Some(Self::C),
             'D' => Some(Self::D),
@@ -370,23 +370,24 @@ const MAJOR_SCALE_SEMITONES: [u8; 8] = [0, 2, 4, 5, 7, 9, 11, 12];
 const MINOR_SCALE_SEMITONES: [u8; 8] = [0, 2, 3, 5, 7, 8, 10, 12];
 
 /// Parses a ChordPro `{key}` value into its tonic pitch class
-/// (`0` = C … `11` = B) and whether the key is minor.
+/// (`0` = C … `11` = B) and whether the key's tonic triad is minor.
 ///
-/// The value is parsed with [`parse_chord`], so any chord-like spelling
-/// is accepted (`"C"`, `"Am"`, `"Bb"`, `"F#m"`, even `"Cmaj7"`). Only the
-/// root and whether the quality is minor matter for the key — extensions,
-/// added tones, and altered fifths are ignored. A minor quality selects
-/// the natural-minor scale and a minor tonic triad; every other quality
-/// (major, diminished, augmented) selects the major scale and a major
-/// tonic triad, because a ChordPro key is conventionally major or minor
-/// and those are the only two modes an audition needs.
+/// The value is parsed with the **strict** [`crate::key::parse_key`], the
+/// single source of truth for what a well-formed key is — so the scale /
+/// tonic-triad audition agrees with the displayed key, the key-signature
+/// glyph, and the transpose re-spelling rather than diverging the way the
+/// permissive [`parse_chord`] used to (e.g. `{key: G minor}` parsed as a
+/// G *major* chord with a junk extension, so a "minor" key auditioned a
+/// major scale). A minor key — or a minor-third church mode (dorian /
+/// phrygian / aeolian / locrian) — selects the natural-minor scale and a
+/// minor tonic triad; major keys and major-third modes select the major
+/// scale and triad.
 ///
-/// Returns `None` when `key` is not parseable as a chord.
+/// Returns `None` when `key` is not a well-formed key.
 fn parse_key_tonic(key: &str) -> Option<(u8, bool)> {
-    let detail = parse_chord(key)?;
-    let root_pc = root_semitone(detail.root, detail.root_accidental);
-    let is_minor = detail.quality == ChordQuality::Minor;
-    Some((root_pc, is_minor))
+    let parsed = crate::key::parse_key(key)?;
+    let root_pc = root_semitone(parsed.root, parsed.accidental);
+    Some((root_pc, parsed.is_minor()))
 }
 
 /// Computes the ascending one-octave scale of a musical key as MIDI note
@@ -394,11 +395,11 @@ fn parse_key_tonic(key: &str) -> Option<(u8, bool)> {
 /// sol la ti do".
 ///
 /// `key` is a ChordPro `{key}` value (`"C"`, `"Am"`, `"Bb"`, `"F#m"`, …).
-/// Major keys yield the major scale; minor keys yield the natural-minor
-/// scale (see `parse_key_tonic`). The eight returned notes are the seven
-/// scale degrees plus the octave, with the tonic placed at the same
-/// C3-based register [`chord_pitches`] uses so a scale and a chord
-/// auditioned together share one register.
+/// Major keys yield the major scale; minor keys — and the minor-third
+/// church modes — yield the natural-minor scale (see `parse_key_tonic`).
+/// The eight returned notes are the seven scale degrees plus the octave,
+/// with the tonic placed at the same C3-based register [`chord_pitches`]
+/// uses so a scale and a chord auditioned together share one register.
 ///
 /// This is the musical-theory source of truth for the key-audition
 /// surface (the wasm / napi / ffi bindings drive the React key-audio
@@ -406,7 +407,8 @@ fn parse_key_tonic(key: &str) -> Option<(u8, bool)> {
 /// then strum the triad — is a presentation concern owned by the
 /// consumer, not encoded here.
 ///
-/// Returns `None` when `key` is not parseable as a chord.
+/// Returns `None` when `key` is not a well-formed key (see
+/// [`crate::key::parse_key`]).
 ///
 /// # Examples
 ///
@@ -441,11 +443,12 @@ pub fn key_scale_pitches(key: &str) -> Option<Vec<u8>> {
 /// minor keys yield a minor triad (root, minor third, perfect fifth). The
 /// root sits at the same C3-based register as [`key_scale_pitches`] and
 /// [`chord_pitches`], so for a bare major / minor key this is identical to
-/// `chord_pitches(key)` — but unlike `chord_pitches` it ignores any
-/// extension on the key spelling (`"Cmaj7"` still yields a plain C major
-/// triad), because the *key's* tonic chord is always a triad.
+/// `chord_pitches(key)`. The *key's* tonic chord is always a triad, and the
+/// strict key grammar (see [`crate::key::parse_key`]) does not admit chord
+/// extensions on a key in the first place — `{key: Cmaj7}` is rejected, not
+/// reduced.
 ///
-/// Returns `None` when `key` is not parseable as a chord.
+/// Returns `None` when `key` is not a well-formed key.
 ///
 /// # Examples
 ///
@@ -1747,11 +1750,22 @@ mod tests {
     }
 
     #[test]
-    fn key_scale_ignores_extensions_for_mode() {
-        // The key's mode is major/minor only — a "maj7" spelling still
-        // sounds the plain major scale, and an "m7" the natural minor.
-        assert_eq!(key_scale_pitches("Cmaj7"), key_scale_pitches("C"));
-        assert_eq!(key_scale_pitches("Am7"), key_scale_pitches("Am"));
+    fn key_scale_rejects_extension_keys() {
+        // A key is a tonal centre, not a chord: the strict key grammar
+        // (issue #2665) rejects an extension on a key outright rather than
+        // reducing it to a triad, so there is no scale to audition.
+        assert_eq!(key_scale_pitches("Cmaj7"), None);
+        assert_eq!(key_scale_pitches("Am7"), None);
+        // The bare tonal keys still sound.
+        assert!(key_scale_pitches("C").is_some());
+        assert!(key_scale_pitches("Am").is_some());
+    }
+
+    #[test]
+    fn key_scale_sounds_minor_for_minor_third_modes() {
+        // A modal key auditions its parent major/minor colour (issue #2665).
+        assert_eq!(key_scale_pitches("C dorian"), key_scale_pitches("Cm"));
+        assert_eq!(key_scale_pitches("C lydian"), key_scale_pitches("C"));
     }
 
     #[test]
@@ -1764,11 +1778,12 @@ mod tests {
     }
 
     #[test]
-    fn key_tonic_triad_ignores_extension() {
-        // Unlike chord_pitches, the key's tonic chord is always a triad —
-        // a "maj7" / "m7" key spelling drops the seventh.
-        assert_eq!(key_tonic_triad("Cmaj7"), Some(vec![48, 52, 55]));
-        assert_eq!(key_tonic_triad("Am7"), Some(vec![57, 60, 64]));
+    fn key_tonic_triad_rejects_extension_keys() {
+        // The strict key grammar (issue #2665) does not admit chord extensions
+        // on a key, so an extension spelling is rejected rather than reduced
+        // to a triad.
+        assert_eq!(key_tonic_triad("Cmaj7"), None);
+        assert_eq!(key_tonic_triad("Am7"), None);
     }
 
     #[test]

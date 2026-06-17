@@ -495,6 +495,11 @@ pub(crate) fn do_parse_chordpro(
     // warning at the top of render_song_impl; the wasm parse path
     // is the React surface's equivalent entry point.
     chordsketch_chordpro::render_result::validate_capo(&song.metadata, &mut warnings);
+    // Mirror the Rust renderers' validate_keys invocation so the React preview
+    // surfaces the same "{key} value … is not a valid key" diagnostic for
+    // malformed key notation (issue #2665, renderer-parity.md §Validation
+    // Parity). Malformed keys render verbatim and untransposed on every surface.
+    chordsketch_chordpro::render_result::validate_keys(&song.metadata, &mut warnings);
     // The wasm path has no `{+config.settings.transpose}` extraction
     // (renderers fold that in via `Config::song_transpose_delta`
     // before reaching their own `effective_transpose` call). Pass
@@ -1238,6 +1243,53 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_chordpro_malformed_key_warns_and_is_not_transposed() {
+        // Issue #2665: a malformed `{key}` value is rejected by the strict
+        // grammar, so the React parse path surfaces a validation warning and
+        // does NOT emit a transposed counterpart (the walker falls back to the
+        // authored value, shown verbatim).
+        let opts = RenderOptions {
+            transpose: 2,
+            config: None,
+        };
+        let (_json, warnings, transposed_key, transposed_key_directives) =
+            do_parse_chordpro("{key: G minor}\n[Gm]Hello", Some(&opts)).unwrap();
+        assert!(
+            warnings.iter().any(|w| w.contains("not a valid key")),
+            "malformed `G minor` must emit a validation warning; got: {warnings:?}"
+        );
+        assert_eq!(
+            transposed_key, None,
+            "a malformed key has no transposed counterpart; got: {transposed_key:?}"
+        );
+        assert!(
+            transposed_key_directives.is_empty(),
+            "a malformed key must not appear in the transposed map; got: {transposed_key_directives:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_chordpro_canonical_minor_key_transposes_without_warning() {
+        // The canonical `Gm` is accepted and transposes; sister to the
+        // malformed case above.
+        let opts = RenderOptions {
+            transpose: 2,
+            config: None,
+        };
+        let (_json, warnings, transposed_key, _directives) =
+            do_parse_chordpro("{key: Gm}\n[Gm]Hello", Some(&opts)).unwrap();
+        assert!(
+            !warnings.iter().any(|w| w.contains("not a valid key")),
+            "canonical Gm must not warn; got: {warnings:?}"
+        );
+        assert_eq!(
+            transposed_key.as_deref(),
+            Some("Am"),
+            "Gm at +2 should land on Am"
+        );
+    }
+
+    #[test]
     fn test_parse_chordpro_transposed_key_directives_covers_mid_song_keys() {
         // The walker (#2525) needs the transposed value for every
         // {key:} directive in the song, not just the primary, so
@@ -1619,8 +1671,9 @@ mod tests {
     fn test_key_tonic_triad_inner_passthrough() {
         assert_eq!(key_tonic_triad_inner("C"), Some(vec![48, 52, 55]));
         assert_eq!(key_tonic_triad_inner("Am"), Some(vec![57, 60, 64]));
-        // Extension dropped — the key's tonic chord is always a triad.
-        assert_eq!(key_tonic_triad_inner("Cmaj7"), Some(vec![48, 52, 55]));
+        // A key is a tonal centre, not a chord: the strict key grammar
+        // (issue #2665) rejects an extension on a key rather than reducing it.
+        assert_eq!(key_tonic_triad_inner("Cmaj7"), None);
         assert_eq!(key_tonic_triad_inner(""), None);
     }
 

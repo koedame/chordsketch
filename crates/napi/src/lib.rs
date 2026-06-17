@@ -1142,7 +1142,9 @@ mod tests {
     fn test_key_tonic_triad_inner_passthrough() {
         assert_eq!(key_tonic_triad_inner("C"), Some(vec![48, 52, 55]));
         assert_eq!(key_tonic_triad_inner("Am"), Some(vec![57, 60, 64]));
-        assert_eq!(key_tonic_triad_inner("Cmaj7"), Some(vec![48, 52, 55]));
+        // A key is a tonal centre, not a chord: the strict key grammar
+        // (issue #2665) rejects an extension on a key rather than reducing it.
+        assert_eq!(key_tonic_triad_inner("Cmaj7"), None);
         assert_eq!(key_tonic_triad_inner(""), None);
     }
 
