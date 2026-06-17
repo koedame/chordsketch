@@ -66,7 +66,7 @@ export class FakeAudioBuffer {
   constructor(length: number) {
     this.channel = new Float32Array(length);
   }
-  getChannelData(): Float32Array {
+  getChannelData(_channelNumber: number): Float32Array {
     return this.channel;
   }
 }
@@ -116,7 +116,7 @@ export class FakeAudioContext {
     this.biquadFilters.push(filter);
     return filter;
   });
-  createBuffer = vi.fn((_channels: number, length: number) => new FakeAudioBuffer(length));
+  createBuffer = vi.fn((_channels: number, length: number, _sampleRate: number) => new FakeAudioBuffer(length));
   createPeriodicWave = vi.fn(() => {
     const wave = new FakePeriodicWave();
     this.periodicWaves.push(wave);
