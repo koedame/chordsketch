@@ -3,7 +3,7 @@ import type { HTMLAttributes, ReactNode } from 'react';
 
 import { ChordInspector } from './chord-inspector';
 import { renderChordproAst, unicodeAccidentals } from './chordpro-jsx';
-import type { ChordSelection } from './chordpro-jsx';
+import type { ChordAudioConfig, ChordSelection } from './chordpro-jsx';
 import { useChordAudio } from './use-chord-audio';
 import type { ChordAudioWasmLoader } from './use-chord-audio';
 import type { ChordproChord, ChordproSong } from './chordpro-ast';
@@ -156,17 +156,26 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
    * ChordSheet into controlled-selection mode — see its docs. */
   onChordSelectionChange?: (selection: ChordSelection | null) => void;
   /**
-   * Enable chord-audio mode (#2650). When `true`, every rendered chord
-   * becomes a play button: clicking (or Enter / Space) sounds the chord
-   * as a block chord via the Web Audio API. Audio mode takes precedence
-   * over the click-to-nudge selection / drag interactions, matching the
-   * toolbar-toggle UX where the user opts into audio explicitly.
+   * Enable chord-audio playback (#2650). Audio is additive, not a
+   * separate mode: when on, activating a chord (click / Enter / Space)
+   * sounds it as a block chord via the Web Audio API IN ADDITION to the
+   * click-to-select / drag editing interactions — so the editing panel
+   * stays usable while audio is on.
+   *
+   * Two shapes are accepted:
+   * - `true`: ChordSheet owns the {@link useChordAudio} instance. Used by
+   *   standalone consumers (`<ChordSheet chordAudio onChordEdit>`), where
+   *   the in-pane inspector's edits also audition the changed chord.
+   * - A {@link ChordAudioConfig}: an injected `{ enabled, play }` so a
+   *   host that owns the audio instance (e.g. via `useChordEditor`'s
+   *   `chordAudio` field) routes BOTH preview-click playback and
+   *   panel-edit playback through one shared voice manager.
    *
    * Degrades gracefully: when the environment has no Web Audio support
-   * (SSR, or a browser without `AudioContext`), the flag has no effect
-   * and chords stay inert. Only consumed by `format="html"`.
+   * (SSR, or a browser without `AudioContext`), the `true` form has no
+   * effect and chords stay inert. Only consumed by `format="html"`.
    */
-  chordAudio?: boolean;
+  chordAudio?: boolean | ChordAudioConfig | null;
   /**
    * Test-only WASM loader override for the chord-audio hook. Production
    * callers never supply this — the default lazy-loads
@@ -436,6 +445,22 @@ function ChordSheetTextBranch({
   );
 }
 
+// Preview elements whose press must NOT clear an active chord
+// selection. Two classes, both inside the song body:
+//   - `.chord` — the chord glyphs (re-selected by their own click
+//     handler; also covers audio play-buttons and inline diagrams,
+//     which carry `.chord`).
+//   - `.meta-inline` — inline directive chips, notably the `{tempo}`
+//     metronome chip, which is an interactive `<button>` when Web Audio
+//     is available (see `chordpro-jsx.tsx`). Pressing a chip performs
+//     its own action (ticking the metronome, etc.); clearing the
+//     selection as a side effect would surprise the user.
+// Everything else inside the preview — lyrics, whitespace — is "outside
+// a chord" and clears. Shared by the controlled and uncontrolled
+// branches of the outside-press listener so the two stay in lockstep
+// (.claude/rules/fix-propagation.md).
+const PREVIEW_SELECTION_KEEP = '.chord, .meta-inline';
+
 function ChordSheetAstBranch({
   source,
   transpose,
@@ -469,7 +494,7 @@ function ChordSheetAstBranch({
   onChordDelete: ((target: ChordDeleteTarget) => void) | undefined;
   controlledSelection: ChordSelection | null | undefined;
   onChordSelectionChange: ((selection: ChordSelection | null) => void) | undefined;
-  chordAudio: boolean | undefined;
+  chordAudio: boolean | ChordAudioConfig | null | undefined;
   chordAudioLoader: ChordAudioWasmLoader | undefined;
 }): JSX.Element {
   const { ast, loading, error, transposedKey, transposedKeyDirectives } = useChordproAst(
@@ -479,13 +504,23 @@ function ChordSheetAstBranch({
   );
   const errorNode = error !== null && errorFallback !== null ? errorFallback(error) : null;
 
-  // Chord-audio mode (#2650). The hook is always instantiated (rules of
-  // hooks) but only wired into the walker when the consumer opted in via
-  // the `chordAudio` prop AND the environment supports Web Audio — so on
-  // SSR / unsupported browsers chords stay inert instead of dead buttons.
-  const audio = useChordAudio(chordAudioLoader, Boolean(chordAudio));
-  const chordAudioConfig =
-    chordAudio && audio.supported ? { enabled: true, play: audio.play } : null;
+  // Chord-audio (#2650). The hook is always instantiated (rules of
+  // hooks) but only loads / preloads when ChordSheet owns the audio
+  // (the `chordAudio === true` form) AND the environment supports Web
+  // Audio — so on SSR / unsupported browsers chords stay inert instead
+  // of dead buttons. When the host injects a `ChordAudioConfig` instead,
+  // ChordSheet uses that shared instance directly and its own hook stays
+  // idle (`enabled = false`).
+  const ownsAudio = chordAudio === true;
+  const ownAudio = useChordAudio(chordAudioLoader, ownsAudio);
+  const chordAudioConfig: ChordAudioConfig | null =
+    typeof chordAudio === 'object' && chordAudio !== null
+      ? chordAudio.enabled
+        ? chordAudio
+        : null
+      : ownsAudio && ownAudio.supported
+        ? { enabled: true, play: ownAudio.play }
+        : null;
 
   // Click-to-focus + nudge selection state (#2614). Owned here so it
   // survives the re-render a nudge triggers (the nudge mutates source,
@@ -513,16 +548,19 @@ function ChordSheetAstBranch({
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   // Clear the selection when the user presses down anywhere that is
-  // not a chord / nudge control belonging to THIS sheet. Clicking a
-  // chord re-selects via that chord's own handler, so we keep the
-  // selection only for presses on this sheet's own `.chord` /
-  // `.chord-nudge`; presses elsewhere — empty space, the editor, or
-  // even another sheet instance's chords — clear it. Scoped to when a
-  // selection is active so there is no idle global listener.
+  // not a chord / inline chip belonging to THIS sheet's preview.
+  // Clicking a chord re-selects via that chord's own handler, so we keep
+  // the selection only for presses that land on `PREVIEW_SELECTION_KEEP`
+  // targets; presses on bare lyrics / whitespace clear it. Scoped to
+  // when a selection is active so there is no idle global listener.
+  //
+  // The listener is per-instance (`wrapperRef` is THIS sheet's root):
+  // the shipped shells mount a single preview, so there is no
+  // cross-instance interference; a host that mounts two controlled
+  // previews against one shared selection would need to scope the
+  // selection per preview, which is the host's responsibility.
   useEffect(() => {
-    // Controlled mode: the shell owns the selection (caret-driven), so
-    // there is no in-pane outside-click clear to manage here.
-    if (controlled || chordSelection == null) return;
+    if (chordSelection == null) return;
     const onPointerDown = (event: PointerEvent): void => {
       const node = event.target as Node | null;
       // Resolve to the nearest Element: a pointer event's target can be
@@ -531,15 +569,35 @@ function ChordSheetAstBranch({
       // selection the instant the user presses on the chord glyph.
       const el =
         node instanceof Element ? node : (node?.parentElement ?? null);
-      // Scope to THIS sheet's subtree (chords in `__content` + the
-      // sibling inspector footer), so a press on a chord or anywhere in
-      // the inspector keeps the selection; anything else clears it.
       const root = wrapperRef.current;
+      if (controlled) {
+        // Controlled mode: the shell owns the selection (caret-driven)
+        // and renders the chord-editor footer OUTSIDE this sheet, so the
+        // only clear scoped here is a press on a non-chord part of the
+        // preview (#2654) — that reports `null` upward, and the shell
+        // moves the editor caret off the chord. Presses outside the
+        // preview (the editor, the footer) are owned by the editor caret
+        // and must not be disturbed here.
+        if (
+          root != null &&
+          el != null &&
+          root.contains(el) &&
+          el.closest(PREVIEW_SELECTION_KEEP) == null
+        ) {
+          onChordSelectionChange?.(null);
+        }
+        return;
+      }
+      // Uncontrolled mode: scope to THIS sheet's subtree (chords / chips
+      // in `__content` + the sibling inspector footer), so a press on a
+      // chord, an inline chip, or anywhere in the inspector keeps the
+      // selection; anything else — including clicks entirely outside
+      // this sheet — clears it.
       if (
         root != null &&
         el != null &&
         root.contains(el) &&
-        el.closest('.chord, .chordsketch-sheet__cins')
+        el.closest(`${PREVIEW_SELECTION_KEEP}, .chordsketch-sheet__cins`)
       ) {
         return;
       }
@@ -547,7 +605,7 @@ function ChordSheetAstBranch({
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [controlled, chordSelection]);
+  }, [controlled, chordSelection, onChordSelectionChange]);
 
   // Resolve the selection into the selected chord's coordinates + parts
   // for the inspector. Recomputed whenever the AST (a re-parse after an
@@ -569,6 +627,20 @@ function ChordSheetAstBranch({
   // `{capo: 18}` cannot fool the gate into editing a transposed AST.
   const sourceEditable = chordSourceEditableUnderTranspose(source, transpose);
   const repositionCb = sourceEditable ? onChordReposition : undefined;
+  // When audio is on, audition the moved chord on EVERY reposition the
+  // preview drives — drag-drop AND the keyboard arrow-nudge both route
+  // through the walker's `onChordReposition` — so a move sounds the same
+  // whether it came from the preview or the in-pane panel ◀/▶ (which
+  // calls this handler too). Mirrors the controlled `useChordEditor`
+  // surface, which already auditions on reposition. The walker still
+  // plays click / Enter / Space activations itself, so those do not
+  // route here and cannot double-fire.
+  const repositionCbWithAudio = repositionCb
+    ? (event: ChordRepositionEvent) => {
+        repositionCb(event);
+        chordAudioConfig?.play(event.chord);
+      }
+    : undefined;
   const editCb = sourceEditable ? onChordEdit : undefined;
   const deleteCb = sourceEditable ? onChordDelete : undefined;
   // Drop a stale selection if the user applies a transpose / capo while
@@ -637,7 +709,7 @@ function ChordSheetAstBranch({
           activeSourceLine,
           caretColumn,
           caretLineLength,
-          onChordReposition: repositionCb,
+          onChordReposition: repositionCbWithAudio,
           chordSelection: repositionCb ? chordSelection : null,
           setChordSelection: repositionCb ? selectChord : undefined,
           chordAudio: chordAudioConfig,
@@ -683,6 +755,9 @@ function ChordSheetAstBranch({
               chord,
               expected: resolvedChord.chordName,
             });
+            // Audition the edited chord when audio is on (#2652
+            // follow-up): every panel change sounds the new chord.
+            chordAudioConfig?.play(chord);
           }}
           onNudge={(direction) => {
             const result = buildChordNudge({
@@ -695,8 +770,11 @@ function ChordSheetAstBranch({
               totalLyrics: resolvedChord.totalLyrics,
               direction,
             });
-            if (!result || !repositionCb) return;
-            repositionCb(result.event);
+            if (!result || !repositionCbWithAudio) return;
+            // Route through the audition wrapper so a panel ◀/▶ move
+            // sounds the chord exactly like a preview drag / arrow-nudge
+            // (single source of move-audition — no double play).
+            repositionCbWithAudio(result.event);
             setInternalSelection((prev) => ({
               line: resolvedChord.sourceLine,
               offset: result.offset,

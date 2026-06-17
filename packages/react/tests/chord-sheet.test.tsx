@@ -132,6 +132,53 @@ function chordNamedStub(name: string): StubRenderer {
   };
 }
 
+// A stub returning a `{time}` directive line (rendered as a
+// `.meta-inline` chip) followed by a chord-bearing lyrics line, so a
+// test can assert that pressing an inline chip does not clear the
+// chord selection.
+function chordWithChipStub(): StubRenderer {
+  const songAst = JSON.stringify({
+    metadata: {
+      title: null,
+      subtitles: [],
+      artists: [],
+      composers: [],
+      lyricists: [],
+      album: null,
+      year: null,
+      key: null,
+      tempo: null,
+      time: null,
+      capo: null,
+      sortTitle: null,
+      sortArtist: null,
+      arrangers: [],
+      copyright: null,
+      duration: null,
+      tags: [],
+      custom: [],
+    },
+    lines: [
+      {
+        kind: 'directive',
+        value: { name: 'time', value: '4/4', kind: { tag: 'time' }, selector: null },
+      },
+      {
+        kind: 'lyrics',
+        value: {
+          segments: [{ chord: { name: 'Am', detail: null, display: null }, text: 'hi', spans: [] }],
+        },
+      },
+    ],
+  });
+  const result = { ast: songAst, warnings: [], transposedKey: undefined };
+  return {
+    ...makeStub(),
+    parseChordproWithWarnings: vi.fn(() => result),
+    parseChordproWithWarningsAndOptions: vi.fn(() => result),
+  };
+}
+
 describe('<ChordSheet>', () => {
   test('renders HTML output via parseChordpro when no options are set', async () => {
     const stub = makeStub();
@@ -848,6 +895,108 @@ describe('<ChordSheet>', () => {
     expect(container.querySelector('.chord--selected')).not.toBeNull();
   });
 
+  test('controlled mode: pressing a non-chord part of the preview reports null', async () => {
+    // #2654: in controlled mode the shell owns the selection (caret-
+    // driven). A press on a non-chord part of the preview must report
+    // `null` upward so the shell can move the caret off the chord; a
+    // press on the chord, or anywhere outside the preview, must not.
+    const onChordSelectionChange = vi.fn();
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={vi.fn()}
+        chordSelection={{ line: 1, offset: 0, ordinal: 0, nonce: 1 }}
+        onChordSelectionChange={onChordSelectionChange}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector('.lyrics')).not.toBeNull();
+    });
+    // Non-chord part of the preview (the lyrics span) → deselect.
+    fireEvent.pointerDown(container.querySelector('.lyrics') as HTMLElement);
+    expect(onChordSelectionChange).toHaveBeenLastCalledWith(null);
+
+    // The chord itself → kept (its own click handler re-selects it).
+    onChordSelectionChange.mockClear();
+    fireEvent.pointerDown(container.querySelector('.chord') as HTMLElement);
+    expect(onChordSelectionChange).not.toHaveBeenCalled();
+
+    // Outside the preview entirely (the editor / footer live there) →
+    // not this listener's business; the editor caret owns it.
+    onChordSelectionChange.mockClear();
+    fireEvent.pointerDown(document.body);
+    expect(onChordSelectionChange).not.toHaveBeenCalled();
+  });
+
+  test('controlled mode: pressing an inline directive chip keeps the selection', async () => {
+    // #2654 follow-up: the {tempo} metronome chip (and other
+    // `.meta-inline` chips) are interactive controls inside the preview.
+    // Pressing one performs its own action; it must NOT report a
+    // deselect upward as a side effect.
+    const onChordSelectionChange = vi.fn();
+    const { container } = render(
+      <ChordSheet
+        source="{time: 4/4}\n[Am]hi"
+        astWasmLoader={makeAstLoader(chordWithChipStub())}
+        onChordReposition={vi.fn()}
+        chordSelection={{ line: 2, offset: 0, ordinal: 0, nonce: 1 }}
+        onChordSelectionChange={onChordSelectionChange}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector('.meta-inline--time')).not.toBeNull();
+    });
+    fireEvent.pointerDown(container.querySelector('.meta-inline--time') as HTMLElement);
+    expect(onChordSelectionChange).not.toHaveBeenCalled();
+    // Sanity: a bare-lyrics press still clears, proving the chip path is
+    // the exception, not a blanket "never clear".
+    fireEvent.pointerDown(container.querySelector('.lyrics') as HTMLElement);
+    expect(onChordSelectionChange).toHaveBeenLastCalledWith(null);
+  });
+
+  test('uncontrolled mode: pressing an inline directive chip keeps the selection', async () => {
+    // Sister-site parity with the controlled-mode chip test: the
+    // uncontrolled in-pane listener must keep the selection on a chip
+    // press too (the keep-list is shared via PREVIEW_SELECTION_KEEP).
+    const { container } = render(
+      <ChordSheet
+        source="{time: 4/4}\n[Am]hi"
+        astWasmLoader={makeAstLoader(chordWithChipStub())}
+        onChordReposition={vi.fn()}
+        onChordEdit={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".chord[role='button']")).not.toBeNull();
+    });
+    fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
+    expect(container.querySelector('.chordsketch-sheet__cins')).not.toBeNull();
+    // Press the inline chip — the selection / inspector must survive.
+    fireEvent.pointerDown(container.querySelector('.meta-inline--time') as HTMLElement);
+    expect(container.querySelector('.chordsketch-sheet__cins')).not.toBeNull();
+  });
+
+  test('controlled mode: no clear is reported when nothing is selected', async () => {
+    // The listener is scoped to an active selection; with a null
+    // controlled selection a non-chord press must stay silent.
+    const onChordSelectionChange = vi.fn();
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        astWasmLoader={makeAstLoader(chordStub())}
+        onChordReposition={vi.fn()}
+        chordSelection={null}
+        onChordSelectionChange={onChordSelectionChange}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector('.lyrics')).not.toBeNull();
+    });
+    fireEvent.pointerDown(container.querySelector('.lyrics') as HTMLElement);
+    expect(onChordSelectionChange).not.toHaveBeenCalled();
+  });
+
   test('a non-zero transpose disables chord selection + the inspector', async () => {
     // The transposed AST carries transposed chord names, so source-
     // coordinate editing is unsafe and must be gated off.
@@ -1061,5 +1210,98 @@ describe('<ChordSheet>', () => {
       }
       resetSharedAudioContextForTests();
     }
+  });
+
+  test('audio is additive: with editing wired, a chord both selects and plays (#2652 follow-up)', async () => {
+    const original = (globalThis as { AudioContext?: unknown }).AudioContext;
+    (window as unknown as { AudioContext: unknown }).AudioContext = FakeAudioContext;
+    resetSharedAudioContextForTests();
+    try {
+      const { container } = render(
+        <ChordSheet
+          source="[Am]hi"
+          chordAudio
+          chordAudioLoader={chordAudioLoader}
+          astWasmLoader={makeAstLoader(chordNamedStub('Am'))}
+          onChordReposition={vi.fn()}
+          onChordEdit={vi.fn()}
+        />,
+      );
+      await waitFor(() =>
+        expect(container.querySelector('.chord--audio')).not.toBeNull(),
+      );
+      const chord = container.querySelector('.chord--audio') as HTMLElement;
+      // Both affordances present: the combined label names edit + play,
+      // and aria-pressed tracks selection.
+      expect(chord.getAttribute('role')).toBe('button');
+      expect(chord.getAttribute('aria-pressed')).toBe('false');
+      expect(chord.getAttribute('aria-label')).toBe('Edit and play chord Am');
+      // Drag is no longer suppressed in audio mode.
+      expect(chord.getAttribute('draggable')).toBe('true');
+
+      // Clicking selects it (badge + inspector) so the editing panel
+      // stays usable while audio is on.
+      fireEvent.click(chord);
+      expect(container.querySelector('.chord--selected')).not.toBeNull();
+      expect(container.querySelector('.chordsketch-sheet__cins')).not.toBeNull();
+    } finally {
+      if (original === undefined) {
+        delete (window as unknown as { AudioContext?: unknown }).AudioContext;
+      } else {
+        (window as unknown as { AudioContext: unknown }).AudioContext = original;
+      }
+      resetSharedAudioContextForTests();
+    }
+  });
+
+  test('accepts an injected ChordAudioConfig and routes preview clicks through it', async () => {
+    // The controlled-host form (e.g. useChordEditor's `chordAudio`
+    // field): ChordSheet uses the injected `play` directly rather than
+    // its own instance, so a single voice manager backs both surfaces.
+    const play = vi.fn();
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        chordAudio={{ enabled: true, play }}
+        astWasmLoader={makeAstLoader(chordNamedStub('Am'))}
+      />,
+    );
+    await waitFor(() =>
+      expect(container.querySelector('.chord--audio')).not.toBeNull(),
+    );
+    fireEvent.click(container.querySelector('.chord--audio') as HTMLElement);
+    expect(play).toHaveBeenCalledWith('Am');
+  });
+
+  test('audio: a preview keyboard arrow-nudge auditions the moved chord (parity with the panel ◀/▶)', async () => {
+    // Regression for the standalone-mode gap: the in-pane panel ◀/▶
+    // auditioned a move but the preview arrow-key nudge did not, so the
+    // same operation sounded inconsistently. Both now route through one
+    // audition wrapper.
+    const play = vi.fn();
+    const onChordReposition = vi.fn();
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        chordAudio={{ enabled: true, play }}
+        astWasmLoader={makeAstLoader(chordNamedStub('Am'))}
+        onChordReposition={onChordReposition}
+        onChordEdit={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(container.querySelector('.chord--audio')).not.toBeNull(),
+    );
+    // Click selects + plays once.
+    fireEvent.click(container.querySelector('.chord--audio') as HTMLElement);
+    expect(play).toHaveBeenCalledTimes(1);
+    // ArrowRight on the now-selected chord nudges it one lyric step and
+    // must audition the move.
+    const selected = container.querySelector('.chord--selected') as HTMLElement;
+    expect(selected).not.toBeNull();
+    fireEvent.keyDown(selected, { key: 'ArrowRight' });
+    expect(onChordReposition).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(play).toHaveBeenLastCalledWith('Am');
   });
 });
