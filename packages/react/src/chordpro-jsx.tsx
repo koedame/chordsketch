@@ -53,10 +53,11 @@ import { ChordDiagram } from './chord-diagram';
 // production bundle drops the dev-only branch entirely.
 declare const process: { env: { NODE_ENV?: string } };
 import {
-  KeySignatureGlyph,
   RoleIcon,
   TimeSignatureGlyph,
+  unicodeAccidentals,
 } from './music-glyphs';
+import { KeySignatureButton } from './key-signature-button';
 import { MetronomeButton } from './metronome-button';
 import type {
   ChordproChord,
@@ -380,40 +381,12 @@ function renderLyricsTextWithChars(
 
 // ---- Chord rendering ----------------------------------------------
 
-/**
- * Replace ASCII accidentals (`b` / `#`) on note letters and
- * chord-quality digits with the proper Unicode musical symbols
- * (`♭` U+266D / `♯` U+266F). Two cases are converted:
- *
- * 1. **Root accidentals** — `[A-G]b` / `[A-G]#` for flat-side
- *    and sharp-side keys (`Bb`, `Eb`, `F#`, …).
- * 2. **Extension accidentals** — `b<digit>` / `#<digit>` for
- *    chord-quality alterations (`b9`, `#11`, `b13`, …),
- *    typically inside parens like `Gb7(b9)` or after a degree
- *    marker like `Cmaj7#11`.
- *
- * Chord-quality letters (`m`, `dim`, `sus`, etc.) and lyrics
- * survive unchanged because they don't match either pattern.
- *
- * Sister-site to `unicode_accidentals` in
- * `crates/chordpro/src/typography.rs`. The two functions MUST
- * produce byte-for-byte identical output for every input — the
- * React JSX walker and every Rust renderer pick up the same
- * typography this way.
- */
-export function unicodeAccidentals(name: string): string {
-  return name
-    .replace(/([A-G])b/g, '$1♭')
-    .replace(/([A-G])#/g, '$1♯')
-    // After the root pass, any remaining ASCII `b` / `#` that
-    // sits IMMEDIATELY before a digit is a quality-alteration
-    // marker. Negative lookbehind on `[A-G]` is unnecessary —
-    // the root pass already consumed those pairs and replaced
-    // the `b`/`#` with their unicode forms, so they can no
-    // longer match this regex.
-    .replace(/b(?=\d)/g, '♭')
-    .replace(/#(?=\d)/g, '♯');
-}
+// `unicodeAccidentals` moved to the leaf `music-glyphs` module (#2658)
+// so the `<KeySignatureButton>` audition control can share it without a
+// circular import back into this walker. Re-exported here to preserve the
+// `@chordsketch/react` public path used by `useChordEditor`, `<ChordSheet>`,
+// and external consumers.
+export { unicodeAccidentals } from './music-glyphs';
 
 function renderChord(chord: ChordproChord): string {
   return unicodeAccidentals(chord.display ?? chord.name);
@@ -4386,35 +4359,26 @@ function handleDirective(
         ? ctx.soundingKey
         : null;
     const sounding = soundingFromMap ?? soundingFromPrimary;
-    if (sounding !== null) {
-      pushElement(
-        ctx,
-        <span key={key} className="meta-inline meta-inline--key meta-inline--key-pair">
-          <span className="meta-inline__group">
-            <KeySignatureGlyph keyName={keyName} className="meta-inline__glyph" />
-            <span className="meta-inline__label">Original:</span>{' '}
-            <span className="meta-inline__value">{unicodeAccidentals(keyName)}</span>
-          </span>
-          <span className="meta-inline__separator" aria-hidden="true">
-            →
-          </span>
-          <span className="meta-inline__group">
-            <KeySignatureGlyph keyName={sounding} className="meta-inline__glyph" />
-            <span className="meta-inline__label">Playing:</span>{' '}
-            <span className="meta-inline__value">{unicodeAccidentals(sounding)}</span>
-          </span>
-        </span>,
-        key, // source-line for `line--active` decoration
-      );
-      return;
-    }
+    // The whole chip is an interactive key-audition control: clicking
+    // anywhere on it plays the key's scale + tonic triad (major or minor)
+    // via the `useKeyAudio` Web Audio hook. `<KeySignatureButton>` renders
+    // the chip root itself — a `<button>` when Web Audio is available, a
+    // plain `<span>` (byte-identical to the pre-#2658 markup) otherwise —
+    // so `pushElement` decorates it with `data-source-line` / `line--active`
+    // via the forwarded props. When a transpose is active it shows the
+    // Original → Playing pair and auditions the sounding key.
     pushElement(
       ctx,
-      <span key={key} className="meta-inline meta-inline--key">
-        <KeySignatureGlyph keyName={keyName} className="meta-inline__glyph" />
-        <span className="meta-inline__label">Key:</span>{' '}
-        <span className="meta-inline__value">{unicodeAccidentals(keyName)}</span>
-      </span>,
+      <KeySignatureButton
+        key={key}
+        keyName={keyName}
+        soundingKey={sounding}
+        className={
+          sounding !== null
+            ? 'meta-inline meta-inline--key meta-inline--key-pair'
+            : 'meta-inline meta-inline--key'
+        }
+      />,
       key, // source-line for `line--active` decoration
     );
     return;

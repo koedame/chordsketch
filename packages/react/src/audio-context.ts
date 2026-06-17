@@ -123,3 +123,24 @@ export function scheduleVoice(
     }
   };
 }
+
+/**
+ * Stop every oscillator tracked in `tracked` and clear the set. A no-arg
+ * `osc.stop()` cancels a not-yet-started voice outright and cuts a sounding
+ * one immediately; the per-voice `onended` cleanup (wired by
+ * {@link scheduleVoice}) removes each node from the set, but this also
+ * clears eagerly so a caller can reuse the set immediately.
+ *
+ * Shared by `useChordAudio`, `useKeyAudio`, and `useMetronome` so the
+ * stop-and-clear race handling lives in one place.
+ */
+export function stopVoices(tracked: Set<OscillatorNode>): void {
+  for (const osc of tracked) {
+    try {
+      osc.stop();
+    } catch {
+      // Already stopped / ended — nothing to cancel.
+    }
+  }
+  tracked.clear();
+}

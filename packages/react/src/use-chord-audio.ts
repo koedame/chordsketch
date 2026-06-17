@@ -4,7 +4,9 @@ import {
   getAudioContextCtor,
   getSharedAudioContext,
   scheduleVoice,
+  stopVoices,
 } from './audio-context';
+import { usePitchModule } from './use-pitch-module';
 
 // ---- Voicing / envelope tuning ---------------------------------
 // A block chord is several oscillators started at once. The total
@@ -107,9 +109,9 @@ export function useChordAudio(
 ): UseChordAudioResult {
   const supported = useMemo(() => getAudioContextCtor() !== null, []);
 
-  const moduleRef = useRef<ChordPitchesModule | null>(null);
-  const loaderRef = useRef(loader);
-  loaderRef.current = loader;
+  // Preload the wasm module so `play` can resolve pitches synchronously
+  // inside the user gesture (shared loader — see `usePitchModule`).
+  const moduleRef = usePitchModule(loader, enabled, supported);
 
   // Per-name pitch cache: `chordPitches` is deterministic, so a chord
   // tapped repeatedly is computed once.
@@ -119,37 +121,8 @@ export function useChordAudio(
   // unmount) can silence them and a retrigger does not stack voices.
   const voicesRef = useRef<Set<OscillatorNode>>(new Set());
 
-  // Preload the wasm module so `play` can resolve pitches synchronously
-  // inside the user gesture. Gated on `enabled` so a `<ChordSheet>` that
-  // never turns chord audio on does not pay the import; the load fires
-  // the first time a consumer enables the feature. If the load fails,
-  // `moduleRef` stays null and `play` is a no-op rather than throwing.
-  useEffect(() => {
-    if (!supported || !enabled) return undefined;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const mod = await loaderRef.current();
-        await mod.default();
-        if (!cancelled) moduleRef.current = mod;
-      } catch {
-        // Leave moduleRef null; play() degrades to a no-op.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [supported, enabled]);
-
   const stop = useCallback(() => {
-    for (const osc of voicesRef.current) {
-      try {
-        osc.stop();
-      } catch {
-        // Already stopped / ended.
-      }
-    }
-    voicesRef.current.clear();
+    stopVoices(voicesRef.current);
   }, []);
 
   const play = useCallback(

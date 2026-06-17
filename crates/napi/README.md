@@ -154,6 +154,8 @@ for (const { line, column, message } of errors) {
 | `chordDiagramSvgWithOrientation(chord, instrument, orientation?)` | `string \| null` | Orientation-aware variant. `orientation`: `"vertical"` (default) or `"horizontal"` (nut on the left, Japanese tablature convention). Horizontal mode is reader-view only (high pitch on top, matches tablature stave order); see ADR-0026. Unrecognised strings fall back to vertical. |
 | `chordDiagramSvgWithDefinesOrientation(chord, instrument, defines, orientation?)` | `string \| null` | Combined surface — accepts both song-level `{define}` voicings and the orientation knob. |
 | `chordPitches(chord)` | `Buffer \| null` | Constituent pitches of a chord as MIDI note numbers, for driving an audio synth. Returns a block voicing (root, third, fifth, plus any extension / altered / added tones, with a slash bass an octave below) as a byte `Buffer`; `null` when the chord is not parseable. |
+| `keyScalePitches(key)` | `Buffer \| null` | Ascending one-octave scale of a musical key as MIDI note numbers — the movable-do "do re mi fa sol la ti do". Major keys yield the major scale; minor keys the natural-minor scale. Eight bytes; `null` when the key is not parseable. |
+| `keyTonicTriad(key)` | `Buffer \| null` | Tonic triad of a musical key as MIDI note numbers (the "do mi sol" chord). Major / minor per the key; extensions on the spelling are ignored. Three bytes; `null` when the key is not parseable. |
 
 ### Utility
 

@@ -209,10 +209,19 @@ export function KeySignatureGlyph({
   keyName,
   className,
   style,
+  'aria-hidden': ariaHidden,
 }: {
   keyName: string;
   className?: string;
   style?: CSSProperties;
+  /**
+   * Pass `true` when the glyph is embedded inside an interactive
+   * ancestor (e.g. `<KeySignatureButton>`) that already carries its own
+   * accessible label. Suppresses the SVG's `role="img"` / `aria-label`
+   * so screen readers do not announce the key signature separately from
+   * the surrounding control (parity with {@link MetronomeGlyph}).
+   */
+  'aria-hidden'?: boolean;
 }): JSX.Element {
   const sig = keySignatureFor(keyName);
   // SVG coordinate system: width grows with the accidental count
@@ -255,14 +264,20 @@ export function KeySignatureGlyph({
       height={h}
       className={['music-glyph', 'music-glyph--key', className].filter(Boolean).join(' ')}
       style={style}
-      role="img"
-      aria-label={
-        sig === null
-          ? `Key ${keyName}`
-          : sig.type === 'natural'
-            ? `Key ${keyName} (no accidentals)`
-            : `Key ${keyName} (${sig.count} ${sig.type}${sig.count === 1 ? '' : 's'})`
-      }
+      // When embedded in a self-labelling interactive ancestor, hide the
+      // glyph from AT (no role / no label) so the key signature is not
+      // announced twice; otherwise expose it as a labelled image.
+      {...(ariaHidden
+        ? { 'aria-hidden': true }
+        : {
+            role: 'img',
+            'aria-label':
+              sig === null
+                ? `Key ${keyName}`
+                : sig.type === 'natural'
+                  ? `Key ${keyName} (no accidentals)`
+                  : `Key ${keyName} (${sig.count} ${sig.type}${sig.count === 1 ? '' : 's'})`,
+          })}
     >
       {/* 5-line staff */}
       {[0, 1, 2, 3, 4].map((i) => (
@@ -772,4 +787,41 @@ export function MetronomeGlyph({
       </g>
     </svg>
   );
+}
+
+// ---- Accidental typography --------------------------------------
+
+/**
+ * Replace ASCII accidentals (`b` / `#`) on note letters and
+ * chord-quality digits with the proper Unicode musical symbols
+ * (`♭` U+266D / `♯` U+266F). Two cases are converted:
+ *
+ * 1. **Root accidentals** — `[A-G]b` / `[A-G]#` for flat-side
+ *    and sharp-side keys (`Bb`, `Eb`, `F#`, …).
+ * 2. **Extension accidentals** — `b<digit>` / `#<digit>` for
+ *    chord-quality alterations (`b9`, `#11`, `b13`, …),
+ *    typically inside parens like `Gb7(b9)` or after a degree
+ *    marker like `Cmaj7#11`.
+ *
+ * Chord-quality letters (`m`, `dim`, `sus`, etc.) and lyrics
+ * survive unchanged because they don't match either pattern.
+ *
+ * Sister-site to `unicode_accidentals` in
+ * `crates/chordpro/src/typography.rs`. The two functions MUST
+ * produce byte-for-byte identical output for every input — the
+ * React JSX walker and every Rust renderer pick up the same
+ * typography this way.
+ */
+export function unicodeAccidentals(name: string): string {
+  return name
+    .replace(/([A-G])b/g, '$1♭')
+    .replace(/([A-G])#/g, '$1♯')
+    // After the root pass, any remaining ASCII `b` / `#` that
+    // sits IMMEDIATELY before a digit is a quality-alteration
+    // marker. Negative lookbehind on `[A-G]` is unnecessary —
+    // the root pass already consumed those pairs and replaced
+    // the `b`/`#` with their unicode forms, so they can no
+    // longer match this regex.
+    .replace(/b(?=\d)/g, '♭')
+    .replace(/#(?=\d)/g, '♯');
 }
