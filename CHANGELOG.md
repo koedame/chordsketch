@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exposes a `chordAudio` config the host forwards to the preview.
   Degrades gracefully without Web Audio / under SSR and respects
   `prefers-reduced-motion`. (#2650)
+- `@chordsketch/react`: a chord click in the preview is now an idempotent
+  **select** rather than a toggle — re-clicking the already-selected
+  chord keeps it selected (and, with chord audio on, re-auditions it)
+  instead of clearing the selection. This removes the conflict where
+  "click to hear" fought "click to deselect" on one gesture; a chord
+  click can no longer clear the editing target by construction.
+  Deselection is now exclusively Escape, click-outside, the inspector ✕,
+  or moving the editor caret off the chord. (#2650)
 - Horizontal (left-nut) orientation for fretted-instrument chord
   diagrams, alongside the existing vertical layout. Enable via the
   `diagrams.orientation = "horizontal"` config key (honoured by the

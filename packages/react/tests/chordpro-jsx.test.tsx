@@ -3901,7 +3901,7 @@ describe('renderChordproAst click-to-focus + nudge (#2614)', () => {
     };
   }
 
-  test('chords are toggle buttons; clicking selects (solid badge + aria-pressed)', () => {
+  test('chords are select buttons; clicking selects (solid badge + aria-pressed)', () => {
     const { container } = render(<Harness ast={twoChordAst()} onReposition={vi.fn()} />);
     const chord = container.querySelector('.chord') as HTMLElement;
     // Toggle-button semantics when the feature is fully wired.
@@ -3984,18 +3984,23 @@ describe('renderChordproAst click-to-focus + nudge (#2614)', () => {
     expect(container.querySelector('.chord--selected')).toBeNull();
   });
 
-  test('clicking the selected chord again toggles the selection off', () => {
+  test('clicking the selected chord again keeps it selected (idempotent, no toggle-off)', () => {
+    // A chord click is an idempotent SELECT, not a toggle: re-clicking the
+    // already-selected chord must NOT clear it. This is what lets "click
+    // to re-hear" (chord audio) coexist with "click to edit" — the two no
+    // longer fight on one gesture. Deselection is Escape / click-outside.
     const { container } = render(<Harness ast={twoChordAst()} onReposition={vi.fn()} />);
     const chord = container.querySelector('.chord') as HTMLElement;
     fireEvent.click(chord);
-    expect(container.querySelector('.chord--selected')).not.toBeNull();
-    // Click the (now selected) chord again.
+    const selected = container.querySelector('.chord--selected') as HTMLElement;
+    expect(selected).not.toBeNull();
+    // Click the (now selected) chord again — it stays selected.
     fireEvent.click(container.querySelector('.chord--selected') as HTMLElement);
-    expect(container.querySelector('.chord--selected')).toBeNull();
+    expect(container.querySelector('.chord--selected')).not.toBeNull();
   });
 
   test('clicking a chord writes the selection with an advanced nonce', () => {
-    // Controlled render proving the toggle's write shape: selecting G
+    // Controlled render proving the select write shape: selecting G
     // (offset 6) from a clean state.
     const setChordSelection = vi.fn();
     const { container } = render(
@@ -4015,14 +4020,14 @@ describe('renderChordproAst click-to-focus + nudge (#2614)', () => {
     });
   });
 
-  test('without setChordSelection, chords are not toggle buttons (drag-only)', () => {
+  test('without setChordSelection, chords are not select buttons (drag-only)', () => {
     const { container } = render(
       renderChordproAst(twoChordAst(), { onChordReposition: vi.fn() }),
     );
     const chord = container.querySelector('.chord') as HTMLElement;
     // Drag still wired…
     expect(chord.getAttribute('draggable')).toBe('true');
-    // …but no click-to-select toggle semantics.
+    // …but no click-to-select semantics.
     expect(chord.getAttribute('role')).toBeNull();
     expect(container.querySelector('.chord--selected')).toBeNull();
   });
@@ -4503,12 +4508,36 @@ describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
     expect(selected.getAttribute('aria-pressed')).toBe('true');
   });
 
-  test('with selection wired, Enter both plays and toggles selection', () => {
+  test('re-clicking an audio chord re-plays AND keeps it selected (the reported conflict fix)', () => {
+    // Direct regression for "press a chord, sound plays, but the
+    // selection clears." A chord click is an idempotent select, so
+    // clicking the already-selected chord auditions it again WITHOUT
+    // toggling the selection off — audio and editing no longer fight.
+    const play = vi.fn();
+    const { container } = render(<AudioSelectHarness play={play} />);
+    const chord = container.querySelector('.chord') as HTMLElement;
+    fireEvent.click(chord);
+    expect(container.querySelector('.chord--selected')).not.toBeNull();
+    expect(play).toHaveBeenCalledTimes(1);
+    // Click the same (selected) chord again.
+    fireEvent.click(container.querySelector('.chord--selected') as HTMLElement);
+    // Still selected, and auditioned a second time.
+    expect(container.querySelector('.chord--selected')).not.toBeNull();
+    expect(play).toHaveBeenCalledTimes(2);
+  });
+
+  test('with selection wired, Enter both plays and selects', () => {
     const play = vi.fn();
     const { container } = render(<AudioSelectHarness play={play} />);
     const chord = container.querySelector('.chord') as HTMLElement;
     fireEvent.keyDown(chord, { key: 'Enter' });
     expect(play).toHaveBeenCalledWith('Am7');
+    expect(container.querySelector('.chord--selected')).not.toBeNull();
+    // Re-pressing Enter on the selected chord re-plays and stays selected.
+    fireEvent.keyDown(container.querySelector('.chord--selected') as HTMLElement, {
+      key: 'Enter',
+    });
+    expect(play).toHaveBeenCalledTimes(2);
     expect(container.querySelector('.chord--selected')).not.toBeNull();
   });
 
