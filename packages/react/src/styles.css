@@ -1835,10 +1835,16 @@
 .chordsketch-chord-pro-editor__chord-footer .chordsketch-sheet__cins-input {
   width: 5.5rem;
 }
-/* Actions hug the right edge of the row. */
+/* Actions hug the right edge of the row. This cluster has no label
+   above it (unlike Root / Type / Quality / Move), so under the row's
+   top-aligned cross axis it would otherwise pin to the very top edge —
+   higher than every labelled cluster's control. Centre it on the band
+   instead, matching the design-system reference
+   (`design-system/ui_kits/web/editor-chord-footer.html` → `.cins__actions`). */
 .chordsketch-chord-pro-editor__chord-footer .chordsketch-sheet__cins-footer {
   margin-left: auto;
   gap: var(--cs-sp-2, 0.5rem);
+  align-self: center;
 }
 /* Hide the empty placeholder span the footer renders when there is no
    Remove button (idle), so it does not add a gap before Insert. */
