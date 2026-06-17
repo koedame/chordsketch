@@ -106,7 +106,7 @@ export interface PreviewToolbarProps
   trailing?: ReactNode;
 }
 
-const AUDIO_ICON = (
+const AUDIO_ON_ICON = (
   <svg
     width="16"
     height="16"
@@ -122,6 +122,28 @@ const AUDIO_ICON = (
     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
     <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
     <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+  </svg>
+);
+
+// Muted-speaker glyph (a struck-out volume mark) so the off state is
+// distinguishable from the on state by shape alone, not just by the
+// active fill colour — see #2669.
+const AUDIO_OFF_ICON = (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+    <line x1="23" y1="9" x2="17" y2="15" />
+    <line x1="17" y1="9" x2="23" y2="15" />
   </svg>
 );
 
@@ -284,14 +306,32 @@ export function PreviewToolbar({
           </span>
           <button
             type="button"
-            className="chordsketch-preview-toolbar__audio-toggle btn btn-secondary btn-sm"
+            /* No `btn btn-secondary` here, unlike the Export button: this
+               is a stateful toggle, and `@chordsketch/react-ui`'s generic
+               `.btn-secondary:hover` background fights the `aria-pressed`
+               active fill when both stylesheets are loaded (the playground
+               loads react-ui after react). The dedicated
+               `.chordsketch-preview-toolbar__audio-toggle` rule owns the
+               full styling so the on/off state is correct with or without
+               react-ui present (#2669). */
+            className="chordsketch-preview-toolbar__audio-toggle"
             aria-pressed={Boolean(chordAudioEnabled)}
             aria-label="Play chords on click"
-            title="Play chords on click"
+            title={
+              chordAudioEnabled
+                ? 'Chord audio on — click to stop playing chords'
+                : 'Chord audio off — click to play chords'
+            }
             onClick={() => onChordAudioToggle!(!chordAudioEnabled)}
           >
-            {AUDIO_ICON}
+            {chordAudioEnabled ? AUDIO_ON_ICON : AUDIO_OFF_ICON}
             <span>Chord audio</span>
+            <span
+              className="chordsketch-preview-toolbar__audio-state"
+              aria-hidden="true"
+            >
+              {chordAudioEnabled ? 'On' : 'Off'}
+            </span>
           </button>
         </div>
       ) : null}
