@@ -1922,11 +1922,14 @@ function LyricsLine({
   useEffect(() => {
     // When this line is not (or no longer) the selected line, reset
     // the handled-nonce so a FUTURE selection of this line refocuses
-    // even if its nonce repeats a previously-handled value — the
-    // per-selection nonce restarts at 1 after a full deselect
-    // (`cur` is null in `toggleSelect`), so without this reset a
-    // select → deselect → reselect-the-same-chord cycle could match
-    // the stale handled value and skip the programmatic refocus.
+    // even if its nonce repeats a previously-handled value. The nonce
+    // sequence depends on the host: the standalone <ChordSheet> writes
+    // `(cur?.nonce ?? 0) + 1`, so it restarts at 1 after a full deselect
+    // (`cur` null, via Escape / click-outside); the caret-driven
+    // useChordEditor host uses a monotonic counter that never resets.
+    // This reset covers BOTH — without it a select → deselect →
+    // reselect-the-same-chord cycle could match a stale handled value
+    // and skip the programmatic refocus.
     // Do NOT reset while the segment is merely unresolved mid-reparse
     // (isSelectedLine true, focusedSegmentIdx < 0) — that transient
     // must still refocus once the new AST lands.
@@ -1940,9 +1943,21 @@ function LyricsLine({
     focusedSpanRef.current?.focus();
   }, [isSelectedLine, focusedSegmentIdx, selected]);
 
-  // Toggle the selection for the chord in `segmentIdx`. Clicking
-  // the already-selected chord clears the selection.
-  const toggleSelect = (segmentIdx: number): void => {
+  // Select the chord in `segmentIdx`. This is an IDEMPOTENT select, not
+  // a toggle: clicking a chord makes it THE selected chord with a fresh
+  // nonce so the focus / scroll / caret-restore effects re-fire; re-
+  // clicking the already-selected chord returns early (no nonce bump, no
+  // churn) rather than clearing the selection.
+  //
+  // Why not a toggle: chord audio turns a chord into a "click to hear"
+  // control, and a toggle would make the second audition click clear the
+  // editing target — the two features would fight on one gesture. An
+  // idempotent select lets click-to-hear and click-to-edit coexist.
+  // Deselection is a separate gesture: Escape (below), click-outside or
+  // the inspector ✕ (standalone <ChordSheet>), or moving the editor caret
+  // off the chord (caret-driven hosts, which already ignore a null
+  // selection write).
+  const selectChordAt = (segmentIdx: number): void => {
     if (!reposition || !nudgeCtx) return;
     const offset = segmentLayout[segmentIdx].lyricsOffsetStart;
     let ordinal = 0;
@@ -1951,21 +1966,24 @@ function LyricsLine({
       if (c.offset === offset) ordinal++;
     }
     const cur = nudgeCtx.selected;
-    const isSame =
+    // Already THE selected chord: a re-click is a selection no-op — it
+    // stays selected (no `null` write, so it cannot clear) and skips the
+    // nonce bump so the focus / scroll effects don't churn. The audio
+    // audition still fires because the caller plays BEFORE calling this.
+    if (
       cur != null &&
       cur.line === reposition.sourceLine &&
       cur.offset === offset &&
-      cur.ordinal === ordinal;
-    nudgeCtx.setSelected(
-      isSame
-        ? null
-        : {
-            line: reposition.sourceLine,
-            offset,
-            ordinal,
-            nonce: (cur?.nonce ?? 0) + 1,
-          },
-    );
+      cur.ordinal === ordinal
+    ) {
+      return;
+    }
+    nudgeCtx.setSelected({
+      line: reposition.sourceLine,
+      offset,
+      ordinal,
+      nonce: (cur?.nonce ?? 0) + 1,
+    });
   };
 
   // Move the selected chord one lyric character in `direction`.
@@ -2007,16 +2025,16 @@ function LyricsLine({
     });
   };
 
-  // Keyboard control for a chord span. Enter / Space toggles the
-  // selection of that chord; once selected, ArrowLeft / ArrowRight
-  // nudge it and Escape clears the selection.
+  // Keyboard control for a chord span. Enter / Space selects that chord
+  // (idempotent — matches the click model, not a toggle); once selected,
+  // ArrowLeft / ArrowRight nudge it and Escape clears the selection.
   const chordKeyHandler =
     (segmentIdx: number) => (event: ReactKeyboardEvent<HTMLSpanElement>): void => {
       if (!reposition || !nudgeCtx) return;
       const { key } = event;
       if (key === 'Enter' || key === ' ') {
         event.preventDefault();
-        toggleSelect(segmentIdx);
+        selectChordAt(segmentIdx);
         return;
       }
       if (segmentIdx !== focusedSegmentIdx) return;
@@ -2277,6 +2295,12 @@ function LyricsLine({
           chordInteractiveProps = {
             tabIndex: 0,
             role: 'button',
+            // aria-pressed communicates selection state (true = active
+            // editing target). Strictly, aria-pressed implies a toggle —
+            // re-pressing un-presses — but chord clicks are now idempotent
+            // selects: re-click is a no-op; Escape / click-outside deselect.
+            // Switching to aria-selected would require a composite widget
+            // role change; the deviation is intentional and acceptable here.
             'aria-pressed': isFocusedChord,
             ...(audioEnabled
               ? {
@@ -2292,7 +2316,7 @@ function LyricsLine({
             onClick: (e: ReactMouseEvent) => {
               e.stopPropagation();
               if (audioEnabled) playChord(e.currentTarget as HTMLElement);
-              toggleSelect(i);
+              selectChordAt(i);
             },
             onKeyDown: (e: ReactKeyboardEvent) => {
               if (audioEnabled && (e.key === 'Enter' || e.key === ' ')) {
