@@ -4453,5 +4453,72 @@ describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
       });
     }
   });
+
+  // ---- Audio is additive, not a separate mode (#2652 follow-up) -----
+
+  // Harness wiring BOTH the selection interaction (onChordReposition +
+  // controlled selection) AND chord audio, to prove the two compose
+  // instead of one suppressing the other.
+  function AudioSelectHarness({
+    play,
+  }: {
+    play: (name: string) => void;
+  }): JSX.Element {
+    const [selected, setSelected] = useState<ChordSelection | null>(null);
+    return (
+      <>
+        {renderChordproAst(chordLineSong(), {
+          onChordReposition: vi.fn(),
+          chordSelection: selected,
+          setChordSelection: setSelected,
+          chordAudio: { enabled: true, play },
+        })}
+      </>
+    );
+  }
+
+  test('with selection wired, audio is additive: clicking both plays AND selects', () => {
+    const play = vi.fn();
+    const { container } = render(<AudioSelectHarness play={play} />);
+    const chord = container.querySelector('.chord') as HTMLElement;
+    // Carries BOTH affordances: the play label/data-chord and the
+    // selection toggle semantics.
+    expect(chord.classList.contains('chord--audio')).toBe(true);
+    expect(chord.getAttribute('role')).toBe('button');
+    expect(chord.getAttribute('aria-pressed')).toBe('false');
+    // Combined control: the label names both actions so the accessible
+    // name does not describe only playback while aria-pressed tracks
+    // selection.
+    expect(chord.getAttribute('aria-label')).toBe('Edit and play chord Am7');
+    expect(chord.getAttribute('data-chord')).toBe('Am7');
+
+    fireEvent.click(chord);
+    // Played…
+    expect(play).toHaveBeenCalledWith('Am7');
+    // …and selected (solid badge + aria-pressed), so the editing panel
+    // stays usable while audio is on.
+    const selected = container.querySelector('.chord--selected') as HTMLElement;
+    expect(selected).not.toBeNull();
+    expect(selected.classList.contains('chord--audio')).toBe(true);
+    expect(selected.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  test('with selection wired, Enter both plays and toggles selection', () => {
+    const play = vi.fn();
+    const { container } = render(<AudioSelectHarness play={play} />);
+    const chord = container.querySelector('.chord') as HTMLElement;
+    fireEvent.keyDown(chord, { key: 'Enter' });
+    expect(play).toHaveBeenCalledWith('Am7');
+    expect(container.querySelector('.chord--selected')).not.toBeNull();
+  });
+
+  test('audio does NOT suppress drag: an audio chord with reposition wired stays draggable', () => {
+    const play = vi.fn();
+    const { container } = render(<AudioSelectHarness play={play} />);
+    const chord = container.querySelector('.chord') as HTMLElement;
+    // Pre-#2652-follow-up the walker stripped drag wiring in audio mode;
+    // now drag and tap-to-hear coexist.
+    expect(chord.getAttribute('draggable')).toBe('true');
+  });
 });
 

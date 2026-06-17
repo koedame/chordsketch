@@ -1516,7 +1516,13 @@
     background 0.12s ease,
     color 0.12s ease;
 }
-.chordsketch-sheet__content .chord--audio:hover {
+/* Audio + selection are additive (#2650 follow-up): a chord can carry
+   both classes. The selected badge (filled crimson + white text) must
+   keep winning over the audio hover tint, otherwise hovering a selected
+   chord would paint white text on the light-pink hover background and
+   become unreadable — so scope the hover tint to the non-selected
+   chord. */
+.chordsketch-sheet__content .chord--audio:not(.chord--selected):hover {
   background: var(--cs-crimson-50, #fdf2f5);
 }
 .chordsketch-sheet__content .chord--audio:focus-visible {

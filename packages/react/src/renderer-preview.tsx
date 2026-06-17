@@ -1,7 +1,7 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 
 import { ChordSheet } from './chord-sheet';
-import type { ChordSelection } from './chordpro-jsx';
+import type { ChordAudioConfig, ChordSelection } from './chordpro-jsx';
 import type { ChordAudioWasmLoader } from './use-chord-audio';
 import { PdfExport } from './pdf-export';
 import type {
@@ -96,12 +96,15 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
   /** Setter paired with {@link chordSelection}; see its docs. */
   onChordSelectionChange?: (selection: ChordSelection | null) => void;
   /**
-   * Enable chord-audio mode (#2650). Forwarded to {@link ChordSheet};
-   * see `ChordSheetProps.chordAudio`. When `true`, each chord becomes a
-   * play button (Web Audio block chord). Only consumed by
-   * `format="html"`; degrades to inert chords without Web Audio support.
+   * Enable chord-audio playback (#2650). Forwarded to {@link ChordSheet};
+   * see `ChordSheetProps.chordAudio`. Pass `true` to let the sheet own
+   * the audio instance, or an injected {@link ChordAudioConfig} (e.g.
+   * `useChordEditor`'s `chordAudio` field) to share one instance with a
+   * panel-edit playback path. Audio is additive — chords stay selectable
+   * / editable while it is on. Only consumed by `format="html"`; degrades
+   * to inert chords without Web Audio support.
    */
-  chordAudio?: boolean;
+  chordAudio?: boolean | ChordAudioConfig | null;
   /**
    * Test-only WASM loader override for the chord-audio hook. Forwarded
    * to {@link ChordSheet}; production callers never supply this.

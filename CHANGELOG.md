@@ -25,6 +25,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   caret-driven editing (`applyChordInsert` is also available for the
   future insert-at-caret surface). Source-coordinate editing stays gated
   under an effective transpose / capo (ADR-0023). (#2644, #2646, #2648)
+- `@chordsketch/react`: chord audio — an opt-in `chordAudio` flag on
+  `<ChordSheet>` / `<RendererPreview>` (and a `<PreviewToolbar>` toggle)
+  sounds a chord as a block chord via the Web Audio API, backed by the
+  new `useChordAudio` hook and the `chord_pitches` core export. Audio is
+  additive: with editing wired, clicking a chord both plays it and
+  selects it for in-place editing, and every panel-driven change
+  (retype / move / drag / keyboard nudge) auditions the chord through a
+  single shared voice manager — `useChordEditor` owns the instance and
+  exposes a `chordAudio` config the host forwards to the preview.
+  Degrades gracefully without Web Audio / under SSR and respects
+  `prefers-reduced-motion`. (#2650)
 - Horizontal (left-nut) orientation for fretted-instrument chord
   diagrams, alongside the existing vertical layout. Enable via the
   `diagrams.orientation = "horizontal"` config key (honoured by the

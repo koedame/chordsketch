@@ -1062,4 +1062,97 @@ describe('<ChordSheet>', () => {
       resetSharedAudioContextForTests();
     }
   });
+
+  test('audio is additive: with editing wired, a chord both selects and plays (#2652 follow-up)', async () => {
+    const original = (globalThis as { AudioContext?: unknown }).AudioContext;
+    (window as unknown as { AudioContext: unknown }).AudioContext = FakeAudioContext;
+    resetSharedAudioContextForTests();
+    try {
+      const { container } = render(
+        <ChordSheet
+          source="[Am]hi"
+          chordAudio
+          chordAudioLoader={chordAudioLoader}
+          astWasmLoader={makeAstLoader(chordNamedStub('Am'))}
+          onChordReposition={vi.fn()}
+          onChordEdit={vi.fn()}
+        />,
+      );
+      await waitFor(() =>
+        expect(container.querySelector('.chord--audio')).not.toBeNull(),
+      );
+      const chord = container.querySelector('.chord--audio') as HTMLElement;
+      // Both affordances present: the combined label names edit + play,
+      // and aria-pressed tracks selection.
+      expect(chord.getAttribute('role')).toBe('button');
+      expect(chord.getAttribute('aria-pressed')).toBe('false');
+      expect(chord.getAttribute('aria-label')).toBe('Edit and play chord Am');
+      // Drag is no longer suppressed in audio mode.
+      expect(chord.getAttribute('draggable')).toBe('true');
+
+      // Clicking selects it (badge + inspector) so the editing panel
+      // stays usable while audio is on.
+      fireEvent.click(chord);
+      expect(container.querySelector('.chord--selected')).not.toBeNull();
+      expect(container.querySelector('.chordsketch-sheet__cins')).not.toBeNull();
+    } finally {
+      if (original === undefined) {
+        delete (window as unknown as { AudioContext?: unknown }).AudioContext;
+      } else {
+        (window as unknown as { AudioContext: unknown }).AudioContext = original;
+      }
+      resetSharedAudioContextForTests();
+    }
+  });
+
+  test('accepts an injected ChordAudioConfig and routes preview clicks through it', async () => {
+    // The controlled-host form (e.g. useChordEditor's `chordAudio`
+    // field): ChordSheet uses the injected `play` directly rather than
+    // its own instance, so a single voice manager backs both surfaces.
+    const play = vi.fn();
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        chordAudio={{ enabled: true, play }}
+        astWasmLoader={makeAstLoader(chordNamedStub('Am'))}
+      />,
+    );
+    await waitFor(() =>
+      expect(container.querySelector('.chord--audio')).not.toBeNull(),
+    );
+    fireEvent.click(container.querySelector('.chord--audio') as HTMLElement);
+    expect(play).toHaveBeenCalledWith('Am');
+  });
+
+  test('audio: a preview keyboard arrow-nudge auditions the moved chord (parity with the panel ◀/▶)', async () => {
+    // Regression for the standalone-mode gap: the in-pane panel ◀/▶
+    // auditioned a move but the preview arrow-key nudge did not, so the
+    // same operation sounded inconsistently. Both now route through one
+    // audition wrapper.
+    const play = vi.fn();
+    const onChordReposition = vi.fn();
+    const { container } = render(
+      <ChordSheet
+        source="[Am]hi"
+        chordAudio={{ enabled: true, play }}
+        astWasmLoader={makeAstLoader(chordNamedStub('Am'))}
+        onChordReposition={onChordReposition}
+        onChordEdit={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(container.querySelector('.chord--audio')).not.toBeNull(),
+    );
+    // Click selects + plays once.
+    fireEvent.click(container.querySelector('.chord--audio') as HTMLElement);
+    expect(play).toHaveBeenCalledTimes(1);
+    // ArrowRight on the now-selected chord nudges it one lyric step and
+    // must audition the move.
+    const selected = container.querySelector('.chord--selected') as HTMLElement;
+    expect(selected).not.toBeNull();
+    fireEvent.keyDown(selected, { key: 'ArrowRight' });
+    expect(onChordReposition).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(play).toHaveBeenLastCalledWith('Am');
+  });
 });
