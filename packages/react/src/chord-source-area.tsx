@@ -32,6 +32,13 @@ import { chordProLanguage, chordProTagTable } from './chordpro-language';
 export interface ChordSourceAreaHandle {
   /** Move keyboard focus into the editor. */
   focus(): void;
+  /**
+   * Remove keyboard focus from the editor (so its caret stops
+   * blinking). Used when a host wants to fully dismiss the editor —
+   * e.g. clicking a non-chord part of the preview to clear the chord
+   * selection should leave no lingering caret behind.
+   */
+  blur(): void;
   /** Read the current document contents. */
   getValue(): string;
   /**
@@ -447,6 +454,12 @@ export const ChordSourceArea = forwardRef<ChordSourceAreaHandle, ChordSourceArea
       () => ({
         focus() {
           viewRef.current?.focus();
+        },
+        blur() {
+          // Blur the actual contenteditable surface CodeMirror renders;
+          // `view.dom` is the outer wrapper, `view.contentDOM` is the
+          // focusable element that carries the caret.
+          viewRef.current?.contentDOM.blur();
         },
         getValue() {
           return viewRef.current?.state.doc.toString() ?? '';

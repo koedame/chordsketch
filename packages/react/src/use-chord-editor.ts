@@ -370,6 +370,13 @@ export function useChordEditor({
           target = base + lineText.length;
         }
         editorRef.current?.setCaret(target);
+        // Then drop editor focus entirely so no caret lingers blinking
+        // after the deselect — the user dismissed the chord, they did
+        // not ask to keep editing at the off-chord position. setCaret
+        // must run first: it clears the caret-derived selection (the
+        // `.chord--selected` badge); blur only removes the visible
+        // caret and does not move the selection.
+        editorRef.current?.blur();
         return;
       }
       const offset = chordSelectionCaretOffset(source, selection);
