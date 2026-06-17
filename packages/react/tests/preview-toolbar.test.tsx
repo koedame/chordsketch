@@ -191,7 +191,7 @@ describe('<PreviewToolbar>', () => {
     expect(onChordAudioToggle).toHaveBeenLastCalledWith(false);
   });
 
-  test('Audio toggle shows an explicit On/Off state label and a state-aware title', () => {
+  test('Audio toggle signals state by icon shape and a state-aware title', () => {
     const { rerender } = render(
       <PreviewToolbar
         source={SAMPLE}
@@ -202,9 +202,15 @@ describe('<PreviewToolbar>', () => {
       />,
     );
     const off = screen.getByRole('button', { name: 'Play chords on click' });
-    // The visible badge is the non-colour-dependent on/off signal (#2669).
-    expect(off.textContent).toContain('Off');
-    expect(off.textContent).not.toContain('On');
+    // The on/off state must be visible without relying on colour (#2669,
+    // #2676): the off state draws the muted-speaker glyph, tagged with the
+    // geometry-independent `data-audio-icon="off"` marker. Asserting on the
+    // marker proves the correct *visible* icon rendered while staying
+    // robust to the glyph being redrawn. The literal "On"/"Off" text badge
+    // was dropped in #2676, so the label reads "Chord audio" in both states.
+    expect(off.querySelector('[data-audio-icon="off"]')).not.toBeNull();
+    expect(off.querySelector('[data-audio-icon="on"]')).toBeNull();
+    expect(off.textContent).toBe('Chord audio');
     expect(off.getAttribute('title')).toBe('Chord audio off — click to play chords');
 
     rerender(
@@ -217,7 +223,11 @@ describe('<PreviewToolbar>', () => {
       />,
     );
     const on = screen.getByRole('button', { name: 'Play chords on click' });
-    expect(on.textContent).toContain('On');
+    // The on state swaps to the volume-waves glyph (`data-audio-icon="on"`),
+    // so the visible icon flips with state.
+    expect(on.querySelector('[data-audio-icon="on"]')).not.toBeNull();
+    expect(on.querySelector('[data-audio-icon="off"]')).toBeNull();
+    expect(on.textContent).toBe('Chord audio');
     expect(on.getAttribute('title')).toBe(
       'Chord audio on — click to stop playing chords',
     );
