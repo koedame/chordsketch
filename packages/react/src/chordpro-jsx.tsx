@@ -384,8 +384,9 @@ function renderLyricsTextWithChars(
 // `unicodeAccidentals` moved to the leaf `music-glyphs` module (#2658)
 // so the `<KeySignatureButton>` audition control can share it without a
 // circular import back into this walker. Re-exported here to preserve the
-// `@chordsketch/react` public path used by `useChordEditor`, `<ChordSheet>`,
-// and external consumers.
+// `./chordpro-jsx` import path that `useChordEditor` and `<ChordSheet>`
+// already use internally (it is not part of the package `index.ts`
+// public surface).
 export { unicodeAccidentals } from './music-glyphs';
 
 function renderChord(chord: ChordproChord): string {
