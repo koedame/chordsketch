@@ -3,39 +3,15 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { fireEvent, render } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { MetronomeButton } from '../src/metronome-button';
 import { resetMetronomeSharedStateForTests } from '../src/use-metronome';
+import { FakeAudioContext } from './fake-audio-context';
 
-// Minimal Web Audio fake — see use-metronome.test.ts for the
-// rationale. The button test only needs the graph calls not to
-// throw; timing accuracy is covered by the hook's own suite.
-class FakeAudioContext {
-  state: 'suspended' | 'running' | 'closed' = 'running';
-  currentTime = 0;
-  destination = {};
-  createOscillatorCalls = 0;
-  resume = vi.fn(() => Promise.resolve());
-  close = vi.fn(() => Promise.resolve());
-  createOscillator = vi.fn(() => {
-    this.createOscillatorCalls += 1;
-    return {
-      type: '',
-      onended: null,
-      frequency: { setValueAtTime: vi.fn() },
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-      start: vi.fn(),
-      stop: vi.fn(),
-    };
-  });
-  createGain = vi.fn(() => ({
-    gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
-    connect: vi.fn(),
-    disconnect: vi.fn(),
-  }));
-}
+// Web Audio fake: the shared stand-in (`./fake-audio-context`). The
+// button test only needs the graph calls not to throw; timing accuracy
+// is covered by the hook's own suite.
 
 const originalAudioContext = (globalThis as { AudioContext?: unknown }).AudioContext;
 

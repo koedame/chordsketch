@@ -100,6 +100,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The `@chordsketch/react` Web Audio surface now sounds with more
+  musical timbres. `useChordAudio` and `useKeyAudio` voice every pitch
+  with a synthesized **piano** timbre (a piano-like `PeriodicWave`
+  harmonic spectrum plus a percussive, no-sustain decay envelope) in
+  place of the previous `triangle` oscillator, and `useMetronome` ticks
+  with a synthesized **woodblock** click (a band-pass-filtered
+  white-noise transient layered with a short pitched body) in place of
+  the previous `square`-wave beep. The metronome click is uniform on
+  every beat — there is no downbeat accent, since the metronome does
+  not track beats. All synthesis stays sample-free (no audio assets, no
+  new dependency) and shares the page-level `AudioContext`; the pitch
+  source of truth stays in the wasm core. (#2668)
 - **Breaking**: `{capo: N}` now transposes the rendered chord names
   by `-N` semitones across every rendering surface (text / HTML /
   PDF Rust renderers and the `@chordsketch/react` `chordpro-jsx`
