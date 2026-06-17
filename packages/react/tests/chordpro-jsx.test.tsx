@@ -3904,7 +3904,7 @@ describe('renderChordproAst click-to-focus + nudge (#2614)', () => {
   test('chords are select buttons; clicking selects (solid badge + aria-pressed)', () => {
     const { container } = render(<Harness ast={twoChordAst()} onReposition={vi.fn()} />);
     const chord = container.querySelector('.chord') as HTMLElement;
-    // Toggle-button semantics when the feature is fully wired.
+    // Select-button semantics when the feature is fully wired.
     expect(chord.getAttribute('role')).toBe('button');
     expect(chord.getAttribute('aria-pressed')).toBe('false');
     // Nothing selected yet.

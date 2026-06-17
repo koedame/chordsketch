@@ -1944,10 +1944,10 @@ function LyricsLine({
   }, [isSelectedLine, focusedSegmentIdx, selected]);
 
   // Select the chord in `segmentIdx`. This is an IDEMPOTENT select, not
-  // a toggle: clicking a chord always makes it THE selected chord, and
-  // re-clicking the already-selected one re-selects it (a fresh nonce so
-  // the focus / scroll / caret-restore effects re-fire and a caret-driven
-  // host re-lands the caret on it) rather than clearing the selection.
+  // a toggle: clicking a chord makes it THE selected chord with a fresh
+  // nonce so the focus / scroll / caret-restore effects re-fire; re-
+  // clicking the already-selected chord returns early (no nonce bump, no
+  // churn) rather than clearing the selection.
   //
   // Why not a toggle: chord audio turns a chord into a "click to hear"
   // control, and a toggle would make the second audition click clear the
@@ -2295,6 +2295,12 @@ function LyricsLine({
           chordInteractiveProps = {
             tabIndex: 0,
             role: 'button',
+            // aria-pressed communicates selection state (true = active
+            // editing target). Strictly, aria-pressed implies a toggle —
+            // re-pressing un-presses — but chord clicks are now idempotent
+            // selects: re-click is a no-op; Escape / click-outside deselect.
+            // Switching to aria-selected would require a composite widget
+            // role change; the deviation is intentional and acceptable here.
             'aria-pressed': isFocusedChord,
             ...(audioEnabled
               ? {
