@@ -529,9 +529,13 @@ pub(crate) fn do_parse_chordpro(
         // C +10 → Bb (not A#). Matches `transpose(song, …)`'s
         // chord-line spelling so the header chip and the lyric
         // chord row agree on which side of the circle of fifths
-        // the song landed on. Returns `None` for unparseable
-        // keys (e.g. `{key: C dorian}`) — the walker falls back
-        // to showing the original key only in that case.
+        // the song landed on. Returns `None` for a malformed key
+        // ({key: G minor}, {key: G7}) AND for a modal key
+        // ({key: C dorian}) — this bare-label variant can't carry
+        // a mode, so the walker falls back to showing the authored
+        // key in those cases (mid-song modal `{key:}` chips still
+        // get their transposed `D dorian` spelling from
+        // `transposed_key_directives` via the `_with_style` helper).
         canonical_transposed_key(song.metadata.key.as_deref(), transpose_steps)
     } else {
         None

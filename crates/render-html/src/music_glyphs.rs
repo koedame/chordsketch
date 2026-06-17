@@ -106,33 +106,15 @@ pub fn key_signature_for(key: &str) -> Option<(usize, KeySigType)> {
 /// passed a modal `{key}` value (#2526).
 #[must_use]
 pub fn key_signature_for_with_diagnostics(key: &str) -> KeySignatureLookup {
-    let trimmed = key.trim();
-    if trimmed.is_empty() {
-        return KeySignatureLookup::Unparseable;
-    }
-    // Normalise unicode accidentals to ASCII so `F♯` and `F#`
-    // hit the same table entry (the displayed key is typeset with
-    // Unicode ♯ / ♭). NBSP / ideographic spaces fold to plain
-    // ASCII spaces in the same pass.
-    let mut ascii = String::with_capacity(trimmed.len());
-    for ch in trimmed.chars() {
-        match ch {
-            '\u{266D}' => ascii.push('b'),
-            '\u{266F}' => ascii.push('#'),
-            '\u{00A0}' | '\u{3000}' => ascii.push(' '),
-            other => ascii.push(other),
-        }
-    }
-    let ascii = ascii.trim();
-
-    // Delegate the grammar to the single strict key parser
-    // (`chordsketch_chordpro::parse_key`) so the glyph agrees with the
-    // displayed key, the transpose re-spelling, and the audition on what a
-    // key is — rather than carrying its own permissive grammar that used to
-    // accept `C minor` / `C m` as minor while the chord parser read them as
-    // major (issue #2665). A modal key (`C dorian`) has no conventional
-    // single key signature here, so it falls back to the staff-only glyph.
-    let Some(parsed) = chordsketch_chordpro::parse_key(ascii) else {
+    // Delegate the grammar — and the Unicode ♯ / ♭ + exotic-space normalisation
+    // — to the single strict key parser (`chordsketch_chordpro::parse_key`) so
+    // the glyph agrees with the displayed key, the transpose re-spelling, and
+    // the audition on what a key is, rather than carrying its own copy of the
+    // grammar (which used to accept `C minor` / `C m` as minor while the chord
+    // parser read them as major, issue #2665) or its own accidental folding.
+    // A modal key (`C dorian`) has no conventional single key signature here,
+    // so it falls back to the staff-only glyph.
+    let Some(parsed) = chordsketch_chordpro::parse_key(key) else {
         return KeySignatureLookup::Unparseable;
     };
     let is_minor = match parsed.mode {

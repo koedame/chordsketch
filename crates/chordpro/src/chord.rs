@@ -840,8 +840,10 @@ pub fn parse_chord(input: &str) -> Option<ChordDetail> {
     })
 }
 
-/// Parses a note letter optionally followed by `#` or `b`.
-fn parse_note_with_accidental(s: &str) -> Option<(Note, Option<Accidental>)> {
+/// Parses a note letter optionally followed by `#` or `b`, rejecting any
+/// trailing characters. Shared with the strict key parser
+/// ([`crate::key::parse_key`]) so bass-note parsing has one implementation.
+pub(crate) fn parse_note_with_accidental(s: &str) -> Option<(Note, Option<Accidental>)> {
     let mut chars = s.chars();
     let note = Note::from_char(chars.next()?)?;
     let accidental = match chars.next() {

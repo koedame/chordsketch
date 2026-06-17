@@ -31,7 +31,7 @@
 //! - chord extensions on a key (`G7`, `Cmaj7`) — a key is a tonal centre,
 //!   not a chord.
 
-use crate::chord::{Accidental, Note};
+use crate::chord::{Accidental, ChordDetail, ChordQuality, Note};
 
 /// One of the seven Western church modes, recognised as a `{key}` modal
 /// qualifier.
@@ -135,6 +135,31 @@ impl Key {
             KeyMode::Mode(m) => m.is_minor_third(),
         }
     }
+
+    /// Lower this validated key into a [`ChordDetail`] so the transpose /
+    /// display machinery (which operates on `ChordDetail`) can drive directly
+    /// off the strict parse rather than re-parsing the raw string with the
+    /// permissive [`crate::chord::parse_chord`]. Keeping a single parse is the
+    /// "single source of truth" the strict parser exists for (ADR-0033): a
+    /// minor key becomes [`ChordQuality::Minor`], a modal qualifier becomes the
+    /// canonical `" <mode>"` extension text (preserved verbatim on transpose
+    /// because it is not a transposable theory token), and the slash-bass
+    /// carries through.
+    #[must_use]
+    pub fn to_chord_detail(self) -> ChordDetail {
+        let (quality, extension) = match self.mode {
+            KeyMode::Major => (ChordQuality::Major, None),
+            KeyMode::Minor => (ChordQuality::Minor, None),
+            KeyMode::Mode(m) => (ChordQuality::Major, Some(format!(" {}", m.as_str()))),
+        };
+        ChordDetail {
+            root: self.root,
+            root_accidental: self.accidental,
+            quality,
+            extension,
+            bass_note: self.bass,
+        }
+    }
 }
 
 impl core::fmt::Display for Key {
@@ -182,17 +207,6 @@ fn take_root(
     Some((root, accidental))
 }
 
-/// Parse a complete bass token (`<note><accidental?>`), rejecting any trailing
-/// characters.
-fn parse_bass(s: &str) -> Option<(Note, Option<Accidental>)> {
-    let mut chars = s.chars().peekable();
-    let bass = take_root(&mut chars)?;
-    if chars.next().is_some() {
-        return None; // trailing garbage after the bass note
-    }
-    Some(bass)
-}
-
 /// Parse a ChordPro `{key}` directive value strictly.
 ///
 /// Returns `Some(Key)` only for the [canonical grammar](self#canonical-grammar);
@@ -201,7 +215,23 @@ fn parse_bass(s: &str) -> Option<(Note, Option<Accidental>)> {
 /// except the single space that introduces a modal qualifier.
 #[must_use]
 pub fn parse_key(value: &str) -> Option<Key> {
-    let trimmed = value.trim();
+    // Normalise the spellings a displayed / authored key can legitimately use
+    // before parsing, so every consumer of `parse_key` (validation, transpose,
+    // the key-signature glyph) agrees: Unicode ♯ / ♭ fold to ASCII `#` / `b`
+    // (the displayed key is typeset with the Unicode glyphs, and editors often
+    // auto-format them), and NBSP / ideographic spaces fold to a plain space so
+    // a modal qualifier still parses. This is the single place the folding
+    // lives — the glyph sister-sites previously each carried their own copy.
+    let normalised: String = value
+        .chars()
+        .map(|c| match c {
+            '\u{266F}' => '#',
+            '\u{266D}' => 'b',
+            '\u{00A0}' | '\u{3000}' => ' ',
+            other => other,
+        })
+        .collect();
+    let trimmed = normalised.trim();
     if trimmed.is_empty() {
         return None;
     }
@@ -209,7 +239,13 @@ pub fn parse_key(value: &str) -> Option<Key> {
     // Split off an optional slash-bass first so the qualifier scan never sees
     // the `/`. A key carries at most one slash.
     let (head, bass) = match trimmed.split_once('/') {
-        Some((before, after)) => (before, Some(parse_bass(after.trim())?)),
+        // The bass token reuses the chord parser's note+accidental scanner so
+        // bass-note parsing has exactly one implementation (it rejects any
+        // trailing characters, so `G/Bextra` is invalid).
+        Some((before, after)) => (
+            before,
+            Some(crate::chord::parse_note_with_accidental(after.trim())?),
+        ),
         None => (trimmed, None),
     };
 
@@ -381,5 +417,57 @@ mod tests {
     fn surrounding_whitespace_tolerated() {
         assert_eq!(k("  Gm  ").mode, KeyMode::Minor);
         assert_eq!(k("  C dorian ").mode, KeyMode::Mode(ChurchMode::Dorian));
+    }
+
+    #[test]
+    fn unicode_accidentals_normalised() {
+        // The displayed key is typeset with Unicode ♯ / ♭; parse_key must fold
+        // them to ASCII so validation / transpose agree with the glyph (#2665,
+        // correctness review finding #2).
+        assert_eq!(k("B\u{266D}").accidental, Some(Accidental::Flat));
+        assert_eq!(k("F\u{266F}").accidental, Some(Accidental::Sharp));
+        assert_eq!(k("C\u{266F}m").mode, KeyMode::Minor);
+        assert_eq!(k("C\u{266F}m").accidental, Some(Accidental::Sharp));
+        // Slash-bass and modal qualifier with Unicode forms.
+        assert_eq!(
+            k("G/B\u{266D}").bass,
+            Some((Note::B, Some(Accidental::Flat)))
+        );
+        // NBSP between root and mode folds to a regular space.
+        assert_eq!(k("C\u{00A0}dorian").mode, KeyMode::Mode(ChurchMode::Dorian));
+    }
+
+    #[test]
+    fn to_chord_detail_lowers_every_mode_variant() {
+        use crate::chord::ChordQuality;
+
+        let major = k("C").to_chord_detail();
+        assert_eq!(major.quality, ChordQuality::Major);
+        assert_eq!(major.extension, None);
+
+        let minor = k("Gm").to_chord_detail();
+        assert_eq!(minor.quality, ChordQuality::Minor);
+        assert_eq!(minor.extension, None);
+
+        // A minor alias lowers to the same Minor quality (so transpose appends
+        // `m`, not a junk extension — correctness review finding #1).
+        for alias in ["Gmi", "Gmin", "G-"] {
+            assert_eq!(k(alias).to_chord_detail().quality, ChordQuality::Minor);
+            assert_eq!(k(alias).to_chord_detail().extension, None);
+        }
+
+        let modal = k("C dorian").to_chord_detail();
+        assert_eq!(modal.quality, ChordQuality::Major);
+        assert_eq!(modal.extension.as_deref(), Some(" dorian"));
+
+        let slash = k("G/B").to_chord_detail();
+        assert_eq!(slash.bass_note, Some((Note::B, None)));
+    }
+
+    #[test]
+    fn display_round_trips_through_to_chord_detail_shape() {
+        // The canonical Display covers the bass-accidental branch too.
+        assert_eq!(k("F#m/C#").to_string(), "F#m/C#");
+        assert_eq!(k("Bb/Db").to_string(), "Bb/Db");
     }
 }
