@@ -1340,6 +1340,22 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_chordpro_canonicalises_meta_key_form_and_ignores_non_keys() {
+        // ADR-0034: the `{meta: key …}` long form is canonicalised for the
+        // React AST too, while a non-key directive (`{title}`) is left alone.
+        let (json, _warnings, _transposed_key, _directives) =
+            do_parse_chordpro("{title: T}\n{meta: key G minor}\n[Gm]Hi", None).unwrap();
+        assert!(
+            json.contains("\"key\":\"Gm\""),
+            "`{{meta: key G minor}}` must canonicalise to `Gm` in the AST; got: {json}"
+        );
+        assert!(
+            json.contains("\"title\":\"T\"") || json.contains("\"T\""),
+            "the non-key `{{title}}` directive must be untouched; got: {json}"
+        );
+    }
+
+    #[test]
     fn test_parse_chordpro_transposed_key_directives_covers_mid_song_keys() {
         // The walker (#2525) needs the transposed value for every
         // {key:} directive in the song, not just the primary, so
