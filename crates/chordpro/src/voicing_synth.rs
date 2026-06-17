@@ -88,6 +88,11 @@ pub(crate) fn synth_fretted_voicing(
             return Some(to_diagram(chord_name, &frets, frets_shown, tuning.len()));
         }
     }
+    // Unreachable in practice: with 13 anchor positions across 4–6 strings and
+    // a small essential set (≤ 4 pitch classes for any palette chord), pass B
+    // always finds a valid voicing for any parseable chord. This path is the
+    // correct fallback for hypothetical future chords whose essential set cannot
+    // fit the instrument (e.g., a > 6-tone essential set on a 4-string ukulele).
     None
 }
 
@@ -287,7 +292,12 @@ pub(crate) fn synth_keyboard_voicing(chord_name: &str) -> Option<KeyboardVoicing
     let keys = crate::chord::chord_pitches(chord_name)?;
     let tones = chord_tones(chord_name)?;
     // Prefer the lowest key that actually spells the root as the marked root
-    // key; fall back to the lowest key (e.g. a degenerate single-note result).
+    // key. `chord_pitches` always places the root interval (0) first, and
+    // `VOICING_ROOT_MIDI = 48 = 4 × 12`, so `keys[0] % 12 == root_pc` is an
+    // invariant — the `find` always succeeds. For slash chords the bass is
+    // prepended via `insert(0, …)` and the root key remains in the list. The
+    // `unwrap_or(keys[0])` is a defence-in-depth guard against hypothetical
+    // future changes to `chord_pitches` that break the invariant.
     let root_key = keys
         .iter()
         .copied()
