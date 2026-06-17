@@ -418,34 +418,46 @@ fn quality_ext_to_kind(
 // ---------------------------------------------------------------------------
 
 /// Convert a ChordPro key string to a (fifths, mode) pair.
+///
+/// Routes through [`chordsketch_chordpro::parse_key`] — the single key parser
+/// (ADR-0033 / ADR-0034 / ADR-0035) — so every spelling the editor accepts maps
+/// to the same `(fifths, mode)`: compact `Gm`, spelled-out `G minor` / `G major`
+/// (the canonical rendered form), the lenient aliases (`Gmin` / `G-` / `CM`),
+/// Unicode accidentals, and the church modes (classified by their parent
+/// major / minor colour). A value `parse_key` rejects (a non-key like `G7`, or
+/// `H`) falls back to C major, matching the historical `_ => 0` behaviour.
+///
+/// `fifths` follows this crate's root-based convention (the root note's
+/// position on the circle of fifths, with `mode` carrying the major / minor
+/// distinction) so it round-trips with [`fifths_to_key`]; it is intentionally
+/// NOT the relative-major key-signature count.
 fn key_to_fifths(key: &str) -> (i32, &'static str) {
-    // Use strip_suffix to avoid byte-indexing into potentially multi-byte strings.
-    let root = key
-        .strip_suffix('m')
-        .filter(|r| !r.is_empty())
-        .unwrap_or(key);
-    let is_minor = root.len() < key.len();
+    use chordsketch_chordpro::chord::{Accidental, Note};
 
-    let fifths = match root {
-        "Cb" | "C♭" => -7,
-        "Gb" | "G♭" => -6,
-        "Db" | "D♭" => -5,
-        "Ab" | "A♭" => -4,
-        "Eb" | "E♭" => -3,
-        "Bb" | "B♭" => -2,
-        "F" => -1,
-        "C" => 0,
-        "G" => 1,
-        "D" => 2,
-        "A" => 3,
-        "E" => 4,
-        "B" => 5,
-        "F#" | "F♯" => 6,
-        "C#" | "C♯" => 7,
+    let Some(parsed) = chordsketch_chordpro::parse_key(key) else {
+        return (0, "major");
+    };
+
+    let fifths = match (parsed.root, parsed.accidental) {
+        (Note::C, Some(Accidental::Flat)) => -7,
+        (Note::G, Some(Accidental::Flat)) => -6,
+        (Note::D, Some(Accidental::Flat)) => -5,
+        (Note::A, Some(Accidental::Flat)) => -4,
+        (Note::E, Some(Accidental::Flat)) => -3,
+        (Note::B, Some(Accidental::Flat)) => -2,
+        (Note::F, None) => -1,
+        (Note::C, None) => 0,
+        (Note::G, None) => 1,
+        (Note::D, None) => 2,
+        (Note::A, None) => 3,
+        (Note::E, None) => 4,
+        (Note::B, None) => 5,
+        (Note::F, Some(Accidental::Sharp)) => 6,
+        (Note::C, Some(Accidental::Sharp)) => 7,
         _ => 0,
     };
 
-    let mode = if is_minor { "minor" } else { "major" };
+    let mode = if parsed.is_minor() { "minor" } else { "major" };
     (fifths, mode)
 }
 
@@ -712,6 +724,26 @@ mod tests {
     fn key_to_fifths_minor() {
         assert_eq!(key_to_fifths("Am"), (3, "minor"));
         assert_eq!(key_to_fifths("Em"), (4, "minor"));
+    }
+
+    #[test]
+    fn key_to_fifths_routes_lenient_and_spelled_out_through_parse_key() {
+        // ADR-0035: the canonical rendered form is spelled out, so authors type
+        // `G minor` / `G major` more often. Every spelling `parse_key` accepts
+        // must export the same (fifths, mode) as its compact equivalent —
+        // previously these fell through the string match to a wrong `(0, major)`.
+        assert_eq!(key_to_fifths("G minor"), key_to_fifths("Gm"));
+        assert_eq!(key_to_fifths("G minor"), (1, "minor"));
+        assert_eq!(key_to_fifths("G major"), key_to_fifths("G"));
+        assert_eq!(key_to_fifths("G major"), (1, "major"));
+        // Lenient aliases and Unicode accidentals.
+        assert_eq!(key_to_fifths("Gmin"), (1, "minor"));
+        assert_eq!(key_to_fifths("CM"), (0, "major"));
+        assert_eq!(key_to_fifths("B\u{266D} minor"), (-2, "minor"));
+        // A church mode classifies by its parent colour (dorian = minor third).
+        assert_eq!(key_to_fifths("C dorian"), (0, "minor"));
+        // A non-key falls back to C major (historical `_ => 0` behaviour).
+        assert_eq!(key_to_fifths("G7"), (0, "major"));
     }
 
     /// Regression test: section label must appear on the first measure of the
