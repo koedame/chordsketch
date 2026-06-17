@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import {
   getAudioContextCtor,
+  getPianoWave,
   getSharedAudioContext,
   midiToFreq,
   scheduleVoice,
@@ -12,10 +13,11 @@ import { usePitchModule } from './use-pitch-module';
 // ---- Voicing / envelope tuning ---------------------------------
 // A key audition is two phases: the scale played one note at a time
 // (do re mi fa sol la ti do), then the tonic triad strummed as a
-// block "jara-n". The scale notes are short and overlapping; the
-// final triad rings.
+// block "jara-n". Both phases sound with the shared piano `PeriodicWave`
+// (#2668): the scale notes are short, struck blips; the final triad
+// rings on a long, no-sustain decay.
 const NOTE_STEP_S = 0.16; // time between consecutive scale-note onsets
-const NOTE_ATTACK_S = 0.008;
+const NOTE_ATTACK_S = 0.006;
 const NOTE_RELEASE_S = 0.34; // each scale note decays past the next onset
 const NOTE_PEAK_GAIN = 0.2;
 const NOTE_TAIL_S = 0.05;
@@ -25,8 +27,8 @@ const NOTE_TAIL_S = 0.05;
 const SCALE_TO_CHORD_GAP_S = 0.24;
 // Per-note delay across the triad so it reads as a strum, not a stab.
 const STRUM_OFFSET_S = 0.035;
-const CHORD_ATTACK_S = 0.008;
-const CHORD_RELEASE_S = 1.6;
+const CHORD_ATTACK_S = 0.006;
+const CHORD_RELEASE_S = 2.6;
 const CHORD_PEAK_GAIN = 0.22;
 const CHORD_TAIL_S = 0.05;
 
@@ -142,9 +144,9 @@ export function useKeyAudio(
   // auditioned repeatedly is computed once.
   const pitchCacheRef = useRef<Map<string, KeyPitches>>(new Map());
 
-  // Oscillators currently scheduled / sounding, tracked so `stop` (and
+  // Voices currently scheduled / sounding, tracked so `stop` (and
   // unmount) can silence them and a retrigger does not stack voices.
-  const voicesRef = useRef<Set<OscillatorNode>>(new Set());
+  const voicesRef = useRef<Set<AudioScheduledSourceNode>>(new Set());
 
   const stop = useCallback(() => {
     stopVoices(voicesRef.current);
@@ -172,17 +174,22 @@ export function useKeyAudio(
         pitchCacheRef.current.set(keyName, pitches);
       }
       // Both lookups derive from the same parse, so they succeed or fail
-      // together; bail if the key was not parseable.
-      if (pitches.scale.length === 0) return;
+      // together; bail if the key was not parseable. The triad check is
+      // also what guards the `CHORD_PEAK_GAIN / triad.length` division
+      // below from a zero divisor (sister to `useChordAudio`'s own
+      // empty-pitch guard), should a future core change ever let the two
+      // lookups diverge.
+      if (pitches.scale.length === 0 || pitches.triad.length === 0) return;
 
       // Cut any audition still ringing so a fresh tap retriggers cleanly.
       stop();
 
       const now = ctx.currentTime;
-      // Scale: one note per `NOTE_STEP_S`, each a short triangle blip.
+      const wave = getPianoWave(ctx);
+      // Scale: one note per `NOTE_STEP_S`, each a short struck piano blip.
       pitches.scale.forEach((midi, i) => {
         scheduleVoice(ctx, voicesRef.current, {
-          type: 'triangle',
+          type: wave,
           frequency: midiToFreq(midi),
           startTime: now + i * NOTE_STEP_S,
           attack: NOTE_ATTACK_S,
@@ -199,7 +206,7 @@ export function useKeyAudio(
       const perVoice = CHORD_PEAK_GAIN / pitches.triad.length;
       pitches.triad.forEach((midi, j) => {
         scheduleVoice(ctx, voicesRef.current, {
-          type: 'triangle',
+          type: wave,
           frequency: midiToFreq(midi),
           startTime: chordStart + j * STRUM_OFFSET_S,
           attack: CHORD_ATTACK_S,

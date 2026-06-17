@@ -4,34 +4,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { resetSharedAudioContextForTests } from '../src/audio-context';
 import { KeySignatureButton } from '../src/key-signature-button';
 import type { KeyAudioWasmLoader } from '../src/use-key-audio';
+import { FakeAudioContext } from './fake-audio-context';
 
-// Minimal Web Audio fake — see use-key-audio.test.ts for the rationale.
-// The button test only needs the graph calls not to throw; pitch / timing
+// Web Audio fake: the shared stand-in (`./fake-audio-context`). The
+// button test only needs the graph calls not to throw; pitch / timing
 // accuracy is covered by the hook's own suite.
-class FakeAudioContext {
-  state: 'suspended' | 'running' | 'closed' = 'running';
-  currentTime = 0;
-  destination = {};
-  createOscillatorCalls = 0;
-  resume = vi.fn(() => Promise.resolve());
-  createOscillator = vi.fn(() => {
-    this.createOscillatorCalls += 1;
-    return {
-      type: '',
-      onended: null,
-      frequency: { setValueAtTime: vi.fn() },
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-      start: vi.fn(),
-      stop: vi.fn(),
-    };
-  });
-  createGain = vi.fn(() => ({
-    gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
-    connect: vi.fn(),
-    disconnect: vi.fn(),
-  }));
-}
 
 const scale = vi.fn((key: string): Uint8Array | undefined =>
   key === 'G' ? new Uint8Array([55, 57, 59, 60, 62, 64, 66, 67]) : undefined,

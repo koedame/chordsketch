@@ -3,50 +3,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { resetSharedAudioContextForTests } from '../src/audio-context';
 import { type KeyAudioWasmLoader, useKeyAudio } from '../src/use-key-audio';
+import { FakeAudioContext } from './fake-audio-context';
 
-// ---- Web Audio API stand-ins -----------------------------------
-// jsdom ships no Web Audio API, so the hook is exercised against a
-// minimal fake that records the graph operations `play` performs.
-
-class FakeOscillator {
-  type = '';
-  onended: (() => void) | null = null;
-  frequency = { setValueAtTime: vi.fn() };
-  connect = vi.fn();
-  disconnect = vi.fn();
-  start = vi.fn();
-  stop = vi.fn();
-}
-
-class FakeGain {
-  gain = {
-    setValueAtTime: vi.fn(),
-    exponentialRampToValueAtTime: vi.fn(),
-  };
-  connect = vi.fn();
-  disconnect = vi.fn();
-}
-
-class FakeAudioContext {
-  static instances: FakeAudioContext[] = [];
-  state: 'suspended' | 'running' | 'closed' = 'running';
-  currentTime = 0;
-  destination = {};
-  oscillators: FakeOscillator[] = [];
-  resume = vi.fn(() => {
-    this.state = 'running';
-    return Promise.resolve();
-  });
-  createOscillator = vi.fn(() => {
-    const osc = new FakeOscillator();
-    this.oscillators.push(osc);
-    return osc;
-  });
-  createGain = vi.fn(() => new FakeGain());
-  constructor() {
-    FakeAudioContext.instances.push(this);
-  }
-}
+// jsdom ships no Web Audio API, so the hook is exercised against the
+// shared minimal fake (`./fake-audio-context`) that records the graph
+// operations `play` performs.
 
 // Scale / triad lookups mirroring `key_scale_pitches` / `key_tonic_triad`:
 // C major scale + triad, A natural-minor scale + triad.
@@ -132,8 +93,11 @@ describe('useKeyAudio', () => {
     const ctx = FakeAudioContext.instances[0]!;
     // 8 scale degrees + 3 triad tones = 11 oscillators.
     expect(ctx.oscillators).toHaveLength(11);
+    // Every voice sounds with the shared piano `PeriodicWave` (#2668),
+    // created once for the context and reused across scale + triad.
+    expect(ctx.periodicWaves).toHaveLength(1);
     for (const osc of ctx.oscillators) {
-      expect(osc.type).toBe('triangle');
+      expect(osc.setPeriodicWave).toHaveBeenCalledWith(ctx.periodicWaves[0]);
       expect(osc.start).toHaveBeenCalled();
       expect(osc.stop).toHaveBeenCalled();
     }

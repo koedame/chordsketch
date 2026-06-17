@@ -6,6 +6,7 @@ import type { ChordSourceAreaHandle } from '../src/chord-source-area';
 import { useChordEditor, type UseChordEditor } from '../src/use-chord-editor';
 import type { ChordAudioWasmLoader } from '../src/use-chord-audio';
 import { resetSharedAudioContextForTests } from '../src/audio-context';
+import { FakeAudioContext } from './fake-audio-context';
 
 // The hook drives a controlled source: `onSourceChange` feeds the parent
 // state, which re-renders the hook with the new source (mirroring how
@@ -286,36 +287,7 @@ describe('useChordEditor', () => {
 // oscillators `play` creates; the wasm `chordPitches` loader is stubbed.
 
 describe('useChordEditor chord-audio', () => {
-  class FakeOscillator {
-    type = '';
-    onended: (() => void) | null = null;
-    frequency = { setValueAtTime: vi.fn() };
-    connect = vi.fn();
-    disconnect = vi.fn();
-    start = vi.fn();
-    stop = vi.fn();
-  }
-  class FakeAudioContext {
-    static instances: FakeAudioContext[] = [];
-    state: 'suspended' | 'running' | 'closed' = 'running';
-    currentTime = 0;
-    destination = {};
-    oscillators: FakeOscillator[] = [];
-    resume = vi.fn(() => Promise.resolve());
-    createOscillator = vi.fn(() => {
-      const osc = new FakeOscillator();
-      this.oscillators.push(osc);
-      return osc;
-    });
-    createGain = vi.fn(() => ({
-      gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-    }));
-    constructor() {
-      FakeAudioContext.instances.push(this);
-    }
-  }
+  // Web Audio fake: the shared stand-in (`./fake-audio-context`).
 
   // `[G]` → a real triad, `[G7]` → a 4-note voicing so a retype produces
   // a distinguishable oscillator count.
