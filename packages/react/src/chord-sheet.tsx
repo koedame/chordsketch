@@ -445,6 +445,22 @@ function ChordSheetTextBranch({
   );
 }
 
+// Preview elements whose press must NOT clear an active chord
+// selection. Two classes, both inside the song body:
+//   - `.chord` — the chord glyphs (re-selected by their own click
+//     handler; also covers audio play-buttons and inline diagrams,
+//     which carry `.chord`).
+//   - `.meta-inline` — inline directive chips, notably the `{tempo}`
+//     metronome chip, which is an interactive `<button>` when Web Audio
+//     is available (see `chordpro-jsx.tsx`). Pressing a chip performs
+//     its own action (ticking the metronome, etc.); clearing the
+//     selection as a side effect would surprise the user.
+// Everything else inside the preview — lyrics, whitespace — is "outside
+// a chord" and clears. Shared by the controlled and uncontrolled
+// branches of the outside-press listener so the two stay in lockstep
+// (.claude/rules/fix-propagation.md).
+const PREVIEW_SELECTION_KEEP = '.chord, .meta-inline';
+
 function ChordSheetAstBranch({
   source,
   transpose,
@@ -532,16 +548,19 @@ function ChordSheetAstBranch({
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   // Clear the selection when the user presses down anywhere that is
-  // not a chord / nudge control belonging to THIS sheet. Clicking a
-  // chord re-selects via that chord's own handler, so we keep the
-  // selection only for presses on this sheet's own `.chord` /
-  // `.chord-nudge`; presses elsewhere — empty space, the editor, or
-  // even another sheet instance's chords — clear it. Scoped to when a
-  // selection is active so there is no idle global listener.
+  // not a chord / inline chip belonging to THIS sheet's preview.
+  // Clicking a chord re-selects via that chord's own handler, so we keep
+  // the selection only for presses that land on `PREVIEW_SELECTION_KEEP`
+  // targets; presses on bare lyrics / whitespace clear it. Scoped to
+  // when a selection is active so there is no idle global listener.
+  //
+  // The listener is per-instance (`wrapperRef` is THIS sheet's root):
+  // the shipped shells mount a single preview, so there is no
+  // cross-instance interference; a host that mounts two controlled
+  // previews against one shared selection would need to scope the
+  // selection per preview, which is the host's responsibility.
   useEffect(() => {
-    // Controlled mode: the shell owns the selection (caret-driven), so
-    // there is no in-pane outside-click clear to manage here.
-    if (controlled || chordSelection == null) return;
+    if (chordSelection == null) return;
     const onPointerDown = (event: PointerEvent): void => {
       const node = event.target as Node | null;
       // Resolve to the nearest Element: a pointer event's target can be
@@ -550,15 +569,35 @@ function ChordSheetAstBranch({
       // selection the instant the user presses on the chord glyph.
       const el =
         node instanceof Element ? node : (node?.parentElement ?? null);
-      // Scope to THIS sheet's subtree (chords in `__content` + the
-      // sibling inspector footer), so a press on a chord or anywhere in
-      // the inspector keeps the selection; anything else clears it.
       const root = wrapperRef.current;
+      if (controlled) {
+        // Controlled mode: the shell owns the selection (caret-driven)
+        // and renders the chord-editor footer OUTSIDE this sheet, so the
+        // only clear scoped here is a press on a non-chord part of the
+        // preview (#2654) — that reports `null` upward, and the shell
+        // moves the editor caret off the chord. Presses outside the
+        // preview (the editor, the footer) are owned by the editor caret
+        // and must not be disturbed here.
+        if (
+          root != null &&
+          el != null &&
+          root.contains(el) &&
+          el.closest(PREVIEW_SELECTION_KEEP) == null
+        ) {
+          onChordSelectionChange?.(null);
+        }
+        return;
+      }
+      // Uncontrolled mode: scope to THIS sheet's subtree (chords / chips
+      // in `__content` + the sibling inspector footer), so a press on a
+      // chord, an inline chip, or anywhere in the inspector keeps the
+      // selection; anything else — including clicks entirely outside
+      // this sheet — clears it.
       if (
         root != null &&
         el != null &&
         root.contains(el) &&
-        el.closest('.chord, .chordsketch-sheet__cins')
+        el.closest(`${PREVIEW_SELECTION_KEEP}, .chordsketch-sheet__cins`)
       ) {
         return;
       }
@@ -566,7 +605,7 @@ function ChordSheetAstBranch({
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [controlled, chordSelection]);
+  }, [controlled, chordSelection, onChordSelectionChange]);
 
   // Resolve the selection into the selected chord's coordinates + parts
   // for the inspector. Recomputed whenever the AST (a re-parse after an

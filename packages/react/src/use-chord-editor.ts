@@ -343,7 +343,6 @@ export function useChordEditor({
 
   const onChordSelectionChange = useCallback(
     (selection: ChordSelection | null) => {
-      if (!selection) return;
       // If a source-mutating commit is in flight (e.g. the preview's
       // keyboard nudge fires onChordReposition then this in the same
       // tick), its caret restoration is already queued against the NEW
@@ -351,13 +350,35 @@ export function useChordEditor({
       // still-stale `source` here. The click path has no pending commit,
       // so it falls through and moves the caret as intended.
       if (pendingCaretRef.current != null) return;
+      if (!selection) {
+        // Deselect (#2654): the user clicked a non-chord part of the
+        // preview, or re-clicked the selected chord to toggle it off.
+        // The selection is a pure function of the editor caret, so the
+        // only way to clear it is to move the caret off the chord —
+        // just past the selected chord's `]`. A caret there falls into
+        // the lyrics (see findChordAtCaret), so the caret-derived
+        // selection re-resolves to null.
+        if (!caretChord) return;
+        const base = lineBaseOffset(source, caretChord.line);
+        let target = base + caretChord.sourceColumn + caretChord.bracketLength;
+        // Guard the adjacent-stacked-chord case (`[A][B]`): the column
+        // just past [A]'s `]` equals [B]'s `[`, which findChordAtCaret
+        // would re-select instead of clearing. Fall back to the end of
+        // the line, which is always off every chord on it.
+        if (findChordAtCaret(source, target) != null) {
+          const lineText = source.split('\n')[caretChord.line - 1] ?? '';
+          target = base + lineText.length;
+        }
+        editorRef.current?.setCaret(target);
+        return;
+      }
       const offset = chordSelectionCaretOffset(source, selection);
       if (offset == null) return;
       // Move the editor caret just inside the clicked chord's bracket;
       // the caret path then re-resolves it as the selection.
       editorRef.current?.setCaret(offset + 1);
     },
-    [source, editorRef],
+    [source, editorRef, caretChord],
   );
 
   const canLeft = caretChord

@@ -110,6 +110,61 @@ describe('useChordEditor', () => {
     expect(setCaretSpy).toHaveBeenLastCalledWith(11);
   });
 
+  test('deselecting (null) moves the caret off the selected chord', () => {
+    mount();
+    caretTo(1); // select `[G]` (col 0..2)
+    expect(latest.inspectorProps.selected).toBe(true);
+    act(() => {
+      latest.onChordSelectionChange(null);
+    });
+    // Caret lands just past `[G]`'s `]` (col 3, in the lyrics), so the
+    // caret-derived selection clears once the editor reports it back.
+    expect(setCaretSpy).toHaveBeenLastCalledWith(3);
+    caretTo(3);
+    expect(latest.inspectorProps.selected).toBe(false);
+    expect(latest.chordSelection).toBeNull();
+  });
+
+  test('deselecting an adjacent stacked chord falls back to end of line', () => {
+    // `[A][B]word`: col 3 (just past [A]'s `]`) equals [B]'s `[`, which
+    // findChordAtCaret would re-select. The deselect must skip past it to
+    // the end of the line, which is off every chord on it.
+    mount('[A][B]word');
+    act(() => {
+      latest.onCaretChange({ line: 1, column: 1, lineLength: 10 }); // inside [A]
+    });
+    expect(latest.inspectorProps.selected).toBe(true);
+    act(() => {
+      latest.onChordSelectionChange(null);
+    });
+    expect(setCaretSpy).toHaveBeenLastCalledWith('[A][B]word'.length);
+  });
+
+  test('deselecting a chord on a later line uses that line base offset', () => {
+    // Locks in the multi-line `lineBaseOffset` arithmetic in the
+    // deselect branch: `[G]` sits on line 2, so the caret target is the
+    // line-2 base (9) + past its `]` (3) = 12, just after `]` in "two".
+    mount('line one\n[G]two');
+    act(() => {
+      latest.onCaretChange({ line: 2, column: 1, lineLength: 6 }); // inside [G]
+    });
+    expect(latest.inspectorProps.selected).toBe(true);
+    act(() => {
+      latest.onChordSelectionChange(null);
+    });
+    expect(setCaretSpy).toHaveBeenLastCalledWith(12);
+  });
+
+  test('deselecting with no chord under the caret is a no-op', () => {
+    mount();
+    caretTo(5); // in the lyrics, no chord selected
+    const callsBefore = setCaretSpy.mock.calls.length;
+    act(() => {
+      latest.onChordSelectionChange(null);
+    });
+    expect(setCaretSpy.mock.calls.length).toBe(callsBefore);
+  });
+
   test('deleting the selected chord removes its token', () => {
     mount();
     caretTo(1); // select `[G]`
