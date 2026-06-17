@@ -10,8 +10,8 @@
 //! innermost open delimiter and determines whether the cursor sits on a chord
 //! name or a directive name.
 
-use chordsketch_chordpro::chord_diagram::render_ascii;
-use chordsketch_chordpro::voicings::guitar_voicing;
+use chordsketch_chordpro::chord_diagram::{DEFAULT_FRETS_SHOWN, render_ascii};
+use chordsketch_chordpro::voicings::lookup_diagram;
 
 // ---------------------------------------------------------------------------
 // Hover context detection
@@ -243,12 +243,14 @@ pub fn hover_token_span(line: &str, col: usize) -> Option<(usize, usize)> {
 
 /// Build Markdown hover content for a chord name.
 ///
-/// Looks up the chord in the built-in guitar voicing database and renders an
-/// ASCII diagram inside a fenced code block. Returns `None` if no voicing is
-/// available for the chord.
+/// Looks up the chord's guitar voicing (curated table or synthesised from the
+/// chord's pitch-class content) and renders an ASCII diagram inside a fenced
+/// code block. Returns `None` when no voicing is available — in practice only
+/// when the chord name is not parseable, since the synthesiser voices every
+/// parseable chord (see `.claude/rules/chord-diagram-coverage.md`).
 #[must_use]
 pub fn chord_hover_markdown(chord_name: &str) -> Option<String> {
-    let diagram = guitar_voicing(chord_name)?;
+    let diagram = lookup_diagram(chord_name, &[], "guitar", DEFAULT_FRETS_SHOWN)?;
     let ascii = render_ascii(&diagram);
     Some(format!("**{chord_name}** (guitar)\n\n```\n{ascii}\n```"))
 }

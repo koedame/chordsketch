@@ -727,6 +727,13 @@ export interface ChordTypePreset {
 // the chord text); it avoids `#` and `/` (spelled `s` / written as the
 // `69` text) so it is safe as a DOM id / attribute selector. `text` is
 // the literal ChordPro suffix written after the root (+ accidental).
+//
+// COVERAGE SISTER LIST: every entry's `text` MUST also appear in
+// `PALETTE_SUFFIXES` (`crates/chordpro/src/voicings.rs`), which proves each
+// suffix yields a valid chord diagram on every instrument. Adding a chip
+// here without the matching Rust suffix fails
+// `tests/chord-type-coverage.test.ts`. Keep diagram coverage at 100% per
+// `.claude/rules/chord-diagram-coverage.md`.
 export const CHORD_TYPE_PRESETS: readonly ChordTypePreset[] = [
   // Triads / basics
   { id: 'maj', label: 'maj', text: '' },

@@ -24,11 +24,15 @@ pub mod selector;
 pub mod token;
 pub mod transpose;
 pub mod typography;
+mod voicing_synth;
 pub mod voicings;
 
 // Re-export key types for convenience.
 pub use abc_importer::convert_abc;
-pub use chord::{Accidental, ChordDetail, ChordQuality, Note, chord_pitches, parse_chord};
+pub use chord::{
+    Accidental, ChordDetail, ChordQuality, ChordTones, Note, chord_pitches, chord_tones,
+    parse_chord,
+};
 pub use chord_diagram::{canonical_chord_name, resolve_diagrams_instrument};
 // Aliased as `format_chordpro` to avoid ambiguity with the `format!` macro at
 // call sites that use glob imports.
