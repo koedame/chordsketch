@@ -53,6 +53,15 @@ export function resetSharedAudioContextForTests(): void {
   sharedContext = null;
 }
 
+/**
+ * MIDI note number → frequency in Hz (A4 = MIDI 69 = 440 Hz). Shared by
+ * the pitch-driven audio hooks (`useChordAudio`, `useKeyAudio`) that feed
+ * {@link scheduleVoice} a frequency.
+ */
+export function midiToFreq(midi: number): number {
+  return 440 * 2 ** ((midi - 69) / 12);
+}
+
 /** Parameters describing a single scheduled oscillator voice. */
 export interface VoiceSpec {
   /** Oscillator waveform. */

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   getAudioContextCtor,
   getSharedAudioContext,
+  midiToFreq,
   scheduleVoice,
   stopVoices,
 } from './audio-context';
@@ -49,11 +50,6 @@ export type ChordAudioWasmLoader = () => Promise<ChordPitchesModule>;
 // contract; the runtime test against a stubbed loader is what guards it.
 const defaultLoader: ChordAudioWasmLoader = () =>
   import('@chordsketch/wasm') as unknown as Promise<ChordPitchesModule>;
-
-/** MIDI note number → frequency in Hz (A4 = MIDI 69 = 440 Hz). */
-function midiToFreq(midi: number): number {
-  return 440 * 2 ** ((midi - 69) / 12);
-}
 
 /** Result of {@link useChordAudio}. */
 export interface UseChordAudioResult {

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   getAudioContextCtor,
   getSharedAudioContext,
+  midiToFreq,
   scheduleVoice,
   stopVoices,
 } from './audio-context';
@@ -66,11 +67,6 @@ export type KeyAudioWasmLoader = () => Promise<KeyAudioModule>;
 // is what guards it.
 const defaultLoader: KeyAudioWasmLoader = () =>
   import('@chordsketch/wasm') as unknown as Promise<KeyAudioModule>;
-
-/** MIDI note number → frequency in Hz (A4 = MIDI 69 = 440 Hz). */
-function midiToFreq(midi: number): number {
-  return 440 * 2 ** ((midi - 69) / 12);
-}
 
 /** A key's auditioned pitches: its scale then its tonic triad. */
 interface KeyPitches {

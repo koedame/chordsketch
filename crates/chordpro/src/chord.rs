@@ -317,7 +317,7 @@ const VOICING_ROOT_MIDI: u8 = 48;
 /// # Examples
 ///
 /// ```
-/// use chordsketch_chordpro::chord::chord_pitches;
+/// use chordsketch_chordpro::chord_pitches;
 ///
 /// // C major triad: C3, E3, G3.
 /// assert_eq!(chord_pitches("C"), Some(vec![48, 52, 55]));
@@ -394,7 +394,7 @@ fn parse_key_tonic(key: &str) -> Option<(u8, bool)> {
 ///
 /// `key` is a ChordPro `{key}` value (`"C"`, `"Am"`, `"Bb"`, `"F#m"`, …).
 /// Major keys yield the major scale; minor keys yield the natural-minor
-/// scale (see [`parse_key_tonic`]). The eight returned notes are the seven
+/// scale (see `parse_key_tonic`). The eight returned notes are the seven
 /// scale degrees plus the octave, with the tonic placed at the same
 /// C3-based register [`chord_pitches`] uses so a scale and a chord
 /// auditioned together share one register.
