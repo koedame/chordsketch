@@ -366,6 +366,23 @@ mod tests {
     }
 
     #[test]
+    fn every_mode_canonicalises_to_its_name() {
+        // Exercises `ChurchMode::as_str` (via Display) for all seven modes so
+        // each arm is covered, and confirms the canonical round-trip.
+        for word in [
+            "ionian",
+            "dorian",
+            "phrygian",
+            "lydian",
+            "mixolydian",
+            "aeolian",
+            "locrian",
+        ] {
+            assert_eq!(k(&format!("C {word}")).to_string(), format!("C {word}"));
+        }
+    }
+
+    #[test]
     fn unknown_mode_word_rejected() {
         assert_eq!(parse_key("C blues"), None);
         assert_eq!(parse_key("G m"), None); // a space before "m" is not a mode
