@@ -543,10 +543,11 @@ pub fn key_scale_pitches(key: String) -> Option<Buffer> {
 /// Tonic triad of a musical key as MIDI note numbers — the "do mi sol"
 /// chord strummed after the scale in a key audition (#2658).
 ///
-/// Major keys yield a major triad, minor keys a minor triad. Any extension
-/// on the key spelling (`"Cmaj7"`) is ignored — the key's tonic chord is
-/// always a triad. Returns a `Buffer` of three ascending MIDI note
-/// numbers, or `null` when `key` is not parseable as a chord.
+/// Major keys yield a major triad, minor keys a minor triad. A key is a
+/// tonal centre, not a chord: the strict key grammar (issue #2665) rejects
+/// an extension on a key (`"Cmaj7"`) outright rather than reducing it.
+/// Returns a `Buffer` of three ascending MIDI note numbers, or `null` when
+/// `key` is not a well-formed key.
 ///
 /// Thin wrapper over the pure-Rust `key_tonic_triad_inner`. Sister-site to
 /// the wasm `keyTonicTriad` export and the FFI `key_tonic_triad` function

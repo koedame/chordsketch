@@ -77,13 +77,19 @@ export function keySignatureFor(
     .replace(/[ 　]/g, ' ')
     .trim();
 
-  // Accept either the bare-major form (`G`, `Bb`, `F#`) or a minor
-  // form with an optional whitespace + `m` / `min` / `minor`
-  // suffix (`Em`, `E minor`, `F# min`). `/i` keeps it case-
-  // insensitive so `e MIN` parses the same as `Em`.
-  const m = /^([A-G])([b#]?)(?:\s*(m|min|minor))?$/i.exec(ascii);
+  // Strict key grammar — sister-site to the Rust
+  // `chordsketch_chordpro::parse_key` / `crates/render-html/src/music_glyphs.rs`
+  // (issue #2665). A tonal key is an uppercase root, an optional accidental,
+  // an optional *attached* minor marker (`m` / `mi` / `min` / `-`), and an
+  // optional `/bass` (ignored for the signature). Malformed spellings — a
+  // spelled-out word (`E minor`), a space before the marker (`E m`), or a
+  // lowercase root — do not match and yield `null`, exactly as the Rust
+  // parser rejects them. Modal keys (`C dorian`) also fail to match here, so
+  // they fall back to the staff-only glyph (a mode has no single conventional
+  // key signature in this table).
+  const m = /^([A-G])([b#]?)(m|mi|min|-)?(?:\/[A-G][b#]?)?$/.exec(ascii);
   if (!m) return null;
-  const root = m[1]!.toUpperCase();
+  const root = m[1]!;
   const accidental = m[2] ?? '';
   const isMinor = !!m[3];
 

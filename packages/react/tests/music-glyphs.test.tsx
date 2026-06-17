@@ -78,16 +78,37 @@ describe('keySignatureFor', () => {
     expect(sig?.type).toBe(type);
   });
 
-  test('accepts unicode ♯ / ♭ accidentals and lowercase trailing m', () => {
+  test('accepts unicode ♯ / ♭ accidentals and attached minor markers', () => {
     expect(keySignatureFor('F♯')?.count).toBe(6);
     expect(keySignatureFor('B♭')?.count).toBe(2);
-    expect(keySignatureFor('e MIN')?.count).toBe(1); // case-insensitive `min` suffix
+    // Strict, attached minor markers (sister-site to Rust `parse_key`, #2665).
+    expect(keySignatureFor('Em')?.count).toBe(1);
+    expect(keySignatureFor('Emi')?.count).toBe(1); // `mi` alias
+    expect(keySignatureFor('Emin')?.count).toBe(1);
+    expect(keySignatureFor('E-')?.count).toBe(1);
+  });
+
+  test('a slash-bass key is looked up by its tonic', () => {
+    // The bass note does not change the key signature (#2665).
+    expect(keySignatureFor('G/B')).toEqual({ count: 1, type: 'sharp' });
   });
 
   test('returns null for unparseable input', () => {
     expect(keySignatureFor('')).toBeNull();
     expect(keySignatureFor('not a key')).toBeNull();
     expect(keySignatureFor('H')).toBeNull(); // German "B" — out of scope
+  });
+
+  test('returns null for malformed key notation (#2665)', () => {
+    // A space before the marker, a spelled-out word, or a lowercase root is
+    // not a valid key — the strict grammar rejects them, so there is no
+    // signature (matching the Rust `parse_key` sister-site).
+    expect(keySignatureFor('E minor')).toBeNull();
+    expect(keySignatureFor('E m')).toBeNull();
+    expect(keySignatureFor('Eminor')).toBeNull();
+    expect(keySignatureFor('e min')).toBeNull();
+    // A modal key has no single conventional signature here.
+    expect(keySignatureFor('C dorian')).toBeNull();
   });
 });
 

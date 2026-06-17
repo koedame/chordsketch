@@ -15,6 +15,7 @@ pub mod heuristic;
 pub mod image_path;
 pub mod inline_markup;
 pub mod json;
+pub mod key;
 pub mod lexer;
 pub mod notation;
 pub mod parser;
@@ -34,6 +35,7 @@ pub use chord::{
     key_scale_pitches, key_tonic_triad, parse_chord,
 };
 pub use chord_diagram::{canonical_chord_name, resolve_diagrams_instrument};
+pub use key::{ChurchMode, Key, KeyMode, parse_key};
 // Aliased as `format_chordpro` to avoid ambiguity with the `format!` macro at
 // call sites that use glob imports.
 pub use formatter::{FormatOptions, format as format_chordpro};
