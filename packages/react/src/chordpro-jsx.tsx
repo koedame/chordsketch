@@ -1922,12 +1922,14 @@ function LyricsLine({
   useEffect(() => {
     // When this line is not (or no longer) the selected line, reset
     // the handled-nonce so a FUTURE selection of this line refocuses
-    // even if its nonce repeats a previously-handled value — the
-    // per-selection nonce restarts at 1 after a full deselect
-    // (`cur` is null after an Escape / click-outside clear), so without
-    // this reset a select → deselect → reselect-the-same-chord cycle
-    // could match the stale handled value and skip the programmatic
-    // refocus.
+    // even if its nonce repeats a previously-handled value. The nonce
+    // sequence depends on the host: the standalone <ChordSheet> writes
+    // `(cur?.nonce ?? 0) + 1`, so it restarts at 1 after a full deselect
+    // (`cur` null, via Escape / click-outside); the caret-driven
+    // useChordEditor host uses a monotonic counter that never resets.
+    // This reset covers BOTH — without it a select → deselect →
+    // reselect-the-same-chord cycle could match a stale handled value
+    // and skip the programmatic refocus.
     // Do NOT reset while the segment is merely unresolved mid-reparse
     // (isSelectedLine true, focusedSegmentIdx < 0) — that transient
     // must still refocus once the new AST lands.
