@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChordSketch — 音色サンプル比較 (triangle vs piano)</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    max-width: 680px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6;
+  }
+  h1 { font-size: 1.3rem; }
+  h2 { font-size: 1.05rem; margin-top: 1.8rem; }
+  .row { display: flex; gap: .6rem; flex-wrap: wrap; margin: .6rem 0 1.2rem; }
+  button {
+    font: inherit; padding: .55rem .9rem; border-radius: 8px;
+    border: 1px solid #bd1642; background: #bd1642; color: #fff; cursor: pointer;
+  }
+  button.ghost { background: transparent; color: #bd1642; }
+  button:active { transform: translateY(1px); }
+  .timbre { padding: .15rem .5rem; border-radius: 999px; font-size: .8rem;
+    background: #bd164222; color: #bd1642; margin-left: .4rem; }
+  small { opacity: .75; }
+  code { background: #8881; padding: .1rem .35rem; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>ChordSketch — 音色サンプル比較</h1>
+<p><small>
+  左列が現行の <code>triangle</code> 波、右列が「合成ピアノ」案(波形=ピアノ風倍音 +
+  打鍵エンベロープ)。同じコード/スケールを鳴らして聞き比べできます。
+  クリックすると音が出ます(ブラウザの自動再生ポリシー対策)。
+</small></p>
+
+<h2>コード(ブロック和音)</h2>
+<div class="row" id="chords"></div>
+
+<h2>スケール(ド〜ド)+ トニック和音</h2>
+<div class="row" id="scales"></div>
+
+<script>
+// ---- Web Audio 基盤(現行コードと同じ考え方) --------------------
+let ctx = null;
+function getCtx() {
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === 'suspended') ctx.resume();
+  return ctx;
+}
+const midiToFreq = (m) => 440 * 2 ** ((m - 69) / 12);
+
+// ピアノ風波形: 倍音を少し含む PeriodicWave を一度だけ生成してキャッシュ。
+// 基音 + 第2〜6倍音を徐々に減衰させたスペクトルで、triangle より
+// 「鍵盤楽器」らしい明るさを出す。
+let pianoWave = null;
+function getPianoWave(c) {
+  if (pianoWave) return pianoWave;
+  // index 0 は DC 成分(0)、以降が各倍音の振幅
+  const real = new Float32Array([0, 1, 0.55, 0.32, 0.18, 0.10, 0.06, 0.03]);
+  const imag = new Float32Array(real.length); // 全て0(sin成分なし)
+  pianoWave = c.createPeriodicWave(real, imag, { disableNormalization: false });
+  return pianoWave;
+}
+
+// 現行 scheduleVoice 相当(triangle 用): 直線アタック + 指数リリース
+function scheduleTriangle(c, midi, start, peak, release) {
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(midiToFreq(midi), start);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(peak, start + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + release);
+  osc.connect(gain).connect(c.destination);
+  osc.start(start); osc.stop(start + release + 0.05);
+}
+
+// 合成ピアノ: ピアノ風波形 + 打鍵エンベロープ
+//   - ごく速いアタック(打鍵の立ち上がり)
+//   - サスティンなしの連続減衰(指数)で自然に減衰
+//   - 高い音ほど少し短く減衰(piano らしさ)
+function schedulePiano(c, midi, start, peak, release) {
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.setPeriodicWave(getPianoWave(c));
+  osc.frequency.setValueAtTime(midiToFreq(midi), start);
+  // 高音ほど減衰を速める
+  const decay = release * (midi > 72 ? 0.7 : 1);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(peak, start + 0.004); // 速い打鍵
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + decay);
+  osc.connect(gain).connect(c.destination);
+  osc.start(start); osc.stop(start + decay + 0.05);
+}
+
+// ---- 楽曲データ -------------------------------------------------
+// C / Am7 / F / G7 のブロック和音(MIDI)
+const CHORDS = {
+  'C':   [60, 64, 67],
+  'Am7': [57, 60, 64, 67],
+  'F':   [60, 65, 69],
+  'G7':  [55, 59, 62, 65],
+};
+// C メジャースケール(ド〜ド)とトニック和音
+const SCALE = [60, 62, 64, 65, 67, 69, 71, 72];
+const TONIC = [60, 64, 67];
+
+function playChord(synth, pitches) {
+  const c = getCtx();
+  const now = c.currentTime;
+  const per = 0.22 / pitches.length;
+  pitches.forEach((m) => synth(c, m, now, per, synth === schedulePiano ? 2.4 : 1.4));
+}
+
+function playScale(synth) {
+  const c = getCtx();
+  const now = c.currentTime;
+  SCALE.forEach((m, i) => synth(c, m, now + i * 0.16, 0.2, 0.34));
+  const chordStart = now + SCALE.length * 0.16 + 0.12;
+  const per = 0.22 / TONIC.length;
+  TONIC.forEach((m, j) =>
+    synth(c, m, chordStart + j * 0.035, per, synth === schedulePiano ? 2.6 : 1.6));
+}
+
+// ---- ボタン生成 -------------------------------------------------
+const chordsEl = document.getElementById('chords');
+for (const [name, pitches] of Object.entries(CHORDS)) {
+  const t = document.createElement('button');
+  t.className = 'ghost';
+  t.textContent = name + ' (triangle)';
+  t.onclick = () => playChord(scheduleTriangle, pitches);
+  const p = document.createElement('button');
+  p.textContent = name + ' (piano)';
+  p.onclick = () => playChord(schedulePiano, pitches);
+  chordsEl.append(t, p);
+}
+
+const scalesEl = document.getElementById('scales');
+const st = document.createElement('button');
+st.className = 'ghost';
+st.textContent = 'C スケール (triangle)';
+st.onclick = () => playScale(scheduleTriangle);
+const sp = document.createElement('button');
+sp.textContent = 'C スケール (piano)';
+sp.onclick = () => playScale(schedulePiano);
+scalesEl.append(st, sp);
+</script>
+</body>
+</html>
