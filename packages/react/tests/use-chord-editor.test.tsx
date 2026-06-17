@@ -18,6 +18,7 @@ const SOURCE = '[G]Almost [Bbm7]heaven';
 let latest: UseChordEditor;
 let currentSource: string;
 let setCaretSpy: ReturnType<typeof vi.fn>;
+let blurSpy: ReturnType<typeof vi.fn>;
 
 function Harness({
   initial,
@@ -35,8 +36,10 @@ function Harness({
   const ref = useRef<ChordSourceAreaHandle | null>(null);
   if (ref.current === null) {
     setCaretSpy = vi.fn();
+    blurSpy = vi.fn();
     ref.current = {
       focus: vi.fn(),
+      blur: blurSpy,
       getValue: () => source,
       setValue: vi.fn(),
       insertAtCursor: vi.fn(),
@@ -120,6 +123,8 @@ describe('useChordEditor', () => {
     // Caret lands just past `[G]`'s `]` (col 3, in the lyrics), so the
     // caret-derived selection clears once the editor reports it back.
     expect(setCaretSpy).toHaveBeenLastCalledWith(3);
+    // ...and editor focus is dropped so no caret lingers blinking.
+    expect(blurSpy).toHaveBeenCalledTimes(1);
     caretTo(3);
     expect(latest.inspectorProps.selected).toBe(false);
     expect(latest.chordSelection).toBeNull();
@@ -163,6 +168,8 @@ describe('useChordEditor', () => {
       latest.onChordSelectionChange(null);
     });
     expect(setCaretSpy.mock.calls.length).toBe(callsBefore);
+    // Nothing was selected, so focus must be left untouched.
+    expect(blurSpy).not.toHaveBeenCalled();
   });
 
   test('deleting the selected chord removes its token', () => {
