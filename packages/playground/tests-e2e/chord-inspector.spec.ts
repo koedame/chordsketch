@@ -53,6 +53,40 @@ test.describe('chord-editor footer (ChordPro playground)', () => {
     expect(errors).toEqual([]);
   });
 
+  test('the lifted footer top-aligns its clusters (not bottom-aligned)', async ({
+    page,
+  }) => {
+    const errors = trackPageErrors(page);
+    await page.goto('./chordpro/');
+    await expect(page.locator('.cm-editor')).toBeVisible();
+
+    // The lifted footer lays its clusters out in a wrapping row. Their
+    // cross-axis alignment must be top (`flex-start`) so the labelled
+    // clusters share one baseline at the top and read top-down; the
+    // earlier `flex-end` floated every cluster to the bottom edge with
+    // empty space above. Assert the computed value so a regression back
+    // to bottom-alignment fails here. The root `.chordsketch-sheet__cins`
+    // is present in both the idle and edit states, so this holds at first
+    // paint before any chord is selected.
+    const cins = page.locator(`${FOOTER} .chordsketch-sheet__cins`);
+    await expect(cins).toBeVisible();
+    await expect(cins).toHaveCSS('align-items', 'flex-start');
+
+    // The label-less actions cluster only renders in the edit state, so
+    // select a chord first, then assert it is centred on the band (it has
+    // no label above it, so top-aligning it with the labelled clusters
+    // would pin its button above their controls).
+    await page.locator('.pane.preview').locator(".chord[role='button']").first().click();
+    await expect(
+      page.locator(`${FOOTER} .chordsketch-sheet__cins[data-mode='edit']`),
+    ).toBeVisible();
+    await expect(
+      page.locator(`${FOOTER} .chordsketch-sheet__cins-footer`),
+    ).toHaveCSS('align-self', 'center');
+
+    expect(errors).toEqual([]);
+  });
+
   test('clicking a preview chord selects it via the editor caret', async ({ page }) => {
     const errors = trackPageErrors(page);
     await page.goto('./chordpro/');
