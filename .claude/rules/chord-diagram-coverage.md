@@ -41,7 +41,8 @@ understands its suffix.
 The synthesiser does not just cover the chord tones — it rejects shapes a hand
 cannot fret. A guitar / ukulele / charango voicing is constrained to **at most
 four fingers** (`MAX_FINGERS`, with an index-barre at the lowest fret counted
-as one finger) within a **four-fret span** (`SPAN`). Dense chords therefore
+as one finger) within a **four-fret window** (`SPAN` = 3 fret rows beyond the
+anchor, i.e. a highest-minus-lowest fretted span of at most 3). Dense chords therefore
 drop the droppable tones (the fifth, inner tensions) the way a player does,
 rather than synthesising an unfrettable five- or six-finger stack. The
 essential tones (root, third / `sus`, seventh, the headline tension, any
