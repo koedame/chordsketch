@@ -83,6 +83,7 @@ describe('keySignatureFor', () => {
     expect(keySignatureFor('B♭')?.count).toBe(2);
     // Strict, attached minor markers (sister-site to Rust `parse_key`, #2665).
     expect(keySignatureFor('Em')?.count).toBe(1);
+    expect(keySignatureFor('Emi')?.count).toBe(1); // `mi` alias
     expect(keySignatureFor('Emin')?.count).toBe(1);
     expect(keySignatureFor('E-')?.count).toBe(1);
   });
