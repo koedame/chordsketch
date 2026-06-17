@@ -10,11 +10,14 @@ import { FakeAudioContext } from './fake-audio-context';
 // button test only needs the graph calls not to throw; pitch / timing
 // accuracy is covered by the hook's own suite.
 
+// The canonical key the walker now hands the button is the spelled-out
+// form (`G major`), per ADR-0035 — the audio core parses it the same way
+// it parses `G` / `Gm`.
 const scale = vi.fn((key: string): Uint8Array | undefined =>
-  key === 'G' ? new Uint8Array([55, 57, 59, 60, 62, 64, 66, 67]) : undefined,
+  key === 'G major' ? new Uint8Array([55, 57, 59, 60, 62, 64, 66, 67]) : undefined,
 );
 const triad = vi.fn((key: string): Uint8Array | undefined =>
-  key === 'G' ? new Uint8Array([55, 59, 62]) : undefined,
+  key === 'G major' ? new Uint8Array([55, 59, 62]) : undefined,
 );
 const defaultFn = vi.fn(() => Promise.resolve());
 const makeLoader = (): KeyAudioWasmLoader => () =>
@@ -42,7 +45,7 @@ afterEach(() => {
 describe('<KeySignatureButton>', () => {
   test('renders the whole key chip as one interactive button', () => {
     const { container } = render(
-      <KeySignatureButton keyName="G" className="meta-inline meta-inline--key" />,
+      <KeySignatureButton keyName="G major" className="meta-inline meta-inline--key" />,
     );
     const button = container.querySelector('button.meta-inline--interactive') as HTMLButtonElement;
     expect(button).not.toBeNull();
@@ -50,11 +53,11 @@ describe('<KeySignatureButton>', () => {
     expect(button.classList.contains('meta-inline')).toBe(true);
     expect(button.classList.contains('meta-inline--key')).toBe(true);
     expect(button.getAttribute('type')).toBe('button');
-    expect(button.getAttribute('aria-label')).toBe('Play the G scale and chord');
+    expect(button.getAttribute('aria-label')).toBe('Play the G major scale and chord');
     // The readout + label live inside the button so the whole pill is a
     // single click target.
     expect(button.querySelector('.meta-inline__label')?.textContent).toBe('Key:');
-    expect(button.querySelector('.meta-inline__value')?.textContent).toBe('G');
+    expect(button.querySelector('.meta-inline__value')?.textContent).toBe('G major');
     // The glyph names itself off in interactive mode (button labels it).
     const glyph = button.querySelector('.music-glyph--key');
     expect(glyph?.getAttribute('aria-hidden')).toBe('true');
@@ -63,18 +66,18 @@ describe('<KeySignatureButton>', () => {
 
   test('unicode-spells an accidental key in the readout and label', () => {
     const { container } = render(
-      <KeySignatureButton keyName="Bb" className="meta-inline meta-inline--key" />,
+      <KeySignatureButton keyName="Bb major" className="meta-inline meta-inline--key" />,
     );
     const button = container.querySelector('button') as HTMLButtonElement;
-    expect(button.querySelector('.meta-inline__value')?.textContent).toBe('B♭');
-    expect(button.getAttribute('aria-label')).toBe('Play the B♭ scale and chord');
+    expect(button.querySelector('.meta-inline__value')?.textContent).toBe('B♭ major');
+    expect(button.getAttribute('aria-label')).toBe('Play the B♭ major scale and chord');
   });
 
   test('renders an Original → Playing pair and auditions the sounding key', () => {
     const { container } = render(
       <KeySignatureButton
-        keyName="G"
-        soundingKey="A"
+        keyName="G major"
+        soundingKey="A major"
         className="meta-inline meta-inline--key meta-inline--key-pair"
       />,
     );
@@ -83,19 +86,19 @@ describe('<KeySignatureButton>', () => {
     const groups = button.querySelectorAll('.meta-inline__group');
     expect(groups).toHaveLength(2);
     expect(groups[0]?.querySelector('.meta-inline__label')?.textContent).toBe('Original:');
-    expect(groups[0]?.querySelector('.meta-inline__value')?.textContent).toBe('G');
+    expect(groups[0]?.querySelector('.meta-inline__value')?.textContent).toBe('G major');
     expect(groups[1]?.querySelector('.meta-inline__label')?.textContent).toBe('Playing:');
-    expect(groups[1]?.querySelector('.meta-inline__value')?.textContent).toBe('A');
+    expect(groups[1]?.querySelector('.meta-inline__value')?.textContent).toBe('A major');
     // The audition plays what the reader hears — the sounding key.
     expect(button.getAttribute('aria-label')).toBe(
-      'Play the A scale and chord (transposed from G)',
+      'Play the A major scale and chord (transposed from G major)',
     );
   });
 
   test('clicking the chip auditions the key (schedules voices) without errors', async () => {
     const { container } = render(
       <KeySignatureButton
-        keyName="G"
+        keyName="G major"
         className="meta-inline meta-inline--key"
         wasmLoader={makeLoader()}
       />,
@@ -107,14 +110,14 @@ describe('<KeySignatureButton>', () => {
 
     const button = container.querySelector('button') as HTMLButtonElement;
     fireEvent.click(button);
-    expect(scale).toHaveBeenCalledWith('G');
-    expect(triad).toHaveBeenCalledWith('G');
+    expect(scale).toHaveBeenCalledWith('G major');
+    expect(triad).toHaveBeenCalledWith('G major');
   });
 
   test('clicking the readout text (not just the icon) auditions the key', async () => {
     const { container } = render(
       <KeySignatureButton
-        keyName="G"
+        keyName="G major"
         className="meta-inline meta-inline--key"
         wasmLoader={makeLoader()}
       />,
@@ -124,13 +127,13 @@ describe('<KeySignatureButton>', () => {
 
     const readout = container.querySelector('.meta-inline__value') as HTMLElement;
     fireEvent.click(readout);
-    expect(scale).toHaveBeenCalledWith('G');
+    expect(scale).toHaveBeenCalledWith('G major');
   });
 
   test('falls back to a static, non-interactive span when Web Audio is unavailable', () => {
     delete (window as unknown as { AudioContext?: unknown }).AudioContext;
     const { container } = render(
-      <KeySignatureButton keyName="G" className="meta-inline meta-inline--key" />,
+      <KeySignatureButton keyName="G major" className="meta-inline meta-inline--key" />,
     );
     expect(container.querySelector('button')).toBeNull();
     const chip = container.querySelector('.meta-inline--key') as HTMLElement;
@@ -139,7 +142,7 @@ describe('<KeySignatureButton>', () => {
     // The fallback markup is byte-identical to the walker's pre-#2658
     // span: "Key:" label, value, and a labelled (non-hidden) glyph.
     expect(chip.querySelector('.meta-inline__label')?.textContent).toBe('Key:');
-    expect(chip.querySelector('.meta-inline__value')?.textContent).toBe('G');
+    expect(chip.querySelector('.meta-inline__value')?.textContent).toBe('G major');
     const glyph = chip.querySelector('.music-glyph--key');
     expect(glyph?.getAttribute('role')).toBe('img');
     expect(glyph?.getAttribute('aria-hidden')).toBeNull();
@@ -149,8 +152,8 @@ describe('<KeySignatureButton>', () => {
     delete (window as unknown as { AudioContext?: unknown }).AudioContext;
     const { container } = render(
       <KeySignatureButton
-        keyName="G"
-        soundingKey="A"
+        keyName="G major"
+        soundingKey="A major"
         className="meta-inline meta-inline--key meta-inline--key-pair"
       />,
     );
@@ -158,6 +161,6 @@ describe('<KeySignatureButton>', () => {
     expect(chip.tagName).toBe('SPAN');
     const groups = chip.querySelectorAll('.meta-inline__group');
     expect(groups).toHaveLength(2);
-    expect(groups[1]?.querySelector('.meta-inline__value')?.textContent).toBe('A');
+    expect(groups[1]?.querySelector('.meta-inline__value')?.textContent).toBe('A major');
   });
 });

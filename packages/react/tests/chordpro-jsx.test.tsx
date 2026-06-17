@@ -2422,15 +2422,16 @@ describe('renderChordproAst', () => {
   });
 
   // Chord names and key values are typeset with proper Unicode
-  // musical accidentals (`♭` / `♯`) so a `{key: Bb}` reads as
-  // "B♭" and a chord `[Bb]` shows as "B♭" in the chord row.
+  // musical accidentals (`♭` / `♯`) so a canonical `{key}` value of
+  // `Bb major` (ADR-0035) reads as "B♭ major" and a chord `[Bb]`
+  // shows as "B♭" in the chord row.
   test('chord and key displays use ♭ / ♯ Unicode accidentals', () => {
     const ast: ChordproSong = {
-      metadata: { ...EMPTY_META, key: 'Bb', keys: ['Bb'] },
+      metadata: { ...EMPTY_META, key: 'Bb major', keys: ['Bb major'] },
       lines: [
         {
           kind: 'directive',
-          value: { name: 'key', value: 'Bb', kind: { tag: 'key' }, selector: null },
+          value: { name: 'key', value: 'Bb major', kind: { tag: 'key' }, selector: null },
         },
         {
           kind: 'lyrics',
@@ -2447,7 +2448,7 @@ describe('renderChordproAst', () => {
     // Inline `{key}` marker carries the value (the header chip
     // for `{key}` was retired in favour of the inline marker).
     const inlineValue = container.querySelector('.meta-inline--key .meta-inline__value');
-    expect(inlineValue?.textContent).toBe('B♭');
+    expect(inlineValue?.textContent).toBe('B♭ major');
     // Chord-block chords show `B♭` and `F♯m7`.
     const chords = Array.from(container.querySelectorAll('.chord')).map((el) => el.textContent);
     expect(chords).toEqual(['B♭', 'F♯m7']);
@@ -2459,40 +2460,40 @@ describe('renderChordproAst', () => {
   // their respective key-signature glyphs.
   test('inline {key} marker shows Original + Playing when transpose is active', () => {
     const ast: ChordproSong = {
-      metadata: { ...EMPTY_META, key: 'G', keys: ['G'] },
+      metadata: { ...EMPTY_META, key: 'G major', keys: ['G major'] },
       lines: [
         {
           kind: 'directive',
-          value: { name: 'key', value: 'G', kind: { tag: 'key' }, selector: null },
+          value: { name: 'key', value: 'G major', kind: { tag: 'key' }, selector: null },
         },
       ],
     };
-    const { container } = render(renderChordproAst(ast, { transposedKey: 'A' }));
+    const { container } = render(renderChordproAst(ast, { transposedKey: 'A major' }));
     const marker = container.querySelector('.meta-inline--key-pair');
     expect(marker).not.toBeNull();
     const groups = marker?.querySelectorAll('.meta-inline__group');
     expect(groups?.length).toBe(2);
     // Written half = original.
     expect(groups?.[0]?.querySelector('.meta-inline__label')?.textContent).toBe('Original:');
-    expect(groups?.[0]?.querySelector('.meta-inline__value')?.textContent).toBe('G');
+    expect(groups?.[0]?.querySelector('.meta-inline__value')?.textContent).toBe('G major');
     expect(groups?.[0]?.querySelector('.music-glyph--key')).not.toBeNull();
     // Sounding half = transposed.
     expect(groups?.[1]?.querySelector('.meta-inline__label')?.textContent).toBe('Playing:');
-    expect(groups?.[1]?.querySelector('.meta-inline__value')?.textContent).toBe('A');
+    expect(groups?.[1]?.querySelector('.meta-inline__value')?.textContent).toBe('A major');
     expect(groups?.[1]?.querySelector('.music-glyph--key')).not.toBeNull();
   });
 
   test('inline {key} marker stays single when transpose is null or matches written key', () => {
     const ast: ChordproSong = {
-      metadata: { ...EMPTY_META, key: 'G', keys: ['G'] },
+      metadata: { ...EMPTY_META, key: 'G major', keys: ['G major'] },
       lines: [
         {
           kind: 'directive',
-          value: { name: 'key', value: 'G', kind: { tag: 'key' }, selector: null },
+          value: { name: 'key', value: 'G major', kind: { tag: 'key' }, selector: null },
         },
       ],
     };
-    for (const opts of [{ transposedKey: null }, { transposedKey: 'G' }, {}]) {
+    for (const opts of [{ transposedKey: null }, { transposedKey: 'G major' }, {}]) {
       const { container } = render(renderChordproAst(ast, opts));
       expect(container.querySelector('.meta-inline--key-pair')).toBeNull();
       // Single marker has just one label, "Key:".
@@ -2510,19 +2511,19 @@ describe('renderChordproAst', () => {
     // directives stay authored. The map-based path supersedes
     // this and is exercised by the next test.
     const ast: ChordproSong = {
-      metadata: { ...EMPTY_META, key: 'D', keys: ['G', 'D'] },
+      metadata: { ...EMPTY_META, key: 'D major', keys: ['G major', 'D major'] },
       lines: [
         {
           kind: 'directive',
-          value: { name: 'key', value: 'G', kind: { tag: 'key' }, selector: null },
+          value: { name: 'key', value: 'G major', kind: { tag: 'key' }, selector: null },
         },
         {
           kind: 'directive',
-          value: { name: 'key', value: 'D', kind: { tag: 'key' }, selector: null },
+          value: { name: 'key', value: 'D major', kind: { tag: 'key' }, selector: null },
         },
       ],
     };
-    const { container } = render(renderChordproAst(ast, { transposedKey: 'E' }));
+    const { container } = render(renderChordproAst(ast, { transposedKey: 'E major' }));
     const markers = container.querySelectorAll('.meta-inline--key');
     expect(markers).toHaveLength(2);
     // First `{key: G}` — not the primary, no map → single chip.
@@ -2538,38 +2539,39 @@ describe('renderChordproAst', () => {
   // authored value appears in the map.
   test('mid-song {key} renders Original → Playing pair when transposedKeyDirectives covers it', () => {
     const ast: ChordproSong = {
-      metadata: { ...EMPTY_META, key: 'G', keys: ['G', 'D'] },
+      metadata: { ...EMPTY_META, key: 'G major', keys: ['G major', 'D major'] },
       lines: [
         {
           kind: 'directive',
-          value: { name: 'key', value: 'G', kind: { tag: 'key' }, selector: null },
+          value: { name: 'key', value: 'G major', kind: { tag: 'key' }, selector: null },
         },
         {
           kind: 'directive',
-          value: { name: 'key', value: 'D', kind: { tag: 'key' }, selector: null },
+          value: { name: 'key', value: 'D major', kind: { tag: 'key' }, selector: null },
         },
       ],
     };
     const { container } = render(
       renderChordproAst(ast, {
-        transposedKey: 'A',
-        transposedKeyDirectives: { G: 'A', D: 'E' },
+        transposedKey: 'A major',
+        // The map is keyed by the canonicalised directive value (ADR-0035).
+        transposedKeyDirectives: { 'G major': 'A major', 'D major': 'E major' },
       }),
     );
     const markers = container.querySelectorAll('.meta-inline--key');
     expect(markers).toHaveLength(2);
-    // Primary `{key: G}` → Original G → Playing A.
+    // Primary `{key: G}` → Original G major → Playing A major.
     expect(markers[0]?.classList.contains('meta-inline--key-pair')).toBe(true);
     const primaryGroups = markers[0]?.querySelectorAll('.meta-inline__group');
-    expect(primaryGroups?.[0]?.querySelector('.meta-inline__value')?.textContent).toBe('G');
-    expect(primaryGroups?.[1]?.querySelector('.meta-inline__value')?.textContent).toBe('A');
-    // Mid-song `{key: D}` → Original D → Playing E (the bug
-    // #2525 closed — before the fix this was a single `Key: D`
+    expect(primaryGroups?.[0]?.querySelector('.meta-inline__value')?.textContent).toBe('G major');
+    expect(primaryGroups?.[1]?.querySelector('.meta-inline__value')?.textContent).toBe('A major');
+    // Mid-song `{key: D}` → Original D major → Playing E major (the
+    // bug #2525 closed — before the fix this was a single `Key: D`
     // chip ignoring the transpose).
     expect(markers[1]?.classList.contains('meta-inline--key-pair')).toBe(true);
     const midGroups = markers[1]?.querySelectorAll('.meta-inline__group');
-    expect(midGroups?.[0]?.querySelector('.meta-inline__value')?.textContent).toBe('D');
-    expect(midGroups?.[1]?.querySelector('.meta-inline__value')?.textContent).toBe('E');
+    expect(midGroups?.[0]?.querySelector('.meta-inline__value')?.textContent).toBe('D major');
+    expect(midGroups?.[1]?.querySelector('.meta-inline__value')?.textContent).toBe('E major');
   });
 
   test('mid-song {key} stays single when transposedKeyDirectives entry equals the authored value', () => {
@@ -2578,17 +2580,17 @@ describe('renderChordproAst', () => {
     // host hand-builds the map. Pair display only fires when
     // original !== transposed.
     const ast: ChordproSong = {
-      metadata: { ...EMPTY_META, key: 'G', keys: ['G'] },
+      metadata: { ...EMPTY_META, key: 'G major', keys: ['G major'] },
       lines: [
         {
           kind: 'directive',
-          value: { name: 'key', value: 'G', kind: { tag: 'key' }, selector: null },
+          value: { name: 'key', value: 'G major', kind: { tag: 'key' }, selector: null },
         },
       ],
     };
     const { container } = render(
       renderChordproAst(ast, {
-        transposedKeyDirectives: { G: 'G' },
+        transposedKeyDirectives: { 'G major': 'G major' },
       }),
     );
     expect(container.querySelector('.meta-inline--key-pair')).toBeNull();
@@ -2730,7 +2732,7 @@ describe('renderChordproAst', () => {
       renderChordproAst({
         metadata: {
           ...EMPTY_META,
-          keys: ['D'],
+          keys: ['D major'],
           tempos: ['140'],
           times: ['6/8'],
         },
@@ -2738,7 +2740,7 @@ describe('renderChordproAst', () => {
           { kind: 'lyrics', value: { segments: [{ chord: null, text: 'before', spans: [] }] } },
           {
             kind: 'directive',
-            value: { name: 'key', value: 'D', kind: { tag: 'key' }, selector: null },
+            value: { name: 'key', value: 'D major', kind: { tag: 'key' }, selector: null },
           },
           { kind: 'lyrics', value: { segments: [{ chord: null, text: 'mid-1', spans: [] }] } },
           {
@@ -2765,7 +2767,7 @@ describe('renderChordproAst', () => {
     expect(markers[0]?.classList.contains('meta-inline--key')).toBe(true);
     expect(markers[0]?.querySelector('.music-glyph--key')).not.toBeNull();
     expect(markers[0]?.querySelector('.meta-inline__label')?.textContent).toBe('Key:');
-    expect(markers[0]?.querySelector('.meta-inline__value')?.textContent).toBe('D');
+    expect(markers[0]?.querySelector('.meta-inline__value')?.textContent).toBe('D major');
 
     expect(markers[1]?.classList.contains('meta-inline--tempo')).toBe(true);
     expect(markers[1]?.querySelector('.music-glyph--metronome')).not.toBeNull();

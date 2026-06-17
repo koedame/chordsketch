@@ -3197,8 +3197,8 @@ mod tests {
         // inline marker uses the ♭ unicode accidental.
         let html = render("{key: Bb}");
         assert!(
-            html.contains("<span class=\"meta-inline__value\">B\u{266D}</span>"),
-            "expected `B♭` in inline key value, got: {html}"
+            html.contains("<span class=\"meta-inline__value\">B\u{266D} major</span>"),
+            "expected `B♭ major` in inline key value, got: {html}"
         );
     }
 
@@ -3206,8 +3206,8 @@ mod tests {
     fn test_inline_key_marker_uses_unicode_accidentals() {
         let html = render("[G]a\n{key: Eb}\n[Eb]b");
         assert!(
-            html.contains("<span class=\"meta-inline__value\">E\u{266D}</span>"),
-            "expected `E♭` in inline key value, got: {html}"
+            html.contains("<span class=\"meta-inline__value\">E\u{266D} major</span>"),
+            "expected `E♭ major` in inline key value, got: {html}"
         );
     }
 
@@ -3227,38 +3227,38 @@ mod tests {
 
         let song = chordsketch_chordpro::parse("{key: G}\n[G]hi [D]world").unwrap();
 
-        // No transpose: authored key passes through unchanged.
+        // No transpose: authored key passes through, canonicalised (ADR-0035).
         let zero = render_song_with_transpose(&song, 0, &Config::defaults());
         assert!(
-            zero.contains("<span class=\"meta-inline__value\">G</span>"),
+            zero.contains("<span class=\"meta-inline__value\">G major</span>"),
             "no-transpose case must preserve authored key; got:\n{zero}"
         );
 
         // +2 semitones: G → A.
         let up_two = render_song_with_transpose(&song, 2, &Config::defaults());
         assert!(
-            up_two.contains("<span class=\"meta-inline__value\">A</span>"),
-            "+2 transpose must surface key value `A`; got:\n{up_two}"
+            up_two.contains("<span class=\"meta-inline__value\">A major</span>"),
+            "+2 transpose must surface key value `A major`; got:\n{up_two}"
         );
         assert!(
-            !up_two.contains("<span class=\"meta-inline__value\">G</span>"),
-            "+2 transpose must NOT leave authored `G` in the key value; got:\n{up_two}"
+            !up_two.contains("<span class=\"meta-inline__value\">G major</span>"),
+            "+2 transpose must NOT leave authored `G major` in the key value; got:\n{up_two}"
         );
 
         // Flat-side spelling: G + 3 lands on B♭ (the chord-line
         // canonical-spelling logic is consistent across renderers).
         let to_bflat = render_song_with_transpose(&song, 3, &Config::defaults());
         assert!(
-            to_bflat.contains("<span class=\"meta-inline__value\">B\u{266D}</span>"),
-            "+3 transpose must surface flat-side `B♭`; got:\n{to_bflat}"
+            to_bflat.contains("<span class=\"meta-inline__value\">B\u{266D} major</span>"),
+            "+3 transpose must surface flat-side `B♭ major`; got:\n{to_bflat}"
         );
 
         // −3 semitones: G → E. Negative offsets must work
         // symmetrically with positive ones.
         let down_three = render_song_with_transpose(&song, -3, &Config::defaults());
         assert!(
-            down_three.contains("<span class=\"meta-inline__value\">E</span>"),
-            "-3 transpose must surface key value `E`; got:\n{down_three}"
+            down_three.contains("<span class=\"meta-inline__value\">E major</span>"),
+            "-3 transpose must surface key value `E major`; got:\n{down_three}"
         );
 
         // Unparseable key: a value that doesn't start with a chord root
@@ -3288,20 +3288,21 @@ mod tests {
             "modal qualifier must round-trip; got:\n{modal_out}"
         );
 
-        // Lenient: word `minor` is accepted (ADR-0034) and rendered canonical,
-        // transposed — `Bb minor` at +2 → `Cm`.
+        // Lenient: word `minor` is accepted (ADR-0034) and rendered in the
+        // spelled-out canonical form (ADR-0035), transposed — `Bb minor` at +2
+        // → `C minor`.
         let bb_minor = chordsketch_chordpro::parse("{key: Bb minor}\n[Bb]hi").unwrap();
         let bb_minor_out = render_song_with_transpose(&bb_minor, 2, &Config::defaults());
         assert!(
-            bb_minor_out.contains("Cm"),
-            "lenient `Bb minor` must render canonical transposed Cm; got:\n{bb_minor_out}"
+            bb_minor_out.contains("C minor"),
+            "lenient `Bb minor` must render canonical transposed `C minor`; got:\n{bb_minor_out}"
         );
 
         // Slash bass transposes alongside the root.
         let slash = chordsketch_chordpro::parse("{key: G/B}\n[G]hi").unwrap();
         let slash_out = render_song_with_transpose(&slash, 2, &Config::defaults());
         assert!(
-            slash_out.contains("A/C\u{266F}"),
+            slash_out.contains("A major/C\u{266F}"),
             "slash-bass must transpose alongside the root; got:\n{slash_out}"
         );
 
@@ -3393,12 +3394,13 @@ mod tests {
         // equivalent to Em, which `canonical_transposed_key` never
         // produces, but a user can hand-write it. The renderer must
         // emit a diagnostics warning rather than silently showing an
-        // empty staff glyph (#2526).
+        // empty staff glyph (#2526). The warning embeds the spelled-out
+        // canonical form `Fb minor` (ADR-0035).
         let song = chordsketch_chordpro::parse("{key: Fbm}\n[Em]Hi").unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
-            result.warnings.iter().any(|w| w.contains("Fbm")),
-            "expected a warning for parseable-but-missing key Fbm, got: {:?}",
+            result.warnings.iter().any(|w| w.contains("Fb minor")),
+            "expected a warning for parseable-but-missing key `Fb minor`, got: {:?}",
             result.warnings
         );
     }
@@ -4521,7 +4523,7 @@ Verse text\n\
             "expected label span; got: {html}"
         );
         assert!(
-            html.contains("<span class=\"meta-inline__value\">D</span>"),
+            html.contains("<span class=\"meta-inline__value\">D major</span>"),
             "expected value span; got: {html}"
         );
     }
@@ -4692,7 +4694,7 @@ Verse text\n\
         );
         // The inline marker IS present.
         assert!(html.contains("meta-inline--key"));
-        assert!(html.contains("<span class=\"meta-inline__value\">G</span>"));
+        assert!(html.contains("<span class=\"meta-inline__value\">G major</span>"));
     }
 
     // -- settings.strict missing-{key} warning (R6.100.0, #2291) ----------

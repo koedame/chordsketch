@@ -71,7 +71,9 @@ test.describe("multi-{key} transpose", () => {
 
     // Spot-check the transposed (Playing) values so the assertion
     // fails if the pairing renders but with the wrong key: each pair's
-    // second `.meta-inline__group` carries the sounding key.
+    // second `.meta-inline__group` carries the sounding key. The
+    // canonical rendered form is spelled out (ADR-0035), so the chips
+    // read "A major" / "E major" / "B major".
     // G + 2 = A, D + 2 = E, A + 2 = B.
     const playing = await pairs.evaluateAll((els) =>
       els.map(
@@ -81,7 +83,7 @@ test.describe("multi-{key} transpose", () => {
             ?.querySelector(".meta-inline__value")?.textContent ?? "",
       ),
     );
-    expect(playing).toEqual(["A", "E", "B"]);
+    expect(playing).toEqual(["A major", "E major", "B major"]);
 
     expect(errors).toEqual([]);
   });

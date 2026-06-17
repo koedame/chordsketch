@@ -1,9 +1,17 @@
 # 0034. Lenient `{key}` input, canonical render
 
-- **Status**: Accepted
+- **Status**: Accepted; canonical-form clause superseded by
+  [ADR-0035](0035-spelled-out-canonical-key-notation.md)
 - **Date**: 2026-06-17
 - **Supersedes**: the strict-input clause of
   [ADR-0033](0033-canonical-key-directive-notation.md)
+
+> **Note (superseded in part):** the lenient-input policy and the
+> render-the-canonical-form-on-every-surface decision below still hold. The
+> *canonical form itself* — `Gm` / `G` / `C dorian` — was changed to the
+> spelled-out `G minor` / `G major` / `C dorian` by
+> [ADR-0035](0035-spelled-out-canonical-key-notation.md). Read every `Gm` / `G`
+> example below as `G minor` / `G major`.
 
 ## Context
 

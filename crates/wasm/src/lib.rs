@@ -446,12 +446,12 @@ pub(crate) type ParseChordproPayload = (
 );
 
 /// Normalise every `{key}` directive value — and the `metadata.key` / `keys`
-/// views — to its canonical spelling for the React AST (ADR-0034). Recognised
-/// human key spellings (`G minor`, `Gmin`, `C Dorian`, …) collapse to their
-/// canonical form (`Gm`, `Gm`, `C dorian`); values that are not keys (chord
-/// extensions, no note-letter root) are left untouched so the JSX walker
-/// renders them verbatim. The editor textarea is unaffected — only the AST the
-/// preview renders from is normalised.
+/// views — to its canonical spelling for the React AST (ADR-0034 / ADR-0035).
+/// Recognised human key spellings (`Gm`, `Gmin`, `C Dorian`, …) collapse to
+/// their spelled-out canonical form (`G minor`, `G minor`, `C dorian`); values
+/// that are not keys (chord extensions, no note-letter root) are left untouched
+/// so the JSX walker renders them verbatim. The editor textarea is unaffected —
+/// only the AST the preview renders from is normalised.
 fn canonicalize_key_directives(song: &mut chordsketch_chordpro::ast::Song) {
     use chordsketch_chordpro::ast::{DirectiveKind, Line};
     fn canon(v: &str) -> Option<String> {
@@ -515,14 +515,15 @@ pub(crate) fn do_parse_chordpro(
     let mut warnings: Vec<String> = parse_result.errors.iter().map(|w| format!("{w}")).collect();
 
     let mut song = parse_result.song;
-    // Render the canonical key on the React surface too (ADR-0034): the editor
-    // textarea keeps whatever the user typed, but the AST the JSX walker
-    // renders from carries the canonical spelling, so a `{key: G minor}` chip
-    // shows `Gm` (and a transposed chip its canonical transposed value). Only
-    // the displayed AST is normalised here — recognised key spellings collapse
-    // to `Gm` / `G` / `C dorian`; values that aren't keys (chord extensions,
-    // no note root) are left verbatim. Done before the transpose + map build
-    // below so every downstream key surface (header, per-directive map) agrees.
+    // Render the canonical key on the React surface too (ADR-0034 / ADR-0035):
+    // the editor textarea keeps whatever the user typed, but the AST the JSX
+    // walker renders from carries the canonical spelling, so a `{key: Gm}` chip
+    // shows `G minor` (and a transposed chip its canonical transposed value).
+    // Only the displayed AST is normalised here — recognised key spellings
+    // collapse to `G minor` / `G major` / `C dorian`; values that aren't keys
+    // (chord extensions, no note root) are left verbatim. Done before the
+    // transpose + map build below so every downstream key surface (header,
+    // per-directive map) agrees.
     canonicalize_key_directives(&mut song);
     let cli_transpose = options.map(|o| o.transpose).unwrap_or(0);
     // ADR-0023: fold `{capo: N}` into the transpose offset so the
@@ -1275,20 +1276,21 @@ mod tests {
         let (json, _warnings, transposed_key, transposed_key_directives) =
             do_parse_chordpro("{key: G}\n[G]Hello", Some(&opts)).unwrap();
         assert!(
-            json.contains("\"key\":\"G\""),
-            "original key stays on the AST, got: {json}"
+            json.contains("\"key\":\"G major\""),
+            "original key stays on the AST, canonicalised (ADR-0035), got: {json}"
         );
         assert_eq!(
             transposed_key.as_deref(),
-            Some("A"),
-            "transpose +2 from G should land on A"
+            Some("A major"),
+            "transpose +2 from G should land on A major"
         );
         // The {key: G} directive appears in song.lines too, so the
         // mid-song-key map (#2525) carries the same G→A mapping
-        // that the walker uses for the body chip.
+        // that the walker uses for the body chip. The map is keyed by
+        // the canonicalised directive value (`G major`).
         assert_eq!(
-            transposed_key_directives.get("G").map(String::as_str),
-            Some("A"),
+            transposed_key_directives.get("G major").map(String::as_str),
+            Some("A major"),
             "{{key: G}} directive must surface in transposed_key_directives, got: {transposed_key_directives:?}"
         );
     }
@@ -1319,9 +1321,9 @@ mod tests {
 
     #[test]
     fn test_parse_chordpro_lenient_key_is_canonicalised_and_transposed() {
-        // ADR-0034: the editor accepts `G minor`, but the AST the React walker
-        // renders from carries the canonical `Gm` (no warning), and the
-        // transposed counterpart is the canonical `Am`.
+        // ADR-0034 / ADR-0035: the editor accepts `G minor`, and the AST the
+        // React walker renders from carries the spelled-out canonical
+        // `G minor` (no warning), with the transposed counterpart `A minor`.
         let opts = RenderOptions {
             transpose: 2,
             config: None,
@@ -1333,23 +1335,27 @@ mod tests {
             "`G minor` is a recognised key and must not warn; got: {warnings:?}"
         );
         assert!(
-            json.contains("\"key\":\"Gm\""),
-            "the React AST must carry the canonical `Gm`, not `G minor`; got: {json}"
+            json.contains("\"key\":\"G minor\""),
+            "the React AST must carry the canonical `G minor`; got: {json}"
         );
-        assert_eq!(transposed_key.as_deref(), Some("Am"));
+        assert_eq!(transposed_key.as_deref(), Some("A minor"));
         // The per-directive map is keyed by the canonical authored value.
-        assert_eq!(directives.get("Gm").map(String::as_str), Some("Am"));
+        assert_eq!(
+            directives.get("G minor").map(String::as_str),
+            Some("A minor")
+        );
     }
 
     #[test]
     fn test_parse_chordpro_canonicalises_meta_key_form_and_ignores_non_keys() {
-        // ADR-0034: the `{meta: key …}` long form is canonicalised for the
-        // React AST too, while a non-key directive (`{title}`) is left alone.
+        // ADR-0034 / ADR-0035: the `{meta: key …}` long form is canonicalised
+        // for the React AST too, while a non-key directive (`{title}`) is left
+        // alone.
         let (json, _warnings, _transposed_key, _directives) =
             do_parse_chordpro("{title: T}\n{meta: key G minor}\n[Gm]Hi", None).unwrap();
         assert!(
-            json.contains("\"key\":\"Gm\""),
-            "`{{meta: key G minor}}` must canonicalise to `Gm` in the AST; got: {json}"
+            json.contains("\"key\":\"G minor\""),
+            "`{{meta: key G minor}}` must canonicalise to `G minor` in the AST; got: {json}"
         );
         assert!(
             json.contains("\"title\":\"T\"") || json.contains("\"T\""),
@@ -1370,15 +1376,16 @@ mod tests {
         let (_json, _warnings, _transposed_key, transposed_key_directives) =
             do_parse_chordpro("{key: G}\n[G]Hello\n{key: D}\n[D]world", Some(&opts)).unwrap();
         // Both directives must surface: primary G→A and mid-song
-        // D→E. The walker keys lookups by directive value so each
-        // unique original maps to its transposed counterpart.
+        // D→E. The walker keys lookups by the canonicalised directive
+        // value (`G major` / `D major`) so each unique original maps to
+        // its transposed counterpart.
         assert_eq!(
-            transposed_key_directives.get("G").map(String::as_str),
-            Some("A"),
+            transposed_key_directives.get("G major").map(String::as_str),
+            Some("A major"),
         );
         assert_eq!(
-            transposed_key_directives.get("D").map(String::as_str),
-            Some("E"),
+            transposed_key_directives.get("D major").map(String::as_str),
+            Some("E major"),
         );
     }
 
@@ -1520,9 +1527,9 @@ mod tests {
             "duplicate {{key: G}} must not produce two map entries, got: {transposed_key_directives:?}"
         );
         assert_eq!(
-            transposed_key_directives.get("G").map(String::as_str),
-            Some("A"),
-            "{{key: G}} +2 must transpose to A, got: {transposed_key_directives:?}"
+            transposed_key_directives.get("G major").map(String::as_str),
+            Some("A major"),
+            "{{key: G}} +2 must transpose to A major, got: {transposed_key_directives:?}"
         );
     }
 
@@ -2150,19 +2157,20 @@ mod wasm_tests {
              indexes it with object-bracket access, which is undefined on a Map"
         );
         // `Reflect::get` mirrors the `obj[key]` access the walker
-        // performs. Every transposed `{key:}` value must resolve:
-        // G + 2 = A, D + 2 = E.
-        let g = Reflect::get(&map, &"G".into()).unwrap();
+        // performs. The map is keyed by the canonicalised directive
+        // value (`G major` / `D major`). Every transposed `{key:}`
+        // value must resolve: G + 2 = A major, D + 2 = E major.
+        let g = Reflect::get(&map, &"G major".into()).unwrap();
         assert_eq!(
             g.as_string().as_deref(),
-            Some("A"),
-            "transposedKeyDirectives['G'] must be A"
+            Some("A major"),
+            "transposedKeyDirectives['G major'] must be A major"
         );
-        let d = Reflect::get(&map, &"D".into()).unwrap();
+        let d = Reflect::get(&map, &"D major".into()).unwrap();
         assert_eq!(
             d.as_string().as_deref(),
-            Some("E"),
-            "transposedKeyDirectives['D'] must be E (the mid-song key the \
+            Some("E major"),
+            "transposedKeyDirectives['D major'] must be E major (the mid-song key the \
              Map-vs-object bug silently dropped)"
         );
     }

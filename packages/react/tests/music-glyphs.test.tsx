@@ -205,21 +205,21 @@ describe('<KeySignatureGlyph>', () => {
     // Before the gap was filled, Dbm rendered an empty staff
     // (0 accidental groups) while the aria-label still announced
     // "Key Dbm" — a silent visual + accessibility mismatch.
-    const { container } = render(<KeySignatureGlyph keyName="Dbm" />);
+    const { container } = render(<KeySignatureGlyph keyName="Db minor" />);
     const svg = container.querySelector('svg.music-glyph--key');
     expect(svg).not.toBeNull();
     expect(svg?.querySelectorAll('g').length).toBe(4);
-    expect(svg?.getAttribute('aria-label')).toBe('Key Dbm (4 sharps)');
+    expect(svg?.getAttribute('aria-label')).toBe('Key Db minor (4 sharps)');
   });
 
   test('aria-label spells out the key + accidental count for screen readers', () => {
-    const { container } = render(<KeySignatureGlyph keyName="A" />);
+    const { container } = render(<KeySignatureGlyph keyName="A major" />);
     expect(container.querySelector('svg')?.getAttribute('aria-label')).toBe(
-      'Key A (3 sharps)',
+      'Key A major (3 sharps)',
     );
-    const cMajor = render(<KeySignatureGlyph keyName="C" />);
+    const cMajor = render(<KeySignatureGlyph keyName="C major" />);
     expect(cMajor.container.querySelector('svg')?.getAttribute('aria-label')).toBe(
-      'Key C (no accidentals)',
+      'Key C major (no accidentals)',
     );
   });
 
