@@ -38,12 +38,11 @@ test.describe('chord-audio toggle on the ChordPro preview', () => {
     await expect(toggle).toBeVisible();
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
     // The toggle must read its state visibly, not only via aria-pressed
-    // (#2669). The visible signal is the icon shape (#2676 dropped the
-    // text badge): the off state draws the struck-out muted-speaker glyph,
-    // whose two crossing strokes are the only `<svg line>` elements either
-    // icon uses, so their presence proves the off icon rendered in the
-    // deployed bundle.
-    await expect(toggle.locator('svg line')).toHaveCount(2);
+    // (#2669). The visible signal is the icon (#2676 dropped the text
+    // badge): the off state draws the muted-speaker glyph, tagged with the
+    // geometry-independent `data-audio-icon="off"` marker, so its presence
+    // proves the off icon rendered in the deployed bundle.
+    await expect(toggle.locator('[data-audio-icon="off"]')).toHaveCount(1);
 
     // Before enabling audio mode, no chord carries the audio affordance.
     const audioChords = page.locator('.chordsketch-preview .chord--audio');
@@ -52,9 +51,10 @@ test.describe('chord-audio toggle on the ChordPro preview', () => {
     // Enable audio mode: chords become play buttons.
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-    // The icon flips to the volume-waves glyph (no `<line>` strokes), so the
-    // enabled state is visibly distinct in shape, not colour alone.
-    await expect(toggle.locator('svg line')).toHaveCount(0);
+    // The icon flips to the volume-waves glyph (`data-audio-icon="on"`), so
+    // the enabled state is visibly distinct in shape, not colour alone.
+    await expect(toggle.locator('[data-audio-icon="on"]')).toHaveCount(1);
+    await expect(toggle.locator('[data-audio-icon="off"]')).toHaveCount(0);
     await expect(audioChords.first()).toBeVisible();
 
     const firstChord = audioChords.first();

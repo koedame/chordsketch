@@ -106,8 +106,15 @@ export interface PreviewToolbarProps
   trailing?: ReactNode;
 }
 
+// Volume-waves glyph for the on state. The `data-audio-icon` marker is a
+// stable, geometry-independent hook for the on/off visible state: tests
+// (and host CSS) target the marker rather than the glyph's internal
+// strokes, so the icon can be redrawn without breaking the state checks
+// while the marker still proves the correct *visible* icon rendered
+// (#2669, #2676).
 const AUDIO_ON_ICON = (
   <svg
+    data-audio-icon="on"
     width="16"
     height="16"
     viewBox="0 0 24 24"
@@ -130,6 +137,7 @@ const AUDIO_ON_ICON = (
 // active fill colour — see #2669.
 const AUDIO_OFF_ICON = (
   <svg
+    data-audio-icon="off"
     width="16"
     height="16"
     viewBox="0 0 24 24"

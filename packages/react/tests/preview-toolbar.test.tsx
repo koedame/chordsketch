@@ -203,12 +203,13 @@ describe('<PreviewToolbar>', () => {
     );
     const off = screen.getByRole('button', { name: 'Play chords on click' });
     // The on/off state must be visible without relying on colour (#2669,
-    // #2676): the off state draws the struck-out muted-speaker glyph,
-    // whose two crossing strokes are the only `<line>` elements either
-    // icon uses, so their presence is a shape-based (not colour-based)
-    // off-state assertion. The literal "On"/"Off" text badge was dropped
-    // in #2676, so the label reads "Chord audio" in both states.
-    expect(off.querySelectorAll('svg line')).toHaveLength(2);
+    // #2676): the off state draws the muted-speaker glyph, tagged with the
+    // geometry-independent `data-audio-icon="off"` marker. Asserting on the
+    // marker proves the correct *visible* icon rendered while staying
+    // robust to the glyph being redrawn. The literal "On"/"Off" text badge
+    // was dropped in #2676, so the label reads "Chord audio" in both states.
+    expect(off.querySelector('[data-audio-icon="off"]')).not.toBeNull();
+    expect(off.querySelector('[data-audio-icon="on"]')).toBeNull();
     expect(off.textContent).toBe('Chord audio');
     expect(off.getAttribute('title')).toBe('Chord audio off — click to play chords');
 
@@ -222,9 +223,10 @@ describe('<PreviewToolbar>', () => {
       />,
     );
     const on = screen.getByRole('button', { name: 'Play chords on click' });
-    // The on state swaps to the volume-waves glyph, which has no `<line>`
-    // strokes — the shape flips with state.
-    expect(on.querySelectorAll('svg line')).toHaveLength(0);
+    // The on state swaps to the volume-waves glyph (`data-audio-icon="on"`),
+    // so the visible icon flips with state.
+    expect(on.querySelector('[data-audio-icon="on"]')).not.toBeNull();
+    expect(on.querySelector('[data-audio-icon="off"]')).toBeNull();
     expect(on.textContent).toBe('Chord audio');
     expect(on.getAttribute('title')).toBe(
       'Chord audio on — click to stop playing chords',
