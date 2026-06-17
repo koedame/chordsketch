@@ -367,6 +367,63 @@
   outline-offset: 2px;
 }
 
+/* Chord-audio toggle (#2669). The button is a stateful on/off control,
+ * so it must look visibly different in each state — the bare
+ * `btn btn-secondary` it previously inherited rendered identically
+ * whether audio mode was on or off, leaving the only state signal in the
+ * invisible `aria-pressed` attribute. The off state is a neutral outline
+ * button; the on (`aria-pressed='true'`) state fills with the
+ * design-system crimson, matching the `<ChordInspector>` chip pattern. */
+.chordsketch-preview-toolbar__audio-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  font: inherit;
+  cursor: pointer;
+  background: var(--cs-surface, #fff);
+  border: 1px solid var(--cs-border-strong, #d4d1d6);
+  border-radius: 4px;
+  color: var(--cs-text-secondary, #67646d);
+  transition: background-color var(--cs-dur-1) var(--cs-ease-out),
+    border-color var(--cs-dur-1) var(--cs-ease-out),
+    color var(--cs-dur-1) var(--cs-ease-out);
+}
+
+.chordsketch-preview-toolbar__audio-toggle:hover {
+  border-color: var(--cs-text-secondary, #67646d);
+}
+
+.chordsketch-preview-toolbar__audio-toggle:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500, #bd1642);
+  box-shadow: var(--cs-focus-ring, 0 0 0 3px rgba(189, 22, 66, 0.35));
+}
+
+.chordsketch-preview-toolbar__audio-toggle[aria-pressed='true'] {
+  background: var(--cs-crimson-500, #bd1642);
+  border-color: var(--cs-crimson-500, #bd1642);
+  color: var(--cs-fg-on-crimson, #fff);
+}
+
+.chordsketch-preview-toolbar__audio-toggle[aria-pressed='true']:hover {
+  background: var(--cs-crimson-600, #a30f37);
+  border-color: var(--cs-crimson-600, #a30f37);
+}
+
+/* Explicit On/Off badge — a non-colour-dependent state signal so the
+ * control is unambiguous for colour-blind users and at a glance. */
+.chordsketch-preview-toolbar__audio-state {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid currentColor;
+  border-radius: var(--cs-r-full, 9999px);
+}
+
 .chordsketch-sheet {
   font-family: inherit;
 }
