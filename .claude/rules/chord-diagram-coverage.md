@@ -36,6 +36,19 @@ root-cause mechanism that keeps coverage at 100% with **zero per-type data to
 maintain**: a new chord type needs no new voicing data, only a parser that
 understands its suffix.
 
+### Synthesised shapes must be playable
+
+The synthesiser does not just cover the chord tones — it rejects shapes a hand
+cannot fret. A guitar / ukulele / charango voicing is constrained to **at most
+four fingers** (`MAX_FINGERS`, with an index-barre at the lowest fret counted
+as one finger) within a **four-fret window** (`SPAN` = 3 fret rows beyond the
+anchor, i.e. a highest-minus-lowest fretted span of at most 3). Dense chords therefore
+drop the droppable tones (the fifth, inner tensions) the way a player does,
+rather than synthesising an unfrettable five- or six-finger stack. The
+essential tones (root, third / `sus`, seventh, the headline tension, any
+altered fifth, the bass) are always kept — see
+`chordsketch_chordpro::chord::ChordTones`.
+
 ## The rule
 
 When you add (or change) a chip in `CHORD_TYPE_PRESETS`, in the **same PR**:
