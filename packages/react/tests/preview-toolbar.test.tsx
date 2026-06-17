@@ -191,6 +191,38 @@ describe('<PreviewToolbar>', () => {
     expect(onChordAudioToggle).toHaveBeenLastCalledWith(false);
   });
 
+  test('Audio toggle shows an explicit On/Off state label and a state-aware title', () => {
+    const { rerender } = render(
+      <PreviewToolbar
+        source={SAMPLE}
+        transpose={0}
+        onTransposeChange={vi.fn()}
+        chordAudioEnabled={false}
+        onChordAudioToggle={vi.fn()}
+      />,
+    );
+    const off = screen.getByRole('button', { name: 'Play chords on click' });
+    // The visible badge is the non-colour-dependent on/off signal (#2669).
+    expect(off.textContent).toContain('Off');
+    expect(off.textContent).not.toContain('On');
+    expect(off.getAttribute('title')).toBe('Chord audio off — click to play chords');
+
+    rerender(
+      <PreviewToolbar
+        source={SAMPLE}
+        transpose={0}
+        onTransposeChange={vi.fn()}
+        chordAudioEnabled
+        onChordAudioToggle={vi.fn()}
+      />,
+    );
+    const on = screen.getByRole('button', { name: 'Play chords on click' });
+    expect(on.textContent).toContain('On');
+    expect(on.getAttribute('title')).toBe(
+      'Chord audio on — click to stop playing chords',
+    );
+  });
+
   test('per-group opt-out: showTranspose/showExport=false', () => {
     render(
       <PreviewToolbar

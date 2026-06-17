@@ -37,6 +37,9 @@ test.describe('chord-audio toggle on the ChordPro preview', () => {
     const toggle = toolbar.getByRole('button', { name: 'Play chords on click' });
     await expect(toggle).toBeVisible();
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    // The toggle must read its state visibly, not only via aria-pressed
+    // (#2669) — the off state shows an "Off" badge in the deployed bundle.
+    await expect(toggle).toContainText('Off');
 
     // Before enabling audio mode, no chord carries the audio affordance.
     const audioChords = page.locator('.chordsketch-preview .chord--audio');
@@ -45,6 +48,8 @@ test.describe('chord-audio toggle on the ChordPro preview', () => {
     // Enable audio mode: chords become play buttons.
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    // The visible badge flips to "On" so the enabled state is unmistakable.
+    await expect(toggle).toContainText('On');
     await expect(audioChords.first()).toBeVisible();
 
     const firstChord = audioChords.first();
