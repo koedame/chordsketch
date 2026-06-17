@@ -306,7 +306,15 @@ export function PreviewToolbar({
           </span>
           <button
             type="button"
-            className="chordsketch-preview-toolbar__audio-toggle btn btn-secondary btn-sm"
+            /* No `btn btn-secondary` here, unlike the Export button: this
+               is a stateful toggle, and `@chordsketch/react-ui`'s generic
+               `.btn-secondary:hover` background fights the `aria-pressed`
+               active fill when both stylesheets are loaded (the playground
+               loads react-ui after react). The dedicated
+               `.chordsketch-preview-toolbar__audio-toggle` rule owns the
+               full styling so the on/off state is correct with or without
+               react-ui present (#2669). */
+            className="chordsketch-preview-toolbar__audio-toggle"
             aria-pressed={Boolean(chordAudioEnabled)}
             aria-label="Play chords on click"
             title={

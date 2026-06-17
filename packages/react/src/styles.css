@@ -368,18 +368,31 @@
 }
 
 /* Chord-audio toggle (#2669). The button is a stateful on/off control,
- * so it must look visibly different in each state — the bare
- * `btn btn-secondary` it previously inherited rendered identically
- * whether audio mode was on or off, leaving the only state signal in the
- * invisible `aria-pressed` attribute. The off state is a neutral outline
+ * so it must look visibly different in each state — before this rule the
+ * button only carried the generic `btn btn-secondary` classes and
+ * rendered identically whether audio mode was on or off, leaving the
+ * only state signal in the invisible `aria-pressed` attribute.
+ *
+ * This rule is fully self-contained (it does NOT rely on
+ * `@chordsketch/react-ui`'s `.btn` classes, which are an optional peer
+ * stylesheet not loaded by every consumer, and whose
+ * `.btn-secondary:hover` background actively conflicts with the active
+ * fill below when it is loaded). The off state is a neutral outline
  * button; the on (`aria-pressed='true'`) state fills with the
- * design-system crimson, matching the `<ChordInspector>` chip pattern. */
+ * design-system crimson, matching the `<ChordInspector>` chip pattern.
+ * The sizing / font tokens mirror `.btn-sm` (28px) so the toggle lines
+ * up with the Export button and the Diagrams select beside it. */
 .chordsketch-preview-toolbar__audio-toggle {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.25rem 0.625rem;
-  font: inherit;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 0.625rem;
+  font-family: var(--cs-font-jp);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  line-height: 1;
   cursor: pointer;
   background: var(--cs-surface, #fff);
   border: 1px solid var(--cs-border-strong, #d4d1d6);
