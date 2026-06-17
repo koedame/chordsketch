@@ -345,17 +345,17 @@ pub fn transpose(song: &Song, semitones: i8) -> Song {
 /// preserve the modal qualifier and the slash-bass (every Rust
 /// renderer's inline `{key:}` marker does, per #2522).
 ///
-/// Returns `None` when the song key is not a well-formed key per the strict
-/// [`crate::key::parse_key`] grammar, **or** when it is a modal key — callers
-/// fall back to displaying the authored value verbatim and untransposed, so a
-/// malformed `{key}` is never silently shifted on a guessed quality and a mode
-/// is never silently flattened to a major label.
+/// Returns `None` when the song key is not a key per [`crate::key::parse_key`]
+/// (a chord extension like `{key: G7}`, a non-note root), **or** when it is a
+/// modal key — callers fall back to displaying the authored value verbatim and
+/// untransposed, so a non-key `{key}` is never silently shifted on a guessed
+/// quality and a mode is never silently flattened to a major label.
 #[must_use]
 pub fn canonical_transposed_key(song_key: Option<&str>, semitones: i8) -> Option<String> {
-    // The strict parser is the single source of truth: a well-formed key is
-    // lowered straight to a `ChordDetail` (no second permissive parse), and a
-    // malformed value ({key: G minor}, {key: G7}, …) returns None so the
-    // caller renders it as authored instead of transposing a guessed quality.
+    // `parse_key` is the single source of truth: a recognised key is lowered
+    // straight to a `ChordDetail` (no second permissive parse), and a non-key
+    // value ({key: G7}, {key: H}, …) returns None so the caller renders it as
+    // authored instead of transposing a guessed quality.
     let key = crate::key::parse_key(song_key?)?;
     // A bare major/minor label can't carry a mode; defer to the authored value
     // (the `_with_style` variant is the one that preserves `C dorian` → `D
@@ -393,22 +393,48 @@ pub fn canonical_transposed_key(song_key: Option<&str>, semitones: i8) -> Option
 /// token) and the slash `/bass` (transposed alongside the root).
 /// Minor keys append `m` after the accidental.
 ///
-/// Returns `None` when the value is not a well-formed key per the strict
-/// [`crate::key::parse_key`] grammar — same contract as
-/// [`canonical_transposed_key`]. A modal qualifier (`C dorian`) and a
-/// slash-bass (`G/B`) are well-formed and preserved; a malformed value
-/// (`G minor`, `G7`) returns `None` so the caller shows it verbatim.
+/// Returns `None` when the value is not a key per [`crate::key::parse_key`] —
+/// same contract as [`canonical_transposed_key`] minus the modal exclusion. A
+/// lenient minor spelling (`G minor`), a modal qualifier (`C dorian`), and a
+/// slash-bass (`G/B`) are all keys and preserved; a non-key value (`G7`, `H`)
+/// returns `None` so the caller shows it verbatim.
 #[must_use]
 pub fn canonical_transposed_key_with_style(
     song_key: Option<&str>,
     semitones: i8,
     prefer_flat: bool,
 ) -> Option<String> {
-    // Single strict parse → `ChordDetail` (see `canonical_transposed_key`);
+    // Single parse → `ChordDetail` (see `canonical_transposed_key`);
     // no second permissive parse, so the two parsers cannot drift.
     let detail = crate::key::parse_key(song_key?)?.to_chord_detail();
     let transposed = transpose_detail_with_style(&detail, semitones, prefer_flat);
     Some(transposed_key_display_string(&transposed))
+}
+
+/// Canonical display spelling for a `{key:}` directive value, for **any**
+/// transpose offset (ADR-0034). At a zero offset this normalises the authored
+/// spelling to its canonical form (`G minor` → `Gm`, `Gmin` → `Gm`,
+/// `C Dorian` → `C dorian`) without re-spelling the accidental; at a non-zero
+/// offset it defers to [`canonical_transposed_key_with_style`] (which applies
+/// the song-wide `prefer_flat`). Returns `None` when the value is not a key
+/// (chord extensions, no note-letter root) so the caller renders it verbatim.
+///
+/// This is the single helper every Rust renderer routes its inline `{key:}`
+/// marker through, so the editor stays lenient while the rendered key is
+/// always canonical — and identical across text / HTML / PDF.
+#[must_use]
+pub fn canonical_key_for_display(
+    song_key: Option<&str>,
+    semitones: i8,
+    prefer_flat: bool,
+) -> Option<String> {
+    if semitones == 0 {
+        // Canonical form straight from the parsed key — preserves the authored
+        // accidental side (no `prefer_flat` re-spelling when nothing moved).
+        Some(crate::key::parse_key(song_key?)?.to_string())
+    } else {
+        canonical_transposed_key_with_style(song_key, semitones, prefer_flat)
+    }
 }
 
 fn key_prefers_flat_for_song(detail: &ChordDetail, semitones: i8) -> bool {
@@ -952,14 +978,55 @@ mod tests {
     }
 
     #[test]
-    fn canonical_transposed_key_rejects_malformed_keys() {
-        // Malformed keys are not transposed at all (caller shows verbatim).
-        assert_eq!(canonical_transposed_key(Some("G minor"), 2), None);
-        assert_eq!(canonical_transposed_key(Some("G7"), 2), None);
+    fn lenient_key_spellings_transpose_as_their_canonical_quality() {
+        // ADR-0034: human spellings are accepted and transpose like `Gm`.
+        for spelling in ["G minor", "G m", "Gminor", "G min"] {
+            assert_eq!(
+                canonical_transposed_key(Some(spelling), 2).as_deref(),
+                Some("Am"),
+                "{spelling} must transpose as minor → Am"
+            );
+        }
+        // A spelled-out major normalises to the bare canonical root.
         assert_eq!(
-            canonical_transposed_key_with_style(Some("G m"), 2, false),
+            canonical_transposed_key(Some("G major"), 2).as_deref(),
+            Some("A")
+        );
+    }
+
+    #[test]
+    fn canonical_transposed_key_rejects_non_keys() {
+        // Chord extensions / non-note roots are not keys → None (verbatim).
+        assert_eq!(canonical_transposed_key(Some("G7"), 2), None);
+        assert_eq!(canonical_transposed_key(Some("Gm7"), 2), None);
+        assert_eq!(
+            canonical_transposed_key_with_style(Some("H"), 2, false),
             None
         );
+    }
+
+    #[test]
+    fn canonical_key_for_display_normalises_at_zero_transpose() {
+        // The transpose-0 path returns the canonical spelling (ADR-0034).
+        assert_eq!(
+            canonical_key_for_display(Some("G minor"), 0, false).as_deref(),
+            Some("Gm")
+        );
+        assert_eq!(
+            canonical_key_for_display(Some("G major"), 0, false).as_deref(),
+            Some("G")
+        );
+        assert_eq!(
+            canonical_key_for_display(Some("C Dorian"), 0, false).as_deref(),
+            Some("C dorian")
+        );
+        // Authored accidental side is preserved at zero transpose.
+        assert_eq!(
+            canonical_key_for_display(Some("F#m"), 0, true).as_deref(),
+            Some("F#m")
+        );
+        // Not a key → None (caller renders verbatim).
+        assert_eq!(canonical_key_for_display(Some("G7"), 0, false), None);
     }
 
     #[test]
