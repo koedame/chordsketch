@@ -39,6 +39,14 @@
 <h2>スケール(ド〜ド)+ トニック和音</h2>
 <div class="row" id="scales"></div>
 
+<h2>メトロノーム(120 BPM・4/4・1拍目アクセント)</h2>
+<div class="row" id="metro"></div>
+<p><small>
+  「現行(ビープ)」は今の <code>square</code> 波クリック。
+  「合成ウッドブロック」はフィルタしたノイズ＋短いピッチ成分で、
+  電子音っぽさを抑えた木のクリック。サンプル音源は使っていません。
+</small></p>
+
 <script>
 // ---- Web Audio 基盤(現行コードと同じ考え方) --------------------
 let ctx = null;
@@ -134,6 +142,90 @@ for (const [name, pitches] of Object.entries(CHORDS)) {
   p.onclick = () => playChord(schedulePiano, pitches);
   chordsEl.append(t, p);
 }
+
+// ---- メトロノーム ----------------------------------------------
+// 現行(ビープ): square 波の短いブリップ
+function beepTick(c, time, accent) {
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(accent ? 1500 : 1000, time);
+  gain.gain.setValueAtTime(accent ? 0.34 : 0.3, time);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.04);
+  osc.connect(gain).connect(c.destination);
+  osc.start(time); osc.stop(time + 0.05);
+}
+
+// 合成ウッドブロック: ノイズ(打撃の立ち上がり)+ 短いピッチ(胴鳴り)
+let noiseBuffer = null;
+function getNoise(c) {
+  if (noiseBuffer) return noiseBuffer;
+  const len = Math.floor(c.sampleRate * 0.1);
+  noiseBuffer = c.createBuffer(1, len, c.sampleRate);
+  const d = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  return noiseBuffer;
+}
+function woodTick(c, time, accent) {
+  // ノイズ → バンドパス → 速い減衰(木のアタック)
+  const src = c.createBufferSource();
+  src.buffer = getNoise(c);
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = accent ? 2600 : 2000;
+  bp.Q.value = 6;
+  const ng = c.createGain();
+  ng.gain.setValueAtTime(accent ? 0.9 : 0.6, time);
+  ng.gain.exponentialRampToValueAtTime(0.0001, time + 0.03);
+  src.connect(bp).connect(ng).connect(c.destination);
+  src.start(time); src.stop(time + 0.05);
+  // 短いピッチ成分(胴鳴りの「コッ」)
+  const osc = c.createOscillator();
+  const og = c.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(accent ? 1800 : 1300, time);
+  og.gain.setValueAtTime(accent ? 0.5 : 0.32, time);
+  og.gain.exponentialRampToValueAtTime(0.0001, time + 0.045);
+  osc.connect(og).connect(c.destination);
+  osc.start(time); osc.stop(time + 0.06);
+}
+
+// ルックアヘッド・スケジューラ(現行コードと同じ方式)
+let metroTimer = null, nextTick = 0, beatIdx = 0, metroTickFn = null;
+function startMetro(tickFn) {
+  stopMetro();
+  const c = getCtx();
+  metroTickFn = tickFn;
+  beatIdx = 0;
+  nextTick = c.currentTime;
+  const period = 60 / 120;
+  const pump = () => {
+    while (nextTick < c.currentTime + 0.12) {
+      metroTickFn(c, nextTick, beatIdx % 4 === 0); // 4拍ごとにアクセント
+      beatIdx++;
+      nextTick += period;
+    }
+  };
+  pump();
+  metroTimer = setInterval(pump, 25);
+}
+function stopMetro() {
+  if (metroTimer !== null) { clearInterval(metroTimer); metroTimer = null; }
+}
+
+const metroEl = document.getElementById('metro');
+const mb = document.createElement('button');
+mb.className = 'ghost';
+mb.textContent = '▶ 現行 (ビープ)';
+mb.onclick = () => startMetro(beepTick);
+const mw = document.createElement('button');
+mw.textContent = '▶ 合成ウッドブロック';
+mw.onclick = () => startMetro(woodTick);
+const ms = document.createElement('button');
+ms.className = 'ghost';
+ms.textContent = '■ 停止';
+ms.onclick = stopMetro;
+metroEl.append(mb, mw, ms);
 
 const scalesEl = document.getElementById('scales');
 const st = document.createElement('button');
