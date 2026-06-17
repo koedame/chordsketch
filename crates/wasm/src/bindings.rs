@@ -848,6 +848,45 @@ pub fn chord_pitches(chord: &str) -> Option<Vec<u8>> {
     crate::chord_pitches_inner(chord)
 }
 
+/// Ascending one-octave scale of a musical key as MIDI note numbers, for
+/// auditioning the key by ear — the movable-do "do re mi fa sol la ti do"
+/// (the React `useKeyAudio` key-audition surface).
+///
+/// `key` is a ChordPro `{key}` value (`"C"`, `"Am"`, `"Bb"`, `"F#m"`, …).
+/// Major keys yield the major scale; minor keys the natural-minor scale.
+/// Returns `undefined` when `key` is not parseable as a chord; otherwise a
+/// `Uint8Array` of eight ascending MIDI note numbers (the seven scale
+/// degrees plus the octave).
+///
+/// Thin wrapper over [`chordsketch_chordpro::key_scale_pitches`] via the
+/// pure-Rust `key_scale_pitches_inner`. Sister-site to the NAPI
+/// `keyScalePitches` export and the FFI `key_scale_pitches` function
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+#[wasm_bindgen(js_name = keyScalePitches)]
+#[must_use]
+pub fn key_scale_pitches(key: &str) -> Option<Vec<u8>> {
+    crate::key_scale_pitches_inner(key)
+}
+
+/// Tonic triad of a musical key as MIDI note numbers — the "do mi sol"
+/// chord strummed after the scale in a key audition.
+///
+/// Major keys yield a major triad, minor keys a minor triad. Unlike
+/// [`chord_pitches`], any extension on the key spelling (`"Cmaj7"`) is
+/// ignored — the key's tonic chord is always a triad. Returns `undefined`
+/// when `key` is not parseable as a chord; otherwise a `Uint8Array` of
+/// three ascending MIDI note numbers.
+///
+/// Thin wrapper over [`chordsketch_chordpro::key_tonic_triad`] via the
+/// pure-Rust `key_tonic_triad_inner`. Sister-site to the NAPI
+/// `keyTonicTriad` export and the FFI `key_tonic_triad` function
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+#[wasm_bindgen(js_name = keyTonicTriad)]
+#[must_use]
+pub fn key_tonic_triad(key: &str) -> Option<Vec<u8>> {
+    crate::key_tonic_triad_inner(key)
+}
+
 /// Validate ChordPro input and return any parse errors as structured
 /// records.
 ///

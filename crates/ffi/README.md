@@ -135,6 +135,8 @@ for e in errors:
 | `chord_diagram_svg_with_orientation(chord, instrument, orientation=None)` | `str \| None` | Orientation-aware variant. `orientation`: `"vertical"` (default) or `"horizontal"` (nut on the left, Japanese tablature convention). Horizontal mode is reader-view only (high pitch on top, matches tablature stave order); see ADR-0026. Unrecognised strings fall back to vertical. |
 | `chord_diagram_svg_with_defines_orientation(chord, instrument, defines, orientation=None)` | `str \| None` | Combined surface — accepts both song-level `{define}` voicings and the orientation knob. |
 | `chord_pitches(chord)` | `list[int] \| None` | Constituent pitches of a chord as MIDI note numbers, for driving an audio synth. Returns a block voicing (root, third, fifth, plus any extension / altered / added tones, with a slash bass an octave below); `None` when the chord is not parseable. |
+| `key_scale_pitches(key)` | `list[int] \| None` | Ascending one-octave scale of a musical key as MIDI note numbers — the movable-do "do re mi fa sol la ti do". Major keys yield the major scale; minor keys the natural-minor scale. Eight notes; `None` when the key is not parseable. |
+| `key_tonic_triad(key)` | `list[int] \| None` | Tonic triad of a musical key as MIDI note numbers (the "do mi sol" chord). Major / minor per the key; extensions on the spelling are ignored. Three notes; `None` when the key is not parseable. |
 
 ### Utility
 

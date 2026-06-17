@@ -246,6 +246,28 @@ pub(crate) fn chord_pitches_inner(chord: &str) -> Option<Vec<u8>> {
     chordsketch_chordpro::chord_pitches(chord)
 }
 
+/// Pure-Rust core of [`bindings::key_scale_pitches`]. Returns the ascending
+/// one-octave scale of `key` as MIDI note numbers, or `None` when `key` is
+/// not parseable as a chord.
+///
+/// Sister-site to the wasm `key_scale_pitches_inner` and the FFI binding's
+/// `key_scale_pitches` (`.claude/rules/fix-propagation.md` §Bindings).
+#[must_use]
+pub(crate) fn key_scale_pitches_inner(key: &str) -> Option<Vec<u8>> {
+    chordsketch_chordpro::key_scale_pitches(key)
+}
+
+/// Pure-Rust core of [`bindings::key_tonic_triad`]. Returns the tonic triad
+/// of `key` as MIDI note numbers, or `None` when `key` is not parseable as a
+/// chord.
+///
+/// Sister-site to the wasm `key_tonic_triad_inner` and the FFI binding's
+/// `key_tonic_triad` (`.claude/rules/fix-propagation.md` §Bindings).
+#[must_use]
+pub(crate) fn key_tonic_triad_inner(key: &str) -> Option<Vec<u8>> {
+    chordsketch_chordpro::key_tonic_triad(key)
+}
+
 /// Orientation-aware variant of [`chord_diagram_svg_inner`].
 ///
 /// `orientation` is passed as `Option<&str>` so the JS surface can
@@ -1101,6 +1123,27 @@ mod tests {
     fn test_chord_pitches_inner_unparseable_returns_none() {
         assert_eq!(chord_pitches_inner("XYZ-not-a-chord"), None);
         assert_eq!(chord_pitches_inner(""), None);
+    }
+
+    #[test]
+    fn test_key_scale_pitches_inner_passthrough() {
+        assert_eq!(
+            key_scale_pitches_inner("C"),
+            Some(vec![48, 50, 52, 53, 55, 57, 59, 60])
+        );
+        assert_eq!(
+            key_scale_pitches_inner("Am"),
+            Some(vec![57, 59, 60, 62, 64, 65, 67, 69])
+        );
+        assert_eq!(key_scale_pitches_inner("XYZ-not-a-chord"), None);
+    }
+
+    #[test]
+    fn test_key_tonic_triad_inner_passthrough() {
+        assert_eq!(key_tonic_triad_inner("C"), Some(vec![48, 52, 55]));
+        assert_eq!(key_tonic_triad_inner("Am"), Some(vec![57, 60, 64]));
+        assert_eq!(key_tonic_triad_inner("Cmaj7"), Some(vec![48, 52, 55]));
+        assert_eq!(key_tonic_triad_inner(""), None);
     }
 
     #[test]

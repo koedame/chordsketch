@@ -148,6 +148,28 @@ namespace chordsketch {
     /// root), or `null` when `chord` is not parseable as a chord.
     sequence<u8>? chord_pitches(string chord);
 
+    /// Ascending one-octave scale of a musical key as MIDI note
+    /// numbers, for auditioning the key by ear — the movable-do "do re
+    /// mi fa sol la ti do" (#2658). Mirrors the wasm `keyScalePitches`
+    /// and NAPI `keyScalePitches` exports.
+    ///
+    /// `key` is a ChordPro `{key}` value (`"C"`, `"Am"`, `"Bb"`,
+    /// `"F#m"`, …). Major keys yield the major scale; minor keys the
+    /// natural-minor scale. Returns eight ascending MIDI note numbers,
+    /// or `null` when `key` is not parseable as a chord.
+    sequence<u8>? key_scale_pitches(string key);
+
+    /// Tonic triad of a musical key as MIDI note numbers — the "do mi
+    /// sol" chord strummed after the scale in a key audition (#2658).
+    /// Mirrors the wasm `keyTonicTriad` and NAPI `keyTonicTriad`
+    /// exports.
+    ///
+    /// Major keys yield a major triad, minor keys a minor triad. Any
+    /// extension on the key spelling (`"Cmaj7"`) is ignored — the key's
+    /// tonic chord is always a triad. Returns three ascending MIDI note
+    /// numbers, or `null` when `key` is not parseable as a chord.
+    sequence<u8>? key_tonic_triad(string key);
+
     /// Convert a ChordPro source string into an `irealb://` URL
     /// (#2067 Phase 1).
     ///

@@ -409,6 +409,34 @@ pub fn chord_pitches(chord: String) -> Option<Vec<u8>> {
     chordsketch_chordpro::chord_pitches(&chord)
 }
 
+/// Ascending one-octave scale of a musical key as MIDI note numbers, for
+/// auditioning the key by ear — the movable-do "do re mi fa sol la ti do"
+/// (#2658). Mirrors the wasm `keyScalePitches` and NAPI `keyScalePitches`
+/// exports (`.claude/rules/fix-propagation.md` §Bindings).
+///
+/// `key` is a ChordPro `{key}` value (`"C"`, `"Am"`, `"Bb"`, `"F#m"`, …).
+/// Major keys yield the major scale; minor keys the natural-minor scale.
+/// Returns eight ascending MIDI note numbers (the seven scale degrees plus
+/// the octave), or `None` when `key` is not parseable as a chord.
+#[must_use]
+pub fn key_scale_pitches(key: String) -> Option<Vec<u8>> {
+    chordsketch_chordpro::key_scale_pitches(&key)
+}
+
+/// Tonic triad of a musical key as MIDI note numbers — the "do mi sol"
+/// chord strummed after the scale in a key audition (#2658). Mirrors the
+/// wasm `keyTonicTriad` and NAPI `keyTonicTriad` exports
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+///
+/// Major keys yield a major triad, minor keys a minor triad. Any extension
+/// on the key spelling (`"Cmaj7"`) is ignored — the key's tonic chord is
+/// always a triad. Returns three ascending MIDI note numbers, or `None`
+/// when `key` is not parseable as a chord.
+#[must_use]
+pub fn key_tonic_triad(key: String) -> Option<Vec<u8>> {
+    chordsketch_chordpro::key_tonic_triad(&key)
+}
+
 /// Look up an SVG chord diagram for the given chord name and
 /// instrument. Mirrors the WASM `chord_diagram_svg` export
 /// added in #2164 and the NAPI `chordDiagramSvg` export added
@@ -1367,5 +1395,27 @@ mod tests {
     fn test_chord_pitches_unparseable_returns_none() {
         assert_eq!(chord_pitches("XYZ-not-a-chord".to_string()), None);
         assert_eq!(chord_pitches(String::new()), None);
+    }
+
+    #[test]
+    fn test_key_scale_pitches_passthrough() {
+        assert_eq!(
+            key_scale_pitches("C".to_string()),
+            Some(vec![48, 50, 52, 53, 55, 57, 59, 60])
+        );
+        assert_eq!(
+            key_scale_pitches("Am".to_string()),
+            Some(vec![57, 59, 60, 62, 64, 65, 67, 69])
+        );
+        assert_eq!(key_scale_pitches("XYZ-not-a-chord".to_string()), None);
+    }
+
+    #[test]
+    fn test_key_tonic_triad_passthrough() {
+        assert_eq!(key_tonic_triad("C".to_string()), Some(vec![48, 52, 55]));
+        assert_eq!(key_tonic_triad("Am".to_string()), Some(vec![57, 60, 64]));
+        // Extension dropped — the key's tonic chord is always a triad.
+        assert_eq!(key_tonic_triad("Cmaj7".to_string()), Some(vec![48, 52, 55]));
+        assert_eq!(key_tonic_triad(String::new()), None);
     }
 }

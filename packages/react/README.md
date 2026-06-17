@@ -594,6 +594,8 @@ shorthand (no Unicode translation; the SVG renderer handles that).
 | `useDebounced` | Atom | Hook | General-purpose debouncer used by `<ChordTextarea>`. |
 | `<MetronomeButton>` | Atom | Component | Interactive `{tempo}` chip; the whole pill toggles an audible metronome at the BPM (speaker cursor on hover, frame pulses while playing). |
 | `useMetronome` | Atom | Hook | Web Audio metronome state (`start` / `stop` / `toggle` / `isRunning` / `isPlaying` / `supported`). |
+| `<KeySignatureButton>` | Atom | Component | Interactive `{key}` chip; the whole pill auditions the key by ear — the movable-do scale "do re mi fa sol la ti do" then the tonic triad strummed (major or minor). Auditions the sounding key when a transpose is active. |
+| `useKeyAudio` | Atom | Hook | Web Audio key audition (`play(keyName)` / `stop` / `supported`); plays a key's scale + tonic triad via the `keyScalePitches` / `keyTonicTriad` wasm exports. |
 | `<IrealBarGrid>` | Atom | Component | Header form + interactive bar grid + URL round-trip for iReal Pro. |
 | `<IrealPreview>` | Atom | Component | iReal Pro SVG preview via `renderIrealSvg`. |
 | `<IrealProEditor>` | Composed editor | Component | All-in-one iReal Pro editor + preview shell. |

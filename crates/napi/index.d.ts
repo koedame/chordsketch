@@ -237,6 +237,43 @@ export function chordDiagramSvgWithDefines(
 ): string | null;
 
 /**
+ * Constituent pitches of a chord as MIDI note numbers, for driving an
+ * audio synth (#2650). Mirrors the WASM `chordPitches` and FFI
+ * `chord_pitches` exports.
+ *
+ * Returns ascending, de-duplicated MIDI note numbers describing a block
+ * voicing (root, third, fifth, plus any extension / altered / added tones,
+ * with a slash bass dropped one octave below the root), as a `Buffer`, or
+ * `null` when `chord` is not parseable as a chord.
+ */
+export function chordPitches(chord: string): Buffer | null;
+
+/**
+ * Ascending one-octave scale of a musical key as MIDI note numbers, for
+ * auditioning the key by ear — the movable-do "do re mi fa sol la ti do"
+ * (#2658). Mirrors the WASM `keyScalePitches` and FFI `key_scale_pitches`
+ * exports.
+ *
+ * `key` is a ChordPro `{key}` value (`"C"`, `"Am"`, `"Bb"`, `"F#m"`, …).
+ * Major keys yield the major scale; minor keys the natural-minor scale.
+ * Returns eight ascending MIDI note numbers as a `Buffer`, or `null` when
+ * `key` is not parseable as a chord.
+ */
+export function keyScalePitches(key: string): Buffer | null;
+
+/**
+ * Tonic triad of a musical key as MIDI note numbers — the "do mi sol"
+ * chord strummed after the scale in a key audition (#2658). Mirrors the
+ * WASM `keyTonicTriad` and FFI `key_tonic_triad` exports.
+ *
+ * Major keys yield a major triad, minor keys a minor triad. Any extension
+ * on the key spelling (`"Cmaj7"`) is ignored — the key's tonic chord is
+ * always a triad. Returns three ascending MIDI note numbers as a `Buffer`,
+ * or `null` when `key` is not parseable as a chord.
+ */
+export function keyTonicTriad(key: string): Buffer | null;
+
+/**
  * Result returned by {@link convertChordproToIrealb} and
  * {@link convertIrealbToChordproText} (#2067 Phase 1).
  *

@@ -53,6 +53,15 @@ export function resetSharedAudioContextForTests(): void {
   sharedContext = null;
 }
 
+/**
+ * MIDI note number → frequency in Hz (A4 = MIDI 69 = 440 Hz). Shared by
+ * the pitch-driven audio hooks (`useChordAudio`, `useKeyAudio`) that feed
+ * {@link scheduleVoice} a frequency.
+ */
+export function midiToFreq(midi: number): number {
+  return 440 * 2 ** ((midi - 69) / 12);
+}
+
 /** Parameters describing a single scheduled oscillator voice. */
 export interface VoiceSpec {
   /** Oscillator waveform. */
@@ -122,4 +131,25 @@ export function scheduleVoice(
       // Nodes may already be disconnected if a stop() raced ahead.
     }
   };
+}
+
+/**
+ * Stop every oscillator tracked in `tracked` and clear the set. A no-arg
+ * `osc.stop()` cancels a not-yet-started voice outright and cuts a sounding
+ * one immediately; the per-voice `onended` cleanup (wired by
+ * {@link scheduleVoice}) removes each node from the set, but this also
+ * clears eagerly so a caller can reuse the set immediately.
+ *
+ * Shared by `useChordAudio`, `useKeyAudio`, and `useMetronome` so the
+ * stop-and-clear race handling lives in one place.
+ */
+export function stopVoices(tracked: Set<OscillatorNode>): void {
+  for (const osc of tracked) {
+    try {
+      osc.stop();
+    } catch {
+      // Already stopped / ended — nothing to cancel.
+    }
+  }
+  tracked.clear();
 }
