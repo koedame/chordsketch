@@ -335,7 +335,8 @@ pub fn chord_pitches(chord_name: &str) -> Option<Vec<u8>> {
     let root_midi = VOICING_ROOT_MIDI + root_pc; // 48..=59
 
     let mut pitches: Vec<u8> =
-        chord_interval_semitones(detail.quality, detail.extension.as_deref().unwrap_or(""))
+        chord_intervals(detail.quality, detail.extension.as_deref().unwrap_or(""))
+            .all
             .into_iter()
             .map(|iv| root_midi + iv)
             .collect();
@@ -466,15 +467,33 @@ pub fn key_tonic_triad(key: &str) -> Option<Vec<u8>> {
     Some(vec![root_midi, root_midi + third, root_midi + 7])
 }
 
+/// The constituent intervals of a chord, split into the full tone set and
+/// the subset that defines the chord's identity.
+struct ChordIntervals {
+    /// Every interval (in semitones above the root, root `0` included) the
+    /// chord nominally contains — the full stack a piano voicing would play.
+    all: Vec<u8>,
+    /// The subset of `all` that a reduced fretboard voicing MUST sound for
+    /// the result to be unambiguously this chord: root, third (or `sus`
+    /// replacement), the seventh (when present), the single highest named
+    /// tension, and any altered / characteristic fifth. The perfect fifth and
+    /// the inner (implied) tensions are droppable, mirroring how guitarists
+    /// reduce extended chords to fit six strings.
+    essential: Vec<u8>,
+}
+
 /// Maps a chord quality + extension string to the semitone intervals (from
-/// the root) of its constituent tones, including the root itself (`0`).
+/// the root) of its constituent tones, including the root itself (`0`), plus
+/// the essential subset a reduced voicing must keep.
 ///
 /// The extension grammar is the lenient one [`parse_quality_and_extension`]
-/// produces (e.g. `"7"`, `"maj7"`, `"sus4"`, `"add9"`, `"7sus4"`, `"7b5"`,
-/// `"9"`, `"13"`). Unrecognised extensions fall back to the bare triad
+/// produces (e.g. `"7"`, `"maj7"`, `"Maj7"`, `"sus4"`, `"add9"`, `"7sus4"`,
+/// `"7b5"`, `"7b9"`, `"7#11"`, `"9"`, `"13"`). Altered tensions (`b9` / `#9`
+/// / `#11` / `b13`) and the `alt` dominant produce the altered interval, not
+/// the natural one. Unrecognised extensions fall back to the bare triad
 /// rather than guessing — a documented, audible-but-safe degradation, not a
 /// silent wrong chord.
-fn chord_interval_semitones(quality: ChordQuality, ext: &str) -> Vec<u8> {
+fn chord_intervals(quality: ChordQuality, ext: &str) -> ChordIntervals {
     // Triad: (third, fifth) intervals above the root.
     let (mut third, mut fifth): (u8, u8) = match quality {
         ChordQuality::Major => (4, 7),
@@ -483,9 +502,12 @@ fn chord_interval_semitones(quality: ChordQuality, ext: &str) -> Vec<u8> {
         ChordQuality::Augmented => (4, 8),
     };
 
-    // Power chord ("C5"): root + fifth, no third.
+    // Power chord ("C5"): root + fifth, no third. Both tones are essential.
     if ext == "5" {
-        return vec![0, fifth];
+        return ChordIntervals {
+            all: vec![0, fifth],
+            essential: vec![0, fifth],
+        };
     }
 
     // `sus` replaces the third with a 2nd or 4th.
@@ -495,42 +517,61 @@ fn chord_interval_semitones(quality: ChordQuality, ext: &str) -> Vec<u8> {
         third = 5;
     }
 
-    // Altered fifth.
+    // Altered fifth. `b5` / `#5` are explicit; the `alt` dominant raises the
+    // fifth as part of its altered colour. A diminished / augmented triad's
+    // fifth is characteristic even without an explicit alteration token.
+    let mut fifth_essential = matches!(quality, ChordQuality::Diminished | ChordQuality::Augmented);
     if ext.contains("b5") {
         fifth = 6;
+        fifth_essential = true;
     } else if ext.contains("#5") {
+        fifth = 8;
+        fifth_essential = true;
+    } else if ext.contains("alt") {
+        // The `alt` dominant raises the fifth as part of its altered colour,
+        // but — unlike an explicit `#5` — the raised fifth is droppable, so it
+        // stays out of the essential set (which must fit a 4-string ukulele).
         fifth = 8;
     }
 
-    let mut extras: Vec<u8> = Vec::new();
+    let mut all_extras: Vec<u8> = Vec::new();
+    let mut ess_extras: Vec<u8> = Vec::new();
 
     if let Some(rest) = ext.strip_prefix("add") {
         // Add-tone chord (e.g. "add9"): triad plus the added degree, no
-        // seventh.
+        // seventh. The added tone is the chord's identity, so it is essential.
         if let Some(semi) = degree_to_semitone(rest) {
-            extras.push(semi);
+            all_extras.push(semi);
+            ess_extras.push(semi);
         }
     } else {
+        let has_six = ext.contains('6');
         let has13 = ext.contains("13");
         let has11 = ext.contains("11");
         let has9 = ext.contains('9');
-        let has_six = ext.contains('6');
         // A 9th / 11th / 13th implies a seventh — EXCEPT in a "6/9" chord
         // (written `69`), where the 6 marks an added-tone chord carrying the
         // 6th and 9th but no seventh.
         let has_seventh = ext.contains('7') || ((has9 || has11 || has13) && !has_six);
-        // "maj7" / "maj9" / "maj13" (or the "M7" / "Δ" shorthands) call for a
-        // major seventh; bare "maj" (just `ChordQuality::Major`) does not.
-        let major_seventh =
-            (ext.starts_with("maj") && has_seventh) || ext.contains("M7") || ext.contains('Δ');
+        // An explicit `7` in the token marks an "add the named alteration"
+        // chord (`7b9`, `7#11`, `7b13`): only the spelled tension is present,
+        // with no implied lower tensions. A headline tension number with no
+        // explicit `7` (`9`, `11`, `13`, `maj13`, `m11`, …) is a full stack
+        // that implies the tensions below it.
+        let stacked = !ext.contains('7');
+        // "maj7" / "Maj7" / "maj9" / "maj13" (or the "M7" / "Δ" shorthands)
+        // call for a major seventh; bare "maj" does not.
+        let major_seventh = has_seventh
+            && (ext.contains("maj")
+                || ext.contains("Maj")
+                || ext.contains("M7")
+                || ext.contains('Δ'));
         // A diminished chord that carries a seventh is fully diminished (bb7).
         let dim_seventh = quality == ChordQuality::Diminished && has_seventh;
 
         if has_seventh {
             // Seventh quality: diminished bb7 (9), major 7th (11), or the
-            // dominant / minor 7th (10). The upper-extension ladder is shared
-            // across all three — a 13th implies the 9th and 11th below it, so
-            // maj13 and the dominant 13 are voiced consistently.
+            // dominant / minor 7th (10).
             let seventh = if dim_seventh {
                 9
             } else if major_seventh {
@@ -538,31 +579,151 @@ fn chord_interval_semitones(quality: ChordQuality, ext: &str) -> Vec<u8> {
             } else {
                 10
             };
-            extras.push(seventh);
-            if has9 || has11 || has13 {
-                extras.push(14);
+            all_extras.push(seventh);
+            ess_extras.push(seventh);
+
+            // Ninth: flat / sharp / natural. `alt` implies a sharp ninth.
+            let ninth = if ext.contains("b9") {
+                Some(13u8)
+            } else if ext.contains("#9") || ext.contains("alt") {
+                Some(15u8)
+            } else if has9 || (stacked && (has11 || has13)) {
+                // Explicit 9, or the natural 9 implied below a full 11 / 13.
+                Some(14u8)
+            } else {
+                None
+            };
+            // Eleventh: sharp / natural.
+            let eleventh = if ext.contains("#11") {
+                Some(18u8)
+            } else if has11 || (stacked && has13) {
+                // Explicit 11, or the natural 11 implied below a full 13.
+                Some(17u8)
+            } else {
+                None
+            };
+            // Thirteenth: flat / natural.
+            let thirteenth = if ext.contains("b13") {
+                Some(20u8)
+            } else if has13 {
+                Some(21u8)
+            } else {
+                None
+            };
+
+            if let Some(n) = ninth {
+                all_extras.push(n);
             }
-            if has11 || has13 {
-                extras.push(17);
+            if let Some(e) = eleventh {
+                all_extras.push(e);
             }
-            if has13 {
-                extras.push(21);
+            if let Some(t) = thirteenth {
+                all_extras.push(t);
+            }
+
+            // The single highest named tension is the chord's headline colour
+            // and must survive a reduced voicing; the tensions below it are
+            // droppable.
+            if let Some(t) = thirteenth {
+                ess_extras.push(t);
+            } else if let Some(e) = eleventh {
+                ess_extras.push(e);
+            } else if let Some(n) = ninth {
+                ess_extras.push(n);
             }
         } else if has9 {
             // Reachable only for a "6/9" chord (the `has_six` guard above
             // suppresses the implied seventh): add the 9th alongside the 6th.
-            extras.push(14);
+            all_extras.push(14);
+            ess_extras.push(14);
         }
 
-        // A sixth (e.g. "C6", "Am6", "C69") adds the major sixth.
+        // A sixth (e.g. "C6", "Am6", "C69") adds the major sixth, which is the
+        // chord's defining colour.
         if has_six {
-            extras.push(9);
+            all_extras.push(9);
+            ess_extras.push(9);
         }
     }
 
-    let mut notes = vec![0u8, third, fifth];
-    notes.append(&mut extras);
-    notes
+    let mut all = vec![0u8, third, fifth];
+    all.extend_from_slice(&all_extras);
+
+    let mut essential = vec![0u8, third];
+    if fifth_essential {
+        essential.push(fifth);
+    }
+    essential.extend_from_slice(&ess_extras);
+
+    ChordIntervals { all, essential }
+}
+
+/// The pitch-class content of a chord, used to synthesise fretboard and
+/// keyboard voicings for chords with no curated entry in the built-in
+/// database. Pitch classes are `0..=11` (`0` = C), independent of octave.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChordTones {
+    /// Pitch class of the chord root.
+    pub root_pc: u8,
+    /// Pitch class of the bass note — the slash bass for a slash chord, the
+    /// root otherwise.
+    pub bass_pc: u8,
+    /// Every pitch class the chord nominally contains (root, third, fifth,
+    /// seventh, tensions, and the bass), sorted and de-duplicated.
+    pub pitch_classes: Vec<u8>,
+    /// The pitch classes a voicing MUST sound to be unambiguously this chord
+    /// (root, third / `sus`, seventh, the headline tension, any altered
+    /// fifth, and the bass), sorted and de-duplicated. Always a subset of
+    /// [`pitch_classes`](Self::pitch_classes).
+    pub essential: Vec<u8>,
+}
+
+/// Computes the [`ChordTones`] of a chord name, or `None` when the name is not
+/// a parseable chord.
+///
+/// This is the pitch-class companion to [`chord_pitches`]: where that function
+/// returns absolute MIDI notes for audio, this returns octave-independent
+/// pitch classes plus the essential subset, which the voicing synthesiser in
+/// [`crate::voicings`] searches the fretboard against.
+///
+/// ```
+/// use chordsketch_chordpro::chord::chord_tones;
+///
+/// let t = chord_tones("Cmaj7").unwrap();
+/// assert_eq!(t.root_pc, 0);
+/// assert_eq!(t.pitch_classes, vec![0, 4, 7, 11]);
+/// // The fifth (7) is droppable; root, third, and the major seventh are not.
+/// assert_eq!(t.essential, vec![0, 4, 11]);
+///
+/// assert!(chord_tones("not-a-chord").is_none());
+/// ```
+#[must_use]
+pub fn chord_tones(chord_name: &str) -> Option<ChordTones> {
+    let detail = parse_chord(chord_name)?;
+    let root_pc = root_semitone(detail.root, detail.root_accidental);
+    let intervals = chord_intervals(detail.quality, detail.extension.as_deref().unwrap_or(""));
+
+    let bass_pc = match detail.bass_note {
+        Some((bass, bass_acc)) => root_semitone(bass, bass_acc),
+        None => root_pc,
+    };
+
+    let to_pcs = |ivs: &[u8]| {
+        let mut v: Vec<u8> = ivs.iter().map(|&s| (root_pc + s) % 12).collect();
+        // A slash bass that is not already a chord tone still has to be voiced
+        // and is part of the chord's identity.
+        v.push(bass_pc);
+        v.sort_unstable();
+        v.dedup();
+        v
+    };
+
+    Some(ChordTones {
+        root_pc,
+        bass_pc,
+        pitch_classes: to_pcs(&intervals.all),
+        essential: to_pcs(&intervals.essential),
+    })
 }
 
 /// Maps an extension degree token (the tail of an `add` chord, e.g. `"9"`)
