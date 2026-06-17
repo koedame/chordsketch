@@ -347,8 +347,10 @@ fn evaluate(chosen: &[i32], ctx: &SearchCtx) -> Option<i64> {
     //     (enforced above), but easier shapes read better and play better.
     //  3. Sit as low on the neck as possible — open / first-position shapes are
     //     what a learner reads off a diagram.
-    //  4. Prefer ringing open strings, then a few extra sounded strings.
-    //  5. Avoid interior muted gaps and high frets.
+    //  4. Keep the fret span compact — a narrow shape is less of a stretch.
+    //  5. Avoid interior muted gaps (hard to mute cleanly, reads poorly).
+    //  6. Prefer ringing open strings, then a few extra sounded strings.
+    //  7. Minimise total fret distance as a final tie-breaker.
     // Position and finger count outrank the per-string rewards so the search
     // does not climb to a hard six-string barre when a simpler shape voices the
     // same chord.
