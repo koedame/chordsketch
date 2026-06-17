@@ -46,10 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exposes a `chordAudio` config the host forwards to the preview.
   Degrades gracefully without Web Audio / under SSR and respects
   `prefers-reduced-motion`. The `<PreviewToolbar>` toggle now shows its
-  on/off state explicitly — a crimson active fill, a muted-speaker icon
-  and an On/Off badge when off, and a state-aware tooltip — so it no
-  longer looks identical whether chord audio is enabled or not.
-  (#2650, #2669)
+  on/off state explicitly — a crimson active fill, a state-aware tooltip,
+  and an icon that changes shape with state (a volume-waves glyph when on
+  vs. a struck-out muted-speaker glyph when off, so the state reads by
+  shape, not colour alone) — so it no longer looks identical whether
+  chord audio is enabled or not. (#2650, #2669, #2676)
 - `@chordsketch/react`: a chord click in the preview is now an idempotent
   **select** rather than a toggle — re-clicking the already-selected
   chord keeps it selected (and, with chord audio on, re-auditions it)

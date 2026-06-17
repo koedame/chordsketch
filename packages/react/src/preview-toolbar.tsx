@@ -326,12 +326,6 @@ export function PreviewToolbar({
           >
             {chordAudioEnabled ? AUDIO_ON_ICON : AUDIO_OFF_ICON}
             <span>Chord audio</span>
-            <span
-              className="chordsketch-preview-toolbar__audio-state"
-              aria-hidden="true"
-            >
-              {chordAudioEnabled ? 'On' : 'Off'}
-            </span>
           </button>
         </div>
       ) : null}

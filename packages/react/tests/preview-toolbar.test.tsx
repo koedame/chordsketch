@@ -191,7 +191,7 @@ describe('<PreviewToolbar>', () => {
     expect(onChordAudioToggle).toHaveBeenLastCalledWith(false);
   });
 
-  test('Audio toggle shows an explicit On/Off state label and a state-aware title', () => {
+  test('Audio toggle signals state by icon shape and a state-aware title', () => {
     const { rerender } = render(
       <PreviewToolbar
         source={SAMPLE}
@@ -202,9 +202,14 @@ describe('<PreviewToolbar>', () => {
       />,
     );
     const off = screen.getByRole('button', { name: 'Play chords on click' });
-    // The visible badge is the non-colour-dependent on/off signal (#2669).
-    expect(off.textContent).toContain('Off');
-    expect(off.textContent).not.toContain('On');
+    // The on/off state must be visible without relying on colour (#2669,
+    // #2676): the off state draws the struck-out muted-speaker glyph,
+    // whose two crossing strokes are the only `<line>` elements either
+    // icon uses, so their presence is a shape-based (not colour-based)
+    // off-state assertion. The literal "On"/"Off" text badge was dropped
+    // in #2676, so the label reads "Chord audio" in both states.
+    expect(off.querySelectorAll('svg line')).toHaveLength(2);
+    expect(off.textContent).toBe('Chord audio');
     expect(off.getAttribute('title')).toBe('Chord audio off — click to play chords');
 
     rerender(
@@ -217,7 +222,10 @@ describe('<PreviewToolbar>', () => {
       />,
     );
     const on = screen.getByRole('button', { name: 'Play chords on click' });
-    expect(on.textContent).toContain('On');
+    // The on state swaps to the volume-waves glyph, which has no `<line>`
+    // strokes — the shape flips with state.
+    expect(on.querySelectorAll('svg line')).toHaveLength(0);
+    expect(on.textContent).toBe('Chord audio');
     expect(on.getAttribute('title')).toBe(
       'Chord audio on — click to stop playing chords',
     );
