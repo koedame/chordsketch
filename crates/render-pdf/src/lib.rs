@@ -4495,24 +4495,24 @@ mod transpose_tests {
         let input = "{key: G}\n[G]hi [D]world";
         let song = chordsketch_chordpro::parse(input).unwrap();
 
-        // No transpose: authored value preserved.
+        // No transpose: authored value preserved, canonicalised (ADR-0035).
         let zero = render_song_with_transpose(&song, 0, &Config::defaults());
         let zero_content = String::from_utf8_lossy(&zero);
         assert!(
-            zero_content.contains("Key: G"),
-            "no-transpose case must preserve authored `Key: G`"
+            zero_content.contains("Key: G major"),
+            "no-transpose case must preserve authored `Key: G major`"
         );
 
         // +2 semitones: G → A.
         let up_two = render_song_with_transpose(&song, 2, &Config::defaults());
         let up_two_content = String::from_utf8_lossy(&up_two);
         assert!(
-            up_two_content.contains("Key: A"),
-            "+2 transpose must surface `Key: A` in PDF stream"
+            up_two_content.contains("Key: A major"),
+            "+2 transpose must surface `Key: A major` in PDF stream"
         );
         assert!(
-            !up_two_content.contains("Key: G"),
-            "+2 transpose must NOT leave authored `Key: G` in PDF stream"
+            !up_two_content.contains("Key: G major"),
+            "+2 transpose must NOT leave authored `Key: G major` in PDF stream"
         );
 
         // −3 semitones: G → E. Negative offsets must work
@@ -4521,8 +4521,8 @@ mod transpose_tests {
         let down_three = render_song_with_transpose(&song, -3, &Config::defaults());
         let down_three_content = String::from_utf8_lossy(&down_three);
         assert!(
-            down_three_content.contains("Key: E"),
-            "-3 transpose must surface `Key: E` in PDF stream"
+            down_three_content.contains("Key: E major"),
+            "-3 transpose must surface `Key: E major` in PDF stream"
         );
 
         // Unparseable key falls back to the authored value. The PDF
@@ -4553,16 +4553,18 @@ mod transpose_tests {
             "modal qualifier must round-trip"
         );
 
-        // Lenient: word `minor` is accepted (ADR-0034) and rendered canonical,
-        // transposed — `Bb minor` at +2 → `Cm`. The PDF text stream may
-        // position glyphs separately, so assert the canonical pieces are
-        // present and the verbatim word `minor` is NOT.
+        // Lenient: word `minor` is accepted (ADR-0034) and rendered in the
+        // spelled-out canonical form (ADR-0035), transposed — `Bb minor` at +2
+        // → `C minor`. The authored verbatim `Bb minor` must NOT survive: the
+        // transposed root is `C`, so the canonical-vs-verbatim distinction is
+        // the root, not the word `minor` (which the canonical form now carries
+        // too).
         let bb_minor = chordsketch_chordpro::parse("{key: Bb minor}\n[Bb]hi").unwrap();
         let bb_minor_out = render_song_with_transpose(&bb_minor, 2, &Config::defaults());
         let bb_minor_content = String::from_utf8_lossy(&bb_minor_out);
         assert!(
-            bb_minor_content.contains("Cm") && !bb_minor_content.contains("minor"),
-            "lenient `Bb minor` must render canonical transposed Cm (not the verbatim word)"
+            bb_minor_content.contains("C minor") && !bb_minor_content.contains("Bb minor"),
+            "lenient `Bb minor` must render canonical transposed `C minor` (not verbatim `Bb minor`)"
         );
 
         // Malformed: an extension on a key (`G7`) is rejected — renders verbatim.

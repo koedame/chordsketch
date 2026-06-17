@@ -159,8 +159,8 @@ pub fn validate_keys(metadata: &Metadata, warnings: &mut Vec<String>) {
             push_warning(
                 warnings,
                 format!(
-                    "{{key}} value {raw:?} is not a valid key (expected e.g. \"Gm\" for \
-                     minor, \"G\" for major, or \"G dorian\" for a mode); rendered \
+                    "{{key}} value {raw:?} is not a valid key (expected e.g. \"G minor\", \
+                     \"G major\", or \"G dorian\" for a mode); rendered \
                      verbatim, untransposed"
                 ),
             );
@@ -437,7 +437,7 @@ mod tests {
         validate_keys(&md, &mut v);
         assert_eq!(v.len(), 1);
         // The message names the canonical alternatives so the user can fix it.
-        assert!(v[0].contains("Gm") && v[0].contains("dorian"));
+        assert!(v[0].contains("G minor") && v[0].contains("dorian"));
     }
 
     #[test]

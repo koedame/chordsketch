@@ -24,15 +24,16 @@
 //!   case-insensitively, but the single-letter marker is case-sensitive (the
 //!   lead-sheet convention `Cm` = minor, `CM` = major): minor ← `m` / `-` /
 //!   `mi` / `min` / `minor`; major ← *(empty)* / `M` / `maj` / `major`.
-//!   Examples: `C`, `Gm`, `G minor`, `Gminor`, `G min`, `G major` (→ `G`),
-//!   `CM` (→ `C`), `Cmin` (→ `Cm`), `G/B`.
+//!   Examples: `C`, `Gm`, `G minor`, `Gminor`, `G min`, `G major`
+//!   (→ `G major`), `CM` (→ `C major`), `Cmin` (→ `C minor`), `G/B`.
 //! - **Modal key**: a root + optional accidental + one of the seven
 //!   church-mode names (`ionian`, `dorian`, `phrygian`, `lydian`,
 //!   `mixolydian`, `aeolian`, `locrian`), case-insensitive. Examples:
 //!   `C dorian`, `F# mixolydian`.
 //!
-//! Canonical [`Display`](core::fmt::Display): minor → `Gm`, major → `G`,
-//! modal → `G dorian`, with the slash-bass preserved.
+//! Canonical [`Display`](core::fmt::Display): the quality is **spelled out** —
+//! minor → `G minor`, major → `G major`, modal → `G dorian` — with the
+//! slash-bass preserved (`G major/B`, `A minor/C`).
 //!
 //! A chord extension on a key (`G7`, `Gm7`, `Cmaj7`, `Gsus4`) is **not** a key
 //! — a key is a tonal centre, not a chord — and yields `None`, as does a value
@@ -115,6 +116,20 @@ pub enum KeyMode {
     Mode(ChurchMode),
 }
 
+/// The canonical, **spelled-out** quality suffix for a tonal (non-modal) key:
+/// `" minor"` for a minor key, `" major"` for a major key.
+///
+/// This is the single source of truth for the spelled-out canonical notation:
+/// [`Key`]'s [`Display`](core::fmt::Display) and the transpose-path key-string
+/// builders (`crate::transpose`) all route through it so the rendered key reads
+/// `G major` / `A minor` identically at a zero transpose and after a transpose.
+/// A modal key carries its mode word (`" dorian"`) instead and never passes
+/// through here.
+#[must_use]
+pub fn quality_word(is_minor: bool) -> &'static str {
+    if is_minor { " minor" } else { " major" }
+}
+
 /// A structurally-validated ChordPro `{key}` value.
 ///
 /// Produced only by [`parse_key`]; an instance is a guarantee that the source
@@ -170,16 +185,18 @@ impl Key {
 }
 
 impl core::fmt::Display for Key {
-    /// Emit the **canonical** spelling of the key (minor aliases normalised to
-    /// `m`, modal qualifier as a single space + lowercase mode word).
+    /// Emit the **canonical** spelling of the key: the quality is spelled out
+    /// (`G major` / `A minor`) and the modal qualifier is a single space +
+    /// lowercase mode word (`C dorian`). Every lenient input alias collapses to
+    /// this one form.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.root)?;
         if let Some(acc) = self.accidental {
             write!(f, "{acc}")?;
         }
         match self.mode {
-            KeyMode::Major => {}
-            KeyMode::Minor => f.write_str("m")?,
+            KeyMode::Major => f.write_str(quality_word(false))?,
+            KeyMode::Minor => f.write_str(quality_word(true))?,
             KeyMode::Mode(m) => write!(f, " {}", m.as_str())?,
         }
         if let Some((bass, bass_acc)) = self.bass {
@@ -330,17 +347,22 @@ mod tests {
     fn minor_marker_aliases_accepted_and_canonicalised() {
         for alias in ["Gm", "Gmi", "Gmin", "G-"] {
             assert_eq!(k(alias).mode, KeyMode::Minor, "alias {alias}");
-            assert_eq!(k(alias).to_string(), "Gm", "canonical of {alias}");
+            assert_eq!(k(alias).to_string(), "G minor", "canonical of {alias}");
         }
     }
 
     #[test]
     fn the_four_user_forms_all_normalise_to_canonical_minor() {
-        // ADR-0034: the editor is lenient, so all four spellings parse as the
-        // SAME minor key and canonicalise to `Gm` (the rendered form).
+        // ADR-0034 / ADR-0035: the editor is lenient, so all the spellings parse
+        // as the SAME minor key and canonicalise to the spelled-out `G minor`
+        // (the rendered form).
         for spelling in ["Gm", "G m", "Gminor", "G minor", "G min", "Gmi", "G-"] {
             assert_eq!(k(spelling).mode, KeyMode::Minor, "mode of {spelling}");
-            assert_eq!(k(spelling).to_string(), "Gm", "canonical of {spelling}");
+            assert_eq!(
+                k(spelling).to_string(),
+                "G minor",
+                "canonical of {spelling}"
+            );
         }
     }
 
@@ -348,20 +370,24 @@ mod tests {
     fn spelled_out_major_normalises() {
         for spelling in ["G", "Gmaj", "G maj", "G major", "Gmajor"] {
             assert_eq!(k(spelling).mode, KeyMode::Major, "mode of {spelling}");
-            assert_eq!(k(spelling).to_string(), "G", "canonical of {spelling}");
+            assert_eq!(
+                k(spelling).to_string(),
+                "G major",
+                "canonical of {spelling}"
+            );
         }
-        assert_eq!(k("Cminor").to_string(), "Cm");
+        assert_eq!(k("Cminor").to_string(), "C minor");
     }
 
     #[test]
     fn single_letter_quality_marker_is_case_sensitive() {
         // Lead-sheet convention: lowercase `m` = minor, uppercase `M` = major.
         assert_eq!(k("Cm").mode, KeyMode::Minor);
-        assert_eq!(k("Cm").to_string(), "Cm");
+        assert_eq!(k("Cm").to_string(), "C minor");
         assert_eq!(k("CM").mode, KeyMode::Major); // NOT minor
-        assert_eq!(k("CM").to_string(), "C");
+        assert_eq!(k("CM").to_string(), "C major");
         assert_eq!(k("C M").mode, KeyMode::Major);
-        assert_eq!(k("F#M").to_string(), "F#");
+        assert_eq!(k("F#M").to_string(), "F# major");
         // The spelled-out words stay case-insensitive.
         assert_eq!(k("C MINOR").mode, KeyMode::Minor);
         assert_eq!(k("C Major").mode, KeyMode::Major);
@@ -430,7 +456,7 @@ mod tests {
         let key = k("G/B");
         assert_eq!(key.mode, KeyMode::Major);
         assert_eq!(key.bass, Some((Note::B, None)));
-        assert_eq!(key.to_string(), "G/B");
+        assert_eq!(key.to_string(), "G major/B");
 
         let minor = k("Am/C");
         assert_eq!(minor.mode, KeyMode::Minor);
@@ -521,7 +547,7 @@ mod tests {
     #[test]
     fn display_round_trips_through_to_chord_detail_shape() {
         // The canonical Display covers the bass-accidental branch too.
-        assert_eq!(k("F#m/C#").to_string(), "F#m/C#");
-        assert_eq!(k("Bb/Db").to_string(), "Bb/Db");
+        assert_eq!(k("F#m/C#").to_string(), "F# minor/C#");
+        assert_eq!(k("Bb/Db").to_string(), "Bb major/Db");
     }
 }

@@ -335,12 +335,12 @@ pub fn transpose(song: &Song, semitones: i8) -> Song {
 /// [`transposed_key_prefers_flat`]), use
 /// [`canonical_transposed_key_with_style`].
 ///
-/// This "simple" variant emits a bare major / minor key label
-/// (transposed root + accidental + minor flag) and so cannot
-/// represent a mode or a slash-bass. It therefore returns `None`
-/// for a modal `{key}` (e.g. `{key: C dorian}`) rather than
-/// fabricating a misleading bare-major label like `D` — callers
-/// fall back to the authored value. Use
+/// This "simple" variant emits a spelled-out major / minor key
+/// label (transposed root + accidental + `" major"` / `" minor"`)
+/// and so cannot represent a mode or a slash-bass. It therefore
+/// returns `None` for a modal `{key}` (e.g. `{key: C dorian}`)
+/// rather than fabricating a misleading major label like
+/// `D major` — callers fall back to the authored value. Use
 /// [`canonical_transposed_key_with_style`] when you need to
 /// preserve the modal qualifier and the slash-bass (every Rust
 /// renderer's inline `{key:}` marker does, per #2522).
@@ -391,7 +391,7 @@ pub fn canonical_transposed_key(song_key: Option<&str>, semitones: i8) -> Option
 /// simpler helper drops: the modal qualifier (`" <mode>"` extension
 /// text, kept verbatim because it's not a transposable music-theory
 /// token) and the slash `/bass` (transposed alongside the root).
-/// Minor keys append `m` after the accidental.
+/// Non-modal keys spell out `" minor"` / `" major"` (ADR-0035).
 ///
 /// Returns `None` when the value is not a key per [`crate::key::parse_key`] —
 /// same contract as [`canonical_transposed_key`] minus the modal exclusion. A
@@ -412,10 +412,10 @@ pub fn canonical_transposed_key_with_style(
 }
 
 /// Canonical display spelling for a `{key:}` directive value, for **any**
-/// transpose offset (ADR-0034). At a zero offset this normalises the authored
-/// spelling to its canonical form (`G minor` → `Gm`, `Gmin` → `Gm`,
-/// `C Dorian` → `C dorian`) without re-spelling the accidental; at a non-zero
-/// offset it defers to [`canonical_transposed_key_with_style`] (which applies
+/// transpose offset (ADR-0034 / ADR-0035). At a zero offset this normalises the
+/// authored spelling to its canonical form (`Gm` → `G minor`, `Gmin` →
+/// `G minor`, `C Dorian` → `C dorian`) without re-spelling the accidental; at a
+/// non-zero offset it defers to [`canonical_transposed_key_with_style`] (which applies
 /// the song-wide `prefer_flat`). Returns `None` when the value is not a key
 /// (chord extensions, no note-letter root) so the caller renders it verbatim.
 ///
@@ -446,8 +446,9 @@ fn key_prefers_flat_for_song(detail: &ChordDetail, semitones: i8) -> bool {
 }
 
 /// Compute the canonical-spelling string for a transposed key
-/// detail. Drops the chord quality (a key is a root + minor
-/// flag, not a chord type) and emits e.g. `"Bb"` / `"F#m"`.
+/// detail. A key is a root + a spelled-out quality word (not a
+/// chord type), so this emits e.g. `"Bb major"` / `"F# minor"`
+/// (ADR-0035).
 ///
 /// `extension` and `bass_note` are intentionally dropped here —
 /// see [`canonical_transposed_key`]'s doc-comment. Callers that
@@ -473,16 +474,21 @@ fn canonical_key_string(detail: &ChordDetail) -> String {
             Accidental::Flat => s.push('b'),
         }
     }
-    if detail.quality == ChordQuality::Minor {
-        s.push('m');
-    }
+    // Spelled-out canonical quality (ADR-0035): `" minor"` / `" major"`, routed
+    // through `key::quality_word` so this matches `Key`'s Display and the
+    // `_with_style` builder. This variant never carries a mode (modal keys
+    // return early in `canonical_transposed_key`), so the boolean is enough.
+    s.push_str(crate::key::quality_word(
+        detail.quality == ChordQuality::Minor,
+    ));
     s
 }
 
 /// Format an already-transposed `ChordDetail` as a key-display
 /// string that preserves the modal qualifier and slash-bass
-/// (sister to [`ChordDetail`]'s `Display` impl, but drops
-/// `ChordQuality::Major` — keys aren't chord types).
+/// (sister to [`ChordDetail`]'s `Display` impl, but emits the
+/// **spelled-out** canonical quality `" major"` / `" minor"`
+/// rather than a chord-type suffix — ADR-0035).
 ///
 /// Unlike [`canonical_key_string`], this trusts the spelling the
 /// caller already picked (via `transpose_detail_with_style`'s
@@ -506,13 +512,19 @@ fn transposed_key_display_string(detail: &ChordDetail) -> String {
             Accidental::Flat => s.push('b'),
         }
     }
-    if detail.quality == ChordQuality::Minor {
-        s.push('m');
-    }
-    // Extension is verbatim source text (e.g. " dorian", " mixolydian",
-    // " add9") — not a transposable theory token, so we preserve it.
+    // Quality / mode word. A modal key lowers to `ChordQuality::Major` with the
+    // mode in `extension` (e.g. `" dorian"`), so the extension branch MUST win —
+    // otherwise a modal key would render the impossible `"C major dorian"`. A
+    // non-modal key has no extension and spells out `" minor"` / `" major"`
+    // (ADR-0035) via the shared `key::quality_word`, matching `Key`'s Display.
     if let Some(ref ext) = detail.extension {
+        // Extension is verbatim source text (e.g. " dorian", " mixolydian") —
+        // not a transposable theory token, so we preserve it.
         s.push_str(ext);
+    } else {
+        s.push_str(crate::key::quality_word(
+            detail.quality == ChordQuality::Minor,
+        ));
     }
     // Slash bass — the bass note IS transposed in lockstep with the
     // root via `transpose_detail_with_style`.
@@ -759,25 +771,26 @@ mod tests {
     fn canonical_transposed_key_normalises_to_pop_spelling() {
         // C major transposed +1 lands at canonical Db (NOT C#),
         // even though the chromatic-shift table would otherwise
-        // emit C# for a source with no flat accidental.
+        // emit C# for a source with no flat accidental. The quality
+        // is spelled out (ADR-0035).
         assert_eq!(
             canonical_transposed_key(Some("C"), 1).as_deref(),
-            Some("Db")
+            Some("Db major")
         );
         // C +10 → Bb (NOT A#).
         assert_eq!(
             canonical_transposed_key(Some("C"), 10).as_deref(),
-            Some("Bb")
+            Some("Bb major")
         );
         // C +3 → Eb (NOT D#).
         assert_eq!(
             canonical_transposed_key(Some("C"), 3).as_deref(),
-            Some("Eb")
+            Some("Eb major")
         );
         // C +8 → Ab (NOT G#).
         assert_eq!(
             canonical_transposed_key(Some("C"), 8).as_deref(),
-            Some("Ab")
+            Some("Ab major")
         );
         // Missing key returns None.
         assert_eq!(canonical_transposed_key(None, 1), None);
@@ -806,7 +819,7 @@ mod tests {
         assert_eq!(transposed.metadata.key.as_deref(), Some("C"));
         assert_eq!(
             canonical_transposed_key(Some("C"), 3).as_deref(),
-            Some("Eb")
+            Some("Eb major")
         );
         // Walk the lyrics to find the transposed chord.
         let chord_names: Vec<&str> = transposed
@@ -838,7 +851,7 @@ mod tests {
         assert_eq!(transposed.metadata.key.as_deref(), Some("C"));
         assert_eq!(
             canonical_transposed_key(Some("C"), 10).as_deref(),
-            Some("Bb")
+            Some("Bb major")
         );
     }
 
@@ -850,7 +863,10 @@ mod tests {
         let transposed = transpose(&song, 7);
         // metadata.key unchanged (authored C). canonical spelling = G.
         assert_eq!(transposed.metadata.key.as_deref(), Some("C"));
-        assert_eq!(canonical_transposed_key(Some("C"), 7).as_deref(), Some("G"));
+        assert_eq!(
+            canonical_transposed_key(Some("C"), 7).as_deref(),
+            Some("G major")
+        );
     }
 
     #[test]
@@ -871,7 +887,7 @@ mod tests {
         // metadata.key unchanged; canonical lookup gives Eb.
         assert_eq!(
             canonical_transposed_key(Some("C"), 3).as_deref(),
-            Some("Eb")
+            Some("Eb major")
         );
         let chord_name = transposed
             .lines
@@ -902,17 +918,17 @@ mod tests {
         // Eb +2 → F (no accidental either way; F is canonical).
         assert_eq!(
             canonical_transposed_key(Some("Eb"), 2).as_deref(),
-            Some("F")
+            Some("F major")
         );
         // F +1 → Gb (flat-side; F is already flat-side).
         assert_eq!(
             canonical_transposed_key(Some("F"), 1).as_deref(),
-            Some("Gb")
+            Some("Gb major")
         );
         // Bb +2 → C (sharp-side, but C has no accidental).
         assert_eq!(
             canonical_transposed_key(Some("Bb"), 2).as_deref(),
-            Some("C")
+            Some("C major")
         );
     }
 
@@ -921,32 +937,32 @@ mod tests {
         // F# +1 → G (canonical, plain).
         assert_eq!(
             canonical_transposed_key(Some("F#"), 1).as_deref(),
-            Some("G")
+            Some("G major")
         );
         // G +6 → Db (canonical for pitch 1).
         assert_eq!(
             canonical_transposed_key(Some("G"), 6).as_deref(),
-            Some("Db")
+            Some("Db major")
         );
     }
 
     #[test]
     fn canonical_transposed_key_for_minor_keys() {
         // Em +3 → Gm (relative-major was G; +3 → Bb → relative
-        // minor Gm). Function should preserve the `m` suffix.
+        // minor Gm). Function should preserve the minor quality.
         assert_eq!(
             canonical_transposed_key(Some("Em"), 3).as_deref(),
-            Some("Gm")
+            Some("G minor")
         );
         // Am +1 → Bbm.
         assert_eq!(
             canonical_transposed_key(Some("Am"), 1).as_deref(),
-            Some("Bbm")
+            Some("Bb minor")
         );
         // F#m +1 → Gm.
         assert_eq!(
             canonical_transposed_key(Some("F#m"), 1).as_deref(),
-            Some("Gm")
+            Some("G minor")
         );
     }
 
@@ -954,11 +970,11 @@ mod tests {
     fn canonical_transposed_key_minor_aliases_stay_minor() {
         // Issue #2665 / correctness review finding #1: the spec minor aliases
         // (`mi`, `min`, `-`) must transpose as MINOR, not silently collapse to
-        // a major label. `Gmin` / `Gmi` / `G-` at +2 all land on `Am`.
+        // a major label. `Gmin` / `Gmi` / `G-` at +2 all land on A minor.
         for alias in ["Gm", "Gmi", "Gmin", "G-"] {
             assert_eq!(
                 canonical_transposed_key(Some(alias), 2).as_deref(),
-                Some("Am"),
+                Some("A minor"),
                 "alias {alias} must transpose as minor"
             );
         }
@@ -983,14 +999,14 @@ mod tests {
         for spelling in ["G minor", "G m", "Gminor", "G min"] {
             assert_eq!(
                 canonical_transposed_key(Some(spelling), 2).as_deref(),
-                Some("Am"),
-                "{spelling} must transpose as minor → Am"
+                Some("A minor"),
+                "{spelling} must transpose as minor → A minor"
             );
         }
-        // A spelled-out major normalises to the bare canonical root.
+        // A spelled-out major transposes to the spelled-out canonical form.
         assert_eq!(
             canonical_transposed_key(Some("G major"), 2).as_deref(),
-            Some("A")
+            Some("A major")
         );
     }
 
@@ -1007,14 +1023,15 @@ mod tests {
 
     #[test]
     fn canonical_key_for_display_normalises_at_zero_transpose() {
-        // The transpose-0 path returns the canonical spelling (ADR-0034).
+        // The transpose-0 path returns the spelled-out canonical form
+        // (ADR-0035).
         assert_eq!(
             canonical_key_for_display(Some("G minor"), 0, false).as_deref(),
-            Some("Gm")
+            Some("G minor")
         );
         assert_eq!(
             canonical_key_for_display(Some("G major"), 0, false).as_deref(),
-            Some("G")
+            Some("G major")
         );
         assert_eq!(
             canonical_key_for_display(Some("C Dorian"), 0, false).as_deref(),
@@ -1023,7 +1040,7 @@ mod tests {
         // Authored accidental side is preserved at zero transpose.
         assert_eq!(
             canonical_key_for_display(Some("F#m"), 0, true).as_deref(),
-            Some("F#m")
+            Some("F# minor")
         );
         // Not a key → None (caller renders verbatim).
         assert_eq!(canonical_key_for_display(Some("G7"), 0, false), None);

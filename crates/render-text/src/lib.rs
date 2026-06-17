@@ -934,7 +934,7 @@ mod tests {
         // where it appears. Phase B of #2454.
         let input = "{title: Test}\n{artist: Someone}\n{key: G}\nLyrics here";
         let output = render(input);
-        assert_eq!(output, "Test\n[Key: G]\nLyrics here\n");
+        assert_eq!(output, "Test\n[Key: G major]\nLyrics here\n");
     }
 
     /// Inline marker for every `[Pos]` metadata directive — sister-site
@@ -981,10 +981,10 @@ mod tests {
 
         let song = chordsketch_chordpro::parse("{key: G}\n[G]hi [D]world").unwrap();
 
-        // No transpose: authored key passes through unchanged.
+        // No transpose: authored key passes through, canonicalised (ADR-0035).
         let zero = render_song_with_transpose(&song, 0, &Config::defaults());
         assert!(
-            zero.contains("[Key: G]"),
+            zero.contains("[Key: G major]"),
             "no-transpose case must preserve authored key; got:\n{zero}"
         );
 
@@ -992,19 +992,19 @@ mod tests {
         // marker must follow.
         let up_two = render_song_with_transpose(&song, 2, &Config::defaults());
         assert!(
-            up_two.contains("[Key: A]"),
-            "+2 transpose must surface [Key: A]; got:\n{up_two}"
+            up_two.contains("[Key: A major]"),
+            "+2 transpose must surface [Key: A major]; got:\n{up_two}"
         );
         assert!(
-            !up_two.contains("[Key: G]"),
-            "+2 transpose must NOT leave [Key: G] in output; got:\n{up_two}"
+            !up_two.contains("[Key: G major]"),
+            "+2 transpose must NOT leave [Key: G major] in output; got:\n{up_two}"
         );
 
         // -3 semitones: G → E. Same invariant in the opposite direction.
         let down_three = render_song_with_transpose(&song, -3, &Config::defaults());
         assert!(
-            down_three.contains("[Key: E]"),
-            "-3 transpose must surface [Key: E]; got:\n{down_three}"
+            down_three.contains("[Key: E major]"),
+            "-3 transpose must surface [Key: E major]; got:\n{down_three}"
         );
 
         // Flat-side spelling: transposing G by +3 lands on Bb (not A#).
@@ -1013,8 +1013,8 @@ mod tests {
         // `prefer_flat` into `canonical_transposed_key_with_style`).
         let to_bflat = render_song_with_transpose(&song, 3, &Config::defaults());
         assert!(
-            to_bflat.contains("[Key: B♭]"),
-            "+3 transpose must surface flat-side [Key: B♭]; got:\n{to_bflat}"
+            to_bflat.contains("[Key: B♭ major]"),
+            "+3 transpose must surface flat-side [Key: B♭ major]; got:\n{to_bflat}"
         );
 
         // Unparseable key (a value that doesn't start with a chord
@@ -1055,21 +1055,23 @@ mod tests {
         );
 
         // Lenient: "minor" written out as a word is accepted as a minor key
-        // (ADR-0034) and rendered in the canonical form, transposed. `Bb minor`
-        // at +2 lands on `Cm` (flat-side, so the root spells `C`).
+        // (ADR-0034) and rendered in the spelled-out canonical form (ADR-0035),
+        // transposed. `Bb minor` at +2 lands on `C minor` (flat-side, so the
+        // root spells `C`).
         let bb_minor = chordsketch_chordpro::parse("{key: Bb minor}\n[Bb]hi").unwrap();
         let bb_minor_out = render_song_with_transpose(&bb_minor, 2, &Config::defaults());
         assert!(
-            bb_minor_out.contains("[Key: Cm]"),
-            "lenient `Bb minor` must render canonical transposed Cm; got:\n{bb_minor_out}"
+            bb_minor_out.contains("[Key: C minor]"),
+            "lenient `Bb minor` must render canonical transposed `C minor`; got:\n{bb_minor_out}"
         );
 
         // Slash bass: the bass note transposes in lockstep with the
-        // root via `transpose_detail_with_style`.
+        // root via `transpose_detail_with_style`. The major quality is
+        // spelled out before the slash (ADR-0035).
         let slash = chordsketch_chordpro::parse("{key: G/B}\n[G]hi").unwrap();
         let slash_out = render_song_with_transpose(&slash, 2, &Config::defaults());
         assert!(
-            slash_out.contains("[Key: A/C♯]"),
+            slash_out.contains("[Key: A major/C♯]"),
             "slash-bass must transpose alongside the root; got:\n{slash_out}"
         );
 
@@ -1084,51 +1086,51 @@ mod tests {
         );
 
         // Compact-form minor (`Em`) uses ChordQuality::Minor — the
-        // helper appends `m` after the (transposed) accidental. At
-        // +2 the song-wide `prefer_flat` for an Em key lands flat
-        // side, so the helper spells G♭m (consistent with the chord
-        // lines, which also use G♭m). F♯m / G♭m are enharmonic
+        // helper spells out ` minor` after the (transposed) accidental
+        // (ADR-0035). At +2 the song-wide `prefer_flat` for an Em key
+        // lands flat side, so the helper spells G♭ minor (consistent with
+        // the chord lines, which also use G♭m). F♯m / G♭m are enharmonic
         // equivalents; the convention is owned by
         // `transposed_key_prefers_flat` and not negotiated here.
         let em = chordsketch_chordpro::parse("{key: Em}\n[Em]hi").unwrap();
         let em_out = render_song_with_transpose(&em, 2, &Config::defaults());
         assert!(
-            em_out.contains("[Key: G♭m]"),
-            "compact minor form must transpose to G♭m at +2 (song-wide prefer_flat); got:\n{em_out}"
+            em_out.contains("[Key: G♭ minor]"),
+            "minor key must transpose to `G♭ minor` at +2 (song-wide prefer_flat); got:\n{em_out}"
         );
         assert!(
             em_out.contains("Gbm"),
-            "chord lines must agree with key marker spelling; got:\n{em_out}"
+            "chord lines must agree with key marker root spelling; got:\n{em_out}"
         );
 
         // Flat-side authored key + transpose lands on a flat-side
-        // target — chord lines and key marker must agree.
+        // target — chord lines and key marker must agree on the root.
         let bb_song = chordsketch_chordpro::parse("{key: Bb}\n[Bb]hi").unwrap();
         let bb_up_two = render_song_with_transpose(&bb_song, 2, &Config::defaults());
         assert!(
-            bb_up_two.contains("[Key: C]"),
-            "Bb at +2 lands on C; got:\n{bb_up_two}"
+            bb_up_two.contains("[Key: C major]"),
+            "Bb at +2 lands on C major; got:\n{bb_up_two}"
         );
     }
 
-    /// Issue #2674 / ADR-0034: the editor accepts the various ways a user
-    /// might write a G-minor key, but the RENDERED marker is always the
-    /// canonical form. `Gm` / `G m` / `Gminor` / `G minor` / `G min` all
-    /// render `Am` at +2 with no warning; a non-key (`G7`) still warns and
-    /// renders verbatim.
+    /// Issue #2674 / ADR-0034 / ADR-0035: the editor accepts the various ways a
+    /// user might write a G-minor key, but the RENDERED marker is always the
+    /// spelled-out canonical form. `Gm` / `G m` / `Gminor` / `G minor` /
+    /// `G min` all render `A minor` at +2 with no warning; a non-key (`G7`)
+    /// still warns and renders verbatim.
     #[test]
     fn lenient_key_notations_render_canonical() {
         use chordsketch_chordpro::config::Config;
 
-        // Every lenient minor spelling transposes to the canonical `Am` at +2,
-        // with no warning.
+        // Every lenient minor spelling transposes to the canonical `A minor` at
+        // +2, with no warning.
         for spelling in ["Gm", "G m", "Gminor", "G minor", "G min"] {
             let song =
                 chordsketch_chordpro::parse(&format!("{{key: {spelling}}}\n[Gm]hi")).unwrap();
             let res = render_song_with_warnings(&song, 2, &Config::defaults());
             assert!(
-                res.output.contains("[Key: Am]"),
-                "`{spelling}` must render canonical Am at +2; got:\n{}",
+                res.output.contains("[Key: A minor]"),
+                "`{spelling}` must render canonical `A minor` at +2; got:\n{}",
                 res.output
             );
             assert!(
@@ -1142,8 +1144,8 @@ mod tests {
         let zero = chordsketch_chordpro::parse("{key: G minor}\n[Gm]hi").unwrap();
         let zero_out = render_song_with_transpose(&zero, 0, &Config::defaults());
         assert!(
-            zero_out.contains("[Key: Gm]"),
-            "`G minor` at +0 must render canonical Gm; got:\n{zero_out}"
+            zero_out.contains("[Key: G minor]"),
+            "`G minor` at +0 must render canonical `G minor`; got:\n{zero_out}"
         );
 
         // A chord extension is not a key: still warns and renders verbatim.
@@ -1185,12 +1187,12 @@ mod tests {
         let song = chordsketch_chordpro::parse("{key: G}\n[G]hi\n{key: Eb}\n[Eb]ho").unwrap();
         let up_one = render_song_with_transpose(&song, 1, &Config::defaults());
         assert!(
-            up_one.contains("[Key: G♯]"),
-            "primary G with +1 (under last-key Eb anchor) spells `G♯`; got:\n{up_one}"
+            up_one.contains("[Key: G♯ major]"),
+            "primary G with +1 (under last-key Eb anchor) spells `G♯ major`; got:\n{up_one}"
         );
         assert!(
-            up_one.contains("[Key: E]"),
-            "mid-song Eb with +1 spells `E`; got:\n{up_one}"
+            up_one.contains("[Key: E major]"),
+            "mid-song Eb with +1 spells `E major`; got:\n{up_one}"
         );
         // Chord lines must use the same spelling.
         assert!(
