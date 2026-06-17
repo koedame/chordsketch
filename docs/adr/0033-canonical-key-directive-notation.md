@@ -1,7 +1,14 @@
 # 0033. Canonical `{key}` directive notation and a single strict key parser
 
-- **Status**: Accepted
+- **Status**: Accepted; strict-input clause superseded by
+  [ADR-0034](0034-lenient-key-input-canonical-render.md)
 - **Date**: 2026-06-17
+
+> **Note (superseded in part):** the canonical-notation choice (`Gm`) and the
+> single-parser consistency guarantee below still hold. The *input* policy —
+> rejecting `{key: G minor}` / `{key: G m}` / `{key: Gminor}` with a warning —
+> was reversed by [ADR-0034](0034-lenient-key-input-canonical-render.md): those
+> spellings are now accepted and normalised to the canonical form on render.
 
 ## Context
 

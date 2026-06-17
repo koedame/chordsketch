@@ -23,7 +23,7 @@ use chordsketch_chordpro::render_result::{
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
 use chordsketch_chordpro::transpose::{
-    canonical_transposed_key_with_style, transpose_chord_with_style, transposed_key_prefers_flat,
+    canonical_key_for_display, transpose_chord_with_style, transposed_key_prefers_flat,
 };
 use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
 
@@ -921,18 +921,18 @@ fn render_song_into_doc(
                             // render-html / the React JSX walker per
                             // `.claude/rules/renderer-parity.md`;
                             // closes #2522.
-                            let displayed = if transpose_offset == 0 {
-                                value.to_string()
-                            } else {
-                                let prefer_flat =
-                                    transposed_key_prefers_flat(&song.metadata, transpose_offset);
-                                canonical_transposed_key_with_style(
-                                    Some(value),
-                                    transpose_offset,
-                                    prefer_flat,
-                                )
-                                .unwrap_or_else(|| value.to_string())
-                            };
+                            // Render the canonical key (ADR-0034): lenient
+                            // input, canonical `Gm` / `G` / `C dorian` output,
+                            // with the song-wide flat/sharp side applied under
+                            // transpose. Verbatim fallback when not a key.
+                            let prefer_flat =
+                                transposed_key_prefers_flat(&song.metadata, transpose_offset);
+                            let displayed = canonical_key_for_display(
+                                Some(value),
+                                transpose_offset,
+                                prefer_flat,
+                            )
+                            .unwrap_or_else(|| value.to_string());
                             format!("Key: {}", unicode_accidentals(&displayed))
                         }
                         DirectiveKind::Tempo => {
@@ -4553,19 +4553,16 @@ mod transpose_tests {
             "modal qualifier must round-trip"
         );
 
-        // Malformed: word `minor` is not a valid key (issue #2665) — rendered
-        // verbatim and untransposed. The PDF text stream positions the
-        // accidental glyph separately from the rest of the run, so the
-        // verbatim value is asserted by its parts: the untransposed root
-        // `Bb` (the `[Bb]` chord on the next line transposes to `C` at +2, so
-        // a surviving `Bb` can only come from the key marker) and the word
-        // `minor` — and crucially NOT the old transposed `C minor` result.
+        // Lenient: word `minor` is accepted (ADR-0034) and rendered canonical,
+        // transposed — `Bb minor` at +2 → `Cm`. The PDF text stream may
+        // position glyphs separately, so assert the canonical pieces are
+        // present and the verbatim word `minor` is NOT.
         let bb_minor = chordsketch_chordpro::parse("{key: Bb minor}\n[Bb]hi").unwrap();
         let bb_minor_out = render_song_with_transpose(&bb_minor, 2, &Config::defaults());
         let bb_minor_content = String::from_utf8_lossy(&bb_minor_out);
         assert!(
-            bb_minor_content.contains("Bb") && bb_minor_content.contains("minor"),
-            "malformed `Bb minor` must render verbatim (untransposed root Bb + word minor)"
+            bb_minor_content.contains("Cm") && !bb_minor_content.contains("minor"),
+            "lenient `Bb minor` must render canonical transposed Cm (not the verbatim word)"
         );
 
         // Malformed: an extension on a key (`G7`) is rejected — renders verbatim.

@@ -12,7 +12,7 @@ use chordsketch_chordpro::render_result::{
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
 use chordsketch_chordpro::transpose::{
-    canonical_transposed_key_with_style, transpose_chord_with_style, transposed_key_prefers_flat,
+    canonical_key_for_display, transpose_chord_with_style, transposed_key_prefers_flat,
 };
 use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
 use unicode_width::UnicodeWidthStr;
@@ -222,20 +222,22 @@ fn render_song_impl(
                                 // `.claude/rules/renderer-parity.md`;
                                 // closes #2522. Typeset `Bb` / `F#` with
                                 // Unicode accidentals.
-                                let displayed = if transpose_offset == 0 {
-                                    value.to_string()
-                                } else {
-                                    let prefer_flat = transposed_key_prefers_flat(
-                                        &song.metadata,
-                                        transpose_offset,
-                                    );
-                                    canonical_transposed_key_with_style(
-                                        Some(value),
-                                        transpose_offset,
-                                        prefer_flat,
-                                    )
-                                    .unwrap_or_else(|| value.to_string())
-                                };
+                                // Render the canonical key (ADR-0034): the
+                                // editor accepts lenient spellings
+                                // (`G minor`, `Gmin`, …) but the rendered
+                                // marker always shows `Gm` / `G` / `C dorian`.
+                                // At a non-zero transpose this also applies the
+                                // song-wide flat/sharp side. Falls back to the
+                                // authored value when it isn't a key (chord
+                                // extensions, no note root).
+                                let prefer_flat =
+                                    transposed_key_prefers_flat(&song.metadata, transpose_offset);
+                                let displayed = canonical_key_for_display(
+                                    Some(value),
+                                    transpose_offset,
+                                    prefer_flat,
+                                )
+                                .unwrap_or_else(|| value.to_string());
                                 output.push(format!("[Key: {}]", unicode_accidentals(&displayed)));
                             }
                             DirectiveKind::Tempo => {
@@ -1052,18 +1054,14 @@ mod tests {
             "modal qualifier must round-trip on transpose; got:\n{modal_out}"
         );
 
-        // Malformed: "minor" written out as a word is NOT a valid key
-        // (issue #2665). The strict key grammar rejects it, so it is
-        // rendered verbatim and untransposed rather than guessing a quality
-        // (the old lenient parser read it as a B-flat *major* chord with a
-        // junk extension and displayed "C minor" on transpose).
-        // (The accidental is typeset with the Unicode ♭ glyph, but the value
-        // is otherwise verbatim and the root is NOT shifted off Bb.)
+        // Lenient: "minor" written out as a word is accepted as a minor key
+        // (ADR-0034) and rendered in the canonical form, transposed. `Bb minor`
+        // at +2 lands on `Cm` (flat-side, so the root spells `C`).
         let bb_minor = chordsketch_chordpro::parse("{key: Bb minor}\n[Bb]hi").unwrap();
         let bb_minor_out = render_song_with_transpose(&bb_minor, 2, &Config::defaults());
         assert!(
-            bb_minor_out.contains("[Key: B\u{266D} minor]"),
-            "malformed `Bb minor` must render verbatim, untransposed; got:\n{bb_minor_out}"
+            bb_minor_out.contains("[Key: Cm]"),
+            "lenient `Bb minor` must render canonical transposed Cm; got:\n{bb_minor_out}"
         );
 
         // Slash bass: the bass note transposes in lockstep with the
@@ -1113,43 +1111,57 @@ mod tests {
         );
     }
 
-    /// Issue #2665: the four ways a user might write a G-minor key are no
-    /// longer judged differently. Only the canonical `Gm` is accepted (and
-    /// transposes); `G m`, `Gminor`, and `G minor` are rejected, render
-    /// verbatim and untransposed, and each emits a validation warning.
+    /// Issue #2674 / ADR-0034: the editor accepts the various ways a user
+    /// might write a G-minor key, but the RENDERED marker is always the
+    /// canonical form. `Gm` / `G m` / `Gminor` / `G minor` / `G min` all
+    /// render `Am` at +2 with no warning; a non-key (`G7`) still warns and
+    /// renders verbatim.
     #[test]
-    fn malformed_key_notations_warn_and_render_verbatim() {
+    fn lenient_key_notations_render_canonical() {
         use chordsketch_chordpro::config::Config;
 
-        // Canonical: transposes to Am at +2, no warning.
-        let canonical = chordsketch_chordpro::parse("{key: Gm}\n[Gm]hi").unwrap();
-        let canonical_res = render_song_with_warnings(&canonical, 2, &Config::defaults());
-        assert!(
-            canonical_res.output.contains("[Key: Am]"),
-            "canonical Gm must transpose to Am at +2; got:\n{}",
-            canonical_res.output
-        );
-        assert!(
-            canonical_res.warnings.is_empty(),
-            "canonical Gm must not warn; got {:?}",
-            canonical_res.warnings
-        );
-
-        // The three malformed forms: verbatim, untransposed, with a warning.
-        for bad in ["G m", "Gminor", "G minor"] {
-            let song = chordsketch_chordpro::parse(&format!("{{key: {bad}}}\n[Gm]hi")).unwrap();
+        // Every lenient minor spelling transposes to the canonical `Am` at +2,
+        // with no warning.
+        for spelling in ["Gm", "G m", "Gminor", "G minor", "G min"] {
+            let song =
+                chordsketch_chordpro::parse(&format!("{{key: {spelling}}}\n[Gm]hi")).unwrap();
             let res = render_song_with_warnings(&song, 2, &Config::defaults());
             assert!(
-                res.output.contains(&format!("[Key: {bad}]")),
-                "malformed `{bad}` must render verbatim, untransposed; got:\n{}",
+                res.output.contains("[Key: Am]"),
+                "`{spelling}` must render canonical Am at +2; got:\n{}",
                 res.output
             );
             assert!(
-                res.warnings.iter().any(|w| w.contains("not a valid key")),
-                "malformed `{bad}` must emit a validation warning; got {:?}",
+                res.warnings.iter().all(|w| !w.contains("not a valid key")),
+                "`{spelling}` is a recognised key and must not warn; got {:?}",
                 res.warnings
             );
         }
+
+        // At transpose 0 the marker still normalises to the canonical spelling.
+        let zero = chordsketch_chordpro::parse("{key: G minor}\n[Gm]hi").unwrap();
+        let zero_out = render_song_with_transpose(&zero, 0, &Config::defaults());
+        assert!(
+            zero_out.contains("[Key: Gm]"),
+            "`G minor` at +0 must render canonical Gm; got:\n{zero_out}"
+        );
+
+        // A chord extension is not a key: still warns and renders verbatim.
+        let non_key = chordsketch_chordpro::parse("{key: G7}\n[Gm]hi").unwrap();
+        let non_key_res = render_song_with_warnings(&non_key, 2, &Config::defaults());
+        assert!(
+            non_key_res.output.contains("[Key: G7]"),
+            "`G7` is not a key and must render verbatim; got:\n{}",
+            non_key_res.output
+        );
+        assert!(
+            non_key_res
+                .warnings
+                .iter()
+                .any(|w| w.contains("not a valid key")),
+            "`G7` must still warn; got {:?}",
+            non_key_res.warnings
+        );
     }
 
     /// Closes #2522 (MEDIUM-3 from the silent-failure audit):

@@ -77,21 +77,48 @@ export function keySignatureFor(
     .replace(/[ 　]/g, ' ')
     .trim();
 
-  // Strict key grammar — sister-site to the Rust
-  // `chordsketch_chordpro::parse_key` / `crates/render-html/src/music_glyphs.rs`
-  // (issue #2665). A tonal key is an uppercase root, an optional accidental,
-  // an optional *attached* minor marker (`m` / `mi` / `min` / `-`), and an
-  // optional `/bass` (ignored for the signature). Malformed spellings — a
-  // spelled-out word (`E minor`), a space before the marker (`E m`), or a
-  // lowercase root — do not match and yield `null`, exactly as the Rust
-  // parser rejects them. Modal keys (`C dorian`) also fail to match here, so
-  // they fall back to the staff-only glyph (a mode has no single conventional
-  // key signature in this table).
-  const m = /^([A-G])([b#]?)(m|mi|min|-)?(?:\/[A-G][b#]?)?$/.exec(ascii);
-  if (!m) return null;
-  const root = m[1]!;
-  const accidental = m[2] ?? '';
-  const isMinor = !!m[3];
+  // Lenient key grammar — sister-site to the Rust
+  // `chordsketch_chordpro::parse_key` (ADR-0034). An uppercase root, an
+  // optional accidental, an optional `/bass`, and a quality qualifier:
+  //   minor ← m | - | (mi | min | minor, case-insensitive)
+  //   major ← <empty> | M | (maj | major, case-insensitive)
+  // The single-letter marker is case-sensitive (lead-sheet convention
+  // `Cm` = minor, `CM` = major); the words and modes are case-insensitive.
+  // A church-mode qualifier (`C dorian`) has no single conventional key
+  // signature here, so it yields `null` (staff-only glyph), as do chord
+  // extensions (`G7`), a lowercase root, a malformed slash-bass, and any
+  // other non-key value.
+  let head = ascii;
+  if (ascii.includes('/')) {
+    // Validate the slash-bass exactly as Rust `parse_key` does (note + optional
+    // accidental, nothing trailing); a malformed bass (`G/`, `G/H`, `G/Bextra`)
+    // makes the whole value not a key, so there is no signature — matching the
+    // Rust HTML/PDF glyph (which returns None) rather than drawing one anyway.
+    const slash = ascii.indexOf('/');
+    head = ascii.slice(0, slash);
+    const bass = ascii.slice(slash + 1).trim();
+    if (!/^[A-G][b#]?$/.test(bass)) return null;
+  }
+  const rootMatch = /^([A-G])([b#]?)(.*)$/.exec(head);
+  if (!rootMatch) return null;
+  const root = rootMatch[1]!;
+  const accidental = rootMatch[2] ?? '';
+  const qualifierRaw = rootMatch[3]!.trim();
+  let isMinor: boolean;
+  if (qualifierRaw === 'm' || qualifierRaw === '-') {
+    isMinor = true;
+  } else if (qualifierRaw === 'M') {
+    isMinor = false;
+  } else {
+    const qualifier = qualifierRaw.toLowerCase();
+    if (qualifier === '' || qualifier === 'maj' || qualifier === 'major') {
+      isMinor = false;
+    } else if (qualifier === 'mi' || qualifier === 'min' || qualifier === 'minor') {
+      isMinor = true;
+    } else {
+      return null; // church mode, chord extension, or unknown → no signature
+    }
+  }
 
   // Sharps / flats table (Wikipedia: "Key signature"). Direct
   // lookups for both major AND minor keys — minor keys map to the

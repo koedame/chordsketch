@@ -80,16 +80,19 @@ const FLAT_ORDER: &[(&str, f32)] = &[
 ];
 
 /// Look up a key-signature size and direction for a ChordPro
-/// `{key}` value. Accepts the strict key grammar
-/// (`chordsketch_chordpro::parse_key`): major (`G`, `Bb`, `F#`) and
-/// minor (`Em`, `F#m`, `Cmin`) tonal keys; unicode ♯ / ♭ are
-/// normalised to ASCII first. Modal keys (`C dorian`) and malformed
-/// values (`E minor`, `e min`) have no key signature here. Returns
-/// `None` for an unparseable input OR for a parseable key whose
-/// lookup table has no entry, so callers can render the marker
-/// without an icon. Callers that need to distinguish the two None
-/// cases (e.g. to emit a warning on a parseable-but-missing-from-table
-/// input) should use [`key_signature_for_with_diagnostics`].
+/// `{key}` value. Delegates grammar to the lenient
+/// [`chordsketch_chordpro::parse_key`] (ADR-0034): major (`G`,
+/// `Bb`, `F#`, `G major`) and minor (`Em`, `F#m`, `E minor`, `E m`,
+/// `Emin`) tonal keys are accepted; unicode ♯ / ♭ and NBSP are
+/// normalised before parsing. Modal keys (`C dorian`) have no
+/// conventional single key signature here and return `None`
+/// (staff-only glyph). A lowercase root (`e min`) or a chord
+/// extension (`G7`) also returns `None`. Returns `None` for an
+/// unparseable input OR for a parseable key whose lookup table has no
+/// entry, so callers can render the marker without an icon. Callers
+/// that need to distinguish the two `None` cases (e.g. to emit a
+/// warning on a parseable-but-missing-from-table input) should use
+/// [`key_signature_for_with_diagnostics`].
 #[must_use]
 pub fn key_signature_for(key: &str) -> Option<(usize, KeySigType)> {
     match key_signature_for_with_diagnostics(key) {
@@ -107,11 +110,10 @@ pub fn key_signature_for(key: &str) -> Option<(usize, KeySigType)> {
 #[must_use]
 pub fn key_signature_for_with_diagnostics(key: &str) -> KeySignatureLookup {
     // Delegate the grammar — and the Unicode ♯ / ♭ + exotic-space normalisation
-    // — to the single strict key parser (`chordsketch_chordpro::parse_key`) so
-    // the glyph agrees with the displayed key, the transpose re-spelling, and
-    // the audition on what a key is, rather than carrying its own copy of the
-    // grammar (which used to accept `C minor` / `C m` as minor while the chord
-    // parser read them as major, issue #2665) or its own accidental folding.
+    // — to the lenient key parser (`chordsketch_chordpro::parse_key`, ADR-0034)
+    // so the glyph agrees with the displayed key, the transpose re-spelling, and
+    // the audition on what a key is. Lenient minor spellings (`C minor`, `C m`,
+    // `Cminor`, `C min`) are now all accepted and resolve to the minor signature.
     // A modal key (`C dorian`) has no conventional single key signature here,
     // so it falls back to the staff-only glyph.
     let Some(parsed) = chordsketch_chordpro::parse_key(key) else {
@@ -535,19 +537,21 @@ mod tests {
     }
 
     #[test]
-    fn key_signature_unicode_and_strict_minor_markers() {
+    fn key_signature_unicode_and_lenient_markers() {
         // Unicode ♯ / ♭ are normalised to ASCII.
         assert_eq!(key_signature_for("F♯"), Some((6, KeySigType::Sharp)));
         assert_eq!(key_signature_for("B♭"), Some((2, KeySigType::Flat)));
         // Strict minor markers (`m`, `min`) resolve to the minor signature.
         assert_eq!(key_signature_for("Em"), Some((1, KeySigType::Sharp)));
         assert_eq!(key_signature_for("Emin"), Some((1, KeySigType::Sharp)));
-        // Malformed spellings — a spelled-out word, a space before the marker,
-        // a lowercase root — are not valid keys and carry no signature
-        // (issue #2665); the strict key grammar rejects them.
-        assert_eq!(key_signature_for("E minor"), None);
+        // Lenient spellings now resolve to the same signature (ADR-0034): a
+        // spelled-out word and a space before the marker are accepted.
+        assert_eq!(key_signature_for("E minor"), Some((1, KeySigType::Sharp)));
+        assert_eq!(key_signature_for("E m"), Some((1, KeySigType::Sharp)));
+        assert_eq!(key_signature_for("E major"), Some((4, KeySigType::Sharp)));
+        // A lowercase root is still not a key; a church mode has no signature.
         assert_eq!(key_signature_for("e min"), None);
-        assert_eq!(key_signature_for("E m"), None);
+        assert_eq!(key_signature_for("C dorian"), None);
     }
 
     #[test]

@@ -34,7 +34,7 @@ use chordsketch_chordpro::render_result::{
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
 use chordsketch_chordpro::transpose::{
-    canonical_transposed_key_with_style, transpose_chord_with_style, transposed_key_prefers_flat,
+    canonical_key_for_display, transpose_chord_with_style, transposed_key_prefers_flat,
 };
 use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
 
@@ -454,20 +454,20 @@ fn render_song_body_into(
                                 // closes #2522. The key-signature SVG
                                 // glyph follows the transposed value too
                                 // so the staff matches.
-                                let displayed = if transpose_offset == 0 {
-                                    value.to_string()
-                                } else {
-                                    let prefer_flat = transposed_key_prefers_flat(
-                                        &song.metadata,
-                                        transpose_offset,
-                                    );
-                                    canonical_transposed_key_with_style(
-                                        Some(value),
-                                        transpose_offset,
-                                        prefer_flat,
-                                    )
-                                    .unwrap_or_else(|| value.to_string())
-                                };
+                                // Render the canonical key (ADR-0034): the
+                                // editor accepts lenient spellings but the
+                                // marker always shows `Gm` / `G` / `C dorian`,
+                                // with the song-wide flat/sharp side applied
+                                // under transpose. Falls back to verbatim when
+                                // the value isn't a key.
+                                let prefer_flat =
+                                    transposed_key_prefers_flat(&song.metadata, transpose_offset);
+                                let displayed = canonical_key_for_display(
+                                    Some(value),
+                                    transpose_offset,
+                                    prefer_flat,
+                                )
+                                .unwrap_or_else(|| value.to_string());
                                 // Surface a warning when the
                                 // key string parses as a chord
                                 // root + accidental + optional
@@ -3288,13 +3288,13 @@ mod tests {
             "modal qualifier must round-trip; got:\n{modal_out}"
         );
 
-        // Malformed: word `minor` is not a valid key (issue #2665) — rendered
-        // verbatim and untransposed instead of guessing a quality.
+        // Lenient: word `minor` is accepted (ADR-0034) and rendered canonical,
+        // transposed — `Bb minor` at +2 → `Cm`.
         let bb_minor = chordsketch_chordpro::parse("{key: Bb minor}\n[Bb]hi").unwrap();
         let bb_minor_out = render_song_with_transpose(&bb_minor, 2, &Config::defaults());
         assert!(
-            bb_minor_out.contains("Bb minor"),
-            "malformed `Bb minor` must render verbatim, untransposed; got:\n{bb_minor_out}"
+            bb_minor_out.contains("Cm"),
+            "lenient `Bb minor` must render canonical transposed Cm; got:\n{bb_minor_out}"
         );
 
         // Slash bass transposes alongside the root.
