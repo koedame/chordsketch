@@ -798,6 +798,159 @@ describe('chordLayoutForLine', () => {
       '[Am]',
     );
   });
+
+  test('uses the parser-supplied source column over reconstruction (#2634)', () => {
+    // Source `do\[re[Am]mi`: the escaped `\[` makes seg0 text `do[re` (5
+    // chars) span SIX source columns. Reconstruction from `seg.text.length`
+    // would place `[Am]` at column 5; the AST column is the real 6.
+    const source = 'do\\[re[Am]mi';
+    const segs = [
+      { text: 'do[re', sourceColumn: null }, // chord-less leading segment
+      { text: 'mi', chord: { name: 'Am' }, sourceColumn: 6 },
+    ];
+    const { layout } = chordLayoutForLine(segs);
+    expect(layout[1].sourceColumn).toBe(6);
+    // The reported span is exactly the `[Am]` in the raw source.
+    expect(
+      source.slice(layout[1].sourceColumn, layout[1].sourceColumn + layout[1].bracketLength),
+    ).toBe('[Am]');
+  });
+
+  test('falls back to reconstruction when the AST omits sourceColumn', () => {
+    // Older `@chordsketch/wasm` builds (or non-parser segments) have no
+    // sourceColumn; the running reconstruction still produces the columns it
+    // always did for escape-free lines.
+    const { layout } = chordLayoutForLine([
+      { text: 'do', chord: { name: 'C' } },
+      { text: 're', chord: { name: 'Am' } },
+    ]);
+    expect(layout.map((l) => l.sourceColumn)).toEqual([0, 5]);
+  });
+
+  test('resyncs the running column after an authoritative value', () => {
+    // A later field-less chord stays aligned because the running counter is
+    // resynced to the authoritative column of the earlier one.
+    const { layout } = chordLayoutForLine([
+      { text: 'do[re', sourceColumn: null }, // 5 visible chars, 6 source cols
+      { text: 'mi', chord: { name: 'Am' }, sourceColumn: 6 }, // authoritative
+      { text: 'fa', chord: { name: 'G' } }, // no field → reconstructed from 6
+    ]);
+    // [Am] at 6, then `[Am]mi` = 6 cols → [G] at 6 + 4 + 2 = 12.
+    expect(layout.map((l) => l.sourceColumn)).toEqual([0, 6, 12]);
+  });
+});
+
+describe('escaped-special source scanning (#2634)', () => {
+  // The documented failing case: editing / nudging `[Am]` on a line where an
+  // escaped `\[` precedes it must target the real `[Am]` span, not drift.
+  const SOURCE = 'do\\[re[Am]mi';
+
+  test('findChordAtCaret resolves the chord after an escaped special', () => {
+    // Caret on the `[` of `[Am]` (raw column 6).
+    const match = findChordAtCaret(SOURCE, 6);
+    expect(match).not.toBeNull();
+    expect(match!.chordName).toBe('Am');
+    expect(match!.sourceColumn).toBe(6);
+    expect(match!.bracketLength).toBe(4);
+    // Lyrics offset counts the escaped `[` as one visible char: `do[re` = 5.
+    expect(match!.offset).toBe(5);
+    // The resolved span is the real `[Am]`.
+    expect(SOURCE.slice(match!.sourceColumn, match!.sourceColumn + match!.bracketLength)).toBe(
+      '[Am]',
+    );
+  });
+
+  test('the escaped `\\[` is not mis-detected as a chord open', () => {
+    // Caret inside `do\[re` (column 4, the escaped `[`) is lyrics, not a chord.
+    expect(findChordAtCaret(SOURCE, 4)).toBeNull();
+  });
+
+  test('applyChordEdit targets the correct span (not a no-op, not corruption)', () => {
+    const match = findChordAtCaret(SOURCE, 6)!;
+    const { text } = applyChordEdit(SOURCE, {
+      line: 1,
+      fromColumn: match.sourceColumn,
+      fromLength: match.bracketLength,
+      chord: 'Bm',
+      expected: match.chordName,
+    });
+    // The edit applied (not the silent no-op the `expected` guard would emit
+    // on a drifted column) and rewrote exactly `[Am]` → `[Bm]`.
+    expect(text).toBe('do\\[re[Bm]mi');
+  });
+
+  test('a drifted (reconstructed) column would have no-opped — proving the fix matters', () => {
+    // Demonstrate the pre-fix behaviour: the reconstructed column 5 spans
+    // `e[Am` not `[Am]`, so the `expected` guard no-ops (safe but dropped).
+    const drifted = 5;
+    const { text } = applyChordEdit(SOURCE, {
+      line: 1,
+      fromColumn: drifted,
+      fromLength: 4,
+      chord: 'Bm',
+      expected: 'Am',
+    });
+    expect(text).toBe(SOURCE); // unchanged — the bug this PR fixes
+  });
+
+  test('buildChordNudge moves the chord by the real span across an escape', () => {
+    const match = findChordAtCaret(SOURCE, 6)!;
+    const nudge = buildChordNudge({
+      sourceLine: 1,
+      chordName: match.chordName,
+      sourceColumn: match.sourceColumn,
+      bracketLength: match.bracketLength,
+      currentOffset: match.offset,
+      otherOffsets: match.otherOffsets,
+      totalLyrics: match.totalLyrics,
+      direction: 1,
+    });
+    expect(nudge).not.toBeNull();
+    const { text } = applyChordReposition(SOURCE, nudge!.event);
+    // `[Am]` moves one visible lyric char right: from before `mi` to between
+    // `m` and `i` → `do\[remi` with `[Am]` after the `m`.
+    expect(text).toBe('do\\[rem[Am]i');
+  });
+
+  test('lyricsOffsetToSourceColumn accounts for an escaped special', () => {
+    // `do\[re` is 5 visible lyric chars over 6 source columns. Offset 5
+    // (after the last visible char `e`) maps to source column 6.
+    expect(lyricsOffsetToSourceColumn('do\\[re', 5)).toBe(6);
+    // Offset 2 (the escaped `[`) sits at source column 2 (the backslash).
+    expect(lyricsOffsetToSourceColumn('do\\[re', 2)).toBe(2);
+  });
+
+  test('sourceColumnToLyricsOffset is the inverse across an escaped special', () => {
+    // Column 6 (after `do\[re`) is 5 visible lyric chars in.
+    expect(sourceColumnToLyricsOffset('do\\[re', 6)).toBe(5);
+  });
+
+  test('a chord whose name contains an escaped bracket is not split early', () => {
+    // `[A\]m]` is ONE chord spanning to the final `]` (column 5), not split at
+    // the escaped `\]`. The caret-driven path keeps the RAW name so it
+    // round-trips the source for the edit `expected` guard.
+    const match = findChordAtCaret('[A\\]m]x', 0)!;
+    expect(match.chordName).toBe('A\\]m'); // raw — round-trips the source span
+    expect(match.bracketLength).toBe(6);
+    expect('[A\\]m]x'.slice(match.sourceColumn, match.sourceColumn + match.bracketLength)).toBe(
+      '[A\\]m]',
+    );
+  });
+
+  test('editing an escaped-bracket-name chord round-trips via the raw-scan path', () => {
+    // Because the name is raw, the `expected` guard matches the live source
+    // and the edit applies (the AST path no-ops these — documented edge).
+    const source = '[A\\]m]x';
+    const match = findChordAtCaret(source, 0)!;
+    const { text } = applyChordEdit(source, {
+      line: 1,
+      fromColumn: match.sourceColumn,
+      fromLength: match.bracketLength,
+      chord: 'C',
+      expected: match.chordName,
+    });
+    expect(text).toBe('[C]x');
+  });
 });
 
 describe('applyChordReposition — expected-token guard (parity with edit/delete)', () => {

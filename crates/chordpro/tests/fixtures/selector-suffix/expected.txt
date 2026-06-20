@@ -114,6 +114,9 @@ Song {
                         ),
                         text: "La la la",
                         spans: [],
+                        source_column: Some(
+                            0,
+                        ),
                     },
                 ],
             },

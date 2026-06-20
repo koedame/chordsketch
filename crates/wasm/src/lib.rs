@@ -1224,6 +1224,18 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_chordpro_emits_escape_safe_source_column() {
+        // The AST JSON carries each chord's real source column (#2634) so the
+        // React chord editor does not re-derive it from escape-stripped text.
+        // `[Am]` after the escaped `\[` sits at the true column 6, not 5.
+        let (json, _, _, _) = do_parse_chordpro("do\\[re[Am]mi", None).unwrap();
+        assert!(
+            json.contains("\"sourceColumn\":6"),
+            "escape-safe chord column must reach the wasm payload, got: {json}"
+        );
+    }
+
+    #[test]
     fn test_parse_chordpro_applies_transpose() {
         let opts = RenderOptions {
             transpose: 2,

@@ -31,8 +31,17 @@ pub struct Lexer {
     pos: usize,
     /// Current 1-based line number.
     line: usize,
-    /// Current 1-based column number.
+    /// Current 1-based column number (in Unicode scalar values / `char`s).
     column: usize,
+    /// Current 1-based column number counted in UTF-16 code units.
+    ///
+    /// Parallel to [`Lexer::column`] but advanced by each character's
+    /// UTF-16 length so chord-token positions can be handed to JS consumers
+    /// that index strings in UTF-16 (see [`Token::utf16_col`] and #2634).
+    /// Resets to 1 on every newline, exactly like `column`.
+    ///
+    /// [`Token::utf16_col`]: crate::token::Token::utf16_col
+    utf16_column: usize,
     /// Whether the lexer is currently inside a directive (`{` … `}`).
     in_directive: bool,
 }
@@ -46,6 +55,7 @@ impl Lexer {
             pos: 0,
             line: 1,
             column: 1,
+            utf16_column: 1,
             in_directive: false,
         }
     }
@@ -65,7 +75,11 @@ impl Lexer {
 
         // Emit the final EOF token.
         let eof_pos = Position::new(self.line, self.column);
-        tokens.push(Token::new(TokenKind::Eof, Span::new(eof_pos, eof_pos)));
+        tokens.push(Token::with_utf16_col(
+            TokenKind::Eof,
+            Span::new(eof_pos, eof_pos),
+            self.utf16_column - 1,
+        ));
 
         tokens
     }
@@ -87,8 +101,10 @@ impl Lexer {
             if ch == '\n' {
                 self.line += 1;
                 self.column = 1;
+                self.utf16_column = 1;
             } else {
                 self.column += 1;
+                self.utf16_column += ch.len_utf16();
             }
             Some(ch)
         } else {
@@ -117,6 +133,7 @@ impl Lexer {
     /// it to `false`.
     fn lex_single(&mut self, kind: TokenKind, enter_directive: bool) -> Option<Token> {
         let start = Position::new(self.line, self.column);
+        let utf16_start = self.utf16_column - 1;
         self.advance();
         let end = Position::new(self.line, self.column);
 
@@ -127,21 +144,31 @@ impl Lexer {
             self.in_directive = false;
         }
 
-        Some(Token::new(kind, Span::new(start, end)))
+        Some(Token::with_utf16_col(
+            kind,
+            Span::new(start, end),
+            utf16_start,
+        ))
     }
 
     /// Lexes a newline token (`\n`).
     fn lex_newline(&mut self) -> Option<Token> {
         let start = Position::new(self.line, self.column);
+        let utf16_start = self.utf16_column - 1;
         self.advance(); // consume '\n'
         let end = Position::new(self.line, self.column);
-        Some(Token::new(TokenKind::Newline, Span::new(start, end)))
+        Some(Token::with_utf16_col(
+            TokenKind::Newline,
+            Span::new(start, end),
+            utf16_start,
+        ))
     }
 
     /// Lexes a `\r` character. If followed by `\n`, emits a single newline
     /// token covering both characters. Otherwise the `\r` is treated as text.
     fn lex_carriage_return(&mut self) -> Option<Token> {
         let start = Position::new(self.line, self.column);
+        let utf16_start = self.utf16_column - 1;
 
         // Peek ahead: is this \r\n?
         let is_crlf = self.chars.get(self.pos + 1).map(|&(_, c)| c) == Some('\n');
@@ -152,7 +179,11 @@ impl Lexer {
             // Advance past \n (bumps line)
             self.advance(); // consumes '\n'
             let end = Position::new(self.line, self.column);
-            Some(Token::new(TokenKind::Newline, Span::new(start, end)))
+            Some(Token::with_utf16_col(
+                TokenKind::Newline,
+                Span::new(start, end),
+                utf16_start,
+            ))
         } else {
             // Bare \r — treat as text.
             self.lex_text()
@@ -166,6 +197,7 @@ impl Lexer {
     /// run rather than acting as delimiters.
     fn lex_text(&mut self) -> Option<Token> {
         let start = Position::new(self.line, self.column);
+        let utf16_start = self.utf16_column - 1;
         let mut buf = String::new();
 
         while let Some(ch) = self.peek() {
@@ -214,13 +246,25 @@ impl Lexer {
         }
 
         let end = Position::new(self.line, self.column);
-        Some(Token::new(TokenKind::Text(buf), Span::new(start, end)))
+        Some(Token::with_utf16_col(
+            TokenKind::Text(buf),
+            Span::new(start, end),
+            utf16_start,
+        ))
     }
 }
 
 /// Returns `true` if the character is a special ChordPro delimiter.
 ///
 /// The colon is only special inside directives.
+///
+/// Sister site: the JS chord editor re-implements this escape rule for raw
+/// source scanning as `ESCAPABLE_SPECIALS` in
+/// `packages/react/src/chord-source-edit.ts` (and the CodeMirror tokenizer's
+/// escape branch in `packages/react/src/chordpro-language.ts`). Those lists
+/// cover only the always-special `{ } [ ]` (lyric context, never `in_directive`).
+/// Keep all of them in lockstep — adding a new escapable special here must be
+/// mirrored there (see `.claude/rules/fix-propagation.md`, #2634).
 fn is_special(ch: char, in_directive: bool) -> bool {
     matches!(ch, '{' | '}' | '[' | ']') || (ch == ':' && in_directive)
 }
@@ -497,6 +541,56 @@ mod tests {
         // "CD"
         assert_eq!(tokens[2].span.start, Position::new(2, 1));
         assert_eq!(tokens[2].span.end, Position::new(2, 3));
+    }
+
+    #[test]
+    fn utf16_col_matches_char_col_for_ascii() {
+        // For BMP-only input the UTF-16 column equals the 0-based char column.
+        let tokens = Lexer::new("[Am]Hi [G]x").tokenize();
+        // Every token's utf16_col is span.start.column - 1.
+        for t in &tokens {
+            assert_eq!(
+                t.utf16_col,
+                t.span.start.column - 1,
+                "ascii token {t:?} utf16_col should equal char col - 1"
+            );
+        }
+        // The second ChordOpen `[` sits at column 8 (1-based char) → utf16 7.
+        let second_open = tokens
+            .iter()
+            .filter(|t| t.kind == ChordOpen)
+            .nth(1)
+            .expect("two chord opens");
+        assert_eq!(second_open.utf16_col, 7);
+    }
+
+    #[test]
+    fn utf16_col_counts_astral_chars_as_two() {
+        // `🎸` is one char but two UTF-16 code units, so the `[` after it has
+        // char column 2 (1-based) but UTF-16 column 2 (0-based). This is the
+        // divergence #2634's JS consumer relies on.
+        let tokens = Lexer::new("🎸[Am]").tokenize();
+        let open = tokens
+            .iter()
+            .find(|t| t.kind == ChordOpen)
+            .expect("a chord open");
+        // 1-based char column of `[` is 2 (after the single-char emoji).
+        assert_eq!(open.span.start.column, 2);
+        // 0-based UTF-16 column is 2 (the emoji occupies code units 0 and 1).
+        assert_eq!(open.utf16_col, 2);
+    }
+
+    #[test]
+    fn utf16_col_resets_each_line() {
+        let tokens = Lexer::new("🎸\n[Am]").tokenize();
+        let open = tokens
+            .iter()
+            .find(|t| t.kind == ChordOpen)
+            .expect("a chord open on line 2");
+        assert_eq!(open.span.start.line, 2);
+        // Line two starts fresh: `[` is at UTF-16 column 0 despite the astral
+        // char on line one.
+        assert_eq!(open.utf16_col, 0);
     }
 
     #[test]

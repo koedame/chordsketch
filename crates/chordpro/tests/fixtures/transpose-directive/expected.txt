@@ -66,6 +66,9 @@ Song {
                         ),
                         text: "Hello ",
                         spans: [],
+                        source_column: Some(
+                            0,
+                        ),
                     },
                     LyricsSegment {
                         chord: Some(
@@ -85,6 +88,9 @@ Song {
                         ),
                         text: "world",
                         spans: [],
+                        source_column: Some(
+                            9,
+                        ),
                     },
                 ],
             },
@@ -120,6 +126,9 @@ Song {
                         ),
                         text: "Second ",
                         spans: [],
+                        source_column: Some(
+                            0,
+                        ),
                     },
                     LyricsSegment {
                         chord: Some(
@@ -139,6 +148,9 @@ Song {
                         ),
                         text: "line",
                         spans: [],
+                        source_column: Some(
+                            11,
+                        ),
                     },
                 ],
             },
@@ -174,6 +186,9 @@ Song {
                         ),
                         text: "Back to ",
                         spans: [],
+                        source_column: Some(
+                            0,
+                        ),
                     },
                     LyricsSegment {
                         chord: Some(
@@ -193,6 +208,9 @@ Song {
                         ),
                         text: "normal",
                         spans: [],
+                        source_column: Some(
+                            11,
+                        ),
                     },
                 ],
             },

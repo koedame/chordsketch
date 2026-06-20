@@ -337,6 +337,10 @@ impl PlainTextImporter {
                             chord: None,
                             text: (*text).to_string(),
                             spans: vec![],
+                            // Heuristic import builds segments from chords-over-
+                            // lyrics text, not inline `[chord]` source, so no
+                            // inline-source column applies (#2634).
+                            source_column: None,
                         }],
                     }));
                     i += 1;
@@ -709,6 +713,7 @@ fn pair_chords_with_lyric(positions: &[(usize, String)], lyric: &str) -> LyricsL
                 chord: None,
                 text: lyric.to_string(),
                 spans: vec![],
+                source_column: None,
             }],
         };
     }
@@ -756,6 +761,7 @@ fn pair_chords_with_lyric(positions: &[(usize, String)], lyric: &str) -> LyricsL
                 chord: None,
                 text: lyric[cursor..text_start].to_string(),
                 spans: vec![],
+                source_column: None,
             });
         }
 
@@ -766,6 +772,7 @@ fn pair_chords_with_lyric(positions: &[(usize, String)], lyric: &str) -> LyricsL
             chord: Some(Chord::new(chord_name.as_str())),
             text,
             spans: vec![],
+            source_column: None,
         });
         cursor = text_end.min(lyric_len);
     }

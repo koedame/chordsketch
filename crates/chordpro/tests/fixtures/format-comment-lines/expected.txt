@@ -56,6 +56,9 @@ Song {
                         ),
                         text: "Hello",
                         spans: [],
+                        source_column: Some(
+                            0,
+                        ),
                     },
                 ],
             },
