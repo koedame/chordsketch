@@ -1568,14 +1568,13 @@
    ring, and the activation pulse (`.chord--ringing`, added imperatively
    by the walker and removed on animationend).
 
-   There is deliberately NO hover background tint. A hover tint paints a
-   light background, but `.chord--ringing` paints WHITE text on the
-   chord while it sounds, and a hover selector outscopes the ringing
-   rule on specificity — so a light hover background under white ring
-   text rendered the chord unreadable (it looked like it vanished). The
-   earlier `:not(.chord--selected)` scoping only covered the persistent
-   selected badge and missed this transient white-text state, so the
-   tint is removed at the root rather than re-scoped. */
+   Do NOT add a hover background tint here. `.chord--ringing` paints
+   WHITE text on the chord while it sounds, and a `:hover` selector
+   wins over the `.chord--ringing` rule on specificity — so a light
+   hover background would render under white ring text and make the
+   just-played chord unreadable (it looks like it vanished). Scoping
+   the tint with `:not(.chord--selected)` does not help: that guards
+   only the persistent selected badge, not the transient ring state. */
 .chordsketch-sheet__content .chord--audio {
   cursor: pointer;
   border-radius: var(--cs-r-2, 4px);

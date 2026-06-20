@@ -1,9 +1,7 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
-
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
+
+import { readStylesheetSource } from './stylesheet-source';
 
 import { ChordSheet } from '../src/index';
 import type { ChordWasmLoader } from '../src/use-chord-render';
@@ -1292,26 +1290,28 @@ describe('<ChordSheet>', () => {
   });
 
   test('audio chords carry no hover background tint that could clash with the ringing white text', () => {
-    // Regression: in audio-only (preview) mode, clicking a chord adds
-    // `.chord--ringing` (crimson background + WHITE text) for the
-    // activation pulse. A `.chord--audio…:hover` rule that paints a light
-    // background outscopes the ringing rule on specificity, so hovering
-    // during/after the ring painted a light background under white text —
-    // the chord looked like it vanished. The fix removes the hover
-    // background tint at the root rather than re-scoping it; jsdom does
-    // not apply CSS, so the guard reads the stylesheet source directly
-    // (same approach as metronome-button.test.tsx).
-    const here = dirname(fileURLToPath(import.meta.url));
-    const css = readFileSync(resolve(here, '../src/styles.css'), 'utf8').replace(
-      /\/\*[\s\S]*?\*\//g,
-      '',
-    );
-    // Every `.chord--audio … :hover { … }` block (if any survive) must
-    // not set a `background`, the property that produced the unreadable
-    // white-on-light-tint state.
-    const hoverRules = css.match(/\.chord--audio[^{]*:hover[^{]*\{[^}]*\}/g) ?? [];
-    for (const rule of hoverRules) {
-      expect(rule).not.toMatch(/background/);
+    // Regression for the bug fixed alongside this test: see the
+    // "Chord audio" comment in src/styles.css for the full rationale.
+    // In short, a hover rule that paints a light background under a
+    // `.chord--audio` element outranks `.chord--ringing` (white text)
+    // on specificity, so a just-played chord became white-on-light and
+    // looked like it vanished. The fix removes the hover background tint
+    // at the root rather than re-scoping it.
+    const css = readStylesheetSource();
+    // Inspect every rule block (`selector { body }`) and fail any whose
+    // selector targets a `.chord--audio` element on `:hover` while its
+    // body sets a `background`. Splitting on `}` (rather than matching
+    // a `:hover`-immediately-before-`{` shape) catches grouped selector
+    // lists and whitespace variants, so the guard is not bypassed by a
+    // reintroduction in a slightly different form.
+    for (const block of css.split('}')) {
+      const braceAt = block.indexOf('{');
+      if (braceAt === -1) continue;
+      const selector = block.slice(0, braceAt);
+      const body = block.slice(braceAt + 1);
+      if (selector.includes('.chord--audio') && selector.includes(':hover')) {
+        expect(body).not.toMatch(/background/);
+      }
     }
   });
 });
