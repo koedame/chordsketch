@@ -273,6 +273,66 @@ describe('<ChordDiagram>', () => {
       });
     }
   });
+
+  test('chordAudio on: a still-loading diagram is already a play target', () => {
+    // Hold the loader open so the loading state is the commit state.
+    const loader: ChordDiagramWasmLoader = () =>
+      new Promise<never>(() => {
+        /* never resolves */
+      });
+    const play = vi.fn();
+    const { container } = render(
+      <ChordDiagram chord="Am" instrument="guitar" chordAudio={{ enabled: true, play }} wasmLoader={loader} />,
+    );
+    const wrapper = container.querySelector('.chordsketch-diagram--audio') as HTMLElement;
+    expect(wrapper).not.toBeNull();
+    expect(wrapper.getAttribute('aria-busy')).toBe('true');
+    expect(wrapper.getAttribute('role')).toBe('button');
+    fireEvent.click(wrapper);
+    expect(play).toHaveBeenCalledWith('Am');
+  });
+
+  test('chordAudio on: the error branch is NOT a play affordance (no audio class / role / handler)', async () => {
+    const stub = makeStub();
+    stub.chord_diagram_svg.mockImplementation(() => {
+      throw new Error('boom');
+    });
+    const play = vi.fn();
+    const { container } = render(
+      <ChordDiagram
+        chord="Am"
+        instrument="guitar"
+        chordAudio={{ enabled: true, play }}
+        wasmLoader={makeLoader(stub)}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toBe('boom');
+    });
+    const wrapper = container.querySelector('.chordsketch-diagram') as HTMLElement;
+    // The failed diagram must not paint a clickable affordance it cannot honour.
+    expect(wrapper.classList.contains('chordsketch-diagram--audio')).toBe(false);
+    expect(wrapper.getAttribute('role')).toBeNull();
+    fireEvent.click(wrapper);
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  test('audio off: an explicit consumer role survives once the SVG resolves', async () => {
+    // Regression guard for the role-respect fix: the hover popover passes
+    // role="tooltip"; the svg branch must not clobber it with role="img"
+    // when the diagram loads. The descriptive aria-label is preserved so
+    // an aria-describedby reference still resolves to a meaningful name.
+    const stub = makeStub();
+    const { container } = render(
+      <ChordDiagram chord="Am" instrument="guitar" role="tooltip" wasmLoader={makeLoader(stub)} />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector('.chordsketch-diagram svg')).not.toBeNull();
+    });
+    const wrapper = container.querySelector('.chordsketch-diagram') as HTMLElement;
+    expect(wrapper.getAttribute('role')).toBe('tooltip');
+    expect(wrapper.getAttribute('aria-label')).toBe('Am chord diagram (guitar)');
+  });
 });
 
 describe('useChordDiagram', () => {

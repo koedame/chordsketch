@@ -4795,7 +4795,7 @@ export function renderChordproAst(
                   chordAudio={
                     ctx.chordAudio?.enabled
                       ? { enabled: true, play: () => ctx.chordAudio?.play(rawName) }
-                      : ctx.chordAudio
+                      : null
                   }
                 />
               </figure>

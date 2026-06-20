@@ -2129,6 +2129,13 @@
   text-decoration: underline dotted;
   text-underline-offset: 2px;
 }
+/* When chord-audio is on (#2686) the hover trigger is also a play button,
+   so it must show the pointer affordance — not the `help` cursor. This
+   rule out-specifies the `.chord-has-diagram` cursor above (which would
+   otherwise win on source order over the `.chord--audio` rule). */
+.chordsketch-sheet__content .chord-has-diagram.chord--audio {
+  cursor: pointer;
+}
 .chordsketch-sheet__content .chord-diagram-popover {
   position: absolute;
   bottom: 100%;

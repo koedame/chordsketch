@@ -175,14 +175,20 @@ export function ChordDiagram({
     if (ringRef.current) pulseElement(ringRef.current, 'chordsketch-diagram--ringing');
   }, [chordAudio, chord]);
 
-  const wrapperClass = [
+  const baseWrapperClass = [
     'chordsketch-diagram',
     compact && 'chordsketch-diagram--compact',
-    audioOn && 'chordsketch-diagram--audio',
     className,
   ]
     .filter(Boolean)
     .join(' ');
+  // The `--audio` modifier carries the play-button affordance (cursor +
+  // hover ring); it is applied only to the branches that are ACTUALLY
+  // interactive. The error branch reuses `baseWrapperClass` so a failed
+  // diagram never paints a clickable affordance it does not honour.
+  const wrapperClass = audioOn
+    ? `${baseWrapperClass} chordsketch-diagram--audio`
+    : baseWrapperClass;
   // Surface the active orientation as a DOM attribute so consumers
   // and tests can observe it without parsing the SVG. Omitted (not
   // emitted as `data-orientation=""`) when the prop is unset so the
@@ -200,6 +206,12 @@ export function ChordDiagram({
     ? {
         role: 'button' as const,
         tabIndex: 0,
+        // `aria-label` / `data-chord` name the chord this diagram DEPICTS
+        // (the `chord` prop). For a `{define} display=` override the inline
+        // / grid call sites look the diagram up by — and pass here — the
+        // display spelling, while the audio config they inject auditions
+        // the raw name; the two are intentionally distinct (the label /
+        // hook match the visible glyph, the sound matches the real chord).
         'aria-label': `Play chord ${chord} (${instrument})`,
         'data-chord': chord,
         onClick: () => handlePlay(),
@@ -217,11 +229,25 @@ export function ChordDiagram({
       }
     : null;
 
+  // Static (audio-off) presentation for the svg branch: a labelled image,
+  // unless the consumer supplied an explicit `role` (e.g. the hover
+  // popover's `role="tooltip"`) — in which case respect it and keep the
+  // descriptive `aria-label` so an `aria-describedby` reference still
+  // resolves to a meaningful name.
+  const staticDiagramProps = {
+    role: divProps.role ?? 'img',
+    'aria-label': `${chord} chord diagram (${instrument})`,
+  };
+
   if (error !== null && errorFallback !== null) {
     const node =
       typeof errorFallback === 'function' ? errorFallback(error) : errorFallback;
+    // Static, non-interactive wrapper: `baseWrapperClass` deliberately
+    // omits `--audio` so a failed diagram does not paint a play affordance
+    // (cursor/ring) it cannot honour — its own `role="alert"` fallback
+    // node carries the error semantics.
     return (
-      <div {...divProps} {...orientationAttr} className={wrapperClass}>
+      <div {...divProps} {...orientationAttr} className={baseWrapperClass}>
         {node}
       </div>
     );
@@ -272,13 +298,11 @@ export function ChordDiagram({
       // When audio is off, expose the diagram as a labelled image to
       // assistive tech (without this, the inline SVG's accessible name is
       // the empty string and the chord identity is invisible to screen
-      // readers). When audio is on, `audioInteractiveProps` supplies
-      // `role="button"` + an action label instead — an element cannot be
-      // both an image and a button.
-      {...(audioInteractiveProps ?? {
-        role: 'img',
-        'aria-label': `${chord} chord diagram (${instrument})`,
-      })}
+      // readers) — or honour an explicit consumer `role` (see
+      // `staticDiagramProps`). When audio is on, `audioInteractiveProps`
+      // supplies `role="button"` + an action label instead — an element
+      // cannot be both an image and a button.
+      {...(audioInteractiveProps ?? staticDiagramProps)}
       // The SVG is produced by our own Rust renderer
       // (`chord_diagram::render_svg` / `render_keyboard_svg`),
       // which emits a fixed, hand-written template — nothing in

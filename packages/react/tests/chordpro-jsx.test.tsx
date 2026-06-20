@@ -4326,10 +4326,11 @@ describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
 
     fireEvent.click(trigger);
     expect(play).toHaveBeenCalledWith('C');
-    // Enter / Space activate from the keyboard.
+    // Enter / Space activate from the keyboard; an unrelated key does not.
     fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.keyDown(trigger, { key: ' ' });
     fireEvent.keyDown(trigger, { key: 'z' });
-    expect(play).toHaveBeenCalledTimes(2);
+    expect(play).toHaveBeenCalledTimes(3);
   });
 
   test('hover diagram cells stay inert when chord-audio is off', () => {
