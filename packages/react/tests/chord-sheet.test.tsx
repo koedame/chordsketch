@@ -1298,19 +1298,19 @@ describe('<ChordSheet>', () => {
     // looked like it vanished. The fix removes the hover background tint
     // at the root rather than re-scoping it.
     const css = readStylesheetSource();
-    // Inspect every rule block (`selector { body }`) and fail any whose
-    // selector targets a `.chord--audio` element on `:hover` while its
-    // body sets a `background`. Splitting on `}` (rather than matching
-    // a `:hover`-immediately-before-`{` shape) catches grouped selector
-    // lists and whitespace variants, so the guard is not bypassed by a
-    // reintroduction in a slightly different form.
-    for (const block of css.split('}')) {
-      const braceAt = block.indexOf('{');
-      if (braceAt === -1) continue;
-      const selector = block.slice(0, braceAt);
-      const body = block.slice(braceAt + 1);
-      if (selector.includes('.chord--audio') && selector.includes(':hover')) {
-        expect(body).not.toMatch(/background/);
+    // Split on `}` so each fragment spans a single rule (selector +
+    // body) — robust to grouped selector lists, whitespace variants,
+    // AND `@media` nesting (the wrapper's `@media (…) {` opener lands in
+    // the same fragment as the inner rule). Fail any fragment that
+    // mentions `.chord--audio`, `:hover`, and `background` together:
+    // that is the unreadable-on-ring combination, in whatever form it
+    // is reintroduced. The base `.chord--audio` rule sets `background`
+    // (in its `transition`) but has no `:hover`, so it is not flagged.
+    for (const fragment of css.split('}')) {
+      const targetsAudioHover =
+        fragment.includes('.chord--audio') && fragment.includes(':hover');
+      if (targetsAudioHover) {
+        expect(fragment).not.toMatch(/background/);
       }
     }
   });
