@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { ChordDiagram, useChordDiagram } from '../src/index';
@@ -137,6 +137,201 @@ describe('<ChordDiagram>', () => {
       });
     render(<ChordDiagram chord="Am" wasmLoader={loader} />);
     expect(screen.getByRole('status').textContent).toMatch(/loading/i);
+  });
+
+  // ---- Chord audio (#2686) ---------------------------------------
+
+  test('chordAudio on: the diagram becomes a play button that sounds its chord', async () => {
+    const stub = makeStub();
+    const play = vi.fn();
+    const { container } = render(
+      <ChordDiagram
+        chord="Am"
+        instrument="guitar"
+        chordAudio={{ enabled: true, play }}
+        wasmLoader={makeLoader(stub)}
+      />,
+    );
+    let wrapper!: HTMLElement;
+    await waitFor(() => {
+      wrapper = container.querySelector('.chordsketch-diagram--audio') as HTMLElement;
+      expect(wrapper).not.toBeNull();
+      // The SVG actually resolved, so this is the svg branch.
+      expect(wrapper.querySelector('svg')).not.toBeNull();
+    });
+    // Interactive button semantics replace the static role="img".
+    expect(wrapper.getAttribute('role')).toBe('button');
+    expect(wrapper.getAttribute('aria-label')).toBe('Play chord Am (guitar)');
+    expect(wrapper.getAttribute('data-chord')).toBe('Am');
+    expect(wrapper.tabIndex).toBe(0);
+
+    fireEvent.click(wrapper);
+    expect(play).toHaveBeenCalledWith('Am');
+
+    // Enter / Space activate from the keyboard; an unrelated key does not.
+    fireEvent.keyDown(wrapper, { key: 'Enter' });
+    fireEvent.keyDown(wrapper, { key: ' ' });
+    fireEvent.keyDown(wrapper, { key: 'x' });
+    expect(play).toHaveBeenCalledTimes(3);
+  });
+
+  test('chordAudio off / absent: the diagram stays a static role="img" figure', async () => {
+    const stub = makeStub();
+    const play = vi.fn();
+    const off = render(
+      <ChordDiagram
+        chord="Am"
+        instrument="guitar"
+        chordAudio={{ enabled: false, play }}
+        wasmLoader={makeLoader(stub)}
+      />,
+    );
+    await waitFor(() => {
+      expect(off.container.querySelector('.chordsketch-diagram svg')).not.toBeNull();
+    });
+    const offWrapper = off.container.querySelector('.chordsketch-diagram') as HTMLElement;
+    expect(offWrapper.classList.contains('chordsketch-diagram--audio')).toBe(false);
+    expect(offWrapper.getAttribute('role')).toBe('img');
+    fireEvent.click(offWrapper);
+    expect(play).not.toHaveBeenCalled();
+
+    const absent = render(
+      <ChordDiagram chord="Am" instrument="guitar" wasmLoader={makeLoader(stub)} />,
+    );
+    await waitFor(() => {
+      expect(absent.container.querySelector('.chordsketch-diagram svg')).not.toBeNull();
+    });
+    expect(
+      absent.container.querySelector('.chordsketch-diagram')?.getAttribute('role'),
+    ).toBe('img');
+  });
+
+  test('chordAudio on: a not-found chord still plays (the name fallback is the play target)', async () => {
+    const stub = makeStub();
+    const play = vi.fn();
+    const { container } = render(
+      <ChordDiagram
+        chord="ZZZ7sus4"
+        instrument="guitar"
+        chordAudio={{ enabled: true, play }}
+        wasmLoader={makeLoader(stub)}
+      />,
+    );
+    let wrapper!: HTMLElement;
+    await waitFor(() => {
+      // Not-found branch: no svg, but still an audio button.
+      wrapper = container.querySelector('.chordsketch-diagram--audio') as HTMLElement;
+      expect(wrapper).not.toBeNull();
+      expect(wrapper.querySelector('svg')).toBeNull();
+    });
+    expect(wrapper.getAttribute('role')).toBe('button');
+    fireEvent.click(wrapper);
+    expect(play).toHaveBeenCalledWith('ZZZ7sus4');
+  });
+
+  test('chordAudio on: no ringing class is left stuck under prefers-reduced-motion', async () => {
+    // Regression guard mirroring the chord-name path: `animation: none`
+    // under reduced motion stops `animationend` from firing, so the pulse
+    // class must never be added in the first place.
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (query: string) => ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }),
+    });
+    try {
+      const stub = makeStub();
+      const play = vi.fn();
+      const { container } = render(
+        <ChordDiagram
+          chord="Am"
+          instrument="guitar"
+          chordAudio={{ enabled: true, play }}
+          wasmLoader={makeLoader(stub)}
+        />,
+      );
+      let wrapper!: HTMLElement;
+      await waitFor(() => {
+        wrapper = container.querySelector('.chordsketch-diagram--audio') as HTMLElement;
+        expect(wrapper).not.toBeNull();
+      });
+      fireEvent.click(wrapper);
+      expect(play).toHaveBeenCalledWith('Am');
+      expect(wrapper.classList.contains('chordsketch-diagram--ringing')).toBe(false);
+    } finally {
+      Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: originalMatchMedia,
+      });
+    }
+  });
+
+  test('chordAudio on: a still-loading diagram is already a play target', () => {
+    // Hold the loader open so the loading state is the commit state.
+    const loader: ChordDiagramWasmLoader = () =>
+      new Promise<never>(() => {
+        /* never resolves */
+      });
+    const play = vi.fn();
+    const { container } = render(
+      <ChordDiagram chord="Am" instrument="guitar" chordAudio={{ enabled: true, play }} wasmLoader={loader} />,
+    );
+    const wrapper = container.querySelector('.chordsketch-diagram--audio') as HTMLElement;
+    expect(wrapper).not.toBeNull();
+    expect(wrapper.getAttribute('aria-busy')).toBe('true');
+    expect(wrapper.getAttribute('role')).toBe('button');
+    fireEvent.click(wrapper);
+    expect(play).toHaveBeenCalledWith('Am');
+  });
+
+  test('chordAudio on: the error branch is NOT a play affordance (no audio class / role / handler)', async () => {
+    const stub = makeStub();
+    stub.chord_diagram_svg.mockImplementation(() => {
+      throw new Error('boom');
+    });
+    const play = vi.fn();
+    const { container } = render(
+      <ChordDiagram
+        chord="Am"
+        instrument="guitar"
+        chordAudio={{ enabled: true, play }}
+        wasmLoader={makeLoader(stub)}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toBe('boom');
+    });
+    const wrapper = container.querySelector('.chordsketch-diagram') as HTMLElement;
+    // The failed diagram must not paint a clickable affordance it cannot honour.
+    expect(wrapper.classList.contains('chordsketch-diagram--audio')).toBe(false);
+    expect(wrapper.getAttribute('role')).toBeNull();
+    fireEvent.click(wrapper);
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  test('audio off: an explicit consumer role survives once the SVG resolves', async () => {
+    // Regression guard for the role-respect fix: the hover popover passes
+    // role="tooltip"; the svg branch must not clobber it with role="img"
+    // when the diagram loads. The descriptive aria-label is preserved so
+    // an aria-describedby reference still resolves to a meaningful name.
+    const stub = makeStub();
+    const { container } = render(
+      <ChordDiagram chord="Am" instrument="guitar" role="tooltip" wasmLoader={makeLoader(stub)} />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector('.chordsketch-diagram svg')).not.toBeNull();
+    });
+    const wrapper = container.querySelector('.chordsketch-diagram') as HTMLElement;
+    expect(wrapper.getAttribute('role')).toBe('tooltip');
+    expect(wrapper.getAttribute('aria-label')).toBe('Am chord diagram (guitar)');
   });
 });
 
