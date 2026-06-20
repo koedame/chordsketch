@@ -176,6 +176,37 @@ mod tests {
         let token = Token::new(TokenKind::DirectiveOpen, span);
         assert_eq!(token.kind, TokenKind::DirectiveOpen);
         assert_eq!(token.span, span);
+        // `new` derives the 0-based UTF-16 column from the 1-based char column.
+        assert_eq!(token.utf16_col, 0);
+    }
+
+    #[test]
+    fn token_new_saturates_zero_column() {
+        // Defensive: a malformed `Span` with column 0 must not underflow.
+        let span = Span::new(Position::new(1, 0), Position::new(1, 0));
+        let token = Token::new(TokenKind::Eof, span);
+        assert_eq!(token.utf16_col, 0);
+    }
+
+    #[test]
+    fn token_equality_ignores_utf16_col() {
+        // Two tokens with the same kind and span but different UTF-16 columns
+        // compare equal — `utf16_col` is excluded from equality because it
+        // re-encodes the position the span already pins.
+        let span = Span::new(Position::new(1, 3), Position::new(1, 4));
+        let a = Token::with_utf16_col(TokenKind::ChordOpen, span, 2);
+        let b = Token::with_utf16_col(TokenKind::ChordOpen, span, 5);
+        assert_eq!(a, b);
+
+        // Differing kind or span still breaks equality.
+        let other_kind = Token::with_utf16_col(TokenKind::ChordClose, span, 2);
+        assert_ne!(a, other_kind);
+        let other_span = Token::with_utf16_col(
+            TokenKind::ChordOpen,
+            Span::new(Position::new(2, 3), Position::new(2, 4)),
+            2,
+        );
+        assert_ne!(a, other_span);
     }
 
     #[test]
