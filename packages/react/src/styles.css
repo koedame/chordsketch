@@ -2129,6 +2129,13 @@
   text-decoration: underline dotted;
   text-underline-offset: 2px;
 }
+/* When chord-audio is on (#2686) the hover trigger is also a play button,
+   so it must show the pointer affordance — not the `help` cursor. This
+   rule out-specifies the `.chord-has-diagram` cursor above (which would
+   otherwise win on source order over the `.chord--audio` rule). */
+.chordsketch-sheet__content .chord-has-diagram.chord--audio {
+  cursor: pointer;
+}
 .chordsketch-sheet__content .chord-diagram-popover {
   position: absolute;
   bottom: 100%;
@@ -2369,6 +2376,39 @@
 
 .chordsketch-diagram__error {
   border-style: solid;
+}
+
+/* ---- Chord-diagram audio (#2686) ------------------------------ */
+/* When chord-audio is on, `<ChordDiagram>` becomes a play button (the
+   whole diagram is the click target). These rules are intentionally
+   UNSCOPED (not under `.chordsketch-sheet__content`) because a diagram
+   can be mounted standalone — the end-of-song grid, the inline / hover
+   cells, and an external `<ChordDiagram chordAudio>` all share them.
+   The activation pulse is a crimson ring + the shared `cs-chord-pulse`
+   scale animation; unlike the chord-name pulse it does NOT paint a
+   background/text colour (an SVG diagram has no text to invert). */
+.chordsketch-diagram--audio {
+  cursor: pointer;
+  border-radius: var(--cs-r-2, 4px);
+  transition:
+    box-shadow 0.12s ease,
+    transform 0.12s ease;
+}
+.chordsketch-diagram--audio:focus-visible {
+  outline: none;
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #bd1642);
+}
+.chordsketch-diagram--audio:hover {
+  box-shadow: 0 0 0 2px var(--cs-crimson-500, #bd1642);
+}
+.chordsketch-diagram--ringing {
+  box-shadow: 0 0 0 2px var(--cs-crimson-500, #bd1642);
+  animation: cs-chord-pulse 0.45s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chordsketch-diagram--ringing {
+    animation: none;
+  }
 }
 
 /* ---------- Source editor (CodeMirror 6) ---------- */

@@ -54,6 +54,31 @@ export type ChordAudioWasmLoader = () => Promise<ChordPitchesModule>;
 const defaultLoader: ChordAudioWasmLoader = () =>
   import('@chordsketch/wasm') as unknown as Promise<ChordPitchesModule>;
 
+/**
+ * Chord-audio (#2650) wiring threaded to the chord surfaces (chord-name
+ * spans in the JSX walker, and chord diagrams via {@link ChordDiagram}).
+ * When {@link ChordAudioConfig.enabled} is `true`, activating a rendered
+ * chord (click / Enter / Space) sounds the chord via
+ * {@link ChordAudioConfig.play}.
+ *
+ * Audio is additive, not a separate mode: it layers playback on top of
+ * whatever interaction is already wired. With a selection consumer
+ * present, clicking a chord both sounds it AND selects it for editing —
+ * the editing panel stays usable while audio is on. With no selection
+ * consumer (e.g. a preview-only host), the chord is a pure play button.
+ *
+ * Defined in this leaf module (not `chordpro-jsx`) so `<ChordDiagram>`
+ * can depend on the type without importing the walker, which would form
+ * an import cycle (the walker imports `<ChordDiagram>`). Re-exported from
+ * `chordpro-jsx` so existing import paths keep resolving.
+ */
+export interface ChordAudioConfig {
+  /** Whether chord-audio mode is active. */
+  enabled: boolean;
+  /** Sound the given raw chord name (e.g. `"Am7"`, `"C/G"`). */
+  play: (chordName: string) => void;
+}
+
 /** Result of {@link useChordAudio}. */
 export interface UseChordAudioResult {
   /**

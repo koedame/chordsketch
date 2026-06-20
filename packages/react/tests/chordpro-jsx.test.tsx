@@ -4183,6 +4183,171 @@ describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
     expect(container.querySelector('.chord-diagrams')).toBeNull();
   });
 
+  // ---- Chord-diagram audio (#2686) -------------------------------
+  // The `<ChordDiagram>` instances mounted by the grid / inline / hover
+  // paths lazily load wasm; like the other diagram tests these assert
+  // only the synchronous interactive wrapper (a diagram is a play button
+  // before any SVG resolves, since the audio props apply to the
+  // loading / not-found branches too).
+
+  // A define-override song: the chord renders/looks-up under its
+  // `display` spelling but must AUDITION the raw `name`.
+  function displayOverrideSong(mode: string | null): ChordproSong {
+    return {
+      metadata: EMPTY_META,
+      lines: [
+        ...(mode === null
+          ? []
+          : [
+              {
+                kind: 'directive' as const,
+                value: {
+                  name: 'diagrams',
+                  value: mode,
+                  kind: { tag: 'diagrams' as const },
+                  selector: null,
+                },
+              },
+            ]),
+        {
+          kind: 'lyrics' as const,
+          value: {
+            segments: [
+              {
+                chord: { name: 'Am', detail: null, display: 'A−' },
+                text: 'Do',
+                spans: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+  }
+
+  test('end-of-song grid: chord-audio makes each diagram a play button', () => {
+    const play = vi.fn();
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValues(null), {
+        chordDiagrams: { instrument: 'guitar' },
+        chordAudio: { enabled: true, play },
+      }),
+    );
+    const diagram = container.querySelector(
+      '.chord-diagrams .chordsketch-diagram--audio',
+    ) as HTMLElement;
+    expect(diagram).not.toBeNull();
+    expect(diagram.getAttribute('role')).toBe('button');
+    fireEvent.click(diagram);
+    expect(play).toHaveBeenCalledWith('C');
+  });
+
+  test('end-of-song grid: a display-override diagram auditions the RAW chord name', () => {
+    const play = vi.fn();
+    const { container } = render(
+      renderChordproAst(displayOverrideSong(null), {
+        chordDiagrams: { instrument: 'guitar' },
+        chordAudio: { enabled: true, play },
+      }),
+    );
+    const diagram = container.querySelector(
+      '.chord-diagrams .chordsketch-diagram--audio',
+    ) as HTMLElement;
+    expect(diagram).not.toBeNull();
+    fireEvent.click(diagram);
+    // Plays the parseable raw name "Am", NOT the "A−" display label.
+    expect(play).toHaveBeenCalledWith('Am');
+  });
+
+  test('grid diagrams stay inert when chord-audio is off', () => {
+    const play = vi.fn();
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValues(null), {
+        chordDiagrams: { instrument: 'guitar' },
+        chordAudio: { enabled: false, play },
+      }),
+    );
+    expect(container.querySelector('.chord-diagrams .chordsketch-diagram--audio')).toBeNull();
+    const diagram = container.querySelector('.chord-diagrams .chordsketch-diagram') as HTMLElement;
+    fireEvent.click(diagram);
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  test('{diagrams: inline}: the inline diagram cell plays the chord on click', () => {
+    const play = vi.fn();
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValues('inline'), {
+        chordDiagrams: { instrument: 'guitar' },
+        chordAudio: { enabled: true, play },
+      }),
+    );
+    const diagram = container.querySelector(
+      '.chord-block-inline-diagram .chordsketch-diagram--audio',
+    ) as HTMLElement;
+    expect(diagram).not.toBeNull();
+    expect(diagram.getAttribute('role')).toBe('button');
+    fireEvent.click(diagram);
+    expect(play).toHaveBeenCalledWith('C');
+  });
+
+  test('{diagrams: inline}: a display-override cell auditions the RAW chord name', () => {
+    const play = vi.fn();
+    const { container } = render(
+      renderChordproAst(displayOverrideSong('inline'), {
+        chordDiagrams: { instrument: 'guitar' },
+        chordAudio: { enabled: true, play },
+      }),
+    );
+    const diagram = container.querySelector(
+      '.chord-block-inline-diagram .chordsketch-diagram--audio',
+    ) as HTMLElement;
+    expect(diagram).not.toBeNull();
+    fireEvent.click(diagram);
+    expect(play).toHaveBeenCalledWith('Am');
+  });
+
+  test('{diagrams: hover}: the chord-name trigger plays the chord; the popover stays a tooltip', () => {
+    const play = vi.fn();
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValues('hover'), {
+        chordDiagrams: { instrument: 'guitar' },
+        chordAudio: { enabled: true, play },
+      }),
+    );
+    const trigger = container.querySelector('.chord-has-diagram') as HTMLElement;
+    expect(trigger).not.toBeNull();
+    // The always-visible name span is the play button.
+    expect(trigger.classList.contains('chord--audio')).toBe(true);
+    expect(trigger.getAttribute('role')).toBe('button');
+    expect(trigger.getAttribute('data-chord')).toBe('C');
+    // The popover is NOT a nested interactive element.
+    const popover = container.querySelector('.chord-diagram-popover') as HTMLElement;
+    expect(popover.getAttribute('role')).toBe('tooltip');
+
+    fireEvent.click(trigger);
+    expect(play).toHaveBeenCalledWith('C');
+    // Enter / Space activate from the keyboard; an unrelated key does not.
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.keyDown(trigger, { key: ' ' });
+    fireEvent.keyDown(trigger, { key: 'z' });
+    expect(play).toHaveBeenCalledTimes(3);
+  });
+
+  test('hover diagram cells stay inert when chord-audio is off', () => {
+    const play = vi.fn();
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValues('hover'), {
+        chordDiagrams: { instrument: 'guitar' },
+        chordAudio: { enabled: false, play },
+      }),
+    );
+    const trigger = container.querySelector('.chord-has-diagram') as HTMLElement;
+    expect(trigger.classList.contains('chord--audio')).toBe(false);
+    expect(trigger.getAttribute('role')).toBeNull();
+    fireEvent.click(trigger);
+    expect(play).not.toHaveBeenCalled();
+  });
+
   // A song with a chord-bearing segment followed by a chord-LESS
   // segment on the same line, plus `{key}` / `{tempo}` directives and
   // a `{diagrams: …}` mode. Exercises the inline-diagram baseline-
