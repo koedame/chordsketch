@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "specification-website": {
+      "type": "http",
+      "url": "https://mcp.specification.website/mcp"
+    }
+  }
+}
