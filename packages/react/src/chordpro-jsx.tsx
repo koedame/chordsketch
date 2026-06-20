@@ -1754,19 +1754,19 @@ function ChordCell(props: {
           role: 'button' as const,
           'aria-label': `Play chord ${audioName}`,
           'data-chord': audioName,
-          onClick: (e: ReactMouseEvent) => {
+          onClick: (e: ReactMouseEvent<HTMLSpanElement>) => {
             chordAudio?.play(audioName);
-            pulseElement(e.currentTarget as HTMLElement, 'chord--ringing');
+            pulseElement(e.currentTarget, 'chord--ringing');
           },
-          onKeyDown: (e: ReactKeyboardEvent) => {
+          onKeyDown: (e: ReactKeyboardEvent<HTMLSpanElement>) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               chordAudio?.play(audioName);
-              pulseElement(e.currentTarget as HTMLElement, 'chord--ringing');
+              pulseElement(e.currentTarget, 'chord--ringing');
             }
           },
-          onAnimationEnd: (e: ReactAnimationEvent) => {
-            (e.currentTarget as HTMLElement).classList.remove('chord--ringing');
+          onAnimationEnd: (e: ReactAnimationEvent<HTMLSpanElement>) => {
+            e.currentTarget.classList.remove('chord--ringing');
           },
         }
       : null;
