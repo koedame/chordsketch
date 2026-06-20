@@ -77,30 +77,6 @@ function isEscapedSpecial(line: string, i: number): boolean {
 }
 
 /**
- * Resolve the lexer's escape rule over a raw source fragment: drop the
- * backslash of each escaped special (`\[` → `[`, `\]` → `]`, …) while keeping
- * a backslash before a non-special (or at end) literal. Mirrors the Rust
- * lexer's `lex_text`, so a raw chord body scanned out of the source yields the
- * same name the AST carries (e.g. `A\]m` → `A]m`). Keeps the raw-scan
- * chord-resolution path (`findChordAtCaret`) in agreement with the AST path
- * (`resolveSelectedChord`) — #2634.
- */
-function resolveLyricEscapes(raw: string): string {
-  let out = '';
-  let i = 0;
-  while (i < raw.length) {
-    if (isEscapedSpecial(raw, i)) {
-      out += raw[i + 1]; // drop the backslash, keep the escaped special
-      i += 2;
-    } else {
-      out += raw[i];
-      i++;
-    }
-  }
-  return out;
-}
-
-/**
  * Index of the `]` that closes a chord opened at `open` (`line[open] === '['`),
  * skipping any escaped `\]` inside the chord body so a chord name containing an
  * escaped bracket is not split early. Returns `-1` when the bracket is
@@ -1152,11 +1128,16 @@ function scanLineChords(line: string): { tokens: LineChordToken[]; totalLyrics: 
       tokens.push({
         colStart: i,
         colClose: close,
-        // Escape-resolved body so the name matches what the AST carries (the
-        // lexer drops the backslash of an escaped special). The token's column
-        // span — `colClose - colStart + 1` at the call sites — remains the
-        // source-accurate width, independent of this resolved name (#2634).
-        name: resolveLyricEscapes(line.slice(i + 1, close)),
+        // RAW body, including any escape backslashes. This is deliberate: the
+        // name feeds the edit `expected` optimistic-concurrency guard, which
+        // compares `'[' + name + ']'` against the live source slice — so the
+        // name must round-trip the source verbatim. `'[' + 'A\]m' + ']'`
+        // matches the source `[A\]m]`; the escape-resolved `A]m` would not and
+        // would no-op every edit of such a chord. Chord names containing an
+        // escaped special are pathological non-chords; this caret-driven path
+        // still edits them correctly, while the AST path (which carries the
+        // escape-resolved name) no-ops them — a documented edge (#2634).
+        name: line.slice(i + 1, close),
         lyricsOffset: lyricsCount,
       });
       i = close + 1;

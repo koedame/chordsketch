@@ -927,14 +927,29 @@ describe('escaped-special source scanning (#2634)', () => {
 
   test('a chord whose name contains an escaped bracket is not split early', () => {
     // `[A\]m]` is ONE chord spanning to the final `]` (column 5), not split at
-    // the escaped `\]`. The name is escape-resolved to match the AST (`A]m`),
-    // while the column span stays source-accurate (6 columns).
+    // the escaped `\]`. The caret-driven path keeps the RAW name so it
+    // round-trips the source for the edit `expected` guard.
     const match = findChordAtCaret('[A\\]m]x', 0)!;
-    expect(match.chordName).toBe('A]m'); // resolved, agrees with the AST name
-    expect(match.bracketLength).toBe(6); // source span, including the backslash
+    expect(match.chordName).toBe('A\\]m'); // raw — round-trips the source span
+    expect(match.bracketLength).toBe(6);
     expect('[A\\]m]x'.slice(match.sourceColumn, match.sourceColumn + match.bracketLength)).toBe(
       '[A\\]m]',
     );
+  });
+
+  test('editing an escaped-bracket-name chord round-trips via the raw-scan path', () => {
+    // Because the name is raw, the `expected` guard matches the live source
+    // and the edit applies (the AST path no-ops these — documented edge).
+    const source = '[A\\]m]x';
+    const match = findChordAtCaret(source, 0)!;
+    const { text } = applyChordEdit(source, {
+      line: 1,
+      fromColumn: match.sourceColumn,
+      fromLength: match.bracketLength,
+      chord: 'C',
+      expected: match.chordName,
+    });
+    expect(text).toBe('[C]x');
   });
 });
 
