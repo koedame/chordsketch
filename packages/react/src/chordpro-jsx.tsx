@@ -45,6 +45,15 @@ import type {
 } from 'react';
 
 import { ChordDiagram } from './chord-diagram';
+import { pulseElement } from './chord-pulse';
+import type { ChordAudioConfig } from './use-chord-audio';
+
+// Re-export so existing consumers (chord-sheet, renderer-preview,
+// use-chord-editor, the package index) keep importing `ChordAudioConfig`
+// from `chordpro-jsx`. The type now lives in the leaf `use-chord-audio`
+// module so `<ChordDiagram>` can depend on it without forming an import
+// cycle with this walker. See use-chord-audio.ts for the definition.
+export type { ChordAudioConfig } from './use-chord-audio';
 
 // Minimal `process.env.NODE_ENV` typing for dev-only assertions
 // below — same pattern as `ireal-pro-editor.tsx` /
@@ -1570,49 +1579,14 @@ export interface ChordSelection {
 }
 
 /**
- * Chord-audio (#2650) wiring threaded to each chord-bearing lyrics line.
- * When {@link ChordAudioConfig.enabled} is `true`, activating a rendered
- * `.chord` (click / Enter / Space) sounds the chord via
- * {@link ChordAudioConfig.play}.
- *
- * Audio is additive, not a separate mode: it layers playback on top of
- * whatever interaction is already wired. With a selection consumer
- * present, clicking a chord both sounds it AND selects it for editing —
- * the editing panel stays usable while audio is on. With no selection
- * consumer (e.g. a preview-only host), the chord is a pure play button.
- */
-export interface ChordAudioConfig {
-  /** Whether chord-audio mode is active. */
-  enabled: boolean;
-  /** Sound the given raw chord name (e.g. `"Am7"`, `"C/G"`). */
-  play: (chordName: string) => void;
-}
-
-/**
  * Briefly flash a `.chord--ringing` class on a played chord element so
- * the tap gets visual feedback. The class is added imperatively (the
- * walker is stateless per chord) and removed on `animationend`; a forced
- * reflow between remove and re-add restarts the CSS animation when the
- * same chord is tapped again before the previous pulse finishes.
- *
- * When `prefers-reduced-motion: reduce` is active the function exits
- * early rather than adding the class — the CSS suppresses the animation
- * (`animation: none`) and `animationend` never fires, which would leave
- * the class (crimson background, white text) on the element permanently.
+ * the tap gets visual feedback. Delegates to the shared
+ * {@link pulseElement} mechanism (sister to the chord-diagram pulse — see
+ * .claude/rules/fix-propagation.md) so the reduced-motion guard and the
+ * animation-restart reflow live in one place.
  */
 function pulseChordElement(el: HTMLElement): void {
-  // Skip the visual pulse when the user prefers reduced motion. The audio
-  // still plays; only the animation feedback is suppressed. Without this
-  // guard, `animationend` never fires under `animation: none`, so the
-  // `.chord--ringing` highlight would stick on the element indefinitely.
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-    return;
-  }
-  el.classList.remove('chord--ringing');
-  // Reading offsetWidth forces a synchronous reflow so the re-added
-  // class starts a fresh animation rather than being coalesced away.
-  void el.offsetWidth;
-  el.classList.add('chord--ringing');
+  pulseElement(el, 'chord--ringing');
 }
 
 /**
@@ -1731,9 +1705,20 @@ function ChordCell(props: {
   instrument: ChordDiagramInstrument;
   orientation: ChordDiagramOrientation | undefined;
   defines: ReadonlyArray<readonly [string, string]> | undefined;
+  /** Chord-audio config (#2686). `null` keeps the diagram cell inert. */
+  chordAudio: ChordAudioConfig | null;
 }): JSX.Element {
-  const { mode, chord, marker, chordStyle, dragProps, instrument, orientation, defines } =
-    props;
+  const {
+    mode,
+    chord,
+    marker,
+    chordStyle,
+    dragProps,
+    instrument,
+    orientation,
+    defines,
+    chordAudio,
+  } = props;
   // The wasm voicing lookup keys on the {define} display override when
   // present, falling back to the raw chord name — the same expression
   // collectChordNames uses for the end-of-song grid. The
@@ -1746,17 +1731,55 @@ function ChordCell(props: {
     </>
   );
 
+  // Chord-audio (#2686). Play the RAW chord name — `chordName` above may
+  // be a `display` spelling override (e.g. `"A−"`) that the audio pitch
+  // lookup cannot parse, so the diagram is looked up by `chordName` but
+  // auditioned by `chord.name` (the same raw name the chord-name path
+  // plays). `null` when audio is off / the chord has no name.
+  const audioName = chord.name ?? '';
+  const audioOn = Boolean(chordAudio?.enabled) && audioName.length > 0;
+
   // Stable ID required for the aria-describedby / id pairing below.
   const tooltipId = useId();
 
   if (mode === 'hover') {
+    // In hover mode the chord NAME is the always-visible target (the
+    // diagram is a hover/focus popover), so the outer span is the play
+    // button when audio is on. A click anywhere inside — the name or the
+    // revealed popover diagram — bubbles here and sounds the chord, so the
+    // popover stays a plain `role="tooltip"` (no nested interactive). The
+    // pulse uses `event.currentTarget` (this span), not the popover.
+    const hoverAudioProps = audioOn
+      ? {
+          role: 'button' as const,
+          'aria-label': `Play chord ${audioName}`,
+          'data-chord': audioName,
+          onClick: (e: ReactMouseEvent) => {
+            chordAudio?.play(audioName);
+            pulseElement(e.currentTarget as HTMLElement, 'chord--ringing');
+          },
+          onKeyDown: (e: ReactKeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              chordAudio?.play(audioName);
+              pulseElement(e.currentTarget as HTMLElement, 'chord--ringing');
+            }
+          },
+          onAnimationEnd: (e: ReactAnimationEvent) => {
+            (e.currentTarget as HTMLElement).classList.remove('chord--ringing');
+          },
+        }
+      : null;
     return (
       <span
-        className="chord chord-has-diagram"
+        className={['chord', 'chord-has-diagram', audioOn && 'chord--audio']
+          .filter(Boolean)
+          .join(' ')}
         style={chordStyle ?? undefined}
         tabIndex={0}
         aria-describedby={tooltipId}
         {...(dragProps ?? {})}
+        {...(hoverAudioProps ?? {})}
       >
         {nameNode}
         <ChordDiagram
@@ -1775,7 +1798,13 @@ function ChordCell(props: {
     );
   }
 
-  // inline: the compact diagram stands in for the chord name.
+  // inline: the compact diagram stands in for the chord name, so the
+  // diagram itself is the play button. Hand `<ChordDiagram>` a config that
+  // auditions the RAW name (see `audioName` above) regardless of the
+  // `display`-spelled `chordName` it renders.
+  const inlineAudio: ChordAudioConfig | null = audioOn
+    ? { enabled: true, play: () => chordAudio?.play(audioName) }
+    : null;
   return (
     <span
       className="chord chord-block-inline-diagram"
@@ -1789,6 +1818,7 @@ function ChordCell(props: {
         defines={defines}
         compact
         className="chord-block-diagram"
+        chordAudio={inlineAudio}
         notFoundFallback={nameNode}
         loadingFallback={nameNode}
         errorFallback={() => nameNode}
@@ -2347,6 +2377,11 @@ function LyricsLine({
                   instrument={diagrams.instrument}
                   orientation={diagrams.orientation}
                   defines={diagrams.defines}
+                  // Chord-audio (#2686): in inline/hover diagram mode the
+                  // diagram cell — not a chord-name span — is the play
+                  // target, so the audio config is threaded into the cell
+                  // (this branch never receives `chordInteractiveProps`).
+                  chordAudio={audioEnabled ? chordAudio ?? null : null}
                 />
               ) : (
                 <span
@@ -3056,25 +3091,41 @@ interface DiagramsState {
 // `chordsketch-render-html`'s `chord_names` accumulator —
 // preserving order of first appearance so the diagram grid
 // reads top-to-bottom in source order.
-function collectChordNames(song: ChordproSong): string[] {
+/**
+ * A chord listed in the end-of-song grid. `name` is the diagram-lookup
+ * key (the `{define} display=` override when present, else the raw chord
+ * name) — what the grid shows and looks the voicing up by. `rawName` is
+ * the underlying parseable chord name used for AUDIO: a `display=`
+ * override can be an arbitrary label (e.g. `"C⁹"`) the pitch lookup
+ * cannot parse, so the two are kept distinct exactly as the inline/hover
+ * `<ChordCell>` keeps them distinct (.claude/rules/fix-propagation.md).
+ */
+interface GridChord {
+  name: string;
+  rawName: string;
+}
+
+function collectChordNames(song: ChordproSong): GridChord[] {
   const seen = new Set<string>();
-  const out: string[] = [];
-  const add = (name: string | undefined): void => {
+  const out: GridChord[] = [];
+  const add = (name: string | undefined, rawName: string | undefined): void => {
     if (!name) return;
     if (seen.has(name)) return;
     seen.add(name);
-    out.push(name);
+    out.push({ name, rawName: rawName ?? name });
   };
   for (const line of song.lines) {
     if (line.kind === 'lyrics') {
       for (const seg of line.value.segments) {
-        if (seg.chord) add(seg.chord.display ?? seg.chord.name);
+        if (seg.chord) add(seg.chord.display ?? seg.chord.name, seg.chord.name);
       }
     } else if (line.kind === 'directive') {
       const kind = line.value.kind;
       // `{define}` / `{chord}` values lead with the chord name —
       // pluck it so the grid lists explicitly-defined chords
-      // even when they don't appear in the lyrics.
+      // even when they don't appear in the lyrics. The first word IS
+      // the raw chord name (the `display=` override is a later token),
+      // so it doubles as the audio name.
       if ((kind.tag === 'define' || kind.tag === 'chordDirective') && line.value.value) {
         const firstWord = line.value.value.trim().split(/\s+/)[0];
         if (firstWord) {
@@ -3082,7 +3133,7 @@ function collectChordNames(song: ChordproSong): string[] {
           const unwrapped = firstWord.startsWith('[') && firstWord.endsWith(']')
             ? firstWord.slice(1, -1)
             : firstWord;
-          add(unwrapped);
+          add(unwrapped, unwrapped);
         }
       }
     }
@@ -4721,7 +4772,7 @@ export function renderChordproAst(
             Chord Diagrams
           </h3>
           <div className="chord-diagrams-grid">
-            {names.map((name) => (
+            {names.map(({ name, rawName }) => (
               // Each diagram is a self-contained figure — the
               // rendered SVG includes the chord name as a label
               // glyph so a separate `<figcaption>` would visually
@@ -4735,6 +4786,17 @@ export function renderChordproAst(
                   instrument={instrument}
                   defines={defines}
                   orientation={chordDiagramsOpts.orientation}
+                  // When chord-audio is on, each grid diagram is a play
+                  // button (#2686) sounding the chord it depicts. The
+                  // diagram is looked up by `name` (the display override)
+                  // but auditioned by `rawName` — a `display=` label may
+                  // not be a parseable chord — so the config plays the raw
+                  // name regardless of the `chord` prop ChordDiagram passes.
+                  chordAudio={
+                    ctx.chordAudio?.enabled
+                      ? { enabled: true, play: () => ctx.chordAudio?.play(rawName) }
+                      : ctx.chordAudio
+                  }
                 />
               </figure>
             ))}

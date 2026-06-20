@@ -1,5 +1,13 @@
-import type { HTMLAttributes, ReactNode } from 'react';
+import type {
+  AnimationEvent as ReactAnimationEvent,
+  HTMLAttributes,
+  KeyboardEvent as ReactKeyboardEvent,
+  ReactNode,
+} from 'react';
+import { useCallback, useRef } from 'react';
 
+import { pulseElement } from './chord-pulse';
+import type { ChordAudioConfig } from './use-chord-audio';
 import {
   type ChordDiagramInstrument,
   type ChordDiagramOrientation,
@@ -42,6 +50,25 @@ export interface ChordDiagramProps extends Omit<HTMLAttributes<HTMLDivElement>, 
    * predate the compact export.
    */
   compact?: boolean;
+  /**
+   * Chord-audio config (#2686). When `chordAudio.enabled` is `true`, the
+   * whole diagram becomes a play button: clicking it (or pressing Enter /
+   * Space while focused) sounds the chord via `chordAudio.play(chord)`,
+   * with a brief activation pulse. When omitted / disabled, the diagram
+   * renders as a static `role="img"` figure exactly as before.
+   *
+   * Wiring audio here — at the canonical diagram component — means every
+   * consumer (the end-of-song chord-diagrams grid, the inline / hover
+   * cells in the JSX walker, and external library consumers using
+   * `<ChordDiagram>` directly) gets click-to-play uniformly, rather than
+   * each call site bolting on its own handler.
+   *
+   * Degrades gracefully: the host is responsible for only supplying an
+   * `enabled` config when Web Audio is actually available (e.g. via
+   * `useChordAudio().supported`), so on SSR / unsupported browsers the
+   * diagram stays a static figure instead of a dead button.
+   */
+  chordAudio?: ChordAudioConfig | null;
   /**
    * Optional node shown while the WASM module loads. Defaults to
    * a minimal `role="status"` placeholder.
@@ -124,6 +151,7 @@ export function ChordDiagram({
   loadingFallback,
   notFoundFallback = defaultNotFoundFallback,
   errorFallback = defaultErrorFallback,
+  chordAudio,
   wasmLoader,
   className,
   ...divProps
@@ -137,7 +165,22 @@ export function ChordDiagram({
     compact,
   );
 
-  const wrapperClass = ['chordsketch-diagram', compact && 'chordsketch-diagram--compact', className]
+  // Chord-audio (#2686). When on, the diagram is a play button. The ref
+  // points at whichever wrapper actually renders (svg / not-found /
+  // loading) so the activation pulse lands on the visible element.
+  const audioOn = Boolean(chordAudio?.enabled);
+  const ringRef = useRef<HTMLDivElement | null>(null);
+  const handlePlay = useCallback(() => {
+    chordAudio?.play(chord);
+    if (ringRef.current) pulseElement(ringRef.current, 'chordsketch-diagram--ringing');
+  }, [chordAudio, chord]);
+
+  const wrapperClass = [
+    'chordsketch-diagram',
+    compact && 'chordsketch-diagram--compact',
+    audioOn && 'chordsketch-diagram--audio',
+    className,
+  ]
     .filter(Boolean)
     .join(' ');
   // Surface the active orientation as a DOM attribute so consumers
@@ -145,6 +188,34 @@ export function ChordDiagram({
   // emitted as `data-orientation=""`) when the prop is unset so the
   // default vertical case stays attribute-free.
   const orientationAttr = orientation !== undefined ? { 'data-orientation': orientation } : {};
+
+  // Interactive button props applied to the content-bearing branches
+  // (svg / not-found / loading) when audio is on. The error branch stays
+  // a static `role="alert"` — a failed diagram is not a play target, and
+  // audio would not work either if the wasm module failed to init. The
+  // `role="button"` here replaces the static `role="img"` (an element
+  // cannot be both), with an action-naming `aria-label` so the accessible
+  // name conveys both the chord and that pressing plays it.
+  const audioInteractiveProps = audioOn
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        'aria-label': `Play chord ${chord} (${instrument})`,
+        'data-chord': chord,
+        onClick: () => handlePlay(),
+        onKeyDown: (e: ReactKeyboardEvent<HTMLDivElement>) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handlePlay();
+          }
+        },
+        // Safety cleanup mirroring the walker's chord-name path: drop the
+        // transient ring class once its animation ends.
+        onAnimationEnd: (e: ReactAnimationEvent<HTMLDivElement>) => {
+          e.currentTarget.classList.remove('chordsketch-diagram--ringing');
+        },
+      }
+    : null;
 
   if (error !== null && errorFallback !== null) {
     const node =
@@ -160,18 +231,33 @@ export function ChordDiagram({
     if (loading) {
       const node = loadingFallback ?? defaultLoadingFallback();
       return (
-        <div {...divProps} {...orientationAttr} className={wrapperClass} aria-busy="true">
+        <div
+          {...divProps}
+          {...orientationAttr}
+          ref={audioOn ? ringRef : undefined}
+          className={wrapperClass}
+          aria-busy="true"
+          {...(audioInteractiveProps ?? {})}
+        >
           {node}
         </div>
       );
     }
-    // Not loading and no SVG — the voicing database has no entry.
+    // Not loading and no SVG — the voicing database has no entry. The
+    // diagram still plays when audio is on (the chord name fallback the
+    // inline-diagram mode shows here stays a play target).
     const node =
       typeof notFoundFallback === 'function'
         ? notFoundFallback(chord, instrument)
         : notFoundFallback;
     return (
-      <div {...divProps} {...orientationAttr} className={wrapperClass}>
+      <div
+        {...divProps}
+        {...orientationAttr}
+        ref={audioOn ? ringRef : undefined}
+        className={wrapperClass}
+        {...(audioInteractiveProps ?? {})}
+      >
         {node}
       </div>
     );
@@ -181,13 +267,18 @@ export function ChordDiagram({
     <div
       {...divProps}
       {...orientationAttr}
+      ref={audioOn ? ringRef : undefined}
       className={wrapperClass}
-      // Expose the diagram as a labelled image to assistive tech
-      // (without this, the inline SVG's accessible name is the
-      // empty string and the chord identity is invisible to
-      // screen readers).
-      role="img"
-      aria-label={`${chord} chord diagram (${instrument})`}
+      // When audio is off, expose the diagram as a labelled image to
+      // assistive tech (without this, the inline SVG's accessible name is
+      // the empty string and the chord identity is invisible to screen
+      // readers). When audio is on, `audioInteractiveProps` supplies
+      // `role="button"` + an action label instead — an element cannot be
+      // both an image and a button.
+      {...(audioInteractiveProps ?? {
+        role: 'img',
+        'aria-label': `${chord} chord diagram (${instrument})`,
+      })}
       // The SVG is produced by our own Rust renderer
       // (`chord_diagram::render_svg` / `render_keyboard_svg`),
       // which emits a fixed, hand-written template — nothing in
