@@ -101,6 +101,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Redesigned the regular (full-size) SVG chord-diagram layout
+  (`chordsketch_chordpro::chord_diagram`) for a cleaner, more
+  chart-like look. The fretboard grid is now compact (string spacing
+  16→10px, fret pitch 20→14px) and centred inside the same bounding
+  box with generous margins instead of bleeding to the edges, so the
+  finger dots (radius unchanged at 5px) read as bold, prominent
+  markers — the standard appearance of a printed chord chart. Open/
+  muted glyphs sit closer to the nut (offset 10→7px). The 6-string /
+  5-fret frame is preserved at 120×160px with the grid centred under
+  the title; the horizontal layout follows the same proportions
+  (height 130→102px). This flows through every SVG consumer (CLI
+  `--format html`, the wasm `chord_diagram_svg` exports,
+  `@chordsketch/react`'s `<ChordDiagram>`, the VS Code preview, and
+  the LSP hover). The compact inline/hover layout and the keyboard
+  diagram are unchanged; the PDF renderer's own diagram geometry is
+  not affected.
 - The `@chordsketch/react` Web Audio surface now sounds with more
   musical timbres. `useChordAudio` and `useKeyAudio` voice every pitch
   with a synthesized **piano** timbre (a piano-like `PeriodicWave`

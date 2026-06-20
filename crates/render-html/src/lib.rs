@@ -4928,10 +4928,10 @@ Verse text\n\
         let html = render("{define: C frets 0 0 0 3}");
         assert!(html.contains("<svg"));
         assert!(html.contains("chord-diagram"));
-        // 4 strings: SVG width = (4-1)*16 + 20*2 = 88
+        // 4 strings: SVG width = (4-1)*10 + 35*2 = 100
         assert!(
-            html.contains("width=\"88\""),
-            "Expected 4-string SVG width (88)"
+            html.contains("width=\"100\""),
+            "Expected 4-string SVG width (100)"
         );
     }
 
@@ -4939,10 +4939,10 @@ Verse text\n\
     fn test_define_banjo_diagram() {
         let html = render("{define: G frets 0 0 0 0 0}");
         assert!(html.contains("<svg"));
-        // 5 strings: SVG width = (5-1)*16 + 20*2 = 104
+        // 5 strings: SVG width = (5-1)*10 + 35*2 = 110
         assert!(
-            html.contains("width=\"104\""),
-            "Expected 5-string SVG width (104)"
+            html.contains("width=\"110\""),
+            "Expected 5-string SVG width (110)"
         );
     }
 
@@ -4954,10 +4954,10 @@ Verse text\n\
             .with_define("diagrams.frets=4")
             .unwrap();
         let html = render_song_with_transpose(&song, 0, &config);
-        // 4 frets: grid_h = 4*20 = 80, total_h = 80 + 30 + 30 = 140
+        // 4 frets: grid_h = 4*14 = 56, total_h = 56 + 32 + 58 = 146
         assert!(
-            html.contains("height=\"140\""),
-            "SVG height should reflect diagrams.frets=4 (expected 140)"
+            html.contains("height=\"146\""),
+            "SVG height should reflect diagrams.frets=4 (expected 146)"
         );
     }
 
