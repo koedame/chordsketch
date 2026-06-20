@@ -77,7 +77,10 @@ fn write_bool(out: &mut String, v: bool) {
     out.push_str(if v { "true" } else { "false" });
 }
 
-fn write_i32(out: &mut String, v: i32) {
+/// Append a non-negative or signed integer as a bare JSON number. Shared by
+/// every numeric field so a future formatting change (clamping, etc.) lands in
+/// one place rather than drifting between the `i32` and `usize` paths.
+fn write_num<T: core::fmt::Display>(out: &mut String, v: T) {
     use core::fmt::Write;
     let _ = write!(out, "{v}");
 }
@@ -250,6 +253,11 @@ impl ToJson for LyricsSegment {
         write_str(out, &self.text);
         out.push_str(",\"spans\":");
         write_array(out, &self.spans);
+        out.push_str(",\"sourceColumn\":");
+        match self.source_column {
+            Some(col) => write_num(out, col),
+            None => out.push_str("null"),
+        }
         out.push('}');
     }
 }
@@ -434,7 +442,7 @@ impl ToJson for ChordDefinition {
                     if i > 0 {
                         out.push(',');
                     }
-                    write_i32(out, *k);
+                    write_num(out, *k);
                 }
                 out.push(']');
             }
@@ -657,6 +665,45 @@ mod tests {
         assert!(json.contains("\"name\":\"G\""));
         assert!(json.contains("\"text\":\"Hello \""));
         assert!(json.contains("\"text\":\"world\""));
+    }
+
+    #[test]
+    fn lyrics_segment_serialises_source_column() {
+        // Chord-bearing segments carry their `[` source column; the second
+        // chord sits at column 10 of `[Am]Hello [G]world`.
+        let song = parse("[Am]Hello [G]world").unwrap();
+        let json = song.to_json_string();
+        assert!(
+            json.contains("\"sourceColumn\":0"),
+            "first chord column missing, got: {json}"
+        );
+        assert!(
+            json.contains("\"sourceColumn\":10"),
+            "second chord column missing, got: {json}"
+        );
+    }
+
+    #[test]
+    fn lyrics_segment_source_column_survives_escaped_special() {
+        // Regression for #2634: `[Am]` after the escaped `\[` lands at the
+        // real source column 6, not the post-lex-text column 5.
+        let song = parse("do\\[re[Am]mi").unwrap();
+        let json = song.to_json_string();
+        assert!(
+            json.contains("\"sourceColumn\":6"),
+            "escaped-special chord column wrong, got: {json}"
+        );
+        assert!(
+            !json.contains("\"sourceColumn\":5"),
+            "must not emit the drifted post-lex column 5, got: {json}"
+        );
+    }
+
+    #[test]
+    fn text_only_segment_serialises_null_source_column() {
+        let seg = LyricsSegment::text_only("plain");
+        let json = seg.to_json_string();
+        assert!(json.contains("\"sourceColumn\":null"), "got: {json}");
     }
 
     #[test]

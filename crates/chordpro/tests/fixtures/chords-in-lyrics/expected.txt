@@ -57,6 +57,9 @@ Song {
                         ),
                         text: "Hello ",
                         spans: [],
+                        source_column: Some(
+                            0,
+                        ),
                     },
                     LyricsSegment {
                         chord: Some(
@@ -76,6 +79,9 @@ Song {
                         ),
                         text: "world",
                         spans: [],
+                        source_column: Some(
+                            10,
+                        ),
                     },
                 ],
             },
@@ -101,6 +107,9 @@ Song {
                         ),
                         text: "Goodbye ",
                         spans: [],
+                        source_column: Some(
+                            0,
+                        ),
                     },
                     LyricsSegment {
                         chord: Some(
@@ -120,6 +129,9 @@ Song {
                         ),
                         text: "moon",
                         spans: [],
+                        source_column: Some(
+                            11,
+                        ),
                     },
                 ],
             },

@@ -471,16 +471,8 @@ pub enum CommentStyle {
 ///
 /// let line = LyricsLine {
 ///     segments: vec![
-///         LyricsSegment {
-///             chord: Some(Chord::new("Am")),
-///             text: "Hello ".to_string(),
-///             spans: vec![],
-///         },
-///         LyricsSegment {
-///             chord: Some(Chord::new("G")),
-///             text: "world".to_string(),
-///             spans: vec![],
-///         },
+///         LyricsSegment::new(Some(Chord::new("Am")), "Hello "),
+///         LyricsSegment::new(Some(Chord::new("G")), "world"),
 ///     ],
 /// };
 /// ```
@@ -529,7 +521,19 @@ impl Default for LyricsLine {
 /// chord and non-empty text represents plain lyrics. A segment with a chord
 /// and empty text represents a chord placed at the end of the line (or
 /// between two consecutive chords with no intervening text).
-#[derive(Debug, Clone, PartialEq)]
+///
+/// # Equality
+///
+/// [`PartialEq`] compares only the semantic content (`chord`, `text`,
+/// `spans`); the positional [`source_column`](Self::source_column) metadata
+/// is intentionally excluded. Two segments with the same chord, text, and
+/// markup are equal regardless of where they sat in the source. This keeps
+/// the parser's golden/equality tests independent of source-column tracking,
+/// and establishes the convention for AST nodes carrying source-provenance:
+/// exclude the provenance from semantic equality. `LyricsSegment` is the
+/// first such node; future nodes that gain span fields should follow the
+/// same manual-`PartialEq` pattern rather than deriving it.
+#[derive(Debug, Clone)]
 pub struct LyricsSegment {
     /// The chord annotation, if any, placed above the start of `text`.
     pub chord: Option<Chord>,
@@ -546,6 +550,25 @@ pub struct LyricsSegment {
     /// When no markup is present, this vector is empty and renderers should
     /// use the `text` field instead.
     pub spans: Vec<TextSpan>,
+    /// 0-based UTF-16 code-unit column of this segment's chord `[` bracket
+    /// within its source line, when known.
+    ///
+    /// `Some` only for parser-produced chord-bearing segments; `None` for
+    /// text-only segments and for segments built outside the parser (the
+    /// conversion crates, hand-written tests). The column is counted in
+    /// UTF-16 code units — not `char`s — so the `@chordsketch/react` chord
+    /// editor can splice the source via JavaScript `String.prototype.slice`
+    /// without re-deriving the column from the post-lex (escape-stripped)
+    /// text, which drifts after an escaped special such as `\[` (#2634).
+    pub source_column: Option<usize>,
+}
+
+impl PartialEq for LyricsSegment {
+    fn eq(&self, other: &Self) -> bool {
+        // `source_column` is positional provenance, not semantic content —
+        // see the type-level "Equality" doc. Compare only chord/text/spans.
+        self.chord == other.chord && self.text == other.text && self.spans == other.spans
+    }
 }
 
 impl LyricsSegment {
@@ -556,6 +579,7 @@ impl LyricsSegment {
             chord,
             text: text.into(),
             spans: Vec::new(),
+            source_column: None,
         }
     }
 
@@ -566,6 +590,7 @@ impl LyricsSegment {
             chord: None,
             text: text.into(),
             spans: Vec::new(),
+            source_column: None,
         }
     }
 
@@ -576,6 +601,7 @@ impl LyricsSegment {
             chord: Some(chord),
             text: String::new(),
             spans: Vec::new(),
+            source_column: None,
         }
     }
 
@@ -586,7 +612,18 @@ impl LyricsSegment {
             chord,
             text: text.into(),
             spans,
+            source_column: None,
         }
+    }
+
+    /// Attaches a 0-based UTF-16 source column for the segment's chord `[`,
+    /// returning the updated segment (builder style).
+    ///
+    /// See [`source_column`](Self::source_column) for the unit and meaning.
+    #[must_use]
+    pub fn with_source_column(mut self, source_column: usize) -> Self {
+        self.source_column = Some(source_column);
+        self
     }
 
     /// Returns `true` if this segment has inline markup spans.

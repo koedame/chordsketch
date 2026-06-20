@@ -65,6 +65,9 @@ Song {
                         ),
                         text: "Sing ",
                         spans: [],
+                        source_column: Some(
+                            0,
+                        ),
                     },
                     LyricsSegment {
                         chord: Some(
@@ -84,6 +87,9 @@ Song {
                         ),
                         text: "along",
                         spans: [],
+                        source_column: Some(
+                            8,
+                        ),
                     },
                 ],
             },
@@ -126,6 +132,9 @@ Song {
                         ),
                         text: "First verse",
                         spans: [],
+                        source_column: Some(
+                            0,
+                        ),
                     },
                 ],
             },
@@ -179,6 +188,9 @@ Song {
                         ),
                         text: "Second verse",
                         spans: [],
+                        source_column: Some(
+                            0,
+                        ),
                     },
                 ],
             },

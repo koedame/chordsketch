@@ -77,6 +77,19 @@ export interface ChordproLyricsSegment {
   text: string;
   /** Inline markup tree; empty when `text` carries no markup. */
   spans: ChordproTextSpan[];
+  /**
+   * 0-based UTF-16 column of this segment's chord `[` bracket within its
+   * source line, or `null` for text-only segments.
+   *
+   * Counted in UTF-16 code units so it can be used directly with
+   * `String.prototype.slice` on the source. The parser supplies it
+   * authoritatively (it survives escaped specials such as `\[`, unlike a
+   * column reconstructed from the post-lex `text` — see `chordLayoutForLine`
+   * and issue #2634). May be absent (`undefined`) when the AST is produced
+   * by an older `@chordsketch/wasm` build that predates this field; consumers
+   * fall back to reconstructing the column from segment text lengths.
+   */
+  sourceColumn?: number | null;
 }
 
 // ---- Inline markup -------------------------------------------------

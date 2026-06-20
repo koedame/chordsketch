@@ -87,6 +87,21 @@ export const chordProLanguage = StreamLanguage.define<ChordProState>({
       }
     }
 
+    // Escaped special (`\[`, `\]`, `\{`, `\}`): the backslash escapes the
+    // bracket/brace, so it is a literal lyric character, NOT a chord/directive
+    // delimiter. Consume both characters as lyric body so an escaped `\[` is
+    // not highlighted as a chord. Mirrors the lexer's `is_special`
+    // (`crates/chordpro/src/lexer.rs`) and the `ESCAPABLE_SPECIALS` set in
+    // `chord-source-edit.ts` — keep all three in lockstep (#2634).
+    if (stream.peek() === '\\') {
+      stream.next(); // consume '\'
+      const next = stream.peek();
+      if (next === '[' || next === ']' || next === '{' || next === '}') {
+        stream.next(); // consume the escaped special as lyric
+      }
+      return null;
+    }
+
     if (stream.eat('[')) {
       // Chord literal — `[Am7]`, `[D/F#]`, `[N.C.]`. Tolerate
       // anything up to the closing bracket so transposition
@@ -96,9 +111,10 @@ export const chordProLanguage = StreamLanguage.define<ChordProState>({
       return 'atom';
     }
 
-    // Plain lyric runs — consume up to the next chord / directive
-    // / line end and emit `null` so the default body style applies.
-    stream.eatWhile((ch: string) => ch !== '[' && ch !== '{');
+    // Plain lyric runs — consume up to the next chord / directive / escape /
+    // line end and emit `null` so the default body style applies. Stopping at
+    // `\` hands an escaped special to the escape branch above on the next call.
+    stream.eatWhile((ch: string) => ch !== '[' && ch !== '{' && ch !== '\\');
     if (stream.current().length > 0) return null;
     stream.next();
     return null;

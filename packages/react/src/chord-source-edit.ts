@@ -58,6 +58,43 @@ const CAPO_ANCHOR_RE = /^(\{(?:title|subtitle|artist|key|tempo|time)[^}]*\}\s*\n
  * separator. */
 const CHORD_FORBIDDEN_RE = /[[\]{}<>\n\r]/;
 
+// ---- ChordPro escape handling (raw-source scanning) ----------------
+// The raw-source scanners below (`scanLineChords`, `lyricsOffsetToSourceColumn`,
+// `sourceColumnToLyricsOffset`) walk the ChordPro source string directly, so
+// they must understand the lexer's escape rule or they mis-detect an escaped
+// `\[` as a chord open — the #2634 bug. A backslash before one of the four
+// structural specials (`[ ] { }`) escapes it: the backslash is dropped and the
+// special becomes a single literal lyric character occupying two source
+// columns. (Colon is special only inside directives, which lyric lines are
+// not, so it is excluded here.) This list is the JS sister of the Rust lexer's
+// `is_special` (`crates/chordpro/src/lexer.rs`); keep the two in lockstep.
+const ESCAPABLE_SPECIALS = new Set(['[', ']', '{', '}']);
+
+/** True when `line[i]` begins an escaped special (`\[`, `\]`, `\{`, `\}`). The
+ * escaped unit spans columns `i` and `i + 1` and counts as one lyric char. */
+function isEscapedSpecial(line: string, i: number): boolean {
+  return line[i] === '\\' && ESCAPABLE_SPECIALS.has(line[i + 1] ?? '');
+}
+
+/**
+ * Index of the `]` that closes a chord opened at `open` (`line[open] === '['`),
+ * skipping any escaped `\]` inside the chord body so a chord name containing an
+ * escaped bracket is not split early. Returns `-1` when the bracket is
+ * unterminated.
+ */
+function chordCloseIndex(line: string, open: number): number {
+  let i = open + 1;
+  while (i < line.length) {
+    if (isEscapedSpecial(line, i)) {
+      i += 2;
+      continue;
+    }
+    if (line[i] === ']') return i;
+    i++;
+  }
+  return -1;
+}
+
 function clampInt(n: number, min: number, max: number): number {
   if (Number.isNaN(n)) return min;
   if (n < min) return min;
@@ -267,23 +304,29 @@ export function lyricsOffsetToSourceColumn(line: string, lyricsOffset: number): 
   let lyricsCount = 0;
   let i = 0;
   while (i < line.length) {
-    // Skip any chord brackets at the current position FIRST so a
-    // drop at the "start of the lyric" lands AFTER any leading
-    // `[chord]` brackets — i.e. the new chord becomes the one
-    // sitting above the lyric, instead of being pushed into a
-    // zero-width segment before the existing brackets. Loop so
-    // adjacent brackets like `[A][B]` are all skipped before
-    // checking the lyric counter.
-    while (i < line.length && line[i] === '[') {
-      const close = line.indexOf(']', i);
+    // An escaped special (`\[`, `\]`, …) is one lyric character occupying two
+    // source columns — count it as lyric, never as a bracket (#2634).
+    if (isEscapedSpecial(line, i)) {
+      if (lyricsCount >= lyricsOffset) return i;
+      lyricsCount++;
+      i += 2;
+      continue;
+    }
+    // Skip a real chord bracket so a drop at the "start of the lyric" lands
+    // AFTER any leading `[chord]` brackets — i.e. the new chord becomes the
+    // one sitting above the lyric, instead of being pushed into a zero-width
+    // segment before the existing brackets. Continuing the loop skips
+    // adjacent brackets like `[A][B]` before the lyric counter is checked.
+    if (line[i] === '[') {
+      const close = chordCloseIndex(line, i);
       if (close === -1) {
         // Malformed bracket — bail out, treat the rest as lyrics.
         return i;
       }
       i = close + 1;
+      continue;
     }
     if (lyricsCount >= lyricsOffset) return i;
-    if (i >= line.length) return line.length;
     lyricsCount++;
     i++;
   }
@@ -420,8 +463,17 @@ export function sourceColumnToLyricsOffset(line: string, column: number): number
   let lyricsCount = 0;
   let i = 0;
   while (i < limit) {
+    // An escaped special is one lyric character (two source columns); count it
+    // and step past both columns. If `limit` falls between the backslash and
+    // the special, the escape still counts as the one lyric char consumed up
+    // to the boundary (#2634).
+    if (isEscapedSpecial(line, i)) {
+      lyricsCount++;
+      i += 2;
+      continue;
+    }
     if (line[i] === '[') {
-      const close = line.indexOf(']', i);
+      const close = chordCloseIndex(line, i);
       // A bracket that closes before `limit` is skipped whole
       // (zero-width). One that is unterminated or extends past
       // `limit` cannot be a complete chord within the counted
@@ -459,6 +511,10 @@ export interface SegmentLayout {
 interface LayoutSegment {
   text: string;
   chord?: { name?: string | null } | null;
+  /** 0-based UTF-16 source column of this segment's chord `[`, supplied
+   * authoritatively by the parser (escape-safe — see {@link chordLayoutForLine}
+   * and #2634). Absent / `null` when unknown, triggering reconstruction. */
+  sourceColumn?: number | null;
 }
 
 /**
@@ -471,14 +527,18 @@ interface LayoutSegment {
  * accumulation; keeping two copies risked silent desync (a future
  * change to bracket-length math applied to one and not the other would
  * resolve the wrong chord — exactly the sister-site hazard
- * `.claude/rules/fix-propagation.md` warns about). This is also the one
- * place a future fix for escaped-special column drift (see #2634) must
- * land: the reconstruction below derives columns from post-lex
- * `seg.text`, which has lost the backslash of an escaped `\[` / `\]` /
- * `\{` etc., so a chord after such an escape gets a column that is too
- * small. Edit / delete / reposition all guard against the resulting
- * stale span via their `expected` token, so a drift produces a safe
- * no-op rather than corruption until the AST carries real source spans.
+ * `.claude/rules/fix-propagation.md` warns about).
+ *
+ * The chord column comes from the parser-supplied authoritative
+ * {@link LayoutSegment.sourceColumn} (a 0-based UTF-16 column that survives
+ * escaped specials such as `\[`). Reconstructing it from post-lex `seg.text`
+ * lengths — as this helper used to — drifts after an escape: the lexer drops
+ * the backslash of `\[` / `\]` / `\{`, so `seg.text` is shorter than the
+ * source span and a chord after the escape gets a column that is too small
+ * (#2634). When the AST does not carry the field (an older `@chordsketch/wasm`
+ * build, or a non-parser-produced segment), it falls back to the running
+ * reconstruction; the edit / delete / reposition `expected` guards keep a
+ * stale fallback column a safe no-op rather than a corruption.
  *
  * @returns one {@link SegmentLayout} per input segment (same order) and
  *   the line's total visible lyric-character count.
@@ -491,8 +551,19 @@ export function chordLayoutForLine(
   let lyricsOffset = 0;
   for (const seg of segments) {
     const bracketLength = seg.chord ? (seg.chord.name?.length ?? 0) + 2 : 0;
-    layout.push({ sourceColumn, bracketLength, lyricsOffsetStart: lyricsOffset });
-    sourceColumn += bracketLength + seg.text.length;
+    // Prefer the parser's authoritative column for a chord segment; otherwise
+    // use the running reconstruction. Resync the running counter to whichever
+    // value won, so a chord's own authoritative column re-anchors the count
+    // and a following field-less segment continues from there. A parser-
+    // produced AST carries the column on every chord (or none, for an older
+    // wasm build), so this resync only matters for a mixed AST; reconstruction
+    // still cannot see escapes inside a segment's own text, but the next chord
+    // that carries a column re-anchors past that drift, and the edit `expected`
+    // guard keeps any residual drift a safe no-op.
+    const col =
+      seg.chord && seg.sourceColumn != null ? seg.sourceColumn : sourceColumn;
+    layout.push({ sourceColumn: col, bracketLength, lyricsOffsetStart: lyricsOffset });
+    sourceColumn = col + bracketLength + seg.text.length;
     lyricsOffset += seg.text.length;
   }
   return { layout, totalLyrics: lyricsOffset };
@@ -1038,16 +1109,34 @@ function scanLineChords(line: string): { tokens: LineChordToken[]; totalLyrics: 
   let lyricsCount = 0;
   let i = 0;
   while (i < line.length) {
+    // An escaped special (`\[`, `\]`, …) is a literal lyric character, never a
+    // chord delimiter — count one lyric char and step past both columns so a
+    // chord after `do\[re` is detected at its true column (#2634).
+    if (isEscapedSpecial(line, i)) {
+      lyricsCount++;
+      i += 2;
+      continue;
+    }
     if (line[i] === '[') {
-      const close = line.indexOf(']', i);
+      const close = chordCloseIndex(line, i);
       if (close === -1) {
-        // Unterminated bracket — treat the rest as lyrics.
-        lyricsCount += line.length - i;
+        // Unterminated bracket — treat the rest as lyrics, counting visible
+        // lyric characters (escaped specials collapse to one).
+        lyricsCount += countLyricChars(line, i);
         return { tokens, totalLyrics: lyricsCount };
       }
       tokens.push({
         colStart: i,
         colClose: close,
+        // RAW body, including any escape backslashes. This is deliberate: the
+        // name feeds the edit `expected` optimistic-concurrency guard, which
+        // compares `'[' + name + ']'` against the live source slice — so the
+        // name must round-trip the source verbatim. `'[' + 'A\]m' + ']'`
+        // matches the source `[A\]m]`; the escape-resolved `A]m` would not and
+        // would no-op every edit of such a chord. Chord names containing an
+        // escaped special are pathological non-chords; this caret-driven path
+        // still edits them correctly, while the AST path (which carries the
+        // escape-resolved name) no-ops them — a documented edge (#2634).
         name: line.slice(i + 1, close),
         lyricsOffset: lyricsCount,
       });
@@ -1058,6 +1147,25 @@ function scanLineChords(line: string): { tokens: LineChordToken[]; totalLyrics: 
     i++;
   }
   return { tokens, totalLyrics: lyricsCount };
+}
+
+/** Count visible lyric characters in `line` from `start` to the end, treating
+ * each escaped special (`\[`, `\]`, …) as a single character. Used on the
+ * unterminated-bracket fall-through so the lyric count matches the AST's
+ * post-lex character count rather than the raw source length. */
+function countLyricChars(line: string, start: number): number {
+  let count = 0;
+  let i = start;
+  while (i < line.length) {
+    if (isEscapedSpecial(line, i)) {
+      count++;
+      i += 2;
+    } else {
+      count++;
+      i++;
+    }
+  }
+  return count;
 }
 
 /**
