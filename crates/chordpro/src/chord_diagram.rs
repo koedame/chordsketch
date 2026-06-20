@@ -298,13 +298,16 @@ pub enum DiagramSize {
 
 /// String-to-string spacing in SVG user units (pixels at 1:1 zoom).
 ///
-/// Deliberately tighter than the finger-dot diameter (`DOT_RADIUS * 2 =
-/// 10`) so a fretted dot reads as a bold, prominent marker that nearly
-/// spans the gap between adjacent strings — the standard look of a
-/// printed chord chart. The grid is intentionally compact and floated
-/// inside a generous margin (see `LEFT_MARGIN` / `TOP_MARGIN` /
-/// `DiagramMetrics::regular`'s `bottom_pad_vertical`) rather than
-/// filling the bounding box edge-to-edge.
+/// Equal to the finger-dot diameter (`DOT_RADIUS * 2 = 10`): a fretted
+/// dot therefore reads as a bold, prominent marker whose edges are
+/// tangent to the adjacent strings — the standard look of a printed
+/// chord chart. This is the tightest spacing that does not overlap
+/// neighbouring same-fret dots; shrinking `CELL_W` below `DOT_RADIUS *
+/// 2`, or enlarging `DOT_RADIUS`, would make them overlap. The grid is
+/// intentionally compact and floated inside a generous margin (see
+/// `LEFT_MARGIN` / `TOP_MARGIN` / `DiagramMetrics::regular`'s
+/// `bottom_pad_vertical`) rather than filling the bounding box
+/// edge-to-edge.
 const CELL_W: f32 = 10.0;
 /// Fret pitch in SVG user units. Larger than [`CELL_W`] so the cells stay
 /// taller than they are wide, matching a real fretboard's proportions.
@@ -350,9 +353,10 @@ const OCTAVE_DOUBLE_DOT_OFFSET: f32 = 0.55;
 /// renderer functions — a geometry fix lands once and applies to both
 /// sizes (cf. `.claude/rules/fix-propagation.md`).
 ///
-/// `regular()` reproduces the historical hard-coded values verbatim; the
+/// `regular()` and `compact()` are the two constructors; the
 /// `render_svg_default_byte_identical_across_chord_shapes` test pins that
-/// the regular output is byte-for-byte unchanged by this indirection.
+/// the `render_svg` wrapper stays in lockstep with the explicit
+/// `Vertical` entry point across every chord shape.
 #[derive(Debug, Clone, Copy)]
 struct DiagramMetrics {
     /// String-to-string spacing (SVG x-axis in vertical mode).
@@ -415,7 +419,8 @@ struct DiagramMetrics {
 }
 
 impl DiagramMetrics {
-    /// Full-size metrics — byte-for-byte the historical layout.
+    /// Full-size metrics — the compact, centred fretboard layout used by
+    /// the end-of-song diagram grid and every non-compact SVG consumer.
     const fn regular() -> Self {
         Self {
             cell_w: CELL_W,
@@ -623,9 +628,9 @@ pub fn render_svg_with_options(
 
 fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
     // Bind every metric to a local so the SVG format strings can
-    // inline-capture them by name (`{cell_w}` etc.). With
-    // `DiagramMetrics::regular()` these reproduce the historical literals
-    // exactly — guarded by `render_svg_default_byte_identical_across_chord_shapes`.
+    // inline-capture them by name (`{cell_w}` etc.). The values come from
+    // whichever `DiagramMetrics` constructor the caller chose (regular /
+    // compact), so geometry lives in one place rather than in literals here.
     let DiagramMetrics {
         cell_w,
         cell_h,
@@ -823,7 +828,8 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
 /// double-dot, base-fret label, finger numbers) must change in the other.
 fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
     // See `render_svg_vertical_inner` for why every metric is bound to a
-    // local. `regular()` reproduces the historical literals byte-for-byte.
+    // local — the values come from the caller's `DiagramMetrics`, not from
+    // literals inlined here.
     let DiagramMetrics {
         cell_w,
         cell_h,
@@ -3330,7 +3336,8 @@ mod tests {
     fn fret_number_axis_does_not_grow_the_bounding_box() {
         // The axis is laid out inside the existing margins / bottom padding,
         // so adding it must not change either SVG's width or height. These
-        // are the historical dimensions for a 6-string, 5-fret diagram.
+        // are the regular-layout dimensions for a 6-string, 5-fret diagram
+        // (vertical 120x160, horizontal 140x102).
         let extract = |svg: &str, attr: &str| -> f32 {
             let needle = format!("{attr}=\"");
             let i = svg.find(&needle).unwrap() + needle.len();
