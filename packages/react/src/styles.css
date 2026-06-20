@@ -1563,24 +1563,25 @@
 }
 
 /* ---- Chord audio (#2650) -------------------------------------- */
-/* In chord-audio mode each chord is a play button. Hover/focus give a
-   speaker affordance; activating one briefly pulses the `.chord--ringing`
-   class (added imperatively by the walker, removed on animationend). */
+/* In chord-audio mode each chord is a play button. The clickable
+   affordance is carried by `cursor: pointer`, the `:focus-visible`
+   ring, and the activation pulse (`.chord--ringing`, added imperatively
+   by the walker and removed on animationend).
+
+   There is deliberately NO hover background tint. A hover tint paints a
+   light background, but `.chord--ringing` paints WHITE text on the
+   chord while it sounds, and a hover selector outscopes the ringing
+   rule on specificity — so a light hover background under white ring
+   text rendered the chord unreadable (it looked like it vanished). The
+   earlier `:not(.chord--selected)` scoping only covered the persistent
+   selected badge and missed this transient white-text state, so the
+   tint is removed at the root rather than re-scoped. */
 .chordsketch-sheet__content .chord--audio {
   cursor: pointer;
   border-radius: var(--cs-r-2, 4px);
   transition:
     background 0.12s ease,
     color 0.12s ease;
-}
-/* Audio + selection are additive (#2650 follow-up): a chord can carry
-   both classes. The selected badge (filled crimson + white text) must
-   keep winning over the audio hover tint, otherwise hovering a selected
-   chord would paint white text on the light-pink hover background and
-   become unreadable — so scope the hover tint to the non-selected
-   chord. */
-.chordsketch-sheet__content .chord--audio:not(.chord--selected):hover {
-  background: var(--cs-crimson-50, #fdf2f5);
 }
 .chordsketch-sheet__content .chord--audio:focus-visible {
   outline: none;

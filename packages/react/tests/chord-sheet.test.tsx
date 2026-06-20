@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -1285,5 +1289,29 @@ describe('<ChordSheet>', () => {
     expect(onChordReposition).toHaveBeenCalledTimes(1);
     expect(play).toHaveBeenCalledTimes(2);
     expect(play).toHaveBeenLastCalledWith('Am');
+  });
+
+  test('audio chords carry no hover background tint that could clash with the ringing white text', () => {
+    // Regression: in audio-only (preview) mode, clicking a chord adds
+    // `.chord--ringing` (crimson background + WHITE text) for the
+    // activation pulse. A `.chord--audio…:hover` rule that paints a light
+    // background outscopes the ringing rule on specificity, so hovering
+    // during/after the ring painted a light background under white text —
+    // the chord looked like it vanished. The fix removes the hover
+    // background tint at the root rather than re-scoping it; jsdom does
+    // not apply CSS, so the guard reads the stylesheet source directly
+    // (same approach as metronome-button.test.tsx).
+    const here = dirname(fileURLToPath(import.meta.url));
+    const css = readFileSync(resolve(here, '../src/styles.css'), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      '',
+    );
+    // Every `.chord--audio … :hover { … }` block (if any survive) must
+    // not set a `background`, the property that produced the unreadable
+    // white-on-light-tint state.
+    const hoverRules = css.match(/\.chord--audio[^{]*:hover[^{]*\{[^}]*\}/g) ?? [];
+    for (const rule of hoverRules) {
+      expect(rule).not.toMatch(/background/);
+    }
   });
 });
