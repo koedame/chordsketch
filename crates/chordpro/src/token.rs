@@ -79,7 +79,15 @@ pub enum TokenKind {
 ///
 /// Each token carries its [`TokenKind`] and the [`Span`] that locates it in
 /// the original source text.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// # Equality
+///
+/// [`PartialEq`] compares `kind` and `span` only; [`utf16_col`](Self::utf16_col)
+/// is excluded because it is a redundant re-encoding of the same start
+/// position the `span` already pins (just counted in UTF-16 code units instead
+/// of `char`s). Excluding it keeps token equality meaning exactly "same kind at
+/// the same source position", unchanged by the addition of the UTF-16 column.
+#[derive(Debug, Clone)]
 pub struct Token {
     /// The kind of this token.
     pub kind: TokenKind,
@@ -102,13 +110,27 @@ pub struct Token {
     pub utf16_col: usize,
 }
 
+impl PartialEq for Token {
+    fn eq(&self, other: &Self) -> bool {
+        // `utf16_col` is excluded — see the type-level "Equality" doc.
+        self.kind == other.kind && self.span == other.span
+    }
+}
+
+impl Eq for Token {}
+
 impl Token {
     /// Creates a new `Token` with the given kind and span.
     ///
-    /// [`Token::utf16_col`] is derived from `span.start.column` (the 0-based
-    /// char column), which equals the UTF-16 column for Basic-Multilingual-Plane
-    /// input. The lexer, which tracks the true UTF-16 column, uses
-    /// [`Token::with_utf16_col`] instead so astral-plane input stays accurate.
+    /// [`Token::utf16_col`] is derived from `span.start.column` (the 1-based
+    /// char column) as `column - 1`, which equals the UTF-16 column for
+    /// Basic-Multilingual-Plane input. `saturating_sub(1)` is deliberately
+    /// defensive here: `new` is public API and a caller may hand it a `Span`
+    /// with `column == 0`, so the conversion clamps rather than underflowing.
+    /// The lexer, whose internal column counter is provably `>= 1`, uses the
+    /// bare `- 1` (so an impossible `0` would surface as a bug) together with
+    /// [`Token::with_utf16_col`], which also tracks the true UTF-16 column so
+    /// astral-plane input stays accurate.
     #[must_use]
     pub fn new(kind: TokenKind, span: Span) -> Self {
         let utf16_col = span.start.column.saturating_sub(1);

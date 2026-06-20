@@ -257,6 +257,14 @@ impl Lexer {
 /// Returns `true` if the character is a special ChordPro delimiter.
 ///
 /// The colon is only special inside directives.
+///
+/// Sister site: the JS chord editor re-implements this escape rule for raw
+/// source scanning as `ESCAPABLE_SPECIALS` in
+/// `packages/react/src/chord-source-edit.ts` (and the CodeMirror tokenizer's
+/// escape branch in `packages/react/src/chordpro-language.ts`). Those lists
+/// cover only the always-special `{ } [ ]` (lyric context, never `in_directive`).
+/// Keep all of them in lockstep — adding a new escapable special here must be
+/// mirrored there (see `.claude/rules/fix-propagation.md`, #2634).
 fn is_special(ch: char, in_directive: bool) -> bool {
     matches!(ch, '{' | '}' | '[' | ']') || (ch == ':' && in_directive)
 }

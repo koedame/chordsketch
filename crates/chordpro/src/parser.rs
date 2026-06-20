@@ -960,12 +960,14 @@ impl Parser {
         text: String,
         chord_column: Option<usize>,
     ) -> LyricsSegment {
+        // A source column is meaningful only for a chord-bearing segment (it
+        // points at the chord's `[`). `Option::and` ties the column to the
+        // chord's presence in one expression — it keeps `chord_column` when a
+        // chord is present and drops it otherwise — so no separate guard branch
+        // is needed.
+        let source_column = chord.as_ref().and(chord_column);
         let mut segment = LyricsSegment::new(chord, text);
-        // Only chord-bearing segments carry a source column; the bracket the
-        // column points at is the chord's `[`.
-        if segment.chord.is_some() {
-            segment.source_column = chord_column;
-        }
+        segment.source_column = source_column;
         segment
     }
 

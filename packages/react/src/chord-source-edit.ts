@@ -77,6 +77,30 @@ function isEscapedSpecial(line: string, i: number): boolean {
 }
 
 /**
+ * Resolve the lexer's escape rule over a raw source fragment: drop the
+ * backslash of each escaped special (`\[` → `[`, `\]` → `]`, …) while keeping
+ * a backslash before a non-special (or at end) literal. Mirrors the Rust
+ * lexer's `lex_text`, so a raw chord body scanned out of the source yields the
+ * same name the AST carries (e.g. `A\]m` → `A]m`). Keeps the raw-scan
+ * chord-resolution path (`findChordAtCaret`) in agreement with the AST path
+ * (`resolveSelectedChord`) — #2634.
+ */
+function resolveLyricEscapes(raw: string): string {
+  let out = '';
+  let i = 0;
+  while (i < raw.length) {
+    if (isEscapedSpecial(raw, i)) {
+      out += raw[i + 1]; // drop the backslash, keep the escaped special
+      i += 2;
+    } else {
+      out += raw[i];
+      i++;
+    }
+  }
+  return out;
+}
+
+/**
  * Index of the `]` that closes a chord opened at `open` (`line[open] === '['`),
  * skipping any escaped `\]` inside the chord body so a chord name containing an
  * escaped bracket is not split early. Returns `-1` when the bracket is
@@ -553,8 +577,13 @@ export function chordLayoutForLine(
     const bracketLength = seg.chord ? (seg.chord.name?.length ?? 0) + 2 : 0;
     // Prefer the parser's authoritative column for a chord segment; otherwise
     // use the running reconstruction. Resync the running counter to whichever
-    // value won so a later segment that lacks the field stays aligned past any
-    // escape drift the authoritative column already corrected for.
+    // value won, so a chord's own authoritative column re-anchors the count
+    // and a following field-less segment continues from there. A parser-
+    // produced AST carries the column on every chord (or none, for an older
+    // wasm build), so this resync only matters for a mixed AST; reconstruction
+    // still cannot see escapes inside a segment's own text, but the next chord
+    // that carries a column re-anchors past that drift, and the edit `expected`
+    // guard keeps any residual drift a safe no-op.
     const col =
       seg.chord && seg.sourceColumn != null ? seg.sourceColumn : sourceColumn;
     layout.push({ sourceColumn: col, bracketLength, lyricsOffsetStart: lyricsOffset });
@@ -1123,9 +1152,11 @@ function scanLineChords(line: string): { tokens: LineChordToken[]; totalLyrics: 
       tokens.push({
         colStart: i,
         colClose: close,
-        // Raw body including any escape backslashes, so `name.length + 2`
-        // matches the source span and the edit `expected` guard round-trips.
-        name: line.slice(i + 1, close),
+        // Escape-resolved body so the name matches what the AST carries (the
+        // lexer drops the backslash of an escaped special). The token's column
+        // span — `colClose - colStart + 1` at the call sites — remains the
+        // source-accurate width, independent of this resolved name (#2634).
+        name: resolveLyricEscapes(line.slice(i + 1, close)),
         lyricsOffset: lyricsCount,
       });
       i = close + 1;

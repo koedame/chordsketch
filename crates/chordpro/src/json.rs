@@ -77,12 +77,10 @@ fn write_bool(out: &mut String, v: bool) {
     out.push_str(if v { "true" } else { "false" });
 }
 
-fn write_i32(out: &mut String, v: i32) {
-    use core::fmt::Write;
-    let _ = write!(out, "{v}");
-}
-
-fn write_usize(out: &mut String, v: usize) {
+/// Append a non-negative or signed integer as a bare JSON number. Shared by
+/// every numeric field so a future formatting change (clamping, etc.) lands in
+/// one place rather than drifting between the `i32` and `usize` paths.
+fn write_num<T: core::fmt::Display>(out: &mut String, v: T) {
     use core::fmt::Write;
     let _ = write!(out, "{v}");
 }
@@ -257,7 +255,7 @@ impl ToJson for LyricsSegment {
         write_array(out, &self.spans);
         out.push_str(",\"sourceColumn\":");
         match self.source_column {
-            Some(col) => write_usize(out, col),
+            Some(col) => write_num(out, col),
             None => out.push_str("null"),
         }
         out.push('}');
@@ -444,7 +442,7 @@ impl ToJson for ChordDefinition {
                     if i > 0 {
                         out.push(',');
                     }
-                    write_i32(out, *k);
+                    write_num(out, *k);
                 }
                 out.push(']');
             }

@@ -527,9 +527,12 @@ impl Default for LyricsLine {
 /// [`PartialEq`] compares only the semantic content (`chord`, `text`,
 /// `spans`); the positional [`source_column`](Self::source_column) metadata
 /// is intentionally excluded. Two segments with the same chord, text, and
-/// markup are equal regardless of where they sat in the source — this keeps
+/// markup are equal regardless of where they sat in the source. This keeps
 /// the parser's golden/equality tests independent of source-column tracking,
-/// matching the way AST nodes elsewhere ignore span provenance.
+/// and establishes the convention for AST nodes carrying source-provenance:
+/// exclude the provenance from semantic equality. `LyricsSegment` is the
+/// first such node; future nodes that gain span fields should follow the
+/// same manual-`PartialEq` pattern rather than deriving it.
 #[derive(Debug, Clone)]
 pub struct LyricsSegment {
     /// The chord annotation, if any, placed above the start of `text`.

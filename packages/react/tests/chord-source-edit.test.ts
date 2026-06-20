@@ -927,10 +927,11 @@ describe('escaped-special source scanning (#2634)', () => {
 
   test('a chord whose name contains an escaped bracket is not split early', () => {
     // `[A\]m]` is ONE chord spanning to the final `]` (column 5), not split at
-    // the escaped `\]`. The raw name round-trips the source span.
+    // the escaped `\]`. The name is escape-resolved to match the AST (`A]m`),
+    // while the column span stays source-accurate (6 columns).
     const match = findChordAtCaret('[A\\]m]x', 0)!;
-    expect(match.chordName).toBe('A\\]m');
-    expect(match.bracketLength).toBe(6);
+    expect(match.chordName).toBe('A]m'); // resolved, agrees with the AST name
+    expect(match.bracketLength).toBe(6); // source span, including the backslash
     expect('[A\\]m]x'.slice(match.sourceColumn, match.sourceColumn + match.bracketLength)).toBe(
       '[A\\]m]',
     );
