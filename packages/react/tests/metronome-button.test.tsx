@@ -1,13 +1,10 @@
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { MetronomeButton } from '../src/metronome-button';
 import { resetMetronomeSharedStateForTests } from '../src/use-metronome';
 import { FakeAudioContext } from './fake-audio-context';
+import { readStylesheetSource } from './stylesheet-source';
 
 // Web Audio fake: the shared stand-in (`./fake-audio-context`). The
 // button test only needs the graph calls not to throw; timing accuracy
@@ -145,14 +142,10 @@ describe('<MetronomeButton>', () => {
   // layout property jsdom does not compute, so the DOM-level tests
   // above cannot catch a regression here.
   test('`.meta-inline` pins box-sizing so span and button chips share a height (#2624)', () => {
-    const here = dirname(fileURLToPath(import.meta.url));
-    // Strip CSS comments first — the explanatory comment inside the
-    // rule mentions `{key}` / `{tempo}` / `{time}`, whose braces would
-    // otherwise terminate the `[^}]` rule-block match prematurely.
-    const css = readFileSync(resolve(here, '../src/styles.css'), 'utf8').replace(
-      /\/\*[\s\S]*?\*\//g,
-      '',
-    );
+    // Comments are stripped (helper default) so an explanatory
+    // comment's `{key}` / `{tempo}` / `{time}` braces do not terminate
+    // the `[^}]` rule-block match prematurely.
+    const css = readStylesheetSource();
     // The base `.meta-inline` rule (not a `--variant` modifier) must
     // carry `box-sizing: border-box`. Match the rule block and assert
     // the declaration lives inside it.
@@ -171,11 +164,7 @@ describe('<MetronomeButton>', () => {
   // so assert it against the stylesheet source like the box-sizing
   // test above.
   test('extinguishes the beat-dot LED while playing', () => {
-    const here = dirname(fileURLToPath(import.meta.url));
-    const css = readFileSync(resolve(here, '../src/styles.css'), 'utf8').replace(
-      /\/\*[\s\S]*?\*\//g,
-      '',
-    );
+    const css = readStylesheetSource();
     // The playing-state rule that targets the beat dot must turn its
     // animation off and set it fully transparent (extinguished).
     const rule = css.match(

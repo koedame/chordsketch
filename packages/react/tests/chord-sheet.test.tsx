@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
+import { readStylesheetSource } from './stylesheet-source';
+
 import { ChordSheet } from '../src/index';
 import type { ChordWasmLoader } from '../src/use-chord-render';
 import type { ChordproWasmLoader } from '../src/use-chordpro-ast';
@@ -1285,5 +1287,31 @@ describe('<ChordSheet>', () => {
     expect(onChordReposition).toHaveBeenCalledTimes(1);
     expect(play).toHaveBeenCalledTimes(2);
     expect(play).toHaveBeenLastCalledWith('Am');
+  });
+
+  test('audio chords carry no hover background tint that could clash with the ringing white text', () => {
+    // Regression for the bug fixed alongside this test: see the
+    // "Chord audio" comment in src/styles.css for the full rationale.
+    // In short, a hover rule that paints a light background under a
+    // `.chord--audio` element outranks `.chord--ringing` (white text)
+    // on specificity, so a just-played chord became white-on-light and
+    // looked like it vanished. The fix removes the hover background tint
+    // at the root rather than re-scoping it.
+    const css = readStylesheetSource();
+    // Split on `}` so each fragment spans a single rule (selector +
+    // body) — robust to grouped selector lists, whitespace variants,
+    // AND `@media` nesting (the wrapper's `@media (…) {` opener lands in
+    // the same fragment as the inner rule). Fail any fragment that
+    // mentions `.chord--audio`, `:hover`, and `background` together:
+    // that is the unreadable-on-ring combination, in whatever form it
+    // is reintroduced. The base `.chord--audio` rule sets `background`
+    // (in its `transition`) but has no `:hover`, so it is not flagged.
+    for (const fragment of css.split('}')) {
+      const targetsAudioHover =
+        fragment.includes('.chord--audio') && fragment.includes(':hover');
+      if (targetsAudioHover) {
+        expect(fragment).not.toMatch(/background/);
+      }
+    }
   });
 });

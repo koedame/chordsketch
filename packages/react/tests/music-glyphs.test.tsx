@@ -1,7 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
-
 import { describe, expect, test } from 'vitest';
 import { render } from '@testing-library/react';
 
@@ -15,6 +11,7 @@ import {
   relativeMajor,
   tempoMarkingFor,
 } from '../src/music-glyphs';
+import { readStylesheetSource } from './stylesheet-source';
 
 describe('keySignatureFor', () => {
   // Key signature lookups against the Wikipedia "Key signature"
@@ -347,8 +344,10 @@ describe('<MetronomeGlyph>', () => {
   // and one that drops the delay would move the flash back to the
   // extremes — neither would fail the DOM-level tests above.
   test('beat blink and swing share --cs-metronome-period in styles.css', () => {
-    const here = dirname(fileURLToPath(import.meta.url));
-    const css = readFileSync(resolve(here, '../src/styles.css'), 'utf8');
+    // Verbatim source (comments kept): the assertions below match
+    // keyframe / animation declarations that cannot collide with
+    // comment braces.
+    const css = readStylesheetSource({ stripComments: false });
     expect(css).toContain('@keyframes cs-metronome-beat');
     expect(css).toMatch(
       /\.music-glyph--metronome__beat\s*\{\s*animation:\s*cs-metronome-beat var\(--cs-metronome-period/,
