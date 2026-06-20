@@ -91,6 +91,9 @@
                             ),
                             text: "Amazing ",
                             spans: [],
+                            source_column: Some(
+                                0,
+                            ),
                         },
                         LyricsSegment {
                             chord: Some(
@@ -112,6 +115,9 @@
                             ),
                             text: "grace, how ",
                             spans: [],
+                            source_column: Some(
+                                11,
+                            ),
                         },
                         LyricsSegment {
                             chord: Some(
@@ -131,6 +137,9 @@
                             ),
                             text: "sweet the ",
                             spans: [],
+                            source_column: Some(
+                                26,
+                            ),
                         },
                         LyricsSegment {
                             chord: Some(
@@ -150,6 +159,9 @@
                             ),
                             text: "sound",
                             spans: [],
+                            source_column: Some(
+                                39,
+                            ),
                         },
                     ],
                 },
@@ -256,6 +268,9 @@
                             ),
                             text: "Oh Danny ",
                             spans: [],
+                            source_column: Some(
+                                0,
+                            ),
                         },
                         LyricsSegment {
                             chord: Some(
@@ -275,6 +290,9 @@
                             ),
                             text: "Boy, the ",
                             spans: [],
+                            source_column: Some(
+                                12,
+                            ),
                         },
                         LyricsSegment {
                             chord: Some(
@@ -294,6 +312,9 @@
                             ),
                             text: "pipes are ",
                             spans: [],
+                            source_column: Some(
+                                24,
+                            ),
                         },
                         LyricsSegment {
                             chord: Some(
@@ -313,6 +334,9 @@
                             ),
                             text: "calling",
                             spans: [],
+                            source_column: Some(
+                                37,
+                            ),
                         },
                     ],
                 },

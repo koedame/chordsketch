@@ -601,6 +601,10 @@ fn transpose_lyrics_with_style(
                 chord: new_chord,
                 text: seg.text.clone(),
                 spans: seg.spans.clone(),
+                // Transposing rewrites the displayed chord name, not the
+                // source: the `[` stays at the same source column, so carry
+                // the original through unchanged (#2634).
+                source_column: seg.source_column,
             }
         })
         .collect();
@@ -1471,5 +1475,24 @@ mod tests {
         let song = crate::parse("{define: [Am7]}\n[Am7]Hi").unwrap();
         let transposed = transpose(&song, 3);
         assert_eq!(directive_value(&transposed.lines[0]), "[Cm7]");
+    }
+
+    #[test]
+    fn transpose_preserves_chord_source_column() {
+        // Transposing rewrites the displayed chord name but not the source,
+        // so the segment's `[` source column rides through unchanged (#2634).
+        let song = crate::parse("do\\[re[Am]mi").unwrap();
+        let transposed = transpose(&song, 2);
+        let crate::ast::Line::Lyrics(line) = &transposed.lines[0] else {
+            panic!("expected a lyrics line");
+        };
+        let chord_seg = line
+            .segments
+            .iter()
+            .find(|s| s.chord.is_some())
+            .expect("a chord-bearing segment");
+        // Name transposed Am → Bm, but the source column stays at the real 6.
+        assert_eq!(chord_seg.chord.as_ref().unwrap().name, "Bm");
+        assert_eq!(chord_seg.source_column, Some(6));
     }
 }

@@ -860,6 +860,11 @@ impl Parser {
     fn parse_lyrics_line(&mut self) -> Result<Line, ParseError> {
         let mut segments: Vec<LyricsSegment> = Vec::new();
         let mut current_chord: Option<Chord> = None;
+        // 0-based UTF-16 source column of `current_chord`'s `[` bracket,
+        // captured from the lexer so it survives the escape-stripping the
+        // text run undergoes (a chord after `\[` would otherwise be
+        // mis-columned — #2634). Flushed onto the segment alongside the chord.
+        let mut current_chord_column: Option<usize> = None;
         let mut current_text = String::new();
 
         loop {
@@ -870,13 +875,16 @@ impl Parser {
                 TokenKind::ChordOpen => {
                     // Flush the current segment before starting a new chord.
                     if current_chord.is_some() || !current_text.is_empty() {
-                        segments.push(LyricsSegment::new(
+                        segments.push(Self::build_segment(
                             current_chord.take(),
                             core::mem::take(&mut current_text),
+                            current_chord_column.take(),
                         ));
                     }
 
-                    current_chord = Some(self.parse_chord()?);
+                    let (chord, chord_column) = self.parse_chord()?;
+                    current_chord = Some(chord);
+                    current_chord_column = Some(chord_column);
                 }
                 TokenKind::Text(text) => {
                     current_text.push_str(text);
@@ -917,7 +925,11 @@ impl Parser {
 
         // Flush the last segment.
         if current_chord.is_some() || !current_text.is_empty() {
-            segments.push(LyricsSegment::new(current_chord, current_text));
+            segments.push(Self::build_segment(
+                current_chord,
+                current_text,
+                current_chord_column,
+            ));
         }
 
         // Consume the trailing newline if present.
@@ -935,6 +947,26 @@ impl Parser {
                 .collect();
             Ok(Line::Lyrics(LyricsLine { segments }))
         }
+    }
+
+    /// Builds a lyrics segment, attaching the chord's 0-based UTF-16 source
+    /// column when the segment carries a chord.
+    ///
+    /// `chord_column` is `Some` only when `chord` is `Some` — the two are
+    /// flushed together in [`Parser::parse_lyrics_line`]. A text-only segment
+    /// keeps `source_column` as `None`.
+    fn build_segment(
+        chord: Option<Chord>,
+        text: String,
+        chord_column: Option<usize>,
+    ) -> LyricsSegment {
+        let mut segment = LyricsSegment::new(chord, text);
+        // Only chord-bearing segments carry a source column; the bracket the
+        // column points at is the chord's `[`.
+        if segment.chord.is_some() {
+            segment.source_column = chord_column;
+        }
+        segment
     }
 
     /// Applies inline markup parsing to a lyrics segment.
@@ -959,8 +991,16 @@ impl Parser {
     ///
     /// The opening bracket has already been peeked; this method consumes it,
     /// the chord text, and the closing bracket.
-    fn parse_chord(&mut self) -> Result<Chord, ParseError> {
-        let open_span = self.peek().span;
+    ///
+    /// Returns the parsed chord together with the 0-based UTF-16 source column
+    /// of its opening `[` (see [`LyricsSegment::source_column`]). The column
+    /// is read straight from the lexer token, so it accounts for escaped
+    /// specials earlier on the line that the post-lex text run has dropped
+    /// (#2634).
+    fn parse_chord(&mut self) -> Result<(Chord, usize), ParseError> {
+        let open_token = self.peek();
+        let open_span = open_token.span;
+        let open_column = open_token.utf16_col;
         self.advance(); // consume ChordOpen
 
         let mut name = String::new();
@@ -989,7 +1029,7 @@ impl Parser {
             }
         }
 
-        Ok(Chord::new(name))
+        Ok((Chord::new(name), open_column))
     }
 }
 
@@ -1620,6 +1660,104 @@ mod tests {
                 ],
             })]
         );
+    }
+
+    // -- Chord source columns (#2634) --------------------------------------
+
+    /// Collect `(chord_name, source_column)` for every chord-bearing segment
+    /// on the first lyrics line of `input`.
+    fn chord_columns(input: &str) -> Vec<(String, Option<usize>)> {
+        let first = lines(input).into_iter().next().expect("at least one line");
+        let Line::Lyrics(line) = first else {
+            panic!("expected a lyrics line, got {first:?}");
+        };
+        line.segments
+            .iter()
+            .filter_map(|s| s.chord.as_ref().map(|c| (c.name.clone(), s.source_column)))
+            .collect()
+    }
+
+    #[test]
+    fn chord_source_columns_track_plain_line() {
+        // No escapes: the column equals the index of each `[`. `[Am]` (4 cols)
+        // + `Hello ` (6 cols) puts `[G]` at column 10.
+        let input = "[Am]Hello [G]world";
+        assert_eq!(input.find("[G]"), Some(10), "fixture sanity");
+        assert_eq!(
+            chord_columns(input),
+            vec![("Am".to_string(), Some(0)), ("G".to_string(), Some(10))],
+        );
+    }
+
+    #[test]
+    fn chord_source_column_survives_escaped_special() {
+        // Regression for #2634: the lyrics run `do\[re` is six source columns
+        // wide (`d o \ [ r e`) but lexes to the five-character text `do[re`.
+        // A column reconstructed from post-lex text would place `[Am]` at 5;
+        // the authoritative lexer column is 6 — the real index of `[`.
+        let line = "do\\[re[Am]mi";
+        assert_eq!(
+            line.find("[Am]"),
+            Some(6),
+            "fixture sanity: `[Am]` at col 6"
+        );
+        assert_eq!(chord_columns(line), vec![("Am".to_string(), Some(6))],);
+    }
+
+    #[test]
+    fn chord_source_column_counts_multiple_escapes() {
+        // Two escaped opens before the chord: `\[\[` is four columns, the
+        // chord `[C]` therefore starts at column 4.
+        let line = "\\[\\[[C]x";
+        assert_eq!(line.find("[C]"), Some(4));
+        assert_eq!(chord_columns(line), vec![("C".to_string(), Some(4))]);
+    }
+
+    #[test]
+    fn chord_source_column_is_utf16_for_astral_lyrics() {
+        // The column is counted in UTF-16 code units, not chars, so the JS
+        // chord editor can splice the source with `String.prototype.slice`.
+        // `🎸` is one char but two UTF-16 code units, so the `[Am]` after it
+        // sits at UTF-16 column 2 (not char column 1).
+        let line = "🎸[Am]hi";
+        assert_eq!(chord_columns(line), vec![("Am".to_string(), Some(2))]);
+    }
+
+    #[test]
+    fn chord_source_column_tracks_per_line() {
+        // The column resets per line (lexer resets on newline), so the chord
+        // on line two is measured from that line's start, not cumulatively.
+        let first = lines("foo[Am]\nba\\[r[G]z");
+        let Line::Lyrics(line2) = &first[1] else {
+            panic!("expected lyrics on line 2");
+        };
+        let cols: Vec<_> = line2
+            .segments
+            .iter()
+            .filter_map(|s| s.chord.as_ref().map(|c| (c.name.clone(), s.source_column)))
+            .collect();
+        // `ba\[r` is five source columns (`b a \ [ r`) → `[G]` at column 5.
+        assert_eq!(cols, vec![("G".to_string(), Some(5))]);
+    }
+
+    #[test]
+    fn text_only_segment_has_no_source_column() {
+        let result = lines("just lyrics");
+        let Line::Lyrics(line) = &result[0] else {
+            panic!("expected lyrics");
+        };
+        assert_eq!(line.segments[0].source_column, None);
+    }
+
+    #[test]
+    fn source_column_excluded_from_segment_equality() {
+        // Two segments differing only in `source_column` compare equal: the
+        // field is positional provenance, not semantic content. This is what
+        // keeps the golden/equality tests above stable.
+        let a = LyricsSegment::new(Some(Chord::new("Am")), "Hi");
+        let b = LyricsSegment::new(Some(Chord::new("Am")), "Hi").with_source_column(7);
+        assert_eq!(a, b);
+        assert_eq!(b.source_column, Some(7));
     }
 
     #[test]

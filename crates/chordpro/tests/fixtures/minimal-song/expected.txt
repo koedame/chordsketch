@@ -42,6 +42,7 @@ Song {
                         chord: None,
                         text: "Hello, world!",
                         spans: [],
+                        source_column: None,
                     },
                 ],
             },
