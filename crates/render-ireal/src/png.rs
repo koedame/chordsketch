@@ -158,8 +158,8 @@ pub fn render_png(song: &IrealSong, options: &PngOptions) -> Result<Vec<u8>, Png
     // `resvg::render` are the exact same crate version that `resvg`
     // compiled against. A direct dep at a different semver version would
     // produce two incompatible copies of the type and fail to compile.
-    let mut pixmap = resvg::tiny_skia::Pixmap::new(width, height)
-        .ok_or(PngError::PixmapAlloc(width, height))?;
+    let mut pixmap =
+        resvg::tiny_skia::Pixmap::new(width, height).ok_or(PngError::PixmapAlloc(width, height))?;
 
     let transform = resvg::tiny_skia::Transform::from_scale(scale, scale);
     resvg::render(&tree, transform, &mut pixmap.as_mut());
