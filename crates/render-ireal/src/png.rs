@@ -81,13 +81,13 @@ pub enum PngError {
     /// exists so we can surface the underlying message rather than
     /// panicking.
     SvgParse(String),
-    /// Pixel-buffer allocation failed. `tiny_skia::Pixmap::new`
+    /// Pixel-buffer allocation failed. `resvg::tiny_skia::Pixmap::new`
     /// returns `None` when the requested dimensions overflow the
     /// internal buffer-size invariant; the contained tuple is
     /// `(width, height)` in pixels.
     PixmapAlloc(u32, u32),
     /// PNG encoding failed. The contained string is the underlying
-    /// `tiny_skia` error message.
+    /// `tiny_skia` (via `resvg`) error message.
     PngEncode(String),
 }
 
@@ -153,10 +153,15 @@ pub fn render_png(song: &IrealSong, options: &PngOptions) -> Result<Vec<u8>, Png
     // fits in `u32` with comfort.
     let width = (svg_size.width() * scale).ceil() as u32;
     let height = (svg_size.height() * scale).ceil() as u32;
-    let mut pixmap =
-        tiny_skia::Pixmap::new(width, height).ok_or(PngError::PixmapAlloc(width, height))?;
+    // Use `resvg::tiny_skia` re-exports rather than a direct `tiny-skia`
+    // dependency so the `Transform` and `PixmapMut` types passed to
+    // `resvg::render` are the exact same crate version that `resvg`
+    // compiled against. A direct dep at a different semver version would
+    // produce two incompatible copies of the type and fail to compile.
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(width, height)
+        .ok_or(PngError::PixmapAlloc(width, height))?;
 
-    let transform = tiny_skia::Transform::from_scale(scale, scale);
+    let transform = resvg::tiny_skia::Transform::from_scale(scale, scale);
     resvg::render(&tree, transform, &mut pixmap.as_mut());
 
     pixmap

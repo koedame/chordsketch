@@ -796,7 +796,6 @@ dependencies = [
  "chordsketch-ireal",
  "resvg",
  "svg2pdf",
- "tiny-skia",
 ]
 
 [[package]]
