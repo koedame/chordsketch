@@ -47,7 +47,7 @@
 //! / `chordsketch-ireal`.
 //!
 //! Enabling the `png` cargo feature additionally pulls in `resvg`
-//! and `tiny-skia` for the `png::render_png` rasteriser; enabling
+//! (which re-exports `tiny-skia`) for the `png::render_png` rasteriser; enabling
 //! `pdf` pulls in `svg2pdf` for the `pdf::render_pdf` converter.
 //! Both features are off by default; SVG-only consumers stay on
 //! the single-dep build. (Inline code-spans — not intra-doc links —
