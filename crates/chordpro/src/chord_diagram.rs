@@ -400,11 +400,7 @@ struct DiagramMetrics {
     title_font: f32,
     /// Baseline y of the chord-name title text.
     title_baseline: f32,
-    /// Font size for the base-fret label and the muted-string `X` glyph.
-    label_font: f32,
-    /// Font size for the per-cell fret-number axis labels. Separate from
-    /// [`label_font`](Self::label_font) so the compact size can use a smaller
-    /// font that fits its narrow gutter without shrinking the muted-`X` glyph.
+    /// Font size for the per-cell fret-number axis labels.
     fret_label_font: f32,
     /// Gap (SVG px) subtracted from `left_margin` to place a vertical
     /// fret-number label's right edge anchor (`left_margin - fret_label_gap`).
@@ -461,12 +457,11 @@ impl DiagramMetrics {
             nut_margin_glyph_offset: NUT_MARGIN_GLYPH_OFFSET,
             title_font: 14.0,
             title_baseline: 14.0,
-            label_font: 10.0,
-            // Axis font matches label_font; the gap places the right edge of
-            // a right-anchored fret number at `left_margin - fret_label_gap
-            // = 18 - 6 = 12`, which clears the leftmost string's finger dot
-            // (left edge `left_margin - dot_radius = 13`) while a 2-digit
-            // label still fits inside the gutter (left edge ≈ 0).
+            // The gap places the right edge of a right-anchored fret number at
+            // `left_margin - fret_label_gap = 18 - 6 = 12`, which clears the
+            // leftmost string's finger dot (left edge `left_margin - dot_radius
+            // = 13`) while a 2-digit label still fits inside the gutter (left
+            // edge ≈ 0).
             fret_label_font: 10.0,
             fret_label_gap: 6.0,
             finger_font: 8.0,
@@ -512,10 +507,9 @@ impl DiagramMetrics {
             nut_margin_glyph_offset: 5.0,
             title_font: 11.0,
             title_baseline: 9.0,
-            label_font: 8.0,
-            // Smaller axis font + gap than label_font so the per-cell
-            // fret numbers fit the compact diagram's narrow gutter and
-            // bottom padding without enlarging the inline layout further.
+            // Small axis font + gap so the per-cell fret numbers fit the
+            // compact diagram's narrow gutter and bottom padding without
+            // enlarging the inline layout further.
             fret_label_font: 6.0,
             fret_label_gap: 2.0,
             finger_font: 7.0,
@@ -673,7 +667,6 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
         nut_margin_glyph_offset,
         title_font,
         title_baseline,
-        label_font,
         fret_label_font,
         finger_font,
         text_v_center,
@@ -811,17 +804,22 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
         }
         let x = left_margin + i as f32 * cell_w;
         if fret == -1 {
-            // Muted (X). The open-string ring below is centred on `y`, so the
-            // `X` glyph must be centred on `y` too — add `text_v_center` to the
-            // baseline (text grows upward from its baseline, so a bare `y`
-            // would float the glyph above the ring). This mirrors the
-            // horizontal renderer, which already centres its muted `X` with the
-            // same offset.
-            let y = nut_y - nut_margin_glyph_offset;
+            // Muted (X) — drawn as two crossing strokes (not a text glyph) so
+            // it is geometrically centred on the marker, exactly like the
+            // open-string ring below, independent of any font's metrics. Sized
+            // to match the open ring (half-extent = open_radius). A
+            // `muted-string` class makes the pair identifiable to CSS / tests.
+            let cy = nut_y - nut_margin_glyph_offset;
+            let r = open_radius;
             svg.push_str(&format!(
-                "<text x=\"{x}\" y=\"{}\" text-anchor=\"middle\" \
-                 font-family=\"sans-serif\" font-size=\"{label_font}\">X</text>\n",
-                y + text_v_center
+                "<line x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\" \
+                 stroke=\"black\" stroke-width=\"{line_stroke}\" class=\"muted-string\"/>\n\
+                 <line x1=\"{x1}\" y1=\"{y2}\" x2=\"{x2}\" y2=\"{y1}\" \
+                 stroke=\"black\" stroke-width=\"{line_stroke}\" class=\"muted-string\"/>\n",
+                x1 = x - r,
+                y1 = cy - r,
+                x2 = x + r,
+                y2 = cy + r,
             ));
         } else if fret == 0 {
             // Open (O)
@@ -879,7 +877,6 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
         nut_margin_glyph_offset,
         title_font,
         title_baseline,
-        label_font,
         fret_label_font,
         finger_font,
         text_v_center,
@@ -1022,14 +1019,21 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
         let row = num_strings - 1 - i;
         let y = top_margin + row as f32 * string_pitch;
         if fret == -1 {
-            // Muted (X) — to the left of the nut, one per string row.
-            // `y + text_v_center` is the same baseline-centring offset the
-            // vertical renderer uses for finger-number text.
-            let x = nut_x - nut_margin_glyph_offset;
+            // Muted (X) — two crossing strokes to the left of the nut, one
+            // per string row, centred on the row exactly like the open-string
+            // ring (see the vertical renderer for the rationale on using a
+            // shape rather than a text glyph).
+            let cx = nut_x - nut_margin_glyph_offset;
+            let r = open_radius;
             svg.push_str(&format!(
-                "<text x=\"{x}\" y=\"{}\" text-anchor=\"middle\" \
-                 font-family=\"sans-serif\" font-size=\"{label_font}\">X</text>\n",
-                y + text_v_center
+                "<line x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\" \
+                 stroke=\"black\" stroke-width=\"{line_stroke}\" class=\"muted-string\"/>\n\
+                 <line x1=\"{x1}\" y1=\"{y2}\" x2=\"{x2}\" y2=\"{y1}\" \
+                 stroke=\"black\" stroke-width=\"{line_stroke}\" class=\"muted-string\"/>\n",
+                x1 = cx - r,
+                y1 = y - r,
+                x2 = cx + r,
+                y2 = y + r,
             ));
         } else if fret == 0 {
             // Open (O) — to the left of the nut, one per string row.
@@ -1777,8 +1781,9 @@ mod tests {
         assert!(svg.contains("Am"));
         // Should have circles for fretted positions
         assert!(svg.contains("<circle"));
-        // Should have X for muted string
-        assert!(svg.contains(">X<"));
+        // Should have a muted-string marker (two crossing lines) for the
+        // muted 6th string.
+        assert!(svg.contains("class=\"muted-string\""));
     }
 
     #[test]
@@ -2814,14 +2819,15 @@ mod tests {
 
     #[test]
     fn horizontal_open_and_muted_markers_sit_left_of_nut() {
-        // Open / muted markers are placed at x = LEFT_MARGIN - 7 = 11 in
+        // Open / muted markers are centred at x = LEFT_MARGIN - 7 = 11 in
         // horizontal mode (the analogue of the vertical mode's y = nut_y - 7
         // placement above the nut).
         let svg = horizontal_am_svg();
-        // "X" mute glyph at x=11 for the muted 6th string.
+        // Muted 6th string: crossing strokes centred on x=11, so the lines
+        // span x1 = 11 - open_radius(4) = 7 to x2 = 15, tagged muted-string.
         assert!(
-            svg.contains("<text x=\"11\""),
-            "expected muted-X glyph anchored at x=11; got: {svg}"
+            svg.contains("x1=\"7\" y1=") && svg.contains("class=\"muted-string\""),
+            "expected muted-string crossing strokes centred at x=11; got: {svg}"
         );
         // Open-string circle at cx=11.
         assert!(
