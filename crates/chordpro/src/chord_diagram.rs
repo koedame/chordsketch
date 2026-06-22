@@ -700,13 +700,22 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
     // Nut (open position). Both sizes draw the full fret-number axis
     // (`show_fret_numbers` is `true` for regular and compact), so the
     // base-fret label is always covered by the axis; no standalone label
-    // is needed. The nut line itself is drawn only at fret 1.
+    // is needed. The nut is drawn only at fret 1.
+    //
+    // The grid lines are filled `<rect>`s rather than `<line>` strokes: a
+    // stroked line centres its width on the path and uses butt caps, so two
+    // perpendicular edge lines leave an unfilled notch where they meet and
+    // the bodies straddle the pixel grid. Equal-area rects that span the
+    // full grid extent union cleanly at every corner and T-junction. The
+    // horizontal lines (nut + frets) are widened by `line_stroke` (half the
+    // string stroke at each end) so they cover the outer strings' corners.
     let nut_y = top_margin;
     if data.base_fret == 1 {
         svg.push_str(&format!(
-            "<line x1=\"{left_margin}\" y1=\"{nut_y}\" x2=\"{}\" y2=\"{nut_y}\" \
-             stroke=\"black\" stroke-width=\"{nut_stroke}\"/>\n",
-            left_margin + grid_w
+            "<rect x=\"{rx}\" y=\"{ry}\" width=\"{rw}\" height=\"{nut_stroke}\" fill=\"black\"/>\n",
+            rx = left_margin - line_stroke / 2.0,
+            ry = nut_y - nut_stroke / 2.0,
+            rw = grid_w + line_stroke,
         ));
     }
 
@@ -782,18 +791,19 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
     for i in 0..num_strings {
         let x = left_margin + i as f32 * cell_w;
         svg.push_str(&format!(
-            "<line x1=\"{x}\" y1=\"{nut_y}\" x2=\"{x}\" y2=\"{}\" \
-             stroke=\"black\" stroke-width=\"{line_stroke}\"/>\n",
-            nut_y + grid_h
+            "<rect x=\"{rx}\" y=\"{nut_y}\" width=\"{line_stroke}\" height=\"{grid_h}\" \
+             fill=\"black\"/>\n",
+            rx = x - line_stroke / 2.0,
         ));
     }
 
     for j in 0..=num_frets {
         let y = nut_y + j as f32 * cell_h;
         svg.push_str(&format!(
-            "<line x1=\"{left_margin}\" y1=\"{y}\" x2=\"{}\" y2=\"{y}\" \
-             stroke=\"black\" stroke-width=\"{line_stroke}\"/>\n",
-            left_margin + grid_w
+            "<rect x=\"{rx}\" y=\"{ry}\" width=\"{rw}\" height=\"{line_stroke}\" fill=\"black\"/>\n",
+            rx = left_margin - line_stroke / 2.0,
+            ry = y - line_stroke / 2.0,
+            rw = grid_w + line_stroke,
         ));
     }
 
@@ -919,17 +929,23 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
         crate::escape::escape_xml(data.title())
     ));
 
-    // Nut (vertical line on the left at the open position). Both sizes draw
-    // the full fret-number axis (`show_fret_numbers` is `true` for regular
-    // and compact), so the base-fret label is always covered by the axis;
-    // no standalone label is needed. The nut line itself is drawn only at
-    // fret 1.
+    // Nut (left edge at the open position). Both sizes draw the full
+    // fret-number axis (`show_fret_numbers` is `true` for regular and
+    // compact), so the base-fret label is always covered by the axis; no
+    // standalone label is needed. The nut is drawn only at fret 1.
+    //
+    // As in the vertical renderer, the grid lines are filled `<rect>`s so
+    // perpendicular edges union without the notch/blur a stroked line leaves
+    // at a right-angle junction. Here the vertical lines (nut + frets) are
+    // the ones lengthened by `line_stroke` (half the string stroke at each
+    // end) to cover the outer strings' corners.
     let nut_x = left_margin;
     if data.base_fret == 1 {
         svg.push_str(&format!(
-            "<line x1=\"{nut_x}\" y1=\"{top_margin}\" x2=\"{nut_x}\" y2=\"{}\" \
-             stroke=\"black\" stroke-width=\"{nut_stroke}\"/>\n",
-            top_margin + grid_h
+            "<rect x=\"{rx}\" y=\"{ry}\" width=\"{nut_stroke}\" height=\"{rh}\" fill=\"black\"/>\n",
+            rx = nut_x - nut_stroke / 2.0,
+            ry = top_margin - line_stroke / 2.0,
+            rh = grid_h + line_stroke,
         ));
     }
 
@@ -993,18 +1009,19 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
     for i in 0..num_strings {
         let y = top_margin + i as f32 * string_pitch;
         svg.push_str(&format!(
-            "<line x1=\"{nut_x}\" y1=\"{y}\" x2=\"{}\" y2=\"{y}\" \
-             stroke=\"black\" stroke-width=\"{line_stroke}\"/>\n",
-            nut_x + grid_w
+            "<rect x=\"{nut_x}\" y=\"{ry}\" width=\"{grid_w}\" height=\"{line_stroke}\" \
+             fill=\"black\"/>\n",
+            ry = y - line_stroke / 2.0,
         ));
     }
 
     for j in 0..=num_frets {
         let x = nut_x + j as f32 * fret_pitch;
         svg.push_str(&format!(
-            "<line x1=\"{x}\" y1=\"{top_margin}\" x2=\"{x}\" y2=\"{}\" \
-             stroke=\"black\" stroke-width=\"{line_stroke}\"/>\n",
-            top_margin + grid_h
+            "<rect x=\"{rx}\" y=\"{ry}\" width=\"{line_stroke}\" height=\"{rh}\" fill=\"black\"/>\n",
+            rx = x - line_stroke / 2.0,
+            ry = top_margin - line_stroke / 2.0,
+            rh = grid_h + line_stroke,
         ));
     }
 
@@ -2780,17 +2797,16 @@ mod tests {
 
     #[test]
     fn horizontal_open_position_has_nut_as_vertical_line() {
-        // base_fret == 1 ⇒ nut is the leftmost vertical line, thick stroke.
-        // The vertical-renderer test asserts a horizontal nut line at
-        // `y1=TOP_MARGIN y2=TOP_MARGIN` with `stroke-width=\"3\"`; the
-        // horizontal-mode analogue is a vertical line at
-        // `x1=LEFT_MARGIN x2=LEFT_MARGIN`.
+        // base_fret == 1 ⇒ the nut is the leftmost vertical bar, drawn as a
+        // filled rect `nut_stroke` (3) wide. It is centred on x=LEFT_MARGIN
+        // (18), so its left edge sits at 18 - 3/2 = 16.5, and it is
+        // lengthened by line_stroke/2 at each end (y starts at 27 - 0.5 =
+        // 26.5). `width="3"` is unique to the nut among the grid rects.
         let svg = horizontal_am_svg();
         assert!(
-            svg.contains("x1=\"18\" y1=\"27\" x2=\"18\""),
-            "expected vertical nut line anchored at LEFT_MARGIN/TOP_MARGIN; got: {svg}"
+            svg.contains("<rect x=\"16.5\" y=\"26.5\" width=\"3\""),
+            "expected vertical nut rect centred at LEFT_MARGIN/TOP_MARGIN; got: {svg}"
         );
-        assert!(svg.contains("stroke-width=\"3\""));
     }
 
     #[test]
@@ -2813,8 +2829,9 @@ mod tests {
             svg.contains(">7</text>"),
             "expected axis label 7 for the first fret cell; got: {svg}"
         );
-        // No thick nut line when starting above fret 1.
-        assert!(!svg.contains("stroke-width=\"3\""));
+        // No thick nut bar when starting above fret 1 (`width="3"` is
+        // unique to the nut rect among the grid rects).
+        assert!(!svg.contains("width=\"3\""));
     }
 
     #[test]
