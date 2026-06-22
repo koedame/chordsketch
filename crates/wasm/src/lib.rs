@@ -336,6 +336,43 @@ pub(crate) fn key_tonic_triad_inner(key: &str) -> Option<Vec<u8>> {
     chordsketch_chordpro::key_tonic_triad(key)
 }
 
+/// One staff-placed chord tone, serialised to a plain JS
+/// `{letter, accidental, octave, midi}` object via `serde_wasm_bindgen`.
+/// Mirrors the NAPI `StaffNote` object and the FFI `StaffNote` dictionary.
+#[derive(Serialize)]
+pub(crate) struct StaffNotePayload {
+    /// Note letter the tone is spelled on, `"A"`–`"G"`.
+    pub(crate) letter: String,
+    /// Signed accidental semitone offset (`-3..=3`; almost always `-2..=2`,
+    /// but reaches `±3` for enharmonically-extreme roots such as `Cbdim7`).
+    pub(crate) accidental: i8,
+    /// Scientific-pitch-notation octave (middle C = C4).
+    pub(crate) octave: i8,
+    /// Absolute MIDI note number, consistent with the spelling.
+    pub(crate) midi: u8,
+}
+
+/// Pure-Rust core of [`bindings::chord_staff_notes`]. Returns the chord's
+/// constituent tones spelled for staff notation, or `None` when `chord` is
+/// not parseable.
+///
+/// Sister-site to the NAPI `chord_staff_notes_inner` and the FFI binding's
+/// `chord_staff_notes` (`.claude/rules/fix-propagation.md` §Bindings).
+#[must_use]
+pub(crate) fn chord_staff_notes_inner(chord: &str) -> Option<Vec<StaffNotePayload>> {
+    chordsketch_chordpro::chord_staff_notes(chord).map(|notes| {
+        notes
+            .into_iter()
+            .map(|n| StaffNotePayload {
+                letter: n.letter.to_string(),
+                accidental: n.accidental,
+                octave: n.octave,
+                midi: n.midi,
+            })
+            .collect()
+    })
+}
+
 /// A single validation issue reported by [`bindings::validate`].
 ///
 /// Serialised to a plain JS `{line, column, message}` object via
@@ -1737,6 +1774,23 @@ mod tests {
     fn test_chord_pitches_inner_unparseable_returns_none() {
         assert_eq!(chord_pitches_inner("XYZ-not-a-chord"), None);
         assert_eq!(chord_pitches_inner(""), None);
+    }
+
+    #[test]
+    fn test_chord_staff_notes_inner_spelling_and_none() {
+        let notes = chord_staff_notes_inner("Cmaj9").expect("Cmaj9 is a chord");
+        let spelled: Vec<(&str, i8)> = notes
+            .iter()
+            .map(|n| (n.letter.as_str(), n.accidental))
+            .collect();
+        assert_eq!(
+            spelled,
+            vec![("C", 0), ("E", 0), ("G", 0), ("B", 0), ("D", 0)]
+        );
+        // Flat-side chord spells with flats, not enharmonic sharps.
+        let ebm7 = chord_staff_notes_inner("Ebm7").expect("Ebm7 is a chord");
+        assert!(ebm7.iter().all(|n| n.accidental == -1));
+        assert!(chord_staff_notes_inner("XYZ-not-a-chord").is_none());
     }
 
     #[test]

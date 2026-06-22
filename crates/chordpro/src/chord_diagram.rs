@@ -304,22 +304,27 @@ pub enum DiagramSize {
 /// chord chart. This is the tightest spacing that does not overlap
 /// neighbouring same-fret dots; shrinking `CELL_W` below `DOT_RADIUS *
 /// 2`, or enlarging `DOT_RADIUS`, would make them overlap. The grid is
-/// intentionally compact and floated inside a generous margin (see
-/// `LEFT_MARGIN` / `TOP_MARGIN` / `DiagramMetrics::regular`'s
-/// `bottom_pad_vertical`) rather than filling the bounding box
-/// edge-to-edge.
+/// tightly cropped — the surrounding gutters (`LEFT_MARGIN` /
+/// `TOP_MARGIN` / `DiagramMetrics::right_margin`) are sized only to hold
+/// the title, the fret-number axis, and the open/muted glyphs, rather
+/// than padding the diagram out to a larger frame.
 const CELL_W: f32 = 10.0;
-/// Fret pitch in SVG user units. Larger than [`CELL_W`] so the cells stay
-/// taller than they are wide, matching a real fretboard's proportions.
-const CELL_H: f32 = 14.0;
+/// Fret pitch in SVG user units for the VERTICAL layout. Larger than
+/// [`CELL_W`] so the cells stay taller than they are wide, matching a real
+/// fretboard's proportions. The horizontal layout uses its own, slightly
+/// wider fret pitch (`DiagramMetrics::horizontal_fret_pitch`) so it reads
+/// visibly wider than tall.
+const CELL_H: f32 = 12.0;
 /// Vertical space above the nut for the title row + open/muted glyph row.
-const TOP_MARGIN: f32 = 32.0;
-/// Side gutter. With the compact grid this also recentres the fretboard
-/// inside the bounding box: `total_w = grid_w + LEFT_MARGIN * 2`, so a
-/// 6-string diagram lands at the historical 120px width with the grid
-/// centred (string axis centred under the title) instead of bleeding to
-/// the edges.
-const LEFT_MARGIN: f32 = 35.0;
+const TOP_MARGIN: f32 = 27.0;
+/// Left gutter. Holds the per-cell fret-number axis to the left of the
+/// fretboard grid, sized so a 2-digit fret number (high-position barre
+/// chords) clears both the left edge of the viewBox and the leftmost
+/// string's finger dots. The grid is no longer centred inside a symmetric
+/// margin (the historical edge-to-edge-avoidance trick); the right gutter
+/// (`DiagramMetrics::right_margin`) is much narrower since it only has to
+/// clear the rightmost dot. `total_w = grid_w + LEFT_MARGIN + right_margin`.
+const LEFT_MARGIN: f32 = 18.0;
 const DOT_RADIUS: f32 = 5.0;
 const OPEN_RADIUS: f32 = 4.0;
 /// Faint inlay-marker dot radius. Smaller and lighter than the
@@ -363,10 +368,22 @@ struct DiagramMetrics {
     cell_w: f32,
     /// Fret pitch (SVG y-axis in vertical mode).
     cell_h: f32,
+    /// Fret pitch for the HORIZONTAL layout's fret axis (SVG x-axis).
+    /// Decoupled from [`cell_h`](Self::cell_h) — the horizontal diagram
+    /// must read visibly wider than tall, which needs a longer fret axis
+    /// than the compact vertical grid uses. The vertical renderer ignores
+    /// this field.
+    horizontal_fret_pitch: f32,
     /// Space above the nut for the title + open/muted glyph row.
     top_margin: f32,
-    /// Side gutter on each edge.
+    /// Left gutter (holds the fret-number axis in vertical mode / the
+    /// open-muted glyph column in horizontal mode).
     left_margin: f32,
+    /// Right gutter. Only has to clear the rightmost finger dot, so it is
+    /// much narrower than [`left_margin`](Self::left_margin). The grid is
+    /// no longer centred in a symmetric margin: `total_w = grid_w +
+    /// left_margin + right_margin`.
+    right_margin: f32,
     /// Padding below the grid in the vertical layout.
     bottom_pad_vertical: f32,
     /// Padding below the grid in the horizontal layout.
@@ -383,11 +400,7 @@ struct DiagramMetrics {
     title_font: f32,
     /// Baseline y of the chord-name title text.
     title_baseline: f32,
-    /// Font size for the base-fret label and the muted-string `X` glyph.
-    label_font: f32,
-    /// Font size for the per-cell fret-number axis labels. Separate from
-    /// [`label_font`](Self::label_font) so the compact size can use a smaller
-    /// font that fits its narrow gutter without shrinking the muted-`X` glyph.
+    /// Font size for the per-cell fret-number axis labels.
     fret_label_font: f32,
     /// Gap (SVG px) subtracted from `left_margin` to place a vertical
     /// fret-number label's right edge anchor (`left_margin - fret_label_gap`).
@@ -419,34 +432,38 @@ struct DiagramMetrics {
 }
 
 impl DiagramMetrics {
-    /// Full-size metrics — the compact, centred fretboard layout used by
+    /// Full-size metrics — the tightly-cropped fretboard layout used by
     /// the end-of-song diagram grid and every non-compact SVG consumer.
     const fn regular() -> Self {
         Self {
             cell_w: CELL_W,
             cell_h: CELL_H,
+            horizontal_fret_pitch: 14.0,
             top_margin: TOP_MARGIN,
             left_margin: LEFT_MARGIN,
-            // Keeps the diagram's overall frame at the historical 120x160
-            // for a 6-string / 5-fret shape: total_h = grid_h (5*14=70) +
-            // top_margin (32) + bottom_pad_vertical (58) = 160. The compact
-            // grid floats in the upper portion of that frame rather than
-            // filling it edge-to-edge.
-            bottom_pad_vertical: 58.0,
-            bottom_pad_horizontal: 20.0,
+            right_margin: 5.0,
+            // The vertical fret-number axis sits in the left gutter and the
+            // open/muted glyphs sit above the nut, so nothing extends below
+            // the grid — the frame ends at the last fret line for a tight
+            // crop: total_h = grid_h (5*12=60) + top_margin (27) = 87 for a
+            // 6-string / 5-fret shape (was 160, mostly empty padding).
+            bottom_pad_vertical: 0.0,
+            // The horizontal fret-number axis is drawn below the grid, so
+            // the horizontal layout keeps a bottom band wide enough for it.
+            bottom_pad_horizontal: 12.0,
             dot_radius: DOT_RADIUS,
             open_radius: OPEN_RADIUS,
             position_dot_radius: POSITION_DOT_RADIUS,
             nut_margin_glyph_offset: NUT_MARGIN_GLYPH_OFFSET,
             title_font: 14.0,
-            title_baseline: 15.0,
-            label_font: 10.0,
-            // Axis font matches label_font; the gap is widened to 7 so the
-            // right-anchored fret numbers clear the recentred grid's left
-            // edge (left_margin - fret_label_gap = 35 - 7 = 28) while still
-            // leaving room for 2-digit labels inside the gutter.
+            title_baseline: 14.0,
+            // The gap places the right edge of a right-anchored fret number at
+            // `left_margin - fret_label_gap = 18 - 6 = 12`, which clears the
+            // leftmost string's finger dot (left edge `left_margin - dot_radius
+            // = 13`) while a 2-digit label still fits inside the gutter (left
+            // edge ≈ 0).
             fret_label_font: 10.0,
-            fret_label_gap: 7.0,
+            fret_label_gap: 6.0,
             finger_font: 8.0,
             text_v_center: 3.0,
             nut_stroke: 3.0,
@@ -470,11 +487,18 @@ impl DiagramMetrics {
         Self {
             cell_w: 9.0,
             cell_h: 11.0,
+            // Compact keeps a single fret pitch for both orientations
+            // (matching its `cell_h`); its grid is small enough that the
+            // horizontal layout already reads wider than tall.
+            horizontal_fret_pitch: 11.0,
             top_margin: 22.0,
             // Left gutter widened from 9 to 11 so a 2-digit fret-number label
             // (font 6, right-anchored at left_margin - fret_label_gap) clears
             // the left edge of the viewBox.
             left_margin: 11.0,
+            // Symmetric with left_margin so the compact bounding box is
+            // unchanged (`total_w = grid_w + 11 + 11`).
+            right_margin: 11.0,
             bottom_pad_vertical: 10.0,
             bottom_pad_horizontal: 8.0,
             dot_radius: 3.2,
@@ -483,10 +507,9 @@ impl DiagramMetrics {
             nut_margin_glyph_offset: 5.0,
             title_font: 11.0,
             title_baseline: 9.0,
-            label_font: 8.0,
-            // Smaller axis font + gap than label_font so the per-cell
-            // fret numbers fit the compact diagram's narrow gutter and
-            // bottom padding without enlarging the inline layout further.
+            // Small axis font + gap so the per-cell fret numbers fit the
+            // compact diagram's narrow gutter and bottom padding without
+            // enlarging the inline layout further.
             fret_label_font: 6.0,
             fret_label_gap: 2.0,
             finger_font: 7.0,
@@ -636,6 +659,7 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
         cell_h,
         top_margin,
         left_margin,
+        right_margin,
         bottom_pad_vertical,
         dot_radius,
         open_radius,
@@ -643,7 +667,6 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
         nut_margin_glyph_offset,
         title_font,
         title_baseline,
-        label_font,
         fret_label_font,
         finger_font,
         text_v_center,
@@ -658,7 +681,7 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
     let num_frets = data.frets_shown;
     let grid_w = (num_strings - 1) as f32 * cell_w;
     let grid_h = num_frets as f32 * cell_h;
-    let total_w = grid_w + left_margin * 2.0;
+    let total_w = grid_w + left_margin + right_margin;
     let total_h = grid_h + top_margin + bottom_pad_vertical;
 
     let mut svg = format!(
@@ -781,11 +804,22 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
         }
         let x = left_margin + i as f32 * cell_w;
         if fret == -1 {
-            // Muted (X)
-            let y = nut_y - nut_margin_glyph_offset;
+            // Muted (X) — drawn as two crossing strokes (not a text glyph) so
+            // it is geometrically centred on the marker, exactly like the
+            // open-string ring below, independent of any font's metrics. Sized
+            // to match the open ring (half-extent = open_radius). A
+            // `muted-string` class makes the pair identifiable to CSS / tests.
+            let cy = nut_y - nut_margin_glyph_offset;
+            let r = open_radius;
             svg.push_str(&format!(
-                "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" \
-                 font-family=\"sans-serif\" font-size=\"{label_font}\">X</text>\n"
+                "<line x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\" \
+                 stroke=\"black\" stroke-width=\"{line_stroke}\" class=\"muted-string\"/>\n\
+                 <line x1=\"{x1}\" y1=\"{y2}\" x2=\"{x2}\" y2=\"{y1}\" \
+                 stroke=\"black\" stroke-width=\"{line_stroke}\" class=\"muted-string\"/>\n",
+                x1 = x - r,
+                y1 = cy - r,
+                x2 = x + r,
+                y2 = cy + r,
             ));
         } else if fret == 0 {
             // Open (O)
@@ -832,9 +866,10 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
     // literals inlined here.
     let DiagramMetrics {
         cell_w,
-        cell_h,
+        horizontal_fret_pitch,
         top_margin,
         left_margin,
+        right_margin,
         bottom_pad_horizontal,
         dot_radius,
         open_radius,
@@ -842,7 +877,6 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
         nut_margin_glyph_offset,
         title_font,
         title_baseline,
-        label_font,
         fret_label_font,
         finger_font,
         text_v_center,
@@ -856,20 +890,18 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
     let num_strings = data.strings;
     let num_frets = data.frets_shown;
     // Semantic aliases — the horizontal layout's fret axis is the SVG
-    // x-axis, so use `cell_h` (the vertical layout's fret pitch, the
-    // larger of the two cell values) along that axis. Likewise the
-    // string axis is the SVG y-axis, so use `cell_w` (the vertical
-    // layout's string-to-string spacing, the smaller value). Using the
-    // same metrics with swapped meanings preserves the
-    // wider-than-tall fretboard aspect ratio that the vertical
-    // renderer already encodes — the diagram looks like a real
-    // fretboard rotated 90°, not a vertical diagram with the labels
-    // shuffled.
-    let fret_pitch = cell_h;
+    // x-axis, so use the dedicated `horizontal_fret_pitch` along it.
+    // This is kept slightly larger than the vertical layout's `cell_h`
+    // so the fretboard reads visibly wider than tall (with the trimmed
+    // margins a vertical-pitch fret axis would make the diagram nearly
+    // square). The string axis is the SVG y-axis, so use `cell_w` (the
+    // string-to-string spacing). The diagram looks like a real fretboard
+    // rotated 90°, not a vertical diagram with the labels shuffled.
+    let fret_pitch = horizontal_fret_pitch;
     let string_pitch = cell_w;
     let grid_w = num_frets as f32 * fret_pitch;
     let grid_h = (num_strings - 1) as f32 * string_pitch;
-    let total_w = grid_w + left_margin * 2.0;
+    let total_w = grid_w + left_margin + right_margin;
     let total_h = grid_h + top_margin + bottom_pad_horizontal;
 
     let mut svg = format!(
@@ -987,14 +1019,21 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
         let row = num_strings - 1 - i;
         let y = top_margin + row as f32 * string_pitch;
         if fret == -1 {
-            // Muted (X) — to the left of the nut, one per string row.
-            // `y + text_v_center` is the same baseline-centring offset the
-            // vertical renderer uses for finger-number text.
-            let x = nut_x - nut_margin_glyph_offset;
+            // Muted (X) — two crossing strokes to the left of the nut, one
+            // per string row, centred on the row exactly like the open-string
+            // ring (see the vertical renderer for the rationale on using a
+            // shape rather than a text glyph).
+            let cx = nut_x - nut_margin_glyph_offset;
+            let r = open_radius;
             svg.push_str(&format!(
-                "<text x=\"{x}\" y=\"{}\" text-anchor=\"middle\" \
-                 font-family=\"sans-serif\" font-size=\"{label_font}\">X</text>\n",
-                y + text_v_center
+                "<line x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\" \
+                 stroke=\"black\" stroke-width=\"{line_stroke}\" class=\"muted-string\"/>\n\
+                 <line x1=\"{x1}\" y1=\"{y2}\" x2=\"{x2}\" y2=\"{y1}\" \
+                 stroke=\"black\" stroke-width=\"{line_stroke}\" class=\"muted-string\"/>\n",
+                x1 = cx - r,
+                y1 = y - r,
+                x2 = cx + r,
+                y2 = y + r,
             ));
         } else if fret == 0 {
             // Open (O) — to the left of the nut, one per string row.
@@ -1742,8 +1781,9 @@ mod tests {
         assert!(svg.contains("Am"));
         // Should have circles for fretted positions
         assert!(svg.contains("<circle"));
-        // Should have X for muted string
-        assert!(svg.contains(">X<"));
+        // Should have a muted-string marker (two crossing lines) for the
+        // muted 6th string.
+        assert!(svg.contains("class=\"muted-string\""));
     }
 
     #[test]
@@ -2747,7 +2787,7 @@ mod tests {
         // `x1=LEFT_MARGIN x2=LEFT_MARGIN`.
         let svg = horizontal_am_svg();
         assert!(
-            svg.contains("x1=\"35\" y1=\"32\" x2=\"35\""),
+            svg.contains("x1=\"18\" y1=\"27\" x2=\"18\""),
             "expected vertical nut line anchored at LEFT_MARGIN/TOP_MARGIN; got: {svg}"
         );
         assert!(svg.contains("stroke-width=\"3\""));
@@ -2779,19 +2819,20 @@ mod tests {
 
     #[test]
     fn horizontal_open_and_muted_markers_sit_left_of_nut() {
-        // Open / muted markers are placed at x = LEFT_MARGIN - 7 = 28 in
+        // Open / muted markers are centred at x = LEFT_MARGIN - 7 = 11 in
         // horizontal mode (the analogue of the vertical mode's y = nut_y - 7
         // placement above the nut).
         let svg = horizontal_am_svg();
-        // "X" mute glyph at x=28 for the muted 6th string.
+        // Muted 6th string: crossing strokes centred on x=11, so the lines
+        // span x1 = 11 - open_radius(4) = 7 to x2 = 15, tagged muted-string.
         assert!(
-            svg.contains("<text x=\"28\""),
-            "expected muted-X glyph anchored at x=28; got: {svg}"
+            svg.contains("x1=\"7\" y1=") && svg.contains("class=\"muted-string\""),
+            "expected muted-string crossing strokes centred at x=11; got: {svg}"
         );
-        // Open-string circle at cx=28.
+        // Open-string circle at cx=11.
         assert!(
-            svg.contains("<circle cx=\"28\""),
-            "expected open-string circle at cx=28; got: {svg}"
+            svg.contains("<circle cx=\"11\""),
+            "expected open-string circle at cx=11; got: {svg}"
         );
     }
 
@@ -2800,11 +2841,11 @@ mod tests {
         // Reader-view (the only horizontal layout): in ChordPro's low-to-high
         // `frets` ordering, index 5 (high E for guitar) sits on row 0 (top).
         // For Am the open 1st string (i=5, fret=0) produces an open-circle on
-        // the top row at y = TOP_MARGIN = 32.
+        // the top row at y = TOP_MARGIN = 27.
         let svg = horizontal_am_svg();
         assert!(
-            svg.contains("<circle cx=\"28\" cy=\"32\""),
-            "expected open marker for high E on top row (cy=32); got: {svg}"
+            svg.contains("<circle cx=\"11\" cy=\"27\""),
+            "expected open marker for high E on top row (cy=27); got: {svg}"
         );
     }
 
@@ -2855,11 +2896,11 @@ mod tests {
         // characteristic ± string_pitch * 0.55 offset from the centre row.
         // For 6-string guitar in horizontal mode the string axis uses
         // string_pitch = CELL_W = 10:
-        //   grid_h = (6 - 1) * 10 = 50; center_y = TOP_MARGIN + 25 = 57;
-        //   10 * 0.55 = 5.5; so cy1 = 51.5, cy2 = 62.5.
+        //   grid_h = (6 - 1) * 10 = 50; center_y = TOP_MARGIN + 25 = 52;
+        //   10 * 0.55 = 5.5; so cy1 = 46.5, cy2 = 57.5.
         assert!(
-            svg.contains("cy=\"51.5\"") && svg.contains("cy=\"62.5\""),
-            "expected 12-fret double dot at cy=51.5 / cy=62.5; got: {svg}"
+            svg.contains("cy=\"46.5\"") && svg.contains("cy=\"57.5\""),
+            "expected 12-fret double dot at cy=46.5 / cy=57.5; got: {svg}"
         );
     }
 
@@ -2947,11 +2988,11 @@ mod tests {
             "expected 1 single + 2 (double at 12); got svg: {svg}"
         );
         // For 4-string ukulele in horizontal mode: string_pitch = CELL_W = 10,
-        //   grid_h = (4 - 1) * 10 = 30; center_y = TOP_MARGIN + 15 = 47;
-        //   10 * 0.55 = 5.5; so cy1 = 41.5, cy2 = 52.5.
+        //   grid_h = (4 - 1) * 10 = 30; center_y = TOP_MARGIN + 15 = 42;
+        //   10 * 0.55 = 5.5; so cy1 = 36.5, cy2 = 47.5.
         assert!(
-            svg.contains("cy=\"41.5\"") && svg.contains("cy=\"52.5\""),
-            "expected 12-fret double dot at cy=41.5 / cy=52.5; got: {svg}",
+            svg.contains("cy=\"36.5\"") && svg.contains("cy=\"47.5\""),
+            "expected 12-fret double dot at cy=36.5 / cy=47.5; got: {svg}",
         );
     }
 
@@ -3247,14 +3288,14 @@ mod tests {
         let count = svg.matches("class=\"fret-number\"").count();
         assert_eq!(count, 5, "expected 5 fret-cell labels (1..=5); got: {svg}");
         // The first cell's label (1) is centred at x = LEFT_MARGIN + fret_pitch/2
-        // = 35 + 7 = 42, with baseline y = TOP_MARGIN + grid_h + fret_label_font
-        // = 32 + 50 + 10 = 92.
+        // = 18 + 7 = 25, with baseline y = TOP_MARGIN + grid_h + fret_label_font
+        // = 27 + 50 + 10 = 87.
         assert!(
             svg.contains(
-                "<text x=\"42\" y=\"92\" text-anchor=\"middle\" \
+                "<text x=\"25\" y=\"87\" text-anchor=\"middle\" \
                  font-family=\"sans-serif\" font-size=\"10\" class=\"fret-number\">1</text>"
             ),
-            "expected first-cell label 1 centred at x=42 y=92; got: {svg}"
+            "expected first-cell label 1 centred at x=25 y=87; got: {svg}"
         );
     }
 
@@ -3337,7 +3378,7 @@ mod tests {
         // The axis is laid out inside the existing margins / bottom padding,
         // so adding it must not change either SVG's width or height. These
         // are the regular-layout dimensions for a 6-string, 5-fret diagram
-        // (vertical 120x160, horizontal 140x102).
+        // (vertical 73x87, horizontal 93x89).
         let extract = |svg: &str, attr: &str| -> f32 {
             let needle = format!("{attr}=\"");
             let i = svg.find(&needle).unwrap() + needle.len();
@@ -3360,19 +3401,19 @@ mod tests {
         };
         let data = open_c();
         let v = render_svg_with_orientation(&data, Orientation::Vertical);
-        assert_eq!(extract(&v, "width"), 120.0);
-        assert_eq!(extract(&v, "height"), 160.0);
+        assert_eq!(extract(&v, "width"), 73.0);
+        assert_eq!(extract(&v, "height"), 87.0);
         let v_ys = label_ys(&v);
         assert!(
-            v_ys.iter().all(|&y| y <= 160.0),
+            v_ys.iter().all(|&y| y <= 87.0),
             "vertical fret-number labels overflow the frame: {v_ys:?}"
         );
         let h = render_svg_with_orientation(&data, Orientation::Horizontal);
-        assert_eq!(extract(&h, "width"), 140.0);
-        assert_eq!(extract(&h, "height"), 102.0);
+        assert_eq!(extract(&h, "width"), 93.0);
+        assert_eq!(extract(&h, "height"), 89.0);
         let h_ys = label_ys(&h);
         assert!(
-            h_ys.iter().all(|&y| y <= 102.0),
+            h_ys.iter().all(|&y| y <= 89.0),
             "horizontal fret-number labels overflow the frame: {h_ys:?}"
         );
         // Compact size: left_margin widened from 9 → 11 to fit 2-digit labels.

@@ -1667,6 +1667,39 @@
   line-height: 1.1;
   color: var(--cs-crimson-500, #bd1642);
 }
+.chordsketch-sheet__cins-title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-sp-1, 0.25rem);
+}
+
+/* Constituent-notes staff beneath the chord name (#2695). */
+.chordsketch-staff {
+  display: inline-flex;
+  align-items: center;
+  /* The staff lines / clef / noteheads paint in `currentColor`; a muted
+     secondary tone keeps the staff legible without competing with the
+     crimson chord name above it. */
+  color: var(--cs-text-secondary, #67646d);
+}
+.chordsketch-sheet__cins-staff {
+  margin-top: var(--cs-sp-1, 0.25rem);
+}
+.chordsketch-staff__svg {
+  display: block;
+  height: auto;
+  /* Cap the rendered height so a wide chord (many tones / ledger lines)
+     stays proportionate inside the footer header. */
+  max-height: 88px;
+}
+.chordsketch-staff__accidental {
+  font-size: 9px;
+  font-family: var(--cs-font-ui, system-ui, sans-serif);
+}
+.chordsketch-staff__loading {
+  font-size: 0.6875rem;
+  color: var(--cs-text-tertiary, #8a8790);
+}
 .chordsketch-sheet__cins-close {
   width: 28px;
   height: 28px;
@@ -2149,7 +2182,7 @@
      explicit width the inner `<svg>` collapses to the 10px line box —
      the diagram renders at ~0px. `width: max-content` lets the
      popover size to the SVG's own intrinsic `width`/`height`
-     attributes (120×160 for the full-size diagram). */
+     attributes (73×87 for the full-size diagram). */
   width: max-content;
   margin-bottom: 4px;
   padding: 4px;
@@ -2165,7 +2198,7 @@
    `100%` resolves against the ~10px trigger box and crushes the
    diagram to ~0px. Lift the cap here (and pin `width: auto` so the svg
    uses its emitted attribute width) so the popover always paints the
-   full-size 120×160 diagram. `display: block` / `height: auto` are
+   full-size 73×87 diagram. `display: block` / `height: auto` are
    already supplied by `.chordsketch-diagram svg`. */
 .chordsketch-sheet__content .chord-diagram-popover svg {
   max-width: none;

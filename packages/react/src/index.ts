@@ -10,6 +10,13 @@ export {
   type ChordDiagramOrientation,
   type ChordDiagramResult,
 } from './use-chord-diagram';
+export { ChordStaff, type ChordStaffProps } from './chord-staff';
+export {
+  useChordStaff,
+  type ChordStaffResult,
+  type ChordStaffWasmLoader,
+  type StaffNote,
+} from './use-chord-staff';
 export { ChordTextarea, type ChordTextareaProps } from './chord-textarea';
 export { ChordSheet, type ChordSheetProps } from './chord-sheet';
 export {

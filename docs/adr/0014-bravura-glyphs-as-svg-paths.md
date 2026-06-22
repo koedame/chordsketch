@@ -240,9 +240,13 @@ Rejected because:
 
 - **Bravura adds glyph variants we want.** Re-running the extractor
   is cheap; the ADR's analysis still holds.
-- **The iReal renderer needs more than ~10 SMuFL glyphs.** At ~10×
-  the current path-byte cost the analysis tilts back toward bundling
-  the font binary.
+- **The project needs more than ~10 SMuFL glyphs.** At ~10× the
+  current path-byte cost the analysis tilts back toward bundling the
+  font binary. [ADR-0036](0036-real-bravura-glyphs-for-key-and-staff.md)
+  extended this path-baked approach to the `{key}` chip and the
+  chord-tone staff (gClef, sharp, flat, noteheadBlack across
+  `render-html` + `@chordsketch/react`), bringing the project total to
+  **7** distinct glyphs — still under the threshold, but closer.
 - **`usvg`'s API for non-fontdb path rendering changes.** The
   current decision relies on `usvg` parsing inline `<path>` without
   consulting `fontdb`. If a future `usvg` makes that no longer
