@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Chord diagrams now show finger numbers on every generated voicing. The
+  renderer already drew the white finger digit inside each fretted dot when
+  `fingers` data was present, but the curated voicing tables and the
+  algorithmic voicing synthesiser both produced empty finger data, so only
+  hand-authored `{define ... fingers ...}` diagrams showed numbers. A shared
+  `chord_diagram::assign_fingers` now synthesises a conventional fingering
+  from the shape (index-finger barre across the lowest fret, then one finger
+  per remaining string in ascending order) for the synthesiser, the curated
+  tables, and `{define}` directives that omit an explicit `fingers` list.
+  This flows through every diagram surface (CLI HTML, wasm, React
+  `<ChordDiagram>`, VS Code preview, LSP hover, and the PDF renderer). (#2701)
 - Key audition: clicking the `{key}` chip in the React preview plays the
   key by ear — the movable-do scale "do re mi fa sol la ti do" followed
   by the tonic triad strummed. Major and minor keys are both supported.
@@ -357,6 +368,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Chord-diagram fretboard grids now render with filled rectangles
+  instead of stroked lines, so the nut, strings, and fret lines meet at
+  clean right-angle corners instead of leaving the unfilled notch a
+  stroked line's butt cap produced where two perpendicular edges met.
+  The line bodies and diagram dimensions are unchanged; only the corner
+  rendering improves. Applies to every SVG surface (CLI `--format html`,
+  the wasm `chord_diagram_svg` exports, `@chordsketch/react`'s
+  `<ChordDiagram>`, the VS Code preview, the LSP hover) and to the PDF
+  renderer's own diagram geometry. The PDF muted-string marker also
+  switches from a text `X` glyph to crossing strokes, matching the SVG
+  renderer's shape-based marker. (#2701)
 - `@chordsketch/react`: dragging a chord in the `<ChordSheet>`
   preview and dropping it now leaves the moved chord **selected**, so
   it can be nudged or edited without a second click — matching the

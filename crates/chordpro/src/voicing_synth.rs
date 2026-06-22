@@ -394,6 +394,7 @@ fn to_diagram(name: &str, frets_abs: &[i32], frets_shown: usize, strings: usize)
         _ => (1u32, frets_abs.to_vec()),
     };
 
+    let fingers = crate::chord_diagram::assign_fingers(&frets);
     DiagramData {
         name: name.to_string(),
         display_name: None,
@@ -401,7 +402,7 @@ fn to_diagram(name: &str, frets_abs: &[i32], frets_shown: usize, strings: usize)
         frets_shown,
         base_fret,
         frets,
-        fingers: vec![],
+        fingers,
     }
 }
 
