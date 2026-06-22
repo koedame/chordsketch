@@ -345,8 +345,10 @@ dictionary ValidationError {
 dictionary StaffNote {
     /// Note letter the tone is spelled on, `"A"`–`"G"`.
     string letter;
-    /// Signed accidental as a semitone offset on `letter`: `-2`
-    /// double-flat, `-1` flat, `0` natural, `1` sharp, `2` double-sharp.
+    /// Signed accidental as a semitone offset on `letter`: `-1` flat,
+    /// `0` natural, `1` sharp, `±2` double, and `±3` for an
+    /// enharmonically-extreme root (e.g. `Cbdim7`). Consumers must handle
+    /// the full `-3..=3` range.
     i8 accidental;
     /// Scientific-pitch-notation octave (middle C = C4).
     i8 octave;

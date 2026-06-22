@@ -528,12 +528,14 @@ pub fn chord_pitches(chord: String) -> Option<Buffer> {
 ///
 /// `accidental` / `octave` are `i32` (not the core's `i8`) because napi-rs
 /// marshals only the wider integer types as plain JS `number`s; the value
-/// ranges (accidental ≈ -2..=2, octave ≈ 2..=6) are unchanged.
+/// ranges (accidental ≈ -3..=3, octave ≈ 2..=6) are unchanged.
 #[napi(object)]
 pub struct StaffNote {
     /// Note letter the tone is spelled on, `"A"`–`"G"`.
     pub letter: String,
-    /// Signed accidental semitone offset: `-2` double-flat … `2` double-sharp.
+    /// Signed accidental semitone offset: `-1` flat … `2` double-sharp, and
+    /// `±3` for an enharmonically-extreme root (e.g. `Cbdim7`); consumers must
+    /// handle the full `-3..=3` range.
     pub accidental: i32,
     /// Scientific-pitch-notation octave (middle C = C4).
     pub octave: i32,

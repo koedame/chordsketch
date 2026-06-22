@@ -419,7 +419,9 @@ pub fn chord_pitches(chord: String) -> Option<Vec<u8>> {
 pub struct StaffNote {
     /// Note letter the tone is spelled on, `"A"`–`"G"`.
     pub letter: String,
-    /// Signed accidental semitone offset: `-2` double-flat … `2` double-sharp.
+    /// Signed accidental semitone offset: `-1` flat … `2` double-sharp, and
+    /// `±3` for an enharmonically-extreme root (e.g. `Cbdim7`); consumers must
+    /// handle the full `-3..=3` range.
     pub accidental: i8,
     /// Scientific-pitch-notation octave (middle C = C4).
     pub octave: i8,
