@@ -1667,6 +1667,39 @@
   line-height: 1.1;
   color: var(--cs-crimson-500, #bd1642);
 }
+.chordsketch-sheet__cins-title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-sp-1, 0.25rem);
+}
+
+/* Constituent-notes staff beneath the chord name (#2695). */
+.chordsketch-staff {
+  display: inline-flex;
+  align-items: center;
+  /* The staff lines / clef / noteheads paint in `currentColor`; a muted
+     secondary tone keeps the staff legible without competing with the
+     crimson chord name above it. */
+  color: var(--cs-text-secondary, #67646d);
+}
+.chordsketch-sheet__cins-staff {
+  margin-top: var(--cs-sp-1, 0.25rem);
+}
+.chordsketch-staff__svg {
+  display: block;
+  height: auto;
+  /* Cap the rendered height so a wide chord (many tones / ledger lines)
+     stays proportionate inside the footer header. */
+  max-height: 88px;
+}
+.chordsketch-staff__accidental {
+  font-size: 9px;
+  font-family: var(--cs-font-ui, system-ui, sans-serif);
+}
+.chordsketch-staff__loading {
+  font-size: 0.6875rem;
+  color: var(--cs-text-tertiary, #8a8790);
+}
 .chordsketch-sheet__cins-close {
   width: 28px;
   height: 28px;

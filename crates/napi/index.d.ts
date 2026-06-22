@@ -249,6 +249,36 @@ export function chordDiagramSvgWithDefines(
 export function chordPitches(chord: string): Buffer | null;
 
 /**
+ * One staff-placed chord tone returned by `chordStaffNotes`. Mirrors the
+ * WASM `StaffNote` interface and the FFI `StaffNote` dictionary.
+ */
+export interface StaffNote {
+  /** Note letter the tone is spelled on, `"A"`–`"G"`. */
+  letter: string;
+  /**
+   * Signed accidental as a semitone offset on `letter`: `-1` flat, `0`
+   * natural, `1` sharp, `±2` double. For enharmonically-extreme roots
+   * (e.g. `Cbdim7`'s triple-flat seventh) the value reaches `±3` — renderers
+   * must handle the full `-3..=3` range, not assume `±2` is the maximum.
+   */
+  accidental: number;
+  /** Scientific-pitch-notation octave (middle C = C4). */
+  octave: number;
+  /** Absolute MIDI note number, consistent with the spelling. */
+  midi: number;
+}
+
+/**
+ * Constituent tones of a chord spelled for staff notation (#2695). Mirrors
+ * the WASM `chordStaffNotes` and FFI `chord_staff_notes` exports.
+ *
+ * Returns the tones ascending by pitch (a slash bass sorts first), or `null`
+ * when `chord` is not parseable as a chord. Each tone is spelled diatonically
+ * from the chord's structure (e.g. `Ebm7` → E♭ G♭ B♭ D♭, not D♯ F♯ A♯ C♯).
+ */
+export function chordStaffNotes(chord: string): Array<StaffNote> | null;
+
+/**
  * Ascending one-octave scale of a musical key as MIDI note numbers, for
  * auditioning the key by ear — the movable-do "do re mi fa sol la ti do"
  * (#2658). Mirrors the WASM `keyScalePitches` and FFI `key_scale_pitches`

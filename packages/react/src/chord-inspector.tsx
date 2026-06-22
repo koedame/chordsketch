@@ -24,10 +24,12 @@
 
 import type { JSX, KeyboardEvent as ReactKeyboardEvent } from 'react';
 
+import { ChordStaff } from './chord-staff';
 import {
   CHORD_TYPE_PRESETS,
   type ChordParts,
 } from './chord-source-edit';
+import type { ChordStaffWasmLoader } from './use-chord-staff';
 
 /** Root letters offered in the segmented control, C-major order. */
 const ROOT_NOTES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
@@ -98,6 +100,12 @@ export interface ChordInspectorProps {
    * Only rendered in the idle state (when {@link selected} is false); a
    * `note` passed alongside `selected: true` is not shown. */
   note?: string;
+  /** Test-only WASM loader override forwarded to the `<ChordStaff>` shown
+   * beneath the chord name. Production callers never supply this — the staff
+   * lazy-loads `@chordsketch/wasm` itself.
+   *
+   * @internal */
+  staffLoader?: ChordStaffWasmLoader;
 }
 
 /**
@@ -168,9 +176,20 @@ export function ChordInspector(props: ChordInspectorProps): JSX.Element {
       onKeyDown={onKeyDown}
     >
       <div className="chordsketch-sheet__cins-head">
-        <div>
+        <div className="chordsketch-sheet__cins-title">
           <div className="chordsketch-sheet__cins-eyebrow">Editing chord</div>
           <div className="chordsketch-sheet__cins-name">{titleName || '—'}</div>
+          {/* Constituent notes of the chord on a five-line staff, beneath
+              the name. Empty `chordName` (a rootless / unparseable token)
+              still renders the placeholder rather than a broken staff. */}
+          {chordName ? (
+            <ChordStaff
+              chord={chordName}
+              displayName={titleName || undefined}
+              wasmLoader={props.staffLoader}
+              className="chordsketch-sheet__cins-staff"
+            />
+          ) : null}
         </div>
         {props.onClose ? (
           <button

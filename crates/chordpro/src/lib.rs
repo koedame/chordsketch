@@ -31,8 +31,8 @@ pub mod voicings;
 // Re-export key types for convenience.
 pub use abc_importer::convert_abc;
 pub use chord::{
-    Accidental, ChordDetail, ChordQuality, ChordTones, Note, chord_pitches, chord_tones,
-    key_scale_pitches, key_tonic_triad, parse_chord,
+    Accidental, ChordDetail, ChordQuality, ChordTones, Note, StaffNote, chord_pitches,
+    chord_staff_notes, chord_tones, key_scale_pitches, key_tonic_triad, parse_chord,
 };
 pub use chord_diagram::{canonical_chord_name, resolve_diagrams_instrument};
 pub use key::{ChurchMode, Key, KeyMode, parse_key};

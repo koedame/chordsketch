@@ -246,6 +246,20 @@ pub(crate) fn chord_pitches_inner(chord: &str) -> Option<Vec<u8>> {
     chordsketch_chordpro::chord_pitches(chord)
 }
 
+/// Pure-Rust core of [`bindings::chord_staff_notes`]. Returns the chord's
+/// constituent tones spelled for staff notation, or `None` when `chord` is
+/// not parseable.
+///
+/// Thin pass-through to [`chordsketch_chordpro::chord_staff_notes`]; kept here
+/// so the native test suite covers the binding's surface without the Node-API
+/// runtime. Sister-site to the wasm `chord_staff_notes_inner` and the FFI
+/// binding's `chord_staff_notes` (`.claude/rules/fix-propagation.md`
+/// §Bindings).
+#[must_use]
+pub(crate) fn chord_staff_notes_inner(chord: &str) -> Option<Vec<chordsketch_chordpro::StaffNote>> {
+    chordsketch_chordpro::chord_staff_notes(chord)
+}
+
 /// Pure-Rust core of [`bindings::key_scale_pitches`]. Returns the ascending
 /// one-octave scale of `key` as MIDI note numbers, or `None` when `key` is
 /// not parseable as a chord.
@@ -1123,6 +1137,19 @@ mod tests {
     fn test_chord_pitches_inner_unparseable_returns_none() {
         assert_eq!(chord_pitches_inner("XYZ-not-a-chord"), None);
         assert_eq!(chord_pitches_inner(""), None);
+    }
+
+    #[test]
+    fn test_chord_staff_notes_inner_spelling_and_none() {
+        let notes = chord_staff_notes_inner("Cmaj9").expect("Cmaj9 is a chord");
+        let spelled: Vec<(char, i8)> = notes.iter().map(|n| (n.letter, n.accidental)).collect();
+        assert_eq!(
+            spelled,
+            vec![('C', 0), ('E', 0), ('G', 0), ('B', 0), ('D', 0)]
+        );
+        let ebm7 = chord_staff_notes_inner("Ebm7").expect("Ebm7 is a chord");
+        assert!(ebm7.iter().all(|n| n.accidental == -1));
+        assert!(chord_staff_notes_inner("XYZ-not-a-chord").is_none());
     }
 
     #[test]
