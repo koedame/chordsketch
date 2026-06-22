@@ -616,6 +616,16 @@ function ChordSheetAstBranch({
     [ast, chordSelection],
   );
 
+  // The song key in effect at the selected chord's source line (honouring
+  // mid-song modulation), forwarded to the inspector's constituent-notes
+  // staff. Memoised so the per-line source scan does not re-run on every
+  // inspector re-render (e.g. typing in the quality field), mirroring the
+  // controlled `useChordEditor` surface.
+  const inspectorMusicKey = useMemo(
+    () => (resolvedChord ? activeKeyAtLine(source, resolvedChord.sourceLine) : null),
+    [resolvedChord, source],
+  );
+
   // Source-coordinate editing (selection / drag / nudge / inspector)
   // is only valid when the chords the walker renders match the raw
   // source. The wasm parse path transposes the AST in place — folding
@@ -728,7 +738,7 @@ function ChordSheetAstBranch({
           // matching key signature. Computed from the raw source; under a
           // transpose the inspector is gated off, so the raw key matches the
           // raw chord the staff shows.
-          musicKey={activeKeyAtLine(source, resolvedChord.sourceLine)}
+          musicKey={inspectorMusicKey}
           root={resolvedChord.parts.root}
           accidental={resolvedChord.parts.accidental}
           suffix={resolvedChord.parts.suffix}

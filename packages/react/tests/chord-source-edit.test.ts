@@ -1295,4 +1295,22 @@ describe('activeKeyAtLine', () => {
   test('clamps an out-of-range line to the document', () => {
     expect(activeKeyAtLine('{key: G}\n[G]x', 99)).toBe('G');
   });
+
+  test('handles an unterminated brace with much whitespace linearly (no ReDoS)', () => {
+    // A `{` followed by a long whitespace run and no closing `}` must not
+    // trigger quadratic regex backtracking (the directive scanner runs per
+    // line on every keystroke). The line is not a directive, so the result
+    // is null — and it must return promptly.
+    const malformed = `{${' '.repeat(100_000)}`;
+    const start = Date.now();
+    expect(activeKeyAtLine(`${malformed}\n[C]x`, 2)).toBeNull();
+    // Generous bound: the linear scan completes in well under this; the
+    // O(n²) regex this guards against took seconds at this length.
+    expect(Date.now() - start).toBeLessThan(1000);
+  });
+
+  test('still resolves a key on a line that also carries other braces', () => {
+    // The scanner takes the first brace group; a normal key line resolves.
+    expect(activeKeyAtLine('{key: A}', 1)).toBe('A');
+  });
 });

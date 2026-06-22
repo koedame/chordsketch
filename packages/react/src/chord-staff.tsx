@@ -94,6 +94,13 @@ function accidentalFor(kind: AccidentalKind): BravuraGlyph {
 // (`./music-glyphs`, sister to `chordsketch_chordpro::parse_key`); this module
 // only maps that result into the treble-staff geometry the chord staff uses.
 
+// The canonical order-of-sharps / order-of-flats *letter* sequence
+// (F C G D A E B / B E A D G C F) is a universal music constant; it also
+// appears in `music-glyphs.tsx` (`SHARP_ORDER` / `FLAT_ORDER`) for the inline
+// `{key}` chip. The two are NOT a copy-paste pair to unify: the chip uses a
+// half-line `y` coordinate, this staff uses the integer diatonic `staffStep`
+// coordinate, so each carries the position values for its own renderer.
+
 /** Conventional treble-clef staff steps of the order-of-sharps accidentals
  * (`F♯ C♯ G♯ D♯ A♯ E♯ B♯`), each as a diatonic staff step (see `staffStep`):
  * F5=38, C5=35, G5=39, D5=36, A4=33, E5=37, B4=34. */
@@ -108,7 +115,8 @@ const SHARP_SIGNATURE: ReadonlyArray<readonly [string, number]> = [
 ];
 
 /** Conventional treble-clef staff steps of the order-of-flats accidentals
- * (`B♭ E♭ A♭ D♭ G♭ C♭ F♭`): B4=34, E5=37, A4=33, D5=36, G4=32, C5=35, F4=30. */
+ * (`B♭ E♭ A♭ D♭ G♭ C♭ F♭`): B4=34, E5=37, A4=33, D5=36, G4=32, C5=35, F4=31.
+ * (F4 is the bottom space `4*7 + 3`; step 30 is the E4 bottom *line*.) */
 const FLAT_SIGNATURE: ReadonlyArray<readonly [string, number]> = [
   ['B', 34],
   ['E', 37],
@@ -116,7 +124,7 @@ const FLAT_SIGNATURE: ReadonlyArray<readonly [string, number]> = [
   ['D', 36],
   ['G', 32],
   ['C', 35],
-  ['F', 30],
+  ['F', 31],
 ];
 
 /** One accidental of a drawn key signature: which staff step it sits on and
@@ -478,11 +486,14 @@ export function ChordStaff({
   const wrapperClass = ['chordsketch-staff', className].filter(Boolean).join(' ');
   // The key only narrows how accidentals are drawn; when the chord renders
   // against a tonal key, name it in the accessible label so a screen-reader
-  // user knows the signature applies (e.g. "… on a staff in D").
-  const inKey = keySig !== null && typeof musicKey === 'string' && musicKey.trim().length > 0;
-  const label = inKey
-    ? `Notes of ${displayName ?? chord} on a staff in ${musicKey!.trim()}`
-    : `Notes of ${displayName ?? chord} on a staff`;
+  // user knows the signature applies (e.g. "… on a staff in D"). A non-null
+  // `keySig` already implies `musicKey` was a non-empty, parseable key (see
+  // `staffKeySignature`), so the trimmed value is always present here.
+  const keyLabel = (musicKey ?? '').trim();
+  const label =
+    keySig !== null && keyLabel.length > 0
+      ? `Notes of ${displayName ?? chord} on a staff in ${keyLabel}`
+      : `Notes of ${displayName ?? chord} on a staff`;
 
   if (notes === null) {
     if (loading) {

@@ -1189,7 +1189,14 @@ function keyDirectiveValue(line: string): string | null {
   // A directive occupies a whole `{…}` token; scan the first brace group.
   // Key directives stand alone on their line in practice, so the first group
   // is the directive, and this never matches a `[chord]` bracket.
-  const brace = /\{\s*([^{}]*)\}/.exec(line);
+  //
+  // The pattern is a single greedy character class with no overlapping
+  // quantifier, so matching is linear: a leading `\s*` here would overlap
+  // `[^{}]*` on whitespace and backtrack O(n²) on a `{`-then-whitespace line
+  // with no closing brace (a denial-of-service surface, since this runs per
+  // line on every keystroke). Leading/trailing whitespace inside the braces
+  // is stripped below instead.
+  const brace = /\{([^{}]*)\}/.exec(line);
   if (brace === null) return null;
   const inner = brace[1]!.trim();
   if (inner.length === 0) return null;

@@ -173,6 +173,17 @@ describe('staffKeySignature', () => {
     // E minor shares G major's signature (1 sharp, F♯).
     expect(staffKeySignature('Em')!.alterations).toEqual({ F: 1 });
   });
+
+  test('places every signature accidental on a valid in-staff diatonic step', () => {
+    // The full 7-sharp and 7-flat signatures exercise every step entry,
+    // including the boundary ones (G♯ above the staff, F♭ on the bottom
+    // space) — guarding the order tables against an off-by-one step.
+    const sharps = staffKeySignature('C#')!; // 7 sharps: F C G D A E B
+    expect(sharps.accidentals.map((a) => a.step)).toEqual([38, 35, 39, 36, 33, 37, 34]);
+    const flats = staffKeySignature('Cb')!; // 7 flats: B E A D G C F
+    // F♭ sits on the F4 *space* (step 31), not the E4 *line* (step 30).
+    expect(flats.accidentals.map((a) => a.step)).toEqual([34, 37, 33, 36, 32, 35, 31]);
+  });
 });
 
 describe('buildStaffModel with a key signature', () => {
