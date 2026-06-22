@@ -111,17 +111,20 @@ test.describe('inline / hover compact chord diagrams (ADR-0027)', () => {
 
     // Reveal the popover (CSS :hover) and measure the inner SVG. Bug 3:
     // the SVG must render at its intrinsic full size, not collapse to the
-    // trigger's inline width. The full-size guitar diagram is 120×160;
-    // the >80 / >100 floors are deliberately generous so the test tracks
+    // trigger's inline width. The full-size guitar diagram is 73×87; the
+    // >60 / >80 floors are deliberately generous so the test tracks
     // "readable" rather than an exact pixel count — yet they still catch
-    // the regression, which collapsed the SVG to ~0.17px.
+    // the regression, which collapsed the SVG to ~0.17px. The popover must
+    // render the regular diagram, not the smaller compact inline layout, so
+    // assert it does NOT carry the `chord-diagram-compact` class.
     await trigger.hover();
     const popoverSvg = page.locator('.chord-diagram-popover svg').first();
     await expect(popoverSvg).toBeVisible();
+    await expect(popoverSvg).not.toHaveClass(/chord-diagram-compact/);
     const box = await popoverSvg.boundingBox();
     expect(box).not.toBeNull();
-    expect(box!.width).toBeGreaterThan(80);
-    expect(box!.height).toBeGreaterThan(100);
+    expect(box!.width).toBeGreaterThan(60);
+    expect(box!.height).toBeGreaterThan(80);
 
     expect(errors).toEqual([]);
   });
