@@ -2182,7 +2182,7 @@
      explicit width the inner `<svg>` collapses to the 10px line box —
      the diagram renders at ~0px. `width: max-content` lets the
      popover size to the SVG's own intrinsic `width`/`height`
-     attributes (120×160 for the full-size diagram). */
+     attributes (73×87 for the full-size diagram). */
   width: max-content;
   margin-bottom: 4px;
   padding: 4px;
@@ -2198,7 +2198,7 @@
    `100%` resolves against the ~10px trigger box and crushes the
    diagram to ~0px. Lift the cap here (and pin `width: auto` so the svg
    uses its emitted attribute width) so the popover always paints the
-   full-size 120×160 diagram. `display: block` / `height: auto` are
+   full-size 73×87 diagram. `display: block` / `height: auto` are
    already supplied by `.chordsketch-diagram svg`. */
 .chordsketch-sheet__content .chord-diagram-popover svg {
   max-width: none;
