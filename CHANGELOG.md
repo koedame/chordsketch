@@ -101,6 +101,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Tightened the regular (full-size) SVG chord-diagram bounding box
+  (`chordsketch_chordpro::chord_diagram`) so it crops to the fretboard
+  instead of floating inside a large frame. The 6-string / 5-fret
+  vertical diagram shrinks from 120×160 to 73×87px: the empty bottom
+  padding (58px) is removed, the over-wide symmetric side margins are
+  replaced with a left gutter only as wide as the fret-number axis (35→18px)
+  plus a thin right gutter (5px) that just clears the rightmost dot, and
+  the fret pitch tightens 14→12px. The fret-number axis stays clear of
+  the leftmost string's finger dots while 2-digit (high-position) fret
+  numbers still fit the gutter. The horizontal layout tightens the same
+  way (140×102 → 93×89px) while keeping its wider-than-tall proportions
+  via a dedicated horizontal fret pitch. This flows through every SVG
+  consumer (CLI `--format html`, the wasm `chord_diagram_svg` exports,
+  `@chordsketch/react`'s `<ChordDiagram>`, the VS Code preview, and the
+  LSP hover). The compact inline/hover layout and the keyboard diagram
+  are unchanged; the PDF renderer's own diagram geometry is not affected.
 - Redesigned the regular (full-size) SVG chord-diagram layout
   (`chordsketch_chordpro::chord_diagram`) for a cleaner, more
   chart-like look. The fretboard grid is now compact (string spacing
