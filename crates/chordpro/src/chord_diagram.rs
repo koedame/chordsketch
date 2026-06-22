@@ -263,9 +263,11 @@ impl DiagramData {
 /// fretted fret collapses the strings sharing it into finger `1` (credited
 /// only when no open string is sounded, since a barre lies across every
 /// string at that fret); every other fretted string takes the next finger
-/// in ascending `(fret, string)` order. The result therefore matches the
-/// conventional chart fingering — e.g. open C (`x 3 2 0 1 0`) →
-/// `0 3 2 0 1 0` and the F barre (`1 3 3 2 1 1`) → `1 3 4 2 1 1`.
+/// in ascending `(fret, string)` order. Muted (`-1`) and open (`0`)
+/// strings both map to finger `0` ("no finger"). The result therefore
+/// matches the conventional chart fingering — e.g. open C with frets
+/// `[-1, 3, 2, 0, 1, 0]` yields fingers `[0, 3, 2, 0, 1, 0]`, and the F
+/// barre `[1, 3, 3, 2, 1, 1]` yields `[1, 3, 4, 2, 1, 1]`.
 ///
 /// Finger numbers are clamped to `4`; the synthesised and curated voicings
 /// are bounded to four fingers, so the clamp only guards a hand-authored
