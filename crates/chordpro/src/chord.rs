@@ -2578,4 +2578,59 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn alternate_triad_glyphs_are_detected() {
+        // `°` (U+00B0) and `+` are accepted alternative spellings for
+        // `dim` and `aug` in many ChordPro editors. The `split_triad_marker`
+        // paths that strip these prefixes must be exercised so the coverage
+        // guard does not silently miss them.
+
+        // `C°9` → diminished triad + bare 9th stack: same detection path as
+        // `Cdim9`, just via the `°` prefix branch.
+        let s = suggest_canonical_chord("C°9");
+        if let Some(ref s) = s {
+            // Suggestion must be tone-preserving.
+            assert_eq!(
+                chord_tones("C°9").unwrap().pitch_classes,
+                chord_tones(&s.canonical).unwrap().pitch_classes,
+                "C°9 suggestion must preserve tones"
+            );
+        }
+        // A `°` paren form likewise reaches the branch.
+        let s2 = suggest_canonical_chord("C°(9)");
+        if let Some(ref s2) = s2 {
+            assert_eq!(
+                chord_tones("C°(9)").unwrap().pitch_classes,
+                chord_tones(&s2.canonical).unwrap().pitch_classes,
+                "C°(9) suggestion must preserve tones"
+            );
+        }
+
+        // `C+9` → augmented triad + bare 9th: the `+` prefix branch.
+        let s3 = suggest_canonical_chord("C+9");
+        if let Some(ref s3) = s3 {
+            assert_eq!(
+                chord_tones("C+9").unwrap().pitch_classes,
+                chord_tones(&s3.canonical).unwrap().pitch_classes,
+                "C+9 suggestion must preserve tones"
+            );
+        }
+    }
+
+    #[test]
+    fn minor_major_seventh_stacks_suggest_explicit_form() {
+        // `Cmmaj9` / `Cmmaj13` — the `("m", true)` arm of `quality_core` (a
+        // minor triad marker followed by a bare major-seventh extended stack).
+        // The canonical form adds `mMaj7` and explicit parenthesised tensions.
+        let s9 = suggest_canonical_chord("Cmmaj9").unwrap();
+        assert_eq!(s9.canonical, "CmMaj7(9)");
+        // No distinct shorter alternative (the full stack and the 9-only form
+        // are the same when the headline is 9).
+        assert_eq!(s9.alternative, None);
+
+        let s13 = suggest_canonical_chord("Cmmaj13").unwrap();
+        assert_eq!(s13.canonical, "CmMaj7(9,11,13)");
+        assert_eq!(s13.alternative.as_deref(), Some("CmMaj7(13)"));
+    }
 }

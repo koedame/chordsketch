@@ -543,6 +543,26 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_ambiguous_chords_early_exit_at_max_warnings() {
+        // The early-exit guard at the top of the `for line` loop in
+        // `validate_ambiguous_chords` must fire when the `warnings` vec is
+        // already at or beyond MAX_WARNINGS, so we never append more than one
+        // additional "suppressed" entry beyond the cap.
+        let song = parse_song("[C9]Hello [C13]world");
+        let mut v: Vec<String> = vec!["placeholder".to_owned(); MAX_WARNINGS];
+        validate_ambiguous_chords(&song, &mut v);
+        // The vec was already at the cap before the call — the early-exit
+        // returns immediately without appending anything (the `push_warning`
+        // overflow guard would add a suppression entry, but the outer early-
+        // exit fires first).
+        assert_eq!(
+            v.len(),
+            MAX_WARNINGS,
+            "no entries should be appended when warnings is already at cap"
+        );
+    }
+
+    #[test]
     fn test_validate_multiple_capo_meta_form_counts() {
         // `{meta: capo X}` is the long form Perl accepts equivalently.
         let mut v = Vec::<String>::new();
