@@ -23,6 +23,7 @@ import type { ChordAudioConfig, ChordSelection } from './chordpro-jsx';
 import { useChordAudio } from './use-chord-audio';
 import type { ChordAudioWasmLoader } from './use-chord-audio';
 import {
+  activeKeyAtLine,
   applyChordDelete,
   applyChordEdit,
   applyChordReposition,
@@ -179,6 +180,15 @@ export function useChordEditor({
     if (!editable || caret == null) return null;
     return findChordAtCaret(source, lineBaseOffset(source, caret.line) + caret.column);
   }, [editable, caret, source]);
+
+  // The song key in effect at the selected chord's source line, honouring any
+  // mid-song modulation. Threaded to the footer's constituent-notes staff so
+  // it draws the key signature active at THIS chord's position. Null when no
+  // chord is selected or no `{key}` precedes it (key-agnostic staff).
+  const musicKey = useMemo(
+    () => (caretChord ? activeKeyAtLine(source, caretChord.line) : null),
+    [caretChord, source],
+  );
 
   // Monotonic selection nonce, bumped when the selected chord identity
   // changes so the walker re-focuses the new span (see ChordSelection).
@@ -409,6 +419,7 @@ export function useChordEditor({
     onNudge,
     onRemove: caretChord != null ? onRemove : undefined,
     note: editable ? undefined : 'Clear transpose / capo to edit chords.',
+    musicKey,
   };
 
   return {

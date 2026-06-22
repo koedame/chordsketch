@@ -85,6 +85,7 @@ GLYPH_SETS = {
         ("GCLEF", 0xE050),
         ("ACCIDENTAL_SHARP", 0xE262),
         ("ACCIDENTAL_FLAT", 0xE260),
+        ("ACCIDENTAL_NATURAL", 0xE261),
         ("NOTEHEAD_BLACK", 0xE0A4),
     ],
 }

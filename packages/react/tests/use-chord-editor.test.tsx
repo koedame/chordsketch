@@ -94,6 +94,23 @@ describe('useChordEditor', () => {
     expect(latest.inspectorProps.onRemove).toBeUndefined();
   });
 
+  test('selecting a chord exposes the key in effect at its line', () => {
+    // A song that modulates: `[D]` sounds in G, `[Bb]` in B♭ after the change.
+    mount('{key: G}\n[D]verse\n{key: Bb}\n[Bb]chorus');
+    // No chord selected → no key forwarded to the staff.
+    expect(latest.inspectorProps.musicKey).toBeNull();
+    act(() => {
+      latest.onCaretChange({ line: 2, column: 1, lineLength: 6 });
+    });
+    expect(latest.inspectorProps.selected).toBe(true);
+    expect(latest.inspectorProps.musicKey).toBe('G');
+    // After the modulation, the chord on line 4 reflects the new key.
+    act(() => {
+      latest.onCaretChange({ line: 4, column: 1, lineLength: 9 });
+    });
+    expect(latest.inspectorProps.musicKey).toBe('Bb');
+  });
+
   test('editing the selected chord rewrites it in source and keeps it selected', () => {
     mount();
     caretTo(1); // select `[G]`

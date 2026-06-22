@@ -100,6 +100,11 @@ export interface ChordInspectorProps {
    * Only rendered in the idle state (when {@link selected} is false); a
    * `note` passed alongside `selected: true` is not shown. */
   note?: string;
+  /** The song key in effect at the selected chord's position (a ChordPro
+   * `{key}` value), honouring any mid-song modulation. Forwarded to the
+   * `<ChordStaff>` so the constituent-notes staff draws that key's signature
+   * and renders accidentals relative to it. Omit for the key-agnostic staff. */
+  musicKey?: string | null;
   /** Test-only WASM loader override forwarded to the `<ChordStaff>` shown
    * beneath the chord name. Production callers never supply this — the staff
    * lazy-loads `@chordsketch/wasm` itself.
@@ -186,6 +191,7 @@ export function ChordInspector(props: ChordInspectorProps): JSX.Element {
             <ChordStaff
               chord={chordName}
               displayName={titleName || undefined}
+              musicKey={props.musicKey}
               wasmLoader={props.staffLoader}
               className="chordsketch-sheet__cins-staff"
             />
