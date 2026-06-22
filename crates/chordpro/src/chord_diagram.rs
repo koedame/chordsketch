@@ -811,11 +811,17 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
         }
         let x = left_margin + i as f32 * cell_w;
         if fret == -1 {
-            // Muted (X)
+            // Muted (X). The open-string ring below is centred on `y`, so the
+            // `X` glyph must be centred on `y` too — add `text_v_center` to the
+            // baseline (text grows upward from its baseline, so a bare `y`
+            // would float the glyph above the ring). This mirrors the
+            // horizontal renderer, which already centres its muted `X` with the
+            // same offset.
             let y = nut_y - nut_margin_glyph_offset;
             svg.push_str(&format!(
-                "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" \
-                 font-family=\"sans-serif\" font-size=\"{label_font}\">X</text>\n"
+                "<text x=\"{x}\" y=\"{}\" text-anchor=\"middle\" \
+                 font-family=\"sans-serif\" font-size=\"{label_font}\">X</text>\n",
+                y + text_v_center
             ));
         } else if fret == 0 {
             // Open (O)
