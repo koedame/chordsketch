@@ -1146,6 +1146,179 @@ fn non_empty_string(s: &str) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
+// Ambiguous-notation detection (ADR-0037)
+// ---------------------------------------------------------------------------
+
+/// An explicit, unambiguous re-spelling of a chord written in ChordSketch's
+/// rejected ambiguous notation (a bare extended "stack" such as `G13`, or a
+/// parenthesised tension with no seventh such as `C(9)`).
+///
+/// ChordSketch still *parses* the ambiguous form for ChordPro / Perl-reference
+/// compatibility — [`chord_tones`] / [`parse_chord`] are unchanged — but the
+/// editor never *produces* it and the render boundary surfaces a warning that
+/// points the user at one of these explicit spellings
+/// ([ADR-0037](https://github.com/koedame/chordsketch/blob/main/docs/adr/0037-explicit-chord-extension-notation.md)).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChordSuggestion {
+    /// The tone-preserving explicit spelling. For a bare dominant stack this is
+    /// the full tertian stack (`G13` → `G7(9,11,13)`); for a parenthesised
+    /// tension with no seventh it inserts the implied dominant seventh
+    /// (`C(9)` → `C7(9)`). Parsing this string yields the *same* pitch classes
+    /// [`chord_tones`] computes for the ambiguous input.
+    pub canonical: String,
+    /// A shorter explicit alternative that does **not** preserve every tone,
+    /// offered when it is musically distinct and commonly what the writer
+    /// meant: the dominant-7-plus-headline-only form for a stack
+    /// (`G13` → `G7(13)`), or the add-tone form for a seventh-less paren
+    /// (`C(9)` → `Cadd9`). `None` when no distinct shorter form exists (e.g.
+    /// `C9`, whose only explicit spelling is `C7(9)`).
+    pub alternative: Option<String>,
+}
+
+/// Splits a parseable chord `name` into `(root_prefix, body, bass_suffix)` where
+/// `root_prefix` is the root letter plus optional accidental (always ASCII),
+/// `body` is the quality + extension before any slash, and `bass_suffix` is the
+/// `/bass` tail (including the slash) or `""`.
+///
+/// Returns `None` when `name` is not a parseable chord. The root and accidental
+/// are guaranteed ASCII (one byte each) by [`parse_chord`], so the byte slice
+/// for `root_prefix` never splits a multi-byte char even when `body` carries a
+/// glyph such as `Δ`.
+fn split_chord_name(name: &str) -> Option<(&str, &str, &str)> {
+    let detail = parse_chord(name)?;
+    // Root letter is one ASCII byte; the accidental (`#` / `b`) is one more.
+    let root_prefix_len = 1 + usize::from(detail.root_accidental.is_some());
+    let (root_prefix, rest) = name.split_at(root_prefix_len);
+    let (body, bass_suffix) = match rest.find('/') {
+        Some(slash) => (&rest[..slash], &rest[slash..]),
+        None => (rest, ""),
+    };
+    Some((root_prefix, body, bass_suffix))
+}
+
+/// Splits a chord `body` (the part after the root + accidental, before any
+/// slash) into a triad marker and the remaining tail.
+///
+/// The marker is the canonical re-emission string for the triad quality
+/// (`""` major, `"m"` minor, `"dim"`, `"aug"`). `"maj…"` is deliberately left
+/// on the tail because `maj` denotes the *seventh*, not the triad — the tail
+/// keeps it so the seventh classification downstream can see it.
+fn split_triad_marker(body: &str) -> (&'static str, &str) {
+    if let Some(rest) = body.strip_prefix("dim") {
+        ("dim", rest)
+    } else if let Some(rest) = body.strip_prefix('°') {
+        ("dim", rest)
+    } else if let Some(rest) = body.strip_prefix("aug") {
+        ("aug", rest)
+    } else if let Some(rest) = body.strip_prefix('+') {
+        ("aug", rest)
+    } else if let Some(rest) = body.strip_prefix("min") {
+        ("m", rest)
+    } else if body.starts_with("maj") {
+        // `maj` is the seventh quality, not the triad: triad is major, keep the
+        // whole `maj…` on the tail.
+        ("", body)
+    } else if let Some(rest) = body.strip_prefix('m') {
+        ("m", rest)
+    } else {
+        ("", body)
+    }
+}
+
+/// Renders the triad + seventh "quality core" for an explicit suggestion,
+/// spelling the minor/major-seventh case as the conventional `mMaj7`.
+fn quality_core(triad: &str, maj_seventh: bool) -> String {
+    match (triad, maj_seventh) {
+        ("m", true) => "mMaj7".to_string(),
+        (t, true) => format!("{t}maj7"),
+        (t, false) => format!("{t}7"),
+    }
+}
+
+/// Detects ChordSketch's rejected ambiguous chord notation and returns the
+/// explicit spelling(s) to suggest, or `None` when the chord is already
+/// unambiguous (or not a chord at all).
+///
+/// Two patterns are flagged (see [ADR-0037]):
+///
+/// 1. **Bare extended stack** — a headline `9` / `11` / `13` with no explicit
+///    seventh marker and no parentheses (`C9`, `Gm13`, `Fmaj9`). The tertian
+///    "implied stack" reading is theory-vs-practice ambiguous, so ChordSketch
+///    rejects it in favour of `C7(9)` / `Gm7(9,11,13)` / `Fmaj7(9)`.
+/// 2. **Seventh-less parenthesised tension** — a tension in parentheses with
+///    no seventh (`C(9)`), which reads as neither a clean add-tone chord nor a
+///    dominant. ChordSketch rejects it in favour of `Cadd9` or `C7(9)`.
+///
+/// Unambiguous forms — `C7`, `Cmaj7`, `C7(9)`, `Cadd9`, `C6`, `C69`, `Csus4`,
+/// `Cm7b5`, `C7b9`, `Cdim7` — return `None`. Tones are never changed by this
+/// function; it only classifies notation.
+///
+/// [ADR-0037]: https://github.com/koedame/chordsketch/blob/main/docs/adr/0037-explicit-chord-extension-notation.md
+#[must_use]
+pub fn suggest_canonical_chord(name: &str) -> Option<ChordSuggestion> {
+    let (root_prefix, body, bass_suffix) = split_chord_name(name)?;
+    let (triad, tail) = split_triad_marker(body);
+
+    // --- Pattern 2: parenthesised tension with no seventh -----------------
+    if let Some(open) = tail.find('(') {
+        let before = &tail[..open];
+        // A seventh anywhere before the parenthesis (dominant `7` or `maj7`)
+        // makes this an explicit, unambiguous form (`C7(9)`, `Cmaj7(13)`).
+        let has_seventh = before.contains('7') || before.contains("maj") || before.contains("Maj");
+        if has_seventh {
+            return None;
+        }
+        let close = tail[open + 1..].find(')').map(|i| open + 1 + i);
+        let inner = match close {
+            Some(c) => &tail[open + 1..c],
+            None => &tail[open + 1..],
+        };
+        let canonical = format!("{root_prefix}{triad}7({inner}){bass_suffix}");
+        // A single natural tension also has a clean add-tone reading.
+        let alternative = match inner {
+            "9" | "11" | "13" if triad.is_empty() || triad == "m" => {
+                Some(format!("{root_prefix}{triad}add{inner}{bass_suffix}"))
+            }
+            _ => None,
+        };
+        return Some(ChordSuggestion {
+            canonical,
+            alternative,
+        });
+    }
+
+    // --- Pattern 1: bare extended stack -----------------------------------
+    let maj_seventh = tail.starts_with("maj");
+    let core = tail.strip_prefix("maj").unwrap_or(tail);
+    let headline: u8 = match core {
+        "9" => 9,
+        "11" => 11,
+        "13" => 13,
+        _ => return None,
+    };
+    let stacked_tensions = match headline {
+        9 => "9",
+        11 => "9,11",
+        _ => "9,11,13",
+    };
+    let qc = quality_core(triad, maj_seventh);
+    let canonical = format!("{root_prefix}{qc}({stacked_tensions}){bass_suffix}");
+    // The dominant-7-plus-headline-only reading is musically distinct from the
+    // full stack and is often what the writer meant (`G13` → `G7(13)`). It is
+    // offered only when it actually differs from the full stack (i.e. not for a
+    // bare `9`, whose stack is already just `(9)`).
+    let alternative = if headline == 9 {
+        None
+    } else {
+        Some(format!("{root_prefix}{qc}({headline}){bass_suffix}"))
+    };
+    Some(ChordSuggestion {
+        canonical,
+        alternative,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -2175,6 +2348,145 @@ mod tests {
             );
             // The tonic and the octave bracket exactly twelve semitones.
             assert_eq!(scale[7] - scale[0], 12, "{name} must span one octave");
+        }
+    }
+
+    // -- Ambiguous-notation suggestion (ADR-0037) --------------------------
+
+    fn canonical_of(name: &str) -> Option<String> {
+        suggest_canonical_chord(name).map(|s| s.canonical)
+    }
+
+    #[test]
+    fn unambiguous_chords_are_not_flagged() {
+        // Triads, sevenths, explicit paren tensions, adds, sixths, sus, and the
+        // unambiguous altered/half-diminished/diminished forms all return None.
+        for name in [
+            "C",
+            "Cm",
+            "Cdim",
+            "Caug",
+            "C7",
+            "Cmaj7",
+            "Cm7",
+            "CmMaj7",
+            "C7(9)",
+            "C7(9,11,13)",
+            "Cmaj7(13)",
+            "Cm7(b5)",
+            "C7(#5)",
+            "Cadd9",
+            "Cadd11",
+            "C6",
+            "Cm6",
+            "C69",
+            "Csus2",
+            "Csus4",
+            "C7sus4",
+            "C9sus4",
+            "Cm7b5",
+            "C7b9",
+            "C7#9",
+            "C7#11",
+            "C7b13",
+            "Cdim7",
+            "C7alt",
+            "C5",
+            "G/B",
+            "Bb",
+            "F#m7",
+        ] {
+            assert_eq!(
+                suggest_canonical_chord(name),
+                None,
+                "{name} is unambiguous and must not be flagged"
+            );
+        }
+    }
+
+    #[test]
+    fn non_chords_are_not_flagged() {
+        for name in ["", "not-a-chord", "H13", "9", "(9)", "x"] {
+            assert_eq!(suggest_canonical_chord(name), None, "{name}");
+        }
+    }
+
+    #[test]
+    fn bare_dominant_stacks_suggest_explicit_form() {
+        assert_eq!(canonical_of("C9").as_deref(), Some("C7(9)"));
+        assert_eq!(canonical_of("C11").as_deref(), Some("C7(9,11)"));
+        assert_eq!(canonical_of("C13").as_deref(), Some("C7(9,11,13)"));
+        assert_eq!(canonical_of("G13").as_deref(), Some("G7(9,11,13)"));
+    }
+
+    #[test]
+    fn bare_minor_and_major_stacks_keep_their_quality() {
+        assert_eq!(canonical_of("Cm9").as_deref(), Some("Cm7(9)"));
+        assert_eq!(canonical_of("Cm13").as_deref(), Some("Cm7(9,11,13)"));
+        assert_eq!(canonical_of("Cmaj9").as_deref(), Some("Cmaj7(9)"));
+        assert_eq!(canonical_of("Cmaj13").as_deref(), Some("Cmaj7(9,11,13)"));
+    }
+
+    #[test]
+    fn stack_alternative_is_dominant_headline_only_when_distinct() {
+        // `C9` collapses to `(9)` either way — no distinct alternative.
+        assert_eq!(suggest_canonical_chord("C9").unwrap().alternative, None);
+        // `C13` / `G13` offer the dominant-7-plus-13 reading explicitly.
+        assert_eq!(
+            suggest_canonical_chord("C13")
+                .unwrap()
+                .alternative
+                .as_deref(),
+            Some("C7(13)")
+        );
+        assert_eq!(
+            suggest_canonical_chord("G13")
+                .unwrap()
+                .alternative
+                .as_deref(),
+            Some("G7(13)")
+        );
+        assert_eq!(
+            suggest_canonical_chord("Cm11")
+                .unwrap()
+                .alternative
+                .as_deref(),
+            Some("Cm7(11)")
+        );
+    }
+
+    #[test]
+    fn seventh_less_parens_suggest_dominant_or_add() {
+        let s = suggest_canonical_chord("C(9)").unwrap();
+        assert_eq!(s.canonical, "C7(9)");
+        assert_eq!(s.alternative.as_deref(), Some("Cadd9"));
+
+        let s = suggest_canonical_chord("Cm(11)").unwrap();
+        assert_eq!(s.canonical, "Cm7(11)");
+        assert_eq!(s.alternative.as_deref(), Some("Cmadd11"));
+    }
+
+    #[test]
+    fn ambiguous_forms_preserve_root_accidental_and_bass() {
+        assert_eq!(canonical_of("Bb13").as_deref(), Some("Bb7(9,11,13)"));
+        assert_eq!(canonical_of("F#m13").as_deref(), Some("F#m7(9,11,13)"));
+        assert_eq!(canonical_of("C13/E").as_deref(), Some("C7(9,11,13)/E"));
+    }
+
+    #[test]
+    fn suggested_canonical_form_preserves_tones() {
+        // The whole point of the `canonical` field: re-parsing it yields the
+        // same pitch classes as the ambiguous input. A clarification, never a
+        // re-harmonisation.
+        for name in ["C9", "C11", "C13", "G13", "Cm9", "Cm13", "Cmaj9", "C(9)"] {
+            let suggestion = suggest_canonical_chord(name).unwrap();
+            let before = chord_tones(name).unwrap().pitch_classes;
+            let after = chord_tones(&suggestion.canonical).unwrap().pitch_classes;
+            assert_eq!(
+                before, after,
+                "{name} -> {} must preserve tones",
+                suggestion.canonical
+            );
         }
     }
 }

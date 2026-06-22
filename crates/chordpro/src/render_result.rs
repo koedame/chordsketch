@@ -168,6 +168,55 @@ pub fn validate_keys(metadata: &Metadata, warnings: &mut Vec<String>) {
     }
 }
 
+/// Walk the song and push a warning for every chord written in ChordSketch's
+/// rejected ambiguous notation — a bare extended "stack" (`G13`, `Cm9`) or a
+/// seventh-less parenthesised tension (`C(9)`) — pointing the user at the
+/// explicit spelling ([ADR-0037]).
+///
+/// ChordSketch still parses and renders the ambiguous form (the chord's tones
+/// and printed name are unchanged); this warning is the read-side half of the
+/// decision: the editor never *produces* ambiguous notation, and when one is
+/// read back the render boundary explains how to write it unambiguously. The
+/// source is never rewritten automatically.
+///
+/// Each distinct ambiguous chord name warns once, in first-appearance order, so
+/// a song that repeats `[G13]` forty times produces one warning rather than
+/// forty. Renderers call this helper alongside [`validate_keys`] so the message
+/// is byte-identical across output formats.
+///
+/// [ADR-0037]: https://github.com/koedame/chordsketch/blob/main/docs/adr/0037-explicit-chord-extension-notation.md
+pub fn validate_ambiguous_chords(song: &Song, warnings: &mut Vec<String>) {
+    let mut seen: Vec<&str> = Vec::new();
+    for line in &song.lines {
+        let Line::Lyrics(lyrics) = line else { continue };
+        for segment in &lyrics.segments {
+            let Some(chord) = &segment.chord else {
+                continue;
+            };
+            if seen.contains(&chord.name.as_str()) {
+                continue;
+            }
+            if let Some(suggestion) = crate::chord::suggest_canonical_chord(&chord.name) {
+                seen.push(chord.name.as_str());
+                let alt = match &suggestion.alternative {
+                    Some(a) => format!(" (or {a})"),
+                    None => String::new(),
+                };
+                push_warning(
+                    warnings,
+                    format!(
+                        "chord {name:?} uses ambiguous extended notation; rendered as \
+                         {canonical:?}. ChordSketch prefers explicit notation — write \
+                         {canonical}{alt}.",
+                        name = chord.name,
+                        canonical = suggestion.canonical,
+                    ),
+                );
+            }
+        }
+    }
+}
+
 /// Result of a render operation, containing both the rendered output
 /// and any warnings produced during rendering.
 ///
@@ -438,6 +487,36 @@ mod tests {
         assert_eq!(v.len(), 1);
         // The message names the canonical alternatives so the user can fix it.
         assert!(v[0].contains("G minor") && v[0].contains("dorian"));
+    }
+
+    // -- validate_ambiguous_chords (ADR-0037) -----------------------------
+
+    #[test]
+    fn test_validate_ambiguous_chords_flags_bare_stack_once() {
+        let mut v = Vec::<String>::new();
+        let song = parse_song("[G13]Hello [G13]again");
+        validate_ambiguous_chords(&song, &mut v);
+        assert_eq!(v.len(), 1, "repeated ambiguous chord warns once; got {v:?}");
+        assert!(v[0].contains("\"G13\"") && v[0].contains("G7(9,11,13)"));
+        // The dominant-7-plus-13 alternative is named too.
+        assert!(v[0].contains("G7(13)"), "unexpected message: {:?}", v[0]);
+    }
+
+    #[test]
+    fn test_validate_ambiguous_chords_ignores_explicit_forms() {
+        let mut v = Vec::<String>::new();
+        let song = parse_song("[C]Hi [Cmaj7]there [C7(9,11,13)]now [Cadd9]end [Cm7b5]fin");
+        validate_ambiguous_chords(&song, &mut v);
+        assert!(v.is_empty(), "explicit chords must not warn; got {v:?}");
+    }
+
+    #[test]
+    fn test_validate_ambiguous_chords_flags_seventhless_paren() {
+        let mut v = Vec::<String>::new();
+        let song = parse_song("[C(9)]Hello");
+        validate_ambiguous_chords(&song, &mut v);
+        assert_eq!(v.len(), 1);
+        assert!(v[0].contains("C7(9)") && v[0].contains("Cadd9"));
     }
 
     #[test]
