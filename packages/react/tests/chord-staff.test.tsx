@@ -1,13 +1,14 @@
 import { render, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { ACCIDENTAL_FLAT } from '../src/bravura-glyphs';
+import { ACCIDENTAL_FLAT, ACCIDENTAL_NATURAL } from '../src/bravura-glyphs';
 import {
   ChordStaff,
   accidentalCount,
   accidentalGlyph,
   buildStaffModel,
   ledgerSteps,
+  staffKeySignature,
   staffStep,
 } from '../src/chord-staff';
 import type { ChordStaffWasmLoader, StaffNote } from '../src/use-chord-staff';
@@ -26,6 +27,20 @@ const EBM7: StaffNote[] = [
   { letter: 'G', accidental: -1, octave: 4, midi: 66 },
   { letter: 'B', accidental: -1, octave: 4, midi: 70 },
   { letter: 'D', accidental: -1, octave: 5, midi: 73 },
+];
+// A major triad — A C♯ E (the C♯ is the only altered tone), as
+// `chord_staff_notes("A")` spells it (root centred at A4).
+const A_MAJOR: StaffNote[] = [
+  { letter: 'A', accidental: 0, octave: 4, midi: 69 },
+  { letter: 'C', accidental: 1, octave: 5, midi: 73 },
+  { letter: 'E', accidental: 0, octave: 5, midi: 76 },
+];
+// F major triad — F A C, all natural — used to exercise a natural cancelling
+// a signature sharp (F♮ in a key whose signature sharps F).
+const F_MAJOR: StaffNote[] = [
+  { letter: 'F', accidental: 0, octave: 4, midi: 65 },
+  { letter: 'A', accidental: 0, octave: 4, midi: 69 },
+  { letter: 'C', accidental: 0, octave: 5, midi: 72 },
 ];
 
 function makeLoader(table: Record<string, StaffNote[]>): ChordStaffWasmLoader {
@@ -112,6 +127,111 @@ describe('staff geometry helpers', () => {
     const model = buildStaffModel(EBM7);
     expect(model.columns.every((c) => c.accKind === 'flat' && c.accXs.length === 1)).toBe(true);
   });
+
+  test('buildStaffModel without a key draws no signature', () => {
+    const model = buildStaffModel(A_MAJOR);
+    expect(model.signature).toHaveLength(0);
+  });
+});
+
+// -- Key-aware staff ----------------------------------------------
+
+describe('staffKeySignature', () => {
+  test('returns null for no key, blank, or a modal / unparseable value', () => {
+    expect(staffKeySignature(undefined)).toBeNull();
+    expect(staffKeySignature(null)).toBeNull();
+    expect(staffKeySignature('   ')).toBeNull();
+    expect(staffKeySignature('C dorian')).toBeNull();
+    expect(staffKeySignature('not-a-key')).toBeNull();
+  });
+
+  test('a natural-signature key is present but empty', () => {
+    // C major / A minor: a real key context with zero accidentals — distinct
+    // from "no key" so the staff still renders against it.
+    expect(staffKeySignature('C')).toEqual({ accidentals: [], alterations: {} });
+    expect(staffKeySignature('Am')).toEqual({ accidentals: [], alterations: {} });
+  });
+
+  test('maps a sharp key to ordered sharps and per-letter alterations', () => {
+    const sig = staffKeySignature('D')!;
+    // D major = 2 sharps (F♯ C♯) on their conventional treble steps.
+    expect(sig.accidentals).toEqual([
+      { step: 38, kind: 'sharp' },
+      { step: 35, kind: 'sharp' },
+    ]);
+    expect(sig.alterations).toEqual({ F: 1, C: 1 });
+  });
+
+  test('maps a flat key to ordered flats and per-letter alterations', () => {
+    const sig = staffKeySignature('Eb')!;
+    // E♭ major = 3 flats (B♭ E♭ A♭).
+    expect(sig.accidentals.map((a) => a.kind)).toEqual(['flat', 'flat', 'flat']);
+    expect(sig.alterations).toEqual({ B: -1, E: -1, A: -1 });
+  });
+
+  test('a minor key resolves to its relative-major signature', () => {
+    // E minor shares G major's signature (1 sharp, F♯).
+    expect(staffKeySignature('Em')!.alterations).toEqual({ F: 1 });
+  });
+
+  test('places every signature accidental on a valid in-staff diatonic step', () => {
+    // The full 7-sharp and 7-flat signatures exercise every step entry,
+    // including the boundary ones (G♯ above the staff, F♭ on the bottom
+    // space) — guarding the order tables against an off-by-one step.
+    const sharps = staffKeySignature('C#')!; // 7 sharps: F C G D A E B
+    expect(sharps.accidentals.map((a) => a.step)).toEqual([38, 35, 39, 36, 33, 37, 34]);
+    const flats = staffKeySignature('Cb')!; // 7 flats: B E A D G C F
+    // F♭ sits on the F4 *space* (step 31), not the E4 *line* (step 30).
+    expect(flats.accidentals.map((a) => a.step)).toEqual([34, 37, 33, 36, 32, 35, 31]);
+  });
+});
+
+describe('buildStaffModel with a key signature', () => {
+  test('draws the signature and suppresses in-key accidentals', () => {
+    const model = buildStaffModel(A_MAJOR, staffKeySignature('D'));
+    // Two sharps drawn after the clef.
+    expect(model.signature).toHaveLength(2);
+    expect(model.signature.every((s) => s.kind === 'sharp')).toBe(true);
+    // The signature sits left of every notehead.
+    const firstNoteX = Math.min(...model.columns.map((c) => c.x));
+    expect(Math.max(...model.signature.map((s) => s.x))).toBeLessThan(firstNoteX);
+    // C♯ is implied by the D-major signature, and A/E are natural → NO inline
+    // accidental on any tone.
+    expect(model.columns.every((c) => c.accKind === null)).toBe(true);
+  });
+
+  test('without the key the same chord spells its sharp inline', () => {
+    const model = buildStaffModel(A_MAJOR);
+    const sharps = model.columns.filter((c) => c.accKind === 'sharp');
+    expect(sharps).toHaveLength(1); // the C♯
+  });
+
+  test('draws a natural to cancel a signature sharp on an out-of-key tone', () => {
+    // F major triad in G major (1 sharp, F♯): F♮ contradicts the signature →
+    // natural; A and C are not altered by the G signature → no glyph.
+    const model = buildStaffModel(F_MAJOR, staffKeySignature('G'));
+    const naturals = model.columns.filter((c) => c.accKind === 'natural');
+    expect(naturals).toHaveLength(1);
+    expect(naturals[0]!.accXs).toHaveLength(1); // a natural is a single glyph
+    expect(model.columns.filter((c) => c.accKind === null)).toHaveLength(2);
+  });
+
+  test('cancels every tone the signature sharps (D sharps both F and C)', () => {
+    // F major triad (F A C) in D major (F♯ C♯): BOTH F♮ and C♮ need naturals.
+    const model = buildStaffModel(F_MAJOR, staffKeySignature('D'));
+    expect(model.columns.filter((c) => c.accKind === 'natural')).toHaveLength(2);
+    expect(model.columns.filter((c) => c.accKind === null)).toHaveLength(1); // A
+  });
+
+  test('suppresses only the tones the signature actually covers', () => {
+    // E♭m7 (E♭ G♭ B♭ D♭) under E♭ major (B♭ E♭ A♭): E♭ and B♭ are covered;
+    // G♭ and D♭ are not and keep their inline flat.
+    const model = buildStaffModel(EBM7, staffKeySignature('Eb'));
+    const covered = model.columns.filter((c) => c.accKind === null);
+    const flats = model.columns.filter((c) => c.accKind === 'flat');
+    expect(covered).toHaveLength(2);
+    expect(flats).toHaveLength(2);
+  });
 });
 
 // -- Component -----------------------------------------------------
@@ -152,6 +272,48 @@ describe('<ChordStaff>', () => {
     expect(accidentals).toHaveLength(4);
     expect(accidentals[0]!.tagName.toLowerCase()).toBe('path');
     expect(accidentals[0]!.getAttribute('d')).toBe(ACCIDENTAL_FLAT.d);
+  });
+
+  test('draws the active key signature and names the key in the label', async () => {
+    const { container } = render(
+      <ChordStaff chord="A" musicKey="D" wasmLoader={makeLoader({ A: A_MAJOR })} />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector('.chordsketch-staff__svg')).not.toBeNull();
+    });
+    const svg = container.querySelector('.chordsketch-staff__svg')!;
+    // Two sharps drawn as signature glyphs, and the key is in the label.
+    expect(svg.querySelectorAll('.chordsketch-staff__signature')).toHaveLength(2);
+    expect(svg.getAttribute('aria-label')).toContain('in D');
+    // C♯ is in the signature, so no inline note accidental is drawn.
+    expect(svg.querySelectorAll('.chordsketch-staff__accidental')).toHaveLength(0);
+  });
+
+  test('draws a natural glyph for an out-of-key tone', async () => {
+    const { container } = render(
+      <ChordStaff chord="F" musicKey="G" wasmLoader={makeLoader({ F: F_MAJOR })} />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector('.chordsketch-staff__svg')).not.toBeNull();
+    });
+    const accidentals = container.querySelectorAll('.chordsketch-staff__accidental');
+    // Exactly one inline accidental — the natural cancelling the F♯ signature.
+    expect(accidentals).toHaveLength(1);
+    expect(accidentals[0]!.getAttribute('d')).toBe(ACCIDENTAL_NATURAL.d);
+  });
+
+  test('a modal key falls back to the key-agnostic staff', async () => {
+    const { container } = render(
+      <ChordStaff chord="Ebm7" musicKey="C dorian" wasmLoader={makeLoader({ Ebm7: EBM7 })} />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector('.chordsketch-staff__svg')).not.toBeNull();
+    });
+    const svg = container.querySelector('.chordsketch-staff__svg')!;
+    // No signature, and every flat tone spells inline (the pre-key behaviour).
+    expect(svg.querySelectorAll('.chordsketch-staff__signature')).toHaveLength(0);
+    expect(svg.querySelectorAll('.chordsketch-staff__accidental')).toHaveLength(4);
+    expect(svg.getAttribute('aria-label')).not.toContain('dorian');
   });
 
   test('renders an "unavailable" figure when the chord is not parseable', async () => {
