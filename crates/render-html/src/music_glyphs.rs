@@ -11,12 +11,23 @@
 //! `.claude/rules/renderer-parity.md` §"Sanitizer Parity (React
 //! JSX surface)" obligation.
 //!
-//! These are hand-written simplified SVG paths rather than real
-//! SMuFL Bravura outlines — at 24–32 px tall the simplified
-//! shapes read as "music notation" without needing the full
-//! Bravura font pulled in (Bravura is ~500 KB woff2).
+//! The treble clef and the sharp / flat accidentals are **real
+//! Bravura SMuFL outlines** baked as inline SVG `<path>` data (see
+//! [`crate::bravura`] and [ADR-0014]), not a font download and not
+//! the simplified caricatures used previously — the caricature clef
+//! read as a distorted squiggle at chip size. The metronome and
+//! time-signature glyphs stay hand-drawn primitives (they are not
+//! SMuFL glyphs). The React `<KeySignatureGlyph>` is the sister
+//! site and MUST emit the same key-signature DOM.
+//!
+//! [ADR-0014]: ../../../docs/adr/0014-bravura-glyphs-as-svg-paths.md
 
 use std::fmt::Write;
+
+use crate::bravura::{self, ACCIDENTAL_FLAT, ACCIDENTAL_SHARP, GCLEF};
+
+/// User units per staff space in the key-signature glyph (line gap).
+const KEY_STAFF_SPACE: f32 = 3.0;
 
 /// What kind of accidentals a key signature carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -210,15 +221,21 @@ pub fn key_signature_svg(key: &str) -> String {
     } else {
         18.0
     };
-    // Visual content (sharps above the staff at y≈1.4, clef tail
-    // at y≈20.9) is centered around y≈11. Trim the viewBox to
-    // span y=1..21 so `align-items: center` on the `.meta-inline`
-    // chip lines the staff up visually with the text rather than
-    // with the SVG's empty viewBox padding.
-    let vb_top: f32 = 1.0;
-    let h: f32 = 20.0;
+    // The real Bravura gClef spans ~7 staff spaces: with the G line
+    // at y=13 and a 3-unit line gap it reaches y≈-0.2 at the top and
+    // y≈20.9 at the tail; sharps placed above the staff (e.g. G#)
+    // reach y≈-1.7. The viewBox spans y=-2..22 so neither the clef
+    // nor an above-staff accidental clips; `.meta-inline__glyph`
+    // caps the rendered height to 1.1em, so the larger viewBox just
+    // scales the content to fit.
+    let vb_top: f32 = -2.0;
+    let h: f32 = 24.0;
     let top: f32 = 4.0;
     let line_gap: f32 = 3.0;
+    // The G (treble) line is the 2nd line from the bottom = y=13; the
+    // gClef origin (font y=0) anchors there.
+    let g_line_y: f32 = top + 3.0 * line_gap;
+    let clef_x: f32 = 1.5;
     let aria = match sig {
         None => format!("Key {key}"),
         Some((_, KeySigType::Natural)) => format!("Key {key} (no accidentals)"),
@@ -252,12 +269,12 @@ pub fn key_signature_svg(key: &str) -> String {
             y = y,
         );
     }
-    // Treble clef silhouette (simplified).
-    s.push_str(
-        "<path d=\"M9 19 C 9 21, 5.5 21, 5.5 18.5 C 5.5 16, 9 16, 9 14 \
-         C 9 11, 4.5 9, 4.5 7 C 4.5 4, 8.5 2.5, 9.5 5 \
-         C 10.5 8, 6 9.5, 6 13 C 6 16, 10 16, 10 13.5\" \
-         fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/>",
+    // Real Bravura treble clef (U+E050); its origin sits on the G line.
+    let _ = write!(
+        s,
+        "<path d=\"{d}\" transform=\"{t}\" fill=\"currentColor\"/>",
+        d = GCLEF.d,
+        t = bravura::smufl_transform(line_gap, 0.0, 0.0, clef_x, g_line_y),
     );
     // Accidentals.
     if let Some((count, sig_type)) = sig {
@@ -283,48 +300,23 @@ pub fn key_signature_svg(key: &str) -> String {
 }
 
 fn write_sharp(s: &mut String, cx: f32, cy: f32) {
-    let w = 2.2;
-    let h = 4.4;
-    let _ = write!(
-        s,
-        "<g stroke=\"currentColor\" stroke-width=\"0.55\" stroke-linecap=\"round\">\
-         <line x1=\"{x1}\" y1=\"{y1}\" x2=\"{x1}\" y2=\"{y2}\"/>\
-         <line x1=\"{x2}\" y1=\"{y3}\" x2=\"{x2}\" y2=\"{y4}\"/>\
-         <line x1=\"{a1}\" y1=\"{b1}\" x2=\"{a2}\" y2=\"{b2}\"/>\
-         <line x1=\"{a1}\" y1=\"{b3}\" x2=\"{a2}\" y2=\"{b4}\"/>\
-         </g>",
-        x1 = cx - w / 2.0,
-        x2 = cx + w / 2.0,
-        y1 = cy - h / 2.0,
-        y2 = cy + h / 2.0 + 0.4,
-        y3 = cy - h / 2.0 - 0.4,
-        y4 = cy + h / 2.0,
-        a1 = cx - w / 2.0 - 0.3,
-        a2 = cx + w / 2.0 + 0.3,
-        b1 = cy - 0.8,
-        b2 = cy - 1.4,
-        b3 = cy + 1.4,
-        b4 = cy + 0.8,
-    );
+    write_accidental(s, &ACCIDENTAL_SHARP, cx, cy);
 }
 
 fn write_flat(s: &mut String, cx: f32, cy: f32) {
+    write_accidental(s, &ACCIDENTAL_FLAT, cx, cy);
+}
+
+/// Emit a Bravura accidental glyph centered horizontally on `cx` with its
+/// font origin (y=0, the altered pitch's center line) at `cy`. Wrapped in a
+/// `<g>` so the accidental-count assertions (sister-site to the React tests)
+/// stay structural.
+fn write_accidental(s: &mut String, glyph: &bravura::BravuraGlyph, cx: f32, cy: f32) {
     let _ = write!(
         s,
-        "<g fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.55\" stroke-linecap=\"round\">\
-         <line x1=\"{x}\" y1=\"{y1}\" x2=\"{x}\" y2=\"{y2}\"/>\
-         <path d=\"M {x} {p1} \
-         C {p2x} {p2y}, {p3x} {p3y}, {x} {p4}\"/>\
-         </g>",
-        x = cx - 0.8,
-        y1 = cy - 2.5,
-        y2 = cy + 2.2,
-        p1 = cy + 0.4,
-        p2x = cx + 0.6,
-        p2y = cy - 0.6,
-        p3x = cx + 1.4,
-        p3y = cy + 1.4,
-        p4 = cy + 2.2,
+        "<g><path d=\"{d}\" transform=\"{t}\" fill=\"currentColor\"/></g>",
+        d = glyph.d,
+        t = bravura::smufl_transform(KEY_STAFF_SPACE, glyph.advance / 2.0, 0.0, cx, cy),
     );
 }
 
@@ -498,7 +490,7 @@ mod tests {
         // groups while still carrying `aria-label="Key Dbm"`,
         // mismatching screen readers and sighted users.
         let svg = key_signature_svg("Dbm");
-        assert_eq!(svg.matches("<g ").count(), 4);
+        assert_eq!(svg.matches("<g>").count(), 4);
         assert!(svg.contains("Key Dbm"));
         assert!(svg.contains("4 sharps"));
     }
@@ -573,13 +565,13 @@ mod tests {
             line_count >= 5,
             "expected at least 5 lines, got {line_count} in {svg}"
         );
-        assert_eq!(svg.matches("<g ").count(), 3);
+        assert_eq!(svg.matches("<g>").count(), 3);
     }
 
     #[test]
     fn key_signature_svg_natural_emits_no_accidentals() {
         let svg = key_signature_svg("C");
-        assert!(!svg.contains("<g "));
+        assert!(!svg.contains("<g>"));
     }
 
     // `tempo_marking_table` moved to
