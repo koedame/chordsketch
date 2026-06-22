@@ -35,9 +35,9 @@ Copyright © 2015 Steinberg Media Technologies GmbH (http://www.steinberg.net),
 with Reserved Font Name "Bravura".
 
 This Font Software is licensed under the SIL Open Font License,
-Version 1.1.  This license is copied in `crates/render-ireal/LICENSE-OFL.txt`
-and `crates/render-html/LICENSE-OFL.txt`, and is also available with a
-FAQ at: https://openfontlicense.org
+Version 1.1.  This license is copied in `crates/render-ireal/LICENSE-OFL.txt`,
+`crates/render-html/LICENSE-OFL.txt`, and `packages/react/LICENSE-OFL.txt`,
+and is also available with a FAQ at: https://openfontlicense.org
 
 A short summary, NOT a substitute for the license text:
 
@@ -50,8 +50,9 @@ A short summary, NOT a substitute for the license text:
     license text alongside any redistribution.
 
 ChordSketch's redistribution complies by retaining this NOTICE entry,
-shipping the OFL text at `crates/render-ireal/LICENSE-OFL.txt` and
-`crates/render-html/LICENSE-OFL.txt`, and documenting the extraction
+shipping the OFL text at `crates/render-ireal/LICENSE-OFL.txt`,
+`crates/render-html/LICENSE-OFL.txt`, and `packages/react/LICENSE-OFL.txt`,
+and documenting the extraction
 provenance in `crates/render-ireal/src/bravura.rs`,
 `crates/render-html/src/bravura.rs`, and
 `packages/react/src/bravura-glyphs.ts`. The single

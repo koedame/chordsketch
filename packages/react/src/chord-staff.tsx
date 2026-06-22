@@ -349,50 +349,53 @@ export function ChordStaff({
         {/* Treble clef (real Bravura gClef, U+E050). */}
         <path d={GCLEF.d} transform={model.clefTransform} fill="currentColor" />
         {/* Noteheads, ledger lines, accidentals */}
-        {model.columns.map((col, i) => (
-          <g key={`note-${i}`} className="chordsketch-staff__note">
-            {col.ledgerYs.map((y, j) => (
-              <line
-                key={`ledger-${i}-${j}`}
-                x1={col.x - LEDGER_HALF_WIDTH}
-                x2={col.x + LEDGER_HALF_WIDTH}
-                y1={y}
-                y2={y}
-                stroke="currentColor"
-                strokeWidth={0.7}
+        {model.columns.map((col, i) => {
+          const accKind = col.accKind;
+          return (
+            <g key={`note-${i}`} className="chordsketch-staff__note">
+              {col.ledgerYs.map((y, j) => (
+                <line
+                  key={`ledger-${i}-${j}`}
+                  x1={col.x - LEDGER_HALF_WIDTH}
+                  x2={col.x + LEDGER_HALF_WIDTH}
+                  y1={y}
+                  y2={y}
+                  stroke="currentColor"
+                  strokeWidth={0.7}
+                />
+              ))}
+              {accKind !== null
+                ? col.accXs.map((ax, j) => (
+                    <path
+                      key={`acc-${i}-${j}`}
+                      className="chordsketch-staff__accidental"
+                      d={accidentalFor(accKind).d}
+                      transform={smuflTransform({
+                        staffSpace: LINE_GAP,
+                        fontAnchorX: 0,
+                        fontAnchorY: 0,
+                        targetX: ax,
+                        targetY: col.cy,
+                      })}
+                      fill="currentColor"
+                    />
+                  ))
+                : null}
+              <path
+                className="chordsketch-staff__notehead"
+                d={NOTEHEAD_BLACK.d}
+                transform={smuflTransform({
+                  staffSpace: LINE_GAP,
+                  fontAnchorX: NOTEHEAD_BLACK.cx,
+                  fontAnchorY: 0,
+                  targetX: col.x,
+                  targetY: col.cy,
+                })}
+                fill="currentColor"
               />
-            ))}
-            {col.accKind !== null
-              ? col.accXs.map((ax, j) => (
-                  <path
-                    key={`acc-${i}-${j}`}
-                    className="chordsketch-staff__accidental"
-                    d={accidentalFor(col.accKind!).d}
-                    transform={smuflTransform({
-                      staffSpace: LINE_GAP,
-                      fontAnchorX: 0,
-                      fontAnchorY: 0,
-                      targetX: ax,
-                      targetY: col.cy,
-                    })}
-                    fill="currentColor"
-                  />
-                ))
-              : null}
-            <path
-              className="chordsketch-staff__notehead"
-              d={NOTEHEAD_BLACK.d}
-              transform={smuflTransform({
-                staffSpace: LINE_GAP,
-                fontAnchorX: NOTEHEAD_BLACK.cx,
-                fontAnchorY: 0,
-                targetX: col.x,
-                targetY: col.cy,
-              })}
-              fill="currentColor"
-            />
-          </g>
-        ))}
+            </g>
+          );
+        })}
       </svg>
     </div>
   );
