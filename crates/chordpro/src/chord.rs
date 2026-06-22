@@ -1286,8 +1286,12 @@ pub fn suggest_canonical_chord(name: &str) -> Option<ChordSuggestion> {
             stacked_tensions(headline)
         );
         // The add-tone reading is the clean shorter alternative for a plain
-        // major / minor triad.
-        let alternative = if triad.is_empty() || triad == "m" {
+        // major / minor triad — but only when the paren names a single natural
+        // tension. A multi-tension paren (`C(9,11)`) has no single `add…`
+        // spelling: emitting `Cadd11` would silently drop the 9 and misrepresent
+        // the chord, so the canonical dominant stack stands alone.
+        let alternative = if (triad.is_empty() || triad == "m") && natural_tension_count(inner) == 1
+        {
             Some(format!("{root_prefix}{triad}add{headline}{bass_suffix}"))
         } else {
             None
@@ -1345,6 +1349,12 @@ fn headline_tension(s: &str) -> Option<u8> {
     } else {
         None
     }
+}
+
+/// How many distinct natural tensions (`9` / `11` / `13`) `s` names. Used to
+/// decide whether a seventh-less paren has a single clean `add…` reading.
+fn natural_tension_count(s: &str) -> usize {
+    usize::from(s.contains('9')) + usize::from(s.contains("11")) + usize::from(s.contains("13"))
 }
 
 /// The ascending implied-stack tensions for a headline degree
@@ -2505,6 +2515,44 @@ mod tests {
         let s = suggest_canonical_chord("Cm(11)").unwrap();
         assert_eq!(s.canonical, "Cm7(9,11)");
         assert_eq!(s.alternative.as_deref(), Some("Cmadd11"));
+    }
+
+    #[test]
+    fn multi_tension_paren_offers_no_misleading_add_alternative() {
+        // A seventh-less paren naming more than one natural tension has no
+        // single `add…` spelling. The canonical dominant stack is correct and
+        // tone-preserving, but the add-tone alternative must be suppressed —
+        // emitting `Cadd11` for `C(9,11)` would silently drop the 9. Regression
+        // for the Pattern-2 multi-tension alternative bug.
+        for name in [
+            "C(9,11)",
+            "C(9,13)",
+            "C(9,11,13)",
+            "Cm(9,11)",
+            "Cm(9,11,13)",
+        ] {
+            let s = suggest_canonical_chord(name)
+                .unwrap_or_else(|| panic!("{name} should still warn with a canonical"));
+            assert_eq!(
+                chord_tones(name).unwrap().pitch_classes,
+                chord_tones(&s.canonical).unwrap().pitch_classes,
+                "{name} -> {} must preserve tones",
+                s.canonical
+            );
+            assert_eq!(
+                s.alternative, None,
+                "{name} must not offer a tone-dropping add alternative"
+            );
+        }
+        // The single-tension parens are unaffected: their `add…` reading is a
+        // faithful shorter spelling and is still offered.
+        assert_eq!(
+            suggest_canonical_chord("C(13)")
+                .unwrap()
+                .alternative
+                .as_deref(),
+            Some("Cadd13")
+        );
     }
 
     #[test]
