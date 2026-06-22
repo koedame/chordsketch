@@ -1867,11 +1867,23 @@ fn render_chord_diagram_pdf_vertical(
 
     let grid_top = top_y - 15.0; // below the name
 
-    // Nut line (thick for open position). When the diagram starts above
-    // fret 1 the full fret-number axis below already labels the first
-    // visible fret, so no separate base-fret label is drawn.
+    // Grid lines are filled rects (not stroked lines) so perpendicular
+    // edges union cleanly at corners — see `PdfDocument::filled_rect`. The
+    // horizontal lines (nut + frets) are widened by `line_w` (half the
+    // string stroke at each end) to cover the outer strings' corners.
+    let line_w: f32 = 0.5;
+    let nut_w: f32 = 2.0;
+
+    // Nut (thick for open position). When the diagram starts above fret 1
+    // the full fret-number axis below already labels the first visible
+    // fret, so no separate base-fret label is drawn.
     if data.base_fret == 1 {
-        doc.line_at(base_x, grid_top, base_x + grid_w, grid_top, 2.0);
+        doc.filled_rect(
+            base_x - line_w / 2.0,
+            grid_top - nut_w / 2.0,
+            grid_w + line_w,
+            nut_w,
+        );
     }
 
     // Fret-number axis: label every visible fret CELL with the absolute fret
@@ -1890,16 +1902,21 @@ fn render_chord_diagram_pdf_vertical(
         doc.text_at(&label, Font::Helvetica, 6.0, label_x, y - 2.0);
     }
 
-    // Vertical lines (strings)
+    // Vertical lines (strings) — exact grid height.
     for i in 0..num_strings {
         let x = base_x + i as f32 * cell_w;
-        doc.line_at(x, grid_top, x, grid_top - grid_h, 0.5);
+        doc.filled_rect(x - line_w / 2.0, grid_top - grid_h, line_w, grid_h);
     }
 
-    // Horizontal lines (frets)
+    // Horizontal lines (frets) — widened to cover the outer strings' corners.
     for j in 0..=num_frets {
         let y = grid_top - j as f32 * cell_h;
-        doc.line_at(base_x, y, base_x + grid_w, y, 0.5);
+        doc.filled_rect(
+            base_x - line_w / 2.0,
+            y - line_w / 2.0,
+            grid_w + line_w,
+            line_w,
+        );
     }
 
     // Finger positions, open, and muted markers
@@ -1977,12 +1994,25 @@ fn render_chord_diagram_pdf_horizontal(
     let grid_top = top_y - 15.0;
     let grid_bottom = grid_top - grid_h;
 
-    // Nut (vertical line on the left when at the open position). When
-    // starting above fret 1 the fret-number axis below the grid already
-    // labels the first visible fret — no separate label is drawn.
+    // Grid lines are filled rects (not stroked lines) so perpendicular
+    // edges union cleanly at corners — see `PdfDocument::filled_rect`. Here
+    // the vertical lines (nut + frets) are the ones lengthened by `line_w`
+    // (half the string stroke at each end) to cover the outer strings'
+    // corners.
+    let line_w: f32 = 0.5;
+    let nut_w: f32 = 2.0;
+
+    // Nut (left edge at the open position). When starting above fret 1 the
+    // fret-number axis below the grid already labels the first visible fret
+    // — no separate label is drawn.
     let nut_x = base_x;
     if data.base_fret == 1 {
-        doc.line_at(nut_x, grid_top, nut_x, grid_bottom, 2.0);
+        doc.filled_rect(
+            nut_x - nut_w / 2.0,
+            grid_bottom - line_w / 2.0,
+            nut_w,
+            grid_h + line_w,
+        );
     }
 
     // Fret-number axis: label every visible fret CELL below the grid with the
@@ -1998,16 +2028,21 @@ fn render_chord_diagram_pdf_horizontal(
         doc.text_at(&label, Font::Helvetica, 6.0, x, grid_bottom - 7.0);
     }
 
-    // Horizontal lines (strings).
+    // Horizontal lines (strings) — exact grid width.
     for i in 0..num_strings {
         let y = grid_top - i as f32 * string_pitch;
-        doc.line_at(nut_x, y, nut_x + grid_w, y, 0.5);
+        doc.filled_rect(nut_x, y - line_w / 2.0, grid_w, line_w);
     }
 
-    // Vertical lines (frets)
+    // Vertical lines (frets) — lengthened to cover the outer strings' corners.
     for j in 0..=num_frets {
         let x = nut_x + j as f32 * fret_pitch;
-        doc.line_at(x, grid_top, x, grid_bottom, 0.5);
+        doc.filled_rect(
+            x - line_w / 2.0,
+            grid_bottom - line_w / 2.0,
+            line_w,
+            grid_h + line_w,
+        );
     }
 
     // Finger positions, open, and muted markers. ChordPro convention orders
@@ -3168,24 +3203,6 @@ impl PdfDocument {
         self.y -= amount;
     }
 
-    /// Draw a line from (x1, y1) to (x2, y2) with the given width.
-    ///
-    /// Wraps the operation in `q`/`Q` (save/restore graphics state) so the
-    /// line width does not leak to subsequent drawing operations.
-    fn line_at(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, width: f32) {
-        let ops = self.current_page_mut();
-        ops.push("q".to_string());
-        ops.push(format!("{} w", fmt_f32(width)));
-        ops.push(format!(
-            "{} {} m {} {} l S",
-            fmt_f32(x1),
-            fmt_f32(y1),
-            fmt_f32(x2),
-            fmt_f32(y2)
-        ));
-        ops.push("Q".to_string());
-    }
-
     /// Draw a filled rectangle with an RGB colour.
     ///
     /// `color` is `(r, g, b)` with each component in the 0.0–1.0 range.
@@ -3204,6 +3221,16 @@ impl PdfDocument {
             fmt_f32(h)
         ));
         ops.push("Q".to_string());
+    }
+
+    /// Draw a black filled rectangle (lower-left corner `(x, y)`).
+    ///
+    /// Used for chord-diagram grid lines: a filled rect spanning the full
+    /// grid extent unions cleanly at right-angle corners, unlike a stroked
+    /// line whose butt caps leave an unfilled notch where two perpendicular
+    /// edges meet.
+    fn filled_rect(&mut self, x: f32, y: f32, w: f32, h: f32) {
+        self.filled_rect_color(x, y, w, h, (0.0, 0.0, 0.0));
     }
 
     /// Draw a stroked (unfilled) rectangle.
@@ -4315,13 +4342,15 @@ Sing along
         let song_on = chordsketch_chordpro::parse(input_on).unwrap();
         let bytes_on = render_song(&song_on);
         let content_on = String::from_utf8_lossy(&bytes_on);
-        // "l S" counts PDF lineto (l) + stroke (S) operations emitted by
-        // render_chord_diagram_pdf for fret grid lines, nut, and string lines.
-        let diagram_lines_off = content.matches("l S").count();
-        let diagram_lines_on = content_on.matches("l S").count();
+        // "re f" counts PDF rectangle-fill operations emitted by
+        // render_chord_diagram_pdf for the fret grid (nut, strings, frets are
+        // filled rects). The two inputs differ only by the diagram, so the
+        // delta is the grid.
+        let diagram_lines_off = content.matches("re f").count();
+        let diagram_lines_on = content_on.matches("re f").count();
         assert!(
             diagram_lines_on > diagram_lines_off,
-            "diagrams=on should produce more line ops than diagrams=off"
+            "diagrams=on should produce more grid-rect ops than diagrams=off"
         );
     }
 
@@ -5777,20 +5806,20 @@ mod chord_diagram_pdf_tests {
         let bytes_7 = render_song_with_transpose(&song, 0, &config_7);
         let content_4 = String::from_utf8_lossy(&bytes_4);
         let content_7 = String::from_utf8_lossy(&bytes_7);
-        // Each line_at() emits "m ... l S". Count line-drawing operations:
-        // frets=4 → 5 horizontal + 6 vertical + 1 nut = 12 lines
-        // frets=7 → 8 horizontal + 6 vertical + 1 nut = 15 lines
+        // Each grid line is a filled rect emitting "re f". Count grid-rect ops:
+        // frets=4 → 5 horizontal + 6 vertical + 1 nut = 12 rects
+        // frets=7 → 8 horizontal + 6 vertical + 1 nut = 15 rects
         // The difference of 3 corresponds to the 3 extra fret lines.
-        let lines_4 = content_4.matches("l S").count();
-        let lines_7 = content_7.matches("l S").count();
+        let lines_4 = content_4.matches("re f").count();
+        let lines_7 = content_7.matches("re f").count();
         assert!(
             lines_7 >= lines_4,
-            "frets=7 ({lines_7}) should have at least as many line ops as frets=4 ({lines_4})"
+            "frets=7 ({lines_7}) should have at least as many grid-rect ops as frets=4 ({lines_4})"
         );
         assert_eq!(
             lines_7 - lines_4,
             3,
-            "frets=7 should produce exactly 3 more line-drawing ops than frets=4 \
+            "frets=7 should produce exactly 3 more grid-rect ops than frets=4 \
              (got {lines_7} vs {lines_4})"
         );
     }
