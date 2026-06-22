@@ -186,18 +186,25 @@ pub fn validate_keys(metadata: &Metadata, warnings: &mut Vec<String>) {
 ///
 /// [ADR-0037]: https://github.com/koedame/chordsketch/blob/main/docs/adr/0037-explicit-chord-extension-notation.md
 pub fn validate_ambiguous_chords(song: &Song, warnings: &mut Vec<String>) {
-    let mut seen: Vec<&str> = Vec::new();
+    // `HashSet` (not `Vec::contains`) keeps the per-chord dedup check O(1), so a
+    // pathological song with many distinct chords stays linear rather than
+    // O(n²). Once the warning cap is reached there is nothing left to emit, so
+    // the walk stops — bounding both work and the `seen` set's memory on
+    // adversarial input (`.claude/rules/defensive-inputs.md` resource limits).
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
     for line in &song.lines {
+        if warnings.len() >= MAX_WARNINGS {
+            return;
+        }
         let Line::Lyrics(lyrics) = line else { continue };
         for segment in &lyrics.segments {
             let Some(chord) = &segment.chord else {
                 continue;
             };
-            if seen.contains(&chord.name.as_str()) {
+            if !seen.insert(chord.name.as_str()) {
                 continue;
             }
             if let Some(suggestion) = crate::chord::suggest_canonical_chord(&chord.name) {
-                seen.push(chord.name.as_str());
                 let alt = match &suggestion.alternative {
                     Some(a) => format!(" (or {a})"),
                     None => String::new(),
