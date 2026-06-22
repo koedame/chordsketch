@@ -131,6 +131,10 @@ impl DiagramData {
         let mut base_fret: u32 = 1;
         let mut frets: Vec<i32> = Vec::new();
         let mut fingers: Vec<u8> = Vec::new();
+        // Whether a `fingers` keyword appeared at all. When it did but parsed
+        // to nothing (e.g. an invalid leading token stopped the section), the
+        // empty list is respected as authored — we do NOT synthesise over it.
+        let mut fingers_seen = false;
 
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         let mut i = 0;
@@ -166,6 +170,7 @@ impl DiagramData {
                     }
                 }
                 "fingers" => {
+                    fingers_seen = true;
                     i += 1;
                     while i < tokens.len() {
                         let low = tokens[i].to_ascii_lowercase();
@@ -223,6 +228,18 @@ impl DiagramData {
             })
             .collect();
 
+        // A `{define}` that lists `frets` but omits the `fingers` keyword
+        // still gets finger numbers, synthesised from the shape, so every
+        // diagram shows a consistent fingering. An explicit `fingers` list is
+        // preserved — including a deliberately empty one left by an invalid
+        // token (see `fingers_seen`), which is respected rather than guessed
+        // over.
+        let fingers = if !fingers_seen && fingers.is_empty() {
+            assign_fingers(&frets)
+        } else {
+            fingers
+        };
+
         Some(Self {
             name: name.to_string(),
             display_name: None,
@@ -233,6 +250,63 @@ impl DiagramData {
             fingers,
         })
     }
+}
+
+/// Assign a fretting-hand finger (1 = index … 4 = pinky) to each fretted
+/// string of a chord shape, returning a finger per string aligned with
+/// `frets` (`0` for open / muted strings, which need no finger).
+///
+/// `frets` holds the per-string positions relative to the diagram's base
+/// fret: `-1` = muted, `0` = open, `>= 1` = a fretted position. The
+/// assignment mirrors the playability model the voicing synthesiser uses
+/// ([`crate::voicing_synth`]): an index-finger **barre** across the lowest
+/// fretted fret collapses the strings sharing it into finger `1` (credited
+/// only when no open string is sounded, since a barre lies across every
+/// string at that fret); every other fretted string takes the next finger
+/// in ascending `(fret, string)` order. The result therefore matches the
+/// conventional chart fingering — e.g. open C (`x 3 2 0 1 0`) →
+/// `0 3 2 0 1 0` and the F barre (`1 3 3 2 1 1`) → `1 3 4 2 1 1`.
+///
+/// Finger numbers are clamped to `4`; the synthesised and curated voicings
+/// are bounded to four fingers, so the clamp only guards a hand-authored
+/// `{define}` that specifies an unplayable shape.
+#[must_use]
+pub fn assign_fingers(frets: &[i32]) -> Vec<u8> {
+    let mut fingers = vec![0u8; frets.len()];
+    let Some(min_fret) = frets.iter().copied().filter(|&f| f > 0).min() else {
+        // No fretted strings (all open / muted): no fingers.
+        return fingers;
+    };
+    let has_open = frets.contains(&0);
+    let at_min = frets.iter().filter(|&&f| f == min_fret).count();
+    let barre = !has_open && at_min >= 2;
+
+    let mut next: u8 = 1;
+    if barre {
+        for (i, &f) in frets.iter().enumerate() {
+            if f == min_fret {
+                fingers[i] = 1;
+            }
+        }
+        next = 2;
+    }
+
+    // Remaining fretted strings (everything not covered by the barre), in
+    // ascending fret order so lower frets take lower-numbered fingers; ties
+    // break by string index for a stable, reproducible assignment.
+    let mut rest: Vec<(usize, i32)> = frets
+        .iter()
+        .enumerate()
+        .filter(|&(_, &f)| f > 0 && !(barre && f == min_fret))
+        .map(|(i, &f)| (i, f))
+        .collect();
+    rest.sort_by_key(|&(i, f)| (f, i));
+    for (i, _) in rest {
+        fingers[i] = next;
+        next = (next + 1).min(4);
+    }
+
+    fingers
 }
 
 // ---------------------------------------------------------------------------
@@ -2038,6 +2112,41 @@ mod tests {
     }
 
     // --- Finger number rendering (#473) ---
+
+    #[test]
+    fn assign_fingers_matches_conventional_chart_fingerings() {
+        // Open strings / muted strings take no finger.
+        assert_eq!(assign_fingers(&[0, 0, 0, 0, 0, 0]), vec![0, 0, 0, 0, 0, 0]);
+        assert_eq!(assign_fingers(&[-1, -1, -1]), vec![0, 0, 0]);
+
+        // Open C (x 3 2 0 1 0): lowest fret 1 (B string) → index, then up.
+        assert_eq!(assign_fingers(&[-1, 3, 2, 0, 1, 0]), vec![0, 3, 2, 0, 1, 0]);
+
+        // Open Am (x 0 2 2 1 0): finger 1 on the B string, 2 and 3 on D/G.
+        assert_eq!(assign_fingers(&[-1, 0, 2, 2, 1, 0]), vec![0, 0, 2, 3, 1, 0]);
+
+        // F barre (1 3 3 2 1 1): index barre across the three fret-1 strings
+        // → finger 1; the remaining notes take 2/3/4 in ascending fret order.
+        assert_eq!(assign_fingers(&[1, 3, 3, 2, 1, 1]), vec![1, 3, 4, 2, 1, 1]);
+
+        // A shared lowest fret WITH an open string sounding gets no barre
+        // credit (a barre would mute the open string): each fret-1 string
+        // takes its own finger.
+        assert_eq!(
+            assign_fingers(&[0, 1, 1, 2, -1, -1]),
+            vec![0, 1, 2, 3, 0, 0]
+        );
+    }
+
+    #[test]
+    fn assign_fingers_clamps_to_four() {
+        // A pathological hand-authored shape needing five distinct fingers
+        // (no barre, no open) clamps the overflow at finger 4 rather than
+        // emitting a 5.
+        let fingers = assign_fingers(&[1, 2, 3, 4, 5]);
+        assert_eq!(fingers, vec![1, 2, 3, 4, 4]);
+        assert!(fingers.iter().all(|&f| f <= 4));
+    }
 
     #[test]
     fn test_render_svg_with_finger_numbers() {

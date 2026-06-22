@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Chord diagrams now show finger numbers on every generated voicing. The
+  renderer already drew the white finger digit inside each fretted dot when
+  `fingers` data was present, but the curated voicing tables and the
+  algorithmic voicing synthesiser both produced empty finger data, so only
+  hand-authored `{define ... fingers ...}` diagrams showed numbers. A shared
+  `chord_diagram::assign_fingers` now synthesises a conventional fingering
+  from the shape (index-finger barre across the lowest fret, then one finger
+  per remaining string in ascending order) for the synthesiser, the curated
+  tables, and `{define}` directives that omit an explicit `fingers` list.
+  This flows through every diagram surface (CLI HTML, wasm, React
+  `<ChordDiagram>`, VS Code preview, LSP hover, and the PDF renderer). (#2701)
 - Key audition: clicking the `{key}` chip in the React preview plays the
   key by ear — the movable-do scale "do re mi fa sol la ti do" followed
   by the tonic triad strummed. Major and minor keys are both supported.
