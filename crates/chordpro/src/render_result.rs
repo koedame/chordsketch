@@ -527,6 +527,22 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_ambiguous_chords_bare_nine_has_no_alternative_clause() {
+        // `C9`'s only explicit spelling is `C7(9)` (no distinct shorter form),
+        // so the message names the canonical form without an "(or …)" clause.
+        let mut v = Vec::<String>::new();
+        let song = parse_song("[C9]Hello");
+        validate_ambiguous_chords(&song, &mut v);
+        assert_eq!(v.len(), 1);
+        assert!(v[0].contains("C7(9)"), "unexpected message: {:?}", v[0]);
+        assert!(
+            !v[0].contains("(or "),
+            "no alternative clause expected: {:?}",
+            v[0]
+        );
+    }
+
+    #[test]
     fn test_validate_multiple_capo_meta_form_counts() {
         // `{meta: capo X}` is the long form Perl accepts equivalently.
         let mut v = Vec::<String>::new();

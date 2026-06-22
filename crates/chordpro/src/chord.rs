@@ -2534,6 +2534,28 @@ mod tests {
     }
 
     #[test]
+    fn self_check_rejects_tone_changing_reconstruction() {
+        // An altered ninth in a seventh-less paren stack-expands to a natural
+        // ninth, which does not preserve tones — the self-check suppresses the
+        // suggestion rather than emit a misleading one.
+        assert_eq!(suggest_canonical_chord("C(b9)"), None);
+        assert_eq!(suggest_canonical_chord("C(#9)"), None);
+    }
+
+    #[test]
+    fn seventh_less_paren_handles_dim_and_unclosed() {
+        // A diminished triad with a seventh-less paren expands to the
+        // fully-diminished seventh; the add-tone alternative is not offered
+        // off a dim triad.
+        let s = suggest_canonical_chord("Cdim(9)").unwrap();
+        assert_eq!(s.canonical, "Cdim7(9)");
+        assert_eq!(s.alternative, None);
+        // A missing closing parenthesis still reads the tension to the end of
+        // the string rather than panicking.
+        assert_eq!(canonical_of("C(9").as_deref(), Some("C7(9)"));
+    }
+
+    #[test]
     fn ambiguous_forms_preserve_root_accidental_and_bass() {
         assert_eq!(canonical_of("Bb13").as_deref(), Some("Bb7(9,11,13)"));
         assert_eq!(canonical_of("F#m13").as_deref(), Some("F#m7(9,11,13)"));
