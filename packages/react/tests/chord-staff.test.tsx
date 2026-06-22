@@ -1,6 +1,7 @@
 import { render, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
+import { ACCIDENTAL_FLAT } from '../src/bravura-glyphs';
 import {
   ChordStaff,
   accidentalGlyph,
@@ -111,8 +112,8 @@ describe('<ChordStaff>', () => {
     });
     const svg = container.querySelector('.chordsketch-staff__svg')!;
     expect(svg.getAttribute('aria-label')).toContain('Cmaj9');
-    // Five staff lines + ledger line(s); five noteheads.
-    expect(svg.querySelectorAll('ellipse')).toHaveLength(5);
+    // Five staff lines + ledger line(s); five Bravura noteheads.
+    expect(svg.querySelectorAll('.chordsketch-staff__notehead')).toHaveLength(5);
     expect(svg.querySelectorAll('.chordsketch-staff__note')).toHaveLength(5);
     // A treble clef path is drawn.
     expect(svg.querySelector('path')).not.toBeNull();
@@ -132,10 +133,11 @@ describe('<ChordStaff>', () => {
     expect(
       container.querySelector('.chordsketch-staff__svg')!.getAttribute('aria-label'),
     ).toContain('E♭m7');
-    // Flat accidental glyphs accompany the noteheads.
+    // One Bravura flat glyph (a `<path>`) accompanies each of the four tones.
     const accidentals = container.querySelectorAll('.chordsketch-staff__accidental');
     expect(accidentals).toHaveLength(4);
-    expect(accidentals[0]!.textContent).toBe('♭');
+    expect(accidentals[0]!.tagName.toLowerCase()).toBe('path');
+    expect(accidentals[0]!.getAttribute('d')).toBe(ACCIDENTAL_FLAT.d);
   });
 
   test('renders an "unavailable" figure when the chord is not parseable', async () => {

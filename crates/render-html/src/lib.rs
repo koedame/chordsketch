@@ -21,6 +21,7 @@
 
 use std::fmt::Write;
 
+mod bravura;
 mod music_glyphs;
 
 use chordsketch_chordpro::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};

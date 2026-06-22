@@ -225,16 +225,15 @@ describe('<KeySignatureGlyph>', () => {
     expect(container.querySelector('svg')?.getAttribute('aria-label')).toBe('Key H');
   });
 
-  // Sharps sit above the top staff line at y≈1.4 and the clef
-  // tail descends to y≈20.9. The viewBox MUST start at y=1 (not
-  // y=0) so the visible content range is symmetric about the
-  // viewBox center — otherwise the staff drifts visually high
-  // inside a `.meta-inline` chip whose flex `align-items: center`
-  // centers the SVG bounding box.
-  test('viewBox y origin starts at 1, height 20 — content visually centered', () => {
+  // The real Bravura gClef spans ~7 staff spaces and an above-staff
+  // sharp (e.g. G#) reaches y≈-1.7, so the viewBox spans y=-2..22 to
+  // contain both without clipping. `.meta-inline__glyph` caps the
+  // rendered height to 1.1em, so the taller viewBox simply scales the
+  // content to fit the chip.
+  test('viewBox spans y=-2..22 to contain the full Bravura clef', () => {
     const { container } = render(<KeySignatureGlyph keyName="G" />);
     const svg = container.querySelector('svg.music-glyph--key');
-    expect(svg?.getAttribute('viewBox')).toBe('0 1 18 20');
+    expect(svg?.getAttribute('viewBox')).toBe('0 -2 18 24');
   });
 });
 
