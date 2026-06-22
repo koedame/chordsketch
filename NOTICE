@@ -12,13 +12,18 @@ License Policy).
 Bravura — SMuFL music font (Steinberg Media Technologies GmbH)
 ===============================================================================
 
-`crates/render-ireal/src/bravura.rs` contains SVG `<path>` outlines
+`crates/render-ireal/src/bravura.rs`, `crates/render-html/src/bravura.rs`,
+and `packages/react/src/bravura-glyphs.ts` contain SVG `<path>` outlines
 extracted from the Bravura font (https://github.com/steinbergmedia/bravura).
 Currently exposed glyphs:
 
-  - U+E047 SEGNO
-  - U+E048 CODA
-  - U+E4C0 FERMATA ABOVE
+  - U+E047 SEGNO            (render-ireal)
+  - U+E048 CODA             (render-ireal)
+  - U+E4C0 FERMATA ABOVE    (render-ireal)
+  - U+E050 G CLEF           (render-html, @chordsketch/react)
+  - U+E262 ACCIDENTAL SHARP (render-html, @chordsketch/react)
+  - U+E260 ACCIDENTAL FLAT  (render-html, @chordsketch/react)
+  - U+E0A4 NOTEHEAD BLACK   (@chordsketch/react)
 
 These outlines are derivative works of Bravura and are redistributed
 under the SIL Open Font License, Version 1.1 — the same terms as the
@@ -30,7 +35,8 @@ Copyright © 2015 Steinberg Media Technologies GmbH (http://www.steinberg.net),
 with Reserved Font Name "Bravura".
 
 This Font Software is licensed under the SIL Open Font License,
-Version 1.1.  This license is copied in `crates/render-ireal/LICENSE-OFL.txt`
+Version 1.1.  This license is copied in `crates/render-ireal/LICENSE-OFL.txt`,
+`crates/render-html/LICENSE-OFL.txt`, and `packages/react/LICENSE-OFL.txt`,
 and is also available with a FAQ at: https://openfontlicense.org
 
 A short summary, NOT a substitute for the license text:
@@ -44,5 +50,11 @@ A short summary, NOT a substitute for the license text:
     license text alongside any redistribution.
 
 ChordSketch's redistribution complies by retaining this NOTICE entry,
-shipping the OFL text at `crates/render-ireal/LICENSE-OFL.txt`, and
-documenting the extraction provenance in `crates/render-ireal/src/bravura.rs`.
+shipping the OFL text at `crates/render-ireal/LICENSE-OFL.txt`,
+`crates/render-html/LICENSE-OFL.txt`, and `packages/react/LICENSE-OFL.txt`,
+and documenting the extraction
+provenance in `crates/render-ireal/src/bravura.rs`,
+`crates/render-html/src/bravura.rs`, and
+`packages/react/src/bravura-glyphs.ts`. The single
+`scripts/extract-bravura-paths.py` regenerates all three from the
+pinned upstream font.

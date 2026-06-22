@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react';
 
+import { ACCIDENTAL_FLAT, ACCIDENTAL_SHARP, GCLEF, smuflTransform } from './bravura-glyphs';
+
 /**
  * Music-notation glyphs (key signature, metronome, time signature)
  * used as decorative icons inside the `.meta-inline` markers the
@@ -8,19 +10,24 @@ import type { CSSProperties } from 'react';
  * §6.1 — no left accent borders, color contrast / typography is
  * the only signal.
  *
- * These are inline SVGs rather than a music font (Bravura) load
- * because:
- * - The React package must work in any consumer bundle without
- *   forcing a font download.
- * - The shapes are simplified caricatures of the real SMuFL
- *   glyphs (treble clef, sharp, flat, metronome) — they read as
- *   "music notation" at 24-32 px without needing the full
- *   Bravura outline detail.
+ * The treble clef and the sharp / flat accidentals are **real
+ * Bravura SMuFL outlines** baked as inline SVG `<path>` data (see
+ * `./bravura-glyphs` and [ADR-0014]), not a font download and not
+ * the simplified caricatures used previously — the caricature clef
+ * read as a distorted squiggle at chip size. The metronome and
+ * time-signature glyphs stay hand-drawn primitives (they are not
+ * SMuFL glyphs).
  *
- * Sister-site to `crates/render-html/src/lib.rs`'s embedded
- * stylesheet, which carries the matching `.meta-glyph-*` classes
- * + inline SVG markup.
+ * Sister-site to `crates/render-html/src/music_glyphs.rs` (which
+ * pulls the same Bravura paths from `crates/render-html/src/bravura.rs`)
+ * — the React JSX walker and the HTML renderer MUST emit the same
+ * key-signature DOM (`.claude/rules/renderer-parity.md`).
+ *
+ * [ADR-0014]: docs/adr/0014-bravura-glyphs-as-svg-paths.md
  */
+
+/** User units per staff space in the key-signature glyph (line gap). */
+const KEY_STAFF_SPACE = 3;
 
 // ---- Key signature math -----------------------------------------
 
@@ -275,19 +282,22 @@ export function KeySignatureGlyph({
     accidentalCount > 0
       ? Math.max(18, accidentalStart + (accidentalCount - 1) * accidentalSpacing + tailRight)
       : 18;
-  // Visual content extends from y≈1.4 (top of an accidental above
-  // the staff) to y≈20.9 (bottom of the clef path, including the
-  // stroke cap). Trimming the viewBox to those bounds keeps the
-  // visual center of the staff coincident with the SVG bounding-
-  // box center, so `align-items: center` inside `.meta-inline`
-  // matches what the eye sees rather than what the underlying
-  // viewBox padding implies.
-  const vbTop = 1;
-  const h = 20;
+  // The real Bravura gClef spans ~7 staff spaces: with the G line at
+  // y=13 and a 3-unit line gap it reaches y≈-0.2 at the top and y≈20.9
+  // at the tail. Sharps placed above the staff (e.g. G#) reach y≈-1.7.
+  // The viewBox spans y=-2..22 so neither the clef nor an above-staff
+  // accidental clips; `.meta-inline__glyph` caps the rendered height to
+  // 1.1em, so the larger viewBox just scales the content to fit.
+  const vbTop = -2;
+  const h = 24;
   const order = sig?.type === 'flat' ? FLAT_ORDER : SHARP_ORDER;
   // Top staff line at y=4, line spacing 3, so lines are at 4,7,10,13,16.
   const top = 4;
   const lineGap = 3;
+  // The G (treble) line is the 2nd line from the bottom = y=13; the gClef
+  // origin (font y=0) anchors there.
+  const gLineY = top + 3 * lineGap;
+  const clefX = 1.5;
 
   return (
     <svg
@@ -324,16 +334,17 @@ export function KeySignatureGlyph({
           strokeWidth={0.6}
         />
       ))}
-      {/* Stylised treble clef — a curl that approximately tracks the
-          SMuFL gClef shape without claiming pixel accuracy. */}
+      {/* Real Bravura treble clef (U+E050); its origin sits on the G line. */}
       <path
-        d="M9 19 C 9 21, 5.5 21, 5.5 18.5 C 5.5 16, 9 16, 9 14
-           C 9 11, 4.5 9, 4.5 7 C 4.5 4, 8.5 2.5, 9.5 5
-           C 10.5 8, 6 9.5, 6 13 C 6 16, 10 16, 10 13.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1}
-        strokeLinecap="round"
+        d={GCLEF.d}
+        transform={smuflTransform({
+          staffSpace: lineGap,
+          fontAnchorX: 0,
+          fontAnchorY: 0,
+          targetX: clefX,
+          targetY: gLineY,
+        })}
+        fill="currentColor"
       />
       {/* Accidentals */}
       {sig != null && sig.type !== 'natural'
@@ -352,29 +363,40 @@ export function KeySignatureGlyph({
 }
 
 function SharpGlyph({ cx, cy }: { cx: number; cy: number }): JSX.Element {
-  // A simplified ♯ glyph: two vertical strokes crossed by two
-  // slightly upward-slanting horizontal strokes.
-  const w = 2.2;
-  const h = 4.4;
+  // Real Bravura sharp (U+E262), centered on (cx, cy) — its font origin
+  // y=0 is the altered pitch's center line.
   return (
-    <g stroke="currentColor" strokeWidth={0.55} strokeLinecap="round">
-      <line x1={cx - w / 2} y1={cy - h / 2} x2={cx - w / 2} y2={cy + h / 2 + 0.4} />
-      <line x1={cx + w / 2} y1={cy - h / 2 - 0.4} x2={cx + w / 2} y2={cy + h / 2} />
-      <line x1={cx - w / 2 - 0.3} y1={cy - 0.8} x2={cx + w / 2 + 0.3} y2={cy - 1.4} />
-      <line x1={cx - w / 2 - 0.3} y1={cy + 1.4} x2={cx + w / 2 + 0.3} y2={cy + 0.8} />
+    <g>
+      <path
+        d={ACCIDENTAL_SHARP.d}
+        transform={smuflTransform({
+          staffSpace: KEY_STAFF_SPACE,
+          fontAnchorX: ACCIDENTAL_SHARP.advance / 2,
+          fontAnchorY: 0,
+          targetX: cx,
+          targetY: cy,
+        })}
+        fill="currentColor"
+      />
     </g>
   );
 }
 
 function FlatGlyph({ cx, cy }: { cx: number; cy: number }): JSX.Element {
-  // A simplified ♭ glyph: a vertical stroke with a teardrop bulb
-  // at the bottom right.
+  // Real Bravura flat (U+E260), centered on (cx, cy) — its font origin
+  // y=0 is the altered pitch's center line.
   return (
-    <g fill="none" stroke="currentColor" strokeWidth={0.55} strokeLinecap="round">
-      <line x1={cx - 0.8} y1={cy - 2.5} x2={cx - 0.8} y2={cy + 2.2} />
+    <g>
       <path
-        d={`M ${cx - 0.8} ${cy + 0.4}
-            C ${cx + 0.6} ${cy - 0.6}, ${cx + 1.4} ${cy + 1.4}, ${cx - 0.8} ${cy + 2.2}`}
+        d={ACCIDENTAL_FLAT.d}
+        transform={smuflTransform({
+          staffSpace: KEY_STAFF_SPACE,
+          fontAnchorX: ACCIDENTAL_FLAT.advance / 2,
+          fontAnchorY: 0,
+          targetX: cx,
+          targetY: cy,
+        })}
+        fill="currentColor"
       />
     </g>
   );

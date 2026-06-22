@@ -67,7 +67,9 @@ describe('<ChordInspector>', () => {
       const svg = container.querySelector('.chordsketch-sheet__cins-staff .chordsketch-staff__svg');
       expect(svg).not.toBeNull();
       // One notehead per tone of Am7.
-      expect(svg!.querySelectorAll('ellipse')).toHaveLength(AM7_STAFF.length);
+      expect(svg!.querySelectorAll('.chordsketch-staff__notehead')).toHaveLength(
+        AM7_STAFF.length,
+      );
     });
     expect(stubStaffLoader).toHaveBeenCalled();
   });
