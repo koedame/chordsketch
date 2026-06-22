@@ -3,6 +3,7 @@ import type { HTMLAttributes, ReactNode } from 'react';
 import {
   ACCIDENTAL_FLAT,
   ACCIDENTAL_SHARP,
+  type BravuraGlyph,
   GCLEF,
   NOTEHEAD_BLACK,
   STAFF_SPACE_FONT_UNITS,
@@ -56,7 +57,7 @@ const NOTEHEAD_HALF_W = NOTEHEAD_BLACK.cx * GLYPH_S;
 const NOTEHEAD_HALF_H = NOTEHEAD_BLACK.bbox.maxY * GLYPH_S;
 
 /** The Bravura accidental glyph for a flat / sharp column. */
-function accidentalFor(kind: 'sharp' | 'flat'): typeof ACCIDENTAL_SHARP {
+function accidentalFor(kind: 'sharp' | 'flat'): BravuraGlyph {
   return kind === 'flat' ? ACCIDENTAL_FLAT : ACCIDENTAL_SHARP;
 }
 
@@ -68,17 +69,28 @@ export function staffStep(note: StaffNote): number {
   return note.octave * 7 + (idx === -1 ? 0 : idx);
 }
 
+/** Number of accidental glyphs a signed semitone offset draws: one per
+ * semitone of alteration, capped at four as a defensive bound against a
+ * pathological value. `0` for a natural tone. This is the single source of the
+ * cap-at-four rule shared by {@link accidentalGlyph} and the staff layout. */
+export function accidentalCount(accidental: number): number {
+  const n = Math.trunc(accidental);
+  return n === 0 ? 0 : Math.min(Math.abs(n), 4);
+}
+
 /** Unicode accidental glyph for a signed semitone offset. Multi-semitone
  * accidentals repeat the single glyph (`♭♭` / `♯♯` / `♭♭♭`) so they render in
  * any font, unlike the dedicated U+1D12A/B double glyphs — and so the full
  * `StaffNote.accidental` range is covered: the core can emit ±3 for an
  * enharmonically-extreme root (e.g. `Cbdim7`'s triple-flat seventh), which a
- * fixed `-2..=2` switch would have dropped to no glyph at all. Capped at four
- * repeats as a defensive bound against a pathological value. */
+ * fixed `-2..=2` switch would have dropped to no glyph at all. Capped via
+ * {@link accidentalCount}. Retained as an exported helper for textual /
+ * accessible-label use; the staff itself draws Bravura glyphs (see
+ * {@link ChordStaff}). */
 export function accidentalGlyph(accidental: number): string {
   const n = Math.trunc(accidental);
   if (n === 0) return '';
-  return (n < 0 ? '♭' : '♯').repeat(Math.min(Math.abs(n), 4));
+  return (n < 0 ? '♭' : '♯').repeat(accidentalCount(accidental));
 }
 
 /** Even staff steps (line positions) a notehead at `step` needs ledger lines
@@ -98,9 +110,8 @@ interface StaffColumn {
   x: number;
   /** Notehead centre y (relative space, before normalisation). */
   cy: number;
-  /** Unicode accidental string (`''` / `♭` / `♯♯` …) — used for the label. */
-  accidental: string;
-  /** Which Bravura accidental glyph to draw, or `null` for a natural tone. */
+  /** Which Bravura accidental glyph to draw, or `null` for a natural tone.
+   * The number of glyphs is `accXs.length` (see {@link accidentalCount}). */
   accKind: 'sharp' | 'flat' | null;
   /** Left-edge x of each accidental glyph drawn before the notehead. */
   accXs: number[];
@@ -121,7 +132,6 @@ export interface StaffModel {
   columns: Array<{
     x: number;
     cy: number;
-    accidental: string;
     accKind: 'sharp' | 'flat' | null;
     accXs: number[];
     ledgerYs: number[];
@@ -148,20 +158,19 @@ export function buildStaffModel(notes: readonly StaffNote[]): StaffModel {
   let cursor = NOTE_START_X;
   const columns: StaffColumn[] = notes.map((note) => {
     const step = staffStep(note);
-    const accidental = accidentalGlyph(note.accidental);
     const accKind = note.accidental < 0 ? 'flat' : note.accidental > 0 ? 'sharp' : null;
     const accXs: number[] = [];
     if (accKind !== null) {
       const glyphW = accidentalFor(accKind).advance * GLYPH_S;
-      for (let j = 0; j < accidental.length; j++) accXs.push(cursor + j * glyphW);
-      cursor += accidental.length * glyphW + ACC_NOTE_GAP;
+      const count = accidentalCount(note.accidental);
+      for (let j = 0; j < count; j++) accXs.push(cursor + j * glyphW);
+      cursor += count * glyphW + ACC_NOTE_GAP;
     }
     const x = cursor + NOTEHEAD_HALF_W;
     cursor = x + NOTEHEAD_HALF_W + COL_GAP;
     return {
       x,
       cy: relY(step),
-      accidental,
       accKind,
       accXs,
       ledgers: ledgerSteps(step).map(relY),
@@ -227,7 +236,6 @@ export function buildStaffModel(notes: readonly StaffNote[]): StaffModel {
     columns: columns.map((col) => ({
       x: col.x,
       cy: col.cy + offsetY,
-      accidental: col.accidental,
       accKind: col.accKind,
       accXs: col.accXs,
       ledgerYs: col.ledgers.map((y) => y + offsetY),

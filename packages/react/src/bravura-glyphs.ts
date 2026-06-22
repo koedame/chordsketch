@@ -81,7 +81,17 @@ export const NOTEHEAD_BLACK: BravuraGlyph = {
 
 // ---- end generated --------------------------------------------------------
 
-/** Round to a compact decimal string (no spurious trailing zeros). */
+/**
+ * Round to a compact decimal string (no spurious trailing zeros).
+ *
+ * Sister-site to `fmt` in `crates/render-html/src/bravura.rs`; both round to
+ * four decimals so the React and HTML key-signature glyphs emit identical
+ * `transform` strings (renderer-parity). The rounding *mode* differs in
+ * principle — JS `toFixed` rounds halves away from zero, Rust `{:.4}` rounds
+ * half-to-even — but the transform inputs here are `staffSpace / 250` scaled
+ * by small integers and half-integers, which never land on a 5th-decimal tie,
+ * so the two helpers agree byte-for-byte on every glyph this module places.
+ */
 function fmt(n: number): string {
   return Number(n.toFixed(4)).toString();
 }

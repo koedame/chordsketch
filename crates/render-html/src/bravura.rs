@@ -69,7 +69,13 @@ pub(crate) const ACCIDENTAL_FLAT: BravuraGlyph = BravuraGlyph {
 // ---- end generated --------------------------------------------------------
 
 /// Format a transform coordinate compactly (no trailing zeros), matching the
-/// TypeScript sister-site's `fmt`.
+/// TypeScript sister-site's `fmt` (`packages/react/src/bravura-glyphs.ts`) so
+/// the HTML and React key-signature glyphs emit identical `transform` strings
+/// (renderer-parity). Both round to four decimals; the rounding *mode* differs
+/// in principle (Rust `{:.4}` is half-to-even, JS `toFixed` is half-away-from-
+/// zero) but the inputs — `staff_space / 250` scaled by small integers and
+/// half-integers — never produce a 5th-decimal tie, so the two agree
+/// byte-for-byte on every glyph placed here.
 fn fmt(n: f32) -> String {
     let mut s = format!("{n:.4}");
     if s.contains('.') {
@@ -87,6 +93,15 @@ fn fmt(n: f32) -> String {
 /// `(font_ax, font_ay)` is the glyph point that should land exactly at
 /// `(target_x, target_y)` — e.g. `(0, 0)` for the gClef's G-line origin, or
 /// `(glyph.cx, 0)` to center a notehead.
+///
+/// The parity-relevant sister is `smuflTransform` in
+/// `packages/react/src/bravura-glyphs.ts` (same algorithm, same output).
+/// `crates/render-ireal/src/music_symbols.rs` composes an analogous but
+/// distinct transform (bbox-center anchoring for segno / coda / fermata); it
+/// is intentionally *not* shared — `render-html` depends only on
+/// `chordsketch-chordpro`, not on `render-ireal`, and the two cover different
+/// glyph-placement needs. Only the glyph *data* (`bravura.rs` / the `.ts`
+/// sister) is regenerated from one script and kept in lockstep.
 pub(crate) fn smufl_transform(
     staff_space: f32,
     font_ax: f32,

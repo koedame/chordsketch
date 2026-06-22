@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { ACCIDENTAL_FLAT } from '../src/bravura-glyphs';
 import {
   ChordStaff,
+  accidentalCount,
   accidentalGlyph,
   buildStaffModel,
   ledgerSteps,
@@ -59,6 +60,19 @@ describe('staff geometry helpers', () => {
     expect(accidentalGlyph(3)).toBe('♯♯♯');
   });
 
+  test('accidentalCount caps at four and shares the rule with accidentalGlyph', () => {
+    expect(accidentalCount(0)).toBe(0);
+    expect(accidentalCount(-1)).toBe(1);
+    expect(accidentalCount(2)).toBe(2);
+    expect(accidentalCount(3)).toBe(3);
+    // Pathological value is capped at four, matching accidentalGlyph's length.
+    expect(accidentalCount(9)).toBe(4);
+    expect(accidentalCount(-9)).toBe(4);
+    for (const n of [-9, -3, -1, 0, 1, 2, 3, 9]) {
+      expect(accidentalGlyph(n).length).toBe(accidentalCount(n));
+    }
+  });
+
   test('ledgerSteps adds lines for notes outside the staff only', () => {
     // Within the staff (E4..F5): no ledgers.
     expect(ledgerSteps(30)).toEqual([]);
@@ -91,12 +105,12 @@ describe('staff geometry helpers', () => {
     // Middle C (first column) hangs below the staff → one ledger line.
     expect(model.columns[0]!.ledgerYs).toHaveLength(1);
     // All-natural chord → no accidental glyphs.
-    expect(model.columns.every((c) => c.accidental === '')).toBe(true);
+    expect(model.columns.every((c) => c.accKind === null && c.accXs.length === 0)).toBe(true);
   });
 
-  test('buildStaffModel emits flat glyphs for a flat-spelled chord', () => {
+  test('buildStaffModel emits one flat glyph per tone for a flat-spelled chord', () => {
     const model = buildStaffModel(EBM7);
-    expect(model.columns.every((c) => c.accidental === '♭')).toBe(true);
+    expect(model.columns.every((c) => c.accKind === 'flat' && c.accXs.length === 1)).toBe(true);
   });
 });
 
