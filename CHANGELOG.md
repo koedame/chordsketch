@@ -357,6 +357,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Chord-diagram fretboard grids now render with filled rectangles
+  instead of stroked lines, so the nut, strings, and fret lines meet at
+  clean right-angle corners instead of leaving the unfilled notch a
+  stroked line's butt cap produced where two perpendicular edges met.
+  The line bodies and diagram dimensions are unchanged; only the corner
+  rendering improves. Applies to every SVG surface (CLI `--format html`,
+  the wasm `chord_diagram_svg` exports, `@chordsketch/react`'s
+  `<ChordDiagram>`, the VS Code preview, the LSP hover) and to the PDF
+  renderer's own diagram geometry. The PDF muted-string marker also
+  switches from a text `X` glyph to crossing strokes, matching the SVG
+  renderer's shape-based marker. (#2701)
 - `@chordsketch/react`: dragging a chord in the `<ChordSheet>`
   preview and dropping it now leaves the moved chord **selected**, so
   it can be nudged or edited without a second click — matching the

@@ -2796,6 +2796,44 @@ mod tests {
     }
 
     #[test]
+    fn grid_lines_are_filled_rects_widened_for_clean_corners() {
+        // The grid is drawn as filled `<rect>`s (not stroked `<line>`s) so
+        // perpendicular edges union without the butt-cap notch a stroke leaves
+        // at a right-angle corner. The horizontal bars (nut + frets) are
+        // widened by `line_stroke` (half at each end) to span the full grid
+        // width and cover the outer strings' corners; the strings keep the
+        // exact grid height. Regression guard for the corner fix.
+        //
+        // open_c is 6 strings / 5 frets / base_fret 1, so grid_w = 50 and
+        // grid_h = 60; widened bars span 50 + line_stroke(1) = 51 with their
+        // left edge at left_margin - line_stroke/2 = 17.5.
+        let svg = render_svg_with_orientation(&open_c(), Orientation::Vertical);
+        // Nut: widened to 51, thick (height = nut_stroke = 3), top at 25.5.
+        assert!(
+            svg.contains("<rect x=\"17.5\" y=\"25.5\" width=\"51\" height=\"3\" fill=\"black\"/>"),
+            "nut should be a 51-wide filled rect covering both outer corners; got: {svg}"
+        );
+        // Fret line: widened to grid_w + line_stroke = 51, 1 tall.
+        assert!(
+            svg.contains("width=\"51\" height=\"1\" fill=\"black\""),
+            "fret lines should be widened to grid_w + line_stroke = 51; got: {svg}"
+        );
+        // String: exact grid height (60), 1 wide — NOT widened.
+        assert!(
+            svg.contains("width=\"1\" height=\"60\" fill=\"black\""),
+            "strings should be 1-wide rects at the exact grid height 60; got: {svg}"
+        );
+        // The only remaining stroked `<line>`s are the diagonal muted-string
+        // markers (open_c mutes the low string), never the axis-aligned grid.
+        for line in svg.lines().filter(|l| l.contains("<line")) {
+            assert!(
+                line.contains("class=\"muted-string\""),
+                "the only <line> elements should be muted-string markers; got: {line}"
+            );
+        }
+    }
+
+    #[test]
     fn horizontal_open_position_has_nut_as_vertical_line() {
         // base_fret == 1 ⇒ the nut is the leftmost vertical bar, drawn as a
         // filled rect `nut_stroke` (3) wide. It is centred on x=LEFT_MARGIN

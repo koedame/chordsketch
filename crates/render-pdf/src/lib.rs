@@ -1783,8 +1783,10 @@ fn compute_image_dimensions(
 
 /// Render a chord diagram directly into the PDF content stream.
 ///
-/// Uses PDF line/circle drawing operations to reproduce the chord grid,
-/// finger dots, open/muted string markers, and the chord name. The
+/// Uses PDF filled-rect, circle, and line drawing operations to reproduce
+/// the chord grid (filled rects), finger dots and open-string rings
+/// (circles), the muted-string `X` (crossing strokes), and the chord name
+/// (text). The
 /// `orientation` argument mirrors the SVG renderer's behaviour at
 /// `chordsketch_chordpro::chord_diagram::render_svg_with_orientation`, so a
 /// song that renders horizontally in HTML renders horizontally in PDF too.
@@ -1926,8 +1928,13 @@ fn render_chord_diagram_pdf_vertical(
         }
         let x = base_x + i as f32 * cell_w;
         if fret == -1 {
-            // Muted: X above nut
-            doc.text_at("X", Font::Helvetica, 7.0, x - 2.5, grid_top + 4.0);
+            // Muted: crossing strokes above the nut, centred where the
+            // open-string ring sits, matching the SVG renderer's shape-based
+            // muted marker (rather than a font-dependent "X" glyph).
+            let r = 2.5;
+            let cy = grid_top + 6.0;
+            doc.line_at(x - r, cy - r, x + r, cy + r, 0.7);
+            doc.line_at(x - r, cy + r, x + r, cy - r, 0.7);
         } else if fret == 0 {
             // Open: circle above nut
             doc.stroked_circle_at(x, grid_top + 6.0, 2.5);
@@ -2056,8 +2063,13 @@ fn render_chord_diagram_pdf_horizontal(
         let row = num_strings - 1 - i;
         let y = grid_top - row as f32 * string_pitch;
         if fret == -1 {
-            // Muted: X to the left of nut, one per string row.
-            doc.text_at("X", Font::Helvetica, 7.0, nut_x - 8.0, y - 2.5);
+            // Muted: crossing strokes to the left of the nut, one per string
+            // row, centred where the open-string ring sits (matching the SVG
+            // renderer's shape-based muted marker).
+            let r = 2.5;
+            let cx = nut_x - 6.0;
+            doc.line_at(cx - r, y - r, cx + r, y + r, 0.7);
+            doc.line_at(cx - r, y + r, cx + r, y - r, 0.7);
         } else if fret == 0 {
             // Open: circle to the left of nut, one per string row.
             doc.stroked_circle_at(nut_x - 6.0, y, 2.5);
@@ -3219,6 +3231,26 @@ impl PdfDocument {
             fmt_f32(y),
             fmt_f32(w),
             fmt_f32(h)
+        ));
+        ops.push("Q".to_string());
+    }
+
+    /// Draw a stroked line from `(x1, y1)` to `(x2, y2)`.
+    ///
+    /// Used for the diagonal muted-string `X` (a pair of crossing strokes),
+    /// matching the SVG renderer's muted marker. Axis-aligned grid lines use
+    /// [`filled_rect`](Self::filled_rect) instead so their corners union
+    /// cleanly. Wrapped in `q`/`Q` so the line width does not leak.
+    fn line_at(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, width: f32) {
+        let ops = self.current_page_mut();
+        ops.push("q".to_string());
+        ops.push(format!("{} w", fmt_f32(width)));
+        ops.push(format!(
+            "{} {} m {} {} l S",
+            fmt_f32(x1),
+            fmt_f32(y1),
+            fmt_f32(x2),
+            fmt_f32(y2)
         ));
         ops.push("Q".to_string());
     }
