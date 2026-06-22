@@ -6,6 +6,7 @@ import {
   TRANSPOSE_MAX,
   TRANSPOSE_MIN,
   CHORD_TYPE_PRESETS,
+  activeKeyAtLine,
   applyChordDelete,
   applyChordEdit,
   applyChordInsert,
@@ -1239,5 +1240,77 @@ describe('chordSelectionCaretOffset', () => {
   test('returns null for a selection that no longer maps to a chord', () => {
     expect(chordSelectionCaretOffset(source, { line: 2, offset: 0, ordinal: 5 })).toBeNull();
     expect(chordSelectionCaretOffset(source, { line: 9, offset: 0, ordinal: 0 })).toBeNull();
+  });
+});
+
+describe('activeKeyAtLine', () => {
+  test('returns null before any key directive', () => {
+    const src = '[C]Hello\n{key: G}\n[G]world';
+    // Line 1 precedes the key directive → no key in effect yet.
+    expect(activeKeyAtLine(src, 1)).toBeNull();
+  });
+
+  test('resolves the key declared on or above the given line', () => {
+    const src = '{key: G}\n[G]first\n[D]second';
+    expect(activeKeyAtLine(src, 1)).toBe('G');
+    expect(activeKeyAtLine(src, 2)).toBe('G');
+    expect(activeKeyAtLine(src, 3)).toBe('G');
+  });
+
+  test('honours mid-song modulation (last key wins per position)', () => {
+    const src = ['{key: C}', '[C]verse', '{key: A}', '[A]chorus', '[E]chorus'].join('\n');
+    // The chord on line 2 sounds in C; the chords on lines 4-5 sound in A.
+    expect(activeKeyAtLine(src, 2)).toBe('C');
+    expect(activeKeyAtLine(src, 4)).toBe('A');
+    expect(activeKeyAtLine(src, 5)).toBe('A');
+  });
+
+  test('accepts the colon-less attribute form `{key VALUE}`', () => {
+    expect(activeKeyAtLine('{key Bb}\n[Bb]x', 2)).toBe('Bb');
+  });
+
+  test('accepts the generic-metadata `{meta: key VALUE}` form', () => {
+    expect(activeKeyAtLine('{meta: key Em}\n[Em]x', 2)).toBe('Em');
+    expect(activeKeyAtLine('{meta key F#m}\n[F#m]x', 2)).toBe('F#m');
+  });
+
+  test('matches the directive name case-insensitively and trims the value', () => {
+    expect(activeKeyAtLine('{KEY:   D }\n[D]x', 2)).toBe('D');
+  });
+
+  test('ignores non-key directives, empty keys, and selector-suffixed keys', () => {
+    expect(activeKeyAtLine('{title: Song}\n[C]x', 2)).toBeNull();
+    expect(activeKeyAtLine('{key:}\n[C]x', 2)).toBeNull();
+    // A conditional `{key-guitar}` applies only under an instrument filter and
+    // does not define the plain editor view's key.
+    expect(activeKeyAtLine('{key-guitar: G}\n[G]x', 2)).toBeNull();
+  });
+
+  test('a later key directive does not leak to lines above it', () => {
+    const src = '[C]top\n{key: G}\n[G]below';
+    expect(activeKeyAtLine(src, 1)).toBeNull();
+    expect(activeKeyAtLine(src, 3)).toBe('G');
+  });
+
+  test('clamps an out-of-range line to the document', () => {
+    expect(activeKeyAtLine('{key: G}\n[G]x', 99)).toBe('G');
+  });
+
+  test('handles an unterminated brace with much whitespace linearly (no ReDoS)', () => {
+    // A `{` followed by a long whitespace run and no closing `}` must not
+    // trigger quadratic regex backtracking (the directive scanner runs per
+    // line on every keystroke). The line is not a directive, so the result
+    // is null — and it must return promptly.
+    const malformed = `{${' '.repeat(100_000)}`;
+    const start = Date.now();
+    expect(activeKeyAtLine(`${malformed}\n[C]x`, 2)).toBeNull();
+    // Generous bound: the linear scan completes in well under this; the
+    // O(n²) regex this guards against took seconds at this length.
+    expect(Date.now() - start).toBeLessThan(1000);
+  });
+
+  test('still resolves a key on a line that also carries other braces', () => {
+    // The scanner takes the first brace group; a normal key line resolves.
+    expect(activeKeyAtLine('{key: A}', 1)).toBe('A');
   });
 });
