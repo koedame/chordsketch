@@ -848,6 +848,35 @@ pub fn chord_pitches(chord: &str) -> Option<Vec<u8>> {
     crate::chord_pitches_inner(chord)
 }
 
+/// Constituent tones of a chord spelled for staff notation — note letter,
+/// signed accidental, octave, and MIDI — for drawing the chord on a
+/// five-line staff (the React `<ChordStaff>` surface, #2695).
+///
+/// Returns `undefined` when `chord` is not parseable as a chord; otherwise a
+/// JS array of `{letter, accidental, octave, midi}` objects, ascending by
+/// pitch (a slash bass sorts first). Each tone is spelled diatonically from
+/// the chord's structure so it lands on its conventional staff line (e.g.
+/// `Ebm7` → E♭ G♭ B♭ D♭, not D♯ F♯ A♯ C♯).
+///
+/// Thin wrapper over [`chordsketch_chordpro::chord_staff_notes`] via the
+/// pure-Rust `chord_staff_notes_inner`. Sister-site to the NAPI
+/// `chordStaffNotes` export and the FFI `chord_staff_notes` function
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string only if serialisation fails — a
+/// defensive path callers can treat as infallible in normal use.
+// No `#[must_use]`: like the sibling `validate` / `listDirectives` JsValue
+// exports, the return is a `Result` (already `#[must_use]`), so a bare
+// attribute would be redundant (clippy::double_must_use). The NAPI / FFI
+// `chord_staff_notes` return a plain `Option` value and DO mark `#[must_use]`,
+// matching their own `chord_pitches` siblings.
+#[wasm_bindgen(js_name = chordStaffNotes, skip_typescript)]
+pub fn chord_staff_notes(chord: &str) -> Result<JsValue, JsValue> {
+    to_js_value(&crate::chord_staff_notes_inner(chord))
+}
+
 /// Ascending one-octave scale of a musical key as MIDI note numbers, for
 /// auditioning the key by ear — the movable-do "do re mi fa sol la ti do"
 /// (the React `useKeyAudio` key-audition surface).
@@ -984,6 +1013,38 @@ export function chordDiagramSvgWithDefinesOrientationCompact(
   defines: Array<[string, string]>,
   orientation?: ChordDiagramOrientation | null,
 ): string | null;
+
+/**
+ * One staff-placed chord tone returned by {@link chordStaffNotes}.
+ *
+ * Matches the NAPI (`@chordsketch/node`) `StaffNote` interface and the UDL
+ * `StaffNote` dictionary exposed by the FFI bindings.
+ */
+export interface StaffNote {
+  /** Note letter the tone is spelled on, `"A"`–`"G"`. */
+  letter: string;
+  /**
+   * Signed accidental as a semitone offset on {@link letter}: `-1` flat,
+   * `0` natural, `1` sharp, `±2` double. For enharmonically-extreme roots
+   * (e.g. `Cbdim7`'s triple-flat seventh) the value reaches `±3` — renderers
+   * must handle the full `-3..=3` range, not assume `±2` is the maximum.
+   */
+  accidental: number;
+  /** Scientific-pitch-notation octave (middle C = C4). */
+  octave: number;
+  /** Absolute MIDI note number, consistent with the spelling. */
+  midi: number;
+}
+
+/**
+ * Constituent tones of a chord spelled for staff notation, ascending by
+ * pitch (a slash bass sorts first).
+ *
+ * Returns `undefined` when `chord` is not parseable as a chord. Each tone is
+ * spelled diatonically from the chord's structure (e.g. `Ebm7` → E♭ G♭ B♭ D♭,
+ * not D♯ F♯ A♯ C♯) so a renderer can place it on its conventional staff line.
+ */
+export function chordStaffNotes(chord: string): StaffNote[] | undefined;
 "#;
 
 /// Return the ChordPro directive catalog as a JS array of `DirectiveInfo`
