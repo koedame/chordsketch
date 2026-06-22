@@ -1677,10 +1677,10 @@
 .chordsketch-staff {
   display: inline-flex;
   align-items: center;
-  /* The staff lines / clef / noteheads paint in `currentColor`; a muted
-     secondary tone keeps the staff legible without competing with the
-     crimson chord name above it. */
-  color: var(--cs-text-secondary, #67646d);
+  /* The staff lines / clef / noteheads paint in `currentColor`; the primary
+     ink keeps the notation crisp and fully legible (the muted secondary tone
+     previously used rendered it washed-out grey). */
+  color: var(--cs-text-primary, #0a0a0b);
 }
 .chordsketch-sheet__cins-staff {
   margin-top: var(--cs-sp-1, 0.25rem);
