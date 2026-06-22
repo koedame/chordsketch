@@ -1,6 +1,15 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 
 import {
+  ACCIDENTAL_FLAT,
+  ACCIDENTAL_SHARP,
+  type BravuraGlyph,
+  GCLEF,
+  NOTEHEAD_BLACK,
+  STAFF_SPACE_FONT_UNITS,
+  smuflTransform,
+} from './bravura-glyphs';
+import {
   type ChordStaffWasmLoader,
   type StaffNote,
   useChordStaff,
@@ -17,6 +26,10 @@ import {
 // with C = 0 … B = 6. On a treble staff the bottom line (E4) is step 30 and
 // the top line (F5) is step 38, so the five lines sit on the even steps
 // 30/32/34/36/38 and each unit step is half a line gap.
+//
+// The clef, noteheads, and accidentals are real Bravura SMuFL outlines (see
+// `./bravura-glyphs` / ADR-0014) mapped from font units into this staff via
+// `smuflTransform`, scaled so one staff space spans {@link LINE_GAP} units.
 
 const LETTER_ORDER = 'CDEFGAB';
 const LINE_GAP = 9;
@@ -25,16 +38,28 @@ const HALF_GAP = LINE_GAP / 2;
 const BOTTOM_LINE_STEP = 30;
 /** Staff step of the top treble line (F5). */
 const TOP_LINE_STEP = 38;
-const NOTE_RX = 5.2;
-const NOTE_RY = 3.9;
+/** Staff step of the G (treble) line — the gClef's reference line. */
+const G_LINE_STEP = 4 * 7 + LETTER_ORDER.indexOf('G'); // G4 = 32
 const LEDGER_HALF_WIDTH = 7.5;
-const NOTE_SPACING = 15;
-const NOTE_START_X = 27;
 const PAD = 6;
-/** Scale mapping the simplified clef path's staff (lines at y 4..16, gap 3)
- * onto this staff (gap {@link LINE_GAP}). */
-const CLEF_SCALE = LINE_GAP / 3;
-const CLEF_X = 7;
+/** Left x of the clef; the first notehead column starts after it. */
+const CLEF_X = 2;
+const NOTE_START_X = 27;
+/** Horizontal gap after a notehead before the next column. */
+const COL_GAP = 6;
+/** Horizontal gap between an accidental and the notehead it alters. */
+const ACC_NOTE_GAP = 2;
+
+/** Font-unit → user-space scale (one staff space = {@link LINE_GAP} units). */
+const GLYPH_S = LINE_GAP / STAFF_SPACE_FONT_UNITS;
+/** Notehead half-width / half-height in user units, for layout + bounds. */
+const NOTEHEAD_HALF_W = NOTEHEAD_BLACK.cx * GLYPH_S;
+const NOTEHEAD_HALF_H = NOTEHEAD_BLACK.bbox.maxY * GLYPH_S;
+
+/** The Bravura accidental glyph for a flat / sharp column. */
+function accidentalFor(kind: 'sharp' | 'flat'): BravuraGlyph {
+  return kind === 'flat' ? ACCIDENTAL_FLAT : ACCIDENTAL_SHARP;
+}
 
 /** Diatonic staff step of a spelled note (`octave * 7 + letterIndex`). */
 export function staffStep(note: StaffNote): number {
@@ -44,17 +69,28 @@ export function staffStep(note: StaffNote): number {
   return note.octave * 7 + (idx === -1 ? 0 : idx);
 }
 
+/** Number of accidental glyphs a signed semitone offset draws: one per
+ * semitone of alteration, capped at four as a defensive bound against a
+ * pathological value. `0` for a natural tone. This is the single source of the
+ * cap-at-four rule shared by {@link accidentalGlyph} and the staff layout. */
+export function accidentalCount(accidental: number): number {
+  const n = Math.trunc(accidental);
+  return n === 0 ? 0 : Math.min(Math.abs(n), 4);
+}
+
 /** Unicode accidental glyph for a signed semitone offset. Multi-semitone
  * accidentals repeat the single glyph (`♭♭` / `♯♯` / `♭♭♭`) so they render in
  * any font, unlike the dedicated U+1D12A/B double glyphs — and so the full
  * `StaffNote.accidental` range is covered: the core can emit ±3 for an
  * enharmonically-extreme root (e.g. `Cbdim7`'s triple-flat seventh), which a
- * fixed `-2..=2` switch would have dropped to no glyph at all. Capped at four
- * repeats as a defensive bound against a pathological value. */
+ * fixed `-2..=2` switch would have dropped to no glyph at all. Capped via
+ * {@link accidentalCount}. Retained as an exported helper for textual /
+ * accessible-label use; the staff itself draws Bravura glyphs (see
+ * {@link ChordStaff}). */
 export function accidentalGlyph(accidental: number): string {
   const n = Math.trunc(accidental);
   if (n === 0) return '';
-  return (n < 0 ? '♭' : '♯').repeat(Math.min(Math.abs(n), 4));
+  return (n < 0 ? '♭' : '♯').repeat(accidentalCount(accidental));
 }
 
 /** Even staff steps (line positions) a notehead at `step` needs ledger lines
@@ -74,7 +110,11 @@ interface StaffColumn {
   x: number;
   /** Notehead centre y (relative space, before normalisation). */
   cy: number;
-  accidental: string;
+  /** Which Bravura accidental glyph to draw, or `null` for a natural tone.
+   * The number of glyphs is `accXs.length` (see {@link accidentalCount}). */
+  accKind: 'sharp' | 'flat' | null;
+  /** Left-edge x of each accidental glyph drawn before the notehead. */
+  accXs: number[];
   ledgers: number[];
   midi: number;
 }
@@ -92,7 +132,8 @@ export interface StaffModel {
   columns: Array<{
     x: number;
     cy: number;
-    accidental: string;
+    accKind: 'sharp' | 'flat' | null;
+    accXs: number[];
     ledgerYs: number[];
     midi: number;
   }>;
@@ -111,34 +152,62 @@ function relY(step: number): number {
  * vertically-stacked engraving.
  */
 export function buildStaffModel(notes: readonly StaffNote[]): StaffModel {
-  const columns: StaffColumn[] = notes.map((note, i) => ({
-    x: NOTE_START_X + i * NOTE_SPACING,
-    cy: relY(staffStep(note)),
-    accidental: accidentalGlyph(note.accidental),
-    ledgers: ledgerSteps(staffStep(note)).map(relY),
-    midi: note.midi,
-  }));
+  // Lay columns out with a running cursor so each accidental reserves its own
+  // horizontal slot before the notehead (real Bravura accidentals are ~1 staff
+  // space wide and would otherwise collide with the previous tone).
+  let cursor = NOTE_START_X;
+  const columns: StaffColumn[] = notes.map((note) => {
+    const step = staffStep(note);
+    const accKind = note.accidental < 0 ? 'flat' : note.accidental > 0 ? 'sharp' : null;
+    const accXs: number[] = [];
+    if (accKind !== null) {
+      const glyphW = accidentalFor(accKind).advance * GLYPH_S;
+      const count = accidentalCount(note.accidental);
+      for (let j = 0; j < count; j++) accXs.push(cursor + j * glyphW);
+      cursor += count * glyphW + ACC_NOTE_GAP;
+    }
+    const x = cursor + NOTEHEAD_HALF_W;
+    cursor = x + NOTEHEAD_HALF_W + COL_GAP;
+    return {
+      x,
+      cy: relY(step),
+      accKind,
+      accXs,
+      ledgers: ledgerSteps(step).map(relY),
+      midi: note.midi,
+    };
+  });
 
-  // Relative y extents: the five staff lines, every notehead (± its radius),
-  // every ledger line, and the clef's vertical overhang. Seed the bounds with
-  // the staff + clef so an empty / sparse chord still frames the staff.
+  // Relative y extents: the five staff lines, every notehead (± its half
+  // height), every ledger line, every accidental's overhang, and the clef's
+  // vertical overhang. Seed the bounds with the staff + clef so an empty /
+  // sparse chord still frames the staff.
   const staffTopRel = relY(TOP_LINE_STEP);
   const staffBottomRel = relY(BOTTOM_LINE_STEP);
-  // The simplified clef path spans y≈2.5..21 in its own space; mapped onto
-  // this staff (its line y=4 → staffTopRel) it overhangs both ends.
-  const clefTopRel = staffTopRel + (2.5 - 4) * CLEF_SCALE;
-  const clefBottomRel = staffTopRel + (21 - 4) * CLEF_SCALE;
+  // The gClef origin sits on the G line; it overhangs ~4.4 spaces above and
+  // ~2.6 below in font units, mapped here through GLYPH_S.
+  const gLineRel = relY(G_LINE_STEP);
+  const clefTopRel = gLineRel - GCLEF.bbox.maxY * GLYPH_S;
+  const clefBottomRel = gLineRel - GCLEF.bbox.minY * GLYPH_S;
   let minRel = Math.min(staffTopRel, clefTopRel);
   let maxRel = Math.max(staffBottomRel, clefBottomRel);
   for (const col of columns) {
-    minRel = Math.min(minRel, col.cy - NOTE_RY, ...col.ledgers);
-    maxRel = Math.max(maxRel, col.cy + NOTE_RY, ...col.ledgers);
+    minRel = Math.min(minRel, col.cy - NOTEHEAD_HALF_H, ...col.ledgers);
+    maxRel = Math.max(maxRel, col.cy + NOTEHEAD_HALF_H, ...col.ledgers);
+    if (col.accKind !== null) {
+      const g = accidentalFor(col.accKind);
+      // Accidental font y=0 anchors at col.cy; it reaches up by bbox.maxY and
+      // down by -bbox.minY (font +Y up → SVG +Y down).
+      minRel = Math.min(minRel, col.cy - g.bbox.maxY * GLYPH_S);
+      maxRel = Math.max(maxRel, col.cy - g.bbox.minY * GLYPH_S);
+    }
   }
 
   const offsetY = PAD - minRel;
   const height = maxRel - minRel + 2 * PAD;
-  const lastX = columns.length > 0 ? columns[columns.length - 1]!.x : NOTE_START_X;
-  const width = lastX + NOTE_RX + PAD + 4;
+  const lastRight =
+    columns.length > 0 ? columns[columns.length - 1]!.x + NOTEHEAD_HALF_W : NOTE_START_X;
+  const width = lastRight + PAD + 4;
   const staffLeft = 3;
   const staffRight = width - 2;
 
@@ -148,11 +217,14 @@ export function buildStaffModel(notes: readonly StaffNote[]): StaffModel {
     lineYs.push(relY(step) + offsetY);
   }
 
-  // Clef: map its path-space onto this staff and shift by the normalisation
-  // offset. (point x,y) → (CLEF_X + (x-4.5)*s, (staffTopRel+offsetY) + (y-4)*s).
-  const clefTy = staffTopRel + offsetY - 4 * CLEF_SCALE;
-  const clefTx = CLEF_X - 4.5 * CLEF_SCALE;
-  const clefTransform = `translate(${clefTx.toFixed(2)} ${clefTy.toFixed(2)}) scale(${CLEF_SCALE.toFixed(3)})`;
+  // Clef: font origin (0,0) lands on the G line, scaled to this staff.
+  const clefTransform = smuflTransform({
+    staffSpace: LINE_GAP,
+    fontAnchorX: 0,
+    fontAnchorY: 0,
+    targetX: CLEF_X,
+    targetY: gLineRel + offsetY,
+  });
 
   return {
     width,
@@ -164,21 +236,13 @@ export function buildStaffModel(notes: readonly StaffNote[]): StaffModel {
     columns: columns.map((col) => ({
       x: col.x,
       cy: col.cy + offsetY,
-      accidental: col.accidental,
+      accKind: col.accKind,
+      accXs: col.accXs,
       ledgerYs: col.ledgers.map((y) => y + offsetY),
       midi: col.midi,
     })),
   };
 }
-
-// The simplified treble-clef outline, shared with `music-glyphs.tsx`'s
-// `KeySignatureGlyph` (its own coordinate space: staff lines at y 4..16). It
-// is a caricature of the SMuFL gClef that reads as "treble clef" at icon size
-// without a Bravura font load.
-const CLEF_PATH =
-  'M9 19 C 9 21, 5.5 21, 5.5 18.5 C 5.5 16, 9 16, 9 14 ' +
-  'C 9 11, 4.5 9, 4.5 7 C 4.5 4, 8.5 2.5, 9.5 5 ' +
-  'C 10.5 8, 6 9.5, 6 13 C 6 16, 10 16, 10 13.5';
 
 /** Props accepted by {@link ChordStaff}. */
 export interface ChordStaffProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
@@ -282,53 +346,56 @@ export function ChordStaff({
             strokeWidth={0.7}
           />
         ))}
-        {/* Treble clef */}
-        <path
-          d={CLEF_PATH}
-          transform={model.clefTransform}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1}
-          strokeLinecap="round"
-        />
+        {/* Treble clef (real Bravura gClef, U+E050). */}
+        <path d={GCLEF.d} transform={model.clefTransform} fill="currentColor" />
         {/* Noteheads, ledger lines, accidentals */}
-        {model.columns.map((col, i) => (
-          <g key={`note-${i}`} className="chordsketch-staff__note">
-            {col.ledgerYs.map((y, j) => (
-              <line
-                key={`ledger-${i}-${j}`}
-                x1={col.x - LEDGER_HALF_WIDTH}
-                x2={col.x + LEDGER_HALF_WIDTH}
-                y1={y}
-                y2={y}
-                stroke="currentColor"
-                strokeWidth={0.7}
-              />
-            ))}
-            {col.accidental ? (
-              <text
-                x={col.x - NOTE_RX - 4}
-                y={col.cy}
-                className="chordsketch-staff__accidental"
-                textAnchor="middle"
-                dominantBaseline="central"
+        {model.columns.map((col, i) => {
+          const accKind = col.accKind;
+          return (
+            <g key={`note-${i}`} className="chordsketch-staff__note">
+              {col.ledgerYs.map((y, j) => (
+                <line
+                  key={`ledger-${i}-${j}`}
+                  x1={col.x - LEDGER_HALF_WIDTH}
+                  x2={col.x + LEDGER_HALF_WIDTH}
+                  y1={y}
+                  y2={y}
+                  stroke="currentColor"
+                  strokeWidth={0.7}
+                />
+              ))}
+              {accKind !== null
+                ? col.accXs.map((ax, j) => (
+                    <path
+                      key={`acc-${i}-${j}`}
+                      className="chordsketch-staff__accidental"
+                      d={accidentalFor(accKind).d}
+                      transform={smuflTransform({
+                        staffSpace: LINE_GAP,
+                        fontAnchorX: 0,
+                        fontAnchorY: 0,
+                        targetX: ax,
+                        targetY: col.cy,
+                      })}
+                      fill="currentColor"
+                    />
+                  ))
+                : null}
+              <path
+                className="chordsketch-staff__notehead"
+                d={NOTEHEAD_BLACK.d}
+                transform={smuflTransform({
+                  staffSpace: LINE_GAP,
+                  fontAnchorX: NOTEHEAD_BLACK.cx,
+                  fontAnchorY: 0,
+                  targetX: col.x,
+                  targetY: col.cy,
+                })}
                 fill="currentColor"
-              >
-                {col.accidental}
-              </text>
-            ) : null}
-            <ellipse
-              cx={col.x}
-              cy={col.cy}
-              rx={NOTE_RX}
-              ry={NOTE_RY}
-              // A filled (quarter-note) head reads clearly at small size; the
-              // slight rotation echoes engraved noteheads.
-              transform={`rotate(-20 ${col.x} ${col.cy})`}
-              fill="currentColor"
-            />
-          </g>
-        ))}
+              />
+            </g>
+          );
+        })}
       </svg>
     </div>
   );

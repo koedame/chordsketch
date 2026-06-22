@@ -1,28 +1,38 @@
 #!/usr/bin/env python3
-"""Re-extracts the SMuFL glyph data baked into
-`crates/render-ireal/src/bravura.rs`.
+"""Re-extracts the SMuFL glyph data baked into the renderers.
+
+The same pinned Bravura.otf feeds three sister sites, selected with
+`--target`:
+
+| `--target` | Output | Consumed by | Glyphs |
+|------------|--------|-------------|--------|
+| `ireal` (default) | Rust constants | `crates/render-ireal/src/bravura.rs` | segno, coda, fermata |
+| `html` | Rust constants | `crates/render-html/src/bravura.rs` | gClef, sharp, flat |
+| `react` | TypeScript constants | `packages/react/src/bravura-glyphs.ts` | gClef, sharp, flat, noteheadBlack |
 
 Run this only when upgrading to a newer Bravura release; commit the
-refreshed `bravura.rs` constants alongside any new font version.
+refreshed sister files alongside any new font version.
 
 Usage:
 
     pip install fonttools  # one-time
-    python3 scripts/extract-bravura-paths.py
+    python3 scripts/extract-bravura-paths.py                 # ireal (Rust)
+    python3 scripts/extract-bravura-paths.py --target html   # render-html (Rust)
+    python3 scripts/extract-bravura-paths.py --target react  # @chordsketch/react (TS)
 
 The output goes to stdout in a format compatible with the constants
-defined in `crates/render-ireal/src/bravura.rs`. The script downloads
-a commit-pinned upstream Bravura.otf each invocation; pass
+defined in the matching sister file. The script downloads a
+commit-pinned upstream Bravura.otf each invocation; pass
 `--source PATH` to use a local file instead.
 
 Upgrading Bravura: bump `PINNED_COMMIT` and `EXPECTED_SHA256` together
-to the new release's commit + Bravura.otf hash, re-run, transcribe
-the resulting block into `crates/render-ireal/src/bravura.rs`, and
-update ADR-0014's "Watch signals" section if the visual output
+to the new release's commit + Bravura.otf hash, re-run each
+`--target`, transcribe the resulting blocks into their sister files,
+and update ADR-0014's "Watch signals" section if the visual output
 shifts noticeably.
 
 ADR-0014 (`docs/adr/0014-bravura-glyphs-as-svg-paths.md`) records why
-the renderer bakes path data instead of bundling the font.
+the renderers bake path data instead of bundling the font.
 """
 
 from __future__ import annotations
@@ -58,11 +68,26 @@ UPSTREAM_URL = (
     f"steinbergmedia/bravura/{PINNED_COMMIT}/redist/otf/Bravura.otf"
 )
 
-GLYPHS = [
-    ("SEGNO", 0xE047),
-    ("CODA", 0xE048),
-    ("FERMATA", 0xE4C0),
-]
+# Glyph sets per `--target`. The codepoints are the SMuFL canonical
+# assignments (https://www.smufl.org/version/latest/).
+GLYPH_SETS = {
+    "ireal": [
+        ("SEGNO", 0xE047),
+        ("CODA", 0xE048),
+        ("FERMATA", 0xE4C0),
+    ],
+    "html": [
+        ("GCLEF", 0xE050),
+        ("ACCIDENTAL_SHARP", 0xE262),
+        ("ACCIDENTAL_FLAT", 0xE260),
+    ],
+    "react": [
+        ("GCLEF", 0xE050),
+        ("ACCIDENTAL_SHARP", 0xE262),
+        ("ACCIDENTAL_FLAT", 0xE260),
+        ("NOTEHEAD_BLACK", 0xE0A4),
+    ],
+}
 
 
 def fetch(source: str | None) -> bytes:
@@ -85,18 +110,37 @@ def emit_center_constant(label: str, axis: str, value: float) -> str:
     return f"pub(crate) const {name}: f32 = {value};"
 
 
+def num(value: float) -> str:
+    """Render a font-unit measure with no spurious trailing `.0` so
+    integer-valued coordinates stay integers in the emitted source."""
+    return str(int(value)) if value == int(value) else str(value)
+
+
+def fnum(value: float) -> str:
+    """Render a font-unit measure as a Rust `f32` literal — integer
+    values keep an explicit `.0` so the field type is unambiguous."""
+    return f"{int(value)}.0" if value == int(value) else str(value)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Extract Bravura SMuFL glyph paths into the constants used "
-            "by crates/render-ireal/src/bravura.rs."
+            "Extract Bravura SMuFL glyph paths into the sister-site "
+            "constants. Select the destination with --target."
         ),
+    )
+    parser.add_argument(
+        "--target",
+        choices=sorted(GLYPH_SETS),
+        default="ireal",
+        help="which sister site to emit for (default: ireal)",
     )
     parser.add_argument(
         "--source",
         help="local path to Bravura.otf (default: download upstream)",
     )
     args = parser.parse_args()
+    glyphs = GLYPH_SETS[args.target]
 
     raw = fetch(args.source)
 
@@ -132,7 +176,13 @@ def main() -> int:
     glyph_set = font.getGlyphSet()
     upem = font["head"].unitsPerEm
 
-    print(f"// Re-emit into crates/render-ireal/src/bravura.rs")
+    dest = {
+        "ireal": "crates/render-ireal/src/bravura.rs",
+        "html": "crates/render-html/src/bravura.rs",
+        "react": "packages/react/src/bravura-glyphs.ts",
+    }[args.target]
+    emit_ts = args.target == "react"
+    print(f"// Re-emit into {dest}")
     print(f"// upem = {upem}")
     print(f"// pinned commit = {PINNED_COMMIT}")
     print()
@@ -140,10 +190,10 @@ def main() -> int:
     # Track partial success: a glyph that is absent from the font
     # (e.g. a future Bravura release that drops a codepoint) must
     # surface as a non-zero exit so the operator does not
-    # accidentally redirect a partial extraction over `bravura.rs`
-    # via shell redirect.
+    # accidentally redirect a partial extraction over the sister
+    # file via shell redirect.
     ok = True
-    for label, codepoint in GLYPHS:
+    for label, codepoint in glyphs:
         glyph_name = cmap[codepoint]
         glyph = glyph_set[glyph_name]
         path_pen = SVGPathPen(glyph_set)
@@ -163,9 +213,8 @@ def main() -> int:
         path_d = path_pen.getCommands()
         # Fail loudly (rather than via `assert`, which is stripped
         # under `python -O`) if the path data ever picks up a
-        # character that breaks `&str` literal embedding or the
-        # ASCII-only invariant the call sites in `music_symbols.rs`
-        # rely on for byte-slicing.
+        # character that breaks the embedded string literal or the
+        # ASCII-only invariant the byte-slicing call sites rely on.
         if "\\" in path_d or '"' in path_d or not path_d.isascii():
             print(
                 f"unexpected character in {label} path data; cannot "
@@ -173,14 +222,45 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 3
-        print(f"// {label} (U+{codepoint:04X})")
-        print(f"//   advance = {glyph.width}")
-        print(f"//   bounds  = {bounds}")
-        print(f"//   center  = ({cx}, {cy})")
-        print(emit_center_constant(label, "X", cx))
-        print(emit_center_constant(label, "Y", cy))
-        print(f'pub(crate) const {label}_PATH_D: &str = "{path_d}";')
-        print()
+        if emit_ts:
+            # TypeScript object literal consumed by
+            # `packages/react/src/bravura-glyphs.ts`'s `BravuraGlyph`
+            # records. Font units, OpenType +Y up convention.
+            print(f"// {label} (U+{codepoint:04X})")
+            print(f"export const {label}: BravuraGlyph = {{")
+            print(f"  advance: {num(glyph.width)},")
+            print(
+                f"  bbox: {{ minX: {num(bounds[0])}, minY: {num(bounds[1])}, "
+                f"maxX: {num(bounds[2])}, maxY: {num(bounds[3])} }},"
+            )
+            print(f"  cx: {num(cx)},")
+            print(f"  cy: {num(cy)},")
+            print(f"  d: '{path_d}',")
+            print("};")
+            print()
+        elif args.target == "html":
+            # Rust struct literal consumed by
+            # `crates/render-html/src/bravura.rs`'s `BravuraGlyph`
+            # records. The HTML key-signature glyph needs only the
+            # advance + path; bbox / center are TS-only (see the
+            # react target). Font units, OpenType +Y up convention.
+            print(f"// {label} (U+{codepoint:04X})")
+            print(f"pub(crate) const {label}: BravuraGlyph = BravuraGlyph {{")
+            print(f"    advance: {fnum(glyph.width)},")
+            print(f'    d: "{path_d}",')
+            print("};")
+            print()
+        else:
+            # Flat `pub(crate) const` form consumed by
+            # `crates/render-ireal/src/bravura.rs`.
+            print(f"// {label} (U+{codepoint:04X})")
+            print(f"//   advance = {glyph.width}")
+            print(f"//   bounds  = {bounds}")
+            print(f"//   center  = ({cx}, {cy})")
+            print(emit_center_constant(label, "X", cx))
+            print(emit_center_constant(label, "Y", cy))
+            print(f'pub(crate) const {label}_PATH_D: &str = "{path_d}";')
+            print()
 
     return 0 if ok else 1
 
