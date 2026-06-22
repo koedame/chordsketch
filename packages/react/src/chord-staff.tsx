@@ -2,6 +2,7 @@ import type { HTMLAttributes, ReactNode } from 'react';
 
 import {
   ACCIDENTAL_FLAT,
+  ACCIDENTAL_NATURAL,
   ACCIDENTAL_SHARP,
   type BravuraGlyph,
   GCLEF,
@@ -9,6 +10,7 @@ import {
   STAFF_SPACE_FONT_UNITS,
   smuflTransform,
 } from './bravura-glyphs';
+import { keySignatureFor } from './music-glyphs';
 import {
   type ChordStaffWasmLoader,
   type StaffNote,
@@ -49,6 +51,10 @@ const NOTE_START_X = 27;
 const COL_GAP = 6;
 /** Horizontal gap between an accidental and the notehead it alters. */
 const ACC_NOTE_GAP = 2;
+/** Horizontal gap between consecutive key-signature accidentals. */
+const SIG_GAP = 1;
+/** Horizontal gap after the key signature before the first notehead column. */
+const SIG_NOTE_GAP = 4;
 
 /** Font-unit → user-space scale (one staff space = {@link LINE_GAP} units). */
 const GLYPH_S = LINE_GAP / STAFF_SPACE_FONT_UNITS;
@@ -56,9 +62,115 @@ const GLYPH_S = LINE_GAP / STAFF_SPACE_FONT_UNITS;
 const NOTEHEAD_HALF_W = NOTEHEAD_BLACK.cx * GLYPH_S;
 const NOTEHEAD_HALF_H = NOTEHEAD_BLACK.bbox.maxY * GLYPH_S;
 
-/** The Bravura accidental glyph for a flat / sharp column. */
-function accidentalFor(kind: 'sharp' | 'flat'): BravuraGlyph {
-  return kind === 'flat' ? ACCIDENTAL_FLAT : ACCIDENTAL_SHARP;
+/** A drawn accidental glyph: a sharp, a flat, or a natural (the last cancels
+ * an accidental the active key signature would otherwise apply to the note's
+ * letter). */
+type AccidentalKind = 'sharp' | 'flat' | 'natural';
+
+/** The Bravura accidental glyph for a sharp / flat / natural column. */
+function accidentalFor(kind: AccidentalKind): BravuraGlyph {
+  switch (kind) {
+    case 'flat':
+      return ACCIDENTAL_FLAT;
+    case 'natural':
+      return ACCIDENTAL_NATURAL;
+    case 'sharp':
+      return ACCIDENTAL_SHARP;
+  }
+}
+
+// ---- Key signature ----------------------------------------------
+//
+// When the chord is being edited in the context of a song key (possibly after
+// a mid-song modulation), the staff draws that key's signature after the clef
+// and renders each notehead relative to it: a tone whose accidental the
+// signature already implies draws no inline accidental, and a tone that
+// deviates from the signature draws one — a natural to cancel a signature
+// sharp/flat, or the tone's own sharp/flat otherwise. Without a key (or for a
+// modal / unparseable `{key}`) the staff falls back to spelling every altered
+// tone inline, exactly as it did before key awareness.
+//
+// The key → (count, sharp/flat) theory is owned by `keySignatureFor`
+// (`./music-glyphs`, sister to `chordsketch_chordpro::parse_key`); this module
+// only maps that result into the treble-staff geometry the chord staff uses.
+
+/** Conventional treble-clef staff steps of the order-of-sharps accidentals
+ * (`F♯ C♯ G♯ D♯ A♯ E♯ B♯`), each as a diatonic staff step (see `staffStep`):
+ * F5=38, C5=35, G5=39, D5=36, A4=33, E5=37, B4=34. */
+const SHARP_SIGNATURE: ReadonlyArray<readonly [string, number]> = [
+  ['F', 38],
+  ['C', 35],
+  ['G', 39],
+  ['D', 36],
+  ['A', 33],
+  ['E', 37],
+  ['B', 34],
+];
+
+/** Conventional treble-clef staff steps of the order-of-flats accidentals
+ * (`B♭ E♭ A♭ D♭ G♭ C♭ F♭`): B4=34, E5=37, A4=33, D5=36, G4=32, C5=35, F4=30. */
+const FLAT_SIGNATURE: ReadonlyArray<readonly [string, number]> = [
+  ['B', 34],
+  ['E', 37],
+  ['A', 33],
+  ['D', 36],
+  ['G', 32],
+  ['C', 35],
+  ['F', 30],
+];
+
+/** One accidental of a drawn key signature: which staff step it sits on and
+ * whether it is a sharp or a flat. */
+export interface StaffSignatureAccidental {
+  step: number;
+  kind: 'sharp' | 'flat';
+}
+
+/** The resolved key signature a chord staff draws: the signature accidentals
+ * (after the clef) plus the per-letter alteration they imply, used to decide
+ * each notehead's inline accidental. */
+export interface StaffKeySignature {
+  accidentals: StaffSignatureAccidental[];
+  /** Signed semitone alteration (`1` sharp, `-1` flat) the signature applies
+   * to a note letter; absent letters are natural. */
+  alterations: Partial<Record<string, 1 | -1>>;
+}
+
+/**
+ * Resolve the key signature a chord staff should draw for the active song key,
+ * or `null` when there is no usable key context (no key, or a modal /
+ * unparseable `{key}` value such as `C dorian`, in which case the staff spells
+ * every altered tone inline). A natural-signature key (`C` major / `A` minor)
+ * resolves to an empty-but-present signature so the staff still renders the
+ * chord without inline-accidental suppression.
+ *
+ * Exported for unit tests.
+ */
+export function staffKeySignature(musicKey: string | null | undefined): StaffKeySignature | null {
+  if (musicKey == null || musicKey.trim().length === 0) return null;
+  const sig = keySignatureFor(musicKey);
+  if (sig === null) return null;
+  if (sig.type === 'natural') return { accidentals: [], alterations: {} };
+  const order = sig.type === 'sharp' ? SHARP_SIGNATURE : FLAT_SIGNATURE;
+  const delta: 1 | -1 = sig.type === 'sharp' ? 1 : -1;
+  const accidentals: StaffSignatureAccidental[] = [];
+  const alterations: Record<string, 1 | -1> = {};
+  for (const [letter, step] of order.slice(0, sig.count)) {
+    accidentals.push({ step, kind: sig.type });
+    alterations[letter] = delta;
+  }
+  return { accidentals, alterations };
+}
+
+/** The inline accidental a tone needs given the active key signature: `null`
+ * when the signature already accounts for the tone, otherwise the glyph to
+ * draw (a `natural` to cancel a signature accidental on this letter, or the
+ * tone's own `sharp`/`flat`). */
+function inlineAccidentalFor(note: StaffNote, keySig: StaffKeySignature | null): AccidentalKind | null {
+  const signatureAlteration = keySig?.alterations[note.letter.toUpperCase()] ?? 0;
+  if (note.accidental === signatureAlteration) return null;
+  if (note.accidental === 0) return 'natural';
+  return note.accidental < 0 ? 'flat' : 'sharp';
 }
 
 /** Diatonic staff step of a spelled note (`octave * 7 + letterIndex`). */
@@ -110,13 +222,23 @@ interface StaffColumn {
   x: number;
   /** Notehead centre y (relative space, before normalisation). */
   cy: number;
-  /** Which Bravura accidental glyph to draw, or `null` for a natural tone.
-   * The number of glyphs is `accXs.length` (see {@link accidentalCount}). */
-  accKind: 'sharp' | 'flat' | null;
+  /** Which Bravura accidental glyph to draw before the notehead, or `null`
+   * when the active key signature already accounts for the tone (or the tone
+   * is a plain natural with no signature). The number of glyphs is
+   * `accXs.length` (see {@link accidentalCount}; a `natural` is always one). */
+  accKind: AccidentalKind | null;
   /** Left-edge x of each accidental glyph drawn before the notehead. */
   accXs: number[];
   ledgers: number[];
   midi: number;
+}
+
+/** A laid-out key-signature accidental (relative-space `cy`, before
+ * normalisation). */
+interface SignatureColumn {
+  x: number;
+  cy: number;
+  kind: 'sharp' | 'flat';
 }
 
 /** The full geometry needed to paint the staff, in normalised (all-positive,
@@ -129,10 +251,17 @@ export interface StaffModel {
   staffLeft: number;
   staffRight: number;
   clefTransform: string;
+  /** Key-signature accidentals drawn between the clef and the first notehead,
+   * in conventional order. Empty for no key (or a natural-signature key). */
+  signature: Array<{
+    x: number;
+    cy: number;
+    kind: 'sharp' | 'flat';
+  }>;
   columns: Array<{
     x: number;
     cy: number;
-    accKind: 'sharp' | 'flat' | null;
+    accKind: AccidentalKind | null;
     accXs: number[];
     ledgerYs: number[];
     midi: number;
@@ -150,19 +279,40 @@ function relY(step: number): number {
  * left-to-right (ascending pitch) so adjacent seconds never collide — a clean,
  * unambiguous "these are the notes" reading suited to the editor helper, not a
  * vertically-stacked engraving.
+ *
+ * When `keySig` is supplied the staff draws that key's signature after the
+ * clef and renders each notehead relative to it (in-key tones lose their
+ * inline accidental; out-of-key tones gain one, including a natural to cancel
+ * a signature sharp/flat). `null` reproduces the key-agnostic layout.
  */
-export function buildStaffModel(notes: readonly StaffNote[]): StaffModel {
+export function buildStaffModel(
+  notes: readonly StaffNote[],
+  keySig: StaffKeySignature | null = null,
+): StaffModel {
   // Lay columns out with a running cursor so each accidental reserves its own
   // horizontal slot before the notehead (real Bravura accidentals are ~1 staff
   // space wide and would otherwise collide with the previous tone).
   let cursor = NOTE_START_X;
+
+  // Key signature first, in the gap between the clef and the first notehead.
+  const signature: SignatureColumn[] = [];
+  if (keySig !== null && keySig.accidentals.length > 0) {
+    for (const acc of keySig.accidentals) {
+      const glyphW = accidentalFor(acc.kind).advance * GLYPH_S;
+      signature.push({ x: cursor, cy: relY(acc.step), kind: acc.kind });
+      cursor += glyphW + SIG_GAP;
+    }
+    cursor += SIG_NOTE_GAP;
+  }
+
   const columns: StaffColumn[] = notes.map((note) => {
     const step = staffStep(note);
-    const accKind = note.accidental < 0 ? 'flat' : note.accidental > 0 ? 'sharp' : null;
+    const accKind = inlineAccidentalFor(note, keySig);
     const accXs: number[] = [];
     if (accKind !== null) {
       const glyphW = accidentalFor(accKind).advance * GLYPH_S;
-      const count = accidentalCount(note.accidental);
+      // A natural is a single glyph; sharps/flats may stack (double / triple).
+      const count = accKind === 'natural' ? 1 : accidentalCount(note.accidental);
       for (let j = 0; j < count; j++) accXs.push(cursor + j * glyphW);
       cursor += count * glyphW + ACC_NOTE_GAP;
     }
@@ -191,6 +341,11 @@ export function buildStaffModel(notes: readonly StaffNote[]): StaffModel {
   const clefBottomRel = gLineRel - GCLEF.bbox.minY * GLYPH_S;
   let minRel = Math.min(staffTopRel, clefTopRel);
   let maxRel = Math.max(staffBottomRel, clefBottomRel);
+  for (const sig of signature) {
+    const g = accidentalFor(sig.kind);
+    minRel = Math.min(minRel, sig.cy - g.bbox.maxY * GLYPH_S);
+    maxRel = Math.max(maxRel, sig.cy - g.bbox.minY * GLYPH_S);
+  }
   for (const col of columns) {
     minRel = Math.min(minRel, col.cy - NOTEHEAD_HALF_H, ...col.ledgers);
     maxRel = Math.max(maxRel, col.cy + NOTEHEAD_HALF_H, ...col.ledgers);
@@ -233,6 +388,11 @@ export function buildStaffModel(notes: readonly StaffNote[]): StaffModel {
     staffLeft,
     staffRight,
     clefTransform,
+    signature: signature.map((sig) => ({
+      x: sig.x,
+      cy: sig.cy + offsetY,
+      kind: sig.kind,
+    })),
     columns: columns.map((col) => ({
       x: col.x,
       cy: col.cy + offsetY,
@@ -254,6 +414,17 @@ export interface ChordStaffProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
    * Falls back to {@link chord}.
    */
   displayName?: string;
+  /**
+   * The song key in effect at the chord's position (a ChordPro `{key}` value
+   * such as `"C"`, `"D"`, `"F# minor"`). When supplied and parseable as a
+   * tonal key, the staff draws that key's signature after the clef and renders
+   * each notehead relative to it (in-key tones drop their inline accidental;
+   * out-of-key tones gain one). Omit — or pass a modal / unparseable value —
+   * to spell every altered tone inline (the key-agnostic default). Honouring
+   * mid-song modulation is the caller's job: pass the key active at this
+   * chord's source line (see `activeKeyAtLine`).
+   */
+  musicKey?: string | null;
   /**
    * Node shown while the WASM module loads. Defaults to a minimal
    * `role="status"` placeholder so the staff area does not jump.
@@ -296,14 +467,22 @@ function defaultLoadingFallback(): ReactNode {
 export function ChordStaff({
   chord,
   displayName,
+  musicKey,
   loadingFallback,
   wasmLoader,
   className,
   ...divProps
 }: ChordStaffProps): JSX.Element {
   const { notes, loading } = useChordStaff(chord, wasmLoader);
+  const keySig = staffKeySignature(musicKey);
   const wrapperClass = ['chordsketch-staff', className].filter(Boolean).join(' ');
-  const label = `Notes of ${displayName ?? chord} on a staff`;
+  // The key only narrows how accidentals are drawn; when the chord renders
+  // against a tonal key, name it in the accessible label so a screen-reader
+  // user knows the signature applies (e.g. "… on a staff in D").
+  const inKey = keySig !== null && typeof musicKey === 'string' && musicKey.trim().length > 0;
+  const label = inKey
+    ? `Notes of ${displayName ?? chord} on a staff in ${musicKey!.trim()}`
+    : `Notes of ${displayName ?? chord} on a staff`;
 
   if (notes === null) {
     if (loading) {
@@ -321,7 +500,7 @@ export function ChordStaff({
     );
   }
 
-  const model = buildStaffModel(notes);
+  const model = buildStaffModel(notes, keySig);
 
   return (
     <div {...divProps} className={wrapperClass}>
@@ -348,6 +527,22 @@ export function ChordStaff({
         ))}
         {/* Treble clef (real Bravura gClef, U+E050). */}
         <path d={GCLEF.d} transform={model.clefTransform} fill="currentColor" />
+        {/* Key signature (sharps or flats) after the clef. */}
+        {model.signature.map((sig, i) => (
+          <path
+            key={`sig-${i}`}
+            className="chordsketch-staff__signature"
+            d={accidentalFor(sig.kind).d}
+            transform={smuflTransform({
+              staffSpace: LINE_GAP,
+              fontAnchorX: 0,
+              fontAnchorY: 0,
+              targetX: sig.x,
+              targetY: sig.cy,
+            })}
+            fill="currentColor"
+          />
+        ))}
         {/* Noteheads, ledger lines, accidentals */}
         {model.columns.map((col, i) => {
           const accKind = col.accKind;

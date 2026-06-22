@@ -174,6 +174,7 @@ export {
   CHORD_TYPE_PRESETS,
   TRANSPOSE_MAX,
   TRANSPOSE_MIN,
+  activeKeyAtLine,
   applyChordDelete,
   applyChordEdit,
   applyChordInsert,

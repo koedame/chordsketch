@@ -1169,6 +1169,91 @@ function countLyricChars(line: string, start: number): number {
 }
 
 /**
+ * Extract the `{key}` value a single source `line` declares, or `null` when
+ * the line is not a key directive.
+ *
+ * Recognises the directive shapes the core parser
+ * (`chordsketch_chordpro::parse_directive_line`) classifies as a key: the
+ * dedicated `{key: C}` / `{key C}` form and the generic-metadata `{meta: key
+ * C}` / `{meta key C}` form, with the directive name matched
+ * case-insensitively and the value separated by a colon or whitespace. The
+ * value is returned trimmed but otherwise raw — its leniency (`C`, `Am`,
+ * `F# minor`, unicode accidentals) is interpreted downstream by the
+ * key-signature resolver (sister to `parse_key`).
+ *
+ * Selector-suffixed conditional keys (`{key-guitar: C}`) are intentionally
+ * NOT matched: they apply only under an instrument filter, so they do not
+ * define the staff's key in the plain editor view.
+ */
+function keyDirectiveValue(line: string): string | null {
+  // A directive occupies a whole `{…}` token; scan the first brace group.
+  // Key directives stand alone on their line in practice, so the first group
+  // is the directive, and this never matches a `[chord]` bracket.
+  const brace = /\{\s*([^{}]*)\}/.exec(line);
+  if (brace === null) return null;
+  const inner = brace[1]!.trim();
+  if (inner.length === 0) return null;
+
+  // Split the directive name from its value at the first `:` (explicit value)
+  // or, lacking one, the first whitespace (the attribute form `{key C}`).
+  let name: string;
+  let value: string;
+  const colon = inner.indexOf(':');
+  if (colon !== -1) {
+    name = inner.slice(0, colon).trim();
+    value = inner.slice(colon + 1).trim();
+  } else {
+    const ws = inner.search(/\s/);
+    if (ws === -1) {
+      name = inner;
+      value = '';
+    } else {
+      name = inner.slice(0, ws).trim();
+      value = inner.slice(ws + 1).trim();
+    }
+  }
+
+  const lowerName = name.toLowerCase();
+  if (lowerName === 'key') {
+    return value.length > 0 ? value : null;
+  }
+  if (lowerName === 'meta') {
+    // `{meta}` splits its value into a meta-key and the remaining value; only
+    // `key` matters here.
+    const ws = value.search(/\s/);
+    if (ws === -1) return null;
+    const metaKey = value.slice(0, ws).toLowerCase();
+    if (metaKey !== 'key') return null;
+    const metaValue = value.slice(ws + 1).trim();
+    return metaValue.length > 0 ? metaValue : null;
+  }
+  return null;
+}
+
+/**
+ * The song key in effect at 1-indexed `line` of `source` — the value of the
+ * last `{key}` directive on or before that line, or `null` when none precedes
+ * it.
+ *
+ * This honours mid-song modulation: a `{key}` change lower in the song
+ * overrides an earlier one for every chord beneath it, so the chord editor's
+ * constituent-notes staff reflects the key actually sounding at the selected
+ * chord's position rather than a single song-wide key. The returned value is
+ * raw (see {@link keyDirectiveValue}); the staff's key-signature resolver
+ * interprets it.
+ */
+export function activeKeyAtLine(source: string, line: number): string | null {
+  const lines = source.split('\n');
+  const limit = Math.min(line, lines.length);
+  let active: string | null = null;
+  for (let i = 0; i < limit; i++) {
+    const value = keyDirectiveValue(lines[i]!);
+    if (value !== null) active = value;
+  }
+  return active;
+}
+
+/**
  * Resolve the `[chord]` token under the editor caret into the
  * coordinates + parts the shell-level chord editor needs.
  *

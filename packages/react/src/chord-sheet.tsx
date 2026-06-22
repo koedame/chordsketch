@@ -8,6 +8,7 @@ import { useChordAudio } from './use-chord-audio';
 import type { ChordAudioWasmLoader } from './use-chord-audio';
 import type { ChordproChord, ChordproSong } from './chordpro-ast';
 import {
+  activeKeyAtLine,
   buildChordName,
   buildChordNudge,
   chordLayoutForLine,
@@ -722,6 +723,12 @@ function ChordSheetAstBranch({
           // Bb) so the editor title matches the rendered chord, while
           // `chordName` stays raw for the source-edit `expected` guard.
           displayName={unicodeAccidentals(resolvedChord.chordName)}
+          // The song key in effect at this chord's source line (honouring
+          // mid-song modulation), so the constituent-notes staff draws the
+          // matching key signature. Computed from the raw source; under a
+          // transpose the inspector is gated off, so the raw key matches the
+          // raw chord the staff shows.
+          musicKey={activeKeyAtLine(source, resolvedChord.sourceLine)}
           root={resolvedChord.parts.root}
           accidental={resolvedChord.parts.accidental}
           suffix={resolvedChord.parts.suffix}
