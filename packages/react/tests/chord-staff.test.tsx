@@ -46,12 +46,16 @@ describe('staff geometry helpers', () => {
     expect(staffStep({ letter: 'C', accidental: 0, octave: 4, midi: 60 })).toBe(28);
   });
 
-  test('accidentalGlyph maps signed offsets to Unicode', () => {
+  test('accidentalGlyph maps signed offsets to Unicode across the full range', () => {
     expect(accidentalGlyph(-2)).toBe('♭♭');
     expect(accidentalGlyph(-1)).toBe('♭');
     expect(accidentalGlyph(0)).toBe('');
     expect(accidentalGlyph(1)).toBe('♯');
     expect(accidentalGlyph(2)).toBe('♯♯');
+    // The core can emit ±3 for an enharmonically-extreme root (e.g. Cbdim7);
+    // the glyph must render it rather than silently dropping to no accidental.
+    expect(accidentalGlyph(-3)).toBe('♭♭♭');
+    expect(accidentalGlyph(3)).toBe('♯♯♯');
   });
 
   test('ledgerSteps adds lines for notes outside the staff only', () => {

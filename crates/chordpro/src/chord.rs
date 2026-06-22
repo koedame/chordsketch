@@ -805,7 +805,12 @@ pub struct StaffNote {
     /// The note letter the tone is spelled on, `'A'..='G'`.
     pub letter: char,
     /// The accidental applied to `letter`, as a signed semitone offset:
-    /// `-2` double-flat, `-1` flat, `0` natural, `1` sharp, `2` double-sharp.
+    /// `-1` flat, `0` natural, `1` sharp, `±2` double, and — only for an
+    /// enharmonically-extreme root such as `Cb` / `B#` whose own letter
+    /// already carries an accidental opposite to the chord's tones (e.g.
+    /// `Cbdim7`, whose strict seventh is a triple-flat B) — `±3`. A renderer
+    /// must handle the full `-3..=3` range, not assume double accidentals are
+    /// the maximum.
     pub accidental: i8,
     /// Scientific-pitch-notation octave (middle C = C4, so `octave == 4`).
     pub octave: i8,
@@ -816,8 +821,9 @@ pub struct StaffNote {
 
 /// Picks the octave (in diatonic letter-step terms) for a letter so its
 /// natural pitch sits as close as possible to `target_midi`. Rounding to the
-/// nearest octave keeps the resulting accidental small (≈ -2..=2) and places
-/// enharmonic spellings such as `Cb` / `B#` in the correct register.
+/// nearest octave keeps the resulting accidental small (`-3..=3`, almost always
+/// `-2..=2`) and places enharmonic spellings such as `Cb` / `B#` in the
+/// correct register.
 fn root_octave_for(letter_idx: i32, target_midi: i32) -> i32 {
     let natural_pc = LETTER_PITCH_CLASSES[letter_idx as usize];
     // natural_midi = (octave + 1) * 12 + natural_pc; solve for octave and
@@ -1273,6 +1279,28 @@ mod tests {
         assert_eq!(cflat[0].letter, 'C');
         assert_eq!(cflat[0].accidental, -1);
         assert_eq!(cflat[0].midi, 71); // Cb5 == B4 pitch
+    }
+
+    #[test]
+    fn staff_notes_enharmonic_extreme_root_reaches_triple_accidental() {
+        // A diminished seventh over an already-flat-spelled root (Cb) forces a
+        // strictly-correct triple-flat seventh on the B letter. This documents
+        // the `-3..=3` edge of the `StaffNote.accidental` contract — a renderer
+        // must handle it, not assume double accidentals are the maximum.
+        let notes = chord_staff_notes("Cbdim7").unwrap();
+        let seventh = notes
+            .iter()
+            .find(|n| n.letter == 'B')
+            .expect("Cbdim7 has a B-letter seventh");
+        assert_eq!(seventh.accidental, -3);
+        // The pitch is still exact: B triple-flat over Cb is enharmonically A.
+        let natural_pc = LETTER_PITCH_CLASSES[LETTER_NAMES
+            .iter()
+            .position(|&c| c == seventh.letter)
+            .unwrap()];
+        let expected =
+            (i32::from(seventh.octave) + 1) * 12 + natural_pc + i32::from(seventh.accidental);
+        assert_eq!(i32::from(seventh.midi), expected);
     }
 
     #[test]

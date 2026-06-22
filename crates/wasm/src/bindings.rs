@@ -867,6 +867,11 @@ pub fn chord_pitches(chord: &str) -> Option<Vec<u8>> {
 ///
 /// Returns a `JsValue` error string only if serialisation fails — a
 /// defensive path callers can treat as infallible in normal use.
+// No `#[must_use]`: like the sibling `validate` / `listDirectives` JsValue
+// exports, the return is a `Result` (already `#[must_use]`), so a bare
+// attribute would be redundant (clippy::double_must_use). The NAPI / FFI
+// `chord_staff_notes` return a plain `Option` value and DO mark `#[must_use]`,
+// matching their own `chord_pitches` siblings.
 #[wasm_bindgen(js_name = chordStaffNotes, skip_typescript)]
 pub fn chord_staff_notes(chord: &str) -> Result<JsValue, JsValue> {
     to_js_value(&crate::chord_staff_notes_inner(chord))

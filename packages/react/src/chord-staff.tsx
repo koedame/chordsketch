@@ -44,24 +44,17 @@ export function staffStep(note: StaffNote): number {
   return note.octave * 7 + (idx === -1 ? 0 : idx);
 }
 
-/** Unicode accidental glyph for a signed semitone offset. Double accidentals
- * use a doubled single glyph (`♭♭` / `♯♯`) so they render in any font, unlike
- * the dedicated U+1D12A/B double glyphs. */
+/** Unicode accidental glyph for a signed semitone offset. Multi-semitone
+ * accidentals repeat the single glyph (`♭♭` / `♯♯` / `♭♭♭`) so they render in
+ * any font, unlike the dedicated U+1D12A/B double glyphs — and so the full
+ * `StaffNote.accidental` range is covered: the core can emit ±3 for an
+ * enharmonically-extreme root (e.g. `Cbdim7`'s triple-flat seventh), which a
+ * fixed `-2..=2` switch would have dropped to no glyph at all. Capped at four
+ * repeats as a defensive bound against a pathological value. */
 export function accidentalGlyph(accidental: number): string {
-  switch (accidental) {
-    case -2:
-      return '♭♭';
-    case -1:
-      return '♭';
-    case 0:
-      return '';
-    case 1:
-      return '♯';
-    case 2:
-      return '♯♯';
-    default:
-      return '';
-  }
+  const n = Math.trunc(accidental);
+  if (n === 0) return '';
+  return (n < 0 ? '♭' : '♯').repeat(Math.min(Math.abs(n), 4));
 }
 
 /** Even staff steps (line positions) a notehead at `step` needs ledger lines
