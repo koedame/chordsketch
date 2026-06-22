@@ -44,14 +44,18 @@ struct StaticVoicing {
 
 impl StaticVoicing {
     fn to_diagram(&self) -> DiagramData {
+        let frets = self.frets.to_vec();
+        // Synthesise a fingering from the shape so curated voicings show the
+        // same finger numbers as every other generated diagram.
+        let fingers = crate::chord_diagram::assign_fingers(&frets);
         DiagramData {
             name: self.name.to_string(),
             display_name: None,
             strings: self.frets.len(),
             frets_shown: DEFAULT_FRETS_SHOWN,
             base_fret: self.base_fret,
-            frets: self.frets.to_vec(),
-            fingers: vec![],
+            frets,
+            fingers,
         }
     }
 }

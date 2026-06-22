@@ -131,6 +131,10 @@ impl DiagramData {
         let mut base_fret: u32 = 1;
         let mut frets: Vec<i32> = Vec::new();
         let mut fingers: Vec<u8> = Vec::new();
+        // Whether a `fingers` keyword appeared at all. When it did but parsed
+        // to nothing (e.g. an invalid leading token stopped the section), the
+        // empty list is respected as authored — we do NOT synthesise over it.
+        let mut fingers_seen = false;
 
         let tokens: Vec<&str> = raw.split_whitespace().collect();
         let mut i = 0;
@@ -166,6 +170,7 @@ impl DiagramData {
                     }
                 }
                 "fingers" => {
+                    fingers_seen = true;
                     i += 1;
                     while i < tokens.len() {
                         let low = tokens[i].to_ascii_lowercase();
@@ -223,6 +228,18 @@ impl DiagramData {
             })
             .collect();
 
+        // A `{define}` that lists `frets` but omits the `fingers` keyword
+        // still gets finger numbers, synthesised from the shape, so every
+        // diagram shows a consistent fingering. An explicit `fingers` list is
+        // preserved — including a deliberately empty one left by an invalid
+        // token (see `fingers_seen`), which is respected rather than guessed
+        // over.
+        let fingers = if !fingers_seen && fingers.is_empty() {
+            assign_fingers(&frets)
+        } else {
+            fingers
+        };
+
         Some(Self {
             name: name.to_string(),
             display_name: None,
@@ -233,6 +250,65 @@ impl DiagramData {
             fingers,
         })
     }
+}
+
+/// Assign a fretting-hand finger (1 = index … 4 = pinky) to each fretted
+/// string of a chord shape, returning a finger per string aligned with
+/// `frets` (`0` for open / muted strings, which need no finger).
+///
+/// `frets` holds the per-string positions relative to the diagram's base
+/// fret: `-1` = muted, `0` = open, `>= 1` = a fretted position. The
+/// assignment mirrors the playability model the voicing synthesiser
+/// (`voicing_synth`) uses: an index-finger **barre** across the lowest
+/// fretted fret collapses the strings sharing it into finger `1` (credited
+/// only when no open string is sounded, since a barre lies across every
+/// string at that fret); every other fretted string takes the next finger
+/// in ascending `(fret, string)` order. Muted (`-1`) and open (`0`)
+/// strings both map to finger `0` ("no finger"). The result therefore
+/// matches the conventional chart fingering — e.g. open C with frets
+/// `[-1, 3, 2, 0, 1, 0]` yields fingers `[0, 3, 2, 0, 1, 0]`, and the F
+/// barre `[1, 3, 3, 2, 1, 1]` yields `[1, 3, 4, 2, 1, 1]`.
+///
+/// Finger numbers are clamped to `4`; the synthesised and curated voicings
+/// are bounded to four fingers, so the clamp only guards a hand-authored
+/// `{define}` that specifies an unplayable shape.
+#[must_use]
+pub fn assign_fingers(frets: &[i32]) -> Vec<u8> {
+    let mut fingers = vec![0u8; frets.len()];
+    let Some(min_fret) = frets.iter().copied().filter(|&f| f > 0).min() else {
+        // No fretted strings (all open / muted): no fingers.
+        return fingers;
+    };
+    let has_open = frets.contains(&0);
+    let at_min = frets.iter().filter(|&&f| f == min_fret).count();
+    let barre = !has_open && at_min >= 2;
+
+    let mut next: u8 = 1;
+    if barre {
+        for (i, &f) in frets.iter().enumerate() {
+            if f == min_fret {
+                fingers[i] = 1;
+            }
+        }
+        next = 2;
+    }
+
+    // Remaining fretted strings (everything not covered by the barre), in
+    // ascending fret order so lower frets take lower-numbered fingers; ties
+    // break by string index for a stable, reproducible assignment.
+    let mut rest: Vec<(usize, i32)> = frets
+        .iter()
+        .enumerate()
+        .filter(|&(_, &f)| f > 0 && !(barre && f == min_fret))
+        .map(|(i, &f)| (i, f))
+        .collect();
+    rest.sort_by_key(|&(i, f)| (f, i));
+    for (i, _) in rest {
+        fingers[i] = next;
+        next = (next + 1).min(4);
+    }
+
+    fingers
 }
 
 // ---------------------------------------------------------------------------
@@ -700,13 +776,22 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
     // Nut (open position). Both sizes draw the full fret-number axis
     // (`show_fret_numbers` is `true` for regular and compact), so the
     // base-fret label is always covered by the axis; no standalone label
-    // is needed. The nut line itself is drawn only at fret 1.
+    // is needed. The nut is drawn only at fret 1.
+    //
+    // The grid lines are filled `<rect>`s rather than `<line>` strokes: a
+    // stroked line centres its width on the path and uses butt caps, so two
+    // perpendicular edge lines leave an unfilled notch where they meet and
+    // the bodies straddle the pixel grid. Equal-area rects that span the
+    // full grid extent union cleanly at every corner and T-junction. The
+    // horizontal lines (nut + frets) are widened by `line_stroke` (half the
+    // string stroke at each end) so they cover the outer strings' corners.
     let nut_y = top_margin;
     if data.base_fret == 1 {
         svg.push_str(&format!(
-            "<line x1=\"{left_margin}\" y1=\"{nut_y}\" x2=\"{}\" y2=\"{nut_y}\" \
-             stroke=\"black\" stroke-width=\"{nut_stroke}\"/>\n",
-            left_margin + grid_w
+            "<rect x=\"{rx}\" y=\"{ry}\" width=\"{rw}\" height=\"{nut_stroke}\" fill=\"black\"/>\n",
+            rx = left_margin - line_stroke / 2.0,
+            ry = nut_y - nut_stroke / 2.0,
+            rw = grid_w + line_stroke,
         ));
     }
 
@@ -782,18 +867,19 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
     for i in 0..num_strings {
         let x = left_margin + i as f32 * cell_w;
         svg.push_str(&format!(
-            "<line x1=\"{x}\" y1=\"{nut_y}\" x2=\"{x}\" y2=\"{}\" \
-             stroke=\"black\" stroke-width=\"{line_stroke}\"/>\n",
-            nut_y + grid_h
+            "<rect x=\"{rx}\" y=\"{nut_y}\" width=\"{line_stroke}\" height=\"{grid_h}\" \
+             fill=\"black\"/>\n",
+            rx = x - line_stroke / 2.0,
         ));
     }
 
     for j in 0..=num_frets {
         let y = nut_y + j as f32 * cell_h;
         svg.push_str(&format!(
-            "<line x1=\"{left_margin}\" y1=\"{y}\" x2=\"{}\" y2=\"{y}\" \
-             stroke=\"black\" stroke-width=\"{line_stroke}\"/>\n",
-            left_margin + grid_w
+            "<rect x=\"{rx}\" y=\"{ry}\" width=\"{rw}\" height=\"{line_stroke}\" fill=\"black\"/>\n",
+            rx = left_margin - line_stroke / 2.0,
+            ry = y - line_stroke / 2.0,
+            rw = grid_w + line_stroke,
         ));
     }
 
@@ -919,17 +1005,23 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
         crate::escape::escape_xml(data.title())
     ));
 
-    // Nut (vertical line on the left at the open position). Both sizes draw
-    // the full fret-number axis (`show_fret_numbers` is `true` for regular
-    // and compact), so the base-fret label is always covered by the axis;
-    // no standalone label is needed. The nut line itself is drawn only at
-    // fret 1.
+    // Nut (left edge at the open position). Both sizes draw the full
+    // fret-number axis (`show_fret_numbers` is `true` for regular and
+    // compact), so the base-fret label is always covered by the axis; no
+    // standalone label is needed. The nut is drawn only at fret 1.
+    //
+    // As in the vertical renderer, the grid lines are filled `<rect>`s so
+    // perpendicular edges union without the notch/blur a stroked line leaves
+    // at a right-angle junction. Here the vertical lines (nut + frets) are
+    // the ones lengthened by `line_stroke` (half the string stroke at each
+    // end) to cover the outer strings' corners.
     let nut_x = left_margin;
     if data.base_fret == 1 {
         svg.push_str(&format!(
-            "<line x1=\"{nut_x}\" y1=\"{top_margin}\" x2=\"{nut_x}\" y2=\"{}\" \
-             stroke=\"black\" stroke-width=\"{nut_stroke}\"/>\n",
-            top_margin + grid_h
+            "<rect x=\"{rx}\" y=\"{ry}\" width=\"{nut_stroke}\" height=\"{rh}\" fill=\"black\"/>\n",
+            rx = nut_x - nut_stroke / 2.0,
+            ry = top_margin - line_stroke / 2.0,
+            rh = grid_h + line_stroke,
         ));
     }
 
@@ -993,18 +1085,19 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
     for i in 0..num_strings {
         let y = top_margin + i as f32 * string_pitch;
         svg.push_str(&format!(
-            "<line x1=\"{nut_x}\" y1=\"{y}\" x2=\"{}\" y2=\"{y}\" \
-             stroke=\"black\" stroke-width=\"{line_stroke}\"/>\n",
-            nut_x + grid_w
+            "<rect x=\"{nut_x}\" y=\"{ry}\" width=\"{grid_w}\" height=\"{line_stroke}\" \
+             fill=\"black\"/>\n",
+            ry = y - line_stroke / 2.0,
         ));
     }
 
     for j in 0..=num_frets {
         let x = nut_x + j as f32 * fret_pitch;
         svg.push_str(&format!(
-            "<line x1=\"{x}\" y1=\"{top_margin}\" x2=\"{x}\" y2=\"{}\" \
-             stroke=\"black\" stroke-width=\"{line_stroke}\"/>\n",
-            top_margin + grid_h
+            "<rect x=\"{rx}\" y=\"{ry}\" width=\"{line_stroke}\" height=\"{rh}\" fill=\"black\"/>\n",
+            rx = x - line_stroke / 2.0,
+            ry = top_margin - line_stroke / 2.0,
+            rh = grid_h + line_stroke,
         ));
     }
 
@@ -2023,6 +2116,41 @@ mod tests {
     // --- Finger number rendering (#473) ---
 
     #[test]
+    fn assign_fingers_matches_conventional_chart_fingerings() {
+        // Open strings / muted strings take no finger.
+        assert_eq!(assign_fingers(&[0, 0, 0, 0, 0, 0]), vec![0, 0, 0, 0, 0, 0]);
+        assert_eq!(assign_fingers(&[-1, -1, -1]), vec![0, 0, 0]);
+
+        // Open C (x 3 2 0 1 0): lowest fret 1 (B string) → index, then up.
+        assert_eq!(assign_fingers(&[-1, 3, 2, 0, 1, 0]), vec![0, 3, 2, 0, 1, 0]);
+
+        // Open Am (x 0 2 2 1 0): finger 1 on the B string, 2 and 3 on D/G.
+        assert_eq!(assign_fingers(&[-1, 0, 2, 2, 1, 0]), vec![0, 0, 2, 3, 1, 0]);
+
+        // F barre (1 3 3 2 1 1): index barre across the three fret-1 strings
+        // → finger 1; the remaining notes take 2/3/4 in ascending fret order.
+        assert_eq!(assign_fingers(&[1, 3, 3, 2, 1, 1]), vec![1, 3, 4, 2, 1, 1]);
+
+        // A shared lowest fret WITH an open string sounding gets no barre
+        // credit (a barre would mute the open string): each fret-1 string
+        // takes its own finger.
+        assert_eq!(
+            assign_fingers(&[0, 1, 1, 2, -1, -1]),
+            vec![0, 1, 2, 3, 0, 0]
+        );
+    }
+
+    #[test]
+    fn assign_fingers_clamps_to_four() {
+        // A pathological hand-authored shape needing five distinct fingers
+        // (no barre, no open) clamps the overflow at finger 4 rather than
+        // emitting a 5.
+        let fingers = assign_fingers(&[1, 2, 3, 4, 5]);
+        assert_eq!(fingers, vec![1, 2, 3, 4, 4]);
+        assert!(fingers.iter().all(|&f| f <= 4));
+    }
+
+    #[test]
     fn test_render_svg_with_finger_numbers() {
         let data = DiagramData {
             name: "C".to_string(),
@@ -2779,18 +2907,55 @@ mod tests {
     }
 
     #[test]
+    fn grid_lines_are_filled_rects_widened_for_clean_corners() {
+        // The grid is drawn as filled `<rect>`s (not stroked `<line>`s) so
+        // perpendicular edges union without the butt-cap notch a stroke leaves
+        // at a right-angle corner. The horizontal bars (nut + frets) are
+        // widened by `line_stroke` (half at each end) to span the full grid
+        // width and cover the outer strings' corners; the strings keep the
+        // exact grid height. Regression guard for the corner fix.
+        //
+        // open_c is 6 strings / 5 frets / base_fret 1, so grid_w = 50 and
+        // grid_h = 60; widened bars span 50 + line_stroke(1) = 51 with their
+        // left edge at left_margin - line_stroke/2 = 17.5.
+        let svg = render_svg_with_orientation(&open_c(), Orientation::Vertical);
+        // Nut: widened to 51, thick (height = nut_stroke = 3), top at 25.5.
+        assert!(
+            svg.contains("<rect x=\"17.5\" y=\"25.5\" width=\"51\" height=\"3\" fill=\"black\"/>"),
+            "nut should be a 51-wide filled rect covering both outer corners; got: {svg}"
+        );
+        // Fret line: widened to grid_w + line_stroke = 51, 1 tall.
+        assert!(
+            svg.contains("width=\"51\" height=\"1\" fill=\"black\""),
+            "fret lines should be widened to grid_w + line_stroke = 51; got: {svg}"
+        );
+        // String: exact grid height (60), 1 wide — NOT widened.
+        assert!(
+            svg.contains("width=\"1\" height=\"60\" fill=\"black\""),
+            "strings should be 1-wide rects at the exact grid height 60; got: {svg}"
+        );
+        // The only remaining stroked `<line>`s are the diagonal muted-string
+        // markers (open_c mutes the low string), never the axis-aligned grid.
+        for line in svg.lines().filter(|l| l.contains("<line")) {
+            assert!(
+                line.contains("class=\"muted-string\""),
+                "the only <line> elements should be muted-string markers; got: {line}"
+            );
+        }
+    }
+
+    #[test]
     fn horizontal_open_position_has_nut_as_vertical_line() {
-        // base_fret == 1 ⇒ nut is the leftmost vertical line, thick stroke.
-        // The vertical-renderer test asserts a horizontal nut line at
-        // `y1=TOP_MARGIN y2=TOP_MARGIN` with `stroke-width=\"3\"`; the
-        // horizontal-mode analogue is a vertical line at
-        // `x1=LEFT_MARGIN x2=LEFT_MARGIN`.
+        // base_fret == 1 ⇒ the nut is the leftmost vertical bar, drawn as a
+        // filled rect `nut_stroke` (3) wide. It is centred on x=LEFT_MARGIN
+        // (18), so its left edge sits at 18 - 3/2 = 16.5, and it is
+        // lengthened by line_stroke/2 at each end (y starts at 27 - 0.5 =
+        // 26.5). `width="3"` is unique to the nut among the grid rects.
         let svg = horizontal_am_svg();
         assert!(
-            svg.contains("x1=\"18\" y1=\"27\" x2=\"18\""),
-            "expected vertical nut line anchored at LEFT_MARGIN/TOP_MARGIN; got: {svg}"
+            svg.contains("<rect x=\"16.5\" y=\"26.5\" width=\"3\""),
+            "expected vertical nut rect centred at LEFT_MARGIN/TOP_MARGIN; got: {svg}"
         );
-        assert!(svg.contains("stroke-width=\"3\""));
     }
 
     #[test]
@@ -2813,8 +2978,9 @@ mod tests {
             svg.contains(">7</text>"),
             "expected axis label 7 for the first fret cell; got: {svg}"
         );
-        // No thick nut line when starting above fret 1.
-        assert!(!svg.contains("stroke-width=\"3\""));
+        // No thick nut bar when starting above fret 1 (`width="3"` is
+        // unique to the nut rect among the grid rects).
+        assert!(!svg.contains("width=\"3\""));
     }
 
     #[test]
