@@ -2479,22 +2479,32 @@ mod tests {
     // -- Chord-type palette diagram coverage ---------------------------------
     //
     // Enforces `.claude/rules/chord-diagram-coverage.md`: every chord type the
-    // editor's chord-type palette can produce MUST yield a valid diagram on
-    // every instrument, for every root. This is the mechanical guard the rule
-    // points to — adding a chip to `CHORD_TYPE_PRESETS`
+    // editor's structured chord-type controls can produce MUST yield a valid
+    // diagram on every instrument, for every root. This is the mechanical
+    // guard the rule points to — changing the editor's producible suffix set
     // (`packages/react/src/chord-source-edit.ts`) without keeping coverage at
     // 100% fails here.
 
-    /// The chord-type suffixes offered by the React editor's chord-type
-    /// palette. SISTER LIST: the `text` field of every entry in
-    /// `CHORD_TYPE_PRESETS`
-    /// (`packages/react/src/chord-source-edit.ts`). When that palette gains or
-    /// loses a chip, mirror the change here (and vice versa) so this coverage
-    /// guard stays aligned with the UI it protects.
+    /// The canonical chord-type suffixes the React editor's structured
+    /// controls (triad × seventh × tensions, ADR-0037) can produce.
+    ///
+    /// SISTER LIST: the output of `enumerateEditorSuffixes()`
+    /// (`packages/react/src/chord-source-edit.ts`). `tests/chord-type-coverage.test.ts`
+    /// asserts this exact set equals that enumeration, so when the editor's
+    /// producible set changes, mirror the change here (and vice versa). Per
+    /// `.claude/rules/chord-diagram-coverage.md`, multi-altered tension
+    /// combinations beyond this representative set are covered structurally by
+    /// the voicing synthesiser; combinations that demand more essential tones
+    /// than an instrument has strings are inherently unplayable and fall back
+    /// to "no diagram for this instrument".
     const PALETTE_SUFFIXES: &[&str] = &[
-        "", "m", "5", "aug", "dim", "6", "m6", "69", "7", "maj7", "m7", "mMaj7", "m7b5", "dim7",
-        "7b5", "7#5", "9", "maj9", "m9", "11", "m11", "13", "m13", "add9", "add11", "7b9", "7#9",
-        "7#11", "7b13", "7alt", "sus2", "sus4", "7sus4", "9sus4",
+        "", "5", "6", "69", "7", "7(#11)", "7(#5)", "7(#9)", "7(11)", "7(13)", "7(9)", "7(9,11)",
+        "7(9,11,13)", "7(b13)", "7(b5)", "7(b9)", "7sus2", "7sus4", "add11", "add13", "add9",
+        "aug", "aug7", "augmaj7", "dim", "dim7", "m", "m6", "m69", "m7", "m7(#11)", "m7(#5)",
+        "m7(#9)", "m7(11)", "m7(13)", "m7(9)", "m7(9,11)", "m7(9,11,13)", "m7(b13)", "m7(b5)",
+        "m7(b9)", "mMaj7", "madd11", "madd13", "madd9", "maj7", "maj7(#11)", "maj7(#5)",
+        "maj7(#9)", "maj7(11)", "maj7(13)", "maj7(9)", "maj7(9,11)", "maj7(9,11,13)", "maj7(b13)",
+        "maj7(b5)", "maj7(b9)", "maj7sus2", "maj7sus4", "sus2", "sus4",
     ];
 
     /// The twelve chromatic roots (sharp spelling).

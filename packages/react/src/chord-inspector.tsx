@@ -26,7 +26,17 @@ import type { JSX, KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 import { ChordStaff } from './chord-staff';
 import {
-  CHORD_TYPE_PRESETS,
+  DEFAULT_CHORD_SELECTION,
+  SEVENTH_OPTIONS,
+  TENSION_OPTIONS,
+  TRIAD_OPTIONS,
+  composeChordSuffix,
+  decomposeChordSuffix,
+  isSeventhAvailable,
+  isTensionAvailable,
+  toggleTension,
+  withSeventh,
+  withTriad,
   type ChordParts,
 } from './chord-source-edit';
 import type { ChordStaffWasmLoader } from './use-chord-staff';
@@ -140,6 +150,17 @@ export function ChordInspector(props: ChordInspectorProps): JSX.Element {
     props.onChange({ root, accidental, suffix, bass, ...patch });
   };
 
+  // Decompose the current suffix into the structured triad / seventh /
+  // tension selection so the controls light up for the chord under the
+  // caret. A suffix the structured model cannot represent (e.g. `7alt`, or
+  // any free-form text) yields `null`: the controls then render unpressed
+  // (`recognized` is false) and the chord is edited through the free-form
+  // field. Toggling any control rebuilds the suffix from `selection`, so an
+  // unrecognised suffix is normalised the moment the user touches a control.
+  const decomposed = decomposeChordSuffix(suffix);
+  const recognized = decomposed !== null;
+  const selection = decomposed ?? DEFAULT_CHORD_SELECTION;
+
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     if (event.key === 'Escape' && props.onClose) {
       event.preventDefault();
@@ -246,22 +267,72 @@ export function ChordInspector(props: ChordInspectorProps): JSX.Element {
         </div>
       </div>
 
+      {/* Structured chord-type controls (ADR-0037): triad quality, seventh,
+          and tensions are three orthogonal groups whose composition only ever
+          yields an explicit, unambiguous suffix (e.g. `7(9,11,13)`, never the
+          ambiguous `13`). The current suffix is decomposed to light up the
+          controls; an unrecognised (free-form) suffix leaves them all
+          unpressed and is edited through the Quality / ext. field below. */}
       <div className="chordsketch-sheet__cins-group chordsketch-sheet__cins-group--type">
-        <span className="chordsketch-sheet__cins-label">Type</span>
+        <span className="chordsketch-sheet__cins-label">Triad</span>
         <div
           className="chordsketch-sheet__cins-chips"
           role="group"
-          aria-label="Chord type"
+          aria-label="Triad quality"
         >
-          {CHORD_TYPE_PRESETS.map((preset) => (
+          {TRIAD_OPTIONS.map((opt) => (
             <button
-              key={preset.id}
+              key={opt.value}
               type="button"
               className="chordsketch-sheet__cins-chip"
-              aria-pressed={suffix === preset.text}
-              onClick={() => emit({ suffix: preset.text })}
+              aria-pressed={recognized && selection.triad === opt.value}
+              onClick={() => emit({ suffix: composeChordSuffix(withTriad(selection, opt.value)) })}
             >
-              {preset.label}
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="chordsketch-sheet__cins-group chordsketch-sheet__cins-group--type">
+        <span className="chordsketch-sheet__cins-label">7th</span>
+        <div
+          className="chordsketch-sheet__cins-chips"
+          role="group"
+          aria-label="Seventh"
+        >
+          {SEVENTH_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              className="chordsketch-sheet__cins-chip"
+              disabled={!isSeventhAvailable(selection.triad, opt.value)}
+              aria-pressed={recognized && selection.seventh === opt.value}
+              onClick={() => emit({ suffix: composeChordSuffix(withSeventh(selection, opt.value)) })}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="chordsketch-sheet__cins-group chordsketch-sheet__cins-group--type">
+        <span className="chordsketch-sheet__cins-label">Tensions</span>
+        <div
+          className="chordsketch-sheet__cins-chips"
+          role="group"
+          aria-label="Tensions"
+        >
+          {TENSION_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              className="chordsketch-sheet__cins-chip"
+              disabled={!isTensionAvailable(selection.triad, selection.seventh, opt.value)}
+              aria-pressed={recognized && selection.tensions.includes(opt.value)}
+              onClick={() => emit({ suffix: composeChordSuffix(toggleTension(selection, opt.value)) })}
+            >
+              {opt.label}
             </button>
           ))}
         </div>

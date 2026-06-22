@@ -5,7 +5,6 @@ import {
   CAPO_MIN,
   TRANSPOSE_MAX,
   TRANSPOSE_MIN,
-  CHORD_TYPE_PRESETS,
   activeKeyAtLine,
   applyChordDelete,
   applyChordEdit,
@@ -19,8 +18,13 @@ import {
   chordSelectionCaretOffset,
   chordSourceEditableUnderTranspose,
   chordSuffixFromQuality,
+  composeChordSuffix,
+  decomposeChordSuffix,
+  enumerateEditorSuffixes,
   findChordAtCaret,
   findChordByOffsetOrdinal,
+  isSeventhAvailable,
+  isTensionAvailable,
   lyricsOffsetToSourceColumn,
   nudgeChordPosition,
   partsFromRawName,
@@ -28,6 +32,10 @@ import {
   repositionedChordOrdinal,
   setCapoInSource,
   sourceColumnToLyricsOffset,
+  toggleTension,
+  withSeventh,
+  withTriad,
+  type ChordTypeSelection,
 } from '../src/chord-source-edit';
 
 describe('lyricsOffsetToSourceColumn', () => {
@@ -529,37 +537,133 @@ describe('chordSuffixFromQuality', () => {
     expect(chordSuffixFromQuality('major', 'sus4')).toBe('sus4');
   });
 
-  test('every suffix-only preset is reachable from a quality+extension split', () => {
-    // Sanity: the presets the chips expose are all valid suffix strings
-    // the parser could produce (so a chip selection round-trips).
-    const suffixes = new Set(CHORD_TYPE_PRESETS.map((p) => p.text));
-    expect(suffixes.has('')).toBe(true); // maj
-    expect(suffixes.has('m')).toBe(true); // min
-    expect(suffixes.has('m7')).toBe(true);
-    expect(suffixes.has('maj7')).toBe(true);
+});
+
+describe('structured chord-type model (ADR-0037)', () => {
+  const sel = (
+    triad: ChordTypeSelection['triad'],
+    seventh: ChordTypeSelection['seventh'],
+    tensions: ChordTypeSelection['tensions'] = [],
+  ): ChordTypeSelection => ({ triad, seventh, tensions });
+
+  test('composes explicit, unambiguous suffixes', () => {
+    expect(composeChordSuffix(sel('maj', 'none'))).toBe('');
+    expect(composeChordSuffix(sel('min', 'none'))).toBe('m');
+    expect(composeChordSuffix(sel('maj', '7'))).toBe('7');
+    expect(composeChordSuffix(sel('maj', 'maj7'))).toBe('maj7');
+    expect(composeChordSuffix(sel('min', '7'))).toBe('m7');
+    expect(composeChordSuffix(sel('min', 'maj7'))).toBe('mMaj7');
+    expect(composeChordSuffix(sel('dim', '7'))).toBe('dim7');
+    // Tensions stack into ascending, comma-separated parentheses.
+    expect(composeChordSuffix(sel('maj', '7', ['13']))).toBe('7(13)');
+    expect(composeChordSuffix(sel('maj', '7', ['13', '9', '11']))).toBe('7(9,11,13)');
+    expect(composeChordSuffix(sel('maj', 'maj7', ['13']))).toBe('maj7(13)');
+    expect(composeChordSuffix(sel('min', '7', ['b5']))).toBe('m7(b5)');
+    expect(composeChordSuffix(sel('maj', '7', ['#5']))).toBe('7(#5)');
+    // No seventh + a single natural tension is an add-tone chord; never `C(9)`.
+    expect(composeChordSuffix(sel('maj', 'none', ['9']))).toBe('add9');
+    expect(composeChordSuffix(sel('min', 'none', ['9']))).toBe('madd9');
+    // Sixth chords carry no parentheses.
+    expect(composeChordSuffix(sel('maj', 'none', ['6']))).toBe('6');
+    expect(composeChordSuffix(sel('min', 'none', ['6']))).toBe('m6');
+    expect(composeChordSuffix(sel('maj', 'none', ['6', '9']))).toBe('69');
   });
 
-  test('the expanded jazz tension / quality set is present (#2630)', () => {
-    const suffixes = new Set(CHORD_TYPE_PRESETS.map((p) => p.text));
-    // Extended + altered families added in #2630.
-    for (const t of ['7b5', '7#5', 'maj9', 'm9', '11', 'm11', '13', 'm13', 'add11', '7b9', '7#9', '7#11', '7b13', '7alt', '69', 'm6', 'mMaj7', '7sus4', '9sus4']) {
-      expect(suffixes.has(t)).toBe(true);
+  test('composing never emits the ambiguous bare stack or seventh-less paren', () => {
+    for (const suffix of enumerateEditorSuffixes()) {
+      // No bare extended stack: a 9/11/13 only ever appears inside parens,
+      // an add-tone, or the 6/9 chord.
+      if (/\d/.test(suffix)) {
+        const ok =
+          suffix.includes('(') ||
+          suffix.startsWith('add') ||
+          suffix.includes('add') ||
+          suffix === '5' ||
+          suffix === '6' ||
+          suffix === 'm6' ||
+          suffix === '69' ||
+          suffix === 'm69' ||
+          /^(maj7|m7|mMaj7|aug7|augmaj7|dim7)/.test(suffix) ||
+          /^7(sus[24]|\(|$)/.test(suffix) ||
+          /sus[24]/.test(suffix);
+        expect(ok, `suffix ${JSON.stringify(suffix)} must be explicit`).toBe(true);
+      }
+      // A parenthesised tension always sits on a seventh chord.
+      if (suffix.includes('(')) {
+        expect(/7\(|7sus[24]\(/.test(suffix), `${suffix} parens require a 7th`).toBe(true);
+      }
     }
   });
 
-  test('every preset text builds a valid chord token (no forbidden / structural chars)', () => {
-    // A chip selection feeds `text` straight into buildChordName as the
-    // suffix; if any preset carried a `/` or a structural char the edit
-    // would throw and silently drop. Guards the `69` (not `6/9`) choice.
-    for (const preset of CHORD_TYPE_PRESETS) {
-      expect(() => buildChordName({ root: 'C', suffix: preset.text })).not.toThrow();
-      expect(buildChordName({ root: 'C', suffix: preset.text })).toBe(`C${preset.text}`);
+  test('decompose round-trips every producible suffix', () => {
+    for (const suffix of enumerateEditorSuffixes()) {
+      const decomposed = decomposeChordSuffix(suffix);
+      expect(decomposed, `decompose(${JSON.stringify(suffix)}) should be recognised`).not.toBeNull();
+      expect(composeChordSuffix(decomposed!)).toBe(suffix);
     }
   });
 
-  test('preset ids are unique', () => {
-    const ids = CHORD_TYPE_PRESETS.map((p) => p.id);
-    expect(new Set(ids).size).toBe(ids.length);
+  test('decompose normalises legacy / equivalent spellings', () => {
+    // Bare extended stacks normalise to an explicit seventh + tensions.
+    expect(composeChordSuffix(decomposeChordSuffix('13')!)).toBe('7(9,11,13)');
+    expect(composeChordSuffix(decomposeChordSuffix('9')!)).toBe('7(9)');
+    expect(composeChordSuffix(decomposeChordSuffix('m13')!)).toBe('m7(9,11,13)');
+    expect(composeChordSuffix(decomposeChordSuffix('maj9')!)).toBe('maj7(9)');
+    // Concatenated alterations normalise into parentheses.
+    expect(composeChordSuffix(decomposeChordSuffix('7b9')!)).toBe('7(b9)');
+    expect(composeChordSuffix(decomposeChordSuffix('m7b5')!)).toBe('m7(b5)');
+    expect(composeChordSuffix(decomposeChordSuffix('7#5')!)).toBe('7(#5)');
+  });
+
+  test('decompose returns null for unmodelled suffixes (free-form fallback)', () => {
+    // `9sus4` is free-form: tensions are not modelled on sus triads, so the
+    // structured controls cannot represent it (the field edits it verbatim).
+    for (const suffix of ['alt', '7alt', 'no3', 'xyz', '7(99)', 'add6', '9sus4', 'dim7(9)']) {
+      expect(decomposeChordSuffix(suffix), suffix).toBeNull();
+    }
+  });
+
+  test('availability rules forbid ambiguous / unvoiceable combinations', () => {
+    // Power chord takes no seventh or tension.
+    expect(isSeventhAvailable('5', '7')).toBe(false);
+    expect(isTensionAvailable('5', 'none', '9')).toBe(false);
+    // dim has only the diminished seventh.
+    expect(isSeventhAvailable('dim', '7')).toBe(true);
+    expect(isSeventhAvailable('dim', 'maj7')).toBe(false);
+    // Tensions live on major / minor triads only.
+    expect(isTensionAvailable('aug', '7', '9')).toBe(false);
+    expect(isTensionAvailable('sus4', '7', '9')).toBe(false);
+    expect(isTensionAvailable('maj', '7', '9')).toBe(true);
+    // Altered tones require a seventh; the sixth requires none.
+    expect(isTensionAvailable('maj', 'none', 'b9')).toBe(false);
+    expect(isTensionAvailable('maj', '7', 'b9')).toBe(true);
+    expect(isTensionAvailable('maj', '7', '6')).toBe(false);
+    expect(isTensionAvailable('maj', 'none', '6')).toBe(true);
+    // The exotic minor-major-7 takes no tensions.
+    expect(isTensionAvailable('min', 'maj7', '9')).toBe(false);
+  });
+
+  test('toggle helpers drop tensions the new triad / seventh forbids', () => {
+    // Clearing the seventh drops the altered tones but keeps a natural upper
+    // tension (which becomes an add-tone chord).
+    const dom = sel('maj', '7', ['b9', '13']);
+    expect(withSeventh(dom, 'none').tensions).toEqual(['13']);
+    expect(composeChordSuffix(withSeventh(dom, 'none'))).toBe('add13');
+    // Switching to a triad that takes no tensions clears them.
+    expect(withTriad(dom, 'aug').tensions).toEqual([]);
+    // add9 / add11 / add13 are mutually exclusive with no seventh.
+    const add9 = toggleTension(sel('maj', 'none'), '9');
+    const add11 = toggleTension(add9, '11');
+    expect(add11.tensions).toEqual(['11']);
+  });
+
+  test('every producible suffix builds a valid chord token', () => {
+    // The composed suffix feeds straight into buildChordName; if any carried a
+    // `/` or a structural char the edit would throw and silently drop.
+    for (const suffix of enumerateEditorSuffixes()) {
+      expect(() => buildChordName({ root: 'C', suffix })).not.toThrow();
+      expect(buildChordName({ root: 'C', suffix })).toBe(`C${suffix}`);
+    }
   });
 });
 
