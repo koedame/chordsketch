@@ -585,12 +585,13 @@ shorthand (no Unicode translation; the SVG renderer handles that).
 | `sourceColumnToLyricsOffset` | Atom | Function | Source-column → lyrics-offset helper (inverse of the above). |
 | `nudgeChordPosition` | Atom | Function | Destination offset/ordinal for a one-step chord nudge. |
 | `findChordByOffsetOrdinal` | Atom | Function | Re-locate a selected chord by `(offset, ordinal)` after a nudge re-render. |
-| `<ChordInspector>` | Atom | Component | Floating chord-editor panel (root / accidental / type chips / `/bass` / move) `<ChordSheet>` opens on chord select when `onChordEdit` is wired. |
+| `<ChordInspector>` | Atom | Component | Floating chord-editor panel (root / accidental / triad / 7th / tension chips / `/bass` / move) `<ChordSheet>` opens on chord select when `onChordEdit` is wired. |
 | `buildChordName` | Atom | Function | Assemble a chord token (`root`+accidental+suffix+`/bass`) for the editor. |
 | `applyChordEdit` | Atom | Function | Apply an in-place `ChordEditEvent` (rewrite a chord token) to the source. |
 | `applyChordDelete` | Atom | Function | Remove a chord token from the source (inspector "Remove chord"). |
 | `chordSuffixFromQuality` | Atom | Function | Reconstruct a chord suffix from parsed quality + extension. |
-| `CHORD_TYPE_PRESETS` | Atom | Const | The chord-type chips (`maj`/`min`/`7`/`maj7`/`m7`/…) the inspector offers. |
+| `composeChordSuffix` / `decomposeChordSuffix` | Atom | Function | Compose an explicit chord suffix from a `ChordTypeSelection` (triad / 7th / tensions), and its normalising inverse (ADR-0037). |
+| `TRIAD_OPTIONS` / `SEVENTH_OPTIONS` / `TENSION_OPTIONS` | Atom | Const | The inspector's structured chord-type control options. `isSeventhAvailable` / `isTensionAvailable` / `withTriad` / `withSeventh` / `toggleTension` drive their availability + toggling; `enumerateEditorSuffixes` lists every producible suffix. |
 | `useDebounced` | Atom | Hook | General-purpose debouncer used by `<ChordTextarea>`. |
 | `<MetronomeButton>` | Atom | Component | Interactive `{tempo}` chip; the whole pill toggles an audible metronome at the BPM (speaker cursor on hover, frame pulses while playing). |
 | `useMetronome` | Atom | Hook | Web Audio metronome state (`start` / `stop` / `toggle` / `isRunning` / `isPlaying` / `supported`). |

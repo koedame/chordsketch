@@ -1,22 +1,44 @@
 # Chord Diagram Coverage
 
-Every chord type a user can pick from the ChordPro editor's **chord-type
-palette** MUST render a valid chord diagram on every supported instrument.
-Diagram coverage of the palette is **100%, and stays at 100%** as the palette
-grows. A chord type that the palette offers but that produces "no diagram
-available" on any instrument is a coverage defect.
+Every chord type a user can produce from the ChordPro editor's **chord-type
+controls** MUST render a valid chord diagram on every supported instrument.
+Diagram coverage of the producible set is **100%, and stays at 100%** as the
+controls evolve. A chord type the controls can produce but that yields "no
+diagram available" on any instrument is a coverage defect.
 
-## What the palette is
+## What the producible set is
 
-The palette is `CHORD_TYPE_PRESETS` in
-`packages/react/src/chord-source-edit.ts` — the chips rendered by
-`<ChordInspector>`'s "Type" group. Each chip's `text` field is the ChordPro
-suffix written after the root (`""` for major, `"m7"`, `"7b9"`, `"sus4"`, …).
+Per [ADR-0037](../../docs/adr/0037-explicit-chord-extension-notation.md), the
+editor's chord-type controls are three orthogonal groups in
+`packages/react/src/chord-source-edit.ts` — triad quality, seventh, and
+tensions — rendered by `<ChordInspector>`. Their composition
+(`composeChordSuffix`) only ever yields an explicit, unambiguous suffix.
+
+The **producible set** is `enumerateEditorSuffixes()` in the same file: a
+representative-complete enumeration of every (triad × seventh) base, every base
+plus a single tension, and the natural full stacks. The availability rules
+(`isSeventhAvailable` / `isTensionAvailable`) bound this set so every member is
+voiceable — see "Inherent unvoiceability" below.
 
 The supported instruments are the ones
 `chordsketch_chordpro::voicings::lookup_diagram` /
 `lookup_keyboard_voicing` dispatch to: **guitar, ukulele, charango**
 (fretted) and **keyboard/piano**.
+
+## Inherent unvoiceability
+
+A chord that needs more **essential** tones than an instrument has strings is
+unplayable as a matter of physics, not a synthesiser gap — you cannot put five
+required notes on a four-string ukulele. The editor's availability rules
+therefore restrict tensions to major/minor triads and forbid the combinations
+that would exceed four essential tones (dim/aug carry their characteristic
+fifth, the power chord is two-note, sus tensions are degenerate, the
+minor-major-7 is a plain seventh form). This keeps the producible set fully
+voiceable. Multi-altered combinations *beyond* the representative enumeration
+that a determined user reaches through the free-form field are covered
+structurally by the synthesiser where playable, and fall back to "no diagram
+for this instrument" where the essential-tone count genuinely exceeds the
+string count.
 
 ## Why coverage is structural, not per-type data
 
@@ -51,27 +73,30 @@ altered fifth, the bass) are always kept — see
 
 ## The rule
 
-When you add (or change) a chip in `CHORD_TYPE_PRESETS`, in the **same PR**:
+When you change the editor's producible set — a new triad / seventh / tension
+option, or a change to the `isSeventhAvailable` / `isTensionAvailable`
+availability rules — in the **same PR**:
 
-1. **Add its suffix to `PALETTE_SUFFIXES`** in
-   `crates/chordpro/src/voicings.rs` (the sister list — see below).
-2. **Confirm the parser models the suffix.** `chord_tones("<root><suffix>")`
-   must return the intended pitch classes. If the suffix introduces a tension
-   or alteration the interval logic in `chordsketch_chordpro::chord` does not
-   yet handle, extend that logic (and its `chord_pitches` tests) so the
+1. **Regenerate `PALETTE_SUFFIXES`** in `crates/chordpro/src/voicings.rs` from
+   `enumerateEditorSuffixes()` (the sister list — see below).
+2. **Confirm the parser models every new suffix.** `chord_tones("<root><suffix>")`
+   must return the intended pitch classes. If a tension or alteration the
+   interval logic in `chordsketch_chordpro::chord` does not yet handle is
+   introduced, extend that logic (and its `chord_pitches` tests) so the
    diagram — and the audio path — is musically correct, rather than letting it
    degrade to a bare triad.
-3. **Run the coverage tests** (below). They must stay green.
-
-Removing a chip is the reverse: drop the suffix from both lists in the same
-PR.
+3. **Run the coverage tests** (below). They must stay green. A new combination
+   that is not voiceable on a 4-string instrument must be excluded by the
+   availability rules (not left to fail the coverage test) — see "Inherent
+   unvoiceability".
 
 ## Sister lists
 
-`CHORD_TYPE_PRESETS[*].text` (TypeScript) and `PALETTE_SUFFIXES`
-(Rust, `crates/chordpro/src/voicings.rs`) are a documented sister pair under
-[`fix-propagation.md`](fix-propagation.md). They must hold the same set of
-suffixes. Each file's comment block points at the other.
+`enumerateEditorSuffixes()` (TypeScript, `packages/react/src/chord-source-edit.ts`)
+and `PALETTE_SUFFIXES` (Rust, `crates/chordpro/src/voicings.rs`) are a
+documented sister pair under [`fix-propagation.md`](fix-propagation.md). They
+must hold the **same set** of suffixes. Each file's comment block points at the
+other.
 
 ## Enforcement
 
@@ -87,13 +112,15 @@ suffixes. Each file's comment block points at the other.
   - `crates/chordpro/src/voicing_synth.rs` carries the synthesiser's own
     musical-correctness unit tests.
 - **TypeScript** (`packages/react/tests/chord-type-coverage.test.ts`): asserts
-  every palette chip's `text` appears in `PALETTE_SUFFIXES`, and that
-  `PALETTE_SUFFIXES` has no stale entry the palette dropped — catching the
-  drift where a chip is added on one side only.
+  `enumerateEditorSuffixes()` equals `PALETTE_SUFFIXES` exactly — every
+  producible suffix is covered, and no stale Rust entry survives that the
+  editor can no longer produce — catching the drift where one side changes
+  alone.
 
-A PR that adds a palette chip without the matching Rust suffix fails the
-TypeScript guard; a suffix the parser models incorrectly fails the Rust
-musical-correctness assertions.
+A PR that makes the editor produce a suffix without the matching Rust coverage
+entry fails the TypeScript guard; a suffix the parser models incorrectly, or a
+producible combination that is unvoiceable, fails the Rust musical-correctness
+assertions.
 
 ## Why
 

@@ -767,88 +767,457 @@ export function buildChordNudge(params: {
 // `[chord]` at a known source position — the same source-as-truth
 // model the reposition pipeline uses (no parallel chord state).
 
-/** A chord-type preset offered as a chip in the editor. `text` is the
- * ChordPro suffix written after the root (+ accidental) — e.g. `"m7"`
- * for A minor 7 → `Am7`. `id` is a stable key; `label` is the chip
- * face (may contain display accidentals like `♭`). */
-export interface ChordTypePreset {
-  id: string;
+// ===========================================================================
+// Structured chord-type model (ADR-0037)
+// ===========================================================================
+//
+// ChordSketch rejects ambiguous chord notation (a bare extended "stack" such
+// as `G13`, or a seventh-less parenthesised tension such as `C(9)`). The
+// editor therefore does NOT offer a flat palette of chord-type chips; it
+// offers three orthogonal control groups whose composition only ever yields
+// an explicit, unambiguous suffix:
+//
+//   - Triad quality (single-select): major / minor / dim / aug, plus the
+//     third-replacement triads sus2 / sus4 and the power chord (5).
+//   - Seventh (single-select): none / 7 (dominant) / maj7. The seventh type
+//     is independent of the tension set, so `maj7(13)` is reachable.
+//   - Tensions (multi-select): 6, 9, 11, 13 and the altered tones
+//     b9 / #9 / #11 / b13 / b5 / #5. With a seventh present they render in
+//     ascending, comma-separated parentheses (`7(9,11,13)`); with no seventh
+//     a single natural tension renders as an add-tone chord (`add9`) and 6 /
+//     6-9 render as the sixth chords (`6`, `m6`, `69`). Altered tones require
+//     a seventh.
+//
+// `composeChordSuffix` is the single source of truth for the canonical
+// spelling; `decomposeChordSuffix` is its (normalising) inverse, used by the
+// inspector to light up the controls for an existing chord — including legacy
+// ambiguous forms, which it normalises (`G13` → seventh 7 + tensions
+// {9,11,13}) so editing one cleans it up.
+
+/** Triad quality (and third-replacement) options, single-select. */
+export type ChordTriad = 'maj' | 'min' | 'dim' | 'aug' | 'sus2' | 'sus4' | '5';
+
+/** Seventh options, single-select. `7` is the dominant (minor) seventh;
+ * `maj7` is the major seventh. Mutually exclusive by construction. */
+export type ChordSeventh = 'none' | '7' | 'maj7';
+
+/** Tension / alteration options, multi-select. */
+export type ChordTension = '6' | '9' | '11' | '13' | 'b9' | '#9' | '#11' | 'b13' | 'b5' | '#5';
+
+/** A structured chord-type selection the three control groups manipulate. */
+export interface ChordTypeSelection {
+  triad: ChordTriad;
+  seventh: ChordSeventh;
+  /** Selected tensions. Order is not significant on input — the canonical
+   * ascending order is applied by {@link composeChordSuffix}. */
+  tensions: ChordTension[];
+}
+
+/** A control option: `value` is the model token, `label` is the chip face
+ * (may carry display accidentals like `♭` / `♯`). */
+export interface ChordTypeOption<T extends string> {
+  value: T;
   label: string;
-  text: string;
+}
+
+/** Triad chips, in display order. */
+export const TRIAD_OPTIONS: ReadonlyArray<ChordTypeOption<ChordTriad>> = [
+  { value: 'maj', label: 'maj' },
+  { value: 'min', label: 'min' },
+  { value: 'dim', label: 'dim' },
+  { value: 'aug', label: 'aug' },
+  { value: 'sus2', label: 'sus2' },
+  { value: 'sus4', label: 'sus4' },
+  { value: '5', label: '5' },
+];
+
+/** Seventh chips, in display order. */
+export const SEVENTH_OPTIONS: ReadonlyArray<ChordTypeOption<ChordSeventh>> = [
+  { value: 'none', label: 'none' },
+  { value: '7', label: '7' },
+  { value: 'maj7', label: 'maj7' },
+];
+
+/** Tension chips, in display (ascending) order. */
+export const TENSION_OPTIONS: ReadonlyArray<ChordTypeOption<ChordTension>> = [
+  { value: '6', label: '6' },
+  { value: '9', label: '9' },
+  { value: '11', label: '11' },
+  { value: '13', label: '13' },
+  { value: 'b9', label: '♭9' },
+  { value: '#9', label: '♯9' },
+  { value: '#11', label: '♯11' },
+  { value: 'b13', label: '♭13' },
+  { value: 'b5', label: '♭5' },
+  { value: '#5', label: '♯5' },
+];
+
+/** Canonical ascending order tensions are emitted in inside parentheses
+ * (by scale degree, altered fifth first). */
+const TENSION_ORDER: readonly ChordTension[] = [
+  'b5',
+  '#5',
+  'b9',
+  '9',
+  '#9',
+  '11',
+  '#11',
+  'b13',
+  '13',
+];
+
+const TENSION_VALUES: ReadonlySet<string> = new Set(TENSION_OPTIONS.map((o) => o.value));
+
+/** Natural upper tensions that read as an add-tone chord with no seventh. */
+const NATURAL_UPPER: readonly ChordTension[] = ['9', '11', '13'];
+
+/** Altered tones that are only meaningful with a seventh present. */
+const ALTERED_TENSIONS: readonly ChordTension[] = ['b9', '#9', '#11', 'b13', 'b5', '#5'];
+
+/** The empty / default selection: a bare major triad. */
+export const DEFAULT_CHORD_SELECTION: ChordTypeSelection = {
+  triad: 'maj',
+  seventh: 'none',
+  tensions: [],
+};
+
+/**
+ * Whether a seventh option is available for the given triad.
+ *
+ * - The power chord (5) is root + fifth only, so it admits no seventh.
+ * - A diminished triad's only conventional seventh is the diminished seventh
+ *   (`dim7`); the diminished-major-seventh is too exotic to surface, so `maj7`
+ *   is unavailable on `dim`.
+ * - Major / minor / augmented / sus triads admit both `7` and `maj7`.
+ */
+export function isSeventhAvailable(triad: ChordTriad, seventh: ChordSeventh): boolean {
+  if (seventh === 'none') return true;
+  if (triad === '5') return false;
+  if (triad === 'dim') return seventh === '7';
+  return true;
+}
+
+/** Triads that carry a tension stack: only the plain major and minor triads.
+ *
+ * The power chord is two-note. The dim / aug triads' identity is their altered
+ * fifth and conventional harmony respells rather than stacking tensions on
+ * them — the augmented-dominant colour is reached on a major / minor triad via
+ * the ♯5 tension. The sus triads put the sus note on the 2nd / 4th degree, so
+ * a 9 (= 2nd) or 11 (= 4th) tension duplicates the sus note and an altered 9 /
+ * 11 clashes a semitone away; tensions on sus are therefore both degenerate
+ * and frequently unvoiceable, so they are not offered (the free-form field
+ * still accepts `7sus4(9)` for the rare case).
+ *
+ * Constraining tensions to major / minor triads also keeps every producible
+ * chord voiceable: with at most one altered fifth essential and one headline
+ * tension on a plain triad, the essential-tone count never exceeds four, so a
+ * playable shape exists even on a 4-string instrument. */
+const TENSION_TRIADS: ReadonlySet<ChordTriad> = new Set<ChordTriad>(['maj', 'min']);
+
+/**
+ * Whether a tension chip is available given the current triad + seventh.
+ *
+ * - Only major / minor triads take tensions (see {@link TENSION_TRIADS}).
+ * - `6` (the sixth / 6-9 chords) is offered only with no seventh; with a
+ *   seventh a sixth becomes a 13.
+ * - Altered tones (b9 / #9 / #11 / b13 / b5 / #5) require a seventh.
+ * - Natural upper tensions (9 / 11 / 13) are available with or without a
+ *   seventh (an add-tone chord when there is no seventh).
+ */
+export function isTensionAvailable(
+  triad: ChordTriad,
+  seventh: ChordSeventh,
+  tension: ChordTension,
+): boolean {
+  if (!TENSION_TRIADS.has(triad)) return false;
+  // Tensions stack on the three common seventh chords — dominant 7, major 7,
+  // and minor 7. The rarer minor-major-7 (min + maj7) is offered as a plain
+  // seventh form, like dim / aug: its tension stack is exotic and its 4
+  // essential tones do not always fit a 4-string instrument.
+  if (triad === 'min' && seventh === 'maj7') return false;
+  if (tension === '6') {
+    return seventh === 'none';
+  }
+  if ((ALTERED_TENSIONS as readonly string[]).includes(tension)) {
+    return seventh !== 'none';
+  }
+  // Natural upper tensions (9 / 11 / 13).
+  return true;
+}
+
+/** Renders the triad + seventh "quality core" of a canonical suffix. */
+function qualityCore(triad: ChordTriad, seventh: ChordSeventh): string {
+  if (triad === '5') return '5';
+  if (triad === 'sus2' || triad === 'sus4') {
+    if (seventh === '7') return `7${triad}`;
+    if (seventh === 'maj7') return `maj7${triad}`;
+    return triad;
+  }
+  const base = triad === 'min' ? 'm' : triad === 'dim' ? 'dim' : triad === 'aug' ? 'aug' : '';
+  if (seventh === 'none') return base;
+  if (seventh === '7') {
+    return triad === 'min' ? 'm7' : `${base}7`;
+  }
+  // maj7 — the minor/major-seventh case is conventionally spelled `mMaj7`.
+  return triad === 'min' ? 'mMaj7' : `${base}maj7`;
+}
+
+/** Sorts tensions into the canonical ascending order. */
+function sortTensions(tensions: readonly ChordTension[]): ChordTension[] {
+  const present = new Set(tensions);
+  return TENSION_ORDER.filter((t) => present.has(t));
 }
 
 /**
- * The curated chord-type presets the editor chips expose, in display
- * order. Each maps to the canonical ChordPro suffix the parser
- * round-trips. `maj` is the empty suffix (a bare major triad is just
- * its root). The set is deliberately small and common; arbitrary
- * qualities remain reachable through the free-form suffix field.
+ * Compose the canonical, unambiguous chord suffix (the text after the root +
+ * accidental, before any `/bass`) from a structured selection.
+ *
+ * Tokens the current triad / seventh make unavailable (see
+ * {@link isTensionAvailable}) are ignored, so a stale tension left in
+ * `tensions` after the seventh is cleared never leaks into the output.
  */
-// Sister surface: the iReal Pro chord editor's `QUALITY_OPTIONS`
-// (`ireal-bar-grid-popover.tsx`). The two lists are INTENTIONALLY not
-// identical and are NOT bound by `.claude/rules/fix-propagation.md`'s
-// "keep sister sites in lockstep": iReal models quality as a closed
-// `IrealChordQuality['kind']` enum (a finite set the iReal AST can
-// represent), whereas a ChordPro chord is free-form text, so this list
-// is an open palette of common shorthands the user can extend via the
-// free-form suffix field. New entries here do NOT require a matching
-// `QUALITY_OPTIONS` entry and vice versa.
-//
-// `id` is a stable React key / test selector only (never emitted into
-// the chord text); it avoids `#` and `/` (spelled `s` / written as the
-// `69` text) so it is safe as a DOM id / attribute selector. `text` is
-// the literal ChordPro suffix written after the root (+ accidental).
-//
-// COVERAGE SISTER LIST: every entry's `text` MUST also appear in
-// `PALETTE_SUFFIXES` (`crates/chordpro/src/voicings.rs`), which proves each
-// suffix yields a valid chord diagram on every instrument. Adding a chip
-// here without the matching Rust suffix fails
-// `tests/chord-type-coverage.test.ts`. Keep diagram coverage at 100% per
-// `.claude/rules/chord-diagram-coverage.md`.
-export const CHORD_TYPE_PRESETS: readonly ChordTypePreset[] = [
-  // Triads / basics
-  { id: 'maj', label: 'maj', text: '' },
-  { id: 'min', label: 'min', text: 'm' },
-  { id: '5', label: '5', text: '5' },
-  { id: 'aug', label: 'aug', text: 'aug' },
-  { id: 'dim', label: 'dim', text: 'dim' },
-  // Sixth family
-  { id: '6', label: '6', text: '6' },
-  { id: 'm6', label: 'm6', text: 'm6' },
-  // `6/9` is written `69` so the suffix carries no `/` (which the
-  // source-edit guard reserves for the slash-bass split).
-  { id: '69', label: '6/9', text: '69' },
-  // Sevenths
-  { id: '7', label: '7', text: '7' },
-  { id: 'maj7', label: 'maj7', text: 'maj7' },
-  { id: 'm7', label: 'm7', text: 'm7' },
-  { id: 'mMaj7', label: 'mMaj7', text: 'mMaj7' },
-  { id: 'm7b5', label: 'm7♭5', text: 'm7b5' },
-  { id: 'dim7', label: 'dim7', text: 'dim7' },
-  { id: '7b5', label: '7♭5', text: '7b5' },
-  { id: '7s5', label: '7♯5', text: '7#5' },
-  // Extended
-  { id: '9', label: '9', text: '9' },
-  { id: 'maj9', label: 'maj9', text: 'maj9' },
-  { id: 'm9', label: 'm9', text: 'm9' },
-  { id: '11', label: '11', text: '11' },
-  { id: 'm11', label: 'm11', text: 'm11' },
-  { id: '13', label: '13', text: '13' },
-  { id: 'm13', label: 'm13', text: 'm13' },
-  { id: 'add9', label: 'add9', text: 'add9' },
-  { id: 'add11', label: 'add11', text: 'add11' },
-  // Altered dominants
-  { id: '7b9', label: '7♭9', text: '7b9' },
-  { id: '7s9', label: '7♯9', text: '7#9' },
-  { id: '7s11', label: '7♯11', text: '7#11' },
-  { id: '7b13', label: '7♭13', text: '7b13' },
-  { id: 'alt', label: 'alt', text: '7alt' },
-  // Suspended
-  { id: 'sus2', label: 'sus2', text: 'sus2' },
-  { id: 'sus4', label: 'sus4', text: 'sus4' },
-  { id: '7sus4', label: '7sus4', text: '7sus4' },
-  { id: '9sus4', label: '9sus4', text: '9sus4' },
-];
+export function composeChordSuffix(selection: ChordTypeSelection): string {
+  const { triad, seventh: rawSeventh } = selection;
+  const seventh = isSeventhAvailable(triad, rawSeventh) ? rawSeventh : 'none';
+  const tensions = selection.tensions.filter((t) => isTensionAvailable(triad, seventh, t));
+  const core = qualityCore(triad, seventh);
+
+  if (seventh === 'none') {
+    // Sixth chords and add-tone chords carry no parentheses.
+    if (tensions.includes('6')) {
+      // `6` / `m6`, plus the 6-9 chord when the 9 is also chosen.
+      return `${core}6${tensions.includes('9') ? '9' : ''}`;
+    }
+    const add = NATURAL_UPPER.find((t) => tensions.includes(t));
+    return add ? `${core}add${add}` : core;
+  }
+
+  // Seventh present: every selected tension renders in ascending parentheses.
+  const inParens = sortTensions(tensions);
+  return inParens.length > 0 ? `${core}(${inParens.join(',')})` : core;
+}
+
+/** Expands a bare-stack headline into its implied ascending tensions. */
+function stackTensions(headline: '9' | '11' | '13'): ChordTension[] {
+  if (headline === '9') return ['9'];
+  if (headline === '11') return ['9', '11'];
+  return ['9', '11', '13'];
+}
+
+/**
+ * Decompose a chord suffix into a structured selection, or `null` when the
+ * suffix is not one the structured controls can model (e.g. `7alt`, or any
+ * free-form text) — in which case the inspector falls back to the free-form
+ * field.
+ *
+ * Recognised inputs include every form {@link composeChordSuffix} emits, plus
+ * the common equivalent / legacy spellings, which are **normalised**:
+ * concatenated alterations (`7b9`, `m7b5`), bare extended stacks
+ * (`9`, `m13`, `maj9`), and `9sus4` all decode to the explicit selection, so
+ * re-composing yields the canonical spelling.
+ */
+export function decomposeChordSuffix(suffix: string): ChordTypeSelection | null {
+  if (suffix === '5') {
+    return { triad: '5', seventh: 'none', tensions: [] };
+  }
+
+  // 1. Split off a trailing parenthesised tension group, if any.
+  const tensions: ChordTension[] = [];
+  let base = suffix;
+  if (suffix.includes('(') || suffix.includes(')')) {
+    const m = suffix.match(/^([^()]*)\(([^()]+)\)$/);
+    if (!m) return null;
+    base = m[1];
+    for (const tok of m[2].split(',')) {
+      const t = tok.trim();
+      if (!TENSION_VALUES.has(t)) return null;
+      tensions.push(t as ChordTension);
+    }
+  }
+
+  // 2. Pull out a sus2 / sus4 third-replacement (independent of triad word).
+  let susKind: 'sus2' | 'sus4' | null = null;
+  let b = base;
+  if (b.includes('sus2')) {
+    susKind = 'sus2';
+    b = b.replace('sus2', '');
+  } else if (b.includes('sus4')) {
+    susKind = 'sus4';
+    b = b.replace('sus4', '');
+  }
+
+  // 3. Triad word. `maj…` is left intact — `maj` is the seventh, not the triad.
+  let triad: ChordTriad;
+  let rest: string;
+  if (b.startsWith('dim')) {
+    triad = 'dim';
+    rest = b.slice(3);
+  } else if (b.startsWith('aug')) {
+    triad = 'aug';
+    rest = b.slice(3);
+  } else if (b.startsWith('min')) {
+    triad = 'min';
+    rest = b.slice(3);
+  } else if (b.startsWith('maj')) {
+    triad = 'maj';
+    rest = b;
+  } else if (b.startsWith('m')) {
+    triad = 'min';
+    rest = b.slice(1);
+  } else {
+    triad = 'maj';
+    rest = b;
+  }
+  if (susKind) triad = susKind;
+
+  // 4. Seventh.
+  let seventh: ChordSeventh = 'none';
+  if (rest.startsWith('maj7') || rest.startsWith('Maj7')) {
+    seventh = 'maj7';
+    rest = rest.slice(4);
+  } else if (rest.startsWith('maj')) {
+    // Bare major-seventh stack: `maj9` / `maj11` / `maj13`.
+    const after = rest.slice(3);
+    if (after === '9' || after === '11' || after === '13') {
+      seventh = 'maj7';
+      for (const t of stackTensions(after)) tensions.push(t);
+      rest = '';
+    } else {
+      return null;
+    }
+  } else if (rest.startsWith('7')) {
+    seventh = '7';
+    rest = rest.slice(1);
+  }
+
+  // 5. Remaining tail: a concatenated alteration, a bare stack, a sixth, or
+  //    an add-tone marker. Anything else is unmodelled → free-form.
+  if (rest !== '') {
+    if (TENSION_VALUES.has(rest) && (ALTERED_TENSIONS as readonly string[]).includes(rest)) {
+      tensions.push(rest as ChordTension);
+    } else if (seventh === 'none' && (rest === '9' || rest === '11' || rest === '13')) {
+      // Bare dominant stack (`C9`, `C13`): normalise to an explicit seventh.
+      seventh = '7';
+      for (const t of stackTensions(rest)) tensions.push(t);
+    } else if (rest === '6') {
+      tensions.push('6');
+    } else if (rest === '69') {
+      tensions.push('6', '9');
+    } else if (rest.startsWith('add')) {
+      const a = rest.slice(3);
+      if (a === '9' || a === '11' || a === '13') {
+        tensions.push(a as ChordTension);
+      } else {
+        return null;
+      }
+    } else {
+      return null;
+    }
+  }
+
+  // De-duplicate while preserving the model (order is normalised on compose).
+  const unique = Array.from(new Set(tensions));
+  // Reject any selection that survived parsing but is not actually
+  // reachable through the controls (e.g. an altered tone with no seventh,
+  // which would mean the input was something we mis-parsed): such a chord is
+  // better left to the free-form field than shown with a misleading
+  // selection.
+  for (const t of unique) {
+    if (!isTensionAvailable(triad, seventh, t)) return null;
+  }
+  return { triad, seventh, tensions: unique };
+}
+
+/**
+ * Apply a triad change to a selection, dropping any tension the new triad
+ * makes unavailable and demoting the seventh if the new triad forbids it.
+ */
+export function withTriad(selection: ChordTypeSelection, triad: ChordTriad): ChordTypeSelection {
+  const seventh = isSeventhAvailable(triad, selection.seventh) ? selection.seventh : 'none';
+  const tensions = selection.tensions.filter((t) => isTensionAvailable(triad, seventh, t));
+  return { triad, seventh, tensions };
+}
+
+/**
+ * Apply a seventh change to a selection, dropping any tension the new seventh
+ * makes unavailable (e.g. clearing the seventh drops the altered tones).
+ */
+export function withSeventh(
+  selection: ChordTypeSelection,
+  seventh: ChordSeventh,
+): ChordTypeSelection {
+  if (!isSeventhAvailable(selection.triad, seventh)) return selection;
+  const tensions = selection.tensions.filter((t) =>
+    isTensionAvailable(selection.triad, seventh, t),
+  );
+  return { ...selection, seventh, tensions };
+}
+
+/**
+ * Toggle a tension in a selection. With no seventh present the natural upper
+ * tensions (9 / 11 / 13) are mutually exclusive (a chord can only be one of
+ * add9 / add11 / add13), so selecting one clears the others.
+ */
+export function toggleTension(
+  selection: ChordTypeSelection,
+  tension: ChordTension,
+): ChordTypeSelection {
+  if (!isTensionAvailable(selection.triad, selection.seventh, tension)) return selection;
+  const present = selection.tensions.includes(tension);
+  let tensions: ChordTension[];
+  if (present) {
+    tensions = selection.tensions.filter((t) => t !== tension);
+  } else if (
+    selection.seventh === 'none' &&
+    (NATURAL_UPPER as readonly string[]).includes(tension)
+  ) {
+    // add9 / add11 / add13 are mutually exclusive without a seventh.
+    tensions = [
+      ...selection.tensions.filter((t) => !(NATURAL_UPPER as readonly string[]).includes(t)),
+      tension,
+    ];
+  } else {
+    tensions = [...selection.tensions, tension];
+  }
+  return { ...selection, tensions };
+}
+
+/**
+ * Enumerate a representative-complete set of the canonical suffixes the
+ * editor can produce: every (triad × seventh) base, every base plus a single
+ * tension, and the natural full stacks (`(9,11)`, `(9,11,13)`, `69`).
+ *
+ * This is the TypeScript half of the chord-diagram coverage sister list
+ * (`.claude/rules/chord-diagram-coverage.md`): `tests/chord-type-coverage.test.ts`
+ * asserts this set equals `PALETTE_SUFFIXES` in
+ * `crates/chordpro/src/voicings.rs`, which the Rust suite then proves yields a
+ * playable diagram on every instrument and every root. Multi-altered tension
+ * combinations beyond this set are covered structurally by the algorithmic
+ * voicing synthesiser (it works from a chord's pitch-class content), per that
+ * rule.
+ */
+export function enumerateEditorSuffixes(): string[] {
+  const out = new Set<string>();
+  for (const { value: triad } of TRIAD_OPTIONS) {
+    for (const { value: seventh } of SEVENTH_OPTIONS) {
+      if (!isSeventhAvailable(triad, seventh)) continue;
+      out.add(composeChordSuffix({ triad, seventh, tensions: [] }));
+      for (const { value: t } of TENSION_OPTIONS) {
+        if (!isTensionAvailable(triad, seventh, t)) continue;
+        out.add(composeChordSuffix({ triad, seventh, tensions: [t] }));
+      }
+      if (seventh === 'none') {
+        if (isTensionAvailable(triad, 'none', '6')) {
+          out.add(composeChordSuffix({ triad, seventh, tensions: ['6', '9'] }));
+        }
+      } else {
+        out.add(composeChordSuffix({ triad, seventh, tensions: ['9', '11'] }));
+        out.add(composeChordSuffix({ triad, seventh, tensions: ['9', '11', '13'] }));
+      }
+    }
+  }
+  return Array.from(out).sort();
+}
 
 /** Quality enum values mirrored from `ChordproChordQuality` — kept as a
  * plain string union so this module stays free of an AST-type import. */

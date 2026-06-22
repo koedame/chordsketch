@@ -47,18 +47,26 @@ function setup(overrides: Partial<Parameters<typeof ChordInspector>[0]> = {}) {
 }
 
 describe('<ChordInspector>', () => {
-  test('header shows the chord name and root/accidental/type reflect the parts', () => {
+  test('header shows the chord name; root + triad + 7th controls reflect the parts', () => {
     const { container } = setup();
     expect(container.querySelector('.chordsketch-sheet__cins-name')?.textContent).toBe('Am7');
-    // Root A is pressed; accidental natural is pressed; type m7 chip pressed.
+    // Root A is pressed; accidental natural is pressed.
     const pressedRoot = container.querySelector(
       '.chordsketch-sheet__cins-seg button[aria-pressed="true"]',
     );
     expect(pressedRoot?.textContent).toBe('A');
-    const pressedChip = container.querySelector(
-      '.chordsketch-sheet__cins-chip[aria-pressed="true"]',
-    );
-    expect(pressedChip?.textContent).toBe('m7');
+    // Am7 decomposes to triad=min, 7th=7, no tensions: the matching chips in
+    // each group are pressed, and no tension chip is.
+    expect(
+      container.querySelector('[aria-label="Triad quality"] button[aria-pressed="true"]')
+        ?.textContent,
+    ).toBe('min');
+    expect(
+      container.querySelector('[aria-label="Seventh"] button[aria-pressed="true"]')?.textContent,
+    ).toBe('7');
+    expect(
+      container.querySelector('[aria-label="Tensions"] button[aria-pressed="true"]'),
+    ).toBeNull();
   });
 
   test('renders the constituent-notes staff beneath the chord name', async () => {
@@ -99,17 +107,55 @@ describe('<ChordInspector>', () => {
     expect(onChange).toHaveBeenCalledWith({ root: 'A', accidental: 'b', suffix: 'm7', bass: '' });
   });
 
-  test('a type chip sets the suffix to the preset text', () => {
+  test('triad / 7th / tension chips compose an explicit suffix', () => {
+    // The fixture chord is Am7 → {triad: min, 7th: 7, tensions: []}. Each chip
+    // click recomposes from that selection (onChange is a mock, so the suffix
+    // prop stays Am7 between clicks).
     const { container, onChange } = setup();
-    const chips = container.querySelectorAll('.chordsketch-sheet__cins-chip');
-    const maj7 = Array.from(chips).find((c) => c.textContent === 'maj7') as HTMLButtonElement;
-    fireEvent.click(maj7);
-    expect(onChange).toHaveBeenCalledWith({
+    const click = (groupLabel: string, text: string): void => {
+      const btn = Array.from(
+        container.querySelectorAll(`[aria-label="${groupLabel}"] button`),
+      ).find((b) => b.textContent === text) as HTMLButtonElement;
+      fireEvent.click(btn);
+    };
+    // Adding the 13 tension to Am7 → the explicit m7(13) (never a bare m13).
+    click('Tensions', '13');
+    expect(onChange).toHaveBeenLastCalledWith({
       root: 'A',
       accidental: '',
-      suffix: 'maj7',
+      suffix: 'm7(13)',
       bass: '',
     });
+    // Switching the triad to major keeps the dominant seventh → A7.
+    click('Triad quality', 'maj');
+    expect(onChange).toHaveBeenLastCalledWith({ root: 'A', accidental: '', suffix: '7', bass: '' });
+    // Switching the seventh to maj7 → AmMaj7.
+    click('Seventh', 'maj7');
+    expect(onChange).toHaveBeenLastCalledWith({
+      root: 'A',
+      accidental: '',
+      suffix: 'mMaj7',
+      bass: '',
+    });
+  });
+
+  test('the seventh and tension chips disable unavailable options', () => {
+    // Am7 → min triad: maj7 is available (mMaj7), but tensions are gone once
+    // the seventh is mMaj7; with the dominant 7th the tensions are live.
+    const { container } = setup();
+    const seventhBtn = (text: string): HTMLButtonElement =>
+      Array.from(container.querySelectorAll('[aria-label="Seventh"] button')).find(
+        (b) => b.textContent === text,
+      ) as HTMLButtonElement;
+    // A minor triad admits both 7 and maj7.
+    expect(seventhBtn('7').disabled).toBe(false);
+    expect(seventhBtn('maj7').disabled).toBe(false);
+    // The altered ♭9 tension needs a seventh and a major/minor triad — present
+    // here (Am7), so it is enabled.
+    const flat9 = Array.from(
+      container.querySelectorAll('[aria-label="Tensions"] button'),
+    ).find((b) => b.textContent === '♭9') as HTMLButtonElement;
+    expect(flat9.disabled).toBe(false);
   });
 
   test('typing in the suffix / bass inputs emits the edited value', () => {
