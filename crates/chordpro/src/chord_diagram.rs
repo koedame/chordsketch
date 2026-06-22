@@ -258,8 +258,8 @@ impl DiagramData {
 ///
 /// `frets` holds the per-string positions relative to the diagram's base
 /// fret: `-1` = muted, `0` = open, `>= 1` = a fretted position. The
-/// assignment mirrors the playability model the voicing synthesiser uses
-/// ([`crate::voicing_synth`]): an index-finger **barre** across the lowest
+/// assignment mirrors the playability model the voicing synthesiser
+/// (`voicing_synth`) uses: an index-finger **barre** across the lowest
 /// fretted fret collapses the strings sharing it into finger `1` (credited
 /// only when no open string is sounded, since a barre lies across every
 /// string at that fret); every other fretted string takes the next finger
