@@ -1,8 +1,26 @@
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { ChordInspector } from '../src/chord-inspector';
 import type { ChordParts } from '../src/chord-source-edit';
+import type { ChordStaffWasmLoader, StaffNote } from '../src/use-chord-staff';
+
+const AM7_STAFF: StaffNote[] = [
+  { letter: 'A', accidental: 0, octave: 3, midi: 57 },
+  { letter: 'C', accidental: 0, octave: 4, midi: 60 },
+  { letter: 'E', accidental: 0, octave: 4, midi: 64 },
+  { letter: 'G', accidental: 0, octave: 4, midi: 67 },
+];
+
+// Deterministic staff loader so the inspector's `<ChordStaff>` never reaches
+// for the real (unbuilt) `@chordsketch/wasm` during these unit tests.
+const stubStaffLoader: ChordStaffWasmLoader = vi.fn(
+  async () =>
+    ({
+      default: vi.fn(async () => undefined),
+      chordStaffNotes: (chord: string) => (chord === 'Am7' ? AM7_STAFF : null),
+    }) as unknown as Awaited<ReturnType<ChordStaffWasmLoader>>,
+);
 
 function setup(overrides: Partial<Parameters<typeof ChordInspector>[0]> = {}) {
   const onChange = vi.fn();
@@ -21,6 +39,7 @@ function setup(overrides: Partial<Parameters<typeof ChordInspector>[0]> = {}) {
     onNudge,
     onRemove,
     onClose,
+    staffLoader: stubStaffLoader,
     ...overrides,
   };
   const utils = render(<ChordInspector {...props} />);
@@ -40,6 +59,22 @@ describe('<ChordInspector>', () => {
       '.chordsketch-sheet__cins-chip[aria-pressed="true"]',
     );
     expect(pressedChip?.textContent).toBe('m7');
+  });
+
+  test('renders the constituent-notes staff beneath the chord name', async () => {
+    const { container } = setup();
+    await waitFor(() => {
+      const svg = container.querySelector('.chordsketch-sheet__cins-staff .chordsketch-staff__svg');
+      expect(svg).not.toBeNull();
+      // One notehead per tone of Am7.
+      expect(svg!.querySelectorAll('ellipse')).toHaveLength(AM7_STAFF.length);
+    });
+    expect(stubStaffLoader).toHaveBeenCalled();
+  });
+
+  test('omits the staff in the idle state', () => {
+    const { container } = setup({ selected: false });
+    expect(container.querySelector('.chordsketch-staff')).toBeNull();
   });
 
   test('changing the root emits the full parts with the new root', () => {

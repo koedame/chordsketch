@@ -338,7 +338,7 @@ pub fn chord_pitches(chord_name: &str) -> Option<Vec<u8>> {
         chord_intervals(detail.quality, detail.extension.as_deref().unwrap_or(""))
             .all
             .into_iter()
-            .map(|iv| root_midi + iv)
+            .map(|iv| root_midi + iv.semitone)
             .collect();
 
     if let Some((bass, bass_acc)) = detail.bass_note {
@@ -470,19 +470,42 @@ pub fn key_tonic_triad(key: &str) -> Option<Vec<u8>> {
     Some(vec![root_midi, root_midi + third, root_midi + 7])
 }
 
+/// A chord tone tagged with its diatonic scale degree and its semitone
+/// offset above the root.
+///
+/// The `degree` fixes the staff LETTER the tone is conventionally spelled
+/// on — independent of any accidental — while `semitone` fixes its pitch
+/// class. Both are needed to spell a tone correctly for staff notation
+/// (e.g. a diminished seventh is degree 7 at 9 semitones, which spells as a
+/// double-flat seventh `B𝄫` over a C root, not as a major sixth `A`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ScaleTone {
+    /// Diatonic degree above the root: 1 = root, 3 = third (or the 2/4 of a
+    /// `sus`), 5 = fifth, 6 = sixth, 7 = seventh, 9/11/13 = the compound
+    /// tensions. Determines the note letter `(root_letter + (degree - 1))`.
+    degree: u8,
+    /// Semitones above the root (root `0` included).
+    semitone: u8,
+}
+
+/// Convenience constructor for a [`ScaleTone`].
+const fn tone(degree: u8, semitone: u8) -> ScaleTone {
+    ScaleTone { degree, semitone }
+}
+
 /// The constituent intervals of a chord, split into the full tone set and
 /// the subset that defines the chord's identity.
 struct ChordIntervals {
-    /// Every interval (in semitones above the root, root `0` included) the
-    /// chord nominally contains — the full stack a piano voicing would play.
-    all: Vec<u8>,
+    /// Every tone the chord nominally contains (root included) — the full
+    /// stack a piano voicing would play.
+    all: Vec<ScaleTone>,
     /// The subset of `all` that a reduced fretboard voicing MUST sound for
     /// the result to be unambiguously this chord: root, third (or `sus`
     /// replacement), the seventh (when present), the single highest named
     /// tension, and any altered / characteristic fifth. The perfect fifth and
     /// the inner (implied) tensions are droppable, mirroring how guitarists
     /// reduce extended chords to fit six strings.
-    essential: Vec<u8>,
+    essential: Vec<ScaleTone>,
 }
 
 /// Maps a chord quality + extension string to the semitone intervals (from
@@ -508,16 +531,20 @@ fn chord_intervals(quality: ChordQuality, ext: &str) -> ChordIntervals {
     // Power chord ("C5"): root + fifth, no third. Both tones are essential.
     if ext == "5" {
         return ChordIntervals {
-            all: vec![0, fifth],
-            essential: vec![0, fifth],
+            all: vec![tone(1, 0), tone(5, fifth)],
+            essential: vec![tone(1, 0), tone(5, fifth)],
         };
     }
 
-    // `sus` replaces the third with a 2nd or 4th.
+    // `sus` replaces the third with a 2nd or 4th. The replacement keeps its
+    // own diatonic degree (2 or 4) so it spells on the correct staff letter.
+    let mut third_degree = 3u8;
     if ext.contains("sus2") {
         third = 2;
+        third_degree = 2;
     } else if ext.contains("sus4") || ext == "sus" {
         third = 5;
+        third_degree = 4;
     }
 
     // Altered fifth. `b5` / `#5` are explicit; the `alt` dominant raises the
@@ -537,15 +564,20 @@ fn chord_intervals(quality: ChordQuality, ext: &str) -> ChordIntervals {
         fifth = 8;
     }
 
-    let mut all_extras: Vec<u8> = Vec::new();
-    let mut ess_extras: Vec<u8> = Vec::new();
+    let mut all_extras: Vec<ScaleTone> = Vec::new();
+    let mut ess_extras: Vec<ScaleTone> = Vec::new();
 
     if let Some(rest) = ext.strip_prefix("add") {
         // Add-tone chord (e.g. "add9"): triad plus the added degree, no
         // seventh. The added tone is the chord's identity, so it is essential.
         if let Some(semi) = degree_to_semitone(rest) {
-            all_extras.push(semi);
-            ess_extras.push(semi);
+            // `degree_to_semitone` matches only the bare degree tokens
+            // "2"/"4"/"6"/"9"/"11"/"13", so `rest` is exactly that degree.
+            let degree: u8 = rest
+                .parse()
+                .expect("degree_to_semitone only matches numeric degree tokens");
+            all_extras.push(tone(degree, semi));
+            ess_extras.push(tone(degree, semi));
         }
     } else {
         let has_six = ext.contains('6');
@@ -582,8 +614,8 @@ fn chord_intervals(quality: ChordQuality, ext: &str) -> ChordIntervals {
             } else {
                 10
             };
-            all_extras.push(seventh);
-            ess_extras.push(seventh);
+            all_extras.push(tone(7, seventh));
+            ess_extras.push(tone(7, seventh));
 
             // Ninth: flat / sharp / natural. `alt` implies a sharp ninth.
             let ninth = if ext.contains("b9") {
@@ -615,46 +647,46 @@ fn chord_intervals(quality: ChordQuality, ext: &str) -> ChordIntervals {
             };
 
             if let Some(n) = ninth {
-                all_extras.push(n);
+                all_extras.push(tone(9, n));
             }
             if let Some(e) = eleventh {
-                all_extras.push(e);
+                all_extras.push(tone(11, e));
             }
             if let Some(t) = thirteenth {
-                all_extras.push(t);
+                all_extras.push(tone(13, t));
             }
 
             // The single highest named tension is the chord's headline colour
             // and must survive a reduced voicing; the tensions below it are
             // droppable.
             if let Some(t) = thirteenth {
-                ess_extras.push(t);
+                ess_extras.push(tone(13, t));
             } else if let Some(e) = eleventh {
-                ess_extras.push(e);
+                ess_extras.push(tone(11, e));
             } else if let Some(n) = ninth {
-                ess_extras.push(n);
+                ess_extras.push(tone(9, n));
             }
         } else if has9 {
             // Reachable only for a "6/9" chord (the `has_six` guard above
             // suppresses the implied seventh): add the 9th alongside the 6th.
-            all_extras.push(14);
-            ess_extras.push(14);
+            all_extras.push(tone(9, 14));
+            ess_extras.push(tone(9, 14));
         }
 
         // A sixth (e.g. "C6", "Am6", "C69") adds the major sixth, which is the
         // chord's defining colour.
         if has_six {
-            all_extras.push(9);
-            ess_extras.push(9);
+            all_extras.push(tone(6, 9));
+            ess_extras.push(tone(6, 9));
         }
     }
 
-    let mut all = vec![0u8, third, fifth];
+    let mut all = vec![tone(1, 0), tone(third_degree, third), tone(5, fifth)];
     all.extend_from_slice(&all_extras);
 
-    let mut essential = vec![0u8, third];
+    let mut essential = vec![tone(1, 0), tone(third_degree, third)];
     if fifth_essential {
-        essential.push(fifth);
+        essential.push(tone(5, fifth));
     }
     essential.extend_from_slice(&ess_extras);
 
@@ -711,8 +743,8 @@ pub fn chord_tones(chord_name: &str) -> Option<ChordTones> {
         None => root_pc,
     };
 
-    let to_pcs = |ivs: &[u8]| {
-        let mut v: Vec<u8> = ivs.iter().map(|&s| (root_pc + s) % 12).collect();
+    let to_pcs = |ivs: &[ScaleTone]| {
+        let mut v: Vec<u8> = ivs.iter().map(|t| (root_pc + t.semitone) % 12).collect();
         // A slash bass that is not already a chord tone still has to be voiced
         // and is part of the chord's identity.
         v.push(bass_pc);
@@ -727,6 +759,163 @@ pub fn chord_tones(chord_name: &str) -> Option<ChordTones> {
         pitch_classes: to_pcs(&intervals.all),
         essential: to_pcs(&intervals.essential),
     })
+}
+
+// ---------------------------------------------------------------------------
+// Staff notation placement
+// ---------------------------------------------------------------------------
+
+/// MIDI note number the staff layout places the chord root on (C4, middle C).
+///
+/// Unlike [`chord_pitches`] — which fixes the root at C3 for a comfortable
+/// synth register — staff display centres the root around middle C so a
+/// typical chord's tones sit on or near the treble staff (bottom line E4,
+/// top line F5) with few ledger lines.
+const STAFF_ROOT_MIDI: i32 = 60;
+
+/// The seven natural-note pitch classes, indexed by diatonic letter
+/// (`0` = C, `1` = D, … `6` = B).
+const LETTER_PITCH_CLASSES: [i32; 7] = [0, 2, 4, 5, 7, 9, 11];
+
+/// The seven note letters, indexed as in [`LETTER_PITCH_CLASSES`].
+const LETTER_NAMES: [char; 7] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+
+/// Diatonic letter index of a [`Note`] (`C` = 0, `D` = 1, … `B` = 6).
+const fn letter_index(note: Note) -> i32 {
+    match note {
+        Note::C => 0,
+        Note::D => 1,
+        Note::E => 2,
+        Note::F => 3,
+        Note::G => 4,
+        Note::A => 5,
+        Note::B => 6,
+    }
+}
+
+/// A chord tone placed for staff notation: its diatonic spelling (note
+/// letter + accidental) and octave, ready for a renderer to position on a
+/// five-line staff.
+///
+/// The tone is spelled from the chord's own structure — its diatonic degree
+/// fixes the letter — so each note lands on the staff line/space a musician
+/// expects (e.g. `Ebm7` → E♭ G♭ B♭ D♭, not the enharmonic D♯ F♯ A♯ C♯).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StaffNote {
+    /// The note letter the tone is spelled on, `'A'..='G'`.
+    pub letter: char,
+    /// The accidental applied to `letter`, as a signed semitone offset:
+    /// `-2` double-flat, `-1` flat, `0` natural, `1` sharp, `2` double-sharp.
+    pub accidental: i8,
+    /// Scientific-pitch-notation octave (middle C = C4, so `octave == 4`).
+    pub octave: i8,
+    /// Absolute MIDI note number, consistent with `letter` + `accidental` +
+    /// `octave`. Lets a consumer cross-check the spelling or drive audio.
+    pub midi: u8,
+}
+
+/// Picks the octave (in diatonic letter-step terms) for a letter so its
+/// natural pitch sits as close as possible to `target_midi`. Rounding to the
+/// nearest octave keeps the resulting accidental small (≈ -2..=2) and places
+/// enharmonic spellings such as `Cb` / `B#` in the correct register.
+fn root_octave_for(letter_idx: i32, target_midi: i32) -> i32 {
+    let natural_pc = LETTER_PITCH_CLASSES[letter_idx as usize];
+    // natural_midi = (octave + 1) * 12 + natural_pc; solve for octave and
+    // round so the chosen octave minimises |target_midi - natural_midi|.
+    let raw = f64::from(target_midi - natural_pc) / 12.0 - 1.0;
+    raw.round() as i32
+}
+
+/// Places a diatonic staff step (`letter_index + 7 * octave`) at the exact
+/// pitch `target_midi`, deriving the accidental as the signed difference
+/// between the target and the letter's natural pitch at that octave. The
+/// returned [`StaffNote`]'s `midi` therefore always equals `target_midi`.
+fn place_step(step: i32, target_midi: i32) -> StaffNote {
+    let letter_idx = step.rem_euclid(7) as usize;
+    let octave = step.div_euclid(7);
+    let natural_midi = (octave + 1) * 12 + LETTER_PITCH_CLASSES[letter_idx];
+    StaffNote {
+        letter: LETTER_NAMES[letter_idx],
+        accidental: (target_midi - natural_midi) as i8,
+        octave: octave as i8,
+        // The chord-tone range is provably 47..=92 (slash bass at C2 through a
+        // 13th over a B root), well inside the MIDI byte; clamp defensively so
+        // a future interval change can never wrap the cast.
+        midi: target_midi.clamp(0, 127) as u8,
+    }
+}
+
+/// Diatonic staff placement of a chord's constituent tones, spelled from the
+/// chord's own structure so each tone lands on its conventional staff
+/// line/space.
+///
+/// Returns the tones ascending by pitch (a slash bass, dropped an octave
+/// below the root, sorts first). Returns `None` when `chord_name` is not a
+/// parseable chord — the same inputs [`parse_chord`] rejects.
+///
+/// This is the spelling companion to [`chord_pitches`] (MIDI for audio) and
+/// [`chord_tones`] (octave-independent pitch classes for voicing synthesis):
+/// where those discard letter spelling, this keeps it, which is exactly what
+/// a staff renderer needs to choose the right line for each note. The root is
+/// centred at middle C (see `STAFF_ROOT_MIDI`).
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::chord_staff_notes;
+///
+/// let notes = chord_staff_notes("Cmaj9").unwrap();
+/// let spelled: Vec<(char, i8)> = notes.iter().map(|n| (n.letter, n.accidental)).collect();
+/// // C E G B D — all naturals, each on its own staff letter.
+/// assert_eq!(spelled, vec![('C', 0), ('E', 0), ('G', 0), ('B', 0), ('D', 0)]);
+///
+/// // Flat-side chords spell with flats, not the enharmonic sharps.
+/// let ebm7 = chord_staff_notes("Ebm7").unwrap();
+/// let letters: Vec<char> = ebm7.iter().map(|n| n.letter).collect();
+/// assert_eq!(letters, vec!['E', 'G', 'B', 'D']);
+/// assert!(ebm7.iter().all(|n| n.accidental == -1));
+///
+/// assert!(chord_staff_notes("not-a-chord").is_none());
+/// ```
+#[must_use]
+pub fn chord_staff_notes(chord_name: &str) -> Option<Vec<StaffNote>> {
+    let detail = parse_chord(chord_name)?;
+    let root_pc = i32::from(root_semitone(detail.root, detail.root_accidental));
+    let root_letter = letter_index(detail.root);
+    let root_midi = STAFF_ROOT_MIDI + root_pc;
+
+    // Diatonic position of the root, counted in letter-steps. Choosing the
+    // octave by `root_octave_for` keeps the root's accidental small and pins
+    // its MIDI to `root_midi` regardless of how the root is spelled.
+    let root_step = root_letter + 7 * root_octave_for(root_letter, root_midi);
+
+    let intervals = chord_intervals(detail.quality, detail.extension.as_deref().unwrap_or(""));
+
+    let mut notes: Vec<StaffNote> = intervals
+        .all
+        .iter()
+        .map(|t| {
+            // Stack each tone its diatonic degree above the root letter and
+            // place it at the exact pitch `root_midi + semitone`.
+            let step = root_step + i32::from(t.degree - 1);
+            place_step(step, root_midi + i32::from(t.semitone))
+        })
+        .collect();
+
+    // A slash bass that is not already a chord tone is part of the chord's
+    // identity; drop it an octave below the root so it is the lowest note,
+    // matching `chord_pitches`.
+    if let Some((bass, bass_acc)) = detail.bass_note {
+        let bass_pc = i32::from(root_semitone(bass, bass_acc));
+        let bass_letter = letter_index(bass);
+        let bass_midi = (STAFF_ROOT_MIDI - 12) + bass_pc;
+        let bass_step = bass_letter + 7 * root_octave_for(bass_letter, bass_midi);
+        notes.push(place_step(bass_step, bass_midi));
+    }
+
+    notes.sort_by_key(|n| (n.midi, n.letter, n.accidental));
+    notes.dedup();
+    Some(notes)
 }
 
 /// Maps an extension degree token (the tail of an `add` chord, e.g. `"9"`)
@@ -963,6 +1152,153 @@ mod tests {
     /// Shorthand: parse and unwrap.
     fn pd(input: &str) -> ChordDetail {
         parse_chord(input).unwrap_or_else(|| panic!("expected Some for chord '{input}'"))
+    }
+
+    // -- Staff notation placement -------------------------------------------
+
+    /// `(letter, accidental, octave)` triples for the spelled chord tones.
+    fn staff_spelling(chord: &str) -> Vec<(char, i8, i8)> {
+        chord_staff_notes(chord)
+            .unwrap_or_else(|| panic!("expected Some for chord '{chord}'"))
+            .into_iter()
+            .map(|n| (n.letter, n.accidental, n.octave))
+            .collect()
+    }
+
+    #[test]
+    fn staff_notes_reject_unparseable() {
+        assert!(chord_staff_notes("not-a-chord").is_none());
+        assert!(chord_staff_notes("").is_none());
+    }
+
+    #[test]
+    fn staff_notes_major_triad_all_naturals() {
+        // C major: C E G, each on its own staff letter, no accidentals, root
+        // at middle C (C4).
+        assert_eq!(
+            staff_spelling("C"),
+            vec![('C', 0, 4), ('E', 0, 4), ('G', 0, 4)]
+        );
+    }
+
+    #[test]
+    fn staff_notes_extended_chord_keeps_diatonic_letters() {
+        // Cmaj9 stacks C E G B D — five distinct staff letters, the 9th an
+        // octave up on D5.
+        assert_eq!(
+            staff_spelling("Cmaj9"),
+            vec![
+                ('C', 0, 4),
+                ('E', 0, 4),
+                ('G', 0, 4),
+                ('B', 0, 4),
+                ('D', 0, 5),
+            ]
+        );
+    }
+
+    #[test]
+    fn staff_notes_flat_chord_spells_with_flats() {
+        // Ebm7 must spell E♭ G♭ B♭ D♭, NOT the enharmonic D♯ F♯ A♯ C♯ — the
+        // letters land on E/G/B/D staff lines with flats.
+        assert_eq!(
+            staff_spelling("Ebm7"),
+            vec![('E', -1, 4), ('G', -1, 4), ('B', -1, 4), ('D', -1, 5),]
+        );
+    }
+
+    #[test]
+    fn staff_notes_diminished_seventh_double_flat() {
+        // Cdim7 = C E♭ G♭ B𝄫: the diminished seventh spells as a double-flat
+        // seventh (degree 7), not as the enharmonic natural sixth (A).
+        assert_eq!(
+            staff_spelling("Cdim7"),
+            vec![('C', 0, 4), ('E', -1, 4), ('G', -1, 4), ('B', -2, 4),]
+        );
+    }
+
+    #[test]
+    fn staff_notes_sus_chords_use_second_and_fourth_letters() {
+        // Csus2 → C D G (2nd on the D letter); Csus4 → C F G (4th on F).
+        assert_eq!(
+            staff_spelling("Csus2"),
+            vec![('C', 0, 4), ('D', 0, 4), ('G', 0, 4)]
+        );
+        assert_eq!(
+            staff_spelling("Csus4"),
+            vec![('C', 0, 4), ('F', 0, 4), ('G', 0, 4)]
+        );
+    }
+
+    #[test]
+    fn staff_notes_slash_bass_sorts_below_root() {
+        // C/G drops the bass G an octave below the root so it is the lowest
+        // note (G3), then C E G of the triad above.
+        let notes = chord_staff_notes("C/G").unwrap();
+        assert_eq!(notes.first().map(|n| (n.letter, n.octave)), Some(('G', 3)));
+        // Ascending by MIDI.
+        assert!(notes.windows(2).all(|w| w[0].midi <= w[1].midi));
+        assert_eq!(notes.first().unwrap().midi, 55); // G3
+    }
+
+    #[test]
+    fn staff_notes_midi_matches_spelling() {
+        // The reported MIDI must equal the pitch implied by letter + accidental
+        // + octave for every tone, across a spread of chord types.
+        for chord in ["C", "Am7", "F#7b9", "Bbmaj13", "G/B", "Cdim7", "Dsus4"] {
+            for n in chord_staff_notes(chord).unwrap() {
+                let natural_pc =
+                    LETTER_PITCH_CLASSES[LETTER_NAMES.iter().position(|&c| c == n.letter).unwrap()];
+                let expected =
+                    (i32::from(n.octave) + 1) * 12 + natural_pc + i32::from(n.accidental);
+                assert_eq!(
+                    i32::from(n.midi),
+                    expected,
+                    "midi/spelling mismatch for {chord}: {n:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn staff_notes_enharmonic_roots_land_in_register() {
+        // B# spells on the B letter (sharp) and Cb on the C letter (flat),
+        // each still pitched near middle C rather than an octave off.
+        let bsharp = chord_staff_notes("B#").unwrap();
+        assert_eq!(bsharp[0].letter, 'B');
+        assert_eq!(bsharp[0].accidental, 1);
+        assert_eq!(bsharp[0].midi, 60); // B#3 == C4 pitch
+
+        let cflat = chord_staff_notes("Cb").unwrap();
+        assert_eq!(cflat[0].letter, 'C');
+        assert_eq!(cflat[0].accidental, -1);
+        assert_eq!(cflat[0].midi, 71); // Cb5 == B4 pitch
+    }
+
+    #[test]
+    fn staff_notes_cover_every_root_and_quality() {
+        // Smoke: every root × a spread of qualities yields a non-empty, in-range
+        // placement with small accidentals — no panic, no wild spelling.
+        for root in ["C", "D", "E", "F", "G", "A", "B", "Bb", "F#", "C#", "Ab"] {
+            for suffix in [
+                "", "m", "7", "maj7", "m7b5", "dim7", "aug", "sus4", "13", "6",
+            ] {
+                let chord = format!("{root}{suffix}");
+                let notes = chord_staff_notes(&chord)
+                    .unwrap_or_else(|| panic!("expected Some for {chord}"));
+                assert!(!notes.is_empty(), "no notes for {chord}");
+                for n in notes {
+                    assert!(
+                        (-2..=2).contains(&n.accidental),
+                        "wild accidental for {chord}: {n:?}"
+                    );
+                    assert!(
+                        (36..=96).contains(&n.midi),
+                        "out-of-register {chord}: {n:?}"
+                    );
+                }
+            }
+        }
     }
 
     // -- Basic major chords --------------------------------------------------

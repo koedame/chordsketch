@@ -409,6 +409,48 @@ pub fn chord_pitches(chord: String) -> Option<Vec<u8>> {
     chordsketch_chordpro::chord_pitches(&chord)
 }
 
+/// One staff-placed chord tone returned by [`chord_staff_notes`].
+///
+/// Mirrors the wasm `StaffNote` interface and the NAPI `StaffNote` object,
+/// and the `StaffNote` dictionary in `chordsketch.udl`. The `letter` field
+/// carries a single `A`–`G` character as a string (the UDL has no `char`
+/// type).
+#[derive(Clone, Debug)]
+pub struct StaffNote {
+    /// Note letter the tone is spelled on, `"A"`–`"G"`.
+    pub letter: String,
+    /// Signed accidental semitone offset: `-2` double-flat … `2` double-sharp.
+    pub accidental: i8,
+    /// Scientific-pitch-notation octave (middle C = C4).
+    pub octave: i8,
+    /// Absolute MIDI note number, consistent with the spelling.
+    pub midi: u8,
+}
+
+/// Constituent tones of a chord spelled for staff notation — note letter,
+/// signed accidental, octave, and MIDI — for drawing the chord on a
+/// five-line staff (#2695). Mirrors the wasm `chordStaffNotes` and NAPI
+/// `chordStaffNotes` exports (`.claude/rules/fix-propagation.md` §Bindings).
+///
+/// Returns the tones ascending by pitch (a slash bass sorts first), or
+/// `None` when `chord` is not parseable as a chord. Each tone is spelled
+/// diatonically from the chord's structure (e.g. `Ebm7` → E♭ G♭ B♭ D♭, not
+/// D♯ F♯ A♯ C♯).
+#[must_use]
+pub fn chord_staff_notes(chord: String) -> Option<Vec<StaffNote>> {
+    chordsketch_chordpro::chord_staff_notes(&chord).map(|notes| {
+        notes
+            .into_iter()
+            .map(|n| StaffNote {
+                letter: n.letter.to_string(),
+                accidental: n.accidental,
+                octave: n.octave,
+                midi: n.midi,
+            })
+            .collect()
+    })
+}
+
 /// Ascending one-octave scale of a musical key as MIDI note numbers, for
 /// auditioning the key by ear — the movable-do "do re mi fa sol la ti do"
 /// (#2658). Mirrors the wasm `keyScalePitches` and NAPI `keyScalePitches`
@@ -1396,6 +1438,22 @@ mod tests {
     fn test_chord_pitches_unparseable_returns_none() {
         assert_eq!(chord_pitches("XYZ-not-a-chord".to_string()), None);
         assert_eq!(chord_pitches(String::new()), None);
+    }
+
+    #[test]
+    fn test_chord_staff_notes_spelling_and_none() {
+        let notes = chord_staff_notes("Cmaj9".to_string()).expect("Cmaj9 is a chord");
+        let spelled: Vec<(&str, i8)> = notes
+            .iter()
+            .map(|n| (n.letter.as_str(), n.accidental))
+            .collect();
+        assert_eq!(
+            spelled,
+            vec![("C", 0), ("E", 0), ("G", 0), ("B", 0), ("D", 0)]
+        );
+        let ebm7 = chord_staff_notes("Ebm7".to_string()).expect("Ebm7 is a chord");
+        assert!(ebm7.iter().all(|n| n.accidental == -1));
+        assert!(chord_staff_notes("XYZ-not-a-chord".to_string()).is_none());
     }
 
     #[test]

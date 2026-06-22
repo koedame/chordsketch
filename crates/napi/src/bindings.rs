@@ -36,12 +36,12 @@ use napi_derive::napi;
 
 use crate::{
     chord_diagram_svg_inner, chord_diagram_svg_inner_with_orientation, chord_pitches_inner,
-    do_convert_chordpro_to_irealb, do_convert_irealb_to_chordpro_text, do_parse_irealb,
-    do_render_bytes, do_render_ireal_pdf, do_render_ireal_png, do_render_ireal_svg,
-    do_render_pdf_with_warnings, do_render_string, do_render_string_with_warnings,
-    do_serialize_irealb, key_scale_pitches_inner, key_tonic_triad_inner,
-    render_html_css_with_options_inner, resolve_options_inner, validate_defines_pairs,
-    validate_inner,
+    chord_staff_notes_inner, do_convert_chordpro_to_irealb, do_convert_irealb_to_chordpro_text,
+    do_parse_irealb, do_render_bytes, do_render_ireal_pdf, do_render_ireal_png,
+    do_render_ireal_svg, do_render_pdf_with_warnings, do_render_string,
+    do_render_string_with_warnings, do_serialize_irealb, key_scale_pitches_inner,
+    key_tonic_triad_inner, render_html_css_with_options_inner, resolve_options_inner,
+    validate_defines_pairs, validate_inner,
 };
 
 /// Render options matching the WASM package API.
@@ -520,6 +520,53 @@ pub fn chord_diagram_svg_with_defines(
 #[napi(js_name = "chordPitches")]
 pub fn chord_pitches(chord: String) -> Option<Buffer> {
     chord_pitches_inner(&chord).map(Buffer::from)
+}
+
+/// One staff-placed chord tone. Mirrors the `StaffNote` interface in
+/// `crates/napi/index.d.ts`; the `#[napi(object)]` attribute marshals this
+/// into a plain JS `{letter, accidental, octave, midi}` record.
+///
+/// `accidental` / `octave` are `i32` (not the core's `i8`) because napi-rs
+/// marshals only the wider integer types as plain JS `number`s; the value
+/// ranges (accidental ≈ -2..=2, octave ≈ 2..=6) are unchanged.
+#[napi(object)]
+pub struct StaffNote {
+    /// Note letter the tone is spelled on, `"A"`–`"G"`.
+    pub letter: String,
+    /// Signed accidental semitone offset: `-2` double-flat … `2` double-sharp.
+    pub accidental: i32,
+    /// Scientific-pitch-notation octave (middle C = C4).
+    pub octave: i32,
+    /// Absolute MIDI note number, consistent with the spelling.
+    pub midi: u8,
+}
+
+/// Constituent tones of a chord spelled for staff notation — note letter,
+/// signed accidental, octave, and MIDI — for drawing the chord on a
+/// five-line staff (#2695).
+///
+/// Returns the tones ascending by pitch (a slash bass sorts first), or
+/// `null` when `chord` is not parseable as a chord. Each tone is spelled
+/// diatonically from the chord's structure (e.g. `Ebm7` → E♭ G♭ B♭ D♭, not
+/// D♯ F♯ A♯ C♯).
+///
+/// Thin wrapper over the pure-Rust `chord_staff_notes_inner`. Sister-site to
+/// the wasm `chordStaffNotes` export and the FFI `chord_staff_notes` function
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+#[must_use]
+#[napi(js_name = "chordStaffNotes")]
+pub fn chord_staff_notes(chord: String) -> Option<Vec<StaffNote>> {
+    chord_staff_notes_inner(&chord).map(|notes| {
+        notes
+            .into_iter()
+            .map(|n| StaffNote {
+                letter: n.letter.to_string(),
+                accidental: i32::from(n.accidental),
+                octave: i32::from(n.octave),
+                midi: n.midi,
+            })
+            .collect()
+    })
 }
 
 /// Ascending one-octave scale of a musical key as MIDI note numbers, for

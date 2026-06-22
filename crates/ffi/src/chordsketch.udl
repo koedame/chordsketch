@@ -148,6 +148,17 @@ namespace chordsketch {
     /// root), or `null` when `chord` is not parseable as a chord.
     sequence<u8>? chord_pitches(string chord);
 
+    /// Constituent tones of a chord spelled for staff notation (#2695).
+    /// Mirrors the wasm `chordStaffNotes` and NAPI `chordStaffNotes`
+    /// exports.
+    ///
+    /// Returns the tones ascending by pitch (a slash bass sorts first),
+    /// or `null` when `chord` is not parseable as a chord. Each tone is
+    /// spelled diatonically from the chord's structure (e.g. `Ebm7` →
+    /// E♭ G♭ B♭ D♭, not D♯ F♯ A♯ C♯), so a renderer can place it on its
+    /// conventional staff line.
+    sequence<StaffNote>? chord_staff_notes(string chord);
+
     /// Ascending one-octave scale of a musical key as MIDI note
     /// numbers, for auditioning the key by ear — the movable-do "do re
     /// mi fa sol la ti do" (#2658). Mirrors the wasm `keyScalePitches`
@@ -326,6 +337,21 @@ dictionary ValidationError {
     u32 column;
     /// Human-readable description of the issue.
     string message;
+};
+
+/// One staff-placed chord tone returned by `chord_staff_notes()`.
+///
+/// Mirrors the wasm `StaffNote` interface and the NAPI `StaffNote` object.
+dictionary StaffNote {
+    /// Note letter the tone is spelled on, `"A"`–`"G"`.
+    string letter;
+    /// Signed accidental as a semitone offset on `letter`: `-2`
+    /// double-flat, `-1` flat, `0` natural, `1` sharp, `2` double-sharp.
+    i8 accidental;
+    /// Scientific-pitch-notation octave (middle C = C4).
+    i8 octave;
+    /// Absolute MIDI note number, consistent with the spelling.
+    u8 midi;
 };
 
 [Error]
