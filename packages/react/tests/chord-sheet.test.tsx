@@ -608,20 +608,22 @@ describe('<ChordSheet>', () => {
     // Inspector appears with the selected chord in the header.
     expect(container.querySelector('.chordsketch-sheet__cins')).not.toBeNull();
     expect(container.querySelector('.chordsketch-sheet__cins-name')?.textContent).toBe('Am');
-    // A type chip emits a ChordEditEvent rewriting the chord at its
-    // source position. Am is detail-less in the stub, so the editor
-    // falls back to raw-name parts (root A, suffix "m"); picking "7"
-    // writes "A7" over the original [Am].
-    const chips = container.querySelectorAll('.chordsketch-sheet__cins-chip');
-    const seven = Array.from(chips).find((c) => c.textContent === '7') as HTMLButtonElement;
-    expect(seven).toBeDefined();
-    fireEvent.click(seven);
+    // A 7th chip emits a ChordEditEvent rewriting the chord at its source
+    // position. Am is detail-less in the stub, so the editor falls back to
+    // raw-name parts (triad min, no 7th); clicking the "7" seventh chip adds
+    // the dominant seventh to the minor triad → "Am7" over the original [Am]
+    // (the seventh is independent of the triad — ADR-0037).
+    const seventhBtn = Array.from(
+      container.querySelectorAll('[aria-label="Seventh"] button'),
+    ).find((c) => c.textContent === '7') as HTMLButtonElement;
+    expect(seventhBtn).toBeDefined();
+    fireEvent.click(seventhBtn);
     expect(onChordEdit).toHaveBeenCalledTimes(1);
     expect(onChordEdit.mock.calls[0][0]).toEqual({
       line: 1,
       fromColumn: 0,
       fromLength: 4,
-      chord: 'A7',
+      chord: 'Am7',
       expected: 'Am',
     });
   });
@@ -779,10 +781,13 @@ describe('<ChordSheet>', () => {
       expect(container.querySelector(".chord[role='button']")).not.toBeNull();
     });
     fireEvent.click(container.querySelector(".chord[role='button']") as HTMLElement);
-    const chips = container.querySelectorAll('.chordsketch-sheet__cins-chip');
-    const seven = Array.from(chips).find((c) => c.textContent === '7') as HTMLButtonElement;
-    fireEvent.click(seven);
-    expect(onChordEdit.mock.calls[0][0].chord).toBe('A7');
+    const seventhBtn = Array.from(
+      container.querySelectorAll('[aria-label="Seventh"] button'),
+    ).find((c) => c.textContent === '7') as HTMLButtonElement;
+    fireEvent.click(seventhBtn);
+    // Adding the dominant 7th to the minor triad uses the RAW source name
+    // (Am, not the transposed detail), so the edit writes Am7.
+    expect(onChordEdit.mock.calls[0][0].chord).toBe('Am7');
   });
 
   test('the inspector "Remove chord" button fires onChordDelete and deselects', async () => {

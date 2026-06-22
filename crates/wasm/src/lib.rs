@@ -585,6 +585,12 @@ pub(crate) fn do_parse_chordpro(
     // this warns only for values that are not keys at all (chord extensions
     // like `{key: G7}`, non-note roots like `{key: H}`), which render verbatim.
     chordsketch_chordpro::render_result::validate_keys(&song.metadata, &mut warnings);
+    // Mirror the Rust renderers' validate_ambiguous_chords invocation so the
+    // React preview flags ambiguous chord notation (`G13`, `C(9)`) and points
+    // the editor user at the explicit spelling (renderer-parity.md §Validation
+    // Parity; ADR-0037). The editor never *produces* these forms, but a song
+    // loaded from elsewhere may carry them.
+    chordsketch_chordpro::render_result::validate_ambiguous_chords(&song, &mut warnings);
     // The wasm path has no `{+config.settings.transpose}` extraction
     // (renderers fold that in via `Config::song_transpose_delta`
     // before reaching their own `effective_transpose` call). Pass

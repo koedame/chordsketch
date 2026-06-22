@@ -109,7 +109,7 @@ test.describe('chord-editor footer (ChordPro playground)', () => {
     expect(errors).toEqual([]);
   });
 
-  test('the footer exposes the jazz-tension chips and edits the selected chord', async ({
+  test('the footer exposes the structured chord-type controls and edits the selected chord', async ({
     page,
   }) => {
     const errors = trackPageErrors(page);
@@ -120,15 +120,24 @@ test.describe('chord-editor footer (ChordPro playground)', () => {
     await preview.locator(".chord[role='button']").first().click();
     await expect(page.locator(`${FOOTER} .chordsketch-sheet__cins[data-mode='edit']`)).toBeVisible();
 
-    // `maj9` is one of the extended jazz entries (#2630); absent if the
-    // preset set regressed.
-    const maj9 = page.locator(`${FOOTER} .chordsketch-sheet__cins-chip`, { hasText: /^maj9$/ });
-    await expect(maj9).toHaveCount(1);
+    // The chord-type controls are three orthogonal groups (triad / 7th /
+    // tensions, ADR-0037), not a flat palette. Their composition produces only
+    // explicit, unambiguous suffixes — `maj7(13)`, never the ambiguous `maj9`.
+    const footer = page.locator(FOOTER);
+    const triadMaj = footer.locator('[aria-label="Triad quality"] button', { hasText: /^maj$/ });
+    const seventhMaj7 = footer.locator('[aria-label="Seventh"] button', { hasText: /^maj7$/ });
+    const tension13 = footer.locator('[aria-label="Tensions"] button', { hasText: /^13$/ });
+    await expect(triadMaj).toHaveCount(1);
+    await expect(seventhMaj7).toHaveCount(1);
+    await expect(tension13).toHaveCount(1);
 
-    // Picking it rewrites the selected chord through the source-as-truth
-    // edit pipeline; the editor source should now contain a `maj9` chord.
-    await maj9.click();
-    await expect(page.locator('.cm-editor')).toContainText('maj9');
+    // Composing triad=maj, 7th=maj7, tension=13 rewrites the selected chord
+    // through the source-as-truth edit pipeline; the editor source should now
+    // carry the explicit `maj7(13)` chord.
+    await triadMaj.click();
+    await seventhMaj7.click();
+    await tension13.click();
+    await expect(page.locator('.cm-editor')).toContainText('maj7(13)');
 
     expect(errors).toEqual([]);
   });
