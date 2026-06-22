@@ -671,4 +671,14 @@ The returned string matches `package.json`'s `version` field.
 
 ## License
 
-[MIT](https://github.com/koedame/chordsketch/blob/main/LICENSE)
+The package sources are licensed under
+[MIT](https://github.com/koedame/chordsketch/blob/main/LICENSE).
+
+The treble clef, sharp, flat, and notehead glyph outlines baked into
+`bravura-glyphs` — used to draw the `{key}` key-signature chip and the
+chord-tone staff — are derived from the
+[Bravura SMuFL font](https://github.com/steinbergmedia/bravura) and are
+redistributed under the
+[SIL Open Font License 1.1](https://openfontlicense.org) (`LICENSE-OFL.txt`).
+See the project-level `NOTICE` for the required attribution; ADR-0014
+records why the glyphs ship as path data instead of a bundled font.

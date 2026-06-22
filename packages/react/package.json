@@ -2,7 +2,7 @@
   "name": "@chordsketch/react",
   "version": "0.4.0",
   "description": "React components for embedding ChordPro and iReal Pro editors + previews, powered by @chordsketch/wasm",
-  "license": "MIT",
+  "license": "MIT AND OFL-1.1",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -44,7 +44,8 @@
   ],
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE-OFL.txt"
   ],
   "scripts": {
     "build": "tsup && node -e \"require('fs').copyFileSync('src/styles.css','dist/styles.css')\"",
