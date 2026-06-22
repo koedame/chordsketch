@@ -1,6 +1,6 @@
 # ChordSketch — Design System
 
-**Version 1.1** · English-primary UI · Light theme · Editorial / Professional
+**Version 1.2** · English-primary UI · Light theme · Editorial / Professional
 
 ChordSketch is a library of chord sheets with lyrics for **ChordPro** and
 **iReal Pro**. A tool for amateurs through professionals to search, edit,
@@ -268,12 +268,24 @@ those artifacts are produced.
 - **No emoji.** Icons are line icons (1.5px stroke).
 - Avoid exclamation marks. State errors plainly: what happened, and
   the next step.
+- **Name the surface's content, not the system's model.** A label,
+  button, or placeholder says what the user enters or sees there — not
+  how the value is matched, validated, or stored. A search field's
+  placeholder is an example value or the field's name, never a
+  description of the match rule. The fix for an awkward label is a
+  shorter, natural phrase, not a longer explanatory sentence.
+- **Localized strings read as native prose.** Every locale's copy
+  follows that language's idiom; it is not a word-for-word rendering of
+  the English source or of an internal concept. A string that reads as
+  a literal translation is rewritten before it ships.
 
 | Avoid | Use |
 |---|---|
 | Oops! Couldn't save your song… 🥲 | Save failed. Check your connection. |
 | Let's create a new song! | New song |
 | Try adding your very first song now! | Add your first song |
+| Part of the title | e.g. Yesterday |
+| Title (partial match supported) | Title |
 
 ---
 
@@ -359,3 +371,9 @@ layout in either place.
   1:1 onto the `--sp-*` scale, nesting for mixed rhythm. Replaces
   per-child `margin-bottom` / margin-collapse as the spacing model. No
   new tokens.
+- **v1.2** — Extended §7 Voice & Tone with microcopy guidance: name the
+  surface's content rather than the system's model (a placeholder shows
+  an example value, not the match rule), keep each locale's strings
+  idiomatic rather than transposed from the source, and prefer a shorter
+  natural phrase over an explanatory sentence. Editorial only — no token
+  or class changes.
