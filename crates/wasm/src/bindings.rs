@@ -1024,8 +1024,10 @@ export interface StaffNote {
   /** Note letter the tone is spelled on, `"A"`–`"G"`. */
   letter: string;
   /**
-   * Signed accidental as a semitone offset on {@link letter}: `-2`
-   * double-flat, `-1` flat, `0` natural, `1` sharp, `2` double-sharp.
+   * Signed accidental as a semitone offset on {@link letter}: `-1` flat,
+   * `0` natural, `1` sharp, `±2` double. For enharmonically-extreme roots
+   * (e.g. `Cbdim7`'s triple-flat seventh) the value reaches `±3` — renderers
+   * must handle the full `-3..=3` range, not assume `±2` is the maximum.
    */
   accidental: number;
   /** Scientific-pitch-notation octave (middle C = C4). */

@@ -343,7 +343,8 @@ pub(crate) fn key_tonic_triad_inner(key: &str) -> Option<Vec<u8>> {
 pub(crate) struct StaffNotePayload {
     /// Note letter the tone is spelled on, `"A"`–`"G"`.
     pub(crate) letter: String,
-    /// Signed accidental semitone offset (`-2`..=`2`).
+    /// Signed accidental semitone offset (`-3..=3`; almost always `-2..=2`,
+    /// but reaches `±3` for enharmonically-extreme roots such as `Cbdim7`).
     pub(crate) accidental: i8,
     /// Scientific-pitch-notation octave (middle C = C4).
     pub(crate) octave: i8,
