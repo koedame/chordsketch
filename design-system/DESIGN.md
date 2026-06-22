@@ -270,14 +270,12 @@ those artifacts are produced.
   the next step.
 - **Name the surface's content, not the system's model.** A label,
   button, or placeholder says what the user enters or sees there — not
-  how the value is matched, validated, or stored. A search field's
-  placeholder is an example value or the field's name, never a
-  description of the match rule. The fix for an awkward label is a
-  shorter, natural phrase, not a longer explanatory sentence.
-- **Localized strings read as native prose.** Every locale's copy
-  follows that language's idiom; it is not a word-for-word rendering of
-  the English source or of an internal concept. A string that reads as
-  a literal translation is rewritten before it ships.
+  how the value is matched, validated, or stored (a search placeholder
+  is an example value or the field's name, not the match rule). Fix an
+  awkward label with a shorter phrase, not a longer explanation.
+- **Localized strings read as native prose.** Every locale follows its
+  own idiom — not a word-for-word rendering of the English source or of
+  an internal concept.
 
 | Avoid | Use |
 |---|---|
