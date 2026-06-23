@@ -34,6 +34,7 @@ import {
   decomposeChordSuffix,
   isSeventhAvailable,
   isTensionAvailable,
+  splitBassNote,
   toggleTension,
   withSeventh,
   withTriad,
@@ -161,6 +162,14 @@ export function ChordInspector(props: ChordInspectorProps): JSX.Element {
   const recognized = decomposed !== null;
   const selection = decomposed ?? DEFAULT_CHORD_SELECTION;
 
+  // Split the slash bass into a note + accidental so the structured Bass
+  // picker lights up. A non-plain-note bass (free-form, e.g. a compound
+  // figure) yields `null`: the note chips stay unpressed and the chord's
+  // bass is edited through the free-form `/ Bass` field below. Switching the
+  // bass note keeps the chosen accidental (parity with the Root control), and
+  // the bass accidental chips are inert until a bass note exists.
+  const bassNote = splitBassNote(bass);
+
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     if (event.key === 'Escape' && props.onClose) {
       event.preventDefault();
@@ -260,6 +269,61 @@ export function ChordInspector(props: ChordInspectorProps): JSX.Element {
               aria-label={acc.aria}
               aria-pressed={accidental === acc.value}
               onClick={() => emit({ accidental: acc.value })}
+            >
+              {acc.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Structured slash-bass picker, directly below the Root control. The
+          slash bass (`C/G`, `D/F#`) gets the same segmented note + accidental
+          treatment the Root has, plus a `None` option that removes the slash.
+          A bass the picker cannot model (a non-plain-note token) leaves every
+          chip unpressed and is edited through the free-form `/ Bass` field
+          below; the two stay in sync because both write `ChordParts.bass`. */}
+      <div className="chordsketch-sheet__cins-group">
+        <span className="chordsketch-sheet__cins-label">Bass</span>
+        <div
+          className="chordsketch-sheet__cins-seg"
+          role="group"
+          aria-label="Bass note"
+        >
+          <button
+            type="button"
+            aria-pressed={bass === ''}
+            onClick={() => emit({ bass: '' })}
+          >
+            None
+          </button>
+          {ROOT_NOTES.map((note) => (
+            <button
+              key={note}
+              type="button"
+              aria-pressed={bassNote?.note === note}
+              // Preserve the chosen accidental when switching note (parity with
+              // the Root control); default to natural when no bass note exists.
+              onClick={() => emit({ bass: `${note}${bassNote?.accidental ?? ''}` })}
+            >
+              {note}
+            </button>
+          ))}
+        </div>
+        <div
+          className="chordsketch-sheet__cins-seg"
+          role="group"
+          aria-label="Bass accidental"
+        >
+          {ACCIDENTALS.map((acc) => (
+            <button
+              key={acc.aria}
+              type="button"
+              aria-label={`Bass ${acc.aria.toLowerCase()}`}
+              // The accidental belongs to a bass note; inert until one is set,
+              // so a stray click cannot produce a noteless `/#` token.
+              disabled={bassNote === null}
+              aria-pressed={bassNote !== null && bassNote.accidental === acc.value}
+              onClick={() => bassNote && emit({ bass: `${bassNote.note}${acc.value}` })}
             >
               {acc.label}
             </button>

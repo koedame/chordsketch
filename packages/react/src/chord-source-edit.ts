@@ -1419,6 +1419,36 @@ export function partsFromRawName(
   return { root, accidental, suffix: rest, bass };
 }
 
+/** A slash-bass token split into a note letter + accidental for the
+ * structured bass picker. */
+export interface BassNote {
+  /** Bass note letter `A`–`G` (uppercase). */
+  note: string;
+  /** Bass accidental: `''` (natural), `'#'` (sharp), or `'b'` (flat). */
+  accidental: '' | '#' | 'b';
+}
+
+/**
+ * Split a slash-bass token (the text after the `/`, as
+ * {@link ChordParts.bass} carries it) into a note letter + accidental — the
+ * inverse of the `note + accidental` concatenation the bass picker writes back
+ * (and that {@link buildChordName} appends after the `/`).
+ *
+ * Returns `null` when the token is not a single plain note — i.e. an `A`–`G`
+ * letter with at most one `#` / `b`. That covers an empty token (no bass) and
+ * any non-plain bass (a compound figure, a stray character): such a token stays
+ * editable only through the inspector's free-form `/ Bass` field, and a `null`
+ * here tells the picker to leave its note chips unpressed rather than guess.
+ *
+ * A plain-note token round-trips: `splitBassNote("F#")` →
+ * `{ note: "F", accidental: "#" }`, and `note + accidental` rebuilds `"F#"`.
+ */
+export function splitBassNote(bass: string): BassNote | null {
+  const m = /^([A-G])(#|b)?$/.exec(bass);
+  if (m === null) return null;
+  return { note: m[1]!, accidental: (m[2] ?? '') as '' | '#' | 'b' };
+}
+
 /**
  * A `[chord]` token resolved out of the raw source by the editor caret —
  * everything the shell-level chord editor needs to (a) drive a
