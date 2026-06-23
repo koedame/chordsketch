@@ -530,9 +530,8 @@ pub fn decompose_diagram_title(name: &str) -> DiagramTitle {
     alterations.extend(tensions);
     alterations.sort_by_key(|t| tension_degree(t));
 
-    if alterations.is_empty() || new_base.is_empty() {
-        // No tensions, or stripping consumed the whole base — keep the
-        // original name as a single-line title.
+    if alterations.is_empty() {
+        // No tensions extracted — keep the original name as a single-line title.
         return single_line();
     }
     DiagramTitle {
