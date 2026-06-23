@@ -139,11 +139,22 @@ body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875
     <div class="cins__group">
       <span class="cins__label">Root</span>
       <div class="cins__rowc">
-        <div class="cins__seg" role="group" aria-label="Root">
+        <div class="cins__seg" role="group" aria-label="Root note">
           <button>C</button><button>D</button><button>E</button><button>F</button><button>G</button><button>A</button><button aria-pressed="true">B</button>
         </div>
         <div class="cins__seg" role="group" aria-label="Accidental">
           <button aria-label="Natural">♮</button><button aria-label="Sharp">♯</button><button aria-pressed="true" aria-label="Flat">♭</button>
+        </div>
+      </div>
+    </div>
+    <div class="cins__group">
+      <span class="cins__label">Bass</span>
+      <div class="cins__rowc">
+        <div class="cins__seg" role="group" aria-label="Bass note">
+          <button aria-pressed="true">None</button><button>C</button><button>D</button><button>E</button><button>F</button><button>G</button><button>A</button><button>B</button>
+        </div>
+        <div class="cins__seg" role="group" aria-label="Bass accidental">
+          <button aria-label="Bass natural" disabled>♮</button><button aria-label="Bass sharp" disabled>♯</button><button aria-label="Bass flat" disabled>♭</button>
         </div>
       </div>
     </div>

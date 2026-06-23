@@ -220,6 +220,121 @@ describe('<ChordInspector>', () => {
     } satisfies ChordParts);
   });
 
+  test('the bass picker lights up None when there is no slash bass', () => {
+    const { container } = setup();
+    const bassSeg = container.querySelector(
+      '[aria-label="Bass note"]',
+    ) as HTMLElement;
+    const none = Array.from(bassSeg.querySelectorAll('button')).find(
+      (b) => b.textContent === 'None',
+    ) as HTMLButtonElement;
+    expect(none.getAttribute('aria-pressed')).toBe('true');
+    // No note chip is pressed, and the bass accidental chips are inert.
+    expect(bassSeg.querySelector('button[aria-pressed="true"]')).toBe(none);
+    const accSeg = container.querySelector(
+      '[aria-label="Bass accidental"]',
+    ) as HTMLElement;
+    for (const btn of Array.from(accSeg.querySelectorAll('button'))) {
+      expect((btn as HTMLButtonElement).disabled).toBe(true);
+    }
+  });
+
+  test('the bass picker reflects a plain-note slash bass', () => {
+    const { container } = setup({ bass: 'F#', chordName: 'Am7/F#' });
+    const bassSeg = container.querySelector('[aria-label="Bass note"]') as HTMLElement;
+    expect(
+      bassSeg.querySelector('button[aria-pressed="true"]')?.textContent,
+    ).toBe('F');
+    const accSeg = container.querySelector(
+      '[aria-label="Bass accidental"]',
+    ) as HTMLElement;
+    const sharp = Array.from(accSeg.querySelectorAll('button')).find(
+      (b) => b.getAttribute('aria-label') === 'Bass sharp',
+    ) as HTMLButtonElement;
+    expect(sharp.disabled).toBe(false);
+    expect(sharp.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  test('choosing a bass note emits the full parts with the slash bass', () => {
+    const { container, onChange } = setup();
+    const bassSeg = container.querySelector('[aria-label="Bass note"]') as HTMLElement;
+    const g = Array.from(bassSeg.querySelectorAll('button')).find(
+      (b) => b.textContent === 'G',
+    ) as HTMLButtonElement;
+    fireEvent.click(g);
+    expect(onChange).toHaveBeenLastCalledWith({
+      root: 'A',
+      accidental: '',
+      suffix: 'm7',
+      bass: 'G',
+    } satisfies ChordParts);
+  });
+
+  test('switching the bass note keeps the chosen accidental', () => {
+    const { container, onChange } = setup({ bass: 'F#', chordName: 'Am7/F#' });
+    const bassSeg = container.querySelector('[aria-label="Bass note"]') as HTMLElement;
+    const a = Array.from(bassSeg.querySelectorAll('button')).find(
+      (b) => b.textContent === 'A',
+    ) as HTMLButtonElement;
+    fireEvent.click(a);
+    expect(onChange).toHaveBeenLastCalledWith({
+      root: 'A',
+      accidental: '',
+      suffix: 'm7',
+      bass: 'A#',
+    } satisfies ChordParts);
+  });
+
+  test('choosing a bass accidental rewrites the bass note', () => {
+    const { container, onChange } = setup({ bass: 'G', chordName: 'Am7/G' });
+    const accSeg = container.querySelector(
+      '[aria-label="Bass accidental"]',
+    ) as HTMLElement;
+    const flat = Array.from(accSeg.querySelectorAll('button')).find(
+      (b) => b.getAttribute('aria-label') === 'Bass flat',
+    ) as HTMLButtonElement;
+    fireEvent.click(flat);
+    expect(onChange).toHaveBeenLastCalledWith({
+      root: 'A',
+      accidental: '',
+      suffix: 'm7',
+      bass: 'Gb',
+    } satisfies ChordParts);
+  });
+
+  test('None clears the slash bass', () => {
+    const { container, onChange } = setup({ bass: 'G', chordName: 'Am7/G' });
+    const bassSeg = container.querySelector('[aria-label="Bass note"]') as HTMLElement;
+    const none = Array.from(bassSeg.querySelectorAll('button')).find(
+      (b) => b.textContent === 'None',
+    ) as HTMLButtonElement;
+    fireEvent.click(none);
+    expect(onChange).toHaveBeenLastCalledWith({
+      root: 'A',
+      accidental: '',
+      suffix: 'm7',
+      bass: '',
+    } satisfies ChordParts);
+  });
+
+  test('a free-form (non-plain-note) bass leaves the picker chips unpressed', () => {
+    // A compound / figured bass the single-note picker cannot model: None is
+    // not pressed (a bass IS set), no note chip is pressed, and the accidental
+    // chips are inert — the free-form `/ Bass` field carries the literal value.
+    const { container } = setup({ bass: 'G7', chordName: 'Am7/G7' });
+    const bassSeg = container.querySelector('[aria-label="Bass note"]') as HTMLElement;
+    expect(bassSeg.querySelector('button[aria-pressed="true"]')).toBeNull();
+    const accSeg = container.querySelector(
+      '[aria-label="Bass accidental"]',
+    ) as HTMLElement;
+    for (const btn of Array.from(accSeg.querySelectorAll('button'))) {
+      expect((btn as HTMLButtonElement).disabled).toBe(true);
+    }
+    // The free-form bass input still shows the literal token.
+    const bassInput = container.querySelectorAll('.chordsketch-sheet__cins-input')[1];
+    expect((bassInput as HTMLInputElement).value).toBe('G7');
+  });
+
   test('move buttons call onNudge and respect the bound flags', () => {
     const { container, onNudge } = setup({ canLeft: false });
     const left = container.querySelector('button[aria-label="Move chord left"]') as HTMLButtonElement;
