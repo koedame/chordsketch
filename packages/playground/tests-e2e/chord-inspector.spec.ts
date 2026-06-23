@@ -180,14 +180,16 @@ test.describe('chord-editor footer (ChordPro playground)', () => {
     // the selection / focus indicator; a focus ring stacked on top would
     // read as an unwanted outline flickering on every Arrow press. The
     // computed box-shadow must therefore stay the badge's elevation
-    // shadow, NOT the crimson focus ring (rgb(189, 22, 70) = #bd1642).
+    // shadow, NOT the crimson focus ring. `--cs-focus-ring` resolves to
+    // `var(--cs-crimson-500)` = #BD1642 = rgb(189, 22, 66), so that
+    // colour appearing in the box-shadow proves the ring leaked.
     await page.keyboard.press('ArrowRight');
     await expect(preview.locator('.chord--selected')).toBeVisible();
 
     const boxShadow = await preview
       .locator('.chord--selected')
       .evaluate((el) => getComputedStyle(el).boxShadow);
-    expect(boxShadow).not.toContain('189, 22, 70');
+    expect(boxShadow).not.toContain('189, 22, 66');
 
     expect(errors).toEqual([]);
   });
