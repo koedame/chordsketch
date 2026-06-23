@@ -188,6 +188,17 @@ describe('<ChordInspector>', () => {
     expect(onNudge).toHaveBeenCalledWith(1);
   });
 
+  test('move control inline label names the chord, matching the buttons', () => {
+    const { container } = setup();
+    // The inline label between the ◀ / ▶ buttons describes what moves —
+    // the chord, not the lyric — so it agrees with the buttons'
+    // "Move chord left" / "Move chord right" accessible names.
+    const label = container.querySelector(
+      '.chordsketch-sheet__cins-movelbl',
+    ) as HTMLElement;
+    expect(label.textContent).toBe('Move chord');
+  });
+
   test('Escape closes; the close button closes; Remove fires onRemove', () => {
     const { container, onClose, onRemove } = setup();
     fireEvent.keyDown(container.querySelector('.chordsketch-sheet__cins') as HTMLElement, {
