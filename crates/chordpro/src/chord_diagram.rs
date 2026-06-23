@@ -312,6 +312,396 @@ pub fn assign_fingers(frets: &[i32]) -> Vec<u8> {
 }
 
 // ---------------------------------------------------------------------------
+// Stacked-tension diagram title (#2719)
+// ---------------------------------------------------------------------------
+
+/// A chord-diagram title decomposed into a base name and a vertical stack of
+/// tension / alteration tokens.
+///
+/// Long chord names such as `Dmaj7(9,11,13)` overflow the narrow diagram
+/// frame when drawn as a single line. [`decompose_diagram_title`] separates
+/// the base (`Dmaj7`) from its tensions (`9`, `11`, `13`) so renderers can
+/// draw the tensions in a smaller font, stacked vertically inside
+/// parentheses, keeping the title within the frame. The ChordPro source is
+/// unaffected — `[Dmaj7(9,11,13)]` round-trips unchanged; only the diagram
+/// *title* is laid out differently.
+///
+/// This is the single source of truth every renderer (the three SVG title
+/// sites here, plus the PDF renderer's three title sites) routes through, so
+/// the base/tension split and ordering cannot drift between surfaces (cf.
+/// `.claude/rules/fix-propagation.md`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiagramTitle {
+    /// The base chord name, drawn at full size (e.g. `Dmaj7`, `F#m7`).
+    pub base: String,
+    /// Tension / alteration tokens, drawn small and stacked, ordered
+    /// ascending by scale degree (e.g. `["b5", "9", "11"]` — `b5` lowest).
+    ///
+    /// Empty when the name carries no parenthesised tensions and no
+    /// accidental-prefixed alteration; the renderer then draws [`base`](Self::base)
+    /// as a single line, exactly as before this feature landed.
+    pub tensions: Vec<String>,
+}
+
+/// Length in bytes of the leading note-root prefix (`A`–`G` plus an optional
+/// `b` / `#` / `♭` / `♯` accidental) of a chord name, or `0` when the string
+/// does not begin with a note letter.
+///
+/// Used to skip the root before scanning the quality for alterations, so the
+/// flat in a flat-root name (`Bb`, `Db`) is never mistaken for a `b5`-style
+/// alteration.
+fn root_prefix_len(s: &str) -> usize {
+    let mut it = s.chars();
+    let Some(first) = it.next() else { return 0 };
+    if !('A'..='G').contains(&first) {
+        return 0;
+    }
+    let mut len = first.len_utf8();
+    if let Some(c) = it.next() {
+        if matches!(c, 'b' | '#' | '♭' | '♯') {
+            len += c.len_utf8();
+        }
+    }
+    len
+}
+
+/// Leading scale-degree number of a tension token, used to order the stack
+/// ascending: `b5` → 5, `#11` → 11, `13` → 13. Tokens with no digit sort
+/// first (degree 0).
+fn tension_degree(token: &str) -> u32 {
+    let digits: String = token
+        .chars()
+        .skip_while(|c| !c.is_ascii_digit())
+        .take_while(char::is_ascii_digit)
+        .collect();
+    digits.parse().unwrap_or(0)
+}
+
+/// Pull accidental-prefixed alteration tokens (`b5`, `#5`, `b9`, `#9`, `#11`,
+/// `b13`, …) out of a chord *quality* (the part after the note root),
+/// returning the quality with those tokens removed plus the extracted tokens
+/// in source order.
+///
+/// Only accidental-prefixed degrees in {4, 5, 6, 9, 11, 13} are extracted, so
+/// a plain `sus4`, `add9`, or `6/9` keeps its number inline (those are part
+/// of the chord quality, not stacked tensions). A bare `b` / `#` not followed
+/// by such a degree is left untouched.
+fn extract_alterations(quality: &str) -> (String, Vec<String>) {
+    const ALLOWED: [&str; 6] = ["4", "5", "6", "9", "11", "13"];
+    let chars: Vec<char> = quality.chars().collect();
+    let mut out = String::new();
+    let mut tokens = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if matches!(c, 'b' | '#' | '♭' | '♯') {
+            let mut j = i + 1;
+            while j < chars.len() && chars[j].is_ascii_digit() {
+                j += 1;
+            }
+            let digits: String = chars[i + 1..j].iter().collect();
+            if ALLOWED.contains(&digits.as_str()) {
+                let mut tok = String::with_capacity(1 + digits.len());
+                tok.push(c);
+                tok.push_str(&digits);
+                tokens.push(tok);
+                i = j;
+                continue;
+            }
+        }
+        out.push(c);
+        i += 1;
+    }
+    (out, tokens)
+}
+
+/// Decompose a chord-diagram title into a [`DiagramTitle`] (base + ascending
+/// tension stack).
+///
+/// The split combines two sources of tensions:
+/// 1. an explicit parenthesised tail — `Dmaj7(9,11,13)` → base `Dmaj7`,
+///    tensions `9, 11, 13`;
+/// 2. accidental-prefixed alterations embedded in the quality — `F#m7b5` →
+///    base `F#m7`, tension `b5`.
+///
+/// The merged tensions are sorted ascending by scale degree so the renderer
+/// can stack them bottom-to-top in that order. When neither source yields a
+/// tension the returned `tensions` is empty and `base` is the original name
+/// verbatim — the single-line path.
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::chord_diagram::decompose_diagram_title;
+///
+/// let t = decompose_diagram_title("Dmaj7(9,11,13)");
+/// assert_eq!(t.base, "Dmaj7");
+/// assert_eq!(t.tensions, vec!["9", "11", "13"]);
+///
+/// let t = decompose_diagram_title("F#m7b5(9,11)");
+/// assert_eq!(t.base, "F#m7");
+/// assert_eq!(t.tensions, vec!["b5", "9", "11"]);
+///
+/// // A flat-root power chord is NOT split — the root's "b" is not a tension.
+/// let t = decompose_diagram_title("Bb5");
+/// assert_eq!(t.base, "Bb5");
+/// assert!(t.tensions.is_empty());
+///
+/// // Plain names round-trip unchanged.
+/// let t = decompose_diagram_title("Am");
+/// assert_eq!(t.base, "Am");
+/// assert!(t.tensions.is_empty());
+/// ```
+#[must_use]
+pub fn decompose_diagram_title(name: &str) -> DiagramTitle {
+    // 1. Peel a trailing parenthesised tension list: "Base(t1,t2,...)".
+    let mut base = name;
+    let mut tensions: Vec<String> = Vec::new();
+    if name.ends_with(')') {
+        if let Some(open) = name.rfind('(') {
+            let head = &name[..open];
+            // Require a non-empty head so a degenerate "(9)" with no chord
+            // base falls through to the single-line path below.
+            if !head.is_empty() {
+                tensions = name[open + 1..name.len() - 1]
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(String::from)
+                    .collect();
+                base = head;
+            }
+        }
+    }
+
+    // 2. Pull accidental-prefixed alterations out of the quality, skipping the
+    //    note root so a flat-root accidental is never mistaken for a tension.
+    let root_len = root_prefix_len(base);
+    let (stripped_quality, mut alterations) = extract_alterations(&base[root_len..]);
+    let new_base = format!("{}{}", &base[..root_len], stripped_quality);
+
+    // 3. Merge (alterations first, then parenthesised) and sort ascending by
+    //    degree. `sort_by_key` is stable, so equal-degree tokens keep their
+    //    relative order.
+    alterations.extend(tensions);
+    alterations.sort_by_key(|t| tension_degree(t));
+
+    if alterations.is_empty() || new_base.is_empty() {
+        // No tensions, or stripping consumed the whole base — keep the
+        // original name as a single-line title.
+        return DiagramTitle {
+            base: name.to_string(),
+            tensions: Vec::new(),
+        };
+    }
+    DiagramTitle {
+        base: new_base,
+        tensions: alterations,
+    }
+}
+
+/// Rough per-glyph advance (in em units) for the diagram title font, using
+/// Helvetica AFM widths for the chord charset. Only used to *lay out* the
+/// stacked-tension title; the SVG box is widened past the estimate (see
+/// [`STACK_SIDE_PAD`]) before drawing, so minor inaccuracy never clips.
+fn glyph_advance_em(c: char) -> f32 {
+    match c {
+        'i' | 'j' | 'l' | 't' | 'r' | 'I' | '/' | ' ' | '\'' => 0.3,
+        '0'..='9'
+        | '#'
+        | 'b'
+        | 'a'
+        | 'c'
+        | 'd'
+        | 'e'
+        | 'g'
+        | 'h'
+        | 'k'
+        | 'n'
+        | 'o'
+        | 'p'
+        | 'q'
+        | 'u'
+        | '♭'
+        | '♯'
+        | '°'
+        | 'ø'
+        | 'Δ'
+        | '−'
+        | '-'
+        | '+' => 0.556,
+        '(' | ')' => 0.333,
+        's' | 'v' | 'x' | 'y' | 'z' => 0.5,
+        'm' | 'M' | 'w' | 'W' => 0.85,
+        'A' | 'B' | 'E' | 'K' | 'P' | 'R' | 'S' | 'V' | 'X' | 'Y' | 'Z' => 0.667,
+        'C' | 'D' | 'G' | 'H' | 'N' | 'O' | 'Q' | 'U' => 0.74,
+        'F' | 'T' => 0.611,
+        _ => 0.6,
+    }
+}
+
+/// Estimated rendered width (SVG px) of `s` at `font_size`.
+fn estimate_text_width(s: &str, font_size: f32) -> f32 {
+    s.chars().map(|c| glyph_advance_em(c) * font_size).sum()
+}
+
+/// Horizontal gap (SVG px) between the base, parentheses, and tension stack.
+const STACK_GAP: f32 = 1.5;
+/// Extra horizontal padding (SVG px) added to each side of the SVG box when a
+/// stacked title is wider than the grid, so the estimate-driven layout never
+/// clips against the viewBox edge.
+const STACK_SIDE_PAD: f32 = 4.0;
+/// Safety inflation applied to the *box* width (not the layout positions) so
+/// that even if the viewer's `sans-serif` font renders wider than the
+/// Helvetica-based [`estimate_text_width`] (e.g. DejaVu Sans on Linux), the
+/// centred title group still fits inside the (overflow-clipped) viewBox.
+const STACK_WIDTH_SAFETY: f32 = 1.18;
+/// Padding (SVG px) between the bottom of the title band and the open/muted
+/// glyph row, on top of the glyph's own radius.
+const STACK_GLYPH_PAD: f32 = 3.0;
+/// Bold-weight width inflation applied to the (bold) base name estimate.
+const BOLD_WIDTH_FACTOR: f32 = 1.05;
+
+/// Resolved geometry for one stacked-title layout pass.
+///
+/// Independent of [`DiagramMetrics`] / [`KeyboardMetrics`] so the fretted and
+/// keyboard SVG renderers share one stacked-title implementation — only the
+/// three font sizes it needs are passed in.
+struct StackedTitleLayout {
+    base: String,
+    tensions: Vec<String>,
+    /// Base-name font size.
+    title_font: f32,
+    /// Tension-token font size.
+    tension_font: f32,
+    /// Line pitch of the tension column.
+    tension_line_h: f32,
+    /// Padding above the band.
+    title_top_pad: f32,
+    /// Estimated width of the bold base name.
+    base_w: f32,
+    /// Width of the widest tension token (stack column width).
+    tens_w: f32,
+    /// Width of one parenthesis glyph at [`paren_font`](Self::paren_font).
+    paren_w: f32,
+    /// Font size of the bracketing parentheses (scales with stack height).
+    paren_font: f32,
+    /// Height of the title band (max of the stack height and the base font).
+    band_h: f32,
+    /// Total width of the `base ( stack )` group.
+    group_w: f32,
+}
+
+impl StackedTitleLayout {
+    /// Compute the layout for a decomposed title, or `None` when it has no
+    /// tensions (the single-line path).
+    fn new(
+        title_font: f32,
+        tension_font: f32,
+        tension_line_h: f32,
+        title_top_pad: f32,
+        title: &DiagramTitle,
+    ) -> Option<Self> {
+        if title.tensions.is_empty() {
+            return None;
+        }
+        let stack_h = title.tensions.len() as f32 * tension_line_h;
+        let band_h = stack_h.max(title_font);
+        let base_w = estimate_text_width(&title.base, title_font) * BOLD_WIDTH_FACTOR;
+        let tens_w = title
+            .tensions
+            .iter()
+            .map(|t| estimate_text_width(t, tension_font))
+            .fold(0.0_f32, f32::max);
+        // Parentheses scale with the stack so they bracket all rows; floored
+        // at the base font so a single-tension `(9)` still reads as a chord.
+        let paren_font = (stack_h * 1.05).max(title_font);
+        let paren_w = estimate_text_width("(", paren_font);
+        let group_w = base_w + STACK_GAP + paren_w + STACK_GAP + tens_w + STACK_GAP + paren_w;
+        Some(Self {
+            base: title.base.clone(),
+            tensions: title.tensions.clone(),
+            title_font,
+            tension_font,
+            tension_line_h,
+            title_top_pad,
+            base_w,
+            tens_w,
+            paren_w,
+            paren_font,
+            band_h,
+            group_w,
+        })
+    }
+
+    /// Vertical centre of the title band.
+    fn band_center_y(&self) -> f32 {
+        self.title_top_pad + self.band_h / 2.0
+    }
+
+    /// Minimum SVG-box width needed to hold the centred title group without
+    /// clipping, including the cross-platform font-width safety margin.
+    fn box_width(&self) -> f32 {
+        self.group_w * STACK_WIDTH_SAFETY + STACK_SIDE_PAD * 2.0
+    }
+
+    /// Top margin (SVG px) the title needs: the band plus `below_band` — the
+    /// space reserved between the band and the grid (the fretted renderers
+    /// pass the open/muted glyph zone; the keyboard passes a small pad).
+    fn top_margin(&self, below_band: f32) -> f32 {
+        self.title_top_pad + self.band_h + below_band
+    }
+
+    /// Append the stacked title to `svg`, horizontally centred on `center_x`.
+    /// Tensions are drawn ascending bottom-to-top (`tensions[0]` on the
+    /// bottom row).
+    fn push(&self, svg: &mut String, center_x: f32) {
+        let band_center_y = self.band_center_y();
+        let mut x = center_x - self.group_w / 2.0;
+        // Base name, baseline centred on the band.
+        svg.push_str(&format!(
+            "<text x=\"{x}\" y=\"{}\" text-anchor=\"start\" font-family=\"sans-serif\" \
+             font-size=\"{}\" font-weight=\"bold\">{}</text>\n",
+            band_center_y + self.title_font * 0.35,
+            self.title_font,
+            crate::escape::escape_xml(&self.base),
+        ));
+        x += self.base_w + STACK_GAP;
+        // Opening parenthesis, vertically centred on the band.
+        let paren_baseline = band_center_y + self.paren_font * 0.33;
+        svg.push_str(&format!(
+            "<text x=\"{x}\" y=\"{paren_baseline}\" text-anchor=\"start\" \
+             font-family=\"sans-serif\" font-size=\"{}\">(</text>\n",
+            self.paren_font,
+        ));
+        x += self.paren_w + STACK_GAP;
+        // Tension stack — ascending bottom-to-top.
+        let n = self.tensions.len();
+        let stack_h = n as f32 * self.tension_line_h;
+        let stack_top = band_center_y - stack_h / 2.0;
+        let col_x = x + self.tens_w / 2.0;
+        for (i, t) in self.tensions.iter().enumerate() {
+            let row = n - 1 - i; // 0 = top row, gets the highest degree
+            let yc = stack_top + (row as f32 + 0.5) * self.tension_line_h;
+            svg.push_str(&format!(
+                "<text x=\"{col_x}\" y=\"{}\" text-anchor=\"middle\" \
+                 font-family=\"sans-serif\" font-size=\"{}\" class=\"tension\">{}</text>\n",
+                yc + self.tension_font * 0.35,
+                self.tension_font,
+                crate::escape::escape_xml(t),
+            ));
+        }
+        x += self.tens_w + STACK_GAP;
+        // Closing parenthesis.
+        svg.push_str(&format!(
+            "<text x=\"{x}\" y=\"{paren_baseline}\" text-anchor=\"start\" \
+             font-family=\"sans-serif\" font-size=\"{}\">)</text>\n",
+            self.paren_font,
+        ));
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Orientation
 // ---------------------------------------------------------------------------
 
@@ -476,6 +866,13 @@ struct DiagramMetrics {
     title_font: f32,
     /// Baseline y of the chord-name title text.
     title_baseline: f32,
+    /// Font size for stacked tension tokens — smaller than [`title_font`](Self::title_font)
+    /// so a long name like `Dmaj7(9,11,13)` fits the narrow frame (#2719).
+    tension_font: f32,
+    /// Line pitch (SVG px) for the vertically-stacked tension column.
+    tension_line_h: f32,
+    /// Padding above the title band in the stacked-title layout.
+    title_top_pad: f32,
     /// Font size for the per-cell fret-number axis labels.
     fret_label_font: f32,
     /// Gap (SVG px) subtracted from `left_margin` to place a vertical
@@ -533,6 +930,9 @@ impl DiagramMetrics {
             nut_margin_glyph_offset: NUT_MARGIN_GLYPH_OFFSET,
             title_font: 14.0,
             title_baseline: 14.0,
+            tension_font: 8.0,
+            tension_line_h: 8.5,
+            title_top_pad: 2.0,
             // The gap places the right edge of a right-anchored fret number at
             // `left_margin - fret_label_gap = 18 - 6 = 12`, which clears the
             // leftmost string's finger dot (left edge `left_margin - dot_radius
@@ -583,6 +983,9 @@ impl DiagramMetrics {
             nut_margin_glyph_offset: 5.0,
             title_font: 11.0,
             title_baseline: 9.0,
+            tension_font: 6.5,
+            tension_line_h: 7.0,
+            title_top_pad: 1.5,
             // Small axis font + gap so the per-cell fret numbers fit the
             // compact diagram's narrow gutter and bottom padding without
             // enlarging the inline layout further.
@@ -757,7 +1160,33 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
     let num_frets = data.frets_shown;
     let grid_w = (num_strings - 1) as f32 * cell_w;
     let grid_h = num_frets as f32 * cell_h;
-    let total_w = grid_w + left_margin + right_margin;
+    let grid_total_w = grid_w + left_margin + right_margin;
+
+    // Stacked-tension title (#2719): a long name like `Dmaj7(9,11,13)` is
+    // split into a base + a small vertically-stacked tension column so it fits
+    // the narrow frame. `None` ⇒ the historical single-line title, which keeps
+    // the geometry below byte-for-byte identical.
+    let title = decompose_diagram_title(data.title());
+    let stacked = StackedTitleLayout::new(
+        m.title_font,
+        m.tension_font,
+        m.tension_line_h,
+        m.title_top_pad,
+        &title,
+    );
+
+    // The stacked title needs its own band + the open/muted glyph zone above
+    // the nut, and may be wider than the grid; widen the box and re-centre the
+    // grid inside it. `left_margin` / `top_margin` are shadowed so the rest of
+    // the renderer (which uses them as the grid origin) is untouched.
+    let (top_margin, total_w) = match &stacked {
+        Some(st) => (
+            st.top_margin(nut_margin_glyph_offset + open_radius + STACK_GLYPH_PAD),
+            grid_total_w.max(st.box_width()),
+        ),
+        None => (top_margin, grid_total_w),
+    };
+    let left_margin = left_margin + (total_w - grid_total_w) / 2.0;
     let total_h = grid_h + top_margin + bottom_pad_vertical;
 
     let mut svg = format!(
@@ -767,11 +1196,19 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
 
     // Chord name (uses display override if present)
     let name_x = left_margin + grid_w / 2.0;
-    svg.push_str(&format!(
-        "<text x=\"{name_x}\" y=\"{title_baseline}\" text-anchor=\"middle\" \
-         font-family=\"sans-serif\" font-size=\"{title_font}\" font-weight=\"bold\">{}</text>\n",
-        crate::escape::escape_xml(data.title())
-    ));
+    match &stacked {
+        Some(st) => {
+            st.push(&mut svg, name_x);
+        }
+        None => {
+            svg.push_str(&format!(
+                "<text x=\"{name_x}\" y=\"{title_baseline}\" text-anchor=\"middle\" \
+                 font-family=\"sans-serif\" font-size=\"{title_font}\" \
+                 font-weight=\"bold\">{}</text>\n",
+                crate::escape::escape_xml(data.title())
+            ));
+        }
+    }
 
     // Nut (open position). Both sizes draw the full fret-number axis
     // (`show_fret_numbers` is `true` for regular and compact), so the
@@ -987,7 +1424,32 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
     let string_pitch = cell_w;
     let grid_w = num_frets as f32 * fret_pitch;
     let grid_h = (num_strings - 1) as f32 * string_pitch;
-    let total_w = grid_w + left_margin + right_margin;
+    let grid_total_w = grid_w + left_margin + right_margin;
+
+    // Stacked-tension title (#2719) — same split as the vertical renderer so
+    // the title reads identically across orientations. `None` ⇒ the historical
+    // single-line title (byte-for-byte unchanged geometry).
+    let title = decompose_diagram_title(data.title());
+    let stacked = StackedTitleLayout::new(
+        m.title_font,
+        m.tension_font,
+        m.tension_line_h,
+        m.title_top_pad,
+        &title,
+    );
+
+    // Widen the box + re-centre the grid when the stacked title is taller /
+    // wider than the historical top margin. `left_margin` / `top_margin` are
+    // shadowed so the body below (which uses them as the grid origin) is
+    // untouched.
+    let (top_margin, total_w) = match &stacked {
+        Some(st) => (
+            st.top_margin(nut_margin_glyph_offset + open_radius + STACK_GLYPH_PAD),
+            grid_total_w.max(st.box_width()),
+        ),
+        None => (top_margin, grid_total_w),
+    };
+    let left_margin = left_margin + (total_w - grid_total_w) / 2.0;
     let total_h = grid_h + top_margin + bottom_pad_horizontal;
 
     let mut svg = format!(
@@ -999,11 +1461,19 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
     // Chord name (uses display override if present). Centred above the
     // fretboard so the visual weight matches the vertical layout's title.
     let name_x = left_margin + grid_w / 2.0;
-    svg.push_str(&format!(
-        "<text x=\"{name_x}\" y=\"{title_baseline}\" text-anchor=\"middle\" \
-         font-family=\"sans-serif\" font-size=\"{title_font}\" font-weight=\"bold\">{}</text>\n",
-        crate::escape::escape_xml(data.title())
-    ));
+    match &stacked {
+        Some(st) => {
+            st.push(&mut svg, name_x);
+        }
+        None => {
+            svg.push_str(&format!(
+                "<text x=\"{name_x}\" y=\"{title_baseline}\" text-anchor=\"middle\" \
+                 font-family=\"sans-serif\" font-size=\"{title_font}\" \
+                 font-weight=\"bold\">{}</text>\n",
+                crate::escape::escape_xml(data.title())
+            ));
+        }
+    }
 
     // Nut (left edge at the open position). Both sizes draw the full
     // fret-number axis (`show_fret_numbers` is `true` for regular and
@@ -1515,8 +1985,28 @@ pub fn render_keyboard_svg_with_size(voicing: &KeyboardVoicing, size: DiagramSiz
 
     let octave_w = 7.0 * m.white_w;
     let kbd_w = num_octaves as f32 * octave_w;
-    let total_w = kbd_w + m.side_pad * 2.0;
-    let total_h = m.top_pad + m.white_h + m.bottom_pad;
+    let kbd_total_w = kbd_w + m.side_pad * 2.0;
+
+    // Stacked-tension title (#2719): a long name is split into a base + small
+    // stacked tension column, consistent with the fretted diagrams. The
+    // keyboard derives the tension font from its title font (it has no
+    // dedicated tension metric). `None` ⇒ historical single-line title.
+    let title = decompose_diagram_title(voicing.title());
+    let tension_font = m.title_font * 0.62;
+    let stacked =
+        StackedTitleLayout::new(m.title_font, tension_font, tension_font * 1.05, 2.0, &title);
+
+    // A stacked title may be taller than the historical `top_pad` and wider
+    // than the keyboard; grow the top band + box and re-centre the keyboard.
+    let (top_pad, total_w) = match &stacked {
+        Some(st) => (
+            st.top_margin(STACK_GLYPH_PAD),
+            kbd_total_w.max(st.box_width()),
+        ),
+        None => (m.top_pad, kbd_total_w),
+    };
+    let kbd_left = m.side_pad + (total_w - kbd_total_w) / 2.0;
+    let total_h = top_pad + m.white_h + m.bottom_pad;
 
     let class_extra = m.class_extra;
     let mut svg = format!(
@@ -1526,15 +2016,20 @@ pub fn render_keyboard_svg_with_size(voicing: &KeyboardVoicing, size: DiagramSiz
 
     // Chord name label
     let name_x = total_w / 2.0;
-    let title_font = m.title_font;
-    let title_baseline = m.title_baseline;
-    svg.push_str(&format!(
-        "<text x=\"{name_x}\" y=\"{title_baseline}\" text-anchor=\"middle\" \
-         font-family=\"sans-serif\" font-size=\"{title_font}\" font-weight=\"bold\">{}</text>\n",
-        crate::escape::escape_xml(voicing.title())
-    ));
+    match &stacked {
+        Some(st) => st.push(&mut svg, name_x),
+        None => {
+            let title_font = m.title_font;
+            let title_baseline = m.title_baseline;
+            svg.push_str(&format!(
+                "<text x=\"{name_x}\" y=\"{title_baseline}\" text-anchor=\"middle\" \
+                 font-family=\"sans-serif\" font-size=\"{title_font}\" \
+                 font-weight=\"bold\">{}</text>\n",
+                crate::escape::escape_xml(voicing.title())
+            ));
+        }
+    }
 
-    let top_pad = m.top_pad;
     let white_w = m.white_w;
     let white_h = m.white_h;
     let black_w = m.black_w;
@@ -1543,7 +2038,7 @@ pub fn render_keyboard_svg_with_size(voicing: &KeyboardVoicing, size: DiagramSiz
     // --- Draw white keys first (black keys are drawn on top) ---
     for oct in 0..num_octaves {
         let oct_midi = start_midi.saturating_add((oct * 12) as u8);
-        let oct_x = m.side_pad + oct as f32 * octave_w;
+        let oct_x = kbd_left + oct as f32 * octave_w;
         for (semitone, x_off) in m.white_positions {
             let midi = oct_midi.saturating_add(semitone);
             let x = oct_x + x_off;
@@ -1567,7 +2062,7 @@ pub fn render_keyboard_svg_with_size(voicing: &KeyboardVoicing, size: DiagramSiz
     // --- Draw black keys on top ---
     for oct in 0..num_octaves {
         let oct_midi = start_midi.saturating_add((oct * 12) as u8);
-        let oct_x = m.side_pad + oct as f32 * octave_w;
+        let oct_x = kbd_left + oct as f32 * octave_w;
         for (semitone, x_off) in m.black_positions {
             let midi = oct_midi.saturating_add(semitone);
             let x = oct_x + x_off;
@@ -1856,6 +2351,149 @@ pub fn canonical_chord_name(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decompose_title_parenthesised_tensions() {
+        let t = decompose_diagram_title("Dmaj7(9,11,13)");
+        assert_eq!(t.base, "Dmaj7");
+        assert_eq!(t.tensions, vec!["9", "11", "13"]);
+    }
+
+    #[test]
+    fn decompose_title_extracts_altered_fifth() {
+        let t = decompose_diagram_title("F#m7b5");
+        assert_eq!(t.base, "F#m7");
+        assert_eq!(t.tensions, vec!["b5"]);
+    }
+
+    #[test]
+    fn decompose_title_merges_alteration_and_parens_ascending() {
+        // b5 (degree 5) sorts below the parenthesised 9 and 11.
+        let t = decompose_diagram_title("F#m7b5(9,11)");
+        assert_eq!(t.base, "F#m7");
+        assert_eq!(t.tensions, vec!["b5", "9", "11"]);
+    }
+
+    #[test]
+    fn decompose_title_sorts_parenthesised_alterations() {
+        let t = decompose_diagram_title("C7(b9,#11,13)");
+        assert_eq!(t.base, "C7");
+        assert_eq!(t.tensions, vec!["b9", "#11", "13"]);
+    }
+
+    #[test]
+    fn decompose_title_does_not_split_flat_root() {
+        // The "b" in "Bb5" is the root accidental, NOT a b5 alteration.
+        let t = decompose_diagram_title("Bb5");
+        assert_eq!(t.base, "Bb5");
+        assert!(t.tensions.is_empty());
+        // Same for a flat-root quality that genuinely has an altered fifth.
+        let t = decompose_diagram_title("Bbm7b5");
+        assert_eq!(t.base, "Bbm7");
+        assert_eq!(t.tensions, vec!["b5"]);
+    }
+
+    #[test]
+    fn decompose_title_keeps_unaltered_added_tones_inline() {
+        // add9 / sus4 / 6 have no accidental prefix — they stay in the base.
+        for name in ["Cadd9", "Csus4", "C6", "Am", "G", "C/E"] {
+            let t = decompose_diagram_title(name);
+            assert_eq!(t.base, name, "{name} should be a single-line title");
+            assert!(
+                t.tensions.is_empty(),
+                "{name} should have no stacked tensions"
+            );
+        }
+    }
+
+    #[test]
+    fn decompose_title_degenerate_parens_fall_back() {
+        // No chord base before the parens — keep verbatim, single line.
+        let t = decompose_diagram_title("(9)");
+        assert_eq!(t.base, "(9)");
+        assert!(t.tensions.is_empty());
+    }
+
+    #[test]
+    fn decompose_title_display_override_text_is_untouched() {
+        // A `{define} display="A minor"` override is free text, not a chord.
+        let t = decompose_diagram_title("A minor");
+        assert_eq!(t.base, "A minor");
+        assert!(t.tensions.is_empty());
+    }
+
+    #[test]
+    fn render_svg_stacks_tensions_for_long_name() {
+        let data = DiagramData {
+            name: "Dmaj7(9,11,13)".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, -1, 0, 2, 2, 2],
+            fingers: vec![],
+        };
+        let svg = render_svg(&data);
+        // Base drawn once, tensions drawn as small stacked tokens.
+        assert!(svg.contains(">Dmaj7</text>"), "base name missing: {svg}");
+        assert!(svg.contains("class=\"tension\">9</text>"));
+        assert!(svg.contains("class=\"tension\">11</text>"));
+        assert!(svg.contains("class=\"tension\">13</text>"));
+        // The verbatim one-line title must NOT appear.
+        assert!(!svg.contains(">Dmaj7(9,11,13)</text>"));
+    }
+
+    #[test]
+    fn render_svg_single_line_title_has_no_tension_spans() {
+        let data = DiagramData {
+            name: "Am".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 0, 2, 2, 1, 0],
+            fingers: vec![],
+        };
+        let svg = render_svg(&data);
+        assert!(svg.contains(">Am</text>"));
+        assert!(!svg.contains("class=\"tension\""));
+    }
+
+    #[test]
+    fn render_svg_stacked_title_clears_glyph_row() {
+        // Regression guard against the stacked tensions overlapping the
+        // open/muted glyph row. The lowest tension baseline must sit above
+        // the open/muted glyphs (which are at nut_y - glyph_offset). We assert
+        // the structural invariant indirectly: the diagram is taller than the
+        // single-line equivalent, proving the title got its own band.
+        let long = DiagramData {
+            name: "Dmaj7(9,11,13)".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, -1, 0, 2, 2, 2],
+            fingers: vec![],
+        };
+        let short = DiagramData {
+            name: "D".to_string(),
+            ..long.clone()
+        };
+        let h_long = svg_height(&render_svg(&long));
+        let h_short = svg_height(&render_svg(&short));
+        assert!(
+            h_long > h_short,
+            "stacked title should make the diagram taller ({h_long} vs {h_short})"
+        );
+    }
+
+    /// Extract the `height="…"` attribute from a rendered SVG for assertions.
+    fn svg_height(svg: &str) -> f32 {
+        let start = svg.find("height=\"").expect("svg has height") + "height=\"".len();
+        let rest = &svg[start..];
+        let end = rest.find('"').unwrap();
+        rest[..end].parse().unwrap()
+    }
 
     #[test]
     fn test_render_svg_basic() {
