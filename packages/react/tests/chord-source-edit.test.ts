@@ -32,6 +32,7 @@ import {
   repositionedChordOrdinal,
   setCapoInSource,
   sourceColumnToLyricsOffset,
+  splitBassNote,
   toggleTension,
   withSeventh,
   withTriad,
@@ -1223,6 +1224,39 @@ describe('partsFromRawName', () => {
     // buildChordName rejects an empty root, so a stray edit is dropped
     // rather than defaulting the root and corrupting the token.
     expect(() => buildChordName(partsFromRawName('N.C.'))).toThrow();
+  });
+});
+
+describe('splitBassNote', () => {
+  test('splits a plain bass note into letter + natural accidental', () => {
+    expect(splitBassNote('G')).toEqual({ note: 'G', accidental: '' });
+  });
+
+  test('splits a sharp / flat bass note', () => {
+    expect(splitBassNote('F#')).toEqual({ note: 'F', accidental: '#' });
+    expect(splitBassNote('Bb')).toEqual({ note: 'B', accidental: 'b' });
+  });
+
+  test('round-trips with the picker concatenation', () => {
+    for (const token of ['C', 'F#', 'Bb', 'A', 'E']) {
+      const split = splitBassNote(token);
+      expect(split).not.toBeNull();
+      expect(`${split!.note}${split!.accidental}`).toBe(token);
+    }
+  });
+
+  test('an empty token (no bass) is not a plain note', () => {
+    expect(splitBassNote('')).toBeNull();
+  });
+
+  test('a non-plain-note bass yields null (free-form, picker stays unpressed)', () => {
+    // A figured / compound bass, a lower-case letter, a double accidental, and
+    // a stray suffix are all outside the single-note grammar the picker models.
+    expect(splitBassNote('G7')).toBeNull();
+    expect(splitBassNote('g')).toBeNull();
+    expect(splitBassNote('F##')).toBeNull();
+    expect(splitBassNote('H')).toBeNull();
+    expect(splitBassNote('F# ')).toBeNull();
   });
 });
 
