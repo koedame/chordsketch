@@ -1782,6 +1782,126 @@ fn compute_image_dimensions(
     }
 }
 
+/// Resolved layout for a (possibly stacked) PDF chord-diagram title (#2719).
+///
+/// Mirrors the SVG renderer's stacked-title behaviour
+/// (`chordsketch_chordpro::chord_diagram::decompose_diagram_title`): a long
+/// name like `Dmaj7(9,11,13)` is split into a base drawn at full size plus a
+/// small column of tensions, stacked ascending bottom-to-top inside
+/// parentheses. The tension column and the bracketing parentheses are drawn
+/// *above* the title baseline (where the base name's glyph already sits), so
+/// the open/muted marker band below the title — and therefore the grid — is
+/// untouched and the single-line path stays byte-identical.
+struct PdfTitleLayout {
+    /// Base chord name drawn at `base_font`.
+    base: String,
+    /// Tension tokens, ascending by degree (`tensions[0]` on the bottom row).
+    tensions: Vec<String>,
+    /// Base-name font size (points).
+    base_font: f32,
+    /// Tension-token font size (points).
+    tension_font: f32,
+    /// Line pitch of the tension column (points).
+    line_h: f32,
+    /// Font size of the bracketing parentheses (points).
+    paren_font: f32,
+    /// Extra vertical space (points) the stack needs ABOVE the title baseline,
+    /// beyond the base glyph's own cap height. `0.0` for a single-line title.
+    extra_above: f32,
+}
+
+impl PdfTitleLayout {
+    fn new(title: &str, base_font: f32) -> Self {
+        let d = chordsketch_chordpro::chord_diagram::decompose_diagram_title(title);
+        if d.tensions.is_empty() {
+            return Self {
+                base: d.base,
+                tensions: Vec::new(),
+                base_font,
+                tension_font: 0.0,
+                line_h: 0.0,
+                paren_font: 0.0,
+                extra_above: 0.0,
+            };
+        }
+        let tension_font = base_font * 0.62;
+        let line_h = tension_font * 1.2;
+        let n = d.tensions.len() as f32;
+        // Top tension baseline sits (n-1)*line_h above the base baseline; its
+        // glyph cap reaches ~0.72*tension_font higher. Reserve that minus the
+        // base glyph's own cap (already accounted for by the caller) so the
+        // ensure_space budget covers the stack.
+        let extra_above = ((n - 1.0) * line_h + tension_font * 0.72 - base_font * 0.72).max(0.0);
+        let paren_font = (n * line_h).max(base_font);
+        Self {
+            base: d.base,
+            tensions: d.tensions,
+            base_font,
+            tension_font,
+            line_h,
+            paren_font,
+            extra_above,
+        }
+    }
+
+    /// Draw the title with its base-name baseline at (`base_x`, `baseline_y`).
+    /// For a single-line title this is exactly the historical
+    /// `text_at(title, …, base_x, baseline_y)` call.
+    fn draw(&self, doc: &mut PdfDocument, base_x: f32, baseline_y: f32) {
+        doc.text_at(
+            &self.base,
+            Font::HelveticaBold,
+            self.base_font,
+            base_x,
+            baseline_y,
+        );
+        if self.tensions.is_empty() {
+            return;
+        }
+        let gap = 1.0;
+        let x0 = base_x + text_width(&self.base, self.base_font) + gap;
+        // Tension column — bottom row baseline aligned with the base baseline,
+        // higher degrees stacked upward (PDF y increases upward).
+        let col_w = self
+            .tensions
+            .iter()
+            .map(|t| text_width(t, self.tension_font))
+            .fold(0.0_f32, f32::max);
+        let paren_w = text_width("(", self.paren_font);
+        let col_x = x0 + paren_w + gap;
+        for (i, t) in self.tensions.iter().enumerate() {
+            let baseline = baseline_y + i as f32 * self.line_h;
+            let tw = text_width(t, self.tension_font);
+            doc.text_at(
+                t,
+                Font::Helvetica,
+                self.tension_font,
+                col_x + (col_w - tw) / 2.0,
+                baseline,
+            );
+        }
+        // Parentheses bracket the stack. Their baseline is lowered from the
+        // stack's vertical centre by ~0.32*font so the glyph (which extends
+        // mostly above its baseline) is centred on the column.
+        let stack_center = baseline_y + (self.tensions.len() as f32 - 1.0) * self.line_h / 2.0;
+        let paren_baseline = stack_center - self.paren_font * 0.32;
+        doc.text_at(
+            "(",
+            Font::HelveticaBold,
+            self.paren_font,
+            x0,
+            paren_baseline,
+        );
+        doc.text_at(
+            ")",
+            Font::HelveticaBold,
+            self.paren_font,
+            col_x + col_w + gap,
+            paren_baseline,
+        );
+    }
+}
+
 /// Render a chord diagram directly into the PDF content stream.
 ///
 /// Uses PDF filled-rect, circle, and line drawing operations to reproduce
@@ -1857,16 +1977,21 @@ fn render_chord_diagram_pdf_vertical(
     let num_frets = data.frets_shown;
     let grid_w = (num_strings - 1) as f32 * cell_w;
     let grid_h = num_frets as f32 * cell_h;
-    let total_h = grid_h + 25.0; // title + top markers + grid
+    // Stacked-tension title (#2719): a long name's tensions are drawn small
+    // and stacked above the title baseline, so the marker/grid bands below are
+    // unchanged. `extra_above` reserves the extra height the stack needs.
+    let title = PdfTitleLayout::new(data.title(), 9.0);
+    let total_h = grid_h + 25.0 + title.extra_above; // title + top markers + grid
 
     doc.ensure_space(total_h);
 
     let base_x = doc.margin_left();
-    // PDF Y is bottom-up, so top of diagram is at doc.y
-    let top_y = doc.y();
+    // PDF Y is bottom-up, so top of diagram is at doc.y; the stack rises into
+    // the reserved `extra_above` headroom above the baseline.
+    let top_y = doc.y() - title.extra_above;
 
     // Chord name (uses display override if present)
-    doc.text_at(data.title(), Font::HelveticaBold, 9.0, base_x, top_y);
+    title.draw(doc, base_x, top_y);
 
     let grid_top = top_y - 15.0; // below the name
 
@@ -1986,16 +2111,18 @@ fn render_chord_diagram_pdf_horizontal(
     // (The vertical renderer above shares the same 25 pt constant for a
     // different reason — title + base-fret label band — so the literal
     // matches but the breakdown is different.)
-    let total_h = grid_h + 25.0;
+    // Stacked-tension title (#2719) — same split as the vertical renderer.
+    let title = PdfTitleLayout::new(data.title(), 9.0);
+    let total_h = grid_h + 25.0 + title.extra_above;
 
     doc.ensure_space(total_h);
 
     let base_x = doc.margin_left();
-    let top_y = doc.y();
+    let top_y = doc.y() - title.extra_above;
 
     // Chord name (uses display override if present). Centred above the
     // fretboard, same baseline rule as the vertical renderer.
-    doc.text_at(data.title(), Font::HelveticaBold, 9.0, base_x, top_y);
+    title.draw(doc, base_x, top_y);
 
     // Top of the grid sits 15 pt below the title (matches the vertical
     // renderer's `grid_top` offset).
@@ -2122,15 +2249,17 @@ fn render_keyboard_diagram_pdf(
     let black_w: f32 = 5.0;
     let black_h: f32 = 18.0;
     let name_h: f32 = 10.0;
-    let total_h = name_h + white_h + 6.0;
+    // Stacked-tension title (#2719), consistent with the fretted PDF diagrams.
+    let title = PdfTitleLayout::new(voicing.title(), 7.0);
+    let total_h = name_h + white_h + 6.0 + title.extra_above;
 
     doc.ensure_space(total_h);
 
     let base_x = doc.margin_left();
-    let top_y = doc.y();
+    let top_y = doc.y() - title.extra_above;
 
     // Chord name
-    doc.text_at(voicing.title(), Font::HelveticaBold, 7.0, base_x, top_y);
+    title.draw(doc, base_x, top_y);
 
     // Y for top of keyboard (PDF Y goes down when we subtract)
     let kbd_top_y = top_y - name_h;

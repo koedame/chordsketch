@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Chord diagrams with long names (e.g. `Dmaj7(9,11,13)`) no longer overflow
+  the diagram frame. The title is now split into a base name drawn at full
+  size plus a smaller column of tensions stacked vertically inside
+  parentheses, ordered ascending by scale degree from the bottom up
+  (`Dmaj7` with `9` / `11` / `13` stacked low-to-high). Accidental-prefixed
+  alterations embedded in the quality are pulled into the same stack, so
+  `F#m7b5` renders as `F#m7` with a stacked `b5` — while a flat-root power
+  chord like `Bb5` is left untouched. The split is shared by every diagram
+  surface — the three SVG sites (vertical / horizontal fretboard + keyboard,
+  which flow through to CLI HTML, wasm, React `<ChordDiagram>`, VS Code
+  preview, and LSP hover) and the PDF renderer's three sites — via the new
+  `chord_diagram::decompose_diagram_title` helper. The ChordPro source is
+  unchanged: `[Dmaj7(9,11,13)]` round-trips exactly as before; only the
+  diagram title's layout differs. (#2719)
 - Chord diagrams now show finger numbers on every generated voicing. The
   renderer already drew the white finger digit inside each fretted dot when
   `fingers` data was present, but the curated voicing tables and the

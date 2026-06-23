@@ -1,0 +1,6 @@
+{title: Stacked Tension Diagrams}
+{define: Dmaj7(9,11,13) base-fret 1 frets x x 0 2 2 2}
+{define: F#m7b5 base-fret 2 frets 2 x 2 2 1 x}
+{define: C7(b9,#11,13) base-fret 1 frets x 3 2 3 2 3}
+{diagrams}
+[Dmaj7(9,11,13)]Long [F#m7b5]chord [C7(b9,#11,13)]names
