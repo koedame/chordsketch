@@ -69,13 +69,15 @@ body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875
 .cins__chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
 .cins__chip { flex: none; appearance: none; border: 1px solid var(--border-strong); background: var(--surface); border-radius: var(--r-full); padding: 5px 10px; font: 600 var(--fs-13)/1 var(--font-chord); color: var(--text-strong); cursor: pointer; white-space: nowrap; }
 .cins__chip[aria-pressed="true"] { background: var(--crimson-500); border-color: var(--crimson-500); color: var(--fg-on-crimson); }
+.cins__chip:hover:not(:disabled) { background: var(--surface-hover); }
+.cins__chip:disabled { background: var(--ink-50); border-color: var(--border); color: var(--text-tertiary); cursor: not-allowed; }
 .cins__input { height: 32px; border: 1px solid var(--border-strong); border-radius: var(--r-2); background: var(--surface); padding: 0 var(--sp-2); font: 500 var(--fs-14)/1 var(--font-chord); color: var(--text-primary); width: 5.5rem; }
 .cins__slash { color: var(--text-tertiary); font-weight: 700; }
 .cins__btn { height: 32px; min-width: 36px; border: 1px solid var(--border-strong); background: var(--surface); border-radius: var(--r-2); font-size: var(--fs-14); color: var(--text-strong); cursor: pointer; }
-.cins__btn:disabled { opacity: .4; cursor: default; }
+.cins__btn:disabled { opacity: .4; cursor: not-allowed; }
 .cins__spacer { flex: 1 1 var(--sp-2); }
 .cins__remove { height: 34px; padding: 0 var(--sp-3); border: 1px solid transparent; background: transparent; border-radius: var(--r-2); font: 600 var(--fs-13)/1 var(--font-jp); color: var(--crimson-600); cursor: pointer; }
-.cins__remove:disabled { opacity: .4; cursor: default; }
+.cins__remove:disabled { opacity: .4; cursor: not-allowed; }
 .cins__insert { height: 34px; padding: 0 var(--sp-4); border-radius: var(--r-2); border: 1px solid var(--crimson-500); background: var(--crimson-500); color: var(--fg-on-crimson); font: 600 var(--fs-13)/1 var(--font-jp); cursor: pointer; }
 .cins__actions { display: flex; align-items: center; gap: var(--sp-2); align-self: center; }
 

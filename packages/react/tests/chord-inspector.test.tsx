@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { ChordInspector } from '../src/chord-inspector';
 import type { ChordParts } from '../src/chord-source-edit';
 import type { ChordStaffWasmLoader, StaffNote } from '../src/use-chord-staff';
+import { readStylesheetSource } from './stylesheet-source';
 
 const AM7_STAFF: StaffNote[] = [
   { letter: 'A', accidental: 0, octave: 3, midi: 57 },
@@ -156,6 +157,48 @@ describe('<ChordInspector>', () => {
       container.querySelectorAll('[aria-label="Tensions"] button'),
     ).find((b) => b.textContent === '♭9') as HTMLButtonElement;
     expect(flat9.disabled).toBe(false);
+  });
+
+  test('a tension that is unavailable for the current chord is rendered disabled', () => {
+    // Behavioural coverage for a distinct branch from the seventh-present case
+    // above: a bare major triad (suffix '', no seventh) cannot take an altered
+    // tension — ♭9 / ♯5 require a seventh (isTensionAvailable) — so those chips
+    // carry the native `disabled` attribute, while the natural 9 add-tone stays
+    // reachable. A disabled chip also exposes a `title` explaining the reason.
+    // (The CSS that paints the disabled state is guarded separately by the
+    // stylesheet-source test below and the playground e2e — this test guards
+    // the availability → disabled-attribute wiring.)
+    const { container } = setup({ root: 'G', suffix: '', chordName: 'G' });
+    const tension = (text: string): HTMLButtonElement =>
+      Array.from(container.querySelectorAll('[aria-label="Tensions"] button')).find(
+        (b) => b.textContent === text,
+      ) as HTMLButtonElement;
+    expect(tension('♭9').disabled).toBe(true);
+    expect(tension('♭9').getAttribute('title')).toBe('Not available for the selected chord type');
+    expect(tension('♯5').disabled).toBe(true);
+    // The natural 9 add-tone is still reachable without a seventh, so it stays
+    // enabled — the disabled treatment is selective, not blanket — and carries
+    // no "unavailable" tooltip.
+    expect(tension('9').disabled).toBe(false);
+    expect(tension('9').getAttribute('title')).toBeNull();
+  });
+
+  test('styles.css gives disabled chips an inert style and suppresses their hover', () => {
+    // The fast guard for the actual style fix (jsdom applies no CSS, so this
+    // asserts rule presence in source per the readStylesheetSource pattern).
+    // Without the `:disabled` rule a disabled chip would be visually
+    // indistinguishable from a pressable one; without the `:not(:disabled)`
+    // gate it would still highlight on hover. The deployed-bundle paint is
+    // additionally proven by the playground e2e.
+    const css = readStylesheetSource();
+    // A dedicated :disabled rule exists for the chip, signalling not-allowed.
+    const disabledRule = css.match(/\.chordsketch-sheet__cins-chip:disabled\s*\{([^}]*)\}/);
+    expect(disabledRule).not.toBeNull();
+    expect(disabledRule![1]).toContain('cursor: not-allowed');
+    // The chip hover is gated behind :not(:disabled) so disabled chips do not
+    // highlight.
+    expect(css).toContain('.chordsketch-sheet__cins-chip:hover:not(:disabled)');
+    expect(css).not.toMatch(/\.chordsketch-sheet__cins-chip:hover\s*\{/);
   });
 
   test('typing in the suffix / bass inputs emits the edited value', () => {
