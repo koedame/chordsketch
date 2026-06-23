@@ -1557,9 +1557,18 @@
   margin: -2px -5px;
   box-shadow: var(--cs-e-1, 0 1px 2px rgba(10, 10, 11, 0.04));
 }
+/* The selected chord is ALWAYS the programmatically-focused element
+   (the walker focuses it on every select / nudge), so `:focus-visible`
+   matches throughout a keyboard nudge. The crimson badge above already
+   marks it unambiguously as the focused editing target, so a second
+   focus ring stacked on top is redundant — and it flickers on every
+   ArrowLeft / ArrowRight press as focus is re-driven, which reads as an
+   unwanted outline. Suppress the ring and keep the badge's elevation
+   shadow; the badge IS the visible-focus indicator here, so this does
+   not drop the WCAG 2.4.7 focus cue. */
 .chordsketch-sheet__content .chord--selected:focus-visible {
   outline: none;
-  box-shadow: var(--cs-focus-ring, 0 0 0 2px #fff, 0 0 0 4px #bd1642);
+  box-shadow: var(--cs-e-1, 0 1px 2px rgba(10, 10, 11, 0.04));
 }
 
 /* ---- Chord audio (#2650) -------------------------------------- */

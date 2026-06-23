@@ -163,6 +163,35 @@ test.describe('chord-editor footer (ChordPro playground)', () => {
     expect(errors).toEqual([]);
   });
 
+  test('keyboard-nudging the selected chord shows no focus-ring outline', async ({
+    page,
+  }) => {
+    const errors = trackPageErrors(page);
+    await page.goto('./chordpro/');
+    await expect(page.locator('.cm-editor')).toBeVisible();
+
+    const preview = page.locator('.pane.preview');
+    await preview.locator(".chord[role='button']").first().click();
+    await expect(preview.locator('.chord--selected')).toBeVisible();
+
+    // Nudge with the keyboard: this moves the chord AND makes
+    // `:focus-visible` match (the last input modality is now a key), and
+    // the walker re-focuses the advanced selection. The crimson badge is
+    // the selection / focus indicator; a focus ring stacked on top would
+    // read as an unwanted outline flickering on every Arrow press. The
+    // computed box-shadow must therefore stay the badge's elevation
+    // shadow, NOT the crimson focus ring (rgb(189, 22, 70) = #bd1642).
+    await page.keyboard.press('ArrowRight');
+    await expect(preview.locator('.chord--selected')).toBeVisible();
+
+    const boxShadow = await preview
+      .locator('.chord--selected')
+      .evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(boxShadow).not.toContain('189, 22, 70');
+
+    expect(errors).toEqual([]);
+  });
+
   test('selecting a chord does not reflow its neighbours (#2638)', async ({ page }) => {
     const errors = trackPageErrors(page);
     await page.goto('./chordpro/');
