@@ -1783,17 +1783,20 @@
   color: var(--cs-fg-on-crimson, #fff);
 }
 /* Disabled chip: a 7th / tension that the current triad+seventh cannot
-   take (isSeventhAvailable / isTensionAvailable). Must read as clearly
-   inert — muted fill + border + text, reduced opacity, and a
-   not-allowed cursor, matching the design-system button convention
-   (.btn:disabled) and the iReal grid's disabled actions. Declared after
-   the [aria-pressed='true'] rule so an unavailable chip never paints as
-   active (equal specificity → source order wins). */
+   take (isSeventhAvailable / isTensionAvailable). Reads as clearly inert
+   via the design-system's muted-colour idiom (the same one .input/.select
+   :disabled use) — a muted fill + border and tertiary text, plus a
+   not-allowed cursor. Opacity is intentionally NOT stacked on top: the
+   text is already tertiary, and dimming it further would crush the label
+   (the `7` / `9` / `13` names a beginner needs to read) toward illegible.
+   The muted colours alone keep ~3.38:1 contrast — disabled-exempt from
+   WCAG 1.4.3 but still perceivable. Declared after the [aria-pressed='true']
+   rule so an unavailable chip never paints as active (equal specificity →
+   source order wins). */
 .chordsketch-sheet__cins-chip:disabled {
-  background: var(--cs-ink-50, #faf9fb);
+  background: var(--cs-ink-50, #fafaf7);
   border-color: var(--cs-border, #e8e6ea);
   color: var(--cs-text-tertiary, #8a8790);
-  opacity: 0.55;
   cursor: not-allowed;
 }
 /* inputs */
