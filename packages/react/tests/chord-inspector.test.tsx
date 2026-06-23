@@ -231,6 +231,26 @@ describe('<ChordInspector>', () => {
     expect(onNudge).toHaveBeenCalledWith(1);
   });
 
+  test('move control labels name the chord and its step granularity', () => {
+    const { container } = setup();
+    // The group header names what moves — the chord, not the lyric — so it
+    // agrees with the buttons' "Move chord left" / "Move chord right"
+    // accessible names. The inline label between the ◀ / ▶ buttons names the
+    // step granularity, not the object, so the two labels don't both repeat
+    // "Move chord".
+    const moveGroup = (
+      container.querySelector('.chordsketch-sheet__cins-move') as HTMLElement
+    ).parentElement as HTMLElement;
+    const header = moveGroup.querySelector(
+      '.chordsketch-sheet__cins-label',
+    ) as HTMLElement;
+    const inline = moveGroup.querySelector(
+      '.chordsketch-sheet__cins-movelbl',
+    ) as HTMLElement;
+    expect(header.textContent).toBe('Move chord');
+    expect(inline.textContent).toBe('one step');
+  });
+
   test('Escape closes; the close button closes; Remove fires onRemove', () => {
     const { container, onClose, onRemove } = setup();
     fireEvent.keyDown(container.querySelector('.chordsketch-sheet__cins') as HTMLElement, {

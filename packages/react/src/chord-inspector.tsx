@@ -382,7 +382,7 @@ export function ChordInspector(props: ChordInspectorProps): JSX.Element {
       <div className="chordsketch-sheet__cins-divider" />
 
       <div className="chordsketch-sheet__cins-group">
-        <span className="chordsketch-sheet__cins-label">Move one step</span>
+        <span className="chordsketch-sheet__cins-label">Move chord</span>
         <div className="chordsketch-sheet__cins-move">
           <button
             type="button"
@@ -393,7 +393,7 @@ export function ChordInspector(props: ChordInspectorProps): JSX.Element {
           >
             ◀
           </button>
-          <span className="chordsketch-sheet__cins-movelbl">lyric position</span>
+          <span className="chordsketch-sheet__cins-movelbl">one step</span>
           <button
             type="button"
             className="chordsketch-sheet__cins-movebtn"

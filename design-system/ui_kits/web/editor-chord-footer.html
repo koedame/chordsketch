@@ -62,6 +62,7 @@ body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875
 .cins__group { display: flex; flex-direction: column; gap: var(--sp-2); }
 .cins__label { font: 600 var(--fs-12)/1 var(--font-latin); color: var(--text-strong); }
 .cins__rowc { display: flex; align-items: center; gap: var(--sp-2); }
+.cins__movelbl { font: 600 var(--fs-12)/1 var(--font-latin); color: var(--text-secondary); white-space: nowrap; }
 .cins__seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--ink-100); border: 1px solid var(--border); border-radius: var(--r-2); }
 .cins__seg button { appearance: none; border: 0; background: transparent; border-radius: var(--r-1); padding: 5px 8px; min-width: 28px; font: 600 var(--fs-13)/1 var(--font-chord); color: var(--text-secondary); cursor: pointer; }
 .cins__seg button[aria-pressed="true"] { background: var(--surface); color: var(--crimson-600); box-shadow: var(--e-1); }
@@ -164,9 +165,10 @@ body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875
       </div>
     </div>
     <div class="cins__group">
-      <span class="cins__label">Move one step</span>
+      <span class="cins__label">Move chord</span>
       <div class="cins__rowc">
         <button class="cins__btn" aria-label="Move chord left">◀</button>
+        <span class="cins__movelbl">one step</span>
         <button class="cins__btn" aria-label="Move chord right">▶</button>
       </div>
     </div>
