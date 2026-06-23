@@ -365,6 +365,24 @@ fn root_prefix_len(s: &str) -> usize {
     len
 }
 
+/// Whether `s` is a parenthesis tension token: an optional accidental
+/// (`b` / `#` / `♭` / `♯`) followed by a 1–2 digit scale degree (`9`, `11`,
+/// `b13`, `#11`). Used to distinguish a genuine `Dmaj7(9,11,13)` tension list
+/// from free-form `display` text that merely ends in parentheses
+/// (`"Cmaj7 (no 3rd)"`), which must NOT be restructured into a stacked title.
+fn is_tension_token(s: &str) -> bool {
+    let mut chars = s.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    let digits = if matches!(first, 'b' | '#' | '♭' | '♯') {
+        chars.as_str()
+    } else {
+        s
+    };
+    !digits.is_empty() && digits.len() <= 2 && digits.bytes().all(|b| b.is_ascii_digit())
+}
+
 /// Leading scale-degree number of a tension token, used to order the stack
 /// ascending: `b5` → 5, `#11` → 11, `13` → 13. Tokens with no digit sort
 /// first (degree 0).
@@ -451,24 +469,50 @@ fn extract_alterations(quality: &str) -> (String, Vec<String>) {
 /// let t = decompose_diagram_title("Am");
 /// assert_eq!(t.base, "Am");
 /// assert!(t.tensions.is_empty());
+///
+/// // Free-form `display` text that merely ends in parentheses is NOT split.
+/// let t = decompose_diagram_title("Cmaj7 (no 3rd)");
+/// assert_eq!(t.base, "Cmaj7 (no 3rd)");
+/// assert!(t.tensions.is_empty());
 /// ```
 #[must_use]
 pub fn decompose_diagram_title(name: &str) -> DiagramTitle {
-    // 1. Peel a trailing parenthesised tension list: "Base(t1,t2,...)".
+    let single_line = || DiagramTitle {
+        base: name.to_string(),
+        tensions: Vec::new(),
+    };
+
+    // Only restructure strings that actually look like a chord — i.e. that
+    // begin with a note root (A–G, optionally accidental). Free-form `display`
+    // overrides such as `"A minor"` or `"Cmaj7 (no 3rd)"` start with a note
+    // letter too, but the further guards below (chord-shaped head, tension-only
+    // parenthesis tokens) keep them on the single-line path. A name that does
+    // not start with a note root (`"(9)"`, `"Take 5"`) is never restructured.
+    if root_prefix_len(name) == 0 {
+        return single_line();
+    }
+
+    // 1. Peel a trailing parenthesised tension list — but ONLY when it really
+    //    is one: a non-empty, whitespace-free head (a chord base has no
+    //    spaces) where every comma-separated token is a tension token
+    //    (optional accidental + 1–2 digit degree). This rejects free text like
+    //    `"Cmaj7 (no 3rd)"` (space in head, `"no 3rd"` not a tension token),
+    //    which must render as a single-line title.
     let mut base = name;
     let mut tensions: Vec<String> = Vec::new();
     if name.ends_with(')') {
         if let Some(open) = name.rfind('(') {
             let head = &name[..open];
-            // Require a non-empty head so a degenerate "(9)" with no chord
-            // base falls through to the single-line path below.
-            if !head.is_empty() {
-                tensions = name[open + 1..name.len() - 1]
-                    .split(',')
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                    .map(String::from)
-                    .collect();
+            let tokens: Vec<&str> = name[open + 1..name.len() - 1]
+                .split(',')
+                .map(str::trim)
+                .collect();
+            if !head.is_empty()
+                && !head.contains(char::is_whitespace)
+                && !tokens.is_empty()
+                && tokens.iter().all(|t| is_tension_token(t))
+            {
+                tensions = tokens.into_iter().map(String::from).collect();
                 base = head;
             }
         }
@@ -489,10 +533,7 @@ pub fn decompose_diagram_title(name: &str) -> DiagramTitle {
     if alterations.is_empty() || new_base.is_empty() {
         // No tensions, or stripping consumed the whole base — keep the
         // original name as a single-line title.
-        return DiagramTitle {
-            base: name.to_string(),
-            tensions: Vec::new(),
-        };
+        return single_line();
     }
     DiagramTitle {
         base: new_base,
@@ -2420,6 +2461,96 @@ mod tests {
         let t = decompose_diagram_title("A minor");
         assert_eq!(t.base, "A minor");
         assert!(t.tensions.is_empty());
+    }
+
+    #[test]
+    fn decompose_title_parenthesised_free_text_is_not_split() {
+        // Free-form display overrides that merely end in parentheses must NOT
+        // be peeled into a stacked tension title (regression guard): the head
+        // has a space and/or the parenthesis content is not a tension list.
+        for name in [
+            "Cmaj7 (no 3rd)",
+            "A (live)",
+            "G (capo 3)",
+            "Dm (intro)",
+            "Gm7 (9)", // space in head ⇒ free text, not a chord
+        ] {
+            let t = decompose_diagram_title(name);
+            assert_eq!(t.base, name, "{name} should stay a single-line title");
+            assert!(t.tensions.is_empty(), "{name} should not be stacked");
+        }
+    }
+
+    #[test]
+    fn decompose_title_non_note_root_names_are_untouched() {
+        for name in ["(9)", "Take 5", "9", ""] {
+            let t = decompose_diagram_title(name);
+            assert_eq!(t.base, name);
+            assert!(t.tensions.is_empty());
+        }
+    }
+
+    #[test]
+    fn is_tension_token_accepts_only_real_tensions() {
+        for ok in [
+            "9", "11", "13", "b5", "#5", "b9", "#9", "#11", "b13", "6", "4",
+        ] {
+            assert!(is_tension_token(ok), "{ok} should be a tension token");
+        }
+        for bad in ["", "b", "#", "no 3rd", "live", "6/9", "add9", "133", "x"] {
+            assert!(
+                !is_tension_token(bad),
+                "{bad} should NOT be a tension token"
+            );
+        }
+    }
+
+    #[test]
+    fn render_svg_horizontal_stacks_tensions() {
+        let data = DiagramData {
+            name: "C7(b9,#11,13)".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 3, 2, 3, 2, 3],
+            fingers: vec![],
+        };
+        let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
+        assert!(svg.contains("chord-diagram-horizontal"));
+        assert!(svg.contains(">C7</text>"));
+        assert!(svg.contains("class=\"tension\">b9</text>"));
+        assert!(svg.contains("class=\"tension\">#11</text>"));
+        assert!(svg.contains("class=\"tension\">13</text>"));
+    }
+
+    #[test]
+    fn render_keyboard_svg_stacks_tensions() {
+        let v = KeyboardVoicing {
+            name: "Dmaj7(9,11,13)".to_string(),
+            display_name: None,
+            keys: vec![62, 66, 69, 73],
+            root_key: 62,
+        };
+        let svg = render_keyboard_svg(&v);
+        assert!(svg.contains(">Dmaj7</text>"));
+        assert!(svg.contains("class=\"tension\">9</text>"));
+        assert!(svg.contains("class=\"tension\">13</text>"));
+        // The verbatim long name must not appear as a single title.
+        assert!(!svg.contains(">Dmaj7(9,11,13)</text>"));
+    }
+
+    #[test]
+    fn render_keyboard_svg_single_line_title_unchanged() {
+        let v = KeyboardVoicing {
+            name: "Am".to_string(),
+            display_name: None,
+            keys: vec![69, 72, 76],
+            root_key: 69,
+        };
+        let svg = render_keyboard_svg(&v);
+        assert!(svg.contains(">Am</text>"));
+        assert!(!svg.contains("class=\"tension\""));
     }
 
     #[test]
