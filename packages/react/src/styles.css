@@ -1774,13 +1774,27 @@
   color: var(--cs-text-strong, #44424a);
   cursor: pointer;
 }
-.chordsketch-sheet__cins-chip:hover {
+.chordsketch-sheet__cins-chip:hover:not(:disabled) {
   background: var(--cs-surface-hover, #f6f4f7);
 }
 .chordsketch-sheet__cins-chip[aria-pressed='true'] {
   background: var(--cs-crimson-500, #bd1642);
   border-color: var(--cs-crimson-500, #bd1642);
   color: var(--cs-fg-on-crimson, #fff);
+}
+/* Disabled chip: a 7th / tension that the current triad+seventh cannot
+   take (isSeventhAvailable / isTensionAvailable). Must read as clearly
+   inert — muted fill + border + text, reduced opacity, and a
+   not-allowed cursor, matching the design-system button convention
+   (.btn:disabled) and the iReal grid's disabled actions. Declared after
+   the [aria-pressed='true'] rule so an unavailable chip never paints as
+   active (equal specificity → source order wins). */
+.chordsketch-sheet__cins-chip:disabled {
+  background: var(--cs-ink-50, #faf9fb);
+  border-color: var(--cs-border, #e8e6ea);
+  color: var(--cs-text-tertiary, #8a8790);
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 /* inputs */
 .chordsketch-sheet__cins-row2 {
@@ -1836,7 +1850,7 @@
 }
 .chordsketch-sheet__cins-movebtn:disabled {
   opacity: 0.35;
-  cursor: default;
+  cursor: not-allowed;
 }
 .chordsketch-sheet__cins-movelbl {
   font-size: 0.75rem;

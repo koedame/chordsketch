@@ -158,6 +158,23 @@ describe('<ChordInspector>', () => {
     expect(flat9.disabled).toBe(false);
   });
 
+  test('a tension that is unavailable for the current chord is rendered disabled', () => {
+    // A bare major triad (suffix '', no seventh) cannot take an altered tension
+    // — ♭9 / ♯5 require a seventh (isTensionAvailable). The chip must carry the
+    // native `disabled` attribute so the `:disabled` style in styles.css de-
+    // emphasises it; an enabled-looking but inert chip is the bug this guards.
+    const { container } = setup({ root: 'G', suffix: '', chordName: 'G' });
+    const tension = (text: string): HTMLButtonElement =>
+      Array.from(container.querySelectorAll('[aria-label="Tensions"] button')).find(
+        (b) => b.textContent === text,
+      ) as HTMLButtonElement;
+    expect(tension('♭9').disabled).toBe(true);
+    expect(tension('♯5').disabled).toBe(true);
+    // The natural 9 add-tone is still reachable without a seventh, so it stays
+    // enabled — the disabled treatment is selective, not blanket.
+    expect(tension('9').disabled).toBe(false);
+  });
+
   test('typing in the suffix / bass inputs emits the edited value', () => {
     const { container, onChange } = setup();
     const inputs = container.querySelectorAll('.chordsketch-sheet__cins-input');
