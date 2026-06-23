@@ -187,6 +187,45 @@ test.describe('chord-editor footer (ChordPro playground)', () => {
     expect(errors).toEqual([]);
   });
 
+  test('keyboard-nudging the selected chord shows no focus-ring outline', async ({
+    page,
+  }) => {
+    const errors = trackPageErrors(page);
+    await page.goto('./chordpro/');
+    await expect(page.locator('.cm-editor')).toBeVisible();
+
+    const preview = page.locator('.pane.preview');
+    await preview.locator(".chord[role='button']").first().click();
+    await expect(preview.locator('.chord--selected')).toBeVisible();
+
+    // Nudge with the keyboard: this moves the chord AND makes
+    // `:focus-visible` match (the last input modality is now a key), and
+    // the walker re-focuses the advanced selection. The crimson badge is
+    // the selection / focus indicator; a focus ring stacked on top would
+    // read as an unwanted outline flickering on every Arrow press. The
+    // computed box-shadow must therefore stay the badge's elevation
+    // shadow, NOT the crimson focus ring. `--cs-focus-ring` resolves to
+    // `var(--cs-crimson-500)` = #BD1642 = rgb(189, 22, 66), so that
+    // colour appearing in the box-shadow proves the ring leaked.
+    await page.keyboard.press('ArrowRight');
+    await expect(preview.locator('.chord--selected')).toBeVisible();
+
+    const boxShadow = await preview
+      .locator('.chord--selected')
+      .evaluate((el) => getComputedStyle(el).boxShadow);
+    // Negative: the crimson ring colour must be gone.
+    expect(boxShadow).not.toContain('189, 22, 66');
+    // Positive: the badge's elevation shadow (`--cs-e-1` =
+    // rgba(10, 10, 11, 0.04)) must be what remains. Asserting the
+    // expected shadow IS present (not merely that the ring is absent)
+    // keeps the test meaningful even if the focus-ring token's colour
+    // ever changes — the regression is the ring REPLACING the elevation
+    // shadow, so checking for the elevation shadow catches it directly.
+    expect(boxShadow).toContain('10, 10, 11');
+
+    expect(errors).toEqual([]);
+  });
+
   test('selecting a chord does not reflow its neighbours (#2638)', async ({ page }) => {
     const errors = trackPageErrors(page);
     await page.goto('./chordpro/');
