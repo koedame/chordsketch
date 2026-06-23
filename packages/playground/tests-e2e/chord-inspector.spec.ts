@@ -142,6 +142,30 @@ test.describe('chord-editor footer (ChordPro playground)', () => {
     expect(errors).toEqual([]);
   });
 
+  test('an unavailable tension chip is visibly disabled (not-allowed cursor)', async ({
+    page,
+  }) => {
+    const errors = trackPageErrors(page);
+    await page.goto('./chordpro/');
+    await expect(page.locator('.cm-editor')).toBeVisible();
+
+    // Select the first chord (`[G]` — a bare major triad with no seventh). An
+    // altered tension (♭9) needs a seventh, so its chip is disabled in this
+    // state. This proves the `:disabled` style in styles.css actually paints
+    // in the deployed bundle: without it the chip would be indistinguishable
+    // from a live one (the pre-fix bug — the chip carried `disabled` but had
+    // no `:disabled` rule, so it looked fully pressable).
+    const footer = page.locator(FOOTER);
+    await page.locator('.pane.preview').locator(".chord[role='button']").first().click();
+    await expect(footer.locator(".chordsketch-sheet__cins[data-mode='edit']")).toBeVisible();
+
+    const flat9 = footer.locator('[aria-label="Tensions"] button', { hasText: /^♭9$/ });
+    await expect(flat9).toBeDisabled();
+    await expect(flat9).toHaveCSS('cursor', 'not-allowed');
+
+    expect(errors).toEqual([]);
+  });
+
   test('the footer is edit-only: idle shows a hint, no editing controls or Insert', async ({
     page,
   }) => {

@@ -301,18 +301,24 @@ export function ChordInspector(props: ChordInspectorProps): JSX.Element {
           role="group"
           aria-label="Seventh"
         >
-          {SEVENTH_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              className="chordsketch-sheet__cins-chip"
-              disabled={!isSeventhAvailable(selection.triad, opt.value)}
-              aria-pressed={recognized && selection.seventh === opt.value}
-              onClick={() => emit({ suffix: composeChordSuffix(withSeventh(selection, opt.value)) })}
-            >
-              {opt.label}
-            </button>
-          ))}
+          {SEVENTH_OPTIONS.map((opt) => {
+            const unavailable = !isSeventhAvailable(selection.triad, opt.value);
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                className="chordsketch-sheet__cins-chip"
+                disabled={unavailable}
+                // Explain why the chip is inert so the disabled style is not a
+                // dead end (a greyed control with no stated cause).
+                title={unavailable ? 'Not available for the selected triad' : undefined}
+                aria-pressed={recognized && selection.seventh === opt.value}
+                onClick={() => emit({ suffix: composeChordSuffix(withSeventh(selection, opt.value)) })}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -323,18 +329,26 @@ export function ChordInspector(props: ChordInspectorProps): JSX.Element {
           role="group"
           aria-label="Tensions"
         >
-          {TENSION_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              className="chordsketch-sheet__cins-chip"
-              disabled={!isTensionAvailable(selection.triad, selection.seventh, opt.value)}
-              aria-pressed={recognized && selection.tensions.includes(opt.value)}
-              onClick={() => emit({ suffix: composeChordSuffix(toggleTension(selection, opt.value)) })}
-            >
-              {opt.label}
-            </button>
-          ))}
+          {TENSION_OPTIONS.map((opt) => {
+            const unavailable = !isTensionAvailable(selection.triad, selection.seventh, opt.value);
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                className="chordsketch-sheet__cins-chip"
+                disabled={unavailable}
+                // Explain why the chip is inert so the disabled style is not a
+                // dead end (a greyed control with no stated cause).
+                title={
+                  unavailable ? 'Not available for the selected chord type' : undefined
+                }
+                aria-pressed={recognized && selection.tensions.includes(opt.value)}
+                onClick={() => emit({ suffix: composeChordSuffix(toggleTension(selection, opt.value)) })}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
