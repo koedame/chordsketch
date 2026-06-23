@@ -189,7 +189,15 @@ test.describe('chord-editor footer (ChordPro playground)', () => {
     const boxShadow = await preview
       .locator('.chord--selected')
       .evaluate((el) => getComputedStyle(el).boxShadow);
+    // Negative: the crimson ring colour must be gone.
     expect(boxShadow).not.toContain('189, 22, 66');
+    // Positive: the badge's elevation shadow (`--cs-e-1` =
+    // rgba(10, 10, 11, 0.04)) must be what remains. Asserting the
+    // expected shadow IS present (not merely that the ring is absent)
+    // keeps the test meaningful even if the focus-ring token's colour
+    // ever changes — the regression is the ring REPLACING the elevation
+    // shadow, so checking for the elevation shadow catches it directly.
+    expect(boxShadow).toContain('10, 10, 11');
 
     expect(errors).toEqual([]);
   });
