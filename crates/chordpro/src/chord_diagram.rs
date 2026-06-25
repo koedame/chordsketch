@@ -1014,8 +1014,8 @@ impl DiagramMetrics {
             // (font 6, right-anchored at left_margin - fret_label_gap) clears
             // the left edge of the viewBox.
             left_margin: 11.0,
-            // Symmetric with left_margin so the compact bounding box is
-            // unchanged (`total_w = grid_w + 11 + 11`).
+            // Kept symmetric with left_margin so the total width is
+            // exactly `grid_w + 11 + 11` with no extra margin padding.
             right_margin: 11.0,
             bottom_pad_vertical: 10.0,
             bottom_pad_horizontal: 8.0,
