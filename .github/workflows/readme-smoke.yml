@@ -506,6 +506,19 @@ jobs:
         run: |
           set -euo pipefail
           brew tap koedame/tap
+          # Homebrew's tap-trust feature refuses to load a cask from a
+          # third-party tap until the tap is explicitly trusted, failing
+          # with "Refusing to load cask ... from untrusted tap". Trust our
+          # own tap so the documented `brew install --cask` below runs.
+          # `brew trust` is non-interactive under CI (Homebrew auto-detects
+          # CI=true). This mirrors the `brew trust koedame/tap` the sibling
+          # formula job already runs (#2606); the cask job missed that
+          # propagation and began failing once the runner's Homebrew
+          # enforced tap-trust. The README's user-facing
+          # `brew install --cask chordsketch` is intentionally left
+          # unchanged — tap-trust is not yet the stable default for end
+          # users (tracked in #2606).
+          brew trust koedame/tap
           brew install --cask chordsketch
           # Verify the app bundle landed where the README promises.
           if [ ! -d /Applications/ChordSketch.app ]; then
