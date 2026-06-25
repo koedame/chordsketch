@@ -992,9 +992,11 @@ impl DiagramMetrics {
     /// Compact metrics for diagrams shown directly above a lyric line
     /// (the `{diagrams: inline}` / `{diagrams: hover}` chordsketch modes).
     ///
-    /// Grid geometry shrinks to roughly 0.7x of regular (string pitch 7,
-    /// fret pitch 9), but the glyph fonts shrink only to ~0.8x and never
-    /// below a legibility floor (title 11, fingers 7). That divergence is
+    /// Grid geometry shrinks per axis — string pitch to 0.7x of regular
+    /// (7 vs `CELL_W` 10) and vertical fret pitch to 0.75x (9 vs
+    /// `CELL_H` 12) — while the glyph fonts shrink far less and never
+    /// below a legibility floor: the title font is 0.79x of regular
+    /// (11 vs 14) and the finger font 0.88x (7 vs 8). That divergence is
     /// the whole reason a compact layout exists rather than a CSS
     /// `transform: scale()`, which would shrink the text into illegibility
     /// along with the geometry. `top_margin` is kept generous enough (22)
