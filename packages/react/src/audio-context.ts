@@ -251,6 +251,75 @@ export function scheduleVoice(
   finalizeSource(osc, [gain], tracked);
 }
 
+// ---- Strummed chord (shared voicing) ---------------------------
+// Both the chord-audio surface (`useChordAudio`, every tapped chord) and
+// the key audition's tonic triad (`useKeyAudio`) sound a chord as a quick
+// strum — a "jara-n" roll, the voices staggered low-to-high, rather than a
+// simultaneous "ja-n" stab. The roll spread AND the per-voice envelope live
+// here, owned by the single `scheduleStrummedChord` call site, so the two
+// surfaces roll identically and neither the stagger nor the envelope can
+// drift (per `.claude/rules/fix-propagation.md`). Only the timbre, the
+// pitches, and the start time are caller-supplied.
+const STRUM_OFFSET_S = 0.035; // per-note onset stagger — the roll's spread
+const STRUM_ATTACK_S = 0.006; // soft onset, no click
+const STRUM_RELEASE_S = 2.6; // long, no-sustain decay so the chord rings
+const STRUM_PEAK_GAIN = 0.22; // total, divided evenly across the voices
+const STRUM_TAIL_S = 0.05; // let each voice's exponential tail finish
+
+/** Parameters describing a strummed (rolled) chord. */
+export interface StrumSpec {
+  /**
+   * MIDI note numbers in strum-sweep order (low → high for a downstroke).
+   * Voice `i` starts one strum offset after voice `i - 1`.
+   */
+  pitches: number[];
+  /**
+   * Oscillator timbre every voice sounds with — see {@link VoiceSpec.type}
+   * (e.g. the shared piano timbre from {@link getPianoWave}).
+   */
+  wave: OscillatorType | PeriodicWave;
+  /** Audio-clock time (seconds) the first (lowest) voice starts. */
+  startTime: number;
+}
+
+/**
+ * Schedule a strummed chord on `ctx`: one {@link scheduleVoice} call
+ * per pitch, each onset staggered so the chord rolls ("jara-n") rather than
+ * landing as a simultaneous stab ("ja-n"). The roll spread and the
+ * per-voice envelope are the module's shared strum voicing — so the
+ * chord-audio surface and the key audition roll identically — and the peak
+ * is divided evenly across the voices so a dense chord does not clip.
+ *
+ * A no-op when `pitches` is empty — which also guards the peak division
+ * from a zero divisor, so callers need not special-case the empty chord.
+ *
+ * Shared by `useChordAudio` (every tapped chord) and `useKeyAudio` (the
+ * tonic-triad strum that follows the scale) so the strum logic — stagger,
+ * envelope, peak division, node graph, cleanup — lives in one place and the
+ * two surfaces cannot drift (see `.claude/rules/fix-propagation.md`). Only
+ * `pitches`, `wave`, and `startTime` vary between the two callers.
+ */
+export function scheduleStrummedChord(
+  ctx: BaseAudioContext,
+  tracked: Set<AudioScheduledSourceNode>,
+  spec: StrumSpec,
+): void {
+  const { pitches, wave, startTime } = spec;
+  if (pitches.length === 0) return;
+  const perVoice = STRUM_PEAK_GAIN / pitches.length;
+  pitches.forEach((midi, i) => {
+    scheduleVoice(ctx, tracked, {
+      type: wave,
+      frequency: midiToFreq(midi),
+      startTime: startTime + i * STRUM_OFFSET_S,
+      attack: STRUM_ATTACK_S,
+      release: STRUM_RELEASE_S,
+      peak: perVoice,
+      tail: STRUM_TAIL_S,
+    });
+  });
+}
+
 /**
  * Schedule one woodblock metronome click on `ctx` at `startTime`,
  * registering its source nodes in `tracked`. The click is a band-pass-
