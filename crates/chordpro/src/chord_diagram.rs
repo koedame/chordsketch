@@ -444,8 +444,21 @@ fn extract_alterations(quality: &str) -> (String, Vec<String>) {
 ///
 /// The merged tensions are sorted ascending by scale degree so the renderer
 /// can stack them bottom-to-top in that order. When neither source yields a
-/// tension the returned `tensions` is empty and `base` is the original name
-/// verbatim — the single-line path.
+/// tension the returned `tensions` is empty and `base` is the original name —
+/// the single-line path.
+///
+/// The returned `base` and `tensions` are **display-ready**: ASCII accidentals
+/// are typeset to their Unicode musical symbols via
+/// [`crate::typography::unicode_accidentals`] (`Bb` → `B♭`, `F#m7b5` →
+/// `F♯m7` + `♭5`), so the chord-diagram title reads as engraved music exactly
+/// like the inline chord names every other renderer surface already typesets.
+/// The structural split (which keys off the ASCII `b` / `#` forms) happens
+/// first; the typography conversion is applied last, so it is the single
+/// source of truth for diagram-title typography across the three SVG title
+/// sites here plus the PDF renderer's three title sites — none of them re-runs
+/// the conversion (cf. `.claude/rules/fix-propagation.md`). The ASCII title
+/// path ([`render_ascii`]) does not route through this function; it applies
+/// [`crate::typography::unicode_accidentals`] to its title directly.
 ///
 /// # Examples
 ///
@@ -456,13 +469,15 @@ fn extract_alterations(quality: &str) -> (String, Vec<String>) {
 /// assert_eq!(t.base, "Dmaj7");
 /// assert_eq!(t.tensions, vec!["9", "11", "13"]);
 ///
+/// // Accidentals are typeset: `F#` → `F♯`, `b5` → `♭5`.
 /// let t = decompose_diagram_title("F#m7b5(9,11)");
-/// assert_eq!(t.base, "F#m7");
-/// assert_eq!(t.tensions, vec!["b5", "9", "11"]);
+/// assert_eq!(t.base, "F\u{266F}m7");
+/// assert_eq!(t.tensions, vec!["\u{266D}5", "9", "11"]);
 ///
-/// // A flat-root power chord is NOT split — the root's "b" is not a tension.
+/// // A flat-root power chord is NOT split — the root's "b" is not a tension —
+/// // but the root flat is still typeset: `Bb5` → `B♭5`.
 /// let t = decompose_diagram_title("Bb5");
-/// assert_eq!(t.base, "Bb5");
+/// assert_eq!(t.base, "B\u{266D}5");
 /// assert!(t.tensions.is_empty());
 ///
 /// // Plain names round-trip unchanged.
@@ -470,7 +485,8 @@ fn extract_alterations(quality: &str) -> (String, Vec<String>) {
 /// assert_eq!(t.base, "Am");
 /// assert!(t.tensions.is_empty());
 ///
-/// // Free-form `display` text that merely ends in parentheses is NOT split.
+/// // Free-form `display` text that merely ends in parentheses is NOT split,
+/// // and carries no accidental to typeset.
 /// let t = decompose_diagram_title("Cmaj7 (no 3rd)");
 /// assert_eq!(t.base, "Cmaj7 (no 3rd)");
 /// assert!(t.tensions.is_empty());
@@ -478,7 +494,7 @@ fn extract_alterations(quality: &str) -> (String, Vec<String>) {
 #[must_use]
 pub fn decompose_diagram_title(name: &str) -> DiagramTitle {
     let single_line = || DiagramTitle {
-        base: name.to_string(),
+        base: crate::typography::unicode_accidentals(name),
         tensions: Vec::new(),
     };
 
@@ -535,8 +551,11 @@ pub fn decompose_diagram_title(name: &str) -> DiagramTitle {
         return single_line();
     }
     DiagramTitle {
-        base: new_base,
-        tensions: alterations,
+        base: crate::typography::unicode_accidentals(&new_base),
+        tensions: alterations
+            .iter()
+            .map(|t| crate::typography::unicode_accidentals(t))
+            .collect(),
     }
 }
 
@@ -1243,11 +1262,15 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
             st.push(&mut svg, name_x);
         }
         None => {
+            // Single-line path: draw the decomposed `base`, which carries the
+            // display-ready typography (`Bb` → `B♭`). Re-reading `data.title()`
+            // here would bypass `decompose_diagram_title`'s accidental
+            // typesetting and reintroduce the ASCII `b`/`#` form.
             svg.push_str(&format!(
                 "<text x=\"{name_x}\" y=\"{title_baseline}\" text-anchor=\"middle\" \
                  font-family=\"sans-serif\" font-size=\"{title_font}\" \
                  font-weight=\"bold\">{}</text>\n",
-                crate::escape::escape_xml(data.title())
+                crate::escape::escape_xml(&title.base)
             ));
         }
     }
@@ -1508,11 +1531,13 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
             st.push(&mut svg, name_x);
         }
         None => {
+            // See the vertical renderer: the single-line title draws the
+            // typeset `title.base` (`Bb` → `B♭`), not the raw `data.title()`.
             svg.push_str(&format!(
                 "<text x=\"{name_x}\" y=\"{title_baseline}\" text-anchor=\"middle\" \
                  font-family=\"sans-serif\" font-size=\"{title_font}\" \
                  font-weight=\"bold\">{}</text>\n",
-                crate::escape::escape_xml(data.title())
+                crate::escape::escape_xml(&title.base)
             ));
         }
     }
@@ -1700,7 +1725,10 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
 /// single line and carries no rotated/flipped variant.
 #[must_use]
 pub fn render_ascii(data: &DiagramData) -> String {
-    let title = data.title();
+    // Typeset the title's accidentals (`Bb` → `B♭`, `F#` → `F♯`) so the
+    // ASCII diagram's chord name matches the inline chord names the text
+    // renderer already typesets via `typography::unicode_accidentals`.
+    let title = crate::typography::unicode_accidentals(data.title());
     let mut positions: Vec<String> = Vec::with_capacity(data.frets.len());
     for &f in &data.frets {
         match f {
@@ -2063,11 +2091,13 @@ pub fn render_keyboard_svg_with_size(voicing: &KeyboardVoicing, size: DiagramSiz
         None => {
             let title_font = m.title_font;
             let title_baseline = m.title_baseline;
+            // See the vertical renderer: draw the typeset `title.base`
+            // (`Bb` → `B♭`), not the raw `voicing.title()`.
             svg.push_str(&format!(
                 "<text x=\"{name_x}\" y=\"{title_baseline}\" text-anchor=\"middle\" \
                  font-family=\"sans-serif\" font-size=\"{title_font}\" \
                  font-weight=\"bold\">{}</text>\n",
-                crate::escape::escape_xml(voicing.title())
+                crate::escape::escape_xml(&title.base)
             ));
         }
     }
@@ -2403,36 +2433,39 @@ mod tests {
 
     #[test]
     fn decompose_title_extracts_altered_fifth() {
+        // The base root `F#` and the `b5` alteration are both typeset.
         let t = decompose_diagram_title("F#m7b5");
-        assert_eq!(t.base, "F#m7");
-        assert_eq!(t.tensions, vec!["b5"]);
+        assert_eq!(t.base, "F\u{266F}m7");
+        assert_eq!(t.tensions, vec!["\u{266D}5"]);
     }
 
     #[test]
     fn decompose_title_merges_alteration_and_parens_ascending() {
         // b5 (degree 5) sorts below the parenthesised 9 and 11.
         let t = decompose_diagram_title("F#m7b5(9,11)");
-        assert_eq!(t.base, "F#m7");
-        assert_eq!(t.tensions, vec!["b5", "9", "11"]);
+        assert_eq!(t.base, "F\u{266F}m7");
+        assert_eq!(t.tensions, vec!["\u{266D}5", "9", "11"]);
     }
 
     #[test]
     fn decompose_title_sorts_parenthesised_alterations() {
         let t = decompose_diagram_title("C7(b9,#11,13)");
         assert_eq!(t.base, "C7");
-        assert_eq!(t.tensions, vec!["b9", "#11", "13"]);
+        assert_eq!(t.tensions, vec!["\u{266D}9", "\u{266F}11", "13"]);
     }
 
     #[test]
     fn decompose_title_does_not_split_flat_root() {
-        // The "b" in "Bb5" is the root accidental, NOT a b5 alteration.
+        // The "b" in "Bb5" is the root accidental, NOT a b5 alteration — but it
+        // is still typeset to a Unicode flat (`Bb5` → `B♭5`).
         let t = decompose_diagram_title("Bb5");
-        assert_eq!(t.base, "Bb5");
+        assert_eq!(t.base, "B\u{266D}5");
         assert!(t.tensions.is_empty());
-        // Same for a flat-root quality that genuinely has an altered fifth.
+        // Same for a flat-root quality that genuinely has an altered fifth: the
+        // root flat is typeset and the `b5` is extracted and typeset.
         let t = decompose_diagram_title("Bbm7b5");
-        assert_eq!(t.base, "Bbm7");
-        assert_eq!(t.tensions, vec!["b5"]);
+        assert_eq!(t.base, "B\u{266D}m7");
+        assert_eq!(t.tensions, vec!["\u{266D}5"]);
     }
 
     #[test]
@@ -2520,8 +2553,9 @@ mod tests {
         let svg = render_svg_with_orientation(&data, Orientation::Horizontal);
         assert!(svg.contains("chord-diagram-horizontal"));
         assert!(svg.contains(">C7</text>"));
-        assert!(svg.contains("class=\"tension\">b9</text>"));
-        assert!(svg.contains("class=\"tension\">#11</text>"));
+        // Altered tensions are typeset: `b9` → `♭9`, `#11` → `♯11`.
+        assert!(svg.contains("class=\"tension\">\u{266D}9</text>"));
+        assert!(svg.contains("class=\"tension\">\u{266F}11</text>"));
         assert!(svg.contains("class=\"tension\">13</text>"));
     }
 
@@ -2589,6 +2623,102 @@ mod tests {
         let svg = render_svg(&data);
         assert!(svg.contains(">Am</text>"));
         assert!(!svg.contains("class=\"tension\""));
+    }
+
+    #[test]
+    fn render_svg_single_line_title_typesets_flat_root() {
+        // Regression for the chord-diagram title showing the ASCII `Bb`
+        // instead of the engraved `B♭`. The single-line (no-tension) SVG title
+        // path must route the name through `unicode_accidentals` just like the
+        // inline chord names every other renderer surface typesets.
+        let data = DiagramData {
+            name: "Bb".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 1, 3, 3, 3, 1],
+            fingers: vec![],
+        };
+        let vertical = render_svg(&data);
+        assert!(
+            vertical.contains(">B\u{266D}</text>"),
+            "vertical title not typeset: {vertical}"
+        );
+        assert!(
+            !vertical.contains(">Bb</text>"),
+            "vertical title still shows ASCII flat: {vertical}"
+        );
+        let horizontal = render_svg_with_orientation(&data, Orientation::Horizontal);
+        assert!(
+            horizontal.contains(">B\u{266D}</text>"),
+            "horizontal title not typeset: {horizontal}"
+        );
+        assert!(!horizontal.contains(">Bb</text>"));
+        // Sharp roots too: `F#` → `F♯`.
+        let sharp = DiagramData {
+            name: "F#m".to_string(),
+            ..data.clone()
+        };
+        let sharp_svg = render_svg(&sharp);
+        assert!(
+            sharp_svg.contains(">F\u{266F}m</text>"),
+            "sharp title not typeset: {sharp_svg}"
+        );
+    }
+
+    #[test]
+    fn render_keyboard_svg_single_line_title_typesets_flat_root() {
+        let v = KeyboardVoicing {
+            name: "Bb".to_string(),
+            display_name: None,
+            keys: vec![70, 74, 77],
+            root_key: 70,
+        };
+        let svg = render_keyboard_svg(&v);
+        assert!(
+            svg.contains(">B\u{266D}</text>"),
+            "keyboard title not typeset: {svg}"
+        );
+        assert!(!svg.contains(">Bb</text>"));
+    }
+
+    #[test]
+    fn render_svg_typesets_flat_in_display_override() {
+        // A `{define} display=Bb7` override is also typeset, since it flows
+        // through the same `title()` → `decompose_diagram_title` path.
+        let data = DiagramData {
+            name: "BbDom7".to_string(),
+            display_name: Some("Bb7".to_string()),
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 1, 3, 1, 3, 1],
+            fingers: vec![],
+        };
+        let svg = render_svg(&data);
+        assert!(
+            svg.contains(">B\u{266D}7</text>"),
+            "display override not typeset: {svg}"
+        );
+    }
+
+    #[test]
+    fn render_ascii_typesets_flat_root() {
+        let data = DiagramData {
+            name: "Bb".to_string(),
+            display_name: None,
+            strings: 6,
+            frets_shown: 5,
+            base_fret: 1,
+            frets: vec![-1, 1, 3, 3, 3, 1],
+            fingers: vec![],
+        };
+        let ascii = render_ascii(&data);
+        assert!(
+            ascii.starts_with("B\u{266D}\n"),
+            "ascii title not typeset: {ascii:?}"
+        );
     }
 
     #[test]
