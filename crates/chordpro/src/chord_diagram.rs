@@ -992,28 +992,30 @@ impl DiagramMetrics {
     /// Compact metrics for diagrams shown directly above a lyric line
     /// (the `{diagrams: inline}` / `{diagrams: hover}` chordsketch modes).
     ///
-    /// Grid geometry shrinks to roughly 0.55x of regular, but the glyph
-    /// fonts shrink only to ~0.8x and never below a legibility floor
-    /// (title 11, fingers 7). That divergence is the whole reason a
-    /// compact layout exists rather than a CSS `transform: scale()`,
-    /// which would shrink the text into illegibility along with the
-    /// geometry. `top_margin` is kept generous enough (22) that the
-    /// title and the open/muted glyph row do not collide.
+    /// Grid geometry shrinks per axis — string pitch to 0.7x of regular
+    /// (7 vs `CELL_W` 10) and vertical fret pitch to 0.75x (9 vs
+    /// `CELL_H` 12) — while the glyph fonts shrink far less and never
+    /// below a legibility floor: the title font is 0.79x of regular
+    /// (11 vs 14) and the finger font 0.88x (7 vs 8). That divergence is
+    /// the whole reason a compact layout exists rather than a CSS
+    /// `transform: scale()`, which would shrink the text into illegibility
+    /// along with the geometry. `top_margin` is kept generous enough (22)
+    /// that the title and the open/muted glyph row do not collide.
     const fn compact() -> Self {
         Self {
-            cell_w: 9.0,
-            cell_h: 11.0,
+            cell_w: 7.0,
+            cell_h: 9.0,
             // Compact keeps a single fret pitch for both orientations
             // (matching its `cell_h`); its grid is small enough that the
             // horizontal layout already reads wider than tall.
-            horizontal_fret_pitch: 11.0,
+            horizontal_fret_pitch: 9.0,
             top_margin: 22.0,
             // Left gutter widened from 9 to 11 so a 2-digit fret-number label
             // (font 6, right-anchored at left_margin - fret_label_gap) clears
             // the left edge of the viewBox.
             left_margin: 11.0,
-            // Symmetric with left_margin so the compact bounding box is
-            // unchanged (`total_w = grid_w + 11 + 11`).
+            // Kept symmetric with left_margin so the total width is
+            // exactly `grid_w + 11 + 11` with no extra margin padding.
             right_margin: 11.0,
             bottom_pad_vertical: 10.0,
             bottom_pad_horizontal: 8.0,
@@ -4354,19 +4356,19 @@ mod tests {
         // Verify the compact bounding box is as expected and that every
         // fret-number label baseline stays inside the declared frame.
         let cv = render_svg_with_options(&data, Orientation::Vertical, DiagramSize::Compact);
-        assert_eq!(extract(&cv, "width"), 67.0);
-        assert_eq!(extract(&cv, "height"), 87.0);
+        assert_eq!(extract(&cv, "width"), 57.0);
+        assert_eq!(extract(&cv, "height"), 77.0);
         let cv_ys = label_ys(&cv);
         assert!(
-            cv_ys.iter().all(|&y| y <= 87.0),
+            cv_ys.iter().all(|&y| y <= 77.0),
             "compact vertical fret-number labels overflow the frame: {cv_ys:?}"
         );
         let ch = render_svg_with_options(&data, Orientation::Horizontal, DiagramSize::Compact);
-        assert_eq!(extract(&ch, "width"), 77.0);
-        assert_eq!(extract(&ch, "height"), 75.0);
+        assert_eq!(extract(&ch, "width"), 67.0);
+        assert_eq!(extract(&ch, "height"), 65.0);
         let ch_ys = label_ys(&ch);
         assert!(
-            ch_ys.iter().all(|&y| y <= 75.0),
+            ch_ys.iter().all(|&y| y <= 65.0),
             "compact horizontal fret-number labels overflow the frame: {ch_ys:?}"
         );
     }
