@@ -15,6 +15,7 @@
  * copy keeps the editor visually correct when consumed without a
  * sibling stylesheet. Keep in lockstep with `tokens.css` whenever
  * it changes (see `design-system/DESIGN.md` §9). */
+/* @generated:start — DO NOT EDIT. Source: design-system/tokens.css. Run: node scripts/build-tokens.mjs */
 :root {
   /* Crimson — the only accent. */
   --crimson-50: #FDF2F5;
@@ -136,6 +137,7 @@
     --dur-4: 0ms;
   }
 }
+/* @generated:end */
 
 .irealb-editor {
   display: flex;

@@ -1,0 +1,47 @@
+name: Design Token Sync Check
+
+# design-system/tokens.css is the single source of truth for design tokens
+# (ADR-0038). scripts/build-tokens.mjs projects it into the per-package token
+# blocks (the `--cs-*` blocks in @chordsketch/react{,-ui} and the bare `:root`
+# block in @chordsketch/ui-irealb-editor). When this check fails, run
+# `node scripts/build-tokens.mjs` and commit the regenerated stylesheets, or
+# revert the hand-edit to a generated block.
+
+on:
+  pull_request:
+    paths:
+      - "design-system/tokens.css"
+      - "packages/react/src/styles.css"
+      - "packages/react-ui/src/styles.css"
+      - "packages/ui-irealb-editor/src/style.css"
+      - "scripts/build-tokens.mjs"
+      - ".github/workflows/tokens-sync.yml"
+  push:
+    branches: [main]
+    paths:
+      - "design-system/tokens.css"
+      - "packages/react/src/styles.css"
+      - "packages/react-ui/src/styles.css"
+      - "packages/ui-irealb-editor/src/style.css"
+      - "scripts/build-tokens.mjs"
+      - ".github/workflows/tokens-sync.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check-token-sync:
+    name: Verify generated token blocks are committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Regenerate token blocks from tokens.css
+        run: node scripts/build-tokens.mjs
+
+      - name: Assert the regenerated blocks are committed (no drift)
+        run: |
+          git diff --exit-code -- \
+            packages/react/src/styles.css \
+            packages/react-ui/src/styles.css \
+            packages/ui-irealb-editor/src/style.css
