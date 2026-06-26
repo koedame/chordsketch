@@ -171,10 +171,11 @@ export function useKeyAudio(
       }
       // Both lookups derive from the same parse, so they succeed or fail
       // together; bail if the key was not parseable. The triad check is
-      // also what guards the `CHORD_PEAK_GAIN / triad.length` division
-      // below from a zero divisor (sister to `useChordAudio`'s own
-      // empty-pitch guard), should a future core change ever let the two
-      // lookups diverge.
+      // also a defence-in-depth guard: `scheduleStrummedChord` has its own
+      // empty-pitches no-op (which also guards its own peak division from a
+      // zero divisor), but an early return here avoids scheduling an empty
+      // scale too (sister to `useChordAudio`'s own empty-pitch guard),
+      // should a future core change ever let the two lookups diverge.
       if (pitches.scale.length === 0 || pitches.triad.length === 0) return;
 
       // Cut any audition still ringing so a fresh tap retriggers cleanly.

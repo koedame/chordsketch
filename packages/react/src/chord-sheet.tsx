@@ -159,7 +159,7 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
   /**
    * Enable chord-audio playback (#2650). Audio is additive, not a
    * separate mode: when on, activating a chord (click / Enter / Space)
-   * sounds it as a block chord via the Web Audio API IN ADDITION to the
+   * sounds it as a strummed chord via the Web Audio API IN ADDITION to the
    * click-to-select / drag editing interactions — so the editing panel
    * stays usable while audio is on.
    *
