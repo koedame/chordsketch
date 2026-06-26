@@ -68,8 +68,8 @@ is zero-dep; other deps are justified per PR).
 
 2. **A bespoke, zero-dependency generator (`scripts/build-tokens.mjs`) parses
    `tokens.css` and writes the derived token blocks** that are hand-mirrored
-   today, each between `/* @generated tokens:start */` and
-   `/* @generated tokens:end */` markers, leaving every hand-authored
+   today, each between `/* @generated:start */` and
+   `/* @generated:end */` markers, leaving every hand-authored
    component rule outside the markers untouched:
    - `packages/react-ui/src/styles.css` and `packages/react/src/styles.css` —
      the `--cs-*`-prefixed block, scoped to that file's existing

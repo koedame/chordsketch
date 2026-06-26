@@ -319,12 +319,19 @@ The runtime playground at `packages/playground/` consumes this
 design system as both an end-user evaluation surface (try the
 parser / renderer live in a browser) and a developer test surface
 (exercise every wasm export, every render format, every input
-format). Any new component or token that lands here must be
-mirrored to `packages/ui-web/src/style.css`,
-`packages/ui-irealb-editor/src/style.css`, and the `--cs-*` block
-in `packages/react/src/styles.css` — those three are the runtime
-copies that actually paint the playground UI and any
-`@chordsketch/react`-consumer's host. Class names used in
+format). Design tokens are single-sourced in `tokens.css` and
+**generated** into the runtime copies that actually paint the
+playground UI and any `@chordsketch/react`-consumer's host — the
+`--cs-*` blocks in `packages/react/src/styles.css` and
+`packages/react-ui/src/styles.css`, and the bare `:root` block in
+`packages/ui-irealb-editor/src/style.css`. To add or change a
+token, edit `tokens.css` and run `node scripts/build-tokens.mjs`;
+the generated blocks (delimited by `/* @generated:start */` …
+`/* @generated:end */`) are committed, and the `tokens-sync` CI
+check fails on drift — never hand-edit them (ADR-0038,
+`.claude/rules/design-tokens.md`). A new component still lands in
+`DESIGN.md` + `preview/` first, then gets its React binding
+(ADR-0029). Class names used in
 `design-system/ui_kits/web/editor.html` (`.topnav`, `.toolbar`,
 `.tool-group`, `.segmented`, `.pane`, `.pane-head`, `.status`,
 `.btn` + variants) are the canonical chrome vocabulary; the

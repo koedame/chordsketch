@@ -18,6 +18,7 @@
  * the inline fallbacks below — visually equivalent for
  * `:root`-level rendering.
  */
+/* @generated:start — DO NOT EDIT. Source: design-system/tokens.css. Run: node scripts/build-tokens.mjs */
 .chordsketch-chord-pro-editor,
 .chordsketch-chord-pro-preview,
 .chordsketch-source-area,
@@ -147,6 +148,7 @@
     --cs-dur-4: 0ms;
   }
 }
+/* @generated:end */
 
 /* ------------------------------------------------------------------
  * Transpose / Capo select.
