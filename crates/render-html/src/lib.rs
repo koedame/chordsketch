@@ -5205,8 +5205,14 @@ Verse text\n\
         // Regression test for #1246.
         let html = render("{define: Bb base-fret 1 frets x 1 3 3 3 1}\n{diagrams}\n[A#]Hello\n");
         // Bb was rendered inline (as Bb); A# is the same chord enharmonically.
-        let bb_count = html.match_indices("font-weight=\"bold\">Bb</text>").count();
-        let as_count = html.match_indices("font-weight=\"bold\">A#</text>").count();
+        // The diagram title is typeset, so the flat reads `B♭` (not ASCII `Bb`)
+        // and a sharp would read `A♯`.
+        let bb_count = html
+            .match_indices("font-weight=\"bold\">B\u{266D}</text>")
+            .count();
+        let as_count = html
+            .match_indices("font-weight=\"bold\">A\u{266F}</text>")
+            .count();
         assert_eq!(bb_count, 1, "Bb should appear once (inline)");
         assert_eq!(
             as_count, 0,
