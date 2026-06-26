@@ -700,9 +700,6 @@ dependencies = [
 [[package]]
 name = "chordsketch-chordpro"
 version = "0.5.0"
-dependencies = [
- "tempfile",
-]
 
 [[package]]
 name = "chordsketch-convert"

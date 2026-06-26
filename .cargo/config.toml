@@ -1,0 +1,21 @@
+# Cargo configuration for the chordsketch workspace.
+#
+# [net] retry — resilience against transient crates.io fetch failures.
+#
+# CI (notably the cold-cache Windows `desktop-build` cell, which runs
+# `wasm-pack build` → `cargo metadata` over the full workspace graph)
+# intermittently dies with `[56] Recv failure: Connection was reset`
+# while downloading a crate or sparse-index file from crates.io. This is
+# an *external* transient — a TCP reset from the registry CDN — not an
+# intermittency in this project's own code, so it cannot be "eliminated
+# at the source" the way `.claude/rules/root-cause-fixes.md` asks for our
+# own flakiness. Retrying an idempotent registry read on a spurious
+# network error is the correct, standard resilience layer for it (curl
+# error 56 is in cargo's retryable set), distinct from masking a real bug
+# behind a retry. Cargo's default is 3; 10 absorbs a longer blip while
+# still failing fast on a genuine outage.
+#
+# In offline/sandboxed builds (the nix sandbox, `cargo --offline`) no
+# network request is issued, so this setting is inert there.
+[net]
+retry = 10

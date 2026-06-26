@@ -973,7 +973,59 @@ static PRESET_CHARANGO: &str = r#"{
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
+
+    /// Stdlib-only stand-in for `tempfile::TempDir`.
+    ///
+    /// `chordsketch-chordpro` carries zero external dependencies — normal,
+    /// dev, and build (see CLAUDE.md "Dependency Policy", the
+    /// `external_tool` module's `TempDirGuard`, and the CI guard in
+    /// `scripts/check-zero-deps.py`). The test suite therefore cannot pull
+    /// in the `tempfile` crate, so this type provides the small slice of
+    /// its API the config tests rely on: a uniquely named directory under
+    /// the system temp dir, accessible via [`TempDir::path`], removed
+    /// recursively on `Drop` regardless of how the test exits.
+    struct TempDir {
+        path: std::path::PathBuf,
+    }
+
+    impl TempDir {
+        fn new() -> std::io::Result<Self> {
+            use std::sync::atomic::{AtomicU64, Ordering};
+
+            // Monotonic counter guarantees uniqueness across the threads
+            // `cargo test` runs concurrently within one process; the pid
+            // and a nanosecond timestamp add entropy across separate test
+            // binaries that may share a pid namespace in CI containers.
+            static COUNTER: AtomicU64 = AtomicU64::new(0);
+            let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
+            let pid = std::process::id();
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0);
+            let path = std::env::temp_dir()
+                .join(format!("chordsketch_config_test_{pid}_{counter}_{nanos}"));
+            std::fs::create_dir_all(&path)?;
+            Ok(Self { path })
+        }
+
+        fn path(&self) -> &std::path::Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            // Best-effort cleanup; a leaked temp dir must never fail a test.
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    /// Create a uniquely named temporary directory (stdlib-only stand-in
+    /// for `tempfile::tempdir`).
+    fn tempdir() -> std::io::Result<TempDir> {
+        TempDir::new()
+    }
 
     /// Map a delegate config value to a permissiveness level for ordering.
     /// Matches the `delegate_perm` function used in `Config::load()`.
@@ -1909,7 +1961,7 @@ mod tests {
     fn test_resolve_propagates_rrjson_warnings() {
         // RRJSON include directives produce warnings. Verify they propagate
         // through Config::resolve.
-        let dir = tempfile::TempDir::new().unwrap();
+        let dir = TempDir::new().unwrap();
         let file_path = dir.path().join("test.prp");
         std::fs::write(&file_path, "include \"nonexistent.prp\"\na = 1\n").unwrap();
         let result = Config::resolve(file_path.to_str().unwrap()).unwrap();
