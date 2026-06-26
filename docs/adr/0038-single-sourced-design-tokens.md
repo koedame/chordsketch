@@ -28,8 +28,9 @@ mirror new tokens by hand to a list of these files — and that list has
 
 - it names `packages/ui-web/src/style.css`, which was removed with the
   `@chordsketch/ui-web` package in ADR-0022;
-- it describes `packages/ui-irealb-editor/src/style.css` as a `--cs-*`
-  mirror, but that file uses the bare namespace, not `--cs-*`;
+- it does not distinguish the bare namespace used by
+  `packages/ui-irealb-editor/src/style.css` from the `--cs-*` block used by
+  the `react` entry, grouping them as equivalent mirror targets;
 - it omits `packages/react-ui/src/styles.css`, the primary `--cs-*` mirror
   added in ADR-0029.
 
@@ -191,8 +192,6 @@ is zero-dep; other deps are justified per PR).
   copies this ADR single-sources.
 - ADR-0029 §5–6 — names `tokens.css` the source of truth and single-sources
   component CSS; this ADR makes that mechanical.
-- ADR-0011 — static design-system / inline-styles posture, preserved by
-  committing the generated outputs.
 - ADR-0022 — retired `@chordsketch/ui-web`, a `§9` mirror target this ADR
   removes.
 - `.claude/rules/fix-propagation.md` — the defect class eliminated for tokens.
