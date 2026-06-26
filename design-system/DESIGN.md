@@ -1,6 +1,6 @@
 # ChordSketch — Design System
 
-**Version 1.2** · English-primary UI · Light theme · Editorial / Professional
+**Version 1.3** · English-primary UI · Light theme · Editorial / Professional
 
 ChordSketch is a library of chord sheets with lyrics for **ChordPro** and
 **iReal Pro**. A tool for amateurs through professionals to search, edit,
@@ -221,18 +221,23 @@ requirements are listed here; visual detail will live in
 `design-system.html` and `preview/components-*.html` once
 those artifacts are produced.
 
-| Category   | Variants |
-|---|---|
-| Buttons    | primary / secondary / ghost / danger × sm / md / lg, icon-only, disabled |
-| Forms      | input / select / textarea / segmented / checkbox / radio, focus = `--focus-ring` |
-| Cards      | song / setlist / featured (uniform 1px `--crimson-500` border; surface, type, and other tokens unchanged) |
-| Badges     | status (4 semantic + crimson + muted) / key (mono on ink-1000 or crimson) / genre (pill) |
-| Avatars    | 24 / 28 / 36 / 48 px, stacked +N |
-| Navigation | top nav 56px, tabs (underline + count) |
-| Modal      | 12px radius, e3 elevation, footer `--ink-50` wash to demarcate |
-| Table      | eyebrow header, tabular-nums, hover row = `--ink-50` |
-| Toast      | `--ink-1000` base / success / danger / warning, action button uses inherited foreground + underline (no color shift) so contrast holds on every variant |
-| Progress   | 6px bar / spinner / skeleton |
+The **React binding** column says whether a category ships a
+`@chordsketch/react-ui` primitive or is, for now, a reference spec realised
+only in `preview/` — per ADR-0029 a category lands in this document and
+`preview/` first, then gets a React binding when a consumer needs it.
+
+| Category   | Variants | React binding |
+|---|---|---|
+| Buttons    | primary / secondary / ghost / danger × sm / md / lg, icon-only, disabled | `@chordsketch/react-ui` `<Button>` |
+| Forms      | input / select / textarea / segmented / checkbox / radio / switch, focus = `--focus-ring` | `@chordsketch/react-ui` (`<Input>` / `<Select>` / `<Textarea>` / `<Segmented>` / `<Checkbox>` / `<Radio>` / `<Switch>` / `<Field>`) |
+| Cards      | song / setlist / featured (uniform 1px `--crimson-500` border; surface, type, and other tokens unchanged) | `@chordsketch/react-ui` `<Card>` |
+| Badges     | status (4 semantic + crimson + muted) / key (mono on ink-1000 or crimson) / genre (pill) | `@chordsketch/react-ui` `<Badge>` / `<Pill>` |
+| Avatars    | 24 / 28 / 36 / 48 px, stacked +N | Reference only (`preview/`) |
+| Navigation | top nav 56px, tabs (underline + count) | Reference only (`preview/`) |
+| Modal      | 12px radius, e3 elevation, footer `--ink-50` wash to demarcate | Reference only (`preview/`) |
+| Table      | eyebrow header, tabular-nums, hover row = `--ink-50` | Reference only (`preview/`) |
+| Toast      | `--ink-1000` base / success / danger / warning, action button uses inherited foreground + underline (no color shift) so contrast holds on every variant | Reference only (`preview/`) |
+| Progress   | 6px bar / spinner / skeleton | Reference only (`preview/`) |
 
 ### 6.1 Prohibited treatments
 
@@ -382,3 +387,32 @@ layout in either place.
   idiomatic rather than transposed from the source, and prefer a shorter
   natural phrase over an explanatory sentence. Editorial only — no token
   or class changes.
+- **v1.3** — Annotated §6 with each category's React binding (which ship a
+  `@chordsketch/react-ui` primitive vs are reference-only in `preview/`), and
+  added §11 Versioning. Documentation only — no token or class changes.
+
+---
+
+## 11. Versioning
+
+The design tokens and the published `@chordsketch/react-ui` package follow
+semantic versioning. What counts as each bump:
+
+- **MAJOR** — remove or rename a public token name (the bare `--crimson-*` /
+  `--ink-*` / `--sp-*` / … consumers import from `tokens.css`, or a `--cs-*`
+  token), remove or rename a canonical class, or remove a primitive. These
+  break a consumer that referenced the old name.
+- **MINOR** — add a token, a primitive, a variant, or a canonical class.
+  Additive; existing consumers are unaffected.
+- **PATCH** — change a token's *value* (e.g. adjust a hex or a spacing step),
+  or fix a component's CSS without changing its class / API.
+
+A token slated for removal is **deprecated first**: kept for one minor cycle,
+marked deprecated in `tokens.css` (a comment on the declaration), and removed
+only in the next major. The bare `:root` names in `tokens.css` are a public
+contract (ADR-0038, constraint 1) and are never renamed outside a major.
+
+See [ADR-0038](docs/adr/0038-single-sourced-design-tokens.md) (tokens are
+single-sourced and generated) and
+[ADR-0029](docs/adr/0029-react-ui-primitives-package.md)
+(`@chordsketch/react-ui` is independently versioned).
