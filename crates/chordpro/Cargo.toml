@@ -13,6 +13,8 @@ description = "ChordPro parser, AST, and transforms"
 readme = "README.md"
 
 [dependencies]
-
-[dev-dependencies]
-tempfile = "3"
+# This crate has ZERO external dependencies — normal, dev, AND build.
+# See CLAUDE.md "Dependency Policy", `.claude/rules/code-style.md`, and
+# the `external_tool` module's stdlib-only `TempDirGuard`. The invariant
+# is enforced in CI by `scripts/check-zero-deps.py`; tests use the
+# stdlib-only temp-directory helper in `config.rs` rather than `tempfile`.

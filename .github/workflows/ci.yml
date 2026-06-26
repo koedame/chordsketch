@@ -146,6 +146,27 @@ jobs:
       - name: Unit tests
         run: python3 -m unittest scripts/test_check_fixture_counts.py
 
+  core-zero-deps:
+    name: Core crate zero-deps
+    # Enforces the zero-external-dependency contract for the core crates
+    # (`chordsketch-chordpro`, `chordsketch-ireal`) documented in CLAUDE.md
+    # "Dependency Policy" and `.claude/rules/code-style.md`. A stray
+    # dev/build/normal dep drags a network-fetched transitive graph
+    # (e.g. tempfile -> getrandom) back into every `cargo metadata`
+    # resolution, which is what made the cold-cache desktop-build wasm
+    # step fragile. Guarantee-style check per
+    # `.claude/rules/ci-parallelization.md` §3 — no paths: filter, runs on
+    # every PR. Python-only, sub-second wall clock; no rust-cache needed.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Check core crate dependencies
+        run: python3 scripts/check-zero-deps.py
+
+      - name: Unit tests
+        run: python3 -m unittest scripts/test_check_zero_deps.py
+
   macports-portfile-sync:
     name: MacPorts Portfile sync
     # Guards against the `cargo.crates` block in
