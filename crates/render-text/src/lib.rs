@@ -419,8 +419,12 @@ fn render_song_impl(
                 output.push("[Chord Diagrams]".to_string());
                 for voicing in &voicings {
                     output.push(format!(
+                        // Typeset the title's accidentals (`Bb` → `B♭`) so this
+                        // keyboard-diagram chord name matches the fretted ASCII
+                        // diagram (`render_ascii`) and the inline chord-name
+                        // typography every other surface applies.
                         "  {}: keys {}",
-                        voicing.title(),
+                        unicode_accidentals(voicing.title()),
                         voicing
                             .keys
                             .iter()
@@ -2270,6 +2274,27 @@ mod delegate_tests {
         assert!(output.contains("Am:"), "Am entry expected");
         assert!(output.contains("C:"), "C entry expected");
         assert!(output.contains("keys"), "key list label expected");
+    }
+
+    #[test]
+    fn test_diagrams_piano_auto_inject_typesets_accidentals() {
+        // Regression: the keyboard-diagram title must typeset its accidentals
+        // (`Bb` → `B♭`, `F#` → `F♯`) to match the fretted ASCII diagram and the
+        // chord-name typography every other surface applies (see
+        // `.claude/rules/chord-name-typography.md`).
+        let output = render("{diagrams: piano}\n[Bb]Hello [F#m]world");
+        assert!(
+            output.contains("B\u{266D}: keys"),
+            "keyboard title should typeset the flat root: {output}"
+        );
+        assert!(
+            output.contains("F\u{266F}m: keys"),
+            "keyboard title should typeset the sharp root: {output}"
+        );
+        assert!(
+            !output.contains("Bb: keys") && !output.contains("F#m: keys"),
+            "keyboard title must not show ASCII accidentals: {output}"
+        );
     }
 
     #[test]
