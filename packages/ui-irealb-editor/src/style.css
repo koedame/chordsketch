@@ -10,11 +10,12 @@
  * below keeps the editor visually correct when consumed standalone.
  */
 
-/* Mirrors `design-system/tokens.css` 1:1. Hosts that already
+/* Generated 1:1 from `design-system/tokens.css` (ADR-0038).
+ * Do not hand-edit the block below — edit `tokens.css` and run
+ * `node scripts/build-tokens.mjs` instead. Hosts that already
  * supply these tokens at `:root` inherit them; this standalone
  * copy keeps the editor visually correct when consumed without a
- * sibling stylesheet. Keep in lockstep with `tokens.css` whenever
- * it changes (see `design-system/DESIGN.md` §9). */
+ * sibling stylesheet. */
 /* @generated:start — DO NOT EDIT. Source: design-system/tokens.css. Run: node scripts/build-tokens.mjs */
 :root {
   /* Crimson — the only accent. */

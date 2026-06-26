@@ -13,7 +13,8 @@
  * to this package's selectors: every primitive root carries the full
  * token set so the primitives render correctly wherever this
  * stylesheet is loaded, without depending on (or being overridden by)
- * a host's own `:root` tokens. Values mirror `design-system/tokens.css`.
+ * a host's own `:root` tokens. Values are generated from `design-system/tokens.css`
+ * (see `scripts/build-tokens.mjs`, ADR-0038).
  */
 /* @generated:start — DO NOT EDIT. Source: design-system/tokens.css. Run: node scripts/build-tokens.mjs */
 .btn,
