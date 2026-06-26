@@ -4,6 +4,7 @@ import {
   getPianoWave,
   midiToFreq,
   resetSharedAudioContextForTests,
+  scheduleStrummedChord,
   scheduleVoice,
   scheduleWoodblockTick,
   stopVoices,
@@ -131,6 +132,79 @@ describe('scheduleVoice', () => {
     expect(tracked.size).toBe(0);
     expect(osc.disconnect).toHaveBeenCalled();
     expect(fake.gains[0]!.disconnect).toHaveBeenCalled();
+  });
+});
+
+describe('scheduleStrummedChord', () => {
+  /** The first `exponentialRampToValueAtTime` target on each gain node is
+   * that voice's attack-peak (the per-voice gain after the chord's total is
+   * divided across the voices). */
+  function perVoicePeaks(fake: FakeAudioContext): number[] {
+    return fake.gains.map(
+      (g) => g.gain.exponentialRampToValueAtTime.mock.calls[0]?.[0] as number,
+    );
+  }
+
+  test('staggers the voice onsets evenly (a roll, not a stab)', () => {
+    const { fake, ctx } = makeCtx();
+    const tracked = new Set<AudioScheduledSourceNode>();
+    // C major triad: C3 / E3 / G3.
+    scheduleStrummedChord(ctx, tracked, {
+      pitches: [48, 52, 55],
+      wave: getPianoWave(ctx),
+      startTime: 1,
+    });
+    expect(fake.oscillators).toHaveLength(3);
+    const starts = fake.oscillators.map(
+      (o) => o.start.mock.calls[0]?.[0] as number,
+    );
+    // The first voice anchors at `startTime`; each later voice is offset by a
+    // uniform, strictly-positive stagger. A simultaneous stab would start
+    // every voice at `startTime`, which the strictly-positive step rejects.
+    expect(starts[0]).toBeCloseTo(1, 5);
+    const step = starts[1]! - starts[0]!;
+    expect(step).toBeGreaterThan(0);
+    expect(starts[2]! - starts[1]!).toBeCloseTo(step, 5);
+  });
+
+  test('divides the peak evenly across the voices, tracking the voice count', () => {
+    // Triad: three voices share the total peak.
+    const triad = makeCtx();
+    scheduleStrummedChord(triad.ctx, new Set(), {
+      pitches: [48, 52, 55],
+      wave: getPianoWave(triad.ctx),
+      startTime: 0,
+    });
+    const triadPeaks = perVoicePeaks(triad.fake);
+    expect(triadPeaks).toHaveLength(3);
+    // Every voice gets the SAME per-voice peak (even division — no voice
+    // dominates and the summed gain stays bounded so the chord doesn't clip).
+    for (const p of triadPeaks) expect(p).toBeCloseTo(triadPeaks[0]!, 10);
+
+    // A denser, four-voice chord splits the same total more ways, so each
+    // voice is quieter — proving the division tracks `pitches.length`.
+    const seventh = makeCtx();
+    scheduleStrummedChord(seventh.ctx, new Set(), {
+      pitches: [48, 52, 55, 59],
+      wave: getPianoWave(seventh.ctx),
+      startTime: 0,
+    });
+    const seventhPeaks = perVoicePeaks(seventh.fake);
+    expect(seventhPeaks).toHaveLength(4);
+    for (const p of seventhPeaks) expect(p).toBeCloseTo(seventhPeaks[0]!, 10);
+    expect(seventhPeaks[0]!).toBeLessThan(triadPeaks[0]!);
+  });
+
+  test('an empty chord is a no-op (guards the peak division from a zero divisor)', () => {
+    const { fake, ctx } = makeCtx();
+    const tracked = new Set<AudioScheduledSourceNode>();
+    scheduleStrummedChord(ctx, tracked, {
+      pitches: [],
+      wave: getPianoWave(ctx),
+      startTime: 0,
+    });
+    expect(fake.oscillators).toHaveLength(0);
+    expect(tracked.size).toBe(0);
   });
 });
 

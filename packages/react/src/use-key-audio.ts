@@ -5,17 +5,19 @@ import {
   getPianoWave,
   getSharedAudioContext,
   midiToFreq,
+  scheduleStrummedChord,
   scheduleVoice,
   stopVoices,
 } from './audio-context';
 import { usePitchModule } from './use-pitch-module';
 
-// ---- Voicing / envelope tuning ---------------------------------
+// ---- Scale-phase tuning ----------------------------------------
 // A key audition is two phases: the scale played one note at a time
-// (do re mi fa sol la ti do), then the tonic triad strummed as a
-// block "jara-n". Both phases sound with the shared piano `PeriodicWave`
-// (#2668): the scale notes are short, struck blips; the final triad
-// rings on a long, no-sustain decay.
+// (do re mi fa sol la ti do), then the tonic triad strummed "jara-n".
+// The scale notes are short, struck piano blips, tuned here; the triad's
+// roll spread + envelope are the shared strum voicing owned by
+// `scheduleStrummedChord` (see `audio-context.ts`), so the key audition
+// and the chord-audio surface roll identically.
 const NOTE_STEP_S = 0.16; // time between consecutive scale-note onsets
 const NOTE_ATTACK_S = 0.006;
 const NOTE_RELEASE_S = 0.34; // each scale note decays past the next onset
@@ -25,12 +27,6 @@ const NOTE_TAIL_S = 0.05;
 // Doubled from 0.12 to give a clearer breath before the "jara-n"
 // lands (#2660).
 const SCALE_TO_CHORD_GAP_S = 0.24;
-// Per-note delay across the triad so it reads as a strum, not a stab.
-const STRUM_OFFSET_S = 0.035;
-const CHORD_ATTACK_S = 0.006;
-const CHORD_RELEASE_S = 2.6;
-const CHORD_PEAK_GAIN = 0.22;
-const CHORD_TAIL_S = 0.05;
 
 /**
  * Minimal structural view of the `@chordsketch/wasm` surface this hook
@@ -175,10 +171,11 @@ export function useKeyAudio(
       }
       // Both lookups derive from the same parse, so they succeed or fail
       // together; bail if the key was not parseable. The triad check is
-      // also what guards the `CHORD_PEAK_GAIN / triad.length` division
-      // below from a zero divisor (sister to `useChordAudio`'s own
-      // empty-pitch guard), should a future core change ever let the two
-      // lookups diverge.
+      // also a defence-in-depth guard: `scheduleStrummedChord` has its own
+      // empty-pitches no-op (which also guards its own peak division from a
+      // zero divisor), but an early return here avoids scheduling an empty
+      // scale too (sister to `useChordAudio`'s own empty-pitch guard),
+      // should a future core change ever let the two lookups diverge.
       if (pitches.scale.length === 0 || pitches.triad.length === 0) return;
 
       // Cut any audition still ringing so a fresh tap retriggers cleanly.
@@ -199,21 +196,16 @@ export function useKeyAudio(
         });
       });
 
-      // Triad strum after the scale: divide the peak across the voices so
-      // the block does not clip, and stagger the onsets for a "jara-n".
+      // Triad strum after the scale: a "jara-n" roll via the shared
+      // `scheduleStrummedChord` (sister to the chord-audio surface), which
+      // staggers the onsets and divides the peak across the voices so the
+      // block does not clip.
       const chordStart =
         now + pitches.scale.length * NOTE_STEP_S + SCALE_TO_CHORD_GAP_S;
-      const perVoice = CHORD_PEAK_GAIN / pitches.triad.length;
-      pitches.triad.forEach((midi, j) => {
-        scheduleVoice(ctx, voicesRef.current, {
-          type: wave,
-          frequency: midiToFreq(midi),
-          startTime: chordStart + j * STRUM_OFFSET_S,
-          attack: CHORD_ATTACK_S,
-          release: CHORD_RELEASE_S,
-          peak: perVoice,
-          tail: CHORD_TAIL_S,
-        });
+      scheduleStrummedChord(ctx, voicesRef.current, {
+        pitches: pitches.triad,
+        wave,
+        startTime: chordStart,
       });
     },
     // `moduleRef` / `pitchCacheRef` / `voicesRef` are stable refs; `stop`
