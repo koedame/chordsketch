@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import {
-  CHORD_STRUM_OFFSET_S,
   getPianoWave,
   midiToFreq,
   resetSharedAudioContextForTests,
@@ -137,7 +136,16 @@ describe('scheduleVoice', () => {
 });
 
 describe('scheduleStrummedChord', () => {
-  test('staggers the voice onsets by the strum offset (a roll, not a stab)', () => {
+  /** The first `exponentialRampToValueAtTime` target on each gain node is
+   * that voice's attack-peak (the per-voice gain after the chord's total is
+   * divided across the voices). */
+  function perVoicePeaks(fake: FakeAudioContext): number[] {
+    return fake.gains.map(
+      (g) => g.gain.exponentialRampToValueAtTime.mock.calls[0]?.[0] as number,
+    );
+  }
+
+  test('staggers the voice onsets evenly (a roll, not a stab)', () => {
     const { fake, ctx } = makeCtx();
     const tracked = new Set<AudioScheduledSourceNode>();
     // C major triad: C3 / E3 / G3.
@@ -145,44 +153,46 @@ describe('scheduleStrummedChord', () => {
       pitches: [48, 52, 55],
       wave: getPianoWave(ctx),
       startTime: 1,
-      strumOffset: CHORD_STRUM_OFFSET_S,
-      attack: 0.006,
-      release: 2,
-      peak: 0.3,
-      tail: 0.05,
     });
     expect(fake.oscillators).toHaveLength(3);
     const starts = fake.oscillators.map(
       (o) => o.start.mock.calls[0]?.[0] as number,
     );
-    // Each successive voice starts one strum offset later than the prior,
-    // anchored at `startTime` — this is what makes the chord roll.
+    // The first voice anchors at `startTime`; each later voice is offset by a
+    // uniform, strictly-positive stagger. A simultaneous stab would start
+    // every voice at `startTime`, which the strictly-positive step rejects.
     expect(starts[0]).toBeCloseTo(1, 5);
-    expect(starts[1]).toBeCloseTo(1 + CHORD_STRUM_OFFSET_S, 5);
-    expect(starts[2]).toBeCloseTo(1 + 2 * CHORD_STRUM_OFFSET_S, 5);
+    const step = starts[1]! - starts[0]!;
+    expect(step).toBeGreaterThan(0);
+    expect(starts[2]! - starts[1]!).toBeCloseTo(step, 5);
   });
 
-  test('divides the total peak evenly across the voices so dense chords do not clip', () => {
-    const { fake, ctx } = makeCtx();
-    const tracked = new Set<AudioScheduledSourceNode>();
-    scheduleStrummedChord(ctx, tracked, {
-      pitches: [48, 52, 55, 59],
-      wave: getPianoWave(ctx),
+  test('divides the peak evenly across the voices, tracking the voice count', () => {
+    // Triad: three voices share the total peak.
+    const triad = makeCtx();
+    scheduleStrummedChord(triad.ctx, new Set(), {
+      pitches: [48, 52, 55],
+      wave: getPianoWave(triad.ctx),
       startTime: 0,
-      strumOffset: CHORD_STRUM_OFFSET_S,
-      attack: 0.006,
-      release: 2,
-      peak: 0.4, // 4 voices ⇒ 0.1 each
-      tail: 0.05,
     });
-    expect(fake.oscillators).toHaveLength(4);
-    for (const gain of fake.gains) {
-      // The soft-attack ramp targets the per-voice peak, not the total.
-      expect(gain.gain.exponentialRampToValueAtTime).toHaveBeenCalledWith(
-        0.1,
-        expect.any(Number),
-      );
-    }
+    const triadPeaks = perVoicePeaks(triad.fake);
+    expect(triadPeaks).toHaveLength(3);
+    // Every voice gets the SAME per-voice peak (even division — no voice
+    // dominates and the summed gain stays bounded so the chord doesn't clip).
+    for (const p of triadPeaks) expect(p).toBeCloseTo(triadPeaks[0]!, 10);
+
+    // A denser, four-voice chord splits the same total more ways, so each
+    // voice is quieter — proving the division tracks `pitches.length`.
+    const seventh = makeCtx();
+    scheduleStrummedChord(seventh.ctx, new Set(), {
+      pitches: [48, 52, 55, 59],
+      wave: getPianoWave(seventh.ctx),
+      startTime: 0,
+    });
+    const seventhPeaks = perVoicePeaks(seventh.fake);
+    expect(seventhPeaks).toHaveLength(4);
+    for (const p of seventhPeaks) expect(p).toBeCloseTo(seventhPeaks[0]!, 10);
+    expect(seventhPeaks[0]!).toBeLessThan(triadPeaks[0]!);
   });
 
   test('an empty chord is a no-op (guards the peak division from a zero divisor)', () => {
@@ -192,11 +202,6 @@ describe('scheduleStrummedChord', () => {
       pitches: [],
       wave: getPianoWave(ctx),
       startTime: 0,
-      strumOffset: CHORD_STRUM_OFFSET_S,
-      attack: 0.006,
-      release: 2,
-      peak: 0.3,
-      tail: 0.05,
     });
     expect(fake.oscillators).toHaveLength(0);
     expect(tracked.size).toBe(0);

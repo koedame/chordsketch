@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import {
-  CHORD_STRUM_OFFSET_S,
   getAudioContextCtor,
   getPianoWave,
   getSharedAudioContext,
@@ -12,12 +11,13 @@ import {
 } from './audio-context';
 import { usePitchModule } from './use-pitch-module';
 
-// ---- Voicing / envelope tuning ---------------------------------
+// ---- Scale-phase tuning ----------------------------------------
 // A key audition is two phases: the scale played one note at a time
-// (do re mi fa sol la ti do), then the tonic triad strummed as a
-// block "jara-n". Both phases sound with the shared piano `PeriodicWave`
-// (#2668): the scale notes are short, struck blips; the final triad
-// rings on a long, no-sustain decay.
+// (do re mi fa sol la ti do), then the tonic triad strummed "jara-n".
+// The scale notes are short, struck piano blips, tuned here; the triad's
+// roll spread + envelope are the shared strum voicing owned by
+// `scheduleStrummedChord` (see `audio-context.ts`), so the key audition
+// and the chord-audio surface roll identically.
 const NOTE_STEP_S = 0.16; // time between consecutive scale-note onsets
 const NOTE_ATTACK_S = 0.006;
 const NOTE_RELEASE_S = 0.34; // each scale note decays past the next onset
@@ -27,13 +27,6 @@ const NOTE_TAIL_S = 0.05;
 // Doubled from 0.12 to give a clearer breath before the "jara-n"
 // lands (#2660).
 const SCALE_TO_CHORD_GAP_S = 0.24;
-// The per-note delay across the triad so it reads as a strum, not a stab,
-// is the shared `CHORD_STRUM_OFFSET_S` so the key audition and the
-// chord-audio surface roll identically (see `audio-context.ts`).
-const CHORD_ATTACK_S = 0.006;
-const CHORD_RELEASE_S = 2.6;
-const CHORD_PEAK_GAIN = 0.22;
-const CHORD_TAIL_S = 0.05;
 
 /**
  * Minimal structural view of the `@chordsketch/wasm` surface this hook
@@ -203,20 +196,15 @@ export function useKeyAudio(
       });
 
       // Triad strum after the scale: a "jara-n" roll via the shared
-      // `scheduleStrummedChord` (sister to the chord-audio surface) — it
-      // staggers the onsets by `CHORD_STRUM_OFFSET_S` and divides the peak
-      // across the voices so the block does not clip.
+      // `scheduleStrummedChord` (sister to the chord-audio surface), which
+      // staggers the onsets and divides the peak across the voices so the
+      // block does not clip.
       const chordStart =
         now + pitches.scale.length * NOTE_STEP_S + SCALE_TO_CHORD_GAP_S;
       scheduleStrummedChord(ctx, voicesRef.current, {
         pitches: pitches.triad,
         wave,
         startTime: chordStart,
-        strumOffset: CHORD_STRUM_OFFSET_S,
-        attack: CHORD_ATTACK_S,
-        release: CHORD_RELEASE_S,
-        peak: CHORD_PEAK_GAIN,
-        tail: CHORD_TAIL_S,
       });
     },
     // `moduleRef` / `pitchCacheRef` / `voicesRef` are stable refs; `stop`

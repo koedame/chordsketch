@@ -65,9 +65,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sounds a chord via the Web Audio API as a quick strum — a "jara-n" roll
   whose voices are staggered low-to-high rather than a simultaneous "ja-n"
   stab — backed by the new `useChordAudio` hook and the `chord_pitches`
-  core export. The strum stagger is shared with the `{key}` audition's
-  tonic-triad roll via a single `scheduleStrummedChord` helper so the two
-  surfaces cannot drift. Audio is
+  core export. The strum voicing — its roll spread and per-voice envelope —
+  is shared with the `{key}` audition's tonic-triad roll via a single
+  `scheduleStrummedChord` helper so the two surfaces cannot drift. Audio is
   additive: with editing wired, clicking a chord both plays it and
   selects it for in-place editing, and every panel-driven change
   (retype / move / drag / keyboard nudge) auditions the chord through a

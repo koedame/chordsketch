@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import {
-  CHORD_STRUM_OFFSET_S,
   getAudioContextCtor,
   getPianoWave,
   getSharedAudioContext,
@@ -10,21 +9,12 @@ import {
 } from './audio-context';
 import { usePitchModule } from './use-pitch-module';
 
-// ---- Voicing / envelope tuning ---------------------------------
-// A chord is several voices struck as a quick strum — a "jara-n" roll
-// (each voice staggered by `CHORD_STRUM_OFFSET_S`) rather than a
-// simultaneous "ja-n" stab — so a tapped chord sounds like an instrument
-// being strummed (#2728). Each voice sounds with the shared piano
-// `PeriodicWave` (#2668). The total peak gain is divided across the voices
-// so a six-note chord does not clip; a short attack avoids the click a hard
-// onset would make, and a long exponential, no-sustain release lets the
-// struck chord ring and decay like a piano. The strum offset is the shared
-// `CHORD_STRUM_OFFSET_S` so this surface and the key audition's tonic-triad
-// strum roll identically (see `audio-context.ts`).
-const ATTACK_S = 0.006;
-const RELEASE_S = 2.6;
-const PEAK_GAIN = 0.22;
-const TAIL_S = 0.05;
+// A tapped chord sounds as a quick strum — a "jara-n" roll rather than a
+// simultaneous "ja-n" stab — so it reads like an instrument being strummed
+// (#2728). The roll spread and the per-voice piano envelope are the shared
+// strum voicing owned by `scheduleStrummedChord` in `audio-context.ts`, so
+// this surface and the key audition's tonic-triad strum roll identically;
+// this hook supplies only the chord's pitches, the timbre, and the onset.
 
 /**
  * Minimal structural view of the `@chordsketch/wasm` surface this hook
@@ -94,11 +84,11 @@ export interface UseChordAudioResult {
    */
   readonly supported: boolean;
   /**
-   * Play the named chord (e.g. `"Am7"`, `"C/G"`) as a block chord. A
-   * no-op when Web Audio is unavailable, the wasm module has not
-   * finished loading, or the name is not a parseable chord. Playing a
-   * new chord cuts any chord still ringing so rapid taps retrigger
-   * cleanly.
+   * Play the named chord (e.g. `"Am7"`, `"C/G"`) as a strummed chord — a
+   * quick low-to-high roll, not a simultaneous stab. A no-op when Web
+   * Audio is unavailable, the wasm module has not finished loading, or
+   * the name is not a parseable chord. Playing a new chord cuts any chord
+   * still ringing so rapid taps retrigger cleanly.
    */
   play: (chordName: string) => void;
   /** Silence any currently-ringing chord. Safe to call when silent. */
@@ -176,23 +166,16 @@ export function useChordAudio(
       // Cut any chord still ringing so a fresh tap retriggers cleanly.
       stop();
 
-      const now = ctx.currentTime;
-      // Strum the chord: stagger the voice onsets by `CHORD_STRUM_OFFSET_S`
-      // so the chord rolls ("jara-n") instead of stabbing all at once, with
-      // the peak divided across the voices so a dense chord does not clip
-      // and a soft attack / long release so each voice rings. Each voice
-      // sounds with the shared piano timbre; the shared
-      // `scheduleStrummedChord` owns the per-voice node graph + cleanup
-      // (sister to the key audition's tonic-triad strum).
+      // Strum the chord through the shared `scheduleStrummedChord`: it
+      // staggers the voice onsets so the chord rolls ("jara-n") instead of
+      // stabbing all at once, divides the peak across the voices, and owns
+      // the per-voice envelope + node graph + cleanup (sister to the key
+      // audition's tonic-triad strum). This hook supplies only the pitches,
+      // the shared piano timbre, and the onset.
       scheduleStrummedChord(ctx, voicesRef.current, {
         pitches,
         wave: getPianoWave(ctx),
-        startTime: now,
-        strumOffset: CHORD_STRUM_OFFSET_S,
-        attack: ATTACK_S,
-        release: RELEASE_S,
-        peak: PEAK_GAIN,
-        tail: TAIL_S,
+        startTime: ctx.currentTime,
       });
     },
     [stop],
