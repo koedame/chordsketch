@@ -148,9 +148,10 @@ jobs:
 
   core-zero-deps:
     name: Core crate zero-deps
-    # Enforces the zero-external-dependency contract for the core crate(s)
-    # (`chordsketch-chordpro`) documented in CLAUDE.md "Dependency Policy"
-    # and `.claude/rules/code-style.md`. A stray dev/build/normal dep drags
+    # Enforces the zero-external-dependency contract for the core crates
+    # (`chordsketch-chordpro`, `chordsketch-ireal`) documented in CLAUDE.md
+    # "Dependency Policy" and `.claude/rules/code-style.md`. A stray
+    # dev/build/normal dep drags
     # a network-fetched transitive graph (e.g. tempfile -> getrandom) back
     # into every `cargo metadata` resolution, which is what made the
     # cold-cache desktop-build wasm step fragile. Guarantee-style check per

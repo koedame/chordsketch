@@ -3,7 +3,8 @@
 
 Each test assembles a synthetic crate manifest in a tempdir so the unit
 cases are independent of the live repo, plus one smoke test that asserts
-the real `chordsketch-chordpro` manifest stays dependency-free.
+the real zero-dep crate manifests (`chordsketch-chordpro`,
+`chordsketch-ireal`) stay dependency-free.
 """
 from __future__ import annotations
 
@@ -175,7 +176,7 @@ class MainTests(unittest.TestCase):
 
 
 class RealRepoSmokeTest(unittest.TestCase):
-    """Sanity check the live chordpro crate stays dependency-free."""
+    """Sanity check the live zero-dep crates stay dependency-free."""
 
     def test_live_repo_passes(self) -> None:
         check_zero_deps.REPO_ROOT = Path(__file__).resolve().parent.parent
