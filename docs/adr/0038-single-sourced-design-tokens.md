@@ -83,9 +83,8 @@ is zero-dep; other deps are justified per PR).
    so the derived copies cannot diverge from it.
 
 3. **Generated outputs are committed**, so the static `design-system/`
-   reference and the packages still build with no extra consumer step
-   (ADR-0011 posture preserved); running the generator is a contributor
-   action.
+   reference and the packages still build with no extra consumer step;
+   running the generator is a contributor action.
 
 4. **CI regenerates and asserts a zero diff**, mirroring the existing
    `readme-sync.yml` / `.github/snapshots/` idiom. A hand-edit inside a
