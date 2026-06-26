@@ -1,25 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import {
+  CHORD_STRUM_OFFSET_S,
   getAudioContextCtor,
   getPianoWave,
   getSharedAudioContext,
-  midiToFreq,
-  scheduleVoice,
+  scheduleStrummedChord,
   stopVoices,
 } from './audio-context';
 import { usePitchModule } from './use-pitch-module';
 
 // ---- Voicing / envelope tuning ---------------------------------
-// A block chord is several voices started at once, each sounding with
-// the shared piano `PeriodicWave` (#2668). The total peak gain is
-// divided across the voices so a six-note chord does not clip; a short
-// attack avoids the click a hard onset would make, and a long
-// exponential, no-sustain release lets the struck chord ring and decay
-// like a piano.
+// A chord is several voices struck as a quick strum — a "jara-n" roll
+// (each voice staggered by `CHORD_STRUM_OFFSET_S`) rather than a
+// simultaneous "ja-n" stab — so a tapped chord sounds like an instrument
+// being strummed (#2728). Each voice sounds with the shared piano
+// `PeriodicWave` (#2668). The total peak gain is divided across the voices
+// so a six-note chord does not clip; a short attack avoids the click a hard
+// onset would make, and a long exponential, no-sustain release lets the
+// struck chord ring and decay like a piano. The strum offset is the shared
+// `CHORD_STRUM_OFFSET_S` so this surface and the key audition's tonic-triad
+// strum roll identically (see `audio-context.ts`).
 const ATTACK_S = 0.006;
 const RELEASE_S = 2.6;
 const PEAK_GAIN = 0.22;
+const TAIL_S = 0.05;
 
 /**
  * Minimal structural view of the `@chordsketch/wasm` surface this hook
@@ -172,24 +177,23 @@ export function useChordAudio(
       stop();
 
       const now = ctx.currentTime;
-      // Divide the peak across the voices so a six-note chord does not
-      // clip; a soft attack avoids a click and the long release lets the
-      // chord ring. Each voice sounds with the shared piano timbre. The
-      // shared `scheduleVoice` owns the node graph + cleanup (sister to
-      // the key audition and the metronome's tick scheduling).
-      const wave = getPianoWave(ctx);
-      const perVoice = PEAK_GAIN / pitches.length;
-      for (const midi of pitches) {
-        scheduleVoice(ctx, voicesRef.current, {
-          type: wave,
-          frequency: midiToFreq(midi),
-          startTime: now,
-          attack: ATTACK_S,
-          release: RELEASE_S,
-          peak: perVoice,
-          tail: 0.05,
-        });
-      }
+      // Strum the chord: stagger the voice onsets by `CHORD_STRUM_OFFSET_S`
+      // so the chord rolls ("jara-n") instead of stabbing all at once, with
+      // the peak divided across the voices so a dense chord does not clip
+      // and a soft attack / long release so each voice rings. Each voice
+      // sounds with the shared piano timbre; the shared
+      // `scheduleStrummedChord` owns the per-voice node graph + cleanup
+      // (sister to the key audition's tonic-triad strum).
+      scheduleStrummedChord(ctx, voicesRef.current, {
+        pitches,
+        wave: getPianoWave(ctx),
+        startTime: now,
+        strumOffset: CHORD_STRUM_OFFSET_S,
+        attack: ATTACK_S,
+        release: RELEASE_S,
+        peak: PEAK_GAIN,
+        tail: TAIL_S,
+      });
     },
     [stop],
   );

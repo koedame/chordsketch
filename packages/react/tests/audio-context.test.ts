@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import {
+  CHORD_STRUM_OFFSET_S,
   getPianoWave,
   midiToFreq,
   resetSharedAudioContextForTests,
+  scheduleStrummedChord,
   scheduleVoice,
   scheduleWoodblockTick,
   stopVoices,
@@ -131,6 +133,73 @@ describe('scheduleVoice', () => {
     expect(tracked.size).toBe(0);
     expect(osc.disconnect).toHaveBeenCalled();
     expect(fake.gains[0]!.disconnect).toHaveBeenCalled();
+  });
+});
+
+describe('scheduleStrummedChord', () => {
+  test('staggers the voice onsets by the strum offset (a roll, not a stab)', () => {
+    const { fake, ctx } = makeCtx();
+    const tracked = new Set<AudioScheduledSourceNode>();
+    // C major triad: C3 / E3 / G3.
+    scheduleStrummedChord(ctx, tracked, {
+      pitches: [48, 52, 55],
+      wave: getPianoWave(ctx),
+      startTime: 1,
+      strumOffset: CHORD_STRUM_OFFSET_S,
+      attack: 0.006,
+      release: 2,
+      peak: 0.3,
+      tail: 0.05,
+    });
+    expect(fake.oscillators).toHaveLength(3);
+    const starts = fake.oscillators.map(
+      (o) => o.start.mock.calls[0]?.[0] as number,
+    );
+    // Each successive voice starts one strum offset later than the prior,
+    // anchored at `startTime` — this is what makes the chord roll.
+    expect(starts[0]).toBeCloseTo(1, 5);
+    expect(starts[1]).toBeCloseTo(1 + CHORD_STRUM_OFFSET_S, 5);
+    expect(starts[2]).toBeCloseTo(1 + 2 * CHORD_STRUM_OFFSET_S, 5);
+  });
+
+  test('divides the total peak evenly across the voices so dense chords do not clip', () => {
+    const { fake, ctx } = makeCtx();
+    const tracked = new Set<AudioScheduledSourceNode>();
+    scheduleStrummedChord(ctx, tracked, {
+      pitches: [48, 52, 55, 59],
+      wave: getPianoWave(ctx),
+      startTime: 0,
+      strumOffset: CHORD_STRUM_OFFSET_S,
+      attack: 0.006,
+      release: 2,
+      peak: 0.4, // 4 voices ⇒ 0.1 each
+      tail: 0.05,
+    });
+    expect(fake.oscillators).toHaveLength(4);
+    for (const gain of fake.gains) {
+      // The soft-attack ramp targets the per-voice peak, not the total.
+      expect(gain.gain.exponentialRampToValueAtTime).toHaveBeenCalledWith(
+        0.1,
+        expect.any(Number),
+      );
+    }
+  });
+
+  test('an empty chord is a no-op (guards the peak division from a zero divisor)', () => {
+    const { fake, ctx } = makeCtx();
+    const tracked = new Set<AudioScheduledSourceNode>();
+    scheduleStrummedChord(ctx, tracked, {
+      pitches: [],
+      wave: getPianoWave(ctx),
+      startTime: 0,
+      strumOffset: CHORD_STRUM_OFFSET_S,
+      attack: 0.006,
+      release: 2,
+      peak: 0.3,
+      tail: 0.05,
+    });
+    expect(fake.oscillators).toHaveLength(0);
+    expect(tracked.size).toBe(0);
   });
 });
 

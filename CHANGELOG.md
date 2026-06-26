@@ -62,8 +62,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under an effective transpose / capo (ADR-0023). (#2644, #2646, #2648)
 - `@chordsketch/react`: chord audio — an opt-in `chordAudio` flag on
   `<ChordSheet>` / `<RendererPreview>` (and a `<PreviewToolbar>` toggle)
-  sounds a chord as a block chord via the Web Audio API, backed by the
-  new `useChordAudio` hook and the `chord_pitches` core export. Audio is
+  sounds a chord via the Web Audio API as a quick strum — a "jara-n" roll
+  whose voices are staggered low-to-high rather than a simultaneous "ja-n"
+  stab — backed by the new `useChordAudio` hook and the `chord_pitches`
+  core export. The strum stagger is shared with the `{key}` audition's
+  tonic-triad roll via a single `scheduleStrummedChord` helper so the two
+  surfaces cannot drift. Audio is
   additive: with editing wired, clicking a chord both plays it and
   selects it for in-place editing, and every panel-driven change
   (retype / move / drag / keyboard nudge) auditions the chord through a
@@ -75,7 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and an icon that changes shape with state (a volume-waves glyph when on
   vs. a struck-out muted-speaker glyph when off, so the state reads by
   shape, not colour alone) — so it no longer looks identical whether
-  chord audio is enabled or not. (#2650, #2669, #2676)
+  chord audio is enabled or not. (#2650, #2669, #2676, #2728)
 - `@chordsketch/react`: a chord click in the preview is now an idempotent
   **select** rather than a toggle — re-clicking the already-selected
   chord keeps it selected (and, with chord audio on, re-auditions it)

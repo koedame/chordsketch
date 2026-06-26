@@ -98,6 +98,24 @@ describe('useChordAudio', () => {
     expect(freqs[2]).toBeCloseTo(196.0, 1);
   });
 
+  test('the chord is strummed: voice onsets stagger, not simultaneous', async () => {
+    const { result } = await renderLoaded();
+    act(() => result.current.play('Am7'));
+
+    const ctx = FakeAudioContext.instances[0]!;
+    // Four voices, each scheduled via `osc.start(startTime)`. A strum rolls
+    // the chord, so the onsets must strictly increase low → high; a block
+    // stab (the pre-#2728 behaviour) would start every voice at the same
+    // instant, which this assertion rejects.
+    const starts = ctx.oscillators.map(
+      (o) => (o.start.mock.calls[0]?.[0] as number) ?? 0,
+    );
+    expect(starts).toHaveLength(4);
+    for (let i = 1; i < starts.length; i += 1) {
+      expect(starts[i]!).toBeGreaterThan(starts[i - 1]!);
+    }
+  });
+
   test('play on an unparseable chord schedules nothing', async () => {
     const { result } = await renderLoaded();
     act(() => result.current.play('xyz'));

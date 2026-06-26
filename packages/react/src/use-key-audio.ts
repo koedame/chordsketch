@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import {
+  CHORD_STRUM_OFFSET_S,
   getAudioContextCtor,
   getPianoWave,
   getSharedAudioContext,
   midiToFreq,
+  scheduleStrummedChord,
   scheduleVoice,
   stopVoices,
 } from './audio-context';
@@ -25,8 +27,9 @@ const NOTE_TAIL_S = 0.05;
 // Doubled from 0.12 to give a clearer breath before the "jara-n"
 // lands (#2660).
 const SCALE_TO_CHORD_GAP_S = 0.24;
-// Per-note delay across the triad so it reads as a strum, not a stab.
-const STRUM_OFFSET_S = 0.035;
+// The per-note delay across the triad so it reads as a strum, not a stab,
+// is the shared `CHORD_STRUM_OFFSET_S` so the key audition and the
+// chord-audio surface roll identically (see `audio-context.ts`).
 const CHORD_ATTACK_S = 0.006;
 const CHORD_RELEASE_S = 2.6;
 const CHORD_PEAK_GAIN = 0.22;
@@ -199,21 +202,21 @@ export function useKeyAudio(
         });
       });
 
-      // Triad strum after the scale: divide the peak across the voices so
-      // the block does not clip, and stagger the onsets for a "jara-n".
+      // Triad strum after the scale: a "jara-n" roll via the shared
+      // `scheduleStrummedChord` (sister to the chord-audio surface) — it
+      // staggers the onsets by `CHORD_STRUM_OFFSET_S` and divides the peak
+      // across the voices so the block does not clip.
       const chordStart =
         now + pitches.scale.length * NOTE_STEP_S + SCALE_TO_CHORD_GAP_S;
-      const perVoice = CHORD_PEAK_GAIN / pitches.triad.length;
-      pitches.triad.forEach((midi, j) => {
-        scheduleVoice(ctx, voicesRef.current, {
-          type: wave,
-          frequency: midiToFreq(midi),
-          startTime: chordStart + j * STRUM_OFFSET_S,
-          attack: CHORD_ATTACK_S,
-          release: CHORD_RELEASE_S,
-          peak: perVoice,
-          tail: CHORD_TAIL_S,
-        });
+      scheduleStrummedChord(ctx, voicesRef.current, {
+        pitches: pitches.triad,
+        wave,
+        startTime: chordStart,
+        strumOffset: CHORD_STRUM_OFFSET_S,
+        attack: CHORD_ATTACK_S,
+        release: CHORD_RELEASE_S,
+        peak: CHORD_PEAK_GAIN,
+        tail: CHORD_TAIL_S,
       });
     },
     // `moduleRef` / `pitchCacheRef` / `voicesRef` are stable refs; `stop`
