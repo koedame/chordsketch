@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Zero-external-dependency CI guard for the core crate(s).
 
-`chordsketch-chordpro` is contractually a zero-external-dependency crate:
-all parsing and AST logic is implemented from scratch, and even RAII
-helpers use stdlib-only `Drop` types rather than `scopeguard` / `tempfile`
-(see CLAUDE.md "Dependency Policy", `.claude/rules/code-style.md`, and the
+`chordsketch-chordpro` and `chordsketch-ireal` are contractually
+zero-external-dependency crates: all parsing, AST, and serialisation logic
+is implemented from scratch, and even RAII helpers use stdlib-only `Drop`
+types rather than `scopeguard` / `tempfile` (see CLAUDE.md "Dependency
+Policy" + Architecture table, `.claude/rules/code-style.md`, and the
 `external_tool` module's `TempDirGuard`).
 
 The invariant is easy to violate by accident — a single `tempfile = "3"`
@@ -34,15 +35,13 @@ from pathlib import Path
 
 # Crate directories under `crates/` that MUST declare zero external
 # dependencies of any kind. Keep in sync with CLAUDE.md "Dependency
-# Policy" and `.claude/rules/code-style.md`.
-ZERO_DEP_CRATES: list[str] = ["chordpro"]
+# Policy" + Architecture table and `.claude/rules/code-style.md`.
+ZERO_DEP_CRATES: list[str] = ["chordpro", "ireal"]
 
 # The dependency-table key names cargo recognises. Any of these holding a
-# non-empty mapping (at the top level or nested under `[target.<cfg>]`)
-# counts as a declared dependency.
-DEP_TABLE_KEYS = frozenset(
-    {"dependencies", "dev-dependencies", "build-dependencies"}
-)
+# non-empty mapping (at the top level or under `[target.<cfg>]`) counts as
+# a declared dependency.
+DEP_TABLE_KEYS = ("dependencies", "dev-dependencies", "build-dependencies")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -50,29 +49,38 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 def declared_dependencies(manifest: dict) -> dict[str, list[str]]:
     """Return every declared dependency, grouped by the table it came from.
 
-    Walks the parsed manifest recursively so both top-level tables
-    (`[dependencies]`) and target-scoped tables
-    (`[target.'cfg(...)'.dev-dependencies]`) are covered. The returned
-    keys are human-readable table labels; the values are the dependency
-    crate names declared in that table.
+    Inspects exactly the locations cargo resolves dependencies from — the
+    three top-level tables (`[dependencies]`, `[dev-dependencies]`,
+    `[build-dependencies]`) and their platform-scoped equivalents under
+    `[target.<cfg>]` — and nowhere else. Free-form tables such as
+    `[package.metadata.*]` are deliberately NOT inspected: a key literally
+    named `dependencies` buried there is documentation/config, not a crate
+    cargo links, so treating it as one would be a false positive.
+
+    The returned keys are human-readable table labels; the values are the
+    dependency crate names declared in that table.
     """
     found: dict[str, list[str]] = {}
 
-    def walk(node: dict, prefix: str) -> None:
-        for key, value in node.items():
-            if not isinstance(value, dict):
-                continue
-            if key in DEP_TABLE_KEYS:
-                names = sorted(value.keys())
-                if names:
-                    label = f"{prefix}{key}" if prefix else key
-                    found[label] = names
-            else:
-                # Recurse into structural tables such as `target` and
-                # `target.'cfg(...)'` without treating them as dep tables.
-                walk(value, f"{prefix}{key}.")
+    def record(label: str, table: object) -> None:
+        if isinstance(table, dict) and table:
+            found[label] = sorted(table.keys())
 
-    walk(manifest, "")
+    # Top-level dependency tables.
+    for key in DEP_TABLE_KEYS:
+        record(key, manifest.get(key))
+
+    # Platform/target-scoped dependency tables: `[target.<cfg>.<key>]`.
+    # tomllib strips the quotes around `<cfg>`, so the label reads e.g.
+    # `target.cfg(windows).dependencies`.
+    target = manifest.get("target")
+    if isinstance(target, dict):
+        for cfg, cfg_table in target.items():
+            if not isinstance(cfg_table, dict):
+                continue
+            for key in DEP_TABLE_KEYS:
+                record(f"target.{cfg}.{key}", cfg_table.get(key))
+
     return found
 
 

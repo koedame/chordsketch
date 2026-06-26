@@ -79,6 +79,20 @@ version = "0.5.0"
 winapi = "0.3"
 """
 
+# A free-form `[package.metadata.*]` table that happens to contain a key
+# literally named `dependencies` must NOT be flagged — it is config/docs,
+# not a crate cargo links.
+METADATA_FALSE_POSITIVE_MANIFEST = """\
+[package]
+name = "chordsketch-chordpro"
+version = "0.5.0"
+
+[dependencies]
+
+[package.metadata.docs.rs.dependencies]
+note = "this is metadata, not a real dependency table"
+"""
+
 
 class DeclaredDependenciesTests(unittest.TestCase):
     def test_empty_tables_report_nothing(self) -> None:
@@ -128,19 +142,34 @@ class DeclaredDependenciesTests(unittest.TestCase):
                 {"target.cfg(windows).dependencies": ["winapi"]},
             )
 
-
-class MainTests(unittest.TestCase):
-    def test_passes_when_crate_is_clean(self) -> None:
+    def test_package_metadata_dependencies_table_is_not_flagged(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            _write_manifest(root, "chordpro", CLEAN_MANIFEST)
+            _write_manifest(root, "chordpro", METADATA_FALSE_POSITIVE_MANIFEST)
+            check_zero_deps.REPO_ROOT = root
+            self.assertEqual(check_zero_deps.check_crate("chordpro"), {})
+
+
+class MainTests(unittest.TestCase):
+    def test_passes_when_all_crates_clean(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # main() iterates every crate in ZERO_DEP_CRATES, so give each
+            # a clean manifest rather than hard-coding a single crate name.
+            for crate in check_zero_deps.ZERO_DEP_CRATES:
+                _write_manifest(root, crate, CLEAN_MANIFEST)
             check_zero_deps.REPO_ROOT = root
             self.assertEqual(check_zero_deps.main(), 0)
 
-    def test_fails_when_dev_dependency_present(self) -> None:
+    def test_fails_when_any_crate_has_a_dependency(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            _write_manifest(root, "chordpro", DEV_DEP_MANIFEST)
+            for crate in check_zero_deps.ZERO_DEP_CRATES:
+                _write_manifest(root, crate, CLEAN_MANIFEST)
+            # Dirty exactly one of them.
+            _write_manifest(
+                root, check_zero_deps.ZERO_DEP_CRATES[0], DEV_DEP_MANIFEST
+            )
             check_zero_deps.REPO_ROOT = root
             self.assertEqual(check_zero_deps.main(), 1)
 
