@@ -229,7 +229,7 @@ only in `preview/` — per ADR-0029 a category lands in this document and
 | Category   | Variants | React binding |
 |---|---|---|
 | Buttons    | primary / secondary / ghost / danger × sm / md / lg, icon-only, disabled | `@chordsketch/react-ui` `<Button>` |
-| Forms      | input / select / textarea / segmented / checkbox / radio, focus = `--focus-ring` | `@chordsketch/react-ui` (`<Input>` / `<Select>` / `<Textarea>` / `<Segmented>` / `<Checkbox>` / `<Radio>` / `<Switch>` / `<Field>`) |
+| Forms      | input / select / textarea / segmented / checkbox / radio / switch, focus = `--focus-ring` | `@chordsketch/react-ui` (`<Input>` / `<Select>` / `<Textarea>` / `<Segmented>` / `<Checkbox>` / `<Radio>` / `<Switch>` / `<Field>`) |
 | Cards      | song / setlist / featured (uniform 1px `--crimson-500` border; surface, type, and other tokens unchanged) | `@chordsketch/react-ui` `<Card>` |
 | Badges     | status (4 semantic + crimson + muted) / key (mono on ink-1000 or crimson) / genre (pill) | `@chordsketch/react-ui` `<Badge>` / `<Pill>` |
 | Avatars    | 24 / 28 / 36 / 48 px, stacked +N | Reference only (`preview/`) |
