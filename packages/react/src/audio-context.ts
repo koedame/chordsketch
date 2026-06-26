@@ -266,7 +266,7 @@ const STRUM_RELEASE_S = 2.6; // long, no-sustain decay so the chord rings
 const STRUM_PEAK_GAIN = 0.22; // total, divided evenly across the voices
 const STRUM_TAIL_S = 0.05; // let each voice's exponential tail finish
 
-/** Parameters describing a strummed (rolled) block chord. */
+/** Parameters describing a strummed (rolled) chord. */
 export interface StrumSpec {
   /**
    * MIDI note numbers in strum-sweep order (low → high for a downstroke).
@@ -283,7 +283,7 @@ export interface StrumSpec {
 }
 
 /**
- * Schedule a strummed block chord on `ctx`: one {@link scheduleVoice} call
+ * Schedule a strummed chord on `ctx`: one {@link scheduleVoice} call
  * per pitch, each onset staggered so the chord rolls ("jara-n") rather than
  * landing as a simultaneous stab ("ja-n"). The roll spread and the
  * per-voice envelope are the module's shared strum voicing — so the
