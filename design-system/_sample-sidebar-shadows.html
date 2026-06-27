@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sample — sidebar shadow options — ChordSketch</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* SAMPLE — not committed. Four sidebar shadow treatments, side by side, on a
+   realistic canvas, so the difference is actually visible and you can pick one. */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  color: var(--text-primary);
+  background: var(--canvas);            /* the real app canvas (--ink-50) */
+  -webkit-font-smoothing: antialiased;
+  padding: 40px;
+}
+.head { max-width: 1100px; margin: 0 auto 28px; }
+.head h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; }
+.head p { color: var(--text-secondary); margin: 0; font-size: 14px; max-width: 70ch; line-height: 1.6; }
+
+.board {
+  max-width: 1100px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px;
+}
+@media (max-width: 980px) { .board { grid-template-columns: repeat(2, 1fr); } }
+
+.opt { min-width: 0; }
+.opt .tag { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
+.opt .tag .k { font-weight: 700; font-size: 14px; }
+.opt .tag.is-current .k { color: var(--text-secondary); }
+.opt .tag.is-pick .k { color: var(--crimson-600); }
+.opt .tag .sub { font-size: 12px; color: var(--text-tertiary); }
+.opt .val { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); line-height: 1.5; margin: 10px 2px 0; word-break: break-all; }
+
+/* Each option draws the SAME sidebar; only --sb-shadow / --sb-border differ. */
+.sb {
+  --sb-shadow: none; --sb-border: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  border: var(--sb-border);
+  border-radius: var(--r-4);
+  box-shadow: var(--sb-shadow);
+}
+.opt.a .sb { --sb-shadow: 0 4px 12px rgba(10,10,11,0.08); }                                              /* current --e-2 */
+.opt.b .sb { --sb-shadow: 0 2px 6px -2px rgba(10,10,11,.05), 0 18px 36px -12px rgba(10,10,11,.10); }           /* soft layered */
+.opt.c .sb { --sb-shadow: 0 1px 2px rgba(10,10,11,.03); --sb-border: 1px solid var(--border-strong); }   /* border-led, near-flat */
+.opt.d .sb { --sb-shadow: 0 4px 10px rgba(10,10,11,.05), 0 22px 48px -16px rgba(10,10,11,.10); --sb-border: 0; } /* borderless, soft */
+
+.sb .h { display: flex; align-items: center; gap: 10px; padding: 16px 12px 12px; }
+.sb .mark { width: 24px; height: 24px; border-radius: var(--r-2); background: var(--crimson-500); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; flex:none; }
+.sb .brand { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
+.sb .new { margin: 0 12px 12px; height: 38px; border: 1px solid var(--border-strong); border-radius: var(--r-2); background: var(--surface); display:flex; align-items:center; gap:10px; padding:0 12px; font-size:14px; font-weight:500; color: var(--text-primary); }
+.sb .new .plus { font-size:18px; line-height:1; color: var(--text-secondary); }
+.sb nav { padding: 0 12px; display:flex; flex-direction:column; gap:1px; }
+.sb nav a { position:relative; display:flex; align-items:center; gap:10px; height:36px; padding:0 12px; border-radius: var(--r-2); color: var(--text-secondary); font-size:14px; font-weight:500; text-decoration:none; }
+.sb nav a .ico { width:16px; height:16px; border-radius:4px; background: var(--ink-300); flex:none; }
+.sb nav a.cur { background: var(--ink-100); color: var(--text-primary); }
+.sb nav a.cur .ico { background: var(--crimson-500); }
+.sb nav a.cur::before { content:""; position:absolute; left:0; top:50%; transform:translateY(-50%); width:3px; height:18px; border-radius:9999px; background: var(--crimson-500); }
+.sb .sec { margin: 20px 12px 8px; font-size:12px; font-weight:600; color: var(--text-secondary); }
+.sb .recent { padding: 0 12px; display:flex; flex-direction:column; gap:1px; }
+.sb .recent a { display:flex; align-items:center; gap:10px; height:32px; padding:0 12px; border-radius: var(--r-2); color: var(--text-secondary); font-size:14px; text-decoration:none; }
+.sb .recent a .dot { width:6px; height:6px; border-radius:9999px; background: var(--border-strong); flex:none; }
+.sb .foot { margin-top:auto; border-top:1px solid var(--border); padding:12px; display:flex; align-items:center; gap:10px; }
+.sb .foot .av { width:28px; height:28px; border-radius:9999px; background: var(--ink-1000); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; flex:none; }
+.sb .foot .nm { font-size:14px; font-weight:600; }
+</style>
+</head>
+<body>
+<div class="head">
+  <h1>Sidebar shadow — pick one</h1>
+  <p>The same floating sidebar, four ways, on the real app canvas. <b>A</b> is today (the one that reads harsh). <b>B–D</b> are softer, more modern directions. Look at the edge of each white panel — that grey halo is the shadow. Tell me a letter (or "between B and C") and I'll wire it into <code>tokens.css</code>. Nothing else — colour, type, spacing, layout — changes.</p>
+</div>
+
+<div class="board">
+  <div class="opt a">
+    <div class="tag is-current"><span class="k">A · Current</span><span class="sub">today</span></div>
+    <div class="sb">
+      <div class="h"><span class="mark">C</span><span class="brand">ChordSketch</span></div>
+      <div class="new"><span class="plus">+</span> New song</div>
+      <nav><a class="cur"><span class="ico"></span>Library</a><a><span class="ico"></span>Viewer</a><a><span class="ico"></span>Editor</a><a><span class="ico"></span>Setlists</a></nav>
+      <div class="sec">Recent</div>
+      <div class="recent"><a><span class="dot"></span>Country Roads</a><a><span class="dot"></span>Hotel California</a><a><span class="dot"></span>Let It Be</a></div>
+      <div class="foot"><span class="av">J</span><span class="nm">john</span></div>
+    </div>
+    <div class="val">0 4px 12px /.08</div>
+  </div>
+
+  <div class="opt b">
+    <div class="tag is-pick"><span class="k">B · Soft layered</span><span class="sub">recommended</span></div>
+    <div class="sb">
+      <div class="h"><span class="mark">C</span><span class="brand">ChordSketch</span></div>
+      <div class="new"><span class="plus">+</span> New song</div>
+      <nav><a class="cur"><span class="ico"></span>Library</a><a><span class="ico"></span>Viewer</a><a><span class="ico"></span>Editor</a><a><span class="ico"></span>Setlists</a></nav>
+      <div class="sec">Recent</div>
+      <div class="recent"><a><span class="dot"></span>Country Roads</a><a><span class="dot"></span>Hotel California</a><a><span class="dot"></span>Let It Be</a></div>
+      <div class="foot"><span class="av">J</span><span class="nm">john</span></div>
+    </div>
+    <div class="val">2-layer · -12 spread /.05 +.10</div>
+  </div>
+
+  <div class="opt c">
+    <div class="tag"><span class="k">C · Border-led</span><span class="sub">near-flat</span></div>
+    <div class="sb">
+      <div class="h"><span class="mark">C</span><span class="brand">ChordSketch</span></div>
+      <div class="new"><span class="plus">+</span> New song</div>
+      <nav><a class="cur"><span class="ico"></span>Library</a><a><span class="ico"></span>Viewer</a><a><span class="ico"></span>Editor</a><a><span class="ico"></span>Setlists</a></nav>
+      <div class="sec">Recent</div>
+      <div class="recent"><a><span class="dot"></span>Country Roads</a><a><span class="dot"></span>Hotel California</a><a><span class="dot"></span>Let It Be</a></div>
+      <div class="foot"><span class="av">J</span><span class="nm">john</span></div>
+    </div>
+    <div class="val">stronger border · 0 1px 2px /.03</div>
+  </div>
+
+  <div class="opt d">
+    <div class="tag"><span class="k">D · Borderless soft</span><span class="sub">no border</span></div>
+    <div class="sb">
+      <div class="h"><span class="mark">C</span><span class="brand">ChordSketch</span></div>
+      <div class="new"><span class="plus">+</span> New song</div>
+      <nav><a class="cur"><span class="ico"></span>Library</a><a><span class="ico"></span>Viewer</a><a><span class="ico"></span>Editor</a><a><span class="ico"></span>Setlists</a></nav>
+      <div class="sec">Recent</div>
+      <div class="recent"><a><span class="dot"></span>Country Roads</a><a><span class="dot"></span>Hotel California</a><a><span class="dot"></span>Let It Be</a></div>
+      <div class="foot"><span class="av">J</span><span class="nm">john</span></div>
+    </div>
+    <div class="val">no border · 2-layer -16 spread /.05 +.10</div>
+  </div>
+</div>
+</body>
+</html>
