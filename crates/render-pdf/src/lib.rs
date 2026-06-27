@@ -320,6 +320,17 @@ const SECTION_SIZE: f32 = 10.0;
 const COMMENT_SIZE: f32 = 9.0;
 /// Spacing between lines.
 const LINE_GAP: f32 = 4.0;
+/// Gap (pt) between the chord-name title baseline and the grid top in the
+/// HORIZONTAL chord-diagram layout. Tighter than the vertical renderer's 15-pt
+/// offset because the horizontal layout draws the open/muted glyphs in the left
+/// gutter, not in an above-nut band the title has to clear. Sister value to the
+/// SVG renderer's `DiagramMetrics::top_margin_horizontal`.
+const HORIZONTAL_DIAGRAM_TITLE_GAP: f32 = 6.0;
+/// Vertical budget (pt) above the grid in the horizontal chord-diagram layout:
+/// the title band plus the title-to-grid gap, with ~1 pt of fret-label-descent
+/// slack below the grid. Kept as `TITLE_GAP + 10` so the two stay coupled — the
+/// `10` is the title band height + label slack that is independent of the gap.
+const HORIZONTAL_DIAGRAM_TITLE_BUDGET: f32 = HORIZONTAL_DIAGRAM_TITLE_GAP + 10.0;
 /// Per-character width as fraction of font size for Helvetica.
 ///
 /// Uses standard Helvetica AFM glyph widths (divided by 1000) for ASCII
@@ -2108,14 +2119,13 @@ fn render_chord_diagram_pdf_horizontal(
     // Horizontal mode draws the open/muted glyphs in the LEFT gutter (left of
     // the nut), not above the grid, so the title band only has to clear the
     // chord name — there is no above-nut marker band to budget for. The gap to
-    // grid_top is therefore the tighter `HORIZONTAL_TITLE_GAP` (6 pt) rather
+    // grid_top is therefore the tighter `HORIZONTAL_DIAGRAM_TITLE_GAP` rather
     // than the vertical renderer's 15 pt, mirroring the SVG renderer's
-    // `top_margin_horizontal` tightening. The 16 pt budget = ~9 pt chord-name
-    // title + the 6 pt gap (with ~1 pt label-descent slack at the bottom).
+    // `top_margin_horizontal` tightening.
     //
     // Stacked-tension title (#2719) — same split as the vertical renderer.
     let title = PdfTitleLayout::new(data.title(), 9.0);
-    let total_h = grid_h + 16.0 + title.extra_above;
+    let total_h = grid_h + HORIZONTAL_DIAGRAM_TITLE_BUDGET + title.extra_above;
 
     doc.ensure_space(total_h);
 
@@ -2128,7 +2138,7 @@ fn render_chord_diagram_pdf_horizontal(
 
     // Top of the grid sits a tight gap below the title — the horizontal layout
     // has no above-nut marker band, unlike the vertical renderer's 15 pt offset.
-    let grid_top = top_y - 6.0;
+    let grid_top = top_y - HORIZONTAL_DIAGRAM_TITLE_GAP;
     let grid_bottom = grid_top - grid_h;
 
     // Grid lines are filled rects (not stroked lines) so perpendicular
