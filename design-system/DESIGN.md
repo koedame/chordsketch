@@ -1,6 +1,6 @@
 # ChordSketch — Design System
 
-**Version 1.3** · English-primary UI · Light theme · Editorial / Professional
+**Version 1.4** · English-primary UI · Light theme · Editorial / Professional
 
 ChordSketch is a library of chord sheets with lyrics for **ChordPro** and
 **iReal Pro**. A tool for amateurs through professionals to search, edit,
@@ -148,8 +148,16 @@ Token aliases in `tokens.css`:
   (8px / card) carry most of the load. `--r-4` (12px) is reserved for
   modals.
 - **Elevation** — Lines first (`--border` = `--ink-200`). Shadows are
-  reserved for popovers (e2), modals (e3), and the command-palette
-  overlay.
+  reserved for popovers (`--e-2`), modals (`--e-3`), and the
+  command-palette overlay (`--e-overlay`). Each level is a two-layer
+  shadow — a tight key layer plus a soft, negative-spread ambient — so a
+  raised surface reads as gentle depth, not a single hard slab. **Large
+  floating panels are border-led**, not popovers: an app-shell sidebar or
+  similar full-height panel takes the near-flat `--e-panel` and lets a
+  slightly stronger hairline (`--border-strong`) carry the separation. A
+  popover-weight shadow (`--e-2`) on a large panel reads as a heavy grey
+  smudge — the harshness `--e-panel` exists to avoid. Reach for `--e-2`
+  only on genuinely small, transient surfaces.
 - **Borders are uniform.** A container's border is the same width on
   all four sides. Asymmetric thick borders (e.g., a 3 px crimson top
   border) are not used as an accent device. To call attention, swap
@@ -391,6 +399,15 @@ layout in either place.
 - **v1.3** — Annotated §6 with each category's React binding (which ship a
   `@chordsketch/react-ui` primitive vs are reference-only in `preview/`), and
   added §11 Versioning. Documentation only — no token or class changes.
+- **v1.4** — Modernised the elevation system (§4). Added the `--e-panel`
+  token: a near-flat, border-led lift for large floating panels, so an
+  app-shell sidebar no longer borrows the popover-weight `--e-2` (the source
+  of the harsh drop shadow). Re-expressed `--e-2` / `--e-3` / `--e-overlay`
+  as two-layer key+ambient shadows with negative spread for softer edges at
+  unchanged prominence; `--e-1` is unchanged. The floating-sidebar sample
+  (`ui_kits/web/sidebar-floating.html`) now uses `--e-panel` + `--border-strong`.
+  Token addition (MINOR) plus value refinements (PATCH); the bare `--e-*`
+  names are unchanged, so no consumer breaks.
 
 ---
 
