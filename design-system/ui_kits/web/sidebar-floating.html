@@ -98,9 +98,13 @@ a { color: inherit; text-decoration: none; }
   flex-direction: column;
   min-height: 0;
   background: var(--surface);
-  border: 1px solid var(--border);
+  /* Border-led, lines-first separation (DESIGN.md §4): a large floating panel
+     reads as detached from its rounded corners + a slightly stronger hairline,
+     not from a popover-weight shadow. `--e-panel` is a near-flat lift; the
+     border does the work. */
+  border: 1px solid var(--border-strong);
   border-radius: var(--r-4);          /* rounded corners → detached look      */
-  box-shadow: var(--e-2);             /* lifts the panel off the canvas       */
+  box-shadow: var(--e-panel);
   overflow: hidden;
 }
 
@@ -354,7 +358,7 @@ a { color: inherit; text-decoration: none; }
     </div>
     <div class="main-body">
       <p class="welcome"><span class="spark" aria-hidden="true">✳</span> Welcome back, john</p>
-      <p class="hint">Only the sidebar is a floating panel — rounded corners, a soft elevation, and a margin to the window edge make it read as an independent area. The main region stays borderless and blends into the canvas. Use the toggle next to the logo to collapse the sidebar to an icon rail; it always spans the full viewport height.</p>
+      <p class="hint">Only the sidebar is a floating panel — rounded corners, a defined hairline border, and a margin to the window edge make it read as an independent area. Separation is carried by the border, not a heavy drop shadow. The main region stays borderless and blends into the canvas. Use the toggle next to the logo to collapse the sidebar to an icon rail; it always spans the full viewport height.</p>
     </div>
   </main>
 

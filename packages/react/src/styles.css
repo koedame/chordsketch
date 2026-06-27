@@ -119,9 +119,10 @@
 
   /* Elevation. */
   --cs-e-1: 0 1px 2px rgba(10, 10, 11, 0.04);
-  --cs-e-2: 0 4px 12px rgba(10, 10, 11, 0.08);
-  --cs-e-3: 0 16px 32px rgba(10, 10, 11, 0.12);
-  --cs-e-overlay: 0 24px 48px rgba(10, 10, 11, 0.18);
+  --cs-e-panel: 0 1px 2px rgba(10, 10, 11, 0.03);
+  --cs-e-2: 0 1px 2px rgba(10, 10, 11, 0.04), 0 4px 14px -2px rgba(10, 10, 11, 0.07);
+  --cs-e-3: 0 2px 6px rgba(10, 10, 11, 0.04), 0 16px 32px -6px rgba(10, 10, 11, 0.12);
+  --cs-e-overlay: 0 4px 10px rgba(10, 10, 11, 0.05), 0 24px 48px -10px rgba(10, 10, 11, 0.18);
 
   /* Motion. */
   --cs-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -2217,7 +2218,9 @@
   background: var(--cs-surface, #ffffff);
   border: 1px solid var(--cs-border, #d4d1d6);
   border-radius: var(--cs-r-2, 4px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  /* Popover elevation token, single-sourced from tokens.css per ADR-0038
+     rather than an off-palette pure-black literal. */
+  box-shadow: var(--cs-e-2, 0 1px 2px rgba(10, 10, 11, 0.04), 0 4px 14px -2px rgba(10, 10, 11, 0.07));
 }
 /* The popover's inner SVG keeps its intrinsic px size (the Rust
    renderer emits `width`/`height` attributes). The shared
@@ -3255,7 +3258,11 @@
   border: 1px solid var(--cs-border-strong, #a8a4ae);
   border-radius: 6px;
   padding: 0.75rem;
-  box-shadow: var(--cs-elevation-popover, 0 8px 24px rgba(0, 0, 0, 0.12));
+  /* Popover elevation token. Was `--cs-elevation-popover` — a token that does
+     not exist, so it always fell back to an off-palette pure-black shadow that
+     also diverged from the `.irealb-editor__popover` sister. Both popover
+     sisters now share `--e-2` (the warm, ink-tinted popover elevation). */
+  box-shadow: var(--cs-e-2, 0 1px 2px rgba(10, 10, 11, 0.04), 0 4px 14px -2px rgba(10, 10, 11, 0.07));
   z-index: 10;
 }
 

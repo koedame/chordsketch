@@ -110,10 +110,17 @@
   --r-full: 9999px;
 
   /* ---------- Elevation ---------- */
-  --e-1:       0 1px 2px rgba(10, 10, 11, 0.04);
-  --e-2:       0 4px 12px rgba(10, 10, 11, 0.08);   /* popover */
-  --e-3:       0 16px 32px rgba(10, 10, 11, 0.12);  /* modal */
-  --e-overlay: 0 24px 48px rgba(10, 10, 11, 0.18);  /* command palette */
+  /* Lines first: most surfaces separate with `--border`, not shadow. Each
+     level below is a two-layer shadow — a tight key layer that grounds the
+     element plus a soft, negative-spread ambient that diffuses — so the
+     shadows that remain read soft rather than as a single hard slab. Large
+     floating panels are border-led (`--e-panel`), not popovers: they take a
+     near-flat lift and let the hairline carry the separation. */
+  --e-1:       0 1px 2px rgba(10, 10, 11, 0.04);                                            /* resting / hover lift */
+  --e-panel:   0 1px 2px rgba(10, 10, 11, 0.03);                                            /* large floating panel (sidebar) — border-led */
+  --e-2:       0 1px 2px rgba(10, 10, 11, 0.04), 0 4px 14px -2px rgba(10, 10, 11, 0.07);    /* popover */
+  --e-3:       0 2px 6px rgba(10, 10, 11, 0.04), 0 16px 32px -6px rgba(10, 10, 11, 0.12);   /* modal */
+  --e-overlay: 0 4px 10px rgba(10, 10, 11, 0.05), 0 24px 48px -10px rgba(10, 10, 11, 0.18); /* command palette */
 
   /* ---------- Motion ---------- */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
