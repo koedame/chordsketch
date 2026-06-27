@@ -33,12 +33,25 @@ a { color: inherit; text-decoration: none; }
 .app {
   --sidebar-w: 272px;       /* expanded rail width                          */
   --rail-w: 68px;           /* collapsed rail width                         */
+  /* Collapse is one state expressed entirely as custom properties, so the
+     `.is-rail` class and the no-JS narrow media query share a single data set
+     (no per-element rule is duplicated, so the two states cannot drift). */
   --label-opacity: 1;       /* text labels: shown when expanded             */
   --label-max: 12rem;       /* text labels: collapse to 0 in rail mode      */
-  --rail-gap: var(--sp-3);  /* row gap; tightens to center icons in rail    */
   --section-display: block; /* the "Recent" list is hidden in rail mode     */
   --head-dir: row;          /* header lays out row → column in rail mode     */
   --head-justify: flex-start;
+  --actions-dir: row;       /* toggle + search: row → column in rail        */
+  --actions-ml: auto;
+  --row-justify: flex-start;/* new / nav / account main-axis alignment      */
+  --rail-pad-x: var(--sp-3);/* horizontal padding that folds to 0 in rail   */
+  --nav-gap: var(--sp-3);
+  --scroll-pad-x: var(--sp-3);
+  --chev-display: block;    /* account chevron hidden in rail               */
+  --new-bg: var(--surface); /* the primary action turns crimson in rail     */
+  --new-bg-hover: var(--ink-100);
+  --new-fg: var(--text-primary);
+  --new-border: var(--border-strong);
 
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
@@ -47,6 +60,7 @@ a { color: inherit; text-decoration: none; }
   padding: var(--sp-4);     /* gap to the window edge = the "independent area" */
   transition: grid-template-columns var(--dur-2) var(--ease-out);
 }
+/* Rail state — keep this data block in lockstep with the @media fallback below. */
 .app.is-rail {
   --sidebar-w: var(--rail-w);
   --label-opacity: 0;
@@ -54,6 +68,17 @@ a { color: inherit; text-decoration: none; }
   --section-display: none;
   --head-dir: column;
   --head-justify: center;
+  --actions-dir: column;
+  --actions-ml: 0;
+  --row-justify: center;
+  --rail-pad-x: 0px;
+  --nav-gap: 0px;
+  --scroll-pad-x: var(--sp-2);
+  --chev-display: none;
+  --new-bg: var(--crimson-500);
+  --new-bg-hover: var(--crimson-600);
+  --new-fg: var(--fg-on-crimson);
+  --new-border: var(--crimson-500);
 }
 
 /* A text label that folds away in rail mode but stays in the accessibility
@@ -90,10 +115,12 @@ a { color: inherit; text-decoration: none; }
 .sb-head .brand-link { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
 .sb-head .mark { width: 26px; height: 26px; border-radius: var(--r-2); display: block; flex: none; }
 .sb-head .brand { font-weight: 700; font-size: var(--fs-16); letter-spacing: -0.01em; }
-.sb-head .head-actions { display: flex; align-items: center; gap: var(--sp-1); margin-left: auto; }
-/* In the rail the header stacks vertically, so the toggle and search stay
-   reachable (search is not dropped on collapse — only the labels fold away). */
-.app.is-rail .sb-head .head-actions { margin-left: 0; flex-direction: column; }
+/* In the rail the header stacks vertically (--actions-dir), so the toggle and
+   search stay reachable — search is not dropped on collapse, only labels fold. */
+.sb-head .head-actions {
+  display: flex; align-items: center; gap: var(--sp-1);
+  margin-left: var(--actions-ml); flex-direction: var(--actions-dir);
+}
 
 .icon-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -106,39 +133,33 @@ a { color: inherit; text-decoration: none; }
 
 .sb-scroll {
   flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
-  padding: 0 var(--sp-3) var(--sp-3);
+  padding: 0 var(--scroll-pad-x) var(--sp-3);
 }
-.app.is-rail .sb-scroll { padding-left: var(--sp-2); padding-right: var(--sp-2); }
 
-/* Primary action — full button when expanded, icon-only when collapsed. */
+/* Primary action — full button when expanded; in the rail it folds to an icon
+   and turns crimson (--new-*) so it reads as primary, not an empty outlined box
+   or the panel toggle's square glyph. */
 .sb-new {
   display: flex; align-items: center; gap: var(--sp-3);
-  justify-content: flex-start;
+  justify-content: var(--row-justify);
   width: 100%;
   margin: 0 0 var(--sp-3);
-  padding: var(--sp-2) var(--sp-3); height: 40px;
-  border: 1px solid var(--border-strong); border-radius: var(--r-2);
-  background: var(--surface);
-  font: 500 var(--fs-14)/1 var(--font-jp); color: var(--text-primary); cursor: pointer;
+  padding: var(--sp-2) var(--rail-pad-x); height: 40px;
+  border: 1px solid var(--new-border); border-radius: var(--r-2);
+  background: var(--new-bg);
+  font: 500 var(--fs-14)/1 var(--font-jp); color: var(--new-fg); cursor: pointer;
   transition: background var(--dur-1) var(--ease-out);
 }
-.sb-new:hover { background: var(--ink-100); }
+.sb-new:hover { background: var(--new-bg-hover); }
 .sb-new:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .sb-new svg { flex: none; }
-/* In the rail the primary action reads as primary (filled crimson), so it is not
-   mistaken for an empty outlined box or for the panel toggle's square glyph. */
-.app.is-rail .sb-new {
-  justify-content: center; padding-left: 0; padding-right: 0;
-  background: var(--crimson-500); border-color: var(--crimson-500); color: var(--fg-on-crimson);
-}
-.app.is-rail .sb-new:hover { background: var(--crimson-600); }
 
 /* Navigation rows — icon + folding label. */
 .nav { display: flex; flex-direction: column; gap: 1px; }
 .nav a {
   position: relative;
-  display: flex; align-items: center; gap: var(--sp-3);
-  padding: var(--sp-2) var(--sp-3); height: 38px;
+  display: flex; align-items: center; justify-content: var(--row-justify); gap: var(--nav-gap);
+  padding: var(--sp-2) var(--rail-pad-x); height: 38px;
   border-radius: var(--r-2);
   color: var(--text-secondary); font-weight: 500;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
@@ -154,7 +175,6 @@ a { color: inherit; text-decoration: none; }
   content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
   width: 3px; height: 20px; border-radius: var(--r-full); background: var(--crimson-500);
 }
-.app.is-rail .nav a { justify-content: center; padding-left: 0; padding-right: 0; gap: 0; }
 
 .sb-section { display: var(--section-display); margin-top: var(--sp-5); }
 .sb-section .section-label {
@@ -181,7 +201,7 @@ a { color: inherit; text-decoration: none; }
 /* Account card pinned to the bottom of the floating panel. */
 .sb-foot { border-top: 1px solid var(--border); padding: var(--sp-3); }
 .account {
-  display: flex; align-items: center; gap: var(--sp-3);
+  display: flex; align-items: center; justify-content: var(--row-justify); gap: var(--sp-3);
   width: 100%;
   padding: var(--sp-2); border: 0; border-radius: var(--r-2);
   background: transparent; cursor: pointer; text-align: left;
@@ -199,9 +219,7 @@ a { color: inherit; text-decoration: none; }
 .account .who { line-height: 1.2; min-width: 0; }
 .account .who .name { font-weight: 600; color: var(--text-primary); }
 .account .who .plan { font-size: var(--fs-12); color: var(--text-secondary); }
-.account .chev { margin-left: auto; color: var(--text-tertiary); flex: none; }
-.app.is-rail .account { justify-content: center; }
-.app.is-rail .account .chev { display: none; }
+.account .chev { display: var(--chev-display); margin-left: auto; color: var(--text-tertiary); flex: none; }
 
 /* ── The main area blends into the canvas — no card, no border, no shadow. ── */
 .main {
@@ -218,10 +236,12 @@ a { color: inherit; text-decoration: none; }
 .welcome .spark { color: var(--crimson-500); }
 .hint { color: var(--text-secondary); margin-top: var(--sp-3); max-width: var(--maxw-reading); }
 
-/* Narrow viewports hold the icon rail. The script (below) is authoritative when
-   JS is on — it adds `.is-rail` and keeps the toggle's ARIA state in sync — so
-   this block is the no-JS fallback that guarantees a usable rail layout. The
-   toggle is hidden here because there is no room to expand on a narrow screen. */
+/* Narrow viewports hold the icon rail. With JS the script is authoritative (it
+   adds `.is-rail` and keeps the toggle's ARIA in sync); this block is the no-JS
+   fallback. It only restates the same rail custom-property data as `.app.is-rail`
+   above — keep the two lists in lockstep — so no per-element rule is duplicated
+   and the two states cannot drift. The toggle is hidden because there is no room
+   to expand on a narrow screen. */
 @media (max-width: 720px) {
   .app {
     --sidebar-w: var(--rail-w);
@@ -230,11 +250,19 @@ a { color: inherit; text-decoration: none; }
     --section-display: none;
     --head-dir: column;
     --head-justify: center;
+    --actions-dir: column;
+    --actions-ml: 0;
+    --row-justify: center;
+    --rail-pad-x: 0px;
+    --nav-gap: 0px;
+    --scroll-pad-x: var(--sp-2);
+    --chev-display: none;
+    --new-bg: var(--crimson-500);
+    --new-bg-hover: var(--crimson-600);
+    --new-fg: var(--fg-on-crimson);
+    --new-border: var(--crimson-500);
   }
   #sidebar-toggle { display: none; }
-  .sb-head .head-actions { margin-left: 0; flex-direction: column; }
-  .sb-new, .nav a, .account { justify-content: center; }
-  .nav a { gap: 0; padding-left: 0; padding-right: 0; }
 }
 
 /* Visually-hidden, but present in the accessibility tree (skip link, etc.). */
@@ -276,7 +304,7 @@ a { color: inherit; text-decoration: none; }
     </div>
 
     <div class="sb-scroll">
-      <button class="sb-new" type="button" aria-label="New song">
+      <button class="sb-new" type="button" aria-label="New song" title="New song">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         <span class="label" aria-hidden="true">New song</span>
       </button>
