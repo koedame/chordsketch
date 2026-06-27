@@ -352,6 +352,7 @@ layout in either place.
 | `ui_kits/web/editor.html` | Full-screen sample — ChordPro split editor (source + live preview) |
 | `ui_kits/web/editor-chord-footer.html` | Full-screen sample — ChordPro split editor with the lifted, caret-driven chord-editor footer spanning both panes (`@chordsketch/react` `<ChordInspector>` + `useChordEditor`, #2644) |
 | `ui_kits/web/editor-irealb.html` | Full-screen sample — iReal Pro bar-grid editor with metadata header and bar inspector |
+| `ui_kits/web/sidebar-floating.html` | Full-screen sample — app shell whose left sidebar is a floating, full-height panel (rounded, elevated, inset from the window edge) over a borderless canvas main region; collapses to an icon rail via the toggle beside the logo |
 | `preview/index.html` | Component preview index |
 | `preview/layout-stack.html` | Stack — vertical-flow primitive (default gap, modifiers, nesting) |
 | `preview/components-buttons.html` | Buttons — variants, sizes, icon-only, disabled, loading |

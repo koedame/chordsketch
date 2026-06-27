@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App shell — floating sidebar — ChordSketch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="../../tokens.css">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+/* The body never scrolls: the sidebar stays pinned at full viewport height and
+   the main region scrolls inside its own column. This is what makes the sidebar
+   "always full height and following" rather than scrolling away with the page. */
+body {
+  font-family: var(--font-jp);
+  font-size: var(--fs-14);
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--canvas);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   App shell. A single padded canvas; only the sidebar is a floating panel.
+   Collapse state is driven by `.app.is-rail`, which flips a few custom
+   properties so the rail width and label visibility stay in one place.
+   ────────────────────────────────────────────────────────────────────────── */
+.app {
+  --sidebar-w: 272px;       /* expanded rail width                          */
+  --rail-w: 68px;           /* collapsed rail width                         */
+  /* Collapse is one state expressed entirely as custom properties, so the
+     `.is-rail` class and the no-JS narrow media query share a single data set
+     (no per-element rule is duplicated, so the two states cannot drift). */
+  --label-opacity: 1;       /* text labels: shown when expanded             */
+  --label-max: 12rem;       /* text labels: collapse to 0 in rail mode      */
+  --section-display: block; /* the "Recent" list is hidden in rail mode     */
+  --head-dir: row;          /* header lays out row → column in rail mode     */
+  --head-justify: flex-start;
+  --actions-dir: row;       /* toggle + search: row → column in rail        */
+  --actions-ml: auto;
+  --row-justify: flex-start;/* new / nav / account main-axis alignment      */
+  --rail-pad-x: var(--sp-3);/* horizontal padding that folds to 0 in rail   */
+  --nav-gap: var(--sp-3);
+  --scroll-pad-x: var(--sp-3);
+  --chev-display: block;    /* account chevron hidden in rail               */
+  --new-bg: var(--surface); /* the primary action turns crimson in rail     */
+  --new-bg-hover: var(--ink-100);
+  --new-fg: var(--text-primary);
+  --new-border: var(--border-strong);
+
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  gap: var(--sp-4);
+  height: 100vh;
+  padding: var(--sp-4);     /* gap to the window edge = the "independent area" */
+  transition: grid-template-columns var(--dur-2) var(--ease-out);
+}
+/* Rail state — keep this data block in lockstep with the @media fallback below. */
+.app.is-rail {
+  --sidebar-w: var(--rail-w);
+  --label-opacity: 0;
+  --label-max: 0px;
+  --section-display: none;
+  --head-dir: column;
+  --head-justify: center;
+  --actions-dir: column;
+  --actions-ml: 0;
+  --row-justify: center;
+  --rail-pad-x: 0px;
+  --nav-gap: 0px;
+  --scroll-pad-x: var(--sp-2);
+  --chev-display: none;
+  --new-bg: var(--crimson-500);
+  --new-bg-hover: var(--crimson-600);
+  --new-fg: var(--fg-on-crimson);
+  --new-border: var(--crimson-500);
+}
+
+/* A text label that folds away in rail mode but stays in the accessibility
+   tree (visibility/display untouched), so screen readers keep the name. */
+.label {
+  display: inline-block;
+  max-width: var(--label-max);
+  opacity: var(--label-opacity);
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width var(--dur-2) var(--ease-out), opacity var(--dur-1) var(--ease-out);
+}
+
+/* ── The floating sidebar ────────────────────────────────────────────────── */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);          /* rounded corners → detached look      */
+  box-shadow: var(--e-2);             /* lifts the panel off the canvas       */
+  overflow: hidden;
+}
+
+.sb-head {
+  display: flex;
+  flex-direction: var(--head-dir);
+  align-items: center;
+  justify-content: var(--head-justify);
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-3) var(--sp-3);
+}
+.sb-head .brand-link { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.sb-head .mark { width: 26px; height: 26px; border-radius: var(--r-2); display: block; flex: none; }
+.sb-head .brand { font-weight: 700; font-size: var(--fs-16); letter-spacing: -0.01em; }
+/* In the rail the header stacks vertically (--actions-dir), so the toggle and
+   search stay reachable — search is not dropped on collapse, only labels fold. */
+.sb-head .head-actions {
+  display: flex; align-items: center; gap: var(--sp-1);
+  margin-left: var(--actions-ml); flex-direction: var(--actions-dir);
+}
+
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: var(--r-2);
+  border: 0; background: transparent; color: var(--text-tertiary); cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.icon-btn:hover { background: var(--ink-100); color: var(--text-primary); }
+.icon-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+.sb-scroll {
+  flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  padding: 0 var(--scroll-pad-x) var(--sp-3);
+}
+
+/* Primary action — full button when expanded; in the rail it folds to an icon
+   and turns crimson (--new-*) so it reads as primary, not an empty outlined box
+   or the panel toggle's square glyph. */
+.sb-new {
+  display: flex; align-items: center; gap: var(--sp-3);
+  justify-content: var(--row-justify);
+  width: 100%;
+  margin: 0 0 var(--sp-3);
+  padding: var(--sp-2) var(--rail-pad-x); height: 40px;
+  border: 1px solid var(--new-border); border-radius: var(--r-2);
+  background: var(--new-bg);
+  font: 500 var(--fs-14)/1 var(--font-jp); color: var(--new-fg); cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.sb-new:hover { background: var(--new-bg-hover); }
+.sb-new:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.sb-new svg { flex: none; }
+
+/* Navigation rows — icon + folding label. */
+.nav { display: flex; flex-direction: column; gap: 1px; }
+.nav a {
+  position: relative;
+  display: flex; align-items: center; justify-content: var(--row-justify); gap: var(--nav-gap);
+  padding: var(--sp-2) var(--rail-pad-x); height: 38px;
+  border-radius: var(--r-2);
+  color: var(--text-secondary); font-weight: 500;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.nav a svg { color: var(--text-tertiary); flex: none; }
+.nav a:hover { background: var(--ink-100); color: var(--text-primary); }
+.nav a:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.nav a[aria-current="page"] { background: var(--ink-100); color: var(--text-primary); }
+.nav a[aria-current="page"] svg { color: var(--crimson-500); }
+/* A left accent bar marks the active item without relying on colour alone, so
+   it stays distinguishable in the rail where the label is folded away. */
+.nav a[aria-current="page"]::before {
+  content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 20px; border-radius: var(--r-full); background: var(--crimson-500);
+}
+
+.sb-section { display: var(--section-display); margin-top: var(--sp-5); }
+.sb-section .section-label {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 var(--sp-3) var(--sp-2);
+  font-family: var(--font-latin); font-size: var(--fs-12); font-weight: 600;
+  color: var(--text-secondary); /* AA-legible reading text (not the 3.4:1 tertiary) */
+}
+.recent { display: flex; flex-direction: column; gap: 1px; }
+.recent a {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3); height: 34px;
+  border-radius: var(--r-2);
+  color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.recent a:hover { background: var(--ink-100); color: var(--text-primary); }
+.recent a:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.recent a .dot { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--border-strong); flex: none; }
+.recent a.active .dot { background: var(--crimson-500); }
+.recent a .label { text-overflow: ellipsis; }
+
+/* Account card pinned to the bottom of the floating panel. */
+.sb-foot { border-top: 1px solid var(--border); padding: var(--sp-3); }
+.account {
+  display: flex; align-items: center; justify-content: var(--row-justify); gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-2); border: 0; border-radius: var(--r-2);
+  background: transparent; cursor: pointer; text-align: left;
+  font: inherit; color: inherit;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.account:hover { background: var(--ink-100); }
+.account:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.account .avatar {
+  width: 30px; height: 30px; border-radius: var(--r-full);
+  background: var(--ink-1000); color: var(--ink-0);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); flex: none;
+}
+.account .who { line-height: 1.2; min-width: 0; }
+.account .who .name { font-weight: 600; color: var(--text-primary); }
+.account .who .plan { font-size: var(--fs-12); color: var(--text-secondary); }
+.account .chev { display: var(--chev-display); margin-left: auto; color: var(--text-tertiary); flex: none; }
+
+/* ── The main area blends into the canvas — no card, no border, no shadow. ── */
+.main {
+  background: transparent;
+  display: flex; flex-direction: column; min-height: 0;
+}
+.main-bar {
+  height: 56px; display: flex; align-items: center; gap: var(--sp-3);
+  padding: 0 var(--sp-6); flex: none;
+}
+.main-bar h1 { margin: 0; font-size: var(--fs-16); font-weight: 700; letter-spacing: -0.01em; }
+.main-body { flex: 1; overflow-y: auto; padding: var(--sp-12) var(--sp-6); }
+.welcome { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-24); font-weight: 700; letter-spacing: -0.02em; }
+.welcome .spark { color: var(--crimson-500); }
+.hint { color: var(--text-secondary); margin-top: var(--sp-3); max-width: var(--maxw-reading); }
+
+/* Narrow viewports hold the icon rail. With JS the script is authoritative (it
+   adds `.is-rail` and keeps the toggle's ARIA in sync); this block is the no-JS
+   fallback. It only restates the same rail custom-property data as `.app.is-rail`
+   above — keep the two lists in lockstep — so no per-element rule is duplicated
+   and the two states cannot drift. The toggle is hidden because there is no room
+   to expand on a narrow screen. */
+@media (max-width: 720px) {
+  .app {
+    --sidebar-w: var(--rail-w);
+    --label-opacity: 0;
+    --label-max: 0px;
+    --section-display: none;
+    --head-dir: column;
+    --head-justify: center;
+    --actions-dir: column;
+    --actions-ml: 0;
+    --row-justify: center;
+    --rail-pad-x: 0px;
+    --nav-gap: 0px;
+    --scroll-pad-x: var(--sp-2);
+    --chev-display: none;
+    --new-bg: var(--crimson-500);
+    --new-bg-hover: var(--crimson-600);
+    --new-fg: var(--fg-on-crimson);
+    --new-border: var(--crimson-500);
+  }
+  #sidebar-toggle { display: none; }
+}
+
+/* Visually-hidden, but present in the accessibility tree (skip link, etc.). */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+.skip-link {
+  position: fixed; top: var(--sp-2); left: var(--sp-2); z-index: 20;
+  padding: var(--sp-2) var(--sp-4); border-radius: var(--r-2);
+  background: var(--ink-1000); color: var(--ink-0); font-weight: 600; text-decoration: none;
+  transform: translateY(-200%); transition: transform var(--dur-1) var(--ease-out);
+}
+.skip-link:focus { transform: translateY(0); outline: none; box-shadow: var(--focus-ring); }
+</style>
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="app" id="app">
+
+  <!-- ───────────────────────── Floating sidebar ───────────────────────── -->
+  <aside class="sidebar" id="app-sidebar" aria-label="Primary">
+    <div class="sb-head">
+      <a class="brand-link" href="../../index.html" aria-label="ChordSketch home">
+        <img class="mark" src="../../../assets/logo.svg" alt="" width="26" height="26">
+        <span class="brand label">ChordSketch</span>
+      </a>
+      <div class="head-actions">
+        <button class="icon-btn" id="sidebar-toggle" type="button"
+                aria-controls="app-sidebar" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+        </button>
+        <button class="icon-btn search-btn" type="button" aria-label="Search">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="sb-scroll">
+      <button class="sb-new" type="button" aria-label="New song" title="New song">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        <span class="label" aria-hidden="true">New song</span>
+      </button>
+
+      <nav class="nav" aria-label="Sections">
+        <a href="library.html" aria-current="page" aria-label="Library" title="Library"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18"/></svg><span class="label" aria-hidden="true">Library</span></a>
+        <a href="viewer.html" aria-label="Viewer" title="Viewer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg><span class="label" aria-hidden="true">Viewer</span></a>
+        <a href="editor.html" aria-label="Editor" title="Editor"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="label" aria-hidden="true">Editor</span></a>
+        <a href="#" aria-label="Setlists" title="Setlists"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="label" aria-hidden="true">Setlists</span></a>
+      </nav>
+
+      <div class="sb-section">
+        <div class="section-label">
+          <span>Recent</span>
+          <button class="icon-btn" type="button" aria-label="Sort recent items" title="Sort recent items" style="width:24px;height:24px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M6 12h12M10 18h4"/></svg>
+          </button>
+        </div>
+        <div class="recent">
+          <a href="#"><span class="dot"></span><span class="label">Country Roads</span></a>
+          <a href="#"><span class="dot"></span><span class="label">Wonderwall</span></a>
+          <a href="#"><span class="dot"></span><span class="label">Autumn Leaves</span></a>
+          <a href="#" class="active"><span class="dot"></span><span class="label">Hotel California</span></a>
+          <a href="#"><span class="dot"></span><span class="label">Hallelujah</span></a>
+          <a href="#"><span class="dot"></span><span class="label">Stand By Me</span></a>
+          <a href="#"><span class="dot"></span><span class="label">Let It Be</span></a>
+        </div>
+      </div>
+    </div>
+
+    <div class="sb-foot">
+      <button class="account" type="button" aria-haspopup="menu" aria-label="Account: john, Max plan">
+        <span class="avatar" aria-hidden="true">J</span>
+        <span class="who label">
+          <span class="name">john</span>
+          <span class="plan">Max</span>
+        </span>
+        <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ───────────────── Main area — blends into the canvas ───────────────── -->
+  <main class="main" id="main" tabindex="-1">
+    <div class="main-bar">
+      <h1>Library</h1>
+    </div>
+    <div class="main-body">
+      <p class="welcome"><span class="spark" aria-hidden="true">✳</span> Welcome back, john</p>
+      <p class="hint">Only the sidebar is a floating panel — rounded corners, a soft elevation, and a margin to the window edge make it read as an independent area. The main region stays borderless and blends into the canvas. Use the toggle next to the logo to collapse the sidebar to an icon rail; it always spans the full viewport height.</p>
+    </div>
+  </main>
+
+</div>
+
+<script>
+// Sidebar collapse toggle. Progressive enhancement: the panel is fully usable
+// without JS (it renders expanded; the CSS media query gives a rail fallback on
+// narrow screens). No user-supplied data touches the DOM.
+//
+// `.is-rail` on #app is the single source of truth for the collapsed state. The
+// script keeps the toggle's ARIA + title in sync with it, and on narrow screens
+// (where there is no room to expand) it forces the rail and suspends the toggle
+// rather than letting the CSS media query and the ARIA state drift apart.
+(function () {
+  var app = document.getElementById('app');
+  var btn = document.getElementById('sidebar-toggle');
+  if (!app || !btn) { return; }
+  var STORAGE_KEY = 'cs-sidebar-collapsed';
+  var narrow = window.matchMedia('(max-width: 720px)');
+
+  function apply(collapsed) {
+    app.classList.toggle('is-rail', collapsed);
+    btn.setAttribute('aria-expanded', String(!collapsed));
+    var label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('title', label);
+  }
+
+  function stored() {
+    try { return localStorage.getItem(STORAGE_KEY) === '1'; } catch (e) { return false; }
+  }
+
+  // On narrow screens the rail is forced and the toggle is inert (hidden by CSS);
+  // otherwise the user's stored preference wins.
+  function sync() {
+    apply(narrow.matches ? true : stored());
+  }
+
+  sync();
+  narrow.addEventListener('change', sync);
+
+  btn.addEventListener('click', function () {
+    if (narrow.matches) { return; } // no expand affordance at narrow widths
+    var collapsed = !app.classList.contains('is-rail');
+    apply(collapsed);
+    try { localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0'); } catch (e) { /* storage blocked */ }
+  });
+})();
+</script>
+
+</body>
+</html>
