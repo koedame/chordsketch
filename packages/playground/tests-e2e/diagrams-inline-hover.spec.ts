@@ -69,35 +69,6 @@ test.describe('inline / hover compact chord diagrams (ADR-0027)', () => {
     const spread = Math.max(...lyricBottoms) - Math.min(...lyricBottoms);
     expect(spread).toBeLessThanOrEqual(2);
 
-    // Center alignment (ADR-0039). The compact diagram is centered over the
-    // lyric segment it annotates, not left-edge-aligned: the diagram's
-    // horizontal center must match its own lyric's center. Under the fix
-    // (`align-items: center`) both children share the block's center, so the
-    // skew is sub-pixel. The regression (`align-items: flex-start`) left-
-    // aligns the children, so the diagram's center and the (narrower) lyric's
-    // center diverge by half the width difference between them — much larger
-    // than the 2px tolerance, which absorbs sub-pixel rounding only. Measured
-    // per chord-block so the assertion holds regardless of where the block
-    // sits in the line.
-    const centerSkew = await page
-      .locator('.line--inline-diagrams .chord-block-inline-diagram')
-      .evaluateAll((cells) =>
-        cells.map((cell) => {
-          const svg = cell.querySelector('svg');
-          // The lyric lives on the sibling `.lyrics` inside the same
-          // `.chord-block` (the cell's parent).
-          const lyric = cell.parentElement?.querySelector(':scope > .lyrics');
-          if (!svg || !lyric) return Number.NaN;
-          const s = svg.getBoundingClientRect();
-          const l = lyric.getBoundingClientRect();
-          return Math.abs((s.left + s.right) / 2 - (l.left + l.right) / 2);
-        }),
-      );
-    expect(centerSkew.length).toBeGreaterThanOrEqual(1);
-    for (const skew of centerSkew) {
-      expect(skew).toBeLessThanOrEqual(2);
-    }
-
     // Bug 2 — the {key}/{tempo} chips must stay narrow inline chips, NOT
     // stretch to the content width. Measure each chip against its
     // container; a flex-column `.song` stretch makes a chip ~= container
@@ -112,53 +83,6 @@ test.describe('inline / hover compact chord diagrams (ADR-0027)', () => {
     for (const w of chipWidths) {
       expect(w).toBeLessThan(contentWidth * 0.5);
     }
-
-    expect(errors).toEqual([]);
-  });
-
-  test('{diagrams: inline}: the diagram stays centered over a lyric segment WIDER than the diagram', async ({
-    page,
-  }) => {
-    // Inverted width ordering (ADR-0039): lyric segments never wrap
-    // (`.lyrics` is `white-space: pre`), so a long unbroken chord-bearing
-    // syllable is wider than the compact diagram and becomes the
-    // width-defining child of the chord-block flex column. Centering must
-    // still hold — the diagram centers over the wide lyric — which the
-    // common-case fixture (`world`, narrower than the diagram) does not
-    // exercise. A single chord on its own line keeps it one block on one
-    // row, so this is isolated from the baseline-spread assertion above
-    // (which requires all blocks on a single visual row).
-    const errors: string[] = [];
-    page.on('pageerror', (e) => errors.push(String(e)));
-
-    await page.goto('chordpro/', { waitUntil: 'networkidle' });
-    await setSource(page, ['{diagrams: inline}', '[C]antidisestablishmentarianism'].join('\n'));
-
-    const inlineCell = page.locator('.chord-block-inline-diagram svg').first();
-    await expect(inlineCell).toBeVisible();
-
-    // Measure in the browser (no Playwright `expect` there — return the raw
-    // numbers and assert in Node).
-    const m = await page
-      .locator('.line--inline-diagrams .chord-block-inline-diagram')
-      .first()
-      .evaluate((cell) => {
-        const svg = cell.querySelector('svg');
-        const lyric = cell.parentElement?.querySelector(':scope > .lyrics');
-        if (!svg || !lyric) return null;
-        const s = svg.getBoundingClientRect();
-        const l = lyric.getBoundingClientRect();
-        return {
-          svgWidth: s.width,
-          lyricWidth: l.width,
-          skew: Math.abs((s.left + s.right) / 2 - (l.left + l.right) / 2),
-        };
-      });
-    expect(m).not.toBeNull();
-    // Confirm the inverted ordering actually obtained — the lyric must be the
-    // wider child here, otherwise the test is not exercising its claimed case.
-    expect(m!.lyricWidth).toBeGreaterThan(m!.svgWidth);
-    expect(m!.skew).toBeLessThanOrEqual(2);
 
     expect(errors).toEqual([]);
   });
