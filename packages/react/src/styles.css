@@ -1507,6 +1507,23 @@
   flex-direction: column;
   align-items: flex-start;
 }
+/* Inline diagrams (ADR-0027 / ADR-0039): center each compact diagram over
+   the lyric segment it annotates, instead of left-aligning its edge. A
+   compact diagram is much wider than the syllable beneath it, so left
+   alignment leaves the diagram hanging off to the right of the note it
+   belongs to; centering makes the diagram read as belonging to that
+   syllable. Because the diagram is the widest child of the chord-block flex
+   column, centering keeps it spanning the block's full width (its left edge
+   never overflows the line start) while the narrower `.lyrics` child is the
+   one that recenters beneath it. Scoped to `inline` mode (the walker adds
+   `.line--inline-diagrams` only when `diagrams.mode === 'inline'`): a chord
+   *name* — short text whose left edge already marks the position — stays
+   left-aligned, and hover mode keeps the name as text, so neither layout is
+   affected. Pairs with the `.line--inline-diagrams { align-items: flex-end }`
+   rule above, which bottom-aligns the blocks on the lyric baseline. */
+.chordsketch-sheet__content .line--inline-diagrams .chord-block {
+  align-items: center;
+}
 .chordsketch-sheet__content .chord {
   font-family: var(--cs-font-chord, "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
   font-weight: 700;

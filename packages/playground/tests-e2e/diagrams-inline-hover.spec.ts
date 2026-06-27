@@ -69,6 +69,35 @@ test.describe('inline / hover compact chord diagrams (ADR-0027)', () => {
     const spread = Math.max(...lyricBottoms) - Math.min(...lyricBottoms);
     expect(spread).toBeLessThanOrEqual(2);
 
+    // Center alignment (ADR-0039). The compact diagram is centered over the
+    // lyric segment it annotates, not left-edge-aligned: the diagram's
+    // horizontal center must match its own lyric's center. Under the fix
+    // (`align-items: center`) both children share the block's center, so the
+    // skew is sub-pixel. The regression (`align-items: flex-start`) left-
+    // aligns the children, so the diagram's center and the (narrower) lyric's
+    // center diverge by half the width difference between them — much larger
+    // than the 2px tolerance, which absorbs sub-pixel rounding only. Measured
+    // per chord-block so the assertion holds regardless of where the block
+    // sits in the line.
+    const centerSkew = await page
+      .locator('.line--inline-diagrams .chord-block-inline-diagram')
+      .evaluateAll((cells) =>
+        cells.map((cell) => {
+          const svg = cell.querySelector('svg');
+          // The lyric lives on the sibling `.lyrics` inside the same
+          // `.chord-block` (the cell's parent).
+          const lyric = cell.parentElement?.querySelector(':scope > .lyrics');
+          if (!svg || !lyric) return Number.NaN;
+          const s = svg.getBoundingClientRect();
+          const l = lyric.getBoundingClientRect();
+          return Math.abs((s.left + s.right) / 2 - (l.left + l.right) / 2);
+        }),
+      );
+    expect(centerSkew.length).toBeGreaterThanOrEqual(1);
+    for (const skew of centerSkew) {
+      expect(skew).toBeLessThanOrEqual(2);
+    }
+
     // Bug 2 — the {key}/{tempo} chips must stay narrow inline chips, NOT
     // stretch to the content width. Measure each chip against its
     // container; a flex-column `.song` stretch makes a chip ~= container
