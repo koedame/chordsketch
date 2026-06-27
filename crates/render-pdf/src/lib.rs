@@ -328,8 +328,9 @@ const LINE_GAP: f32 = 4.0;
 const HORIZONTAL_DIAGRAM_TITLE_GAP: f32 = 6.0;
 /// Vertical budget (pt) above the grid in the horizontal chord-diagram layout:
 /// the title band plus the title-to-grid gap, with ~1 pt of fret-label-descent
-/// slack below the grid. Kept as `TITLE_GAP + 10` so the two stay coupled — the
-/// `10` is the title band height + label slack that is independent of the gap.
+/// slack below the grid. Kept as `HORIZONTAL_DIAGRAM_TITLE_GAP + 10` so the two
+/// stay coupled — the `10` is the title band height + label slack that is
+/// independent of the gap.
 const HORIZONTAL_DIAGRAM_TITLE_BUDGET: f32 = HORIZONTAL_DIAGRAM_TITLE_GAP + 10.0;
 /// Per-character width as fraction of font size for Helvetica.
 ///
