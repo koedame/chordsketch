@@ -2105,15 +2105,17 @@ fn render_chord_diagram_pdf_horizontal(
     let num_frets = data.frets_shown;
     let grid_w = num_frets as f32 * fret_pitch;
     let grid_h = (num_strings - 1) as f32 * string_pitch;
-    // 25 pt vertical budget = ~9 pt chord-name title + the 15-pt gap to
-    // grid_top; horizontal mode does NOT have a separate "top markers"
-    // band because position-marker inlays render inside the grid rows.
-    // (The vertical renderer above shares the same 25 pt constant for a
-    // different reason — title + base-fret label band — so the literal
-    // matches but the breakdown is different.)
+    // Horizontal mode draws the open/muted glyphs in the LEFT gutter (left of
+    // the nut), not above the grid, so the title band only has to clear the
+    // chord name — there is no above-nut marker band to budget for. The gap to
+    // grid_top is therefore the tighter `HORIZONTAL_TITLE_GAP` (6 pt) rather
+    // than the vertical renderer's 15 pt, mirroring the SVG renderer's
+    // `top_margin_horizontal` tightening. The 16 pt budget = ~9 pt chord-name
+    // title + the 6 pt gap (with ~1 pt label-descent slack at the bottom).
+    //
     // Stacked-tension title (#2719) — same split as the vertical renderer.
     let title = PdfTitleLayout::new(data.title(), 9.0);
-    let total_h = grid_h + 25.0 + title.extra_above;
+    let total_h = grid_h + 16.0 + title.extra_above;
 
     doc.ensure_space(total_h);
 
@@ -2124,9 +2126,9 @@ fn render_chord_diagram_pdf_horizontal(
     // fretboard, same baseline rule as the vertical renderer.
     title.draw(doc, base_x, top_y);
 
-    // Top of the grid sits 15 pt below the title (matches the vertical
-    // renderer's `grid_top` offset).
-    let grid_top = top_y - 15.0;
+    // Top of the grid sits a tight gap below the title — the horizontal layout
+    // has no above-nut marker band, unlike the vertical renderer's 15 pt offset.
+    let grid_top = top_y - 6.0;
     let grid_bottom = grid_top - grid_h;
 
     // Grid lines are filled rects (not stroked lines) so perpendicular
