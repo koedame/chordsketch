@@ -72,6 +72,17 @@ export interface ChordAudioConfig {
   enabled: boolean;
   /** Sound the given raw chord name (e.g. `"Am7"`, `"C/G"`). */
   play: (chordName: string) => void;
+  /**
+   * Sound an explicit list of MIDI note numbers, in the given order — used
+   * to audition a chord **diagram** as the concrete voicing it draws (the
+   * per-string fretted pitches, or the keyboard's highlighted keys) rather
+   * than the name-derived block voicing {@link play} produces.
+   *
+   * Optional: a host that does not own a {@link useChordAudio} instance
+   * exposing `playPitches` (or an older integration) may omit it, in which
+   * case diagram surfaces fall back to {@link play} with the chord name.
+   */
+  playPitches?: (pitches: number[]) => void;
 }
 
 /** Result of {@link useChordAudio}. */
@@ -89,8 +100,24 @@ export interface UseChordAudioResult {
    * Audio is unavailable, the wasm module has not finished loading, or
    * the name is not a parseable chord. Playing a new chord cuts any chord
    * still ringing so rapid taps retrigger cleanly.
+   *
+   * This voices the chord from its *name* — a fixed block voicing rooted at
+   * C3 — so it is the right call for an inline chord name that depicts no
+   * particular fingering. To sound a concrete diagram's voicing instead, use
+   * {@link playPitches} with the diagram's MIDI notes (see
+   * `diagramPitches` / `useChordDiagramPitches`).
    */
   play: (chordName: string) => void;
+  /**
+   * Play an explicit list of MIDI note numbers as a strummed chord, in the
+   * given order (the diagram's string / strum order). Unlike {@link play},
+   * which derives a block voicing from a chord *name*, this sounds exactly
+   * the pitches handed in — used to audition a chord **diagram** as the
+   * shape it draws. A no-op when Web Audio is unavailable, the shared
+   * context is missing, or `pitches` is empty. Cuts any chord still ringing
+   * so rapid taps retrigger cleanly.
+   */
+  playPitches: (pitches: number[]) => void;
   /** Silence any currently-ringing chord. Safe to call when silent. */
   stop: () => void;
 }
@@ -144,34 +171,26 @@ export function useChordAudio(
     stopVoices(voicesRef.current);
   }, []);
 
-  const play = useCallback(
-    (chordName: string) => {
-      const mod = moduleRef.current;
+  // Strum an explicit pitch list — the shared tail of both `play` (name →
+  // block voicing) and `playPitches` (diagram voicing). Does NOT need the
+  // wasm module: the pitches are already resolved by the caller.
+  const playPitches = useCallback(
+    (pitches: number[]) => {
       const ctx = getSharedAudioContext();
-      if (!ctx || !mod) return;
+      if (!ctx || pitches.length === 0) return;
       // A context left 'suspended' by the autoplay policy stays silent
-      // until resumed; this play() call is the authorising user gesture.
+      // until resumed; this call is the authorising user gesture.
       if (ctx.state === 'suspended') {
         void ctx.resume();
       }
-
-      let pitches = pitchCacheRef.current.get(chordName);
-      if (!pitches) {
-        const raw = mod.chordPitches(chordName);
-        pitches = raw ? Array.from(raw) : [];
-        pitchCacheRef.current.set(chordName, pitches);
-      }
-      if (pitches.length === 0) return;
-
       // Cut any chord still ringing so a fresh tap retriggers cleanly.
       stop();
-
-      // Strum the chord through the shared `scheduleStrummedChord`: it
-      // staggers the voice onsets so the chord rolls ("jara-n") instead of
-      // stabbing all at once, divides the peak across the voices, and owns
-      // the per-voice envelope + node graph + cleanup (sister to the key
-      // audition's tonic-triad strum). This hook supplies only the pitches,
-      // the shared piano timbre, and the onset.
+      // Strum through the shared `scheduleStrummedChord`: it staggers the
+      // voice onsets so the chord rolls ("jara-n") instead of stabbing all at
+      // once, divides the peak across the voices, and owns the per-voice
+      // envelope + node graph + cleanup (sister to the key audition's
+      // tonic-triad strum). This hook supplies only the pitches, the shared
+      // piano timbre, and the onset.
       scheduleStrummedChord(ctx, voicesRef.current, {
         pitches,
         wave: getPianoWave(ctx),
@@ -181,9 +200,25 @@ export function useChordAudio(
     [stop],
   );
 
+  const play = useCallback(
+    (chordName: string) => {
+      const mod = moduleRef.current;
+      if (!mod) return;
+
+      let pitches = pitchCacheRef.current.get(chordName);
+      if (!pitches) {
+        const raw = mod.chordPitches(chordName);
+        pitches = raw ? Array.from(raw) : [];
+        pitchCacheRef.current.set(chordName, pitches);
+      }
+      playPitches(pitches);
+    },
+    [playPitches],
+  );
+
   // Silence on unmount; the shared context is intentionally NOT closed
   // (other live hooks reuse it for the page lifetime).
   useEffect(() => () => stop(), [stop]);
 
-  return { supported, play, stop };
+  return { supported, play, playPitches, stop };
 }

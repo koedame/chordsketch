@@ -36,9 +36,9 @@ use napi_derive::napi;
 
 use crate::{
     chord_diagram_svg_inner, chord_diagram_svg_inner_with_orientation, chord_pitches_inner,
-    chord_staff_notes_inner, do_convert_chordpro_to_irealb, do_convert_irealb_to_chordpro_text,
-    do_parse_irealb, do_render_bytes, do_render_ireal_pdf, do_render_ireal_png,
-    do_render_ireal_svg, do_render_pdf_with_warnings, do_render_string,
+    chord_staff_notes_inner, diagram_pitches_inner, do_convert_chordpro_to_irealb,
+    do_convert_irealb_to_chordpro_text, do_parse_irealb, do_render_bytes, do_render_ireal_pdf,
+    do_render_ireal_png, do_render_ireal_svg, do_render_pdf_with_warnings, do_render_string,
     do_render_string_with_warnings, do_serialize_irealb, key_scale_pitches_inner,
     key_tonic_triad_inner, render_html_css_with_options_inner, resolve_options_inner,
     validate_defines_pairs, validate_inner,
@@ -520,6 +520,41 @@ pub fn chord_diagram_svg_with_defines(
 #[napi(js_name = "chordPitches")]
 pub fn chord_pitches(chord: String) -> Option<Buffer> {
     chord_pitches_inner(&chord).map(Buffer::from)
+}
+
+/// MIDI note numbers **sounded** by the chord diagram drawn for
+/// `(chord, instrument)` — for auditioning a diagram as exactly the shape it
+/// depicts, rather than the instrument-agnostic block voicing
+/// [`chord_pitches`] returns from the chord *name* (#2736).
+///
+/// Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`) return one pitch
+/// per non-muted string in string (strum) order, keeping octave doublings;
+/// keyboard instruments (`"piano"`, `"keyboard"`, `"keys"`) return the
+/// highlighted keys. `defines` is the same `[name, raw]` tuple list
+/// [`chord_diagram_svg_with_defines`] accepts (ignored for keyboard, matching
+/// the SVG path). The accepted instrument set is kept in lockstep with
+/// [`chord_diagram_svg_with_defines`]; anything outside it (e.g. `"charango"`,
+/// not drawn by the binding SVG path) returns `null`. Also `null` when no
+/// diagram is available for the chord.
+///
+/// Thin wrapper over the pure-Rust `diagram_pitches_inner`. Sister-site to the
+/// wasm `diagramPitches` export and the FFI `diagram_pitches` function
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+///
+/// # Errors
+///
+/// Returns a napi `Error` with status `InvalidArg` when `defines` is not a
+/// list of `[name, raw]` pairs.
+#[must_use = "callers must handle the invalid-defines error"]
+#[napi(js_name = "diagramPitches")]
+pub fn diagram_pitches(
+    chord: String,
+    instrument: String,
+    defines: Vec<Vec<String>>,
+) -> Result<Option<Buffer>> {
+    let pairs =
+        validate_defines_pairs(defines).map_err(|msg| Error::new(Status::InvalidArg, msg))?;
+    Ok(diagram_pitches_inner(&chord, &instrument, &pairs).map(Buffer::from))
 }
 
 /// One staff-placed chord tone. Mirrors the `StaffNote` interface in

@@ -13,6 +13,7 @@ import {
   type ChordDiagramOrientation,
   type ChordDiagramWasmLoader,
   useChordDiagram,
+  useChordDiagramPitches,
 } from './use-chord-diagram';
 
 /** Props accepted by {@link ChordDiagram}. */
@@ -169,11 +170,25 @@ export function ChordDiagram({
   // points at whichever wrapper actually renders (svg / not-found /
   // loading) so the activation pulse lands on the visible element.
   const audioOn = Boolean(chordAudio?.enabled);
+
+  // Diagram-voicing audio (#2736). Resolve the MIDI notes THIS diagram
+  // sounds — the per-string fretted pitches, or the keyboard's highlighted
+  // keys — from the same wasm voicing lookup that draws the SVG, so audio
+  // and the drawn shape cannot drift. Gated on `audioOn` so the lookup is
+  // skipped when chord-audio is off, and only used when the host exposes a
+  // `playPitches` channel; otherwise we fall back to the name-based block
+  // voicing via `play`, which also covers older wasm bundles where
+  // `diagramPitches` is absent (the hook returns null).
+  const diagramPitches = useChordDiagramPitches(chord, instrument, wasmLoader, defines, audioOn);
   const ringRef = useRef<HTMLDivElement | null>(null);
   const handlePlay = useCallback(() => {
-    chordAudio?.play(chord);
+    if (chordAudio?.playPitches && diagramPitches && diagramPitches.length > 0) {
+      chordAudio.playPitches(diagramPitches);
+    } else {
+      chordAudio?.play(chord);
+    }
     if (ringRef.current) pulseElement(ringRef.current, 'chordsketch-diagram--ringing');
-  }, [chordAudio, chord]);
+  }, [chordAudio, chord, diagramPitches]);
 
   const baseWrapperClass = [
     'chordsketch-diagram',

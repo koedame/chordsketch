@@ -848,6 +848,48 @@ pub fn chord_pitches(chord: &str) -> Option<Vec<u8>> {
     crate::chord_pitches_inner(chord)
 }
 
+/// MIDI note numbers **sounded** by the chord diagram drawn for
+/// `(chord, instrument)` — for auditioning a diagram as exactly the shape it
+/// depicts, rather than the instrument-agnostic block voicing
+/// [`chord_pitches`] returns from the chord *name*.
+///
+/// Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`) return one pitch
+/// per non-muted string in string (strum) order, keeping octave doublings;
+/// keyboard instruments (`"piano"`, `"keyboard"`, `"keys"`) return the
+/// highlighted keys. `defines` is the same `[[name, raw], …]` shape
+/// [`chord_diagram_svg_with_defines`] accepts (ignored for keyboard, matching
+/// the SVG path). The accepted instrument set is kept in lockstep with
+/// [`chord_diagram_svg_with_defines`]; anything outside it (e.g. `"charango"`,
+/// not drawn by the binding SVG path) returns `undefined`. Also `undefined`
+/// when no diagram is available for the chord.
+///
+/// Thin wrapper over the pure-Rust `diagram_pitches_inner`. Sister-site to the
+/// NAPI `diagramPitches` export and the FFI `diagram_pitches` function
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+///
+/// # Errors
+///
+/// Returns a `JsValue` error string when `defines` is not a deserialisable
+/// `[[string, string], …]` array.
+#[wasm_bindgen(js_name = diagramPitches)]
+pub fn diagram_pitches(
+    chord: &str,
+    instrument: &str,
+    defines: JsValue,
+) -> Result<Option<Vec<u8>>, JsValue> {
+    let defines_vec: Vec<(String, String)> = if defines.is_undefined() || defines.is_null() {
+        Vec::new()
+    } else {
+        serde_wasm_bindgen::from_value(defines)
+            .map_err(|e| JsValue::from_str(&format!("invalid defines argument: {e}")))?
+    };
+    Ok(crate::diagram_pitches_inner(
+        chord,
+        instrument,
+        &defines_vec,
+    ))
+}
+
 /// Constituent tones of a chord spelled for staff notation — note letter,
 /// signed accidental, octave, and MIDI — for drawing the chord on a
 /// five-line staff (the React `<ChordStaff>` surface, #2695).

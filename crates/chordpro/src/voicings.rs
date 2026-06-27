@@ -2022,6 +2022,86 @@ pub fn lookup_keyboard_voicing(
     crate::voicing_synth::synth_keyboard_voicing(chord_name)
 }
 
+/// MIDI note numbers **sounded** by the chord diagram that the renderers draw
+/// for `chord_name` on `instrument` — the audio companion to the SVG / ASCII
+/// diagram lookups.
+///
+/// This runs the *same* lookup chain the diagram renderers use, so the pitches
+/// returned here are exactly the pitches of the shape drawn on screen and the
+/// two cannot drift:
+///
+/// - **Fretted** instruments (`"guitar"`, `"ukulele"` / `"uke"`,
+///   `"charango"`, and any unrecognised value, which falls back to guitar)
+///   route through [`lookup_diagram`] and decode each non-muted string to its
+///   sounding pitch via [`DiagramData::voiced_pitches`](crate::chord_diagram::DiagramData::voiced_pitches)
+///   against the instrument's standard tuning. The pitches are returned in
+///   string (strum) order, keeping octave doublings.
+/// - **Keyboard** instruments (`"piano"`, `"keyboard"`, `"keys"`) route
+///   through [`lookup_keyboard_voicing`] and return the highlighted keys
+///   (pitch classes normalised to octave 4, matching the rendered keyboard
+///   diagram).
+///
+/// Returns `None` when no diagram is available for the chord (the same
+/// condition under which the renderers draw nothing), or when the resolved
+/// diagram sounds no strings/keys.
+///
+/// `defines` is the song's fretted `{define}` list (as for [`lookup_diagram`]);
+/// it is ignored for keyboard instruments, mirroring the diagram renderers'
+/// current keyboard path. `frets_shown` matches the value passed to the SVG
+/// lookup so the resolved voicing is identical.
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::voicings::diagram_pitches;
+///
+/// // Open C major on guitar (x32010): C3 E3 G3 C4 E4.
+/// assert_eq!(
+///     diagram_pitches("C", &[], "guitar", 5),
+///     Some(vec![48, 52, 55, 60, 64]),
+/// );
+///
+/// // Keyboard C major: the highlighted keys in octave 4.
+/// assert_eq!(diagram_pitches("C", &[], "piano", 5), Some(vec![60, 64, 67]));
+/// ```
+#[must_use]
+pub fn diagram_pitches(
+    chord_name: &str,
+    defines: &[(String, String)],
+    instrument: &str,
+    frets_shown: usize,
+) -> Option<Vec<u8>> {
+    match instrument.to_ascii_lowercase().as_str() {
+        "piano" | "keyboard" | "keys" => {
+            // Keyboard diagrams carry no fretted `{define}` data; the SVG path
+            // passes an empty keyboard-defines slice today, so audition the
+            // same built-in / synthesised voicing it draws.
+            let voicing = lookup_keyboard_voicing(chord_name, &[])?;
+            let (keys, _root) =
+                crate::chord_diagram::normalise_keyboard_keys(&voicing.keys, voicing.root_key);
+            // `normalise_keyboard_keys` is length-preserving (maps 1-to-1,
+            // no filtering). This call passes `&[]` for keyboard_defines, so
+            // `lookup_keyboard_voicing` only reaches the curated or synthesiser
+            // paths. Curated voicings always have at least one key (an empty
+            // entry would also break the SVG renderer). The synthesiser path
+            // goes through `chord_pitches`, which always includes the root
+            // interval when it returns `Some`. So `keys` is guaranteed
+            // non-empty here; the `?` above already handles the no-voicing case.
+            Some(keys)
+        }
+        _ => {
+            let data = lookup_diagram(chord_name, defines, instrument, frets_shown)?;
+            let tuning = crate::voicing_synth::instrument_tuning(instrument);
+            let pitches = data.voiced_pitches(tuning);
+            if pitches.is_empty() {
+                None
+            } else {
+                Some(pitches)
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -2682,6 +2762,151 @@ mod tests {
                     tones.root_pc,
                     "{name} (keyboard): root_key must spell the root",
                 );
+            }
+        }
+    }
+
+    // --- diagram_pitches (#2736) -------------------------------------------
+
+    #[test]
+    fn diagram_pitches_guitar_open_chords_sound_the_shape() {
+        // Open C major (x32010): C3 E3 G3 C4 E4, in low→high string order.
+        assert_eq!(
+            diagram_pitches("C", &[], "guitar", 5),
+            Some(vec![48, 52, 55, 60, 64]),
+        );
+        // Open E major (022100): E2 B2 E3 G#3 B3 E4 — note the octave-doubled
+        // E and B are kept, not deduped.
+        assert_eq!(
+            diagram_pitches("E", &[], "guitar", 5),
+            Some(vec![40, 47, 52, 56, 59, 64]),
+        );
+        // Open A major (x02220): A2 E3 A3 C#4 E4.
+        assert_eq!(
+            diagram_pitches("A", &[], "guitar", 5),
+            Some(vec![45, 52, 57, 61, 64]),
+        );
+    }
+
+    #[test]
+    fn diagram_pitches_ukulele_uses_reentrant_tuning() {
+        // Open C on the re-entrant high-G ukulele (frets 0 0 0 3): the lowest
+        // string (G4 = 67) is NOT the lowest pitch, so the sounded order is
+        // not ascending — it is the diagram's string order.
+        assert_eq!(
+            diagram_pitches("C", &[], "ukulele", 5),
+            Some(vec![67, 60, 64, 72]),
+        );
+        // `uke` is an accepted alias for the same tuning.
+        assert_eq!(
+            diagram_pitches("C", &[], "uke", 5),
+            diagram_pitches("C", &[], "ukulele", 5)
+        );
+    }
+
+    #[test]
+    fn diagram_pitches_keyboard_returns_highlighted_keys() {
+        assert_eq!(
+            diagram_pitches("C", &[], "piano", 5),
+            Some(vec![60, 64, 67])
+        );
+        assert_eq!(
+            diagram_pitches("Am", &[], "keyboard", 5),
+            Some(vec![69, 72, 76])
+        );
+        // `keys` is an accepted alias.
+        assert_eq!(
+            diagram_pitches("C", &[], "keys", 5),
+            diagram_pitches("C", &[], "piano", 5)
+        );
+    }
+
+    #[test]
+    fn diagram_pitches_honours_song_defines() {
+        // A song-level fretted {define} takes priority over the built-in table,
+        // and its voicing is what gets auditioned.
+        let defines = vec![("C".to_string(), "base-fret 1 frets 0 3 2 0 1 0".to_string())];
+        assert_eq!(
+            diagram_pitches("C", &defines, "guitar", 5),
+            Some(vec![40, 48, 52, 55, 60, 64]),
+        );
+    }
+
+    #[test]
+    fn diagram_pitches_unknown_chord_is_none() {
+        // Not parseable as a chord → no diagram → no pitches.
+        assert_eq!(diagram_pitches("xyzzy", &[], "guitar", 5), None);
+        assert_eq!(diagram_pitches("xyzzy", &[], "piano", 5), None);
+    }
+
+    #[test]
+    fn diagram_pitches_match_the_rendered_diagram_for_the_whole_palette() {
+        // Audio must sound exactly what the diagram draws: for every palette
+        // chord × instrument, `diagram_pitches` equals decoding the diagram
+        // `lookup_diagram` produces through the instrument tuning, and every
+        // sounded pitch is a genuine chord tone.
+        for &suffix in PALETTE_SUFFIXES {
+            for &root in ROOTS {
+                let name = format!("{root}{suffix}");
+                let tones = crate::chord::chord_tones(&name).unwrap();
+                let target = pc_mask(&tones.pitch_classes);
+                for instrument in ["guitar", "ukulele", "charango"] {
+                    let data = lookup_diagram(&name, &[], instrument, 5)
+                        .unwrap_or_else(|| panic!("no diagram for {name} ({instrument})"));
+                    let tuning = crate::voicing_synth::instrument_tuning(instrument);
+                    let expected = data.voiced_pitches(tuning);
+                    let got = diagram_pitches(&name, &[], instrument, 5)
+                        .unwrap_or_else(|| panic!("no pitches for {name} ({instrument})"));
+                    assert_eq!(
+                        got, expected,
+                        "{name} ({instrument}): diagram_pitches must equal the drawn voicing",
+                    );
+                    assert!(!got.is_empty(), "{name} ({instrument}): sounded nothing");
+
+                    // The chord-tone purity check applies only to *synthesised*
+                    // voicings — the synthesiser guarantees it sounds only chord
+                    // tones. Curated upstream tables may include a stray
+                    // non-chord open string (e.g. the charango B7 leaves the
+                    // high-E course open); faithfully auditioning the drawn
+                    // shape means we sound it, so they are exempt, mirroring the
+                    // coverage test's "curated → required only to exist" rule.
+                    let curated = match instrument {
+                        "ukulele" => ukulele_voicing(&name).is_some(),
+                        "charango" => charango_voicing(&name).is_some(),
+                        _ => guitar_voicing(&name).is_some(),
+                    };
+                    if curated {
+                        continue;
+                    }
+                    for p in got {
+                        let pc = u16::from(p % 12);
+                        assert!(
+                            target & (1u16 << pc) != 0,
+                            "{name} ({instrument}): sounded pitch {p} (pc {pc}) is not a chord tone",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn diagram_pitches_keyboard_palette_sounds_only_chord_tones() {
+        for &suffix in PALETTE_SUFFIXES {
+            for &root in ROOTS {
+                let name = format!("{root}{suffix}");
+                let tones = crate::chord::chord_tones(&name).unwrap();
+                let target = pc_mask(&tones.pitch_classes);
+                let got = diagram_pitches(&name, &[], "piano", 5)
+                    .unwrap_or_else(|| panic!("no keyboard pitches for {name}"));
+                assert!(!got.is_empty(), "{name} (keyboard): sounded nothing");
+                for p in got {
+                    let pc = u16::from(p % 12);
+                    assert!(
+                        target & (1u16 << pc) != 0,
+                        "{name} (keyboard): sounded pitch {p} (pc {pc}) is not a chord tone",
+                    );
+                }
             }
         }
     }

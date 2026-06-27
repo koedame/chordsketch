@@ -145,6 +145,47 @@ describe('useChordAudio', () => {
     expect(ctx.oscillators).toHaveLength(7);
   });
 
+  test('playPitches sounds the given MIDI notes as a strum, without a wasm lookup (#2736)', async () => {
+    const { result } = await renderLoaded();
+    // Open C on guitar (x32010): C3 E3 G3 C4 E4 — a 5-note diagram voicing,
+    // not the 3-note name-derived block voicing `play('C')` would produce.
+    act(() => result.current.playPitches([48, 52, 55, 60, 64]));
+
+    const ctx = FakeAudioContext.instances[0]!;
+    expect(ctx.oscillators).toHaveLength(5);
+    // No chord-name lookup happens on the explicit-pitch path.
+    expect(fakePitches).not.toHaveBeenCalled();
+    // Strummed: onsets strictly increase across the five voices.
+    const starts = ctx.oscillators.map(
+      (o) => (o.start.mock.calls[0]?.[0] as number) ?? 0,
+    );
+    for (let i = 1; i < starts.length; i += 1) {
+      expect(starts[i]!).toBeGreaterThan(starts[i - 1]!);
+    }
+    // The lowest voice is C3 (~130.81 Hz); the doubled C4 is ~261.63 Hz.
+    const freqs = ctx.oscillators.map(
+      (o) => (o.frequency.setValueAtTime.mock.calls[0]?.[0] as number) ?? 0,
+    );
+    expect(freqs[0]).toBeCloseTo(130.81, 1);
+    expect(freqs[3]).toBeCloseTo(261.63, 1);
+  });
+
+  test('playPitches on an empty list schedules nothing', async () => {
+    const { result } = await renderLoaded();
+    act(() => result.current.playPitches([]));
+    const ctx = FakeAudioContext.instances[0];
+    expect(ctx?.oscillators ?? []).toHaveLength(0);
+  });
+
+  test('playPitches does not need the wasm module (works before preload resolves)', () => {
+    // Render without awaiting the preload — `playPitches` takes explicit
+    // pitches, so it must not depend on `moduleRef` being assigned.
+    const { result } = renderHook(() => useChordAudio(makeLoader()));
+    act(() => result.current.playPitches([60, 64, 67]));
+    const ctx = FakeAudioContext.instances[0]!;
+    expect(ctx.oscillators).toHaveLength(3);
+  });
+
   test('stop silences all ringing voices', async () => {
     const { result } = await renderLoaded();
     act(() => result.current.play('Am7'));

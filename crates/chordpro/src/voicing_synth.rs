@@ -91,6 +91,11 @@ const W_FRET_SUM: i64 = 10;
 /// Returns the absolute-MIDI open-string tuning for an instrument name, in the
 /// diagram's string order. Unknown instruments fall back to guitar, matching
 /// [`crate::voicings::lookup_diagram`]'s dispatch.
+///
+/// This is the single source of truth for the supported fretted tunings; the
+/// synthesiser builds voicings from it and [`crate::voicings::diagram_pitches`]
+/// decodes rendered diagrams back to sounding pitches through it, so the two
+/// cannot disagree on what a string sounds.
 #[must_use]
 pub(crate) fn instrument_tuning(instrument: &str) -> &'static [i32] {
     match instrument.to_ascii_lowercase().as_str() {
