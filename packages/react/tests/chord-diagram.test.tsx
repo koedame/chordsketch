@@ -4,13 +4,19 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { ChordDiagram, useChordDiagram } from '../src/index';
 import {
   __resetStaleBundleWarnings,
+  __resetStalePitchesWarnings,
   type ChordDiagramWasmLoader,
 } from '../src/use-chord-diagram';
 
 interface StubRenderer {
   default: ReturnType<typeof vi.fn>;
   chord_diagram_svg: ReturnType<typeof vi.fn>;
+  diagramPitches?: ReturnType<typeof vi.fn>;
 }
+
+// Open Am on guitar (x02210): A2 E3 A3 C4 E4 — the per-string voicing the
+// diagram draws, distinct from the name-based block voicing.
+const AM_GUITAR_PITCHES = [45, 52, 57, 60, 64];
 
 function makeStub(): StubRenderer {
   return {
@@ -25,6 +31,15 @@ function makeStub(): StubRenderer {
       // Unknown combos return null — voicing database has no match.
       return null;
     }),
+    diagramPitches: vi.fn((chord: string, instrument: string) => {
+      if (instrument === 'guitar' && chord === 'Am') {
+        return new Uint8Array(AM_GUITAR_PITCHES);
+      }
+      if (instrument === 'piano' && chord === 'C') {
+        return new Uint8Array([60, 64, 67]);
+      }
+      return null;
+    }),
   };
 }
 
@@ -33,6 +48,10 @@ function makeLoader(stub: StubRenderer): ChordDiagramWasmLoader {
 }
 
 describe('<ChordDiagram>', () => {
+  beforeEach(() => {
+    __resetStalePitchesWarnings();
+  });
+
   test('renders the SVG returned by the WASM lookup', async () => {
     const stub = makeStub();
     const { container } = render(
@@ -173,6 +192,85 @@ describe('<ChordDiagram>', () => {
     fireEvent.keyDown(wrapper, { key: ' ' });
     fireEvent.keyDown(wrapper, { key: 'x' });
     expect(play).toHaveBeenCalledTimes(3);
+  });
+
+  test('chordAudio with playPitches: clicking sounds the diagram voicing, not the name (#2736)', async () => {
+    const stub = makeStub();
+    const play = vi.fn();
+    const playPitches = vi.fn();
+    const { container } = render(
+      <ChordDiagram
+        chord="Am"
+        instrument="guitar"
+        chordAudio={{ enabled: true, play, playPitches }}
+        wasmLoader={makeLoader(stub)}
+      />,
+    );
+    let wrapper!: HTMLElement;
+    await waitFor(() => {
+      wrapper = container.querySelector('.chordsketch-diagram--audio') as HTMLElement;
+      expect(wrapper).not.toBeNull();
+      expect(wrapper.querySelector('svg')).not.toBeNull();
+    });
+    // The diagram voicing was resolved from the same lookup that drew the SVG.
+    expect(stub.diagramPitches).toHaveBeenCalledWith('Am', 'guitar', []);
+
+    fireEvent.click(wrapper);
+    // It sounds the drawn shape's per-string pitches — NOT the name-based
+    // block voicing.
+    expect(playPitches).toHaveBeenCalledWith(AM_GUITAR_PITCHES);
+    expect(play).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(wrapper, { key: 'Enter' });
+    expect(playPitches).toHaveBeenCalledTimes(2);
+  });
+
+  test('chordAudio with playPitches but a stale bundle (no diagramPitches): falls back to the name voicing', async () => {
+    const stub = makeStub();
+    delete stub.diagramPitches; // simulate an @chordsketch/wasm bundle predating #2736
+    const play = vi.fn();
+    const playPitches = vi.fn();
+    const { container } = render(
+      <ChordDiagram
+        chord="Am"
+        instrument="guitar"
+        chordAudio={{ enabled: true, play, playPitches }}
+        wasmLoader={makeLoader(stub)}
+      />,
+    );
+    let wrapper!: HTMLElement;
+    await waitFor(() => {
+      wrapper = container.querySelector('.chordsketch-diagram--audio') as HTMLElement;
+      expect(wrapper).not.toBeNull();
+      expect(wrapper.querySelector('svg')).not.toBeNull();
+    });
+    fireEvent.click(wrapper);
+    // No diagram pitches available → fall back to the chord-name block voicing.
+    expect(play).toHaveBeenCalledWith('Am');
+    expect(playPitches).not.toHaveBeenCalled();
+  });
+
+  test('chordAudio keyboard diagram: clicking sounds the highlighted keys (#2736)', async () => {
+    const stub = makeStub();
+    const play = vi.fn();
+    const playPitches = vi.fn();
+    const { container } = render(
+      <ChordDiagram
+        chord="C"
+        instrument="piano"
+        chordAudio={{ enabled: true, play, playPitches }}
+        wasmLoader={makeLoader(stub)}
+      />,
+    );
+    let wrapper!: HTMLElement;
+    await waitFor(() => {
+      wrapper = container.querySelector('.chordsketch-diagram--audio') as HTMLElement;
+      expect(wrapper).not.toBeNull();
+      expect(wrapper.querySelector('svg')).not.toBeNull();
+    });
+    fireEvent.click(wrapper);
+    expect(playPitches).toHaveBeenCalledWith([60, 64, 67]);
+    expect(play).not.toHaveBeenCalled();
   });
 
   test('chordAudio off / absent: the diagram stays a static role="img" figure', async () => {
